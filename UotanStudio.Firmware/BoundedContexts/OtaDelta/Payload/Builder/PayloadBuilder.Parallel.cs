@@ -64,8 +64,6 @@ public sealed partial class PayloadBuilder
             }
             if (count == 0) break;
 
-            // No tasks or completed results escape the batch. Input buffers are reused only after
-            // every worker has stopped and the ordered writer has consumed their output.
             if (count == 1)
                 slots[0].Compress(partition.CompressionType, cancellationToken);
             else
@@ -121,8 +119,6 @@ public sealed partial class PayloadBuilder
             {
                 if (compression == CompressionType.Xz)
                 {
-                    // This input is already bounded to one operation. Avoid the general streaming
-                    // XZ encoder's disk spool for each 1 MiB chunk, without buffering a whole image.
                     var original = InputLength == Input.Length ? Input : Input.AsSpan(0, InputLength).ToArray();
                     bounded.Write(XzCompressor.Compress(original, dictionarySize: 1u << 20, maxDegreeOfParallelism: 1));
                 }

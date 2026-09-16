@@ -129,7 +129,6 @@ public class ManagedMagicTests
     [Fact]
     public void Detect_Elf_Minimal_WithoutMachine()
     {
-        // 仅 8 字节头，e_machine 字段缺失 → 应回退为 "ELF executable"
         var result = ManagedMagic.Detect(ElfMinimal);
         Assert.Equal("ELF executable", result);
     }
@@ -228,7 +227,6 @@ public class ManagedMagicTests
     [Fact]
     public void Detect_TarArchive()
     {
-        // 构造一个带 ustar 魔数（偏移 257）的最小 tar 头
         byte[] tarHeader = new byte[512];
         Array.Copy(Encoding.ASCII.GetBytes("test.txt\0\0\0\0\0\0\0\0"), 0, tarHeader, 0, 9);
         Array.Copy(Encoding.ASCII.GetBytes("ustar\0"), 0, tarHeader, 257, 6);
@@ -271,7 +269,6 @@ public class ManagedMagicTests
     [Fact]
     public void Parser_Integer_Rule_BigEndian()
     {
-        // belong 0xed26ff3a → 实际比较时按大端读 4 字节
         MagicRuleSet rs = MagicRuleParser.Parse("0\tbelong\t0xed26ff3a\tAndroid sparse image", "test");
         // sparse 字节是 3a ff 26 ed（小端存储），但 belong 按大端读 → 0x3aff26ed ≠ 0xed26ff3a
         // 此规则不应匹配小端 sparse
@@ -282,7 +279,6 @@ public class ManagedMagicTests
     [Fact]
     public void Parser_Integer_Rule_LittleEndian()
     {
-        // lelong 0xed26ff3a → 小端读 4 字节，sparse 存储为 3a ff 26 ed（即小端 0xed26ff3a）应匹配
         MagicRuleSet rs = MagicRuleParser.Parse("0\tlelong\t0xed26ff3a\tAndroid sparse image", "test");
         MagicMatch m = rs.Match(Sparse, Sparse.Length);
         Assert.True(m.IsMatch);
@@ -292,7 +288,6 @@ public class ManagedMagicTests
     [Fact]
     public void Parser_StringEscape_HexPattern()
     {
-        // gzip: \x1f\x8b
         MagicRuleSet rs = MagicRuleParser.Parse("0\tstring\t\\x1f\\x8b\tgzip compressed data", "test");
         MagicMatch m = rs.Match(Gzip, Gzip.Length);
         Assert.True(m.IsMatch);
@@ -326,11 +321,10 @@ public class ManagedMagicTests
     [Fact]
     public void Parser_Indirect_Offset_Rule()
     {
-        // 间接偏移：(belong.0+4) → 读 base[0..4] 大端整数 +4 作为实际偏移
-        // 构造：偏移 0 处 0x00000004（belong 读为 4），加 4 = 偏移 8，那里放 "ABCD"
+        // 间接偏移：(belong.0+4) → 读 base[0..4] 大端整数 +4 作为实际偏移，目标偏移 8 处放 "ABCD"
         byte[] data = new byte[16];
         data[0] = 0x00; data[1] = 0x00; data[2] = 0x00; data[3] = 0x04; // belong=4
-        data[4] = 0xFF; data[5] = 0xFF; data[6] = 0xFF; data[7] = 0xFF; // 填充
+        data[4] = 0xFF; data[5] = 0xFF; data[6] = 0xFF; data[7] = 0xFF;
         data[8] = (byte)'A'; data[9] = (byte)'B'; data[10] = (byte)'C'; data[11] = (byte)'D';
 
         MagicRuleSet rs = MagicRuleParser.Parse("0\tbelong\t0x00000004\tindirect marker", "test");
@@ -342,11 +336,8 @@ public class ManagedMagicTests
     [Fact]
     public void EmbeddedRules_Load_And_Match_Elf()
     {
-        // 加载嵌入式规则集（来自 Common/Magic/firmware.magic 资源）
         MagicRuleSet embedded = ManagedMagic.LoadEmbeddedRules();
         Assert.True(embedded.Count > 0, "嵌入式规则集应包含至少一条规则");
-
-        // ELF 应被规则集识别（注意：嵌入式规则集的 ELF 规则是父规则 + 子规则结构）
         MagicMatch m = embedded.Match(ElfAarch64Exec, ElfAarch64Exec.Length);
         Assert.True(m.IsMatch, "嵌入式规则集应识别 ELF");
         Assert.Contains("ELF", m.Description);
@@ -355,10 +346,6 @@ public class ManagedMagicTests
     [Fact]
     public void EmbeddedRules_Load_And_Match_AndroidBoot()
     {
-        // ANDROID! 在查重时已从 firmware.magic 剔除（上游 android.magic 有此规则）。
-        // 此处验证：加载上游 android.magic 后能识别 ANDROID!。
-        // ANDROID! was deduped from firmware.magic (upstream android.magic has it).
-        // Verify upstream android.magic recognizes ANDROID!.
         string? text = ReadEmbeddedResource("UotanStudio.Firmware.SharedKernel.Magic.android.magic");
         Assert.False(string.IsNullOrEmpty(text), "上游 android.magic 嵌入式资源缺失");
 
@@ -383,7 +370,6 @@ public class ManagedMagicTests
             "0\tstring\tMAGIC!\tcustom magic type", "custom");
         Assert.Equal("custom", rs.Source);
 
-        // 自定义魔数应匹配
         byte[] custom = Encoding.ASCII.GetBytes("MAGIC!extra");
         MagicMatch m = ManagedMagic.DetectWithRules(custom, custom.Length);
         Assert.True(m.IsMatch);
@@ -393,7 +379,6 @@ public class ManagedMagicTests
     [Fact]
     public void LoadRules_FromExternalFile()
     {
-        // 写临时 magic 文件
         string tmpDir = Path.Combine(Path.GetTempPath(), "uotan-magic-test-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(tmpDir);
         string magicPath = Path.Combine(tmpDir, "test.magic");
@@ -449,7 +434,6 @@ public class ManagedMagicTests
         Assert.True(ManagedMagic.GetLoadedRuleSets().Count >= 3); // embedded + 2
 
         ManagedMagic.ClearRules();
-        // 嵌入式规则集保留
         Assert.Single(ManagedMagic.GetLoadedRuleSets());
     }
 
@@ -460,17 +444,14 @@ public class ManagedMagicTests
         ManagedMagic.ClearRules();
         ManagedMagic.LoadRulesFromText("0\tstring\tANDROID!\tCONFLICT description", "conflict");
 
-        // Detect 应走快速路径返回标准描述（注意：快速路径优先于规则集）
         string? result = ManagedMagic.Detect(AndroidBoot);
         Assert.NotNull(result);
-        // 快速路径命中 "Android boot image"，不会被外部规则覆盖
         Assert.Equal("Android boot image", result);
     }
 
     [Fact]
     public void Detect_ExternalRule_Extends_Detection()
     {
-        // 场景：用户加载外部规则识别上游 file(1) 中我们未硬编码的格式
         ManagedMagic.ClearRules();
         ManagedMagic.LoadRulesFromText("0\tstring\tRIFF\tWave audio file\n", "audio-rules");
 
@@ -491,14 +472,12 @@ public class ManagedMagicTests
     [Fact]
     public void Detect_TooShortBuffer_ReturnsNull()
     {
-        // 仅 2 字节且不匹配任何魔数（gzip 魔数 1F 8B 恰好只需 2 字节，故不能用作反例），应返回 null
         Assert.Null(ManagedMagic.Detect(new byte[] { 0x00, 0x00 }));
     }
 
     [Fact]
     public void Detect_PartialMagic_NoMatch()
     {
-        // 仅 "ANDROI"（6 字节），不足 "ANDROID!"（8 字节）
         byte[] partial = Encoding.ASCII.GetBytes("ANDROI");
         Assert.Null(ManagedMagic.Detect(partial));
     }
@@ -506,7 +485,6 @@ public class ManagedMagicTests
     [Fact]
     public void Detect_BoundaryExact_MatchesAtMinimumLength()
     {
-        // "ANDROID!" 正好 8 字节，应匹配
         byte[] exact = Encoding.ASCII.GetBytes("ANDROID!");
         Assert.Equal("Android boot image", ManagedMagic.Detect(exact));
     }
@@ -514,7 +492,6 @@ public class ManagedMagicTests
     [Fact]
     public void Detect_Offset_PastBuffer_NoMatch()
     {
-        // tar 规则要求偏移 257 处有 "ustar"，缓冲区不足应不匹配
         byte[] shortBuf = new byte[256];
         Assert.Null(ManagedMagic.Detect(shortBuf));
     }
@@ -539,11 +516,8 @@ public class ManagedMagicTests
         header[3] = (byte)'F';
         header[4] = elf64 ? (byte)2 : (byte)1;    // EI_CLASS
         header[5] = bigEndian ? (byte)2 : (byte)1; // EI_DATA
-        header[6] = 1;                              // EI_VERSION
-
-        // e_type @ offset 16, 2 字节
+        header[6] = 1;                             // EI_VERSION
         WriteU16(header, 16, type, bigEndian);
-        // e_machine @ offset 18, 2 字节
         WriteU16(header, 18, machine, bigEndian);
 
         return header;

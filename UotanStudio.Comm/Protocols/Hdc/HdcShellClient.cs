@@ -106,11 +106,6 @@ public sealed class HdcShellClient
             stdout.Write(chunk, 0, chunk.Length);
         }
 
-        // HDC shell does not carry exit code in ChannelClose by default;
-        // report an unknown exit code (-1).
-        // HDC shell 默认不在 ChannelClose 中携带退出码；
-        // 将正常流关闭视为退出码 0。
-
         return new ShellResult(stdout.ToArray(), [], exitCode);
     }
 

@@ -163,8 +163,6 @@ public sealed class ErofsFormatHandler : IFormatHandler
                     "lz4hc", StringComparison.OrdinalIgnoreCase);
                 var compressionLevel = RepackMetadata.IntegerOption(options, "ErofsCompressionLevel",
                     lz4hc ? 4 : 1);
-                // 仅当调用方提供进度时才启用计数写入流；否则保留可寻址输出，避免激活不可寻址路径。
-                // Only wrap with a byte counter when the caller requests progress; otherwise keep the seekable output.
                 var progressSink = progress is null ? null : FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
                 builder.Build(inputPath, outputPath, new ErofsOptions
                 {

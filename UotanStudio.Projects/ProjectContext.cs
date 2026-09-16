@@ -159,12 +159,10 @@ public sealed class ProjectContext
         SolutionName = Path.GetFileNameWithoutExtension(CurrentSolutionPath);
         Directory.CreateDirectory(RootDirectory);
 
-        // Build sub-project list from snapshot or by scanning the root directory
         var subProjects = new List<SubProjectContext>();
 
         if (snapshot?.SubProjects is { Count: > 0 } spList)
         {
-            // v2+ : use explicit sub-project references from the snapshot
             foreach (var dto in spList)
             {
                 var fwPath = Path.Combine(RootDirectory, dto.RelativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -181,9 +179,6 @@ public sealed class ProjectContext
         }
         else if (snapshot is null)
         {
-            // Fallback scan: only a directory directly under the solution root that owns a *.uotanfw
-            // forms a sub-project. Directories nested inside another sub-project (or reserved folders)
-            // are skipped so a stray inner scaffold is never registered as an independent sub-project.
             var candidates = Directory.EnumerateDirectories(RootDirectory)
                 .Where(directory => !IsReservedDirectory(directory)
                     && (File.GetAttributes(directory) & FileAttributes.ReparsePoint) == 0)
@@ -199,8 +194,6 @@ public sealed class ProjectContext
 
         SubProjects = subProjects;
         ActiveSubProject = subProjects.FirstOrDefault();
-        // The single node project is owned by the sub-project whose name equals the solution name,
-        // falling back to the first sub-project.
         var nodeOwnerRoot = subProjects.FirstOrDefault(s => string.Equals(s.Name, SolutionName, StringComparison.OrdinalIgnoreCase))?.RootPath
             ?? subProjects.FirstOrDefault()?.RootPath;
         NodeProjectPath = nodeOwnerRoot is null ? null : Path.Combine(nodeOwnerRoot, SolutionName + ".uotannode");

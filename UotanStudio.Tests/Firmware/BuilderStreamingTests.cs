@@ -82,7 +82,7 @@ public class BuilderStreamingTests
         {
             if ((i / BlockSize) % 2 == 0)
             {
-                continue; // hole (all zero)
+                continue;
             }
 
             for (var j = 0; j < BlockSize; j++)

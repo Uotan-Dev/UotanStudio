@@ -66,7 +66,6 @@ internal sealed class FileSystemEditPlan
                 }
                 donor ??= rootEntry;
                 var permissions = donor.Mode & 0x0FFF;
-                // A directory fallback supplies owner/label; regular files must not gain directory search bits.
                 if (!directory && (donor.Mode & 0xF000) == 0x4000) permissions &= ~0xE49;
                 selected = Copy(donor, image, (ushort)(type | permissions));
                 selected.Inode = 0;
@@ -122,7 +121,6 @@ internal sealed class FileSystemEditPlan
     {
         if ((entry.Flags & (0x800u | 0x100000u | 0x20000000u | 0x40000000u)) != 0)
             throw new InvalidDataException($"Encrypted, verity, project-inherited or casefold inode requires a dedicated semantic writer: {entry.Path}");
-        // Inline payload storage is regenerated from file data, not inherited as a Linux attribute.
         entry.Xattrs?.Remove("system.data");
         if (entry.Xattrs?.Keys.Any(k => k is "security.ima" or "security.evm" or "security.fsverity" or "security.fscrypt" or "encryption.c") == true)
             throw new InvalidDataException($"Content authentication/encryption attributes require a dedicated writer: {entry.Path}");

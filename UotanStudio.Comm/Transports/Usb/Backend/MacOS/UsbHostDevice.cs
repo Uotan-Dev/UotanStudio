@@ -65,14 +65,6 @@ internal class UsbHostDevice : UsbDevice
             return UsbChunkResult.Fatal(IOKitUsbAPI.KIOReturnNoDevice);
         }
 
-        // In-flight tracking so Dispose can abort then wait before releasing pipes
-        // (releasing a pipe mid-request crashes in objc_release). The _disposing
-        // check closes the re-entry race: the ADB read loop immediately re-issues a
-        // read after an abort-induced timeout, which could otherwise slip a new
-        // request in between WaitForInFlightTransfers and ReleasePipe.
-        // <para>在飞计数供 Dispose 先中止再等待后释放管道（请求进行中释放管道会在
-        // objc_release 崩溃）。_disposing 检查消除重入竞态：ADB 读取循环在被中止
-        // 导致的超时后会立即重发读取，否则新请求可能落在等待与释放之间。</para>
         if (Volatile.Read(ref _disposing) != 0)
         {
             return UsbChunkResult.Fatal(IOKitUsbAPI.KIOReturnError);
@@ -270,9 +262,6 @@ internal class UsbHostDevice : UsbDevice
         var request = new ObjcRuntime.UsbHostDeviceRequest(
             setupPacket.RequestType, setupPacket.Request, setupPacket.Value, setupPacket.Index, (ushort)length);
 
-        // The data stage must be copied into NSMutableData; honour a non-zero offset
-        // by staging the slice first.
-        // <para>数据阶段必须复制进 NSMutableData；偏移非零时先暂存切片。</para>
         byte[]? staged = null;
         try
         {
@@ -322,10 +311,6 @@ internal class UsbHostDevice : UsbDevice
             return -1;
         }
 
-        // Re-open the device service from its IOService-plane path (the finder
-        // stored the path returned by IORegistryEntryGetPath).
-        // <para>从 IOService 平面路径重开设备服务（finder 存储了
-        // IORegistryEntryGetPath 返回的路径）。</para>
         UsbTrace.Log($"UsbHostDevice.CreateHandle: DevicePath='{DevicePath}'");
         var service = IOKitUsbAPI.IORegistryEntryFromPath(IntPtr.Zero, DevicePath);
         if (service == IntPtr.Zero)
@@ -336,10 +321,6 @@ internal class UsbHostDevice : UsbDevice
 
         try
         {
-            // Creating the device user client IS the exclusive open. On failure
-            // (e.g. kIOReturnExclusiveAccess) the IOReturn code is reported.
-            // <para>创建设备用户客户端即独占打开。失败时（如 kIOReturnExclusiveAccess）
-            // 上报 IOReturn 码。</para>
             var device = UsbHostAPI.CreateObject(UsbHostAPI.GetDeviceClass(), (uint)service.ToInt32(), out var kr);
             UsbTrace.Log($"UsbHostDevice.CreateHandle: device user client kr=0x{kr:X} device={device}");
             if (device == IntPtr.Zero)
@@ -349,11 +330,6 @@ internal class UsbHostDevice : UsbDevice
 
             _device = device;
 
-            // Claim the interface: enumerate IOUSBHostInterface children of the
-            // device service and open the first one matching the filter hints
-            // (or the first with a usable bulk pair).
-            // <para>声明接口：枚举设备服务下的 IOUSBHostInterface 子项，打开匹配
-            // 过滤提示（或首个具备可用批量对）的接口。</para>
             var children = UsbHostAPI.GetInterfaceServices((uint)service.ToInt32());
             UsbTrace.Log($"UsbHostDevice.CreateHandle: interface children={children.Count}");
             foreach (var child in children)
@@ -370,17 +346,12 @@ internal class UsbHostDevice : UsbDevice
                 }
                 finally
                 {
-                    // The child service reference is released once the interface
-                    // user client holds its own reference (or on failure).
-                    // <para>接口用户客户端持有自身引用（或失败）后释放子服务引用。</para>
                     IOKitUsbAPI.IOObjectRelease((IntPtr)child);
                 }
             }
 
             UsbTrace.Log("UsbHostDevice.CreateHandle: no interface claimed.");
 
-            // No interface claimed: release the device user client for a clean retry.
-            // <para>未声明接口：释放设备用户客户端以便干净重试。</para>
             UsbHostAPI.Destroy(_device);
             _device = IntPtr.Zero;
             return -1;
@@ -447,9 +418,6 @@ internal class UsbHostDevice : UsbDevice
                 }
             }
 
-            // Prefer the bulk pair; fall back to interrupt pipes for interfaces
-            // with no bulk endpoints (libusb parity).
-            // <para>优先使用批量对；无批量端点的接口回退中断管道（与 libusb 一致）。</para>
             var pipeIn = bulkIn != 0 ? bulkIn : interruptIn;
             var pipeOut = bulkOut != 0 ? bulkOut : interruptOut;
             if (pipeIn == 0)
@@ -486,8 +454,6 @@ internal class UsbHostDevice : UsbDevice
         {
             if (usbInterface != IntPtr.Zero)
             {
-                // Interface not claimed: destroy the user client.
-                // <para>接口未声明：销毁用户客户端。</para>
                 UsbHostAPI.Destroy(usbInterface);
             }
         }
@@ -502,10 +468,6 @@ internal class UsbHostDevice : UsbDevice
     {
         var endpoints = new List<(byte Address, byte Type)>();
 
-        // IOUSBHostInterface exposes its configuration descriptor directly
-        // (verified in the SDK header), so walk it without touching the device.
-        // <para>IOUSBHostInterface 直接暴露其配置描述符（已在 SDK 头文件核实），
-        // 故无需设备对象即可遍历。</para>
         var config = UsbHostAPI.GetConfigurationDescriptor(usbInterface);
         if (config != IntPtr.Zero)
         {
@@ -546,10 +508,6 @@ internal class UsbHostDevice : UsbDevice
             }
         }
 
-        // Fallback scan: control endpoint 0 is never returned by copyPipeWithAddress;
-        // probe IN 0x81-0x8F and OUT 0x01-0x0F.
-        // <para>回退扫描：copyPipeWithAddress 不会返回控制端点 0；探测 IN 0x81-0x8F
-        // 与 OUT 0x01-0x0F。</para>
         for (byte address = 1; address <= 0x0F; address++)
         {
             foreach (var probe in new[] { address, (byte)(address | 0x80) })
@@ -562,8 +520,6 @@ internal class UsbHostDevice : UsbDevice
 
                 try
                 {
-                    // The pipe's own endpoint address is authoritative.
-                    // <para>管道自身报告的端点地址是权威值。</para>
                     var reported = UsbHostAPI.GetPipeEndpointAddress(pipe);
                     endpoints.Add(((byte)reported, 0x02));
                 }
@@ -585,17 +541,12 @@ internal class UsbHostDevice : UsbDevice
             return;
         }
 
-        // resetWithError re-enumerates the device; best-effort, session must be
-        // re-opened afterwards (capability ResetReenumeratesDevice=true).
-        // <para>resetWithError 会使设备重新枚举；尽力而为，之后必须重开会话
-        // （能力 ResetReenumeratesDevice=true）。</para>
         try
         {
             _ = UsbHostAPI.ResetDevice(_device);
         }
         catch
         {
-            // Best-effort reset.
         }
     }
 
@@ -609,10 +560,6 @@ internal class UsbHostDevice : UsbDevice
 
         try
         {
-            // Read the device descriptor via a control request; ISerialNumber lives
-            // at offset 16, BcdUSB at offset 2 (used to infer the USB speed).
-            // <para>经控制请求读取设备描述符；ISerialNumber 在偏移 16，BcdUSB 在偏移 2
-            // （用于推断 USB 速度）。</para>
             var dd = new byte[18];
             var done = ControlTransferRaw(0x80, 0x06, 0x0100, 0x0000, dd, dd.Length);
             if (done < 18)
@@ -628,7 +575,6 @@ internal class UsbHostDevice : UsbDevice
                 return -1;
             }
 
-            // GET_DESCRIPTOR(STRING), language 0x0409 (en-US).
             var buf = new byte[256];
             done = ControlTransferRaw(0x80, 0x06, (ushort)((0x03 << 8) | serialIndex), 0x0409, buf, buf.Length);
             if (done <= 2)
@@ -660,14 +606,6 @@ internal class UsbHostDevice : UsbDevice
     /// <inheritdoc/>
     public override void Dispose()
     {
-        // Tear-down order is critical: the ADB message loop may still be blocked in
-        // a synchronous sendIORequest on these pipes. Abort first (blocked calls
-        // return kIOReturnAborted immediately), wait for in-flight transfers to
-        // leave the transfer path, and only then release the native objects —
-        // releasing a pipe mid-request segfaults in objc_release.
-        // <para>销毁顺序很关键：ADB 消息循环可能仍阻塞在管道的同步 sendIORequest 上。
-        // 先中止（阻塞调用立即以 kIOReturnAborted 返回），再等在飞传输退出传输路径，
-        // 最后释放原生对象——请求进行中释放管道会在 objc_release 段错误。</para>
         Volatile.Write(ref _disposing, 1);
         UsbHostAPI.AbortPipe(_pipeIn);
         UsbHostAPI.AbortPipe(_pipeOut);

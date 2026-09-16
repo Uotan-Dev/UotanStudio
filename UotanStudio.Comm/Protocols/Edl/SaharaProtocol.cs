@@ -85,10 +85,6 @@ public sealed class SaharaProtocol(ICommTransport transport, int? timeoutMs = nu
         ThrowIfDisposed();
         Log("Waiting for Sahara HELLO from device...");
 
-        // Passive read first: a device still in Sahara sends HELLO immediately; one already in
-        // Firehose mode does not, so a short probe window distinguishes the two quickly.
-        // 被动读优先：Sahara 模式设备会立即发送 HELLO；已在 Firehose 模式的设备不会，
-        // 因此短探测窗口即可快速区分两者。
         var helloProbeTimeout = Math.Min(_timeoutMs, EdlConstants.HelloProbeTimeoutMs);
         byte[] firstData;
 
@@ -98,15 +94,6 @@ public sealed class SaharaProtocol(ICommTransport transport, int? timeoutMs = nu
         }
         catch (EdlException ex) when (ex.ErrorCode == EdlErrorCode.ReadPortTimeout)
         {
-            // Two possibilities on a first-read timeout:
-            //  1) The QUD driver swallowed the initial HELLO (device still in Sahara) — send an
-            //     unsolicited HELLO_RESPONSE so the device re-sends its HELLO;
-            //  2) The device is already in Firehose mode (no Sahara HELLO) — probe with an
-            //     active Firehose <nop>.
-            // 首读超时的两种可能：
-            //  1) QUD 驱动吞掉了首个 HELLO（设备仍在 Sahara）——发送主动 HELLO_RESPONSE
-            //     让设备重发 HELLO；
-            //  2) 设备已在 Firehose 模式（无 Sahara HELLO）——用主动 Firehose <nop> 探测。
             if (QudHelloRecoveryEnabled)
             {
                 Log("First read timed out; the QUD driver may have consumed the HELLO. " +
@@ -127,10 +114,6 @@ public sealed class SaharaProtocol(ICommTransport transport, int? timeoutMs = nu
                 }
                 catch (EdlException recoveryEx) when (recoveryEx.ErrorCode == EdlErrorCode.ReadPortTimeout)
                 {
-                    // The recovery HELLO never arrived; fall through to the Firehose NOP probe
-                    // before giving up (the device may already be running Firehose).
-                    // 恢复 HELLO 未到达；先回退到 Firehose NOP 探测再放弃（设备可能已在
-                    // 运行 Firehose）。
                     if (await ProbeFirehoseNopAsync(cancellationToken))
                     {
                         FirehoseAlreadyRunning = true;
@@ -250,10 +233,6 @@ public sealed class SaharaProtocol(ICommTransport transport, int? timeoutMs = nu
                         var fullEoi = await ReadRemainingPacket<SaharaEndOfImagePacket>(headerData, cancellationToken);
                         var eoi = BytesToStruct<SaharaEndOfImagePacket>(fullEoi);
                         Log($"END_OF_IMAGE: ImageId={eoi.ImageId}, Status={eoi.Status}");
-                        // A non-zero status means the device rejected the image (e.g. hash
-                        // mismatch); fail before replying DONE so the error is not swallowed.
-                        // 非零状态表示设备拒绝了镜像（例如哈希不匹配）；在回复 DONE 之前
-                        // 失败，避免错误被吞掉。
                         if (eoi.Status != 0)
                         {
                             throw new SaharaException($"END_OF_IMAGE with non-zero status: {eoi.Status}");
@@ -270,11 +249,6 @@ public sealed class SaharaProtocol(ICommTransport transport, int? timeoutMs = nu
                         var fullDone = await ReadRemainingPacket<SaharaDoneResponsePacket>(headerData, cancellationToken);
                         var dr = BytesToStruct<SaharaDoneResponsePacket>(fullDone);
                         Log($"DONE_RESPONSE: Status={dr.Status}");
-                        // Status 1 = image transfer complete; status 0 = transfer still pending
-                        // (keep looping and serve further READ_DATA requests); anything else
-                        // is a protocol error.
-                        // 状态 1 = 镜像传输完成；状态 0 = 传输仍待处理（继续循环并服务后续
-                        // READ_DATA 请求）；其他值为协议错误。
                         if (dr.Status == 1)
                         {
                             handshakeComplete = true;
@@ -336,13 +310,6 @@ public sealed class SaharaProtocol(ICommTransport transport, int? timeoutMs = nu
             }
         }
 
-        // Read one more (optional) trailing packet with a short timeout: right after
-        // DONE_RESPONSE the transitioning device may emit a final Sahara packet; consuming it
-        // here prevents it from being misread as garbage by Firehose's first read. A timeout
-        // is tolerated (many devices send nothing).
-        // 以短超时再读取一个（可选的）尾包：DONE_RESPONSE 之后正在切换模式的设备可能发出
-        // 最后一个 Sahara 包；在此消费它可避免其被 Firehose 的首次读取误读为垃圾数据。
-        // 超时可容忍（很多设备什么都不发）。
         try
         {
             var trailing = await ReadExactAsync(Marshal.SizeOf<SaharaPacketHeader>(), EdlConstants.SaharaTrailingPacketTimeoutMs, cancellationToken);
@@ -368,10 +335,6 @@ public sealed class SaharaProtocol(ICommTransport transport, int? timeoutMs = nu
     /// <param name="command">The command name (for diagnostics). 命令名（用于诊断）。</param>
     private static void ValidateReadRange(long offset, long length, long imageLength, string command)
     {
-        // An out-of-range request must fail loudly: silently sending a short read desynchronizes
-        // the device's image hash and yields a confusing END_OF_IMAGE error later.
-        // 越界请求必须显式失败：静默发送短读会使设备端镜像哈希失步，之后才报出令人困惑的
-        // END_OF_IMAGE 错误。
         if (offset < 0 || length < 0 || imageLength < 0 || offset > imageLength || length > imageLength - offset)
         {
             throw new SaharaException($"{command} requests invalid range: offset={offset}, length={length}, image length={imageLength}");
@@ -433,15 +396,6 @@ public sealed class SaharaProtocol(ICommTransport transport, int? timeoutMs = nu
             var nopBytes = Encoding.UTF8.GetBytes(EdlConstants.XmlHeader + EdlConstants.DataOpen + "<nop value=\"ping\"/>\n" + EdlConstants.DataClose);
             await WriteDataAsync(nopBytes, cancellationToken);
 
-            // A Firehose <nop> response is several independent <data> blocks: the target
-            // <log> block first, then the <response value="ACK"/> block. The first "</data>"
-            // must NOT stop the loop — that is just the end of the log block. Use PARTIAL
-            // reads (returning whatever arrived) and accumulate until a
-            // <response ... ACK> is assembled or the overall budget elapses.
-            // Firehose 对 <nop> 的响应是多个独立 <data> 块：先是目标 <log> 块，其后才是
-            // <response value="ACK"/> 块。不能以第一个 "</data>" 停止——那只是 log 块的
-            // 结束。使用部分读取（返回已到达的数据）并累积，直到拼出
-            // <response ... ACK> 或总预算耗尽。
             var sb = new StringBuilder();
             var start = Environment.TickCount64;
             var budget = Math.Max(_timeoutMs, EdlConstants.ProbeReadBudgetMs);

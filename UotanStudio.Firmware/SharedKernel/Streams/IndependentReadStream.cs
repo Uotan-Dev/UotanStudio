@@ -18,7 +18,6 @@ internal sealed class IndependentReadStream : Stream
         lock (gate)
         {
             _length = source.Length;
-            // Do not bypass a derived stream's transformation or validation overrides.
             if (source.GetType() == typeof(FileStream)) _file = ((FileStream)source).SafeFileHandle;
         }
     }

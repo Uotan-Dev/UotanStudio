@@ -184,9 +184,9 @@ public sealed class SolutionSnapshot
     /// <summary>
     /// Solution-level extension state keyed by well-known names (e.g. <c>delivery</c> delivery
     /// plan, <c>panels</c> panel visibility), stored as raw JSON elements so the host application
-    /// owns their schema. Optional; older solutions simply omit it.
+    /// owns their schema. Optional; solutions may omit it.
     /// <para>解决方案级扩展状态，按约定键名存放（如 <c>delivery</c> 交付计划、<c>panels</c> 面板
-    /// 可见性），以原始 JSON 元素承载、模式由宿主应用定义。可选；旧解决方案不包含该字段。</para>
+    /// 可见性），以原始 JSON 元素承载、模式由宿主应用定义。可选；解决方案可不包含该字段。</para>
     /// </summary>
     public Dictionary<string, JsonElement>? State { get; set; }
 }

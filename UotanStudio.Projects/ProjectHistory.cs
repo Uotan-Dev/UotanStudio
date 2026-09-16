@@ -166,7 +166,7 @@ public sealed class ProjectHistory
         finally { IsExecuting = false; }
     }
 
-    /// <summary>Optional asynchronous action factory; takes precedence over the legacy synchronous factory.</summary>
+    /// <summary>Optional asynchronous action factory; takes precedence over the synchronous factory when set.</summary>
     public Func<HistoryOperationDto, (Func<CancellationToken, Task> Undo, Func<CancellationToken, Task> Redo)>? ReconstructAsyncOperation { get; set; }
 
     private HistoryEntry Reconstruct(HistoryOperationDto operation)
@@ -235,9 +235,6 @@ public sealed class ProjectHistory
         _redoStack.Clear();
         if (_undoStack.Count > Capacity)
         {
-            // 丢弃最旧的超额条目：弹出全部，保留最新 Capacity 条再按原顺序还原。
-            // Drop the oldest excess entries: pop everything, keep the newest Capacity entries,
-            // then restore them in order (buffer[0] is the newest, buffer[^1] the oldest).
             _trimBuffer.Clear();
             while (_undoStack.Count > 0)
             {
@@ -395,8 +392,6 @@ public sealed class ProjectHistory
 
         _undoStack.Clear();
         _redoStack.Clear();
-        // operations[0] 为最新；逆序重建使栈顶（Peek）为最新条目。
-        // operations[0] is the newest; rebuild in reverse so the stack top (Peek) is the newest entry.
         for (var i = Math.Min(operations.Count, Capacity) - 1; i >= 0; i--)
         {
             var operation = operations[i];

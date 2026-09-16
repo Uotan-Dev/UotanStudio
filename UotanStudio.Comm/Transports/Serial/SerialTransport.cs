@@ -90,9 +90,6 @@ public sealed class SerialTransport(
             WriteTimeout = DefaultTimeoutMs,
         };
 
-        // 1MB 缓冲区，匹配 fh_loader。Unix 平台内核管理缓冲区大小，设置会被拒绝并忽略。
-        // 1MB buffers to match fh_loader. Unix serial devices size buffers in the kernel
-        // and reject custom sizes, which we silently ignore.
         try
         {
             port.ReadBufferSize = 1048576;
@@ -154,8 +151,6 @@ public sealed class SerialTransport(
             }
             catch
             {
-                // Closing a half-open or already-failing port must not mask the original error.
-                // 关闭半开或已故障的端口不应掩盖原始错误。
             }
         }
 
@@ -176,8 +171,6 @@ public sealed class SerialTransport(
         }
         catch
         {
-            // Buffer discard is best-effort.
-            // 缓冲区清空为尽力而为操作。
         }
     }
 

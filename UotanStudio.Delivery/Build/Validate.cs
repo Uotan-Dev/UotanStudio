@@ -3,9 +3,18 @@ namespace UotanStudio.Services.Delivery;
 /// <summary>Validation shared by preview, script generation, and file publication.</summary>
 internal static class DeliveryValidation
 {
+    /// <summary>
+    /// <para>判断名称是否为可发布的脚本文件名（updater-script、update-binary 或 .sh/.bat/.txt）。</para>
+    /// Determines whether a name is a publishable script filename (updater-script, update-binary, or .sh/.bat/.txt).
+    /// </summary>
     internal static bool IsScriptName(string name) => IsName(name) && (name == "updater-script" || name == "update-binary"
         || name.EndsWith(".sh", StringComparison.Ordinal) || name.EndsWith(".bat", StringComparison.Ordinal)
         || name.EndsWith(".txt", StringComparison.Ordinal));
+
+    /// <summary>
+    /// <para>判断数值是否为合法文件/项名称：ASCII 字母数字、下划线、连字符或点，不含 Windows 保留设备名。</para>
+    /// Determines whether a value is a valid file/entry name: ASCII alphanumerics, underscore, hyphen, or dot, excluding Windows reserved device names.
+    /// </summary>
     internal static bool IsName(string value, int maximum = 100) => value is not null && value.Length is > 0 && value.Length <= maximum
         && value is not "." and not ".." && !value.StartsWith('.') && !value.EndsWith('.')
         && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.')
@@ -13,10 +22,25 @@ internal static class DeliveryValidation
             "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9" }
             .Contains(value.Split('.')[0], StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// <para>判断数值是否为合法分区名：最长 36 个 ASCII 字母数字或下划线，payload 模式额外允许连字符。</para>
+    /// Determines whether a value is a valid partition name: up to 36 ASCII alphanumerics or underscores, plus hyphens in payload mode.
+    /// </summary>
     internal static bool IsPartition(string value, bool payload = false) => value is not null && value.Length is > 0 and <= 36
         && value[0] != '-'
         && value.All(c => char.IsAsciiLetterOrDigit(c) || c == '_' || payload && c == '-');
 
+    /// <summary>
+    /// <para>校验交付计划的输出方式、镜像归属、容器、脚本与生成条目的一致性。
+    /// 仅生成 Super_Empty 时 Empty 与 Zstd 互斥，且唯一生成条目是 super_empty.img；便携 Zstd 只作可选覆盖，
+    /// 提供时路径必须存在，缺失时由工具服务自动下载钉住版本兜底。</para>
+    /// Validates the plan's output mode, image membership, container, scripts, and generated entries.
+    /// With Super_Empty only, Empty excludes Zstd and the sole generated entry is super_empty.img; a portable
+    /// Zstd is an optional override whose provided paths must exist, otherwise the tool service downloads the
+    /// pinned release.
+    /// </summary>
+    /// <param name="plan"><para>要校验的交付计划。</para>The delivery plan to validate.</param>
+    /// <param name="sources"><para>是否校验源文件的存在与大小。</para>Whether to check source files for existence and size.</param>
     internal static void Validate(DeliveryPlan plan, bool sources = true)
     {
         plan = plan.ForOutput();
@@ -50,15 +74,11 @@ internal static class DeliveryValidation
         if (plan.PackPayload) DeliveryPayloadBuilder.Validate(plan);
         DeliveryPackageBuilder.Validate(plan);
         if (sources && DeliveryPackageBuilder.HasDat(plan)) DeliveryRecoveryUpdater.Resolve(plan);
-        // 仅生成Super_Empty：Empty 与 Zstd 互斥，且唯一生成条目是 super_empty.img。
-        // Super_Empty only: Empty excludes Zstd, and the single generated entry must be super_empty.img.
         if (plan.PackSuper && plan.Super.Empty && plan.Super.Zstd)
             throw new InvalidDataException("仅生成Super_Empty 与压缩为ZST 不能同时选择 / Super_Empty only excludes ZST compression.");
         if (plan.Super.ZstdLevel is < 0 or > 22)
             throw new InvalidDataException("Super Zstd 压缩等级无效 / Invalid Super Zstd level.");
         var generated = plan.Files.Where(f => f.Generated).ToArray();
-        // 新语义：Empty 时唯一生成条目是 super_empty.img，不再同时生成完整 super。
-        // New semantics: with Empty, the only generated entry is super_empty.img; the full super is no longer produced.
         if (generated.Any(f => !(plan.PackSuper || plan.PackPayload) || f.SourcePath.Length != 0 || f.Optional
             || f.Partition != (f.FileName == "super_empty.img" ? "super_empty" : plan.PackPayload ? "payload" : "super")
             || f.FileName != (f.Partition == "super_empty" ? "super_empty.img" : DeliveryOutputService.ContainerFileName(plan)))
@@ -88,9 +108,6 @@ internal static class DeliveryValidation
         }
         if (plan.PackSuper && (!IsPartition(plan.Super.DeviceName) || !IsPartition(plan.Super.Group)))
             throw new InvalidDataException("Super 设备名或分组名无效 / Invalid Super device or group.");
-        // 便携 Zstd 仅作可选覆盖：有提供且路径存在时通过，缺失时由 DeliveryToolService 自动下载钉住版本兜底。
-        // A portable Zstd is an optional override: provided paths must exist; otherwise DeliveryToolService
-        // falls back to downloading the pinned release, so nothing is required here.
         if (sources && plan.OrganizeDirectory && plan.Files.Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase)))
             foreach (var platform in new[] { ("Windows", plan.Windows), ("Linux", plan.Linux), ("macOS", plan.MacOS) }.Where(p => p.Item2))
             {
@@ -100,6 +117,10 @@ internal static class DeliveryValidation
             }
     }
 
+    /// <summary>
+    /// <para>校验单个源镜像存在、非符号链接、长度与声明一致且非空（除非允许空）。</para>
+    /// Validates a single source image exists, is not a symlink, matches its declared length, and is non-empty unless allowed.
+    /// </summary>
     internal static void CheckSource(DeliveryFile file, bool allowEmpty = false)
     {
         var info = new FileInfo(file.SourcePath);

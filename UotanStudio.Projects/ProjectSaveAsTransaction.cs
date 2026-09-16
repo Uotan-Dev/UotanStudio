@@ -58,7 +58,6 @@ internal sealed class ProjectSaveAsTransaction : IDisposable
 
     internal Task PrepareAsync(string? sourceRoot, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
-        // Existing unrelated destination files survive successful Save As.
         Directory.CreateDirectory(StagingRoot);
         if (Directory.Exists(RootDirectory)) CopyTree(RootDirectory, StagingRoot, cancellationToken);
         if (sourceRoot is not null) CopyTree(sourceRoot, StagingRoot, cancellationToken);
@@ -121,8 +120,6 @@ internal sealed class ProjectSaveAsTransaction : IDisposable
         }
         catch
         {
-            // Move the new tree back into our owned staging location before restoring the old tree.
-            // If restoration itself fails, leave the backup intact for recovery.
             if (installedRoot) Directory.Move(RootDirectory, StagingRoot);
             if (movedOldRoot) Directory.Move(_backupRoot, RootDirectory);
             throw;

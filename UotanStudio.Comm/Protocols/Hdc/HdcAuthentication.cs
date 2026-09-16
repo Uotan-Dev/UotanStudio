@@ -154,8 +154,6 @@ public sealed class HdcAuthentication : IDisposable
             try { File.Move(temporaryPath, path, overwrite: false); }
             catch (IOException) when (File.Exists(path))
             {
-                // Another process published its complete identity first. Never
-                // overwrite it or expose a partially written private key.
             }
             var loaded = LoadPrivateKey(path);
             try
@@ -209,13 +207,10 @@ public sealed class HdcAuthentication : IDisposable
 
         if (verifyType == HdcAuthVerifyType.Rsa3072Sha512)
         {
-            // RSA-PSS SHA-512 signature (primary HDC authentication mode).
             return _rsa.SignData(token, HashAlgorithmName.SHA512, RSASignaturePadding.Pss);
         }
         if (verifyType == HdcAuthVerifyType.RsaEncrypt)
         {
-            // Upstream RSA_private_encrypt uses block type 1 with the raw
-            // challenge, not public-key encryption and not a DigestInfo hash.
             var signer = new Pkcs1Encoding(new RsaBlindedEngine());
             signer.Init(true, DotNetUtilities.GetRsaKeyPair(_rsa).Private);
             return signer.ProcessBlock(token, 0, token.Length);
@@ -370,8 +365,6 @@ public sealed class HdcAuthentication : IDisposable
             return;
         }
 
-        // Unix: atomically create with 0600 via FileStreamOptions.UnixCreateMode.
-        // Fall back to File.WriteAllBytes on older runtimes that lack UnixCreateMode.
         var options = new FileStreamOptions
         {
             Mode = FileMode.Create,
@@ -384,7 +377,6 @@ public sealed class HdcAuthentication : IDisposable
         }
         catch (PlatformNotSupportedException)
         {
-            // Runtime does not support UnixCreateMode; proceed with default mode.
         }
 
         using (var fs = new FileStream(path, options))

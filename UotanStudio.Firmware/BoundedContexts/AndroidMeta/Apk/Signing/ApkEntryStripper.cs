@@ -76,8 +76,6 @@ public static class ApkEntryStripper
             throw new InvalidDataException("APK central directory exceeds the supported size. APK 中央目录超出支持的大小。");
         }
 
-        // Parse the central directory into records.
-        // 把中央目录解析为记录。
         input.Seek(sections.CentralDirectoryOffset, SeekOrigin.Begin);
         var centralDirectory = new byte[sections.CentralDirectorySize];
         input.ReadExactly(centralDirectory);
@@ -115,8 +113,6 @@ public static class ApkEntryStripper
             offset += recordLength;
         }
 
-        // Copy kept entries in local-header order so sequential offsets stay contiguous.
-        // 按本地文件头顺序复制保留条目，使偏移连续。
         var kept = new List<CentralRecord>();
         foreach (var record in records)
         {
@@ -133,8 +129,6 @@ public static class ApkEntryStripper
         foreach (var record in kept)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            // Preserve stored-entry alignment even when preceding signature entries were removed.
-            // 删除前置签名条目后仍保持未压缩内容的原有对齐。
             if (record.Method == 0)
             {
                 input.Position = record.LocalHeaderOffset + 26;
@@ -151,8 +145,6 @@ public static class ApkEntryStripper
             CopyRawEntry(input, output, record, cancellationToken);
         }
 
-        // Append the requested STORED entries.
-        // 追加请求的 STORED 条目。
         var appended = new List<byte[]>();
         foreach (var (name, content) in request.EntriesToAppend)
         {
@@ -161,9 +153,6 @@ public static class ApkEntryStripper
             appended.Add(BuildCentralRecord(record.name, record.crc, (uint)content.Length, (uint)content.Length, record.offset));
         }
 
-        // Rewrite the central directory: kept records (original order) with patched offsets,
-        // then the appended records.
-        // 重写中央目录：保留条目按原顺序回填新偏移，然后写入追加条目。
         var centralDirectoryStart = output.Position;
         long centralDirectorySize = 0;
         foreach (var record in records)
@@ -221,8 +210,6 @@ public static class ApkEntryStripper
 
         if ((record.Flags & DataDescriptorFlag) != 0)
         {
-            // Streamed entries carry a data descriptor after the payload (optional signature first).
-            // 流式条目在载荷后携带数据描述符（可能先有可选签名）。
             Span<byte> peek = stackalloc byte[4];
             var position = input.Position;
             input.ReadExactly(peek);
@@ -302,8 +289,6 @@ public static class ApkEntryStripper
 
     private static void WriteDosTimestamp(Span<byte> target)
     {
-        // Fixed deterministic timestamp (2020-01-01 00:00:00) keeps builds reproducible.
-        // 固定确定性时间戳（2020-01-01 00:00:00）保证构建可复现。
         const ushort dosDate = ((2020 - 1980) << 9) | (1 << 5) | 1;
         BinaryPrimitives.WriteUInt16LittleEndian(target.Slice(0, 2), 0);
         BinaryPrimitives.WriteUInt16LittleEndian(target.Slice(2, 2), dosDate);

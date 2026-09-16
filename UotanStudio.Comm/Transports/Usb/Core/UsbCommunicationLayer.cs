@@ -102,13 +102,6 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         var providers = ResolveProviders(apiKind);
         var devices = new List<UsbDeviceInfo>();
 
-        // Auto 解析多个后端（Windows 上为 WinUSB 原生 + libusb）时，同一物理设备会被
-        // 各后端分别枚举一次；按物理键去重，避免设备管理器出现重复条目
-        // （与 OpenDeviceSessions 的去重逻辑保持一致）。
-        // When Auto resolves multiple backends (WinUSB native + libusb on Windows) the
-        // same physical device is enumerated once per backend; deduplicate by physical
-        // key so the device manager does not show duplicate entries (mirrors
-        // OpenDeviceSessions).
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var provider in providers)
@@ -194,13 +187,6 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     {
         ArgumentNullException.ThrowIfNull(onChanged);
 
-        // Auto 按平台配置表解析为单一默认后端，使插拔监视与枚举使用同一后端：
-        // Windows → WM_DEVICECHANGE（winusb 原生），Linux/macOS → libusb hotplug。
-        // 未知平台保持 Auto，落入下方轮询监视器。
-        // Auto resolves to a single default backend per the platform table so the
-        // hotplug monitor matches the enumeration backend: WM_DEVICECHANGE (winusb
-        // native) on Windows, libusb hotplug on Linux/macOS. Unknown platforms keep
-        // Auto and fall through to the polling monitor below.
         if (apiKind == UsbApiKind.Auto)
         {
             apiKind = PreferredAutoApiKind();
@@ -226,9 +212,6 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
             }
         }
 
-        // Prefer libusb's native hotplug callback (event-driven on Linux/macOS) when the
-        // caller explicitly selected the libusb backend. Falls back to polling when the
-        // platform does not support hotplug (Windows) or the native runtime is absent.
         if (apiKind == UsbApiKind.LibUsbDotNet)
         {
             try
@@ -254,8 +237,6 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
             }
         }
 
-        // On Windows, prefer event-driven WM_DEVICECHANGE notifications for the native
-        // backend; fall back to polling when the hidden Message window cannot be created.
         if (apiKind == UsbApiKind.Native && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             try
@@ -400,8 +381,6 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         var providers = ResolveProviders(apiKind);
         var sessions = new List<IUsbDeviceSession>();
 
-        // Auto 解析多个后端时，同一物理设备可能被 native 与 libusb 各枚举一次，
-        // 按物理键去重，避免同一设备被打开两次。
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var provider in providers)
@@ -465,7 +444,6 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
                 continue;
             }
 
-            // Select metadata first, then constrain the backend to that exact physical path.
             foreach (var info in provider.EnumerateDeviceInfos(filter))
             {
                 var selectedFilter = UsbDeviceIdentity.TryParseKeyFilter(info.DeviceKey);
@@ -512,23 +490,10 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
             throw new ArgumentException("Device key cannot be null or whitespace.", nameof(deviceKey));
         }
 
-        // Rebuild the filter embedded in the key (VID/PID + interface triple) so the
-        // backend binds the SAME interface the key was produced from. Without this, an
-        // interface-filtered key (e.g. ADB FF|42|01) is matched against sessions opened
-        // with no interface constraint, which binds the first bulk interface (FF|FF|00)
-        // of a composite device and never equals the requested key.
-        // <para>重建键中内嵌的过滤器（VID/PID + 接口三元组），使后端绑定与生成该键时相同的
-        // 接口。否则，接口过滤器产生的键（如 ADB FF|42|01）会被拿去与无接口约束打开的会话
-        // 比较，而无约束打开会绑定复合设备第一个 bulk 接口（FF|FF|00），永远不等于所请求的键。</para>
         var keyFilter = UsbDeviceIdentity.TryParseKeyFilter(deviceKey);
         if (keyFilter is null || string.IsNullOrEmpty(keyFilter.DevicePathEquals))
             throw new ArgumentException("A physical USB key with an exact path is required.", nameof(deviceKey));
 
-        // Auto 下按 key 内嵌的后端名（首段，如 "native"/"libusb"）解析，使带后端限定的
-        // 键按其生成后端重开，而非被 Auto 的单一默认后端（WinUSB）拒绝匹配。
-        // Under Auto, resolve by the backend name embedded in the key (first segment,
-        // e.g. "native"/"libusb") so backend-qualified keys reopen against their producing
-        // backend instead of being rejected by Auto's single default backend.
         var providers = ResolveProviders(apiKind);
         if (apiKind == UsbApiKind.Auto)
         {
@@ -557,8 +522,6 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
             }
             finally
             {
-                // Providers return an eagerly opened list, including sessions
-                // after the match. The returned session is the only survivor.
                 foreach (var session in sessions)
                     if (!ReferenceEquals(session, selected)) session.Dispose();
             }
@@ -591,14 +554,6 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     {
         if (apiKind == UsbApiKind.Auto)
         {
-            // Auto 按平台配置表解析为单一默认后端：Windows 走 winusb 原生，
-            // Linux/macOS 走 libusb。首选后端不可用（例如缺少 libusb 原生运行时）
-            // 时，回退到当前平台第一个可用后端，保证设备发现始终可用。
-            // Auto resolves to a single default backend per the platform table:
-            // winusb-native on Windows, libusb on Linux/macOS. When the preferred
-            // backend is unavailable (e.g. missing libusb native runtime), fall back
-            // to the first backend supported on the current platform so device
-            // discovery always works.
             var preferredName = PreferredAutoApiName();
             return preferredName is not null &&
                 _registry.TryCreate(preferredName, out var preferred) &&
@@ -616,8 +571,6 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
             UsbApiKind.Native => NativeUsbApiProvider.ApiNameConst,
             UsbApiKind.LibUsbDotNet => LibUsbApiProvider.ApiNameConst,
             UsbApiKind.HarmonyOS => HarmonyOSUsbApiProvider.ApiNameConst,
-            // Auto 已在上方 ResolveProviders 开头解析为单一具体后端，不应到达此处。
-            // Auto is resolved to a concrete backend at the top of ResolveProviders; unreachable here.
             UsbApiKind.Auto => string.Empty,
             UsbApiKind.Custom => string.Empty,
             _ => string.Empty
@@ -656,9 +609,6 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     {
         UsbApiKind.Native => NativeUsbApiProvider.ApiNameConst,
         UsbApiKind.LibUsbDotNet => LibUsbApiProvider.ApiNameConst,
-        // 未知平台或非自动解析的后端没有首选名称，回退到首个可用后端。
-        // Unknown platforms and non-Auto resolved backends have no preferred name;
-        // fall back to the first supported backend.
         _ => null
     };
 
@@ -686,13 +636,6 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            // The IOKit classic API is the only macOS backend. The key stays
-            // "copy-devices" (matching the pre-IOUSBHost-removal contract) so CI
-            // assertions keep working; the value now reports the IOKit finder's
-            // IOServiceGetMatchingServices outcome.
-            // <para>IOKit 经典 API 是唯一的 macOS 后端。键名保持 "copy-devices"
-            // （与移除 IOUSBHost 前的契约一致），使 CI 断言继续可用；其值现在报告
-            // IOKit finder 的 IOServiceGetMatchingServices 结果。</para>
             return $"copy-devices={IOKitUsbFinder.LastCopyDevicesSucceeded}; scanned={IOKitUsbFinder.LastScannedDeviceCount}; matched={IOKitUsbFinder.LastMatchedDeviceCount}";
         }
 

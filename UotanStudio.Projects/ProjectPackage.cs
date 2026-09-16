@@ -69,7 +69,6 @@ public static class ProjectPackage
             if (!ProjectSaveAsTransaction.IsWithin(root, nodePath)
                 || await SolutionPersistenceService.LoadNodeProjectAsync(nodePath, cancellationToken) is null)
                 throw new InvalidDataException("Missing or invalid packaged workflow.");
-            // Never reconstruct source-machine absolute undo paths in the imported workspace.
             foreach (var project in snapshot.SubProjects ?? [])
             {
                 var subRoot = Path.GetDirectoryName(Path.GetFullPath(Path.Combine(root, project.RelativePath)))!;

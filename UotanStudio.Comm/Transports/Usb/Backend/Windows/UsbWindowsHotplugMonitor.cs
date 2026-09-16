@@ -115,8 +115,6 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
         }
         finally
         {
-            // RegisterClassW 拷贝类名字符串，此处统一释放，异常路径也不泄漏。
-            // RegisterClassW copies the class-name string; free it here so the failure path leaks nothing.
             Marshal.FreeHGlobal(classNamePtr);
             if (_hwnd != IntPtr.Zero)
             {
@@ -139,7 +137,6 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
 
     private void TriggerPoll()
     {
-        // Never block the Message pump: re-enumerate and diff on the thread pool.
         _ = Task.Run(() =>
         {
             try

@@ -28,10 +28,6 @@ public sealed class CountingWriteStream : Stream
     public long BytesWritten { get; private set; }
     public long MaximumBytes => _maximumBytes;
     public override bool CanRead => false;
-    // 镜像构建（EXT4/EROFS）会随机定位写入，计数流必须把定位操作透传到底层可寻址流，
-    // 否则进度路径会在首次 WriteAt 时抛出 NotSupportedException。
-    // Random-access image builders seek before writing; forward positioning to the underlying
-    // seekable stream so a progress-enabled build can still place blocks anywhere.
     public override bool CanSeek => _inner.CanSeek;
     public override bool CanWrite => !_disposed;
     public override long Length => _inner.Length;

@@ -148,8 +148,6 @@ public static class HsuartPacket
         }
 
         var tempBuffer = new byte[MaxPacketSize];
-        // Ack/Nak 分支不写入 encodedLength，默认初始化是控制流必需的。
-        // The Ack/Nak arms never assign encodedLength; the default init is required by control flow.
         var encodedLength = 0;
 
         switch (packetId)
@@ -174,8 +172,6 @@ public static class HsuartPacket
 
             case HsuartPacketId.ProtocolPacket:
             case HsuartPacketId.EndOfTransferPacket:
-                // EndOfTransfer 允许空负载（仅含标识 + CRC）；ProtocolPacket 必须携带负载。
-                // EndOfTransfer may carry an empty payload (id + CRC only); ProtocolPacket requires a payload.
                 if (src.IsEmpty && packetId == HsuartPacketId.ProtocolPacket)
                 {
                     error = HsuartPacketError.InvalidParameter;

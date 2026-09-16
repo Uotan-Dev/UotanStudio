@@ -105,15 +105,12 @@ public static class ApkParser
         }
         catch (Exception ex) when (ex is InvalidDataException or OverflowException or EndOfStreamException or ArgumentOutOfRangeException)
         {
-            // A malformed optional signing block must not prevent the metadata view from opening.
         }
         info.SigningSchemes.Sort(StringComparer.Ordinal);
     }
 
     private static string? DetectHardening(ZipArchive zip)
     {
-        // These markers are intentionally conservative and only report a provider when a
-        // well-known loader/library name is present. Absence is not proof that an APK is plain.
         var markers = new (string Marker, string Provider)[]
         {
             ("libjiagu", "360 Jiagu"), ("libsecexe", "SecNeo"), ("libshell", "Bangcle"),

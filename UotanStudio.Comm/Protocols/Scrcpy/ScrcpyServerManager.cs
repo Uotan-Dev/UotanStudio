@@ -64,9 +64,6 @@ public static class ScrcpyServerManager
 
         ArgumentNullException.ThrowIfNull(options);
 
-        // v1 shell service: the stream stays open until the (long-running)
-        // server process exits. 逐字节数据即服务端 stdout 日志。
-        // v1 shell 服务：流保持打开直至（长驻的）服务端进程退出。
         return session.Connection.OpenStream("shell:" + options.BuildShellCommand());
     }
 
@@ -83,8 +80,6 @@ public static class ScrcpyServerManager
         }
 
         using var stream = session.Connection.OpenStream("shell:pkill -f " + ScrcpyConstants.ServerMainClass);
-        // Drain until the pkill itself finishes; ignore output/errors.
-        // 读取至 pkill 自身结束；忽略输出与错误。
         while (stream.Read(3000) is not null)
         {
         }

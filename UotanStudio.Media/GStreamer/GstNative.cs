@@ -46,7 +46,7 @@ internal static unsafe partial class GstNative
     {
         long nanoseconds = checked(ticks * 100);
         Marshal.WriteInt64(buffer, BufferPtsOffset, nanoseconds);
-        Marshal.WriteInt64(buffer, BufferPtsOffset + 8, -1); // DTS unknown; do not invent decoding order.
+        Marshal.WriteInt64(buffer, BufferPtsOffset + 8, -1);
     }
     internal static long GetTimestamp(nint buffer)
     {

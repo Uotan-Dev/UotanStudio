@@ -196,14 +196,10 @@ internal static class DeviceToolHandlers
     public static Task<string> ListAdbDevicesAsync()
         => Task.Run(() =>
         {
-            // host:devices-l needs no target selection; states include offline/unauthorized.
-            // host:devices-l 无需选择目标；状态包含 offline/unauthorized。
             var devices = new List<object>();
             using (var stream = new AdbServerServices("unused").Open("host:devices-l"))
             using (var reader = new StreamReader(stream))
             {
-                // First line is the hex length header emitted by the adb server.
-                // 第一行是 adb server 输出的十六进制长度头。
                 if (string.IsNullOrWhiteSpace(reader.ReadLine()))
                 {
                     return ToolJson.Serialize(new ToolResult(true, "0 adb target(s).", devices));
@@ -243,8 +239,6 @@ internal static class DeviceToolHandlers
             var resolvedLocal = sandbox.ResolveOutput(localPath);
             var services = new AdbServerServices(serial);
             services.ValidateTarget();
-            // Inline adb sync RECV over the service stream (mirrors AdbServerServices.Push).
-            // 在服务流上内联实现 adb sync RECV（与 AdbServerServices.Push 对称）。
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(resolvedLocal))!);
             using (var stream = services.Open("sync:"))
             {

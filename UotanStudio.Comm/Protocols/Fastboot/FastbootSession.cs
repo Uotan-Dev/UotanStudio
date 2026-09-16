@@ -162,8 +162,6 @@ public sealed class FastbootSession : IProtocolSession
 
         var response = new FastbootResponse();
         var timeout = timeoutMs ?? _timeoutMs;
-        // Use the monotonic clock (Stopwatch) for the response timeout so that system clock
-        // adjustments cannot corrupt the deadline, matching AOSP's steady_clock.
         var startTimestamp = Stopwatch.GetTimestamp();
         var timeoutTicks = (long)(Stopwatch.Frequency * (timeout / 1000.0));
         var pending = string.Empty;
@@ -175,8 +173,6 @@ public sealed class FastbootSession : IProtocolSession
         {
             while (true)
             {
-                // Per-read timeout is bounded by the global budget only (no per-iteration
-                // floor that would let the total wait overshoot the requested timeout).
                 var remainingTicks = timeoutTicks - (Stopwatch.GetTimestamp() - startTimestamp);
                 if (remainingTicks <= 0)
                 {
@@ -204,8 +200,6 @@ public sealed class FastbootSession : IProtocolSession
 
                     if (!IsKnownPrefixAt(pending, pendingOffset))
                     {
-                        // Scan forward for the next known status prefix; if none exists the
-                        // stream is unrecoverable (device sent an unknown status code).
                         var nextPrefix = -1;
                         for (var i = pendingOffset + 1; i <= pending.Length - 4; i++)
                         {
@@ -233,7 +227,6 @@ public sealed class FastbootSession : IProtocolSession
                     var isFail = IsPrefixAt(pending, pendingOffset, 'F', 'A', 'I', 'L');
                     var isInfo = IsPrefixAt(pending, pendingOffset, 'I', 'N', 'F', 'O');
                     var isText = IsPrefixAt(pending, pendingOffset, 'T', 'E', 'X', 'T');
-                    // DATA is the remaining known prefix at this point.
 
                     if (isOkay || isFail)
                     {
@@ -250,9 +243,6 @@ public sealed class FastbootSession : IProtocolSession
                         var endIdx = FindInfoTextEnd(pending, contentStart);
                         if (endIdx < 0)
                         {
-                            // Most transports deliver one status frame per read packet. If no
-                            // boundary marker exists, treat the current chunk as one complete
-                            // INFO/TEXT frame to avoid merging with the next status frame.
                             endIdx = pending.Length;
                         }
 
@@ -274,13 +264,10 @@ public sealed class FastbootSession : IProtocolSession
                             next++;
                         }
                         pendingOffset = next;
-                        // Reset the deadline on progress output so long-running commands
-                        // (erase, flash, getvar:all, ...) with periodic INFO frames keep going.
                         startTimestamp = Stopwatch.GetTimestamp();
                         continue;
                     }
 
-                    // DATA: expected to carry a hex size field and no extra payload.
                     var dataHex = ExtractContent(pending, pendingOffset + 4).Trim();
                     var dataSize = ParseDataSizeHex(dataHex);
                     if (dataSize < 0)
@@ -422,16 +409,11 @@ public sealed class FastbootSession : IProtocolSession
 
         for (var i = contentStart + 1; i <= s.Length - 4; i++)
         {
-            // For INFO/TEXT payloads without delimiters, treat any known status prefix
-            // (OKAY/FAIL/DATA/INFO/TEXT) as a boundary. This splits consecutive INFO/TEXT
-            // frames in a single packet while protecting against malformed streams.
             if (IsTerminalPrefixAt(s, i))
             {
                 return i;
             }
 
-            // Avoid splitting plain payload text that happens to contain INFO/TEXT tokens:
-            // only split mid-payload when the packet also contains a terminal status marker.
             var isInfoAt = IsPrefixAt(s, i, 'I', 'N', 'F', 'O');
             var isTextAt = IsPrefixAt(s, i, 'T', 'E', 'X', 'T');
             if ((isInfoAt || isTextAt) && firstTerminalIdx > i)
@@ -1302,8 +1284,6 @@ public sealed class FastbootSession : IProtocolSession
         }
         catch
         {
-            // Ignore transient failures; cancellation is best-effort.
-            // 忽略瞬时失败；取消是尽力而为。
         }
     }
 
@@ -1361,8 +1341,6 @@ public sealed class FastbootSession : IProtocolSession
             }
             catch
             {
-                // Best-effort: a partition may not exist on all devices.
-                // 尽力而为：某些设备可能不存在对应分区。
             }
         }
     }

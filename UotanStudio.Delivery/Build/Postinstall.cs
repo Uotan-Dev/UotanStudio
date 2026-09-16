@@ -2,9 +2,14 @@ using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 
 namespace UotanStudio.Services.Delivery;
 
-/// <summary>Reads update_engine postinstall configuration without executing programs on the host.</summary>
+/// <summary><para>在不执行宿主机程序的前提下读取 update_engine postinstall 配置。</para>
+/// Reads update_engine postinstall configuration without executing programs on the host.</summary>
 internal static class DeliveryPostinstall
 {
+    /// <summary>
+    /// <para>在不执行宿主机程序的前提下读取 update_engine postinstall 配置文件，校验键归属与取值并返回按分区索引的配置。</para>
+    /// Reads an update_engine postinstall config without executing host programs, validating key ownership and values, and returns per-partition configs.
+    /// </summary>
     internal static Dictionary<string, PartitionUpdate> Read(string path, IEnumerable<string> partitions)
     {
         var result = new Dictionary<string, PartitionUpdate>(StringComparer.Ordinal);

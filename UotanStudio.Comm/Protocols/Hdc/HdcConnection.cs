@@ -118,14 +118,10 @@ public sealed class HdcConnection : IDisposable
             }
         }
 
-        // Generate random session id.
-        // <para>生成随机会话 ID。</para>
         _sessionId = (uint)Random.Shared.Next();
 
         if (_transport is UsbDeviceTransport usbTransport)
         {
-            // Cache the OUT endpoint packet size once per connection instead of
-            // re-enumerating interfaces/endpoints on every message send.
             _usbOutPacketSize = usbTransport.Session.DeviceInfo.Interfaces.SelectMany(i => i.Endpoints)
                 .FirstOrDefault(e => e.EndpointAddress == usbTransport.Session.EndpointOut)?.MaxPacketSize ?? 0;
 
@@ -178,8 +174,6 @@ public sealed class HdcConnection : IDisposable
                 var capabilities = handshake.Buffer.AsSpan().StartsWith("emgmsg          "u8) || handshake.Buffer.AsSpan().StartsWith("daemonauthstatus "u8)
                     ? HdcCapabilities.Decode(handshake.Buffer) : new Dictionary<string, string>();
                 var diagnostic = capabilities.GetValueOrDefault("emgmsg", "");
-                // The daemon emits AUTH_OK/DAEMON_UNAUTH as a progress notice
-                // before opening the trust dialog, then sends the real challenge.
                 if (diagnostic.StartsWith("[E000002]", StringComparison.Ordinal)) continue;
                 if (capabilities.GetValueOrDefault("daemonauthstatus") == "DAEMON_UNAUTH" || status == "DAEMON_UNAUTH")
                     throw new UnauthorizedAccessException("HDC device did not authorize this host: " + diagnostic);
@@ -199,8 +193,6 @@ public sealed class HdcConnection : IDisposable
         }
         if (!authenticated) throw new UnauthorizedAccessException("HDC authorization did not complete.");
 
-        // Start the background message loop.
-        // <para>启动后台消息循环。</para>
         _connected = true;
         _peerReady.Set();
 
@@ -258,8 +250,6 @@ public sealed class HdcConnection : IDisposable
         }
         try
         {
-            // These checks start a host-master task. The daemon only allocates
-            // its slave task on WAKEUP; CHECK alone is silently discarded.
             if (command is HdcCommand.FileCheck or HdcCommand.AppCheck or HdcCommand.ForwardCheck)
                 Send(new HdcMessage(HdcCommand.WakeupSlaveTask, stream.ChannelId, _sessionId, []));
             Send(new HdcMessage(command, stream.ChannelId, _sessionId, initialPayload));
@@ -443,8 +433,6 @@ public sealed class HdcConnection : IDisposable
                             break;
 
                         case HdcCommand.HeartbeatMsg:
-                            // Reply with a heartbeat to keep the connection alive.
-                            // <para>回复心跳以保持连接活跃。</para>
                             Send(message);
                             break;
 
@@ -492,10 +480,6 @@ public sealed class HdcConnection : IDisposable
             }
             else HandleData(message with { Payload = payload[1..] });
         }
-        // Echo messages carry diagnostic text in the payload.
-        // Currently consumed silently; callers can extend via events if needed.
-        // <para>Echo 消息在负载中携带诊断文本。
-        // 当前静默消费；调用方可通过事件扩展。</para>
     }
 
     /// <summary>
@@ -516,8 +500,6 @@ public sealed class HdcConnection : IDisposable
 
         stream?.MarkClosed();
 
-        // Echo CLSE back so the peer tears down its side.
-        // <para>回送 CLSE 使对端拆除其侧流。</para>
         if (message.Payload is { Length: > 0 } close && close[0] > 0)
             Send(HdcMessaging.BuildCommand(HdcCommand.ChannelClose, message.ChannelId, [(byte)(close[0] - 1)]));
     }
@@ -583,8 +565,6 @@ public sealed class HdcConnection : IDisposable
             return HdcCommand.ForwardData;
         }
 
-        // Default to ShellData for unknown channel types.
-        // <para>未知通道类型默认使用 ShellData。</para>
         return HdcCommand.ShellData;
     }
 

@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Extraction;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Formats.Cpio;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
@@ -143,9 +143,6 @@ public sealed class CpioFormatHandler : IFormatHandler
                 IReadOnlyList<string> entries;
                 using (var fs = File.OpenRead(filePath))
                 {
-                    // 单次遍历同时提取并收集清单，不再为列表重读归档。
-                    // Collect the entry names during the same extraction pass
-                    // instead of re-reading the archive just to list them.
                     _archive.ExtractToDirectory(fs, outputDirectory, extractOptions, null, out entries);
                 }
 

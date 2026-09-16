@@ -495,7 +495,6 @@ public sealed class SuperImageBuilder
             remainingBytes -= size;
         }
 
-        // Register all groups before adding partitions.
         var groups = new HashSet<string>(StringComparer.Ordinal) { "default" };
         foreach (var p in partitions)
         {

@@ -34,10 +34,6 @@ internal sealed class LibUsbApiProvider : UsbApiProviderBase
             SupportsNativeAsyncIo = true,
             SupportsNativeHotPlugMonitoring = false,
             RequiresExternalRuntime = true,
-            // libusb Reset maps to libusb_reset_device (USBDEVFS_RESET): the device
-            // re-enumerates, so the session must be discarded and re-opened.
-            // <para>libusb 的 Reset 映射到 libusb_reset_device（USBDEVFS_RESET）：
-            // 设备会重新枚举，会话必须丢弃并重新打开。</para>
             ResetReenumeratesDevice = true,
             Notes = "LibUsbDotNet requires the native libusb runtime; async access uses the upstream libusb async API where available and hot-plug monitoring is polling-based. The runtime is bundled per-RID in the package, or an explicit library path can be supplied via UsbCommunicationLayer.SetLibusbLibraryPath."
         };

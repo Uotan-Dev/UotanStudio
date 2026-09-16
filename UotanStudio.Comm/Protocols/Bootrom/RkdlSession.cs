@@ -130,7 +130,6 @@ public sealed class RkdlSession(ICommTransport transport, int? timeoutMs = null)
             }
         }
 
-        // The device re-enumerates in loader (rockusb) mode after the second stage.
         Thread.Sleep(1000);
         return total;
     }
@@ -532,7 +531,6 @@ public sealed class RkdlSession(ICommTransport transport, int? timeoutMs = null)
                     throw new EndOfStreamException($"Stream ended at {totalWritten}/{length}");
                 }
 
-                // Align to full sectors, zero-padding the final partial sector.
                 var sectorBytes = (n + RkdlConstants.SectorSize - 1) / RkdlConstants.SectorSize * RkdlConstants.SectorSize;
                 if (sectorBytes > n)
                 {

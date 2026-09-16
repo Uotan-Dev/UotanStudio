@@ -29,9 +29,6 @@ public static class FileSystemPreservation
 
     internal static void RejectLossyDirectoryRebuild(string directory)
     {
-        // An explicit packing-options override (packing-settings panel) opts into a fresh rebuild,
-        // so the preservation-only guard is lifted for those mandatory repacks.
-        // 显式的打包选项覆盖（打包设置面板）选择全新重建，因此针对此类强制重打包放开“仅限保留还原”守卫。
         if (RepackMetadata.HasPackingOverrides) return;
         if (FileSystemEditPlan.Current is { } plan && Path.GetFullPath(directory) == plan.Root) return;
         var metadataPath = RepackMetadata.ResolveActualMetadataPath(directory);
@@ -104,9 +101,6 @@ public static class FileSystemPreservation
         Directory.CreateDirectory(directory);
         try
         {
-            // No original image byte copy is retained; the structured metadata document (plus the
-            // preserved projection) is the authoritative source for later tree rebuilds.
-            // 不再保留原始镜像字节副本；结构化元数据文档（连同保留的投影）是后续目录重建的权威来源。
             var rebuild = BuildRebuildParameters(source, metadata.FormatName);
             var document = FileSystemMetadataOverrides.BuildDocument(metadataDirectory, metadata.SourceFileName, rebuild);
             var metadataPath = FileExtraction.ResolvePath(directory, "metadata.json");
@@ -152,7 +146,6 @@ public static class FileSystemPreservation
             using var logical = new SparseReadStream(sparse);
             var inner = BuildRebuildParameters(logical, DetectFilesystem(logical));
             if (inner is null) return null;
-            // Preserve the real filesystem identity while marking the outer container.
             inner.InnerFormat = inner.Format;
             inner.Format = "Android Sparse Image (simg)";
             inner.SparseBlockSize = checked((int)sparse.Header.BlockSize);
@@ -219,7 +212,6 @@ public static class FileSystemPreservation
         var metadata = RepackMetadata.Read(inputDirectory);
         if (metadata is null) return false;
         if (metadata.FormatName != format) throw new InvalidDataException("Filesystem metadata format does not match the requested image format.");
-        // A non-filesystem Sparse extraction contains one RAW file and has no inode snapshot to restore.
         if (format == "Android Sparse Image (simg)" && metadata.Configuration.Count == 0
             && metadata.FileSystemPreservationId is null && metadata.FileSystemPreservationHash is null
             && File.Exists(Path.Combine(inputDirectory, Path.GetFileNameWithoutExtension(metadata.SourceFileName) + ".raw")))
@@ -283,9 +275,6 @@ public static class FileSystemPreservation
             ["CompressionProfile"] = string.Join(", ", profile.Codecs
                 .OrderBy(codec => codec.Algorithm, StringComparer.Ordinal)
                 .Select(codec => $"{codec.Algorithm}:{codec.CompressionLevel}")),
-            // Encoder level and the LZ4 versus LZ4HC choice are not stored on disk; the verified source
-            // profile is inherited instead, so this is an inheritance report rather than an inference.
-            // 磁盘不保存编码级别与 LZ4/LZ4HC 选择，改为继承经校验的源档案。
             ["CompressionInference"] = string.Join("; ", profile.Codecs
                 .OrderBy(codec => codec.Algorithm, StringComparer.Ordinal)
                 .Select(codec => $"{codec.Algorithm}: inherited from the verified source image; encoder identity and original level remain unproven"))
@@ -338,11 +327,6 @@ public static class FileSystemPreservation
                 }
             case "EROFS":
                 {
-                    // The original image is not retained, so the persisted profile supplies the
-                    // superblock features, compression records and per-inode strategy captured at
-                    // extraction. Without it the writer falls back to a lossy fresh build.
-                    // 原始镜像不再保留，因此由持久化档案提供解包时采集的超级块特性、压缩记录与
-                    // 逐 inode 策略；缺失时退化为有损的全新构建。
                     var erofsOptions = rebuild?.Erofs is { } profile
                         ? ErofsRebuildMetadata.Restore(profile)
                         : new ErofsOptions();

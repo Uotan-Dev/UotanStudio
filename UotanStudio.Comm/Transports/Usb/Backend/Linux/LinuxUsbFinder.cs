@@ -132,8 +132,6 @@ internal static class LinuxUsbFinder
                 IntPtr ptr;
                 int n;
 
-                // Start with a 1 KiB buffer; if the configuration descriptor's wTotalLength
-                // exceeds it (rare), re-read into a buffer sized from the descriptor.
                 var capacity = 1024;
                 desc = new byte[capacity];
                 ptr = Marshal.AllocHGlobal(capacity);
@@ -142,8 +140,6 @@ internal static class LinuxUsbFinder
                     n = (int)read(fd, ptr, (UIntPtr)capacity);
                     if (n < 18) { close(fd); fd = -1; continue; }
 
-                    // wTotalLength lives at offset 2 of the configuration descriptor, which
-                    // starts right after the 18-byte device descriptor.
                     if (n > 20)
                     {
                         var wTotalLength = Marshal.ReadByte(ptr, 20) | (Marshal.ReadByte(ptr, 21) << 8);
@@ -185,8 +181,6 @@ internal static class LinuxUsbFinder
                         SerialNumber = null
                     };
 
-                    // Discovery must not claim a debug interface owned by another host.
-                    // UsbProviderProjection opens only the selected, permitted session.
                     devices.Add(dev);
                 }
                 catch (Exception ex)
@@ -306,9 +300,6 @@ internal static class LinuxUsbFinder
             pos += len;
         }
 
-        // Phase 2: match the filter against the complete interface list (in descriptor
-        // order) and bind the matched interface's endpoints.
-        // <para>第二阶段在完整接口列表（按描述符顺序）上匹配过滤器并绑定命中接口的端点。</para>
         byte epIn = 0, epOut = 0;
         byte matchedIfcClass = 0, matchedIfcSubClass = 0, matchedIfcProtocol = 0, matchedIfcId = 0;
         var matched = false;
@@ -327,10 +318,6 @@ internal static class LinuxUsbFinder
                 continue;
             }
 
-            // Collect bulk endpoints first (the session I/O path), then interrupt
-            // endpoints as fallback candidates so devices with only interrupt pipes
-            // (e.g. HID) can still be opened when the filter requests explicit
-            // endpoint addresses (interrupt-test).
             foreach (var ep in endpoints)
             {
                 var epType = ep.Attributes & 0x03;
@@ -366,9 +353,6 @@ internal static class LinuxUsbFinder
                 }
             }
 
-            // Honor an explicit endpoint requirement: the interface must contain the
-            // requested addresses (e.g. Rockchip loader on 0x82/0x02), and the
-            // requested endpoints win over the first bulk pair when both exist.
             var inOk = filter?.EndpointAddressIn is not byte reqIn ||
                 endpoints.Any(e => (e.EndpointAddress & 0x80) != 0 && e.EndpointAddress == reqIn);
             var outOk = filter?.EndpointAddressOut is not byte reqOut ||
@@ -385,9 +369,6 @@ internal static class LinuxUsbFinder
                 continue;
             }
 
-            // Default requires a usable IN+OUT pair. When the filter explicitly
-            // requests only an IN endpoint (interrupt-test on HID devices that expose
-            // no OUT pipe), an IN-only match wins.
             var pairOk = epIn != 0 && epOut != 0;
             var inOnlyOk = epIn != 0 &&
                 filter?.EndpointAddressIn is byte &&
@@ -471,7 +452,6 @@ internal static class LinuxUsbFinder
         ushort bcdUsb,
         string sysfsDevicesRoot = "/sys/bus/usb/devices")
     {
-        // /dev/bus/usb/BBB/DDD -> match <sysfsDevicesRoot>/* via busnum+devnum.
         try
         {
             var busPart = Path.GetFileName(Path.GetDirectoryName(devPath));
@@ -495,14 +475,12 @@ internal static class LinuxUsbFinder
                         return UsbSpeedInference.FromMbps(mbps);
                     }
 
-                    // Device directory found but speed unreadable; fall through to inference.
                     break;
                 }
             }
         }
         catch
         {
-            // sysfs unreadable (permissions, non-Linux); fall back to BcdUSB inference.
         }
 
         return InferSpeed(bcdUsb);

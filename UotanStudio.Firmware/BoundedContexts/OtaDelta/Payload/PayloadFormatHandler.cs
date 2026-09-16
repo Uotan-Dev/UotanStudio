@@ -106,11 +106,6 @@ public sealed class PayloadFormatHandler : IFormatHandler
                 cancellationToken.ThrowIfCancellationRequested();
 
                 options?.Progress?.Report(5, "Reading payload manifest...");
-                // 将字节进度适配为百分比进度，映射到 5%–100% 区间。Total 已覆盖容器（ZIP）物化与
-                // 分区提取的整个作业，因此无需再按分区数缩放。
-                // Adapts the byte progress into a percent, mapping to the 5%-100% range. Total already
-                // covers the whole job (container/materialization plus partition extraction), so no
-                // additional per-partition scaling is needed.
                 var byteProgressAdapter = options?.Progress is null
                     ? null
                     : new Progress<(long Processed, long Total)>(tuple =>

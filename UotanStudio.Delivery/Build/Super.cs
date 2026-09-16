@@ -5,9 +5,12 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Services.Delivery;
 
-/// <summary>Builds actual LP partition contents using absolute sector addresses and bounded streams.</summary>
+/// <summary><para>用绝对扇区地址与有界流构建实际的 LP 分区内容。</para>
+/// Builds actual LP partition contents using absolute sector addresses and bounded streams.</summary>
 internal static class DeliverySuperBuilder
 {
+    /// <summary><para>展开 AutoZero 伴随分区并把分区名补全为 _a/_b 配对，同时校验名称合法且唯一。</para>
+    /// Expands AutoZero companion partitions into _a/_b pairs and validates that names are valid and unique.</summary>
     internal static List<DeliveryFile> ExpandPartitions(IReadOnlyList<DeliveryFile> files, DeliverySuperOptions options)
     {
         var result = files.Select(f => options.AutoZero && !f.Partition.EndsWith("_a", StringComparison.Ordinal)
@@ -24,6 +27,13 @@ internal static class DeliverySuperBuilder
         return result;
     }
 
+    /// <summary>
+    /// <para>构建 LP 元数据并写出完整 Super 镜像或独立的 super_empty.img（含可选的稀疏与 Zstd 阶段）。
+    /// 在分配 extent 前先按容量预检，使容量超限的报错给出实际数值而不是裸参数名。</para>
+    /// Builds the LP metadata and writes the full Super image or the standalone super_empty.img, including optional Sparse
+    /// and Zstd stages. Capacity is pre-checked before allocating extents so an over-capacity error reports actual numbers
+    /// rather than a bare parameter name.
+    /// </summary>
     internal static Task BuildAsync(IReadOnlyList<DeliveryFile> files, DeliverySuperOptions options, string output,
         IProgress<double>? progress = null, CancellationToken token = default,
         IProgress<DeliveryProgress>? detailProgress = null) => Task.Run(() =>
@@ -47,8 +57,6 @@ internal static class DeliverySuperBuilder
             }
             lengths.Add(length);
         }
-        // Precheck capacity before allocating extents so the error reports actual numbers instead of a bare parameter name.
-        // 在分配 extent 前预检容量，使报错能给出具体数值而不是仅参数名。
         DeliverySuperCapacity.Validate(lengths, options);
         for (var i = 0; i < partitions.Count; i++)
         {
@@ -67,7 +75,6 @@ internal static class DeliverySuperBuilder
         {
             if (options.Empty)
             {
-                // liblp standalone empty-image format: geometry at zero, one metadata blob.
                 using var empty = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write);
                 empty.Write(MetadataWriter.SerializeGeometry(metadata.Geometry));
                 empty.Write(MetadataWriter.SerializeMetadata(metadata));
@@ -133,7 +140,8 @@ internal static class DeliverySuperBuilder
 
 }
 
-/// <summary>Non-owning write adapter providing bounded-frequency progress and cancellation for synchronous codecs.</summary>
+/// <summary><para>为同步编解码器提供有界频率进度与取消的非持有型写入适配器。</para>
+/// Non-owning write adapter providing bounded-frequency progress and cancellation for synchronous codecs.</summary>
 internal sealed class DeliveryWriteProgressStream(Stream inner, Action<long> progress, CancellationToken token) : Stream
 {
     private long _written;

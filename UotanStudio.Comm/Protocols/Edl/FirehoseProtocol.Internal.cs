@@ -39,10 +39,6 @@ public sealed partial class FirehoseProtocol
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Move any carry-over bytes (from the previous command's read) into the response
-            // buffer first — only newly-read bytes get appended, never the whole buffer again.
-            // 先把（上一条命令读取遗留的）结转字节移入响应缓冲——只追加新读取的字节，
-            // 绝不重复追加整个缓冲。
             if (_rxBufferBytes > 0)
             {
                 var copied = Math.Min(_rxBufferBytes, responseBuffer.Length - responseBufferPos);
@@ -53,11 +49,6 @@ public sealed partial class FirehoseProtocol
 
             if (responseBufferPos > 0)
             {
-                // Normalize the buffer so it starts at the "<?xml" marker, discarding any
-                // unexpected bytes before it. A buffer that is merely an incomplete prefix of
-                // "<?xml" is kept waiting for more data.
-                // 规整缓冲，使其从 "<?xml" 标记开始，丢弃之前的意外字节。仅是 "<?xml" 的
-                // 不完整前缀的缓冲保留，等待更多数据。
                 if (!LooksLikeXmlHeader(responseBuffer, responseBufferPos))
                 {
                     var xmlStart = FindXmlMarker(responseBuffer, responseBufferPos);
@@ -69,8 +60,6 @@ public sealed partial class FirehoseProtocol
                     }
                     else if (!IsPartialXmlMarkerPrefix(responseBuffer, responseBufferPos))
                     {
-                        // No XML marker present: garbage data; clear and wait for more.
-                        // 缓冲中没有 "<?xml" 标记：垃圾数据；清空等待更多数据。
                         Log($"Discarding {responseBufferPos} unexpected bytes (no XML marker).");
                         responseBufferPos = 0;
                     }
@@ -96,9 +85,6 @@ public sealed partial class FirehoseProtocol
 
                             if (block.Response != null)
                             {
-                                // Keep the bytes AFTER the returned block in the carry-over
-                                // buffer for the next command.
-                                // 将返回块之后的字节保留到结转缓冲，供下一条命令使用。
                                 if (blockBytes < responseBufferPos)
                                 {
                                     var remaining = responseBufferPos - blockBytes;
@@ -109,8 +95,6 @@ public sealed partial class FirehoseProtocol
                                 return block.Response;
                             }
 
-                            // Log-only block: consume it and keep reading; reset the timer.
-                            // 仅日志块：消费并继续读取；重置计时器。
                             if (blockBytes <= responseBufferPos)
                             {
                                 Array.Copy(responseBuffer, blockBytes, responseBuffer, 0, responseBufferPos - blockBytes);
@@ -120,8 +104,6 @@ public sealed partial class FirehoseProtocol
                             continue;
                         }
 
-                        // Neither logs nor a response node: fall back to whole-block parsing.
-                        // 既无日志也无 response 节点：回退到整块解析。
                         var response = FirehoseResponseParser.Parse(completeXml);
                         var responseBytes = Encoding.UTF8.GetByteCount(completeXml);
                         if (responseBytes < responseBufferPos)
@@ -135,10 +117,6 @@ public sealed partial class FirehoseProtocol
                 }
             }
 
-            // Partial read: returns whatever arrived (empty on timeout) — never blocks for the
-            // full chunk size, and never consumes+discards data.
-            // 部分读取：返回已到达的数据（超时返回空）——既不为凑满块大小而阻塞，也不
-            // 消费后丢弃数据。
             var data = await ReadChunkAsync(
                 Math.Min(EffectiveMaxPayloadFromTarget, EdlConstants.ResponseReadChunkBytes),
                 _cmdTimeoutMs, cancellationToken);
@@ -163,10 +141,6 @@ public sealed partial class FirehoseProtocol
     /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
     private async Task DrainPendingDataAsync(CancellationToken cancellationToken)
     {
-        // Draining is best-effort cleanup: no exception (read timeout, port error) may abort
-        // the main flow. Everything except cancellation is swallowed.
-        // 排空是尽力而为的清理：任何异常（读超时、端口错误）都不应中断主流程。除取消外
-        // 一律吞掉。
         try
         {
             _rxBufferBytes = 0;
@@ -232,8 +206,6 @@ public sealed partial class FirehoseProtocol
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Best-effort: a failed trailing drain must not abort the main flow.
-            // 尽力而为：收尾消费失败不影响主流程。
             Log($"Trailing drain failed (best-effort, ignored): {ex.Message}");
         }
     }
@@ -305,8 +277,6 @@ public sealed partial class FirehoseProtocol
             return false;
         }
 
-        // length is 1..4 here; check the buffer against the "<?xml" prefix byte by byte.
-        // 此处 length 为 1..4；将缓冲与 "<?xml" 前缀逐字节比较。
         return (length >= 4 && buffer[0] == (byte)'<' && buffer[1] == (byte)'?' && buffer[2] == (byte)'x' && buffer[3] == (byte)'m') ||
                (length >= 3 && buffer[0] == (byte)'<' && buffer[1] == (byte)'?' && buffer[2] == (byte)'x') ||
                (length >= 2 && buffer[0] == (byte)'<' && buffer[1] == (byte)'?') ||

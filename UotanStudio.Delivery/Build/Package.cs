@@ -12,22 +12,33 @@ using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 
 namespace UotanStudio.Services.Delivery;
 
-/// <summary>Metadata and user-owned certificate for ZIP delivery.</summary>
+/// <summary><para>ZIP 交付的元数据与用户自有签名证书。</para>Metadata and user-owned certificate for ZIP delivery.</summary>
 internal sealed record DeliveryPackageOptions
 {
+    /// <summary><para>是否按 A/B OTA 包布局输出（需配合 Payload 模式）。</para>Whether to output an A/B OTA package layout (requires Payload mode).</summary>
     public bool Ota { get; init; }
+    /// <summary><para>外层签名证书路径。</para>Path of the outer signing certificate.</summary>
     public string CertificatePath { get; init; } = "";
+    /// <summary><para>外层签名私钥路径。</para>Path of the outer signing private key.</summary>
     public string SigningKeyPath { get; init; } = "";
+    /// <summary><para>OTA 元数据 <c>post-build</c> 指纹。</para>OTA metadata <c>post-build</c> fingerprint.</summary>
     public string BuildFingerprint { get; init; } = "";
+    /// <summary><para>OTA 元数据 <c>post-build-incremental</c> 值。</para>OTA metadata <c>post-build-incremental</c> value.</summary>
     public string Incremental { get; init; } = "";
+    /// <summary><para>OTA 元数据 <c>post-sdk-level</c> 值。</para>OTA metadata <c>post-sdk-level</c> value.</summary>
     public uint SdkLevel { get; init; }
-    /// <summary>Original ROM's Edify updater; empty discovers META-INF alongside the selected DAT files.</summary>
+    /// <summary><para>原 ROM 的 Edify 更新器路径；为空时沿所选 DAT 文件发现 META-INF。</para>Path of the original ROM's Edify updater; empty discovers META-INF alongside the selected DAT files.</summary>
     public string RecoveryUpdaterPath { get; init; } = "";
 }
 
-/// <summary>Streams full A/B OTA and custom Recovery packages; signs ZIP comments using Android's whole-file format.</summary>
+/// <summary><para>以流式构建完整 A/B OTA 与自定义 Recovery 包，并用 Android 整文件格式对 ZIP 评论签名。</para>
+/// Streams full A/B OTA and custom Recovery packages; signs ZIP comments using Android's whole-file format.</summary>
 internal static partial class DeliveryPackageBuilder
 {
+    /// <summary>
+    /// <para>校验 ZIP 交付计划：签名证书/私钥配对、OTA 元数据、Recovery 包约束与 DAT 分组完整性。</para>
+    /// Validates the ZIP delivery plan: certificate/key pairing, OTA metadata, Recovery constraints, and DAT group integrity.
+    /// </summary>
     internal static void Validate(DeliveryPlan plan)
     {
         var options = plan.Package;
@@ -47,6 +58,10 @@ internal static partial class DeliveryPackageBuilder
         if (plan.Recovery && !plan.PackPayload && !plan.PackSuper && Selected(plan).Length == 0) throw new InvalidDataException("Recovery 包没有默认选中的镜像。");
     }
 
+    /// <summary>
+    /// <para>构建并写出 ZIP 交付：A/B OTA（含元数据与 ranges）、Recovery 包（含 DAT/IMG 成员）或组织式 Super 的 Recovery 入口文件。</para>
+    /// Builds and writes the ZIP delivery: an A/B OTA (with metadata and ranges), a Recovery package (DAT/IMG members), or the Recovery entry files of an organized Super delivery.
+    /// </summary>
     internal static async Task BuildAsync(DeliveryPlan plan, string stage, string images, CancellationToken token,
         IProgress<DeliveryProgress>? progress = null, IDeliverySigningKeyProvider? signingKeys = null)
     {
@@ -70,8 +85,6 @@ internal static partial class DeliveryPackageBuilder
                 writer.Write("payload.bin", new FileInfo(Path.Combine(images, "payload.bin")));
                 writer.Write("payload_properties.txt", new FileInfo(Path.Combine(images, "payload_properties.txt")));
                 writer.Write("META-INF/com/android/metadata", new MemoryStream(Encoding.UTF8.GetBytes(text)));
-                // Recovery 执行包内 update-binary 调 update_engine 消费 payload；没有它 TWRP 与原生
-                // A/B recovery 都会拒绝安装。优先用户指定的原生更新器，否则回退内嵌 arm64。
                 var updater = plan.Package.RecoveryUpdaterPath.Length > 0
                     ? DeliveryRecoveryUpdater.Validate(plan.Package.RecoveryUpdaterPath)
                     : DeliveryRecoveryUpdater.EmbeddedOtaUpdater();
@@ -150,8 +163,6 @@ internal static partial class DeliveryPackageBuilder
                 {
                     if (dat)
                     {
-                        // 旧式 DAT 卡刷包：update-binary 直接放原包/内嵌的原生 ELF 更新器，与 AOSP 标准布局一致。
-                        // Old-style DAT package: update-binary is the native ELF updater at the standard AOSP path.
                         await using var engine = File.OpenRead(DeliveryRecoveryUpdater.Resolve(plan));
                         await engine.CopyToAsync(entry, 65536, token);
                     }
@@ -163,9 +174,6 @@ internal static partial class DeliveryPackageBuilder
         }
         if (plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty)
         {
-            // A ZIP-organized Super delivery is a complete Recovery package
-            // directory. The host publishes the directory atomically; Recovery
-            // consumes META-INF/com/google/android/update-binary directly.
             var meta = Path.Combine(stage, "META-INF", "com", "google", "android");
             Directory.CreateDirectory(meta);
             await File.WriteAllTextAsync(Path.Combine(meta, "update-binary"), plan.Scripts.GetValueOrDefault("update-binary", RecoveryScript(plan)), new UTF8Encoding(false), token);
@@ -215,6 +223,8 @@ internal static partial class DeliveryPackageBuilder
 
     private static DeliveryFile[] Selected(DeliveryPlan plan) => plan.Files.Where(f => !f.Optional || f.Default).ToArray();
 
+    /// <summary><para>判断文件名是否为 DAT/BR 刷写工件（.transfer.list/.new.dat[.br]/.patch.dat[.br]）。</para>
+    /// Determines whether a filename is a DAT/BR flashing artifact (.transfer.list/.new.dat[.br]/.patch.dat[.br]).</summary>
     internal static bool IsDatArtifact(string fileName) =>
         fileName.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase)
         || fileName.EndsWith(".new.dat", StringComparison.OrdinalIgnoreCase)
@@ -222,12 +232,17 @@ internal static partial class DeliveryPackageBuilder
         || fileName.EndsWith(".patch.dat", StringComparison.OrdinalIgnoreCase)
         || fileName.EndsWith(".patch.dat.br", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary><para>判断文件名是否为可写入 Recovery 的工件（.img 或 DAT 工件）。</para>
+    /// Determines whether a filename is a Recovery-flashable artifact (an .img or a DAT artifact).</summary>
     internal static bool IsRecoveryArtifact(string fileName) =>
         fileName.EndsWith(".img", StringComparison.OrdinalIgnoreCase) || IsDatArtifact(fileName);
 
+    /// <summary><para>判断两个文件名是否同属一个 DAT 分区组。</para>Determines whether two filenames belong to the same DAT partition set.</summary>
     internal static bool SameDatSet(string first, string second) => IsDatArtifact(first) && IsDatArtifact(second)
         && DatStem(first).Equals(DatStem(second), StringComparison.OrdinalIgnoreCase);
 
+    /// <summary><para>去掉 DAT 工件后缀返回分区基名；非工件返回原名。</para>
+    /// Strips the DAT artifact suffix returning the partition stem; non-artifacts return the name unchanged.</summary>
     internal static string DatStem(string fileName)
     {
         foreach (var suffix in new[] { ".transfer.list", ".new.dat.br", ".new.dat", ".patch.dat.br", ".patch.dat" })
@@ -340,6 +355,10 @@ internal static partial class DeliveryPackageBuilder
             ? X509Certificate2.CreateFromPem(Encoding.ASCII.GetString(bytes)) : X509CertificateLoader.LoadCertificate(bytes);
     }
 
+    /// <summary>
+    /// <para>按 Android 整文件格式用外层证书/私钥对 ZIP 做评论签名；证书与私钥必须匹配且 ZIP 无既有评论。</para>
+    /// Signs a ZIP comment using Android's whole-file format with the outer certificate/key; the key must match the certificate and the ZIP must have no existing comment.
+    /// </summary>
     internal static async Task SignAsync(string path, DeliveryPackageOptions options, CancellationToken token,
         IDeliverySigningKeyProvider? signingKeys = null)
     {

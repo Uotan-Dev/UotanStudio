@@ -28,7 +28,6 @@ internal static class AudioFormatLimits
             rate = rates[index];
             channels = (config[1] >> 3) & 15;
         }
-        // scrcpy's AAC encoder emits AAC-LC. PCE/SBR/PS need a different format negotiation path.
         if (objectType != 2 || channels is < 1 or > 7) throw new NotSupportedException("Expected AAC-LC with explicit channel configuration.");
         if (channels == 7) channels = 8;
         Validate(channels, rate, 16);

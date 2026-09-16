@@ -189,7 +189,6 @@ public sealed class Ext4Parser : IDisposable
             throw new InvalidDataException("ext4 group descriptor table exceeds the image bounds or supported metadata limit.");
         }
         _groups = new Ext4BlockGroup[groupCount];
-        // Keep the parsed table, but never materialize a second image-sized descriptor table.
         var descriptorsPerRead = Math.Min(groupCount, Math.Max(1, 65536 / descSize));
         var gdtBytes = new byte[checked(descriptorsPerRead * descSize)];
         _stream.Position = gdtOffset;
@@ -668,8 +667,6 @@ public sealed class Ext4Parser : IDisposable
 
         using var ms = new MemoryStream(size);
         ReadInodeContent(eaInode, size, ms);
-        // 直接从 MemoryStream 内部缓冲截取，避免 ToArray 的整份复制。
-        // Copy from the MemoryStream's internal buffer to skip an extra full copy.
         return ms.GetBuffer().AsSpan(0, (int)ms.Length).ToArray();
     }
 
@@ -742,11 +739,6 @@ public sealed class Ext4Parser : IDisposable
 
     private byte[] ReadBlock(ulong physicalBlock)
     {
-        // 元数据块缓存：顺序读取大文件时同一指针/索引块会被逐逻辑块重复请求，
-        // 命中缓存可消除重复 IO 与每次 new byte[blockSize] 的分配。
-        // Metadata block cache: sequential large-file reads request the same pointer/index
-        // block once per logical block; a hit avoids both the repeated IO and the
-        // per-call byte[blockSize] allocation.
         if (_metadataBlockCache.TryGetValue(physicalBlock, out var cached))
         {
             return cached;

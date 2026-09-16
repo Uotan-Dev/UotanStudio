@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
@@ -146,10 +146,6 @@ public sealed class SparseFileRangeProvider : ISparseDataProvider
         var requestedEnd = checked(absoluteOffset + buffer.Length);
         var written = 0;
 
-        // 二分定位起始 chunk（对齐 SparseReadStream.ReadLogical），避免每次读取都
-        // 从头线性扫描整个 chunk 列表。
-        // Binary-search the starting chunk (mirrors SparseReadStream.ReadLogical) instead
-        // of linearly scanning the whole chunk list on every read.
         var chunks = _owner.Chunks;
         var startBlock = requestedStart / blockSize;
         int lo = 0, hi = chunks.Count;
@@ -224,8 +220,6 @@ public sealed class SparseFileRangeProvider : ISparseDataProvider
 
             case ChunkType.Fill:
                 {
-                    // 按 4 字节对齐段复制替代逐字节取模写。
-                    // Copy in 4-byte aligned segments instead of per-byte modulo writes.
                     Span<byte> pattern = stackalloc byte[4];
                     BinaryPrimitives.WriteUInt32LittleEndian(pattern, chunk.FillValue);
                     var offset = (int)(chunkLocal % 4);

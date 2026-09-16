@@ -1,4 +1,4 @@
-﻿using System.IO.Compression;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
@@ -89,15 +89,8 @@ public sealed class BootPatchService
                     ?? throw new InvalidDataException("The boot kernel compression is unsupported or corrupt.");
             SplitEmbeddedKernelDtb(parser, rawKernel, out var kernelBody, out kernelDtb);
             var beforeKernelChanges = changes.Count;
-            // Magisk's legacy boot flow always requests an initramfs when the
-            // stock kernel advertises skip_initramfs.  Keep the explicit option
-            // for callers while matching the device patcher by detecting that
-            // marker automatically.
             var patched = MagiskKernelPatcher.Apply(kernelBody,
                 options.ForceRootfs || MagiskKernelPatcher.NeedsLegacyRootfs(kernelBody), changes);
-            // Magisk deliberately keeps the original compressed bytes when no
-            // vendor pattern was found.  Recompressing an unchanged kernel can
-            // alter headers and invalidate vendor signatures.
             if (changes.Count == beforeKernelChanges)
                 patchedKernel = parser.Kernel;
             else
@@ -126,10 +119,6 @@ public sealed class BootPatchService
                     ?? throw new InvalidDataException("The boot ramdisk compression is unsupported or corrupt.");
             var editor = new CpioArchiveEditor();
             using (var ramdiskStream = new MemoryStream(rawRamdisk, writable: false)) editor.Load(ramdiskStream);
-            // ksud refuses KernelSU patching of Magisk-patched images; layering
-            // KernelSU on top of Magisk's init replacement corrupts the ramdisk
-            // chain. Magisk may legitimately re-patch its own image, so only
-            // KernelSU packages hit this guard.
             if (detection.Kind is BootPatchKind.KernelSu or BootPatchKind.KernelSuLkm
                 && (editor.Exists(".backup/.magisk") || editor.Exists("overlay.d/sbin/magisk.xz")))
                 throw new InvalidDataException("Cannot work with a Magisk patched image; restore the stock image first.");
@@ -164,9 +153,6 @@ public sealed class BootPatchService
         string architecture, BootPatchOptions options, List<string> changes, CancellationToken ct, string? bootKmi = null,
         string? stockBootSha1 = null)
     {
-        // KernelSU's ksud boot_patch replaces the ramdisk init with ksuinit and
-        // drops the LKM at the cpio root; overlay.d is a Magisk-only mechanism
-        // that ksud never reads.
         var initTarget = editor.Exists("init.real") ? "init.real" : "init";
         if (detection.Kind == BootPatchKind.KernelSuLkm)
         {
@@ -188,9 +174,6 @@ public sealed class BootPatchService
             if (!inAbi && !isMagiskAsset) continue;
             if (detection.Kind == BootPatchKind.Magisk)
             {
-                // Magisk's boot_patch.sh injects only the runtime payloads below.
-                // util_functions.sh and helper libraries are patch-time inputs and
-                // must never become ramdisk files.
                 if (!IsMagiskRuntimeEntry(entry.Name, detection.Version)) continue;
                 var magiskTarget = MagiskTarget(entry.Name, initTarget, detection.Version);
                 if (magiskTarget is null) continue;
@@ -222,9 +205,6 @@ public sealed class BootPatchService
             await using var input = entry.Open();
             using var data = new MemoryStream();
             await input.CopyToAsync(data, ct).ConfigureAwait(false);
-            // KernelSU follows magiskboot semantics: ksuinit replaces the root
-            // init (stock init moves to init.real); the LKM lives at the cpio
-            // root, not under the Magisk-only overlay.d directory.
             var target = isKsuInit ? initTarget : "kernelsu.ko";
             EnsureParentDirectories(editor, target, changes);
             editor.AddOrReplace(target, data.ToArray(), Regular((uint)(isKsuInit ? 0x81ED : 0x81A4)));
@@ -264,9 +244,6 @@ public sealed class BootPatchService
                 var bytes = await ReadEntryBoundedAsync(entry, ct).ConfigureAwait(false);
                 if (detection.Kind == BootPatchKind.KernelSu && entry.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase))
                 {
-                    // KernelSU reads the LKM from the cpio root under the fixed
-                    // name kernelsu.ko regardless of the KMI-qualified package
-                    // entry name (ksu.ko is the Next/SukiSU alias).
                     EnsureParentDirectories(editor, "kernelsu.ko", changes);
                     editor.AddOrReplace("kernelsu.ko", bytes, Regular(0x81A4));
                     changes.Add("install kernelsu.ko");
@@ -350,8 +327,6 @@ public sealed class BootPatchService
     {
         kernelBody = rawKernel.ToArray();
         kernelDtb = null;
-        // Android v1 images commonly carry a concatenated FDT after the gzip
-        // kernel. Preserve that payload when patching the kernel body.
         if (parser.Header.HeaderVersion != BootImageVersion.V1) return;
         ReadOnlySpan<byte> dtbMagic = "\xD0\x0D\xFE\xED"u8;
         for (var offset = Math.Max(0, rawKernel.Length - 8 * 1024 * 1024); offset <= rawKernel.Length - 40; offset++)
@@ -414,11 +389,6 @@ public sealed class BootPatchService
         EnsureParentDirectories(editor, ".backup/.magisk", changes);
         var compressedInit = CompressionService.Compress(stockInit, CompressionFormat.Xz);
         editor.AddOrReplace(".backup/init.xz", compressedInit, Regular(0x81E8u));
-        // Magisk records files created by the patch so its restore operation can
-        // remove them on the next patch. Keep this list deterministic.
-        // Magisk's restore list is a NUL-terminated sequence, rather than a
-        // text file with line separators.  Keep the exact delimiter so the
-        // next patch can consume it with the same semantics as Magisk.
         var removeList = Encoding.UTF8.GetBytes(
             "overlay.d\0" +
             "overlay.d/sbin\0" +
@@ -435,8 +405,6 @@ public sealed class BootPatchService
     /// </summary>
     private static void InstallKernelSuInit(CpioArchiveEditor editor, string initTarget, List<string> changes)
     {
-        // Only swap when a ksuinit payload is available; renaming the stock
-        // init without a replacement would produce an unbootable image.
         var ksuinit = editor.Find("ksuinit")?.Data;
         if (ksuinit is not { Length: > 0 }) return;
         var stockInit = editor.Find("init")?.Data;

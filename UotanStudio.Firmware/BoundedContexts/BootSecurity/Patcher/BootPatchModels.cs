@@ -161,8 +161,6 @@ public static class BootPatchAnalyzer
         var match = ManagedMagic.DetectWithRules(header, header.Length);
         if (match.IsMatch && TryMapArchitecture(match.Description) is { } detected) return detected;
 
-        // Boot images may contain an uncompressed executable ELF at a non-zero
-        // offset. Use the same Firmware magic engine for each bounded candidate.
         for (var offset = 0; offset <= kernel.Length - 4 && offset < 64 * 1024 * 1024; offset++)
         {
             if (!ManagedMagic.IsElf(kernel[offset..])) continue;
@@ -203,11 +201,6 @@ public static class BootPatchAnalyzer
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         var names = zip.Entries.Where(e => !string.IsNullOrEmpty(e.Name)).Select(e => e.FullName.Replace('\\', '/')).ToArray();
         var abis = names.Select(TryGetAbi).Where(static a => a is not null).Cast<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        // Classification must be driven by family-exclusive components only.
-        // util_functions.sh and magiskboot are shared by KernelSU forks and
-        // general root-package tooling; libsu.so is a generic root-Activity API
-        // library bundled by many ordinary applications, so none of those may
-        // mark a package as a patcher by itself.
         var hasMagisk = names.Any(n => n.Contains("libmagiskinit", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.Contains("libmagisk.", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.Contains("libmagisk32", StringComparison.OrdinalIgnoreCase))
@@ -220,18 +213,11 @@ public static class BootPatchAnalyzer
             || names.Any(n => n.EndsWith("kernelsu.ko", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.EndsWith("ksu.ko", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.EndsWith("susfs.ko", StringComparison.OrdinalIgnoreCase));
-        // KernelSU variants such as SukiSU also ship a KPM image named
-        // `kpimg`; that marker alone must not classify them as APatch.  APatch
-        // packages carry the kpatch native library or an APatch-specific
-        // installer script, which are stronger family identifiers.
         var hasApatch = names.Any(n => n.EndsWith("libkptools.so", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.EndsWith("libkpatch.so", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.EndsWith("kpatch", StringComparison.OrdinalIgnoreCase));
         if (!hasApatch && names.Any(n => n.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase)))
         {
-            // Both Magisk and APatch ship a script with this name.  Inspect the
-            // script body before classifying it; APatch scripts mention kpimg or
-            // the SuperKey while Magisk scripts mention magiskinit/magiskboot.
             var script = zip.Entries.FirstOrDefault(e => e.FullName.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase));
             if (script is not null)
             {
@@ -243,9 +229,6 @@ public static class BootPatchAnalyzer
             }
         }
         hasApatch = hasApatch || names.Any(n => n.EndsWith("kpatch", StringComparison.OrdinalIgnoreCase));
-        // KernelSU variants often carry Magisk compatibility scripts and shared
-        // util_functions.sh files. Native KSU markers are stronger evidence than
-        // those compatibility names, so classify KSU before falling back to Magisk.
         var kind = hasApatch ? BootPatchKind.APatch : hasKsu ? BootPatchKind.KernelSu : hasMagisk ? BootPatchKind.Magisk : BootPatchKind.Unknown;
         var kmiNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (kind == BootPatchKind.KernelSu)
@@ -292,8 +275,6 @@ public static class BootPatchAnalyzer
                 AddSupportedOption(executableScript, supportedOptions, BootPatchOption.LegacySar, "LEGACYSAR");
                 AddSupportedOption(executableScript, supportedOptions, BootPatchOption.PreInitDevice, "PREINITDEVICE");
             }
-            // Very old scripts did not declare every environment variable but
-            // still implement the two mandatory preservation flags.
             supportedOptions.Add(BootPatchOption.KeepVerity);
             supportedOptions.Add(BootPatchOption.KeepForceEncryption);
         }
@@ -366,9 +347,6 @@ public static class KernelSuEmbeddedExtractor
     {
         var text = Encoding.Latin1.GetString(data);
         var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        // A KMI is only considered advertised when the complete resource name
-        // is present. Do not consume adjacent strings from a merged .rodata
-        // section and do not infer a module from a bare KMI token.
         foreach (Match match in Regex.Matches(text, @"(?i)(android\d+(?:\.\d+)?[-_]\d+\.\d+)_kernelsu\.ko"))
             found.Add(match.Groups[1].Value.Replace('_', '-'));
         return found.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase).ToArray();
@@ -420,9 +398,6 @@ public static class KernelSuEmbeddedExtractor
     {
         kmi = null;
         var normalized = name.Replace('\\', '/');
-        // The module suffix is a resource delimiter, not part of the KMI.
-        // Strip it before applying the permissive version pattern so a name
-        // such as android13_5.15_kernelsu.ko yields android13-5.15.
         normalized = Regex.Replace(normalized, @"(?i)_kernelsu\.ko$", string.Empty);
         var patterns = new[] {
             @"(?i)(android\d+(?:\.\d+)?[-_]\d+\.\d+(?:[-_][0-9A-Za-z.]+)?)",

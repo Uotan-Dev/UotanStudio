@@ -14,8 +14,6 @@ internal static class Lz4DiffApplier
 
     internal static byte[] Apply(byte[] source, byte[] patch, int expectedLength)
     {
-        // update_engine writes the 7-character magic followed by version/size at offsets 7/11,
-        // and starts the protobuf at offset 16 (one reserved byte follows the size).
         if (patch.Length < 16 || !patch.AsSpan(0, 7).SequenceEqual("LZ4DIFF"u8) || BinaryPrimitives.ReadUInt32BigEndian(patch.AsSpan(7, 4)) != 1)
             throw new InvalidDataException("Invalid LZ4DIFF header.");
         var headerLength = BinaryPrimitives.ReadUInt32BigEndian(patch.AsSpan(11, 4));
@@ -49,9 +47,6 @@ internal static class Lz4DiffApplier
         var plainTargetPooled = false;
         if (innerType == 0)
         {
-            // 结果直接写入池化缓冲，去掉 MemoryStream→ToArray 的整份复制。
-            // The result is written straight into a pooled buffer, skipping the
-            // MemoryStream→ToArray full copy.
             var pooled = System.Buffers.ArrayPool<byte>.Shared.Rent(targetSize);
             try
             {
@@ -69,11 +64,6 @@ internal static class Lz4DiffApplier
         }
         else if (innerType == 1) plainTarget = PuffDiffApplier.Apply(innerPatch, plainSource);
         else throw new InvalidDataException("Unknown LZ4DIFF inner patch type.");
-        // 池化路径的长度已由内层 MemoryStream(result.Length) 校验；池化缓冲容量可能
-        // 大于 targetSize，不能按数组长度校验。
-        // The pooled path's length is already validated via the inner MemoryStream
-        // (result.Length); the pooled buffer's capacity may exceed targetSize, so the
-        // array length must not be checked.
         if (!plainTargetPooled && plainTarget.Length != targetSize) throw new InvalidDataException("LZ4DIFF target length mismatch.");
         var storedTotal = targetInfo.Blocks.Aggregate(0L, (length, block) => checked(length + block.StoredLength));
         if (storedTotal != expectedLength) throw new InvalidDataException("LZ4DIFF stored output does not match destination extents.");

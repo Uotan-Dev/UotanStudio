@@ -275,8 +275,6 @@ internal static unsafe partial class Lz4DestinationCodec
 
     private static void LZ4HC_clearTables(LZ4_streamHC_t* hc4)
     {
-        // uint hashTable[LZ4HC_HASHTABLESIZE];
-        // ushort chainTable[LZ4HC_MAXD];
         Mem.Fill((byte*)hc4->hashTable, 0, sizeof(uint) * LZ4HC_HASHTABLESIZE);
         Mem.Fill((byte*)hc4->chainTable, 0xFF, sizeof(ushort) * LZ4HC_MAXD);
     }

@@ -39,8 +39,6 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
         var context = new UsbContext();
         try
         {
-            // VID/PID map directly onto libusb hotplug matching; everything else
-            // (serial, interface class, path) is applied by the post-event enumeration.
             context.HotplugOptions.VendorId = filter?.VendorId is ushort vid ? vid : (int)HotplugOptionFlag.LibusbHotplugMatchAny;
             context.HotplugOptions.ProductId = filter?.ProductId is ushort pid ? pid : (int)HotplugOptionFlag.LibusbHotplugMatchAny;
             context.HotplugOptions.DeviceClass = (int)HotplugOptionFlag.LibusbHotplugMatchAny;
@@ -48,8 +46,6 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
 
             _lastSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
             context.DeviceEvent += OnDeviceEvent;
-            // Throws PlatformNotSupportedException when libusb hotplug is unavailable
-            // (e.g. Windows) or the native runtime is absent.
             context.RegisterHotPlug();
             _context = context;
         }

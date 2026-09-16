@@ -18,8 +18,6 @@ public static class ProjectArchiveService
         outputPath = Path.GetFullPath(outputPath);
         if (!Directory.Exists(root)) throw new DirectoryNotFoundException(root);
         var excludedHistory = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-        // Package mode archives only the solution file plus the referenced sub-project folders, so the
-        // result is self-contained. Plain archive mode (no solution) walks the whole root directory.
         var includeRoots = new List<string>();
         if (solutionPath is not null)
         {
@@ -54,9 +52,6 @@ public static class ProjectArchiveService
                     await using var solutionOutput = archive.CreateEntry(Path.GetFileName(solutionPath)).Open();
                     await ProjectStreamCopy.CopyExactlyAsync(solutionSource, solutionOutput, solutionSource.Length, cancellationToken);
                 }
-                // Package mode archives only the solution file and the referenced sub-project folders so the
-                // result is self-contained: entry names are relative to the solution directory and match the
-                // snapshot's sub-project paths. Plain archive mode still walks the whole root directory.
                 var pending = new Stack<string>();
                 if (solutionPath is not null)
                 {
@@ -74,7 +69,6 @@ public static class ProjectArchiveService
                         var attributes = File.GetAttributes(path);
                         if ((attributes & FileAttributes.ReparsePoint) != 0) throw new IOException($"Cannot archive a linked entry: {path}");
                         var name = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
-                        // Executable history contains machine-local absolute paths and deleted files are excluded.
                         if (solutionPath is not null && excludedHistory.Contains(Path.GetFullPath(path))) continue;
                         if ((attributes & FileAttributes.Directory) != 0)
                         {

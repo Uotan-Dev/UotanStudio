@@ -91,7 +91,6 @@ public sealed class UsbStream : Stream
     /// <inheritdoc />
     public override void Flush()
     {
-        // Bulk USB writes are unbuffered at the stream layer; nothing to flush.
     }
 
     /// <inheritdoc />
@@ -109,7 +108,6 @@ public sealed class UsbStream : Stream
             return 0;
         }
 
-        // A returned count of 0 means the operation timed out (the session has no EOF concept).
         return Session.ReadInto(buffer, offset, count, ReadTimeout);
     }
 
@@ -128,8 +126,6 @@ public sealed class UsbStream : Stream
             return;
         }
 
-        // The session's offset-aware Write overload writes straight from the caller's
-        // buffer, avoiding a sub-range copy for chunked transfers (e.g. firmware images).
         _ = Session.Write(buffer, offset, count, WriteTimeout);
     }
 

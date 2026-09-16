@@ -43,9 +43,6 @@ public class OpsDecryptor(Stream stream, IOnePlusLogger? logger = null)
         _logger.Debug($"Parsing {entryCount} OPS entries");
         var entries = new List<OpsEntry>((int)entryCount);
 
-        // 条目头缓冲跨条目复用，避免每条目一次小分配。
-        // The entry-header buffer is reused across entries instead of one small
-        // allocation per entry.
         var buffer = new byte[OpsConstants.ENTRY_HEADER_SIZE];
         for (uint i = 0; i < entryCount; i++)
         {
@@ -186,8 +183,6 @@ public class OpsDecryptor(Stream stream, IOnePlusLogger? logger = null)
     /// outside the table bounds.</exception>
     public byte[] DecryptAesEcb(byte[] encryptedData, int keyIndex)
     {
-        // Reject MBox data entries before any AES allocation, with a clear
-        // contract error rather than a misleading "key length" ArgumentException.
         if (keyIndex < 0 || keyIndex >= OnePlusKeyTable.KeyCount)
         {
             throw new ArgumentOutOfRangeException(nameof(keyIndex),

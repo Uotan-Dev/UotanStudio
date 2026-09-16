@@ -78,9 +78,6 @@ public readonly struct RepackMetadataContext
                 if (string.IsNullOrWhiteSpace(_root)) return null;
                 var directoryName = Path.GetFileName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(extractionDirectory)));
                 if (string.IsNullOrWhiteSpace(directoryName)) return null;
-                // Same dual-candidate lookup as the ambient path: the extraction directory is usually
-                // named after the source image while metadata is keyed by partition name.
-                // 与环境路径相同的双候选查找：解包目录通常以源镜像命名，而元数据按键（分区名）存放。
                 foreach (var candidate in new[] { directoryName, RepackMetadata.DetectPartitionName(directoryName) })
                 {
                     if (string.IsNullOrWhiteSpace(candidate)) continue;

@@ -97,7 +97,7 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
     public void Flush()
     {
         CheckReady();
-        VtNative.Check(VtNative.VTCompressionSessionCompleteFrames(_session, default), "complete frames"); // kCMTimeInvalid means all pending frames.
+        VtNative.Check(VtNative.VTCompressionSessionCompleteFrames(_session, default), "complete frames");
         Interlocked.Exchange(ref _error, null)?.Throw();
         while (_packets.TryDequeue(out var packet))
         {

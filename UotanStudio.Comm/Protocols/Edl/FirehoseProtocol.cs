@@ -217,8 +217,6 @@ public class FirehoseConfiguration
         FirehoseStorageType.Nand => "nand",
         FirehoseStorageType.Spinor => "spinor",
         FirehoseStorageType.Emmc => "eMMC",
-        // Unknown 存储类型无法生成有效 XML，返回空让调用方处理。
-        // Unknown storage type cannot produce valid XML; return empty for the caller to handle.
         FirehoseStorageType.Unknown => string.Empty,
         _ => "eMMC"
     };
@@ -288,14 +286,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             var xml = FirehoseXmlBuilder.BuildConfigure(Configuration);
             Log($"Sending configure: MaxPayloadSizeToTargetInBytes={Configuration.MaxPayloadSizeToTarget}");
 
-            // Right after the Sahara handshake the device may still be booting Firehose and
-            // ignore the first configure (both the response read AND the command write — the
-            // OUT endpoint may NAK): the FIRST attempt uses the short first-attempt timeout
-            // for BOTH directions so the retry kicks in fast; later attempts use the generous
-            // configure timeout.
-            // Sahara 握手刚结束时设备可能仍在启动 Firehose 并忽略首个 configure（响应读取
-            // 与命令写入皆然——OUT 端点可能 NAK）：首次尝试的读、写两个方向都使用短超时，
-            // 让重试快速生效；后续尝试使用宽松的 configure 超时。
             var firstAttempt = attempt == 0 && Configuration.ConfigureFirstAttemptTimeoutMs > 0;
             var perAttemptTimeoutMs = firstAttempt
                 ? Configuration.ConfigureFirstAttemptTimeoutMs
@@ -308,11 +298,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             }
             catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.TransportTimeout or EdlErrorCode.ReadPortTimeout)
             {
-                // Consecutive timeouts reaching the limit mean the device is gone (reset /
-                // unplugged); fail fast with ConnectionLost instead of idling maxRetries ×
-                // the full response timeout.
-                // 连续超时达到上限说明设备已消失（复位/拔出）；立即以 ConnectionLost 失败，
-                // 而不是空等 maxRetries × 完整响应超时。
                 if (maxConsecutiveTimeouts > 0 && attempt + 1 >= maxConsecutiveTimeouts)
                 {
                     throw new EdlException(EdlErrorCode.ConnectionLost,
@@ -334,11 +319,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                 var maxPayloadStr = response["MaxPayloadSizeToTargetInBytes"];
                 if (maxPayloadStr != null && long.TryParse(maxPayloadStr, out var maxPayload) && maxPayload > 0 && maxPayload != Configuration.MaxPayloadSizeToTarget)
                 {
-                    // The programmer rejected our payload size and told us the supported one:
-                    // resend the configure IMMEDIATELY with the corrected payload instead of
-                    // looping through another retry interval.
-                    // programmer 拒绝了我方负载大小并告知支持值：立即使用修正后的负载重发
-                    // configure，而不是再空转一轮重试间隔。
                     Configuration.MaxPayloadSizeToTarget = maxPayload;
                     Log($"Retrying configure with MaxPayloadSizeToTargetInBytes={maxPayload}");
                     xml = FirehoseXmlBuilder.BuildConfigure(Configuration);
@@ -388,10 +368,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
             Log($"Configure OK: MaxPayload={Configuration.MaxPayloadSizeToTarget}, FromTarget={Configuration.MaxPayloadSizeFromTarget}");
 
-            // Sector-size auto-detection: prefer <getstorageinfo>'s sector_size; fall back to
-            // a storage-type default (UFS/Spinor → 4096, else 512).
-            // 扇区大小自动检测：优先使用 <getstorageinfo> 的 sector_size；失败则按存储类型
-            // 回退（UFS/Spinor → 4096，其余 → 512）。
             if (Configuration.AutoDetectSectorSize && Configuration.SectorSize == 0)
             {
                 await AutoDetectSectorSizeAsync(cancellationToken);
@@ -419,8 +395,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     public async Task AutoDetectSectorSizeAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
-        // NAND programmers do not support getstorageinfo; keep the configured size.
-        // NAND programmer 不支持 getstorageinfo；保留配置的扇区大小。
         if (Configuration.StorageType == FirehoseStorageType.Nand)
         {
             return;
@@ -450,8 +424,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             sectorSize = Configuration.StorageType switch
             {
                 FirehoseStorageType.Ufs or FirehoseStorageType.Spinor => EdlConstants.DefaultSectorSizeLarge,
-                // eMMC/NAND/Unknown 使用小扇区（512）作为保守默认值。
-                // eMMC/NAND/Unknown use the small sector size (512) as a conservative default.
                 _ => EdlConstants.DefaultSectorSizeSmall
             };
             Log($"Using default sector size for {Configuration.StorageType}: {sectorSize}");
@@ -472,11 +444,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     private async Task<FirehoseResponse> SendCommandAndWaitResponseAsync(string xml, CancellationToken cancellationToken, int? responseTimeoutMs = null, int? writeTimeoutMs = null)
     {
         var xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
-        // Command writes use the generous per-storage write timeout: a short write timeout
-        // loses the command when the device is busy (just entered Firehose, or right after a
-        // large raw read), leaving the read side waiting for the full response timeout.
-        // 命令写入使用宽松的按存储类型写入超时：短写超时会在设备忙时（刚进入 Firehose 或
-        // 大块 raw 读取刚结束）丢失命令，导致读侧空等完整响应超时。
         await WriteDataAsync(xmlBytes, writeTimeoutMs ?? GetZlpTimeoutMs(), cancellationToken);
         return await ReceiveResponseAsync(cancellationToken, responseTimeoutMs);
     }
@@ -495,8 +462,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                 FirehoseStorageType.Spinor => EdlConstants.WriteTimeoutSpinorMs,
                 FirehoseStorageType.Nand => EdlConstants.WriteTimeoutNandMs,
                 FirehoseStorageType.Ufs => EdlConstants.WriteTimeoutUfsMs,
-                // eMMC/Unknown 使用默认写入超时。
-                // eMMC/Unknown use the default write timeout.
                 _ => EdlConstants.WriteTimeoutDefaultMs
             };
     }
@@ -515,8 +480,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                 FirehoseStorageType.Spinor => EdlConstants.EraseTimeoutSpinorMs,
                 FirehoseStorageType.Nand => EdlConstants.EraseTimeoutNandMs,
                 FirehoseStorageType.Ufs => EdlConstants.EraseTimeoutUfsMs,
-                // eMMC/Unknown 使用 eMMC 擦除超时作为默认值。
-                // eMMC/Unknown use the eMMC erase timeout as the default.
                 _ => EdlConstants.EraseTimeoutEmmcMs
             };
     }

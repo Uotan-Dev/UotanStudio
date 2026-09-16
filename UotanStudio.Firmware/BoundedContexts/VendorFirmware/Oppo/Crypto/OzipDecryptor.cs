@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto.KeyDatabase;
 using UotanStudio.Firmware.SharedKernel;
 
@@ -83,11 +83,6 @@ public static class OzipDecryptor
         var encryptedBuffer = new byte[EncryptedSize];
         var decryptedBuffer = new byte[EncryptedSize];
         var plaintextBuffer = new byte[PlaintextBlockSize];
-        // 聚合输出缓冲：每个单元 = 16B 解密前缀 + 16KB 明文，拼进同一缓冲后一次 Write，
-        // 消除每单元两次小写；单元边界严格保持（先读完整个单元明文再读下一前缀）。
-        // Aggregated output buffer: each unit = 16B decrypted prefix + 16KB plaintext, joined
-        // and written once per unit instead of two small writes; unit boundaries are kept
-        // strictly (the unit's plaintext is fully read before the next prefix).
         var aggregate = new byte[EncryptedSize + PlaintextBlockSize];
 
         while (remaining > 0)

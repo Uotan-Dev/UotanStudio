@@ -438,8 +438,6 @@ internal sealed class UsbDeviceSession(string apiName, UsbApiKind kind, UsbDevic
 
     public void Reset()
     {
-        // A transport reset must not overlap any direction; take all gates in a fixed
-        // order (read → write → control) so Reset/Dispose never deadlock with each other.
         _readGate.Wait();
         _writeGate.Wait();
         _controlGate.Wait();
@@ -480,15 +478,11 @@ internal sealed class UsbDeviceSession(string apiName, UsbApiKind kind, UsbDevic
 
     public void Dispose()
     {
-        // Idempotent: a second Dispose (e.g. via UsbSessionCollection after the caller
-        // already disposed the session) must not touch the released semaphores again.
-        // <para>幂等：二次 Dispose 不得再次触碰已释放的信号量。</para>
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
         {
             return;
         }
 
-        // Waiting here also drains any in-flight async operation before the device is released.
         _readGate.Wait();
         _writeGate.Wait();
         _controlGate.Wait();

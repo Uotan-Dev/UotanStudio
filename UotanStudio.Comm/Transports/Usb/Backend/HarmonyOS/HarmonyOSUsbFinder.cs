@@ -21,9 +21,6 @@ internal static class HarmonyOSUsbFinder
     {
         var devices = new List<UsbDevice>();
 
-        // DDK must be initialized before calling GetDeviceDescriptor/GetConfigDescriptor.
-        // OH_Usb_Init uses internal reference counting, so the subsequent Init call in
-        // CreateHandle is safe and simply increments the count.
         var ret = OH_Usb_Init();
         if (ret != USB_DDK_NO_ERROR)
         {
@@ -191,8 +188,6 @@ internal static class HarmonyOSUsbFinder
                     dev.Interfaces = interfaces;
                     dev.Speed = UsbSpeedInference.FromBcdUsb(devDesc.BcdUSB);
 
-                    // Discovery must not claim a debug interface owned by another host.
-                    // UsbProviderProjection opens only the selected, permitted session.
                     devices.Add(dev);
 
                     break;

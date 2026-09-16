@@ -193,7 +193,6 @@ public static class HttpDownload
                 }
                 catch (InvalidOperationException)
                 {
-                    // Some CDNs advertise ranges but reject concurrent requests; retain a reliable sequential fallback.
                     TryDelete(temporary);
                     await DownloadSequentialAsync(client, uri, temporary, length, progress, cancellationToken).ConfigureAwait(false);
                 }

@@ -7,17 +7,25 @@ using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
 
 namespace UotanStudio.Services.Delivery;
 
+/// <summary><para>导出过程中的进度快照：百分比、消息文本及可选的字节/条目/阶段详细信息。</para>
+/// A progress snapshot during an export: percent, message text, and optional byte/item/stage detail.</summary>
 internal sealed record DeliveryProgress(double Percent, string Message,
     (long Processed, long Total)? Bytes = null, string? Stage = null,
     (long Processed, long Total)? Items = null, string? Detail = null,
     IReadOnlyDictionary<string, string>? Metadata = null);
 
+/// <summary><para>按交付计划在暂存目录准备平台工具。</para>Prepares platform tools in a staging directory for a delivery plan.</summary>
 internal interface IDeliveryTools
 {
+    /// <summary>
+    /// <para>把交付所需工具（platform-tools 与 zstd）解压/下载到 staging 目录下的 bin 布局。</para>
+    /// Prepares the tools a delivery needs (platform-tools and zstd) into the bin layout under the staging directory.
+    /// </summary>
     Task PrepareAsync(DeliveryPlan plan, string directory, IProgress<DeliveryProgress>? progress, CancellationToken token);
 }
 
-/// <summary>Prepares every file privately, then publishes: overwrites caller-approved destinations and keeps the rest.</summary>
+/// <summary><para>先在暂存目录里逐个准备每个文件，再发布：覆盖调用方批准的目标，保留其余文件。</para>
+/// Prepares every file privately, then publishes: overwrites caller-approved destinations and keeps the rest.</summary>
 internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigningKeyProvider? signingKeys = null)
 {
     private static readonly HashSet<string> FirmwareUpdateImages = new(StringComparer.OrdinalIgnoreCase)
@@ -33,12 +41,25 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         return Path.Combine(stage, OrganizedImageRelativePath(file));
     }
 
+    /// <summary>
+    /// <para>计算单个镜像在组织布局下的相对路径：固件镜像放入 firmware-update/，其余放根目录。</para>
+    /// Computes a single image's relative path in the organized layout: firmware images go under firmware-update/, others at the root.
+    /// </summary>
     internal static string OrganizedImageRelativePath(DeliveryFile file)
     {
         var stem = Path.GetFileNameWithoutExtension(file.FileName);
         return FirmwareUpdateImages.Contains(stem) ? Path.Combine("firmware-update", file.FileName) : file.FileName;
     }
 
+    /// <summary>
+    /// <para>在暂存目录中逐一准备每个文件后原子发布到输出目录：覆盖调用方批准的目标，保留其余已有文件。
+    /// 校验在消除误报的同时不允许输出覆盖已选源镜像——输出目录不得等于任一源镜像所在目录（避免 images/images 嵌套），
+    /// 且按组织布局写出的目标路径不得与任一选中源镜像重合。</para>
+    /// Prepares every file privately in a staging directory, then atomically publishes to the output: overwrites
+    /// caller-approved destinations and keeps the rest. Validation rejects false positives yet forbids the output
+    /// from overwriting a selected source image—the output directory must not equal any source's own directory
+    /// (avoiding images/images nesting), and no written destination may coincide with a selected source path.
+    /// </summary>
     internal async Task<string[]> ExportAsync(DeliveryPlan plan, IProgress<DeliveryProgress>? progress = null, CancellationToken token = default,
         IReadOnlySet<string>? overwrite = null)
     {
@@ -47,8 +68,6 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         if (string.IsNullOrWhiteSpace(plan.OutputDirectory)) throw new InvalidDataException("Select an output directory.");
         var output = Path.GetFullPath(plan.OutputDirectory);
         CheckDirectory(output);
-        // 校验既要消除误报，也不能让输出覆盖已选源镜像：输出目录本身不得等于任一源镜像所在目录（避免 images/images 嵌套），
-        // 且按组织布局实际写出的目标路径不得与任一选择的源镜像路径重合（直接覆盖源镜像）。
         var sources = plan.Files.Concat(plan.Container).Where(f => f.SourcePath.Length > 0).ToArray();
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         var plannedOutputs = PlannedOutputPaths(plan).Select(path => Path.GetFullPath(path)).ToArray();
@@ -86,8 +105,6 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
             if (plan.PackPayload) await DeliveryPayloadBuilder.BuildAsync(plan, Path.Combine(imageDirectory, "payload.bin"), progress, token, signingKeys).ConfigureAwait(false);
             if (plan.PackSuper)
             {
-                // 仅生成Super_Empty：跳过完整 super，只产出独立的 super_empty.img（恒为未压缩原始镜像）。
-                // Super_Empty only: skip the full super and produce the standalone super_empty.img (always raw).
                 if (plan.Super.Empty)
                     await DeliverySuperBuilder.BuildAsync(plan.Container, plan.Super,
                         Path.Combine(imageDirectory, "super_empty.img"),
@@ -108,8 +125,6 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                             using var tracked = new DeliveryWriteProgressStream(destination,
                                 _ => progress?.Report(new(45 + input.Position * 10.0 / Math.Max(1, input.Length), "Compressing Super",
                                     (input.Position, input.Length), "Delivery_ProgressCompress")), token);
-                            // 使用计划中的高压缩等级，确保重打包的 super.zst 不大于原始 super 镜像。
-                            // Use the plan's high level so a repacked super.zst does not exceed the original Super image.
                             ZstdCompressor.Compress(input, tracked, new CompressionOptions
                             {
                                 Level = DeliverySuperOptions.ResolveZstdLevel(plan.Super)
@@ -151,7 +166,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                     if (!DeliveryValidation.IsScriptName(name))
                         throw new InvalidDataException("Invalid script filename: " + name);
                     if (Encoding.UTF8.GetByteCount(contents) > 1024 * 1024) throw new InvalidDataException("Script exceeds 1 MiB.");
-                    if (name == "updater-script" || name == "update-binary") continue; // Published inside the Recovery ZIP, with its interpreter.
+                    if (name == "updater-script" || name == "update-binary") continue;
                     var path = Path.Combine(stage, name);
                     await File.WriteAllTextAsync(path, contents, new UTF8Encoding(false), token).ConfigureAwait(false);
                     if (!OperatingSystem.IsWindows() && name.EndsWith(".sh"))
@@ -224,6 +239,10 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         finally { if (Directory.Exists(stage)) Directory.Delete(stage, true); }
     }
 
+    /// <summary>
+    /// <para>返回组织布局下生成的容器文件名（ota.zip / super.zip / super_empty.img / super.img / super.zst / payload.bin）。</para>
+    /// Returns the generated container filename in the organized layout (ota.zip / super.zip / super_empty.img / super.img / super.zst / payload.bin).
+    /// </summary>
     internal static string ContainerFileName(DeliveryPlan plan) => plan.PackPayload
         ? (plan.OrganizeDirectory ? ZipFileName(plan, "ota.zip") : "payload.bin")
         : plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty
@@ -235,6 +254,8 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     internal static string ZipFileName(DeliveryPlan plan, string fallback) =>
         plan.OrganizeDirectory && plan.ArchiveName.Trim().Length > 0 ? plan.ArchiveName.Trim() + ".zip" : fallback;
 
+    /// <summary><para>返回 Super 镜像文件名：压缩时为 super.zst，否则为 super.img。</para>
+    /// Returns the Super image filename: super.zst when compressed, otherwise super.img.</summary>
     internal static string SuperFileName(DeliverySuperOptions options) => options.Zstd ? "super.zst" : "super.img";
 
     private static async Task CreateSuperArchiveAsync(string stage, string archivePath, CancellationToken token)
@@ -259,10 +280,13 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         }
     }
 
+    /// <summary>
+    /// <para>流式复制源文件到目标并报告进度；expandSparse 时把稀疏镜像展开（Recovery 按物理块写入桌面暂存目录）。</para>
+    /// Streams a source file to a destination with progress; when expandSparse is set, sparse images are expanded in the staging directory.
+    /// </summary>
     internal static async Task CopyFileAsync(string source, string destination, CancellationToken token, Action<double>? progress = null,
         bool expandSparse = false)
     {
-        // Recovery writes physical blocks. Expand sparse companions in the desktop staging directory.
         await using var input = expandSparse ? MetadataReader.OpenImage(source)
             : new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true);
         await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true);
@@ -327,13 +351,9 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                     if (Directory.Exists(file.Destination)) throw new IOException("输出位置被目录占用 / A directory blocks the output: " + file.Destination);
                     if (overwrite is null || !overwrite.Contains(file.Destination))
                     {
-                        // 未批准覆盖：保留原文件，丢弃暂存副本。
-                        // Not approved for overwrite: keep the existing file and discard the staged copy.
                         skipped.Add(file.Destination);
                         continue;
                     }
-                    // 先把原文件移入暂存区作备份，全部发布成功后再删除；失败回滚时恢复原文件。
-                    // Set the original aside in the stage as a backup; delete after a successful publish, restore on rollback.
                     var backup = Path.Combine(stage, ".uotan-original-" + Guid.NewGuid().ToString("N"));
                     File.Move(file.Destination, backup, false);
                     backups.Add((backup, file.Destination));
@@ -353,6 +373,10 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         }
     }
 
+    /// <summary>
+    /// <para>沿目录向上逐级检查：任一祖先被文件占用或为符号链接则抛错，保证输出目录可安全创建。</para>
+    /// Walks up the directory ancestors, throwing if any is blocked by a file or is a symlink, so the output directory can be created safely.
+    /// </summary>
     internal static void CheckDirectory(string path)
     {
         for (var p = Path.GetFullPath(path); p is not null; p = Path.GetDirectoryName(p))

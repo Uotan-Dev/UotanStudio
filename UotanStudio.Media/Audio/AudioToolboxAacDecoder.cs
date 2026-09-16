@@ -62,16 +62,13 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
         if (codecConfig.Length is 0 or > 64) throw new InvalidDataException("AAC AudioSpecificConfig is required (2-64 bytes).");
         if (_thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The decoder must remain on its owning thread.");
         Release();
-
-        // Parse the AudioSpecificConfig: object type, sampling frequency, channels.
-        // 解析 AudioSpecificConfig：对象类型、采样频率、通道配置。
         (int rate, int channels) = AudioFormatLimits.ParseAacConfig(codecConfig);
         var source = new AudioStreamBasicDescription
         {
             SampleRate = rate,
             FormatId = FormatAac,
             FormatFlags = 0,
-            BytesPerPacket = 0, // Variable-rate packetized AAC. 变码率封包 AAC。
+            BytesPerPacket = 0,
             FramesPerPacket = 1024,
             BytesPerFrame = 0,
             ChannelsPerFrame = (uint)channels,
@@ -91,8 +88,6 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
         _self = GCHandle.Alloc(this);
         try
         {
-            // Locals live on the stack; take their addresses directly (no fixed needed).
-            // 局部结构体位于栈上，直接取地址（无需 fixed）。
             AudioStreamBasicDescription* s = &source;
             AudioStreamBasicDescription* t = &target;
             Check(AudioConverterNew(s, t, out _converter), "create converter");
@@ -124,7 +119,7 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
                 _packetDescription = (nint)(&description);
                 _packetBytes = packet.Length;
                 _packetConsumed = false;
-                uint packets = 1024; // PCM packets contain one sample frame, not one AAC access unit.
+                uint packets = 1024;
                 var output = new AudioBufferList
                 {
                     NumberBuffers = 1,
@@ -136,7 +131,7 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
                 int bytes = checked((int)output.Buffer0.DataByteSize);
                 if (bytes > bufferBytes || bytes != packets * _channels * 2) throw new InvalidDataException("Invalid AudioConverter PCM output.");
                 using var frame = new DecodedAudioFrame(buffer, bytes, (int)packets, _channels, _sampleRate, 16, timestampTicks);
-                buffer = null; // Ownership passed to frame; never return this array twice.
+                buffer = null;
                 _inCallback = true;
                 try { _callback!(frame); } finally { _inCallback = false; }
             }

@@ -194,9 +194,6 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
                 }
             }
 
-            // Ensure the session is initialized (Sahara handshake + Firehose configure). The
-            // device is expected to already be running a Firehose programmer.
-            // 确保会话已初始化（Sahara 握手 + Firehose 配置）。设备应已在运行 Firehose programmer。
             RaiseProgress(progress, FlashBundlePhase.Parsing, "Initializing EDL session... 初始化 EDL 会话...", 0, 0);
             await _session.EnsureInitializedAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -226,8 +223,6 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
 
                     if (string.IsNullOrEmpty(entry.Filename))
                     {
-                        // A rawprogram entry without a filename is an erase region.
-                        // 无文件名的 rawprogram 条目是擦除区域。
                         if (entry.NumPartitionSectors <= 0)
                         {
                             result.ProgramEntriesSkipped++;

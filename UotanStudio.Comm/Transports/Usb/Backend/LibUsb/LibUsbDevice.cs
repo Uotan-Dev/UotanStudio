@@ -104,16 +104,6 @@ internal partial class LibUsbDevice : UsbDevice
     {
         _context = new UsbContext();
 
-        // UsbContext.List() returns a UsbDeviceCollection that MUST be disposed: the
-        // collection owns the native device handles, and leaving it undisposed lets the
-        // devices' SafeHandle finalizers run against memory already freed by
-        // libusb_exit, crashing with 0xC0000005 in UnrefDevice. Clone the matched
-        // device (as the LibUsbDotNet docs recommend) so the session keeps a valid
-        // handle after the collection is disposed.
-        // <para>UsbContext.List() 返回的 UsbDeviceCollection 必须释放：集合持有原生设备
-        // 句柄，不释放会导致设备 SafeHandle 终结器对 libusb_exit 已释放的内存执行 unref，
-        // 在 UnrefDevice 处以 0xC0000005 崩溃。按 LibUsbDotNet 文档建议 Clone 匹配到的
-        // 设备，使会话在集合释放后仍持有有效句柄。</para>
         LibUsbDotNet.LibUsb.UsbDevice? device;
         using (var candidates = _context.List())
         {
@@ -155,15 +145,6 @@ internal partial class LibUsbDevice : UsbDevice
         }
         catch (Exception ex)
         {
-            // Open() failed (e.g. the interface is claimed by another session or process).
-            // Never Close() a device that was never opened: LibUsbDotNet's Close() on an
-            // unopened device corrupts the native refcount and the device's finalizer
-            // later crashes with 0xC0000005 in UnrefDevice. Dispose() the clone (releases
-            // the SafeHandle) and release only the _context.
-            // <para>Open() 失败（例如接口已被其他会话或进程声明）。绝不对从未成功打开的设备
-            // 调用 Close()：LibUsbDotNet 对未打开设备调用 Close() 会破坏原生引用计数，
-            // 设备终结器随后在 UnrefDevice 处以 0xC0000005 崩溃。对克隆调用 Dispose()
-            // （释放 SafeHandle），并仅释放上下文。</para>
             UsbTrace.LogErrorFormatted(
                 $"LibUsbDevice.CreateHandle open failed: {ex.GetType().Name}: {ex.Message}");
             (_usbDevice as IDisposable)?.Dispose();
@@ -172,13 +153,6 @@ internal partial class LibUsbDevice : UsbDevice
             return -1;
         }
 
-        // On Windows winusb.sys, sending SET_CONFIGURATION (even with the current value)
-        // re-enumerates interfaces and invalidates open handles; AOSP adb never calls
-        // set_configuration because the OS has already configured the device. So only
-        // set it when the device is not already in configuration 1.
-        // <para>Windows winusb.sys 上发送 SET_CONFIGURATION（即使是当前值）会重新枚举
-        // 接口并使已打开句柄失效；AOSP adb 从不调用 set_configuration。因此仅当设备
-        // 尚未处于配置 1 时才设置。</para>
         try
         {
             if (_usbDevice is LibUsbDotNet.LibUsb.UsbDevice wholeUsbDevice && wholeUsbDevice.Configuration != 1)
@@ -195,10 +169,6 @@ internal partial class LibUsbDevice : UsbDevice
         var inEndpoint = ReadEndpointId;
         var outEndpoint = WriteEndpointId;
 
-        // Auto-discover a bulk IN/OUT pair only when the finder did not already bind both.
-        // IN-only (HID interrupt) and OUT-only devices must NOT be rejected here: the
-        // session supports single-direction binding, and ReadInterrupt/WriteInterrupt
-        // target explicit endpoints regardless of the bulk pair.
         if (inEndpoint == 0 || outEndpoint == 0)
         {
             foreach (var config in _usbDevice.Configs)
@@ -209,10 +179,6 @@ internal partial class LibUsbDevice : UsbDevice
                     byte candidateOut = 0;
                     foreach (var endpoint in ifc.Endpoints)
                     {
-                        // Collect bulk endpoints first (the session I/O path), then interrupt
-                        // endpoints as fallback candidates so devices with only interrupt pipes
-                        // (e.g. HID) can still be opened when the filter requests explicit
-                        // endpoint addresses (interrupt-test).
                         var epType = endpoint.Attributes & 0x03;
                         if (epType is not 0x02 and not 0x03)
                         {
@@ -259,8 +225,6 @@ internal partial class LibUsbDevice : UsbDevice
             }
         }
 
-        // Only reject when the session would have NO endpoint at all; single-direction
-        // sessions are valid (the missing direction's bulk helpers throw NotSupportedException).
         if (inEndpoint == 0 && outEndpoint == 0)
         {
             Dispose();
@@ -269,9 +233,6 @@ internal partial class LibUsbDevice : UsbDevice
 
         InterfaceId = targetInterfaceId;
 
-        // usbhid (and other kernel drivers) bind HID interrupt devices immediately, and
-        // udev may rebind right after a detach; retry detach+claim a few times instead of
-        // failing on the first contention (mirrors libusb's auto-detach behaviour).
         var claimed = LibUsbInterfaceClaim.TryClaim(
             () => _usbDevice.ClaimInterface(targetInterfaceId),
             _usbDevice is LibUsbDotNet.LibUsb.UsbDevice libusbDevice
@@ -292,9 +253,6 @@ internal partial class LibUsbDevice : UsbDevice
         _reader = null;
         _writer = null;
 
-        // Open each direction independently: interrupt-only HID devices (e.g. QEMU
-        // usb-tablet) expose no OUT pipe, so a missing direction must not fail the
-        // session — the session's ReadInterrupt/WriteInterrupt target explicit endpoints.
         if (inEndpoint != 0)
         {
             _reader = _usbDevice.OpenEndpointReader((ReadEndpointID)inEndpoint);
@@ -305,16 +263,6 @@ internal partial class LibUsbDevice : UsbDevice
             _writer = _usbDevice.OpenEndpointWriter((WriteEndpointID)outEndpoint);
         }
 
-        // Do NOT flush the IN endpoint at session open: protocol devices that greet
-        // immediately (e.g. Qualcomm EDL's Sahara HELLO) would have their first
-        // packet consumed here. The WinUSB backend has no flush, so libusb must match.
-        // <para>会话打开时不要冲刷 IN 端点：对"打开即主动上报"的协议设备
-        // （如 Qualcomm EDL 的 Sahara HELLO），此处会恰好吞掉首包。WinUSB 后端
-        // 无冲刷，libusb 应保持一致。</para>
-
-        // A session is usable as long as every direction it was asked to bind actually
-        // opened. IN-only (HID interrupt) and OUT-only devices are valid; the missing
-        // direction's bulk helpers throw NotSupportedException when invoked.
         if ((inEndpoint != 0 && _reader == null) || (outEndpoint != 0 && _writer == null))
         {
             Dispose();
@@ -329,20 +277,12 @@ internal partial class LibUsbDevice : UsbDevice
     {
         if (_usbDevice != null)
         {
-            // Clear any halted pipes before releasing the interface; on Windows winusb
-            // a stalled pipe keeps the interface claimed at the driver level, so later
-            // opens/enumeration fail until a replug.
-            // <para>释放接口前清除停滞的管道；Windows winusb 上停滞的管道会使接口在驱动层
-            // 保持占用，导致后续打开/枚举失败直到重新拔插。</para>
             if (_interfaceClaimed)
             {
                 RestoreEndpointHalt(ReadEndpointId);
                 RestoreEndpointHalt(WriteEndpointId);
             }
 
-            // Release the claimed interface before closing the handle: winusb.sys allows
-            // only one open handle per interface, so a leftover claim blocks later opens.
-            // <para>关闭句柄前显式释放已 claim 的接口：winusb.sys 每接口仅允许一个句柄。</para>
             try
             {
                 if (_interfaceClaimed && _usbDevice is LibUsbDotNet.LibUsb.UsbDevice wholeUsbDevice)
@@ -355,13 +295,6 @@ internal partial class LibUsbDevice : UsbDevice
                 UsbTrace.Log($"LibUsbDevice.ReleaseInterface ignored: {ex.GetType().Name}: {ex.Message}");
             }
 
-            // Close() releases the device handle; Dispose() additionally releases the
-            // underlying Device SafeHandle. Calling only Close() leaves the SafeHandle
-            // to the finalizer, which then UnrefDevices memory already freed by
-            // libusb_exit -> 0xC0000005.
-            // <para>Close() 释放设备句柄；Dispose() 额外释放底层 Device SafeHandle。
-            // 仅调用 Close() 会把 SafeHandle 留给终结器，终结器会对 libusb_exit 已释放的
-            // 内存执行 UnrefDevice，导致 0xC0000005。</para>
             _usbDevice.Close();
             (_usbDevice as IDisposable)?.Dispose();
             _usbDevice = null;
@@ -387,11 +320,6 @@ internal partial class LibUsbDevice : UsbDevice
             }
             catch (Exception ex)
             {
-                // Info.SerialNumber reads the string descriptor; a device without a
-                // serial or with a stalled control pipe throws UsbException. Expose the
-                // reason to the global log instead of silently swallowing it.
-                // <para>Info.SerialNumber 会读取字符串描述符；无序列号的设备或控制
-                // 管道停滞的设备会抛出 UsbException。将原因写入全局日志而非静默吞掉。</para>
                 UsbTrace.LogErrorFormatted(
                     $"LibUsbDevice.GetSerialNumber failed: {ex.GetType().Name}: {ex.Message}");
                 return -1;
@@ -500,7 +428,6 @@ internal partial class LibUsbDevice : UsbDevice
         }
         catch (Exception ex)
         {
-            // The device may already be disconnected; restoring the pipe is best-effort.
             UsbTrace.Log($"LibUsbDevice.RestoreEndpointHalt ignored: {ex.GetType().Name}: {ex.Message}");
         }
     }
@@ -609,8 +536,6 @@ internal partial class LibUsbDevice : UsbDevice
         if (length == 0) return 0;
         var result = await LibUsbTransfer.ExecuteAsync(device.DeviceHandle, endpointAddress, TransferType.Interrupt,
             data.AsSpan(offset, length).ToArray(), timeoutMs, cancellationToken).ConfigureAwait(false);
-        // The write API exposes a count only; return partial progress on timeout,
-        // but never silently classify STALL, overflow or disconnection as zero bytes.
         return LibUsbTransfer.ReadResult(result.Error, result.Count, length).Count;
     }
 
@@ -645,9 +570,6 @@ internal partial class LibUsbDevice : UsbDevice
             if (!read) Marshal.Copy(buffer, data, 0, length);
             var nativeTimeout = ToLibusbTimeout(timeoutMs);
             var deadline = nativeTimeout == 0 ? long.MaxValue : Environment.TickCount64 + nativeTimeout;
-            // LibUsbDotNet 3.x exposes no cancellation handle for ReadAsync/WriteAsync.
-            // Use bounded native transfers and await their actual completion before
-            // observing cancellation, so no transfer outlives the caller's buffer.
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -675,8 +597,6 @@ internal partial class LibUsbDevice : UsbDevice
         cancellationToken.ThrowIfCancellationRequested();
         var device = _usbDevice ?? throw new UsbDeviceHandleClosedException("Device handle is closed.");
         var data = BuildControlBuffer(setupPacket, buffer, offset, length);
-        // A control request is submitted exactly once: even a zero-data timeout
-        // does not prove that the device has not already performed the request.
         var result = await LibUsbTransfer.ExecuteAsync(device.DeviceHandle, 0, TransferType.Control,
             data, timeoutMs, cancellationToken).ConfigureAwait(false);
         LibUsbTransfer.ThrowOnError(result.Error);

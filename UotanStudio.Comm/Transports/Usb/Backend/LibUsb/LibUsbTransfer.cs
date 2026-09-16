@@ -40,8 +40,6 @@ internal static partial class LibUsbTransfer
         var operation = new Operation(handle, endpoint, type, buffer, timeoutMs, api ?? Native);
         operation.Submit();
         using var registration = cancellationToken.Register(static state => ((Operation)state!).Cancel(), operation);
-        // Cancellation only asks libusb to stop. Completion owns the pinned buffer and
-        // handle until libusb confirms that it no longer borrows either resource.
         var result = await operation.Completion.Task.ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         return result;
@@ -134,8 +132,6 @@ internal static partial class LibUsbTransfer
         {
             lock (_gate)
             {
-                // A callback may already have completed and freed the transfer. A failed
-                // cancellation request never grants permission to free an in-flight transfer.
                 if (_transfer != IntPtr.Zero) _api.Cancel(_transfer);
             }
         }

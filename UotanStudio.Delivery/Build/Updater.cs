@@ -3,13 +3,20 @@ using System.Text;
 
 namespace UotanStudio.Services.Delivery;
 
-/// <summary>Reuses the original ROM's native Edify interpreter instead of assuming a shell block_image_update command.</summary>
+/// <summary><para>复用原 ROM 的原生 Edify 解释器，而不是假定 shell 的 block_image_update 命令。</para>
+/// Reuses the original ROM's native Edify interpreter instead of assuming a shell block_image_update command.</summary>
 internal static class DeliveryRecoveryUpdater
 {
     internal const string ScriptPath = "META-INF/com/google/android/updater-script";
     /// <summary><para>A/B OTA 包内原生更新器的标准成员路径。</para>Standard member path of the native updater inside an A/B OTA package.</summary>
     internal const string EntryPath = "META-INF/com/google/android/update-binary";
 
+    /// <summary>
+    /// <para>解析 DAT 卡刷要使用的原生 Edify 更新器：优先显式指定的路径，其次沿 DAT 来源目录寻找原包
+    /// META-INF/com/google/android/update-binary；多个候选时回退内嵌的 arm64 更新器，找不到则报错。</para>
+    /// Resolves the native Edify updater for DAT flashing: an explicit path first, then META-INF/com/google/android/update-binary
+    /// discoverable alongside the DAT sources; multiple candidates fall back to the embedded arm64 updater, and none throws.
+    /// </summary>
     internal static string Resolve(DeliveryPlan plan)
     {
         if (plan.Package.RecoveryUpdaterPath.Length > 0) return Validate(plan.Package.RecoveryUpdaterPath);
@@ -22,7 +29,6 @@ internal static class DeliveryRecoveryUpdater
         return candidates.Length switch
         {
             1 => Validate(candidates[0]),
-            // 多个原包无法自动挑选时回退到内嵌的 arm64 更新器；arm32 设备需明确指定 RecoveryUpdaterPath。
             > 1 => Embedded(),
             _ => throw new InvalidDataException("DAT 卡刷需要原包的原生 update-binary。请保留 DAT 目录（或其上一级）的 META-INF/com/google/android/update-binary，或明确指定 RecoveryUpdaterPath。"),
         };
@@ -54,6 +60,10 @@ internal static class DeliveryRecoveryUpdater
         return path;
     }
 
+    /// <summary>
+    /// <para>校验给定的更新器为本机 ELF 可执行文件，且导出卡刷所需的 Edify 函数（block_image_update 等）；通过则返回绝对路径。</para>
+    /// Validates that the updater is a native ELF executable exposing the Edify functions needed for flashing; returns the absolute path on success.
+    /// </summary>
     internal static string Validate(string path)
     {
         var file = new DeliveryFile { SourcePath = Path.GetFullPath(path) };

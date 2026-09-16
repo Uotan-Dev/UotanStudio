@@ -81,7 +81,6 @@ public sealed class AdbTcpTransport : ICommTransport
             }
 
             var stream = client.GetStream();
-            // Surface a read failure instead of blocking forever on a silent peer.
             stream.ReadTimeout = DefaultReadTimeoutMs;
             _stream = stream;
             return client;

@@ -178,7 +178,6 @@ public sealed class AvbVerificationService
             if (result.StoredHash is { Length: > 0 })
             {
                 byte[]? computed = null;
-                // Try standard256-byte header first, then legacy candidate sizes.
                 foreach (var headerSize in new[] { AvbVBMetaImageHeader.Size }.Concat(CandidateHeaderSizes))
                 {
                     try { computed = ComputeVbmetaDigest(data, header, headerSize); }
@@ -299,14 +298,12 @@ public sealed class AvbVerificationService
         if (data == null || data.Length < 80 || !data.AsSpan(0, 4).SequenceEqual("AVB0"u8))
             return false;
 
-        // Try Firmware's FromBytes first (requires256 bytes).
         if (data.Length >= AvbVBMetaImageHeader.Size)
         {
             try { header = AvbVBMetaImageHeader.FromBytes(data); return true; }
             catch { /* fall through to legacy parsing */ }
         }
 
-        // Legacy parsing for headers <256 bytes.
         ReadOnlySpan<byte> s = data;
         header = new AvbVBMetaImageHeader
         {

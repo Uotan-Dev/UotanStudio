@@ -74,10 +74,6 @@ internal sealed class SelinuxFileLabelInference
                 if (label != "<<none>>" && !IsObjectContext(label))
                     throw new InvalidDataException($"Invalid SELinux file object context in {path}: {label}");
                 var pattern = parts[0];
-                // Keep a portable PCRE subset: no lookarounds, backreferences, Unicode classes,
-                // POSIX classes or engine-specific escapes. The \d shorthand is ASCII [0-9] in
-                // both PCRE and .NET byte matching, so allow it; strip it before scanning so
-                // non-portable escapes such as \w, \s, \x and \p are still rejected.
                 var digest = pattern.Replace("\\d", "", StringComparison.Ordinal);
                 if (digest.Contains("(?", StringComparison.Ordinal) || digest.Contains("[[:", StringComparison.Ordinal)
                     || digest.Contains("&&", StringComparison.Ordinal) || digest.Contains("-[", StringComparison.Ordinal)
@@ -86,7 +82,6 @@ internal sealed class SelinuxFileLabelInference
                 var literal = !Regex.IsMatch(pattern, @"(?<!\\)[.\^$?*+|\[({]", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
                 try
                 {
-                    // libselinux matches UTF-8 bytes with PCRE_DOTALL, not UTF-16 characters.
                     var bytes = Encoding.Latin1.GetString(Encoding.UTF8.GetBytes(pattern));
                     rules.Add(new(new Regex("\\A(?:" + bytes + ")\\z", RegexOptions.NonBacktracking | RegexOptions.Singleline
                         | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)), literal, kind, label));
@@ -108,7 +103,6 @@ internal sealed class SelinuxFileLabelInference
         var matches = new HashSet<string>(StringComparer.Ordinal);
         foreach (var policy in policies)
         {
-            // libselinux gives literals priority, then evaluates regex rules in reverse source order.
             var match = policy.LastOrDefault(r => r.Literal && (r.Kind == 0 || r.Kind == kind) && r.Pattern.IsMatch(key))
                 ?? policy.LastOrDefault(r => !r.Literal && (r.Kind == 0 || r.Kind == kind) && r.Pattern.IsMatch(key));
             if (match is not null) matches.Add(match.Label);

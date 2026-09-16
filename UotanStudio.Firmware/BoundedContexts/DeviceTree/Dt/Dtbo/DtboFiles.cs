@@ -239,7 +239,6 @@ public static partial class DtboFormat
     /// </summary>
     public static void Repack(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
-        // Close the source before the atomic rename so in-place repacking also works on Windows.
         AtomicWrite(outputPath, output =>
         {
             using var input = File.OpenRead(inputPath);

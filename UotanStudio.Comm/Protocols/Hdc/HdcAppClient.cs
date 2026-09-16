@@ -132,7 +132,6 @@ public sealed class HdcAppClient(HdcConnection connection)
                 if (copied != entry.Length) throw new InvalidDataException("Truncated APP module.");
             }
             if (selected.Count == 1) return InstallPackage(Path.Combine(staging, selected[0].Name), options, cancellationToken);
-            // Official HDC sends directories as a TAR so bm installs all modules together.
             var tar = Path.Combine(staging, "modules.tar");
             using (var output = File.Create(tar))
             using (var writer = new System.Formats.Tar.TarWriter(output, System.Formats.Tar.TarEntryFormat.Ustar))
@@ -181,8 +180,6 @@ public sealed class HdcAppClient(HdcConnection connection)
     private static void ValidateOptions(string options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        // The daemon embeds this field in its bm shell command. Accept option
-        // tokens and identifiers without allowing a second shell command.
         if (options.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is ' ' or '-' or '_' or '.')))
             throw new ArgumentException("Invalid bundle-manager options.", nameof(options));
     }
@@ -210,9 +207,6 @@ public sealed class HdcAppClient(HdcConnection connection)
         if (payload.Length < 2) throw new InvalidDataException("Truncated HDC app result.");
         if (payload[0] != expectedMode) throw new InvalidDataException("Unexpected HDC app result mode.");
         var text = Encoding.UTF8.GetString(payload.AsSpan(2));
-        // OpenHarmony uses a boolean success flag. HarmonyOS devices have also
-        // returned zero on success; accept only bm's exact success line
-        // for that variant, never a substring of an error diagnostic.
         var vendorSuccess = payload[1] == 0 && text.Trim().Equals(
             expectedMode == 1 ? "install bundle successfully." : "uninstall bundle successfully.", StringComparison.Ordinal);
         if ((payload[1] != 1 && !vendorSuccess) || text.TrimStart().StartsWith("error:", StringComparison.OrdinalIgnoreCase))

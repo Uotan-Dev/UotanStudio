@@ -70,17 +70,9 @@ public sealed class EdlSession(ICommTransport transport, FirehoseConfiguration? 
     {
         ThrowIfDisposed();
 
-        // Try Sahara handshake (skipped internally when the device already runs Firehose).
         Sahara = new SaharaProtocol(Transport);
         await Sahara.HandshakeAsync(programmerImage, cancellationToken: cancellationToken);
 
-        // Always configure Firehose afterwards — even when Sahara detected an already-running
-        // programmer, the configure handshake (payload negotiation, sector-size detection) is
-        // still required before any Firehose command can be trusted. FirehoseAlreadyRunning
-        // only decides whether the Sahara handshake itself can be skipped.
-        // 之后总是执行 Firehose 配置——即使 Sahara 检测到 programmer 已在运行，仍需 configure
-        // 握手（负载协商、扇区大小检测）才能保证后续 Firehose 命令可靠。FirehoseAlreadyRunning
-        // 仅用于决定是否跳过 Sahara 握手本身。
         await Firehose!.ConfigureAsync(cancellationToken: cancellationToken);
         IsConfigured = true;
     }

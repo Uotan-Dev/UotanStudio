@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -8,9 +8,14 @@ using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 
 namespace UotanStudio.Services.Delivery;
 
-/// <summary>Builds a full payload, optionally signed with the selected private key, and standard update_engine property hashes.</summary>
+/// <summary><para>构建完整 Payload，可选使用所选私钥签名，并生成标准 update_engine 属性哈希。</para>
+/// Builds a full payload, optionally signed with the selected private key, and standard update_engine property hashes.</summary>
 internal static class DeliveryPayloadBuilder
 {
+    /// <summary>
+    /// <para>校验 Payload 计划：版本、签名文件、块大小、时间戳、压缩方式、postinstall 配置及分区的唯一性。</para>
+    /// Validates the Payload plan: version, signature, block size, timestamp, compression, postinstall config, and partition uniqueness.
+    /// </summary>
     internal static void Validate(DeliveryPlan plan)
     {
         if (plan.Payload.Version != 2 || plan.Payload.MinorVersion != 0)
@@ -29,6 +34,10 @@ internal static class DeliveryPayloadBuilder
             throw new InvalidDataException("Payload 需要名称唯一的实际分区镜像 / Payload requires unique source partitions.");
     }
 
+    /// <summary>
+    /// <para>读取动态分区配置文件（super_partition_groups 等）为 DynamicPartitionMetadata；缺失或含 Super 成员时按规则返回或报错。</para>
+    /// Reads the dynamic partition config file (super_partition_groups etc.) into DynamicPartitionMetadata; returns null when absent, otherwise errors on rule violations.
+    /// </summary>
     internal static DynamicPartitionMetadata? ReadDynamicLayout(DeliveryPlan plan, IReadOnlyDictionary<string, long> lengths)
     {
         if (plan.Payload.DynamicPartitionsFile.Length == 0)
@@ -83,6 +92,10 @@ internal static class DeliveryPayloadBuilder
         return result;
     }
 
+    /// <summary>
+    /// <para>根据计划内选中的动态分区与 Super 分组配置生成 update_engine 的动态分区配置文件文本。</para>
+    /// Generates the update_engine dynamic partition configuration text from the plan's selected Super members and groups.
+    /// </summary>
     internal static string GenerateDynamicLayout(DeliveryPlan plan)
     {
         var selected = plan.Container.Where(f => f.IncludeInSuper).ToArray();
@@ -107,6 +120,10 @@ internal static class DeliveryPayloadBuilder
         return $"super_partition_groups={plan.Super.Group}\nsuper_{plan.Super.Group}_group_size={plan.Super.DeviceSize}\nsuper_{plan.Super.Group}_partition_list={string.Join(' ', selected.Select(f => f.Partition))}\nvirtual_ab={plan.Super.VirtualAb.ToString().ToLowerInvariant()}\n";
     }
 
+    /// <summary>
+    /// <para>构建完整 Payload 到输出文件，并按 update_engine 约定写出 payload 的属性哈希文件；可选使用所选私钥签名。</para>
+    /// Builds a full payload to the output file and writes the update_engine property hashes, optionally signed with the selected private key.
+    /// </summary>
     internal static async Task BuildAsync(DeliveryPlan plan, string output, IProgress<DeliveryProgress>? progress,
         CancellationToken token, IDeliverySigningKeyProvider? signingKeys = null)
     {
@@ -148,6 +165,10 @@ internal static class DeliveryPayloadBuilder
         await WritePropertiesAsync(output, Path.Combine(Path.GetDirectoryName(output)!, "payload_properties.txt"), token).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// <para>按 Payload 选项加载并校验签名密钥：要求 RSA 2048/4096 位，且指纹与所选一致。</para>
+    /// Loads and validates the signing key per the Payload options: RSA 2048/4096-bit, matching the selected fingerprint.
+    /// </summary>
     internal static RSA? LoadSigningKey(DeliveryPayloadOptions options, IDeliverySigningKeyProvider? signingKeys = null)
     {
         if (options.SigningKeyPath.Length == 0) return null;

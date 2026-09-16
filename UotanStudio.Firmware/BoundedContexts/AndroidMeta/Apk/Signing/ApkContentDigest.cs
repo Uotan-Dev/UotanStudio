@@ -47,8 +47,6 @@ public static class ApkContentDigest
             throw new InvalidDataException("EOCD record is too short. EOCD 记录过短。");
         }
 
-        // Patch the central-directory offset in a private EOCD copy.
-        // 在私有 EOCD 副本中修补中央目录偏移。
         var patchedEocd = (byte[])eocd.Clone();
         BinaryPrimitives.WriteUInt32LittleEndian(patchedEocd.AsSpan(16, 4), (uint)patchedCentralDirectoryOffset);
 
@@ -70,8 +68,6 @@ public static class ApkContentDigest
             throw new InvalidOperationException("Chunk digest buffer was not filled exactly. 分块摘要缓冲区未被精确填满。");
         }
 
-        // Top level = hash(0x5a || uint32(count) || concat(per-chunk digests)).
-        // 顶层摘要 = hash(0x5a || uint32(count) || 各块摘要串联)。
         topLevel.AppendData(TopPrefix(totalChunks));
         topLevel.AppendData(perChunkDigests);
         return topLevel.GetHashAndReset();
@@ -97,8 +93,6 @@ public static class ApkContentDigest
     {
         if (length == 0)
         {
-            // Empty sections contribute no chunks (apksig).
-            // 空区段不贡献摘要块（apksig）。
             return filled;
         }
 

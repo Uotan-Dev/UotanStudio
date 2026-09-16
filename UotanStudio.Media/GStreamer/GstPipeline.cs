@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 
 namespace UotanStudio.Media.GStreamer;
 
@@ -42,7 +42,7 @@ internal sealed unsafe class GstPipeline : IDisposable
             GstNative.SetTimestamp(buffer, ticks);
         }
         catch { GstNative.gst_mini_object_unref(buffer); throw; }
-        int flow = GstNative.gst_app_src_push_buffer(_source, buffer); // Ownership transfers even on failure.
+        int flow = GstNative.gst_app_src_push_buffer(_source, buffer);
         if (flow != 0) { CheckError(); throw new InvalidOperationException($"GStreamer input flow failed: {flow}."); }
     }
     internal nint Pull(ulong timeout = 0)
@@ -62,7 +62,7 @@ internal sealed unsafe class GstPipeline : IDisposable
     }
     internal void CheckError()
     {
-        nint message = GstNative.gst_bus_pop_filtered(_bus, 2); // GST_MESSAGE_ERROR
+        nint message = GstNative.gst_bus_pop_filtered(_bus, 2);
         if (message == 0) return;
         try
         {
@@ -82,7 +82,7 @@ internal sealed unsafe class GstPipeline : IDisposable
         if (_disposed) return;
         CheckThread();
         _disposed = true;
-        if (_pipeline != 0) _ = GstNative.gst_element_set_state(_pipeline, 1); // NULL: stop workers before freeing endpoints.
+        if (_pipeline != 0) _ = GstNative.gst_element_set_state(_pipeline, 1);
         if (_sink != 0) GstNative.gst_object_unref(_sink);
         if (_source != 0) GstNative.gst_object_unref(_source);
         if (_bus != 0) GstNative.gst_object_unref(_bus);

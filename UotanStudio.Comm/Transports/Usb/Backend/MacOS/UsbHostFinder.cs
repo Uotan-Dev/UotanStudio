@@ -91,7 +91,7 @@ internal static partial class UsbHostFinder
 
             var kr = IOKitUsbAPI.IOServiceGetMatchingServices(IntPtr.Zero, matching, out var iter);
             UsbTrace.Log($"UsbHostFinder: IOServiceGetMatchingServices kr={kr} iter={iter}");
-            matching = IntPtr.Zero; // consumed by GetMatchingServices
+            matching = IntPtr.Zero;
             if (kr != IOKitUsbAPI.KIOReturnSuccess || iter == IntPtr.Zero)
             {
                 return devices;
@@ -99,11 +99,6 @@ internal static partial class UsbHostFinder
 
             iterator = iter;
 
-            // IOIteratorNext returns +0 on this platform for these services (same
-            // contract the IOKit classic finder verified) — do NOT release the
-            // per-service handles.
-            // <para>在此平台上 IOIteratorNext 对这些服务返回 +0（与 IOKit 经典查找器
-            // 验证过的契约相同）——不要释放各服务句柄。</para>
             uint next;
             while ((next = IOKitUsbAPI.IOIteratorNext(iterator)) != 0)
             {
@@ -112,11 +107,6 @@ internal static partial class UsbHostFinder
                 var service = new IntPtr(next);
                 try
                 {
-                    // Device-level scalar property reads only — these cannot wedge
-                    // on a bad device the way the global interface-table iteration
-                    // can (verified).
-                    // <para>仅设备级标量属性读取——这些读取不会像全局接口表迭代那样
-                    // 在异常设备上卡死（已验证）。</para>
                     var vid = ReadCFNumberUshort(service, "idVendor");
                     var pid = ReadCFNumberUshort(service, "idProduct");
                     if (vid == 0 && pid == 0)
@@ -143,12 +133,6 @@ internal static partial class UsbHostFinder
                     {
                         continue;
                     }
-
-                    // Interface-code filters are enforced leniently: enumeration does
-                    // not read interface descriptors (wedge-free), so a device with
-                    // no metadata cannot be disproven and is kept.
-                    // <para>接口码过滤器宽松执行：枚举期不读接口描述符（避免卡死），
-                    // 无元数据的设备无法被证伪，予以保留。</para>
 
                     var device = new UsbHostDevice
                     {

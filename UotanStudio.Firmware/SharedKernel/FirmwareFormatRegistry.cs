@@ -17,39 +17,30 @@ public static class FirmwareFormatRegistry
                 return;
             }
 
-            // Archive
             Register(new BoundedContexts.Archive.Cpio.CpioFormatHandler());
             Register(new CrossCutting.Compress.CompressFormatHandler());
 
-            // OtaDelta
             Register(new BoundedContexts.OtaDelta.Payload.PayloadFormatHandler());
             Register(new BoundedContexts.OtaDelta.Dat.DatFormatHandler());
             Register(new BoundedContexts.OtaDelta.Diff.DiffFormatHandler());
 
-            // Identify logical partitions before their sparse storage wrapper.
             Register(new BoundedContexts.LogicalPartition.Lp.LpFormatHandler());
 
-            // FileSystem
             Register(new BoundedContexts.FileSystem.Sparse.SparseFormatHandler());
             Register(new BoundedContexts.FileSystem.Ext4.Ext4FormatHandler());
             Register(new BoundedContexts.FileSystem.Erofs.ErofsFormatHandler());
             Register(new BoundedContexts.FileSystem.F2fs.F2fsFormatHandler());
 
-            // BootSecurity
             Register(new BoundedContexts.BootSecurity.Avb.AvbFormatHandler());
             Register(new BoundedContexts.BootSecurity.BootImage.BootImageFormatHandler());
 
-
-            // AndroidMeta
             Register(new BoundedContexts.AndroidMeta.Dex.DexFormatHandler());
             Register(new BoundedContexts.AndroidMeta.AXml.AXmlFormatHandler());
             Register(new BoundedContexts.AndroidMeta.Arsc.ArscFormatHandler());
             Register(new BoundedContexts.AndroidMeta.Apk.ApkFormatHandler());
 
-            // DeviceTree
             Register(new BoundedContexts.DeviceTree.Dt.DtFormatHandler());
 
-            // VendorFirmware
             Register(new BoundedContexts.VendorFirmware.NTPi.NtpiFormatHandler());
             Register(new BoundedContexts.VendorFirmware.Nb0.Nb0FormatHandler());
             Register(new BoundedContexts.VendorFirmware.Oppo.OppoFormatHandler());

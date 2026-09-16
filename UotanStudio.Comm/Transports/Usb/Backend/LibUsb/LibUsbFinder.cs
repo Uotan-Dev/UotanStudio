@@ -22,8 +22,6 @@ internal static partial class LibUsbFinder
     {
         try
         {
-            // Resolves the entry points without invoking them; throws when the
-            // native library (or the entry point) is absent.
             Marshal.PrelinkAll(typeof(LibUsbFinder));
             return true;
         }
@@ -64,13 +62,6 @@ internal static partial class LibUsbFinder
 
         try
         {
-            // Collect the FULL interface list first (all configs, all interfaces), then
-            // match the filter in a separate pass. Matching while collecting truncated
-            // the reported list: the first matching interface returned early with only
-            // the interfaces enumerated so far, so later interfaces never made it into
-            // the list (e.g. FT2232H: interface 0 matched, interface 1 was dropped).
-            // <para>先完整收集所有配置下的全部接口，再单独进行过滤器匹配。边收集边匹配会在
-            // 首个命中接口处提前返回，导致后续接口（如 FT2232H 的接口 1）从列表中丢失。</para>
             var configs = device.Configs.ToList();
             var collected = new List<UsbInterfaceInfo>();
             foreach (var config in configs)
@@ -129,10 +120,6 @@ internal static partial class LibUsbFinder
                     byte candidateOut = 0;
                     foreach (var endpoint in ifc.Endpoints)
                     {
-                        // Collect bulk endpoints first (the session I/O path), then interrupt
-                        // endpoints as fallback candidates so devices with only interrupt pipes
-                        // (e.g. HID) can still be opened when the filter requests explicit
-                        // endpoint addresses (interrupt-test).
                         var epType = endpoint.Attributes & 0x03;
                         if (epType is not 0x02 and not 0x03)
                         {
@@ -159,9 +146,6 @@ internal static partial class LibUsbFinder
 
                     if (hasIn && hasOut)
                     {
-                        // Honor an explicit endpoint requirement: the interface must contain
-                        // the requested addresses (e.g. Rockchip loader on 0x82/0x02), and the
-                        // requested endpoints win over the first bulk pair when both exist.
                         var inOk = filter?.EndpointAddressIn is not byte reqIn ||
                             ifc.Endpoints.Any(e => (e.EndpointAddress & 0x80) != 0 && e.EndpointAddress == reqIn);
                         var outOk = filter?.EndpointAddressOut is not byte reqOut ||
@@ -180,7 +164,6 @@ internal static partial class LibUsbFinder
                     }
                     else if (hasIn && filter is { EndpointAddressIn: byte inOnlyEp, EndpointAddressOut: null })
                     {
-                        // IN-only match: interrupt-test on HID devices that expose no OUT pipe.
                         interfaceId = (byte)ifc.Number;
                         inEndpoint = inOnlyEp;
                         outEndpoint = 0;
@@ -195,13 +178,6 @@ internal static partial class LibUsbFinder
         }
         catch
         {
-            // Reading the configuration descriptors failed (e.g. the device's driver
-            // state is corrupted after a failed session read). This is DIFFERENT from
-            // "no interface matches the filter": the caller must keep the device
-            // visible instead of silently dropping it from enumeration.
-            // <para>读取配置描述符失败（例如会话读失败后设备驱动状态损坏）。这与
-            // "没有接口匹配过滤器"不同：调用方必须保留该设备，而不是将其静默地从
-            // 枚举中丢弃。</para>
             descriptorReadFailed = true;
             UsbTrace.Log("LibUsbFinder: failed to inspect interface descriptors.");
             return false;
@@ -222,14 +198,6 @@ internal static partial class LibUsbFinder
         using (var context = new UsbContext())
         using (var deviceList = context.List())
         {
-            // NOTE: LibUsbDotNet's UsbContext is NOT thread-safe; a Parallel.For over
-            // device descriptor reads caused the CLI to hang (features/pull tests
-            // timed out at 30 s). Descriptor reads stay serial — enumeration latency
-            // is dominated by libusb's own List()/descriptor cache, not our loop.
-            // <para>注意：LibUsbDotNet 的 UsbContext 不是线程安全的；对设备描述符
-            // 读取使用 Parallel.For 会导致 CLI 挂起（features/pull 测试 30 秒超时）。
-            // 描述符读取保持串行——枚举延迟主要由 libusb 自身的 List()/描述符缓存
-            // 决定，而非我们的循环。</para>
             foreach (var device in deviceList)
             {
                 if (device is not LibUsbDotNet.LibUsb.UsbDevice libUsbDevice)
@@ -281,19 +249,9 @@ internal static partial class LibUsbFinder
         {
             if (!descriptorReadFailed)
             {
-                // Normal case: the device simply has no interface matching the
-                // filter — skip it, keep scanning.
-                // <para>正常情况：设备只是没有匹配过滤器的接口——跳过并继续扫描。</para>
                 return null;
             }
 
-            // Descriptor read failed (e.g. driver state corrupted after a failed
-            // session read). Keep the device visible with metadata-only (VID/PID/
-            // path) instead of silently dropping it from enumeration; sessions
-            // over a non-open device are skipped later by ToSessions.
-            // <para>描述符读取失败（例如会话读失败后驱动状态损坏）。以仅元数据
-            // （VID/PID/路径）保留设备可见，而不是将其静默地从枚举中丢弃；
-            // 基于未打开设备的会话稍后由 ToSessions 跳过。</para>
             var degradedBus = libUsbDevice.BusNumber;
             var degradedAddress = libUsbDevice.Address;
             var degraded = new LibUsbDevice
@@ -334,20 +292,6 @@ internal static partial class LibUsbFinder
             UsbDeviceType = UsbDeviceType.LibUSB
         };
 
-        // Keep the device even when the handle cannot be opened (e.g. the interface
-        // is claimed by another session or process). Enumeration must reflect the
-        // current device state: the metadata was already collected above, and a busy
-        // device must not silently disappear from the list.
-        // <para>即使句柄无法打开（例如接口已被其他会话或进程声明）也保留该设备。
-        // 枚举必须反映当前设备状态：元数据已在上方收集，被占用的设备不应静默地从
-        // 列表中消失。</para>
-        // Note: we do NOT open the handle here. Enumeration is metadata discovery;
-        // opening is deferred to session creation (UsbProviderProjection.ToSessions
-        // opens on demand). Opening during enumeration would be wasted work for the
-        // info-only path (ToInfos projects then disposes the device).
-        // <para>注意：此处不打开句柄。枚举是元数据发现；打开延迟到会话创建
-        // （UsbProviderProjection.ToSessions 按需打开）。枚举阶段打开对仅需信息的
-        // 路径（ToInfos 投影后即释放设备）是白费工作。</para>
         return usbDevice;
     }
 
@@ -380,11 +324,6 @@ internal static partial class LibUsbFinder
             return false;
         }
 
-        // Verify with the raw native API instead of constructing a LibUsbDotNet UsbContext:
-        // when libusb_init fails, LibUsbDotNet leaves a half-initialized context whose
-        // finalizer throws NullReferenceException (known upstream issue) - on CI this fails
-        // the whole test run even when every test passes. libusb_init/libusb_exit probe the
-        // runtime without creating any LibUsbDotNet object.
         if (!ProbeNativeInit())
         {
             reason = "libusb_init failed";

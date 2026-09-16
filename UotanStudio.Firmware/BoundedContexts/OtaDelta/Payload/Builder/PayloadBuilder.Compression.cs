@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Google.Protobuf;
 using SharpCompress.Compressors.BZip2;
@@ -20,8 +20,6 @@ public sealed partial class PayloadBuilder
             _ => throw new PayloadGenerationException("Unsupported payload REPLACE compression.")
         };
         UotanStudio.Firmware.CrossCutting.Compress.CompressionService.Compress(inputStream, outputStream, format,
-            // Operations contain at most 1 MiB and reset codec history. A larger dictionary
-            // cannot reference additional input but multiplies each worker's match-finder memory.
             new UotanStudio.Firmware.CrossCutting.Compress.CompressionOptions
             {
                 MaxDegreeOfParallelism = 1,

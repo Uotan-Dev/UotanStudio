@@ -121,6 +121,26 @@ public class ErofsTests
     }
 
     [Fact]
+    public void Superblock_FromImage_ReadsMetaboxExtensionSlot()
+    {
+        using var temp = new TempDirectory();
+        WriteText(temp, "file.txt", "payload");
+
+        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false, Metabox = true });
+        using var parser = new ErofsParser(image);
+        var direct = ErofsSuperblock.FromImage(image);
+
+        Assert.True(parser.Superblock.HasMetabox);
+        Assert.True(parser.Superblock.SbExtSlots >= 1);
+        Assert.NotEqual(0UL, parser.Superblock.MetaBoxNid);
+        // The 144-byte superblock carries s_metabox_nid in its first extension slot; a 128-byte
+        // truncation would silently drop it (Linux fs/erofs/erofs_fs.h erofs_super_block).
+        // 144 字节超级块在首个扩展槽中携带 s_metabox_nid；截断到 128 字节会静默丢弃它。
+        Assert.Equal(parser.Superblock.MetaBoxNid, direct.MetaBoxNid);
+        Assert.Equal(parser.Superblock.SbExtSlots, direct.SbExtSlots);
+    }
+
+    [Fact]
     public void Compress_DefaultPclusterSmallerThanSingleBlockPcluster()
     {
         // A small MaxPclusterSize (one block) recompresses each 4 KiB independently, so LZ4 cannot

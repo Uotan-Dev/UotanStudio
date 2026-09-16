@@ -65,8 +65,6 @@ public static class Hdlc
             return 0;
         }
 
-        // Worst case: every byte escaped to 2 bytes, plus 2 flags + addr + ctrl + 2 FCS = 6 fixed bytes.
-        // 最坏情况：每个字节都可能转义为 2 字节，加上 2 个 flag + addr + ctrl + 2 FCS = 6 字节固定开销。
         var maxNeeded = (info.Length * 2) + 8;
         if (dst.Length < maxNeeded)
         {
@@ -74,25 +72,17 @@ public static class Hdlc
             return 0;
         }
 
-        // Assemble the un-escaped frame body in a temp buffer: addr + ctrl + info + FCS(2).
-        // 在临时缓冲中拼装未转义帧体：addr + ctrl + info + FCS(2)。
         var body = new byte[2 + info.Length + 2];
         body[0] = address;
         body[1] = control;
         info.CopyTo(body.AsSpan(2));
         var fcs = ComputeFcs(body.AsSpan(0, 2 + info.Length));
-        // FCS low byte transmitted first (spec §2.2 HDLC LSB first).
-        // FCS 低字节先发（spec §2.2 HDLC LSB first）。
         body[2 + info.Length] = (byte)(fcs & 0xFF);
         body[2 + info.Length + 1] = (byte)((fcs >> 8) & 0xFF);
 
         var dstIndex = 0;
-        // Opening flag is not escaped.
-        // 起始标志不转义。
         dst[dstIndex++] = Flag;
 
-        // Write frame body with transparency escaping.
-        // 帧体转义写入。
         for (var i = 0; i < body.Length; i++)
         {
             var b = body[i];
@@ -107,8 +97,6 @@ public static class Hdlc
             }
         }
 
-        // Closing flag is not escaped.
-        // 结束标志不转义。
         dst[dstIndex++] = Flag;
 
         return dstIndex;
@@ -163,16 +151,12 @@ public static class Hdlc
             }
         }
 
-        // Decoded body needs at least addr(1)+ctrl(1)+FCS(2)=4 bytes.
-        // 还原后帧体至少需 addr(1)+ctrl(1)+FCS(2)=4 字节。
         if (dstIndex < 4)
         {
             error = HdlcError.FrameTooShort;
             return 0;
         }
 
-        // Verify FCS: compute CRC over [addr+ctrl+info] and compare with the trailing 2-byte FCS.
-        // 校验 FCS：对 [addr+ctrl+info] 计算 CRC，与帧尾 2 字节 FCS 比较。
         var bodyLen = dstIndex - 2;
         var computed = ComputeFcs(dst[..bodyLen]);
         var receivedFcs = (ushort)(dst[bodyLen] | (dst[bodyLen + 1] << 8));
@@ -197,7 +181,7 @@ public static class Hdlc
     {
         error = HdlcError.Success;
 
-        if (frame.Length < 6) // min: flag + addr + ctrl + fcs(2) + flag = 6
+        if (frame.Length < 6)
         {
             error = HdlcError.FrameTooShort;
             return 0;
@@ -209,18 +193,14 @@ public static class Hdlc
             return 0;
         }
 
-        // Strip leading/trailing flags, decode the escaped body in between.
-        // 剥离首尾 flag，对中间转义帧体解码。
         var escapedBody = frame[1..^1];
-        var body = new byte[escapedBody.Length]; // decoded never grows
+        var body = new byte[escapedBody.Length];
         var bodyLen = Decode(escapedBody, body, out error);
         if (bodyLen == 0)
         {
             return 0;
         }
 
-        // Info field = body - addr(1) - ctrl(1) - FCS(2).
-        // 信息字段 = 帧体 - addr(1) - ctrl(1) - FCS(2)。
         var infoLen = bodyLen - 4;
         if (infoLen <= 0)
         {

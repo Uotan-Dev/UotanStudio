@@ -74,12 +74,6 @@ public static class SparseImageConverter
         var totalBlocks = (uint)((totalLength + blockSize - 1) / blockSize);
         var sparseFile = new SparseFile(blockSize, totalLength);
 
-        // Non-seekable streams cannot back the absolute-offset providers the zero/fill run grouping
-        // needs, so fall back to a single RAW chunk spanning the whole image (byte-identical, not
-        // compact). Seekable callers — the super builder, image conversion and the flash service —
-        // take the compact encoding below.
-        // 不可寻址流无法为按绝对偏移读取的提供器做零/填充行程分组，回退为覆盖整张镜像的单个 RAW
-        // chunk（字节一致但不紧凑）。可寻址调用方——super 构建、镜像转换、刷机服务——走紧凑编码。
         if (!input.CanSeek || totalBlocks == 0)
         {
             if (totalBlocks > 0)
@@ -93,13 +87,6 @@ public static class SparseImageConverter
         var buffer = ArrayPool<byte>.Shared.Rent((int)blockSize);
         try
         {
-            // Run-length classification folds all-zero blocks and uniform-fill spans into
-            // DONT_CARE / FILL chunks. Without it, a repacked SPARSE super would emit its entire
-            // device as one RAW chunk, so its file balloons to ~the full DeviceSize and exceeds the
-            // original sparse super, which then cannot be flashed.
-            // 行程分类把全零块与均匀填充区间折叠成 DONT_CARE / FILL。不这样做的话，重打包的
-            // SPARSE super 会把整个设备当作单个 RAW chunk 写出，文件膨胀到约等于完整 DeviceSize，
-            // 超过原始稀疏 super，导致无法刷入。
             const byte KindZero = 1, KindFill = 2, KindRaw = 3;
             byte kind = 0;
             var fillValue = 0u;
@@ -241,9 +228,6 @@ public static class SparseImageConverter
         ArgumentOutOfRangeException.ThrowIfLessThan(usable, SparseFormat.ChunkHeaderSize + blockBytes, nameof(maxFileSize));
         var maxPieceDataBlocks = (usable - SparseFormat.ChunkHeaderSize) / blockBytes;
 
-        // 预切分超大 RAW chunk 为不超过 maxPieceDataBlocks 的工作项，打包阶段不再二次切分。
-        // Pre-split oversized RAW chunks into work items of at most maxPieceDataBlocks blocks so
-        // the packing stage never needs to split again.
         var work = new List<WorkItem>();
         foreach (var chunk in sparseFile.Chunks)
         {

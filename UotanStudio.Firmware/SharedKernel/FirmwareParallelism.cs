@@ -37,7 +37,6 @@ public static class FirmwareParallelism
         }
         catch (AggregateException ex)
         {
-            // All workers have stopped; preserve the original format/I/O exception contract.
             ExceptionDispatchInfo.Capture(ex.Flatten().InnerExceptions[0]).Throw();
             throw;
         }

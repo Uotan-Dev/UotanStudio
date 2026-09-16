@@ -38,10 +38,6 @@ public sealed class PathSandbox
             ? Path.GetFullPath(path)
             : Path.GetFullPath(Path.Combine(_root, path));
 
-        // Path prefix alone is not enough ("C:\root" vs "C:\root2"); require a separator at the
-        // boundary or an exact root match, using case-insensitive comparison on Windows only.
-        // 仅路径前缀不够（"C:\root" vs "C:\root2"）；要求边界处是分隔符或恰好等于根目录，
-        // 仅在 Windows 上使用大小写不敏感比较。
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         var contained = string.Equals(full, _root, comparison)
             || (full.StartsWith(_root, comparison)

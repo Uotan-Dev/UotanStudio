@@ -54,7 +54,6 @@ public static class UsbDeviceSessionExtensions
             int remaining;
             if (effectiveTimeout == UsbTransferPolicies.InfiniteTimeoutMs)
             {
-                // Unbounded wait: no deadline check, pass the sentinel straight through.
                 remaining = UsbTransferPolicies.InfiniteTimeoutMs;
             }
             else
@@ -129,7 +128,6 @@ public static class UsbDeviceSessionExtensions
             int remaining;
             if (effectiveTimeout == UsbTransferPolicies.InfiniteTimeoutMs)
             {
-                // Unbounded wait: no deadline check, pass the sentinel straight through.
                 remaining = UsbTransferPolicies.InfiniteTimeoutMs;
             }
             else

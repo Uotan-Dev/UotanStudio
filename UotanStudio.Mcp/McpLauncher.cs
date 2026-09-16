@@ -26,10 +26,6 @@ public static class McpLauncher
     /// </summary>
     public static async Task RunHeadlessAsync(string[] args, CancellationToken cancellationToken = default)
     {
-        // Minimal host-service bootstrap: format registry only. Device tools enumerate through
-        // the shared CommKit / adb server and need no desktop monitor state.
-        // 最小宿主服务引导：仅格式注册表。设备工具经共享 CommKit / adb server 枚举，
-        // 不依赖桌面监视器状态。
         UotanStudio.Firmware.SharedKernel.FirmwareFormatRegistry.RegisterAll();
         var host = new McpServerHost(McpServerConfig.Parse(args));
         await host.RunAsync(cancellationToken).ConfigureAwait(false);
@@ -43,8 +39,6 @@ public static class McpLauncher
     /// </summary>
     public static async Task RunCompanionAsync(string[] args, CancellationToken cancellationToken = default)
     {
-        // Same pinned-tool cache directory as the desktop delivery view; both share downloads.
-        // 与桌面交付视图相同的钉住工具缓存目录；两者共享下载结果。
         Tools.DeliveryToolFactory.ToolsProvider = static () =>
             new UotanStudio.Services.Delivery.DeliveryToolService(
                 new HttpClient { Timeout = Timeout.InfiniteTimeSpan },

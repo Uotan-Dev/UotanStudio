@@ -47,8 +47,6 @@ internal static class MappedBlockCopy
                 destination.Write(buffer, 0, written);
                 remaining -= written;
                 logical += (uint)run;
-                // A boundary mismatch already resolved the next mapping. At a full window,
-                // resolve the next block now; never skip it or probe beyond the inode size.
                 if (logical < blocks && run == capacity / blockSize) pending = mapBlock(logical);
             }
         }

@@ -15,7 +15,7 @@ public interface IProjectDataHost
     void ChangeProjectRoot(string? rootDirectory, bool preserveDocuments) { }
     /// <summary>Indicates host work that must prevent changing or closing the project.</summary>
     bool IsImageOperationRunning { get; }
-    /// <summary>Legacy host capability indicator; the library never requires an editor to persist data.</summary>
+    /// <summary>Host capability indicator; the library never requires an editor to persist data.</summary>
     bool HasNodeEditor { get; }
     /// <summary>Clears the host workflow representation.</summary>
     void ClearNodes();

@@ -19,8 +19,6 @@ public class DexRoundTripTests
         var dex = BuildMinimalDex();
         var bytes = dex.ToArray();
 
-        // 魔数与版本
-        // Magic and version.
         Assert.Equal((byte)'d', bytes[0]);
         Assert.Equal((byte)'e', bytes[1]);
         Assert.Equal((byte)'x', bytes[2]);

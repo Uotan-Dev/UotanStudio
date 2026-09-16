@@ -47,9 +47,6 @@ public sealed partial class F2fsBuilder
     /// Builds an F2FS image from sourceDirectory and returns it as a byte array.
     /// <para>从 sourceDirectory 构建 f2fs 镜像并以字节数组返回。</para>
     /// </summary>
-    // 结果整镜像驻留内存（峰值约为镜像大小的 2 倍托管内存）；大型输出请改用流式重载。
-    // The result is resident in memory (peak managed memory about 2x the image);
-    // use the streaming overloads for large outputs.
     [Obsolete("Loads the entire image into memory. Use Build(sourceDirectory, outputPath) or Build(sourceDirectory, Stream) instead. 整镜像驻留内存；请使用文件路径或流式重载。")]
     public static byte[] Build(string sourceDirectory, F2fsOptions? options = null)
     {
@@ -623,7 +620,6 @@ public sealed partial class F2fsBuilder
 
     private static List<uint> CreateBlockAddressTable(int count)
     {
-        // A fresh backing array is already zeroed; avoid copying another full block-address array.
         var addresses = new List<uint>(count);
         System.Runtime.InteropServices.CollectionsMarshal.SetCount(addresses, count);
         return addresses;
@@ -679,7 +675,6 @@ public sealed partial class F2fsBuilder
 
         var holes = new bool[dataBlocks];
         using var stream = File.OpenRead(node.FullPath);
-        // 大文件（稀疏源可达数 GB）按较大段读取并整段判零，避免逐块系统调用与逐字节扫描。
         const int segmentBlocks = 16;
         var segment = new byte[segmentBlocks * blockSize];
         for (var baseBlock = 0; baseBlock < dataBlocks; baseBlock += segmentBlocks)

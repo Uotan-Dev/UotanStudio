@@ -227,8 +227,5 @@ internal sealed class UsbDeviceMonitor : IDisposable
     }
 
     internal static string BuildIdentityKey(UsbDeviceInfo device) =>
-        // Use the backend-independent physical key for monitoring/dedup so the same
-        // physical device is not reported twice when Auto resolves both native and libusb.
-        // (UsbDeviceInfo.DeviceKey retains the backend-specific key for reopen purposes.)
         UsbDeviceIdentity.BuildPhysicalKey(device);
 }

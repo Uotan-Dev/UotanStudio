@@ -4,7 +4,10 @@ using System.Text.RegularExpressions;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.Ksud;
 
-/// <summary>KernelSU ELF extraction and patching details.</summary>
+/// <summary>
+/// <para>表示从 KernelSU 模块 ELF 中定位到的一个资源条目及其还原结果。</para>
+/// Represents a single asset located in the KernelSU module ELF together with its restored result.
+/// </summary>
 public sealed class Asset
 {
     public string Name { get; set; } = string.Empty;
@@ -22,7 +25,10 @@ public sealed class Asset
 
     public Asset() { }
 
-    /// <summary>KernelSU ELF extraction and patching details.</summary>
+    /// <summary>
+    /// <para>复制另一个资源条目的全部字段。</para>
+    /// Copies all fields of another asset entry.
+    /// </summary>
     public Asset(Asset other)
     {
         Name = other.Name; FnVa = other.FnVa; TableOff = other.TableOff;
@@ -38,7 +44,10 @@ public sealed class SkippedAsset
     public string Reason { get; set; } = string.Empty;
 }
 
-/// <summary>KernelSU ELF extraction and patching details.</summary>
+/// <summary>
+/// <para>汇总一次 KernelSU 资源提取的结果、跳过的条目与日志。</para>
+/// Aggregates the result, skipped entries and log of a KernelSU asset extraction run.
+/// </summary>
 public sealed class Report
 {
     public string Source { get; set; } = string.Empty;
@@ -51,17 +60,15 @@ public sealed class Report
 }
 
 /// <summary>
-/// <summary>KernelSU ELF extraction and patching details.</summary>
-/// <summary>KernelSU ELF extraction and patching details.</summary>
+/// <para>解析 KernelSU 模块 ELF，定位并还原其中压缩打包的资源。</para>
+/// Parses a KernelSU module ELF to locate and restore the compressed assets it embeds.
+/// </summary>
 public static partial class Extractor
 {
-    // Binary parsing and patching implementation detail.
-
     /// <summary>
-    /// <summary>KernelSU ELF extraction and patching details.</summary>
-    ///   ADRP  Xd, label        (0x90000000 / mask 0x9F000000)
-    /// <summary>KernelSU ELF extraction and patching details.</summary>
-    /// <summary>KernelSU ELF extraction and patching details.</summary>
+    /// <para>在 AArch64 函数内扫描 ADRP/ADD 指令对（ADRP: 0x90000000，掩码 0x9F000000），收集解析后的页引用地址。</para>
+    /// Scans an AArch64 function for ADRP/ADD instruction pairs (ADRP: 0x90000000, mask 0x9F000000) and collects the resolved page-reference addresses.
+    /// </summary>
     public static List<ulong> ScanAarch64Refs(ElfFile elf, ulong fnVa, int window = 0x1000)
     {
         byte[] data = elf.Data;
@@ -80,9 +87,6 @@ public static partial class Extractor
                 uint immlo = (insn >> 29) & 0x3;
                 uint immhi = (insn >> 5) & 0x7FFFF;
                 long imm21 = ((long)immhi << 2) | immlo;
-                // ADRP carries a signed 21-bit page delta. Sign-extend bit 20
-                // before shifting; testing bit 19 (the old implementation) sent
-                // backward references to the wrong high address.
                 if ((imm21 & (1L << 20)) != 0)
                     imm21 -= 1L << 21;
                 ulong pcVa = elf.OffToVa(i) ?? fnVa;
@@ -91,7 +95,6 @@ public static partial class Extractor
                 if (targetPage < 0)
                     continue;
                 ulong target = (ulong)targetPage;
-                // Binary parsing and patching implementation detail.
                 for (long j = i + 4; j <= Math.Min(end, i + 12); j += 4)
                 {
                     uint a = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan((int)j));
@@ -131,7 +134,9 @@ public static partial class Extractor
     }
 
     /// <summary>
-    /// <summary>KernelSU ELF extraction and patching details.</summary>
+    /// <para>在 x86-64 函数内扫描指向全局数据的 RIP+disp32 指令并收集解析后的目标地址。</para>
+    /// Scans an x86-64 function for RIP+disp32 instructions that address global data and collects the resolved target addresses.
+    /// </summary>
     public static List<ulong> ScanX86_64Refs(ElfFile elf, ulong fnVa, int window = 0x1000)
     {
         byte[] data = elf.Data;
@@ -169,7 +174,10 @@ public static partial class Extractor
         return outRefs;
     }
 
-    /// <summary>KernelSU ELF extraction and patching details.</summary>
+    /// <summary>
+    /// <para>依据 ELF 机器类型选择对应的引用扫描实现。</para>
+    /// Dispatches to the reference scanner matching the ELF machine type.
+    /// </summary>
     public static List<ulong> ScanRefs(ElfFile elf, ulong fnVa, int window = 0x1000)
     {
         return elf.Machine switch
@@ -180,10 +188,10 @@ public static partial class Extractor
         };
     }
 
-    // Binary parsing and patching implementation detail.
-
     /// <summary>
-    /// <summary>KernelSU ELF extraction and patching details.</summary>
+    /// <para>在 ELF 视图数据中查找 KernelSU 资源表条目，返回名称、工厂函数地址与表偏移。</para>
+    /// Finds KernelSU asset table entries in the ELF view data, returning their name, factory function address and table offset.
+    /// </summary>
     public static List<(string Name, ulong FnVa, long TableOff)> FindEntries(
         byte[] view, ElfFile elf, int maxNameLen = 256, int minCluster = 3)
     {
@@ -214,8 +222,6 @@ public static partial class Extractor
             if (!printable)
                 continue;
             var name = ElfFile.EncodingLatin1.GetString(view, (int)noff.Value, (int)v2);
-            // rust-embed tables can sit next to unrelated (&str, value) data.
-            // Keep only names that are provably KernelSU module assets.
             if (!name.EndsWith("_kernelsu.ko", StringComparison.OrdinalIgnoreCase))
                 continue;
             if (!Regex.IsMatch(name, @"(?i)(?:^|/)(?:android\d+(?:\.\d+)?[-_]\d+\.\d+|\d+\.\d+(?:\.\d+)?[-_]android\d+)_kernelsu\.ko$"))
@@ -223,7 +229,6 @@ public static partial class Extractor
             hits.Add((p, name, v3));
         }
 
-        // Binary parsing and patching implementation detail.
         var clusters = new List<List<(long P, string Name, ulong Fn)>>();
         var cur = new List<(long P, string Name, ulong Fn)>();
         foreach (var h in hits)
@@ -253,11 +258,10 @@ public static partial class Extractor
         return entries;
     }
 
-    // Binary parsing and patching implementation detail.
-
     /// <summary>
-    /// <summary>KernelSU ELF extraction and patching details.</summary>
-    /// <summary>KernelSU ELF extraction and patching details.</summary>
+    /// <para>在给定静态地址附近扫描指向可执行代码的 64 位字，返回候选内部函数地址。</para>
+    /// Scans for 64-bit words pointing into executable code near a given static address and returns candidate internal function addresses.
+    /// </summary>
     public static List<ulong> FindStaticFns(byte[] view, ElfFile elf, ulong staticVa, int scanBytes = 0x40)
     {
         long? off = elf.VaToOff(staticVa);
@@ -273,8 +277,6 @@ public static partial class Extractor
         }
         return fns;
     }
-
-    // Binary parsing and patching implementation detail.
 
     private static byte[] ReadCapped(Stream s, int maxLen)
     {
@@ -306,7 +308,10 @@ public static partial class Extractor
         }
     }
 
-    /// <summary>KernelSU ELF extraction and patching details.</summary>
+    /// <summary>
+    /// <para>二分查找被 deflate 流实际消耗的输入字节数。</para>
+    /// Binary-searches how many input bytes the deflate stream actually consumes.
+    /// </summary>
     private static int FindConsumed(byte[] data, int off, int chunkLen, int outputLen, int capOut)
     {
         int lo = 0, hi = chunkLen;
@@ -322,7 +327,9 @@ public static partial class Extractor
     }
 
     /// <summary>
-    /// <summary>KernelSU ELF extraction and patching details.</summary>
+    /// <para>尝试把 <paramref name="off" /> 处的数据当作 deflate 流解压，并返回消耗字节数与输出。</para>
+    /// Attempts to decompress data at <paramref name="off" /> as a deflate stream and returns the consumed bytes and output.
+    /// </summary>
     public static (int Consumed, byte[] Output)? TryDeflate(byte[] data, int off, int cap = 32 * 1024 * 1024)
     {
         int chunkLen = Math.Min(cap, data.Length - off);
@@ -349,9 +356,10 @@ public static partial class Extractor
         return (consumed, output);
     }
 
-    // Binary parsing and patching implementation detail.
-
-    /// <summary>KernelSU ELF extraction and patching details.</summary>
+    /// <summary>
+    /// <para>返回指定资源条目对应位置的解压后字节内容。</para>
+    /// Returns the decompressed byte content stored at the given asset's data offset.
+    /// </summary>
     public static byte[] GetOutBytes(byte[] data, Asset asset)
     {
         if (asset.DataOff is null)
@@ -360,7 +368,10 @@ public static partial class Extractor
         return got?.Output ?? Array.Empty<byte>();
     }
 
-    /// <summary>KernelSU ELF extraction and patching details.</summary>
+    /// <summary>
+    /// <para>净化资源名称：把反斜杠归一化为正斜杠、去掉路径前缀并移除无效字符。</para>
+    /// Sanitizes an asset name by normalizing backslashes to forward slashes, stripping path prefixes and removing invalid characters.
+    /// </summary>
     public static string SanitizeName(string name)
     {
         name = name.Replace('\\', '/').TrimStart('/');
@@ -370,12 +381,8 @@ public static partial class Extractor
     [System.Text.RegularExpressions.GeneratedRegex(@"[^A-Za-z0-9._+@%\-]")]
     private static partial System.Text.RegularExpressions.Regex InvalidCharsRegex();
 
-    // Binary parsing and patching implementation detail.
-
     private static string Sha256Hex(byte[] data) =>
         Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(data));
-
-
 
     private static IEnumerable<byte[]> EnumerateX86InlineHashes(ElfFile elf, ulong fnVa, int window)
     {
@@ -448,9 +455,6 @@ public static partial class Extractor
                 }
             }
 
-            // rust-embed writes the SHA-256 metadata as two adjacent STP pairs:
-            // [x8, x9] at EmbeddedFile + 0x20 and +0x30. Capture only those
-            // stores, keeping the digest tied to this exact factory function.
             if ((instruction & 0xFFC00000u) == 0xA9000000u &&
                 (instruction & 0x1Fu) == 8u && ((instruction >> 10) & 0x1Fu) == 9u &&
                 ((instruction >> 5) & 0x1Fu) == 19u)
@@ -465,9 +469,6 @@ public static partial class Extractor
                 }
             }
 
-            // The second hash pair is stored by include-flate's tiny helper
-            // (`bl ...; stp x8, x9, [x19, #0x30]`). The call itself is the
-            // stable boundary even when the helper is inlined or deduplicated.
             if ((instruction & 0xFC000000u) == 0x94000000u &&
                 firstHashWord8 is not null && firstHashWord9 is not null &&
                 mask8 == 0xF && mask9 == 0xF && (x8 != firstHashWord8 || x9 != firstHashWord9))
@@ -485,7 +486,9 @@ public static partial class Extractor
     }
 
     /// <summary>
-    /// <summary>KernelSU ELF extraction and patching details.</summary>
+    /// <para>从 KernelSU 模块 ELF 中提取全部资源条目，返回资源列表与日志。</para>
+    /// Extracts every asset entry from a KernelSU module ELF and returns the asset list and log.
+    /// </summary>
     public static (List<Asset> Assets, List<string> Log) ExtractAssets(
         ElfFile elf, bool verbose = false)
     {
@@ -500,7 +503,6 @@ public static partial class Extractor
         var entryFns = entries.Select(e => e.FnVa).OrderBy(f => f).ToList();
         foreach (var (name, fnVa, tableOff) in entries)
         {
-            // Binary parsing and patching implementation detail.
             ulong nxt = entryFns.FirstOrDefault(f => f > fnVa);
             if (nxt == 0)
                 nxt = fnVa + 0x200;
@@ -511,8 +513,6 @@ public static partial class Extractor
 
             var result = new Asset { Name = name, FnVa = fnVa, TableOff = tableOff };
 
-            // Binary parsing and patching implementation detail.
-            // Binary parsing and patching implementation detail.
             foreach (var r in dataRefs)
             {
                 foreach (var thunk in FindStaticFns(view, elf, r))
@@ -540,8 +540,6 @@ public static partial class Extractor
                     break;
             }
 
-            // Binary parsing and patching implementation detail.
-            // Binary parsing and patching implementation detail.
             if (result.DataOff is null)
             {
                 foreach (var r in refs)
@@ -562,9 +560,6 @@ public static partial class Extractor
                 }
             }
 
-            // Binary parsing and patching implementation detail.
-
-            // Binary parsing and patching implementation detail.
             {
                 ulong? hashHit = null;
                 foreach (var hr in hashRefs)
@@ -582,8 +577,6 @@ public static partial class Extractor
                     (EnumerateInlineHashes(elf, fnVa, extWindow)
                         .Concat(elf.Machine == 62 ? EnumerateX86InlineHashes(elf, fnVa, extWindow) : [])
                         .Any(candidate => Convert.ToHexStringLower(candidate) == result.Sha256));
-                // The digest must be referenced from the same factory. A matching
-                // byte sequence found elsewhere in the ELF is not sufficient.
                 result.HashInBinary = hashHit is not null || inlineHash;
                 byte[] outBytes = GetOutBytes(data, result);
                 result.Verified =

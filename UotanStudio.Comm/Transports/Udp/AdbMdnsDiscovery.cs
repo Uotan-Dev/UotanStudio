@@ -78,7 +78,6 @@ public static class AdbMdnsDiscovery
         }
         catch (OperationCanceledException)
         {
-            // Cancelled — return whatever was found so far.
         }
 
         return BuildDevices(byInstance, addressesByHost);

@@ -148,11 +148,6 @@ public sealed class AdbConnection : IDisposable
         catch (Exception ex) when ((ex is System.ComponentModel.Win32Exception or IOException)
             && _transport is UsbDeviceTransport)
         {
-            // 直连 USB 握手的单次瞬态错误（如 WinUSB ERROR_CRC / 管道数据损坏）在重置
-            // 管道后重试一次；消息循环尚未启动，重复发送 CNXN 不会残留后台状态。
-            // A single transient error on the direct-USB handshake (e.g. WinUSB ERROR_CRC
-            // or pipe data corruption) is retried once after a pipe reset; the message loop
-            // has not started, so re-sending CNXN leaves no background state behind.
             _transport.Reset();
             Send(AdbMessaging.BuildConnect());
         }
@@ -340,11 +335,6 @@ public sealed class AdbConnection : IDisposable
         switch ((AdbAuthType)message.Arg0)
         {
             case AdbAuthType.Token:
-                // AOSP send_auth_response(): answer EACH token with the NEXT key's
-                // signature; when the key queue is exhausted, advertise the public key
-                // so the user can authorize it on the device.
-                // <para>AOSP send_auth_response()：对每个令牌以“下一个”密钥的签名
-                // 应答；密钥队列耗尽后宣告公钥，供用户在设备上授权。</para>
                 var token = message.Payload ?? [];
                 if (_authKeyIndex < _authentications.Count)
                 {
@@ -360,8 +350,6 @@ public sealed class AdbConnection : IDisposable
                 break;
 
             case AdbAuthType.RsaPublicKey:
-                // The peer asked for an explicit (re)send of our public key.
-                // <para>对端要求显式（重）发我们的公钥。</para>
                 var explicitPublicKey = _authentications[0].BuildPublicKeyPayload();
                 Send(AdbMessaging.BuildAuth(AdbAuthType.RsaPublicKey, explicitPublicKey));
                 break;
@@ -410,15 +398,11 @@ public sealed class AdbConnection : IDisposable
     /// <param name="message">The OKAY message. OKAY 消息。</param>
     private void HandleOkay(AdbMessage message)
     {
-        // Peer messages carry arg0 = peer's local id (our remote id), arg1 = our local id.
-        // <para>对端消息中 arg0 = 对端的本地 id（即我们的远端 id），arg1 = 我们的本地 id。</para>
         AdbStream? stream;
         lock (_lock)
         {
             _streams.TryGetValue(message.Arg1, out stream);
         }
-        // Set outside the lock: this signals _ready which may unblock waiting writers.
-        // <para>在锁外设置：该操作触发 _ready，可能唤醒等待的写入方。</para>
         stream?.SetRemoteId(message.Arg0);
     }
 
@@ -429,8 +413,6 @@ public sealed class AdbConnection : IDisposable
     /// <param name="message">The WRTE message. WRTE 消息。</param>
     private void HandleWrite(AdbMessage message)
     {
-        // arg1 = our local id; acknowledge with OKAY so the peer's window does not stall.
-        // <para>arg1 = 我们的本地 id；回 OKAY 确认，避免对端窗口停滞。</para>
         lock (_lock)
         {
             if (_streams.TryGetValue(message.Arg1, out var stream))
@@ -448,8 +430,6 @@ public sealed class AdbConnection : IDisposable
     /// <param name="message">The CLSE message. CLSE 消息。</param>
     private void HandleClose(AdbMessage message)
     {
-        // Echo CLSE back so the peer tears down its side, then drop the stream.
-        // <para>回送 CLSE 使对端拆除其侧流，然后移除该流。</para>
         AdbStream? stream;
         lock (_lock)
         {
@@ -525,8 +505,6 @@ public sealed class AdbConnection : IDisposable
             }
             if (n == 0)
             {
-                // A static scrcpy screen (or quiet shell) need not send any packets.
-                // Do not tear down every multiplexed service for an idle USB read.
                 if (allowIdle && totalRead == 0 && !_disposed && Transport.IsConnected) continue;
                 throw new TimeoutException("ADB read timeout");
             }

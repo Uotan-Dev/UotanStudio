@@ -54,10 +54,6 @@ internal static class WinUSBFinder
         LastScannedNodeCount = 0;
         LastMatchedDeviceCount = 0;
 
-        // Enumerate ALL device nodes (no interface-GUID whitelist), then for each USB
-        // node read its registered DeviceInterfaceGUIDs from the registry and enumerate
-        // the interfaces under those GUIDs. This discovers any driver (WinUSB/Zadig/
-        // libusb-win32/vendor) without a hardcoded GUID list.
         var devInfoSet = Win32API.SetupDiGetClassDevsW(IntPtr.Zero, null, IntPtr.Zero,
             Win32API.DIGCF_PRESENT | Win32API.DIGCF_ALLCLASSES);
         LastSetupDiSucceeded = devInfoSet != -1;
@@ -67,18 +63,6 @@ internal static class WinUSBFinder
             return devices;
         }
 
-        // Some winusb-driven interfaces (e.g. standard ADB interfaces on winusb.sys)
-        // do not write a DeviceInterfaceGUIDs value under their node's Device Parameters
-        // even though the interface registration exists under
-        // HKLM\SYSTEM\CurrentControlSet\Control\DeviceClasses. Build a reverse map
-        // (device instance -> interface GUIDs) LAZILY, only when a node actually lacks
-        // the node-level value: most devices carry their GUIDs directly, so the full
-        // DeviceClasses registry walk is skipped in the common case.
-        // <para>部分 winusb 驱动的接口（如 winusb.sys 上的标准 ADB 接口）不会在节点
-        // Device Parameters 下写入 DeviceInterfaceGUIDs 值，但接口注册实际存在于
-        // HKLM\SYSTEM\CurrentControlSet\Control\DeviceClasses。反向映射（设备实例 ->
-        // 接口 GUID）按需惰性构建——仅当节点确实缺少节点级值时构建；大多数设备自带
-        // GUID，常见情况下可完全跳过 DeviceClasses 注册表遍历。</para>
         Func<Dictionary<string, List<Guid>>> lazyDeviceClassGuids = BuildDeviceClassGuidMap;
 
         try
@@ -178,7 +162,6 @@ internal static class WinUSBFinder
             {
                 if (Win32API.RegQueryValueExW(key, "DeviceInterfaceGUIDs", IntPtr.Zero, out type, buffer, ref size) == 0)
                 {
-                    // REG_MULTI_SZ: NUL-separated strings ending with double NUL.
                     var multi = Marshal.PtrToStringUni(buffer, (int)size / 2) ?? string.Empty;
                     foreach (var part in multi.Split('\0'))
                     {
@@ -240,7 +223,7 @@ internal static class WinUSBFinder
                 }
                 if (guidEnumResult != 0)
                 {
-                    break; // ERROR_NO_MORE_ITEMS (or an unexpected failure) ends the walk.
+                    break;
                 }
 
                 var guidNameStr = new string(guidName, 0, (int)guidNameCapacity);
@@ -276,10 +259,6 @@ internal static class WinUSBFinder
                             break;
                         }
 
-                        // Link name format (lowercase):
-                        // ##?#USB#VID_12D1&PID_107D&MI_02#a&f92a917&2&0002#{dee824ef-...}
-                        // <para>链接名格式（小写）：
-                        // ##?#USB#VID_12D1&PID_107D&MI_02#a&f92a917&2&0002#{dee824ef-...}</para>
                         var link = new string(linkName, 0, (int)linkNameCapacity);
                         var hashHashQuestion = link.IndexOf("?#", StringComparison.Ordinal);
                         if (hashHashQuestion < 0)
@@ -331,12 +310,6 @@ internal static class WinUSBFinder
         string instanceId,
         Func<Dictionary<string, List<Guid>>> deviceClassGuidsFactory)
     {
-        // Build the DeviceClasses reverse map only on first actual need (a node
-        // without node-level DeviceInterfaceGUIDs); most nodes carry their GUIDs
-        // directly, so the full registry walk is skipped in the common case.
-        // <para>仅在首次真正需要时构建 DeviceClasses 反向映射（节点缺少节点级
-        // DeviceInterfaceGUIDs 时）；大多数节点自带 GUID，常见情况下跳过整个
-        // 注册表遍历。</para>
         IReadOnlyDictionary<string, List<Guid>> deviceClassGuids = deviceClassGuidsFactory();
         if (deviceClassGuids.TryGetValue(instanceId.ToLowerInvariant(), out var fallback))
         {
@@ -390,8 +363,6 @@ internal static class WinUSBFinder
         List<UsbDevice> devices,
         HashSet<string> uniqueKeys)
     {
-        // Copy to a local so the local function can capture it (ref parameters cannot
-        // be captured); SetupDiEnumDeviceInterfaces only reads the GUID per call.
         var guid = interfaceClassGuid;
         bool Enumerate(uint index, ref Win32API.SpDeviceInterfaceData iface)
         {
@@ -420,10 +391,6 @@ internal static class WinUSBFinder
             var detailBuffer = Marshal.AllocHGlobal((int)detailSize);
             try
             {
-                // SP_DEVICE_INTERFACE_DETAIL_DATA_W: cbSize (DWORD, 4 bytes) is followed
-                // immediately by DevicePath (WCHAR[]) — the field offset is 4 on BOTH
-                // x86 and x64 (no pointer padding inside the struct). Using 8 on x64
-                // skips the leading "\\" of "\\?\..." and makes CreateFile fail (err=123).
                 var cbSize = IntPtr.Size == 8 ? 8 : 6;
                 var pathOffset = 4;
                 Marshal.WriteInt32(detailBuffer, cbSize);
@@ -437,13 +404,11 @@ internal static class WinUSBFinder
                         continue;
                     }
 
-                    // Check the bound interface before opening any candidate handle.
                     var identity = CreateMetadataOnlyDevice(path, TryParseVidPid(path).vid ?? 0, TryParseVidPid(path).pid ?? 0);
                     if (filter?.InterfaceClass is byte cls && identity.InterfaceClass != cls ||
                         filter?.InterfaceSubClass is byte sub && identity.InterfaceSubClass != sub ||
                         filter?.InterfaceProtocol is byte protocol && identity.InterfaceProtocol != protocol)
                         continue;
-                    // Prefer WinUSB for Google devices
                     var isGoogleWinUsb = lowerPath.Contains(PreferWinUsbVidPid);
 
                     UsbDevice? device = null;
@@ -537,15 +502,6 @@ internal static class WinUSBFinder
         DebugBridgeRoute.RequireDirectUsb(metadata.InterfaceClass, metadata.InterfaceSubClass, metadata.InterfaceProtocol);
 
 
-        // winusb.sys allows only one open handle per interface: when the interface is
-        // claimed by another session/process, CreateFile fails with access denied. Keep
-        // the device visible with metadata parsed from the interface path instead of
-        // silently dropping it from enumeration; sessions over a non-open device are
-        // skipped later by UsbProviderProjection.ToSessions.
-        // <para>winusb.sys 每个接口只允许一个打开句柄：当接口被其他会话/进程声明时，
-        // CreateFile 会以访问拒绝失败。以从接口路径解析的元数据保留设备，而不是将其
-        // 静默地从枚举中丢弃；基于未打开设备的会话稍后由
-        // UsbProviderProjection.ToSessions 跳过。</para>
         var hDevice = Win32API.SimpleCreateHandle(path);
         if (hDevice == Win32API.INVALID_HANDLE_VALUE)
         {
@@ -580,9 +536,6 @@ internal static class WinUSBFinder
                 return dev;
             }
 
-            // Legacy open failed (busy/unopenable): keep the device visible with
-            // metadata only. <para>Legacy 打开失败（被占用/无法打开）：以仅元数据
-            // 形式保留设备可见。</para>
             UsbTrace.Log($"WinUSBFinder: ProbeDevice legacy open failed for [{path}] - reported with metadata only.");
             return dev;
         }
@@ -599,8 +552,6 @@ internal static class WinUSBFinder
             return winDev;
         }
 
-        // WinUSB open failed (busy/unopenable): keep the device visible with metadata
-        // only. <para>WinUSB 打开失败（被占用/无法打开）：以仅元数据形式保留设备可见。</para>
         UsbTrace.Log($"WinUSBFinder: ProbeDevice WinUSB open failed for [{path}] - reported with metadata only.");
         return winDev;
     }
@@ -624,8 +575,6 @@ internal static class WinUSBFinder
             return dev;
         }
 
-        // WinUSB open failed (busy/unopenable): keep the device visible with metadata
-        // only. <para>WinUSB 打开失败（被占用/无法打开）：以仅元数据形式保留设备可见。</para>
         UsbTrace.Log($"WinUSBFinder: TryOpenWinUSB open failed for [{path}] - reported with metadata only.");
         return dev;
     }
@@ -689,12 +638,6 @@ internal static class WinUSBFinder
         interfaceSubClass = 0;
         interfaceProtocol = 0;
 
-        // Convert a device interface path "\\?\usb#vid_12d1&pid_107d&mi_02#a&f92a917&2&0002#{guid}"
-        // into a registry device instance id "USB\VID_12D1&PID_107D&MI_02\A&F92A917&2&0002"
-        // (registry key names are case-insensitive, so case does not need to match exactly).
-        // <para>将设备接口路径 "\\?\usb#vid_12d1&pid_107d&mi_02#a&f92a917&2&0002#{guid}"
-        // 转换为注册表设备实例 ID "USB\VID_12D1&PID_107D&MI_02\A&F92A917&2&0002"
-        // （注册表键名不区分大小写，大小写无需完全一致）。</para>
         const string prefix = @"\\?\usb#";
         var rest = path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? path[prefix.Length..] : path;
         var guidBrace = rest.IndexOf("#{", StringComparison.Ordinal);
@@ -709,10 +652,6 @@ internal static class WinUSBFinder
         }
 
         var instanceId = @"USB\" + rest.Replace('#', '\\');
-        // CompatibleIDs is a REG_MULTI_SZ VALUE of the device node key, not a subkey —
-        // open the node key and query the value directly.
-        // <para>CompatibleIDs 是设备节点键下的 REG_MULTI_SZ 值，不是子键——直接打开
-        // 节点键并查询该值。</para>
         var subKey = @"SYSTEM\CurrentControlSet\Enum\" + instanceId;
         if (Win32API.RegOpenKeyExW(Win32API.HKEY_LOCAL_MACHINE, subKey, 0, Win32API.KEY_READ, out var key) != 0)
         {
@@ -736,7 +675,6 @@ internal static class WinUSBFinder
                     return false;
                 }
 
-                // REG_MULTI_SZ: NUL-separated strings ending with double NUL.
                 var multi = Marshal.PtrToStringUni(buffer, (int)size / 2) ?? string.Empty;
                 foreach (var part in multi.Split('\0'))
                 {
@@ -771,11 +709,6 @@ internal static class WinUSBFinder
 
     private static string BuildDeviceKey(UsbDevice device)
     {
-        // Composite devices (e.g. FT2232HL) expose the same serial number on every
-        // interface (MI_00/MI_01). The interface number must be part of the dedup key
-        // so each WinUSB-bound interface enumerates as its own device.
-        // <para>复合设备（例如 FT2232HL）在每个接口（MI_00/MI_01）上暴露相同的序列号。
-        // 接口号必须参与去重键，使每个 WinUSB 绑定的接口都被枚举为独立设备。</para>
         var interfaceTag = string.Empty;
         var miMatch = Regex.Match(device.DevicePath, @"mi_([0-9a-fA-F]{2})", RegexOptions.IgnoreCase);
         if (miMatch.Success)
@@ -788,7 +721,6 @@ internal static class WinUSBFinder
             return $"serial:{device.SerialNumber}{interfaceTag}";
         }
 
-        // Fallback for devices that do not expose serial numbers.
         return $"path:{device.DevicePath}|vid:{device.VendorId:X4}|pid:{device.ProductId:X4}|type:{device.GetType().Name}";
     }
 

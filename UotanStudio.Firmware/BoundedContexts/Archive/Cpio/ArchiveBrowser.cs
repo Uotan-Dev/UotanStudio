@@ -144,8 +144,6 @@ public sealed class ArchiveBrowser : IDisposable
                 if (string.IsNullOrWhiteSpace(memberName)) memberName = "content";
             }
 
-            // Common SharpCompress archives (ZIP, RAR, 7z, ARC, ARJ, ACE and LZW) are kept
-            // open so individual entries can be streamed on demand instead of buffering them.
             IArchive? sharpArchive = null;
             if (IsSharpArchivePath(memberName))
             {

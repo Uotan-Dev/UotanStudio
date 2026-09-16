@@ -107,7 +107,7 @@ public class FastbootBackupTests
 
         using var session = new FastbootSession(transport);
         using var ms = new MemoryStream(imageBytes);
-        var response = session.FlashPartition("boot", ms, imageBytes.Length);
+        var response = session.FlashPartition("boot", ms, imageBytes.Length, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(FastbootResponseState.Success, response.State);
         var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
@@ -130,7 +130,7 @@ public class FastbootBackupTests
 
         using var session = new FastbootSession(transport);
         using var ms = new MemoryStream(imageBytes);
-        session.FlashPartition("boot_a", ms, imageBytes.Length);
+        session.FlashPartition("boot_a", ms, imageBytes.Length, cancellationToken: TestContext.Current.CancellationToken);
 
         var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
         Assert.Contains("flash:boot_a", commands);
@@ -153,7 +153,7 @@ public class FastbootBackupTests
 
         using var session = new FastbootSession(transport);
         using var ms = new MemoryStream(imageBytes);
-        session.FlashPartition("system_ext_a", ms, imageBytes.Length);
+        session.FlashPartition("system_ext_a", ms, imageBytes.Length, cancellationToken: TestContext.Current.CancellationToken);
 
         var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
         Assert.Contains("flash:system_ext_a", commands);
@@ -176,7 +176,7 @@ public class FastbootBackupTests
 
         using var session = new FastbootSession(transport);
         using var ms = new MemoryStream(imageBytes);
-        session.FlashPartition("boot", ms, imageBytes.Length, resolveSlot: false);
+        session.FlashPartition("boot", ms, imageBytes.Length, cancellationToken: TestContext.Current.CancellationToken, resolveSlot: false);
 
         var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
         Assert.DoesNotContain(commands, c => c.StartsWith("getvar:has-slot:", StringComparison.Ordinal));

@@ -118,8 +118,6 @@ public sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = AdbS
 
             if (id == SyncIds.Done)
             {
-                // LIST terminates with a full sync_dent (id + mode/size/time/namelen),
-                // not the eight-byte DONE header used by RECV.
                 ReadExact(stream, 16);
                 break;
             }

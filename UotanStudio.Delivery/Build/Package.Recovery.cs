@@ -5,6 +5,8 @@ namespace UotanStudio.Services.Delivery;
 
 internal static partial class DeliveryPackageBuilder
 {
+    /// <summary><para>判断计划是否需要 DAT Recovery 包（纯 Recovery、非 Payload/Super，且选中了 DAT 工件）。</para>
+    /// Determines whether the plan needs a DAT Recovery package (pure Recovery, not Payload/Super, with a selected DAT artifact).</summary>
     internal static bool HasDat(DeliveryPlan plan) => plan.Recovery && !plan.PackPayload && !plan.PackSuper
         && Selected(plan).Any(f => IsDatArtifact(f.FileName));
 
@@ -128,7 +130,6 @@ internal static partial class DeliveryPackageBuilder
         return script.ToString().ReplaceLineEndings("\n");
     }
 
-    // Each producer is waited separately: POSIX sh has no portable pipefail. FIFOs keep Super data out of /tmp.
     private const string StreamFunctions = """
         package_extract_file() (
           member=$1; shift
@@ -177,7 +178,12 @@ internal static partial class DeliveryPackageBuilder
         }
         """;
 
-    /// <summary>Emits native Edify with actual ZIP member names and the wrapper's resolved partition paths.</summary>
+    /// <summary>
+    /// <para>生成使用真实 ZIP 成员名与解析后分区路径的原生 Edify 脚本：A/B 分区按
+    /// getprop("ro.boot.slot_suffix") 拼接，显式 _a/_b 分区不加后缀，DAT 分区用 block_image_update 写镜像。</para>
+    /// Emits native Edify with actual ZIP member names and resolved partition paths: A/B partitions append
+    /// getprop("ro.boot.slot_suffix"), explicit _a/_b partitions take none, and DAT partitions are written via block_image_update.
+    /// </summary>
     internal static string RecoveryUpdaterScript(DeliveryPlan plan, Func<string, string>? localize = null)
     {
         if (!HasDat(plan)) return "# UotanStudio custom Recovery shell installer\n";
@@ -185,8 +191,6 @@ internal static partial class DeliveryPackageBuilder
         var script = new StringBuilder("# Executed by the native updater at META-INF/com/google/android/update-binary.\n");
         foreach (var line in DeliveryScriptGenerator.BannerLines(plan, localize))
             script.AppendLine("ui_print(" + DeliveryScriptGenerator.QuoteEdify(line) + ");");
-        // AOSP 标准设备路径：A/B 设备用 getprop("ro.boot.slot_suffix") 拼接；显式 _a/_b 分区不加后缀。
-        // AOSP-standard device path: A/B slots append getprop("ro.boot.slot_suffix"); explicit _a/_b partitions take none.
         string Target(int i)
         {
             var partition = images[i].File.Partition;

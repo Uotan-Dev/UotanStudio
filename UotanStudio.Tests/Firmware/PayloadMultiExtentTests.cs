@@ -10,13 +10,10 @@ namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
 /// 多区间（multi-extent）操作语义测试，对齐上游 delta_performer：源区间拼接为一条数据流
-/// 整体校验哈希后按顺序写入全部目标区间。回归覆盖旧实现"每个源区间都写到
-/// DstExtents[0]"导致的覆写损坏与"bsdiff 家族只写第一个目标区间"的静默截断。
+/// 整体校验哈希后按顺序写入全部目标区间。
 /// <para>Multi-extent operation semantics tests, mirroring upstream delta_performer: source
 /// extents concatenate into one data stream, verified as a whole, then written sequentially
-/// across ALL destination extents. Regression coverage for the old behaviour that wrote every
-/// source extent at DstExtents[0] (overwriting) and wrote bsdiff-family output only into the
-/// first destination extent (silent truncation).</para>
+/// across ALL destination extents.</para>
 /// </summary>
 public class PayloadMultiExtentTests
 {
@@ -27,11 +24,6 @@ public class PayloadMultiExtentTests
     {
         // 6 块基座镜像（24 字节），SOURCE_COPY 源区间 [0,1)+[3,1)（不连续），目标 [4,2)。
         // 输出长度 = 目标区间最大末尾（块 6）= 24 字节，基座须等长。
-        // 旧实现把两个源区间都写到块 4，导致块 4 被第二个源区间覆盖。
-        // 6-block base image (24 bytes); SOURCE_COPY with non-contiguous source extents
-        // [0,1)+[3,1) into destination [4,2). Output length = max destination end (block 6)
-        // = 24 bytes, so the base matches it. The old implementation wrote both source extents
-        // at block 4, so the second one overwrote the first.
         var baseData = new byte[24];
         for (var i = 0; i < baseData.Length; i++)
         {
@@ -53,8 +45,6 @@ public class PayloadMultiExtentTests
 
         var expected = (byte[])baseData.Clone();
         // 块 4-5 = base[0..4] ++ base[12..16]（源区间按顺序拼接）；其余块保留基座。
-        // Blocks 4-5 = base[0..4] ++ base[12..16] (source extents concatenated in order); the
-        // rest keep the base content.
         baseData[0..4].CopyTo(expected, 16);
         baseData[12..16].CopyTo(expected, 20);
         Assert.Equal(expected, output);

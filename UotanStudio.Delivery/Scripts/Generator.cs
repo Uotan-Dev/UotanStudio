@@ -4,15 +4,19 @@ using System.Text.Json;
 
 namespace UotanStudio.Services.Delivery;
 
-/// <summary>Generates scripts from one validated plan; never executes device commands.</summary>
+/// <summary><para>根据已验证的计划生成脚本，绝不执行设备命令。</para>
+/// Generates scripts from one validated plan; never executes device commands.</summary>
 internal static partial class DeliveryScriptGenerator
 {
     private static string ImagePath(DeliveryPlan plan, DeliveryFile file)
         => plan.PackSuper ? DeliveryOutputService.OrganizedImageRelativePath(file).Replace('\\', '/') : "images/" + file.FileName;
+    /// <summary>
+    /// <para>对计划的关键字段计算脚本指纹，用于检测生成脚本是否随安装器契约或计划内容而过期。</para>
+    /// Computes a fingerprint over the plan's key fields to detect when generated scripts are stale relative to the installer contract.
+    /// </summary>
     internal static string Fingerprint(DeliveryPlan plan)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        // Invalidate saved generated scripts when the installer contract changes; edited drafts still use the host's conflict flow.
         hash.AppendData("UotanStudio delivery scripts v3\n"u8);
         hash.AppendData(JsonSerializer.SerializeToUtf8Bytes(plan with { Scripts = [], GeneratedScripts = [], OpenScripts = [], ScriptCarets = [], ScriptFingerprint = "", OutputDirectory = "" },
             DeliveryJsonContext.Default.DeliveryPlan));
@@ -28,8 +32,6 @@ internal static partial class DeliveryScriptGenerator
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         if (!plan.OrganizeDirectory) return result;
         var flashFiles = plan.Files.Where(f => !f.FileName.Equals("payload.bin", StringComparison.OrdinalIgnoreCase) && f.Partition != "payload"
-            // super_empty.img 是附加布局文件，不是可刷写的分区镜像，不进入任何刷写脚本与清单。
-            // super_empty.img is an auxiliary layout file, not a flashable partition image; keep it out of scripts and manifests.
             && f.Partition != "super_empty"
             && !DeliveryPackageBuilder.IsDatArtifact(f.FileName))
             .Select(f => f.Generated && f.Partition == "super"
@@ -40,8 +42,6 @@ internal static partial class DeliveryScriptGenerator
         {
             if (DeliveryPackageBuilder.HasDat(plan))
             {
-                // 旧式 DAT 卡刷包：update-binary 是原包/内嵌的原生 ELF 更新器，脚本只生成 Edify updater-script。
-                // Old-style DAT package: update-binary is the native ELF updater; only the Edify updater-script is generated.
                 result.Add("updater-script", DeliveryPackageBuilder.RecoveryUpdaterScript(plan, localize));
             }
             else
@@ -55,14 +55,8 @@ internal static partial class DeliveryScriptGenerator
         var groups = plan.Files.GroupBy(f => f.Partition, StringComparer.Ordinal).Select(g => g.ToArray()).ToArray();
         if (groups.Any(g => g.Length > 9)) throw new InvalidDataException("每个选择组最多 9 项 / At most 9 alternatives per partition.");
         var defaults = groups.Select(g => g.FirstOrDefault(f => f.Default) ?? g[0]).Where(f => !f.Optional || f.Default).ToArray();
-        // The legacy TXT flasher cannot decompress ZST images. When ZST is selected,
-        // suppress the TXT artifact entirely instead of leaving a misleading partial manifest.
         if (plan.Txt && !plan.Super.Zstd)
         {
-            // TXT 线刷（旧工具箱）没有 zstd 解压能力：压缩镜像（如 super.zst）不写入清单，避免被直接当
-            // super 分区刷入压缩数据；Shell/Batch 脚本仍保留各自的解压步骤。
-            // The TXT flasher cannot decompress zstd, so compressed images (e.g. super.zst) are excluded
-            // from the manifest instead of being flashed as raw compressed data; Shell/Batch keep their steps.
             static bool IsZstd(DeliveryFile f) => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase);
             result.Add("flash.txt", Txt(plan, defaults.Where(f => !IsZstd(f))));
             if (plan.TxtVariants)
@@ -114,8 +108,6 @@ internal static partial class DeliveryScriptGenerator
         foreach (var f in plan.Files) b.AppendLine($"[ -f \"$ROOT/{ImagePath(plan, f)}\" ] || die {Sh(T(localize, "MissingImage", "Missing image: {0}", f.FileName))}");
         if (plan.Files.Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase)))
         {
-            // macOS 随包包含 arm64（zstd）与 x86_64（zstd-x86_64）两个二进制，按运行架构选择。
-            // The macOS bundle ships both arm64 (zstd) and x86_64 (zstd-x86_64) binaries; pick by runtime architecture.
             b.AppendLine(platform switch
             {
                 "macOS" => "ZSTD=\"$TOOLS/zstd\"\n[ \"$(uname -m)\" = arm64 ] || ZSTD=\"$TOOLS/zstd-x86_64\"",
@@ -132,7 +124,6 @@ internal static partial class DeliveryScriptGenerator
         b.AppendLine($"  elif [ \"$target\" = super ]; then\n    \"$TOOLS/fastboot\" flash \"$target\" \"$file\" || die {Sh(T(localize, "SuperFlashFailed", "Super flash failed."))}\n  else");
         b.AppendLine($"    \"$TOOLS/fastboot\" {(plan.Slot.Length > 0 ? "--slot=" + plan.Slot + " " : "")}flash \"$target\" \"$file\" || die {Sh(T(localize, "FlashFailed", "Flash failed."))}\n  fi\n}}");
         b.AppendLine(ShellMode(localize));
-        // Collect every choice before the first write, so invalid input cannot partially flash a plan.
         for (var i = 0; i < groups.Length; i++)
         {
             var group = groups[i];

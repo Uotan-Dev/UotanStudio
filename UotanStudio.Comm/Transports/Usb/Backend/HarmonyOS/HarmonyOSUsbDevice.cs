@@ -258,8 +258,6 @@ internal class HarmonyOSUsbDevice : UsbDevice
                 }
             }
 
-            // 报告实际拷贝到调用方缓冲区的字节数：transferred 可能因驱动行为超过 length，
-            // 若原样返回会导致基类分块循环按未填充的字节数推进。
             return UsbChunkResult.Success(copyLen);
         }
 
@@ -268,9 +266,6 @@ internal class HarmonyOSUsbDevice : UsbDevice
 
     protected override UsbChunkResult WriteChunk(IntPtr buffer, int length, int timeoutMs)
     {
-        // DDK pipe requests must reference the buffer created by OH_Usb_CreateDeviceMemMap
-        // (passing an arbitrary caller pointer makes the request fail or misbehave), so the
-        // caller's data is copied into the mapped region before sending.
         if (_devMmapBuffer == IntPtr.Zero || length > _devMmapSize)
         {
             return UsbChunkResult.Fatal(USB_DDK_INVALID_OPERATION);

@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using UotanStudio.Media.Decoding;
 
@@ -147,7 +147,6 @@ public sealed unsafe class VaApiSession : IDisposable
         if (buffers.Count is < 1 or > 4096) throw new ArgumentOutOfRangeException(nameof(buffers));
         var ids = new List<uint>(buffers.Count);
         long total = 0;
-        // Validate the entire submission before creating native objects.
         foreach (VaApiBuffer buffer in buffers)
         {
             ArgumentNullException.ThrowIfNull(buffer);

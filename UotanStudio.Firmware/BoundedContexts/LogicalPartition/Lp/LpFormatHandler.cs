@@ -27,15 +27,6 @@ public sealed class LpFormatHandler : IFormatHandler
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return false;
         try
         {
-            // 无损预检：逻辑分区镜像必须在主、备份或空布局（偏移 0）几何槽位携带几何魔数。
-            // 不满足时立即返回 false，避免为每个无关 .img 做全量 LP 解析并在主/备/空三个槽位
-            // 各抛一次 InvalidDataException/EndOfStreamException（被捕获）——这正是工程打开时
-            // 镜像扫描对 images/ 下每个非 super 镜像产生异常风暴的来源。
-            // Cheap, lossless pre-probe: a logical-partition image must carry the geometry magic in
-            // the primary, backup or empty-layout (offset 0) geometry slot. Otherwise it is rejected
-            // immediately, so unrelated .img files are not fully LP-parsed and do not throw an
-            // InvalidDataException/EndOfStreamException per slot (which is what produced the first-chance
-            // exception storm when the project-open image scan probed every non-super images/ entry).
             if (!HasGeometryMagicOrIsSparse(filePath))
             {
                 return false;

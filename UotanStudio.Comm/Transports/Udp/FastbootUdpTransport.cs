@@ -15,7 +15,6 @@ namespace UotanStudio.Comm.Transports.Udp;
 public sealed class FastbootUdpTransport : ICommTransport
 {
     private const int HeaderSize = 4;
-    // AOSP udp.h: kHostMaxPacketSize = 8192 (host-advertised max), kMinPacketSize = 512.
     private const ushort HostMaxPacketSize = 8192;
     private const ushort MinPacketSize = 512;
 
@@ -296,9 +295,6 @@ public sealed class FastbootUdpTransport : ICommTransport
         client.Client.ReceiveTimeout = timeoutMs;
         client.Client.SendTimeout = timeoutMs;
 
-        // Handshake runs at transport creation and is sensitive to scheduling jitter
-        // in constrained CI environments. Use a slightly larger retry budget here
-        // without changing steady-state transfer behavior.
         var initAttempts = Math.Max(_maxTransmissionAttempts, 5);
 
         var response = SendSinglePacket(client, PacketId.DeviceQuery, 0, PacketFlag.None, [], 0, 0, initAttempts, out _);
@@ -526,7 +522,6 @@ public sealed class FastbootUdpTransport : ICommTransport
                 }
                 catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
                 {
-                    // Timeout — retransmit the packet.
                 }
 
                 if (gotValidResponse)

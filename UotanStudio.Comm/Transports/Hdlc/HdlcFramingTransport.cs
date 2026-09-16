@@ -130,9 +130,6 @@ public sealed class HdlcFramingTransport(ICommTransport inner, byte address, byt
         {
             return 0;
         }
-        // Materialize the slice before the async boundary: Span/ReadOnlySpan are not allowed
-        // as async method arguments (CS4012).
-        // 在异步边界之前物化切片：Span/ReadOnlySpan 不能作为异步方法参数（CS4012）。
         var info = data.AsSpan(offset, length).ToArray();
         await WriteFrameAsync(info, timeoutMs, cancellationToken).ConfigureAwait(false);
         return length;
@@ -184,9 +181,6 @@ public sealed class HdlcFramingTransport(ICommTransport inner, byte address, byt
         {
             return 0;
         }
-        // Materialize the slice before the async boundary: Span is not allowed as an async
-        // method argument (CS4012).
-        // 在异步边界之前物化切片：Span 不能作为异步方法参数（CS4012）。
         var dst = buffer.AsSpan(offset, length).ToArray();
         var n = await ReadFrameAsync(dst, timeoutMs, cancellationToken).ConfigureAwait(false);
         Array.Copy(dst, 0, buffer, offset, n);
@@ -267,27 +261,18 @@ public sealed class HdlcFramingTransport(ICommTransport inner, byte address, byt
     // 读取路径：HDLC 解码
 
     private int ReadFrame(byte[] dst, int timeoutMs, CancellationToken cancellationToken) =>
-        // Simplified: reuse the async path. HDLC is low-frequency control traffic; the
-        // overhead is negligible.
-        // 简化实现：复用异步路径。HDLC 为低频控制流量，开销可忽略。
         ReadFrameAsync(dst, timeoutMs, cancellationToken).GetAwaiter().GetResult();
 
     private async Task<int> ReadFrameAsync(byte[] dst, int timeoutMs, CancellationToken cancellationToken)
     {
-        // Loop reading bytes until a closing flag (0x7E) is detected.
-        // 循环读取字节，直到检测到关闭 flag (0x7E)。
         while (true)
         {
-            // Check whether the accumulated buffer already contains a complete frame.
-            // 检查已有缓冲中是否存在完整帧（开头 flag + 结尾 flag）。
             if (TryExtractFrame(dst, out var infoLen, out var consumed))
             {
                 _rxBuffer.RemoveRange(0, consumed);
                 return infoLen;
             }
 
-            // Otherwise read more bytes from the underlying transport.
-            // 否则从底层 transport 读取更多字节。
             var chunk = new byte[256];
             int n;
             try
@@ -296,8 +281,6 @@ public sealed class HdlcFramingTransport(ICommTransport inner, byte address, byt
             }
             catch (TimeoutException)
             {
-                // Timeout with partial buffer: the frame is incomplete — discard and surface.
-                // 超时且缓冲有内容：视为帧不完整，清空并抛出。
                 _rxBuffer.Clear();
                 throw;
             }
@@ -323,8 +306,6 @@ public sealed class HdlcFramingTransport(ICommTransport inner, byte address, byt
         infoLen = 0;
         consumed = 0;
 
-        // Locate the first opening flag.
-        // 找到第一个起始 flag。
         var start = -1;
         for (var i = 0; i < _rxBuffer.Count; i++)
         {
@@ -336,14 +317,10 @@ public sealed class HdlcFramingTransport(ICommTransport inner, byte address, byt
         }
         if (start < 0)
         {
-            // No flag at all; discard accumulated invalid bytes.
-            // 没有任何 flag，丢弃已积累的无效字节。
             _rxBuffer.Clear();
             return false;
         }
 
-        // Search for the closing flag after the opening flag.
-        // 从起始 flag 之后寻找关闭 flag。
         var end = -1;
         for (var i = start + 1; i < _rxBuffer.Count; i++)
         {
@@ -355,9 +332,6 @@ public sealed class HdlcFramingTransport(ICommTransport inner, byte address, byt
         }
         if (end < 0)
         {
-            // Opening flag found but no closing flag: discard bytes before the opening flag
-            // and wait for more data.
-            // 起始 flag 已找到但无关闭 flag：丢弃起始 flag 之前的字节，等待更多数据。
             if (start > 0)
             {
                 _rxBuffer.RemoveRange(0, start);
@@ -366,10 +340,8 @@ public sealed class HdlcFramingTransport(ICommTransport inner, byte address, byt
             return false;
         }
 
-        // Complete frame = _rxBuffer[start..=end].
-        // 完整帧 = _rxBuffer[start..=end]。
         var frame = _rxBuffer.GetRange(start, end - start + 1).ToArray();
-        var infoBuf = new byte[frame.Length]; // info is never larger than the frame
+        var infoBuf = new byte[frame.Length];
         var n = Hsuart.Hdlc.ExtractInfo(frame, infoBuf, out var err);
         if (n == 0)
         {
@@ -383,7 +355,7 @@ public sealed class HdlcFramingTransport(ICommTransport inner, byte address, byt
 
         infoBuf.AsSpan(0, n).CopyTo(dst);
         infoLen = n;
-        consumed = end + 1; // consume through the closing flag
+        consumed = end + 1;
         return true;
     }
 }

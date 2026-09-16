@@ -73,15 +73,11 @@ public sealed class ApkSignerKeyMaterial : IDisposable
 
     private static AsymmetricAlgorithm LoadRsaOrEcKey(string path, string? password, out IDisposable? disposable)
     {
-        // Both PEM and DER inputs are normalized to DER bytes; PEM blocks are base64-decoded.
-        // PEM 与 DER 输入统一归一化为 DER 字节；PEM 块经 base64 解码。
         var der = ReadKeyDerBytes(path);
         disposable = null;
 
         if (password is { Length: > 0 })
         {
-            // Encrypted PKCS#8 (-----BEGIN ENCRYPTED PRIVATE KEY-----).
-            // 加密 PKCS#8（-----BEGIN ENCRYPTED PRIVATE KEY-----）。
             var rsaEnc = RSA.Create();
             if (TryImport(() => rsaEnc.ImportEncryptedPkcs8PrivateKey(password, der, out _)))
             {
@@ -102,8 +98,6 @@ public sealed class ApkSignerKeyMaterial : IDisposable
                 $"Unable to import the encrypted private key '{path}' with the provided password. 无法使用给定密码导入加密私钥 '{path}'。");
         }
 
-        // Plaintext: try RSA (PKCS#8 then PKCS#1), then EC (PKCS#8 then SEC1).
-        // 明文：先试 RSA（PKCS#8 再 PKCS#1），再试 EC（PKCS#8 再 SEC1）。
         var rsa = RSA.Create();
         if (TryImport(() => rsa.ImportPkcs8PrivateKey(der, out _))
             || TryImport(() => rsa.ImportRSAPrivateKey(der, out _)))
@@ -132,13 +126,9 @@ public sealed class ApkSignerKeyMaterial : IDisposable
         var bytes = File.ReadAllBytes(path);
         if (bytes.Length > 0 && bytes[0] == 0x30)
         {
-            // DER (SEQUENCE).
-            // DER（SEQUENCE）。
             return bytes;
         }
 
-        // PEM: decode the first BEGIN/END block body.
-        // PEM：解码首个 BEGIN/END 块内容。
         var text = System.Text.Encoding.ASCII.GetString(bytes);
         const string begin = "-----BEGIN ";
         const string end = "-----END ";
@@ -185,13 +175,9 @@ public sealed class ApkSignerKeyMaterial : IDisposable
         var bytes = File.ReadAllBytes(path);
         if (bytes.Length > 0 && bytes[0] == 0x30)
         {
-            // DER certificate.
-            // DER 证书。
             return X509CertificateLoader.LoadCertificate(bytes);
         }
 
-        // PEM certificate (first block is the leaf; a following chain is embedded as-is).
-        // PEM 证书（首个块为叶子；后续链证书保持原样）。
         var pem = System.Text.Encoding.ASCII.GetString(bytes);
         const string begin = "-----BEGIN CERTIFICATE-----";
         const string end = "-----END CERTIFICATE-----";

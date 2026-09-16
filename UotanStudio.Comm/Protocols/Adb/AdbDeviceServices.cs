@@ -43,8 +43,6 @@ public sealed class AdbDeviceServices(AdbConnection connection)
     {
         var service = string.IsNullOrEmpty(mode) ? "reboot:" : $"reboot:{mode}";
         using var stream = _connection.OpenStream(service);
-        // The device reboots; the stream may close abruptly, which is expected.
-        // 设备随即重启；流可能突然关闭，属预期行为。
     }
 
     /// <summary>

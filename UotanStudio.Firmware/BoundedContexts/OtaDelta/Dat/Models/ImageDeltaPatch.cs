@@ -41,7 +41,6 @@ internal static class ImageDeltaPatch
                 var method = reader.ReadInt32(); var windowBits = reader.ReadInt32(); var memoryLevel = reader.ReadInt32(); strategy = reader.ReadInt32();
                 if (expanded < 0 || targetLength <= 0 || level is < -1 or > 9 || strategy is < 0 or > 2)
                     throw new InvalidDataException("Invalid IMGDIFF2 DEFLATE parameters.");
-                // These are the fixed settings emitted by Android imgdiff's ImageChunk.
                 if (method != 8 || windowBits != -15 || memoryLevel != 8)
                     throw new InvalidDataException("IMGDIFF2 requires Android raw DEFLATE settings (method 8, window -15, memory 8).");
             }

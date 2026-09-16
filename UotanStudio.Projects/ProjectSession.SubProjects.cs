@@ -35,7 +35,6 @@ public sealed partial class ProjectSession
             }).ToList();
             ProjectValidation.ValidateSolution(solution);
             var active = Context.ActiveSubProject;
-            // Validate the successor before publishing a removal of the active project.
             if (newName is null && active == project)
             {
                 var reference = solution.SubProjects[0];
@@ -45,17 +44,10 @@ public sealed partial class ProjectSession
             RequireSaved(await SolutionPersistenceService.SaveSolutionAsync(path, solution, token), path);
             if (newName is null)
             {
-                // 删除子项目后与新增子项目一致：从磁盘完整重载解决方案，使镜像列表、设置、文档与
-                // 交付面板都基于新的子项目集合重建，而不是只改 Context 留下残留状态。
-                // Removing a sub-project reloads the whole solution from disk like adding one, so the image
-                // list, settings, documents and delivery panel rebuild from the new sub-project set instead
-                // of leaving state behind on a context-only mutation.
                 await OpenProjectFromPathCoreAsync(path, token);
                 changed = true;
                 return;
             }
-            // 重命名保持轻量路径：文档保持打开，只更换引用标识。
-            // Rename keeps the lighter path: documents stay open, only the reference identity changes.
             Context.OpenSolution(path, solution);
             if (active is not null) Context.SetActiveSubProject(active == project ? newName! : active.Name);
             changed = true;

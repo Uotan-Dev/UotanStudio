@@ -110,9 +110,7 @@ public class F2fsCompressionWriteTests
             new Random(7).NextBytes(random);
             File.WriteAllBytes(Path.Combine(root, "random.bin"), random);
 
-            // 关闭压缩显式构建。
             var explicitDisabled = F2fsBuilder.Build(root, new F2fsOptions { EnableCompression = false, Uuid = FixedUuid });
-            // 默认选项（EnableCompression 默认 false）。
             var defaultBuild = F2fsBuilder.Build(root, new F2fsOptions { Uuid = FixedUuid });
 
             // 两遍路径均走既有的普通文件布局，镜像必须逐字节一致。
@@ -124,7 +122,6 @@ public class F2fsCompressionWriteTests
             Assert.Equal(random, ReadFile(parser, "random.bin"));
             Assert.Equal(200 * 1024L, entries["text.bin"].Size);
 
-            // 未压缩大文件的 inode 不得携带压缩标志。
             var textInode = ReadInode(defaultBuild, entries["text.bin"].Inode);
             Assert.False(textInode.IsCompressed);
         }

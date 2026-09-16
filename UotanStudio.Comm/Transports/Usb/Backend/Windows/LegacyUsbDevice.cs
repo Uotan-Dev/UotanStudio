@@ -121,10 +121,6 @@ internal class LegacyUsbDevice : UsbDevice
     {
         ArgumentOutOfRangeException.ThrowIfNegative(length);
 
-        // Synchronous ReadFile (no Task.Run): the previous implementation parked a thread-pool
-        // thread on the blocking read and could not cancel it after the wait timed out, leaking
-        // the thread until the driver eventually returned. ReadFile blocks the caller instead;
-        // timeout behaviour is delegated to the legacy driver (ReadChunk ignores timeoutMs).
         var buffer = new byte[length];
         var count = ReadInto(buffer, 0, length, IoTimeoutMs);
         if (count == length)

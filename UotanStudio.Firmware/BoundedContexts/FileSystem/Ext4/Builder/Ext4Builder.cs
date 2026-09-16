@@ -92,9 +92,6 @@ public sealed partial class Ext4Builder
     /// Builds an ext4 image from sourceDirectory and returns it as a byte array.
     /// <para>从 sourceDirectory 构建 ext4 镜像并以字节数组返回。</para>
     /// </summary>
-    // 整镜像驻留内存的便利重载，违反两遍流式构建约定；大型输出请改用流式重载。
-    // Convenience overload keeps the whole image in memory, violating the two-pass
-    // streaming convention; use the streaming overloads for large outputs.
     [Obsolete("Builds the entire image in memory. Use Build(sourceDirectory, outputPath) or Build(sourceDirectory, Stream) instead. 整镜像驻留内存；大型输出请使用文件路径或流式重载。")]
     public static byte[] Build(string sourceDirectory, Ext4Options? options = null)
     {
@@ -653,10 +650,6 @@ public sealed partial class Ext4Builder
         var children = Directory.EnumerateFileSystemEntries(node.FullPath)
             .Where(path => (SharedKernel.FileSystemEditPlan.Current is { } plan ? plan.Includes(path) : !SharedKernel.RepackMetadata.IsMetadataFile(path)))
             .OrderBy(static p => Path.GetFileName(p), StringComparer.Ordinal);
-        // 排除表构建为 HashSet（对齐 ErofsBuilder/F2fsBuilder 做法），把每子路径的
-        // O(排除数) 线性扫描降为 O(1)。
-        // Build the exclusion set as a HashSet (matching ErofsBuilder/F2fsBuilder), turning
-        // the per-path O(exclusions) scan into O(1).
         var excludedSet = excludedFiles.Count == 0
             ? null
             : new HashSet<string>(

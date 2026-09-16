@@ -58,8 +58,7 @@ internal static class FirmwareCorpus
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // 扫描中遇到不可访问的子目录时放弃本次查找（视同未命中）。
-            // Give up this lookup when a subdirectory is inaccessible (treat as no match).
+            return null;
         }
 
         return null;

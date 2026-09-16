@@ -10,8 +10,6 @@ internal static class LibUsbInterfaceClaim
         {
             if (attempt > 0)
             {
-                // Detach is unsupported on some platforms. Preserve the subsequent
-                // claim error, which describes why the interface is still unavailable.
                 try { detach!(); }
                 catch (Exception) { }
             }

@@ -4,9 +4,6 @@ using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Models;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using UotanStudio.Firmware.SharedKernel;
-// SharpZipLib 用于读取条目本地头偏移（含 ZIP64），避免与 System.IO.Compression 的 ZipFile 重名。
-// SharpZipLib reads the entry local-header offset (incl. ZIP64), aliased to avoid the
-// System.IO.Compression ZipFile name collision.
 using SharpZipCompressionMethod = ICSharpCode.SharpZipLib.Zip.CompressionMethod;
 using SharpZipZipFile = ICSharpCode.SharpZipLib.Zip.ZipFile;
 
@@ -431,9 +428,6 @@ public static partial class PayloadParser
             using var planDisposable = plan;
             var resolvedSourceImages = ResolveSourceImages(plan.Manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
 
-            // 存在容器阶段时把分区提取的绝对读数偏移到容器之后，保证整个作业的进度连续。
-            // When a container phase is present, offset the partition extraction readings past it so
-            // the whole job's progress stays continuous.
             IProgress<(long Processed, long Total)>? sink = byteProgress;
             if (plan.ContainerOffset > 0 && byteProgress is not null)
             {
@@ -574,10 +568,6 @@ public static partial class PayloadParser
 
                     var extractionTotal = ExtractTotalBytes(manifest);
 
-                    // 全量 OTA 的 payload.bin 通常在 ZIP 内未压缩（STORED）。对其原址建立可随机访问
-                    // 视图并直接解包，跳过临时物化，避免把多 GB 载荷先写盘再读回的多余 I/O。
-                    // Full-OTA payload.bin is usually stored uncompressed (STORED): build a seekable
-                    // in-place view of the entry and extract directly, skipping temp materialization.
                     if (TryGetStoredPayloadLocation(filepath, out var dataStart, out var payloadLength))
                     {
                         var outer = File.OpenRead(filepath);
@@ -594,9 +584,6 @@ public static partial class PayloadParser
                         }
                     }
 
-                    // 压缩（DEFLATE）条目的回退路径：先物化到临时 payload.bin，再从中解包。
-                    // Compressed (DEFLATE) entries fall back to materializing the payload.bin to a temp
-                    // file, then extracting from it.
                     tempPath = ExtractPayloadFromZip(filepath);
                     var tempFile = tempPath;
                     var containerOuter = File.OpenRead(tempFile);
@@ -663,13 +650,6 @@ public static partial class PayloadParser
 
                     var extractionTotal = ExtractTotalBytes(manifest);
 
-                    // 全量 OTA 的 payload.bin 通常在 ZIP 内未压缩（STORED）。对其原址建立可随机访问
-                    // 视图并直接解包，跳过临时物化，避免多 GB 载荷多一次写盘与读回的重复 I/O；因无
-                    // 容器阶段，进度 Total 即分区提取总量，直接映射到实际解压进度。
-                    // Full-OTA payload.bin is usually stored uncompressed (STORED): build a seekable
-                    // in-place view and extract directly, avoiding the redundant write-then-read of a
-                    // multi-GB temp copy; with no container phase the progress total equals the partition
-                    // extraction size, mapping directly to real extraction progress.
                     if (TryGetStoredPayloadLocation(filepath, out var dataStart, out var payloadLength))
                     {
                         var outer = File.OpenRead(filepath);
@@ -686,11 +666,6 @@ public static partial class PayloadParser
                         }
                     }
 
-                    // 压缩（DEFLATE）条目的回退路径：先把 payload.bin 物化到临时目录，随后从临时
-                    // payload.bin 中读取解包；解包阶段经 OffsetByteProgress 偏移到容器字节之后。
-                    // Compressed (DEFLATE) entries fall back to materializing the payload.bin to a temp
-                    // file, then extracting from it; extraction progress is offset past the container via
-                    // OffsetByteProgress so the whole job stays continuous.
                     var containerTotal = PayloadEntryUncompressedLength(filepath);
                     long totalBytes;
                     try
@@ -788,8 +763,6 @@ public static partial class PayloadParser
             return false;
         }
 
-        // 本地文件头：压缩方法(8-9)[0=STORED] 文件名长度(26-27) 扩展字段长度(28-29)。
-        // Local file header: compression method(8-9)[0=STORED] nameLen(26-27) extraLen(28-29).
         if ((localHeader[8] | (localHeader[9] << 8)) != 0)
         {
             return false;

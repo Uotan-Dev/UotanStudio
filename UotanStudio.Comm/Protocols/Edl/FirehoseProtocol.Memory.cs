@@ -20,9 +20,6 @@ public sealed partial class FirehoseProtocol
     /// <returns>A tuple containing the response and data. 包含响应和数据的元组。</returns>
     public async Task<(FirehoseResponse Response, byte[] Data)> ReadAsync(long startSector, long numSectors, string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default)
     {
-        // In-memory variant backed by the streaming path; for large partitions use
-        // ReadToStreamAsync to write straight to disk.
-        // 内存版实现走流式路径；大分区请使用 ReadToStreamAsync 直接落盘。
         using var ms = new MemoryStream();
         var response = await ReadToStreamAsync(ms, startSector, numSectors, filename, physicalPartition, cancellationToken);
         return (response, ms.ToArray());
@@ -50,10 +47,6 @@ public sealed partial class FirehoseProtocol
 
         var xml = FirehoseXmlBuilder.BuildRead(Configuration.SectorSize, numSectors, filename, physicalPartition, startSector, slot: EffectiveSlot);
 
-        // (1) Send <read> and wait for the command response: the device must ACK (and normally
-        // enters raw mode) before any raw payload is read.
-        // (1) 发送 <read> 并等待命令响应：设备必须 ACK（通常进入 raw 模式）后才能读取
-        // 原始数据。
         var response = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
         if (response.IsRawMode)
         {
@@ -195,16 +188,9 @@ public sealed partial class FirehoseProtocol
         long bytesRead = 0;
         var pendingXml = new List<byte>(EdlConstants.ResponseReadChunkBytes);
 
-        // Total budget: the response timeout plus 1 ms per KB of payload (a safety net that
-        // keeps large multi-GB reads viable while never looping forever on a dead device).
-        // 总预算：响应超时 + 每 KB 负载 1 毫秒（安全上限：既保证数 GB 大读取可行，又不会
-        // 在设备失联时无限循环）。
         var totalBudgetMs = ((long)Configuration.ResponseTimeoutSeconds * 1000) + (totalBytes / 1024);
         var start = Environment.TickCount64;
 
-        // 每次调用复用同一读取缓冲：多 GB 读取不再每 1MB 块分配 1-2 个新数组。
-        // One reusable read buffer per call: multi-GB reads no longer allocate one
-        // or two new arrays per 1 MB chunk.
         var rawBuffer = new byte[EdlConstants.RawReadChunkBytes];
 
         while (bytesRead < totalBytes)
@@ -220,11 +206,6 @@ public sealed partial class FirehoseProtocol
             int chunkLength;
             if (_rxBufferBytes > 0)
             {
-                // Consume the carry-over buffer first (it may already hold raw payload read
-                // past the command response). Strip reads directly from _rxBuffer, so the
-                // shift must run afterwards.
-                // 先消费结转缓冲（其中可能已包含越过命令响应读到的原始数据）。剥离逻辑
-                // 直接读取 _rxBuffer，因此左移必须在剥离之后执行。
                 var fromRx = Math.Min(_rxBufferBytes, (int)Math.Min(totalBytes - bytesRead, int.MaxValue));
                 chunkBuffer = _rxBuffer;
                 chunkLength = fromRx;
@@ -243,11 +224,6 @@ public sealed partial class FirehoseProtocol
                 chunkLength = n;
             }
 
-            // (2) Strip embedded XML log blocks: some UFS programmers emit
-            // <data><log/></data> inside the raw stream — without stripping, the XML would
-            // land in the partition data.
-            // (2) 剥离嵌入式 XML 日志块：部分 UFS programmer 会在原始流中输出
-            // <data><log/></data>——不剥离的话 XML 会落入分区数据。
             var remaining = StripEmbeddedXmlLogs(chunkBuffer, chunkLength, pendingXml);
             if (remaining.Length > 0)
             {
@@ -261,9 +237,6 @@ public sealed partial class FirehoseProtocol
             }
         }
 
-        // (3) Consume the trailing <response value="ACK"/> block so the stale ACK does not
-        // desync the next command.
-        // (3) 消费收尾的 <response value="ACK"/> 块，避免残留 ACK 使下一条命令失步。
         await DrainTrailingResponseXmlAsync(cancellationToken);
     }
 
@@ -280,8 +253,6 @@ public sealed partial class FirehoseProtocol
     /// <returns>The remaining raw bytes. 剥离后的有效原始字节。</returns>
     private byte[] StripEmbeddedXmlLogs(byte[] chunk, int chunkLength, List<byte> pendingXml)
     {
-        // Fast path: no pending XML prefix and this chunk does not start with "<?xml".
-        // 快速路径：无待定 XML 前缀且本块不以 "<?xml" 开头。
         if (pendingXml.Count == 0 && !LooksLikeXmlHeader(chunk, chunkLength))
         {
             return chunk.AsSpan(0, chunkLength).ToArray();
@@ -289,9 +260,6 @@ public sealed partial class FirehoseProtocol
 
         pendingXml.AddRange(chunk.AsSpan(0, chunkLength).ToArray());
 
-        // While the accumulated buffer starts with "<?xml", locate and skip complete log
-        // blocks.
-        // 只要累积缓冲以 "<?xml" 开头，就定位并跳过完整的日志块。
         while (pendingXml.Count >= 5 &&
                pendingXml[0] == (byte)'<' && pendingXml[1] == (byte)'?' &&
                pendingXml[2] == (byte)'x' && pendingXml[3] == (byte)'m' && pendingXml[4] == (byte)'l')
@@ -300,8 +268,6 @@ public sealed partial class FirehoseProtocol
             var xmlSize = FindCompleteXml(text);
             if (xmlSize <= 0)
             {
-                // The XML block is incomplete; keep accumulating.
-                // XML 块尚未收全；继续累积。
                 return [];
             }
 
@@ -322,8 +288,6 @@ public sealed partial class FirehoseProtocol
             pendingXml.RemoveRange(0, xmlSize);
         }
 
-        // Not an XML prefix: the accumulated buffer is all valid raw data.
-        // 非 XML 前缀：累积缓冲全部是有效原始数据。
         if (pendingXml.Count == 0)
         {
             return [];

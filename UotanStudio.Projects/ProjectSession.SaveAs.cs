@@ -34,22 +34,17 @@ public sealed partial class ProjectSession
         var node = _workspace.CaptureWorkflow(destinationName);
         var images = _workspace.CaptureImages();
         var packing = _workspace.CaptureSettings();
-        // Existing editors keep their original file identity. Store those paths relative to the new root.
         var documents = _workspace.CaptureDocuments(destinationDirectory);
         var history = History.CaptureSnapshot();
 
         if (context.RootDirectory is null || context.SubProjects.Count == 0)
         {
-            // 未打开工程：在目标目录发布一个仅含单个同名子项目的新工程。
-            // No project open: publish a fresh single-sub-project solution at the destination.
             var fresh = new SubProjectDto { Name = destinationName, RelativePath = $"{destinationName}/{destinationName}.uotanfw" };
             var freshSettings = new SolutionSettings { RecentDocuments = documents.Select(d => d.RelativePath).Where(p => p.Length > 0).ToList() };
             await PublishCopyAsync(fullPath, destinationDirectory, destinationName, [fresh], fresh, node, images, packing, documents, freshSettings, history, cancellationToken);
             return;
         }
 
-        // 目标目录不得落在任一源子项目文件夹内，避免把新解决方案写进子项目区域。
-        // The destination directory must not sit inside a source sub-project folder.
         if (context.SubProjects.Any(sp => ProjectSaveAsTransaction.IsWithin(sp.RootPath, destinationDirectory)))
             throw new IOException("The source and destination project directories must not overlap.");
 

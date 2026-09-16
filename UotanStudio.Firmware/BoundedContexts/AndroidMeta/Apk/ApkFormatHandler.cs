@@ -1,4 +1,4 @@
-﻿using System.IO.Compression;
+using System.IO.Compression;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
@@ -77,11 +77,6 @@ public sealed class ApkFormatHandler : IFormatHandler
 
             var info = ApkParser.Analyze(filePath);
             Directory.CreateDirectory(outputDirectory);
-            // apk-metadata.txt 与 .uotanstudio-repack.json 同规则统一管理：
-            // 有项目上下文时写入 .uotan/metadata/<分区名>/，无项目时写入解包目录。
-            // apk-metadata.txt follows the same unified rule as .uotanstudio-repack.json:
-            // stored under .uotan/metadata/<partition>/ when a project is open, in the
-            // extraction directory otherwise.
             var metadataDirectory = RepackMetadata.DefaultMetadataRoot is { Length: > 0 } root
                 ? Path.Combine(root, RepackMetadata.DetectPartitionName(Path.GetFileName(filePath)))
                 : outputDirectory;
@@ -93,9 +88,6 @@ public sealed class ApkFormatHandler : IFormatHandler
                 return Task.FromResult(FirmwareOpResult.Fail($"Output exists and overwrite is disabled: {metadataPath}"));
             }
 
-            // APK 是标准 ZIP 容器：除元数据外完整解出全部条目（有界流式 + zip-slip 校验 + 原子提交）。
-            // An APK is a standard ZIP container: extract every entry besides the metadata file
-            // (bounded streaming + zip-slip validation + atomic commit).
             var maximumOutputBytes = options?.MaximumOutputBytes ?? new UnpackOptions().MaximumOutputBytes;
             long totalBytes = 0;
             var extractedFiles = new List<string>();
@@ -108,8 +100,6 @@ public sealed class ApkFormatHandler : IFormatHandler
                     cancellationToken.ThrowIfCancellationRequested();
                     if (string.IsNullOrEmpty(entry.Name) && entry.FullName.EndsWith('/'))
                     {
-                        // 目录占位条目仅创建目录，不产出文件。
-                        // Directory placeholder entries only create the directory.
                         FileExtraction.ResolvePath(outputDirectory, entry.FullName);
                         continue;
                     }

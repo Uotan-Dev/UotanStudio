@@ -71,8 +71,6 @@ public static class ApkV1Signer
 
         using var buffer = new MemoryStream();
         WriteSection(buffer, main, individualSections: null);
-        // Include each manifest section, including its terminating blank line, as apksig does.
-        // 与 apksig 一致，对包含末尾空行的每个清单段计算摘要。
         var start = manifestBytes.AsSpan().IndexOf("\r\n\r\n"u8);
         start = start < 0 ? manifestBytes.Length : start + 4;
         while (start < manifestBytes.Length)
@@ -100,8 +98,6 @@ public static class ApkV1Signer
     /// </summary>
     public static byte[] SignSignatureFile(byte[] sfBytes, ApkSignerKeyMaterial keyMaterial)
     {
-        // Merge the user's private key into the certificate so SignedCms can sign.
-        // 把用户私钥合并进证书，供 SignedCms 签名使用。
         X509Certificate2 certificateWithKey = keyMaterial.Key switch
         {
             RSA rsa => keyMaterial.Certificate.CopyWithPrivateKey(rsa),
@@ -179,8 +175,6 @@ public static class ApkV1Signer
             }
         }
 
-        // Sections are separated by a fully blank line.
-        // 段落之间以完全空行分隔。
         output.Write("\r\n"u8);
     }
 
@@ -194,8 +188,6 @@ public static class ApkV1Signer
             return;
         }
 
-        // First line up to 72 bytes, continuation lines start with a space and carry 71 more.
-        // 首行至多 72 字节，续行以空格开头并携带 71 字节。
         var offset = 0;
         var first = true;
         while (offset < bytes.Length)

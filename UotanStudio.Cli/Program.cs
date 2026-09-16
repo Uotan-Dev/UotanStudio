@@ -10,10 +10,21 @@ using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Cli;
 
-/// <summary>Command-line entry point shared by the standalone host and the desktop executable.</summary>
+/// <summary>
+/// Command-line entry point shared by the standalone host and the desktop executable.
+/// <para>独立宿主与桌面可执行文件共用的命令行入口。</para>
+/// </summary>
 public static class CliProgram
 {
-    /// <summary>Runs the command tree and returns a process exit code.</summary>
+    /// <summary>
+    /// Runs the command tree and returns a process exit code.
+    /// <para>运行命令树并返回进程退出码。</para>
+    /// </summary>
+    /// <param name="args">Command-line arguments. <para>命令行参数。</para></param>
+    /// <param name="output">Standard output writer; defaults to the console. <para>标准输出写入器；默认控制台。</para></param>
+    /// <param name="error">Standard error writer; defaults to the console. <para>标准错误写入器；默认控制台。</para></param>
+    /// <param name="cancellationToken">Cancellation token propagated to asynchronous commands. <para>传播到异步命令的取消令牌。</para></param>
+    /// <returns>The process exit code. <para>进程退出码。</para></returns>
     public static Task<int> RunAsync(string[] args, TextWriter? output = null, TextWriter? error = null,
         CancellationToken cancellationToken = default)
     {
@@ -21,13 +32,23 @@ public static class CliProgram
         return root.Parse(args).InvokeAsync();
     }
 
-    /// <summary>Returns true when arguments explicitly request command-line mode.</summary>
+    /// <summary>
+    /// Returns true when arguments explicitly request command-line mode.
+    /// <para>判断参数是否显式请求命令行模式。</para>
+    /// </summary>
+    /// <param name="args">Command-line arguments. <para>命令行参数。</para></param>
+    /// <returns>True when the arguments select command-line mode. <para>参数选择命令行模式时为 true。</para></returns>
     public static bool IsCommandLineMode(IReadOnlyList<string> args)
         => args.Count > 0 && (string.Equals(args[0], "--cli", StringComparison.OrdinalIgnoreCase)
             || string.Equals(args[0], "cli", StringComparison.OrdinalIgnoreCase)
             || args[0] is "version" or "firmware" or "hdc" or "adb" or "fastboot" or "magiskboot");
 
-    /// <summary>Removes the optional mode switch while preserving command arguments.</summary>
+    /// <summary>
+    /// Removes the optional mode switch while preserving command arguments.
+    /// <para>移除可选的模式开关，同时保留其余命令参数。</para>
+    /// </summary>
+    /// <param name="args">Command-line arguments. <para>命令行参数。</para></param>
+    /// <returns>The arguments without a leading mode switch, unchanged otherwise. <para>去掉开头模式开关后的参数；无开关时原样返回。</para></returns>
     public static string[] StripModeSwitch(string[] args)
         => args.Length > 0 && (string.Equals(args[0], "--cli", StringComparison.OrdinalIgnoreCase)
             || string.Equals(args[0], "cli", StringComparison.OrdinalIgnoreCase)) ? args[1..] : args;
@@ -93,6 +114,7 @@ public static class CliProgram
         });
         firmware.Add(unpack);
         root.Add(firmware);
+        FirmwareCommands.Add(root, output, error, cancellationToken);
 
         var hdc = new Command("hdc", "Execute native OpenHarmony HDC protocol operations.");
         var targets = new Command("targets", "List targets from the HDC host channel.");
@@ -308,4 +330,6 @@ public static class CliProgram
 }
 
 [JsonSerializable(typeof(IReadOnlyList<HdcTargetInfo>))]
+[JsonSerializable(typeof(FirmwareInfoJson))]
+[JsonSerializable(typeof(AvbVerifyJson))]
 internal partial class CliJsonContext : JsonSerializerContext;

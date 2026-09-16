@@ -121,8 +121,6 @@ public static class ApkSigningKeyGenerator
                 {
                     if (certificate.HasPrivateKey)
                     {
-                        // CreateSelfSigned already associates the generated key with the certificate.
-                        // CreateSelfSigned 返回的证书已关联生成的私钥，直接导出即可。
                         pfxBytes = certificate.Export(X509ContentType.Pkcs12, options.KeyPassword);
                     }
                     else
@@ -147,8 +145,6 @@ public static class ApkSigningKeyGenerator
 
     private static void Commit(string keyPem, string certPem, byte[]? pfxBytes, string keyPath, string certPath, string? pfxPath, string? keyPassword)
     {
-        // Round-trip the exact consumer code path before anything is committed.
-        // 在提交任何文件前先走一次真实消费方的加载路径。
         var keyTemporary = Path.Combine(Path.GetDirectoryName(keyPath)!, Guid.NewGuid().ToString("N") + ".tmp");
         var certTemporary = Path.Combine(Path.GetDirectoryName(certPath)!, Guid.NewGuid().ToString("N") + ".tmp");
         var pfxTemporary = pfxPath is null ? null : Path.Combine(Path.GetDirectoryName(pfxPath)!, Guid.NewGuid().ToString("N") + ".tmp");

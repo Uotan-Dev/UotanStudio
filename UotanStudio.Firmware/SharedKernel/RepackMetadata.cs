@@ -232,9 +232,6 @@ public sealed class RepackMetadata
         {
             var directoryName = Path.GetFileName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(extractionDirectory)));
             if (string.IsNullOrWhiteSpace(directoryName)) return null;
-            // Extraction directories are usually named after the source image (e.g. "system.img"),
-            // while metadata is keyed by partition name ("system") — try both candidates.
-            // 解包目录通常以源镜像命名（如 "system.img"），而元数据按键（分区名 "system"）存放——两个候选都尝试。
             foreach (var candidate in new[] { directoryName, DetectPartitionName(directoryName) })
             {
                 if (string.IsNullOrWhiteSpace(candidate)) continue;
@@ -278,28 +275,14 @@ public sealed class RepackMetadata
     internal static IReadOnlyDictionary<string, string> OptionsFor(string directory, string formatName)
     {
         var metadata = Read(directory);
-        // Filesystem format conversions (e.g. EROFS → EXT4) still inherit the generic sidecars
-        // (fs_config, file_contexts, partition info) even when the target format differs; unrelated
-        // formats keep returning empty so their options never leak into a filesystem build.
-        // 文件系统格式转换（如 EROFS → EXT4）即使目标格式不同仍继承通用附属文件（fs_config、
-        // file_contexts、分区信息）；无关格式仍返回空，避免其选项泄漏进文件系统构建。
         if (metadata is null
             || (metadata.FormatName != formatName && metadata.FormatName is not ("EXT4" or "EROFS" or "F2FS")))
             return new Dictionary<string, string>();
         var options = new Dictionary<string, string>(metadata.PackingOptions, StringComparer.Ordinal);
-        // Application packing-settings overrides always win over the on-disk packing options.
-        // 应用层打包设置覆盖始终优先于磁盘打包选项。
         if (CurrentPackingOverrides.Value is { } overrides)
             foreach (var pair in overrides) options[pair.Key] = pair.Value;
-        // Backfill superblock keys from partition_info and expose fs_config/file_contexts paths;
-        // packingOptions always win, discovered files only fill absent keys.
-        // 从 partition_info 回填超级块键值并暴露 fs_config/file_contexts 路径；
-        // packingOptions 优先，发现的文件仅补缺。
         try
         {
-            // Prefer the structured metadata.json partition table (escape-safe), falling back to
-            // the flat _info sidecar for old extraction trees that lack a JSON document.
-            // 优先使用结构化 metadata.json 分区表（免转义），旧解包目录无 JSON 时回退扁平 _info 附属文件。
             var metadataDirectory = Path.GetDirectoryName(ResolveActualMetadataPath(directory)) ?? directory;
             var document = FileSystemMetadataOverrides.TryLoadDocument(metadataDirectory, metadata.SourceFileName, metadata.FileSystemPreservationId);
             if (document is { PartitionInfo.Count: > 0 })
@@ -328,8 +311,6 @@ public sealed class RepackMetadata
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Backfill is best-effort; packingOptions alone remain usable.
-            // 回填尽力而为；仅 packingOptions 时打包仍可用。
         }
 
         return options;
@@ -360,9 +341,7 @@ public sealed class RepackMetadata
             var doc = JsonNode.Parse(input);
             if (doc is null) return false;
             var schema = doc["schema"]?.GetValue<string>();
-            // Valid pointer file
             if (schema == PointerSchemaName) return true;
-            // Valid direct metadata
             return ReadFromAbsolute(path) is not null;
         }
         catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException or UnauthorizedAccessException)
@@ -539,14 +518,12 @@ public sealed class RepackMetadata
             var partitionName = DetectPartitionName(Path.GetFileName(sourcePath));
             var metaDir = Path.Combine(effectiveRoot, partitionName);
             await metadata.SaveAsync(metaDir, cancellationToken).ConfigureAwait(false);
-            // Generate Android-style metadata files for filesystem images
             if (handler.FormatName is "EXT4" or "EROFS" or "F2FS" or "Android Sparse Image (simg)")
                 GenerateFileSystemMetadata(metaDir, partitionName, handler, sourcePath, metadata.Configuration);
         }
         else
         {
             await metadata.SaveAsync(outputDirectory, cancellationToken).ConfigureAwait(false);
-            // Generate filesystem metadata alongside the metadata file when no project context is available.
             if (handler.FormatName is "EXT4" or "EROFS" or "F2FS" or "Android Sparse Image (simg)")
             {
                 var partitionName = DetectPartitionName(Path.GetFileName(sourcePath));
@@ -632,7 +609,6 @@ public sealed class RepackMetadata
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
         {
-            // Non-fatal: metadata generation is best-effort; log and continue
             System.Diagnostics.Debug.WriteLine($"Failed to generate filesystem metadata: {ex.Message}");
         }
     }

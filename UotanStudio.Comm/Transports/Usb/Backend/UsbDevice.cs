@@ -375,9 +375,6 @@ internal abstract class UsbDevice : IDisposable
     /// </summary>
     private void EmitTransfer(UsbTransferOperation operation, int requestedBytes, int transferredBytes, int timeoutMs, int retryCount, int? nativeErrorCode, long elapsedMs, UsbTransferOutcome outcome, byte[]? payload = null)
     {
-        // Skip allocating the event object entirely when no subscriber is registered;
-        // the transfer hot path otherwise constructs one per chunk.
-        // <para>未注册订阅者时完全跳过事件对象分配；否则传输热路径每块都会构造一个。</para>
         if (!UsbTrace.HasTransferSubscribers)
         {
             return;

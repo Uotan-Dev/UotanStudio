@@ -49,6 +49,26 @@ public sealed class ErofsRebuildInteropTests
             var help = WslTestHelpers.RunWsl($"{Tool("mkfs.erofs")} --help");
             if (!help.Output.Contains(name == "mixed" ? "zstd" : name, StringComparison.Ordinal)) Assert.Skip($"Native EROFS tools lack {name}.");
         }
+        // erofs-utils 1.9.4 has an init-order defect where --compress-hints dereferences the ZIP
+        // config table before mkfs.erofs assigns importer_params.z_paramsets, crashing with SIGSEGV
+        // for any compression combination. It is a tool bug, not a project one, so smoke-test the
+        // exact mixed+hints command once and skip with the reason when it still faults. An explicit
+        // UOTAN_EROFS_MIXED_MKFS override is trusted as already-patched and bypasses the probe.
+        // erofs-utils 1.9.4 存在初始化顺序缺陷：--compress-hints 在 mkfs.erofs 给
+        // importer_params.z_paramsets 赋值前解引用压缩配置表，任何压缩组合都会段错误崩溃。
+        // 这是工具缺陷而非项目问题，故用与正式用例相同的 mixed+hints 命令冒烟一次，若仍崩溃则
+        // 写明原因跳过；显式 UOTAN_EROFS_MIXED_MKFS 覆盖视为已修复，跳过探测。
+        if (name == "mixed" && Environment.GetEnvironmentVariable("UOTAN_EROFS_MIXED_MKFS") is not { Length: > 0 })
+        {
+            var probeRoot = "/tmp/uotan-erofs-hint-probe";
+            var probe = WslTestHelpers.RunWsl(
+                $"rm -rf {probeRoot}\nmkdir -p {probeRoot}/src\nhead -c 2048 /dev/urandom > {probeRoot}/src/data\n" +
+                $"printf '4096 0 (^|/)data$\\n' > {probeRoot}/hints\n" +
+                $"{Tool("mkfs.erofs")} -b4096 --compress-hints={probeRoot}/hints -zlz4:lzma,6:deflate,6:zstd,3 {probeRoot}/smoke.img {probeRoot}/src\n" +
+                $"code=$?\nrm -rf {probeRoot}\nexit \"$code\"\n", asRoot: true);
+            if (probe.ExitCode != 0)
+                Assert.Skip("erofs-utils 1.9.4 --compress-hints faults (SIGSEGV) before any pcluster is written; set UOTAN_EROFS_MIXED_MKFS to a fixed build.");
+        }
         using var scope = RepackMetadata.UseContext(RepackMetadataContext.LocalDirectory);
         using var host = new TempDirectory();
         var source = Path.Combine(host.Path, "source");

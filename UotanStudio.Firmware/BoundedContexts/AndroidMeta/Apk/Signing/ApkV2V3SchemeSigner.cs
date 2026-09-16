@@ -34,11 +34,6 @@ public static class ApkV2V3SchemeSigner
     {
         var signedData = BuildSignedDataV2(algorithm, contentDigest, certificateChain, protectV3);
         var signature = SignSignedData(key, algorithm, signedData);
-        // The block value is a length-prefixed sequence of signers; one signer here. The outer
-        // length counts the signer's own 4-byte length prefix (matches apksig's
-        // encodeAsSequenceOfLengthPrefixedElements).
-        // 分块值是带长度前缀的 signer 序列；此处仅一个签名者。外层长度包含 signer 自身 4 字节
-        // 长度前缀（与 apksig 的 encodeAsSequenceOfLengthPrefixedElements 一致）。
         return LengthPrefixSequence([BuildSignerV2(signedData, algorithm, signature, key)]);
     }
 
@@ -62,26 +57,20 @@ public static class ApkV2V3SchemeSigner
     {
         var signedData = BuildSignedDataV3(algorithm, contentDigest, certificateChain, minSdk, maxSdk);
         var signature = SignSignedData(key, algorithm, signedData);
-        // The block value is a length-prefixed sequence of signers; one signer here. The outer
-        // length counts the signer's own 4-byte length prefix (matches apksig's
-        // encodeAsSequenceOfLengthPrefixedElements).
-        // 分块值是带长度前缀的 signer 序列；此处仅一个签名者。外层长度包含 signer 自身 4 字节
-        // 长度前缀（与 apksig 的 encodeAsSequenceOfLengthPrefixedElements 一致）。
         return LengthPrefixSequence([BuildSignerV3(signedData, algorithm, signature, key, minSdk, maxSdk)]);
     }
 
     // ---- v2 structure ---------------------------------------------------------------
 
+    // Builds v2 signed-data as a concatenation of two-level length-prefixed digests,
+    // certificates and attributes, matching apksig's encodeAsSequenceOfLengthPrefixedElements.
+    // 构建 v2 签名数据：digests、certificates、attributes 按 apksig 带两级长度前缀的序列规则拼接。
     private static byte[] BuildSignedDataV2(
         ApkSignatureConstants.SignatureAlgorithm algorithm,
         byte[] contentDigest,
         IReadOnlyList<X509Certificate2> chain,
         bool protectV3)
     {
-        // digests: length-prefixed sequence of length-prefixed digest records; each record is
-        // a length-prefixed (algoId, digest) tuple — two prefix levels per the spec.
-        // digests：带长度前缀的序列，元素为带长度前缀的摘要记录；每条记录是带长度前缀的
-        // (算法ID, 摘要) 元组——按规范共两级前缀。
         Span<byte> algoId = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(algoId, (uint)algorithm);
         var digests = LengthPrefixSequence([
@@ -89,20 +78,16 @@ public static class ApkV2V3SchemeSigner
         ]);
 
         var certificates = LengthPrefixSequence(chain.Select(static c => c.RawData));
-        // Empty additional-attributes sequence (uint32 length 0).
-        // 空的附加属性序列（uint32 长度 0）。
         var attributes = protectV3
             ? LengthPrefixSequence([new byte[] { 0x0d, 0xf0, 0xef, 0xbe, 3, 0, 0, 0 }])
             : new byte[] { 0, 0, 0, 0 };
 
-        // v2 signed data contains digests, certificates and attributes only; the public key
-        // lives at the signer level. The signature covers the signed-data CONTENT (without its
-        // outer length prefix); the prefix is applied when assembling the signer.
-        // v2 签名数据仅含 digests、certificates 与 attributes；公钥位于 signer 层。签名覆盖
-        // signed-data 的内容本身（不含外层长度前缀）；组装 signer 时再加前缀。
         return Concat(digests, certificates, attributes);
     }
 
+    // Builds the v2 signer element from length-prefixed signed data, signatures and public key, in the
+    // exact field order the v2 spec requires; the enclosing sequence supplies the signer length prefix.
+    // 按 v2 规范字段顺序将带长度前缀的 signed data、signatures 与公钥拼成 signer 元素。
     private static byte[] BuildSignerV2(
         byte[] signedData,
         ApkSignatureConstants.SignatureAlgorithm algorithm,
@@ -112,22 +97,19 @@ public static class ApkV2V3SchemeSigner
         Span<byte> algoId = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(algoId, (uint)algorithm);
 
-        // signatures: length-prefixed sequence of length-prefixed (algoId, signature) records
-        // — two prefix levels per the spec.
-        // signatures：带长度前缀的序列，元素为带长度前缀的 (算法ID, 签名) 记录——按规范共两级前缀。
         var signatures = LengthPrefixSequence([
             Concat(algoId.ToArray(), LengthPrefix(signature)),
         ]);
         var publicKey = LengthPrefix(ExportSubjectPublicKeyInfo(key, Array.Empty<X509Certificate2>()));
 
-        // The signer element is the direct concatenation of its fields; its length prefix is
-        // supplied by the enclosing sequence (apksig encodeAsSequenceOfLengthPrefixedElements).
-        // signer 元素是各字段的直接拼接；其长度前缀由外层序列编码提供。
         return Concat(LengthPrefix(signedData), signatures, publicKey);
     }
 
     // ---- v3 structure ---------------------------------------------------------------
 
+    // Builds v3 signed-data: digests, certificates, min/max SDK and empty additional attributes, in the
+    // field order required by the official v3 spec; the signature covers the signed-data content only.
+    // 按 v3 规范字段顺序构建签名数据：digests、certificates、min/max SDK、空附加属性。
     private static byte[] BuildSignedDataV3(
         ApkSignatureConstants.SignatureAlgorithm algorithm,
         byte[] contentDigest,
@@ -137,15 +119,11 @@ public static class ApkV2V3SchemeSigner
     {
         Span<byte> algoId = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(algoId, (uint)algorithm);
-        // Same two-level digest record encoding as v2 (sequence of length-prefixed records).
-        // 与 v2 相同的两级摘要记录编码（带长度前缀记录的序列）。
         var digests = LengthPrefixSequence([
             Concat(algoId.ToArray(), LengthPrefix(contentDigest)),
         ]);
 
         var certificates = LengthPrefixSequence(chain.Select(static c => c.RawData));
-        // Empty additional-attributes sequence (uint32 length 0).
-        // 空的附加属性序列（uint32 长度 0）。
         var attributes = new byte[] { 0, 0, 0, 0 };
 
         Span<byte> minSdkBytes = stackalloc byte[4];
@@ -153,16 +131,12 @@ public static class ApkV2V3SchemeSigner
         Span<byte> maxSdkBytes = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(maxSdkBytes, (uint)maxSdk);
 
-        // Signed-data field order per V3SchemeVerifier.parseSigner (official apksig source):
-        // digests, certificates, min SDK (uint32), max SDK (uint32), additional attributes.
-        // The signature covers the signed-data CONTENT (without its outer length prefix); the
-        // prefix is applied when assembling the signer.
-        // 官方 apksig 源码 V3SchemeVerifier.parseSigner 的 signed-data 字段顺序：
-        // digests、certificates、min SDK（uint32）、max SDK（uint32）、附加 attributes。签名覆盖
-        // signed-data 的内容本身（不含外层长度前缀）；组装 signer 时再加前缀。
         return Concat(digests, certificates, minSdkBytes.ToArray(), maxSdkBytes.ToArray(), attributes);
     }
 
+    // Builds the v3 signer element in the field order the official v3 spec requires: signed data,
+    // min SDK, max SDK, signatures, public key.
+    // 按官方 v3 规范字段顺序构建 signer 元素：signed data、min SDK、max SDK、signatures、公钥。
     private static byte[] BuildSignerV3(
         byte[] signedData,
         ApkSignatureConstants.SignatureAlgorithm algorithm,
@@ -173,8 +147,6 @@ public static class ApkV2V3SchemeSigner
     {
         Span<byte> algoId = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(algoId, (uint)algorithm);
-        // Same two-level signature record encoding as v2 (sequence of length-prefixed records).
-        // 与 v2 相同的两级签名记录编码（带长度前缀记录的序列）。
         var signatures = LengthPrefixSequence([
             Concat(algoId.ToArray(), LengthPrefix(signature)),
         ]);
@@ -185,11 +157,6 @@ public static class ApkV2V3SchemeSigner
         Span<byte> maxSdkBytes = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(maxSdkBytes, (uint)maxSdk);
 
-        // Signer field order per the official v3 spec: signed data, min SDK, max SDK,
-        // signatures, public key. The signer element is the direct concatenation of its
-        // fields; its length prefix is supplied by the enclosing sequence.
-        // 官方 v3 规范的 signer 字段顺序：signed data、min SDK、max SDK、signatures、public key。
-        // signer 元素是各字段的直接拼接；其长度前缀由外层序列编码提供。
         return Concat(LengthPrefix(signedData), minSdkBytes.ToArray(), maxSdkBytes.ToArray(), signatures, publicKey);
     }
 
@@ -226,8 +193,6 @@ public static class ApkV2V3SchemeSigner
 
     private static byte[] ExportSubjectPublicKeyInfo(AsymmetricAlgorithm? key, IReadOnlyList<X509Certificate2> chain)
     {
-        // Prefer the key's own SPKI; fall back to the leaf certificate's (identical).
-        // 优先使用密钥自身的 SPKI；回退到叶子证书的（二者一致）。
         if (key is RSA rsa)
         {
             return rsa.ExportSubjectPublicKeyInfo();

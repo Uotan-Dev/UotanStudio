@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Hashing;
 
@@ -317,9 +317,6 @@ public static class SparseReader
             return;
         }
 
-        // 共享填充缓冲替代 64KB stackalloc，避免深调用栈溢出风险；按块写入模式值。
-        // Shared fill buffer instead of a 64KB stackalloc (stack-overflow safe in deep stacks);
-        // the pattern is written per block.
         Span<byte> buf = CrcFillBuffer;
         for (var i = 0; i < buf.Length; i += 4)
         {

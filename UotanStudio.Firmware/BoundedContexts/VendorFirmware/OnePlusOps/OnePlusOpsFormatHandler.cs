@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.OnePlusOps.Logging;
 using UotanStudio.Firmware.SharedKernel;
@@ -172,9 +172,6 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
                 }
 
 
-                // 流式重打包：条目数据直接从源 OPS 复制到输出，不再整包驻留内存。
-                // Streaming repack: entry payloads are copied straight from the
-                // source OPS into the output instead of being resident in memory.
                 var source = File.OpenRead(inputPath);
                 try
                 {
@@ -221,8 +218,6 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
             return TryDecryptSmall(data);
         }
 
-        // 试探窗口覆盖 LooksLikeDecrypted 检查的全部偏移（最大 0x404+4）。
-        // The probe window covers every offset inspected by LooksLikeDecrypted.
         var probeLength = DecryptProbeLength;
         foreach (var key in OnePlusKeyTable.GetAllKeys())
         {
@@ -339,9 +334,6 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
             .OrderBy(f => f, StringComparer.Ordinal)
             .ToList();
 
-        // 条目数据保留在磁盘上，写出时按文件流式复制，不再整包读入内存。
-        // Entry payloads stay on disk and are streamed into the output instead
-        // of being fully read into memory.
         var entries = new List<OpsEntry>();
         var dataFiles = new string[files.Count];
         for (var i = 0; i < files.Count; i++)

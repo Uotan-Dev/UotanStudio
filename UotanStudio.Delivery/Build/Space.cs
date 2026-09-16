@@ -25,8 +25,6 @@ internal static class DiskSpaceEstimator
     {
         if (plan.IsSuperEmptyOnly) return (4096L + plan.Super.MetadataSize) * SafetyFactor;
         var total = Add(SumSourceLengths(plan.Files), SumSourceLengths(plan.Container));
-        // 仅生成Super_Empty 时不再构建完整 super，磁盘需求不计设备大小。
-        // With Super_Empty only, no full super is built, so the device size does not count toward demand.
         if (plan.PackSuper && !plan.Super.Empty) total = Add(total, checked((long)plan.Super.DeviceSize));
         if (plan.OrganizeDirectory)
         {
@@ -47,7 +45,7 @@ internal static class DiskSpaceEstimator
                 var info = new FileInfo(path);
                 if (info.Exists && info.Length > 0) total = Add(total, info.Length);
             }
-            catch { /* 按未知大小处理，计 0。Treat as unknown size, count as zero. */ }
+            catch { }
         }
         return total;
     }
@@ -70,11 +68,9 @@ internal static class DiskSpaceEstimator
             try
             {
                 var info = new FileInfo(path);
-                // 防止超大小文件求和溢出；读不到的文件按 0 计。
-                // Guard the sum against oversized files; unreadable files count as zero.
                 if (info.Exists && info.Length > 0 && total <= long.MaxValue - info.Length) total += info.Length;
             }
-            catch { /* 按未知大小处理，计 0。Treat as unknown size, count as zero. */ }
+            catch { }
         }
         return total * SafetyFactor;
     }
@@ -94,7 +90,8 @@ internal static class DiskSpaceEstimator
         catch { return -1; }
     }
 
-    /// <summary>Finds the most specific mounted volume, including destinations below linked directories.</summary>
+    /// <summary><para>查找最具体的挂载卷根路径，包含符号链接目录之下的目标。</para>
+    /// Finds the most specific mounted volume root, including destinations below linked directories.</summary>
     internal static string? GetVolumePath(string directory)
     {
         try

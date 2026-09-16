@@ -21,7 +21,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     public async Task CreateAndOpen_RestoresDataInOrder_ExcludesMissingImages()
     {
         var path = Path.Combine(_root, "sample.uotan");
-        await _projects.CreateNewSolutionAsync(path);
+        await _projects.CreateNewSolutionAsync(path, TestContext.Current.CancellationToken);
         var context = ProjectContextService.Instance;
         var imagePath = Path.Combine(context.EnsureImagesDirectory(), "boot.img");
         await File.WriteAllBytesAsync(imagePath, [1, 2, 3], TestContext.Current.CancellationToken);
@@ -54,7 +54,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
         _projects.BeforeProjectChangeAsync = () => { confirmed++; return Task.FromResult(false); };
         var path = Path.Combine(_root, "cancelled.uotan");
 
-        await _projects.CreateNewSolutionAsync(path);
+        await _projects.CreateNewSolutionAsync(path, TestContext.Current.CancellationToken);
 
         Assert.Equal(busy ? 0 : 1, confirmed);
         Assert.Equal("original.uotan", _projects.CurrentProjectPath);
@@ -74,7 +74,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     [InlineData(true)]
     public async Task SaveAs_CopiesImages_AndPersistsWorkspaceData(bool existingTarget)
     {
-        await _projects.CreateNewSolutionAsync(Path.Combine(_root, "original.uotan"));
+        await _projects.CreateNewSolutionAsync(Path.Combine(_root, "original.uotan"), TestContext.Current.CancellationToken);
         var context = ProjectContextService.Instance;
         var originalImage = Path.Combine(context.EnsureImagesDirectory(), "boot.img");
         await File.WriteAllBytesAsync(originalImage, [4, 5, 6], TestContext.Current.CancellationToken);
@@ -110,7 +110,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     public async Task SaveAs_CopiesAllSubprojectsNestedFilesAndMetadata_PreservesActiveProject()
     {
         var source = Path.Combine(_root, "original.uotan");
-        await _projects.CreateNewSolutionAsync(source);
+        await _projects.CreateNewSolutionAsync(source, TestContext.Current.CancellationToken);
         var context = ProjectContextService.Instance;
         var oldRoot = context.RootDirectory!;
         await _projects.AddSubProjectAsync(Path.Combine(oldRoot, "second", "second.uotanfw"));
@@ -147,7 +147,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     public async Task SaveAs_WriteOrCommitFailure_PreservesSourceContextAndExistingDestination(bool commitFailure)
     {
         var source = Path.Combine(_root, "original.uotan");
-        await _projects.CreateNewSolutionAsync(source);
+        await _projects.CreateNewSolutionAsync(source, TestContext.Current.CancellationToken);
         var context = ProjectContextService.Instance;
         var oldRoot = context.RootDirectory;
         var oldActive = context.ActiveSubProject;
@@ -181,7 +181,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     public async Task SaveAs_OverlappingRoots_IsRejectedBeforeChangingContext()
     {
         var source = Path.Combine(_root, "original.uotan");
-        await _projects.CreateNewSolutionAsync(source);
+        await _projects.CreateNewSolutionAsync(source, TestContext.Current.CancellationToken);
         // The destination directory sits inside a source sub-project folder.
         var target = Path.Combine(ProjectContextService.Instance.RootDirectory!, "original", "nested.uotan");
         await Assert.ThrowsAsync<IOException>(() => _projects.SaveAsAsync(target));
@@ -222,7 +222,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     public async Task SaveAs_SamePath_UsesNormalSaveWithoutLosingSubprojects()
     {
         var source = Path.Combine(_root, "sample.uotan");
-        await _projects.CreateNewSolutionAsync(source);
+        await _projects.CreateNewSolutionAsync(source, TestContext.Current.CancellationToken);
         var active = ProjectContextService.Instance.ActiveSubProject;
         _workspace.Images.Add(new() { RelativePath = "sample/images/system.img", Format = "EXT4", SizeBytes = 4096 });
         await _projects.SaveAsAsync(source);
@@ -235,7 +235,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     [Fact]
     public async Task Save_FailedPersistence_DoesNotReportSuccess()
     {
-        await _projects.CreateNewSolutionAsync(Path.Combine(_root, "sample.uotan"));
+        await _projects.CreateNewSolutionAsync(Path.Combine(_root, "sample.uotan"), TestContext.Current.CancellationToken);
         var firmwarePath = ProjectContextService.Instance.FirmwareProjectPath!;
         File.Delete(firmwarePath);
         Directory.CreateDirectory(firmwarePath);
@@ -247,7 +247,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     public async Task SaveAs_EverySubProject_IsCopiedWithoutRewritingSourceFiles()
     {
         var source = Path.Combine(_root, "sample.uotan");
-        await _projects.CreateNewSolutionAsync(source);
+        await _projects.CreateNewSolutionAsync(source, TestContext.Current.CancellationToken);
         var shared = Path.Combine(_root, "shared", "shared.uotanfw");
         await _projects.AddSubProjectAsync(shared);
         var before = File.ReadAllBytes(shared);
@@ -266,7 +266,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     public async Task SaveAs_KeepsNestedOnlyAsSubProjectFolder_WithoutRegisteringInnerScaffold()
     {
         var source = Path.Combine(_root, "sample.uotan");
-        await _projects.CreateNewSolutionAsync(source);
+        await _projects.CreateNewSolutionAsync(source, TestContext.Current.CancellationToken);
         // A nested scaffold inside the sub-project folder is copied but never registered as its own sub-project.
         var inner = Path.Combine(_root, "sample", "inner", "inner.uotanfw");
         Directory.CreateDirectory(Path.GetDirectoryName(inner)!);
@@ -286,7 +286,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     public async Task PersistWithoutPageState_PreservesPreviouslySavedDocuments()
     {
         var path = Path.Combine(_root, "sample.uotan");
-        await _projects.CreateNewSolutionAsync(path);
+        await _projects.CreateNewSolutionAsync(path, TestContext.Current.CancellationToken);
         _workspace.Documents.Add(new() { Kind = "Text", RelativePath = "saved.txt" });
         await _projects.PersistToAsync(path);
         _workspace.Documents.Clear();
@@ -333,7 +333,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     [Fact]
     public async Task AddAndImportSubprojects_PreserveExistingFirmwareFile()
     {
-        await _projects.CreateNewSolutionAsync(Path.Combine(_root, "sample.uotan"));
+        await _projects.CreateNewSolutionAsync(Path.Combine(_root, "sample.uotan"), TestContext.Current.CancellationToken);
         var context = ProjectContextService.Instance;
         var added = Path.Combine(context.RootDirectory!, "added", "added.uotanfw");
         await _projects.AddSubProjectAsync(added);
@@ -359,7 +359,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     public async Task OpenSolution_RootDirectoryEqualsSolutionFolder()
     {
         var solution = Path.Combine(_root, "sample.uotan");
-        await _projects.CreateNewSolutionAsync(solution);
+        await _projects.CreateNewSolutionAsync(solution, TestContext.Current.CancellationToken);
         ProjectContextService.Instance.CloseProject();
 
         Assert.True(await _projects.OpenProjectFromPathAsync(solution));

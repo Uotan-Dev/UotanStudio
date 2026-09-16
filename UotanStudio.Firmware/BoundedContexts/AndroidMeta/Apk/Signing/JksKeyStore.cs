@@ -41,7 +41,7 @@ public static class JksKeyStoreReader
                     var chain = new List<byte[]>(certCount);
                     for (var c = 0; c < certCount; c++)
                     {
-                        if (version == 2) _ = ReadModifiedUtf(data, ref offset); // certificate type
+                        if (version == 2) _ = ReadModifiedUtf(data, ref offset);
                         chain.Add(ReadBounded(data, ref offset));
                     }
                     entries.Add(new JksEntry(tag, alias, creation, protectedKey, chain));
@@ -56,10 +56,6 @@ public static class JksKeyStoreReader
             }
         }
 
-        // Verify the trailing keyed digest over the entry bytes only, matching JavaKeyStore.load
-        // which wraps just the entries (the leading magic/version/count stay outside the digest).
-        // 校验尾部 keyed 摘要（仅覆盖条目字节），与 JavaKeyStore.load 一致
-        // （开头的 magic/version/count 不在摘要范围内）。
         digest.AppendData(data, bodyStart, offset - bodyStart);
         var computed = digest.GetHashAndReset();
         if (offset + computed.Length != data.Length) throw new InvalidDataException("JKS 尾部长度不符，密钥库已损坏。");
@@ -162,10 +158,8 @@ public static class JksKeyStoreReader
         return value;
     }
 
-    // Java DataInputStream.readUTF prefixes modified UTF-8 with an unsigned 16-bit length;
-    // the writer (JksKeyStoreWriter) and upstream JavaKeyStore both use that 2-byte framing.
-    // Java DataInputStream.readUTF 以无符号 16 位长度前缀标记修改版 UTF-8；
-    // 写入端（JksKeyStoreWriter）与上游 JavaKeyStore 均使用该 2 字节框架。
+    // Reads a 16-bit big-endian length used by Java DataInputStream.readUTF modified UTF-8 framing.
+    // 读取 16 位大端长度，即 Java DataInputStream.readUTF 修改版 UTF-8 框架。
     private static int ReadInt16(byte[] data, ref int offset)
     {
         const int size = 2;
@@ -262,15 +256,9 @@ public static class JksKeyStoreWriter
             var creationMillis = (creation ?? DateTimeOffset.UtcNow).ToUnixTimeMilliseconds();
             var aliasBytes = EncodeModifiedUtf(alias);
 
-            // Build the entry body once; the keyed digest is fed with exactly the entry bytes in
-            // the same order that upstream JavaKeyStore.engineStore wraps in its digest stream.
-            // 先构建条目 body；keyed 摘要按上游 JavaKeyStore.engineStore 摘要流包装的同一顺序喂入条目字节。
             using var body = new MemoryStream();
             var writer = new BinaryWriter(body, System.Text.Encoding.UTF8, leaveOpen: true);
-            // The keyed digest covers the entries only; upstream JavaKeyStore writes the entry
-            // count directly to the stream and wraps only the entries in the digest stream.
-            // keyed 摘要仅覆盖条目；上游 JavaKeyStore 直接写出条目计数，只把条目放进摘要流。
-            writer.WriteBEInt32(1); // entry count (not part of the keyed digest)
+            writer.WriteBEInt32(1);
             using (var digest = JksKeyStoreReader.IntegrityDigest(password))
             {
                 void WriteHashedInt32(int value)
@@ -350,8 +338,6 @@ public static class JksKeyStoreWriter
             var protectedKey = new byte[SaltLength + plainKey.Length + DigestLength];
             Array.Copy(salt, protectedKey, SaltLength);
             for (var i = 0; i < plainKey.Length; i++) protectedKey[SaltLength + i] = (byte)(plainKey[i] ^ xorKey[i]);
-            // Integrity: SHA1(passwordBytes || plainKey).
-            // 完整性：SHA1(passwordBytes || plainKey)。
             sha.AppendData(passwordBytes);
             sha.AppendData(plainKey);
             var check = sha.GetHashAndReset();

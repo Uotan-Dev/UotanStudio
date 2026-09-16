@@ -45,8 +45,6 @@ public sealed class HdcFactory : IProtocolFactory
         {
             var info = transport.DeviceInfo;
 
-            // Check VID/PID if specified.
-            // <para>在指定时检查 VID/PID。</para>
             if (_vendorId.HasValue && info.VendorId != _vendorId.Value)
             {
                 return false;

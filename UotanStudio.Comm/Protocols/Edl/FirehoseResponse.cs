@@ -171,8 +171,6 @@ public static class FirehoseResponseParser
         }
         catch (XmlException)
         {
-            // Return an empty block on malformed XML; the caller falls back to existing handling.
-            // 非完整/畸形 XML 时返回空块，由调用方按既有路径处理。
         }
 
         return block;

@@ -48,8 +48,6 @@ public sealed class AdbFactory : IProtocolFactory
         {
             var info = transport.DeviceInfo;
 
-            // Check VID/PID if specified
-            // <para>在指定时检查 VID/PID。</para>
             if (_vendorId.HasValue && info.VendorId != _vendorId.Value)
             {
                 return false;
@@ -60,8 +58,6 @@ public sealed class AdbFactory : IProtocolFactory
                 return false;
             }
 
-            // Check for the ADB interface class/subclass/protocol (AOSP: 0xFF/0x42/0x01).
-            // <para>检查 ADB 接口类/子类/协议（AOSP：0xFF/0x42/0x01）。</para>
             var hasAdbInterface = false;
             if (info.InterfaceMetadataObserved)
             {
@@ -78,10 +74,6 @@ public sealed class AdbFactory : IProtocolFactory
             }
             else
             {
-                // When interface metadata is not observed, check if we have bulk endpoints
-                // or if the VID/PID matches known ADB-only Google device IDs.
-                // <para>接口元数据未观测到时，检查是否存在 bulk 端点，
-                // 或 VID/PID 是否匹配已知的 Google ADB 设备 ID。</para>
                 hasAdbInterface = info.Interfaces.Count > 0 ||
                     (info.VendorId == 0x18D1 && (info.ProductId == 0x4EE2 || info.ProductId == 0x4EE7));
             }

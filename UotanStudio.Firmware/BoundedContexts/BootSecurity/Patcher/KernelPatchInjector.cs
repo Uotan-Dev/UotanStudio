@@ -6,9 +6,8 @@ using System.Text;
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher;
 
 /// <summary>
-/// Native managed implementation of the image part of KernelPatch/APatch.
-/// It prepares the kpimg preset, appends it to an Android arm64 Image and
-/// redirects the image entry point to the KernelPatch trampoline.
+/// <para>KernelPatch/APatch 镜像部分的托管实现：准备 kpimg 预设、追加到 Android arm64 Image 并把入口重定向到 KernelPatch 跳板。</para>
+/// Native managed implementation of the image part of KernelPatch/APatch. It prepares the kpimg preset, appends it to an Android arm64 Image and redirects the entry point to the KernelPatch trampoline.
 /// </summary>
 internal static class KernelPatchInjector
 {
@@ -28,6 +27,21 @@ internal static class KernelPatchInjector
     // region has a clearly terminated tail that kptools can rescan.
     private const int ExtraItemSentinelSize = 0x80;
 
+    /// <summary>
+    /// <para>把 KernelPatch kpimg 追加到内核镜像末尾并重定向入口到 KernelPatch 跳板，返回组合后的镜像。</para>
+    /// Appends the kpimg to the end of the kernel image, redirects the entry point to the KernelPatch trampoline and returns the combined image.
+    /// </summary>
+    /// <param name="kernel">原始 Android arm64 Image 内核字节。</param>
+    /// <param name="kpimg">KernelPatch 补丁镜像字节。</param>
+    /// <param name="superKey">用于生成 Supervisor/root 密钥的超级密码。</param>
+    /// <returns>组合后的补丁内核镜像字节。</returns>
+    /// <exception cref="InvalidDataException">内核过小、缺少 kallsyms、已被补丁或 kpimg 无效时抛出。</exception>
+    /// <exception cref="NotSupportedException">kpimg 目标架构或内核格式不受支持时抛出。</exception>
+    /// <remarks>
+    /// <para>image_size 描述内存中的镜像大小，可能超过引导镜像实际存在的字节数，故只用于文件内前缀；kernel_size 与 arm64 Image 头部同字段一致，而不采用裁剪后的文件前缀。</para>
+    /// <para>start_offset 是地址空间值，指向取整后 kernel_size 之后的内核区结尾；当末尾附加项把文件推过该点时，以末尾对齐为准。</para>
+    /// <para>The in-memory image_size can exceed the bytes actually present, so it is used only as an in-file prefix; kernel_size mirrors the arm64 Image header field rather than the trimmed prefix, and start_offset is an address-space value where the tail alignment wins once extra items push the file past it.</para>
+    /// </remarks>
     public static byte[] Patch(ReadOnlySpan<byte> kernel, ReadOnlySpan<byte> kpimg, string superKey)
     {
         if (kernel.Length < 0x40) throw new InvalidDataException("Kernel image is too small for APatch.");
@@ -45,8 +59,6 @@ internal static class KernelPatchInjector
         if (!TryReadArm64Header(kernel, entryOffset, out var imageSize, out var pageShift))
             throw new NotSupportedException("APatch currently supports Android arm64 Image kernels only.");
 
-        // image_size describes the in-memory image and can exceed the bytes
-        // present in a boot image. Use it only for an in-file prefix.
         var originalLength = imageSize is > 0 and <= int.MaxValue && imageSize <= (ulong)kernel.Length
             ? (int)imageSize : kernel.Length;
         if (originalLength < 0x40)
@@ -60,14 +72,9 @@ internal static class KernelPatchInjector
         var preset = output.AsSpan(alignedKernelLength, alignedKpimgLength);
         BinaryPrimitives.WriteInt64LittleEndian(preset[SetupKimgSize..], originalLength);
         BinaryPrimitives.WriteInt64LittleEndian(preset[SetupKpimgSize..], alignedKpimgLength);
-        // kernel_size mirrors the arm64 Image header's image_size, not the
-        // trimmed in-file prefix that only covers the bytes actually present.
         BinaryPrimitives.WriteInt64LittleEndian(preset[SetupKernelSize..], (long)imageSize);
         BinaryPrimitives.WriteInt64LittleEndian(preset[SetupPageShift..], pageShift);
         BinaryPrimitives.WriteInt64LittleEndian(preset[SetupImageOffset..], alignedKernelLength);
-        // start_offset is an address-space value: the kernel region ends after
-        // the rounded kernel_size. When extra items push the file past that
-        // point, the tail alignment wins.
         long startOffset = Align64(imageSize, PageAlignment);
         var outAllLength = checked(alignedKernelLength + alignedKpimgLength + ExtraItemSentinelSize);
         if (outAllLength > startOffset) startOffset = Align(outAllLength, PageAlignment);

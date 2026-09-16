@@ -14,7 +14,6 @@ internal static class UsbDeviceIdentity
         if (string.Equals(requested, opened, StringComparison.Ordinal)) return true;
         var before = requested.Split('|', 9);
         var after = opened.Split('|', 9);
-        // Never weaken a known serial or a physical path/interface constraint.
         return before.Length == 9 && after.Length == 9 && before[7].Length == 0 &&
             before[8].Length != 0 && before[8] == after[8] &&
             before.AsSpan(0, 7).SequenceEqual(after.AsSpan(0, 7));
@@ -123,8 +122,6 @@ internal static class UsbDeviceIdentity
             return null;
         }
 
-        // Split into at most 9 segments; VID/PID/interface triple are segments 2..6.
-        // <para>最多拆为 9 段；VID/PID/接口三元组为第 2..6 段。</para>
         var parts = deviceKey.Split('|', 9);
         if (parts.Length < 7)
         {
@@ -161,7 +158,6 @@ internal static class UsbDeviceIdentity
         {
             filter.DevicePathEquals = parts[8];
             filter.DevicePathContains = parts[8];
-            // Opening may enrich an absent serial; the physical path remains mandatory.
             if (!string.IsNullOrEmpty(parts[7]) && parts[7] != "UNKNOWN") filter.SerialNumber = parts[7];
         }
         return filter;

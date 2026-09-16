@@ -166,9 +166,6 @@ public sealed class FastbootTcpTransport : ICommTransport
                         throw new IOException("Failed to read Message length from the fastboot TCP stream.");
                     }
 
-                    // AOSP TCP fastboot frames the payload length as a big-endian unsigned 64-bit
-                    // integer. The wire-level DATA size field is 32-bit, so any frame larger than
-                    // uint.MaxValue is invalid and would overflow the int cast below.
                     var frameLength = BinaryPrimitives.ReadUInt64BigEndian(_readLenBuffer);
                     if (frameLength > uint.MaxValue)
                     {

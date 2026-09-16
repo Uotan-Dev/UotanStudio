@@ -126,7 +126,6 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable
                 var check = HdcSyncClient.Expect(_channel, HdcCommand.ForwardCheck, ct);
                 var id = ValidateEndpoint(check.Payload ?? []);
                 Send(HdcCommand.ForwardCheckResult, id, [1]);
-                // The daemon publishes success as an informational Echo; this is not a context message.
                 HdcSyncClient.Expect(_channel, HdcCommand.Echo, ct);
             }
             else
@@ -137,7 +136,6 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable
                 var result = HdcSyncClient.Expect(_channel, HdcCommand.ForwardCheckResult, ct).Payload ?? [];
                 if (result.Length != 5 || BinaryPrimitives.ReadUInt32BigEndian(result) != 1)
                     throw new InvalidDataException("Invalid HDC forwarding check response.");
-                // Upstream sends zero for a successful schema-only check (SetupPointContinue status == 0).
                 _ = AcceptLoop();
             }
             _ = Task.Run(Dispatch);
@@ -186,7 +184,6 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable
                         case HdcCommand.ForwardActiveSlave when reverse:
                             ValidateEndpoint(payload);
                             if (_contexts.Count >= 64) { Send(HdcCommand.ForwardFreeContext, id, []); break; }
-                            // Reserve the context before the asynchronous connect to bound pending connections too.
                             var socket = new TcpClient(AddressFamily.InterNetwork);
                             if (AddContext(id, socket)) _ = ConnectReverse(id, socket);
                             break;

@@ -288,10 +288,6 @@ internal class IOKitUsbDevice : UsbDevice
             return -1;
         }
 
-        // Re-open the device service from its IOService-plane path (the finder
-        // stored the path returned by IORegistryEntryGetPath).
-        // <para>从 IOService 平面路径重开设备服务（finder 存储了
-        // IORegistryEntryGetPath 返回的路径）。</para>
         UsbTrace.Log($"IOKitUsbDevice.CreateHandle: DevicePath='{DevicePath}'");
         var service = IOKitUsbAPI.IORegistryEntryFromPath(IntPtr.Zero, DevicePath);
         UsbTrace.Log($"IOKitUsbDevice.CreateHandle: IORegistryEntryFromPath -> {service}");
@@ -324,28 +320,8 @@ internal class IOKitUsbDevice : UsbDevice
                 }
                 UsbTrace.Log($"IOKitUsbDevice.CreateHandle: QueryInterface -> deviceInterface={_deviceInterface}");
 
-                // Keep the plugin alive for the lifetime of the device (the
-                // interface returned by QueryInterface borrows its vtable).
-                // <para>保持插件存活于设备生命周期（QueryInterface 返回的接口借用其
-                // vtable）。</para>
                 _pluginInterface = plugin;
 
-                // NOTE: no device-level USBDeviceOpen — it fails with
-                // kIOReturnNoSpace when the system claims the device, and adb /
-                // fastboot never open the device; CreateInterfaceIterator works on
-                // a closed device interface. Pipe I/O only needs USBInterfaceOpen
-                // in TryOpenInterface. See README "Platform Notes (macOS IOKit)".
-                // <para>注意：不做设备级 USBDeviceOpen——系统已声明设备时它以
-                // kIOReturnNoSpace 失败，且 adb/fastboot 从不打开设备；
-                // CreateInterfaceIterator 在未打开的设备接口上即可工作。管道 I/O
-                // 仅需 TryOpenInterface 中的 USBInterfaceOpen。
-                // 详见 README「平台注意事项（macOS IOKit 后端）」。</para>
-
-                // Align with adb: ensure Configuration 1 is selected before creating
-                // the interface iterator. Best-effort; a device may legitimately have
-                // a single, differently numbered configuration.
-                // <para>与 adb 对齐：在创建接口迭代器前确保选择配置 1。尽力而为；设备
-                // 可能仅有一个编号不同的配置。</para>
                 try
                 {
                     var getConf = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBGetConfigurationDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBGetConfiguration);
@@ -357,16 +333,8 @@ internal class IOKitUsbDevice : UsbDevice
                 }
                 catch
                 {
-                    // Configuration probing/selection is best-effort.
                 }
 
-                // Match interfaces by the device's known class/subclass/protocol
-                // (adb CheckInterface semantics: avoid claiming mass-storage
-                // endpoints). Falls back to KIOUSBFindInterfaceDontCare when the
-                // finder did not surface interface codes.
-                // <para>按设备已知的类/子类/协议匹配接口（adb CheckInterface 语义：
-                // 避免声明大容量存储端点）。finder 未暴露接口码时回退到
-                // KIOUSBFindInterfaceDontCare。</para>
                 var findRequest = new IOKitUsbAPI.IOUSBFindInterfaceRequest
                 {
                     BInterfaceClass = InterfaceClass ?? IOKitUsbAPI.KIOUSBFindInterfaceDontCare,
@@ -408,9 +376,6 @@ internal class IOKitUsbDevice : UsbDevice
             {
                 if (_interfaceInterface == IntPtr.Zero && _deviceInterface != IntPtr.Zero)
                 {
-                    // Interface claim failed or no matching interface: release what we
-                    // opened so a later retry can start clean.
-                    // <para>接口声明失败或无匹配接口：释放已打开者，使后续重试可干净开始。</para>
                     var devClose = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBDeviceCloseDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBDeviceClose);
                     _ = devClose(_deviceInterface);
                     var devRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(_deviceInterface, IOKitUsbAPI.Offset_IUnknown_Release);
@@ -516,10 +481,6 @@ internal class IOKitUsbDevice : UsbDevice
                     }
                 }
 
-                // Prefer the bulk pair; fall back to interrupt pipes for HID-Style
-                // interfaces that have no bulk endpoints (libusb parity).
-                // <para>优先使用批量对；无批量端点时回退到中断管道（HID 类接口，
-                // 与 libusb 对齐）。</para>
                 var pipeIn = bulkIn != 0 ? bulkIn : interruptIn;
                 var pipeOut = bulkOut != 0 ? bulkOut : interruptOut;
                 if (pipeIn == 0)
@@ -543,8 +504,6 @@ internal class IOKitUsbDevice : UsbDevice
             {
                 if (_interfaceInterface == IntPtr.Zero)
                 {
-                    // Interface not claimed: release the interface COM object.
-                    // <para>接口未声明：释放接口 COM 对象。</para>
                     var ifcRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(ifcIntf, IOKitUsbAPI.Offset_IUnknown_Release);
                     _ = ifcRelease(ifcIntf);
                 }
@@ -565,8 +524,6 @@ internal class IOKitUsbDevice : UsbDevice
             return;
         }
 
-        // USBDeviceReset restarts the device; best-effort (mirrors SharpFastboot).
-        // <para>USBDeviceReset 重启设备；尽力而为（与 SharpFastboot 对齐）。</para>
         try
         {
             var reset = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBDeviceResetDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBDeviceReset);
@@ -574,7 +531,6 @@ internal class IOKitUsbDevice : UsbDevice
         }
         catch
         {
-            // Best-effort reset.
         }
     }
 
@@ -588,10 +544,6 @@ internal class IOKitUsbDevice : UsbDevice
 
         try
         {
-            // Read the device descriptor via a control request; ISerialNumber lives
-            // at offset 16, BcdUSB at offset 2 (used to infer the USB speed).
-            // <para>经控制请求读取设备描述符；ISerialNumber 在偏移 16，BcdUSB 在偏移 2
-            // （用于推断 USB 速度）。</para>
             var dd = new byte[18];
             var done = ControlTransferRaw(0x80, 0x06, 0x0100, 0x0000, dd, dd.Length);
             if (done < 18)
@@ -607,7 +559,6 @@ internal class IOKitUsbDevice : UsbDevice
                 return -1;
             }
 
-            // GET_DESCRIPTOR(STRING), language 0x0409 (en-US).
             var buf = new byte[256];
             done = ControlTransferRaw(0x80, 0x06, (ushort)((0x03 << 8) | serialIndex), 0x0409, buf, buf.Length);
             if (done <= 2)
@@ -677,7 +628,6 @@ internal class IOKitUsbDevice : UsbDevice
             }
             catch
             {
-                // Best-effort cleanup.
             }
             _interfaceInterface = IntPtr.Zero;
         }
@@ -693,7 +643,6 @@ internal class IOKitUsbDevice : UsbDevice
             }
             catch
             {
-                // Best-effort cleanup.
             }
             _deviceInterface = IntPtr.Zero;
         }
@@ -707,7 +656,6 @@ internal class IOKitUsbDevice : UsbDevice
             }
             catch
             {
-                // Best-effort cleanup.
             }
             _pluginInterface = IntPtr.Zero;
         }

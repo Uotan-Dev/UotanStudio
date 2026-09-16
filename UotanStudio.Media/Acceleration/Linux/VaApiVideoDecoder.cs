@@ -82,8 +82,6 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
         VideoFrameLimits.ValidateAccessUnit(accessUnit);
         try
         {
-            // Standalone VPS/SPS/PPS/SEI packets are retained until the next picture.
-            // libavcodec expects complete access units, as supplied by scrcpy.
             bool hasPicture = _codec == VideoCodecId.Av1 && Av1Obu.ContainsFrame(accessUnit);
             if (_codec != VideoCodecId.Av1)
             {

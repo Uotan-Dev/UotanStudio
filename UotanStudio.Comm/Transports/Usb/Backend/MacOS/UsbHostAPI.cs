@@ -135,11 +135,6 @@ internal static partial class UsbHostAPI
     public static IntPtr CreateObject(IntPtr objcClass, uint ioService, out int ioReturn)
     {
         ioReturn = Ok;
-        // ObjC two-step construction: [[Class alloc] initWithIOService:...]. Sending
-        // initWithIOService: directly to the class object raises "unrecognized
-        // selector sent to class".
-        // <para>ObjC 两步构造：[[Class alloc] initWithIOService:...]。直接向类对象发送
-        // initWithIOService: 会抛 "unrecognized selector sent to class"。</para>
         var alloc = ObjcRuntime.MsgSendObject(objcClass, AllocSel.Value);
         if (alloc == IntPtr.Zero)
         {
@@ -151,11 +146,6 @@ internal static partial class UsbHostAPI
             alloc, InitWithIOServiceSel.Value,
             ioService, options: 0, queue: IntPtr.Zero,
             out var error, interestHandler: IntPtr.Zero);
-        // alloc returns +1; init consumes that reference (success returns +1, failure
-        // releases the receiver and returns nil per ObjC init convention) — the
-        // receiver must NOT be released again here.
-        // <para>alloc 返回 +1；init 接管该引用（成功返回 +1，失败按 ObjC init 惯例
-        // 释放接收者并返回 nil）——此处不得再次释放接收者。</para>
         if (obj == IntPtr.Zero)
         {
             ioReturn = ReadErrorCode(error);
@@ -192,13 +182,6 @@ internal static partial class UsbHostAPI
         }
 
         var code = ObjcRuntime.MsgSendUlong(error, ErrorCodeSel.Value);
-        // Cocoa convention: errors returned through an NSError** out-parameter of an
-        // "error:" method are AUTORELEASED — do NOT release them here. Releasing
-        // over-allocates a decrement that later detonates in the autorelease-pool
-        // teardown when the calling thread exits.
-        // <para>Cocoa 惯例："error:" 方法经 NSError** 出参返回的错误对象是
-        // autorelease 的——此处不得释放。多余的释放会在调用线程退出时的
-        // autorelease 池清理中引发崩溃。</para>
         return unchecked((int)code);
     }
 
@@ -254,13 +237,7 @@ internal static partial class UsbHostAPI
     public static IntPtr CopyPipe(IntPtr usbInterface, ulong endpointAddress)
     {
         var pipe = ObjcRuntime.MsgSendObject_Ulong_Error(usbInterface, CopyPipeSel.Value, endpointAddress, out var error);
-        // error is autoreleased per the NSError** convention — never released here.
-        // <para>按 NSError** 惯例 error 为 autorelease——此处不释放。</para>
         _ = error;
-        // copyPipeWithAddress:error: is in the "copy" family → +1 already; the
-        // extra retain below would leak, so just hand it back.
-        // <para>copyPipeWithAddress:error: 属 "copy" 家族→已是 +1；下面的额外
-        // retain 会泄漏，故直接返回。</para>
         return pipe;
     }
 
@@ -342,8 +319,6 @@ internal static partial class UsbHostAPI
     {
         if (pipe != IntPtr.Zero)
         {
-            // error is autoreleased per the NSError** convention — not released.
-            // <para>按 NSError** 惯例 error 为 autorelease——不释放。</para>
             _ = ObjcRuntime.MsgSendBool_OutErr(pipe, AbortSel.Value, out _);
         }
     }
@@ -481,15 +456,6 @@ internal static partial class UsbHostAPI
     /// <summary>Creates an NSMutableData of the given length (+1 retained). <para>创建指定长度的 NSMutableData（+1 持有）。</para></summary>
     public static IntPtr CreateMutableData(int length)
     {
-        // +[NSMutableData dataWithLength:] is a CLASS method but NOT in the
-        // alloc/new/copy/mutableCopy family: it returns an AUTORELEASED object.
-        // Retain it so the caller owns +1 and the explicit objc_release in the
-        // transfer paths balances (an unbalanced release corrupts the heap and
-        // crashes in the autorelease-pool teardown when the calling thread exits).
-        // <para>+[NSMutableData dataWithLength:] 是类方法但不在
-        // alloc/new/copy/mutableCopy 家族：返回 autorelease 对象。需手动 retain 使
-        // 调用方持有 +1，与传输路径中的显式 objc_release 平衡（不平衡的释放会破坏
-        // 堆，并在调用线程退出时的 autorelease 池清理中崩溃）。</para>
         var autoreleased = ObjcRuntime.MsgSendObject_Ulong(NSMutableDataClass.Value, DataWithLengthSel.Value, (ulong)length);
         return autoreleased == IntPtr.Zero ? IntPtr.Zero : ObjcRuntime.objc_retain(autoreleased);
     }

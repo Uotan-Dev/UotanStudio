@@ -59,8 +59,6 @@ public static class ApkSigner
             var working = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
             try
             {
-                // Step 1: strip stale signatures (v1 entries + existing signing block) when re-signing.
-                // 第 1 步：重新签名时剥离旧签名（v1 条目 + 既有签名分块）。
                 if (resolvedOptions.StripExistingSignatures)
                 {
                     ApkEntryStripper.Rewrite(inputApk, working, new ApkEntryStripper.RewriteRequest
@@ -73,15 +71,11 @@ public static class ApkSigner
                     File.Copy(inputApk, working, overwrite: true);
                 }
 
-                // Step 2: v1 JAR artifacts (MANIFEST.MF, .SF, CMS), appended as STORED entries.
-                // 第 2 步：v1 JAR 工件（MANIFEST.MF、.SF、CMS），以 STORED 条目追加。
                 if (resolvedOptions.EnableV1)
                 {
                     AppendV1Artifacts(working, keyMaterial, resolvedOptions, cancellationToken);
                 }
 
-                // Step 3: v2/v3 signing block over the final ZIP layout.
-                // 第 3 步：对最终 ZIP 布局计算并插入 v2/v3 签名分块。
                 if (resolvedOptions.EnableV2 || resolvedOptions.EnableV3)
                 {
                     InsertSigningBlock(working, tempPath, keyMaterial, resolvedOptions, cancellationToken);
@@ -96,12 +90,12 @@ public static class ApkSigner
             }
             finally
             {
-                try { File.Delete(working); } catch { /* best effort 尽力清理 */ }
+                try { File.Delete(working); } catch { }
             }
         }
         catch
         {
-            try { File.Delete(tempPath); } catch { /* best effort 尽力清理 */ }
+            try { File.Delete(tempPath); } catch { }
             throw;
         }
     }
@@ -134,8 +128,6 @@ public static class ApkSigner
                 cancellationToken.ThrowIfCancellationRequested();
                 if (string.IsNullOrEmpty(entry.Name) && entry.FullName.EndsWith('/'))
                 {
-                    // Directory entries carry no digest in JAR manifests.
-                    // 目录条目在 JAR 清单中不携带摘要。
                     continue;
                 }
 
@@ -151,8 +143,6 @@ public static class ApkSigner
             }
         }
 
-        // JAR manifest entry order must match the archive order for deterministic output.
-        // JAR 清单条目顺序与归档顺序一致，保证输出确定。
         entries.Sort(static (a, b) => string.CompareOrdinal(a.Name, b.Name));
 
         var manifest = ApkV1Signer.BuildManifest(entries);
@@ -203,13 +193,8 @@ public static class ApkSigner
         using var input = new FileStream(inputApk, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
         var sections = ApkZipSections.Locate(input);
 
-        // The ZIP content section runs from 0 to the (future) signing block start, which is
-        // the current central directory offset.
-        // ZIP 内容区段从 0 到（未来的）签名块起始处，即当前中央目录偏移。
         var zipContentLength = sections.CentralDirectoryOffset;
 
-        // EOCD raw bytes.
-        // EOCD 原始字节。
         var eocd = new byte[sections.EocdSize];
         input.Seek(sections.EocdOffset, SeekOrigin.Begin);
         input.ReadExactly(eocd);
@@ -217,8 +202,6 @@ public static class ApkSigner
         var algorithm = ApkSignatureAlgorithmSelector.Select(keyMaterial.Key, options.MinSdkVersion);
         var hashName = ApkSignatureConstants.HashNameFor(algorithm);
 
-        // AOSP ApkSigningBlockUtils: hash EOCD with the signing-block START offset.
-        // AOSP 规定摘要中的 EOCD 指向签名块起点，摘要不依赖签名块长度。
         var contentDigest = ApkContentDigest.ComputeApkDigest(
             input, zipContentLength, sections.CentralDirectoryOffset, zipContentLength,
             sections.CentralDirectorySize, eocd, hashName, cancellationToken);
@@ -227,8 +210,6 @@ public static class ApkSigner
         var block = ApkSigningBlock.Build(pairs);
         var newCentralDirectoryOffset = checked((uint)(zipContentLength + block.Length));
 
-        // Final layout: [zip content | signing block | central directory | patched EOCD].
-        // 最终布局：[ZIP 内容 | 签名分块 | 中央目录 | 修正后的 EOCD]。
         var patchedEocd = (byte[])eocd.Clone();
         BinaryPrimitives.WriteUInt32LittleEndian(patchedEocd.AsSpan(16, 4), (uint)newCentralDirectoryOffset);
 

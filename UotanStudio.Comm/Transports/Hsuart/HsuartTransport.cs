@@ -13,9 +13,6 @@ public sealed class HsuartFrameParser
     private const int MaxAcknowledgementPrefixLength = 16;
     private const int MaxEncodedPacketSize = HsuartPacket.MaxPacketSize + 16;
 
-    // Contiguous bounded buffer: unconsumed bytes are retained across Feed calls without per-byte
-    // List<byte> adds or a ToArray() copy per candidate. Only complete frames are copied out, and
-    // 0 delimiters are located with span scans instead of a per-byte Add check on the hot path.
     private readonly byte[] _buffer = new byte[MaxEncodedPacketSize];
     private int _start;
     private int _end;
@@ -32,8 +29,6 @@ public sealed class HsuartFrameParser
         var offset = 0;
         while (offset < data.Length)
         {
-            // Take only as much as fits within the maximum pending window; delimiters inside the
-            // chunk free room again during the scan below.
             var take = Math.Min(MaxEncodedPacketSize - (_end - _start), data.Length - offset);
             if (take <= 0)
             {
@@ -47,16 +42,11 @@ public sealed class HsuartFrameParser
 
             if (!ConsumeCompleteFrames(frames, acceptRawAcknowledgements) && offset < data.Length)
             {
-                // The window filled to capacity with no delimiter while more data remains.
                 ClearBuffer();
                 throw new InvalidDataException("HSUART frame exceeds the maximum encoded packet size.");
             }
         }
 
-        // Raw interpretation is enabled only by the ACK-owned receive path. Once that same bulk
-        // read has established a complete framed boundary, a trailing single ACK is unambiguous and
-        // can be queued as coalesced control data. Never apply this to a leading 0x06: that remains a
-        // legal first COBS code until a complete frame proves otherwise.
         if (acceptRawAcknowledgements && frames.Count > 0 &&
             _end - _start == 1 && IsAcknowledgement(_buffer[_start]))
         {
@@ -133,7 +123,6 @@ public sealed class HsuartFrameParser
 
     private void EmitCompleteCandidate(List<byte[]> frames, int length, bool acceptRawAcknowledgements)
     {
-        // The candidate includes its trailing 0 delimiter; length is the number of bytes before it.
         var candidate = _buffer.AsSpan(_start, length + 1);
         _start += length + 1;
 
@@ -146,8 +135,6 @@ public sealed class HsuartFrameParser
                 prefixLength++;
             }
 
-            // Usually the sole plausible split is after the contiguous ACK/NAK prefix. A COBS
-            // frame may itself start with 0x06, however, so permit that one ambiguous split too.
             var split = prefixLength > 0 && IsValidFrame(candidate[prefixLength..])
                 ? prefixLength
                 : prefixLength > 1 && IsValidFrame(candidate[(prefixLength - 1)..])
@@ -172,9 +159,6 @@ public sealed class HsuartFrameParser
         {
             return;
         }
-        // Compact the pending window to the front of the pooled buffer. Because the pending window
-        // is bounded by MaxEncodedPacketSize and the rented buffer is at least that large, this
-        // compaction always frees enough room whenever needed is positive.
         if (_start > 0)
         {
             if (_end > _start)
@@ -202,8 +186,6 @@ public sealed class HsuartFrameParser
             return false;
         }
 
-        // The first decoded byte is the packet id. For a non-empty first COBS block it is the
-        // second encoded byte, so reject prefixes that already identify an impossible packet.
         return candidate.Length == 1 || IsPacketId(candidate[1]);
     }
 
@@ -248,8 +230,6 @@ public sealed class HsuartTransport : ICommTransport
     private int _disconnectGeneration;
     private bool _versionNegotiated;
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
-    // Retained for short lifecycle state transitions only; serial reads and writes have independent
-    // gates so a blocking public read cannot monopolize the whole session.
     private readonly SemaphoreSlim _sessionGate = new(1, 1);
     private readonly SemaphoreSlim _readGate = new(1, 1);
     private readonly SemaphoreSlim _writeGate = new(1, 1);
@@ -264,10 +244,6 @@ public sealed class HsuartTransport : ICommTransport
 
     private const int MaxRetries = 3;
     private const int VersionNegotiationTimeoutMs = 5000;
-    // Raw ACK and a COBS frame beginning with code 0x06 are information-theoretically ambiguous on
-    // a byte stream. Therefore raw ACK acceptance is explicit protocol configuration, never a timing
-    // guess. In this mode the stop-and-wait ACK path performs exactly one one-byte underlying read;
-    // that read boundary is the configured protocol boundary and is valid only while ACK is expected.
     private readonly bool _rawAcknowledgementMode;
 
     /// <summary>Creates a transport using the protocol-compatible raw ACK mode.</summary>
@@ -467,8 +443,6 @@ public sealed class HsuartTransport : ICommTransport
         ThrowIfDisposed();
         Interlocked.Increment(ref _disconnectRequests);
         Interlocked.Increment(ref _disconnectGeneration);
-        // Mark disconnecting and interrupt physical I/O before waiting for Connect's lifecycle lock.
-        // Otherwise Connect can hold that lock while negotiation waits for serial input forever.
         CancelSession();
         Exception? disconnectError = null;
         try
@@ -479,7 +453,6 @@ public sealed class HsuartTransport : ICommTransport
             }
             catch (Exception ex)
             {
-                // Physical teardown may fail, but lifecycle state must still be serialized and cleared.
                 disconnectError = ex;
             }
 
@@ -619,8 +592,6 @@ public sealed class HsuartTransport : ICommTransport
         _writeGate.Wait();
         try
         {
-            // ACK waiting owns the sole serial receive path; public reads cannot consume this
-            // stop-and-wait response. The write itself remains independently serialized.
             _readGate.Wait();
             try
             {
@@ -711,9 +682,6 @@ public sealed class HsuartTransport : ICommTransport
     {
         ThrowIfDisposed();
         EnsureConnected();
-        // Keep the same global acquisition order as Write: writer, sole receiver, then the
-        // short-lived session state gate. This makes parser reset exclusive with both public reads
-        // and ACK waiters without introducing an inverted read/write lock order.
         _writeGate.Wait();
         try
         {
@@ -852,8 +820,6 @@ public sealed class HsuartTransport : ICommTransport
             return;
         }
 
-        // Interrupt an infinite serial read before waiting for the session owner; waiting first can
-        // deadlock forever because that owner cannot release the gate until its I/O completes.
         _lifetimeCts.Cancel();
         CancelSession();
         Exception? disposeError = null;
@@ -899,9 +865,6 @@ public sealed class HsuartTransport : ICommTransport
         finally
         {
             _lifecycleGate.Release();
-            // Do not dispose the gates or cancellation sources: callers may already be queued on a
-            // gate or may be constructing a linked token. They are small managed lifetime resources,
-            // and cancellation plus the disposed guard safely completes those waiters.
         }
 
         if (disposeError is not null)
@@ -955,8 +918,6 @@ public sealed class HsuartTransport : ICommTransport
 
         try
         {
-            // Version negotiation is always a complete COBS-framed exchange. Raw ACK mode applies
-            // only to the stop-and-wait acknowledgement immediately following a protocol write.
             var response = ReadNegotiationResponse(VersionNegotiationTimeoutMs);
             DecodePacket(response, response.Length, out var packetId);
             if (packetId == HsuartPacketId.VersionPacket)
@@ -970,8 +931,6 @@ public sealed class HsuartTransport : ICommTransport
         }
         catch (TimeoutException)
         {
-            // Some devices do not answer the version packet; proceed regardless.
-            // 部分设备不回应版本包；无论是否回应都继续。
         }
 
         _versionNegotiated = true;
@@ -1009,8 +968,6 @@ public sealed class HsuartTransport : ICommTransport
         }
         catch (TimeoutException)
         {
-            // Some devices do not answer the version packet; proceed regardless.
-            // 部分设备不回应版本包；无论是否回应都继续。
         }
 
         _versionNegotiated = true;
@@ -1180,8 +1137,6 @@ public sealed class HsuartTransport : ICommTransport
         }
 
         var remaining = timeoutMs - (int)Math.Min(int.MaxValue, stopwatch.ElapsedMilliseconds);
-        // Zero is a valid one-shot poll; the underlying transport must get the opportunity to perform
-        // one nonblocking read before reporting that no data is available.
         return Math.Max(0, remaining);
     }
 
@@ -1194,8 +1149,6 @@ public sealed class HsuartTransport : ICommTransport
         {
             throw new TimeoutException("No HSUART version response arrived.");
         }
-        // Negotiation may explicitly permit a raw NAK, but never a raw ACK: 0x06 is a legal COBS
-        // code and a successful version response must always reach its frame delimiter.
         if (first[0] == (byte)HsuartPacketId.NakPacket)
         {
             return first;
@@ -1230,8 +1183,6 @@ public sealed class HsuartTransport : ICommTransport
 
     private byte[] ReadAcknowledgementOrFrame(int timeoutMs)
     {
-        // Never inspect queued parser output before performing the ACK-owned read. In particular, an
-        // isolated 0x06 buffered by a previous public read is not acknowledgement of this send.
         var stopwatch = Stopwatch.StartNew();
         var raw = ArrayPool<byte>.Shared.Rent(HsuartPacket.MaxPacketSize + 16);
         try
@@ -1241,9 +1192,6 @@ public sealed class HsuartTransport : ICommTransport
             {
                 throw new TimeoutException("No HSUART acknowledgement arrived.");
             }
-            // A sole byte from this post-send read is the configured raw control boundary. For a
-            // coalesced read, require the parser to establish frame/control boundaries instead of
-            // treating a leading 0x06 (also a valid COBS code) as ACK.
             if (count == 1 && raw[0] is (byte)HsuartPacketId.AckPacket or (byte)HsuartPacketId.NakPacket)
             {
                 return [raw[0]];
@@ -1478,8 +1426,6 @@ public sealed class HsuartTransport : ICommTransport
 
     private void PrepareAcknowledgementBoundary()
     {
-        // ACKs already queued before this write belong to an earlier generation. Keep data/control
-        // frames in order, but discard stale acknowledgements; preserve any partial COBS bytes.
         var retained = new Queue<byte[]>();
         while (_receivedFrames.Count > 0)
         {
@@ -1494,8 +1440,6 @@ public sealed class HsuartTransport : ICommTransport
             _receivedFrames.Enqueue(retained.Dequeue());
         }
 
-        // A raw candidate isolated by a pre-send physical read is stale. This consumes only that
-        // single ambiguous control candidate and never clears a legitimate multi-byte partial COBS frame.
         _frameParser.TakeIsolatedAcknowledgement();
     }
 

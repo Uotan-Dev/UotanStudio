@@ -167,16 +167,11 @@ public sealed class SuperFlashHelper(FastbootSession session, string mainPartiti
             _session.UpdateSuper(MainPartition, metadataStream, wipe, progress, cancellationToken).ThrowIfFailed();
         }
 
-        // Flash each logical partition's data. Each partition is materialized to a temp file
-        // so multi-extent partitions can be downloaded as one contiguous payload.
-        // 逐逻辑分区刷写数据：将每个分区物化到临时文件，使多 extent 分区可作为单个连续负载下载。
         foreach (var partition in metadata.Partitions)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (partition.SizeInBytes <= 0)
             {
-                // Zero-sized logical partitions carry no data to flash.
-                // 零大小的逻辑分区没有可刷写的数据。
                 continue;
             }
 
@@ -280,8 +275,6 @@ public sealed class SuperFlashHelper(FastbootSession session, string mainPartiti
         }
         catch (IOException)
         {
-            // Best-effort cleanup; the OS temp directory will reclaim it eventually.
-            // 尽力清理；系统临时目录最终会回收。
         }
     }
 

@@ -64,10 +64,6 @@ public sealed class McpServerHost
                 Name = "uotanstudio",
                 Version = typeof(McpServerHost).Assembly.GetName().Version?.ToString(3) ?? "0.1.0"
             },
-            // The SDK serves ListTools/CallTool from the top-level ToolCollection; leaving it on
-            // Capabilities.Tools alone yields an empty tools/list.
-            // SDK 从顶层 ToolCollection 提供 ListTools/CallTool；只放在 Capabilities.Tools 会导致
-            // tools/list 返回空列表。
             ToolCollection = [.. tools]
         };
 

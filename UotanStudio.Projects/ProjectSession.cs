@@ -70,7 +70,6 @@ public sealed partial class ProjectSession
     private async Task RunOperationAsync(Func<Task> operation, bool changingProject = false, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        // Serialize change confirmations without holding the persistence gate: confirmation may flush it.
         if (changingProject) await _changeGate.WaitAsync(cancellationToken);
         try
         {
@@ -210,7 +209,6 @@ public sealed partial class ProjectSession
         var firmware = target.FirmwareProjectPath is { } firmwarePath
             ? await SolutionPersistenceService.LoadFirmwareProjectAsync(firmwarePath, cancellationToken) : null;
         var node = await SolutionPersistenceService.LoadNodeProjectAsync(target.NodeProjectPath!, cancellationToken);
-        // Read descriptors before publication; bind host actions only after the new context is active.
         var history = new ProjectHistory();
         if (target.StateDirectory is { } stateDirectory)
         {
@@ -238,8 +236,6 @@ public sealed partial class ProjectSession
                 _workspace.ApplySettings(firmware.Settings);
             }
 
-            // 恢复上次打开的文档标签（文本、固件信息、文件管理器等）。
-            // Restore previously open document tabs (text, firmware info, file manager, etc.).
             if (firmware.OpenDocuments is { Count: > 0 } openDocs)
             {
                 var rootDir = Context.RootDirectory ?? Path.GetDirectoryName(path) ?? ".";
@@ -256,10 +252,6 @@ public sealed partial class ProjectSession
 
         History.CopyFrom(history);
 
-        // 完整重新加载解决方案（打开、添加/删除子项目）先发出专用信号，再发常规变更消息，
-        // 让交付面板等同路径命名的订阅方也能区分“换文件”与“同一文件重载”。
-        // Signal the full reload before the generic change so the delivery panel can tell a reload of the
-        // same solution apart from a context switch or an incremental change.
         SolutionReloaded?.Invoke();
         Changed?.Invoke();
         ProjectDiagnostics.Write(ProjectLogLevel.Info, "Menu", $"Opened solution: {path}");
@@ -392,14 +384,10 @@ public sealed partial class ProjectSession
             return;
         }
 
-        // 确保 images/、output/ 与 delivery/ 子目录存在。
-        // Ensure images/, output/ and delivery/ sub-directories exist.
         Directory.CreateDirectory(Path.Combine(dirPath, "images"));
         Directory.CreateDirectory(Path.Combine(dirPath, "output"));
         Directory.CreateDirectory(Path.Combine(dirPath, "delivery"));
 
-        // 若目录下无 .uotanfw 文件则创建；已有时跳过以保留用户修改。
-        // Create a .uotanfw file if missing; skip if it already exists to preserve user changes.
         var fwPath = Path.Combine(dirPath, subName + ".uotanfw");
         if (!File.Exists(fwPath))
         {
@@ -504,9 +492,6 @@ public sealed partial class ProjectSession
         {
             FormatVersion = 2,
             SolutionName = solutionName,
-            // The node project lives inside the node-owner sub-project; record its root-relative path so the
-            // recorded reference and the actually written file always agree, even when the owner is not the
-            // solution-named sub-project.
             NodeProjectPath = Path.GetRelativePath(rootDir, nodePath).Replace(Path.DirectorySeparatorChar, '/'),
             SubProjects = subProjectDtos.Count > 0 ? subProjectDtos : null,
             State = CaptureState?.Invoke()

@@ -91,7 +91,7 @@ public static class ApkRepacker
         }
         catch
         {
-            try { File.Delete(tempPath); } catch { /* best effort 尽力清理 */ }
+            try { File.Delete(tempPath); } catch { }
             throw;
         }
     }
@@ -130,8 +130,6 @@ public static class ApkRepacker
             }
         }
 
-        // Deterministic ordering by entry name (ordinal) keeps output reproducible.
-        // 按条目名（序数）确定性排序，保证输出可复现。
         result.Sort(static (a, b) => string.CompareOrdinal(a.EntryName, b.EntryName));
         if (result.Count > 0xFFFF)
         {
@@ -177,8 +175,6 @@ public static class ApkRepacker
             var localHeaderOffset = checked((uint)output.Position);
             (uint Crc, uint CompressedSize, uint UncompressedSize) sizes;
 
-            // Extra field pads the data start to the required alignment.
-            // extra 字段把数据起始填充到所需对齐。
             var extraBytes = BuildAlignmentExtra(output.Position + 30 + nameBytes.Length, alignment);
 
             WriteLocalHeader(output, nameBytes, extraBytes, store, localHeaderOffset);
@@ -191,8 +187,6 @@ public static class ApkRepacker
                 sizes = CopyDeflated(output, filePath, options.CompressionLevel, cancellationToken);
             }
 
-            // Patch the CRC and sizes into the local header.
-            // 把 CRC 与大小回填到本地文件头。
             PatchLocalHeader(output, localHeaderOffset, sizes);
 
             WriteCentralEntry(centralDirectory, entryName, nameBytes, store, localHeaderOffset, sizes);
@@ -228,8 +222,6 @@ public static class ApkRepacker
         BinaryPrimitives.WriteUInt16LittleEndian(header.Slice(6, 2), Utf8Flag);
         BinaryPrimitives.WriteUInt16LittleEndian(header.Slice(8, 2), (ushort)(store ? 0 : 8));
         WriteDosTimestamp(header.Slice(10, 4));
-        // CRC and sizes are patched after the payload is written.
-        // CRC 与大小在载荷写完后回填。
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(14, 4), 0);
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(18, 4), 0);
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(22, 4), 0);
@@ -347,8 +339,6 @@ public static class ApkRepacker
 
         var misalignment = (int)(headerEndOffset % alignment);
         var padding = misalignment == 0 ? 0 : alignment - misalignment;
-        // The extra field needs at least its 4-byte header; over-pad to the next multiple.
-        // extra 字段至少需要 4 字节头部；不足时填充到下一个对齐倍数。
         if (padding > 0 && padding < 4)
         {
             padding += alignment;
@@ -367,8 +357,6 @@ public static class ApkRepacker
 
     private static void WriteDosTimestamp(Span<byte> target)
     {
-        // Fixed deterministic timestamp (2020-01-01 00:00:00) keeps builds reproducible.
-        // 固定确定性时间戳（2020-01-01 00:00:00）保证构建可复现。
         const ushort dosDate = ((2020 - 1980) << 9) | (1 << 5) | 1;
         const ushort dosTime = 0;
         BinaryPrimitives.WriteUInt16LittleEndian(target.Slice(0, 2), dosTime);

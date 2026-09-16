@@ -49,7 +49,6 @@ public sealed class EdlFactory : IProtocolFactory
         {
             var info = transport.DeviceInfo;
 
-            // Check VID/PID if specified
             if (_vendorId.HasValue && info.VendorId != _vendorId.Value)
             {
                 return false;
@@ -60,7 +59,6 @@ public sealed class EdlFactory : IProtocolFactory
                 return false;
             }
 
-            // Check for known Qualcomm EDL interfaces
             foreach (var iface in info.Interfaces)
             {
                 if (iface.Class == 0xFF && iface.SubClass == 0x01)
@@ -70,7 +68,6 @@ public sealed class EdlFactory : IProtocolFactory
                 }
             }
 
-            // Also match by known Qualcomm VID/PID combinations
             if (info.VendorId == 0x05C6 && (
                 info.ProductId == 0x9008 ||  // Qualcomm QDLoader 9008
                 info.ProductId == 0x6000 ||  // Samsung Qualcomm EDL
@@ -82,7 +79,6 @@ public sealed class EdlFactory : IProtocolFactory
                 return true;
             }
 
-            // Rockchip RKUD devices
             if (info.VendorId == 0x2207 && (
                 info.ProductId == 0x300A ||  // RK3066 Maskrom
                 info.ProductId == 0x320B ||  // RK3288 Loader
@@ -95,7 +91,6 @@ public sealed class EdlFactory : IProtocolFactory
                 return true;
             }
 
-            // Also check by interface subclass if specified
             if (_interfaceSubclass.HasValue)
             {
                 foreach (var iface in info.Interfaces)

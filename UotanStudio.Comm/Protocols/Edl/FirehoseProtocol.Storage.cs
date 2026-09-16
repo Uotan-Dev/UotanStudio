@@ -61,13 +61,6 @@ public sealed partial class FirehoseProtocol
     {
         ThrowIfDisposed();
 
-        // Before resetting to the system, best-effort mark the bootable storage drive (mirrors
-        // qdl firehose_run: set_bootable → reset). UFS→1, eMMC→0. Failure does not block the
-        // reset — just logged. PowerOff/ResetToEdl do not involve a normal boot, so they are
-        // skipped.
-        // 复位到系统前先尽力标记可启动存储驱动（对齐 qdl firehose_run：set_bootable →
-        // reset）。UFS→1，eMMC→0。失败不阻断复位——仅记录日志。PowerOff/ResetToEdl 不涉及
-        // 正常启动，跳过。
         if (option == RebootOption.Reset)
         {
             try
@@ -84,11 +77,6 @@ public sealed partial class FirehoseProtocol
         var xml = FirehoseXmlBuilder.BuildPower(option);
         await WriteDataAsync(Encoding.UTF8.GetBytes(xml), GetZlpTimeoutMs(), cancellationToken);
 
-        // The device reboots right away and usually never sends an ACK XML; a short wait
-        // window catches the rare device that ACKs before rebooting, and a timeout means
-        // "device reset".
-        // 设备收到后立即复位，通常不会回 ACK XML；短等待窗口捕获极少数先回 ACK 再重启的
-        // 设备，超时即视为"设备已重置"。
         FirehoseResponse response;
         try
         {
@@ -96,20 +84,10 @@ public sealed partial class FirehoseProtocol
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Read timeout / connection lost / device gone caused by the reboot are all
-            // treated as "device reset".
-            // 复位导致的读超时 / 连接断开 / 设备消失均视为"设备已重置"。
             Log($"No response after power command ({ex.Message}); assuming device reset.");
             response = new FirehoseResponse { IsAck = true, RawValue = "ACK (device reset)" };
         }
 
-        // Verify the reset actually took effect: keep reading device output and surface the
-        // target logs emitted around the reset until the device disappears (read throws /
-        // times out after reset signals) or the verification budget elapses. Still responding
-        // within the budget = reset did not fire — warn clearly.
-        // 验证复位是否真正生效：持续读取设备输出并上报复位前后的目标日志，直到设备消失
-        // （读抛异常/收到复位信号后超时）或验证预算耗尽。预算内仍在响应 = 复位未生效——
-        // 明确告警。
         var verifyBudgetMs = Configuration.PowerResetVerifyTimeoutMs;
         if (verifyBudgetMs > 0)
         {
@@ -125,9 +103,6 @@ public sealed partial class FirehoseProtocol
                     var chunk = await ReadChunkAsync(readBuffer.Length, 500, cancellationToken);
                     if (chunk.Length == 0)
                     {
-                        // Device silent. After a reset-execution log the device is rebooting,
-                        // so confirm immediately instead of idling to the budget.
-                        // 设备静默。收到复位执行日志后设备正在重启，立即确认而非空等预算。
                         if (sawResetSignal)
                         {
                             Log("Device stopped responding after reset logs; reset confirmed.");
@@ -143,9 +118,6 @@ public sealed partial class FirehoseProtocol
                         continue;
                     }
 
-                    // Extract and print the log values; fall back to the raw text when the
-                    // chunk is not a complete XML block.
-                    // 提取并打印 log 值；非完整 XML 块时回退打印原文。
                     var logs = FirehoseResponseParser.ParseDataBlock(text).Logs;
                     if (logs.Count == 0)
                     {
@@ -160,9 +132,6 @@ public sealed partial class FirehoseProtocol
                         }
                     }
 
-                    // Reset-execution signal — the device is rebooting; a subsequent silence
-                    // confirms the reset.
-                    // 复位执行信号——设备正在重启；随后的静默即确认复位。
                     if (text.Contains("Will issue reset", StringComparison.OrdinalIgnoreCase) ||
                         text.Contains("bsp_target_reset", StringComparison.OrdinalIgnoreCase))
                     {
@@ -171,8 +140,6 @@ public sealed partial class FirehoseProtocol
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    // Device disappeared (USB dropped / connection error) → reset confirmed.
-                    // 设备消失（USB 断开 / 连接错误）→ 复位已生效。
                     Log($"Device disconnected after power command ({ex.Message}); reset confirmed.");
                     resetConfirmed = true;
                     break;

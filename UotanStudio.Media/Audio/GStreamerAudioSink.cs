@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Buffers.Binary;
 using UotanStudio.Media.GStreamer;
 
@@ -50,8 +50,6 @@ public sealed class GStreamerAudioSink(bool alsa = false) : IAudioSink
         }
         if (_volume == 1)
         {
-            // Push synchronously copies the borrowed PCM into an independently owned GstBuffer.
-            // Push 同步复制借用的 PCM 到独立拥有的 GstBuffer，无须托管中转。
             _pipeline.Push(pcm, checked(_samples * 10_000_000 / SampleRate));
             _samples += pcm.Length / align;
             return;

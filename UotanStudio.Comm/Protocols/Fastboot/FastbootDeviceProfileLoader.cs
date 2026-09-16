@@ -48,8 +48,6 @@ public static class FastbootDeviceProfileLoader
                     var vendorText = GetStringValue(entry, "vendorId");
                     var productText = GetStringValue(entry, "productId");
 
-                    // Both ids are required: profiles match on exact VID+PID pairs only,
-                    // never whole-vendor wildcards.
                     if (!TryParseHex16(vendorText, out var vendorId) || vendorId == 0)
                     {
                         continue;
@@ -65,13 +63,11 @@ public static class FastbootDeviceProfileLoader
                 }
                 catch
                 {
-                    // Skip malformed entries; a broken manifest must not break discovery.
                 }
             }
         }
         catch
         {
-            // Unreadable manifest yields an empty list; callers keep the built-in defaults.
         }
 
         return profiles;

@@ -39,9 +39,6 @@ public sealed partial class FirehoseProtocol
 
         var response = await ReceiveProgramResponseAsync(cancellationToken);
 
-        // A NAK must fail loudly: returning it silently left callers believing the write
-        // succeeded.
-        // NAK 必须显式失败：静默返回会让调用方误以为写入成功。
         return !response.IsAck
             ? throw new EdlException(EdlErrorCode.ProgramFailed,
                 $"Program failed for {filename}. Response: {response.RawValue}")
@@ -229,9 +226,6 @@ public sealed partial class FirehoseProtocol
                         $"Program data stream ended after {bytesWritten}/{totalBytes} bytes.");
                 }
 
-                // Drain + retry on write timeout: re-send the SAME chunk (the failed chunk is
-                // never advanced past).
-                // 写超时时排出后重试：重发同一数据块（绝不越过失败的数据块）。
                 while (true)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -370,8 +364,6 @@ internal static class AndroidSparseImage
             {
                 case ChunkTypeRaw:
                     dataBytes = chunkSzBlocks * blockSize;
-                    // Skip the raw payload; it will be streamed by SparseRawStream.
-                    // 跳过 raw 负载；该负载由 SparseRawStream 流式输出。
                     source.Seek(totalSz - chunkHdrSz, SeekOrigin.Current);
                     break;
                 case ChunkTypeFill:
@@ -532,10 +524,6 @@ internal static class AndroidSparseImage
                 }
                 else
                 {
-                    // Fill / dont-care: generate the expanded bytes locally. The fill pattern
-                    // repeats from the chunk start, so index by the bytes already consumed.
-                    // Fill / dont-care：本地生成展开字节。填充模式自块起始重复，因此按已消费
-                    // 字节数索引。
                     var toGenerate = (int)Math.Min(count - total, _chunkRemaining);
                     var consumed = _chunkTotalSize - _chunkRemaining;
                     if (_fillActive)
@@ -586,8 +574,6 @@ internal static class AndroidSparseImage
                         _chunkTotalSize = chunkSzBlocks * _blockSize;
                         _chunkRemaining = _chunkTotalSize;
                         _fillActive = false;
-                        // totalSz includes the header; the payload follows immediately.
-                        // totalSz 含头部长度；负载紧随其后。
                         return true;
                     case ChunkTypeFill:
                         _source.ReadExactly(_fillPattern, 0, 4);

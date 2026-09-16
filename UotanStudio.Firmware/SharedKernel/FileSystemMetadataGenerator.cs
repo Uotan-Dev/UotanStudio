@@ -117,7 +117,6 @@ public static class FileSystemMetadataGenerator
     public static string DetectPartitionName(string sourceFileName)
     {
         var name = Path.GetFileNameWithoutExtension(sourceFileName);
-        // Strip .raw extension added by sparse extraction
         if (name.EndsWith(".raw", StringComparison.OrdinalIgnoreCase))
             name = name[..^4];
         return string.IsNullOrWhiteSpace(name) ? "unknown" : name;
@@ -131,7 +130,6 @@ public static class FileSystemMetadataGenerator
         var sb = new StringBuilder();
         foreach (var (entryPath, uid, gid, mode, isDir) in entries)
         {
-            // Normalize path: remove leading "./", ensure root is "/"
             var normalized = NormalizePath(entryPath);
             var permBits = mode != 0 ? (mode & 0xFFF) : (isDir ? 0x1ED : 0x1A4);
             var capabilities = 0;

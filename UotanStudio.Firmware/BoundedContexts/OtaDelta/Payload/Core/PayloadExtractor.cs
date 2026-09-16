@@ -105,9 +105,6 @@ internal class PayloadExtractor
                 }
 
 
-                // 有界节流字节进度：按目标总量累计已写字节，≥100ms 或阶段结束时上报一次。
-                // Bounded throttled byte progress: accumulates written bytes against the target size,
-                // reporting at most once per 100ms and once at each stage end.
                 var progressTracker = byteProgress is null
                     ? null
                     : new PartitionByteProgress(byteProgress, totalSize);
@@ -132,9 +129,6 @@ internal class PayloadExtractor
                     ? null
                     : new FileStream(baseImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
 
-                // 消除基座双读：校验与拷贝合并为单遍——在 VerifyingReadStream 之上直接 CopyExactly。
-                // Eliminate the double read of the base image: verification and copy are merged into a
-                // single pass — CopyExactly reads straight through the VerifyingReadStream.
                 if (baseStream is not null)
                 {
                     baseStream.Position = 0;
@@ -156,22 +150,13 @@ internal class PayloadExtractor
                     }
                     else
                     {
-                        // OldPartitionInfo 缺失时仅拷贝、不校验（保持原语义）。
-                        // Copy without verification when OldPartitionInfo is missing (original semantics).
                         outFile.Position = 0;
                         BinaryDeltaPatch.CopyExactly(baseStream, outFile, Math.Min(baseStream.Length, totalSize), cancellationToken);
                     }
                 }
 
                 object writeLock = new();
-                // 分区专属载荷句柄：每个分区打开自己的只读 payload 流并配一个专属锁，
-                // 跨分区互不阻塞；锁仍传给下游以保护本分区内部的并发读。
-                // Partition-exclusive payload handle: each partition opens its own read-only payload
-                // stream with a dedicated lock so partitions never block each other; the lock is still
-                // passed downstream to guard reads within this partition.
                 var ownPayload = openPayloadStream is not null;
-                // Caller-supplied streams can be shared across partitions as well as operations.
-                // 调用方提供的流可能跨分区共享，回退读取必须使用同一把锁。
                 object streamLock = ownPayload ? new object() : stream!;
 
                 var parallelOps = new List<InstallOperation>();
@@ -192,9 +177,6 @@ internal class PayloadExtractor
 
                 if (ownPayload)
                 {
-                    // 专属句柄路径：本分区的所有操作读自己的 payload 流，streamLock 仅约束本分区内部并发。
-                    // Exclusive-handle path: all operations of this partition read their own payload stream;
-                    // streamLock only serializes concurrency within this partition.
                     using var payloadStream = openPayloadStream!();
                     Stream opStream = payloadStream;
 
@@ -215,8 +197,6 @@ internal class PayloadExtractor
                 }
                 else
                 {
-                    // 共享流路径（保持原行为）：跨分区共用调用方提供的 payload 流。
-                    // Shared-stream path (original behavior): partitions share the caller-provided payload stream.
                     Parallel.ForEach(
                         parallelOps.OrderBy(o => o.DataOffset),
                         new ParallelOptions
@@ -309,9 +289,6 @@ internal class PayloadExtractor
         var selected = manifest.Partitions.Where(p => !string.IsNullOrEmpty(p.PartitionName)
             && (extractSet is null || extractSet.Contains(p.PartitionName))).ToArray();
 
-        // 并发分区共享同一个 sink：与异步路径一致，经增量转发器跨分区聚合，避免分区内绝对值交错。
-        // Concurrent partitions share one sink: mirroring the async path, progress is aggregated across
-        // partitions via delta forwarders so in-partition absolute values never interleave.
         long totalBytes = 0;
         if (byteProgress is not null)
             foreach (var partition in selected) totalBytes = checked(totalBytes + ProgressSize(partition, manifest.BlockSize));
@@ -333,8 +310,6 @@ internal class PayloadExtractor
         }
         catch (AggregateException ex)
         {
-            // 保留原有异常契约：拆开包装，抛出首个真实异常。
-            // Preserve the original exception contract: unwrap and rethrow the first inner exception.
             ExceptionDispatchInfo.Capture(ex.Flatten().InnerExceptions[0]).Throw();
             throw;
         }
@@ -374,9 +349,6 @@ internal class PayloadExtractor
         if (byteProgress is not null)
             foreach (var partition in selected) totalBytes = checked(totalBytes + ProgressSize(partition, manifest.BlockSize));
 
-        // 跨分区分摊的进度累计器：各分区字节写入经 Interlocked 汇总后共享同一 100ms 节流窗口。
-        // Cross-partition apportioned progress accumulator: per-partition byte writes are merged via
-        // Interlocked and share a single 100ms throttle window.
         var crossProgress = byteProgress is null ? null : new CrossPartitionProgress(byteProgress, totalBytes);
         byteProgress?.Report((0, totalBytes));
 
@@ -389,17 +361,12 @@ internal class PayloadExtractor
                 async (partition, token) =>
                 {
                     var outFilename = GetSafeOutputPath(outputDir, partition.PartitionName);
-                    // 每个分区一个增量转发器：把分区内的绝对读数折算为增量后汇入共享累计器。
-                    // One delta forwarder per partition: converts in-partition absolute readings into
-                    // deltas before merging them into the shared accumulator.
                     IProgress<(long Processed, long Total)>? sink = crossProgress is null ? null : new PartitionDeltaForwarder(crossProgress);
                     await ExtractPartitionAsync(partition, outFilename, stream, baseOffset, manifest.BlockSize, token, sourceImages, sink, openPayloadStream).ConfigureAwait(false);
                 }).ConfigureAwait(false);
         }
         catch (AggregateException ex)
         {
-            // 保留原有异常契约：拆开包装，抛出首个真实异常。
-            // Preserve the original exception contract: unwrap and rethrow the first inner exception.
             ExceptionDispatchInfo.Capture(ex.Flatten().InnerExceptions[0]).Throw();
             throw;
         }
@@ -483,8 +450,6 @@ internal class PayloadExtractor
         /// </summary>
         public void Report((long Processed, long Total) sample)
         {
-            // 传入的 Processed 为分区内单调递增的绝对值；折算为增量后转发。
-            // The incoming Processed value is monotonic within the partition; forward only the delta.
             long delta;
             long current;
             do

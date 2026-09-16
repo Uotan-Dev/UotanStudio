@@ -178,7 +178,6 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
         ValidatePath(remotePath);
-        // BeginTransfer requires both source and destination argv even though publication is local.
         using var channel = connection.OpenChannel(HdcCommand.FileInit, Encoding.UTF8.GetBytes((Compress ? "-z " : "") + "\"" + remotePath + "\" ."));
         var metadata = Expect(channel, HdcCommand.FileCheck, cancellationToken);
         var config = DeserializeTransferConfig(metadata.Payload ?? []);

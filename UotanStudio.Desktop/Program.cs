@@ -5,18 +5,19 @@ using UotanStudio.Cli;
 
 namespace UotanStudio.Desktop;
 
+/// <summary>
+/// Desktop application entry point: host process bootstrap and startup-mode dispatch.
+/// <para>桌面应用入口：宿主进程引导与启动模式分发。</para>
+/// </summary>
 sealed class Program
 {
-    // Initialization code. Don't use any Avalonia, third-party APIs or any
-    // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
-    // yet and stuff might break.
+    /// <summary>
+    /// Process entry point that dispatches startup mode (headless MCP, CLI, companion MCP, GUI).
+    /// <para>进程入口，分发启动模式（无头 MCP、CLI、伴随 MCP、GUI）。</para>
+    /// </summary>
     [STAThread]
     public static int Main(string[] args)
     {
-        // Headless MCP mode: serve the Model Context Protocol over stdio without any Avalonia
-        // lifetime or windows; exits when the client closes the connection or Ctrl+C cancels.
-        // 无头 MCP 模式：通过 stdio 提供 Model Context Protocol 服务，不启动 Avalonia 生命周期、
-        // 不创建窗口；客户端关闭连接或 Ctrl+C 取消后退出。
         if (UotanStudio.Mcp.McpLauncher.IsHeadlessRequested(args))
         {
             using var cts = new CancellationTokenSource();
@@ -41,11 +42,6 @@ sealed class Program
             return CliProgram.RunAsync(CliProgram.StripModeSwitch(args)).GetAwaiter().GetResult();
         }
 
-        // Companion MCP mode: serve MCP over stdio in the background while the desktop UI runs.
-        // The server lives until the process exits; stdin belongs to the desktop process, so the
-        // companion server is meant for long-lived client pipes rather than interactive stdio.
-        // 伴随 MCP 模式：桌面 UI 运行期间在后台提供 MCP 服务。服务器随进程退出而结束；
-        // stdin 属于桌面进程，伴随服务器面向长连接客户端管道而非交互式 stdio。
         if (UotanStudio.Mcp.McpLauncher.IsCompanionRequested(args))
         {
             _ = Task.Run(() => UotanStudio.Mcp.McpLauncher.RunCompanionAsync(args));
@@ -56,7 +52,11 @@ sealed class Program
         return 0;
     }
 
-    // Avalonia configuration, don't remove; also used by visual designer.
+    /// <summary>
+    /// Configures and returns the Avalonia application builder.
+    /// <para>配置并返回 Avalonia 应用构建器。</para>
+    /// </summary>
+    /// <returns>The configured Avalonia <see cref="AppBuilder"/>. <para>配置完成的 Avalonia <see cref="AppBuilder"/>。</para></returns>
     public static AppBuilder BuildAvaloniaApp()
     {
         var builder = AppBuilder.Configure<App>()
@@ -68,11 +68,6 @@ sealed class Program
                 CommandBarMergingScope = DockCommandBarMergingScope.ActiveDocument
             });
 
-        // Dock.Avalonia 主题模板在空态（Layout/ActiveDockable 为 null）下会触发大量
-        // "Value is null" 绑定警告（库已知噪音，功能无影响），用过滤 sink 静音。
-        // Dock.Avalonia theme templates emit many "Value is null" binding warnings in the empty
-        // state (null Layout/ActiveDockable) — known library noise with no functional impact,
-        // silenced via a filtered sink.
         Logger.Sink = new FilteredTraceLogSink();
         return builder;
     }

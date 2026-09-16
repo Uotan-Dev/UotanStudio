@@ -71,15 +71,8 @@ internal sealed class HarmonyOSUsbApiProvider : UsbApiProviderBase
             SupportsNativeAsyncIo = false,
             SupportsNativeHotPlugMonitoring = false,
             RequiresExternalRuntime = false,
-            // Reset re-initializes the DDK session (OH_Usb_Release + OH_Usb_Init + claim):
-            // interface handles and memmaps are rebuilt, so the caller must re-open.
-            // <para>Reset 会重新初始化 DDK 会话（OH_Usb_Release + OH_Usb_Init + claim）：
-            // 接口句柄与内存映射被重建，调用方必须重新打开。</para>
             ResetReenumeratesDevice = true,
             Notes = "HarmonyOS USB DDK backend via libusb_ndk.z.so P/Invoke; pure C# implementation with no external bridge required. Opt-in: set FIRMWAREKIT_USB_ENABLE_HARMONY=1 to enable; must run within DriverExtensionAbility lifecycle with ohos.permission.ACCESS_DDK_USB."
-            // <para>基于 libusb_ndk.z.so P/Invoke 的 HarmonyOS USB DDK 后端；纯 C# 实现，无需外部桥接。
-            // 需设置 FIRMWAREKIT_USB_ENABLE_HARMONY=1 显式开启；必须在 DriverExtensionAbility 生命周期内
-            // 运行，并持有 ohos.permission.ACCESS_DDK_USB 权限。</para>
         };
     }
 }

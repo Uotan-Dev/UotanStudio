@@ -99,9 +99,6 @@ public class FileDataProvider(string filePath, long offset, long length) : ISpar
         }
 
         var toRead = (int)Math.Min(buffer.Length, Length - inOffset);
-        // 持有单个长生命周期流并在 Dispose 时关闭；调用方逐块读取时不再重复开/关句柄。
-        // Hold a single long-lived stream closed on Dispose; chunked callers no longer
-        // open/close a handle per read.
         if (_readStream is null)
         {
             _readStream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.RandomAccess);

@@ -243,8 +243,6 @@ public sealed partial class ErofsParser
 
         var interlaced = (advise & ZErofsMapHeader.AdviseInterlacedPcluster) != 0;
 
-        // A per-file fixed window serves both index layouts. No whole-index copy or
-        // per-logical-block next-head array grows with the extracted file size.
         var indexBase = headerOffset + ZErofsMapHeader.Size;
         var indexLength = inode.DataLayout == ErofsInode.DataLayoutCompactIndexes
             ? checked((long)totalIdx * 4 + 64)
@@ -259,7 +257,6 @@ public sealed partial class ErofsParser
             while (lcn < totalIdx)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                // Inference inspects only a bounded prefix of each selected inode.
                 if (observer is not null && lcn >= 4096) return;
                 var lc = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn, out var ebase, out var compacted4bInitial, out var compacted2b, cachedIndex);
                 if (lc.Type == LclusterTypeNonHead)
@@ -279,8 +276,6 @@ public sealed partial class ErofsParser
                 }
 
 
-                // The outer loop jumps to this next head, so each intervening entry
-                // is visited once; lookahead stays linear without a full-file map.
                 var nextLcn = lcn + 1;
                 while (nextLcn < totalIdx)
                 {

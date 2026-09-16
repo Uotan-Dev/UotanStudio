@@ -392,8 +392,6 @@ public sealed class F2fsParser : IDisposable
     {
         using var ms = new MemoryStream();
         WriteFileData(nid, inode, ms);
-        // 直接从 MemoryStream 内部缓冲解码，避免 ToArray 的整份复制。
-        // Decode from the MemoryStream's internal buffer to skip the ToArray copy.
         return System.Text.Encoding.UTF8.GetString(ms.GetBuffer().AsSpan(0, (int)ms.Length));
     }
 
@@ -563,8 +561,6 @@ public sealed class F2fsParser : IDisposable
             var inSeg = natBlockIndex % (uint)_blocksPerSeg;
             var secondCopy = (_natVersionBitmap[natBlockIndex / 8] & (0x80 >> (int)(natBlockIndex % 8))) != 0;
             var natBlockAddress = checked(_superblock.NatBlkaddr + segOff * (uint)_blocksPerSeg * 2 + inSeg + (secondCopy ? (uint)_blocksPerSeg : 0));
-            // NAT 块缓存：同一 NAT 块会被大量 nid 重复读取，命中时避免整块重读。
-            // NAT block cache: the same NAT block is re-read for many nids; a hit skips the full re-read.
             if (!_natBlockCache.TryGetValue(natBlockIndex, out var natBlock))
             {
                 natBlock = ReadBlockChecked(natBlockAddress, $"NAT block for nid {nid}");

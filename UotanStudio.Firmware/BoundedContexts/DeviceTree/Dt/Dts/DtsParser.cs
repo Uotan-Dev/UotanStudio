@@ -1,4 +1,4 @@
-﻿
+
 
 using System.Buffers.Binary;
 using System.Text;
@@ -1130,7 +1130,6 @@ internal sealed class DtsParser
             return value;
         }
 
-        // Numeric literal — delegate to existing hex/decimal parser.
         if (char.IsDigit(CurrentChar()) || CurrentChar() == '-')
         {
             return (long)ParseHexOrDecimal64();

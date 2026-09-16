@@ -48,11 +48,6 @@ internal class LinuxUsbDevice : UsbDevice
         }
         _fd.SetFd(fd);
 
-        // Claim the primary interface plus any additional requested interfaces (e.g.
-        // CDC-ACM control + data). A failure to claim any of them fails the open so the
-        // session is never half-claimed.
-        // <para>声明主接口及所有附加请求接口（例如 CDC-ACM 控制 + 数据）。
-        // 任一接口声明失败都会导致打开失败，避免会话处于半声明状态。</para>
         var interfacesToClaim = new List<byte>(ClaimedInterfaceIds);
         if (InterfaceId is >= 0 and <= byte.MaxValue && !interfacesToClaim.Contains((byte)InterfaceId))
         {
@@ -85,10 +80,6 @@ internal class LinuxUsbDevice : UsbDevice
         if (n != 0)
         {
             ioctl(Fd, USBDEVFS_DISCONNECT, ref ifc);
-            // udev may rebind a kernel driver right after the disconnect, so retry the claim
-            // instead of failing on the first EBUSY. Matches libusb's auto-detach behaviour.
-            // <para>udev 可能在分离后立即重新绑定内核驱动，因此重试几次而不是首次 EBUSY 即失败；
-            // 与 libusb 的自动分离行为一致。</para>
             for (var attempt = 0; attempt < 3; attempt++)
             {
                 n = ioctl(Fd, USBDEVFS_CLAIMINTERFACE, ref ifc);
@@ -434,8 +425,6 @@ internal class LinuxUsbDevice : UsbDevice
         {
             Ep = Ep_out,
             Len = 0,
-            // usbfs treats 0 as "no timeout"; map the -1 sentinel accordingly.
-            // <para>usbfs 将 0 视为"无超时"；因此将 -1 哨兵映射为 0。</para>
             Timeout = timeoutMs == UsbTransferPolicies.InfiniteTimeoutMs ? 0 : (uint)timeoutMs,
             Data = IntPtr.Zero
         };
@@ -466,8 +455,6 @@ internal class LinuxUsbDevice : UsbDevice
 
         ValidateBufferRange(buffer, offset, length);
 
-        // Interrupt endpoints cannot use the USBDEVFS_BULK ioctl; they require an URB of
-        // type USBDEVFS_URB_TYPE_INTERRUPT, so reuse the async URB machinery synchronously.
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
         var transferred = SubmitUrbAsync(endpointAddress, buffer, offset, length, effectiveTimeoutMs, CancellationToken.None, USBDEVFS_URB_TYPE_INTERRUPT).GetAwaiter().GetResult();
         return transferred == 0
@@ -500,8 +487,6 @@ internal class LinuxUsbDevice : UsbDevice
         }
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
-        // usbfs treats 0 as "no timeout"; map the -1 sentinel accordingly.
-        // <para>usbfs 将 0 视为"无超时"；将 -1 哨兵映射为 0。</para>
         if (effectiveTimeoutMs == UsbTransferPolicies.InfiniteTimeoutMs)
         {
             effectiveTimeoutMs = 0;
@@ -641,15 +626,12 @@ internal class LinuxUsbDevice : UsbDevice
             }
             catch (OperationCanceledException)
             {
-                // Cancelled while the URB is still queued: discard and drain it so the pinned
-                // URB can be freed and the kernel does not keep a stale reference.
                 DiscardPendingUrb(urbHandle);
                 throw;
             }
 
             if (pollResult == 0)
             {
-                // Timeout: discard the pending URB and drain it so the pinned URB can be freed.
                 DiscardPendingUrb(urbHandle);
                 return 0;
             }
@@ -659,7 +641,6 @@ internal class LinuxUsbDevice : UsbDevice
                 return err == EINTR ? (uint)0 : throw new IOException($"USB async poll failed: {err}");
             }
 
-            // Reap the completed URB and read its status/Actual_length.
             var reaped = IntPtr.Zero;
             var reapCode2 = (IntPtr.Size == 8) ? USBDEVFS_REAPURBNDELAY_X86_64 : USBDEVFS_REAPURBNDELAY_X86;
             if (ioctl(Fd, reapCode2, ref reaped) < 0)

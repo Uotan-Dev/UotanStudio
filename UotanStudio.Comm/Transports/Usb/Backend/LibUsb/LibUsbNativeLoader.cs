@@ -115,10 +115,6 @@ internal static partial class LibUsbNativeLoader
         RegisterResolverOnce();
         return handle;
 #else
-        // netstandard2.0: pre-load via dlopen/LoadLibraryW so the bare SONAME
-        // probe in LibUsbFinder.IsNativeRuntimePresent can resolve.
-        // <para>netstandard2.0：经 dlopen/LoadLibraryW 预加载，使
-        // LibUsbFinder.IsNativeRuntimePresent 中的裸 SONAME 探测可解析。</para>
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX) || RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             return Dlopen(fullPath, RtlNowLocal);

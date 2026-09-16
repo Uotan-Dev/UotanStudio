@@ -77,7 +77,6 @@ public sealed class FastbootFactory : IProtocolFactory
         {
             var info = transport.DeviceInfo;
 
-            // Check VID/PID if specified.
             if (_vendorId.HasValue && info.VendorId != _vendorId.Value)
             {
                 return false;
@@ -91,8 +90,6 @@ public sealed class FastbootFactory : IProtocolFactory
             var hasFastbootInterface = HasStandardFastbootInterface(info);
             if (!hasFastbootInterface)
             {
-                // Strict by default: without a standard fastboot interface the device is only
-                // accepted in opt-in mode and only when an exact VID+PID profile matches.
                 if (MatchMode != FastbootMatchMode.InterfaceOrKnownVidPid)
                 {
                     return false;
@@ -133,9 +130,6 @@ public sealed class FastbootFactory : IProtocolFactory
             }
         }
 
-        // Fall back to the device-level interface codes when no per-interface descriptors
-        // are available. Unlike the observed interface list, these are only trusted when
-        // the backend actually observed/inferred a fastboot triple, never on their absence.
         return info.InterfaceClass == FastbootConstants.FastbootInterfaceClass &&
                info.InterfaceSubClass == FastbootConstants.FastbootInterfaceSubclass &&
                info.InterfaceProtocol == FastbootConstants.FastbootInterfaceProtocol;

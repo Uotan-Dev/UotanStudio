@@ -35,6 +35,7 @@ public sealed class DebugBridgeRouteTests
             await stream.WriteAsync(Encoding.ASCII.GetBytes($"FAIL{failure.Length:X4}{failure}"), ct);
         }, ct);
         using var session = DebugBridgeRoute.OpenAdb("TARGET", () => { opens++; throw new InvalidOperationException("USB opened"); }, port: port);
+        Assert.NotNull(session);
         var error = Assert.Throws<IOException>(session.Connect);
         Assert.Contains(failure, error.Message);
         Assert.Equal(0, opens);
@@ -54,6 +55,7 @@ public sealed class DebugBridgeRouteTests
         using var running = new TcpListener(IPAddress.Loopback, port);
         running.Start();
         using var session = DebugBridgeRoute.OpenAdb("A", () => { opens++; throw new DirectSelectedException(); }, port: port);
+        Assert.NotNull(session);
         Assert.True(session.Connection.UsesServer);
         Assert.Equal(1, opens);
     }

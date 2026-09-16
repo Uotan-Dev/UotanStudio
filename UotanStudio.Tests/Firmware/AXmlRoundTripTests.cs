@@ -24,8 +24,6 @@ public class AXmlRoundTripTests
 
         var doc = AXmlParser.Parse(bytes);
 
-        // 魔数与头部
-        // Magic and header.
         Assert.Equal(0x0003, bytes[0] | (bytes[1] << 8));
         Assert.Equal(8, bytes[2] | (bytes[3] << 8));
 

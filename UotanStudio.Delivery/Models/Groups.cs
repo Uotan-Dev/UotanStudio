@@ -4,7 +4,8 @@ using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 
 namespace UotanStudio.Services.Delivery;
 
-/// <summary>Explicit group capacity and membership, shared by Super and Payload.</summary>
+/// <summary><para>显式的分组容量与成员关系，Super 与 Payload 共用。</para>
+/// Explicit group capacity and membership, shared by Super and Payload.</summary>
 internal sealed record DeliveryGroup
 {
     public string Name { get; init; } = "";
@@ -12,8 +13,14 @@ internal sealed record DeliveryGroup
     public List<string> Partitions { get; init; } = [];
 }
 
+/// <summary><para>解析、格式化并从源容器元数据还原显示的动态分区组配置。</para>
+/// Parses, formats, and restores display dynamic partition group configuration from source container metadata.</summary>
 internal static class DeliveryGroups
 {
+    /// <summary>
+    /// <para>把逐行“组名 容量字节 分区1 分区2 …”文本解析为分组列表；校验组名、容量与分区是否合法且不重复。</para>
+    /// Parses per-line "group size partitions…" text into a list of groups, validating names, sizes, and partitions for uniqueness.
+    /// </summary>
     internal static List<DeliveryGroup> Parse(string text)
     {
         if (text.Length > 1024 * 1024) throw new InvalidDataException("分组配置超过 1 MiB。");
@@ -33,9 +40,15 @@ internal static class DeliveryGroups
         return result;
     }
 
+    /// <summary><para>把分组列表格式化为逐行“组名 容量字节 分区…”文本。</para>
+    /// Formats a group list into per-line "group size partitions…" text.</summary>
     internal static string Format(IEnumerable<DeliveryGroup> groups) => string.Join('\n', groups.Select(g =>
         $"{g.Name} {g.Size.ToString(CultureInfo.InvariantCulture)} {string.Join(' ', g.Partitions)}"));
 
+    /// <summary>
+    /// <para>从源容器元数据重建分组：Payload 来源解析动态分区配置，Super 来源解析 LP 元数据中的分组与分区归属。</para>
+    /// Rebuilds groups from source container metadata: Payload sources parse the dynamic partition config, Super sources parse LP metadata groups and memberships.
+    /// </summary>
     internal static List<DeliveryGroup> FromSource(DeliverySourceContainerSettings settings)
     {
         if (settings.Kind == "payload")

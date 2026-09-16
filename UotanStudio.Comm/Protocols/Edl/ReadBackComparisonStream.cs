@@ -79,8 +79,6 @@ internal sealed class ReadBackComparisonStream(Stream source, string filename) :
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // The old path finished reading the device before touching the source.
-            // 原路径先完成设备回读再访问源；源失败也须先让协议消费完设备数据。
             _sourceError = ExceptionDispatchInfo.Capture(ex);
             return 0;
         }

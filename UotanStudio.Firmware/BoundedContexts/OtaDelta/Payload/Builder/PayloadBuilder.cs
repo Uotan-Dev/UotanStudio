@@ -312,7 +312,6 @@ public sealed partial class PayloadBuilder : IDisposable
             }
             if (manifest.CalculateSize() > 64 * 1024 * 1024) throw new PayloadGenerationException("Payload manifest exceeds 64 MiB.");
             var manifestBytes = manifest.ToByteArray();
-            // An unsigned v2 payload has a zero-sized metadata signature, not a dummy blob.
             var header = PayloadHeaderBuilder.BuildHeader((ulong)manifestBytes.Length, 0);
             output.Write(header);
             output.Write(manifestBytes);

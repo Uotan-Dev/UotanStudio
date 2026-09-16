@@ -40,8 +40,6 @@ internal static class BinaryDeltaPatch
         using var diff = Decoder(diffRange, extended ? header[6] : (byte)1);
         using var extra = Decoder(extraRange, extended ? header[7] : (byte)1);
         using var boundedOutput = new CountingWriteStream(output, outputLength, leaveOpen: true, cancellationToken: ct);
-        // 64KB 工作缓冲租借自 ArrayPool，替代每次调用的两份分配。
-        // The 64KB working buffers are rented from ArrayPool instead of two per-call allocations.
         var deltaBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(64 * 1024);
         var oldBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(deltaBuffer.Length);
         try
@@ -186,8 +184,6 @@ internal static class BinaryDeltaPatch
 
     internal static void CopyExactly(Stream source, Stream target, long length, CancellationToken ct = default)
     {
-        // 缓冲租借自 ArrayPool，替代每次调用分配 64KB。
-        // The buffer is rented from ArrayPool instead of a fresh 64KB per call.
         var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(64 * 1024);
         try
         {

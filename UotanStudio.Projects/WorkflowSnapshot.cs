@@ -108,16 +108,14 @@ public sealed class ConnectionDto
     public string TargetConnectorTitle { get; set; } = string.Empty;
 
     /// <summary>
-    /// <para>源节点实例 ID（可选；旧版工程文件可能缺失，缺失时按连接器标题匹配重建）。</para>
-    /// Source node instance ID (optional; legacy project files may omit it, in which case rebuild falls
-    /// back to connector-title matching).
+    /// <para>源节点实例 ID（可选；缺失时按连接器标题匹配重建）。</para>
+    /// Source node instance ID (optional; when omitted, rebuild falls back to connector-title matching).
     /// </summary>
     public string? SourceInstanceId { get; set; }
 
     /// <summary>
-    /// <para>目标节点实例 ID（可选；旧版工程文件可能缺失，缺失时按连接器标题匹配重建）。</para>
-    /// Target node instance ID (optional; legacy project files may omit it, in which case rebuild falls
-    /// back to connector-title matching).
+    /// <para>目标节点实例 ID（可选；缺失时按连接器标题匹配重建）。</para>
+    /// Target node instance ID (optional; when omitted, rebuild falls back to connector-title matching).
     /// </summary>
     public string? TargetInstanceId { get; set; }
 }

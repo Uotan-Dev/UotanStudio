@@ -863,10 +863,6 @@ public sealed partial class ErofsParser : IDisposable
             throw new InvalidDataException($"Inode nid {nid} is out of range.");
         }
 
-        // 单次读取 inode 最大长度（含 advise 字段），按 advise 判定 compact/extended 后解释，
-        // 消除先读 2 字节 advise 再全量读的每文件两次 IO。
-        // Single read of the maximum inode size (covering the advise field) interpreted as
-        // compact/extended per the advise flags, removing the two reads per inode.
         var available = (int)Math.Min(ErofsInode.ExtendedSize, _imageSize - offset);
         var data = ReadBytes(offset, available, $"Inode nid {nid}");
         var advise = BinaryPrimitives.ReadUInt16LittleEndian(data);

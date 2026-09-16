@@ -154,8 +154,6 @@ public sealed class Ext4FormatHandler : IFormatHandler
             }
 
             var options = RepackMetadata.OptionsFor(inputPath, FormatName);
-            // 仅当调用方提供进度时才启用计数写入流；否则保留可寻址输出，避免激活不可寻址路径。
-            // Only wrap with a byte counter when the caller requests progress; otherwise keep the seekable output.
             var progressSink = progress is null ? null : FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
             Ext4Builder.Build(inputPath, outputPath, new Ext4Options
             {

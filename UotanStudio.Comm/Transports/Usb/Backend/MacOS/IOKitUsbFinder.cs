@@ -62,16 +62,6 @@ internal static partial class IOKitUsbFinder
         LastScannedDeviceCount = 0;
         LastMatchedDeviceCount = 0;
 
-        // Build a (vid,pid) -> interfaces[] table ONCE by enumerating the
-        // IOUSBInterface plane. IOUSBInterface services inherit IdVendor/
-        // IdProduct from their parent IOUSBDevice (verified by probe), so we
-        // can pair interfaces to devices by VID/PID without IORegistryEntryGetParent
-        // (which is not exported on current macOS) or IORegistryEntryGetRegistryEntryID
-        // (which segfaults against IOUSBDevice services).
-        // <para>枚举 IOUSBInterface 平面一次，构建 (vid,pid) -> interfaces[] 表。
-        // IOUSBInterface 服务从父 IOUSBDevice 继承 IdVendor/IdProduct（已由探针验证），
-        // 故可按 VID/PID 将接口配对到设备，无需 IORegistryEntryGetParent（当前 macOS
-        // 不导出）或 IORegistryEntryGetRegistryEntryID（对 IOUSBDevice 服务段错误）。</para>
         var interfaceTable = BuildInterfaceTable();
 
         var matching = IntPtr.Zero;
@@ -89,8 +79,6 @@ internal static partial class IOKitUsbFinder
 
             var kr = IOKitUsbAPI.IOServiceGetMatchingServices(IntPtr.Zero, matching, out var iter);
             UsbTrace.Log($"IOKitUsbFinder: IOServiceGetMatchingServices kr={kr} iter={iter}");
-            // IOServiceGetMatchingServices consumes the matching dictionary (+1 ref -> 0).
-            // <para>IOServiceGetMatchingServices 消费匹配字典（+1 引用 -> 0）。</para>
             matching = IntPtr.Zero;
             if (kr != IOKitUsbAPI.KIOReturnSuccess || iter == IntPtr.Zero)
             {
@@ -124,18 +112,12 @@ internal static partial class IOKitUsbFinder
                             out var ifcSubClass,
                             out var ifcProtocol))
                     {
-                        // Metadata read failed (e.g. the service disappeared mid-scan).
-                        // Skip it rather than silently dropping a partially-known device.
-                        // <para>元数据读取失败（例如服务在扫描中消失）。跳过它而非静默丢弃
-                        // 郸分已知的设备。</para>
                         UsbTrace.Log($"IOKitUsbFinder: TryReadDeviceMetadata FAILED for service, skipping.");
                         continue;
                     }
 
                     UsbTrace.Log($"IOKitUsbFinder: dev rid={registryEntryId} vid={vid:X4} pid={pid:X4} serial='{serial}' ifClass={ifcClass}");
 
-                    // Apply the device filter (vendor/product/interface codes).
-                    // <para>应用设备过滤器（厂商/产品/接口码）。</para>
                     if (filter?.VendorId is ushort filterVid && vid != filterVid)
                     {
                         continue;
@@ -176,38 +158,10 @@ internal static partial class IOKitUsbFinder
                         UsbDeviceType = UsbDeviceType.MacOS,
                     };
 
-                    // IMPORTANT: do NOT call dev.CreateHandle() during enumeration.
-                    // Enumeration is metadata discovery only — opening the IOKit
-                    // COM-vtable on a list-only host SIGSEGVs the process (exit 139)
-                    // at teardown. Sessions open the device lazily.
-                    // See README "Platform Notes (macOS IOKit backend)".
-                    // <para>重要：枚举期间切勿调用 dev.CreateHandle()。枚举仅为元数据
-                    // 发现——在仅需列表的宿主上打开 IOKit COM-vtable 会在拆除时使进程
-                    // SIGSEGV（退出码 139）。会话按需惰性打开设备。
-                    // 详见 README「平台注意事项（macOS IOKit 后端）」。</para>
-
                     devices.Add(dev);
                 }
                 finally
                 {
-                    // IMPORTANT: do NOT IOObjectRelease(service) here. The iterator
-                    // returned a +0 reference (not +1) — releasing it destroys the
-                    // service the iterator still points to, and IOIteratorNext then
-                    // returns the same handle forever (verified: loop stuck on
-                    // service #1 = 4115). Leave the service ref alone; the iterator
-                    // itself is released in the outer finally.
-                    // <para>重要：此处切勿 IOObjectRelease(service)。迭代器返回 +0 引用
-                    // （非 +1）——释放之会摧毁迭代器仍指向的服务，使 IOIteratorNext 永远
-                    // 返回同一句柄（已验证：循环卡在 service #1 = 4115）。保持服务引用
-                    // 不动；迭代器本身在外层 finally 中释放。</para>
-
-                    // Advance the iterator in finally so EVERY path — including the
-                    // `continue` statements above (filter mismatch, metadata failure) —
-                    // moves to the next service. Without this, a filter mismatch keeps
-                    // `next` frozen and the loop spins forever on one service.
-                    // <para>在 finally 中推进迭代器，使每条路径——包括上面的 `continue`
-                    // （过滤器不匹配、元数据失败）——都移动到下一个服务。否则过滤器不匹配
-                    // 会使 `next` 冻结，循环在同一服务上空转。</para>
                     next = IOKitUsbAPI.IOIteratorNext(iterator);
                 }
             }
@@ -215,10 +169,6 @@ internal static partial class IOKitUsbFinder
         }
         catch (DllNotFoundException ex)
         {
-            // IOKit.framework should always be present on macOS; if not, degrade
-            // to an empty list and surface through diagnostics.
-            // <para>IOKit.framework 在 macOS 上应始终存在；若不存在则降级为空列表并通过
-            // 诊断暴露。</para>
             UsbTrace.Log($"IOKitUsbFinder: DllNotFoundException caught: {ex.Message}");
             LastCopyDevicesSucceeded = false;
             return devices;
@@ -279,50 +229,17 @@ internal static partial class IOKitUsbFinder
         ifcSubClass = null;
         ifcProtocol = null;
 
-        // Skip IORegistryEntryGetRegistryEntryID — it segfaults on current macOS
-        // when called against an IOUSBDevice service (verified: the native call
-        // crashes the process with no managed exception). Use the service handle
-        // itself (uint mach_port_t) as the identity key instead, stored in the low
-        // 32 bits of registryEntryId so IOKitUsbDevice.RegistryEntryId stays a
-        // ulong. Note this is only a display/identity hint — reopening is done by
-        // IOService-plane DevicePath, never by this handle value.
-        // <para>跳过 IORegistryEntryGetRegistryEntryID——在当前 macOS 上对 IOUSBDevice
-        // 服务调用会段错误（已验证：native 调用崩溃进程且无托管异常）。改用服务句柄
-        // 本身（uint mach_port_t）作为标识键，存放于 registryEntryId 低 32 位，使
-        // IOKitUsbDevice.RegistryEntryId 保持 ulong。注意这仅用于展示/标识——重开设备
-        // 始终走 IOService 平面 DevicePath，绝不使用此句柄值。</para>
         UsbTrace.Log($"IOKitUsbFinder: TryReadDeviceMetadata entry, service={service}");
         registryEntryId = (uint)service.ToInt64();
 
         vid = ReadCFNumberUshort(service, "IdVendor");
         pid = ReadCFNumberUshort(service, "IdProduct");
 
-        // Serial number: the IORegistry publishes it as a CFString under
-        // "USB Serial Number" (or "kUSBSerialNumberString" = "serial number").
-        // <para>序列号：IORegistry 以 CFString 形式发布于 "USB Serial Number"
-        // （或 "kUSBSerialNumberString" = "serial number"）。</para>
         serial = ReadCFString(service, "USB Serial Number") ?? ReadCFString(service, "serial number");
 
-        // Interface metadata: pair this device to its IOUSBInterface children by
-        // VID/PID. IOUSBInterface services inherit IdVendor/IdProduct from their
-        // parent IOUSBDevice (verified by probe), so the (vid,pid) -> interfaces[]
-        // table built once at the top of FindDevice() carries the full interface
-        // list — including every alternate-setting's class/subclass/protocol —
-        // which lets the matcher find the ADB interface (0xFF/0x42/0x01) even when
-        // it is not the first interface.
-        // <para>接口元数据：按 VID/PID 将本设备与其 IOUSBInterface 子项配对。
-        // IOUSBInterface 服务从父 IOUSBDevice 继承 IdVendor/IdProduct（已由探针验证），
-        // 故 FindDevice() 顶部一次性构建的 (vid,pid) -> interfaces[] 表携带完整接口
-        // 列表——包括每个备用设置的类/子类/协议——使匹配器即便 ADB 接口
-        // （0xFF/0x42/0x01）非首个接口时也能找到。</para>
         if (interfaceTable.TryGetValue((vid, pid), out var pairedInterfaces) && pairedInterfaces.Count > 0)
         {
             interfaces = pairedInterfaces;
-            // Surface the FIRST interface's codes for UsbDeviceFilter compatibility
-            // (the matcher checks one interface-class tuple). Callers needing a
-            // specific alternate setting should filter by the full interface list.
-            // <para>为 UsbDeviceFilter 兼容暴露首个接口的码（匹配器检查一组接口类
-            // 元组）。需特定备用设置的调用方应按完整接口列表过滤。</para>
             var first = pairedInterfaces[0];
             ifcClass = first.Class;
             ifcSubClass = first.SubClass;
@@ -402,8 +319,6 @@ internal static partial class IOKitUsbFinder
                         value = unchecked((uint)v64);
                         return true;
                     default:
-                        // Unknown numeric type — fall back to SInt32 widening.
-                        // <para>未知数值类型——回退到 SInt32 widening。</para>
                         uint fallback = 0;
                         if (!CFNumberGetValueU32(cfValue, 3, ref fallback))
                         {
@@ -461,8 +376,6 @@ internal static partial class IOKitUsbFinder
 
             try
             {
-                // CFStringGetCString writes a NUL-terminated UTF-8 buffer.
-                // <para>CFStringGetCString 写入 NUL 终止的 UTF-8 缓冲。</para>
                 var buffer = new byte[256];
                 bool ok;
                 unsafe
@@ -525,7 +438,7 @@ internal static partial class IOKitUsbFinder
 
             var kr = IOKitUsbAPI.IOServiceGetMatchingServices(IntPtr.Zero, matching, out var iter);
             UsbTrace.Log($"IOKitUsbFinder: BuildInterfaceTable GetMatchingServices kr={kr} iter={iter}");
-            matching = IntPtr.Zero; // consumed by GetMatchingServices
+            matching = IntPtr.Zero;
             if (kr != IOKitUsbAPI.KIOReturnSuccess || iter == IntPtr.Zero)
             {
                 return table;
@@ -543,8 +456,6 @@ internal static partial class IOKitUsbFinder
                     var pid = ReadCFNumberUshort(ifaceService, "IdProduct");
                     if (vid == 0 || pid == 0)
                     {
-                        // Some host-side interfaces may not carry VID/PID; skip them.
-                        // <para>某些主机侧接口可能不携带 VID/PID；跳过。</para>
                         continue;
                     }
 
@@ -565,11 +476,6 @@ internal static partial class IOKitUsbFinder
                 }
                 finally
                 {
-                    // IOIteratorNext returns +0 — do NOT release the service handle
-                    // here (releasing it makes the iterator return the same handle
-                    // forever, verified earlier). Only the iterator itself is released.
-                    // <para>IOIteratorNext 返回 +0——此处切勿释放服务句柄（释放之会使
-                    // 迭代器永远返回同一句柄，前已验证）。仅释放迭代器本身。</para>
                 }
 
                 next = IOKitUsbAPI.IOIteratorNext(iterator);
@@ -577,11 +483,6 @@ internal static partial class IOKitUsbFinder
         }
         catch
         {
-            // Best-effort: if the IOUSBInterface enumeration fails, return whatever
-            // we have so far (possibly empty). The device still enumerates with
-            // VID/PID/serial; only interface-class filtering degrades.
-            // <para>尽力而为：若 IOUSBInterface 枚举失败，返回目前已收集者（可能为空）。
-            // 设备仍以 VID/PID/序列号枚举；仅接口类过滤降级。</para>
         }
         finally
         {

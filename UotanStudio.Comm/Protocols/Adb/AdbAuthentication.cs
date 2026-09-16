@@ -266,8 +266,6 @@ public sealed class AdbAuthentication : IDisposable
             return;
         }
 
-        // Unix: atomically create with 0600 via FileStreamOptions.UnixCreateMode.
-        // Fall back to File.WriteAllBytes on older runtimes that lack UnixCreateMode.
         var options = new FileStreamOptions
         {
             Mode = FileMode.Create,
@@ -280,7 +278,6 @@ public sealed class AdbAuthentication : IDisposable
         }
         catch (PlatformNotSupportedException)
         {
-            // Runtime does not support UnixCreateMode; proceed with default mode.
         }
 
         using (var fs = new FileStream(path, options))
@@ -314,7 +311,6 @@ public sealed class AdbAuthentication : IDisposable
     /// <returns>The parsed value. 解析后的值。</returns>
     private static BigInteger FromBigEndianUnsigned(byte[] bytes)
     {
-        // BigInteger expects little-endian input; reverse and keep the value positive.
         var littleEndian = new byte[bytes.Length];
         for (var i = 0; i < bytes.Length; i++)
         {

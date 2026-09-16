@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Zucchini;
@@ -37,16 +37,11 @@ internal static class OperationProcessor
             UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.BinaryDeltaPatch.Apply(oldData, patch, output, output.Length, ct);
         else
         {
-            // These codecs need random access to bounded operation buffers.
             const int maximumOperationBytes = 256 * 1024 * 1024;
             if (oldData.Length > maximumOperationBytes || patch.Length > maximumOperationBytes || output.Length > maximumOperationBytes)
                 throw new InvalidDataException("This delta codec exceeds the supported 256 MiB operation limit.");
             if (op.Type == InstallOperation.Types.Type.Puffdiff)
             {
-                // PuffDiff 支持 Span 输入：old/patch 缓冲租借自 ArrayPool（finally 归还），
-                // 消除最高 2×256 MiB 的 LOH 分配。
-                // PuffDiff accepts Span inputs: old/patch buffers are rented from ArrayPool
-                // (returned in finally), removing up to 2x256 MiB LOH allocations.
                 var oldBytes = ArrayPool<byte>.Shared.Rent(checked((int)oldData.Length));
                 var patchBytes = ArrayPool<byte>.Shared.Rent(checked((int)patch.Length));
                 try
@@ -65,11 +60,6 @@ internal static class OperationProcessor
             }
             else if (op.Type == InstallOperation.Types.Type.Zucchini)
             {
-                // old/result 缓冲池化；解码数据长度不等于输出长度，保留可扩展
-                // MemoryStream 并用 GetBuffer() 零复制取出（patch 流直接喂解码器，免物化）。
-                // old/result buffers are pooled; the decoded size differs from the output size,
-                // so keep an expandable MemoryStream and extract via GetBuffer() (zero copy).
-                // The patch stream feeds the decoder directly, avoiding full materialization.
                 var oldBytes = ArrayPool<byte>.Shared.Rent(checked((int)oldData.Length));
                 var result = ArrayPool<byte>.Shared.Rent(checked((int)output.Length));
                 try
@@ -93,8 +83,6 @@ internal static class OperationProcessor
             }
             else if (op.Type is InstallOperation.Types.Type.Lz4diffBsdiff or InstallOperation.Types.Type.Lz4diffPuffdiff)
             {
-                // Lz4DiffApplier 仅提供 byte[] API，保持精确长度分配（原行为）。
-                // Lz4DiffApplier only exposes a byte[] API; keep exact-length allocations (original behavior).
                 var oldBytes = new byte[checked((int)oldData.Length)];
                 var patchBytes = new byte[checked((int)patch.Length)];
                 oldData.ReadExactly(oldBytes);
@@ -155,22 +143,10 @@ internal static class OperationProcessor
             or InstallOperation.Types.Type.ReplaceXz;
         if (isReplace)
         {
-            // No outer write lock: bounded read (shared payload stream guarded by streamLock) and
-            // decompression/hash verification run in parallel; only the output FileStream's Seek+Write
-            // is serialized through ExtentWriteStream's syncRoot (writeLock).
-            // 无外层写锁：有界读取（共享载荷流由 streamLock 保护）与解压/哈希校验并行进行；
-            // 仅输出 FileStream 的 Seek+Write 通过 ExtentWriteStream 的 syncRoot（writeLock）串行化。
-            // Positional reads keep raw file cursors independent; transformed streams retain
-            // the shared lock around each bounded read instead of around decoding.
-            // 原始文件使用独立偏移读取，转换流仍按次读取加锁；解码不持有该锁。
             using var cursor = new IndependentReadStream(stream, streamLock);
             using var bounded = new BoundedReadStream(cursor, dataPos, dataLength, leaveOpen: true);
             using var hashing = new VerifyingReadStream(bounded, op.DataSha256Hash?.ToByteArray());
             cancellationToken.ThrowIfCancellationRequested();
-            // Decode-and-verify in one pass: the hashing stream feeds the decoder, Complete() checks
-            // accumulated digest (throws on truncation or hash mismatch before the temp output is used).
-            // 边解码边校验：哈希流直接喂给解码器，Complete() 校验累计摘要
-            // （截断或哈希不符时在临时输出被使用前抛错）。
             ProcessReplaceStream(op, hashing, outFile, blockSize, writeLock, cancellationToken, byteProgress);
             hashing.Complete();
             return;
@@ -179,12 +155,6 @@ internal static class OperationProcessor
         if (op.Type is not (InstallOperation.Types.Type.Zero or InstallOperation.Types.Type.Discard))
             throw new PayloadUnsupportedOperationException($"Source-dependent operation {op.Type} cannot run on the parallel path.", op.Type.ToString());
         if (dataLength != 0) throw new PartitionExtractionException("ZERO and DISCARD operations cannot carry a data blob.", string.Empty);
-        // No data blob is carried here (dataLength must be 0), so there is nothing to hash-verify.
-        // ZERO writes outside writeLock; only the underlying FileStream's Seek+Write is serialized
-        // inside ExtentWriteStream via its syncRoot. DISCARD writes nothing.
-        // 此处不携带数据 blob（dataLength 必为 0），无哈希校验需要执行。
-        // ZERO 在 writeLock 之外写零；仅底层 FileStream 的 Seek+Write 在 ExtentWriteStream
-        // 内部通过其 syncRoot 串行化。DISCARD 不写任何数据。
         if (op.Type == InstallOperation.Types.Type.Zero)
         {
             cancellationToken.ThrowIfCancellationRequested();

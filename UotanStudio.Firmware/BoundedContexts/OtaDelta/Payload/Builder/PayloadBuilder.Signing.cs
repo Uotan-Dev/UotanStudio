@@ -8,8 +8,6 @@ namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
 
 public sealed partial class PayloadBuilder
 {
-    // update_engine payload_signer.cc: metadata hashes header + manifest; payload hashes
-    // header + manifest + operation blobs, excluding both serialized signature messages.
     private static void WriteSignedPayload(Stream output, FileStream data, DeltaArchiveManifest manifest, RSA key, CancellationToken token)
     {
         var hashAlgorithm = HashAlgorithmName.SHA256;
@@ -18,7 +16,6 @@ public sealed partial class PayloadBuilder
         manifest.SignaturesSize = checked((ulong)signatureSize);
         if (manifest.CalculateSize() > 64 * 1024 * 1024) throw new PayloadGenerationException("Payload manifest exceeds 64 MiB.");
         var manifestBytes = manifest.ToByteArray();
-        // The proto2 signatures_offset field must be present even for an empty data area.
         if (data.Length == 0)
         {
             using var encoded = new MemoryStream();
@@ -52,8 +49,6 @@ public sealed partial class PayloadBuilder
         output.Write(payloadSignature);
     }
 
-    // update_metadata.proto: Signatures.signatures=1; Signature.data=2;
-    // Signature.unpadded_signature_size=3 (fixed32); deprecated version is omitted.
     private static byte[] SerializeSignature(byte[] signature)
     {
         using var nested = new MemoryStream();

@@ -17,9 +17,6 @@ public static class ApkSigningBlock
     /// <returns>分块起始偏移与完整分块字节（含长度前缀与 magic）；不存在时返回 null。</returns>
     public static (long Offset, byte[] Contents)? Find(Stream stream, in ApkZipSections sections)
     {
-        // The block footer ends right before the central directory and is at least 32 bytes:
-        // 8-byte size + 16-byte magic + 8-byte size.
-        // 分块尾部紧邻中央目录之前，至少 32 字节：8 字节长度 + 16 字节 magic + 8 字节长度。
         const long minimumBlockSize = 32;
         if (sections.CentralDirectoryOffset < minimumBlockSize)
         {
@@ -30,9 +27,6 @@ public static class ApkSigningBlock
         var footer = new byte[24];
         stream.ReadExactly(footer);
 
-        // Footer layout per the official spec: [size 8B][magic 16B] — the magic is the LAST
-        // 16 bytes of the block, immediately before the central directory.
-        // 官方规范的尾部布局：[长度 8 字节][magic 16 字节]——magic 是分块最后 16 字节，紧邻中央目录。
         if (!footer.AsSpan(8, 16).SequenceEqual(ApkSignatureConstants.SigningBlockMagic))
         {
             return null;
@@ -44,8 +38,6 @@ public static class ApkSigningBlock
             throw new InvalidDataException("APK Signing Block size fields are inconsistent. APK 签名分块的长度字段不一致。");
         }
 
-        // Full block = 8-byte leading size + payload + 8-byte trailing size + 16-byte magic.
-        // 完整分块 = 8 字节头部长度 + 载荷 + 8 字节尾部长度 + 16 字节 magic。
         var totalSize = checked((long)blockSize + 8);
         var blockOffset = sections.CentralDirectoryOffset - totalSize;
         stream.Seek(blockOffset, SeekOrigin.Begin);
@@ -61,8 +53,6 @@ public static class ApkSigningBlock
     public static List<(uint Id, byte[] Value)> ParsePairs(byte[] blockContents)
     {
         var pairs = new List<(uint, byte[])>();
-        // Payload starts after the leading 8-byte size and stops before the magic + trailer.
-        // 载荷从头部 8 字节之后开始，到 magic + 尾部长度之前结束。
         var payloadLength = blockContents.Length - 24;
         var offset = 8;
         while (offset + 12 <= payloadLength)
@@ -95,9 +85,6 @@ public static class ApkSigningBlock
             payloadLength += 12 + value.Length;
         }
 
-        // Leading/trailing size fields do not count themselves: total = 8 + payload + 8 + 16,
-        // and the recorded size = payload + 8 + 16. The magic is the last 16 bytes.
-        // 头尾长度字段不计自身：总长 = 8 + 载荷 + 8 + 16，记录值 = 载荷 + 8 + 16。magic 位于最后 16 字节。
         var blockSize = payloadLength + 24;
         var block = new byte[checked(blockSize + 8)];
         BinaryPrimitives.WriteUInt64LittleEndian(block.AsSpan(0, 8), (ulong)blockSize);
@@ -123,8 +110,6 @@ public static class ApkSigningBlock
     /// </summary>
     public static long ComputeEocdCentralDirectoryOffset(long zipContentEndOffset, byte[] signingBlock)
     {
-        // The signing block starts where the ZIP entries end; the central directory follows it.
-        // 签名块起始处即 ZIP 条目结束处；中央目录紧随其后。
         return zipContentEndOffset + signingBlock.Length;
     }
 }

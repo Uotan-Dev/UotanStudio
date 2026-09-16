@@ -8,7 +8,12 @@ namespace UotanStudio.Services.Delivery;
 /// <summary><para>钉住的工具发布产物：zip 归档或原始单文件二进制。</para>Pinned tool artifact: a zip archive or a raw single-file binary.</summary>
 internal sealed record DeliveryToolPackage(string Name, string Url, string Sha256, string Prefix, bool Raw = false, string? Member = null);
 
-/// <summary>Downloads pinned tools into a verified archive cache and materializes selected platforms.</summary>
+/// <summary><para>把钉住的工具发布产物下载到可校验的归档缓存，并把选中的平台物化到 staging 目录。
+/// 关键工具的来源与 SHA-256 在下方静态字段逐一钉住；Windows 使用官方 win64 包，
+/// Linux/macOS 部分二进制使用 aspect-build 的 musl 静态链接单文件发布。</para>
+/// Downloads pinned tool releases into a verified archive cache and materializes the selected platforms into staging.
+/// Pinned sources and SHA-256 checksums are declared per package below; Windows uses the official win64 bundle, while
+/// some Linux/macOS binaries use aspect-build's musl static single-file releases.</summary>
 internal sealed class DeliveryToolService(HttpClient client, string cacheDirectory) : IDeliveryTools
 {
     private static readonly SemaphoreSlim CacheGate = new(1, 1);
@@ -22,10 +27,6 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
         "https://dl.google.com/android/repository/platform-tools_r36.0.2-darwin.zip",
         "106A5D31FAD8C1C0C5A180D06F5779767D129D7D5EDBE629005C11A85EEC5B4B", "platform-tools/");
 
-    // zstd 解压工具钉住来源：Windows 使用官方 win64 zip；Linux/macOS 无官方预编译，使用 aspect-build 的
-    // musl 静态链接单文件发布（同一版本、同一发布页，附 SHA256.txt 校验）。
-    // Pinned zstd binaries: official win64 zip for Windows; Linux/macOS use aspect-build's musl static
-    // single-file releases (same version/release page, verified by SHA256.txt).
     internal static readonly DeliveryToolPackage ZstdWindows = new("zstd-1.5.7-win64",
         "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-v1.5.7-win64.zip",
         "ACB4E8111511749DC7A3EBEDCA9B04190E37A17AFEB73F55D4425DBF0B90FAD9", "zstd-v1.5.7-win64/", Member: "zstd.exe");
@@ -45,9 +46,12 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
         "https://github.com/aspect-build/zstd-prebuilt/releases/download/v1.5.6-bcr2/zstd_darwin_amd64",
         "D81BE8618553D7D658E09DA669FFD68EC76D8095161A590C9B8A1A99FCE67CA8", "", Raw: true);
 
-    // GitHub 镜像测速与源选择已统一到 Firmware.SharedKernel 的 HttpDownload。
-    // GitHub mirror probing and source selection are unified in HttpDownload (Firmware.SharedKernel).
-
+    /// <summary>
+    /// <para>为启用的平台准备 platform-tools 与（选择压缩镜像时）zstd，裁掉不用的二进制，
+    /// 并按 Recovery/组织式 Super 的约定把所需 Linux 静态 zstd 别名物化到 bin/android。</para>
+    /// Prepares platform-tools and, when compressed images are selected, zstd for each enabled platform, trims unused
+    /// binaries, and materializes the Linux static zstd aliases into bin/android per the Recovery/organized Super convention.
+    /// </summary>
     public async Task PrepareAsync(DeliveryPlan plan, string directory, IProgress<DeliveryProgress>? progress, CancellationToken token)
     {
         var platforms = new List<(string Name, DeliveryToolPackage Package)>();
@@ -66,10 +70,6 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
                 throw new InvalidDataException("Tool archive does not contain fastboot.");
             if (plan.Files.Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase)))
                 await PrepareZstdAsync(name, target, plan, progress, token).ConfigureAwait(false);
-            // Both fastboot scripts and Recovery only use fastboot (plus zstd
-            // when a compressed Super image is selected). Remove the rest of
-            // the platform-tools payload from every delivery shape, including
-            // organized Super ZIP output.
             TrimPlatformTools(name, target);
         }
         if (plan.Recovery && !plan.PackPayload && !plan.PackSuper
@@ -80,11 +80,6 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
             || (plan.Recovery && !plan.PackPayload && !plan.PackSuper
                 && plan.Files.Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase))))
         {
-            // Recovery's package_extract_zstd convention uses an Android
-            // scoped helper. Reuse the pinned Linux static binary when it was
-            // prepared for this delivery and expose it at the vendor path.
-            // Publish all available statically linked Linux variants. The historical
-            // `zstd` member remains the arm64 default; the wrapper selects aliases.
             var mappings = new[] { (Source: "zstd-arm64", Name: "zstd"), (Source: "zstd-arm64", Name: "zstd-arm64"),
                 (Source: "zstd", Name: "zstd-x86_64"), (Source: "zstd-loong64", Name: "zstd-loong64") };
             var linuxDirectory = Path.Combine(directory, "bin", "Linux");
@@ -106,8 +101,6 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
     /// Removes binaries the delivery scripts never use, keeping only fastboot and its runtime dependencies.</summary>
     internal static void TrimPlatformTools(string name, string target)
     {
-        // 脚本只用 fastboot（与 zstd）；adb、sqlite3、mke2fs、etc1tool、hprof-conv、make_f2fs* 均为无用体积。
-        // The scripts only call fastboot (and zstd); adb, sqlite3, mke2fs, etc1tool, hprof-conv and make_f2fs* are dead weight.
         var unused = name == "Windows"
             ? new[] { "adb.exe", "etc1tool.exe", "hprof-conv.exe", "make_f2fs.exe", "make_f2fs_casefold.exe", "mke2fs.exe", "mke2fs.conf", "sqlite3.exe" }
             : new[] { "adb", "etc1tool", "hprof-conv", "make_f2fs", "make_f2fs_casefold", "mke2fs", "mke2fs.conf", "sqlite3" };
@@ -145,8 +138,6 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
         }
         else
         {
-            // macOS 无官方预编译：同时放入 arm64（默认 zstd）与 x86_64（zstd-x86_64），脚本按 uname -m 选择。
-            // No official macOS prebuilt: ship both the arm64 (zstd) and x86_64 (zstd-x86_64) binaries; the script picks by uname -m.
             await MaterializeRawAsync(ZstdMacArm, target, exe, progress, token).ConfigureAwait(false);
             await MaterializeRawAsync(ZstdMacAmd64, target, "zstd-x86_64", progress, token).ConfigureAwait(false);
         }
@@ -159,6 +150,13 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
         SetExecutable(Path.Combine(target, fileName));
     }
 
+    /// <summary>
+    /// <para>取得（必要时下载并校验 SHA-256）指定工具包在缓存中的路径。源的选择与测速由
+    /// Firmware.SharedKernel 的 <c>HttpDownload</c> 负责，从快到慢依次尝试，SHA-256 校验兜底。</para>
+    /// Returns the cached path for a tool package, downloading and verifying its SHA-256 when needed. Source selection
+    /// and speed probing are handled by <c>HttpDownload</c> in Firmware.SharedKernel; sources are tried fastest-first
+    /// with a SHA-256 check as the final guard.
+    /// </summary>
     internal async Task<string> AcquireAsync(DeliveryToolPackage package, IProgress<DeliveryProgress>? progress, CancellationToken token)
     {
         await CacheGate.WaitAsync(token).ConfigureAwait(false);
@@ -167,8 +165,6 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
             Directory.CreateDirectory(cacheDirectory);
             var cached = Path.Combine(cacheDirectory, package.Name + (package.Raw ? ".bin" : ".zip"));
             if (await MatchesAsync(cached, package.Sha256, token).ConfigureAwait(false)) return cached;
-            // 先对源站与镜像测速，再从快到慢依次尝试；SHA-256 校验仍然兜底。
-            // Speed-probe origin and mirrors first, then try fastest-first; the SHA-256 check still guards integrity.
             var sources = await HttpDownload.SelectSourcesBySpeedAsync(new Uri(package.Url), client, token).ConfigureAwait(false);
             var errors = new List<string>();
             foreach (var source in sources)

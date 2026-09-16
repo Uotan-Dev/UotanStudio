@@ -246,8 +246,6 @@ public sealed class HdcStream : IDisposable
     {
         Close();
         lock (_lock) { _incoming.Clear(); _queuedBytes = 0; }
-        // Readers and the dispatch thread can still be unwinding after Close.
-        // These slim events never expose WaitHandle; let GC release them safely.
         GC.SuppressFinalize(this);
     }
 }
