@@ -111,7 +111,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
         var metadata = Path.Combine(context.GetMetadataRoot()!, "system", ".uotanstudio-repack.json");
         Directory.CreateDirectory(Path.GetDirectoryName(metadata)!);
         File.WriteAllText(metadata, "metadata-marker");
-        var first = Path.Combine(oldRoot, "original", "original.uotanfw");
+        var first = Path.Combine(oldRoot, "original.uotanfw");
         var firstBytes = File.ReadAllBytes(first);
         _workspace.Images.Clear();
         _workspace.Images.Add(new() { RelativePath = Path.GetRelativePath(oldRoot, nested), Format = "EXT4", SizeBytes = 3 });
@@ -121,7 +121,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
 
         Assert.Equal(2, context.SubProjects.Count);
         Assert.Equal("second", context.ActiveSubProject!.Name);
-        Assert.Equal(firstBytes, File.ReadAllBytes(Path.Combine(context.RootDirectory!, "original", "original.uotanfw")));
+        Assert.Equal(firstBytes, File.ReadAllBytes(Path.Combine(context.RootDirectory!, "original.uotanfw")));
         Assert.Equal(new byte[] { 7, 8, 9 }, File.ReadAllBytes(Path.Combine(context.RootDirectory!, "second", "images", "nested", "system.img")));
         Assert.Equal("metadata-marker", File.ReadAllText(Path.Combine(context.GetMetadataRoot()!, "system", ".uotanstudio-repack.json")));
         var snapshot = await SolutionPersistenceService.LoadSolutionAsync(target, TestContext.Current.CancellationToken);
@@ -263,14 +263,14 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
             context.OpenSolution(source, new SolutionSnapshot
             {
                 SolutionName = "sample",
-                SubProjects = [new() { Name = "sample", RelativePath = "../alias/sample/sample.uotanfw" }]
+                SubProjects = [new() { Name = "sample", RelativePath = "../alias/sample.uotanfw" }]
             });
-            _workspace.Images.Add(new() { RelativePath = "sample/images/boot.img", Format = "Boot" });
+            _workspace.Images.Add(new() { RelativePath = "images/boot.img", Format = "Boot" });
 
             await _projects.SaveAsAsync(Path.Combine(_root, "copy.uotan"));
 
             Assert.Equal(originalBytes, File.ReadAllBytes(originalFirmware));
-            Assert.Equal(Path.Combine(_root, "copy", "sample", "sample.uotanfw"), context.FirmwareProjectPath);
+            Assert.Equal(Path.Combine(_root, "copy", "sample.uotanfw"), context.FirmwareProjectPath);
             var saved = await SolutionPersistenceService.LoadFirmwareProjectAsync(context.FirmwareProjectPath!, TestContext.Current.CancellationToken);
             Assert.Equal("Boot", Assert.Single(saved!.Images).Format);
         }

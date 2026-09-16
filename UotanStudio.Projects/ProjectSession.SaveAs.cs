@@ -47,7 +47,7 @@ public sealed partial class ProjectSession
         if (references.Count == 0)
         {
             activeName = name;
-            references.Add(new() { Name = name, RelativePath = $"{name}/{name}.uotanfw" });
+            references.Add(new() { Name = name, RelativePath = $"{name}.uotanfw" });
         }
         var active = references.FirstOrDefault(sp => sp.Name == activeName) ?? references[0];
         var activePath = Path.Combine(transaction.StagingRoot, active.RelativePath);

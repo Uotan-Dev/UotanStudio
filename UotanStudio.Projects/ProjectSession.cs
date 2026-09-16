@@ -127,7 +127,7 @@ public sealed partial class ProjectSession
             ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName);
         var nodePath = target.NodeProjectPath
             ?? Path.Combine(rootDir, solutionName + ".uotannode");
-        var subProjectDir = Path.Combine(rootDir, solutionName);
+        var subProjectDir = rootDir;
         var stateDir = Path.Combine(subProjectDir, ".uotan");
         var subImagesDir = Path.Combine(subProjectDir, "images");
         var subOutputDir = Path.Combine(subProjectDir, "output");
@@ -156,7 +156,7 @@ public sealed partial class ProjectSession
             NodeProjectPath = $"{solutionName}/{solutionName}.uotannode",
             SubProjects =
             [
-                new SubProjectDto { Name = solutionName, RelativePath = $"{solutionName}/{solutionName}.uotanfw" }
+                new SubProjectDto { Name = solutionName, RelativePath = $"{solutionName}.uotanfw" }
             ]
         };
 

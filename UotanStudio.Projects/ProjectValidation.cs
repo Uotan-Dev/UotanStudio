@@ -3,11 +3,11 @@ namespace UotanStudio.Services.Projects;
 /// <summary>Shared validation for persisted solution references, without restricting editor document paths.</summary>
 public static class ProjectValidation
 {
-    /// <summary>State-owning directories must be distinct from the solution root and outside reserved data folders.</summary>
+    /// <summary>State-owning directories must stay outside reserved data folders; the solution root
+    /// itself is allowed for the flat layout where the default sub-project shares the root.</summary>
     public static bool IsSubProjectDirectory(string solutionRoot, string directory)
     {
         var relative = Path.GetRelativePath(Path.GetFullPath(solutionRoot), Path.GetFullPath(directory));
-        if (relative == ".") return false;
         var reserved = new[] { "images", "output", ".uotan", ".deleted", ".git" };
         return !relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar])
             .Any(part => reserved.Contains(part, StringComparer.OrdinalIgnoreCase));
