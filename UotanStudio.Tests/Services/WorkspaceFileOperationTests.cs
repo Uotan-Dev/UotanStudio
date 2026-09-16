@@ -173,6 +173,22 @@ public class WorkspaceFileOperationTests
     }
 
     [Theory]
+    [InlineData("img", "boot.img")]
+    [InlineData("dat", "boot.new.dat")]
+    [InlineData("br", "boot.new.dat.br")]
+    public void PlannedOutputsMatchPublishedNames(string operation, string expected)
+    {
+        // 打包前的重名覆盖确认依赖这里的输出清单与实际发布文件保持一致。
+        // The pre-pack overwrite check relies on this list matching the files actually published.
+        using var temp = new TempDirectory();
+        var output = Path.Combine(temp.Path, "output");
+        var planned = ImageOutputService.GetPlannedOutputs(new(Path.Combine(temp.Path, "boot"), true, temp.Path, output), operation);
+        Assert.Contains(Path.Combine(output, expected), planned);
+        if (operation is "dat" or "br") Assert.Contains(Path.Combine(output, "boot.transfer.list"), planned);
+        else Assert.Single(planned);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void TransferPreservesContentsAndHonorsCut(bool move)

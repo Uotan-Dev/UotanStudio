@@ -7,6 +7,20 @@ namespace UotanStudio.Services.Firmware;
 /// <summary>Builds image and Android DAT outputs on disk. 在磁盘上构建镜像与 Android DAT 产物。</summary>
 internal static class ImageOutputService
 {
+    /// <summary>
+    /// <para>返回该条目打包后会写出的目标文件（<paramref name="paths"/> 的输出目录内），
+    /// 供写入前的重名覆盖确认使用。</para>
+    /// Returns the files a pack operation would publish under the operation's output directory, so the
+    /// caller can confirm overwriting same-named files before writing.
+    /// </summary>
+    internal static IReadOnlyList<string> GetPlannedOutputs(ImageOperationPaths paths, string operation) => operation switch
+    {
+        "img" => [Path.Combine(paths.OutputRoot, paths.Name + ".img")],
+        "br" => [Path.Combine(paths.OutputRoot, paths.Name + ".new.dat.br"), Path.Combine(paths.OutputRoot, paths.Name + ".transfer.list")],
+        "dat" => [Path.Combine(paths.OutputRoot, paths.Name + ".new.dat"), Path.Combine(paths.OutputRoot, paths.Name + ".transfer.list")],
+        _ => []
+    };
+
     internal static FirmwareOpResult Build(ImageOperationPaths paths, string operation, int brotliLevel, IProgress<FileSystemByteProgress>? progress = null)
     {
         if (operation is not ("img" or "dat" or "br")) throw new ArgumentOutOfRangeException(nameof(operation));

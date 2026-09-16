@@ -23,6 +23,10 @@ public partial class DeliveryView
     private TaskCompletionSource? _deliveryCompletion;
     private string? _deliveryRoot;
     private bool _deliveryLoaded;
+    // 已应用到面板的解决方案完整重载代号；与 ProjectOperationsService 的计数器比较决定是否强制重载。
+    // The full-reload generation already applied to the panel; compared against the service counter to
+    // decide whether the plan and sub-project choices must be rebuilt from the solution file.
+    private int _loadedSolutionGeneration;
     private bool _restoringDelivery;
     private bool _deliveryChangePending;
     private string _recoveryUpdaterPath = "";
@@ -293,12 +297,25 @@ public partial class DeliveryView
         try
         {
             var root = ProjectContextService.Instance.RootDirectory;
-            if (!_deliveryLoaded || root != _deliveryRoot)
+            // 完整重载（打开、添加/删除子项目）由会话计数器标记：即使解决方案路径未变，也要丢弃内存计划，
+            // 从解决方案文件重新恢复并重建子项目下拉列表；面板当时未在可视树、错过消息时也能在再次进入时补上。
+            // A full reload (open, add/remove sub-project) is marked by the session counter: even with an
+            // unchanged path the in-memory plan is dropped, restored from the solution file and the sub-project
+            // choices rebuilt; a detached panel that missed the message catches up on the next refresh.
+            var generation = ProjectOperationsService.Instance.SolutionReloadGeneration;
+            var reloaded = generation != _loadedSolutionGeneration;
+            var rootChanged = root != _deliveryRoot;
+            if (reloaded || !_deliveryLoaded || rootChanged)
             {
                 _deliverySaveTimer.Stop();
                 _deliveryCancellation?.Cancel();
                 if (_deliveryCompletion is { } completion) await completion.Task;
-                if (_deliveryLoaded && _deliveryRoot is { } previous) await PersistDeliveryAsync();
+                // 仅“换到另一解决方案”才回写旧计划；同文件完整重载必须从文件读取，
+                // 否则刚被重新加载的交付状态会被内存中的旧表单覆盖。
+                // Only a move to a different solution writes the outgoing plan back; a full reload of the
+                // same file must read the stored state, or the reloaded plan would be overwritten by the
+                // stale in-memory form.
+                if (rootChanged && _deliveryLoaded && _deliveryRoot is not null) await PersistDeliveryAsync();
                 if (root != ProjectContextService.Instance.RootDirectory) return;
                 _restoringDelivery = true;
                 _deliveryRoot = root;
@@ -306,6 +323,7 @@ public partial class DeliveryView
                 if (root is not null && DeliveryPlanStore.LoadFromState(ProjectOperationsService.Instance.PendingDeliveryState, root) is { } plan)
                     RestoreDelivery(plan);
                 _deliveryLoaded = true;
+                _loadedSolutionGeneration = generation;
             }
             await ImageSelection.RefreshAsync();
             ImageSelection.RestoreAssignedSources(Composition.Model.Container.Concat(Composition.Model.Output)

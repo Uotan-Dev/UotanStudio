@@ -198,6 +198,8 @@
     <x:String x:Key="Image_ExtractOverwriteMessage">目录 '{0}' 已存在，是否覆盖？</x:String>
     <x:String x:Key="Image_ExtractOverwrite">覆盖</x:String>
     <x:String x:Key="Image_ExtractSkip">跳过</x:String>
+    <x:String x:Key="Image_PackOverwriteTitle">目标文件已存在</x:String>
+    <x:String x:Key="Image_PackOverwriteMessage">以下文件已存在，是否覆盖？</x:String>
     <x:String x:Key="Image_UnpackedDirectoryMissingTitle">解包文件夹不存在</x:String>
     <x:String x:Key="Image_UnpackedDirectoryMissingMessage">未找到解包文件夹“{0}”。</x:String>
 

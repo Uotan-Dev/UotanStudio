@@ -393,7 +393,7 @@ public sealed class DeliveryTests : IDisposable
     }
 
     [Fact]
-    public async Task PlanRoundTripKeepsDraftsAndRebasesSources()
+    public void PlanRoundTripKeepsDraftsAndDropsImageMembership()
     {
         var plan = new DeliveryPlan
         {
@@ -406,7 +406,11 @@ public sealed class DeliveryTests : IDisposable
         };
         var state = DeliveryPlanStore.CaptureElement(_root, plan);
         var restored = Assert.IsType<DeliveryPlan>(DeliveryPlanStore.LoadFromState(state, _root));
-        Assert.Equal(plan.Files[0], restored.Files[0]);
+        // 交付面板的镜像列表不随解决方案持久化：重开后从空开始，避免展示过期或不属于当前工程的镜像。
+        // The delivery panel's image lists are never persisted: a reopen starts empty so stale or foreign images
+        // are never shown.
+        Assert.Empty(restored.Files);
+        Assert.Empty(restored.Container);
         Assert.Equal("manual edits\n", restored.Scripts["flash.txt"]);
         Assert.Equal(plan.OutputDirectory, restored.OutputDirectory);
         Assert.Equal(plan.GeneratedScripts["flash.txt"], restored.GeneratedScripts["flash.txt"]);
@@ -546,6 +550,37 @@ public sealed class DeliveryTests : IDisposable
             OutputDirectory = Path.Combine(_root, "empty-zstd-out")
         };
         Assert.Throws<InvalidDataException>(() => DeliveryValidation.Validate(plan));
+    }
+
+    [Fact]
+    public void SuperZstdLevelRaisesDefaultAndRejectsInvalidValues()
+    {
+        // 重打包原包镜像时默认使用高 Zstd 等级，避免 super.zst 超过原始 super；0 或越界回退默认。
+        // Repacking the original package defaults to a high Zstd level so super.zst stays within the original
+        // Super size; 0 or out-of-range values fall back to the default.
+        var defaults = new DeliverySuperOptions();
+        Assert.Equal(DeliverySuperOptions.DefaultZstdLevel, defaults.ZstdLevel);
+        Assert.Equal(DeliverySuperOptions.DefaultZstdLevel, DeliverySuperOptions.ResolveZstdLevel(defaults with { ZstdLevel = 0 }));
+        Assert.Equal(DeliverySuperOptions.DefaultZstdLevel, DeliverySuperOptions.ResolveZstdLevel(defaults with { ZstdLevel = 30 }));
+        Assert.Equal(7, DeliverySuperOptions.ResolveZstdLevel(defaults with { ZstdLevel = 7 }));
+
+        var plan = new DeliveryPlan
+        {
+            OrganizeDirectory = false,
+            PackSuper = true,
+            Super = new() { DeviceSize = 8 * 1024 * 1024, Zstd = true, ZstdLevel = 30 },
+            Container = [Input("system")],
+            OutputDirectory = Path.Combine(_root, "bad-zstd-out")
+        };
+        Assert.Throws<InvalidDataException>(() => DeliveryValidation.Validate(plan));
+    }
+
+    [Fact]
+    public void SuperZstdLevelSurvivesPlanPersistence()
+    {
+        var plan = new DeliveryPlan { Super = new() { Zstd = true, ZstdLevel = 12 } };
+        var restored = DeliveryPlanStore.LoadFromState(DeliveryPlanStore.CaptureElement(_root, plan), _root);
+        Assert.Equal(12, restored!.Super.ZstdLevel);
     }
 
     [Theory]

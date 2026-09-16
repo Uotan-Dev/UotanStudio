@@ -36,7 +36,7 @@ public sealed class DeliveryWiringTests : IDisposable
     }
 
     [Fact]
-    public async Task DynamicAttributeSurvivesPlanAndChoosesFastbootdInBothScripts()
+    public async Task DynamicAttributeChoosesFastbootdInBothScripts()
     {
         SaveSource(_root, new() { Kind = "super", PartitionNames = ["system_a", "system_b"] });
         var model = new DeliveryViewModel();
@@ -49,8 +49,11 @@ public sealed class DeliveryWiringTests : IDisposable
         var scripts = DeliveryScriptGenerator.Generate(plan);
         Assert.Contains("ensure_mode yes; flash 'system'", scripts["FlashLinux.sh"]);
         Assert.Contains("call :ensure_mode yes", scripts["FlashWindows.bat"]);
+        // 镜像归属不随交付计划持久化：动态属性只影响当前会话的脚本选择，重开后由作者重新选择。
+        // Image membership is not persisted with the plan: the dynamic attribute only drives the current
+        // session's scripts and the author re-selects after reopen.
         var state = DeliveryPlanStore.CaptureElement(_root, plan);
-        Assert.True(DeliveryPlanStore.LoadFromState(state, _root)!.Files[0].Fastbootd);
+        Assert.Empty(DeliveryPlanStore.LoadFromState(state, _root)!.Files);
         row.PartitionName = "boot";
         Assert.False(row.Fastbootd);
         row.PartitionName = "system_b";

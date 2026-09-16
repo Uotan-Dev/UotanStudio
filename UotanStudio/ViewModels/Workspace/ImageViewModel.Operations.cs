@@ -108,6 +108,14 @@ internal partial class ImageViewModel
                     else
                     {
                         Directory.CreateDirectory(paths.OutputRoot);
+                        // 写入前确认同名目标：存在且作者选择跳过时不计入失败。
+                        // Confirm same-named targets before writing; a declined overwrite counts as skipped, not failed.
+                        var conflicts = ImageOutputService.GetPlannedOutputs(paths, operation).Where(File.Exists).ToArray();
+                        if (!await ConfirmPackOverwriteAsync(conflicts))
+                        {
+                            skipped++;
+                            continue;
+                        }
                         var byteProgress = CreateFileSystemProgress(entry.DisplayName);
                         var result = await Task.Run(() => ImageOutputService.Build(paths, operation, brotliLevel, byteProgress));
                         if (result.Success) succeeded++;

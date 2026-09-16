@@ -193,6 +193,57 @@ public sealed class ContainerStructureTests
         Assert.Equal(4096, entry.SizeBytes);
     }
 
+    [Fact]
+    public async Task Capture_ZipPayload_ReadsOtaBuildIdentity()
+    {
+        // ZIP 包裹的 payload 来源应读出 OTA 元数据构建身份；原始 payload.bin 没有该信息时保持为空。
+        // A ZIP-wrapped payload source reads the OTA build identity; a raw payload.bin without it stays empty.
+        using var temp = new TempDirectory();
+        var source = temp.WriteBytes("boot.img", new byte[4096]);
+        var payload = Path.Combine(temp.Path, "payload.bin");
+        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadBuilder())
+        {
+            await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
+        }
+
+        var zipPath = Path.Combine(temp.Path, "ota.zip");
+        using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+        {
+            archive.CreateEntryFromFile(payload, "payload.bin");
+            var metadata = archive.CreateEntry("META-INF/com/android/metadata");
+            using var stream = metadata.Open();
+            stream.Write("ota-type=AB\npost-build=Brand/Device/Device:14/UP1A/123:user/release-keys\npost-build-incremental=123\npost-sdk-level=34\n"u8);
+        }
+
+        var settings = SourceContainerMetadataService.Capture(zipPath, ContainerKind.Zip);
+        Assert.Equal("Brand/Device/Device:14/UP1A/123:user/release-keys", settings.BuildFingerprint);
+        Assert.Equal("123", settings.Incremental);
+        Assert.Equal((uint)34, settings.SdkLevel);
+        Assert.Equal("", SourceContainerMetadataService.Capture(payload, ContainerKind.Payload).BuildFingerprint);
+    }
+
+    [Fact]
+    public void LegacySourceSettings_MissingOptionalStrings_DeserializeToEmpty()
+    {
+        // 旧 source-*.json 没有后加的 DeviceName/BuildFingerprint/Incremental；读取后必须为空字符串而不是 null，
+        // 否则交付面板回填时会空引用。
+        // Legacy source-*.json lacks the later DeviceName/BuildFingerprint/Incremental fields; reading must yield
+        // empty strings rather than null, or the delivery panel backfill throws.
+        using var temp = new TempDirectory();
+        var path = SourceContainerMetadataService.GetPath(temp.Path, "super");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path,
+            "{\"SourceName\":\"super.img\",\"Kind\":\"super\",\"GroupNames\":[],\"GroupSizes\":[],\"PartitionNames\":[],\"PartitionSizes\":[],\"OriginalStructures\":[]}");
+        var settings = SourceContainerMetadataService.Read(temp.Path, "super");
+        Assert.NotNull(settings);
+        Assert.Equal("", settings!.DeviceName);
+        Assert.Equal("", settings.BuildFingerprint);
+        Assert.Equal("", settings.Incremental);
+        Assert.Equal("", settings.SecurityPatchLevel);
+        Assert.Equal("RAW", settings.Storage);
+        Assert.Equal("Unknown", settings.DeviceType);
+    }
+
     // ============== Analyze: zip ==============
 
     [Fact]

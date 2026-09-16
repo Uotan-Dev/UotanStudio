@@ -75,7 +75,10 @@ public sealed class PayloadSigningTests : IDisposable
         var restored = DeliveryPlanStore.LoadFromState(state, _root);
         Assert.Equal(plan.Payload, restored!.Payload);
         Assert.DoesNotContain("PRIVATE KEY", state.GetRawText());
-        await new DeliveryOutputService(new NoTools(), new TestSigningKeys()).ExportAsync(restored, token: TestContext.Current.CancellationToken);
+        // 镜像归属不随计划持久化：恢复后按原计划重新填入容器与输出文件再导出。
+        // Image membership is not persisted: reapply the original container and output files before exporting.
+        await new DeliveryOutputService(new NoTools(), new TestSigningKeys())
+            .ExportAsync(restored with { Container = plan.Container, Files = plan.Files }, token: TestContext.Current.CancellationToken);
         var unpacked = Path.Combine(_root, "ota-content");
         ZipFile.ExtractToDirectory(Path.Combine(plan.OutputDirectory, "ota.zip"), unpacked);
         var bytes = File.ReadAllBytes(Path.Combine(unpacked, "payload.bin"));

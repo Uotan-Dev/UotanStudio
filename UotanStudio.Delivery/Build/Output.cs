@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
+using UotanStudio.Firmware.CrossCutting.Compress;
 using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
 
 namespace UotanStudio.Services.Delivery;
@@ -107,7 +108,12 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                             using var tracked = new DeliveryWriteProgressStream(destination,
                                 _ => progress?.Report(new(45 + input.Position * 10.0 / Math.Max(1, input.Length), "Compressing Super",
                                     (input.Position, input.Length), "Delivery_ProgressCompress")), token);
-                            ZstdCompressor.Compress(input, tracked);
+                            // 使用计划中的高压缩等级，确保重打包的 super.zst 不大于原始 super 镜像。
+                            // Use the plan's high level so a repacked super.zst does not exceed the original Super image.
+                            ZstdCompressor.Compress(input, tracked, new CompressionOptions
+                            {
+                                Level = DeliverySuperOptions.ResolveZstdLevel(plan.Super)
+                            });
                         }, token).ConfigureAwait(false);
                         File.Delete(superOutput);
                     }

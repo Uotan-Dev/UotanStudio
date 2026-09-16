@@ -39,6 +39,30 @@ internal sealed record DeliveryPayloadOptions
 /// <summary>Explicit single-device LP layout; sizes are bytes, never sparse file lengths.</summary>
 internal sealed record DeliverySuperOptions
 {
+    /// <summary>
+    /// <para>压缩 Super 镜像时使用的 Zstd 等级。默认提高到 19：重打包原包分区镜像时，压缩后的
+    /// super.zst 不应比原始 super 镜像更大，而库默认的 3 级往往压不过原包。</para>
+    /// Zstd level used when compressing the Super image. Defaulted to 19 so repacking the original
+    /// package's partitions does not exceed the original Super image size, which the library default
+    /// level 3 frequently fails to match.
+    /// </summary>
+    internal const int DefaultZstdLevel = 19;
+
+    /// <summary>
+    /// <para>Zstd 压缩等级；0 或超出 1..22 时回退到 <see cref="DefaultZstdLevel"/>。</para>
+    /// Zstd compression level; 0 or values outside 1..22 fall back to <see cref="DefaultZstdLevel"/>.
+    /// </summary>
+    public int ZstdLevel { get; init; } = DefaultZstdLevel;
+
+    /// <summary>
+    /// <para>解析本次 Super 压缩实际使用的 Zstd 等级：合法值原样使用，否则回退到默认等级
+    /// （旧计划 JSON 缺省该字段时反序列化为 0）。</para>
+    /// Resolves the effective Zstd level for this Super compression: a valid value is used as-is,
+    /// otherwise the default applies (older plan JSON missing the field deserializes to 0).
+    /// </summary>
+    internal static int ResolveZstdLevel(DeliverySuperOptions options) =>
+        options.ZstdLevel is >= 1 and <= 22 ? options.ZstdLevel : DefaultZstdLevel;
+
     public ulong DeviceSize { get; init; } = 9_126_805_504;
     public uint MetadataSize { get; init; } = 65536;
     public uint Slots { get; init; } = 3;
@@ -123,7 +147,15 @@ internal static class DeliveryPlanStore
     /// </summary>
     internal static JsonElement CaptureElement(string root, DeliveryPlan plan)
     {
-        var stored = Rebase(plan, path => Path.IsPathRooted(path) ? Path.GetRelativePath(root, path) : path);
+        // 交付计划的镜像归属（Files/Container）不写入解决方案状态：条目携带的源路径与大小在重开时可能已失效，
+        // 还原后会把不存在或不再属于当前工程的镜像显示在交付面板里。每次启动或加载解决方案时镜像列表从空开始，
+        // 由作者按当前工程重新选择；其余设置、输出目录与脚本配置照常保存。
+        // The delivery plan never persists its image membership (Files/Container): their source paths and sizes
+        // can be stale on reopen and would surface missing or foreign images in the panel. Every start or solution
+        // load begins with empty image lists so the author re-selects from the current project; settings, output
+        // directory and script configuration are still saved.
+        var detached = plan with { Files = [], Container = [] };
+        var stored = Rebase(detached, path => Path.IsPathRooted(path) ? Path.GetRelativePath(root, path) : path);
         var element = JsonSerializer.SerializeToElement(stored, DeliveryJsonContext.Default.DeliveryPlan);
         if (element.ValueKind is not JsonValueKind.Object || element.GetRawText().Length > 8 * 1024 * 1024)
             throw new InvalidDataException("Delivery plan exceeds 8 MiB.");
@@ -160,6 +192,10 @@ internal static class DeliveryPlanStore
                 Files = plan.Files.Select(f => f.Generated && (f.Partition == "payload" || f.Partition == "super")
                 ? f with { FileName = DeliveryOutputService.ContainerFileName(plan) } : f).ToList()
             };
+        // 旧解决方案可能仍写有镜像归属；一律丢弃，确保加载后交付面板的镜像列表为空（含旧状态与新状态）。
+        // Older solutions may still carry image membership; always drop it so the delivery panel's image lists
+        // start empty for both legacy and current state.
+        plan = plan with { Files = [], Container = [] };
         return Rebase(plan, path => Path.GetFullPath(path, root));
     }
 
@@ -174,9 +210,7 @@ internal static class DeliveryPlanStore
             SigningKeyPath = string.IsNullOrEmpty(plan.Payload.SigningKeyPath) ? "" : path(plan.Payload.SigningKeyPath),
             PostinstallFile = string.IsNullOrEmpty(plan.Payload.PostinstallFile) ? "" : path(plan.Payload.PostinstallFile)
         },
-        LocalZstd = plan.LocalZstd.ToDictionary(p => p.Key, p => string.IsNullOrEmpty(p.Value) ? "" : path(p.Value)),
-        Container = plan.Container.Select(f => f with { SourcePath = string.IsNullOrEmpty(f.SourcePath) ? "" : path(f.SourcePath) }).ToList(),
-        Files = plan.Files.Select(f => f with { SourcePath = string.IsNullOrEmpty(f.SourcePath) ? "" : path(f.SourcePath) }).ToList()
+        LocalZstd = plan.LocalZstd.ToDictionary(p => p.Key, p => string.IsNullOrEmpty(p.Value) ? "" : path(p.Value))
     };
 }
 

@@ -92,7 +92,7 @@ public sealed class PayloadOtaZipTests : IDisposable
     }
 
     [Fact]
-    public async Task LegacyPayloadPlanRestoresZipArtifactWithoutChangingContainerMembership()
+    public void LegacyPayloadPlanDropsImageMembershipOnLoad()
     {
         var plan = new DeliveryPlan
         {
@@ -103,7 +103,15 @@ public sealed class PayloadOtaZipTests : IDisposable
         };
         var state = DeliveryPlanStore.CaptureElement(_root, plan);
         var restored = DeliveryPlanStore.LoadFromState(state, _root)!;
-        Assert.Equal("ota.zip", Assert.Single(restored.Files).FileName);
+        // 交付面板的镜像列表不随解决方案持久化，旧方案里的条目一律丢弃；仅打包模式与确认状态保留。
+        // The delivery panel's image lists are never persisted: legacy entries are dropped, while the pack mode
+        // and confirmation state survive.
+        Assert.Empty(restored.Files);
+        Assert.Empty(restored.Container);
+        Assert.True(restored.PackPayload);
+        Assert.True(restored.ContainerConfirmed);
+        // 会话内仍按计划生成 ota.zip 行并保留容器归属。
+        // In-session the plan still materializes the ota.zip row and keeps container membership.
         var model = new DeliveryViewModel();
         model.Reset(plan);
         Assert.Equal("ota.zip", Assert.Single(model.Output).FileName);

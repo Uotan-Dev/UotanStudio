@@ -418,8 +418,12 @@ public sealed partial class DeliveryCompletionTests : IDisposable
         var restored = DeliveryPlanStore.LoadFromState(state, _root)!;
         Assert.True(restored.AskWipe); Assert.True(restored.Reboot); Assert.Equal("b", restored.Slot);
         Assert.Equal(plan.LocalZstd["Linux"], restored.LocalZstd["Linux"]); Assert.True(restored.Super.Zstd);
-        Assert.Equal(plan.Package, restored.Package); Assert.True(restored.Files[1].Fastbootd);
-        var scripts = DeliveryScriptGenerator.Generate(restored);
+        Assert.Equal(plan.Package, restored.Package);
+        // 镜像归属不持久化：恢复后列表为空，脚本按当前选择重新生成。
+        // Image membership is not persisted: the restored lists are empty and scripts regenerate from the current selection.
+        Assert.Empty(restored.Files);
+        Assert.Empty(restored.Container);
+        var scripts = DeliveryScriptGenerator.Generate(restored with { Files = plan.Files });
         Assert.False(scripts.ContainsKey("FlashMacOS.sh"));
         Assert.Contains("sha256sum --strict -c", scripts["FlashLinux.sh"]);
         Assert.Contains("reboot fastboot", scripts["FlashLinux.sh"]); Assert.Contains("ensure_mode yes", scripts["FlashLinux.sh"]);

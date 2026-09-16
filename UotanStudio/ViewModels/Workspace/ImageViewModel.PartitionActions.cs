@@ -207,6 +207,7 @@ internal partial class ImageViewModel
         {
             var outputDir = ProjectContextService.Instance.EnsureOutputDirectory();
             var outputPath = Path.Combine(outputDir, "super.img");
+            if (!await ConfirmPackOverwriteAsync(File.Exists(outputPath) ? [outputPath] : [])) return;
             var deviceSize = ulong.TryParse(settings.SUPERSize, out var parsed) && parsed > 0 ? parsed : 9_126_805_504UL;
             LogService.Instance.Write(LogLevel.Info, "Images", $"Synthesizing super image with {partitions.Count} partition(s)  正在合成 super 镜像（{partitions.Count} 个分区）");
             var result = await _firmware.SynthesizeSuperAsync(partitions, outputPath, deviceSize, settings.SUPERName);

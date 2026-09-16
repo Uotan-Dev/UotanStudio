@@ -54,9 +54,16 @@ public sealed class DeliveryOutputDirectoryTests : IDisposable
         var name = "NewProject1";
         var file = WriteSource("boot", Path.Combine(name, "images"));
         var output = Path.Combine(_root, name, "output");
-        var state = DeliveryPlanStore.CaptureElement(_root, Plan(file, output));
+        var original = Plan(file, output);
+        var state = DeliveryPlanStore.CaptureElement(_root, original);
         var restored = DeliveryPlanStore.LoadFromState(state, _root)!;
-        await new DeliveryOutputService(new NoTools()).ExportAsync(restored, token: TestContext.Current.CancellationToken);
+        // 镜像归属不随计划持久化：恢复后输出目录仍正确 rebase，按当前选择重新填入文件后不得误报拒绝。
+        // Image membership is not persisted: the output directory still rebases and re-adding the current
+        // selection must not trigger the sibling-layout false positive.
+        Assert.Empty(restored.Files);
+        Assert.Equal(Path.GetFullPath(output), restored.OutputDirectory);
+        await new DeliveryOutputService(new NoTools())
+            .ExportAsync(restored with { Files = original.Files }, token: TestContext.Current.CancellationToken);
         Assert.True(File.Exists(Path.Combine(output, "images", "boot.img")));
     }
 

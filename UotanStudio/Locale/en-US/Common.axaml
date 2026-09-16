@@ -198,6 +198,8 @@
     <x:String x:Key="Image_ExtractOverwriteMessage">Directory '{0}' already exists. Overwrite?</x:String>
     <x:String x:Key="Image_ExtractOverwrite">Overwrite</x:String>
     <x:String x:Key="Image_ExtractSkip">Skip</x:String>
+    <x:String x:Key="Image_PackOverwriteTitle">Output File Already Exists</x:String>
+    <x:String x:Key="Image_PackOverwriteMessage">The following files already exist. Overwrite them?</x:String>
     <x:String x:Key="Image_UnpackedDirectoryMissingTitle">Unpacked Folder Not Found</x:String>
     <x:String x:Key="Image_UnpackedDirectoryMissingMessage">The unpacked folder '{0}' does not exist.</x:String>
 

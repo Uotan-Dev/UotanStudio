@@ -54,6 +54,8 @@ internal static class DeliveryValidation
         // Super_Empty only: Empty excludes Zstd, and the single generated entry must be super_empty.img.
         if (plan.PackSuper && plan.Super.Empty && plan.Super.Zstd)
             throw new InvalidDataException("仅生成Super_Empty 与压缩为ZST 不能同时选择 / Super_Empty only excludes ZST compression.");
+        if (plan.Super.ZstdLevel is < 0 or > 22)
+            throw new InvalidDataException("Super Zstd 压缩等级无效 / Invalid Super Zstd level.");
         var generated = plan.Files.Where(f => f.Generated).ToArray();
         // 新语义：Empty 时唯一生成条目是 super_empty.img，不再同时生成完整 super。
         // New semantics: with Empty, the only generated entry is super_empty.img; the full super is no longer produced.

@@ -59,6 +59,25 @@ internal partial class ImageViewModel : Tool
     }
 
     /// <summary>
+    /// <para>打包写入前检查同名输出文件：存在时询问是否覆盖，取消则跳过该条目。无冲突直接返回 <c>true</c>。</para>
+    /// Before a pack writes, checks for same-named output files and asks whether to overwrite; declining
+    /// skips the entry. Returns <c>true</c> immediately when there is no conflict.
+    /// </summary>
+    /// <param name="existing"><para>已存在的目标文件绝对路径。</para>Absolute paths of the targets that already exist.</param>
+    /// <returns><para>可以继续写入时为 <c>true</c>；用户取消或无可询问窗口时为 <c>false</c>。</para>
+    /// <c>true</c> when the write may proceed; <c>false</c> when the user declines or no owner window is available.</returns>
+    private static async Task<bool> ConfirmPackOverwriteAsync(IReadOnlyList<string> existing)
+    {
+        if (existing.Count == 0) return true;
+        if (TopLevelExtensions.GetTopLevel() is not Avalonia.Controls.Window owner) return false;
+        var language = LanguageService.Instance;
+        var names = string.Join("\n", existing.Select(Path.GetFileName));
+        return await DialogService.ConfirmAsync(owner, language.GetString("Image_PackOverwriteTitle"),
+            language.GetString("Image_PackOverwriteMessage") + "\n" + names,
+            language.GetString("Image_ExtractOverwrite"), language.GetString("Image_ExtractSkip"));
+    }
+
+    /// <summary>
     /// <para>获取项目内镜像条目集合，条目路径为相对工程根目录。</para>
     /// Gets the collection of image entries in the project; entry paths are relative to the project root.
     /// </summary>
@@ -242,13 +261,22 @@ internal partial class ImageViewModel : Tool
     }
 
     /// <summary>
-    /// <para>解包模式下排除的保留目录名集合（不区分大小写）。</para>
-    /// Reserved directory names excluded in pack mode (case-insensitive).
+    /// <para>打包模式下排除的保留目录名集合（不区分大小写）：<c>delivery/</c> 是交付输出目录，
+    /// 与其他保留目录一样不是可打包的解包产物。</para>
+    /// Reserved directory names excluded in pack mode (case-insensitive): <c>delivery/</c> is a delivery
+    /// output directory and, like the other reserved names, is not a packable extraction result.
     /// </summary>
     private static readonly HashSet<string> ReservedDirNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        "images", "output", ".deleted", ".uotan"
+        "images", "output", "delivery", ".deleted", ".uotan"
     };
+
+    /// <summary>
+    /// <para>返回一级子目录是否属于保留目录：打包视图中不应把这些目录登记为可打包的解包产物。</para>
+    /// Returns whether a first-level project folder is reserved, so the pack view never registers it as a
+    /// packable extraction result.
+    /// </summary>
+    internal static bool IsReservedPackDirectory(string name) => ReservedDirNames.Contains(name);
 
     /// <summary>
     /// <para>根据当前模式扫描工程条目：解包模式扫描 <c>images/</c> 目录中的可解包文件，
@@ -370,7 +398,7 @@ internal partial class ImageViewModel : Tool
             foreach (var dir in Directory.EnumerateDirectories(subProjectRoot))
             {
                 var name = Path.GetFileName(dir);
-                if (string.IsNullOrEmpty(name) || ReservedDirNames.Contains(name))
+                if (string.IsNullOrEmpty(name) || IsReservedPackDirectory(name))
                 {
                     continue;
                 }

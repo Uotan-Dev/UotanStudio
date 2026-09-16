@@ -298,6 +298,15 @@ public partial class DeliveryView : UserControl
         SuperMetadataSlotsField.IsEnabled = !applied;
         PayloadTimestampBox.IsEnabled = !applied;
         PayloadSecurityPatchBox.IsEnabled = !applied;
+        // 使用项目 Payload 设置时，Payload 元数据字段由来源容器决定，一并禁用以免被手工覆盖；
+        // 签名下拉与 Postinstall 仍由作者按当前交付选择，保持可用。
+        // With project Payload settings applied, the Payload metadata fields come from the source container and
+        // are disabled so they cannot be overridden; the signing dropdown and Postinstall stay author-selectable.
+        PayloadVersionBox.IsEnabled = !applied;
+        PayloadMinorVersionBox.IsEnabled = !applied;
+        PayloadBuildFingerprintBox.IsEnabled = !applied;
+        PayloadIncrementalBox.IsEnabled = !applied;
+        PayloadSdkLevelBox.IsEnabled = !applied;
         ApplySourceSettings();
     }
 
@@ -355,14 +364,18 @@ public partial class DeliveryView : UserControl
             SuperMetadataSlotsBox.Text = settings.MetadataSlots.ToString(System.Globalization.CultureInfo.InvariantCulture);
             SuperMetadataSizeBox.Text = settings.MetadataMaxSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
             SuperBlockSizeBox.Text = settings.BlockSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (!string.IsNullOrEmpty(settings.DeviceName)) SuperDeviceNameBox.Text = settings.DeviceName;
         }
         else
         {
             PayloadVersionBox.Text = "2";
-            PayloadMinorVersionBox.Text = "0";
+            PayloadMinorVersionBox.Text = settings.MinorVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
             SuperBlockSizeBox.Text = settings.BlockSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
             PayloadTimestampBox.Text = settings.MaxTimestamp.ToString(System.Globalization.CultureInfo.InvariantCulture);
             PayloadSecurityPatchBox.Text = settings.SecurityPatchLevel;
+            PayloadBuildFingerprintBox.Text = settings.BuildFingerprint;
+            PayloadIncrementalBox.Text = settings.Incremental;
+            PayloadSdkLevelBox.Text = settings.SdkLevel == 0 ? "" : settings.SdkLevel.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
         UpdateDeviceTypeOptions();
     }
