@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -191,7 +192,9 @@ public static class FileSystemPreservation
             Format = "EROFS",
             BlockSize = options.BlockSize,
             Uuid = options.Uuid,
-            VolumeName = options.VolumeName
+            VolumeName = options.VolumeName,
+            SourceLength = source.CanSeek ? source.Length : null,
+            Erofs = ErofsRebuildMetadata.Capture(options)
         };
     }
 
@@ -266,7 +269,36 @@ public static class FileSystemPreservation
                 || !Same(Scan(inputDirectory, metadataDirectory, metadata.SourceFileName, cancellationToken), projection))
                 throw new IOException("Filesystem content or attributes changed during rebuilding.");
         }, overwrite: true);
+        if (rebuildReport is not null && format == "EROFS" && tables.Rebuild?.Erofs is { } erofsProfile)
+            rebuildReport(BuildErofsReport(erofsProfile, tables.Rebuild.SourceLength, new FileInfo(fullOutput).Length));
         return true;
+    }
+
+    /// <summary>Describes the regenerated layout against the source image length and the inherited codec profile.<para>描述相对源镜像长度与继承编解码档案的重建布局。</para></summary>
+    private static Dictionary<string, string> BuildErofsReport(ErofsRebuildParameters profile, long? sourceLength, long rebuiltLength)
+    {
+        var report = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["RebuiltSize"] = rebuiltLength.ToString(CultureInfo.InvariantCulture),
+            ["CompressionProfile"] = string.Join(", ", profile.Codecs
+                .OrderBy(codec => codec.Algorithm, StringComparer.Ordinal)
+                .Select(codec => $"{codec.Algorithm}:{codec.CompressionLevel}")),
+            // Encoder level and the LZ4 versus LZ4HC choice are not stored on disk; the verified source
+            // profile is inherited instead, so this is an inheritance report rather than an inference.
+            // 磁盘不保存编码级别与 LZ4/LZ4HC 选择，改为继承经校验的源档案。
+            ["CompressionInference"] = string.Join("; ", profile.Codecs
+                .OrderBy(codec => codec.Algorithm, StringComparer.Ordinal)
+                .Select(codec => $"{codec.Algorithm}: inherited from the verified source image; encoder identity and original level remain unproven"))
+        };
+        if (sourceLength is > 0)
+        {
+            var target = sourceLength.Value;
+            report["SourceFilesystemSize"] = target.ToString(CultureInfo.InvariantCulture);
+            report["FitsSourceFilesystemSize"] = (rebuiltLength <= target).ToString();
+            report["SizeExcess"] = Math.Max(0, rebuiltLength - target).ToString(CultureInfo.InvariantCulture);
+        }
+
+        return report;
     }
 
     private static void BuildEdited(string inputDirectory, Stream output, string format,
@@ -306,14 +338,27 @@ public static class FileSystemPreservation
                 }
             case "EROFS":
                 {
-                    var erofsOptions = new ErofsOptions
+                    // The original image is not retained, so the persisted profile supplies the
+                    // superblock features, compression records and per-inode strategy captured at
+                    // extraction. Without it the writer falls back to a lossy fresh build.
+                    // 原始镜像不再保留，因此由持久化档案提供解包时采集的超级块特性、压缩记录与
+                    // 逐 inode 策略；缺失时退化为有损的全新构建。
+                    var erofsOptions = rebuild?.Erofs is { } profile
+                        ? ErofsRebuildMetadata.Restore(profile)
+                        : new ErofsOptions();
+                    if (rebuild?.BlockSize is { } blockSize)
                     {
-                        BlockSize = rebuild?.BlockSize ?? 4096,
-                        Uuid = rebuild?.Uuid,
-                        VolumeName = options.GetValueOrDefault("VolumeName", rebuild?.VolumeName ?? "erofs")
-                    };
-                    // Without the retained image the single-pass tree builder is used; the per-inode
-                    // source optimizer is unavailable, so physical layout is regenerated, not byte-identical.
+                        erofsOptions.BlockSize = blockSize;
+                    }
+
+                    erofsOptions.Uuid = rebuild?.Uuid;
+                    var volumeName = options.GetValueOrDefault("VolumeName", rebuild?.VolumeName ?? "erofs");
+                    if (volumeName != rebuild?.VolumeName)
+                    {
+                        erofsOptions.SourceVolumeNameBytes = null;
+                    }
+
+                    erofsOptions.VolumeName = volumeName;
                     erofsOptions.FsConfig = fsConfig;
                     erofsOptions.FileContexts = fileContexts;
                     new ErofsBuilder().Build(inputDirectory, output, erofsOptions);
