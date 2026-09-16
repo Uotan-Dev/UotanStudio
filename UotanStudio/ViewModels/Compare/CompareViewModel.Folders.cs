@@ -49,6 +49,11 @@ public sealed partial class CompareViewModel
                 result.RightOnlyCount);
 
             _compareTreeRoot = BuildCompareTree(result, _leftPath, _rightPath);
+            // 对比一开始就展开最初始的文件夹：视图里立刻显示目录内的条目（根行仍保留，便于看到整棵对比的汇总状态），
+            // 而不是只显示一行文件夹名等着用户展开。
+            // The initial folder is expanded from the start: the view shows the directory's entries immediately (the root row stays so the
+            // aggregated status of the whole comparison remains visible) instead of a single folder row waiting to be expanded.
+            _compareTreeRoot.IsExpanded = true;
             Mode = CompareMode.Folder;
             Rows = ComparisonRowBuilder.ForTree([_compareTreeRoot], compared: true);
             SelectedIndex = -1;

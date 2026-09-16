@@ -67,6 +67,17 @@ public sealed partial class CompareViewModel : Document
     private bool _dirtyLeft;
     private bool _dirtyRight;
     private ObservableCollection<CompareRowViewModel>? _textRows;
+    private CompareTextSlotModel? _textModel;
+    private readonly List<TextUndoEntry> _textUndo = [];
+    private readonly List<TextUndoEntry> _textRedo = [];
+    private DateTime _lastTextUndoUtc;
+    private bool _lastTextUndoWasStructural;
+    private long _textUndoBytes;
+
+    /// <summary>文本对比撤销历史的内存上限（字节估算）：超过后丢弃最早的撤销点，避免大文件长时间编辑占用过多内存。</summary>
+    /// Memory cap (estimated bytes) of the text-comparison undo history: the oldest points are dropped beyond it so a long editing
+    /// session on a large file stays bounded.
+    private const long MaxTextUndoBytes = 24L * 1024 * 1024;
 
     /// <summary>
     /// <para>文档中的文件列；可以任意追加，对比只使用其中两列。</para>
@@ -261,6 +272,294 @@ public sealed partial class CompareViewModel : Document
     public bool IsTextMode => Mode == CompareMode.Text;
 
     /// <summary>
+    /// <para>文本对比是否使用项目文本编辑器（两侧各一个编辑器，行=对齐槽，填充槽显示斜杠）。</para>
+    /// Whether the text comparison uses the project's text editors (one per side, one line per aligned slot with slashes for
+    /// fillers).
+    /// </summary>
+    public bool IsTextEditorMode => IsComparing && Mode == CompareMode.Text && _textModel is not null;
+
+    /// <summary>某一侧编辑器应显示的文本（一行一槽，填充槽显示斜杠）。 One side's editor text (one line per slot, slashes for fillers).</summary>
+    internal string ProjectText(bool leftSide) => _textModel?.Project(leftSide) ?? string.Empty;
+
+    /// <summary>某一侧需要整行着色的槽号（0 起）。 The slot indices (0-based) to colour on one side.</summary>
+    internal List<int> HighlightedSlots(bool leftSide) => _textModel?.HighlightedSlots(leftSide) ?? [];
+
+    /// <summary>某一侧的真实行（跳过填充槽），保存用。 One side's real lines with fillers skipped, used for saving.</summary>
+    internal List<string> RealLines(bool leftSide) => _textModel?.RealLines(leftSide) ?? [];
+
+    /// <summary>
+    /// <para>把编辑器的一次改动翻译成槽操作：编辑涉及的整行范围由视图换算成「起始槽号 + 原槽数 + 替换后的行」，
+    /// 这里统一落到模型上——行数不变时只改该侧内容；行数变化时按「本侧加行→对侧补填充槽 / 本侧删行→本侧留填充槽」
+    /// 维护两侧等长，并重建行投影、标记该侧已修改。</para>
+    /// Translates one editor change into slot operations: the view converts the affected line range into "first slot + removed
+    /// slots + replacement lines", and this applies it to the model — an unchanged line count only touches that side's
+    /// content, while a changed count keeps both sides equal (a new line adds a filler on the other side, a deleted line
+    /// leaves a filler on this side) and rebuilds the row projection and the modified flag.
+    /// </summary>
+    /// <param name="leftSide"><para>是否为左侧。</para>Whether the left side changed.</param>
+    /// <param name="startSlot"><para>起始槽号（0 起）。</para>The first slot index (0-based).</param>
+    /// <param name="removedSlots"><para>被替换掉的槽数。</para>The number of replaced slots.</param>
+    /// <param name="lines"><para>替换后的行。</para>The replacement lines.</param>
+    /// <returns><para>光标应回到的槽号（0 起）与列。</para>The slot index and column the caret should return to.</returns>
+    internal (int Slot, int Column) ApplyEditorLines(bool leftSide, int startSlot, int removedSlots, IReadOnlyList<string> lines)
+    {
+        if (_textModel is null)
+        {
+            return (startSlot, 0);
+        }
+
+        if (removedSlots == lines.Count)
+        {
+            for (var offset = 0; offset < lines.Count; offset++)
+            {
+                _textModel.SetLine(Math.Clamp(startSlot + offset, 0, _textModel.Slots.Count - 1), leftSide, lines[offset]);
+            }
+        }
+        else
+        {
+            _textModel.ReplaceLines(startSlot, removedSlots, leftSide, lines);
+        }
+
+        // 两侧都没内容的槽直接收掉（合并/删除留下的全空槽），行数变化量只跟本侧文件的行数保持一致。
+        // Slots empty on both sides are dropped (leftovers of a join or delete), so the row count only follows this side's file.
+        _textModel.DropEmptySlots();
+        MarkDirty(leftSide);
+        RebuildTextRows();
+        return (Math.Clamp(startSlot + lines.Count - 1, 0, Math.Max(0, _textModel.Slots.Count - 1)),
+            lines.Count == 0 ? 0 : lines[^1].Length);
+    }
+
+    /// <summary>
+    /// <para>把一侧编辑器中选中的整行复制到另一侧相同的槽范围（Beyond Compare 的「复制到另一侧」）。</para>
+    /// Copies the whole lines selected in one side's editor to the same slot range on the other side (Beyond Compare's "copy
+    /// to other side").
+    /// </summary>
+    /// <param name="fromLeftToRight"><para>是否从左复制到右。</para>Whether to copy from left to right.</param>
+    /// <param name="startSlot"><para>起始槽号（0 起）。</para>The first slot index (0-based).</param>
+    /// <param name="count"><para>复制的行数。</para>The number of lines to copy.</param>
+    internal void CopySlots(bool fromLeftToRight, int startSlot, int count)
+    {
+        if (_textModel is null || count <= 0)
+        {
+            return;
+        }
+
+        var lines = new List<string>();
+        for (var offset = 0; offset < count; offset++)
+        {
+            var index = startSlot + offset;
+            if (index < 0 || index >= _textModel.Slots.Count)
+            {
+                break;
+            }
+
+            var slot = _textModel.Slots[index];
+            if (fromLeftToRight ? slot.HasLeft : slot.HasRight)
+            {
+                lines.Add(fromLeftToRight ? slot.Left : slot.Right);
+            }
+        }
+
+        _textModel.ReplaceLines(startSlot, count, leftSide: !fromLeftToRight, lines);
+        MarkDirty(!fromLeftToRight);
+        RebuildTextRows();
+    }
+
+    /// <summary>按槽模型重建行投影（供汇总、差异导航与属性面板使用；文本对比的编辑面是编辑器）。</summary>
+    /// Rebuilds the row projection from the slot model (used by the summary, diff navigation and the properties panel; the text
+    /// editors are the editing surface).
+    private void RebuildTextRows()
+    {
+        if (_textModel is null)
+        {
+            return;
+        }
+
+        var rows = new ObservableCollection<CompareRowViewModel>();
+        for (var index = 0; index < _textModel.Slots.Count; index++)
+        {
+            var slot = _textModel.Slots[index];
+            var differs = slot.Status != FolderItemStatus.Equal;
+            rows.Add(new CompareRowViewModel(
+                slot.Status,
+                depth: 0,
+                leftLine: slot.HasLeft ? (index + 1).ToString() : string.Empty,
+                leftText: slot.HasLeft ? slot.Left : string.Empty,
+                leftSub: string.Empty,
+                isLeftDiff: slot.HasLeft && differs,
+                rightLine: slot.HasRight ? (index + 1).ToString() : string.Empty,
+                rightText: slot.HasRight ? slot.Right : string.Empty,
+                rightSub: string.Empty,
+                isRightDiff: slot.HasRight && differs,
+                menu: CompareRowMenuKind.ComparedText,
+                compared: true,
+                hasLeftLine: slot.HasLeft,
+                hasRightLine: slot.HasRight));
+        }
+
+        _textRows = rows;
+        Rows = rows;
+        OnPropertyChanged(nameof(IsTextEditorMode));
+        NotifyColumnsCompareState();
+    }
+
+    /// <summary>
+    /// <para>文本对比的一个撤销点：槽状态快照 + 两侧光标所在槽号。两侧编辑器共享同一份撤销历史，
+    /// 因此一次「两侧各改一处」的结构编辑永远一起撤销/重做，不会把两侧弄错位。</para>
+    /// One undo point of a text comparison: a slot-state snapshot plus both sides' caret slots. Both editors share this single
+    /// history, so a structural edit that touched both sides is always undone/redone as a unit and the panes can never drift.
+    /// </summary>
+    private sealed record TextUndoEntry(
+        List<CompareTextSlotModel.SlotState> Slots,
+        int LeftSlot,
+        int RightSlot);
+
+    /// <summary>文本对比是否可以撤销/重做。 Whether the text comparison can undo/redo.</summary>
+    internal bool CanUndoText => _textUndo.Count > 0;
+
+    /// <summary>文本对比是否可以重做。 Whether the text comparison can redo.</summary>
+    internal bool CanRedoText => _textRedo.Count > 0;
+
+    /// <summary>
+    /// <para>记录一个撤销点（在把编辑器改动落到槽模型之前调用）：连续的行内输入在 600ms 内合并成一个撤销点，
+    /// 结构化操作（改行数）每次都单独成点。</para>
+    /// Records an undo point (called before the editor change is applied to the slot model): consecutive in-line typing within
+    /// 600 ms coalesces into one point, while a structural change (line count touched) always gets its own point.
+    /// </summary>
+    /// <param name="structural"><para>是否改变了行数。</para>Whether the line count changed.</param>
+    /// <param name="leftSlot"><para>左侧光标槽号。</para>The left caret slot.</param>
+    /// <param name="rightSlot"><para>右侧光标槽号。</para>The right caret slot.</param>
+    internal void RecordTextUndoPoint(bool structural, int leftSlot, int rightSlot)
+    {
+        if (_textModel is null)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        var coalesce = !structural && !_lastTextUndoWasStructural && _textUndo.Count > 0
+            && (now - _lastTextUndoUtc).TotalMilliseconds < 600;
+        _lastTextUndoWasStructural = structural;
+        _lastTextUndoUtc = now;
+        if (coalesce)
+        {
+            // 合并到上一个点：保留更早的快照（那才是这次连续输入前的状态）。
+            // Coalesce into the previous point: the earlier snapshot is the state before the whole burst of typing.
+            _textRedo.Clear();
+            return;
+        }
+
+        var entry = new TextUndoEntry(_textModel.CaptureState(), leftSlot, rightSlot);
+        _textUndo.Add(entry);
+        _textUndoBytes += EstimateBytes(entry);
+        _textRedo.Clear();
+        // 同时按条数与内存估算上限裁剪：大文件不会因为撤销历史把内存吃爆。
+        // Trim by both point count and estimated memory so undo history cannot blow up the memory footprint of a large file.
+        while (_textUndo.Count > 1 && (_textUndo.Count > 100 || _textUndoBytes > MaxTextUndoBytes))
+        {
+            _textUndoBytes -= EstimateBytes(_textUndo[0]);
+            _textUndo.RemoveAt(0);
+        }
+    }
+
+    /// <summary>估算一个撤销点的内存占用（两侧文本字符数 + 每槽固定开销）。</summary>
+    /// Estimates one undo point's memory footprint (both sides' characters plus a fixed cost per slot).
+    private static long EstimateBytes(TextUndoEntry entry)
+    {
+        long bytes = 0;
+        foreach (var slot in entry.Slots)
+        {
+            bytes += ((slot.Left.Length + slot.Right.Length) * 2L) + 32;
+        }
+
+        return bytes;
+    }
+
+    /// <summary>
+    /// <para>撤销一次文本对比编辑：恢复上一个槽状态快照（当前状态进入重做栈），返回两侧光标应回到的槽号。</para>
+    /// Undoes one text-comparison edit: restores the previous slot snapshot (the current state moves to the redo stack) and
+    /// returns the slots both carets should return to.
+    /// </summary>
+    internal (int LeftSlot, int RightSlot)? UndoText()
+    {
+        if (_textModel is null || _textUndo.Count == 0)
+        {
+            return null;
+        }
+
+        var entry = _textUndo[^1];
+        _textUndo.RemoveAt(_textUndo.Count - 1);
+        _textRedo.Add(new TextUndoEntry(_textModel.CaptureState(), entry.LeftSlot, entry.RightSlot));
+        _textModel.RestoreState(entry.Slots);
+        _lastTextUndoWasStructural = true;
+        MarkDirty(leftSide: true);
+        MarkDirty(leftSide: false);
+        RebuildTextRows();
+        return (entry.LeftSlot, entry.RightSlot);
+    }
+
+    /// <summary>重做一次文本对比编辑（与撤销对称）。 Redoes one text-comparison edit (the mirror of undo).</summary>
+    internal (int LeftSlot, int RightSlot)? RedoText()
+    {
+        if (_textModel is null || _textRedo.Count == 0)
+        {
+            return null;
+        }
+
+        var entry = _textRedo[^1];
+        _textRedo.RemoveAt(_textRedo.Count - 1);
+        _textUndo.Add(new TextUndoEntry(_textModel.CaptureState(), entry.LeftSlot, entry.RightSlot));
+        _textModel.RestoreState(entry.Slots);
+        MarkDirty(leftSide: true);
+        MarkDirty(leftSide: false);
+        RebuildTextRows();
+        return (entry.LeftSlot, entry.RightSlot);
+    }
+
+    /// <summary>
+    /// <para>把编辑器里选中的内容复制到另一侧的相同位置：整行选中时复制这些槽；只选中一行里的一段文字时，
+    /// 用选中的文字替换对侧同一行相同列范围的内容（其余部分保留）。</para>
+    /// Copies the editor selection to the same place on the other side: a whole-line selection copies those slots, while a partial
+    /// selection inside one line replaces the counterpart's same column range with the selected text (the rest of the line is kept).
+    /// </summary>
+    /// <param name="fromLeftToRight"><para>是否从左复制到右。</para>Whether to copy from left to right.</param>
+    /// <param name="startSlot"><para>选区起始槽号（0 起）。</para>The selection's first slot (0-based).</param>
+    /// <param name="endSlot"><para>选区结束槽号（0 起）。</para>The selection's last slot (0-based).</param>
+    /// <param name="selectedText"><para>仅单行内部分选中时给出的选中文字；整行选中时为 <c>null</c>。</para>The selected text for a partial single-line selection; <c>null</c> for whole-line selections.</param>
+    /// <param name="startColumn"><para>部分选中的起始列（0 起）。</para>The partial selection's start column (0-based).</param>
+    /// <param name="endColumn"><para>部分选中的结束列（0 起）。</para>The partial selection's end column (0-based).</param>
+    internal void CopyEditorSelection(
+        bool fromLeftToRight,
+        int startSlot,
+        int endSlot,
+        string? selectedText,
+        int startColumn,
+        int endColumn)
+    {
+        if (_textModel is null)
+        {
+            return;
+        }
+
+        startSlot = Math.Max(0, Math.Min(startSlot, _textModel.Slots.Count - 1));
+        endSlot = Math.Max(startSlot, Math.Min(endSlot, _textModel.Slots.Count - 1));
+        if (selectedText is not null && startSlot == endSlot)
+        {
+            // 单行内部分选中：按相同列范围替换对侧该行的内容。
+            // A partial selection inside one line: replace the counterpart's same column range.
+            var target = _textModel.TextAt(startSlot, leftSide: !fromLeftToRight);
+            var from = Math.Clamp(startColumn, 0, target.Length);
+            var to = Math.Clamp(endColumn, from, target.Length);
+            _textModel.SetLine(startSlot, leftSide: !fromLeftToRight, target[..from] + selectedText + target[to..]);
+            MarkDirty(!fromLeftToRight);
+            RebuildTextRows();
+            return;
+        }
+
+        CopySlots(fromLeftToRight, startSlot, endSlot - startSlot + 1);
+    }
+
+    /// <summary>
     /// <para>是否处于二进制对比模式。</para>
     /// Whether binary-compare mode is active.
     /// </summary>
@@ -379,6 +678,13 @@ public sealed partial class CompareViewModel : Document
             column.Path = fullPath;
             await column.LoadPathAsync(fullPath, isDirectory);
             loaded++;
+        }
+
+        // 恰好拖入两个路径时直接开始对比（与「工具」菜单的语义一致）；其余情况只加载为浏览列。
+        // Exactly two dropped paths start the comparison straight away (matching the Tools menu); anything else only loads columns.
+        if (loaded == 2 && loaded == paths.Count && !IsComparing)
+        {
+            await StartCompareAsync(allowSingleSide: false);
         }
 
         return loaded > 0 && loaded == paths.Count;
@@ -821,34 +1127,17 @@ public sealed partial class CompareViewModel : Document
     /// <param name="fromLeftToRight"><para>是否从左复制到右。</para>Whether to copy left to right.</param>
     internal void CopySelectedTextRows(bool fromLeftToRight)
     {
-        if (Rows is null || _selectedRowIndices.Count == 0)
+        if (_textModel is null || _selectedRowIndices.Count == 0)
         {
             return;
         }
 
-        var changed = false;
         foreach (var index in _selectedRowIndices)
         {
-            if (index < 0 || index >= Rows.Count)
-            {
-                continue;
-            }
-
-            var row = Rows[index];
-            if (!row.IsEditable)
-            {
-                continue;
-            }
-
-            var sourcePresent = fromLeftToRight ? row.HasLeftLine : row.HasRightLine;
-            var text = fromLeftToRight ? row.LeftText : row.RightText;
-            row.SetSideText(leftSide: !fromLeftToRight, sourcePresent ? text : string.Empty, sourcePresent);
-            changed = true;
-        }
-
-        if (changed)
-        {
-            MarkDirty(!fromLeftToRight);
+            // 每选中的一槽单独应用：源侧有内容就复制过去，没有就把目标侧退成填充（等价于删掉目标那一行）。
+            // Each selected slot is applied on its own: the source side's content is copied over, or the target falls back to a
+            // filler when the source has no line there (equivalent to deleting the target's line).
+            CopySlots(fromLeftToRight, index, 1);
         }
     }
 
@@ -870,26 +1159,18 @@ public sealed partial class CompareViewModel : Document
             return (0, 0);
         }
 
-        var index = _textRows.IndexOf(row);
-        if (index < 0)
+        var slot = IndexOfRow(row);
+        if (_textModel is null || slot < 0)
         {
             return (0, 0);
         }
 
-        var text = leftSide ? row.LeftText : row.RightText;
+        var text = _textModel.TextAt(slot, leftSide);
         var caret = Math.Clamp(caretIndex, 0, text.Length);
-        var head = text[..caret];
-        var tail = text[caret..];
-
-        row.SetSideText(leftSide, head, present: true);
-        var inserted = leftSide
-            ? CreateTextRow(tail, string.Empty, hasLeft: true, hasRight: false)
-            : CreateTextRow(string.Empty, tail, hasLeft: false, hasRight: true);
-        _textRows.Insert(index + 1, inserted);
-        row.RefreshDiffState();
-        inserted.RefreshDiffState();
+        _textModel.ReplaceLines(slot, 1, leftSide, [text[..caret], text[caret..]]);
         MarkDirty(leftSide);
-        return (index + 1, 0);
+        RebuildTextRows();
+        return (slot + 1, 0);
     }
 
     /// <summary>
@@ -908,25 +1189,17 @@ public sealed partial class CompareViewModel : Document
             return (0, 0);
         }
 
-        var index = _textRows.IndexOf(row);
-        if (index < 0 || index + 1 >= _textRows.Count)
+        var slot = IndexOfRow(row);
+        if (_textModel is null || slot < 0)
         {
-            return (Math.Max(index, 0), leftSide ? row.LeftText.Length : row.RightText.Length);
+            return (0, 0);
         }
 
-        var next = _textRows[index + 1];
-        var caret = leftSide ? row.LeftText.Length : row.RightText.Length;
-        if (leftSide ? next.HasLeftLine : next.HasRightLine)
-        {
-            var merged = (leftSide ? row.LeftText : row.RightText) + (leftSide ? next.LeftText : next.RightText);
-            row.SetSideText(leftSide, merged, present: true);
-        }
-
-        next.SetSideText(leftSide, string.Empty, present: false);
-        RemoveRowWhenEmpty(next);
-        row.RefreshDiffState();
+        var caret = _textModel.TextAt(slot, leftSide).Length;
+        _textModel.JoinLines(slot, leftSide);
         MarkDirty(leftSide);
-        return (index, caret);
+        RebuildTextRows();
+        return (slot, caret);
     }
 
     /// <summary>
@@ -945,25 +1218,17 @@ public sealed partial class CompareViewModel : Document
             return (0, 0);
         }
 
-        var index = _textRows.IndexOf(row);
-        if (index <= 0)
+        var slot = IndexOfRow(row);
+        if (_textModel is null || slot <= 0)
         {
-            return (Math.Max(index, 0), 0);
+            return (Math.Max(slot, 0), 0);
         }
 
-        var previous = _textRows[index - 1];
-        var caret = leftSide ? previous.LeftText.Length : previous.RightText.Length;
-        if (leftSide ? row.HasLeftLine : row.HasRightLine)
-        {
-            var merged = (leftSide ? previous.LeftText : previous.RightText) + (leftSide ? row.LeftText : row.RightText);
-            previous.SetSideText(leftSide, merged, present: true);
-        }
-
-        row.SetSideText(leftSide, string.Empty, present: false);
-        RemoveRowWhenEmpty(row);
-        previous.RefreshDiffState();
+        var caret = _textModel.TextAt(slot - 1, leftSide).Length;
+        _textModel.JoinLines(slot - 1, leftSide);
         MarkDirty(leftSide);
-        return (index - 1, caret);
+        RebuildTextRows();
+        return (slot - 1, caret);
     }
 
     /// <summary>
@@ -975,63 +1240,38 @@ public sealed partial class CompareViewModel : Document
     /// <param name="leftSide"><para>是否为左侧。</para>Whether the left side is edited.</param>
     internal void DeleteSelectedTextRows(bool leftSide)
     {
-        if (_textRows is null || _selectedRowIndices.Count == 0)
+        if (_textModel is null || _selectedRowIndices.Count == 0)
         {
             return;
         }
 
-        var removed = false;
         foreach (var index in _selectedRowIndices.OrderByDescending(index => index))
         {
-            if (index < 0 || index >= _textRows.Count)
-            {
-                continue;
-            }
-
-            var row = _textRows[index];
-            row.SetSideText(leftSide, string.Empty, present: false);
-            RemoveRowWhenEmpty(row);
-            removed = true;
+            _textModel.ReplaceLines(index, 1, leftSide, []);
         }
 
-        if (removed)
-        {
-            MarkDirty(leftSide);
-        }
+        _textModel.DropEmptySlots();
+        MarkDirty(leftSide);
+        RebuildTextRows();
     }
 
-    /// <summary>
-    /// <para>构建一个可编辑文本行（新增行用）：一侧有内容、另一侧为空，供断开/合并/复制使用。</para>
-    /// Creates an editable text row (used for new rows): content on one side and empty on the other, shared by split,
-    /// join and copy.
-    /// </summary>
-    private CompareRowViewModel CreateTextRow(string leftText, string rightText, bool hasLeft, bool hasRight)
-        => new(
-            FolderItemStatus.Equal,
-            depth: 0,
-            leftLine: string.Empty,
-            leftText: leftText,
-            leftSub: string.Empty,
-            isLeftDiff: false,
-            rightLine: string.Empty,
-            rightText: rightText,
-            rightSub: string.Empty,
-            isRightDiff: false,
-            editable: true,
-            menu: CompareRowMenuKind.ComparedText,
-            hasLeftLine: hasLeft,
-            hasRightLine: hasRight,
-            edited: MarkRowEdited);
-
-    /// <summary>两侧都没有内容时把行从列表里移除（断开/合并/删除留下的空行）。</summary>
-    private void RemoveRowWhenEmpty(CompareRowViewModel row)
+    /// <summary>取行在投影行列表中的索引（行列表与槽一一对应）。</summary>
+    private int IndexOfRow(CompareRowViewModel row)
     {
-        if (_textRows is null || row.HasLeftLine || row.HasRightLine)
+        if (_textRows is null)
         {
-            return;
+            return -1;
         }
 
-        _textRows.Remove(row);
+        for (var index = 0; index < _textRows.Count; index++)
+        {
+            if (ReferenceEquals(_textRows[index], row))
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
 
@@ -1057,18 +1297,13 @@ public sealed partial class CompareViewModel : Document
             return;
         }
 
-        var lines = new List<string>();
-        foreach (var row in Rows)
+        // 槽模型是唯一的真相：保存该侧真实行（填充槽不写入文件，空行照写）。
+        // The slot model is the single source of truth: save that side's real lines (fillers are never written, blank lines are).
+        var lines = RealLines(leftSide);
+        if (_textModel is null)
         {
-            if (!row.IsEditable)
-            {
-                return;
-            }
-
-            if (leftSide ? row.HasLeftLine : row.HasRightLine)
-            {
-                lines.Add(leftSide ? row.LeftText : row.RightText);
-            }
+            ReportError(LanguageService.Instance.GetString("Compare_SingleSideFile"));
+            return;
         }
 
         try
@@ -1091,8 +1326,13 @@ public sealed partial class CompareViewModel : Document
     /// </summary>
     /// <param name="path"><para>文件路径。</para>The file path.</param>
     /// <param name="cancellationToken"><para>取消令牌。</para>The cancellation token.</param>
-    /// <returns><para>该文件的展示行。</para>The rows that display the file.</returns>
-    internal async Task<IReadOnlyList<CompareRowViewModel>> BuildFileRowsAsync(string path, CancellationToken cancellationToken)
+    /// <param name="edited">文本被编辑时的回调（浏览列用它把自己的文件标记为已修改）。
+    /// <para>Callback invoked when the text is edited (a browsing column uses it to mark its own file modified).</para></param>
+    /// <returns><para>该文件的展示行（可结构编辑的可观察集合）。</para>The rows that display the file (an observable collection that supports structural editing).</returns>
+    internal async Task<ObservableCollection<CompareRowViewModel>> BuildFileRowsAsync(
+        string path,
+        CancellationToken cancellationToken,
+        Action<CompareRowViewModel, bool>? edited = null)
     {
         var isText = await _comparison.IsTextLikeFileAsync(path, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
@@ -1101,12 +1341,28 @@ public sealed partial class CompareViewModel : Document
         {
             var lines = await _comparison.ReadTextAsync(path, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            return await Task.Run(() => ComparisonRowBuilder.ForText(lines), cancellationToken);
+            return [.. await Task.Run(() => ComparisonRowBuilder.ForText(lines, edited), cancellationToken)];
         }
 
         var metadata = await _comparison.ReadMetadataAsync(path, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        return ComparisonRowBuilder.ForMetadata(metadata, null, LanguageService.Instance.GetString("Compare_Unrecognized"));
+        return [.. ComparisonRowBuilder.ForMetadata(metadata, null, LanguageService.Instance.GetString("Compare_Unrecognized"))];
+    }
+
+    /// <summary>
+    /// <para>读取一个文本文件的行；文件不是文本（固件扩展名或含 NUL）时返回 <c>null</c>，调用方改用元数据视图。
+    /// 浏览列的文本编辑直接使用项目文本编辑器，因此只需要行内容。</para>
+    /// Reads a text file's lines; returns <c>null</c> when the file is not textual (firmware extension or NUL bytes) so the
+    /// caller falls back to the metadata view. A browsing column edits text with the project's text editor, so the lines are
+    /// all it needs.
+    /// </summary>
+    /// <param name="path"><para>文件路径。</para>The file path.</param>
+    /// <param name="cancellationToken"><para>取消令牌。</para>The cancellation token.</param>
+    internal async Task<IReadOnlyList<string>?> ReadTextLinesAsync(string path, CancellationToken cancellationToken)
+    {
+        var isText = await _comparison.IsTextLikeFileAsync(path, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        return isText ? await _comparison.ReadTextAsync(path, cancellationToken) : null;
     }
 
     /// <summary>
@@ -1396,12 +1652,11 @@ public sealed partial class CompareViewModel : Document
         {
             var lines = await _comparison.ReadTextAsync(path, ct);
             ct.ThrowIfCancellationRequested();
-            var rows = await Task.Run(() => ComparisonRowBuilder.ForTextSingleSide(lines, useLeftSide), ct);
-            ct.ThrowIfCancellationRequested();
 
             Mode = CompareMode.Text;
-            _textRows = [.. rows];
-            Rows = _textRows;
+            _textModel = new CompareTextSlotModel();
+            _textModel.LoadSingleSide(lines, useLeftSide);
+            RebuildTextRows();
             StatsText = LanguageService.Instance.GetString("Compare_SingleSideFile");
         }
         else
@@ -1433,26 +1688,18 @@ public sealed partial class CompareViewModel : Document
         var lines = await _comparison.CompareTextAsync(_fileLeftPath, _fileRightPath, ct);
         ct.ThrowIfCancellationRequested();
 
-        var rows = new ObservableCollection<CompareRowViewModel>();
-        var diffCount = 0;
-        foreach (var line in lines)
-        {
-            var row = CompareRowViewModel.ForText(line, MarkRowEdited);
-            if (row.IsLeftDiff || row.IsRightDiff)
-            {
-                diffCount++;
-            }
-
-            rows.Add(row);
-        }
-
-        _textRows = rows;
-        Rows = rows;
+        // 文本对比使用「槽模型 + 两侧文本编辑器」：行号=对齐序号，填充槽显示斜杠，编辑由编辑器承担。
+        // A text comparison uses the slot model together with the project's text editors: one line per aligned slot with
+        // slashes for fillers, and the editors as the editing surface.
+        _textModel = new CompareTextSlotModel();
+        _textModel.Load(lines);
+        RebuildTextRows();
+        var diffCount = _textModel.Slots.Count(slot => slot.Status != FolderItemStatus.Equal);
         SelectedIndex = -1;
         StatsText = string.Format(
             LanguageService.Instance.GetString("Compare_TextSummary"),
             diffCount,
-            rows.Count);
+            _textModel.Slots.Count);
         HasError = false;
         ErrorMessage = string.Empty;
     }
@@ -1512,6 +1759,10 @@ public sealed partial class CompareViewModel : Document
         _folderSummaryText = string.Empty;
         _compareTreeRoot = null;
         _textRows = null;
+        _textModel = null;
+        _textUndo.Clear();
+        _textRedo.Clear();
+        _lastTextUndoWasStructural = false;
         _currentHexRows?.Dispose();
         _currentHexRows = null;
         _leftMetadata = null;

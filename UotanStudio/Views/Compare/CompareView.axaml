@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:edit="using:AvaloniaEdit"
              xmlns:vm="using:UotanStudio.ViewModels.Compare"
              xmlns:compareviews="using:UotanStudio.Views.Compare"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
@@ -25,7 +26,10 @@
          and single-side entries stay blank on the other side. Whole-row colouring follows Beyond Compare:
          different → both rows highlighted, single-side → that side tinted. -->
     <DataTemplate x:Key="CompareLeftRowTemplate" x:DataType="vm:CompareRowViewModel">
-      <Grid ColumnDefinitions="3,*" MinHeight="20" ContextRequested="OnRowContextRequested">
+      <!-- 整行可命中：Grid 没有背景时空白区域不参与命中测试，右键菜单只会在文件名那一段生效。 -->
+      <!-- The whole row is hit-testable: without a background a Grid ignores empty areas, so the context menu only appeared over the
+           file name. -->
+      <Grid ColumnDefinitions="3,*" MinHeight="20" Background="Transparent" ContextRequested="OnRowContextRequested">
         <Grid.ContextMenu>
           <ContextMenu>
             <MenuItem Header="{DynamicResource Compare_CopyTextToOtherSide}" Tag="Left"
@@ -53,6 +57,8 @@
                       Click="OnCreateFolder" />
             <MenuItem Header="{DynamicResource Explorer_CopyFullPath}" IsVisible="{Binding ShowEntryMenu}" Tag="Left"
                       Click="OnCopyEntryPath" />
+            <MenuItem Header="{DynamicResource Compare_EnterFolder}" IsVisible="{Binding ShowBrowsingEntryFolder}"
+                      Tag="Left" Click="OnEnterFolder" />
             <MenuItem Header="{DynamicResource Explorer_OpenInFileExplorer}" IsVisible="{Binding ShowEntryMenu}" Tag="Left"
                       Click="OnOpenEntryInExplorer" />
           </ContextMenu>
@@ -63,23 +69,28 @@
                 IsVisible="{Binding IsLeftDiff}" />
         <Border Grid.Column="0" Width="3" Background="{Binding StatusBrush}"
                 Margin="2,3" CornerRadius="2" IsVisible="{Binding !IsLeftEmpty}" />
-        <Grid Grid.Column="1" ColumnDefinitions="14,32,*,Auto"
+        <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*,Auto"
               Margin="{Binding Depth, Converter={x:Static compareviews:DepthToIndentConverter.Instance}}">
-          <avalonia:MaterialIcon Grid.Column="1" Kind="{Binding LeftIconKind}" Foreground="{Binding LeftIconBrush}"
+          <avalonia:MaterialIcon Grid.Column="0" Kind="{Binding LeftIconKind}" Foreground="{Binding LeftIconBrush}"
                                  Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center"
-                                 IsVisible="{Binding ShowLeftIcon}" />
+                                 Margin="0,0,4,0" IsVisible="{Binding ShowLeftIcon}" />
           <TextBlock Grid.Column="1" Text="{Binding LeftLine}" FontSize="11" Opacity="0.6" MinWidth="32"
-                     TextAlignment="Right" VerticalAlignment="Center" Margin="4,0"
-                     IsVisible="{Binding !IsLeftEmpty}" />
+                     TextAlignment="Right" VerticalAlignment="Center" Margin="2,0,4,0"
+                     IsVisible="{Binding ShowLeftLineNumber}" />
           <TextBlock Grid.Column="2" Text="{Binding LeftText}" FontFamily="Consolas" FontSize="12"
                      VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                      IsVisible="{Binding ShowLeftText}" />
+          <!-- 对比中该侧没有这一行 → 用斜杠占位，保持同行对应关系一眼可见。 -->
+          <!-- The comparison has no such row on this side → a slash placeholder keeps the row alignment visible. -->
+          <TextBlock Grid.Column="2" Text="/" FontFamily="Consolas" FontSize="12" Opacity="0.35"
+                     VerticalAlignment="Center" IsVisible="{Binding ShowLeftFiller}" />
           <!-- 文本对比中该行可编辑：直接在行内改文本，鼠标可拖拽选中，顶部两个复制按钮把选中行推到另一侧。 -->
           <!-- Editable in a text comparison: the text is edited in place, mouse selection works, and the toolbar's copy
                buttons push the selected rows to the other side. -->
           <TextBox Grid.Column="2" Text="{Binding LeftText, Mode=TwoWay}" FontFamily="Consolas" FontSize="12"
                    IsVisible="{Binding IsEditable}" BorderThickness="0" Background="Transparent" Padding="0"
                    MinHeight="0" Height="20" VerticalContentAlignment="Center" AcceptsReturn="False"
+                   PlaceholderText="{Binding ComparedFiller}"
                    KeyDown="OnRowEditorKeyDown" />
           <TextBlock Grid.Column="3" Text="{Binding LeftSub}" FontSize="11" Opacity="0.6"
                      HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0,6,0"
@@ -88,7 +99,7 @@
       </Grid>
     </DataTemplate>
     <DataTemplate x:Key="CompareRightRowTemplate" x:DataType="vm:CompareRowViewModel">
-      <Grid ColumnDefinitions="3,*" MinHeight="20" ContextRequested="OnRowContextRequested">
+      <Grid ColumnDefinitions="3,*" MinHeight="20" Background="Transparent" ContextRequested="OnRowContextRequested">
         <Grid.ContextMenu>
           <ContextMenu>
             <MenuItem Header="{DynamicResource Compare_CopyTextToOtherSide}" Tag="Right"
@@ -118,20 +129,23 @@
                 IsVisible="{Binding IsRightDiff}" />
         <Border Grid.Column="0" Width="3" Background="{Binding StatusBrush}"
                 Margin="2,3" CornerRadius="2" IsVisible="{Binding !IsRightEmpty}" />
-        <Grid Grid.Column="1" ColumnDefinitions="14,32,*,Auto"
+        <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*,Auto"
               Margin="{Binding Depth, Converter={x:Static compareviews:DepthToIndentConverter.Instance}}">
-          <avalonia:MaterialIcon Grid.Column="1" Kind="{Binding RightIconKind}" Foreground="{Binding RightIconBrush}"
+          <avalonia:MaterialIcon Grid.Column="0" Kind="{Binding RightIconKind}" Foreground="{Binding RightIconBrush}"
                                  Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center"
-                                 IsVisible="{Binding ShowRightIcon}" />
+                                 Margin="0,0,4,0" IsVisible="{Binding ShowRightIcon}" />
           <TextBlock Grid.Column="1" Text="{Binding RightLine}" FontSize="11" Opacity="0.6" MinWidth="32"
-                     TextAlignment="Right" VerticalAlignment="Center" Margin="4,0"
-                     IsVisible="{Binding !IsRightEmpty}" />
+                     TextAlignment="Right" VerticalAlignment="Center" Margin="2,0,4,0"
+                     IsVisible="{Binding ShowRightLineNumber}" />
           <TextBlock Grid.Column="2" Text="{Binding RightText}" FontFamily="Consolas" FontSize="12"
                      VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                      IsVisible="{Binding ShowRightText}" />
+          <TextBlock Grid.Column="2" Text="/" FontFamily="Consolas" FontSize="12" Opacity="0.35"
+                     VerticalAlignment="Center" IsVisible="{Binding ShowRightFiller}" />
           <TextBox Grid.Column="2" Text="{Binding RightText, Mode=TwoWay}" FontFamily="Consolas" FontSize="12"
                    IsVisible="{Binding IsEditable}" BorderThickness="0" Background="Transparent" Padding="0"
                    MinHeight="0" Height="20" VerticalContentAlignment="Center" AcceptsReturn="False"
+                   PlaceholderText="{Binding ComparedFiller}"
                    KeyDown="OnRowEditorKeyDown" />
           <TextBlock Grid.Column="3" Text="{Binding RightSub}" FontSize="11" Opacity="0.6"
                      HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0,6,0"
@@ -206,6 +220,53 @@
         <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" Height="2" IsVisible="{Binding IsBusy}" />
 
         <Grid>
+          <!-- 文本对比：两侧各一个项目文本编辑器（行=对齐槽，填充槽显示斜杠；跨行选择、增删行、撤销/重做、多行粘贴
+               都是编辑器原生行为，改动会被翻译成槽操作并同步到另一侧）。 -->
+          <!-- Text comparison: one project text editor per side (one line per aligned slot, slashes for fillers). Cross-line
+               selection, line insert/delete, undo/redo and multi-line paste are native, and every change is translated into
+               slot operations and mirrored to the other side. -->
+          <edit:TextEditor x:Name="CompareTextEditor" IsVisible="{Binding IsCompareTextEditorVisible}"
+                           FontFamily="Consolas,monospace" FontSize="12" Padding="6,2"
+                           Background="Transparent" Foreground="{DynamicResource TextForeground}"
+                           ShowLineNumbers="True" WordWrap="False"
+                           HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+            <!-- 文本对比编辑器：常用编辑命令 + 把选中的行/文字复制到另一侧相同位置。 -->
+            <!-- Text-comparison editor: the usual editing commands plus "copy the selected lines/text to the same place on the other side". -->
+            <edit:TextEditor.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="{DynamicResource Compare_CopyTextToOtherSide}" Tag="CopyToOtherSide"
+                          Click="OnCopyEditorSelectionToOtherSide" />
+                <Separator />
+                <MenuItem Header="{DynamicResource Menu_Cut}" Click="OnEditorCut" />
+                <MenuItem Header="{DynamicResource Menu_Copy}" Click="OnEditorCopy" />
+                <MenuItem Header="{DynamicResource Menu_Paste}" Click="OnEditorPaste" />
+                <Separator />
+                <MenuItem Header="{DynamicResource Menu_SelectAll}" Click="OnEditorSelectAll" />
+              </ContextMenu>
+            </edit:TextEditor.ContextMenu>
+          </edit:TextEditor>
+
+          <!-- 浏览文本文件：使用项目文本编辑器（真正的多行编辑、跨行选择、撤销/重做、多行粘贴）。 -->
+          <!-- Browsing a text file: the project's text editor (real multi-line editing, cross-line selection, undo/redo,
+               multi-line paste). -->
+          <edit:TextEditor x:Name="BrowseTextEditor" IsVisible="{Binding IsBrowsingTextEditor}"
+                           FontFamily="Consolas,monospace" FontSize="12" Padding="6,2"
+                           Background="Transparent" Foreground="{DynamicResource TextForeground}"
+                           ShowLineNumbers="True" WordWrap="False"
+                           HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+            <!-- 浏览文本编辑器：当前 AvaloniaEdit 版本没有自带右键菜单，这里补回常用编辑命令。 -->
+            <!-- Browsing text editor: this AvaloniaEdit version ships no built-in context menu, so the usual editing commands are restored. -->
+            <edit:TextEditor.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="{DynamicResource Menu_Cut}" Click="OnEditorCut" />
+                <MenuItem Header="{DynamicResource Menu_Copy}" Click="OnEditorCopy" />
+                <MenuItem Header="{DynamicResource Menu_Paste}" Click="OnEditorPaste" />
+                <Separator />
+                <MenuItem Header="{DynamicResource Menu_SelectAll}" Click="OnEditorSelectAll" />
+              </ContextMenu>
+            </edit:TextEditor.ContextMenu>
+          </edit:TextEditor>
+
           <!-- 左单元格行列表：浏览列显示目录树行或文件内容，对比左列显示对比结果左侧。 -->
           <!-- Left-cell row list: a browsing column shows tree rows or file content, the compare left column
                shows the comparison's left side. -->
@@ -213,9 +274,7 @@
                    Classes="compare-rows" SelectionChanged="OnRowSelectionChanged"
                    SelectionMode="{Binding RowSelectionMode}"
                    AutoScrollToSelectedItem="False" Background="Transparent"
-                   DoubleTapped="OnRowDoubleTapped"
                    KeyDown="OnRowListKeyDown"
-                   PointerPressed="OnRowPointerPressed" PointerMoved="OnRowPointerMoved"
                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
                    ScrollViewer.VerticalScrollBarVisibility="Auto"
                    ItemTemplate="{StaticResource CompareLeftRowTemplate}" />
@@ -226,9 +285,7 @@
                    Classes="compare-rows" SelectionChanged="OnRowSelectionChanged"
                    SelectionMode="{Binding RowSelectionMode}"
                    AutoScrollToSelectedItem="False" Background="Transparent"
-                   DoubleTapped="OnRowDoubleTapped"
                    KeyDown="OnRowListKeyDown"
-                   PointerPressed="OnRowPointerPressed" PointerMoved="OnRowPointerMoved"
                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
                    ScrollViewer.VerticalScrollBarVisibility="Auto"
                    ItemTemplate="{StaticResource CompareRightRowTemplate}" />
@@ -309,22 +366,15 @@
   </UserControl.Styles>
 
   <Grid Background="Transparent">
-    <!-- 空态提示：尚无任何文件列内容时展示（拖入文件/文件夹，或用顶部「添加文件夹」）。 -->
-    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10"
-                IsVisible="{Binding IsEmptyDocument}">
-      <avalonia:MaterialIcon Kind="FileCompare" Width="48" Height="48" Opacity="0.35"
-                             HorizontalAlignment="Center" />
-      <TextBlock Text="{DynamicResource Compare_DropHint}" FontSize="14" Opacity="0.7"
-                 HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
-    </StackPanel>
-
     <DockPanel>
       <!-- 顶栏：左侧两个复制按钮，右侧「开启/结束对比」与「添加文件夹」；其余按钮在各列路径行。 -->
       <!-- Toolbar: the two copy buttons on the left, start/stop-compare and add-folder on the right; every
            other button lives on a column's path row. -->
       <Border DockPanel.Dock="Top" Padding="6,4"
               BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+        <!-- 左右两侧都是星号列，中间的复制按钮因此相对整条顶栏真正水平居中（而不是被挤到右侧）。 -->
+        <!-- Both sides are star columns so the copy buttons in the middle are centred against the whole toolbar instead of being pushed right. -->
+        <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="8">
           <TextBlock Grid.Column="0" Text="{Binding StatsText}" FontSize="12" VerticalAlignment="Center"
                      TextTrimming="CharacterEllipsis" />
           <!-- 两个复制按钮放在顶栏中间，且仅在对比状态下显示。 -->
@@ -342,7 +392,8 @@
               <avalonia:MaterialIcon Kind="ArrowLeft" />
             </Button>
           </StackPanel>
-          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                      HorizontalAlignment="Right">
             <Button Classes="Small" Command="{Binding ToggleCompareCommand}"
                     AutomationProperties.Name="{DynamicResource Compare_StartCompare}">
               <ToolTip.Tip>

@@ -8,10 +8,15 @@ using Avalonia.Data.Converters;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Markup.Xaml.Templates;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using AvaloniaEdit;
+using AvaloniaEdit.Document;
+using AvaloniaEdit.Editing;
+using AvaloniaEdit.Rendering;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
@@ -85,6 +90,18 @@ public partial class CompareView : UserControl
         Loaded += OnViewLoaded;
         Unloaded += OnViewUnloaded;
         DataContextChanged += OnDataContextChanged;
+        // 兜底：只拦截「异常调用栈来自本视图」的未处理异常（日志 + 错误条），避免编辑器内部状态冲突直接终止进程；
+        // 其它来源的未处理异常照旧向上抛出，不掩盖别处的问题。
+        // Safety net: only unhandled exceptions whose stack comes from this view are turned into a log line plus an error banner entry,
+        // so an internal editor state conflict cannot kill the process; exceptions from elsewhere still propagate as before.
+        Dispatcher.UIThread.UnhandledException += OnDispatcherUnhandledException;
+
+        // 拖拽与跨行框选在隧道阶段捕获：行内的输入框/列表项会消费冒泡的指针事件，
+        // 只有在预览阶段才能稳定拿到「从某一行开始的按下/移动」。
+        // Drag and range selection are captured in the tunnel phase: editors and list items consume the bubbling pointer
+        // events, so only the preview phase reliably sees a press/move that starts on a row.
+        AddHandler(PointerPressedEvent, OnPreviewPointerPressed, RoutingStrategies.Tunnel);
+        AddHandler(PointerMovedEvent, OnPreviewPointerMoved, RoutingStrategies.Tunnel);
     }
 
     /// <summary>
@@ -105,6 +122,18 @@ public partial class CompareView : UserControl
 
         /// <summary>行列表内部滚动容器。 The row list's inner scroll container.</summary>
         public ScrollViewer? Scroll { get; set; }
+
+        /// <summary>浏览文本编辑器（文本文件）。 The browsing text editor (text files).</summary>
+        public TextEditor? BrowseEditor { get; set; }
+
+        /// <summary>文本对比编辑器。 The text-comparison editor.</summary>
+        public TextEditor? CompareEditor { get; set; }
+
+        /// <summary>浏览编辑器是否已接线（含列属性监听）。 Whether the browsing editor is wired up (including the column listener).</summary>
+        public bool BrowseWired { get; set; }
+
+        /// <summary>列属性变化处理器（用于退订）。 The column property-change handler (kept for unsubscribing).</summary>
+        public System.ComponentModel.PropertyChangedEventHandler? ColumnHandler { get; set; }
     }
 
     // ===== 生命周期与列构建 =====
@@ -123,8 +152,31 @@ public partial class CompareView : UserControl
 
     private void OnViewUnloaded(object? sender, RoutedEventArgs e)
     {
+        Dispatcher.UIThread.UnhandledException -= OnDispatcherUnhandledException;
         DetachScrollViewers();
         UnsubscribeViewModel();
+    }
+
+    /// <summary>
+    /// <para>未处理异常兜底：调用栈来自对比视图（含其编辑器）时记录日志、写错误条并标记已处理，避免直接崩退；
+    /// 其它来源保持原行为。</para>
+    /// Unhandled-exception safety net: when the stack comes from the compare view (or its editors) the failure is logged, shown in the
+    /// error banner and marked handled so the app does not die; anything else keeps its original behaviour.
+    /// </summary>
+    private void OnDispatcherUnhandledException(object? sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        var stack = e.Exception.StackTrace ?? string.Empty;
+        if (!stack.Contains("UotanStudio.Views.Compare", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        LogService.Instance.Write(LogLevel.Error, "Compare", e.Exception.ToString());
+        if (DataContext is CompareViewModel vm)
+        {
+            vm.ReportError(e.Exception.Message);
+        }
     }
 
     /// <summary>
@@ -221,12 +273,16 @@ public partial class CompareView : UserControl
                 ContentTemplate = columnTemplate,
                 Focusable = false
             };
+            // 新列的模板稍后才实例化，挂接滚动容器要等它进入可视树再补一次。
+            // A new column's template is realised later, so the scroll container is attached again once it loads.
+            container.Loaded += OnColumnContainerLoaded;
             Grid.SetColumn(container, ColumnGrid.ColumnDefinitions.Count - 1);
             ColumnGrid.Children.Add(container);
             _columnVisuals.Add(new ColumnVisuals(vm.Columns[index], container));
         }
 
         UpdateDividerInteractivity();
+        Dispatcher.UIThread.Post(AttachColumnEditors, DispatcherPriority.Loaded);
     }
 
     /// <summary>
@@ -290,6 +346,37 @@ public partial class CompareView : UserControl
 
         _mirroredLeftY = double.NaN;
         _mirroredRightY = double.NaN;
+    }
+
+    /// <summary>
+    /// <para>列容器首次进入可视树时补挂滚动容器：新增第 3、4…列时其模板尚未应用，早先那次挂接会落空，
+    /// 只有在这里再补一次，新列的滚动镜像/选中同步才生效。</para>
+    /// Attaches the scroll container when a column's container is first realized: a newly added third, fourth … column
+    /// has no template yet when the earlier attach runs, so this retry is what makes the new column's scroll mirroring and
+    /// selection synchronisation work.
+    /// </summary>
+    private void OnColumnContainerLoaded(object? sender, RoutedEventArgs e) => AttachScrollViewers();
+
+    /// <summary>懒解析某一列的列表与滚动容器（容器已实现但缓存还没跟上时补上）。</summary>
+    private void EnsureColumnResolved(ColumnVisuals visuals)
+    {
+        if (visuals.List is not null)
+        {
+            return;
+        }
+
+        var list = ResolveRowList(visuals.Container, visuals.Column.UsesRightCells);
+        if (list is null)
+        {
+            return;
+        }
+
+        visuals.List = list;
+        visuals.Scroll = ResolveListScrollViewer(list);
+        if (visuals.Scroll is not null)
+        {
+            visuals.Scroll.ScrollChanged += OnScrollChanged;
+        }
     }
 
     /// <summary>
@@ -658,13 +745,32 @@ public partial class CompareView : UserControl
             or nameof(CompareViewModel.Mode)
             or nameof(CompareViewModel.IsComparing))
         {
-            Dispatcher.UIThread.Post(AttachScrollViewers, DispatcherPriority.Loaded);
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    AttachScrollViewers();
+                    AttachCompareEditors();
+                },
+                DispatcherPriority.Loaded);
         }
     }
 
-    /// <summary>按角色查找参与对比的列视图；未在对比时返回 <c>null</c>。</summary>
+    /// <summary>
+    /// <para>按角色查找参与对比的列视图；未在对比时返回 <c>null</c>。查找前先按需补解析列表与滚动容器，
+    /// 避免新增列后这里拿到未挂接的条目。</para>
+    /// Finds the visual of the column playing the given role, or <c>null</c> while not comparing. The column's list and
+    /// scroll container are resolved on demand first so an added column is never returned unresolved.
+    /// </summary>
     private ColumnVisuals? FindCompareVisuals(CompareColumnSide side)
-        => _columnVisuals.FirstOrDefault(visuals => visuals.Column.Side == side);
+    {
+        var visuals = _columnVisuals.FirstOrDefault(item => item.Column.Side == side);
+        if (visuals is not null)
+        {
+            EnsureColumnResolved(visuals);
+        }
+
+        return visuals;
+    }
 
     /// <summary>
     /// <para>差异导航滚动：把两个对比列都顶部对齐滚到 <see cref="CompareViewModel.ScrollToIndex"/>
@@ -751,6 +857,708 @@ public partial class CompareView : UserControl
 
     // ===== 行双击与目录树展开 =====
 
+    // ===== 文本对比编辑器（槽模型 ↔ 两侧编辑器） =====
+
+    /// <summary>同步编辑器文档时置位，避免把程序写入当成用户编辑。</summary>
+    private bool _syncingEditors;
+
+    /// <summary>每个对比编辑器的高亮着色器（按行着色整行差异）。</summary>
+    private readonly Dictionary<TextEditor, CompareLineHighlighter> _editors = [];
+
+    /// <summary>最后一次右键命中的编辑器（右键菜单项据此定位编辑器）。</summary>
+    private TextEditor? _contextEditor;
+
+    /// <summary>编辑器滚动镜像中置位（防回环）。 Set while mirroring editor scrolling (guards against loops).</summary>
+    private bool _syncingEditorScroll;
+
+    /// <summary>
+    /// <para>两个对比编辑器的滚动镜像：两侧文档等长（行=对齐槽），所以直接按像素镜像偏移就能保持同行对应，
+    /// 不需要按行号换算。</para>
+    /// Scroll mirroring between the two compare editors: both documents have the same length (one line per aligned slot), so
+    /// mirroring the pixel offset keeps the rows aligned without any row-index conversion.
+    /// </summary>
+    private void OnCompareEditorScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        if (_syncingEditorScroll || sender is not ScrollViewer source || !IsLoaded)
+        {
+            return;
+        }
+
+        var editors = EnumerateCompareEditors();
+        var sourceEditor = editors.FirstOrDefault(pair => ReferenceEquals(ResolveEditorScrollViewer(pair.Editor), source));
+        if (sourceEditor.Editor is null)
+        {
+            return;
+        }
+
+        var target = editors.FirstOrDefault(pair => pair.LeftSide != sourceEditor.LeftSide).Editor is { } targetEditor
+            ? ResolveEditorScrollViewer(targetEditor)
+            : null;
+        if (target is null || Math.Abs(target.Offset.Y - source.Offset.Y) < 0.5)
+        {
+            return;
+        }
+
+        _syncingEditorScroll = true;
+        try
+        {
+            target.Offset = new Vector(target.Offset.X, source.Offset.Y);
+        }
+        finally
+        {
+            _syncingEditorScroll = false;
+        }
+    }
+
+    /// <summary>取编辑器内部的滚动容器（AvaloniaEdit 未公开该部件，按可视树解析）。</summary>
+    /// Resolves the editor's inner scroll container (AvaloniaEdit does not expose the part, so the visual tree is used).
+    private static ScrollViewer? ResolveEditorScrollViewer(TextEditor editor)
+        => editor.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+
+    /// <summary>
+    /// <para>把两个对比编辑器同步成槽模型的投影（行号=对齐序号，填充槽显示斜杠），并刷新差异行着色与选中范围。</para>
+    /// Synchronises both compare editors with the slot model's projection (line numbers are alignment indices, fillers show a
+    /// slash) and refreshes the diff-line colouring and the selected slot range.
+    /// </summary>
+    private void SyncCompareEditors(TextEditor? skip = null)
+    {
+        if (DataContext is not CompareViewModel vm)
+        {
+            return;
+        }
+
+        // 同步过程本身也不能抛：任何编辑器异常都转成错误条 + 日志。
+        // The synchronisation itself must not throw either: any editor failure becomes an error banner entry plus a log line.
+        try
+        {
+            SyncCompareEditorsCore(vm, skip);
+        }
+        catch (Exception ex)
+        {
+            ReportEditorFailure(vm, ex);
+        }
+    }
+
+    /// <summary>同步实现：写入两侧投影并刷新差异着色。 The synchronisation itself: writes both projections and refreshes the diff colouring.</summary>
+    private void SyncCompareEditorsCore(CompareViewModel vm, TextEditor? skip)
+    {
+        _syncingEditors = true;
+        try
+        {
+            foreach (var (editor, leftSide) in EnumerateCompareEditors())
+            {
+                // 编辑侧保持用户刚输入的内容与光标（模型已按同样的语义更新），只同步另一侧。
+                // The edited side keeps the user's text and caret (the model was updated with the same semantics); only the other
+                // side is synchronised.
+                if (!ReferenceEquals(editor, skip))
+                {
+                    var text = vm.ProjectText(leftSide);
+                    if (!string.Equals(editor.Text, text, StringComparison.Ordinal))
+                    {
+                        editor.Text = text;
+                    }
+                }
+
+                // 差异行整行着色（不同=红、单侧=橙/蓝），与行列表期间的规则一致。
+                // Whole-line diff colouring (different=red, single-side=orange/blue), matching the row list's rule.
+                if (_editors.TryGetValue(editor, out var highlighter))
+                {
+                    highlighter.SetLines(vm.HighlightedSlots(leftSide).Select(index => index + 1));
+                    editor.TextArea.TextView.InvalidateVisual();
+                }
+            }
+        }
+        finally
+        {
+            _syncingEditors = false;
+        }
+    }
+
+    /// <summary>枚举当前对比中的编辑器及其所属侧。 Enumerates the compare editors with the side they show.</summary>
+    private List<(TextEditor Editor, bool LeftSide)> EnumerateCompareEditors()
+    {
+        var result = new List<(TextEditor, bool)>();
+        foreach (var visuals in _columnVisuals)
+        {
+            if (visuals.CompareEditor is { } editor && visuals.Column.IsCompareSide)
+            {
+                result.Add((editor, !visuals.Column.UsesRightCells));
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>在列容器里取文本对比编辑器（按名字查找）。 Finds the compare text editor inside a column container.</summary>
+    private static TextEditor? ResolveCompareEditor(ContentControl container)
+        => ResolveEditor(container, "CompareTextEditor");
+
+    /// <summary>按名字在列容器里查找编辑器。 Finds an editor by name inside a column container.</summary>
+    private static TextEditor? ResolveEditor(ContentControl container, string name)
+    {
+        foreach (var editor in container.GetVisualDescendants().OfType<TextEditor>())
+        {
+            if (string.Equals(editor.Name, name, StringComparison.Ordinal))
+            {
+                return editor;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// <para>接线每一列的编辑器：浏览文本文件用编辑器（内容随列属性双向同步），文本对比用两侧编辑器（改动翻译成槽操作）。</para>
+    /// Wires each column's editors: a browsed text file uses the editor (content synchronised both ways with the column's
+    /// property) and a text comparison uses both sides' editors (changes translated into slot operations).
+    /// </summary>
+    private void AttachColumnEditors()
+    {
+        if (!IsLoaded)
+        {
+            return;
+        }
+
+        foreach (var visuals in _columnVisuals)
+        {
+            WireBrowseEditor(visuals);
+        }
+
+        AttachCompareEditors();
+        SyncCompareEditors();
+    }
+
+    /// <summary>接线浏览文本编辑器：把列里的文本推给编辑器，并把用户的编辑写回列（标记已修改）。</summary>
+    /// Wires the browsing text editor: the column's text is pushed into the editor and the user's edits are written back into
+    /// the column (marking it modified).
+    private void WireBrowseEditor(ColumnVisuals visuals)
+    {
+        var editor = ResolveEditor(visuals.Container, "BrowseTextEditor");
+        if (editor is null)
+        {
+            return;
+        }
+
+        visuals.BrowseEditor = editor;
+        if (visuals.BrowseWired)
+        {
+            return;
+        }
+
+        visuals.BrowseWired = true;
+        visuals.ColumnHandler = (_, args) =>
+        {
+            if (args.PropertyName is not (nameof(CompareColumnViewModel.EditorText)
+                or nameof(CompareColumnViewModel.IsTextEditorVisible)))
+            {
+                return;
+            }
+
+            _syncingEditors = true;
+            try
+            {
+                if (!string.Equals(editor.Document.Text, visuals.Column.EditorText, StringComparison.Ordinal))
+                {
+                    // 写入延后到本次属性通知之后：在编辑器自身的变更通知里回写文档容易触发内部状态冲突。
+                    // The write is deferred past the current notification: writing the document back from inside the editor's own
+                    // change notification can trip internal state.
+                    var text = visuals.Column.EditorText;
+                    Dispatcher.UIThread.Post(
+                        () =>
+                        {
+                            _syncingEditors = true;
+                            try
+                            {
+                                // 写回整篇文档会把光标重置到文件开头，先记住光标位置再恢复。
+                                // Replacing the whole document resets the caret to the top of the file, so it is captured and restored.
+                                var caret = editor.CaretOffset;
+                                editor.Document.Text = text;
+                                editor.CaretOffset = Math.Clamp(caret, 0, editor.Document.TextLength);
+                            }
+                            finally
+                            {
+                                _syncingEditors = false;
+                            }
+                        },
+                        DispatcherPriority.Background);
+                }
+            }
+            finally
+            {
+                _syncingEditors = false;
+            }
+        };
+        visuals.Column.PropertyChanged += visuals.ColumnHandler;
+        editor.AddHandler(ContextRequestedEvent, OnEditorContextRequested, RoutingStrategies.Tunnel);
+        editor.Document.Changed += (_, _) =>
+        {
+            if (_syncingEditors)
+            {
+                return;
+            }
+
+            // 编辑失败也不能闪退：异常写进错误区与日志。
+            // An editing failure must not crash the app either: exceptions go to the error banner and the log.
+            try
+            {
+                visuals.Column.EditorText = editor.Document.Text;
+            }
+            catch (Exception ex)
+            {
+                if (DataContext is CompareViewModel viewModel)
+                {
+                    ReportEditorFailure(viewModel, ex);
+                }
+                else
+                {
+                    LogService.Instance.Write(LogLevel.Error, "Compare", ex.ToString());
+                }
+            }
+        };
+        editor.Document.Text = visuals.Column.EditorText;
+    }
+
+    // ===== 文本编辑器的右键菜单 =====
+
+    /// <summary>记录右键命中的编辑器（菜单项在弹出层里，取不到编辑器本身）。</summary>
+    /// Records the editor a context request hit (menu items live in a popup and cannot resolve the editor themselves).
+    private void OnEditorContextRequested(object? sender, ContextRequestedEventArgs e)
+        => _contextEditor = sender as TextEditor;
+
+    /// <summary>菜单项对应的编辑器：优先右键记录，回退到当前聚焦的编辑器。</summary>
+    /// The editor a menu item applies to: the recorded context editor, falling back to the focused one.
+    private TextEditor? ResolveMenuEditor()
+        => _contextEditor ?? EnumerateCompareEditors().Select(pair => pair.Editor).FirstOrDefault(editor => editor.IsFocused)
+            ?? _columnVisuals.Select(visuals => visuals.BrowseEditor).FirstOrDefault(editor => editor?.IsFocused == true);
+
+    /// <summary>编辑器右键菜单：剪切。</summary>
+    private void OnEditorCut(object? sender, RoutedEventArgs e)
+    {
+        if (ResolveMenuEditor() is { } editor)
+        {
+            editor.Cut();
+        }
+    }
+
+    /// <summary>编辑器右键菜单：复制。</summary>
+    private void OnEditorCopy(object? sender, RoutedEventArgs e)
+    {
+        if (ResolveMenuEditor() is { } editor)
+        {
+            editor.Copy();
+        }
+    }
+
+    /// <summary>编辑器右键菜单：粘贴。</summary>
+    private void OnEditorPaste(object? sender, RoutedEventArgs e)
+    {
+        if (ResolveMenuEditor() is { } editor)
+        {
+            editor.Paste();
+        }
+    }
+
+    /// <summary>编辑器右键菜单：全选。</summary>
+    private void OnEditorSelectAll(object? sender, RoutedEventArgs e)
+    {
+        if (ResolveMenuEditor() is { } editor)
+        {
+            editor.SelectAll();
+        }
+    }
+
+    /// <summary>
+    /// <para>文本对比编辑器右键菜单「复制到另一侧」：整行选中时复制这些行到对侧相同槽位；只在单行内选中一段文字时，
+    /// 用选中文字替换对侧同一行的相同列范围。</para>
+    /// The text-comparison editor's "copy to the other side": a whole-line selection copies those lines to the same slots on the other
+    /// side, while a partial selection inside one line replaces the counterpart's same column range with the selected text.
+    /// </summary>
+    private void OnCopyEditorSelectionToOtherSide(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not CompareViewModel vm || !vm.IsTextEditorMode || ResolveMenuEditor() is not { } editor)
+        {
+            return;
+        }
+
+        var (owner, leftSide) = FindCompareEditorSide(editor.Document);
+        if (owner is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var selection = editor.TextArea.Selection;
+            var startLine = Math.Min(selection.StartPosition.Line, selection.EndPosition.Line) - 1;
+            var endLine = Math.Max(selection.StartPosition.Line, selection.EndPosition.Line) - 1;
+            var selectedText = selection.IsEmpty ? null : editor.SelectedText;
+
+            // 只有「单行内、且没有整行覆盖」时才按列范围替换，其余情况按整行复制。
+            // Only a single-line selection that does not cover whole lines is handled as a column range; everything else copies whole lines.
+            var partial = selectedText is not null && startLine == endLine
+                && selection.StartPosition.Column > 1;
+            vm.CopyEditorSelection(
+                fromLeftToRight: leftSide,
+                startSlot: Math.Max(0, startLine),
+                endSlot: Math.Max(0, endLine),
+                selectedText: partial ? selectedText : null,
+                startColumn: Math.Max(0, selection.StartPosition.Column - 1),
+                endColumn: Math.Max(0, selection.EndPosition.Column - 1));
+            SyncCompareEditors();
+            ClearEditorUndo(editor);
+        }
+        catch (Exception ex)
+        {
+            ReportEditorFailure(vm, ex);
+        }
+    }
+
+    /// <summary>
+    /// <para>挂接对比编辑器：载入槽模型投影、拦截会改变行数的编辑（翻译成槽操作后重新投影两侧），
+    /// 把行内编辑写回槽模型，并把编辑器选区同步成行选择（供顶部复制按钮使用）。</para>
+    /// Attaches a compare editor: loads the slot model's projection, intercepts line-count-changing edits (translated into slot
+    /// operations with both sides re-projected afterwards), writes in-line edits back into the slot model and mirrors the
+    /// editor's selection into the row selection used by the toolbar's copy buttons.
+    /// </summary>
+    private void AttachCompareEditors()
+    {
+        if (!IsLoaded || DataContext is not CompareViewModel vm || !vm.IsTextEditorMode)
+        {
+            return;
+        }
+
+        foreach (var visuals in _columnVisuals)
+        {
+            var editor = ResolveCompareEditor(visuals.Container);
+            visuals.CompareEditor = editor;
+            if (editor is null)
+            {
+                continue;
+            }
+
+            if (_editors.ContainsKey(editor))
+            {
+                continue;
+            }
+
+            var highlighter = new CompareLineHighlighter(ResolveDiffBrush());
+            editor.TextArea.TextView.BackgroundRenderers.Add(highlighter);
+            editor.Document.Changed += OnCompareEditorChanged;
+            editor.TextArea.SelectionChanged += OnCompareEditorSelectionChanged;
+            // Ctrl+Z / Ctrl+Y 由两侧共享的撤销历史处理（隧道阶段先拦截）。
+            // Ctrl+Z / Ctrl+Y are handled by the history both panes share (intercepted in the tunnel phase).
+            editor.AddHandler(KeyDownEvent, OnCompareEditorKeyDown, RoutingStrategies.Tunnel);
+            // 两侧文档等长、行高相同，因此编辑器滚动直接按像素镜像即可保持同行对应。
+            // Both documents have the same length and row height, so mirroring the pixel offsets keeps the rows aligned.
+            if (ResolveEditorScrollViewer(editor) is { } scrollViewer)
+            {
+                scrollViewer.ScrollChanged += OnCompareEditorScrollChanged;
+            }
+
+            _editors[editor] = highlighter;
+        }
+
+        SyncCompareEditors();
+    }
+
+    /// <summary>取差异行底色（主题画刷优先，取不到时用半透明红）。 Resolves the diff-line brush (theme first, translucent red as fallback).</summary>
+    private Avalonia.Media.IBrush ResolveDiffBrush()
+        => this.TryFindResource("DiffBackgroundBrush", out var brush) && brush is Avalonia.Media.IBrush found
+            ? found
+            : new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromArgb(0x40, 0xC4, 0x2B, 0x1C));
+
+    /// <summary>
+    /// <para>编辑器改动前置处理：行数会变化的编辑（Enter、删除换行、多行粘贴、剪切整行）在这里取消，
+    /// 改由槽模型执行并重新投影两侧，保证两侧文档始终等长；行数不变的行内编辑直接放行。</para>
+    /// Pre-change handling: an edit that changes the line count (Enter, deleting a line break, multi-line paste, cutting a
+    /// whole line) is cancelled and executed through the slot model with both sides re-projected so the documents stay the
+    /// same length; an in-line edit that keeps the line count passes through.
+    /// </summary>
+    private void OnCompareEditorChanged(object? sender, DocumentChangeEventArgs e)
+    {
+        if (_syncingEditors || sender is not TextDocument document
+            || DataContext is not CompareViewModel vm || !vm.IsTextEditorMode)
+        {
+            return;
+        }
+
+        // 任何异常都不能让应用闪退（UI 事件里的未捕获异常会直接终止进程）：出错写进错误区与日志，保持视图可用。
+        // No exception may crash the app (an uncaught exception in a UI event kills the process): failures go to the error banner and
+        // the log, and the view stays usable.
+        try
+        {
+            var (editor, leftSide) = FindCompareEditorSide(document);
+            if (editor is null)
+            {
+                return;
+            }
+
+            // 编辑器的改动整体交给槽模型翻译（行内编辑只改本侧内容；行数变化则在对侧补/收填充槽），
+            // 然后只把另一侧同步成新的投影，编辑侧保留用户输入与光标。
+            // The editor change is translated by the slot model as a whole (an in-line edit only touches this side's content, a
+            // count change adds/removes fillers on the other side) and only the other side is synchronised afterwards, so the
+            // edited side keeps the user's text and caret.
+            var (startLine, removedLines, lines, _) = DescribeChange(document, e);
+            // 先记撤销点（两侧共享），再落到槽模型：一次结构编辑会连同对侧的填充槽一起回退。
+            // Record the undo point (shared by both panes) before applying to the slot model, so a structural edit rolls back
+            // together with the counterpart's filler.
+            vm.RecordTextUndoPoint(
+                structural: removedLines != lines.Count,
+                leftSlot: CaretSlot(FindEditor(leftSide: true)),
+                rightSlot: CaretSlot(FindEditor(leftSide: false)));
+            vm.ApplyEditorLines(leftSide, startLine, removedLines, lines);
+            // 变更通知里只更新模型：另一侧文档的写入与撤销栈清理全部延后到通知结束之后。
+            // 在编辑器自身的变更通知里改文档（哪怕改的是另一侧）或清理撤销栈，都会触发编辑器内部状态冲突并导致闪退。
+            // Inside a change notification only the model is updated: writing the other side's document and clearing undo stacks are
+            // deferred until the notification has finished. Touching documents (even the other side) or undo stacks from inside a change
+            // notification trips internal state in the editor and crashes the app.
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    try
+                    {
+                        SyncCompareEditors(editor);
+                        ClearEditorUndo(editor);
+                    }
+                    catch (Exception ex)
+                    {
+                        ReportEditorFailure(vm, ex);
+                    }
+                },
+                DispatcherPriority.Background);
+        }
+        catch (Exception ex)
+        {
+            ReportEditorFailure(vm, ex);
+        }
+    }
+
+    /// <summary>取某一侧的对比编辑器。 Returns a side's compare editor.</summary>
+    private TextEditor? FindEditor(bool leftSide)
+        => EnumerateCompareEditors().Where(pair => pair.LeftSide == leftSide).Select(pair => pair.Editor).FirstOrDefault();
+
+    /// <summary>
+    /// <para>编辑器处理失败时把原因写进错误区与日志：宁可显示一条错误，也不能让未处理异常结束进程。</para>
+    /// Records an editor failure in the error banner and the log: showing an error beats letting an unhandled exception kill the
+    /// process.
+    /// </summary>
+    private void ReportEditorFailure(CompareViewModel vm, Exception ex)
+    {
+        LogService.Instance.Write(LogLevel.Error, "Compare", ex.ToString());
+        vm.ReportError(ex.Message);
+    }
+
+    /// <summary>取编辑器光标所在槽号（无光标时为 0）。 Returns the editor's caret slot (0 when there is no caret).</summary>
+    private static int CaretSlot(TextEditor? editor) => editor is null ? 0 : Math.Max(0, editor.TextArea.Caret.Line - 1);
+
+    /// <summary>清空编辑器自带的撤销栈（撤销由两侧共享的历史负责）。 Clears the editor's own undo stack (the shared history owns undo).</summary>
+    private static void ClearEditorUndo(TextEditor editor) => editor.Document.UndoStack.ClearAll();
+
+    /// <summary>
+    /// <para>对比编辑器上的 Ctrl+Z / Ctrl+Y（含 Ctrl+Shift+Z）：回退两侧共享的编辑历史，结构编辑连同对侧填充槽一起回退，
+    /// 因此两侧永远保持同行对应。</para>
+    /// Ctrl+Z / Ctrl+Y (and Ctrl+Shift+Z) inside a compare editor: rolls the shared history back and forth, so a structural edit is
+    /// undone together with the counterpart's filler and the rows stay aligned.
+    /// </summary>
+    private void OnCompareEditorKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not CompareViewModel vm || !vm.IsTextEditorMode
+            || !e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.Key is not (Key.Z or Key.Y))
+        {
+            return;
+        }
+
+        var redo = e.Key == Key.Y || e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        e.Handled = true;
+        try
+        {
+            var caret = redo ? vm.RedoText() : vm.UndoText();
+            if (caret is not { } target)
+            {
+                return;
+            }
+
+            SyncCompareEditors();
+            foreach (var (editor, leftSide) in EnumerateCompareEditors())
+            {
+                RestoreEditorCaret(editor, leftSide ? target.LeftSlot : target.RightSlot);
+                ClearEditorUndo(editor);
+            }
+        }
+        catch (Exception ex)
+        {
+            ReportEditorFailure(vm, ex);
+        }
+    }
+
+    /// <summary>把光标放回指定槽所在行的末尾。 Places the caret at the end of the given slot's line.</summary>
+    private static void RestoreEditorCaret(TextEditor editor, int slot)
+    {
+        var document = editor.Document;
+        if (document.LineCount == 0)
+        {
+            return;
+        }
+
+        var number = Math.Clamp(slot + 1, 1, document.LineCount);
+        var line = document.GetLineByNumber(number);
+        editor.CaretOffset = line.Offset + line.Length;
+        editor.ScrollToLine(number);
+    }
+
+    /// <summary>编辑器选区变化 → 同步成行选择，顶部复制按钮据此复制到另一侧。</summary>
+    /// Selection changes mirror into the row selection so the toolbar's copy buttons know which lines to copy.
+    private void OnCompareEditorSelectionChanged(object? sender, EventArgs e)
+    {
+        if (_syncingEditors || DataContext is not CompareViewModel vm || !vm.IsTextEditorMode
+            || sender is not TextArea textArea)
+        {
+            return;
+        }
+
+        try
+        {
+            var (editor, _) = FindCompareEditorSide(textArea.Document);
+            if (editor is null)
+            {
+                return;
+            }
+
+            var selection = textArea.Selection;
+            var start = Math.Min(selection.StartPosition.Line, selection.EndPosition.Line) - 1;
+            var end = Math.Max(selection.StartPosition.Line, selection.EndPosition.Line) - 1;
+            var indices = new List<int>();
+            for (var line = Math.Max(start, 0); line <= Math.Max(end, 0); line++)
+            {
+                indices.Add(line);
+            }
+
+            vm.UpdateRowSelection(indices);
+        }
+        catch (Exception ex)
+        {
+            ReportEditorFailure(vm, ex);
+        }
+    }
+
+    /// <summary>
+    /// <para>把一次文档改动换算成「受影响的整行范围 + 该范围替换后的行 + 被替换掉的旧行数」。</para>
+    /// <para>注意：<c>Changed</c> 事件触发时文档**已经是改动后**的状态，所以新行直接从文档里读，
+    /// 不能拿改动前的区域再套一次插入（那样会把同一个字符应用两遍，表现为输入一个字符出现两个、删除多删）。
+    /// 旧行数由「新行数 − 本次插入的换行数 + 本次删除的换行数」还原。</para>
+    /// Converts one document change into "the affected whole-line range, its replacement lines and how many old lines it replaced".
+    /// Note that when <c>Changed</c> fires the document already holds the post-change state, so the new lines are read straight from the
+    /// document — applying the insertion to a pre-change region again would insert the same character twice (typing one character shows
+    /// two, deletions remove extra characters). The old line count is recovered as
+    /// "new line count − inserted newlines + removed newlines".
+    /// </summary>
+    private static (int StartLine, int RemovedLines, List<string> Lines, int CaretColumn) DescribeChange(
+        TextDocument document,
+        DocumentChangeEventArgs e)
+    {
+        var startLine = document.GetLineByOffset(e.Offset).LineNumber - 1;
+        var endOffset = Math.Min(e.Offset + e.InsertionLength, document.TextLength);
+        var endLine = document.GetLineByOffset(endOffset).LineNumber - 1;
+        var firstLine = document.GetLineByNumber(startLine + 1);
+        var lastLine = document.GetLineByNumber(endLine + 1);
+        var regionEnd = lastLine.Offset + lastLine.Length;
+        var region = document.GetText(firstLine.Offset, Math.Max(0, regionEnd - firstLine.Offset));
+        var lines = region.Split('\n').ToList();
+
+        // 旧行数 = 新行数 − 插入的换行数 + 删除的换行数（换行只在受影响的整行范围内）。
+        // Old line count = new line count − inserted newlines + removed newlines (newlines only occur inside the affected range).
+        var netNewLines = CountNewlines(e.InsertedText.Text) - CountNewlines(e.RemovedText.Text);
+        var removedLines = Math.Max(1, lines.Count - netNewLines);
+        var caretColumn = lines.Count == 0 ? 0 : lines[^1].Length;
+        return (startLine, removedLines, lines, caretColumn);
+    }
+
+    /// <summary>数一段文本里的换行符个数。 Counts the newline characters in a piece of text.</summary>
+    private static int CountNewlines(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return 0;
+        }
+
+        var count = 0;
+        foreach (var character in text)
+        {
+            if (character == '\n')
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>取某个文档所属的对比编辑器与它显示的侧（左/右）。 Finds the compare editor and side owning a document.</summary>
+    private (TextEditor? Editor, bool LeftSide) FindCompareEditorSide(TextDocument? document)
+    {
+        if (document is null)
+        {
+            return (null, true);
+        }
+
+        foreach (var (editor, leftSide) in EnumerateCompareEditors())
+        {
+            if (ReferenceEquals(editor.Document, document))
+            {
+                return (editor, leftSide);
+            }
+        }
+
+        return (null, true);
+    }
+
+    /// <summary>结构变化后把光标放回目标行与列。 Restores the caret to the given line and column after a structural change.</summary>
+    /// <summary>
+    /// <para>差异行整行背景着色器：按行号集合画半透明色块（与行列表期间的整行变色一致）。</para>
+    /// Whole-line diff background renderer: paints translucent bands for the given line numbers, matching the row list's
+    /// whole-row colouring.
+    /// </summary>
+    private sealed class CompareLineHighlighter(Avalonia.Media.IBrush brush) : IBackgroundRenderer
+    {
+        private HashSet<int> _lines = [];
+
+        public KnownLayer Layer => KnownLayer.Background;
+
+        public void SetLines(IEnumerable<int> lines) => _lines = [.. lines];
+
+        public void Draw(TextView textView, DrawingContext drawingContext)
+        {
+            if (_lines.Count == 0 || !textView.VisualLinesValid)
+            {
+                return;
+            }
+
+            // 渲染里的异常会直接崩掉应用：着色失败就放弃本次绘制。
+            // An exception during rendering crashes the app, so a failed paint is simply skipped.
+            try
+            {
+                using (drawingContext.PushClip(new Rect(textView.Bounds.Size)))
+                {
+                    foreach (var line in textView.VisualLines)
+                    {
+                        if (!_lines.Contains(line.FirstDocumentLine.LineNumber))
+                        {
+                            continue;
+                        }
+
+                        var y = line.VisualTop - textView.ScrollOffset.Y;
+                        drawingContext.FillRectangle(brush, new Rect(0, y, textView.Bounds.Width, line.Height));
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // 忽略本次着色。
+                // Skip this paint.
+            }
+        }
+    }
+
     /// <summary>
     /// <para>「添加文件夹」按钮：弹出多选文件夹对话框，每个选中的文件夹占用一个文件列（优先填充空列，
     /// 不足时在末尾追加）。对比进行中不追加列。</para>
@@ -807,64 +1615,33 @@ public partial class CompareView : UserControl
     }
 
     /// <summary>
-    /// <para>行双击：浏览状态下目录行进入该目录（路径框同步为新路径），对比状态下目录行展开/折叠
-    /// （两侧共享同一节点，一侧展开即两侧同步展开）；文件行在文件夹对比中于新标签打开该文件的对比。</para>
-    /// Row double-click: while browsing a directory row enters that directory (the path box follows), while
-    /// comparing it expands or collapses the row (both sides share one node, so expanding one side expands the
-    /// other); a file row opens that file's comparison in a new tab during a folder comparison.
+    /// <para>双击激活一行：目录行展开/折叠（浏览与对比都一样；对比中两侧共享同一节点，一侧展开即两侧同步展开），
+    /// 文件行在文件夹对比中于新标签打开该文件的对比，浏览状态下的文件行不做处理。
+    /// 「进入某个目录」改为右键菜单项，避免与展开手势冲突。</para>
+    /// Activates a row on double-click: a folder row expands/collapses (both while browsing and comparing; a folder
+    /// comparison shares one node so one side expands both), a file row opens its comparison in a new tab during a folder
+    /// comparison, and a file row while browsing does nothing. Entering a folder moved to the context menu so it no longer
+    /// competes with the expand gesture.
     /// </summary>
-    private async void OnRowDoubleTapped(object? sender, TappedEventArgs e)
+    private void ActivateRow(CompareRowViewModel row, ListBox list)
     {
-        if (e.Source is not Control source || source.DataContext is not CompareRowViewModel row
-            || row.TreeNode is not { } node)
+        if (row.TreeNode is not { } node)
         {
             return;
         }
 
-        e.Handled = true;
-        var column = FindColumnFor(source);
         if (node.IsDirectory)
         {
-            // 未对比时双击目录进入该目录（路径框同步）；对比中展开/折叠。
-            // While not comparing, double-clicking a directory enters it (the path box follows); while
-            // comparing it expands or collapses the row.
-            if (DataContext is not CompareViewModel viewModel || column is null)
-            {
-                return;
-            }
-
-            if (!viewModel.IsComparing)
-            {
-                await column.EnterDirectoryAsync(node);
-                return;
-            }
-
-            await ToggleRowExpansionAsync(node, source);
+            _ = ToggleRowExpansionAsync(node, list);
             return;
         }
 
         if (DataContext is CompareViewModel vm
-            && column is { IsCompareSide: true }
+            && ResolveTextRowOwner(list) is { IsCompareSide: true }
             && vm.IsFolderMode)
         {
             vm.OpenFileComparisonInNewTab(node);
         }
-    }
-
-    /// <summary>
-    /// <para>展开箭头点击：与双击目录行同样的展开/折叠行为，单点也能操作。</para>
-    /// Expander click: the same expand/collapse behaviour as double-clicking a directory row, so a single click
-    /// works too.
-    /// </summary>
-    private async void OnTreeExpanderClick(object? sender, RoutedEventArgs e)
-    {
-        if (sender is not Control { DataContext: CompareRowViewModel { TreeNode: { } node } } source)
-        {
-            return;
-        }
-
-        e.Handled = true;
-        await ToggleRowExpansionAsync(node, source);
     }
 
     /// <summary>
@@ -889,12 +1666,27 @@ public partial class CompareView : UserControl
         await column.ToggleTreeExpansionAsync(node);
     }
 
-    /// <summary>按可视元素反查它所在的文件列（行模板内的展开按钮与行列表都能定位到所属列）。</summary>
+    /// <summary>
+    /// <para>按可视元素反查它所在的文件列：直接取最近的行列表的 DataContext（列模板的 DataContext 就是列视图模型）。
+    /// 不再依赖缓存的列条目，因此新增第 3、4…列时不会出现「找不到所属列」导致双击/拖拽失效的问题。</para>
+    /// Resolves a control's file column from the nearest row list's DataContext (a column template's DataContext is its
+    /// column view model). It no longer relies on the cached column visuals, so adding a third, fourth … column cannot
+    /// break double-click or drag handling with "no owning column found".
+    /// </summary>
     private CompareColumnViewModel? FindColumnFor(Control source)
     {
+        if (FindListFor(source)?.DataContext is CompareColumnViewModel direct)
+        {
+            return direct;
+        }
+
+        // 兜底：某些模板/弹出结构里拿不到列表的 DataContext 时，按列容器反查（弹出菜单里的元素走不到这里，
+        // 那条路径由右键请求时记录的上下文列负责）。
+        // Fallback: when the list's DataContext is unavailable, resolve through the column containers (elements inside the
+        // popup menu never get here — that path uses the context column recorded on the context request).
         foreach (var visuals in _columnVisuals)
         {
-            if (visuals.List is { } list && list.IsVisualAncestorOf(source))
+            if (ReferenceEquals(visuals.Container, source) || visuals.Container.IsVisualAncestorOf(source))
             {
                 return visuals.Column;
             }
@@ -928,26 +1720,68 @@ public partial class CompareView : UserControl
         {
             case Key.Enter:
                 e.Handled = true;
-                RestoreCaret(list, vm.SplitTextRow(row, leftSide, caret));
+                RestoreCaret(list, SplitRow(list, row, leftSide, caret));
                 return;
             case Key.Back when caret == 0 && box.SelectionStart == 0:
                 e.Handled = true;
-                RestoreCaret(list, vm.JoinTextRowWithPrevious(row, leftSide));
+                RestoreCaret(list, JoinRowWithPrevious(list, row, leftSide));
                 return;
             case Key.Delete when caret >= length:
                 e.Handled = true;
-                RestoreCaret(list, vm.JoinTextRowWithNext(row, leftSide));
+                RestoreCaret(list, JoinRowWithNext(list, row, leftSide));
                 return;
         }
     }
+
+    /// <summary>断行：对比状态交给文档（两栏共享行列表），浏览状态交给所属列（各自的文件）。</summary>
+    private (int Index, int Caret) SplitRow(ListBox list, CompareRowViewModel row, bool leftSide, int caret)
+        => ResolveTextRowOwner(list) is { IsCompareSide: true } && DataContext is CompareViewModel vm && vm.IsComparing
+            ? vm.SplitTextRow(row, leftSide, caret)
+            : ResolveTextRowOwner(list)?.SplitTextRow(row, leftSide, caret) ?? (0, 0);
+
+    /// <summary>与下一行合并（沿用同一套归属判定）。</summary>
+    private (int Index, int Caret) JoinRowWithNext(ListBox list, CompareRowViewModel row, bool leftSide)
+        => ResolveTextRowOwner(list) is { IsCompareSide: true } && DataContext is CompareViewModel vm && vm.IsComparing
+            ? vm.JoinTextRowWithNext(row, leftSide)
+            : ResolveTextRowOwner(list)?.JoinTextRowWithNext(row, leftSide) ?? (0, 0);
+
+    /// <summary>并入上一行（沿用同一套归属判定）。</summary>
+    private (int Index, int Caret) JoinRowWithPrevious(ListBox list, CompareRowViewModel row, bool leftSide)
+        => ResolveTextRowOwner(list) is { IsCompareSide: true } && DataContext is CompareViewModel vm && vm.IsComparing
+            ? vm.JoinTextRowWithPrevious(row, leftSide)
+            : ResolveTextRowOwner(list)?.JoinTextRowWithPrevious(row, leftSide) ?? (0, 0);
+
+    /// <summary>取行列表所属的文件列（浏览状态用它承载编辑与保存）。</summary>
+    private static CompareColumnViewModel? ResolveTextRowOwner(ListBox list)
+        => list.DataContext as CompareColumnViewModel;
 
     /// <summary>行列表上的 Delete 键：删除所选行在该侧的内容（两侧都空的行整行移除）。</summary>
     /// <param name="sender"><para>行列表。</para>The row list.</param>
     /// <param name="e"><para>按键事件。</para>The key event.</param>
     private void OnRowListKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Delete || sender is not ListBox list || DataContext is not CompareViewModel vm
-            || !vm.IsTextMode)
+        if (sender is not ListBox list || DataContext is not CompareViewModel vm)
+        {
+            return;
+        }
+
+        // 列表上的 Ctrl+A 与 Shift+↑/↓：与鼠标框选等价的行选择方式。
+        // Ctrl+A and Shift+Up/Down on the list mirror what mouse range selection does.
+        switch (e.Key)
+        {
+            case Key.A when e.KeyModifiers.HasFlag(KeyModifiers.Control) && vm.IsTextMode:
+                e.Handled = true;
+                list.Selection?.SelectAll();
+                return;
+            case Key.Up when e.KeyModifiers.HasFlag(KeyModifiers.Shift) && vm.IsTextMode:
+                e.Handled = ExtendSelectionByRow(list, -1);
+                return;
+            case Key.Down when e.KeyModifiers.HasFlag(KeyModifiers.Shift) && vm.IsTextMode:
+                e.Handled = ExtendSelectionByRow(list, 1);
+                return;
+        }
+
+        if (e.Key != Key.Delete || !vm.IsTextMode)
         {
             return;
         }
@@ -960,16 +1794,55 @@ public partial class CompareView : UserControl
         }
 
         e.Handled = true;
-        vm.UpdateRowSelection(list.Selection?.SelectedIndexes ?? []);
-        vm.DeleteSelectedTextRows(leftSide: !IsRightList(list));
+        var indices = list.Selection?.SelectedIndexes?.ToList() ?? [];
+        var leftSide = !IsRightList(list);
+        if (ResolveTextRowOwner(list) is { IsCompareSide: true } && vm.IsComparing)
+        {
+            vm.UpdateRowSelection(indices);
+            vm.DeleteSelectedTextRows(leftSide);
+            return;
+        }
+
+        ResolveTextRowOwner(list)?.DeleteSelectedTextRows(indices);
+    }
+
+    /// <summary>按方向键把行选择范围扩展一行（Shift+↑/↓）。</summary>
+    private static bool ExtendSelectionByRow(ListBox list, int delta)
+    {
+        if (list.ItemsSource is not IReadOnlyList<CompareRowViewModel> rows || rows.Count == 0
+            || list.Selection is not { } selection)
+        {
+            return false;
+        }
+
+        var selected = selection.SelectedIndexes;
+        if (selected is null || selected.Count == 0)
+        {
+            selection.Select(0);
+            return true;
+        }
+
+        var min = selected.Min();
+        var max = selected.Max();
+        var target = Math.Clamp(delta < 0 ? min - 1 : max + 1, 0, rows.Count - 1);
+        selection.Clear();
+        selection.SelectRange(Math.Min(min, target), Math.Max(max, target));
+        list.ScrollIntoView(target);
+        return true;
     }
 
     /// <summary>文本对比的行右键菜单：删除所选行。</summary>
     private void OnDeleteSelectedTextRows(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is CompareViewModel vm)
+        if (DataContext is not CompareViewModel vm)
         {
-            vm.DeleteSelectedTextRows(leftSide: !IsRightTagged(sender));
+            return;
+        }
+
+        var leftSide = !IsRightTagged(sender);
+        if (vm.IsComparing)
+        {
+            vm.DeleteSelectedTextRows(leftSide);
         }
     }
 
@@ -995,33 +1868,18 @@ public partial class CompareView : UserControl
         }, DispatcherPriority.Loaded);
     }
 
-    /// <summary>按可视元素反查它所在的行列表（行编辑框定位所在列用）。</summary>
+    /// <summary>
+    /// <para>按可视元素反查它所在的行列表（行编辑框定位所在列用）：沿可视祖先直接找最近的 <see cref="ListBox"/>，
+    /// 不依赖缓存，因此列数变化后依然可靠。</para>
+    /// Finds the nearest <see cref="ListBox"/> among a control's visual ancestors (used to locate a row editor's column).
+    /// Nothing is cached, so it stays reliable no matter how many columns exist.
+    /// </summary>
     private ListBox? FindListFor(Control source)
-    {
-        foreach (var visuals in _columnVisuals)
-        {
-            if (visuals.List is { } list && list.IsVisualAncestorOf(source))
-            {
-                return list;
-            }
-        }
-
-        return null;
-    }
+        => source.GetSelfAndVisualAncestors().OfType<ListBox>().FirstOrDefault();
 
     /// <summary>该行列表是否属于右侧模板（对比右列渲染右侧单元格）。</summary>
-    private bool IsRightList(ListBox list)
-    {
-        foreach (var visuals in _columnVisuals)
-        {
-            if (ReferenceEquals(visuals.List, list))
-            {
-                return visuals.Column.UsesRightCells;
-            }
-        }
-
-        return false;
-    }
+    private static bool IsRightList(ListBox list)
+        => (list.DataContext as CompareColumnViewModel)?.UsesRightCells == true;
 
     // ===== 从行拖出到另一个目录（拖拽复制） =====
 
@@ -1031,15 +1889,64 @@ public partial class CompareView : UserControl
     private ListBox? _dragList;
     private Point _dragOrigin;
 
+    /// <summary>跨行框选的起点（在某一行上按下）。</summary>
+    private ListBox? _rangeList;
+    private int _rangeAnchor = -1;
+
+    /// <summary>正文拖拽的负载路径（拖到文件夹行时用它复制，避免依赖平台拖拽数据的格式差异）。</summary>
+    private string? _draggingPath;
+
+    /// <summary>拖拽来源列：跨列复制的兜底目标需要排除它。</summary>
+    private CompareColumnViewModel? _dragSourceColumn;
+
+    /// <summary>右键菜单当前作用的行与列（在行上收到 ContextRequested 时记录）。</summary>
+    private CompareRowViewModel? _contextRow;
+    private CompareColumnViewModel? _contextColumn;
+
     /// <summary>记录拖拽候选：只有文件/文件夹行（非文本编辑行）可以拖出。</summary>
-    private void OnRowPointerPressed(object? sender, PointerPressedEventArgs e)
+    private void OnPreviewPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         ClearDragCandidate();
+        _rangeList = null;
+        _rangeAnchor = -1;
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
-            || e.Source is TextBox
-            || e.Source is not Control { DataContext: CompareRowViewModel row }
-            || row.TreeNode is null
-            || sender is not ListBox list)
+            || e.Source is not Control { DataContext: CompareRowViewModel row } source
+            || FindListFor(source) is not { } list)
+        {
+            return;
+        }
+
+        var index = IndexOfRow(list, row);
+        if (index < 0)
+        {
+            return;
+        }
+
+        // 输入框内按下：先按「文字选择」处理，但记录行锚点——指针移动到别的行时就升级为跨行选中，
+        // 与 Beyond Compare 里「拖动经过多行即选多行」的手感一致。
+        // A press inside an editor starts as text selection, but the row anchor is recorded: once the pointer reaches
+        // another row it turns into a cross-row selection, matching dragging over lines in Beyond Compare.
+        _rangeList = list;
+        _rangeAnchor = index;
+
+        // 双击：目录行展开/折叠（对比中两侧同步），文件行在文件夹对比里开新标签的文件对比。
+        // 直接按 ClickCount 判定，不依赖手势事件的路由，避免列表项消费事件导致双击失效。
+        // Double-click: a folder row expands/collapses (both sides in a folder comparison) and a file row opens its
+        // comparison in a new tab while comparing. It is detected from ClickCount so no gesture routing can swallow it.
+        if (e.ClickCount == 2)
+        {
+            ActivateRow(row, list);
+            return;
+        }
+
+        if (source is TextBox)
+        {
+            return;
+        }
+
+        // 只有文件/文件夹行可以拖出到另一个目录。
+        // Only file/folder rows can be dragged out into another directory.
+        if (row.TreeNode is null)
         {
             return;
         }
@@ -1048,6 +1955,7 @@ public partial class CompareView : UserControl
         _dragRow = row;
         _dragList = list;
         _dragOrigin = e.GetPosition(this);
+        _dragSourceColumn = FindColumnFor(source);
     }
 
     /// <summary>
@@ -1056,8 +1964,10 @@ public partial class CompareView : UserControl
     /// Starts a drag once the pointer moved past the threshold: the row's full path becomes the drag payload (text format),
     /// and dropping it on another folder row copies it into that folder.
     /// </summary>
-    private async void OnRowPointerMoved(object? sender, PointerEventArgs e)
+    private async void OnPreviewPointerMoved(object? sender, PointerEventArgs e)
     {
+        ExtendRangeSelection(e);
+
         var trigger = _dragTrigger;
         var row = _dragRow;
         var list = _dragList;
@@ -1087,7 +1997,68 @@ public partial class CompareView : UserControl
 
         var transfer = new DataTransfer();
         transfer.Add(DataTransferItem.CreateText(path));
+        // 应用内拖拽额外记录路径，作为拖放数据格式差异的兜底。
+        // An in-view drag also records the path, covering platform differences in the payload's text format.
+        _draggingPath = path;
         await DragDrop.DoDragDropAsync(trigger, transfer, DragDropEffects.Copy);
+    }
+
+    /// <summary>
+    /// <para>按住左键在某一行按下后拖过其它行 → 选中整段（跨行框选）；松开或移到行外即结束。</para>
+    /// Dragging over other rows while the left button is held selects the whole range (cross-row selection); releasing or
+    /// leaving the rows ends it.
+    /// </summary>
+    private void ExtendRangeSelection(PointerEventArgs e)
+    {
+        if (_rangeList is not { } list || _rangeAnchor < 0
+            || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        // 指针下的元素给出当前行；行内的输入框/文本块都带行上下文，列表空白处则忽略。
+        // The element under the pointer gives the current row: editors and text blocks inside a row carry the row context,
+        // while empty list space is ignored.
+        if (e.Source is not Control { DataContext: CompareRowViewModel row })
+        {
+            return;
+        }
+
+        var index = IndexOfRow(list, row);
+        if (index < 0 || index == _rangeAnchor)
+        {
+            return;
+        }
+
+        var start = Math.Min(_rangeAnchor, index);
+        var end = Math.Max(_rangeAnchor, index);
+        var selection = list.Selection;
+        if (selection is null)
+        {
+            return;
+        }
+
+        selection.Clear();
+        selection.SelectRange(start, end);
+    }
+
+    /// <summary>取行在列表中的索引（列表的 ItemsSource 就是文档的行列表）。</summary>
+    private static int IndexOfRow(ListBox list, CompareRowViewModel row)
+    {
+        if (list.ItemsSource is not IReadOnlyList<CompareRowViewModel> rows)
+        {
+            return -1;
+        }
+
+        for (var index = 0; index < rows.Count; index++)
+        {
+            if (ReferenceEquals(rows[index], row))
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>清空当前拖拽候选。</summary>
@@ -1133,7 +2104,7 @@ public partial class CompareView : UserControl
     {
         if (DataContext is CompareViewModel vm)
         {
-            vm.CopySelectedTextRows(fromLeftToRight: !IsRightTagged(sender));
+            vm.CopySelectedTextRows(fromLeftToRight: !ContextIsRightSide(sender));
         }
     }
 
@@ -1160,7 +2131,7 @@ public partial class CompareView : UserControl
     private async void OnDeleteEntry(object? sender, RoutedEventArgs e)
     {
         var (path, isDirectory, column) = ResolveEntry(sender);
-        if (path is null || column is null)
+        if (path is null)
         {
             return;
         }
@@ -1203,7 +2174,7 @@ public partial class CompareView : UserControl
     private async void OnRenameEntry(object? sender, RoutedEventArgs e)
     {
         var (path, isDirectory, column) = ResolveEntry(sender);
-        if (path is null || column is null)
+        if (path is null)
         {
             return;
         }
@@ -1246,7 +2217,7 @@ public partial class CompareView : UserControl
     private async void OnCreateFolder(object? sender, RoutedEventArgs e)
     {
         var (path, isDirectory, column) = ResolveEntry(sender);
-        if (path is null || column is null)
+        if (path is null)
         {
             return;
         }
@@ -1286,6 +2257,20 @@ public partial class CompareView : UserControl
     }
 
     /// <summary>在系统文件资源管理器中定位该行条目。</summary>
+    /// <summary>
+    /// <para>浏览状态下「进入此文件夹」：把该列重新根到双击的目录（路径框同步为新路径）。</para>
+    /// "Enter this folder" while browsing: re-roots the column at the chosen directory (the path box follows).
+    /// </summary>
+    private async void OnEnterFolder(object? sender, RoutedEventArgs e)
+    {
+        if (_contextRow?.TreeNode is not { IsDirectory: true } node || _contextColumn is not { } column)
+        {
+            return;
+        }
+
+        await column.EnterDirectoryAsync(node);
+    }
+
     private void OnOpenEntryInExplorer(object? sender, RoutedEventArgs e)
     {
         var (path, _, _) = ResolveEntry(sender);
@@ -1325,12 +2310,12 @@ public partial class CompareView : UserControl
     private async Task TransferComparedEntryAsync(object? sender, bool move)
     {
         var (path, _, column) = ResolveEntry(sender);
-        if (DataContext is not CompareViewModel vm || path is null || column is null)
+        if (DataContext is not CompareViewModel vm || path is null)
         {
             return;
         }
 
-        var sourceIsLeft = !IsRightTagged(sender);
+        var sourceIsLeft = !ContextIsRightSide(sender);
         var targetColumn = sourceIsLeft
             ? vm.Columns.FirstOrDefault(candidate => candidate.Side == CompareColumnSide.Right)
             : vm.Columns.FirstOrDefault(candidate => candidate.Side == CompareColumnSide.Left);
@@ -1341,7 +2326,7 @@ public partial class CompareView : UserControl
             return;
         }
 
-        await TransferAsync(vm, column, path, target, move);
+        await TransferAsync(vm, column ?? _contextColumn, path, target, move);
     }
 
     /// <summary>浏览状态中把条目复制/移动到相邻列的目录。</summary>
@@ -1354,7 +2339,7 @@ public partial class CompareView : UserControl
         }
 
         var index = vm.Columns.IndexOf(column);
-        var neighbourIndex = index + (IsRightTagged(sender) ? 1 : -1);
+        var neighbourIndex = index + (ContextIsRightSide(sender) ? 1 : -1);
         var target = neighbourIndex >= 0 && neighbourIndex < vm.Columns.Count
             ? vm.Columns[neighbourIndex].Path
             : string.Empty;
@@ -1374,7 +2359,7 @@ public partial class CompareView : UserControl
     /// </summary>
     private async Task TransferAsync(
         CompareViewModel vm,
-        CompareColumnViewModel column,
+        CompareColumnViewModel? column,
         string source,
         string targetDirectory,
         bool move)
@@ -1396,7 +2381,7 @@ public partial class CompareView : UserControl
     /// Refreshes the view after an entry changed (copy/move/delete/rename/new folder): comparing re-runs the
     /// comparison and browsing reloads that column.
     /// </summary>
-    private async Task ReloadAfterEntryChangeAsync(CompareColumnViewModel column)
+    private async Task ReloadAfterEntryChangeAsync(CompareColumnViewModel? column)
     {
         if (DataContext is not CompareViewModel vm)
         {
@@ -1409,7 +2394,19 @@ public partial class CompareView : UserControl
             return;
         }
 
-        await column.ReloadContentAsync();
+        if (column is not null)
+        {
+            await column.ReloadContentAsync();
+            return;
+        }
+
+        // 拿不到具体列（落点在工具栏/列间隔等）时刷新所有列，保证复制进去的文件一定出现在列表里。
+        // When no specific column could be resolved (the drop landed on the toolbar or a divider) every column is reloaded so the copied
+        // file always shows up.
+        foreach (var visuals in _columnVisuals.ToList())
+        {
+            await visuals.Column.ReloadContentAsync();
+        }
     }
 
     /// <summary>把操作失败写入对比视图的错误区（并留下日志）。</summary>
@@ -1431,13 +2428,18 @@ public partial class CompareView : UserControl
     /// </summary>
     private (string? Path, bool IsDirectory, CompareColumnViewModel? Column) ResolveEntry(object? sender)
     {
-        if (DataContext is not CompareViewModel vm || sender is not Control control
-            || control.DataContext is not CompareRowViewModel row || row.TreeNode is not { } node)
+        // 优先使用右键时记录的上下文行（菜单项本身在弹出层里，取不到列）；直接调用（如拖放）时回退到 sender。
+        // The row recorded by the context request wins (menu items live in a popup and cannot resolve a column); a direct
+        // call (drops) falls back to the sender.
+        var row = _contextRow
+            ?? (sender as Control)?.DataContext as CompareRowViewModel;
+        if (DataContext is not CompareViewModel vm || row?.TreeNode is not { } node)
         {
             return (null, false, null);
         }
 
-        var column = FindColumnFor(control);
+        var column = _contextColumn
+            ?? ((sender as Control) is { } control ? FindColumnFor(control) : null);
         if (node.FullPath.Length > 0)
         {
             return (node.FullPath, node.IsDirectory, column);
@@ -1466,6 +2468,10 @@ public partial class CompareView : UserControl
     private static bool IsRightTagged(object? sender)
         => sender is MenuItem { Tag: string tag } && string.Equals(tag, "Right", StringComparison.Ordinal);
 
+    /// <summary>判断右键目标是否位于右侧栏：优先用右键时记录的列，回退到菜单项 Tag。</summary>
+    private bool ContextIsRightSide(object? sender)
+        => _contextColumn is { UsesRightCells: true } || IsRightTagged(sender);
+
     /// <summary>
     /// <para>右键请求：行没有提供菜单（十六进制/元数据行、浏览状态下的文本行）时吞掉请求，
     /// 避免弹出空菜单；其余情况交给行上挂的 <c>ContextMenu</c>。</para>
@@ -1474,7 +2480,17 @@ public partial class CompareView : UserControl
     /// </summary>
     private void OnRowContextRequested(object? sender, ContextRequestedEventArgs e)
     {
-        if (e.Source is Control { DataContext: CompareRowViewModel row } && row.Menu == CompareRowMenuKind.None)
+        if (e.Source is not Control { DataContext: CompareRowViewModel row } control)
+        {
+            return;
+        }
+
+        // 菜单项在弹出层里，取不到行列表祖先；这里记录右键目标（行 + 列），菜单命令据此定位文件。
+        // Menu items live in a popup and cannot find the row list through their ancestors, so the context request records
+        // the target (row + column) and the menu commands resolve the file from it.
+        _contextRow = row;
+        _contextColumn = FindColumnFor(control);
+        if (row.Menu == CompareRowMenuKind.None)
         {
             e.Handled = true;
         }
@@ -1505,9 +2521,10 @@ public partial class CompareView : UserControl
     /// first (in-process drags), then probes <c>TryGetFiles</c> directly (matching what Drop consumes),
     /// and finally scans the format list for the OS file-format name.
     /// </summary>
-    private static bool HasFilePayload(IDataTransfer transfer)
+    private bool HasFilePayload(IDataTransfer transfer)
         => UotanStudio.Views.Controls.FileDropPaths.HasFilePayload(transfer, "CompareView")
-            || LooksLikeExistingPath(transfer);
+            || LooksLikeExistingPath(transfer)
+            || _draggingPath is not null;
 
     /// <summary>
     /// <para>拖放事件：把拖入的文件/文件夹路径交给视图模型，每个路径占用一个文件列
@@ -1528,6 +2545,8 @@ public partial class CompareView : UserControl
         }
 
         var paths = ExtractDropPaths(e.DataTransfer);
+        var inViewDrag = _draggingPath is not null;
+        _draggingPath = null;
         if (paths.Count == 0)
         {
             return;
@@ -1536,13 +2555,21 @@ public partial class CompareView : UserControl
         // 拖到某个文件夹行上 → 复制进该目录（从资源管理器或应用内拖一个文件到另一个目录即可完成复制）。
         // Dropping onto a folder row copies into that folder (drag a file from the explorer or from the app onto another
         // directory to copy it).
-        if (ResolveDropTarget(e.Source) is { } dropTarget)
+        // 视图内拖拽（跨列复制）再按指针位置兜底：落在列表空白、列头、列间隔或工具栏上时同样能定位目标列，
+        // 否则「拖到另一列」会因为落点不在行上而毫无反应。
+        // An in-view drag (cross-column copy) also falls back to the pointer position so dropping on empty list space, a column header,
+        // a divider or the toolbar still resolves the target column instead of doing nothing.
+        var dropTarget = ResolveDropTarget(e.Source, inViewDrag)
+            ?? (inViewDrag ? ResolveInViewDropFolder(e.GetPosition(this)) : null);
+        if (dropTarget is not null)
         {
+            var copied = false;
             foreach (var path in paths)
             {
                 try
                 {
                     ExplorerFileOperations.Transfer(path, dropTarget, move: false);
+                    copied = true;
                 }
                 catch (Exception ex)
                 {
@@ -1550,8 +2577,15 @@ public partial class CompareView : UserControl
                 }
             }
 
-            if (ResolveEntry(e.Source) is var (_, _, column) && column is not null)
+            // 复制成功后自动刷新目标列（对比中重新比对、浏览中重新枚举目录内容），不需要再手动点刷新。
+            // After a successful copy the target column refreshes itself (re-compares while comparing, re-enumerates the folder while
+            // browsing), so no manual refresh is needed.
+            if (copied)
             {
+                var column = ResolveEntry(e.Source) is var (_, _, resolved) ? resolved : null;
+                column ??= _columnVisuals
+                    .Select(visuals => visuals.Column)
+                    .FirstOrDefault(candidate => string.Equals(candidate.Path, dropTarget, StringComparison.OrdinalIgnoreCase));
                 await ReloadAfterEntryChangeAsync(column);
             }
 
@@ -1569,11 +2603,71 @@ public partial class CompareView : UserControl
     /// Resolves a drop target: a directory tree row yields that directory's absolute path, anything else returns
     /// <c>null</c> (handled as "load into columns").
     /// </summary>
-    private string? ResolveDropTarget(object? source)
+    /// <param name="source"><para>拖放命中的元素。</para>The element hit by the drop.</param>
+    /// <param name="inViewDrag"><para>是否来自视图内的行拖拽（可放宽落点：同一列里的任何位置都算落到该列目录）。</para>Whether the drag started inside the view (its target may fall back to the column's own folder).</param>
+    /// <summary>
+    /// <para>视图内拖拽按指针位置兜底定位目标目录：先用指针所在列的目录，再退一步取「不是拖拽来源列」的第一个目录列。</para>
+    /// Position-based fallback for an in-view drag: first the folder of the column under the pointer, then the first folder column that
+    /// is not the drag source.
+    /// </summary>
+    /// <param name="position"><para>指针在视图内的坐标。</para>The pointer position inside the view.</param>
+    private string? ResolveInViewDropFolder(Point position)
+    {
+        var column = ResolveColumnAt(position);
+        if (column is not null && Directory.Exists(column.Path))
+        {
+            return column.Path;
+        }
+
+        foreach (var visuals in _columnVisuals)
+        {
+            if (!ReferenceEquals(visuals.Column, _dragSourceColumn) && Directory.Exists(visuals.Column.Path))
+            {
+                return visuals.Column.Path;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>取指针所在（或最接近）的列。 Returns the column under the pointer, or the closest one.</summary>
+    private CompareColumnViewModel? ResolveColumnAt(Point position)
+    {
+        CompareColumnViewModel? nearest = null;
+        var nearestDistance = double.MaxValue;
+        foreach (var visuals in _columnVisuals)
+        {
+            var bounds = visuals.Container.Bounds;
+            if (bounds.Contains(position))
+            {
+                return visuals.Column;
+            }
+
+            var distance = Math.Min(Math.Abs(position.X - bounds.Left), Math.Abs(position.X - bounds.Right));
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = visuals.Column;
+            }
+        }
+
+        return nearest;
+    }
+
+    private string? ResolveDropTarget(object? source, bool inViewDrag)
     {
         if (source is not Control { DataContext: CompareRowViewModel row } control
             || row.TreeNode is not { IsDirectory: true } node)
         {
+            // 视图内拖拽落在非目录行上时，退化为「落到该行所在列的目录」。
+            // An in-view drag dropped on a non-folder row falls back to the folder of that row's column.
+            if (inViewDrag && source is Control controlOnRow
+                && FindColumnFor(controlOnRow) is { } fallbackColumn
+                && Directory.Exists(fallbackColumn.Path))
+            {
+                return fallbackColumn.Path;
+            }
+
             return null;
         }
 
@@ -1612,7 +2706,7 @@ public partial class CompareView : UserControl
     /// Extracts paths from a drag payload: the platform file formats first (external drags such as Explorer), then the
     /// text format (an in-view row drag, which must name an existing path).
     /// </summary>
-    private static IReadOnlyList<string> ExtractDropPaths(IDataTransfer transfer)
+    private IReadOnlyList<string> ExtractDropPaths(IDataTransfer transfer)
     {
         var paths = TryExtractPaths(transfer);
         if (paths.Count > 0)
@@ -1623,6 +2717,13 @@ public partial class CompareView : UserControl
         if (TryGetDragText(transfer) is { } text && (File.Exists(text) || Directory.Exists(text)))
         {
             return [text];
+        }
+
+        // 应用内拖拽：拖放数据的文本格式取不到时用拖出时记录的路径。
+        // In-view drags: when the payload's text format cannot be read, use the path recorded when the drag started.
+        if (_draggingPath is { } recorded && (File.Exists(recorded) || Directory.Exists(recorded)))
+        {
+            return [recorded];
         }
 
         return paths;
@@ -1648,10 +2749,12 @@ public partial class CompareView : UserControl
 }
 
 /// <summary>
-/// <para>缩进换算：把条目深度转换为左边距（深度 × 14 像素），文件夹比较按层级缩进路径。
-/// 在 XAML 中以 <c>{x:Static compareviews:DepthToIndentConverter.Instance}</c> 引用。</para>
-/// Converts a row depth to a left margin (depth × 14 px), indenting folder rows by their level.
-/// Referenced from XAML as <c>{x:Static compareviews:DepthToIndentConverter.Instance}</c>.
+/// <para>缩进换算：把条目深度转换为左边距（基础 8 像素 + 深度 × 14 像素），文件夹比较按层级缩进路径。
+/// 基础边距用于把图标与行首的状态色条分开，避免第一层条目紧贴色条。在 XAML 中以
+/// <c>{x:Static compareviews:DepthToIndentConverter.Instance}</c> 引用。</para>
+/// Converts a row depth to a left margin (an 8 px base plus depth × 14 px), indenting folder rows by their level. The base margin
+/// separates the icon from the status stripe at the start of the row so the first level does not touch it. Referenced from XAML as
+/// <c>{x:Static compareviews:DepthToIndentConverter.Instance}</c>.
 /// </summary>
 public sealed class DepthToIndentConverter : IValueConverter
 {
@@ -1670,7 +2773,9 @@ public sealed class DepthToIndentConverter : IValueConverter
             _ => 0.0
         };
 
-        return new Thickness(depth * 14.0, 0, 0, 0);
+        // 基础边距 + 层级缩进：状态色条（3px 列）与图标之间留出可见间隔。
+        // Base margin plus per-level indentation: leaves a visible gap between the 3 px status stripe and the icon.
+        return new Thickness((depth * 14.0) + 8.0, 0, 0, 0);
     }
 
     /// <inheritdoc />

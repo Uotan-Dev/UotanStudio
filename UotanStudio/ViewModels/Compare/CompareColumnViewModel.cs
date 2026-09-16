@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -20,6 +21,12 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     private CancellationTokenSource _loadCts = new();
     private IReadOnlyList<CompareRowViewModel>? _rows;
     private CompareTreeNodeViewModel? _treeRoot;
+    private ObservableCollection<CompareRowViewModel>? _ownRows;
+    private bool _isDirty;
+    private bool _hasEditableRows;
+    private bool _isTextEditorVisible;
+    private string _editorText = string.Empty;
+    private bool _loadingEditorText;
     private CompareColumnSide _side;
 
     /// <summary>创建文件列；列必须由所属对比文档创建，命令会回写到文档。</summary>
@@ -103,11 +110,20 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsBrowsing));
             OnPropertyChanged(nameof(IsCompareSide));
+            OnPropertyChanged(nameof(IsBrowsingTextEditor));
             OnPropertyChanged(nameof(UsesRightCells));
             OnPropertyChanged(nameof(ShowLeftCells));
             OnPropertyChanged(nameof(ShowRightCells));
             NotifyCompareStateChanged();
             NotifyContentChanged();
+
+            // 参与对比后收起浏览编辑器：内容交给对比编辑器/行列表（结束对比时会按路径重新加载）。
+            // Hide the browsing editor once the column participates in a comparison: the compare editor or row list takes over and the
+            // content is reloaded from the path when the comparison ends.
+            if (value != CompareColumnSide.Browse)
+            {
+                IsTextEditorVisible = false;
+            }
         }
     }
 
@@ -137,22 +153,29 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     public bool HasPath => !string.IsNullOrWhiteSpace(Path);
 
     /// <summary>
-    /// <para>是否显示空态提示（本列尚无内容）。</para>
-    /// Whether the empty-state hint is shown (the column has no content yet).
+    /// <para>是否显示空态提示（本列尚无内容：既没有行列表、也没有显示文本编辑器）。</para>
+    /// Whether the empty-state hint is shown (the column has no content yet: neither a row list nor a text editor is visible).
     /// </summary>
-    public bool ShowHint => Rows is null;
+    public bool ShowHint => (Rows is null || Rows.Count == 0) && !IsTextEditorVisible && !IsCompareTextEditorVisible;
 
     /// <summary>
     /// <para>是否显示左侧单元格行列表（浏览列与对比左列）。</para>
     /// Whether the left-cell row list is shown (browsing columns and the compare left column).
     /// </summary>
-    public bool ShowLeftCells => Rows is not null && !UsesRightCells;
+    public bool ShowLeftCells => Rows is not null && !UsesRightCells && !IsCompareTextEditorVisible;
 
     /// <summary>
     /// <para>是否显示右侧单元格行列表（仅对比右列）。</para>
     /// Whether the right-cell row list is shown (the compare right column only).
     /// </summary>
-    public bool ShowRightCells => Rows is not null && UsesRightCells;
+    public bool ShowRightCells => Rows is not null && UsesRightCells && !IsCompareTextEditorVisible;
+
+    /// <summary>
+    /// <para>文本对比时本列是否显示项目文本编辑器（两侧各一个编辑器，行=对齐槽，填充槽显示斜杠）。</para>
+    /// Whether this column shows the project's text editor during a text comparison (one editor per side, one line per aligned
+    /// slot with slashes for fillers).
+    /// </summary>
+    public bool IsCompareTextEditorVisible => IsCompareSide && _owner.IsTextEditorMode;
 
     /// <summary>
     /// <para>对比模式下是否显示十六进制原始数据切换按钮（两侧都有文件的二进制对比）。</para>
@@ -171,7 +194,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// The row list's selection mode: a text comparison allows dragging a multi-row selection (used by "copy to the other
     /// side"), everything else is single selection.
     /// </summary>
-    public SelectionMode RowSelectionMode => _owner.IsTextMode ? SelectionMode.Multiple : SelectionMode.Single;
+    public SelectionMode RowSelectionMode => _hasEditableRows ? SelectionMode.Multiple : SelectionMode.Single;
 
     /// <summary>
     /// <para>十六进制原始数据切换命令（转发到所属文档，两列共享同一份对比结果）。</para>
@@ -201,7 +224,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// <para>本列对应的文件是否有未保存的编辑（文本对比中修改文本或复制到另一侧之后）。</para>
     /// Whether this column's file has unsaved edits (after text edits or a copy to the other side in a text comparison).
     /// </summary>
-    public bool IsDirty => IsCompareSide && _owner.IsFileDirty(Side);
+    public bool IsDirty => IsCompareSide ? _owner.IsFileDirty(Side) : _isDirty;
 
     partial void OnPathChanged(string value)
     {
@@ -313,7 +336,217 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// and line ending).
     /// </summary>
     [RelayCommand]
-    private async Task Save() => await _owner.SaveSideAsync(this);
+    private async Task Save()
+    {
+        if (IsCompareSide)
+        {
+            await _owner.SaveSideAsync(this);
+            return;
+        }
+
+        // 浏览状态：本列自己的文本文件按当前行写回（结构编辑后的行结构同样生效）。
+        // Browsing: this column's own text file is written back from the current rows (structural edits included).
+        if (IsTextEditorVisible)
+        {
+            var editorPath = (Path ?? string.Empty).Trim();
+            if (editorPath.Length == 0)
+            {
+                return;
+            }
+
+            try
+            {
+                await _owner.Comparison.SaveTextAsync(editorPath, EditorLines(), CancellationToken.None);
+                _isDirty = false;
+                NotifyDirtyChanged();
+                _owner.ClearError();
+            }
+            catch (Exception ex)
+            {
+                _owner.ReportError(ex.Message);
+                LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
+            }
+
+            return;
+        }
+
+        if (_ownRows is null || !_hasEditableRows)
+        {
+            return;
+        }
+
+        var path = (Path ?? string.Empty).Trim();
+        var lines = new List<string>();
+        foreach (var row in _ownRows)
+        {
+            if (row.IsEditable && row.HasLeftLine)
+            {
+                lines.Add(row.LeftText);
+            }
+        }
+
+        try
+        {
+            await _owner.Comparison.SaveTextAsync(path, lines, CancellationToken.None);
+            _isDirty = false;
+            NotifyDirtyChanged();
+            _owner.ClearError();
+        }
+        catch (Exception ex)
+        {
+            _owner.ReportError(ex.Message);
+            LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
+        }
+    }
+
+    /// <summary>本列自己的文本文件被编辑时标记「已修改」（浏览状态用）。</summary>
+    internal void MarkDirty()
+    {
+        if (_isDirty)
+        {
+            return;
+        }
+
+        _isDirty = true;
+        NotifyDirtyChanged();
+        _owner.NotifyColumnsChanged();
+    }
+
+    /// <summary>
+    /// <para>浏览文本文件时是否显示项目文本编辑器（真正的多行编辑：跨行选择、增删行、撤销/重做、多行粘贴）。</para>
+    /// Whether the project's text editor is shown while browsing a text file (real multi-line editing: cross-line selection,
+    /// line insert/delete, undo/redo, multi-line paste).
+    /// </summary>
+    public bool IsTextEditorVisible
+    {
+        get => _isTextEditorVisible;
+        private set
+        {
+            if (SetProperty(ref _isTextEditorVisible, value))
+            {
+                OnPropertyChanged(nameof(IsBrowsingTextEditor));
+                OnPropertyChanged(nameof(ShowLeftCells));
+                OnPropertyChanged(nameof(ShowRightCells));
+                OnPropertyChanged(nameof(ShowHint));
+            }
+        }
+    }
+
+    /// <summary>
+    /// <para>浏览文本编辑器是否显示：只有浏览列才显示单文档编辑器；参与对比后必须让位给对比编辑器，
+    /// 否则两个编辑器会叠在同一列里（表现为重影）。</para>
+    /// Whether the browsing text editor is shown: only a browsing column shows the single-document editor. Once the column takes part
+    /// in a comparison it must yield to the compare editor, otherwise both editors stack inside one column (which shows up as
+    /// ghosting).
+    /// </summary>
+    public bool IsBrowsingTextEditor => _isTextEditorVisible && IsBrowsing;
+
+    /// <summary>
+    /// <para>文本编辑器中的内容（浏览文本文件时使用；每一行以 <c>\n</c> 连接，保存时由服务还原原换行风格）。</para>
+    /// The text editor's content (used while browsing a text file; lines are joined with <c>\n</c> and the save service
+    /// restores the file's original line ending).
+    /// </summary>
+    public string EditorText
+    {
+        get => _editorText;
+        set
+        {
+            if (!SetProperty(ref _editorText, value) || _loadingEditorText)
+            {
+                return;
+            }
+
+            // 用户编辑（载入时用 _loadingEditorText 抑制）。
+            // A user edit (suppressed with _loadingEditorText while loading).
+            MarkDirty();
+        }
+    }
+
+    /// <summary>浏览状态下把文本行载入编辑器（不触发「已修改」）。</summary>
+    private void LoadEditorText(IReadOnlyList<string> lines)
+    {
+        _loadingEditorText = true;
+        try
+        {
+            EditorText = string.Join('\n', lines);
+        }
+        finally
+        {
+            _loadingEditorText = false;
+        }
+
+        _isDirty = false;
+        IsTextEditorVisible = true;
+        _ownRows = null;
+        _hasEditableRows = false;
+        Rows = null;
+        TreeRoot = null;
+        NotifyContentChanged();
+        NotifyDirtyChanged();
+    }
+
+    /// <summary>取编辑器中的文本行（保存浏览文本文件用）。</summary>
+    private List<string> EditorLines()
+    {
+        var lines = new List<string>();
+        foreach (var line in _editorText.Split('\n'))
+        {
+            lines.Add(line.TrimEnd('\r'));
+        }
+
+        return lines;
+    }
+
+    /// <summary>浏览状态下在本列内断行（结构与对比共用同一套行编辑实现）。</summary>
+    internal (int Index, int Caret) SplitTextRow(CompareRowViewModel row, bool leftSide, int caretIndex)
+    {
+        if (_ownRows is null)
+        {
+            return (0, 0);
+        }
+
+        var result = CompareTextRowEditor.Split(_ownRows, row, leftSide, caretIndex);
+        MarkDirty();
+        return result;
+    }
+
+    /// <summary>浏览状态下把本列某行与下一行合并。</summary>
+    internal (int Index, int Caret) JoinTextRowWithNext(CompareRowViewModel row, bool leftSide)
+    {
+        if (_ownRows is null)
+        {
+            return (0, 0);
+        }
+
+        var result = CompareTextRowEditor.JoinWithNext(_ownRows, row, leftSide);
+        MarkDirty();
+        return result;
+    }
+
+    /// <summary>浏览状态下把本列某行并入上一行。</summary>
+    internal (int Index, int Caret) JoinTextRowWithPrevious(CompareRowViewModel row, bool leftSide)
+    {
+        if (_ownRows is null)
+        {
+            return (0, 0);
+        }
+
+        var result = CompareTextRowEditor.JoinWithPrevious(_ownRows, row, leftSide);
+        MarkDirty();
+        return result;
+    }
+
+    /// <summary>浏览状态下删除本列所选行。</summary>
+    internal void DeleteSelectedTextRows(IReadOnlyList<int> indices)
+    {
+        if (_ownRows is null)
+        {
+            return;
+        }
+
+        CompareTextRowEditor.DeleteSelected(_ownRows, indices, leftSide: true);
+        MarkDirty();
+    }
 
     /// <summary>
     /// <para>展开/折叠本列浏览树上的一个节点：先按需扫描子项，再切换展开状态并重建可见行。</para>
@@ -334,8 +567,16 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         }
 
         node.IsExpanded = !node.IsExpanded;
-        Rows = ComparisonRowBuilder.ForTree([TreeRoot], compared: false);
+        Rows = BuildBrowseRows();
     }
+
+    /// <summary>
+    /// <para>浏览列当前应有的行：导入的文件夹显示其**内容**（根节点不占一行），展开的子文件夹把它们的孩子插在原位。</para>
+    /// The rows a browsing column should show: an imported folder shows its **contents** (the root takes no row) and an expanded
+    /// subfolder inserts its children in place.
+    /// </summary>
+    private List<CompareRowViewModel> BuildBrowseRows()
+        => TreeRoot is null ? [] : ComparisonRowBuilder.ForTree(TreeRoot.Children, compared: false);
 
     /// <summary>
     /// <para>浏览状态下进入某个目录：把该目录设为本列路径并重建内容（未对比时双击文件夹的行为）。</para>
@@ -369,22 +610,49 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         {
             if (isDirectory)
             {
-                // 导入目录后保持折叠：只挂根节点，子项等双击或展开箭头。
-                // An imported folder stays collapsed: only the root is attached, children wait for a
-                // double-click or the expander arrow.
+                // 导入文件夹直接列出它里面的内容：根节点不作为一行（它的子项就是顶层行），子文件夹保持折叠、双击展开，
+                // 「返回上一级」按路径回退。
+                // Importing a folder lists its contents straight away: the root itself is not a row (its children are the top-level rows),
+                // subfolders stay collapsed until double-clicked and "go up" walks the path back.
                 var root = CompareTreeNodeViewModel.ForBrowsing(path, isDirectory: true, ct);
                 TreeRoot = root;
-                Rows = ComparisonRowBuilder.ForTree([root], compared: false);
+                await root.EnsureChildrenLoadedAsync();
+                ct.ThrowIfCancellationRequested();
+                _ownRows = null;
+                _isDirty = false;
+                _hasEditableRows = false;
+                IsTextEditorVisible = false;
+                Rows = BuildBrowseRows();
             }
             else
             {
-                var rows = await _owner.BuildFileRowsAsync(path, ct);
+                // 文本文件用项目文本编辑器打开（真正的多行编辑）；二进制文件仍用元数据行。
+                // A text file opens in the project's text editor (real multi-line editing); a binary file keeps the
+                // metadata rows.
+                var textLines = await _owner.ReadTextLinesAsync(path, ct);
+                ct.ThrowIfCancellationRequested();
+                if (textLines is not null)
+                {
+                    LoadEditorText(textLines);
+                    NotifyContentChanged();
+                    OnPropertyChanged(nameof(RowSelectionMode));
+                    _owner.ClearError();
+                    return;
+                }
+
+                IsTextEditorVisible = false;
+                var rows = await _owner.BuildFileRowsAsync(path, ct, (_, _) => MarkDirty());
                 ct.ThrowIfCancellationRequested();
                 TreeRoot = null;
+                _ownRows = rows;
+                _isDirty = false;
+                _hasEditableRows = rows.Any(row => row.IsEditable);
                 Rows = rows;
             }
 
             NotifyContentChanged();
+            NotifyDirtyChanged();
+            OnPropertyChanged(nameof(RowSelectionMode));
             _owner.ClearError();
         }
         catch (OperationCanceledException)
@@ -419,8 +687,14 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     {
         BeginLoad();
         TreeRoot = null;
+        _ownRows = null;
+        _isDirty = false;
+        _hasEditableRows = false;
+        IsTextEditorVisible = false;
         Rows = null;
         NotifyContentChanged();
+        NotifyDirtyChanged();
+        OnPropertyChanged(nameof(RowSelectionMode));
     }
 
     /// <summary>
@@ -516,5 +790,8 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         OnPropertyChanged(nameof(ShowHexToggle));
         OnPropertyChanged(nameof(ShowDiffNavigation));
         OnPropertyChanged(nameof(RowSelectionMode));
+        OnPropertyChanged(nameof(IsCompareTextEditorVisible));
+        OnPropertyChanged(nameof(ShowLeftCells));
+        OnPropertyChanged(nameof(ShowRightCells));
     }
 }

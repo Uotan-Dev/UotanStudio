@@ -86,6 +86,7 @@ internal static class ComparisonRowBuilder
             leftIcon: leftIcon,
             rightIcon: rightIcon,
             menu: compared ? CompareRowMenuKind.ComparedEntry : CompareRowMenuKind.BrowsingEntry,
+            compared: compared,
             hasLeftLine: node.LeftName.Length > 0,
             hasRightLine: node.RightName.Length > 0);
     }
@@ -95,15 +96,21 @@ internal static class ComparisonRowBuilder
         => isDirectory || size < 0 ? string.Empty : FormatSize(size);
 
     /// <summary>
-    /// <para>构建浏览一个文本文件的行：内容落在左侧单元格，行号 1 起，无单侧淡色背景
-    /// （浏览不是对比，不加状态色）。</para>
-    /// Builds the rows for browsing a text file: content in the left cells, one-based line numbers, and
-    /// no single-side tint (browsing is not a comparison, so no status colour is applied).
+    /// <para>构建浏览一个文本文件的行：内容落在左侧单元格，行号 1 起，可直接编辑（浏览状态也允许改文本，
+    /// 保存后写回文件），没有对比状态色与右键菜单。</para>
+    /// Builds the rows for browsing a text file: content in the left cells with one-based line numbers and direct editing
+    /// (browsing may edit text too, saved back to the file), without comparison status colours or a context menu.
     /// </summary>
-    internal static List<CompareRowViewModel> ForText(IReadOnlyList<string> lines) =>
+    /// <param name="lines"><para>文件行。</para>The file's lines.</param>
+    /// <param name="edited"><para>文本被编辑时的回调（供所属列标记文件已修改）。</para>Callback invoked when the text is edited.</param>
+    internal static List<CompareRowViewModel> ForText(
+        IReadOnlyList<string> lines,
+        Action<CompareRowViewModel, bool>? edited = null) =>
         lines.Select((line, index) => new CompareRowViewModel(
             FolderItemStatus.LeftOnly, 0, (index + 1).ToString(), line, string.Empty, true,
-            string.Empty, string.Empty, string.Empty, false, hasLeftLine: true, hasRightLine: false)).ToList();
+            string.Empty, string.Empty, string.Empty, false,
+            editable: true, menu: CompareRowMenuKind.None, compared: false,
+            hasLeftLine: true, hasRightLine: false, edited: edited)).ToList();
 
     /// <summary>
     /// <para>构建单侧文本对比的行：内容只落在有文件的一侧（行号 1 起），另一侧整列留空，
@@ -124,12 +131,12 @@ internal static class ComparisonRowBuilder
                 FolderItemStatus.LeftOnly, 0, (index + 1).ToString(), line, string.Empty, true,
                 string.Empty, string.Empty, string.Empty, false,
                 editable: true, menu: CompareRowMenuKind.ComparedText,
-                hasLeftLine: true, hasRightLine: false, edited: edited)
+                compared: true, hasLeftLine: true, hasRightLine: false, edited: edited)
             : new CompareRowViewModel(
                 FolderItemStatus.RightOnly, 0, string.Empty, string.Empty, string.Empty, false,
                 (index + 1).ToString(), line, string.Empty, true,
                 editable: true, menu: CompareRowMenuKind.ComparedText,
-                hasLeftLine: false, hasRightLine: true, edited: edited)).ToList();
+                compared: true, hasLeftLine: false, hasRightLine: true, edited: edited)).ToList();
 
     /// <summary>
     /// <para>由两侧元数据构建元数据视图行：格式名行、摘要行、键值对行（键并集）、条目行与组件行；
