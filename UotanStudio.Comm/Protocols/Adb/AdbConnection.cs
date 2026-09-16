@@ -141,7 +141,21 @@ public sealed class AdbConnection : IDisposable
         }
         if (_transport is UsbDeviceTransport)
             UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.RequireDirectUsb(0xff, 0x42, 1);
-        Send(AdbMessaging.BuildConnect());
+        try
+        {
+            Send(AdbMessaging.BuildConnect());
+        }
+        catch (Exception ex) when ((ex is System.ComponentModel.Win32Exception or IOException)
+            && _transport is UsbDeviceTransport)
+        {
+            // 直连 USB 握手的单次瞬态错误（如 WinUSB ERROR_CRC / 管道数据损坏）在重置
+            // 管道后重试一次；消息循环尚未启动，重复发送 CNXN 不会残留后台状态。
+            // A single transient error on the direct-USB handshake (e.g. WinUSB ERROR_CRC
+            // or pipe data corruption) is retried once after a pipe reset; the message loop
+            // has not started, so re-sending CNXN leaves no background state behind.
+            _transport.Reset();
+            Send(AdbMessaging.BuildConnect());
+        }
         _connected = true;
         _authKeyIndex = 0;
 

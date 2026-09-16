@@ -103,7 +103,7 @@ public static class DebugBridgeRoute
     }
 
     /// <summary>Creates a routed ADB session; the direct factory is invoked only when the server is absent.</summary>
-    public static AdbSession OpenAdb(string serial, Func<AdbSession> openDirect,
+    public static AdbSession? OpenAdb(string serial, Func<AdbSession?> openDirect,
         string host = "127.0.0.1", int port = 5037)
         => Probe(host, port) ? new AdbSession(new AdbServerServices(serial, host, port)) : openDirect();
 

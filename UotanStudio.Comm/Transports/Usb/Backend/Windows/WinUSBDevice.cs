@@ -13,6 +13,7 @@ internal class WinUSBDevice : UsbDevice
     private const int WinUsbDefaultTimeoutMs = UsbTransferPolicies.WinUsbDefaultTimeoutMs;
     private const int ERROR_SEM_TIMEOUT = 121;
     private const int ERROR_TIMEOUT = 146;
+    private const int ERROR_CRC = 23;
     private const int ERROR_NO_DATA = 232;
     private const int ERROR_DEVICE_NOT_CONNECTED = 1167;
     private const int ERROR_NO_SUCH_DEVICE = 433;
@@ -456,7 +457,27 @@ internal class WinUSBDevice : UsbDevice
         => IsDisconnectionError(nativeError) ? base.CreateReadFatalException(nativeError) : new Win32Exception(nativeError);
 
     protected override Exception CreateWriteFatalException(int nativeError)
-        => IsDisconnectionError(nativeError) ? base.CreateWriteFatalException(nativeError) : new Win32Exception(nativeError);
+    {
+        if (IsDisconnectionError(nativeError))
+        {
+            return base.CreateWriteFatalException(nativeError);
+        }
+
+        // ERROR_CRC (0x17) 表示批量写数据在传输中被破坏：常见于线缆/集线器/USB 3 端口
+        // 的物理层抖动，或本工具与 adb server 同时占用同一 ADB 接口。给出可操作的提示，
+        // 避免用户面对晦涩的系统错误文本。
+        // ERROR_CRC (0x17) means bulk-write data was corrupted in transit: typically a
+        // marginal cable/hub/USB3 port, or another host (e.g. an adb server) sharing the
+        // same ADB interface. Surface an actionable hint instead of a cryptic system message.
+        if (nativeError == ERROR_CRC)
+        {
+            return new Win32Exception(nativeError,
+                "USB 写数据循环冗余校验（CRC）失败。请检查线缆/端口，或避免与 adb server 同时占用同一 ADB 接口。"
+                + " USB write CRC failure. Check the cable/port, or avoid sharing the ADB interface with an adb server.");
+        }
+
+        return new Win32Exception(nativeError);
+    }
 
     public override long Write(byte[] data, int length) => Write(data, length, DefaultTimeoutMs);
 

@@ -425,7 +425,8 @@ public sealed class DeviceMonitorService : IDisposable
         if (device.Protocol != DeviceProtocolKind.Adb) return null;
         return DebugBridgeRoute.OpenAdb(device.Serial, () =>
         {
-            var usb = OpenUsbSession(device) ?? throw new IOException("Selected ADB USB device is unavailable.");
+            var usb = OpenUsbSession(device);
+            if (usb is null) return null; // server 不存在且 USB 设备无法打开时视为不可用，而非抛异常
             try { return new AdbSession(new UsbDeviceTransport(usb)); }
             catch { usb.Dispose(); throw; }
         });
