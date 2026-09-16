@@ -16,6 +16,35 @@ public class SparseRoundTripTests
     private const uint BlockSize = 4096;
 
     [Fact]
+    public void ConvertRawToSparse_RejectsInvalidBlockSize()
+    {
+        using var input = new MemoryStream(new byte[8192]);
+        using var output = new MemoryStream();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => SparseImageConverter.ConvertRawToSparse(input, output, blockSize: 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => SparseImageConverter.ConvertRawToSparse(input, output, blockSize: 6));
+    }
+
+    [Fact]
+    public void ConvertRawToSparse_AcceptsMultipleOfFourBlockSize()
+    {
+        var payload = new byte[BlockSize * 3];
+        for (var i = 0; i < payload.Length; i++)
+        {
+            payload[i] = (byte)((i * 7) & 0xFF);
+        }
+
+        using var input = new MemoryStream(payload);
+        using var output = new MemoryStream();
+        SparseImageConverter.ConvertRawToSparse(input, output, blockSize: 2048);
+
+        output.Position = 0;
+        using var loaded = SparseReader.FromStream(output);
+        Assert.Equal(2048u, loaded.Header.BlockSize);
+        Assert.Equal((uint)(payload.Length / 2048), loaded.Header.TotalBlocks);
+    }
+
+    [Fact]
     public void WriteThenRead_RoundTripsChunksAndLogicalData()
     {
         using var sparse = new SparseFile(BlockSize, BlockSize * 8);
@@ -242,6 +271,65 @@ public class SparseRoundTripTests
 
             var parts = Directory.EnumerateFiles(tmpDir, "part*.img").OrderBy(f => f, StringComparer.Ordinal).ToList();
             Assert.Equal(2, parts.Count);
+
+            using var combined = new MemoryStream();
+            foreach (var part in parts)
+            {
+                using var split = SparseReader.FromImageFile(part);
+                split.WriteRawToStream(combined);
+            }
+
+            Assert.Equal(expected, combined.ToArray());
+        }
+        finally
+        {
+            if (Directory.Exists(tmpDir))
+            {
+                Directory.Delete(tmpDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void ResparseImage_PiecesStayWithinMaxFileSize_AndReassemble()
+    {
+        // 回归测试：输出分片除逻辑数据外还携带稀疏头/块头（共 40 字节）开销，
+        // 切分时必须预留，否则单个分片文件会超过 maxFileSize，刷写下载时触发
+        // "download payload ... exceeds max-download-size"。
+        // Regression: an output piece also carries sparse/chunk header overhead (40 bytes); the split must
+        // reserve it, otherwise a single piece file exceeds maxFileSize and the download fails with
+        // "download payload ... exceeds max-download-size" when flashing.
+        using var sparse = new SparseFile(BlockSize, BlockSize * 6);
+        sparse.AddRawChunk(BuildBytes(BlockSize * 3, 13));
+        sparse.AddFillChunk(0x5A5A5A5A, BlockSize * 3);
+
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"sparse_resp_bounded_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        var input = Path.Combine(tmpDir, "input.img");
+        try
+        {
+            using (var fs = File.Create(input))
+            {
+                sparse.WriteToStream(fs, sparse: true);
+            }
+
+            var maxFileSize = BlockSize * 4;
+            SparseImageConverter.ResparseImage(input, Path.Combine(tmpDir, "part{0}.img"), maxFileSize);
+
+            byte[] expected;
+            using (var rawMs = new MemoryStream())
+            {
+                sparse.WriteRawToStream(rawMs);
+                expected = rawMs.ToArray();
+            }
+
+            var parts = Directory.EnumerateFiles(tmpDir, "part*.img").OrderBy(f => f, StringComparer.Ordinal).ToList();
+            Assert.NotEmpty(parts);
+            foreach (var part in parts)
+            {
+                var length = new FileInfo(part).Length;
+                Assert.True(length <= maxFileSize, $"Output piece {Path.GetFileName(part)} is {length} bytes which exceeds {maxFileSize}");
+            }
 
             using var combined = new MemoryStream();
             foreach (var part in parts)
