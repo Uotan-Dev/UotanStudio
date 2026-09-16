@@ -344,6 +344,8 @@
     <x:String x:Key="Compare_CloseColumn">Close this column</x:String>
     <x:String x:Key="Compare_SaveFile">Save this column's edits to the file</x:String>
     <x:String x:Key="Compare_CopyTextToOtherSide">Copy to Other Side</x:String>
+    <x:String x:Key="Compare_DeleteSelectedRows">Delete Selected Lines</x:String>
+    <x:String x:Key="Compare_EnterFolder">Enter This Folder</x:String>
     <x:String x:Key="Compare_CopyToOtherSide">Copy to Other Side</x:String>
     <x:String x:Key="Compare_MoveToOtherSide">Move to Other Side</x:String>
     <x:String x:Key="Compare_CopyToLeftColumn">Copy to Left</x:String>

@@ -87,6 +87,7 @@ public sealed class CompareRowViewModel : ObservableObject
         ExplorerIcon? rightIcon = null,
         bool editable = false,
         CompareRowMenuKind menu = CompareRowMenuKind.None,
+        bool compared = false,
         bool? hasLeftLine = null,
         bool? hasRightLine = null,
         Action<CompareRowViewModel, bool>? edited = null)
@@ -107,6 +108,7 @@ public sealed class CompareRowViewModel : ObservableObject
         RightIcon = rightIcon;
         IsEditable = editable;
         Menu = menu;
+        IsComparedRow = compared;
         _hasLeftLine = hasLeftLine ?? !string.IsNullOrEmpty(leftText);
         _hasRightLine = hasRightLine ?? !string.IsNullOrEmpty(rightText);
         _edited = edited;
@@ -239,6 +241,32 @@ public sealed class CompareRowViewModel : ObservableObject
     /// </summary>
     public CompareRowMenuKind Menu { get; }
 
+    /// <summary>
+    /// <para>该行是否属于对比结果（对比中单侧缺失的行用斜杠占位，让同行对应关系一眼可见）。</para>
+    /// Whether the row belongs to a comparison (a side missing the row shows a slash placeholder so the one-row-per-entry
+    /// alignment stays visible).
+    /// </summary>
+    public bool IsComparedRow { get; }
+
+    /// <summary>
+    /// <para>左侧是否需要斜杠占位（对比中该侧没有这一行）。</para>
+    /// Whether the left side needs a slash placeholder (the comparison has no such row on that side).
+    /// </summary>
+    public bool ShowLeftFiller => IsComparedRow && !IsEditable && !HasLeftLine;
+
+    /// <summary>
+    /// <para>右侧是否需要斜杠占位。</para>
+    /// Whether the right side needs a slash placeholder.
+    /// </summary>
+    public bool ShowRightFiller => IsComparedRow && !IsEditable && !HasRightLine;
+
+    /// <summary>
+    /// <para>可编辑行在对比中缺失该侧时显示的占位符（编辑框的 PlaceholderText）。</para>
+    /// The placeholder shown by an editable row when the comparison has no such line on that side (the editor's
+    /// placeholder text).
+    /// </summary>
+    public string? ComparedFiller => IsComparedRow && IsEditable ? "/" : null;
+
     /// <summary>是否显示条目右键菜单（浏览或对比状态下的文件/文件夹行）。 Whether the entry context menu is shown.</summary>
     public bool ShowEntryMenu => Menu is CompareRowMenuKind.BrowsingEntry or CompareRowMenuKind.ComparedEntry;
 
@@ -247,6 +275,9 @@ public sealed class CompareRowViewModel : ObservableObject
 
     /// <summary>对比状态下是否显示「复制/移动到另一边」。 Whether the compared copy/move items are shown.</summary>
     public bool ShowComparedTransfers => Menu == CompareRowMenuKind.ComparedEntry;
+
+    /// <summary>浏览状态下的目录行是否显示「进入此文件夹」。 Whether the "enter this folder" item is shown.</summary>
+    public bool ShowBrowsingEntryFolder => Menu == CompareRowMenuKind.BrowsingEntry && TreeNode is { IsDirectory: true };
 
     /// <summary>文本对比中是否显示「复制到另一侧」。 Whether the text "copy to the other side" item is shown.</summary>
     public bool ShowTextTransfer => Menu == CompareRowMenuKind.ComparedText;
@@ -308,6 +339,17 @@ public sealed class CompareRowViewModel : ObservableObject
     /// Whether the right read-only text is shown.
     /// </summary>
     public bool ShowRightText => !IsEditable && HasRightLine;
+
+    /// <summary>
+    /// <para>是否显示左侧行号/偏移列：只有真正带行号的行（文本行、十六进制行）才显示——目录树行没有行号，
+    /// 不能白占一列宽度把图标和文件名顶开。</para>
+    /// Whether the left line-number column is shown: only rows that really carry one (text and hex rows). A directory-tree row has no
+    /// line number and must not reserve a column that pushes the icon and the file name apart.
+    /// </summary>
+    public bool ShowLeftLineNumber => !IsTreeRow && LeftLine.Length > 0;
+
+    /// <summary>是否显示右侧行号/偏移列（同左侧规则）。 Whether the right line-number column is shown (same rule).</summary>
+    public bool ShowRightLineNumber => !IsTreeRow && RightLine.Length > 0;
 
     /// <summary>
     /// <para>是否显示左侧图标（目录树行且左侧有内容）。</para>
@@ -401,6 +443,39 @@ public sealed class CompareRowViewModel : ObservableObject
     }
 
     /// <summary>
+    /// <para>按本行的属性创建一个可编辑的兄弟行（断行/并行等结构编辑新增行用），继承右键菜单类型与「已修改」
+    /// 回调，因此无论浏览还是对比都能把改动记到正确的文件上。</para>
+    /// Creates an editable sibling row with this row's attributes (used when a structural edit inserts a row), inheriting the
+    /// context-menu kind and the "edited" callback so the change is always recorded against the right file, whether
+    /// browsing or comparing.
+    /// </summary>
+    /// <param name="leftText"><para>左侧文本。</para>The left text.</param>
+    /// <param name="rightText"><para>右侧文本。</para>The right text.</param>
+    /// <param name="hasLeft"><para>左侧是否有这一行。</para>Whether the left side has the row.</param>
+    /// <param name="hasRight"><para>右侧是否有这一行。</para>Whether the right side has the row.</param>
+    internal CompareRowViewModel CreateEditableSibling(string leftText, string rightText, bool hasLeft, bool hasRight)
+        => new(
+            FolderItemStatus.Equal,
+            depth: 0,
+            leftLine: string.Empty,
+            leftText: leftText,
+            leftSub: string.Empty,
+            isLeftDiff: false,
+            rightLine: string.Empty,
+            rightText: rightText,
+            rightSub: string.Empty,
+            isRightDiff: false,
+            editable: true,
+            menu: Menu,
+            compared: IsComparedRow,
+            hasLeftLine: hasLeft,
+            hasRightLine: hasRight,
+            edited: _edited);
+
+    /// <summary>通知「该侧被编辑」（结构编辑由列表助手调用，用于标记文件已修改）。</summary>
+    internal void NotifyEdited(bool leftSide) => _edited?.Invoke(this, leftSide);
+
+    /// <summary>
     /// <para>从文本差异行构造对比行：Equal→相同、Added→仅右、Deleted→仅左、Modified→不同；行号 1-based 转文本，
     /// 缺失侧行号与文本保持为空。「有这一行」由行号是否大于 0 决定，因此空行与缺失行可以区分。</para>
     /// Builds a compare row from a text-diff line: Equal→Equal, Added→RightOnly, Deleted→LeftOnly, Modified→Different;
@@ -436,6 +511,7 @@ public sealed class CompareRowViewModel : ObservableObject
             isRightDiff: line.Kind is DiffLineKind.Added or DiffLineKind.Modified,
             editable: true,
             menu: CompareRowMenuKind.ComparedText,
+            compared: true,
             hasLeftLine: line.LeftLine > 0,
             hasRightLine: line.RightLine > 0,
             edited: edited);

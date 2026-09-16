@@ -344,6 +344,8 @@
     <x:String x:Key="Compare_CloseColumn">关闭此列</x:String>
     <x:String x:Key="Compare_SaveFile">保存本列修改到文件</x:String>
     <x:String x:Key="Compare_CopyTextToOtherSide">复制到另一侧</x:String>
+    <x:String x:Key="Compare_DeleteSelectedRows">删除所选行</x:String>
+    <x:String x:Key="Compare_EnterFolder">进入此文件夹</x:String>
     <x:String x:Key="Compare_CopyToOtherSide">复制到另一边</x:String>
     <x:String x:Key="Compare_MoveToOtherSide">移动到另一边</x:String>
     <x:String x:Key="Compare_CopyToLeftColumn">复制到左边</x:String>
