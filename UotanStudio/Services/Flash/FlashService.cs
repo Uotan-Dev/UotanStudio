@@ -431,10 +431,101 @@ public sealed class FlashService : IFlashService
 
             TryBackupBeforeFlash(session, partition, progress, ct, stateDir);
 
-            var summary = FlashImageChunked(session, partition, imagePath, progress, ct);
-            Report(progress, partition, 100, "Flash complete. 刷写完成。");
+            // fastbootd 会拒绝大于当前逻辑分区的镜像（FAIL EOVERFLOW "Value too large for defined
+            // data type"），因此必须先按 AOSP fastboot do_flash 语义把分区调整到镜像尺寸再刷写。
+            // fastbootd rejects an image larger than the current logical partition (FAIL EOVERFLOW),
+            // so the partition is resized to the image size first, following AOSP fastboot do_flash.
+            var target = PrepareFlashTarget(session, partition, GetImageLogicalSize(imagePath), progress);
+            var summary = FlashImageChunked(session, target, imagePath, progress, ct);
+            Report(progress, target, 100, "Flash complete. 刷写完成。");
             return new FlashResult { Success = true, Summary = summary };
         }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <para>解析刷写目标分区（A/B 槽位）并按 AOSP fastboot <c>do_flash</c> 语义准备逻辑分区：
+    /// 目标为逻辑分区时先发送 <c>resize-logical-partition:&lt;分区&gt;:&lt;镜像逻辑尺寸&gt;</c>，
+    /// 使 fastbootd 的 <c>flash</c> 不再因镜像大于当前分区而返回 EOVERFLOW
+    /// （"Value too large for defined data type"）或越界写入失败。非逻辑分区和设备不支持
+    /// <c>is-logical</c> 时不做任何调整。</para>
+    /// Resolves the flash target (A/B slot) and prepares a logical partition following AOSP fastboot
+    /// <c>do_flash</c>: a logical partition is resized to the image's logical size with
+    /// <c>resize-logical-partition:&lt;partition&gt;:&lt;size&gt;</c> beforehand, so fastbootd's
+    /// <c>flash</c> no longer rejects an oversized image with EOVERFLOW
+    /// ("Value too large for defined data type") or fails writing past the mapped range. Physical
+    /// partitions and devices without <c>is-logical</c> support are left untouched.
+    /// </summary>
+    /// <param name="session"><para>已连接的 fastboot 会话。</para>A connected fastboot session.</param>
+    /// <param name="partition"><para>目标分区名（可能尚未带槽位后缀）。</para>The target partition name (may lack a slot suffix).</param>
+    /// <param name="imageSize"><para>镜像的逻辑尺寸（字节，由 <see cref="GetImageLogicalSize"/> 得到）。</para>
+    /// The image's logical size in bytes, as returned by <see cref="GetImageLogicalSize"/>.</param>
+    /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
+    /// <returns><para>后续 <c>flash:</c> 应使用的槽位解析后分区名。</para>The slot-resolved name to use for the following <c>flash:</c>.</returns>
+    public static string PrepareFlashTarget(
+        FastbootSession session, string partition, long imageSize, IProgress<FlashProgress>? progress)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        if (string.IsNullOrWhiteSpace(partition))
+        {
+            throw new ArgumentException("Partition must not be empty.", nameof(partition));
+        }
+
+        var target = session.ResolvePartition(partition);
+        if (!session.IsLogical(target))
+        {
+            return target;
+        }
+
+        if (imageSize <= 0)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "FlashService",
+                $"Cannot determine the size of the image for logical partition {target}; flashing without resize. 无法确定逻辑分区镜像尺寸，跳过分区调整。");
+            return target;
+        }
+
+        Report(progress, target, 1, $"Resizing logical partition {target} to {imageSize} bytes... 正在把逻辑分区调整到镜像大小...");
+        var response = session.ResizeLogicalPartition(target, imageSize);
+        if (!response.IsSuccess)
+        {
+            // AOSP fastboot ignores a failed resize and still flashes: a partition that is already
+            // large enough can be written without resizing.
+            // AOSP fastboot 忽略调整失败并继续刷写：分区已足够大时无需调整也可写入。
+            LogService.Instance.Write(LogLevel.Warn, "FlashService",
+                $"Resize-logical-partition {target} to {imageSize} failed: {response.Info}; continuing flash. 逻辑分区大小调整失败，继续刷写。");
+        }
+
+        return target;
+    }
+
+    /// <summary>
+    /// <para>获取镜像的逻辑尺寸：稀疏镜像取头部声明的展开大小（<c>total_blks × blk_sz</c>），
+    /// 原始镜像取文件长度。设备侧校验的是展开后的大小（fastbootd 用下载数据长度对比分区大小），
+    /// 因此逻辑分区调整必须按展开尺寸而不是稀疏文件体积进行。</para>
+    /// Gets the image's logical size: the expanded size declared by a sparse header
+    /// (<c>total_blks × blk_sz</c>) or the file length of a raw image. The device compares its
+    /// partition size against the expanded payload, so a logical partition must be resized to the
+    /// expanded size rather than the smaller sparse file size.
+    /// </summary>
+    /// <param name="imagePath"><para>镜像文件完整路径。</para>Full path of the image file.</param>
+    /// <returns><para>镜像逻辑尺寸（字节）。</para>The image's logical size in bytes.</returns>
+    public static long GetImageLogicalSize(string imagePath)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(imagePath);
+        try
+        {
+            var header = UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse.SparseReader.PeekHeader(imagePath);
+            if (header.IsValid())
+            {
+                return checked((long)header.TotalBlocks * header.BlockSize);
+            }
+        }
+        catch (IOException)
+        {
+            // 文件短于稀疏头（或读取失败）：按原始镜像处理。
+            // Shorter than a sparse header (or unreadable): treated as a raw image.
+        }
+
+        return new FileInfo(imagePath).Length;
     }
 
     /// <summary>
@@ -447,6 +538,13 @@ public sealed class FlashService : IFlashService
     /// (the bootloader appends each chunk at the current offset, matching AOSP fastboot behavior).
     /// Chunk temp files are deleted afterwards.
     /// </summary>
+    /// <remarks>
+    /// <paramref name="partition"/> must already be slot-resolved (see
+    /// <see cref="PrepareFlashTarget"/>), because every piece is flashed with
+    /// <c>resolveSlot: false</c>.
+    /// <para><paramref name="partition"/> 必须已由 <see cref="PrepareFlashTarget"/> 完成槽位解析，
+    /// 因为每个分片都以 <c>resolveSlot: false</c> 刷写。</para>
+    /// </remarks>
     private static string FlashImageChunked(
         FastbootSession session, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
@@ -467,7 +565,7 @@ public sealed class FlashService : IFlashService
             Report(progress, partition, 5, "Uploading image... 正在上传镜像...");
             var byteProgress = new Progress<long>(written =>
                 Report(progress, partition, imageLength > 0 ? (int)Math.Min(100, written * 100L / imageLength) : 0, "Uploading image... 正在上传镜像..."));
-            var response = session.FlashPartition(partition, image, imageLength, byteProgress, ct);
+            var response = session.FlashPartition(partition, image, imageLength, byteProgress, ct, resolveSlot: false);
             response.ThrowIfFailed();
             return $"Flashed {partition} ({imageLength} bytes) via fastboot.";
         }
@@ -508,7 +606,7 @@ public sealed class FlashService : IFlashService
                 var chunkProgress = new Progress<long>(written =>
                     Report(progress, partition, totalBytes > 0 ? (int)Math.Min(100, (bytesDone + written) * 100L / totalBytes) : 0,
                         $"Uploading chunk {index + 1}/{chunks.Length}... 正在上传分片..."));
-                var chunkResponse = session.FlashPartition(partition, chunk, chunkLength, chunkProgress, ct);
+                var chunkResponse = session.FlashPartition(partition, chunk, chunkLength, chunkProgress, ct, resolveSlot: false);
                 chunkResponse.ThrowIfFailed();
                 bytesDone += chunkLength;
             }

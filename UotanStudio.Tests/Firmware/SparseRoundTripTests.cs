@@ -300,7 +300,7 @@ public class SparseRoundTripTests
         // Regression: an output piece also carries sparse/chunk header overhead; the split must
         // reserve it, otherwise a single piece file exceeds maxFileSize and the download fails with
         // "download payload ... exceeds max-download-size" when flashing.
-        using var sparse = new SparseFile(BlockSize, BlockSize * 6);
+        using var sparse = new SparseFile(BlockSize, BlockSize * 9);
         sparse.AddRawChunk(BuildBytes(BlockSize * 3, 13));
         sparse.AddFillChunk(0x5A5A5A5A, BlockSize * 3);
         sparse.AddRawChunk(BuildBytes(BlockSize * 3, 29));
@@ -336,7 +336,7 @@ public class SparseRoundTripTests
             // 模拟 bootloader：逐分片按绝对块地址累积 RAW/FILL 数据，得到完整分区内容。
             // Simulate the bootloader: accumulate RAW/FILL data across pieces at absolute block
             // addresses to obtain the complete partition content.
-            Assert.Equal(expected, FlashPiecesInOrder(parts, (uint)(BlockSize * 6)));
+            Assert.Equal(expected, FlashPiecesInOrder(parts, BlockSize * 9));
         }
         finally
         {
@@ -391,16 +391,31 @@ public class SparseRoundTripTests
 
             // 逐分片按绝对块地址累积后与完整 raw 一致。
             // Accumulating pieces at absolute block addresses matches the complete raw.
-            Assert.Equal(expected, FlashPiecesInOrder(parts, (uint)(BlockSize * 10)));
+            Assert.Equal(expected, FlashPiecesInOrder(parts, BlockSize * 10));
 
-            // 首片保留 FILL chunk（含原填充值）与 DONT_CARE chunk，RAW chunk 起始块为绝对地址。
+            // 首片保留 FILL chunk（含原填充值）与 DONT_CARE chunk。
             // The first piece keeps the FILL chunk (with the original fill value) and the
-            // DONT_CARE chunk; RAW chunk start blocks are absolute addresses.
+            // DONT_CARE chunk.
             using var first = SparseReader.FromImageFile(parts[0]);
             Assert.Contains(first.Chunks, c => (ChunkType)c.Header.ChunkType == ChunkType.Fill && c.FillValue == 0xDEADBEEF);
             Assert.Contains(first.Chunks, c => (ChunkType)c.Header.ChunkType == ChunkType.DontCare);
-            var rawChunk = first.Chunks.First(c => (ChunkType)c.Header.ChunkType == ChunkType.Raw && c.StartBlock > 0);
-            Assert.Equal((uint)5, rawChunk.StartBlock);
+
+            // RAW chunk 携带绝对块地址：第二段 5 块 RAW 数据出现在后续分片且起始块仍为 5，
+            // 而不是分片本地地址 0；否则逐次 flash 会反复覆盖分区前缀。
+            // RAW chunks carry absolute block addresses: the second 5-block RAW payload appears in a
+            // later piece still starting at block 5 rather than a piece-local block 0; otherwise
+            // repeated flashes would overwrite the start of the partition.
+            var rawStarts = new List<uint>();
+            foreach (var part in parts)
+            {
+                using var split = SparseReader.FromImageFile(part);
+                rawStarts.AddRange(split.Chunks
+                    .Where(c => (ChunkType)c.Header.ChunkType == ChunkType.Raw)
+                    .Select(c => c.StartBlock));
+            }
+
+            Assert.Contains(0u, rawStarts);
+            Assert.Contains(5u, rawStarts);
         }
         finally
         {
@@ -420,9 +435,11 @@ public class SparseRoundTripTests
     /// 写入分区缓冲，DONT_CARE（及写入游标）被跳过——即上游重稀疏化不变量针对的
     /// ABOOT/fastbootd 语义。</para>
     /// </summary>
-    private static byte[] FlashPiecesInOrder(IReadOnlyList<string> pieces, uint partitionBlocks)
+    /// <param name="pieces"><para>按刷写顺序排列的分片文件。</para>The piece files in flash order.</param>
+    /// <param name="partitionSize"><para>分区逻辑容量（字节）。</para>The partition's logical capacity in bytes.</param>
+    private static byte[] FlashPiecesInOrder(IReadOnlyList<string> pieces, long partitionSize)
     {
-        var partition = new byte[partitionBlocks * BlockSize];
+        var partition = new byte[partitionSize];
         foreach (var piece in pieces)
         {
             using var sparse = SparseReader.FromImageFile(piece);
@@ -432,11 +449,16 @@ public class SparseRoundTripTests
                 {
                     case ChunkType.Raw when chunk.DataProvider is not null:
                         {
-                            var dst = partition[(int)(chunk.StartBlock * BlockSize)..];
+                            // 必须写入分区缓冲的 Span 切片：数组的 range 索引会复制出新数组，
+                            // 用其作为目标会让写入丢失，组装结果恒为全零。
+                            // Must write into a Span slice of the partition buffer: an array range
+                            // index copies into a new array, so writing to it silently discards the
+                            // data and the assembled image stays zeroed.
+                            var dst = partition.AsSpan((int)(chunk.StartBlock * BlockSize));
                             var filled = 0;
                             while (filled < chunk.Header.ChunkSize * BlockSize)
                             {
-                                var read = chunk.DataProvider.Read(filled, dst.AsSpan(filled));
+                                var read = chunk.DataProvider.Read(filled, dst[filled..]);
                                 if (read <= 0)
                                 {
                                     break;

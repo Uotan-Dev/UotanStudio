@@ -1022,6 +1022,26 @@ public sealed class FastbootSession : IProtocolSession
     }
 
     /// <summary>
+    /// Resolves a partition name against A/B slots with exactly the rules used by
+    /// <see cref="FlashPartition"/>: an explicit slot suffix is authoritative and returned
+    /// unchanged, a slot-capable partition gets the current active slot appended, and any other
+    /// name is returned as-is. Callers that issue several commands for the same target (for
+    /// example <c>is-logical</c> / <c>resize-logical-partition</c> before <c>flash:</c>) use this
+    /// so every command addresses the identical partition.
+    /// <para>使用与 <see cref="FlashPartition"/> 完全相同的规则按 A/B 槽位解析分区名：显式槽位后缀
+    /// 权威且原样返回，支持槽位的分区追加当前活跃槽位，其余名称原样返回。需要对同一目标连发多条
+    /// 命令的调用方（如 <c>flash:</c> 前的 <c>is-logical</c> / <c>resize-logical-partition</c>）
+    /// 借此保证各条命令指向完全相同的分区。</para>
+    /// </summary>
+    /// <param name="partition"><para>待解析的分区名。</para>The partition name to resolve.</param>
+    /// <returns><para>槽位解析后的分区名。</para>The slot-resolved partition name.</returns>
+    public string ResolvePartition(string partition)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(partition);
+        return ResolvePartitionWithSlot(partition);
+    }
+
+    /// <summary>
     /// Resolves the target partition name against A/B slots: a name that already carries an explicit
     /// slot suffix (e.g. <c>system_ext_a</c>) is flashed verbatim, matching upstream fastboot, so the
     /// compound base name is never re-split or re-suffixed; other slot-capable partitions get the
