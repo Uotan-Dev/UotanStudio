@@ -678,35 +678,57 @@ public sealed partial class F2fsBuilder
 
         var holes = new bool[dataBlocks];
         using var stream = File.OpenRead(node.FullPath);
-        var buffer = new byte[blockSize];
-        for (var i = 0; i < dataBlocks; i++)
+        // 大文件（稀疏源可达数 GB）按较大段读取并整段判零，避免逐块系统调用与逐字节扫描。
+        const int segmentBlocks = 16;
+        var segment = new byte[segmentBlocks * blockSize];
+        for (var baseBlock = 0; baseBlock < dataBlocks; baseBlock += segmentBlocks)
         {
-            var read = 0;
-            while (read < blockSize)
+            var segmentCount = Math.Min(segmentBlocks, dataBlocks - baseBlock);
+            var total = 0;
+            while (total < segmentCount * blockSize)
             {
-                var n = stream.Read(buffer, read, blockSize - read);
+                var n = stream.Read(segment, total, segment.Length - total);
                 if (n <= 0)
                 {
                     break;
                 }
 
-                read += n;
+                total += n;
             }
 
-            var allZero = true;
-            for (var j = 0; j < read; j++)
+            for (var i = 0; i < segmentCount; i++)
             {
-                if (buffer[j] != 0)
-                {
-                    allZero = false;
-                    break;
-                }
+                var offset = i * blockSize;
+                var length = Math.Min(blockSize, Math.Max(0, total - offset));
+                holes[baseBlock + i] = IsAllZero(segment.AsSpan(offset, length));
             }
-
-            holes[i] = allZero;
         }
 
         return holes;
+    }
+
+    private static bool IsAllZero(ReadOnlySpan<byte> data)
+    {
+        var zeros = data;
+        while (zeros.Length >= 16)
+        {
+            if (System.Runtime.Intrinsics.Vector128.LoadUnsafe(ref System.Runtime.InteropServices.MemoryMarshal.GetReference(zeros)) != System.Runtime.Intrinsics.Vector128<byte>.Zero)
+            {
+                return false;
+            }
+
+            zeros = zeros[16..];
+        }
+
+        foreach (var value in zeros)
+        {
+            if (value != 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static void PlanDnodes(BuildNode node, int dataBlocks)
