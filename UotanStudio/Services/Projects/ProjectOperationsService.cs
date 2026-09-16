@@ -60,6 +60,7 @@ public sealed class ProjectOperationsService
         // Delivery plan and panel visibility persist inside the solution file: capture before saves, restore after opens.
         _session.CaptureState = CaptureSolutionState;
         _session.Changed += OnSessionChanged;
+        _session.SolutionReloaded += OnSolutionReloaded;
     }
 
     private const string PanelStateKey = "panels";
@@ -86,6 +87,13 @@ public sealed class ProjectOperationsService
     }
 
     private Dictionary<string, JsonElement>? _restoredState;
+    // 解决方案完整重载计数器：每次打开/添加/删除子项目的完整重载递增。订阅方在每次刷新时比较它，
+    // 因此即使面板当时不在可视树中、错过了 ProjectContextChangedMessage，也会在重新进入时强制重载。
+    // Full-reload counter, incremented on every open/add/remove-sub-project reload. Subscribers compare it on
+    // every refresh, so a panel that was detached and missed ProjectContextChangedMessage still reloads later.
+    private int _solutionReloadGeneration;
+    internal int SolutionReloadGeneration => _solutionReloadGeneration;
+    private void OnSolutionReloaded() => _solutionReloadGeneration++;
 
     private void OnSessionChanged()
     {

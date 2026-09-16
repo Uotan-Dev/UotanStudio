@@ -36,23 +36,28 @@ public sealed partial class ProjectSession
             ProjectValidation.ValidateSolution(solution);
             var active = Context.ActiveSubProject;
             // Validate the successor before publishing a removal of the active project.
-            FirmwareProjectSnapshot? successor = null;
             if (newName is null && active == project)
             {
                 var reference = solution.SubProjects[0];
-                successor = await SolutionPersistenceService.LoadFirmwareProjectAsync(Context.ResolvePath(reference.RelativePath)!, token)
+                _ = await SolutionPersistenceService.LoadFirmwareProjectAsync(Context.ResolvePath(reference.RelativePath)!, token)
                     ?? throw new InvalidDataException("Cannot read the replacement active sub-project.");
             }
             RequireSaved(await SolutionPersistenceService.SaveSolutionAsync(path, solution, token), path);
-            Context.OpenSolution(path, solution);
-            if (active is not null && (active != project || newName is not null))
-                Context.SetActiveSubProject(active == project ? newName! : active.Name);
-            if (successor is not null)
+            if (newName is null)
             {
-                _workspace.ClearImages();
-                _workspace.ApplySettings(successor.Settings ?? new());
-                _workspace.RestoreImages(successor.Images.Where(dto => _workspace.PreserveMissingImages || Context.ResolvePath(dto.RelativePath) is { } file && File.Exists(file)));
+                // 删除子项目后与新增子项目一致：从磁盘完整重载解决方案，使镜像列表、设置、文档与
+                // 交付面板都基于新的子项目集合重建，而不是只改 Context 留下残留状态。
+                // Removing a sub-project reloads the whole solution from disk like adding one, so the image
+                // list, settings, documents and delivery panel rebuild from the new sub-project set instead
+                // of leaving state behind on a context-only mutation.
+                await OpenProjectFromPathCoreAsync(path, token);
+                changed = true;
+                return;
             }
+            // 重命名保持轻量路径：文档保持打开，只更换引用标识。
+            // Rename keeps the lighter path: documents stay open, only the reference identity changes.
+            Context.OpenSolution(path, solution);
+            if (active is not null) Context.SetActiveSubProject(active == project ? newName! : active.Name);
             changed = true;
             Changed?.Invoke();
         }, changingProject: true, cancellationToken: token);

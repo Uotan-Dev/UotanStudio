@@ -89,6 +89,31 @@ public sealed class ProjectBoundaryOptimizationTests : IDisposable
     }
 
     [Fact]
+    public async Task SubProjectAddAndRemove_ReloadSolutionForSubscribers()
+    {
+        // 新增与删除子项目都必须完整重载解决方案；切换子项目只算增量变更。
+        // Adding and removing a sub-project must reload the solution in full; switching is incremental.
+        var session = new ProjectSession();
+        await session.CreateNewSolutionAsync(Path.Combine(_root, "sample.uotan"), Token);
+        var reloads = 0;
+        var changes = 0;
+        session.SolutionReloaded += () => reloads++;
+        session.Changed += () => changes++;
+        var second = Path.Combine(session.Context.RootDirectory!, "second", "second.uotanfw");
+        await session.AddSubProjectAsync(second, Token);
+        Assert.Equal(1, reloads);
+        Assert.Equal(1, changes);
+        Assert.True(await session.SwitchSubProjectAsync("second", cancellationToken: Token));
+        Assert.Equal(1, reloads);
+        Assert.Equal(2, changes);
+        Assert.True(await session.RemoveSubProjectAsync("second", Token));
+        Assert.Equal(2, reloads);
+        Assert.Equal(3, changes);
+        Assert.Equal("sample", session.State.ActiveSubProjectName);
+        Assert.Equal("sample", Assert.Single(session.Context.SubProjects).Name);
+    }
+
+    [Fact]
     public async Task AsyncHistory_DoesNotMoveStacksUntilSuccess_AndRejectsConcurrentMutation()
     {
         var history = new ProjectHistory();

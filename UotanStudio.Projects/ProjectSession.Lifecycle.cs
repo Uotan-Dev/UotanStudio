@@ -14,6 +14,14 @@ public sealed partial class ProjectSession
     /// <summary>Raised synchronously after successful lifecycle operations, on the calling context.</summary>
     public event Action? Changed;
 
+    /// <summary>
+    /// <para>解决方案从磁盘完整重新加载后触发（打开、添加/删除子项目）。宿主据此重建与解决方案
+    /// 而非文件路径绑定的状态，例如交付面板。</para>
+    /// Raised after a solution is reloaded from disk in full (open, add/remove sub-project). Hosts use it
+    /// to rebuild state keyed by the solution rather than by its file path, such as the delivery panel.
+    /// </summary>
+    public event Action? SolutionReloaded;
+
     /// <summary>Switches active sub-project under the operation gate. Optional persistence saves the old project's data first.</summary>
     public async Task<bool> SwitchSubProjectAsync(string name, bool persistCurrent = true, CancellationToken cancellationToken = default)
     {

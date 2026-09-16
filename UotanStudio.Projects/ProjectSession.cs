@@ -256,6 +256,11 @@ public sealed partial class ProjectSession
 
         History.CopyFrom(history);
 
+        // 完整重新加载解决方案（打开、添加/删除子项目）先发出专用信号，再发常规变更消息，
+        // 让交付面板等同路径命名的订阅方也能区分“换文件”与“同一文件重载”。
+        // Signal the full reload before the generic change so the delivery panel can tell a reload of the
+        // same solution apart from a context switch or an incremental change.
+        SolutionReloaded?.Invoke();
         Changed?.Invoke();
         ProjectDiagnostics.Write(ProjectLogLevel.Info, "Menu", $"Opened solution: {path}");
         return true;
