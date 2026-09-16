@@ -96,7 +96,7 @@ internal partial class ImageViewModel
                     _ = paths.UnpackedDirectory;
                     if (operation == "extract")
                     {
-                        var (success, skippedEntry) = await ExtractEntryAsync(entry, paths, itemProgress);
+                        var (success, skippedEntry, _) = await ExtractEntryAsync(entry, paths, itemProgress);
                         if (skippedEntry) skipped++;
                         else if (success)
                         {
@@ -159,38 +159,73 @@ internal partial class ImageViewModel
     /// <param name="entry"><para>镜像条目（用于按格式分派）。</para>The image entry (used for format dispatch).</param>
     /// <param name="paths"><para>操作路径（源文件与解包目录）。</para>Operation paths (source file and unpacked directory).</param>
     /// <param name="itemProgress"><para>条目内进度（0-100，可选），由调用方换算为总进度。</para>Optional in-item progress (0-100); the caller scales it into overall progress.</param>
-    /// <returns>解包是否成功，以及是否被用户跳过。Whether extraction succeeded and whether the user skipped it.</returns>
-    private async Task<(bool Success, bool Skipped)> ExtractEntryAsync(ImageEntryViewModel entry, ImageOperationPaths paths, IProgress<double>? itemProgress = null, CancellationToken cancellationToken = default)
+    /// <returns>解包是否成功、是否被用户跳过，以及实际使用的解包目录（重名时已加后缀）。
+    /// Whether extraction succeeded, whether the user skipped it, and the directory actually used
+    /// (suffixed when a duplicate name was found).</returns>
+    private async Task<(bool Success, bool Skipped, string TargetDirectory)> ExtractEntryAsync(ImageEntryViewModel entry, ImageOperationPaths paths, IProgress<double>? itemProgress = null, CancellationToken cancellationToken = default)
     {
         paths.ValidateExtraction();
+        var targetDirectory = ResolveUnpackTargetDirectory(paths);
         using var metadataScope = UotanStudio.Firmware.SharedKernel.RepackMetadata.UseContext(
-            ProjectContextService.Instance.CaptureMetadataContext(paths.UnpackedDirectory));
+            ProjectContextService.Instance.CaptureMetadataContext(targetDirectory));
         UotanStudio.Firmware.SharedKernel.FirmwareFormatRegistry.RegisterAll();
         var handler = FormatDetector.Detect(paths.Source)
             ?? throw new IOException("Unsupported firmware format.");
-        if (Directory.Exists(paths.UnpackedDirectory)
-            && !await RequestExtractOverwriteAsync(paths.UnpackedDirectory))
+        if (Directory.Exists(targetDirectory)
+            && !await RequestExtractOverwriteAsync(targetDirectory))
         {
-            return (false, true);
+            return (false, true, targetDirectory);
         }
 
         var byteProgress = CreateFileSystemProgress(entry.DisplayName);
 
-        var result = await ExtractionDirectory.ReplaceAsync(paths.UnpackedDirectory, async () => entry.Format switch
+        var result = await ExtractionDirectory.ReplaceAsync(targetDirectory, async () => entry.Format switch
         {
-            "boot" => await Task.Run(() => _firmware.UnpackBootAsync(paths.Source, paths.UnpackedDirectory), cancellationToken),
-            "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(paths.Source, paths.UnpackedDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken), cancellationToken),
-            "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(paths.Source, paths.UnpackedDirectory, paths.Name, byteProgress: byteProgress),
+            "boot" => await Task.Run(() => _firmware.UnpackBootAsync(paths.Source, targetDirectory), cancellationToken),
+            "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(paths.Source, targetDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken), cancellationToken),
+            "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(paths.Source, targetDirectory, paths.Name, byteProgress: byteProgress),
             _ => await Task.Run(async () =>
             {
                 var options = new UotanStudio.Firmware.SharedKernel.UnpackOptions { FileSystemProgress = byteProgress };
                 if (itemProgress is not null) options.Progress = new FirmwareItemProgress(itemProgress);
-                var unpacked = await handler.UnpackAsync(paths.Source, paths.UnpackedDirectory, options, cancellationToken);
+                var unpacked = await handler.UnpackAsync(paths.Source, targetDirectory, options, cancellationToken);
                 return new FirmwareOpResult { Success = unpacked.Success, Summary = unpacked.Summary };
             })
         });
         LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Images", result.Summary);
-        return (result.Success, false);
+        return (result.Success, false, targetDirectory);
+    }
+
+    /// <summary>
+    /// <para>返回本次解包实际使用的目标目录：当标准解包目录已被同名文件占用（文件与目录冲突，
+    /// 无法作为目录解包）时，自动在原名称后追加 <c>(1)</c>/<c>(2)</c> 形式的后缀以避开冲突；
+    /// 否则原样返回标准解包目录。</para>
+    /// Returns the directory actually used for this extraction: when the standard unpacked directory
+    /// is already occupied by a same-named file (a file/directory conflict that cannot be unpacked
+    /// into), the original name is automatically given a <c>(1)</c>/<c>(2)</c> style suffix to avoid
+    /// the collision; otherwise the standard unpacked directory is returned unchanged.
+    /// </summary>
+    private static string ResolveUnpackTargetDirectory(ImageOperationPaths paths)
+    {
+        var basePath = paths.UnpackedDirectory;
+        // 标准目录可正常用作目录时直接返回（已存在的同名目录由覆盖确认流程处理）。
+        // Return the standard path when it can be used as a directory; a pre-existing directory is
+        // handled by the overwrite-confirmation flow instead.
+        if (!File.Exists(basePath))
+        {
+            return basePath;
+        }
+
+        var parent = Path.GetDirectoryName(basePath)!;
+        var name = Path.GetFileName(basePath);
+        for (var i = 1; ; i++)
+        {
+            var candidate = Path.Combine(parent, $"{name}({i})");
+            if (!File.Exists(candidate) && !Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
     }
 
     /// <summary>
@@ -238,7 +273,7 @@ internal partial class ImageViewModel
                 try
                 {
                     var paths = new ImageOperationPaths(source, entry.IsDirectory, project.RootPath, project.OutputDir);
-                    var (success, skippedEntry) = await ExtractEntryAsync(entry, paths, itemProgress, cancellationToken);
+                    var (success, skippedEntry, targetDirectory) = await ExtractEntryAsync(entry, paths, itemProgress, cancellationToken);
                     if (skippedEntry) continue;
                     if (success)
                     {
@@ -246,7 +281,7 @@ internal partial class ImageViewModel
                         entry.IsUnpacked = true;
                         if (unpackFully)
                         {
-                            var nestedImages = await Task.Run(() => CollectNestedImages(paths.UnpackedDirectory));
+                            var nestedImages = await Task.Run(() => CollectNestedImages(targetDirectory));
                             foreach (var nested in nestedImages)
                             {
                                 total++;
