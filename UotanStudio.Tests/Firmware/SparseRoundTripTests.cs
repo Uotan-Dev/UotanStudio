@@ -244,11 +244,16 @@ public class SparseRoundTripTests
     [Fact]
     public void ResparseImage_SplitsIntoStreamingPieces_AndReassembles()
     {
+        // 每个分片携带绝对块地址并保留完整 total_blks（对齐上游 sparse_file_resparse）；
+        // bootloader 按绝对块地址把各分片的 RAW/FILL chunk 写入分区，逐片 flash 累积成完整镜像。
+        // Each piece carries absolute block addresses and the full total_blks (mirroring upstream
+        // sparse_file_resparse); the bootloader writes each piece's RAW/FILL chunks at their
+        // absolute block addresses, so flashing pieces sequentially accumulates the full image.
         using var sparse = new SparseFile(BlockSize, BlockSize * 6);
         sparse.AddRawChunk(BuildBytes(BlockSize * 3, 11));
-        sparse.AddFillChunk(0xCAFEBABE, BlockSize * 3);
+        sparse.AddRawChunk(BuildBytes(BlockSize * 3, 23));
 
-        var tmpDir = Path.Combine(Path.GetTempPath(), $"sparse_resp_{Guid.NewGuid():N}");
+        var tmpDir = Path.Combine(Path.GetTempPath(), "sparse_resp_probe");
         Directory.CreateDirectory(tmpDir);
         var input = Path.Combine(tmpDir, "input.img");
         try
@@ -258,8 +263,8 @@ public class SparseRoundTripTests
                 sparse.WriteToStream(fs, sparse: true);
             }
 
-            // ResparseImage 现在直接流式切分，不再经 MemoryStream 中转整张 raw。
-            // ResparseImage now splits directly from the source without a whole-raw MemoryStream.
+            // ResparseImage 直接流式切分，不经整张 raw 的内存中转。
+            // ResparseImage splits directly from the source without a whole-raw MemoryStream.
             SparseImageConverter.ResparseImage(input, Path.Combine(tmpDir, "part{0}.img"), BlockSize * 4);
 
             byte[] expected;
@@ -272,14 +277,10 @@ public class SparseRoundTripTests
             var parts = Directory.EnumerateFiles(tmpDir, "part*.img").OrderBy(f => f, StringComparer.Ordinal).ToList();
             Assert.Equal(2, parts.Count);
 
-            using var combined = new MemoryStream();
-            foreach (var part in parts)
-            {
-                using var split = SparseReader.FromImageFile(part);
-                split.WriteRawToStream(combined);
-            }
-
-            Assert.Equal(expected, combined.ToArray());
+            // 模拟 bootloader：逐分片按绝对块地址累积 RAW/FILL 数据，得到完整分区内容。
+            // Simulate the bootloader: accumulate RAW/FILL data across pieces at absolute block
+            // addresses to obtain the complete partition content.
+            Assert.Equal(expected, FlashPiecesInOrder(parts, (uint)(BlockSize * 6)));
         }
         finally
         {
@@ -293,15 +294,16 @@ public class SparseRoundTripTests
     [Fact]
     public void ResparseImage_PiecesStayWithinMaxFileSize_AndReassemble()
     {
-        // 回归测试：输出分片除逻辑数据外还携带稀疏头/块头（共 40 字节）开销，
-        // 切分时必须预留，否则单个分片文件会超过 maxFileSize，刷写下载时触发
+        // 回归测试：输出分片除逻辑数据外还携带稀疏头/块头开销，切分时必须预留，
+        // 否则单个分片文件会超过 maxFileSize，刷写下载时触发
         // "download payload ... exceeds max-download-size"。
-        // Regression: an output piece also carries sparse/chunk header overhead (40 bytes); the split must
+        // Regression: an output piece also carries sparse/chunk header overhead; the split must
         // reserve it, otherwise a single piece file exceeds maxFileSize and the download fails with
         // "download payload ... exceeds max-download-size" when flashing.
         using var sparse = new SparseFile(BlockSize, BlockSize * 6);
         sparse.AddRawChunk(BuildBytes(BlockSize * 3, 13));
         sparse.AddFillChunk(0x5A5A5A5A, BlockSize * 3);
+        sparse.AddRawChunk(BuildBytes(BlockSize * 3, 29));
 
         var tmpDir = Path.Combine(Path.GetTempPath(), $"sparse_resp_bounded_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
@@ -331,14 +333,10 @@ public class SparseRoundTripTests
                 Assert.True(length <= maxFileSize, $"Output piece {Path.GetFileName(part)} is {length} bytes which exceeds {maxFileSize}");
             }
 
-            using var combined = new MemoryStream();
-            foreach (var part in parts)
-            {
-                using var split = SparseReader.FromImageFile(part);
-                split.WriteRawToStream(combined);
-            }
-
-            Assert.Equal(expected, combined.ToArray());
+            // 模拟 bootloader：逐分片按绝对块地址累积 RAW/FILL 数据，得到完整分区内容。
+            // Simulate the bootloader: accumulate RAW/FILL data across pieces at absolute block
+            // addresses to obtain the complete partition content.
+            Assert.Equal(expected, FlashPiecesInOrder(parts, (uint)(BlockSize * 6)));
         }
         finally
         {
@@ -347,6 +345,114 @@ public class SparseRoundTripTests
                 Directory.Delete(tmpDir, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public void ResparseImage_PreservesChunkTypes_AndAbsoluteBlockAddresses()
+    {
+        // 上游 sparse_file_resparse 语义：FILL chunk 类型保留、分片 chunk 携带绝对块地址、
+        // 空隙由写入端补 DONT_CARE；bootloader 依赖这些不变量把多次 flash 写到正确偏移。
+        // Upstream sparse_file_resparse semantics: FILL chunk types are preserved, piece chunks
+        // carry absolute block addresses, and gaps become DONT_CARE on write; bootloaders rely on
+        // these invariants to land each flash at the correct partition offset.
+        using var sparse = new SparseFile(BlockSize, BlockSize * 10);
+        sparse.AddRawChunk(BuildBytes(BlockSize * 2, 7));
+        sparse.AddDontCareChunk(BlockSize * 1);
+        sparse.AddFillChunk(0xDEADBEEF, BlockSize * 2);
+        sparse.AddRawChunk(BuildBytes(BlockSize * 5, 31));
+
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"sparse_resp_types_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        var input = Path.Combine(tmpDir, "input.img");
+        try
+        {
+            using (var fs = File.Create(input))
+            {
+                sparse.WriteToStream(fs, sparse: true);
+            }
+
+            SparseImageConverter.ResparseImage(input, Path.Combine(tmpDir, "part{0}.img"), BlockSize * 4);
+
+            byte[] expected;
+            using (var rawMs = new MemoryStream())
+            {
+                sparse.WriteRawToStream(rawMs);
+                expected = rawMs.ToArray();
+            }
+
+            var parts = Directory.EnumerateFiles(tmpDir, "part*.img").OrderBy(f => f, StringComparer.Ordinal).ToList();
+            Assert.True(parts.Count >= 2, "Expected the 10-block image to split under a 4-block budget.");
+
+            foreach (var part in parts)
+            {
+                using var split = SparseReader.FromImageFile(part);
+                Assert.Equal((uint)10, split.Header.TotalBlocks);
+            }
+
+            // 逐分片按绝对块地址累积后与完整 raw 一致。
+            // Accumulating pieces at absolute block addresses matches the complete raw.
+            Assert.Equal(expected, FlashPiecesInOrder(parts, (uint)(BlockSize * 10)));
+
+            // 首片保留 FILL chunk（含原填充值）与 DONT_CARE chunk，RAW chunk 起始块为绝对地址。
+            // The first piece keeps the FILL chunk (with the original fill value) and the
+            // DONT_CARE chunk; RAW chunk start blocks are absolute addresses.
+            using var first = SparseReader.FromImageFile(parts[0]);
+            Assert.Contains(first.Chunks, c => (ChunkType)c.Header.ChunkType == ChunkType.Fill && c.FillValue == 0xDEADBEEF);
+            Assert.Contains(first.Chunks, c => (ChunkType)c.Header.ChunkType == ChunkType.DontCare);
+            var rawChunk = first.Chunks.First(c => (ChunkType)c.Header.ChunkType == ChunkType.Raw && c.StartBlock > 0);
+            Assert.Equal((uint)5, rawChunk.StartBlock);
+        }
+        finally
+        {
+            if (Directory.Exists(tmpDir))
+            {
+                Directory.Delete(tmpDir, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Simulates the bootloader consuming resparse pieces: for each piece in order, RAW/FILL
+    /// chunks are written into a partition buffer at their absolute block addresses, and
+    /// DONT_CARE chunks (and the write cursor) are skipped — the ABOOT/fastbootd semantics the
+    /// upstream resparse invariants target.
+    /// <para>模拟 bootloader 消费重稀疏化分片：按序把每个分片的 RAW/FILL chunk 按绝对块地址
+    /// 写入分区缓冲，DONT_CARE（及写入游标）被跳过——即上游重稀疏化不变量针对的
+    /// ABOOT/fastbootd 语义。</para>
+    /// </summary>
+    private static byte[] FlashPiecesInOrder(IReadOnlyList<string> pieces, uint partitionBlocks)
+    {
+        var partition = new byte[partitionBlocks * BlockSize];
+        foreach (var piece in pieces)
+        {
+            using var sparse = SparseReader.FromImageFile(piece);
+            foreach (var chunk in sparse.Chunks)
+            {
+                switch ((ChunkType)chunk.Header.ChunkType)
+                {
+                    case ChunkType.Raw when chunk.DataProvider is not null:
+                        {
+                            var dst = partition[(int)(chunk.StartBlock * BlockSize)..];
+                            var filled = 0;
+                            while (filled < chunk.Header.ChunkSize * BlockSize)
+                            {
+                                var read = chunk.DataProvider.Read(filled, dst.AsSpan(filled));
+                                if (read <= 0)
+                                {
+                                    break;
+                                }
+                                filled += read;
+                            }
+                            Assert.Equal((long)chunk.Header.ChunkSize * BlockSize, filled);
+                            break;
+                        }
+                    case ChunkType.Fill:
+                        SparseFill.Fill(partition.AsSpan((int)(chunk.StartBlock * BlockSize), (int)(chunk.Header.ChunkSize * BlockSize)), chunk.FillValue);
+                        break;
+                }
+            }
+        }
+        return partition;
     }
 
     private static byte[] BuildBytes(uint length, int factor)
