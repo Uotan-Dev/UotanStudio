@@ -694,15 +694,33 @@ public partial class CompareView : UserControl
             ? CompareColumnSide.Right
             : CompareColumnSide.Left;
         var other = FindCompareVisuals(otherSide);
-        if (other?.List is not { } otherList || otherList.SelectedIndex == list.SelectedIndex)
+        if (other?.List is not { } otherList)
         {
             return;
         }
 
+        // 选择集合完全一致（含同为空）时无需同步，避免每次点击都触发多余的清空/重选。
+        // Skip when both selections already match (including both empty) so a click does not trigger a redundant clear/reselect.
+        var sourceIndexes = list.Selection?.SelectedIndexes ?? [];
+        var targetIndexes = otherList.Selection?.SelectedIndexes ?? [];
+        if (sourceIndexes.Count == targetIndexes.Count
+            && !sourceIndexes.Except(targetIndexes).Any())
+        {
+            return;
+        }
+
+        // Multiple 模式（文本对比）下只写 SelectedIndex 是"追加"语义，会残留之前的选中行；
+        // 整组同步：先清空对侧选择再选中相同索引集合。
+        // In Multiple mode (text comparison) writing SelectedIndex alone adds to the old set, leaving stale rows;
+        // sync as a group: clear the other side first, then select the same index set.
         _syncingSelection = true;
         try
         {
-            otherList.SelectedIndex = list.SelectedIndex;
+            otherList.Selection?.Clear();
+            foreach (var index in list.Selection?.SelectedIndexes ?? [])
+            {
+                otherList.Selection?.Select(index);
+            }
         }
         finally
         {
@@ -1274,6 +1292,10 @@ public partial class CompareView : UserControl
             editor.TextArea.TextView.BackgroundRenderers.Add(highlighter);
             editor.Document.Changed += OnCompareEditorChanged;
             editor.TextArea.SelectionChanged += OnCompareEditorSelectionChanged;
+            // 右键菜单项在弹出层里取不到编辑器，与浏览编辑器一样在隧道阶段记录右键目标。
+            // Menu items live in a popup and cannot resolve the editor, so record the context target in the tunnel phase
+            // just like the browsing editor does.
+            editor.AddHandler(ContextRequestedEvent, OnEditorContextRequested, RoutingStrategies.Tunnel);
             // Ctrl+Z / Ctrl+Y 由两侧共享的撤销历史处理（隧道阶段先拦截）。
             // Ctrl+Z / Ctrl+Y are handled by the history both panes share (intercepted in the tunnel phase).
             editor.AddHandler(KeyDownEvent, OnCompareEditorKeyDown, RoutingStrategies.Tunnel);
@@ -1957,6 +1979,20 @@ public partial class CompareView : UserControl
         // another row it turns into a cross-row selection, matching dragging over lines in Beyond Compare.
         _rangeList = list;
         _rangeAnchor = index;
+
+        // Multiple 模式下列表的点击是切换语义：点新行不会清掉旧选中，高亮会一路残留。
+        // 普通左键按下（无 Ctrl/Shift）在隧道阶段先清空旧选择，列表随后的处理只会选中按下的这一行。
+        // A Multiple-mode list toggles on click: pressing a new row keeps the old rows highlighted. A plain left
+        // press (no Ctrl/Shift) clears the old selection in the tunnel phase so the list's own handling selects only
+        // the pressed row.
+        if (list.Selection is { } selection
+            && (list.SelectionMode & SelectionMode.Multiple) != 0
+            && !e.KeyModifiers.HasFlag(KeyModifiers.Control)
+            && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        {
+            selection.Clear();
+            selection.Select(index);
+        }
 
         // 双击：目录行展开/折叠（对比中两侧同步），文件行在文件夹对比里开新标签的文件对比。
         // 直接按 ClickCount 判定，不依赖手势事件的路由，避免列表项消费事件导致双击失效。
