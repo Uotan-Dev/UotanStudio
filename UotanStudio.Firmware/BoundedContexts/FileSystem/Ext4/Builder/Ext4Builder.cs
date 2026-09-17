@@ -292,7 +292,6 @@ public sealed partial class Ext4Builder
         PlanLeafBlocks(nodes, blockSize);
 
 
-        var blocksPerGroup = BlocksPerGroupMultiplier * blockSize;
         var inodesPerInodeBlock = blockSize / inodeSize;
 
         var inodesPerGroup = (int)RoundUpPowerOfTwo(Math.Max(maxInode, 16));
@@ -305,9 +304,29 @@ public sealed partial class Ext4Builder
             + nodes.Sum(static n => (long)n.LeafBlocks.Length)
             + nodes.Sum(static n => (long)n.IndexBlocks.Length);
 
-
+        // The JBD2 journal has a hard minimum of 1024 blocks (e2fsck rejects smaller
+        // journals as corrupt), so it stays at the fixed default; the size reduction
+        // below comes from the block group, never from a broken journal.
+        // <para>JBD2 日志有硬性最小 1024 块（更小会被 e2fsck 判为损坏），故保持固定默认值；
+        // 体积缩减来源于块组，绝不能通过破坏日志语义换取。</para>
+        var maxBlockGroupBlocks = BlocksPerGroupMultiplier * blockSize;
         var journalBlocks = options.IncludeJournal ? DefaultJournalBlocks : 0;
         var includeJournal = journalBlocks > 0;
+
+        // Give small/sparse filesystems a smaller block group so a single group no
+        // longer pins the output to 8 × blockSize × blockSize (128 MiB for 4 KiB
+        // blocks). Sized as the smallest multiple of 8 blocks (the e2fsprogs validity
+        // bound) that holds the group-zero metadata, the data and the journal; large
+        // images still cap at one block bitmap (8 × blockSize) per group, preserving
+        // the prior layout semantics.
+        // <para>为小型/稀疏文件系统生成更小的块组，使单个块组不再把输出固化在
+        // 8 × blockSize × blockSize（4 KiB 块即为 128 MiB）。块组大小取能容纳组 0 元数据、
+        // 数据与日志的最小的 8 块整倍数（e2fsprogs 的合法性约束）；大镜像仍以单块块位图
+        // （8 × blockSize 块）为上限，保持原有布局语义不变。</para>
+        var group0Overhead = 32L + inodeTableBlocks;
+        var minimumGroupBlocks = Math.Max(8L, group0Overhead + totalDataBlocks + journalBlocks);
+        var blocksPerGroup = (int)Math.Min(maxBlockGroupBlocks,
+            ((minimumGroupBlocks + 7) / 8) * 8);
 
 
         var gdtBlocks = 1L;
@@ -448,7 +467,7 @@ public sealed partial class Ext4Builder
             totalFreeInodes += CountFreeInodes(inodeBitmap, group.InodesInGroup);
 
             var desc = gdtBuffer.AsSpan(g * 64, 64);
-            WriteGroupDescriptor(desc, group, g, uuid, blockBitmap, inodeBitmap, enableMetadataCsum, gdtBlocks, reservedGdtBlocks, inodeTableBlocks, backupGroups);
+            WriteGroupDescriptor(desc, group, g, uuid, blockBitmap, inodeBitmap, enableMetadataCsum, gdtBlocks, reservedGdtBlocks, inodeTableBlocks, blocksPerGroup, backupGroups);
         }
 
 
@@ -1274,7 +1293,7 @@ public sealed partial class Ext4Builder
     private static void WriteGroupDescriptor(
         Span<byte> desc, GroupInfo group, int groupIndex, byte[] uuid,
         byte[] blockBitmap, byte[] inodeBitmap, bool enableMetadataCsum, long gdtBlocks, int reservedGdtBlocks, int inodeTableBlocks,
-        HashSet<int>? backupGroups = null)
+        int blocksPerGroup, HashSet<int>? backupGroups = null)
     {
 
         desc.Clear();
@@ -1319,7 +1338,14 @@ public sealed partial class Ext4Builder
 
         var seed = ComputeCrc32(uuid, 0xFFFF_FFFF);
         var inodeBitmapCsumLength = Math.Max(1, group.InodesInGroup / 8);
-        var blockCsum = ComputeCrc32(blockBitmap, seed);
+        // The block bitmap checksum covers only the bits that belong to the
+        // group (blocks_per_group/8 bytes), not the whole bitmap block; the
+        // adaptive small group leaves tail padding bits in the block that must
+        // be excluded from the checksum (mke2fs only ever fills the block).
+        // <para>块位图校验和只覆盖属于该组的位（blocks_per_group/8 字节），而非整块；
+        // 自适应小块组在位图块尾部留有 padding 位，计算校验和时需排除
+        // （mke2fs 因块组恰占满整块而无需如此处理）。</para>
+        var blockCsum = ComputeCrc32(blockBitmap.AsSpan(0, Math.Max(1, blocksPerGroup / 8)), seed);
         var inodeCsum = ComputeCrc32(inodeBitmap.AsSpan(0, inodeBitmapCsumLength), seed);
         WriteU16(desc, 24, (ushort)(blockCsum & 0xFFFF));
         WriteU16(desc, 26, (ushort)(inodeCsum & 0xFFFF));
@@ -1375,6 +1401,21 @@ public sealed partial class Ext4Builder
         for (var i = 0L; i < group.UsedBlocks; i++)
         {
             MarkBlockUsed(bitmap, dataStart + i);
+        }
+
+        // e2fsck pass 5 and the kernel's ext4_validate_block_bitmap require the
+        // padding bits beyond the group's real block count to be set; leaving
+        // them clear is reported as "Padding at end of block bitmap is not set".
+        // Real mke2fs never needs this because it uses a full bitmap block
+        // (blocks_per_group == 8 * blockSize); with a smaller adaptive block
+        // group the tail bits of the bitmap block must be forced to 1.
+        // <para>e2fsck pass 5 与内核 ext4_validate_block_bitmap 要求组真实块数之后的
+        // padding 位被置位，清零会报 "Padding at end of block bitmap is not set"。
+        // 真实 mke2fs 因块组恰占满位图块（blocks_per_group == 8 × blockSize）无需处理；
+        // 采用自适应的小块组时，位图块尾部多余位必须强制置 1。</para>
+        for (var bit = blocksPerGroup; bit < bitmap.Length * 8L; bit++)
+        {
+            MarkBlockUsed(bitmap, bit);
         }
     }
 

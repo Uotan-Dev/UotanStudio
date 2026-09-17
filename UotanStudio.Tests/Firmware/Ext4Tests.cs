@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using Xunit;
@@ -287,6 +288,45 @@ public class Ext4Tests
 
             using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
             Assert.Throws<InvalidDataException>(() => parser.ListFiles());
+        }
+        finally
+        {
+            DeleteRecursive(root);
+        }
+    }
+
+    [Fact]
+    public void Build_TinyPartition_YieldsSmallImageWithSaneBlockGroupSize()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            // A sub-1 MiB source must not be inflated to a full 128 MiB single block group;
+            // the builder shrinks blocks_per_group and the journal for tiny content.
+            // 不足 1 MiB 的源目录不得膨胀为单个 128 MiB 块组；构建器应为小内容缩小块组与日志。
+            var payload = new byte[512 * 1024];
+            RandomNumberGenerator.Fill(payload);
+            File.WriteAllBytes(Path.Combine(root, "payload.bin"), payload);
+            File.WriteAllText(Path.Combine(root, "meta.txt"), "vendor partition");
+
+            var image = Ext4Builder.Build(root);
+
+            // The block group must be shrunk so the output no longer hits the former
+            // 8 × blockSize × blockSize (128 MiB) floor. Semantics stay intact: the
+            // filesystem must still parse and read the payload back byte-for-byte.
+            // 块组应被缩小，使小内容不再命中原先 8 × blockSize × blockSize（128 MiB）的下限；
+            // 语义保持完整：文件系统仍需可解析，并能逐字节读回数据。
+            Assert.True(image.LongLength < 16L * 1024 * 1024, $"image too large: {image.LongLength}");
+            var blocksPerGroup = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(1024 + 32, 4));
+            var totalBlocks = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(1024 + 4, 4));
+            Assert.InRange(blocksPerGroup, 8u, 32768u);
+            Assert.Equal((uint)(image.Length / 4096), totalBlocks);
+
+            using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
+            Assert.Contains(parser.ListFiles(), static e => e.Path == "payload.bin");
+            using var sink = new MemoryStream();
+            parser.ReadFile("payload.bin", sink);
+            Assert.Equal(payload, sink.ToArray());
         }
         finally
         {
