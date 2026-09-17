@@ -180,4 +180,45 @@ public class ErofsCompressionConfigurationTests
         var restored = ErofsRebuildMetadata.Restore(parameters);
         Assert.True(restored.SourceXattrFilterFeature);
     }
+
+    [Fact]
+    public void Build_Legacy_CompressedHeads_StayClusterAligned()
+    {
+        // Linux 5.4 / 5.10 legacy full-index decoders place the LZ4 input at the clusterofs recorded
+        // for each head lcluster; a byte-granular (dense) packer records non-zero clusterofs, which
+        // those decoders cannot address. Legacy builds must therefore bypass dense packing and keep
+        // every compressed head at its cluster start (clusterofs == 0).
+        // legacy 全索引解码器把 LZ4 输入放在每个 head lcluster 记录的 clusterofs 处；按字节粒度打包的
+        // dense 会记录非零 clusterofs，这是旧内核无法寻址的。故 legacy 构建必须绕过 dense，令每个
+        // 压缩 head 位于其逻辑簇起点（clusterofs == 0）。
+        using var source = new TempDirectory();
+        source.WriteBytes("data.bin", AlternatingCompressionPayload());
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            LegacyCompatibility = true,
+            // Route through the dense-by-default optimizer path used by a preserved rebuild so the
+            // test genuinely guards the legacy gate inside TryPlanCompressed.
+            // 与保留重建一样默认走 dense 优化路径，使该测试真正守护 TryPlanCompressed 内的 legacy 门禁。
+            OptimizeCompression = true,
+        });
+        using var parser = new ErofsParser(image);
+        Assert.Equal(0, parser.MaxCompressedClusterOfs());
+    }
+
+    private static byte[] AlternatingCompressionPayload()
+    {
+        var bytes = new byte[2 * 1024 * 1024];
+        var random = new Random(20260918);
+        for (var offset = 0; offset < bytes.Length; offset += 8192)
+        {
+            Array.Fill(bytes, (byte)0x41, offset, 4096);
+            if (offset + 8192 <= bytes.Length)
+            {
+                random.NextBytes(bytes.AsSpan(offset + 4096, 4096));
+            }
+        }
+
+        return bytes;
+    }
 }

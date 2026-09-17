@@ -21,7 +21,7 @@ public class ErofsRebuildPreservationTests
         using var source = new TempDirectory();
         var payload = Enumerable.Repeat((byte)0x77, 20 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
-        source.WriteBytes("small.txt", "tiny");
+        source.WriteBytes("small.txt", "tiny"u8.ToArray());
         var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
@@ -43,7 +43,8 @@ public class ErofsRebuildPreservationTests
         Assert.NotNull(restored.SourceInodesByPath);
         foreach (var (nid, original) in captured.SourceInodes!)
         {
-            var record = Assert.NotNull(restored.SourceInodesByPath!.GetValueOrDefault(original.Path!));
+            Assert.True(restored.SourceInodesByPath!.TryGetValue(original.Path!, out var record));
+            record = record!;
             Assert.Equal(original.Compressed, record.Compressed);
             Assert.Equal(original.InlineData, record.InlineData);
             Assert.Equal(original.Algorithm, record.Algorithm);
@@ -85,7 +86,7 @@ public class ErofsRebuildPreservationTests
         using var source = new TempDirectory();
         var payload = Enumerable.Repeat((byte)0x3C, 20 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
-        source.WriteBytes("small.txt", "tiny");
+        source.WriteBytes("small.txt", "tiny"u8.ToArray());
         var original = new ErofsBuilder().Build(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
@@ -107,7 +108,7 @@ public class ErofsRebuildPreservationTests
 
             using var verify = new ErofsParser(repacked);
             Assert.Equal(payload, verify.ReadFileBytes("data.bin"));
-            Assert.Equal("tiny", verify.ReadFileText("small.txt"));
+            Assert.Equal("tiny", System.Text.Encoding.UTF8.GetString(verify.ReadFileBytes("small.txt")));
         }
     }
 

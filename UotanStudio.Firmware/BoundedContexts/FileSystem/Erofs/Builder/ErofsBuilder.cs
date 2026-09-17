@@ -687,8 +687,9 @@ public sealed partial class ErofsBuilder
                     node.CompactedIndexes = node.SourceInode?.CompactIndexes ?? options.UseCompactedIndexes;
 
 
-                    node.BigPcluster = node.CompressionOptions!.Algorithm != ErofsCompressionAlgorithm.Lz4
-                        || node.Pclusters.Any(p => p.CompressedLength > blockSize);
+                    node.BigPcluster = !options.LegacyCompatibility
+                        && (node.CompressionOptions!.Algorithm != ErofsCompressionAlgorithm.Lz4
+                            || node.Pclusters.Any(p => p.CompressedLength > blockSize));
                     var tailLength = node.Pclusters[^1].CompressedLength;
                     if (options.CompressedTailPacking && !node.Pclusters[^1].Plain && tailLength < blockSize
                         && GetInodeRecordSize(node, blockSize) % blockSize + tailLength <= blockSize)

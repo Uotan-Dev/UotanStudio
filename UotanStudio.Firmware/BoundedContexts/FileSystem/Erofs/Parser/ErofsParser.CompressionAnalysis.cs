@@ -1,7 +1,7 @@
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 
 internal delegate bool CompressionObserver(ErofsCompressionAlgorithm algorithm,
-    ReadOnlySpan<byte> encoded, ReadOnlySpan<byte> decoded);
+    ReadOnlySpan<byte> encoded, ReadOnlySpan<byte> decoded, int clusterOfs);
 
 internal sealed class ErofsCompressionEstimate(ErofsOptions options)
 {
@@ -67,7 +67,7 @@ public sealed partial class ErofsParser
             var samples = 0;
             try
             {
-                WriteCompressedData(nid, inode, Stream.Null, (algorithm, encoded, decoded) =>
+                WriteCompressedData(nid, inode, Stream.Null, (algorithm, encoded, decoded, _) =>
                 {
                     if (estimates.TryGetValue(algorithm, out var estimate) && estimate.Samples < 16)
                         estimate.Observe(encoded, decoded);

@@ -467,7 +467,7 @@ public sealed partial class ErofsParser
                 if (observer is not null)
                 {
                     if (!observer((ErofsCompressionAlgorithm)algorithm,
-                        compressed.AsSpan(inputMargin, compressedByteLen - inputMargin), decoded.AsSpan(0, (int)llen))) return;
+                        compressed.AsSpan(inputMargin, compressedByteLen - inputMargin), decoded.AsSpan(0, (int)llen), lc.ClusterOfs)) return;
                 }
                 else output.Write(decoded, 0, (int)llen);
                 lcn = nextLcn;
@@ -478,6 +478,35 @@ public sealed partial class ErofsParser
             ArrayPool<byte>.Shared.Return(compressed);
             ArrayPool<byte>.Shared.Return(decoded);
         }
+    }
+
+    /// <summary>
+    /// Returns the largest logical <c>clusterofs</c> among all compressed head lclusters, i.e. the
+    /// greatest nonzero SourceOffset modulo the logical cluster size. Standards-conforming images
+    /// place every head lcluster at its cluster start (clusterofs == 0); only byte-granular packing
+    /// (the dense planner) produces a non-zero clusterofs, which legacy Linux 5.4 / 5.10 decoders
+    /// cannot address.
+    /// <para>返回所有压缩 head lcluster 中最大的逻辑 clusterofs，即 SourceOffset 对逻辑簇大小取模的
+    /// 最大值。符合规范的镜像把每个 head lcluster 放在其逻辑簇起点（clusterofs == 0）；只有按
+    /// 字节粒度打包（dense 规划器）才会产生非零 clusterofs，这是 legacy Linux 5.4 / 5.10 解码器
+    /// 无法寻址的布局。</para>
+    /// </summary>
+    internal int MaxCompressedClusterOfs()
+    {
+        var largest = 0;
+        foreach (var entry in EnumerateEntries())
+        {
+            if (entry.IsDirectory || entry.IsSymlink || entry.IsSpecialFile) continue;
+            var inode = ReadInode(entry.Nid);
+            if (!inode.IsCompressed) continue;
+            WriteCompressedData(entry.Nid, inode, Stream.Null, (_, _, _, clusterOfs) =>
+            {
+                largest = Math.Max(largest, clusterOfs);
+                return true;
+            });
+        }
+
+        return largest;
     }
 
     /// <summary>

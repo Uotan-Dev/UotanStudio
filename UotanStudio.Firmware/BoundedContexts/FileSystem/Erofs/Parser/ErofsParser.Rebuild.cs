@@ -61,7 +61,16 @@ public sealed partial class ErofsParser
             }
             inodes.Add(entry.Nid, record);
         }
+        // Path-indexed projection so plain directory repacks can bind per-inode strategies
+        // without an edit plan (paths are stable across nid shifts).
+        // 按路径索引的投影，让纯目录重打包在没有 editPlan 时也能绑定逐 inode 策略
+        // （路径不随 nid 漂移）。
+        var byPath = inodes.Values
+            .Where(record => record.Path is { Length: > 0 })
+            .GroupBy(record => record.Path!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         var selected = codecs.GetValueOrDefault(defaultAlgorithm) ?? new ErofsOptions { BlockSize = _blockSize };
+        selected.SourceInodesByPath = byPath;
         selected.Compress = compressed || _superblock.HasBigPcluster && _superblock.AvailableComprAlgs != 0;
         selected.Uuid = _superblock.Uuid.ToArray();
         selected.VolumeName = _superblock.VolumeName;

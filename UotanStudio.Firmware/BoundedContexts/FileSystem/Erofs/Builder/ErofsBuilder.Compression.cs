@@ -64,8 +64,21 @@ public sealed partial class ErofsBuilder
     {
         // LZ4's upstream destSize API safely supports byte-granular clusters. The
         // other codecs retain the established logical-cluster planner until their
-        // window-specific destSize encoders are available.
-        if (options.OptimizeCompression && options.Algorithm == ErofsCompressionAlgorithm.Lz4)
+        // window-specific destSize encoders are available. Dense packing is limited to
+        // modern (non-legacy) images: it can place a pcluster's compressed stream at a
+        // byte-granular, block-misaligned clusterofs that spans several logical clusters,
+        // an arrangement Linux 5.4 / 5.10 legacy full-index decoders cannot read, because
+        // they anchor the LZ4 input at clusterofs and bound it by per-cluster block counts.
+        // Whether the encoded bytes fit MaxPclusterSize says nothing about that legacy
+        // invariant, so legacy always uses the block-aligned logical-cluster planner that
+        // reproduces mkfs.erofs' legacy layout exactly.
+        // dense 打包仅适用于现代（非 legacy）镜像：它可能把 pcluster 的压缩流放在按字节粒度、
+        // 块内不对齐的 clusterofs，且一个 pcluster 跨越多个逻辑簇——这是 Linux 5.4 / 5.10 的
+        // legacy 全索引解码器无法读取的布局，因为它把 LZ4 输入锚定在 clusterofs 并以每簇块数
+        // 作为上界。编码后是否小于 MaxPclusterSize 与此 legacy 不变量无关，故 legacy 恒使用
+        // 与 mkfs.erofs legacy 布局完全一致的块对齐逻辑簇规划器。
+        if (options.OptimizeCompression && !options.LegacyCompatibility
+            && options.Algorithm == ErofsCompressionAlgorithm.Lz4)
             return TryPlanDenseCompressed(node, blockSize, options);
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         var clusterSize = node.LogicalClusterSize;
@@ -94,6 +107,24 @@ public sealed partial class ErofsBuilder
             bool TryTake(int take, out int candidateLen, out int outLen)
             {
                 candidateLen = (int)Math.Min(node.Size - pos, (long)take * clusterSize);
+                // Legacy kernel compact-extent merging computes outputsize as the
+                // number of covered logical clusters times clusterSize, regardless of
+                // how much valid data the last cluster actually carries. Merging a
+                // trailing partial cluster into a compressed pcluster therefore
+                // causes LZ4 to emit fewer bytes than the kernel expects, resulting
+                // in "failed to decompress %d in[...] out[...]". Truncate the probe
+                // to a cluster boundary so the tail partial cluster stays for Plain
+                // handling just below (acceptedLen <= 0).
+                // legacy 内核的 compact extent merging 会按覆盖的逻辑簇数 × 簇大小
+                // 计算 outputsize，与最后一簇的有效载荷无关。如果把尾部非整簇合并到
+                // 压缩 pcluster，LZ4 解压字节数会少于内核预期，触发
+                // "failed to decompress %d in[...] out[...]"。截断探测长度到簇边界，
+                // 让尾部非整簇留给下面的 Plain 分支单独处理（acceptedLen <= 0）。
+                if (options.LegacyCompatibility)
+                {
+                    var tail = candidateLen % clusterSize;
+                    if (tail != 0) candidateLen -= tail;
+                }
                 if (candidateLen > buffered)
                 {
                     fs.Position = pos + buffered;

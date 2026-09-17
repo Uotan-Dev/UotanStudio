@@ -89,7 +89,12 @@ internal static class ErofsRebuildMetadata
             BlockSize = parameters.BlockSize > 0 ? parameters.BlockSize : 4096,
             Compress = parameters.Compress,
             Algorithm = ParseAlgorithm(parameters.Algorithm),
-            CompressionLevel = Math.Clamp(parameters.CompressionLevel, 1, 9),
+            // The EROFS disk format does not record the encoder level, so a preserved profile
+            // always carries the neutral default; rebuild at the maximum managed level to keep
+            // the output close to the source image instead of the lossy level-1 baseline.
+            // EROFS 磁盘格式不记录编码级别，保留档案总是中性默认值；重建时使用托管最大级别，
+            // 使输出尽量接近源镜像，而不是有损的级别 1 基线。
+            CompressionLevel = parameters.CompressionLevel > 1 ? Math.Clamp(parameters.CompressionLevel, 1, 9) : 9,
             TailPacking = parameters.TailPacking,
             CompressedTailPacking = parameters.CompressedTailPacking,
             UseCompactedIndexes = parameters.UseCompactedIndexes,
@@ -125,7 +130,10 @@ internal static class ErofsRebuildMetadata
                     DictionarySize = codec.DictionarySize,
                     WindowBits = codec.WindowBits,
                     Lz4MaxDistance = checked((ushort)Math.Clamp(codec.Lz4MaxDistance, 0, ushort.MaxValue)),
-                    CompressionLevel = Math.Clamp(codec.CompressionLevel, 1, 9),
+                    // Same rationale as the primary level: EROFS stores no encoder level, so a
+                    // neutral 1 in the profile means "unknown" and is rebuilt at the maximum.
+                    // 与主级别同理：EROFS 不存编码级别，档案中的中性 1 表示"未知"，按最大级别重建。
+                    CompressionLevel = codec.CompressionLevel > 1 ? Math.Clamp(codec.CompressionLevel, 1, 9) : 9,
                 };
             }
 
