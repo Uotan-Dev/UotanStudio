@@ -45,10 +45,22 @@ internal static class PackingService
                 var focused = settings is not null && metadata.FormatName is "EXT4" or "EROFS";
                 if (focused)
                 {
-                    // 打包设置面板选择的目标格式覆盖原文件格式（如 EROFS → EXT4）。
-                    // The target format chosen in the packing-settings panel overrides the source
-                    // format (e.g. EROFS → EXT4), instead of always reusing the metadata format.
+                    // 仅当用户真正切换了文件系统格式（EROFS ↔ EXT4）时申请打包覆盖走全新目录打包；
+                    // 目标格式与原格式相同时直接走保留元数据重建路径，精确还原
+                    // SELinux/capability/hardlink/symlink，避免覆盖导致降级后丢失安全上下文。
+                    // The target format chose in the panel; only a real format switch (EROFS ↔ EXT4)
+                    // requests packing overrides (and a fresh build). When the target equals the source
+                    // format we reuse the preserved-metadata rebuild to restore
+                    // SELinux/capability/hardlink/symlink exactly instead of downgrading the output.
                     var targetFormat = settings!.TypeEXT4 ? "EXT4" : "EROFS";
+                    if (targetFormat == metadata.FormatName)
+                    {
+                        var preserved = RegisteredFirmwareFormats.PackDirectoryAsync(metadata.FormatName, sourceDirectory, outputPath, progress: progress)
+                            .GetAwaiter().GetResult();
+                        imageProgress.Report((estimated, estimated));
+                        return (preserved.Success, preserved.Summary);
+                    }
+
                     using var overrides = RepackMetadata.UsePackingOverrides(BuildOverrideOptions(settings, targetFormat));
                     var overridden = RegisteredFirmwareFormats.PackDirectoryAsync(targetFormat, sourceDirectory, outputPath, progress: progress)
                         .GetAwaiter().GetResult();
