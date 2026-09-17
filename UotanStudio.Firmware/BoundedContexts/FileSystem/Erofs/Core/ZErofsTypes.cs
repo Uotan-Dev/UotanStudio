@@ -38,6 +38,17 @@ internal readonly struct ZErofsMapHeader
     public const int ExtRecSizeMask = 0x3;
 
 
+    // z_erofs_extent plen encoding (fs/erofs/erofs_fs.h): low bits hold the encoded length,
+    // bit 27 marks a partially-referenced pcluster, bits 28+ encode (algorithm + 1).
+    // z_erofs_extent 的 plen 编码（fs/erofs/erofs_fs.h）：低位为编码长度，位 27 表示部分引用，
+    // 位 28 起编码（算法号 + 1）。
+    public const uint ExtentPlenPartial = 1u << 27;
+
+    public const int ExtentPlenFmtBit = 28;
+
+    public const uint ExtentPlenMask = (1u << 21) - 1;
+
+
     public const byte LclusterBitsMask = 0x0F;
 
     public const int FragmentInodeBit = 7;

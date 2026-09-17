@@ -23,7 +23,11 @@ internal sealed class ErofsInode
 
     public const ushort FlagExtended = 1;
 
-    private const ushort AdviseBitNlinkOneOrDotOmitted = 1 << 4;
+    /// <summary>All defined i_format bits (fs/erofs/erofs_fs.h EROFS_I_ALL): version, layout, nlink-1/dot-omitted.</summary>
+    /// <para>i_format 的全部已定义位（fs/erofs/erofs_fs.h EROFS_I_ALL）：版本、布局、nlink-1/省略点项。</para>
+    public const ushort AdviseAll = 0x1F;
+
+    public const ushort AdviseBitNlinkOneOrDotOmitted = 1 << 4;
 
 
     private const ushort ChunkFormatBlkBitsMask = 0x001F;
@@ -158,6 +162,11 @@ internal sealed class ErofsInode
         }
 
         var advise = BinaryPrimitives.ReadUInt16LittleEndian(data);
+        if ((advise & ~AdviseAll) != 0)
+        {
+            throw new FormatException($"EROFS inode uses undefined i_format bits 0x{advise & ~AdviseAll:X4}.");
+        }
+
         if ((advise & FlagExtended) != 0)
         {
             if (data.Length < ExtendedSize)
@@ -231,12 +240,21 @@ internal sealed class ErofsInode
 
     private void WriteCompact(Span<byte> destination)
     {
+        // Non-directory compact inodes with nlink == 1 set EROFS_I_NLINK_1_BIT and leave the
+        // i_nb union unused for nlink (fs/erofs/erofs_fs.h).
+        // 非目录紧凑 inode 的 nlink 为 1 时置 EROFS_I_NLINK_1_BIT，i_nb 联合体不再承载 nlink。
+        if (!IsDirectory && Nlink == 1)
+        {
+            Advise |= AdviseBitNlinkOneOrDotOmitted;
+        }
+
         BinaryPrimitives.WriteUInt16LittleEndian(destination, Advise);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[2..], XattrICount);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[4..], Mode);
 
 
-        BinaryPrimitives.WriteUInt16LittleEndian(destination[6..], (ushort)Math.Min(Nlink, ushort.MaxValue));
+        var nbValue = (Advise & AdviseBitNlinkOneOrDotOmitted) != 0 && !IsDirectory ? (ushort)0 : (ushort)Math.Min(Nlink, ushort.MaxValue);
+        BinaryPrimitives.WriteUInt16LittleEndian(destination[6..], nbValue);
         BinaryPrimitives.WriteUInt32LittleEndian(destination[8..], (uint)Math.Min(Size, uint.MaxValue));
         BinaryPrimitives.WriteUInt32LittleEndian(destination[12..], Generation);
         BinaryPrimitives.WriteUInt32LittleEndian(destination[16..], U);

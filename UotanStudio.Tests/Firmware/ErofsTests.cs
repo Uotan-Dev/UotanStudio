@@ -301,9 +301,11 @@ public class ErofsTests
 
         // 只保留超级块及少量后续字节：根 inode / 目录块落在被截断的区域。
         // Keep only the superblock plus a few trailing bytes: the root inode / directory blocks are gone.
+        // 超级块带 SB_CHKSUM 时，校验窗口被截断会在构造阶段直接失败（比枚举时失败更严格）。
+        // With SB_CHKSUM set, the truncated checksum window fails at construction (stricter than
+        // failing during enumeration).
         var truncated = image.Take(ErofsSuperblock.SuperblockOffset + ErofsSuperblock.SuperblockSize + 8).ToArray();
-        using var parser = new ErofsParser(truncated);
-        Assert.Throws<InvalidDataException>(() => parser.EnumerateFiles());
+        Assert.Throws<FormatException>(() => new ErofsParser(truncated));
     }
 
     [Fact]
@@ -386,7 +388,9 @@ public class ErofsTests
 
         var iFormat = BinaryPrimitives.ReadUInt16LittleEndian(
             image.AsSpan((int)superblock.GetInodeOffset(entry.Nid), 2));
-        Assert.Equal(0, iFormat);
+        // 非目录 nlink==1 的紧凑 inode 置 EROFS_I_NLINK_1_BIT（0x10），与 mkfs 一致。
+        // A compact non-directory inode with nlink==1 sets EROFS_I_NLINK_1_BIT (0x10), like mkfs.
+        Assert.Equal(ErofsInode.AdviseBitNlinkOneOrDotOmitted, iFormat);
         Assert.Equal(ErofsInode.DataLayoutFlat, (ushort)(iFormat & ErofsInode.DataLayoutMask));
     }
 
@@ -418,6 +422,30 @@ public class ErofsTests
         tampered[1024 + 8] ^= 0x40;
         var altered = ErofsCrc32cLe(tampered.AsSpan(1024 + 8, blockSize - 1024 - 8), ErofsSuperblockChecksumSeed);
         Assert.NotEqual(expected, altered);
+    }
+
+    [Fact]
+    public void Parser_SuperblockChecksum_ValidImage_ParsesAndTamperedWindow_Throws()
+    {
+        // The parser must verify the superblock checksum (SB_CHKSUM feature) with the same
+        // kernel convention the builder writes, and refuse a corrupted window.
+        // 解析器必须按打包器写入的内核约定校验超级块校验和（SB_CHKSUM），并拒绝被篡改的窗口。
+        using var temp = new TempDirectory();
+        WriteText(temp, "a.txt", "hello erofs checksum");
+        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = true });
+
+        using (var parser = new ErofsParser(image))
+        {
+            Assert.Equal("hello erofs checksum", Encoding.UTF8.GetString(parser.ReadFileBytes("a.txt")));
+        }
+
+        var tampered = (byte[])image.Clone();
+        var superblock = ErofsSuperblock.FromImage(image);
+        Assert.True(superblock.HasCompatChecksum);
+        // Flip a byte inside the hashed window but outside the superblock fields parsed so far.
+        // 在校验窗口内、超级块已解析字段之外翻转一个字节。
+        tampered[1024 + ErofsSuperblock.SuperblockSize + 4] ^= 0xFF;
+        Assert.Throws<FormatException>(() => new ErofsParser(tampered).Dispose());
     }
 
     private const uint ErofsSuperblockChecksumSeed = 0x5045B54A;

@@ -118,8 +118,11 @@ public sealed partial class ErofsParser
             if ((bitmap & (1 << id)) == 0) continue;
             offset = checked((int)AlignUp(offset, 4));
             var length = BinaryPrimitives.ReadUInt16LittleEndian(ReadBytes(offset, 2, "compression configuration length"));
-            if (length < (id < 2 ? 14 : 6) || length > 4096)
-                throw new InvalidDataException("Invalid EROFS compression configuration length.");
+            // Exact upstream record sizes: lz4/lzma cfgs are 14 bytes (+2 length), deflate/zstd 6 (+2).
+            // 上游记录的精确长度：lz4/lzma 配置 14 字节（另加 2 字节长度），deflate/zstd 6 字节。
+            var expected = id < 2 ? 14 : 6;
+            if (length != expected)
+                throw new InvalidDataException($"Invalid EROFS compression configuration length for algorithm {id}: {length} (expected {expected}).");
             var bytes = ReadBytes(offset + 2, length, "compression configuration");
             var options = new ErofsOptions { Algorithm = (ErofsCompressionAlgorithm)id, BlockSize = _blockSize, MaxPclusterSize = _blockSize };
             switch (options.Algorithm)

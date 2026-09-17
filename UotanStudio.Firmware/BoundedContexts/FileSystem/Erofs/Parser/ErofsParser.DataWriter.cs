@@ -162,10 +162,10 @@ public sealed partial class ErofsParser
                 for (var mappedId = 1; mappedId < _deviceSlots.Length; mappedId++)
                 {
                     var mapped = _deviceSlots[mappedId];
-                    if (mapped.MappedBlkAddr != 0 && startBlk >= mapped.MappedBlkAddr && startBlk - mapped.MappedBlkAddr < mapped.Blocks)
+                    if (mapped.UniAddr != 0 && startBlk >= mapped.UniAddr && startBlk - mapped.UniAddr < mapped.Blocks)
                     {
                         deviceId = mappedId;
-                        startBlk -= mapped.MappedBlkAddr;
+                        startBlk -= mapped.UniAddr;
                         break;
                     }
                 }
@@ -219,6 +219,17 @@ public sealed partial class ErofsParser
 
         var advise = header.Advise;
         var algorithmHead1 = header.Algorithm;
+
+        // COMRESSED_FULL with extent metadata (Z_EROFS_ADVISE_EXTENTS): the index area holds
+        // variable-size extent records instead of lcluster indexes (fs/erofs/zmap.c z_erofs_map_blocks_ext).
+        // COMRESSED_FULL 且启用 extent 元数据（Z_EROFS_ADVISE_EXTENTS）：索引区为可变长度 extent
+        // 记录而非 lcluster 索引（fs/erofs/zmap.c z_erofs_map_blocks_ext）。
+        if (inode.DataLayout == ErofsInode.DataLayoutCompressed && header.HasExtents)
+        {
+            if (observer is not null) return;
+            WriteExtentsData(nid, inode, header, headerBytes, headerOffset, output, cancellationToken);
+            return;
+        }
 
 
         var algorithmHead2 = (ErofsAlgorithm)((header.AlgorithmType >> 4) & ZErofsMapHeader.AlgorithmTypeMask);
@@ -461,6 +472,203 @@ public sealed partial class ErofsParser
                 else output.Write(decoded, 0, (int)llen);
                 lcn = nextLcn;
             }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(compressed);
+            ArrayPool<byte>.Shared.Return(decoded);
+        }
+    }
+
+    /// <summary>
+    /// Reads a COMRESSED_FULL inode whose map header carries extent metadata: the index area is
+    /// a sorted array of variable-size z_erofs_extent records (fs/erofs/zmap.c z_erofs_map_blocks_ext).
+    /// <para>读取携带 extent 元数据的 COMRESSED_FULL inode：索引区为按逻辑偏移排序的可变长度
+    /// z_erofs_extent 记录数组（fs/erofs/zmap.c z_erofs_map_blocks_ext）。</para>
+    /// </summary>
+    private void WriteExtentsData(ulong nid, ErofsInode inode, ZErofsMapHeader header, byte[] headerBytes,
+        long headerOffset, Stream output, CancellationToken cancellationToken)
+    {
+        // Extent count lives in the header union: h_extents_lo (bytes 0-3) + h_extents_hi (bytes 6-7).
+        // extent 总数位于头部联合体：h_extents_lo（字节 0-3）+ h_extents_hi（字节 6-7）。
+        var extentCount = (ulong)(BinaryPrimitives.ReadUInt32LittleEndian(headerBytes)
+            | ((ulong)header.ExtentsHi << 32));
+        if (extentCount == 0)
+        {
+            return;
+        }
+
+        var recSize = 4 << ((header.Advise >> ZErofsMapHeader.ExtRecSizeBit) & ZErofsMapHeader.ExtRecSizeMask);
+        var extentsBase = checked((long)AlignUp(headerOffset + ZErofsMapHeader.Size, recSize));
+        // A record holds at least plen + pstart_lo; anything shorter cannot address data.
+        // 记录至少容纳 plen + pstart_lo；更短的记录无法寻址数据。
+        if (recSize < 8)
+        {
+            throw new InvalidDataException($"EROFS extent record size {recSize} is too small.");
+        }
+
+        const int maxExtents = 1 << 24;
+        if (extentCount > (ulong)maxExtents)
+        {
+            throw new InvalidDataException($"EROFS extent count {extentCount} exceeds the limit of {maxExtents}.");
+        }
+
+        var logicalOffset = 0L;
+        var physicalOffset = -1L;
+        for (var i = 0; i < (long)extentCount; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var recordOffset = checked(extentsBase + i * recSize);
+            var record = ReadBytes(recordOffset, recSize, $"extent record {i}");
+            var plenRaw = BinaryPrimitives.ReadUInt32LittleEndian(record);
+            var logicalStart = (long)BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(12));
+            if (recSize > 20)
+            {
+                logicalStart |= (long)BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(16)) << 32;
+            }
+
+            // Records are sorted by logical start; the previous record's logical end is the
+            // logical length of this extent (fs/erofs/zmap.c: m_llen = lend - m_la).
+            // 记录按逻辑偏移排序；前一条记录的逻辑终点即本 extent 的逻辑长度。
+            if (logicalStart < logicalOffset)
+            {
+                throw new InvalidDataException($"EROFS extent {i} of nid {nid} is not sorted.");
+            }
+
+            var logicalLength = logicalStart - logicalOffset;
+            var physicalLength = plenRaw & ZErofsMapHeader.ExtentPlenMask;
+            var fmt = plenRaw >> ZErofsMapHeader.ExtentPlenFmtBit;
+            var isPartial = (plenRaw & ZErofsMapHeader.ExtentPlenPartial) != 0;
+            if (fmt > (uint)ErofsAlgorithm.Zstd + 1)
+            {
+                throw new InvalidDataException($"EROFS extent {i} of nid {nid} uses unknown algorithm {fmt - 1}.");
+            }
+
+            // Fragment tail extent: data lives in the packed inode, addressed by (plen, pstart).
+            // fragment 尾部 extent：数据在 packed inode 中，以 (plen, pstart) 寻址。
+            if (isPartial && physicalLength == 0)
+            {
+                WriteZeroes(output, logicalLength);
+                logicalOffset = logicalStart;
+                continue;
+            }
+
+            if (fmt == 0)
+            {
+                // fmt == 0: plain/interlaced extent — the pstart is a byte address into the image.
+                // fmt == 0：未压缩 extent —— pstart 为镜像内的字节地址。
+                WritePlainExtent(nid, inode, record, recSize, logicalOffset, logicalLength, physicalOffset, output, cancellationToken);
+            }
+            else
+            {
+                WriteCompressedExtent(nid, inode, record, recSize, logicalOffset, logicalLength,
+                    (ErofsAlgorithm)(fmt - 1), output, cancellationToken);
+            }
+
+            // Advance the physical cursor for records that do not carry an absolute pstart
+            // (recsz 4: pstart_lo is absent, so extents are packed consecutively).
+            // 对不带绝对 pstart 的记录（recsz 4 无 pstart_lo）推进物理游标，extent 连续存放。
+            if (recSize > 4)
+            {
+                var pstart = BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(4));
+                if (recSize > 8)
+                {
+                    pstart |= (uint)(BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(8)) << 0);
+                }
+
+                physicalOffset = checked((long)pstart * (recSize > 12 ? 1 : 1));
+            }
+
+            logicalOffset = logicalStart;
+        }
+
+        if (logicalOffset < (long)inode.Size)
+        {
+            WriteZeroes(output, (long)inode.Size - logicalOffset);
+        }
+    }
+
+    private void WritePlainExtent(ulong nid, ErofsInode inode, byte[] record, int recSize,
+        long logicalOffset, long logicalLength, long physicalOffset, Stream output, CancellationToken cancellationToken)
+    {
+        if (logicalLength <= 0)
+        {
+            return;
+        }
+
+        long source;
+        if (recSize > 8)
+        {
+            var pstartLo = BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(4));
+            var pstartHi = recSize > 12 ? BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(8)) : 0;
+            source = checked((long)(pstartLo | (pstartHi << 0)));
+        }
+        else
+        {
+            source = checked(physicalOffset + logicalOffset);
+        }
+
+        CheckRange(source, logicalLength, "Plain extent data");
+        CopyFromSource(output, source, logicalLength);
+    }
+
+    private void WriteCompressedExtent(ulong nid, ErofsInode inode, byte[] record, int recSize,
+        long logicalOffset, long logicalLength, ErofsAlgorithm algorithm, Stream output, CancellationToken cancellationToken)
+    {
+        if (logicalLength <= 0)
+        {
+            return;
+        }
+
+        long pstart;
+        if (recSize > 8)
+        {
+            var pstartLo = BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(4));
+            var pstartHi = recSize > 12 ? BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(8)) : 0;
+            pstart = checked((long)pstartLo);
+        }
+        else
+        {
+            throw new InvalidDataException($"EROFS compressed extent of nid {nid} lacks a physical start.");
+        }
+
+        var plenRaw = BinaryPrimitives.ReadUInt32LittleEndian(record);
+        var compressedLength = (int)(plenRaw & ZErofsMapHeader.ExtentPlenMask);
+        if (compressedLength <= 0 || compressedLength > ErofsCompression.MaxPclusterSize)
+        {
+            throw new InvalidDataException($"EROFS extent of nid {nid} has invalid encoded length {compressedLength}.");
+        }
+
+        CheckRange(pstart, compressedLength, "Compressed extent data");
+        var compressed = ArrayPool<byte>.Shared.Rent(compressedLength);
+        var decoded = ArrayPool<byte>.Shared.Rent((int)logicalLength);
+        try
+        {
+            lock (_streamLock)
+            {
+                _stream.Position = checked(_baseOffset + pstart);
+                _stream.ReadExactly(compressed, 0, compressedLength);
+            }
+
+            int decodedLength;
+            try
+            {
+                decodedLength = ErofsCompression.AlgorithmDecompress(
+                    algorithm, compressed, 0, compressedLength, decoded, 0, (int)logicalLength);
+            }
+            catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or ArgumentException)
+            {
+                throw new InvalidDataException(
+                    $"Extent of nid {nid} failed to decompress ({algorithm}): {ex.Message}");
+            }
+
+            if (decodedLength != (int)logicalLength)
+            {
+                throw new InvalidDataException(
+                    $"Extent of nid {nid} decoded to {decodedLength} bytes, expected {logicalLength}.");
+            }
+
+            output.Write(decoded, 0, (int)logicalLength);
         }
         finally
         {

@@ -200,6 +200,24 @@ public sealed partial class ErofsParser : IDisposable
                     $"Unsupported EROFS block size shift {_superblock.BlockSizeBits} (expected 9..16).");
             }
 
+            if (_superblock.HasCompatChecksum)
+            {
+                // fs/erofs/super.c erofs_superblock_csum_verify: crc32c(0x5045B54A) over [1024+8, blockSize),
+                // skipping the magic and checksum fields. Mirror the builder's capture window.
+                var windowLength = (int)Math.Min(
+                    _superblock.BlockSize > ErofsSuperblock.SuperblockOffset
+                        ? _superblock.BlockSize - ErofsSuperblock.SuperblockOffset
+                        : _superblock.BlockSize,
+                    _imageSize - ErofsSuperblock.SuperblockOffset);
+                var crcWindow = ReadBytes(ErofsSuperblock.SuperblockOffset, windowLength, "Superblock checksum window");
+                var computed = ErofsCrc32c.VerifySuperblock(crcWindow);
+                if (computed != _superblock.Checksum)
+                {
+                    throw new FormatException(
+                        $"EROFS superblock checksum mismatch: stored 0x{_superblock.Checksum:X8}, computed 0x{computed:X8}.");
+                }
+            }
+
 
             var unknownIncompat = _superblock.FeatureIncompat & ~ErofsSuperblock.AllIncompat;
             if (unknownIncompat != 0)
@@ -225,7 +243,7 @@ public sealed partial class ErofsParser : IDisposable
                 _deviceSlots = new ErofsDeviceSlot[_superblock.ExtraDevices + 1];
 
 
-                _deviceSlots[0] = new ErofsDeviceSlot { Blocks = (uint)_superblock.BlockCount64, MappedBlkAddr = 0 };
+                _deviceSlots[0] = new ErofsDeviceSlot { Blocks = _superblock.BlockCount64, UniAddr = 0 };
                 var devTableOffset = (long)_superblock.DevtSlotoff * ErofsDeviceSlot.Size;
                 for (var i = 0; i < _superblock.ExtraDevices; i++)
                 {
@@ -493,9 +511,9 @@ public sealed partial class ErofsParser : IDisposable
             throw new InvalidDataException($"{what} exceeds device {deviceId} bounds.");
         if (_deviceStreams?[deviceId] is not { } device)
         {
-            if (!_flatDevice || slot.MappedBlkAddr == 0)
+            if (!_flatDevice || slot.UniAddr == 0)
                 throw new InvalidDataException($"{what} requires missing EROFS device {deviceId}.");
-            var mappedOffset = checked((long)slot.MappedBlkAddr * _blockSize + offset);
+            var mappedOffset = checked((long)slot.UniAddr * _blockSize + offset);
             CheckRange(mappedOffset, length, what);
             CopyFromSource(output, mappedOffset, length);
             return;
