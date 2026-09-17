@@ -1,0 +1,209 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:icons="using:Material.Icons.Avalonia"
+             xmlns:vm="using:UotanStudio.ViewModels.Basic"
+             xmlns:views="using:UotanStudio.Views.Basic"
+             mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="820"
+             x:Class="UotanStudio.Views.Basic.BasicView"
+             x:DataType="vm:BasicViewModel"
+             Background="{DynamicResource PageBackground}">
+    <Design.DataContext>
+        <vm:BasicViewModel />
+    </Design.DataContext>
+    <UserControl.Styles>
+        <Style Selector="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="Button">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="12,0" />
+        </Style>
+        <Style Selector="CheckBox, RadioButton">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="MinHeight" Value="24" />
+        </Style>
+        <Style Selector="ListBox.menu-list">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="ListBox.menu-list ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="8,7" />
+            <Setter Property="Margin" Value="6,1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="MinHeight" Value="0" />
+        </Style>
+        <!-- 窄窗口下的图标栏：隐藏文字标签，条目居中。 -->
+        <!-- Icon rail used on narrow windows: the text labels are hidden and the items are centred. -->
+        <Style Selector="ListBox.menu-list.menu-rail TextBlock.menu-item-label">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="ListBox.menu-list.menu-rail ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="0,9" />
+        </Style>
+        <!-- 右侧固定面板的 Tab 顶栏：两项均分整条顶栏，字号略小并沿用主题默认的上下等距排版。 -->
+        <!-- Tab strip of the fixed right panel: the two entries split the whole strip evenly, with a slightly smaller
+             caption and the theme's default equal top/bottom spacing. -->
+        <Style Selector="TabItem.side-tab">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TabControl#SideTabs /template/ ItemsPresenter">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+        <!-- 菜单点击后的跳转用偏移过渡做平滑滚动，避免整页瞬间跳走。 -->
+        <!-- Menu jumps animate the scroll offset so the page does not snap between sections. -->
+        <Style Selector="ScrollViewer#SectionScroller">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <VectorTransition Property="Offset" Duration="0:0:0.35">
+                        <VectorTransition.Easing>
+                            <CubicEaseOut />
+                        </VectorTransition.Easing>
+                    </VectorTransition>
+                </Transitions>
+            </Setter>
+        </Style>
+    </UserControl.Styles>
+
+    <!-- 三段式布局：左侧菜单、中间菜单视图、右侧固定面板；列宽在窗口变窄时由代码后置切换。 -->
+    <!-- Three-part layout: left menu, middle section view and the fixed right panel; the code-behind switches
+         the column widths once the window gets narrow. -->
+    <Grid Name="BasicLayout" Margin="12" ColumnDefinitions="232,12,*,12,336" ClipToBounds="True">
+        <!--  左侧菜单：图标、四项设备状态与菜单列表  -->
+        <!--  Left menu: icon, four device-status rows and the menu list  -->
+        <Border Name="MenuPane" Grid.Column="0" CornerRadius="8" BorderThickness="1"
+                Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}">
+            <DockPanel>
+                <!--  Logo 与设备状态整体下移，四行信息向中间收紧（左右留白更大）。  -->
+                <!--  The logo and device status sit lower, and the four rows are pulled towards the centre with a
+                      wider inset on both sides.  -->
+                <StackPanel DockPanel.Dock="Top" Margin="28,50,28,12" Spacing="12">
+                    <Image Name="MenuLogo" Width="56" Height="56" HorizontalAlignment="Center"
+                           Source="/Assets/UotanToolbox.png" ToolTip.Tip="UotanStudio" />
+                    <StackPanel Name="StatusBlock" Spacing="6">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <TextBlock Text="{DynamicResource Basic_Status}" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding Status}" FontSize="12"
+                                       HorizontalAlignment="Right" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <TextBlock Text="{DynamicResource Basic_CodeName}" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding CodeName}" FontSize="12"
+                                       HorizontalAlignment="Right" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <TextBlock Text="{DynamicResource Basic_BlStatus}" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding BlStatus}" FontSize="12"
+                                       HorizontalAlignment="Right" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <TextBlock Text="{DynamicResource Basic_VabStatus}" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding VabStatus}" FontSize="12"
+                                       HorizontalAlignment="Right" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                    </StackPanel>
+                    <Border Name="MenuDivider" Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
+                </StackPanel>
+                <!--  菜单项由视图静态声明：图标与标题都能直接引用本地化资源  -->
+                <!--  Menu entries are declared statically here so both the icon and the localised title can be referenced directly  -->
+                <ListBox Name="MenuList" Classes="menu-list"
+                         SelectedIndex="{Binding SelectedSection, Mode=TwoWay}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBoxItem ToolTip.Tip="{DynamicResource Basic_Menu_Home}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <icons:MaterialIcon Kind="HomeVariantOutline" Width="18" Height="18" VerticalAlignment="Center" />
+                            <TextBlock Classes="menu-item-label" Text="{DynamicResource Basic_Menu_Home}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem ToolTip.Tip="{DynamicResource Basic_Menu_BasicFlash}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <icons:MaterialIcon Kind="FlashOutline" Width="18" Height="18" VerticalAlignment="Center" />
+                            <TextBlock Classes="menu-item-label" Text="{DynamicResource Basic_Menu_BasicFlash}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem ToolTip.Tip="{DynamicResource Basic_Menu_AppManager}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <icons:MaterialIcon Kind="Apps" Width="18" Height="18" VerticalAlignment="Center" />
+                            <TextBlock Classes="menu-item-label" Text="{DynamicResource Basic_Menu_AppManager}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem ToolTip.Tip="{DynamicResource Basic_Menu_ScreenMirror}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <icons:MaterialIcon Kind="CellphoneLink" Width="18" Height="18" VerticalAlignment="Center" />
+                            <TextBlock Classes="menu-item-label" Text="{DynamicResource Basic_Menu_ScreenMirror}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem ToolTip.Tip="{DynamicResource Basic_Menu_FileManager}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <icons:MaterialIcon Kind="FolderMultipleOutline" Width="18" Height="18" VerticalAlignment="Center" />
+                            <TextBlock Classes="menu-item-label" Text="{DynamicResource Basic_Menu_FileManager}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem ToolTip.Tip="{DynamicResource Basic_Menu_Others}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <icons:MaterialIcon Kind="TuneVariant" Width="18" Height="18" VerticalAlignment="Center" />
+                            <TextBlock Classes="menu-item-label" Text="{DynamicResource Basic_Menu_Others}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <!--  中间：六个分段纵向合并成一页，滚动条只有这一条；左侧菜单只负责滚到对应分段。
+              分段顺序必须与左侧菜单项的顺序一致（菜单选中序号就是这里的子项序号）。  -->
+        <!--  Middle: the six sections are stacked into a single page with one scrollbar; the left-hand menu only
+              scrolls to a section. The order below must match the menu entries, since the menu index is the child
+              index here.  -->
+        <ScrollViewer Name="SectionScroller" Grid.Column="2" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled" AllowAutoHide="True">
+            <!--  分段之间留出比卡片间距（12）更大的间隔，让相邻分段在合并后的长页面里能看出来是一组一组。  -->
+            <!--  Section gaps are wider than the 12px card gap so neighbouring sections still read as groups.  -->
+            <StackPanel Name="SectionStack" Spacing="24">
+                <views:BasicHomeView Name="SectionHome" />
+                <views:BasicFlashView Name="SectionBasicFlash" />
+                <views:BasicAppManagerView Name="SectionAppManager" />
+                <views:BasicMirrorSettingsView Name="SectionMirrorSettings" />
+                <views:BasicFileManagerView Name="SectionFileManager" />
+                <views:BasicOthersView Name="SectionOthers" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <!--  右侧固定面板：投屏与日志两个标签  -->
+        <!--  Fixed right panel: the mirror and log tabs  -->
+        <Border Name="SidePanel" Grid.Column="4" CornerRadius="8" BorderThickness="1"
+                Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}">
+            <TabControl Name="SideTabs" SelectedIndex="{Binding PanelTabIndex, Mode=TwoWay}">
+                <TabControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <!-- 两栏均分顶栏：UniformGrid 单行两列，每项各占一半。 -->
+                        <!-- Two equal columns: a single-row UniformGrid gives each entry half of the strip. -->
+                        <UniformGrid Rows="1" />
+                    </ItemsPanelTemplate>
+                </TabControl.ItemsPanel>
+                <TabItem Classes="side-tab" Header="{DynamicResource Basic_Tab_Mirror}">
+                    <views:BasicMirrorPanelView />
+                </TabItem>
+                <TabItem Classes="side-tab" Header="{DynamicResource Basic_Tab_Log}">
+                    <views:BasicLogPanelView />
+                </TabItem>
+            </TabControl>
+        </Border>
+    </Grid>
+</UserControl>

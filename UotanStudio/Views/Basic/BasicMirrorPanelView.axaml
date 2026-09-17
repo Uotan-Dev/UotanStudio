@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:editors="using:UotanStudio.Views.Editors"
+             xmlns:icons="using:Material.Icons.Avalonia"
+             xmlns:vm="using:UotanStudio.ViewModels.Basic"
+             mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="700"
+             x:Class="UotanStudio.Views.Basic.BasicMirrorPanelView"
+             x:DataType="vm:BasicViewModel">
+    <!-- 右侧固定面板的「投屏」标签：画面区域按 20:9 手机屏（竖屏 9:20）保持比例并居中，尺寸在代码后置里按
+         可用空间计算，画面控件本身不做缩放；未连接时在画面内叠加提示。 -->
+    <!-- The "Mirror" tab of the fixed right panel: the picture area keeps the 20:9 phone shape (portrait 9:20) and
+         stays centred. The size is computed in the code-behind from the available space, so the frame control itself
+         is never scaled. A hint is overlaid inside the picture while no device is connected. -->
+    <Grid Name="MirrorHost" Background="{DynamicResource PageBackground}" ClipToBounds="True">
+        <Border Name="MirrorSurface"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                CornerRadius="8" ClipToBounds="True"
+                Background="Black" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+            <Panel>
+                <editors:ScreenMirrorView DataContext="{x:Null}" />
+                <StackPanel IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+                    <icons:MaterialIcon Kind="CellphoneLink" Width="30" Height="30" HorizontalAlignment="Center"
+                                        Foreground="GhostWhite" Opacity="0.85" />
+                    <TextBlock Text="{DynamicResource Basic_MirrorWaiting}" Foreground="GhostWhite"
+                               FontSize="13" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Panel>
+        </Border>
+    </Grid>
+</UserControl>

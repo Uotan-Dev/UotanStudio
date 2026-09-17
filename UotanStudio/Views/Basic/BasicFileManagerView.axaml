@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:editors="using:UotanStudio.Views.Editors"
+             xmlns:icons="using:Material.Icons.Avalonia"
+             xmlns:vm="using:UotanStudio.ViewModels.Basic"
+             mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="760"
+             x:Class="UotanStudio.Views.Basic.BasicFileManagerView"
+             x:DataType="vm:BasicViewModel">
+    <!-- 文件管理：左侧为快速访问，右侧直接复用文件管理器编辑器的文件视图
+         （通过 ShowDirectoryTree=False 去掉自带目录树）。 -->
+    <!-- File manager: quick access on the left and, on the right, the file view of the file-manager editor reused
+         directly (its own directory tree is removed with ShowDirectoryTree=False). -->
+    <!-- 本段在合并后的长页面里必须自带高度：复用进来的文件浏览器是「填满可用高度」的布局，
+         不设高度会跟着内容无限撑开。 -->
+    <!-- This band needs its own height inside the merged page: the reused file browser fills the available height,
+         so without a bound it would grow with its content. -->
+    <Grid ColumnDefinitions="Auto,12,*" Height="760" ClipToBounds="True">
+        <Border Grid.Column="0" Classes="basic-card" MinWidth="200" MaxWidth="240">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Classes="basic-title" Text="{DynamicResource Basic_File_QuickAccess}" />
+                <CheckBox DockPanel.Dock="Bottom" HorizontalAlignment="Center" Margin="0,8,0,0"
+                          Content="{DynamicResource Basic_File_RootMode}" />
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Margin="0,12">
+                    <icons:MaterialIcon Kind="FolderStarOutline" Width="26" Height="26"
+                                        HorizontalAlignment="Center" Opacity="0.5" />
+                    <TextBlock Classes="basic-hint" Text="{DynamicResource Basic_File_QuickAccessEmpty}"
+                               HorizontalAlignment="Center" TextAlignment="Center" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+        <Grid Grid.Column="2" ClipToBounds="True">
+            <!--  复用文件管理器的文件视图；本页尚未接入文件会话，因此显式置空数据上下文  -->
+            <!--  The file-manager file view is reused; this page has no file session yet, hence the explicit null context  -->
+            <editors:FileManagerEditorView Name="FileBrowser" ShowDirectoryTree="False" DataContext="{x:Null}" />
+            <StackPanel IsVisible="{Binding IsFileListEmpty}" IsHitTestVisible="False"
+                        HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+                <icons:MaterialIcon Kind="FolderMultipleOutline" Width="28" Height="28"
+                                    HorizontalAlignment="Center" Opacity="0.5" />
+                <TextBlock Classes="basic-hint" Text="{DynamicResource Basic_File_Empty}"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

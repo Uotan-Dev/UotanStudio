@@ -1,0 +1,201 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:UotanStudio.ViewModels.Basic"
+             mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="760"
+             x:Class="UotanStudio.Views.Basic.BasicOthersView"
+             x:DataType="vm:BasicViewModel">
+    <!-- 杂项控制：显示属性、电池、锁屏时间、图标隐藏与字体/动画调节。 -->
+    <!-- Utilities: display properties, battery, lock-screen timeout, status-icon hiding and font/animation scaling. -->
+    <StackPanel Spacing="12">
+        <!-- 显示属性、电池与锁屏时间同处一排（参考页也是这样并排三张卡片），锁屏时间不再单独占一行。 -->
+        <!-- Display, battery and lock-screen timeout share one row, as they do side by side in the reference. -->
+        <Grid ColumnDefinitions="*,12,*,12,*">
+            <Border Grid.Column="0" Classes="basic-card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Others_Display}" />
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_Resolution}" />
+                        <TextBlock Grid.Column="1" Classes="basic-value" Text="{Binding PlaceholderText}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,8,*">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                            <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_Dpi}" />
+                            <TextBlock Grid.Column="1" Classes="basic-value" Text="{Binding PlaceholderText}" />
+                        </Grid>
+                        <Grid Grid.Column="2" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                            <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_Dp}" />
+                            <TextBlock Grid.Column="1" Classes="basic-value" Text="{Binding PlaceholderText}" />
+                        </Grid>
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto,*">
+                        <TextBox Height="32" VerticalContentAlignment="Center"
+                                 PlaceholderText="{DynamicResource Basic_Others_Width}" />
+                        <TextBlock Grid.Column="1" Text="x" VerticalAlignment="Center" Margin="8,0" />
+                        <TextBox Grid.Column="2" Height="32" VerticalContentAlignment="Center"
+                                 PlaceholderText="{DynamicResource Basic_Others_Height}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="96,8,*">
+                        <ComboBox Height="32" HorizontalAlignment="Stretch" SelectedIndex="-1" />
+                        <TextBox Grid.Column="2" Height="32" VerticalContentAlignment="Center" />
+                    </Grid>
+                    <UniformGrid Columns="2" MaxWidth="300" HorizontalAlignment="Center" Margin="0,4,0,0">
+                        <Button Margin="6,0" Content="{DynamicResource Basic_Others_Modify}" />
+                        <Button Margin="6,0" Content="{DynamicResource Basic_Others_Restore}" />
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="2" Classes="basic-card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Others_Battery}" />
+                    <Grid ColumnDefinitions="Auto,10,*">
+                        <Button Width="76" Height="76" VerticalAlignment="Top"
+                                Content="{DynamicResource Basic_Others_Restore}" />
+                        <Grid Grid.Column="2" RowDefinitions="Auto,8,Auto">
+                            <Grid ColumnDefinitions="*,8,Auto">
+                                <TextBox Height="32" VerticalContentAlignment="Center"
+                                         PlaceholderText="{DynamicResource Basic_Others_Temperature}" />
+                                <Button Grid.Column="2" MinWidth="64" Content="{DynamicResource Basic_Others_Modify}" />
+                            </Grid>
+                            <Grid Grid.Row="2" ColumnDefinitions="*,8,Auto">
+                                <TextBox Height="32" VerticalContentAlignment="Center"
+                                         PlaceholderText="{DynamicResource Basic_Others_BatteryLevel}" />
+                                <Button Grid.Column="2" MinWidth="64" Content="{DynamicResource Basic_Others_Modify}" />
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_NoCharge}" />
+                        <ToggleSwitch Grid.Column="1" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_WirelessCharge}" />
+                        <ToggleSwitch Grid.Column="1" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_UsbCharge}" />
+                        <ToggleSwitch Grid.Column="1" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_DcCharge}" />
+                        <ToggleSwitch Grid.Column="1" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="4" Classes="basic-card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Others_LockTime}" />
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_CurrentLockTime}" />
+                        <TextBlock Grid.Column="1" Classes="basic-value" Text="{Binding PlaceholderText}" />
+                    </Grid>
+                    <TextBox Height="32" VerticalContentAlignment="Center" />
+                    <Button MinWidth="110" MaxWidth="200" HorizontalAlignment="Center"
+                            Content="{DynamicResource Basic_Others_Modify}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Border Classes="basic-card">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="6">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Others_IconHide}" />
+                    <!-- 七列两排等宽复选框：与参考页一致，同一列在上下两排严格对齐。 -->
+                    <!-- Seven equal check-box columns over two rows, aligned exactly as in the reference. -->
+                    <UniformGrid Columns="7" Rows="2">
+                        <CheckBox Content="{DynamicResource Basic_Others_Time}" />
+                        <CheckBox Content="{DynamicResource Basic_Others_Location}" />
+                        <CheckBox Content="{DynamicResource Basic_Others_Earphone}" />
+                        <CheckBox Content="{DynamicResource Basic_Others_Alarm}" />
+                        <CheckBox Content="{DynamicResource Basic_Others_Sound}" />
+                        <CheckBox Content="{DynamicResource Basic_Others_Signal}" />
+                        <CheckBox Content="{DynamicResource Basic_Others_Rotation}" />
+                        <CheckBox Content="{DynamicResource Basic_Others_Bluetooth}" />
+                        <CheckBox Content="{DynamicResource Basic_Others_BatteryIcon}" />
+                        <CheckBox Content="{DynamicResource Basic_Others_Wlan}" />
+                        <CheckBox Content="{DynamicResource Basic_Others_Seconds}" />
+                        <CheckBox Content="NFC" />
+                        <CheckBox Content="{DynamicResource Basic_Others_Airplane}" />
+                        <CheckBox Content="{DynamicResource Basic_Others_WifiX}" />
+                    </UniformGrid>
+                </StackPanel>
+                <Button Grid.Column="1" MinWidth="110" Margin="12,0,0,0" VerticalAlignment="Center"
+                        Content="{DynamicResource Basic_Others_HideOrShow}" />
+            </Grid>
+        </Border>
+
+        <Border Classes="basic-card">
+            <StackPanel Spacing="10">
+                <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Others_FontAdjust}" />
+                <Grid ColumnDefinitions="Auto,8,*,8,140">
+                    <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_Scale}" />
+                    <Slider Grid.Column="2" Minimum="0" Maximum="5" Value="0" TickFrequency="0.01"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                    <Grid Grid.Column="4" ColumnDefinitions="Auto,8,60">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_CurrentScale}" />
+                        <TextBlock Grid.Column="2" Classes="basic-value" Text="{Binding PlaceholderText}" />
+                    </Grid>
+                </Grid>
+                <!-- 四列等宽：四组调节按钮列宽一致，横向对齐；宽度封顶避免按钮在大卡片里被拉得过长。 -->
+                <!-- Four equal columns keep every group's buttons aligned, with a cap so they do not stretch
+                     across the whole card. -->
+                <UniformGrid Columns="4" MaxWidth="440" HorizontalAlignment="Left">
+                    <Button Margin="3,0" Content="{DynamicResource Basic_Others_Modify}" />
+                    <Button Margin="3,0" Content="1X" />
+                    <Button Margin="3,0" Content="3X" />
+                    <Button Margin="3,0" Content="5X" />
+                </UniformGrid>
+                <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
+                <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Others_Animation}" />
+                <Grid ColumnDefinitions="Auto,8,*,8,140">
+                    <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_WindowScale}" />
+                    <Slider Grid.Column="2" Minimum="0" Maximum="10" Value="0" TickFrequency="0.01"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                    <Grid Grid.Column="4" ColumnDefinitions="Auto,8,60">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_SetScale}" />
+                        <TextBlock Grid.Column="2" Classes="basic-value" Text="{Binding PlaceholderText}" />
+                    </Grid>
+                </Grid>
+                <UniformGrid Columns="4" MaxWidth="440" HorizontalAlignment="Left">
+                    <Button Margin="3,0" Content="{DynamicResource Basic_Others_Modify}" />
+                    <Button Margin="3,0" Content="1X" />
+                    <Button Margin="3,0" Content="3X" />
+                    <Button Margin="3,0" Content="5X" />
+                </UniformGrid>
+                <Grid ColumnDefinitions="Auto,8,*,8,140">
+                    <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_TransitionScale}" />
+                    <Slider Grid.Column="2" Minimum="0" Maximum="10" Value="0" TickFrequency="0.01"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                    <Grid Grid.Column="4" ColumnDefinitions="Auto,8,60">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_SetScale}" />
+                        <TextBlock Grid.Column="2" Classes="basic-value" Text="{Binding PlaceholderText}" />
+                    </Grid>
+                </Grid>
+                <UniformGrid Columns="4" MaxWidth="440" HorizontalAlignment="Left">
+                    <Button Margin="3,0" Content="{DynamicResource Basic_Others_Modify}" />
+                    <Button Margin="3,0" Content="1X" />
+                    <Button Margin="3,0" Content="3X" />
+                    <Button Margin="3,0" Content="5X" />
+                </UniformGrid>
+                <Grid ColumnDefinitions="Auto,8,*,8,140">
+                    <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_Duration}" />
+                    <Slider Grid.Column="2" Minimum="0" Maximum="10" Value="0" TickFrequency="0.01"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                    <Grid Grid.Column="4" ColumnDefinitions="Auto,8,60">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Others_SetScale}" />
+                        <TextBlock Grid.Column="2" Classes="basic-value" Text="{Binding PlaceholderText}" />
+                    </Grid>
+                </Grid>
+                <UniformGrid Columns="4" MaxWidth="440" HorizontalAlignment="Left">
+                    <Button Margin="3,0" Content="{DynamicResource Basic_Others_Modify}" />
+                    <Button Margin="3,0" Content="1X" />
+                    <Button Margin="3,0" Content="3X" />
+                    <Button Margin="3,0" Content="5X" />
+                </UniformGrid>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

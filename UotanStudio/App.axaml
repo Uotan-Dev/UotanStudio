@@ -87,5 +87,8 @@
         <!-- 按钮/分段单选的悬浮与选中态补丁（主色底 + 浅色文字）。 -->
         <!-- Hover/selection patch for buttons and segmented radios (accent fill with light text). -->
         <StyleInclude Source="avares://UotanStudio/Themes/AccentControls.axaml" />
+        <!-- 「基础」页共用的卡片与字段样式。 -->
+        <!-- Shared card and field styles for the "Basic" page. -->
+        <StyleInclude Source="avares://UotanStudio/Themes/BasicPageStyles.axaml" />
     </Application.Styles>
 </Application>

@@ -11,16 +11,17 @@ public partial class MainView : UserControl
 {
     // 底栏页面索引：前三个与最后三个 ContentPage 是撑开居中留白的占位页。
     // Bottom-bar page indexes: the first and last three ContentPages are spacers that keep the group centred.
-    private const int FlashTabIndex = 3;
-    private const int WorkspaceTabIndex = 4;
-    private const int DeliveryTabIndex = 5;
-    private const int NodeEditorTabIndex = 6;
-    private const int SettingsTabIndex = 7;
+    private const int BasicTabIndex = 3;
+    private const int FlashTabIndex = 4;
+    private const int WorkspaceTabIndex = 5;
+    private const int DeliveryTabIndex = 6;
+    private const int NodeEditorTabIndex = 7;
+    private const int SettingsTabIndex = 8;
 
     public MainView()
     {
         InitializeComponent();
-        // 默认选中 Workspace Tab（Flash=3, Workspace=4, Delivery=5, NodeEditor=6, Settings=7）。
+        // 默认选中 Workspace Tab（Basic=3, Flash=4, Workspace=5, Delivery=6, NodeEditor=7, Settings=8）。
         MainTabs.SelectedIndex = WorkspaceTabIndex;
 
         // 初始同步：告知订阅者当前激活面板为 Workspace（与默认 SelectedIndex 对应）
@@ -72,6 +73,7 @@ public partial class MainView : UserControl
     {
         var tab = selectedIndex switch
         {
+            BasicTabIndex => ActiveTab.Basic,
             FlashTabIndex => ActiveTab.Flash,
             WorkspaceTabIndex => ActiveTab.Workspace,
             DeliveryTabIndex => ActiveTab.Delivery,

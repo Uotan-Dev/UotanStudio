@@ -1,0 +1,200 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:icons="using:Material.Icons.Avalonia"
+             xmlns:vm="using:UotanStudio.ViewModels.Basic"
+             mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="760"
+             x:Class="UotanStudio.Views.Basic.BasicFlashView"
+             x:DataType="vm:BasicViewModel">
+    <!-- 基本刷入：解锁、刷入 Recovery、更多重启、修补 Boot 与简易刷入。每行一大一小两张卡片（2:1，
+         与参考页的 630 / 310 一致），按钮和复选框按等宽网格排布，保证上下两排对齐。
+         修补 Boot 卡片沿用 Boot 修补窗口的字段与选项排布，实际修补仍由该窗口执行。 -->
+    <!-- Basic flash: unlock, recovery flashing, extra reboot targets, boot patching and easy flash. Each row pairs a
+         wide and a narrow card (2:1, matching the reference's 630 / 310); buttons and check boxes sit on equal-width
+         grids so successive rows line up. The boot-patch card mirrors the boot patch window's fields and options,
+         while the patch itself still runs in that window. -->
+    <StackPanel Spacing="12">
+        <Grid ColumnDefinitions="2*,12,*" RowDefinitions="Auto,12,Auto,12,Auto">
+            <Border Grid.Row="0" Grid.Column="0" Classes="basic-card">
+                <!-- 两行共用同一列宽（SharedSizeGroup）：「选择解锁文件」和「代码解锁」标签宽度不同，
+                     不共享时下面的下拉框会比上面的文本框靠左。 -->
+                <!-- Both rows share one label column (SharedSizeGroup): "unlock file" and "code unlock" are
+                     different lengths, so without sharing the combo box starts left of the text box above. -->
+                <StackPanel Spacing="10" Grid.IsSharedSizeScope="True">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Flash_Unlock}" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="BasicUnlockLabel" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Flash_UnlockFile}" />
+                        <TextBox Grid.Column="1" Height="32" VerticalContentAlignment="Center" IsReadOnly="True" />
+                        <Button Grid.Column="2" Content="{DynamicResource Flash_ChooseFile}" />
+                    </Grid>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="BasicUnlockLabel" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Flash_UnlockCode}" />
+                        <ComboBox Grid.Column="1" Width="108" Height="32" SelectedIndex="-1" />
+                        <TextBox Grid.Column="2" Height="32" VerticalContentAlignment="Center" />
+                    </Grid>
+                    <UniformGrid Columns="2" MaxWidth="360" HorizontalAlignment="Center" Margin="0,4,0,0">
+                        <Button Margin="6,0" Content="{DynamicResource Basic_Flash_UnlockNow}" />
+                        <Button Margin="6,0" Content="{DynamicResource Basic_Flash_Relock}" />
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="0" Grid.Column="2" Classes="basic-card">
+                <StackPanel Spacing="10">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Flash_CommandUnlock}" />
+                    <ComboBox Height="32" HorizontalAlignment="Stretch" SelectedIndex="-1" />
+                    <Grid Margin="0,4,0,0">
+                        <Button MinWidth="180" MaxWidth="260" HorizontalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <icons:MaterialIcon Kind="Reload" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_Flash_RunUnlock}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="2" Grid.Column="0" Classes="basic-card">
+                <StackPanel Spacing="10">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Flash_Recovery}" />
+                    <Grid ColumnDefinitions="Auto,8,*,8,Auto">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Flash_ChooseRecovery}" />
+                        <TextBox Grid.Column="2" Height="32" VerticalContentAlignment="Center" IsReadOnly="True" />
+                        <Button Grid.Column="4" Content="{DynamicResource Flash_ChooseFile}" />
+                    </Grid>
+                    <!-- 三个一行、两行对齐：GridView 用等宽单元格，参考页同样是每行三个按钮。 -->
+                    <!-- Three per row across two aligned rows, matching the reference's three-button rows. -->
+                    <UniformGrid Columns="3" Rows="2" Margin="0,4,0,0">
+                        <Button Margin="4">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                <icons:MaterialIcon Kind="Android" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource Basic_Flash_ToRecovery}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            </Grid>
+                        </Button>
+                        <Button Margin="4">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                <icons:MaterialIcon Kind="Numeric1BoxOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource Basic_Flash_ToRecoveryA}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            </Grid>
+                        </Button>
+                        <Button Margin="4">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                <icons:MaterialIcon Kind="Numeric2BoxOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource Basic_Flash_ToRecoveryB}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            </Grid>
+                        </Button>
+                        <Button Margin="4">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                <icons:MaterialIcon Kind="ProgressDownload" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource Basic_Flash_TempBoot}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            </Grid>
+                        </Button>
+                        <Button Margin="4">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                <icons:MaterialIcon Kind="ProgressDownload" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource Basic_Flash_ToBootA}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            </Grid>
+                        </Button>
+                        <Button Margin="4">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                <icons:MaterialIcon Kind="ProgressDownload" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource Basic_Flash_ToBootB}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            </Grid>
+                        </Button>
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="2" Grid.Column="2" Classes="basic-card">
+                <StackPanel Spacing="10">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Flash_MoreReboot}" />
+                    <ComboBox Height="32" HorizontalAlignment="Stretch" SelectedIndex="-1" />
+                    <Grid Margin="0,4,0,0">
+                        <Button MinWidth="180" MaxWidth="260" HorizontalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <icons:MaterialIcon Kind="Restart" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_Flash_RunReboot}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!--  修补 Boot：字段与选项沿用 Boot 修补窗口，横向排布与窗口一致  -->
+            <!--  Patch boot: fields and options follow the boot patch window and keep the window's row layout  -->
+            <Border Grid.Row="4" Grid.Column="0" Classes="basic-card">
+                <StackPanel Spacing="8" Grid.IsSharedSizeScope="True">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Flash_PatchBoot}" />
+                    <TextBlock Classes="basic-hint" Text="{DynamicResource Basic_Flash_PatchHint}" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="BasicBootPatchLabel" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Classes="basic-label" Text="{DynamicResource BootPatch_File}" />
+                        <ComboBox Grid.Column="1" Width="116" Height="32" SelectedIndex="0">
+                            <ComboBoxItem Content="{DynamicResource BootPatch_CustomFile}" />
+                            <ComboBoxItem Content="{DynamicResource BootPatch_NoFile}" />
+                        </ComboBox>
+                        <TextBox Grid.Column="2" Height="32" VerticalContentAlignment="Center" IsReadOnly="True" />
+                        <Button Grid.Column="3" Content="{DynamicResource BootPatch_SelectFile}" />
+                    </Grid>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="BasicBootPatchLabel" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Classes="basic-label" Text="{DynamicResource BootPatch_Boot}" />
+                        <TextBox Grid.Column="1" Height="32" VerticalContentAlignment="Center" IsReadOnly="True" />
+                        <Button Grid.Column="2" Content="{DynamicResource BootPatch_SelectFile}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,8,*">
+                        <TextBox Height="32" VerticalContentAlignment="Center"
+                                 PlaceholderText="{DynamicResource BootPatch_DevicePlaceholder}" />
+                        <ComboBox Grid.Column="2" Height="32" HorizontalAlignment="Stretch" SelectedIndex="-1" />
+                    </Grid>
+                    <!-- 两列等宽网格：参考页的复选框同样是右列对齐的固定宽度，而不是随文字长短错开。 -->
+                    <!-- Two equal columns, the same aligned fixed-width columns the reference uses for check boxes. -->
+                    <UniformGrid Columns="2">
+                        <CheckBox Content="{DynamicResource BootPatch_ForceRootfs}" />
+                        <CheckBox Content="{DynamicResource BootPatch_KeepEncryption}" IsChecked="True" />
+                        <CheckBox Content="{DynamicResource BootPatch_InstallRecovery}" />
+                        <CheckBox Content="{DynamicResource BootPatch_KeepAvb}" IsChecked="True" />
+                        <CheckBox Content="{DynamicResource BootPatch_PatchVbmeta}" />
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="4" Grid.Column="2" Classes="basic-card">
+                <StackPanel Spacing="10">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Flash_Easy}" />
+                    <!-- 单列等宽：参考页的简易刷入也是三个等宽按钮纵向对齐。 -->
+                    <!-- Single equal-width column, as the reference stacks its easy-flash buttons. -->
+                    <UniformGrid Columns="1" MaxWidth="260" HorizontalAlignment="Center">
+                        <Button Margin="0,4" Content="{DynamicResource Basic_Flash_FlashMagisk}" />
+                        <Button Margin="0,4" Content="{DynamicResource Basic_Flash_PreventRecovery}" />
+                        <Button Margin="0,4" Content="{DynamicResource Basic_Flash_SyncAb}" />
+                    </UniformGrid>
+                    <StackPanel Orientation="Horizontal" Spacing="14" Margin="0,4,0,0">
+                        <RadioButton GroupName="BasicEasyFlashMode" Content="TWRP Install" IsChecked="True" />
+                        <RadioButton GroupName="BasicEasyFlashMode" Content="ADB Sideload" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </StackPanel>
+</UserControl>

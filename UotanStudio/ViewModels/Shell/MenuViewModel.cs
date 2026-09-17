@@ -1402,7 +1402,13 @@ public enum ActiveTab
     /// <summary><para>设置面板。</para>Settings panel.</summary>
     Settings,
     /// <summary><para>ROM 交付配置面板。</para>ROM delivery configuration panel.</summary>
-    Delivery
+    Delivery,
+    /// <summary>
+    /// <para>基础页面（左侧菜单 + 中间视图 + 右侧投屏/日志）。新值追加在末尾，避免改动既有枚举成员的取值。</para>
+    /// Basic page (left menu, middle view, right mirror/log panel); appended last so existing member values keep
+    /// their numbers.
+    /// </summary>
+    Basic
 }
 
 /// <summary>

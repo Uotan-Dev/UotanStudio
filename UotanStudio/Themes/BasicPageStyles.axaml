@@ -1,0 +1,109 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- 「基础」页各视图共用的卡片与字段排版：卡片底色/描边与字段标签、值、提示三个文本样式集中在这里，
+         视图里只写 Classes，避免每个视图各写一套。 -->
+    <!-- Shared card and field layout for the views of the "Basic" page: card surface/border plus the field label,
+         value and hint text styles live here, leaving the views with plain class names only. -->
+    <Style Selector="Border.basic-card">
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="14" />
+        <Setter Property="Background" Value="{DynamicResource CardBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    </Style>
+    <Style Selector="TextBlock.basic-title">
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.basic-subtitle">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.basic-label">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.basic-value">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+    <Style Selector="TextBlock.basic-hint">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <!-- 等宽网格里的按钮与复选框铺满单元格：Semi 的按钮默认按内容宽度居中，
+         不铺满单元格时多排按钮只能做到「中心对齐」，左右边界仍是参差不齐的。 -->
+    <!-- Buttons and check boxes inside an equal-width grid fill their cell: Semi sizes buttons to their content and
+         centres them, which lines up only the centres and leaves the left/right edges ragged. -->
+    <Style Selector="UniformGrid > Button">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="UniformGrid > CheckBox">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="UniformGrid > RadioButton">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <!-- 主页设备信息的值按钮：主色文字、点击复制，悬浮/按下只做轻微缩放，不改变底色。
+         模板里的内容宿主刻意不叫 PART_ContentPresenter，避免命中 AccentControls.axaml 中
+         「悬浮主色底 + 浅色文字」的全局按钮补丁（该补丁会把这里的前景改成浅色）。 -->
+    <!-- Value button of the home page's device info: accent text, copy on click and a slight scale on
+         hover/press without changing the fill. The content host is deliberately not named
+         PART_ContentPresenter so the app-wide "accent fill + light text on hover" button patch in
+         AccentControls.axaml does not repaint this foreground. -->
+    <Style Selector="Button.basic-info-button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource SemiColorPrimary}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <!-- 基础页其它视图给所有按钮设了固定高度，这里显式还原为按内容高度。 -->
+        <!-- Other basic-page views pin every button to a fixed height; NaN restores content sizing here. -->
+        <Setter Property="Height" Value="NaN" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Padding" Value="4,0" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <!-- 复制提示集中在这里，主页的十几行值按钮不必各写一遍。 -->
+        <!-- The copy hint lives here so the dozens of value buttons on the home page do not repeat it. -->
+        <Setter Property="ToolTip.Tip" Value="{DynamicResource Basic_Home_CopyHint}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="PART_Root" Background="{TemplateBinding Background}"
+                        Padding="{TemplateBinding Padding}" ClipToBounds="True">
+                    <ContentPresenter Name="PART_ValueText"
+                                      Content="{TemplateBinding Content}"
+                                      Foreground="{TemplateBinding Foreground}"
+                                      FontSize="{TemplateBinding FontSize}"
+                                      FontWeight="{TemplateBinding FontWeight}"
+                                      TextAlignment="Right"
+                                      TextTrimming="CharacterEllipsis" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="Button.basic-info-button /template/ Border#PART_Root">
+        <Setter Property="RenderTransformOrigin" Value="1,0.5" />
+    </Style>
+    <Style Selector="Button.basic-info-button:pointerover /template/ ContentPresenter#PART_ValueText">
+        <Setter Property="Foreground" Value="{DynamicResource SemiColorPrimaryPointerover}" />
+    </Style>
+    <Style Selector="Button.basic-info-button:pressed /template/ ContentPresenter#PART_ValueText">
+        <Setter Property="Foreground" Value="{DynamicResource SemiColorPrimaryActive}" />
+    </Style>
+    <Style Selector="Button.basic-info-button:pointerover /template/ Border#PART_Root">
+        <Setter Property="RenderTransform">
+            <ScaleTransform ScaleX="1.03" ScaleY="1.03" />
+        </Setter>
+    </Style>
+    <Style Selector="Button.basic-info-button:pressed /template/ Border#PART_Root">
+        <Setter Property="RenderTransform">
+            <ScaleTransform ScaleX="0.97" ScaleY="0.97" />
+        </Setter>
+    </Style>
+</Styles>

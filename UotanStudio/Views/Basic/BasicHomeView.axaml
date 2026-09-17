@@ -1,0 +1,245 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:controls="using:UotanStudio.Views.Controls"
+             xmlns:vm="using:UotanStudio.ViewModels.Basic"
+             mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="760"
+             x:Class="UotanStudio.Views.Basic.BasicHomeView"
+             x:DataType="vm:BasicViewModel">
+    <!-- 主页：设备信息、电池与存储/内存三张卡片，下方是 CPU 频率区域。
+         设备信息的值都是「basic-info-button」按钮（主色文字，点击复制），卡片宽度全部由星号列分配，
+         中栏变窄时按比例收缩，不会出现横向裁切。 -->
+    <!-- Home: device info, battery and storage/memory cards on top, the CPU-frequency section below.
+         Every device-info value is a "basic-info-button" (accent text, click to copy); card widths come from
+         star columns, so narrowing the middle column shrinks them instead of clipping. -->
+    <UserControl.Styles>
+        <!-- 主页字段比基础页其它卡片大一号，值可能很长，这里统一放宽字号。 -->
+        <!-- The home page uses one size up from the other basic-page cards, since its values can be long. -->
+        <Style Selector="TextBlock.basic-label">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="TextBlock.basic-value">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+    </UserControl.Styles>
+    <StackPanel Spacing="12">
+        <Grid ColumnDefinitions="2*,12,*,12,*">
+            <!--  设备信息：每行左侧标签、右侧可点击复制的值按钮  -->
+            <!--  Device info: label on the left, click-to-copy value button on the right  -->
+            <Border Grid.Column="0" Classes="basic-card">
+                <StackPanel Spacing="14">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Home_DeviceInfo}" />
+                    <Grid ColumnDefinitions="*,16,*">
+                        <StackPanel Spacing="10">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_Brand}" />
+                                <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                        Content="{Binding PlaceholderText}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_Model}" />
+                                <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                        Content="{Binding PlaceholderText}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_CodeName}" />
+                                <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                        Content="{Binding CodeName}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_System}" />
+                                <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                        Content="{Binding PlaceholderText}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_CpuAbi}" />
+                                <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                        Content="{Binding PlaceholderText}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_Resolution}" />
+                                <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                        Content="{Binding PlaceholderText}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_Density}" />
+                                <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                        Content="{Binding PlaceholderText}" />
+                            </Grid>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="10">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_Connection}" />
+                                <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                        Content="{Binding Status}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_Bootloader}" />
+                                <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                        Content="{Binding BlStatus}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_Vab}" />
+                                <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                        Content="{Binding VabStatus}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_Vndk}" />
+                                <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                        Content="{Binding PlaceholderText}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_CpuCode}" />
+                                <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                        Content="{Binding PlaceholderText}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_Uptime}" />
+                                <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                        Content="{Binding PlaceholderText}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_StorageType}" />
+                                <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                        Content="{Binding PlaceholderText}" />
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+                    <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
+                    <!--  下面四项各占一行：主板编号、平台、编译版本和内核版本的值可能很长，
+                          行距比上面的两列更大，避免值和相邻字段挤在一起。  -->
+                    <!--  The four entries below take a row each: board ID, platform, build and kernel values can
+                          be long, so they get more spacing than the two-column block above.  -->
+                    <StackPanel Spacing="14">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_BoardId}" />
+                            <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                    Content="{Binding PlaceholderText}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_Platform}" />
+                            <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                    Content="{Binding PlaceholderText}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_Build}" />
+                            <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                    Content="{Binding PlaceholderText}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_Kernel}" />
+                            <Button Grid.Column="1" Classes="basic-info-button" Click="OnCopyValueClick"
+                                    Content="{Binding PlaceholderText}" />
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!--  电池：圆形水波进度显示电量百分比，下方是容量与充电状态文本  -->
+            <!--  Battery: the circular wave gauge shows the level, with the capacity/charging text below  -->
+            <Border Grid.Column="2" Classes="basic-card">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Home_Battery}" />
+                    <Viewbox Grid.Row="1" MaxWidth="220" MaxHeight="220" Margin="0,12"
+                             HorizontalAlignment="Center" VerticalAlignment="Center" Stretch="Uniform">
+                        <controls:WaveProgress Value="{Binding BatteryLevel}" />
+                    </Viewbox>
+                    <TextBlock Grid.Row="2" Classes="basic-value" FontSize="15" HorizontalAlignment="Center"
+                               Text="{Binding BatteryInfo}" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="4" Classes="basic-card">
+                <StackPanel Spacing="14">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Home_StorageMemory}" />
+                    <!--  存储与内存都用 Semi 的环形进度（ProgressRing）：圆内显示百分比，圆下是容量文本。
+                          环的固定尺寸小于 Semi 进度条约 200 的最小宽度，所以要显式 MinWidth=0。  -->
+                    <!--  Storage and memory both use Semi's ring progress (ProgressRing): the percentage sits
+                          inside the ring and the capacity text below it. The fixed ring is narrower than the
+                          ~200 minimum width of Semi's progress bar, hence the explicit MinWidth=0.  -->
+                    <StackPanel Spacing="12" HorizontalAlignment="Center">
+                        <TextBlock Classes="basic-label" HorizontalAlignment="Center"
+                                   Text="{DynamicResource Device_Storage}" />
+                        <!--  Viewbox 让圆环在窄卡片里按比例缩小，不会顶掉卡片内边距。  -->
+                        <!--  The Viewbox shrinks the ring inside a narrow card instead of eating its padding.  -->
+                        <Viewbox MaxWidth="130" MaxHeight="130" HorizontalAlignment="Center" Stretch="Uniform">
+                            <ProgressBar Theme="{DynamicResource ProgressRing}" Minimum="0" Maximum="100"
+                                         Value="{Binding StorageLevel}" Width="130" Height="130" MinWidth="0"
+                                         BorderThickness="10" FontSize="30" ShowProgressText="True" />
+                        </Viewbox>
+                        <TextBlock Classes="basic-value" FontSize="15" HorizontalAlignment="Center"
+                                   Text="{Binding StorageInfo}" />
+                    </StackPanel>
+                    <StackPanel Spacing="12" HorizontalAlignment="Center">
+                        <TextBlock Classes="basic-label" HorizontalAlignment="Center"
+                                   Text="{DynamicResource Device_Memory}" />
+                        <Viewbox MaxWidth="130" MaxHeight="130" HorizontalAlignment="Center" Stretch="Uniform">
+                            <ProgressBar Theme="{DynamicResource ProgressRing}" Minimum="0" Maximum="100"
+                                         Value="{Binding MemoryLevel}" Width="130" Height="130" MinWidth="0"
+                                         BorderThickness="10" FontSize="30" ShowProgressText="True" />
+                        </Viewbox>
+                        <TextBlock Classes="basic-value" FontSize="15" HorizontalAlignment="Center"
+                                   Text="{Binding MemoryInfo}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!--  CPU 频率：左半区按核心逐个显示当前频率，右半区是可点选的可用频率表。
+              两个半区都整列排布并保留较大行距，窄栏时星号列收缩，而不是让控件相互覆盖。  -->
+        <!--  CPU frequency: the left half lists the current frequency per core, the right half is the
+              selectable frequency table. Both halves stack in a single column with roomy spacing, so a narrow
+              card shrinks the star column instead of letting rows overlap.  -->
+        <Border Classes="basic-card">
+            <StackPanel Spacing="14">
+                <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Home_CpuFrequency}" />
+                <Grid ColumnDefinitions="*,18,*">
+                    <StackPanel Spacing="12">
+                        <TextBlock Classes="basic-subtitle" Text="{DynamicResource Basic_Home_CurrentFrequency}" />
+                        <ItemsControl ItemsSource="{Binding CpuCores}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:BasicCpuCoreEntry">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Margin="0,5">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Home_Core}" />
+                                            <TextBlock Classes="basic-label" Text="{Binding Index}" />
+                                        </StackPanel>
+                                        <ProgressBar Grid.Column="1" Minimum="0" Maximum="100" Value="0"
+                                                     MinWidth="40" Height="8" VerticalAlignment="Center"
+                                                     ShowProgressText="False" />
+                                        <TextBlock Grid.Column="2" Classes="basic-value" Width="72"
+                                                   TextAlignment="Right" Text="{Binding Frequency}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="12">
+                        <TextBlock Classes="basic-subtitle" Text="{DynamicResource Basic_Home_AvailableFrequencies}" />
+                        <!--  频率表只有一个标题，每行都是 PureCardRadioButton 样式的单选卡片，点一下即选中该核心  -->
+                        <!--  行内只放频率文本，不再显示核心序号  -->
+                        <!--  The table keeps just its caption and every row is a PureCardRadioButton card holding the
+                              frequency list only; the per-core index is no longer shown  -->
+                        <ItemsControl ItemsSource="{Binding AvailableFrequencies}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:BasicFrequencyEntry">
+                                    <RadioButton Theme="{DynamicResource PureCardRadioButton}"
+                                                 GroupName="CpuAvailableFrequencies"
+                                                 IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                 HorizontalAlignment="Stretch"
+                                                 HorizontalContentAlignment="Stretch"
+                                                 Margin="0,3">
+                                        <TextBlock Classes="basic-value" HorizontalAlignment="Stretch"
+                                                   TextAlignment="Left" TextWrapping="Wrap" MaxLines="2"
+                                                   Text="{Binding Frequencies}" />
+                                    </RadioButton>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

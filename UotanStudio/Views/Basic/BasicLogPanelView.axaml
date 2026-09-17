@@ -1,0 +1,40 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:UotanStudio.ViewModels.Basic"
+             mc:Ignorable="d" d:DesignWidth="336" d:DesignHeight="700"
+             x:Class="UotanStudio.Views.Basic.BasicLogPanelView"
+             x:DataType="vm:BasicViewModel">
+    <UserControl.Styles>
+        <Style Selector="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <!-- 日志框是多行只读控件，需要覆盖主题给出的单行高度并让文本顶端对齐。 -->
+        <!-- The log box is a multi-line read-only control, so it overrides the themed single-line height. -->
+        <Style Selector="TextBox#LogBox">
+            <Setter Property="VerticalContentAlignment" Value="Top" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="Height" Value="NaN" />
+        </Style>
+    </UserControl.Styles>
+    <!-- 右侧固定面板的「日志」标签：本页自己的日志文本，尚未接统一日志服务。 -->
+    <!-- The "Log" tab of the fixed right panel: the page's own log text, not yet bound to the unified log service. -->
+    <Grid RowDefinitions="Auto,*">
+        <Border Grid.Row="0" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="{DynamicResource Basic_Tab_Log}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Name="ClearLogButton" Classes="Small" Padding="8,0" MinWidth="0" Height="24"
+                        Command="{Binding ClearLogCommand}" Content="{DynamicResource Basic_LogClear}"
+                        AutomationProperties.Name="{DynamicResource Basic_LogClear}" />
+            </Grid>
+        </Border>
+        <TextBox Grid.Row="1" Name="LogBox" Margin="8" Padding="8"
+                 IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
+                 Text="{Binding LogText, Mode=OneWay}"
+                 PlaceholderText="{DynamicResource Basic_LogEmpty}"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 AutomationProperties.Name="{DynamicResource Basic_Tab_Log}" />
+    </Grid>
+</UserControl>

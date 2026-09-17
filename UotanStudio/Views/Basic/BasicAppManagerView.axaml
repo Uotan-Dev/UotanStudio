@@ -1,0 +1,113 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:icons="using:Material.Icons.Avalonia"
+             xmlns:vm="using:UotanStudio.ViewModels.Basic"
+             mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="760"
+             x:Class="UotanStudio.Views.Basic.BasicAppManagerView"
+             x:DataType="vm:BasicViewModel">
+    <!-- 应用管理：应用操作、安装应用与应用列表三张卡片，按钮尚未接入后端。 -->
+    <!-- App manager: app actions, APK installation and the app list; the buttons are not wired to a backend yet. -->
+    <StackPanel Spacing="12">
+        <Grid ColumnDefinitions="*,12,*">
+            <Border Grid.Column="0" Classes="basic-card">
+                <StackPanel Spacing="10">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_App_Manager}" />
+                    <!-- 3×3 等宽网格：三排按钮上下对齐，窄卡片里也不会被挤成参差不齐的宽度。 -->
+                    <!-- 3x3 equal grid: the three button rows line up and stay even in a narrow card. -->
+                    <UniformGrid Columns="3" Rows="3">
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="PlayOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_App_Run}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="StopCircleOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_App_ForceStop}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="StarFourPointsCircleOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_App_Activate}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="Ban" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_App_Disable}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="Check" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_App_Enable}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="ProgressDownload" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_App_Extract}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_App_Uninstall}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="TrashCircleOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_App_UninstallKeepData}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="TrashCanOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_App_ClearData}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="2" Classes="basic-card">
+                <StackPanel Spacing="10">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_App_Install}" />
+                    <Grid ColumnDefinitions="Auto,8,*,8,Auto">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_App_ApkFile}" />
+                        <TextBox Grid.Column="2" Height="32" VerticalContentAlignment="Center" IsReadOnly="True" />
+                        <Button Grid.Column="4" Content="{DynamicResource Flash_ChooseFile}" />
+                    </Grid>
+                    <Button MinWidth="180" MaxWidth="280" HorizontalAlignment="Center" Margin="0,12,0,0"
+                            Content="{DynamicResource Basic_App_StartInstall}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Border Classes="basic-card">
+            <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="Auto,12,*,12,Auto">
+                    <Button MinWidth="150" Content="{DynamicResource Basic_App_Fetch}" />
+                    <TextBox Grid.Column="2" Height="32" VerticalContentAlignment="Center"
+                             PlaceholderText="{DynamicResource Basic_App_SearchHint}" />
+                    <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Basic_App_ShowSystem}" VerticalAlignment="Center" />
+                        <ToggleSwitch VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+                <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
+                <StackPanel MinHeight="480" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
+                    <icons:MaterialIcon Kind="PackageVariantClosed" Width="28" Height="28"
+                                        HorizontalAlignment="Center" Opacity="0.5" />
+                    <TextBlock Classes="basic-hint" Text="{DynamicResource Basic_App_Empty}"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

@@ -1,0 +1,173 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:icons="using:Material.Icons.Avalonia"
+             xmlns:vm="using:UotanStudio.ViewModels.Basic"
+             mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="760"
+             x:Class="UotanStudio.Views.Basic.BasicMirrorSettingsView"
+             x:DataType="vm:BasicViewModel">
+    <!-- 投屏：scrcpy 参数设置。参数只保留界面，投屏画面在右侧固定面板的「投屏」标签中查看。 -->
+    <!-- Mirror: scrcpy settings. Only the interface is kept here; the mirrored picture is shown on the "Mirror"
+         tab of the fixed right-hand panel. -->
+    <StackPanel Spacing="12">
+        <Border Classes="basic-card">
+            <StackPanel Spacing="10">
+                <icons:MaterialIcon Kind="CellphoneLink" Width="30" Height="30" HorizontalAlignment="Center"
+                                    Foreground="{DynamicResource SemiColorPrimary}" />
+                <TextBlock Text="{DynamicResource Basic_Mirror_Tool}" FontSize="18" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" />
+                <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Mirror_WindowTitle}" />
+                <TextBox Height="32" VerticalContentAlignment="Center"
+                         PlaceholderText="{DynamicResource Basic_Mirror_WindowTitleHint}" />
+                <Button HorizontalAlignment="Center" MinWidth="160" Margin="0,8,0,0"
+                        Content="{DynamicResource Basic_Mirror_Start}" />
+            </StackPanel>
+        </Border>
+        <Grid ColumnDefinitions="*,12,*" RowDefinitions="Auto,12,Auto">
+            <Border Grid.Row="0" Grid.Column="0" Classes="basic-card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Mirror_TransmitRecord}" />
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Mirror_Record}" />
+                        <ToggleSwitch Grid.Column="2" />
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,8,*,8,Auto">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Mirror_Folder}" />
+                        <TextBox Grid.Column="2" Height="32" VerticalContentAlignment="Center"
+                                 PlaceholderText="{DynamicResource Basic_Mirror_RecordFolder}" />
+                        <Button Grid.Column="4" Content="{DynamicResource Flash_ChooseFolder}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,8,*,8,56">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Mirror_BitRate}" />
+                        <Slider Grid.Column="2" Minimum="0" Maximum="50" Value="0" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="4" Height="32" TextAlignment="Center" Text="0" />
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,8,*,8,56">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Mirror_MaxFps}" />
+                        <Slider Grid.Column="2" Minimum="0" Maximum="144" Value="0" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="4" Height="32" TextAlignment="Center" Text="0" />
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,8,*,8,56">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Mirror_Scale}" />
+                        <Slider Grid.Column="2" Minimum="0" Maximum="2048" Value="0" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="4" Height="32" TextAlignment="Center" Text="0" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="0" Grid.Column="2" Classes="basic-card">
+                <StackPanel Spacing="6">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Mirror_MoreSettings}" />
+                    <!-- 三列等宽复选框：四排上下对齐，不会因为文字长短错位。 -->
+                    <!-- Three equal check-box columns aligned across the four rows. -->
+                    <UniformGrid Columns="3">
+                        <CheckBox Content="{DynamicResource Basic_Mirror_WindowOnTop}" />
+                        <CheckBox Content="{DynamicResource Basic_Mirror_ComputerControl}" />
+                        <CheckBox Content="{DynamicResource Basic_Mirror_Fullscreen}" />
+                        <CheckBox Content="{DynamicResource Basic_Mirror_Border}" />
+                        <CheckBox Content="{DynamicResource Basic_Mirror_Touch}" />
+                        <CheckBox Content="{DynamicResource Basic_Mirror_TurnScreenOff}" />
+                        <CheckBox Content="{DynamicResource Basic_Mirror_StayAwake}" />
+                        <CheckBox Content="{DynamicResource Basic_Mirror_Clipboard}" />
+                        <CheckBox Content="{DynamicResource Basic_Mirror_Camera}" />
+                        <CheckBox Content="{DynamicResource Basic_Mirror_Audio}" />
+                        <CheckBox Content="{DynamicResource Basic_Mirror_MirrorRotation}" />
+                        <CheckBox Content="{DynamicResource Basic_Mirror_LockAngle}" />
+                    </UniformGrid>
+                    <StackPanel Margin="4,4,0,0" Spacing="2">
+                        <RadioButton GroupName="BasicMirrorRotation" IsChecked="True"
+                                     Content="{DynamicResource Basic_Mirror_Rotation}" />
+                        <RadioButton GroupName="BasicMirrorRotation" Content="90°" />
+                        <RadioButton GroupName="BasicMirrorRotation" Content="180°" />
+                        <RadioButton GroupName="BasicMirrorRotation" Content="270°" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <RadioButton GroupName="BasicMirrorRotation" VerticalAlignment="Center" />
+                            <NumericUpDown Width="120" Height="32" Minimum="0" Maximum="360" Value="0" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="2" Grid.Column="0" Classes="basic-card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Mirror_VirtualDisplay}" />
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Mirror_VirtualEnable}" />
+                        <ToggleSwitch Grid.Column="2" />
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,8,*">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Mirror_VirtualPackage}" />
+                        <TextBox Grid.Column="2" Height="32" VerticalContentAlignment="Center" />
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,8,*">
+                        <TextBlock Classes="basic-label" Text="{DynamicResource Basic_Mirror_VirtualSize}" />
+                        <TextBox Grid.Column="2" Height="32" VerticalContentAlignment="Center"
+                                 PlaceholderText="{DynamicResource Basic_Mirror_VirtualSizeHint}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="2" Grid.Column="2" Classes="basic-card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="basic-title" Text="{DynamicResource Basic_Mirror_Button}" />
+                    <!-- 四列等宽：八个模拟按键排成两排，上下两排严格对齐。 -->
+                    <!-- Four equal columns: the eight simulated keys form two strictly aligned rows. -->
+                    <UniformGrid Columns="4" Rows="2">
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="ArrowBack" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_Mirror_Back}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="CircleOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_Mirror_Home}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="CardMultipleOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_Mirror_MultiTask}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="LockOpenOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_Mirror_LockScreen}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="VolumePlus" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_Mirror_VolumeUp}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="VolumeMinus" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_Mirror_VolumeDown}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="VolumeOff" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_Mirror_Mute}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:MaterialIcon Kind="CameraOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Basic_Mirror_Screenshot}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </StackPanel>
+</UserControl>
