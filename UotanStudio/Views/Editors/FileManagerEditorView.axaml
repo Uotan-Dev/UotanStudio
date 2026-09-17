@@ -150,7 +150,12 @@
       </Grid>
     </Border>
 
-    <Border DockPanel.Dock="Top" Padding="8,4" IsVisible="{Binding IsLoading}">
+    <!-- FallbackValue=False：数据上下文为空（本视图被「基础」页嵌入，只作只读浏览）时，
+         绑定取不到值会退回属性默认值 true，导致加载条、空目录提示和路径栏残留显示。 -->
+    <!-- FallbackValue=False: with an empty data context (this view embedded on the Basic page for read-only
+         browsing) a failed binding falls back to the property default of true, which left the loading strip,
+         the empty-directory hint and the path bar painted on screen. -->
+    <Border DockPanel.Dock="Top" Padding="8,4" IsVisible="{Binding IsLoading, FallbackValue=False}">
       <Grid ColumnDefinitions="32,*">
         <ProgressBar IsIndeterminate="True" Height="4" VerticalAlignment="Center" />
         <TextBlock Grid.Column="1" Text="{DynamicResource FileManager_Loading}" FontSize="12" Margin="8,0,0,0"
@@ -158,11 +163,15 @@
       </Grid>
     </Border>
 
-    <Border Classes="error-banner" DockPanel.Dock="Top" IsVisible="{Binding HasError}">
+    <!-- 同加载条：空数据上下文下 HasError 取不到值会回落为 true，红色错误条会整条留在页面上。 -->
+    <!-- Same as the loading strip: with an empty data context HasError falls back to true and the red error bar
+         stayed painted across the page. -->
+    <Border Classes="error-banner" DockPanel.Dock="Top" IsVisible="{Binding HasError, FallbackValue=False}">
       <TextBlock Classes="error-banner" Text="{Binding ErrorMessage}" />
     </Border>
 
-    <Border DockPanel.Dock="Bottom" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+    <Border DockPanel.Dock="Bottom" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+            IsVisible="{Binding FileCountText, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}">
       <WrapPanel>
         <TextBlock Text="{Binding FileCountText}" FontSize="11" Margin="0,0,16,0" />
         <TextBlock Text="{Binding DirectoryCountText}" FontSize="11" Margin="0,0,16,0" />
@@ -223,12 +232,13 @@
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                  DoubleTapped="OnFileListDoubleTapped" KeyDown="OnFileListKeyDown" SelectionChanged="OnFileListSelectionChanged" />
 
-        <TextBlock Grid.Row="1" Text="{DynamicResource FileManager_EmptyDirectory}" IsVisible="{Binding IsDirectoryEmpty}"
+        <TextBlock Grid.Row="1" Text="{DynamicResource FileManager_EmptyDirectory}"
+                   IsVisible="{Binding IsDirectoryEmpty, FallbackValue=False}"
                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12" TextWrapping="Wrap"
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" IsHitTestVisible="False" />
 
         <Border Grid.Row="2" Padding="8,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
-                IsVisible="{Binding SelectedEntry, Converter={x:Static ObjectConverters.IsNotNull}}">
+                IsVisible="{Binding SelectedEntry, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}">
           <Grid ColumnDefinitions="Auto,*">
             <TextBlock Text="{DynamicResource FileManager_Path}" FontSize="11" Margin="0,0,8,0" />
             <TextBlock Grid.Column="1" Text="{Binding SelectedEntry.Path}" FontSize="11" FontFamily="Consolas"
