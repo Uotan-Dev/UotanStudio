@@ -153,7 +153,6 @@ public static class FileSystemMetadataOverrides
 
     private const string MetadataFolderName = ".filesystem";
     private const string MetadataFileName = "metadata.json";
-    private const int MaximumMetadataBytes = 64 * 1024 * 1024;
 
     /// <summary>
     /// Loads an optional <c>metadata.json</c> document from the preservation directory
@@ -170,7 +169,6 @@ public static class FileSystemMetadataOverrides
         var path = FileExtraction.ResolvePath(metadataDirectory, MetadataFolderName + "/" + preservationId + "/" + MetadataFileName);
         if (!File.Exists(path) || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) return null;
         using var input = File.OpenRead(path);
-        if (input.Length > MaximumMetadataBytes) return null;
         FilesystemMetadataDocument? document;
         try
         {

@@ -29,6 +29,7 @@ internal static class ErofsRebuildMetadata
             ExtraDeviceCount = options.ExtraDeviceCount,
             SuperblockChecksum = options.SuperblockChecksum,
             MtimeFeature = options.SourceMtimeFeature,
+            XattrFilterFeature = options.SourceXattrFilterFeature,
             BuildTime = options.BuildTime,
             BuildTimeNanoseconds = options.BuildTimeNanoseconds,
             BuildTimeOffset = options.BuildTimeOffset,
@@ -63,6 +64,7 @@ internal static class ErofsRebuildMetadata
                 parameters.Inodes.Add(new ErofsRebuildInode
                 {
                     Nid = inode.Key,
+                    Path = inode.Value.Path,
                     MTime = inode.Value.Mtime,
                     MTimeNanoseconds = inode.Value.MtimeNanoseconds,
                     Extended = inode.Value.Extended,
@@ -97,6 +99,7 @@ internal static class ErofsRebuildMetadata
             ExtraDeviceCount = parameters.ExtraDeviceCount,
             SuperblockChecksum = parameters.SuperblockChecksum,
             SourceMtimeFeature = parameters.MtimeFeature,
+            SourceXattrFilterFeature = parameters.XattrFilterFeature,
             BuildTime = parameters.BuildTime,
             BuildTimeNanoseconds = parameters.BuildTimeNanoseconds,
             BuildTimeOffset = parameters.BuildTimeOffset,
@@ -136,9 +139,10 @@ internal static class ErofsRebuildMetadata
         if (parameters.Inodes.Count > 0)
         {
             var inodes = new Dictionary<ulong, ErofsSourceInode>(parameters.Inodes.Count);
+            Dictionary<string, ErofsSourceInode>? byPath = null;
             foreach (var inode in parameters.Inodes)
             {
-                inodes[inode.Nid] = new ErofsSourceInode(
+                var record = new ErofsSourceInode(
                     inode.MTime,
                     inode.MTimeNanoseconds,
                     inode.Extended,
@@ -146,10 +150,23 @@ internal static class ErofsRebuildMetadata
                     ParseAlgorithm(inode.Algorithm),
                     inode.CompactIndexes,
                     inode.InlineData,
-                    inode.LogicalClusterSize);
+                    inode.LogicalClusterSize,
+                    inode.Path);
+                inodes[inode.Nid] = record;
+                // Newer documents carry the image-absolute path; it survives file additions and
+                // removals (which shift nids), so the builder can bind per-inode strategies in
+                // plain directory repacks where no edit plan maps paths back to nids.
+                // 新文档携带镜像内绝对路径；路径不随文件增删漂移（nid 会），因此无 editPlan 的
+                // 纯目录重打包也能按路径绑定逐 inode 策略。
+                if (inode.Path is { Length: > 0 } path)
+                {
+                    byPath ??= new(StringComparer.Ordinal);
+                    byPath[path] = record;
+                }
             }
 
             options.SourceInodes = inodes;
+            options.SourceInodesByPath = byPath;
         }
 
         return options;

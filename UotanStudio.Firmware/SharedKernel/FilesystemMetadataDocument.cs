@@ -89,6 +89,8 @@ internal sealed class ErofsRebuildParameters
     public bool SuperblockChecksum { get; set; } = true;
     /// <summary>Gets whether the COMPAT_MTIME feature is declared.<para>获取是否声明 COMPAT_MTIME 特性。</para></summary>
     public bool MtimeFeature { get; set; }
+    /// <summary>Gets whether the COMPAT_XATTRFILTER feature is declared.<para>获取是否声明 COMPAT_XATTRFILTER 特性。</para></summary>
+    public bool XattrFilterFeature { get; set; }
     /// <summary>Gets the superblock epoch in seconds.<para>获取超级块 epoch（秒）。</para></summary>
     public ulong? BuildTime { get; set; }
     /// <summary>Gets the superblock fixed nanosecond component.<para>获取超级块固定纳秒分量。</para></summary>
@@ -142,6 +144,10 @@ internal sealed class ErofsRebuildInode
 {
     /// <summary>Gets the source node id.<para>获取源节点号。</para></summary>
     public ulong Nid { get; set; }
+    /// <summary>Gets the image-absolute path of the inode, when known. The path is the stable
+    /// cross-session key; the nid drifts when files are added or removed.
+    /// <para>获取 inode 的镜像内绝对路径（已知时）。路径是跨会话的稳定主键；nid 会随文件增删漂移。</para></summary>
+    public string? Path { get; set; }
     /// <summary>Gets the modification time in seconds.<para>获取修改时间（秒）。</para></summary>
     public ulong MTime { get; set; }
     /// <summary>Gets the modification time nanosecond component.<para>获取修改时间纳秒分量。</para></summary>

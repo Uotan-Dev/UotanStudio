@@ -140,4 +140,44 @@ public class ErofsCompressionConfigurationTests
         using var parser = new ErofsParser(image);
         Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
     }
+
+    [Theory]
+    [InlineData(true, true, 0x00000007u)]   // checksum | mtime | xattrfilter
+    [InlineData(false, true, 0x00000006u)]  // mtime | xattrfilter
+    [InlineData(true, false, 0x00000005u)]  // checksum | xattrfilter
+    [InlineData(false, false, 0x00000004u)] // xattrfilter only
+    public void Build_DeclaresXattrFilterCompatBit_AlongsideSourceCompat(bool superblockChecksum, bool mtime, uint expectedCompat)
+    {
+        // The COMPAT_XATTRFILTER bit is carried forward from a source superblock exactly like
+        // COMPAT_SB_CHECKSUM and COMPAT_MTIME, keeping a preserved rebuild bit-identical to its
+        // source in feature_compat so older kernels introduce no spurious difference.
+        // COMPAT_XATTRFILTER 位与 COMPAT_SB_CHECKSUM、COMPAT_MTIME 一样从源超级块继承，
+        // 使保留重建在 feature_compat 上与原厂逐位一致，避免给旧内核引入多余的差异。
+        using var source = new TempDirectory();
+        var payload = Enumerable.Repeat((byte)0x63, 20 * 1024).ToArray();
+        source.WriteBytes("data.bin", payload);
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            LegacyCompatibility = true,
+            SuperblockChecksum = superblockChecksum,
+            SourceMtimeFeature = mtime,
+            SourceXattrFilterFeature = true,
+        });
+        var superblock = ErofsSuperblock.FromImage(image);
+        Assert.Equal(expectedCompat, superblock.FeatureCompat);
+    }
+
+    [Fact]
+    public void PreservedMetadata_RoundTrips_XattrFilterFeature()
+    {
+        // The persisted rebuild profile must survive the capture/restore round trip so a later
+        // pack of the unpacked directory reproduces the source COMPAT_XATTRFILTER bit.
+        // 持久化重建档案须在 capture/restore 往返后保留，这样后续对解包目录重新打包才能还原
+        // 源镜像的 COMPAT_XATTRFILTER 位。
+        var options = new ErofsOptions { SourceXattrFilterFeature = true };
+        var parameters = ErofsRebuildMetadata.Capture(options);
+        var restored = ErofsRebuildMetadata.Restore(parameters);
+        Assert.True(restored.SourceXattrFilterFeature);
+    }
 }

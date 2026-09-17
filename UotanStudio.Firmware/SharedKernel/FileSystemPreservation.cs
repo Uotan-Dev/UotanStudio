@@ -106,8 +106,11 @@ public static class FileSystemPreservation
             var metadataPath = FileExtraction.ResolvePath(directory, "metadata.json");
             await using (var output = new FileStream(metadataPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                using var bounded = new CountingWriteStream(output, MaximumManifestBytes, leaveOpen: true);
-                await JsonSerializer.SerializeAsync(bounded, document, FilesystemMetadataJsonContext.Default.FilesystemMetadataDocument,
+                // No size cap here: the metadata document carries the full per-inode rebuild
+                // profile (tens of MB for large partitions) and must never be silently truncated.
+                // 此处不设大小上限：metadata 文档携带完整的逐 inode 重建档案（大分区可达数十 MB），
+                // 绝不能被静默截断。
+                await JsonSerializer.SerializeAsync(output, document, FilesystemMetadataJsonContext.Default.FilesystemMetadataDocument,
                     cancellationToken).ConfigureAwait(false);
             }
             metadata.FileSystemPreservationId = id;

@@ -33,47 +33,33 @@ public sealed partial class ErofsParser
     internal ErofsOptions ReadRebuildOptions()
     {
         var codecs = ReadCompressionOptions();
-        var inodes = new Dictionary<ulong, ErofsSourceInode>();
-        var compressed = false;
         var defaultAlgorithm = codecs.Keys.FirstOrDefault();
+        // Directory traversal is cheap; per-inode records need random reads across the image, so
+        // the record decoding is fanned out over FirmwareParallelism (ReadBytes is stream-lock safe).
+        // 目录遍历开销小；逐 inode 记录需要跨镜像随机读，因此把记录解码分发给
+        // FirmwareParallelism 并行执行（ReadBytes 已有流锁保护）。
+        var entries = new List<ErofsFileEntry>();
+        var seenNids = new HashSet<ulong>();
         foreach (var entry in EnumerateEntries())
         {
-            if (inodes.ContainsKey(entry.Nid)) continue;
-            var inode = ReadInode(entry.Nid);
-            var algorithm = defaultAlgorithm;
-            var isCompressed = inode.IsCompressed;
-            var logicalClusterSize = _blockSize;
-            if (isCompressed)
+            if (seenNids.Add(entry.Nid)) entries.Add(entry);
+        }
+        var records = new ErofsSourceInode?[entries.Count];
+        SharedKernel.FirmwareParallelism.ForEach(entries, entry =>
+        {
+            records[entries.IndexOf(entry)] = ReadRebuildInodeRecord(entry, codecs, defaultAlgorithm);
+        });
+        var inodes = new Dictionary<ulong, ErofsSourceInode>(entries.Count);
+        var compressed = false;
+        foreach (var (entry, record) in entries.Zip(records))
+        {
+            if (record is null) continue;
+            if (record.Compressed && !compressed)
             {
-                var offset = AlignUp(_superblock.GetInodeOffset(entry.Nid) + inode.InlineDataOffset, 8);
-                var header = ZErofsMapHeader.FromBytes(ReadBytes(offset, ZErofsMapHeader.Size, "rebuild compression header"));
-                if (header.IsFragmentInode)
-                {
-                    if (_superblock.PackedNid == 0) throw new InvalidDataException("Missing EROFS packed inode.");
-                    var packed = ReadInode(_superblock.PackedNid);
-                    isCompressed = packed.IsCompressed;
-                    if (isCompressed)
-                    {
-                        var packedOffset = AlignUp(_superblock.GetInodeOffset(_superblock.PackedNid) + packed.InlineDataOffset, 8);
-                        header = ZErofsMapHeader.FromBytes(ReadBytes(packedOffset, ZErofsMapHeader.Size, "packed compression header"));
-                        if (header.IsFragmentInode) throw new InvalidDataException("Recursive EROFS packed inode.");
-                    }
-                }
-                if (isCompressed)
-                {
-                    algorithm = (ErofsCompressionAlgorithm)header.Algorithm;
-                    if (!codecs.ContainsKey(algorithm))
-                        throw new InvalidDataException($"Undeclared EROFS compression algorithm {algorithm} for '{entry.Path}'.");
-                    var logicalBits = _superblock.BlockSizeBits + (header.ClusterBits & ZErofsMapHeader.LclusterBitsMask);
-                    if (logicalBits > 14) throw new NotSupportedException("EROFS logical clusters exceed the supported 16384-byte limit.");
-                    logicalClusterSize = 1 << logicalBits;
-                    if (!compressed) defaultAlgorithm = algorithm;
-                    compressed = true;
-                }
+                compressed = true;
+                defaultAlgorithm = record.Algorithm;
             }
-            inodes.Add(entry.Nid, new(inode.CTime, inode.CTimeNsec, inode.IsExtended, isCompressed,
-                algorithm, inode.DataLayout == ErofsInode.DataLayoutCompactIndexes,
-                inode.DataLayout == ErofsInode.DataLayoutInline, logicalClusterSize));
+            inodes.Add(entry.Nid, record);
         }
         var selected = codecs.GetValueOrDefault(defaultAlgorithm) ?? new ErofsOptions { BlockSize = _blockSize };
         selected.Compress = compressed || _superblock.HasBigPcluster && _superblock.AvailableComprAlgs != 0;
@@ -85,6 +71,7 @@ public sealed partial class ErofsParser
         selected.BuildTimeOffset = _superblock.BuildTime32;
         selected.SuperblockChecksum = _superblock.HasCompatChecksum;
         selected.SourceMtimeFeature = _superblock.HasCompatMtime;
+        selected.SourceXattrFilterFeature = _superblock.HasCompatXattrFilter;
         selected.Fragments = _superblock.PackedNid != 0;
         selected.CompressedTailPacking = _superblock.HasZtailpacking;
         selected.Metabox = _superblock.HasMetabox;
@@ -114,6 +101,47 @@ public sealed partial class ErofsParser
             selected.Dedup = false;
         }
         return selected;
+    }
+
+    /// <summary>Decodes one inode's storage strategy; thread-safe because all source reads take the stream lock.</summary>
+    private ErofsSourceInode ReadRebuildInodeRecord(
+        ErofsFileEntry entry,
+        Dictionary<ErofsCompressionAlgorithm, ErofsOptions> codecs,
+        ErofsCompressionAlgorithm fallbackAlgorithm)
+    {
+        var inode = ReadInode(entry.Nid);
+        var algorithm = fallbackAlgorithm;
+        var isCompressed = inode.IsCompressed;
+        var logicalClusterSize = _blockSize;
+        if (isCompressed)
+        {
+            var offset = AlignUp(_superblock.GetInodeOffset(entry.Nid) + inode.InlineDataOffset, 8);
+            var header = ZErofsMapHeader.FromBytes(ReadBytes(offset, ZErofsMapHeader.Size, "rebuild compression header"));
+            if (header.IsFragmentInode)
+            {
+                if (_superblock.PackedNid == 0) throw new InvalidDataException("Missing EROFS packed inode.");
+                var packed = ReadInode(_superblock.PackedNid);
+                isCompressed = packed.IsCompressed;
+                if (isCompressed)
+                {
+                    var packedOffset = AlignUp(_superblock.GetInodeOffset(_superblock.PackedNid) + packed.InlineDataOffset, 8);
+                    header = ZErofsMapHeader.FromBytes(ReadBytes(packedOffset, ZErofsMapHeader.Size, "packed compression header"));
+                    if (header.IsFragmentInode) throw new InvalidDataException("Recursive EROFS packed inode.");
+                }
+            }
+            if (isCompressed)
+            {
+                algorithm = (ErofsCompressionAlgorithm)header.Algorithm;
+                if (!codecs.ContainsKey(algorithm))
+                    throw new InvalidDataException($"Undeclared EROFS compression algorithm {algorithm} for '{entry.Path}'.");
+                var logicalBits = _superblock.BlockSizeBits + (header.ClusterBits & ZErofsMapHeader.LclusterBitsMask);
+                if (logicalBits > 14) throw new NotSupportedException("EROFS logical clusters exceed the supported 16384-byte limit.");
+                logicalClusterSize = 1 << logicalBits;
+            }
+        }
+        return new(inode.CTime, inode.CTimeNsec, inode.IsExtended, isCompressed,
+            algorithm, inode.DataLayout == ErofsInode.DataLayoutCompactIndexes,
+            inode.DataLayout == ErofsInode.DataLayoutInline, logicalClusterSize, entry.Path);
     }
 
     private Dictionary<ErofsCompressionAlgorithm, ErofsOptions> ReadCompressionOptions()

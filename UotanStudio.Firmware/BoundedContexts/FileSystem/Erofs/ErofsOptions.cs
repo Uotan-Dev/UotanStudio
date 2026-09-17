@@ -43,8 +43,10 @@ public sealed class ErofsOptions
     public bool SuperblockChecksum { get; set; } = true;
 
     internal Dictionary<ulong, ErofsSourceInode>? SourceInodes { get; set; }
+    internal Dictionary<string, ErofsSourceInode>? SourceInodesByPath { get; set; }
     internal Dictionary<ErofsCompressionAlgorithm, ErofsOptions>? SourceCompressionOptions { get; set; }
     internal bool SourceMtimeFeature { get; set; }
+    internal bool SourceXattrFilterFeature { get; set; }
     internal byte[]? SourceVolumeNameBytes { get; set; }
     internal CancellationToken CancellationToken { get; set; }
     internal bool OptimizeCompression { get; set; }
@@ -194,4 +196,5 @@ public sealed class ErofsOptions
 }
 
 internal sealed record ErofsSourceInode(ulong Mtime, uint MtimeNanoseconds, bool Extended,
-    bool Compressed, ErofsCompressionAlgorithm Algorithm, bool CompactIndexes, bool InlineData, int LogicalClusterSize);
+    bool Compressed, ErofsCompressionAlgorithm Algorithm, bool CompactIndexes, bool InlineData, int LogicalClusterSize,
+    string? Path = null);

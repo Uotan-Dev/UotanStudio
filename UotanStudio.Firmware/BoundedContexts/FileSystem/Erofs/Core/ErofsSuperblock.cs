@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Text;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
@@ -131,6 +131,7 @@ internal sealed class ErofsSuperblock
 
     public bool HasCompatChecksum => (FeatureCompat & CompatSbChecksum) != 0;
     public bool HasCompatMtime => (FeatureCompat & CompatMtime) != 0;
+    public bool HasCompatXattrFilter => (FeatureCompat & CompatXattrFilter) != 0;
     public bool Has48Bit => (FeatureIncompat & Incompat48Bit) != 0;
     public bool HasBigPcluster => (FeatureIncompat & IncompatBigPcluster) != 0;
     public bool HasChunkedFile => (FeatureIncompat & IncompatChunkedFile) != 0;

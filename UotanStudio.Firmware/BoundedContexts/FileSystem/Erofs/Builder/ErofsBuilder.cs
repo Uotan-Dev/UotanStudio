@@ -591,6 +591,18 @@ public sealed partial class ErofsBuilder
                 if (node.IsDevice) node.Size = 0;
                 node.XattrIbody = entry.Xattrs is { Count: > 0 } ? ErofsXattr.EncodeInline(entry.Xattrs.Select(p => new ErofsXattrEntry { Name = p.Key, Value = p.Value }).ToList()) : [];
             }
+        else if (options.SourceInodesByPath is { Count: > 0 } byPath)
+            // Plain directory repacks have no edit plan mapping paths to source nids, so bind the
+            // preserved per-inode strategy by image path. Renamed files fall through to the global
+            // inference below (safe-side: they are treated as new content).
+            // 纯目录重打包没有把路径映射回源 nid 的 editPlan，因此按镜像路径绑定保留的逐 inode
+            // 策略。被重命名的文件回落到下方全局推断（安全侧：按新内容处理）。
+            foreach (var node in ordered)
+            {
+                if (node.SourceInode is not null) continue;
+                var imagePath = BuildImagePath(node);
+                if (byPath.TryGetValue(imagePath, out var record)) node.SourceInode = record;
+            }
 
         foreach (var node in ordered)
         {
@@ -719,7 +731,13 @@ public sealed partial class ErofsBuilder
 
 
             var remainder = node.Size % blockSize;
-            if (node.SourceInode?.InlineData ?? options.TailPacking)
+            // The global TailPacking switch only governs trees without a preserved per-inode
+            // profile (fresh builds). When a profile exists but this file has no record (added
+            // after extraction), default to not inlining instead of inheriting the tree-wide flag.
+            // 全局 TailPacking 开关只管理没有保留逐 inode 档案的目录树（全新构建）。档案存在但
+            // 该文件无记录（解包后新增）时，默认不内联，而不是继承整树开关。
+            var inlineFallback = options.SourceInodes is { Count: > 0 } ? false : options.TailPacking;
+            if (node.SourceInode?.InlineData ?? inlineFallback)
             {
 
 
@@ -938,7 +956,8 @@ public sealed partial class ErofsBuilder
             MetaBlkAddr = 0,
             AvailableComprAlgs = CompressedAlgorithmsField(options),
             FeatureCompat = (options.SuperblockChecksum ? ErofsSuperblock.CompatSbChecksum : 0u)
-                | (options.SourceMtimeFeature ? ErofsSuperblock.CompatMtime : 0u),
+                | (options.SourceMtimeFeature ? ErofsSuperblock.CompatMtime : 0u)
+                | (options.SourceXattrFilterFeature ? ErofsSuperblock.CompatXattrFilter : 0u),
             FeatureIncompat = featureIncompat,
             ExtraDevices = (ushort)extraDevices,
             DevtSlotoff = devtSlotOff,
