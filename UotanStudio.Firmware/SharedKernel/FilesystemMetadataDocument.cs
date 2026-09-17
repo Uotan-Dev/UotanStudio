@@ -105,6 +105,13 @@ internal sealed class ErofsRebuildParameters
     public int Lz4MaxDistance { get; set; }
     /// <summary>Gets the primary maximum physical cluster size.<para>获取主最大物理簇大小。</para></summary>
     public int MaxPclusterSize { get; set; }
+    /// <summary>
+    /// Gets whether the source image used the legacy (pre-5.13) layout, i.e. no big pclusters and
+    /// no compacted indexes, so older (5.4 / 5.10) kernels can still mount it.
+    /// <para>获取源镜像是否采用 legacy（pre-5.13）布局，即无 big pcluster 与紧凑索引，
+    /// 使较旧内核（5.4 / 5.10）仍能挂载。</para>
+    /// </summary>
+    public bool LegacyCompatibility { get; set; }
     /// <summary>Gets the declared compression configuration records.<para>获取已声明的压缩配置记录。</para></summary>
     public List<ErofsRebuildCodec> Codecs { get; set; } = [];
     /// <summary>Gets the per-inode source storage strategy.<para>获取逐 inode 源存储策略。</para></summary>

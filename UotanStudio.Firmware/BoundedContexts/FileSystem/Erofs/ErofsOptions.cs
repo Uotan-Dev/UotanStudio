@@ -51,6 +51,19 @@ public sealed class ErofsOptions
 
     public bool UseCompactedIndexes { get; set; } = true;
 
+    /// <summary>
+    /// Produces a legacy (pre-5.13) EROFS image without the big-pcluster / COMPR_CFGS incompatible
+    /// feature, making the output mountable by older kernels (Linux 5.4 and 5.10).
+    /// <para>生成 legacy（pre-5.13）erofs 镜像，不声明 big-pcluster / COMPR_CFGS 不兼容特性，
+    /// 使输出可被较旧内核（Linux 5.4 与 5.10）挂载。</para>
+    /// Enabling it forces the legacy layout: LZ4 only, <see cref="MaxPclusterSize"/> equal to the block
+    /// size (so every pcluster spans a single logical cluster), and full-size (non-compacted) indexes,
+    /// because compacted indexes and big pclusters were introduced together in Linux 5.13.
+    /// <para>开启时强制 legacy 布局：仅 LZ4、<see cref="MaxPclusterSize"/> 等于块大小（每个 pcluster
+    /// 仅覆盖一个逻辑簇）、使用完整（非紧凑）索引——紧凑索引与 big pcluster 均在 Linux 5.13 才引入。</para>
+    /// </summary>
+    public bool LegacyCompatibility { get; set; }
+
     /// <summary>Optional filesystem UUID; extracted images retain their original identity.</summary>
     public byte[]? Uuid { get; set; }
 
@@ -112,6 +125,26 @@ public sealed class ErofsOptions
         }
 
         if (MaxPclusterSize == 0) MaxPclusterSize = ErofsCompression.MaxPclusterSize;
+        // Legacy (pre-5.13) images restrict compressed pclusters to a single logical cluster and
+        // drop compacted indexes, whose on-disk support only landed together with big pclusters.
+        // legacy（pre-5.13）镜像把压缩 pcluster 限制为单个逻辑簇，并关闭与 big pcluster 同时引入
+        // 的紧凑索引。
+        if (LegacyCompatibility)
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4;
+            MaxPclusterSize = BlockSize;
+            UseCompactedIndexes = false;
+            // Linux 5.4 only understands the LZ4_0_PADDING incompatible bit; fragments,
+            // ztailpacking, dedupe and metabox are newer incompatible features that would
+            // make the image unmountable even with the big-pcluster bit cleared.
+            // Linux 5.4 只认识 LZ4_0_PADDING 这一个 incompat 位；fragments、ztailpacking、
+            // dedupe 和 metabox 都是更新的 incompat 特性，即使清掉 big-pcluster 位也会导致挂载失败。
+            CompressedTailPacking = false;
+            Fragments = false;
+            Dedup = false;
+            Metabox = false;
+        }
+
         if (MaxPclusterSize < BlockSize || MaxPclusterSize > ErofsCompression.MaxPclusterSize || MaxPclusterSize % BlockSize != 0)
             throw new ArgumentOutOfRangeException(nameof(MaxPclusterSize));
         if (DictionarySize is < 4096 or > 8 << 20)

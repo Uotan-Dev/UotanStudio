@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,7 +9,10 @@ public sealed partial class ErofsBuilder
 {
     private static byte[] BuildCompressionConfiguration(ErofsOptions options)
     {
-        if (!options.Compress) return [];
+        // Legacy (pre-5.13) images carry no compression configuration record; the LZ4 distance is
+        // published through s_available_compr_algs instead.
+        // legacy（pre-5.13）镜像不含压缩配置记录；LZ4 距离改由 s_available_compr_algs 承载。
+        if (!options.Compress || options.LegacyCompatibility) return [];
         if (options.SourceCompressionOptions is { } codecs)
         {
             using var output = new MemoryStream();
@@ -497,12 +500,12 @@ public sealed partial class ErofsBuilder
     /// Writes the metabox inode's container data area: each resident file's 32-byte compact inode record is streamed to its slot (the metabox inode's i_u points at this data area and its i_size is slotCount × 32).
     /// <para>写出 metabox inode 的容器数据区：把每个容器驻留文件的 32 字节 compact inode 记录写到其 槽位（metabox inode 的 i_u 指向该数据区，i_size = 槽数 × 32）。</para>
     /// </summary>
-    private static void WriteMetaboxContainer(Stream output, BuildNode metaboxNode, int blockSize, ulong now, List<BuildNode> residents)
+    private static void WriteMetaboxContainer(Stream output, BuildNode metaboxNode, int blockSize, ulong now, List<BuildNode> residents, bool legacyCompatibility)
     {
         var baseOffset = checked(metaboxNode.FlatBlockAddr * blockSize);
         foreach (var resident in residents)
         {
-            var inode = BuildInode(resident, blockSize, now);
+            var inode = BuildInode(resident, blockSize, now, legacyCompatibility);
             var buffer = new byte[inode.OnDiskSize];
             inode.WriteTo(buffer);
             WriteAt(output, baseOffset + resident.MetaboxSlot * ErofsSuperblock.CompactInodeSize, buffer, buffer.Length);

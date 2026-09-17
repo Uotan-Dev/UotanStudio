@@ -94,6 +94,12 @@ internal sealed class ErofsInode
 
     public bool IsExtended => (Advise & FlagExtended) != 0;
 
+    /// <summary>When false, EROFS_I_NLINK_1_BIT is never set and nlink is stored in i_nb,
+    /// matching pre-5.13 kernels whose EROFS_I_ALL mask only covers bits 0-3.
+    /// <para>为 false 时不置 EROFS_I_NLINK_1_BIT，nlink 一律写入 i_nb，与 EROFS_I_ALL
+    /// 仅覆盖 0-3 位的 pre-5.13 内核一致。</para></summary>
+    public bool AllowNlinkOneBit { get; set; } = true;
+
     public ushort DataLayout => (ushort)(Advise & DataLayoutMask);
 
     public bool IsDirectory => (Mode & ModeTypeMask) == ModeDirectory;
@@ -241,9 +247,13 @@ internal sealed class ErofsInode
     private void WriteCompact(Span<byte> destination)
     {
         // Non-directory compact inodes with nlink == 1 set EROFS_I_NLINK_1_BIT and leave the
-        // i_nb union unused for nlink (fs/erofs/erofs_fs.h).
-        // 非目录紧凑 inode 的 nlink 为 1 时置 EROFS_I_NLINK_1_BIT，i_nb 联合体不再承载 nlink。
-        if (!IsDirectory && Nlink == 1)
+        // i_nb union unused for nlink (fs/erofs/erofs_fs.h). Pre-5.13 kernels reject any
+        // undefined i_format bit, so legacy images keep nlink in i_nb instead.
+        // 非目录紧凑 inode 的 nlink 为 1 时置 EROFS_I_NLINK_1_BIT，i_nb 联合体不再承载 nlink
+        // （fs/erofs/erofs_fs.h）。pre-5.13 内核拒绝任何未定义的 i_format 位，legacy 镜像改为
+        // 把 nlink 写入 i_nb。
+        var nlinkOneBit = AllowNlinkOneBit && !IsDirectory && Nlink == 1;
+        if (nlinkOneBit)
         {
             Advise |= AdviseBitNlinkOneOrDotOmitted;
         }
@@ -253,7 +263,7 @@ internal sealed class ErofsInode
         BinaryPrimitives.WriteUInt16LittleEndian(destination[4..], Mode);
 
 
-        var nbValue = (Advise & AdviseBitNlinkOneOrDotOmitted) != 0 && !IsDirectory ? (ushort)0 : (ushort)Math.Min(Nlink, ushort.MaxValue);
+        var nbValue = nlinkOneBit ? (ushort)0 : (ushort)Math.Min(Nlink, ushort.MaxValue);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[6..], nbValue);
         BinaryPrimitives.WriteUInt32LittleEndian(destination[8..], (uint)Math.Min(Size, uint.MaxValue));
         BinaryPrimitives.WriteUInt32LittleEndian(destination[12..], Generation);

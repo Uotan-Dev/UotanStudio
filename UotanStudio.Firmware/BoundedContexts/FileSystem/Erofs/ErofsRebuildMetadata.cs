@@ -37,6 +37,7 @@ internal static class ErofsRebuildMetadata
             WindowBits = options.WindowBits,
             Lz4MaxDistance = options.Lz4MaxDistance,
             MaxPclusterSize = options.MaxPclusterSize,
+            LegacyCompatibility = options.LegacyCompatibility,
         };
         if (options.SourceCompressionOptions is { } codecs)
         {
@@ -104,6 +105,7 @@ internal static class ErofsRebuildMetadata
             WindowBits = parameters.WindowBits,
             Lz4MaxDistance = checked((ushort)Math.Clamp(parameters.Lz4MaxDistance, 0, ushort.MaxValue)),
             MaxPclusterSize = parameters.MaxPclusterSize,
+            LegacyCompatibility = parameters.LegacyCompatibility,
         };
 
         if (parameters.Codecs.Count > 0)

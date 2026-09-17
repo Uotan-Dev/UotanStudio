@@ -81,4 +81,63 @@ public class ErofsCompressionConfigurationTests
         Assert.Equal(14, BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(configurationOffset)));
         Assert.Equal(expected, BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(configurationOffset + 2, 2)));
     }
+
+    [Fact]
+    public void Build_LegacyCompatibility_Lz4_OmitsBigPclusterAndPublishesDistance()
+    {
+        // Legacy (pre-5.13) images must not advertise the big-pcluster / COMPR_CFGS incompatible
+        // feature that Linux 5.4 / 5.10 kernels cannot mount, and must carry the LZ4 max distance
+        // inside s_available_compr_algs instead of an algorithm bitmap with no config record.
+        // legacy（pre-5.13）镜像不得声明 5.4 / 5.10 内核无法挂载的 big-pcluster / COMPR_CFGS 不兼容
+        // 特性，并应把 LZ4 最大匹配距离写入 s_available_compr_algs，同时不写压缩配置记录。
+        using var source = new TempDirectory();
+        var payload = Enumerable.Repeat((byte)0x42, 20 * 1024).ToArray();
+        source.WriteBytes("data.bin", payload);
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            LegacyCompatibility = true,
+        });
+        var superblock = ErofsSuperblock.FromImage(image);
+        Assert.Equal(0u, superblock.FeatureIncompat & ErofsSuperblock.IncompatBigPcluster);
+        Assert.NotEqual(0u, superblock.FeatureIncompat & ErofsSuperblock.IncompatLz4_0Padding);
+        Assert.Equal(ErofsCompression.Lz4DistanceMax, superblock.AvailableComprAlgs);
+
+        // The configuration never follows the superblock in legacy images; instead the inode table
+        // begins immediately after it.
+        // legacy 镜像中超级块后不跟随压缩配置记录，inode 表紧随其后。
+        var afterSuperblock = 1024 + 128 + superblock.SbExtSlots * 16;
+        var declared = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(afterSuperblock));
+        Assert.False(declared is 14 or 6, "Legacy image unexpectedly carries a compression configuration record.");
+
+        using var parser = new ErofsParser(image);
+        Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
+    }
+
+    [Fact]
+    public void Build_LegacyCompatibility_StripsPost54IncompatibleFeatures()
+    {
+        // Linux 5.4 only understands LZ4_0_PADDING; fragments, ztailpacking, dedupe and metabox
+        // are newer incompatible bits, so a legacy build must drop them even when requested.
+        // Linux 5.4 只认识 LZ4_0_PADDING；fragments、ztailpacking、dedupe 与 metabox 都是更新的
+        // incompat 位，legacy 构建必须在用户显式请求时仍然丢弃它们。
+        using var source = new TempDirectory();
+        var payload = Enumerable.Repeat((byte)0x5A, 20 * 1024).ToArray();
+        source.WriteBytes("data.bin", payload);
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            LegacyCompatibility = true,
+            Fragments = true,
+            Dedup = true,
+            Metabox = true,
+            CompressedTailPacking = true,
+        });
+        var superblock = ErofsSuperblock.FromImage(image);
+        Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding, superblock.FeatureIncompat);
+        Assert.Equal(0u, superblock.PackedNid);
+
+        using var parser = new ErofsParser(image);
+        Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
+    }
 }

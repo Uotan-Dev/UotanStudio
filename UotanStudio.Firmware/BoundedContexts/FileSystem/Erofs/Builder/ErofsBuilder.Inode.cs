@@ -268,9 +268,9 @@ public sealed partial class ErofsBuilder
         return node.Size > uint.MaxValue ? ErofsInode.ExtendedSize : ErofsInode.CompactSize;
     }
 
-    private static ErofsInode BuildInode(BuildNode node, int blockSize, ulong now)
+    private static ErofsInode BuildInode(BuildNode node, int blockSize, ulong now, bool legacyCompatibility)
     {
-        var inode = new ErofsInode();
+        var inode = new ErofsInode { AllowNlinkOneBit = !legacyCompatibility };
         if (GetInodeHeaderSize(node) == ErofsInode.ExtendedSize)
         {
             inode.Advise |= ErofsInode.FlagExtended;

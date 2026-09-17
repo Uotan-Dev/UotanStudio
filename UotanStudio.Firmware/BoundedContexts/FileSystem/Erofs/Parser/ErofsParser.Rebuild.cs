@@ -92,6 +92,27 @@ public sealed partial class ErofsParser
         selected.TailPacking = inodes.Values.Any(i => i.InlineData);
         selected.SourceInodes = inodes;
         selected.SourceCompressionOptions = codecs;
+        // A source without the big pcluster / COMPR_CFGS feature used the legacy (pre-5.13) layout.
+        // Carry that forward so the rebuilt superblock does not advertise unsupported features to
+        // older (5.4 / 5.10) kernels, which would refuse to mount the image. A source that carries
+        // post-5.4 incompatible features (fragments / ztailpacking / metabox) genuinely needs them
+        // to preserve its packed data, so those images are rebuilt with the modern layout instead
+        // of being silently stripped.
+        // 源镜像未声明 big pcluster / COMPR_CFGS 说明其采用 legacy（pre-5.13）布局。重建时保留该
+        // 特征，避免重建后的超级块向较旧内核（5.4 / 5.10）声明其不支持的特性而导致挂载失败。
+        // 若源镜像带有 5.4 之后引入的 incompat 特性（fragments / ztailpacking / metabox），其打包
+        // 数据确实依赖这些特性，此时应按现代布局重建，而不是静默裁剪。
+        selected.LegacyCompatibility = !_superblock.HasBigPcluster
+            && !_superblock.HasZtailpacking
+            && !_superblock.HasMetabox
+            && _superblock.PackedNid == 0;
+        if (selected.LegacyCompatibility)
+        {
+            selected.Fragments = false;
+            selected.CompressedTailPacking = false;
+            selected.Metabox = false;
+            selected.Dedup = false;
+        }
         return selected;
     }
 

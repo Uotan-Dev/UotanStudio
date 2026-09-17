@@ -512,6 +512,24 @@ public sealed partial class ErofsBuilder
         public bool Plain;
     }
 
+    /// <summary>Computes s_available_compr_algs: the LZ4 max distance in legacy (pre-5.13)
+    /// images, otherwise the algorithm bitmap.
+    /// <para>计算 s_available_compr_algs：legacy（pre-5.13）镜像承载 LZ4 最大匹配距离，
+    /// 否则为算法位图，均与 erofs-utils 上游一致。</para></summary>
+    private static ushort CompressedAlgorithmsField(ErofsOptions options)
+    {
+        if (!options.Compress) return 0;
+        if (options.LegacyCompatibility)
+        {
+            return options.Lz4MaxDistance == 0 ? ErofsCompression.Lz4DistanceMax : options.Lz4MaxDistance;
+        }
+        if (options.SourceCompressionOptions is { } codecs)
+        {
+            return (ushort)codecs.Keys.Aggregate(0, (mask, algorithm) => mask | (1 << (int)algorithm));
+        }
+        return (ushort)(1 << (int)options.Algorithm);
+    }
+
     private static void BuildImage(BuildNode root, ErofsOptions options, Stream destination, long baseOffset, bool freshDestination)
     {
         using var output = new OffsetStream(destination, baseOffset);
@@ -870,7 +888,7 @@ public sealed partial class ErofsBuilder
         }
 
         var featureIncompat = options.Compress
-            ? ErofsSuperblock.IncompatLz4_0Padding | ErofsSuperblock.IncompatBigPcluster
+            ? ErofsSuperblock.IncompatLz4_0Padding | (options.LegacyCompatibility ? 0u : ErofsSuperblock.IncompatBigPcluster)
             : 0;
 
 
@@ -882,6 +900,16 @@ public sealed partial class ErofsBuilder
 
         if (packedNode is not null)
         {
+            if (options.LegacyCompatibility)
+            {
+                // Legacy (Linux 5.4) images cannot carry fragments or metabox data; the
+                // option-level validation keeps these off, so reaching this guard means the
+                // build input itself demands a modern layout.
+                // legacy（Linux 5.4）镜像无法携带 fragments 或 metabox 数据；选项校验已保证这些
+                // 开关关闭，走到这里说明构建输入本身要求现代布局。
+                throw new NotSupportedException(
+                    "LegacyCompatibility images cannot contain fragment or metabox packed nodes.");
+            }
             featureIncompat |= ErofsSuperblock.IncompatFragments;
         }
         if (options.CompressedTailPacking) featureIncompat |= ErofsSuperblock.IncompatZtailpacking;
@@ -889,6 +917,11 @@ public sealed partial class ErofsBuilder
 
         if (metaboxNode is not null)
         {
+            if (options.LegacyCompatibility)
+            {
+                throw new NotSupportedException(
+                    "LegacyCompatibility images cannot contain fragment or metabox packed nodes.");
+            }
             featureIncompat |= ErofsSuperblock.IncompatMetabox;
         }
 
@@ -903,7 +936,7 @@ public sealed partial class ErofsBuilder
             BuildTime32 = options.BuildTimeOffset,
             Blocks = (uint)totalBlocks,
             MetaBlkAddr = 0,
-            AvailableComprAlgs = options.Compress ? (ushort)(options.SourceCompressionOptions?.Keys.Aggregate(0, (mask, algorithm) => mask | (1 << (int)algorithm)) ?? (1 << (int)options.Algorithm)) : (ushort)0,
+            AvailableComprAlgs = CompressedAlgorithmsField(options),
             FeatureCompat = (options.SuperblockChecksum ? ErofsSuperblock.CompatSbChecksum : 0u)
                 | (options.SourceMtimeFeature ? ErofsSuperblock.CompatMtime : 0u),
             FeatureIncompat = featureIncompat,
@@ -971,7 +1004,7 @@ public sealed partial class ErofsBuilder
             {
 
 
-                WriteMetaboxContainer(output, node, blockSize, now, metaboxResident!);
+                WriteMetaboxContainer(output, node, blockSize, now, metaboxResident!, options.LegacyCompatibility);
             }
             else if (node.FlatBlockAddr >= 0 && node.FlatBlocks > 0 && node.DedupSource is null)
             {
@@ -990,7 +1023,7 @@ public sealed partial class ErofsBuilder
                 continue;
             }
 
-            var inode = BuildInode(node, blockSize, now);
+            var inode = BuildInode(node, blockSize, now, options.LegacyCompatibility);
             var inodeBuffer = new byte[inode.OnDiskSize];
             inode.WriteTo(inodeBuffer);
             WriteAt(output, node.MetaOffset, inodeBuffer, inodeBuffer.Length);
