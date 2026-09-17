@@ -27,6 +27,17 @@
 			</ContentPage>
 			<ContentPage TabbedPage.IsTabEnabled="False">
 			</ContentPage>
+			<!-- 底部工作区第一个入口：烧录。 -->
+			<!-- First entry of the bottom workspace bar: flash. -->
+			<ContentPage>
+				<ContentPage.Icon>
+					<avalonia:MaterialIcon Kind="Flash" Width="18" Margin="0 -10 0 0" />
+				</ContentPage.Icon>
+				<ContentPage.Header>
+					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Flash}" FontSize="13" FontWeight="SemiBold" />
+				</ContentPage.Header>
+				<shellviews:FlashView Name="FlashPage" />
+			</ContentPage>
 			<ContentPage>
 				<ContentPage.Icon>
 					<avalonia:MaterialIcon Kind="MonitorDashboard" Width="18" Margin="0 -10 0 0" />

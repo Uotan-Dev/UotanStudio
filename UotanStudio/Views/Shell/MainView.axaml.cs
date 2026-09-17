@@ -9,13 +9,21 @@ namespace UotanStudio.Views.Shell;
 
 public partial class MainView : UserControl
 {
+    // 底栏页面索引：前三个与最后三个 ContentPage 是撑开居中留白的占位页。
+    // Bottom-bar page indexes: the first and last three ContentPages are spacers that keep the group centred.
+    private const int FlashTabIndex = 3;
+    private const int WorkspaceTabIndex = 4;
+    private const int DeliveryTabIndex = 5;
+    private const int NodeEditorTabIndex = 6;
+    private const int SettingsTabIndex = 7;
+
     public MainView()
     {
         InitializeComponent();
-        // 默认选中 Workspace Tab（Workspace=3, Delivery=4, NodeEditor=5, Settings=6）。
-        MainTabs.SelectedIndex = 3;
+        // 默认选中 Workspace Tab（Flash=3, Workspace=4, Delivery=5, NodeEditor=6, Settings=7）。
+        MainTabs.SelectedIndex = WorkspaceTabIndex;
 
-        // 初始同步：告知订阅者当前激活面板为 Workspace（与默认 SelectedIndex=3 对应）
+        // 初始同步：告知订阅者当前激活面板为 Workspace（与默认 SelectedIndex 对应）
         SendActiveTabChanged(MainTabs.SelectedIndex);
     }
 
@@ -31,10 +39,10 @@ public partial class MainView : UserControl
         {
             var index = message.Target switch
             {
-                NavigationTarget.Workspace => 3,
-                NavigationTarget.Delivery => 4,
-                NavigationTarget.NodeEditor => 5,
-                NavigationTarget.Settings => 6,
+                NavigationTarget.Workspace => WorkspaceTabIndex,
+                NavigationTarget.Delivery => DeliveryTabIndex,
+                NavigationTarget.NodeEditor => NodeEditorTabIndex,
+                NavigationTarget.Settings => SettingsTabIndex,
                 _ => MainTabs.SelectedIndex
             };
             if (MainTabs.SelectedIndex == index && message.Target == NavigationTarget.Delivery)
@@ -52,7 +60,7 @@ public partial class MainView : UserControl
     private void OnSelectionChanged(object? sender, PageSelectionChangedEventArgs e)
     {
         SendActiveTabChanged(MainTabs.SelectedIndex);
-        if (MainTabs.SelectedIndex == 4) DeliveryPage.Refresh();
+        if (MainTabs.SelectedIndex == DeliveryTabIndex) DeliveryPage.Refresh();
     }
 
     /// <summary>
@@ -64,10 +72,11 @@ public partial class MainView : UserControl
     {
         var tab = selectedIndex switch
         {
-            3 => ActiveTab.Workspace,
-            4 => ActiveTab.Delivery,
-            5 => ActiveTab.NodeEditor,
-            6 => ActiveTab.Settings,
+            FlashTabIndex => ActiveTab.Flash,
+            WorkspaceTabIndex => ActiveTab.Workspace,
+            DeliveryTabIndex => ActiveTab.Delivery,
+            NodeEditorTabIndex => ActiveTab.NodeEditor,
+            SettingsTabIndex => ActiveTab.Settings,
             _ => ActiveTab.Workspace
         };
         WeakReferenceMessenger.Default.Send(new ActiveTabChangedMessage(tab));
@@ -80,7 +89,7 @@ public partial class MainView : UserControl
         MainTabs.SelectionChanged += OnSelectionChanged;
         WeakReferenceMessenger.Default.Register<MainView, OpenDocumentSearchMessage>(this, static (view, message) =>
         {
-            view.MainTabs.SelectedIndex = 3;
+            view.MainTabs.SelectedIndex = WorkspaceTabIndex;
             // Wait for the selected page's document dock to complete layout before positioning search.
             Dispatcher.UIThread.Post(() => view.WorkspaceDocuments.ShowDocumentSearch(message.ShowReplace), DispatcherPriority.Loaded);
         });

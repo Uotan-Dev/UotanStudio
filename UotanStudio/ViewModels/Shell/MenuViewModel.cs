@@ -32,8 +32,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// Currently active bottom main panel; gates availability of node-editor-related View menu commands (minimap/zoom).
     /// </summary>
     /// <remarks>
-    /// <para>由 <c>MainView</c> 通过 <see cref="ActiveTabChangedMessage"/> 在面板切换时更新；初始为 <see cref="ActiveTab.Workspace"/>（与 MainView 默认 SelectedIndex=3 对应）。</para>
-    /// Updated by <c>MainView</c> via <see cref="ActiveTabChangedMessage"/> on tab switch; defaults to <see cref="ActiveTab.Workspace"/> (matching MainView default SelectedIndex=3).
+    /// <para>由 <c>MainView</c> 通过 <see cref="ActiveTabChangedMessage"/> 在面板切换时更新；初始为 <see cref="ActiveTab.Workspace"/>（与 MainView 启动时选中的工作区页对应）。</para>
+    /// Updated by <c>MainView</c> via <see cref="ActiveTabChangedMessage"/> on tab switch; defaults to <see cref="ActiveTab.Workspace"/> (matching the workspace page MainView selects on startup).
     /// </remarks>
     private ActiveTab _currentTab = ActiveTab.Workspace;
 
@@ -1391,6 +1391,8 @@ public enum ActiveTab
 {
     /// <summary><para>设备管理器面板。</para>Device manager panel.</summary>
     Device,
+    /// <summary><para>烧录面板。</para>Flash panel.</summary>
+    Flash,
     /// <summary><para>工作区面板。</para>Workspace panel.</summary>
     Workspace,
     /// <summary><para>节点编辑器面板。</para>Node editor panel.</summary>

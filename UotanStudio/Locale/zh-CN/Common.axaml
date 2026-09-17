@@ -4,6 +4,7 @@
 
     <!-- 选项卡 -->
     <x:String x:Key="Tab_Workspace">工作区</x:String>
+    <x:String x:Key="Tab_Flash">烧录</x:String>
     <x:String x:Key="Tab_Delivery">交付</x:String>
     <x:String x:Key="Delivery_DirectOutput">打包为ZIP</x:String>
     <x:String x:Key="Delivery_ZipArchiveName">压缩包名称</x:String>
@@ -122,6 +123,38 @@
     <x:String x:Key="ScreenMirror_Mirroring">投屏中</x:String>
     <x:String x:Key="ScreenMirror_Stopped">投屏已停止</x:String>
     <x:String x:Key="ScreenMirror_Failed">投屏失败：</x:String>
+
+    <!-- 烧录页面 -->
+    <x:String x:Key="Flash_Package">刷机包</x:String>
+    <x:String x:Key="Flash_PackagePlaceholder">选择刷机包或解包目录</x:String>
+    <x:String x:Key="Flash_ChooseFile">选择文件</x:String>
+    <x:String x:Key="Flash_ChooseFolder">选择文件夹</x:String>
+    <x:String x:Key="Flash_SelectAll">全选</x:String>
+    <x:String x:Key="Flash_Selected">已选</x:String>
+    <x:String x:Key="Flash_SearchPlaceholder">搜索分区</x:String>
+    <x:String x:Key="Flash_Select">选择</x:String>
+    <x:String x:Key="Flash_Partition">分区</x:String>
+    <x:String x:Key="Flash_Command">命令</x:String>
+    <x:String x:Key="Flash_Size">大小</x:String>
+    <x:String x:Key="Flash_File">文件</x:String>
+    <x:String x:Key="Flash_NoPartitions">尚未加载分区列表</x:String>
+    <x:String x:Key="Flash_NoPartitionsHint">选择刷机包后，可刷写分区会显示在这里。</x:String>
+    <x:String x:Key="Flash_Basic">基本操作</x:String>
+    <x:String x:Key="Flash_ReadInfo">读取设备信息</x:String>
+    <x:String x:Key="Flash_FlashSelected">刷写选中分区</x:String>
+    <x:String x:Key="Flash_EraseSelected">擦除选中分区</x:String>
+    <x:String x:Key="Flash_DisableVbmeta">禁用 vbmeta 校验</x:String>
+    <x:String x:Key="Flash_DeleteCow">删除COW分区</x:String>
+    <x:String x:Key="Flash_UseAdb">使用ADB</x:String>
+    <x:String x:Key="Flash_AddMagisk">添加Magisk</x:String>
+    <x:String x:Key="Flash_EraseData">清除所有数据</x:String>
+    <x:String x:Key="Flash_RebootAfter">刷写后重启设备</x:String>
+    <x:String x:Key="Flash_Image">镜像操作</x:String>
+    <x:String x:Key="Flash_ExtractSelected">提取选中镜像</x:String>
+    <x:String x:Key="Flash_BuildWiredPackage">一键生成线刷包</x:String>
+    <x:String x:Key="Flash_Log">日志</x:String>
+    <x:String x:Key="Flash_ClearLog">清空</x:String>
+    <x:String x:Key="Flash_LogPlaceholder">刷写日志输出</x:String>
 
     <!-- 视图定位器 -->
     <x:String x:Key="ViewLocator_NotFound">未找到: </x:String>

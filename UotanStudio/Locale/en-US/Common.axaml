@@ -4,6 +4,7 @@
 
     <!-- Tabs -->
     <x:String x:Key="Tab_Workspace">Workspace</x:String>
+    <x:String x:Key="Tab_Flash">Flash</x:String>
     <x:String x:Key="Tab_Delivery">Delivery</x:String>
     <x:String x:Key="Delivery_DirectOutput">Pack as ZIP</x:String>
     <x:String x:Key="Delivery_ZipArchiveName">Archive name</x:String>
@@ -122,6 +123,38 @@
     <x:String x:Key="ScreenMirror_Mirroring">Mirroring</x:String>
     <x:String x:Key="ScreenMirror_Stopped">Mirroring stopped</x:String>
     <x:String x:Key="ScreenMirror_Failed">Mirroring failed: </x:String>
+
+    <!-- Flash page -->
+    <x:String x:Key="Flash_Package">Package</x:String>
+    <x:String x:Key="Flash_PackagePlaceholder">Select a flash package or an unpacked folder</x:String>
+    <x:String x:Key="Flash_ChooseFile">Select file</x:String>
+    <x:String x:Key="Flash_ChooseFolder">Select folder</x:String>
+    <x:String x:Key="Flash_SelectAll">Select all</x:String>
+    <x:String x:Key="Flash_Selected">Selected</x:String>
+    <x:String x:Key="Flash_SearchPlaceholder">Search partitions</x:String>
+    <x:String x:Key="Flash_Select">Select</x:String>
+    <x:String x:Key="Flash_Partition">Partition</x:String>
+    <x:String x:Key="Flash_Command">Command</x:String>
+    <x:String x:Key="Flash_Size">Size</x:String>
+    <x:String x:Key="Flash_File">File</x:String>
+    <x:String x:Key="Flash_NoPartitions">No partition list loaded</x:String>
+    <x:String x:Key="Flash_NoPartitionsHint">Select a flash package and the flashable partitions appear here.</x:String>
+    <x:String x:Key="Flash_Basic">Basic actions</x:String>
+    <x:String x:Key="Flash_ReadInfo">Read device info</x:String>
+    <x:String x:Key="Flash_FlashSelected">Flash selected</x:String>
+    <x:String x:Key="Flash_EraseSelected">Erase selected</x:String>
+    <x:String x:Key="Flash_DisableVbmeta">Disable vbmeta verification</x:String>
+    <x:String x:Key="Flash_DeleteCow">Delete COW partition</x:String>
+    <x:String x:Key="Flash_UseAdb">Use ADB</x:String>
+    <x:String x:Key="Flash_AddMagisk">Add Magisk</x:String>
+    <x:String x:Key="Flash_EraseData">Erase all data</x:String>
+    <x:String x:Key="Flash_RebootAfter">Reboot after flashing</x:String>
+    <x:String x:Key="Flash_Image">Image actions</x:String>
+    <x:String x:Key="Flash_ExtractSelected">Extract selected images</x:String>
+    <x:String x:Key="Flash_BuildWiredPackage">Build wired flash package</x:String>
+    <x:String x:Key="Flash_Log">Log</x:String>
+    <x:String x:Key="Flash_ClearLog">Clear</x:String>
+    <x:String x:Key="Flash_LogPlaceholder">Flash log output</x:String>
 
     <!-- ViewLocator -->
     <x:String x:Key="ViewLocator_NotFound">Not Found: </x:String>
