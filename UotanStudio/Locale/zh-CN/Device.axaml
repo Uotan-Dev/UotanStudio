@@ -10,6 +10,7 @@
     <x:String x:Key="Device_Select">选择设备</x:String>
     <x:String x:Key="Device_Scanning">正在扫描设备...</x:String>
     <x:String x:Key="Device_Reboot">重启</x:String>
+    <x:String x:Key="Device_RebootSystem">重启到系统</x:String>
     <x:String x:Key="Device_RebootBootloader">重启到 Bootloader</x:String>
     <x:String x:Key="Device_RebootFastbootd">重启到 Fastbootd</x:String>
     <x:String x:Key="Device_RebootRecovery">重启到 Recovery</x:String>

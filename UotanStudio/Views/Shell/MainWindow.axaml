@@ -347,21 +347,46 @@
 						  AutomationProperties.Name="{DynamicResource Device_Reboot}">
 					<MenuItem.Header>
 						<Grid ColumnDefinitions="16,12" ColumnSpacing="6">
-							<avalonia:MaterialIcon Kind="Restart" Width="16" Height="16" />
+							<avalonia:MaterialIcon Kind="Power" Width="16" Height="16" />
 							<avalonia:MaterialIcon Grid.Column="1" Kind="ChevronDown" Width="12" Height="12" />
 						</Grid>
 					</MenuItem.Header>
-					<MenuItem Header="{DynamicResource Device_Reboot}"
-							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="system" />
+					<!-- 图标走菜单项标准的 Icon 槽、文字左对齐；ToggleType 仍为默认 None，
+					     也没有 IsChecked/IsSelected 绑定，所以任何一项都不会出现勾选或选中态。 -->
+					<!-- Icons use the standard MenuItem.Icon slot with left-aligned text; ToggleType stays
+					     at its default None and nothing binds IsChecked/IsSelected, so no item can ever
+					     show a checked or selected look. -->
+					<MenuItem Header="{DynamicResource Device_RebootSystem}"
+							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="system">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="Restart" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
 					<MenuItem Header="{DynamicResource Device_RebootBootloader}"
-							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="bootloader" />
+							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="bootloader">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="IntegratedCircuit" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
 					<MenuItem Header="{DynamicResource Device_RebootFastbootd}"
 							  IsEnabled="{Binding DeviceVM.CanRebootToFastbootd}"
-							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="fastbootd" />
+							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="fastbootd">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="ProgressDownload" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
 					<MenuItem Header="{DynamicResource Device_RebootRecovery}"
-							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="recovery" />
+							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="recovery">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="NetworkOutline" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
 					<MenuItem Header="{DynamicResource Device_RebootEdl}"
-							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="edl" />
+							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="edl">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="DownloadOutline" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
 				</MenuItem>
 				<MenuItem x:Name="DeviceSelector" Height="28" Padding="8,2"
 						  ToolTip.Tip="{DynamicResource Device_Select}"

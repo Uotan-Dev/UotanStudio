@@ -10,6 +10,7 @@
     <x:String x:Key="Device_Select">Select device</x:String>
     <x:String x:Key="Device_Scanning">Scanning for devices...</x:String>
     <x:String x:Key="Device_Reboot">Reboot</x:String>
+    <x:String x:Key="Device_RebootSystem">Reboot to System</x:String>
     <x:String x:Key="Device_RebootBootloader">Reboot to Bootloader</x:String>
     <x:String x:Key="Device_RebootFastbootd">Reboot to Fastbootd</x:String>
     <x:String x:Key="Device_RebootRecovery">Reboot to Recovery</x:String>

@@ -117,7 +117,7 @@
                             Command="{Binding RebootCommand}"
                             CommandParameter="system"
                             IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
-                            ToolTip.Tip="{DynamicResource Device_Reboot}">
+                            ToolTip.Tip="{DynamicResource Device_RebootSystem}">
                         <avalonia:MaterialIcon Kind="Restart" Width="16" Height="16" />
                     </Button>
                     <Button Classes="DeviceIconButton"
@@ -134,14 +134,14 @@
                             CommandParameter="fastbootd"
                             IsEnabled="{Binding CanRebootToFastbootd}"
                             ToolTip.Tip="{DynamicResource Device_RebootFastbootd}">
-                        <avalonia:MaterialIcon Kind="Android" Width="16" Height="16" />
+                        <avalonia:MaterialIcon Kind="ProgressDownload" Width="16" Height="16" />
                     </Button>
                     <Button Classes="DeviceIconButton"
                             Command="{Binding RebootCommand}"
                             CommandParameter="recovery"
                             IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
                             ToolTip.Tip="{DynamicResource Device_RebootRecovery}">
-                        <avalonia:MaterialIcon Kind="DispensaryBoxOutline" Width="16" Height="16" />
+                        <avalonia:MaterialIcon Kind="NetworkOutline" Width="16" Height="16" />
                     </Button>
                     <Button Classes="DeviceIconButton"
                             Command="{Binding RebootCommand}"
@@ -257,7 +257,7 @@
                                             <MenuItem Header="{DynamicResource Device_Connect}" Click="OnConnectMenuClick" />
                                             <MenuItem Header="{DynamicResource Device_Disconnect}" Click="OnDisconnectMenuClick" />
                                             <Separator />
-                                            <MenuItem Header="{DynamicResource Device_Reboot}" Click="OnRebootMenuClick" CommandParameter="system" />
+                                            <MenuItem Header="{DynamicResource Device_RebootSystem}" Click="OnRebootMenuClick" CommandParameter="system" />
                                             <MenuItem Header="{DynamicResource Device_RebootBootloader}" Click="OnRebootMenuClick" CommandParameter="bootloader" />
                                             <MenuItem Header="{DynamicResource Device_RebootFastbootd}" IsVisible="{Binding SupportsFastbootd}" Click="OnRebootMenuClick" CommandParameter="fastbootd" />
                                             <MenuItem Header="{DynamicResource Device_RebootRecovery}" Click="OnRebootMenuClick" CommandParameter="recovery" />
