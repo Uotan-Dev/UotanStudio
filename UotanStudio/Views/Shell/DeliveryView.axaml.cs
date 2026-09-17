@@ -22,8 +22,6 @@ public partial class DeliveryView : UserControl
     private bool _attached;
     private string? _solutionPath;
     private string? _appliedSourceSettings;
-    // Preserve source and saved group metadata without exposing a second layout editor.
-    // 原包和已保存的分组元数据继续保留，不再提供第二组布局编辑框。
     private List<DeliveryGroup> _deliveryGroups = [];
     private bool? _stacked;
     private double _defaultSidebarWidth = MinimumSidebarWidth;
@@ -59,8 +57,6 @@ public partial class DeliveryView : UserControl
         SuperAOnlyBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
         ImageSelection.SelectedImagesChanged += (_, _) => UpdateCompositionImages();
         ImageSelection.LayoutChanged += (_, _) => UpdateImagesLayout();
-        // Lock the whole sidebar pack-settings panel while the composition list is confirmed.
-        // 编排列表确认后，左侧打包设置面板整体禁用，取消确认后恢复。
         Composition.Changed += (_, _) => UpdateSidebarLock();
         DeliveryContent.SizeChanged += (_, _) => UpdateImagesColumnMinimums();
         foreach (var option in OutputOptions.Children)
