@@ -1,0 +1,200 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="UotanStudio.Locale.ZhCn.Basic">
+
+    <!-- 底部导航入口 -->
+    <x:String x:Key="Tab_Basic">基础</x:String>
+
+    <!-- 左侧菜单 -->
+    <x:String x:Key="Basic_Menu_Home">设备详情</x:String>
+    <x:String x:Key="Basic_Menu_BasicFlash">基本刷入</x:String>
+    <x:String x:Key="Basic_Menu_AppManager">应用管理</x:String>
+    <x:String x:Key="Basic_Menu_ScreenMirror">投屏</x:String>
+    <x:String x:Key="Basic_Menu_FileManager">文件管理</x:String>
+    <x:String x:Key="Basic_Menu_Others">杂项控制</x:String>
+
+    <!-- 左侧设备状态 -->
+    <x:String x:Key="Basic_Status">连接状态</x:String>
+    <x:String x:Key="Basic_CodeName">机型代号</x:String>
+    <x:String x:Key="Basic_BlStatus">BL 锁状态</x:String>
+    <x:String x:Key="Basic_VabStatus">VAB 状态</x:String>
+
+    <!-- 右侧固定面板 -->
+    <x:String x:Key="Basic_Tab_Mirror">投屏</x:String>
+    <x:String x:Key="Basic_Tab_Log">日志</x:String>
+    <x:String x:Key="Basic_MirrorWaiting">等待设备连接</x:String>
+    <x:String x:Key="Basic_LogClear">清空</x:String>
+    <x:String x:Key="Basic_LogEmpty">暂无日志输出</x:String>
+
+    <!-- 主页 -->
+    <x:String x:Key="Basic_Home_DeviceInfo">设备信息</x:String>
+    <x:String x:Key="Basic_Home_Brand">设备品牌</x:String>
+    <x:String x:Key="Basic_Home_Model">设备型号</x:String>
+    <x:String x:Key="Basic_Home_CodeName">机型代号</x:String>
+    <x:String x:Key="Basic_Home_System">系统版本</x:String>
+    <x:String x:Key="Basic_Home_CpuAbi">CPU 架构</x:String>
+    <x:String x:Key="Basic_Home_Resolution">分辨率</x:String>
+    <x:String x:Key="Basic_Home_Density">像素密度</x:String>
+    <x:String x:Key="Basic_Home_Connection">连接状态</x:String>
+    <x:String x:Key="Basic_Home_Bootloader">BL 锁状态</x:String>
+    <x:String x:Key="Basic_Home_Vab">VAB 状态</x:String>
+    <x:String x:Key="Basic_Home_Vndk">VNDK 版本</x:String>
+    <x:String x:Key="Basic_Home_CpuCode">CPU 代号</x:String>
+    <x:String x:Key="Basic_Home_Uptime">开机时长</x:String>
+    <x:String x:Key="Basic_Home_StorageType">存储类型</x:String>
+    <x:String x:Key="Basic_Home_BoardId">主板编号</x:String>
+    <x:String x:Key="Basic_Home_Platform">平台</x:String>
+    <x:String x:Key="Basic_Home_Build">编译版本</x:String>
+    <x:String x:Key="Basic_Home_Kernel">内核版本</x:String>
+    <x:String x:Key="Basic_Home_Battery">电池</x:String>
+    <x:String x:Key="Basic_Home_StorageMemory">存储与内存</x:String>
+    <x:String x:Key="Basic_Home_CpuFrequency">CPU 频率</x:String>
+    <x:String x:Key="Basic_Home_CurrentFrequency">当前频率</x:String>
+    <x:String x:Key="Basic_Home_AvailableFrequencies">可用频率表</x:String>
+    <x:String x:Key="Basic_Home_Core">核心</x:String>
+    <x:String x:Key="Basic_Home_Frequency">频率</x:String>
+    <x:String x:Key="Basic_Home_CopyHint">点击复制</x:String>
+
+    <!-- 基本刷入 -->
+    <x:String x:Key="Basic_Flash_Unlock">常规解锁</x:String>
+    <x:String x:Key="Basic_Flash_UnlockFile">选择解锁文件</x:String>
+    <x:String x:Key="Basic_Flash_UnlockCode">代码解锁</x:String>
+    <x:String x:Key="Basic_Flash_UnlockNow">立即解锁</x:String>
+    <x:String x:Key="Basic_Flash_Relock">重新上锁</x:String>
+    <x:String x:Key="Basic_Flash_CommandUnlock">基础命令解锁</x:String>
+    <x:String x:Key="Basic_Flash_RunUnlock">执行解锁命令</x:String>
+    <x:String x:Key="Basic_Flash_Recovery">刷入 Recovery</x:String>
+    <x:String x:Key="Basic_Flash_ChooseRecovery">选择 Recovery</x:String>
+    <x:String x:Key="Basic_Flash_ToRecovery">刷入 Recovery</x:String>
+    <x:String x:Key="Basic_Flash_ToRecoveryA">刷入 Recovery A 分区</x:String>
+    <x:String x:Key="Basic_Flash_ToRecoveryB">刷入 Recovery B 分区</x:String>
+    <x:String x:Key="Basic_Flash_TempBoot">临时启动</x:String>
+    <x:String x:Key="Basic_Flash_ToBootA">刷入 Boot A 分区</x:String>
+    <x:String x:Key="Basic_Flash_ToBootB">刷入 Boot B 分区</x:String>
+    <x:String x:Key="Basic_Flash_MoreReboot">更多重启</x:String>
+    <x:String x:Key="Basic_Flash_RunReboot">执行重启</x:String>
+    <x:String x:Key="Basic_Flash_PatchBoot">修补 Boot</x:String>
+    <x:String x:Key="Basic_Flash_PatchHint">支持 Magisk、KernelSU 与 APatch 补丁包</x:String>
+    <x:String x:Key="Basic_Flash_PatchPackage">补丁包</x:String>
+    <x:String x:Key="Basic_Flash_BootImage">Boot 镜像</x:String>
+    <x:String x:Key="Basic_Flash_Start">开始</x:String>
+    <x:String x:Key="Basic_Flash_Easy">简易刷入</x:String>
+    <x:String x:Key="Basic_Flash_FlashMagisk">刷入所选 Magisk</x:String>
+    <x:String x:Key="Basic_Flash_PreventRecovery">防止恢复官方 Recovery</x:String>
+    <x:String x:Key="Basic_Flash_SyncAb">同步 A/B 分区</x:String>
+    <x:String x:Key="Basic_Flash_Executing">正在执行</x:String>
+
+    <!-- 应用管理 -->
+    <x:String x:Key="Basic_App_Manager">应用管理</x:String>
+    <x:String x:Key="Basic_App_Run">运行</x:String>
+    <x:String x:Key="Basic_App_ForceStop">强制停止</x:String>
+    <x:String x:Key="Basic_App_Activate">激活切换</x:String>
+    <x:String x:Key="Basic_App_Disable">禁用</x:String>
+    <x:String x:Key="Basic_App_Enable">启用</x:String>
+    <x:String x:Key="Basic_App_Extract">提取安装包</x:String>
+    <x:String x:Key="Basic_App_Uninstall">卸载</x:String>
+    <x:String x:Key="Basic_App_UninstallKeepData">保留数据卸载</x:String>
+    <x:String x:Key="Basic_App_ClearData">清除数据</x:String>
+    <x:String x:Key="Basic_App_Install">安装应用</x:String>
+    <x:String x:Key="Basic_App_ApkFile">APK 文件</x:String>
+    <x:String x:Key="Basic_App_StartInstall">开始安装</x:String>
+    <x:String x:Key="Basic_App_Installing">正在安装</x:String>
+    <x:String x:Key="Basic_App_Fetch">获取应用列表</x:String>
+    <x:String x:Key="Basic_App_ShowSystem">显示系统应用</x:String>
+    <x:String x:Key="Basic_App_SearchHint">搜索应用</x:String>
+    <x:String x:Key="Basic_App_Empty">尚未获取应用列表</x:String>
+    <x:String x:Key="Basic_App_Fetching">正在获取应用列表</x:String>
+
+    <!-- 投屏设置 -->
+    <x:String x:Key="Basic_Mirror_Tool">scrcpy 投屏工具</x:String>
+    <x:String x:Key="Basic_Mirror_WindowTitle">窗口标题</x:String>
+    <x:String x:Key="Basic_Mirror_WindowTitleHint">填写期望的窗口标题</x:String>
+    <x:String x:Key="Basic_Mirror_Start">开始投屏</x:String>
+    <x:String x:Key="Basic_Mirror_Casting">正在投屏</x:String>
+    <x:String x:Key="Basic_Mirror_TransmitRecord">传输与录制</x:String>
+    <x:String x:Key="Basic_Mirror_Record">录制屏幕</x:String>
+    <x:String x:Key="Basic_Mirror_Folder">目录</x:String>
+    <x:String x:Key="Basic_Mirror_RecordFolder">录制目录</x:String>
+    <x:String x:Key="Basic_Mirror_BitRate">码率</x:String>
+    <x:String x:Key="Basic_Mirror_MaxFps">最大帧率</x:String>
+    <x:String x:Key="Basic_Mirror_Scale">缩放</x:String>
+    <x:String x:Key="Basic_Mirror_MoreSettings">更多设置</x:String>
+    <x:String x:Key="Basic_Mirror_WindowOnTop">窗口置顶</x:String>
+    <x:String x:Key="Basic_Mirror_ComputerControl">电脑端控制</x:String>
+    <x:String x:Key="Basic_Mirror_Fullscreen">全屏</x:String>
+    <x:String x:Key="Basic_Mirror_Border">显示边框</x:String>
+    <x:String x:Key="Basic_Mirror_Touch">显示触摸</x:String>
+    <x:String x:Key="Basic_Mirror_TurnScreenOff">投屏时关闭屏幕</x:String>
+    <x:String x:Key="Basic_Mirror_StayAwake">关闭屏幕锁定</x:String>
+    <x:String x:Key="Basic_Mirror_Clipboard">剪贴板同步</x:String>
+    <x:String x:Key="Basic_Mirror_Camera">摄像头投屏</x:String>
+    <x:String x:Key="Basic_Mirror_Audio">转发音频</x:String>
+    <x:String x:Key="Basic_Mirror_MirrorRotation">镜像旋转</x:String>
+    <x:String x:Key="Basic_Mirror_LockAngle">锁定角度</x:String>
+    <x:String x:Key="Basic_Mirror_Rotation">正常旋转</x:String>
+    <x:String x:Key="Basic_Mirror_VirtualDisplay">虚拟显示</x:String>
+    <x:String x:Key="Basic_Mirror_VirtualEnable">启用虚拟屏幕</x:String>
+    <x:String x:Key="Basic_Mirror_VirtualPackage">虚拟屏幕包名</x:String>
+    <x:String x:Key="Basic_Mirror_VirtualSize">虚拟屏幕尺寸</x:String>
+    <x:String x:Key="Basic_Mirror_VirtualSizeHint">例如 1080x1920</x:String>
+    <x:String x:Key="Basic_Mirror_Button">模拟按键</x:String>
+    <x:String x:Key="Basic_Mirror_Back">返回</x:String>
+    <x:String x:Key="Basic_Mirror_Home">主页</x:String>
+    <x:String x:Key="Basic_Mirror_MultiTask">多任务</x:String>
+    <x:String x:Key="Basic_Mirror_LockScreen">锁屏</x:String>
+    <x:String x:Key="Basic_Mirror_VolumeUp">音量加</x:String>
+    <x:String x:Key="Basic_Mirror_VolumeDown">音量减</x:String>
+    <x:String x:Key="Basic_Mirror_Mute">静音</x:String>
+    <x:String x:Key="Basic_Mirror_Screenshot">截图</x:String>
+
+    <!-- 文件管理 -->
+    <x:String x:Key="Basic_File_QuickAccess">快速访问</x:String>
+    <x:String x:Key="Basic_File_RootMode">Root 模式</x:String>
+    <x:String x:Key="Basic_File_Import">导入文件</x:String>
+    <x:String x:Key="Basic_File_Export">导出文件</x:String>
+    <x:String x:Key="Basic_File_Delete">删除</x:String>
+    <x:String x:Key="Basic_File_Empty">尚未加载文件列表</x:String>
+    <x:String x:Key="Basic_File_QuickAccessEmpty">暂无快速访问目录</x:String>
+
+    <!-- 杂项控制 -->
+    <x:String x:Key="Basic_Others_Display">显示属性</x:String>
+    <x:String x:Key="Basic_Others_Resolution">分辨率</x:String>
+    <x:String x:Key="Basic_Others_Dpi">DPI</x:String>
+    <x:String x:Key="Basic_Others_Dp">DP</x:String>
+    <x:String x:Key="Basic_Others_Width">横向</x:String>
+    <x:String x:Key="Basic_Others_Height">纵向</x:String>
+    <x:String x:Key="Basic_Others_Modify">修改</x:String>
+    <x:String x:Key="Basic_Others_Restore">恢复</x:String>
+    <x:String x:Key="Basic_Others_Battery">电池</x:String>
+    <x:String x:Key="Basic_Others_Temperature">温度</x:String>
+    <x:String x:Key="Basic_Others_BatteryLevel">电量</x:String>
+    <x:String x:Key="Basic_Others_NoCharge">模拟未充电</x:String>
+    <x:String x:Key="Basic_Others_WirelessCharge">模拟无线充电</x:String>
+    <x:String x:Key="Basic_Others_UsbCharge">模拟 USB 充电</x:String>
+    <x:String x:Key="Basic_Others_DcCharge">模拟 DC 充电</x:String>
+    <x:String x:Key="Basic_Others_LockTime">锁屏时间</x:String>
+    <x:String x:Key="Basic_Others_CurrentLockTime">当前锁屏时间</x:String>
+    <x:String x:Key="Basic_Others_IconHide">图标隐藏</x:String>
+    <x:String x:Key="Basic_Others_Time">时间</x:String>
+    <x:String x:Key="Basic_Others_Location">定位</x:String>
+    <x:String x:Key="Basic_Others_Earphone">耳机</x:String>
+    <x:String x:Key="Basic_Others_Alarm">闹钟</x:String>
+    <x:String x:Key="Basic_Others_Sound">声音</x:String>
+    <x:String x:Key="Basic_Others_Signal">信号</x:String>
+    <x:String x:Key="Basic_Others_Rotation">旋转提示</x:String>
+    <x:String x:Key="Basic_Others_Bluetooth">蓝牙</x:String>
+    <x:String x:Key="Basic_Others_BatteryIcon">电池图标</x:String>
+    <x:String x:Key="Basic_Others_Wlan">WLAN</x:String>
+    <x:String x:Key="Basic_Others_Seconds">显示秒</x:String>
+    <x:String x:Key="Basic_Others_Airplane">飞行模式</x:String>
+    <x:String x:Key="Basic_Others_WifiX">WiFi 叉</x:String>
+    <x:String x:Key="Basic_Others_HideOrShow">隐藏/显示</x:String>
+    <x:String x:Key="Basic_Others_FontAdjust">字体调节</x:String>
+    <x:String x:Key="Basic_Others_Scale">缩放</x:String>
+    <x:String x:Key="Basic_Others_CurrentScale">当前缩放</x:String>
+    <x:String x:Key="Basic_Others_SetScale">设置缩放</x:String>
+    <x:String x:Key="Basic_Others_Animation">动画速度</x:String>
+    <x:String x:Key="Basic_Others_WindowScale">窗口缩放</x:String>
+    <x:String x:Key="Basic_Others_TransitionScale">过渡缩放</x:String>
+    <x:String x:Key="Basic_Others_Duration">动画时长</x:String>
+</ResourceDictionary>

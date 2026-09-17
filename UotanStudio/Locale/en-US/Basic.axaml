@@ -1,0 +1,200 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="UotanStudio.Locale.EnUs.Basic">
+
+    <!-- Bottom navigation entry -->
+    <x:String x:Key="Tab_Basic">Basic</x:String>
+
+    <!-- Left-hand menu -->
+    <x:String x:Key="Basic_Menu_Home">Device details</x:String>
+    <x:String x:Key="Basic_Menu_BasicFlash">Basic flash</x:String>
+    <x:String x:Key="Basic_Menu_AppManager">App manager</x:String>
+    <x:String x:Key="Basic_Menu_ScreenMirror">Mirror</x:String>
+    <x:String x:Key="Basic_Menu_FileManager">File manager</x:String>
+    <x:String x:Key="Basic_Menu_Others">Utilities</x:String>
+
+    <!-- Left-hand device status -->
+    <x:String x:Key="Basic_Status">Connection</x:String>
+    <x:String x:Key="Basic_CodeName">Model code</x:String>
+    <x:String x:Key="Basic_BlStatus">Bootloader</x:String>
+    <x:String x:Key="Basic_VabStatus">VAB</x:String>
+
+    <!-- Fixed right-hand panel -->
+    <x:String x:Key="Basic_Tab_Mirror">Mirror</x:String>
+    <x:String x:Key="Basic_Tab_Log">Log</x:String>
+    <x:String x:Key="Basic_MirrorWaiting">Waiting for a device</x:String>
+    <x:String x:Key="Basic_LogClear">Clear</x:String>
+    <x:String x:Key="Basic_LogEmpty">No log output yet</x:String>
+
+    <!-- Home -->
+    <x:String x:Key="Basic_Home_DeviceInfo">Device info</x:String>
+    <x:String x:Key="Basic_Home_Brand">Brand</x:String>
+    <x:String x:Key="Basic_Home_Model">Model</x:String>
+    <x:String x:Key="Basic_Home_CodeName">Model code</x:String>
+    <x:String x:Key="Basic_Home_System">System</x:String>
+    <x:String x:Key="Basic_Home_CpuAbi">CPU ABI</x:String>
+    <x:String x:Key="Basic_Home_Resolution">Resolution</x:String>
+    <x:String x:Key="Basic_Home_Density">Density</x:String>
+    <x:String x:Key="Basic_Home_Connection">Connection</x:String>
+    <x:String x:Key="Basic_Home_Bootloader">Bootloader</x:String>
+    <x:String x:Key="Basic_Home_Vab">VAB</x:String>
+    <x:String x:Key="Basic_Home_Vndk">VNDK</x:String>
+    <x:String x:Key="Basic_Home_CpuCode">CPU code</x:String>
+    <x:String x:Key="Basic_Home_Uptime">Uptime</x:String>
+    <x:String x:Key="Basic_Home_StorageType">Storage type</x:String>
+    <x:String x:Key="Basic_Home_BoardId">Board ID</x:String>
+    <x:String x:Key="Basic_Home_Platform">Platform</x:String>
+    <x:String x:Key="Basic_Home_Build">Build</x:String>
+    <x:String x:Key="Basic_Home_Kernel">Kernel</x:String>
+    <x:String x:Key="Basic_Home_Battery">Battery</x:String>
+    <x:String x:Key="Basic_Home_StorageMemory">Storage and memory</x:String>
+    <x:String x:Key="Basic_Home_CpuFrequency">CPU frequency</x:String>
+    <x:String x:Key="Basic_Home_CurrentFrequency">Current frequency</x:String>
+    <x:String x:Key="Basic_Home_AvailableFrequencies">Available frequencies</x:String>
+    <x:String x:Key="Basic_Home_Core">Core</x:String>
+    <x:String x:Key="Basic_Home_Frequency">Frequency</x:String>
+    <x:String x:Key="Basic_Home_CopyHint">Click to copy</x:String>
+
+    <!-- Basic flash -->
+    <x:String x:Key="Basic_Flash_Unlock">Standard unlock</x:String>
+    <x:String x:Key="Basic_Flash_UnlockFile">Unlock file</x:String>
+    <x:String x:Key="Basic_Flash_UnlockCode">Unlock code</x:String>
+    <x:String x:Key="Basic_Flash_UnlockNow">Unlock now</x:String>
+    <x:String x:Key="Basic_Flash_Relock">Re-lock</x:String>
+    <x:String x:Key="Basic_Flash_CommandUnlock">Command unlock</x:String>
+    <x:String x:Key="Basic_Flash_RunUnlock">Run unlock command</x:String>
+    <x:String x:Key="Basic_Flash_Recovery">Flash recovery</x:String>
+    <x:String x:Key="Basic_Flash_ChooseRecovery">Choose recovery</x:String>
+    <x:String x:Key="Basic_Flash_ToRecovery">To recovery</x:String>
+    <x:String x:Key="Basic_Flash_ToRecoveryA">To recovery A</x:String>
+    <x:String x:Key="Basic_Flash_ToRecoveryB">To recovery B</x:String>
+    <x:String x:Key="Basic_Flash_TempBoot">Temporary boot</x:String>
+    <x:String x:Key="Basic_Flash_ToBootA">To boot A</x:String>
+    <x:String x:Key="Basic_Flash_ToBootB">To boot B</x:String>
+    <x:String x:Key="Basic_Flash_MoreReboot">More reboot targets</x:String>
+    <x:String x:Key="Basic_Flash_RunReboot">Run reboot</x:String>
+    <x:String x:Key="Basic_Flash_PatchBoot">Patch boot</x:String>
+    <x:String x:Key="Basic_Flash_PatchHint">Supports Magisk, KernelSU and APatch packages</x:String>
+    <x:String x:Key="Basic_Flash_PatchPackage">Patch package</x:String>
+    <x:String x:Key="Basic_Flash_BootImage">Boot image</x:String>
+    <x:String x:Key="Basic_Flash_Start">Start</x:String>
+    <x:String x:Key="Basic_Flash_Easy">Easy flash</x:String>
+    <x:String x:Key="Basic_Flash_FlashMagisk">Flash chosen Magisk</x:String>
+    <x:String x:Key="Basic_Flash_PreventRecovery">Prevent stock recovery restore</x:String>
+    <x:String x:Key="Basic_Flash_SyncAb">Sync A/B slots</x:String>
+    <x:String x:Key="Basic_Flash_Executing">Executing</x:String>
+
+    <!-- App manager -->
+    <x:String x:Key="Basic_App_Manager">App manager</x:String>
+    <x:String x:Key="Basic_App_Run">Run</x:String>
+    <x:String x:Key="Basic_App_ForceStop">Force stop</x:String>
+    <x:String x:Key="Basic_App_Activate">Activate</x:String>
+    <x:String x:Key="Basic_App_Disable">Disable</x:String>
+    <x:String x:Key="Basic_App_Enable">Enable</x:String>
+    <x:String x:Key="Basic_App_Extract">Extract installer</x:String>
+    <x:String x:Key="Basic_App_Uninstall">Uninstall</x:String>
+    <x:String x:Key="Basic_App_UninstallKeepData">Uninstall, keep data</x:String>
+    <x:String x:Key="Basic_App_ClearData">Clear data</x:String>
+    <x:String x:Key="Basic_App_Install">Install app</x:String>
+    <x:String x:Key="Basic_App_ApkFile">APK file</x:String>
+    <x:String x:Key="Basic_App_StartInstall">Start installing</x:String>
+    <x:String x:Key="Basic_App_Installing">Installing</x:String>
+    <x:String x:Key="Basic_App_Fetch">Fetch app list</x:String>
+    <x:String x:Key="Basic_App_ShowSystem">Show system apps</x:String>
+    <x:String x:Key="Basic_App_SearchHint">Search apps</x:String>
+    <x:String x:Key="Basic_App_Empty">The app list has not been fetched yet</x:String>
+    <x:String x:Key="Basic_App_Fetching">Fetching the app list</x:String>
+
+    <!-- Mirror settings -->
+    <x:String x:Key="Basic_Mirror_Tool">scrcpy mirroring tool</x:String>
+    <x:String x:Key="Basic_Mirror_WindowTitle">Window title</x:String>
+    <x:String x:Key="Basic_Mirror_WindowTitleHint">Enter the desired window title</x:String>
+    <x:String x:Key="Basic_Mirror_Start">Start mirroring</x:String>
+    <x:String x:Key="Basic_Mirror_Casting">Mirroring</x:String>
+    <x:String x:Key="Basic_Mirror_TransmitRecord">Transmit and record</x:String>
+    <x:String x:Key="Basic_Mirror_Record">Record screen</x:String>
+    <x:String x:Key="Basic_Mirror_Folder">Folder</x:String>
+    <x:String x:Key="Basic_Mirror_RecordFolder">Recording folder</x:String>
+    <x:String x:Key="Basic_Mirror_BitRate">Bit rate</x:String>
+    <x:String x:Key="Basic_Mirror_MaxFps">Maximum frame rate</x:String>
+    <x:String x:Key="Basic_Mirror_Scale">Scaling</x:String>
+    <x:String x:Key="Basic_Mirror_MoreSettings">More settings</x:String>
+    <x:String x:Key="Basic_Mirror_WindowOnTop">Window on top</x:String>
+    <x:String x:Key="Basic_Mirror_ComputerControl">Computer control</x:String>
+    <x:String x:Key="Basic_Mirror_Fullscreen">Full screen</x:String>
+    <x:String x:Key="Basic_Mirror_Border">Show border</x:String>
+    <x:String x:Key="Basic_Mirror_Touch">Show touches</x:String>
+    <x:String x:Key="Basic_Mirror_TurnScreenOff">Turn screen off while mirroring</x:String>
+    <x:String x:Key="Basic_Mirror_StayAwake">Keep the device awake</x:String>
+    <x:String x:Key="Basic_Mirror_Clipboard">Clipboard sync</x:String>
+    <x:String x:Key="Basic_Mirror_Camera">Camera mirroring</x:String>
+    <x:String x:Key="Basic_Mirror_Audio">Forward audio</x:String>
+    <x:String x:Key="Basic_Mirror_MirrorRotation">Mirror rotation</x:String>
+    <x:String x:Key="Basic_Mirror_LockAngle">Lock angle</x:String>
+    <x:String x:Key="Basic_Mirror_Rotation">Normal rotation</x:String>
+    <x:String x:Key="Basic_Mirror_VirtualDisplay">Virtual display</x:String>
+    <x:String x:Key="Basic_Mirror_VirtualEnable">Enable virtual display</x:String>
+    <x:String x:Key="Basic_Mirror_VirtualPackage">Virtual display package</x:String>
+    <x:String x:Key="Basic_Mirror_VirtualSize">Virtual display size</x:String>
+    <x:String x:Key="Basic_Mirror_VirtualSizeHint">For example 1080x1920</x:String>
+    <x:String x:Key="Basic_Mirror_Button">Button shortcuts</x:String>
+    <x:String x:Key="Basic_Mirror_Back">Back</x:String>
+    <x:String x:Key="Basic_Mirror_Home">Home</x:String>
+    <x:String x:Key="Basic_Mirror_MultiTask">Recents</x:String>
+    <x:String x:Key="Basic_Mirror_LockScreen">Lock screen</x:String>
+    <x:String x:Key="Basic_Mirror_VolumeUp">Volume up</x:String>
+    <x:String x:Key="Basic_Mirror_VolumeDown">Volume down</x:String>
+    <x:String x:Key="Basic_Mirror_Mute">Mute</x:String>
+    <x:String x:Key="Basic_Mirror_Screenshot">Screenshot</x:String>
+
+    <!-- File manager -->
+    <x:String x:Key="Basic_File_QuickAccess">Quick access</x:String>
+    <x:String x:Key="Basic_File_RootMode">Root mode</x:String>
+    <x:String x:Key="Basic_File_Import">Import file</x:String>
+    <x:String x:Key="Basic_File_Export">Export file</x:String>
+    <x:String x:Key="Basic_File_Delete">Delete</x:String>
+    <x:String x:Key="Basic_File_Empty">The file list has not been loaded yet</x:String>
+    <x:String x:Key="Basic_File_QuickAccessEmpty">No quick-access folders yet</x:String>
+
+    <!-- Utilities -->
+    <x:String x:Key="Basic_Others_Display">Display properties</x:String>
+    <x:String x:Key="Basic_Others_Resolution">Resolution</x:String>
+    <x:String x:Key="Basic_Others_Dpi">DPI</x:String>
+    <x:String x:Key="Basic_Others_Dp">DP</x:String>
+    <x:String x:Key="Basic_Others_Width">Width</x:String>
+    <x:String x:Key="Basic_Others_Height">Height</x:String>
+    <x:String x:Key="Basic_Others_Modify">Apply</x:String>
+    <x:String x:Key="Basic_Others_Restore">Restore</x:String>
+    <x:String x:Key="Basic_Others_Battery">Battery</x:String>
+    <x:String x:Key="Basic_Others_Temperature">Temperature</x:String>
+    <x:String x:Key="Basic_Others_BatteryLevel">Level</x:String>
+    <x:String x:Key="Basic_Others_NoCharge">Simulate unplugged</x:String>
+    <x:String x:Key="Basic_Others_WirelessCharge">Simulate wireless charging</x:String>
+    <x:String x:Key="Basic_Others_UsbCharge">Simulate USB charging</x:String>
+    <x:String x:Key="Basic_Others_DcCharge">Simulate DC charging</x:String>
+    <x:String x:Key="Basic_Others_LockTime">Lock-screen timeout</x:String>
+    <x:String x:Key="Basic_Others_CurrentLockTime">Current timeout</x:String>
+    <x:String x:Key="Basic_Others_IconHide">Hide status icons</x:String>
+    <x:String x:Key="Basic_Others_Time">Time</x:String>
+    <x:String x:Key="Basic_Others_Location">Location</x:String>
+    <x:String x:Key="Basic_Others_Earphone">Headset</x:String>
+    <x:String x:Key="Basic_Others_Alarm">Alarm</x:String>
+    <x:String x:Key="Basic_Others_Sound">Sound</x:String>
+    <x:String x:Key="Basic_Others_Signal">Signal</x:String>
+    <x:String x:Key="Basic_Others_Rotation">Rotation lock</x:String>
+    <x:String x:Key="Basic_Others_Bluetooth">Bluetooth</x:String>
+    <x:String x:Key="Basic_Others_BatteryIcon">Battery icon</x:String>
+    <x:String x:Key="Basic_Others_Wlan">WLAN</x:String>
+    <x:String x:Key="Basic_Others_Seconds">Seconds</x:String>
+    <x:String x:Key="Basic_Others_Airplane">Airplane mode</x:String>
+    <x:String x:Key="Basic_Others_WifiX">Wi-Fi cross</x:String>
+    <x:String x:Key="Basic_Others_HideOrShow">Hide / show</x:String>
+    <x:String x:Key="Basic_Others_FontAdjust">Font scale</x:String>
+    <x:String x:Key="Basic_Others_Scale">Scale</x:String>
+    <x:String x:Key="Basic_Others_CurrentScale">Current</x:String>
+    <x:String x:Key="Basic_Others_SetScale">Target</x:String>
+    <x:String x:Key="Basic_Others_Animation">Animation speed</x:String>
+    <x:String x:Key="Basic_Others_WindowScale">Window scale</x:String>
+    <x:String x:Key="Basic_Others_TransitionScale">Transition scale</x:String>
+    <x:String x:Key="Basic_Others_Duration">Animation duration</x:String>
+</ResourceDictionary>

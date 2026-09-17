@@ -175,7 +175,7 @@ public class LanguagePackRegistry
     public void DiscoverBuiltInPacks(string baseUri = "avares://UotanStudio/Locale", string[]? knownCultures = null)
     {
         var cultures = knownCultures ?? ["en-US", "zh-CN"];
-        var defaultModules = new[] { "Common", "Menu", "Dock", "Node", "Settings", "Device" };
+        var defaultModules = new[] { "Common", "Menu", "Dock", "Node", "Settings", "Device", "Basic" };
 
         foreach (var culture in cultures)
         {

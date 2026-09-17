@@ -67,3 +67,13 @@ public partial class Device : ResourceDictionary
     /// <inheritdoc cref="Common()"/>
     public Device() => AvaloniaXamlLoader.Load(this);
 }
+
+/// <summary>
+/// <para>英文（美国）基础页面模块资源字典（<c>Locale/en-US/Basic.axaml</c> 的代码后置）。</para>
+/// English (US) basic-page module resource dictionary (code-behind of <c>Locale/en-US/Basic.axaml</c>).
+/// </summary>
+public partial class Basic : ResourceDictionary
+{
+    /// <inheritdoc cref="Common()"/>
+    public Basic() => AvaloniaXamlLoader.Load(this);
+}
