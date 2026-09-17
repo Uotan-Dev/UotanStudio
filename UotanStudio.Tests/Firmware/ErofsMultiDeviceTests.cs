@@ -133,38 +133,20 @@ public class ErofsMultiDeviceTests
     }
 
     [Fact]
-    public void Builder_ExtraDeviceCount1_WritesDeviceTable()
+    public void Builder_ExtraDeviceCount1_ThrowsNotSupported()
     {
+        // The builder has no backing-device input; multi-device output is explicitly refused
+        // instead of silently writing an all-zero device table.
+        // 打包器没有外部设备镜像输入；显式拒绝多设备输出，而不是静默写全零设备表。
         using var temp = new TempDirectory();
         WriteText(temp, "hello.txt", "hello erofs\n");
-        WriteText(temp, "dir/nested.txt", "nested content");
-        var payload = string.Concat(Enumerable.Repeat("0123456789abcdef", 400));
-        WriteText(temp, "dir/big.txt", payload);
 
         var builder = new ErofsBuilder();
         var imagePath = System.IO.Path.Combine(temp.Path, "multi.erofs");
-        builder.Build(
+        Assert.Throws<NotSupportedException>(() => builder.Build(
             temp.Path,
             imagePath,
-            new ErofsOptions { Compress = false, ExtraDeviceCount = 1 });
-
-        using var parser = new ErofsParser(imagePath);
-        var sb = parser.Superblock;
-
-        // s_extra_devices == 1, s_devt_slotoff > 0（块 1）。
-        Assert.Equal((ushort)1, sb.ExtraDevices);
-        Assert.True(sb.DevtSlotoff > 0, $"s_devt_slotoff should be > 0, got {sb.DevtSlotoff}");
-
-        // Linux super.c defines devt_slotoff in 128-byte slots.
-        var devtOffset = (long)sb.DevtSlotoff * 128;
-        var imageBytes = System.IO.File.ReadAllBytes(imagePath);
-
-        // The disk table contains extra devices only; primary storage is implicit.
-        var slot0 = ErofsDeviceSlot.FromBytes(
-            imageBytes.AsSpan((int)devtOffset, ErofsDeviceSlot.Size));
-        Assert.Equal(0u, slot0.Blocks);
-        Assert.Equal(0u, slot0.MappedBlkAddr);
-
+            new ErofsOptions { Compress = false, ExtraDeviceCount = 1 }));
     }
 
     [Fact]
@@ -211,7 +193,7 @@ public class ErofsMultiDeviceTests
         builder.Build(
             temp.Path,
             imagePath,
-            new ErofsOptions { Compress = false, ExtraDeviceCount = 1 });
+            new ErofsOptions { Compress = false });
 
         var wslPath = ToWslPath(imagePath);
         var (output, exitCode) = RunWsl($"fsck.erofs {wslPath}");

@@ -15,12 +15,6 @@ public class ErofsCompressionConfigurationTests
     [InlineData(ErofsCompressionAlgorithm.Lzma, true, 0)]
     [InlineData(ErofsCompressionAlgorithm.Deflate, true, 0)]
     [InlineData(ErofsCompressionAlgorithm.Zstd, true, 0)]
-    [InlineData(ErofsCompressionAlgorithm.Lzma, false, 1)]
-    [InlineData(ErofsCompressionAlgorithm.Deflate, false, 1)]
-    [InlineData(ErofsCompressionAlgorithm.Zstd, false, 1)]
-    [InlineData(ErofsCompressionAlgorithm.Lzma, true, 1)]
-    [InlineData(ErofsCompressionAlgorithm.Deflate, true, 1)]
-    [InlineData(ErofsCompressionAlgorithm.Zstd, true, 1)]
     public void Build_WritesKernelConfigurationBeforeInodes(ErofsCompressionAlgorithm algorithm, bool metabox, int extraDevices)
     {
         using var source = new TempDirectory();

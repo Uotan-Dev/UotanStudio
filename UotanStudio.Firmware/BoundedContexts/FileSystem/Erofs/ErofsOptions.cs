@@ -135,6 +135,17 @@ public sealed class ErofsOptions
                 "ExtraDeviceCount must be non-negative.");
         }
 
+        // The builder has no input path for backing device images; writing an all-zero device
+        // table would silently produce an image whose extra devices are unreadable. Refuse
+        // explicitly until multi-device output is actually implemented.
+        // 打包器没有外部设备镜像的输入路径；写全零设备表会静默产出额外设备不可读的镜像。
+        // 在真正实现多设备输出前显式拒绝。
+        if (ExtraDeviceCount > 0)
+        {
+            throw new NotSupportedException(
+                "EROFS multi-device output is not implemented: ExtraDeviceCount must be 0.");
+        }
+
 
         if (Fragments)
         {
