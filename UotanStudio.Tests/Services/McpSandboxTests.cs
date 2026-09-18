@@ -1,6 +1,8 @@
+using System.Formats.Tar;
 using System.Text.Json;
 using UotanStudio.Mcp;
 using UotanStudio.Mcp.Tools;
+using UotanStudio.Services.Delivery;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
@@ -118,6 +120,60 @@ public class McpSandboxTests : IDisposable
             decompressJson);
 
         Assert.True(payload.AsSpan().SequenceEqual(File.ReadAllBytes(restored)));
+    }
+
+    [Fact]
+    public async Task ListAlgorithms_ReportsCompressionPayloadShape()
+    {
+        var json = await CompressionToolHandlers.ListAlgorithms();
+        using var document = JsonDocument.Parse(json);
+        Assert.True(document.RootElement.GetProperty("success").GetBoolean(), json);
+        var algorithms = document.RootElement.GetProperty("data");
+        Assert.True(algorithms.GetArrayLength() > 0, json);
+        var first = algorithms[0];
+        Assert.True(first.TryGetProperty("format", out _));
+        Assert.True(first.TryGetProperty("canCompress", out _));
+        Assert.True(first.TryGetProperty("isStreaming", out _));
+    }
+
+    [Fact]
+    public async Task UnpackTar_ReportsFirmwareDataEntries()
+    {
+        var sandbox = new PathSandbox(_root);
+        var staged = Path.Combine(_root, "stage");
+        Directory.CreateDirectory(staged);
+        File.WriteAllText(Path.Combine(staged, "a.txt"), "alpha");
+        File.WriteAllText(Path.Combine(staged, "b.txt"), "bravo");
+        var tar = Path.Combine(_root, "payload.tar");
+        TarFile.CreateFromDirectory(staged, tar, includeBaseDirectory: false);
+
+        var json = await FirmwareToolHandlers.UnpackAsync(sandbox, tar, "unpacked", 1024 * 1024);
+        using var document = JsonDocument.Parse(json);
+        Assert.True(document.RootElement.GetProperty("success").GetBoolean(), json);
+        var entries = document.RootElement.GetProperty("data").GetProperty("entries");
+        Assert.Equal(2, entries.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task DeliveryListOutputs_ReportsPlannedAndExistingPaths()
+    {
+        var sandbox = new PathSandbox(_root);
+        var source = Path.Combine(_root, "boot.img");
+        File.WriteAllBytes(source, new byte[8192]);
+        var plan = new DeliveryPlan
+        {
+            Files = [new DeliveryFile { SourcePath = source, FileName = "boot.img", Partition = "boot" }],
+            Txt = false,
+            OutputDirectory = Path.Combine(_root, "output")
+        };
+        var planJson = JsonSerializer.Serialize(plan, DeliveryJsonContext.Default.DeliveryPlan);
+
+        var json = await DeliveryToolHandlers.ListOutputs(sandbox, planJson);
+        using var document = JsonDocument.Parse(json);
+        Assert.True(document.RootElement.GetProperty("success").GetBoolean(), json);
+        var data = document.RootElement.GetProperty("data");
+        Assert.True(data.GetProperty("planned").GetArrayLength() > 0, json);
+        Assert.Equal(0, data.GetProperty("existing").GetArrayLength());
     }
 
     [Fact]

@@ -97,15 +97,10 @@ internal static class FirmwareToolHandlers
     {
         FirmwareFormatRegistry.RegisterAll();
         var formats = FormatDetector.RegisteredHandlers
-            .Select(h => new
-            {
-                name = h.FormatName,
-                extensions = h.FileExtensions,
-                canPack = h is IWritableFormatHandler
-            })
+            .Select(h => new FormatListEntryPayload(h.FormatName, h.FileExtensions, h is IWritableFormatHandler))
             .ToList();
         return Task.FromResult(ToolJson.Serialize(
-            new ToolResult(true, $"{formats.Count} format handler(s) registered.", formats)));
+            new ToolResult(true, $"{formats.Count} format handler(s) registered.", ToolJson.Data(formats))));
     }
 
     public static Task<string> DetectFormatAsync(PathSandbox sandbox, string path)
@@ -115,12 +110,9 @@ internal static class FirmwareToolHandlers
         var handler = FormatDetector.Detect(resolved);
         var json = handler is null
             ? ToolJson.Serialize(new ToolResult(false, $"No registered handler can process: {resolved}"))
-            : ToolJson.Serialize(new ToolResult(true, handler.FormatName, new
-            {
-                format = handler.FormatName,
-                extensions = handler.FileExtensions,
-                canPack = handler is IWritableFormatHandler
-            }));
+            : ToolJson.Serialize(new ToolResult(true, handler.FormatName, ToolJson.Data(
+                new DetectedFormatPayload(handler.FormatName, handler.FileExtensions,
+                    handler is IWritableFormatHandler))));
         return Task.FromResult(json);
     }
 

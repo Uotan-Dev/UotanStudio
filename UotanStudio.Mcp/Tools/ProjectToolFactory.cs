@@ -86,7 +86,8 @@ internal static class ProjectToolHandlers
             ?? throw new InvalidDataException("Solution snapshot JSON could not be parsed.");
         var written = await SolutionPersistenceService.SaveSolutionAsync(resolved, snapshot).ConfigureAwait(false);
         return written
-            ? ToolJson.Serialize(new ToolResult(true, $"Solution written: {resolved}", new { path = resolved }))
+            ? ToolJson.Serialize(new ToolResult(true, $"Solution written: {resolved}",
+                ToolJson.Data(new PathPayload(resolved))))
             : ToolJson.Serialize(new ToolResult(false, $"Writing the solution failed: {resolved}"));
     }
 

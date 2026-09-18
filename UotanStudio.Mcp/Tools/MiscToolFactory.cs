@@ -129,7 +129,7 @@ internal static class MiscToolHandlers
             var text = Disassembler.DisassembleAll(dex);
             return ToolJson.Serialize(new ToolResult(true,
                 $"Disassembled {Path.GetFileName(resolved)} ({text.Length} chars).",
-                new { path = resolved, text }));
+                ToolJson.Data(new PathTextPayload(resolved, text))));
         });
 
     public static Task<string> DexDecompileAsync(PathSandbox sandbox, string path)
@@ -141,7 +141,7 @@ internal static class MiscToolHandlers
             var text = LightweightDecompiler.DecompileAll(dex);
             return ToolJson.Serialize(new ToolResult(true,
                 $"Decompiled {Path.GetFileName(resolved)} ({text.Length} chars).",
-                new { path = resolved, text }));
+                ToolJson.Data(new PathTextPayload(resolved, text))));
         });
 
     public static Task<string> DexAssembleAsync(PathSandbox sandbox, string smali, string outputPath)
@@ -153,7 +153,7 @@ internal static class MiscToolHandlers
             dex.Write(resolvedOutput);
             return ToolJson.Serialize(new ToolResult(true,
                 $"Assembled dex written: {resolvedOutput}",
-                new { output = resolvedOutput, bytes = new FileInfo(resolvedOutput).Length }));
+                ToolJson.Data(new OutputBytesPayload(resolvedOutput, new FileInfo(resolvedOutput).Length))));
         });
 
     public static Task<string> DexInfoAsync(PathSandbox sandbox, string path)
@@ -163,15 +163,13 @@ internal static class MiscToolHandlers
             GuardMetaSize(resolved);
             var dex = DexFile.Load(resolved);
             var classes = dex.Classes.Select(c => dex.GetType(c.TypeIndex)).ToList();
-            return ToolJson.Serialize(new ToolResult(true, dex.Describe(), new
-            {
-                path = resolved,
-                strings = dex.Strings.Count,
-                types = dex.Types.Count,
-                fields = dex.Fields.Count,
-                methods = dex.Methods.Count,
-                classes
-            }));
+            return ToolJson.Serialize(new ToolResult(true, dex.Describe(), ToolJson.Data(new DexInfoPayload(
+                resolved,
+                dex.Strings.Count,
+                dex.Types.Count,
+                dex.Fields.Count,
+                dex.Methods.Count,
+                classes))));
         });
 
     public static Task<string> AxmlParseAsync(PathSandbox sandbox, string path)
@@ -188,7 +186,7 @@ internal static class MiscToolHandlers
             var document = AXmlParser.Parse(data);
             var text = document.ToXml();
             return ToolJson.Serialize(new ToolResult(true,
-                $"Parsed AXML {Path.GetFileName(resolved)}.", new { path = resolved, xml = text }));
+                $"Parsed AXML {Path.GetFileName(resolved)}.", ToolJson.Data(new PathXmlPayload(resolved, text))));
         });
 
     public static Task<string> ArscParseAsync(PathSandbox sandbox, string path)
@@ -197,15 +195,13 @@ internal static class MiscToolHandlers
             var resolved = sandbox.Resolve(path, mustExist: true);
             GuardMetaSize(resolved);
             var table = UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.ArscParser.Parse(File.ReadAllBytes(resolved));
-            var packages = table.Packages.Select(p => new
-            {
-                name = p.Name,
-                packageId = p.Id,
-                typeCount = p.Types.Count
-            }).ToList();
+            var packages = table.Packages.Select(p => new ArscPackagePayload(
+                p.Name,
+                (int)p.Id,
+                p.Types.Count)).ToList();
             return ToolJson.Serialize(new ToolResult(true,
                 $"Parsed resources.arsc with {packages.Count} package(s).",
-                new { path = resolved, packages }));
+                ToolJson.Data(new ArscSummaryPayload(resolved, packages))));
         });
 
     public static Task<string> ApkStripSignaturesAsync(PathSandbox sandbox, string inputPath, string outputPath)
@@ -223,7 +219,7 @@ internal static class MiscToolHandlers
                 new ApkEntryStripper.RewriteRequest { StripV1SignatureEntries = true });
             return ToolJson.Serialize(new ToolResult(true,
                 $"Signature entries stripped into: {resolvedOutput}",
-                new { input = resolvedInput, output = resolvedOutput }));
+                ToolJson.Data(new InputOutputPayload(resolvedInput, resolvedOutput))));
         });
 
     /// <summary>

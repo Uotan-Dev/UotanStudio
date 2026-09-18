@@ -101,7 +101,7 @@ internal static class DeliveryToolHandlers
             var existing = DeliveryOutputService.FindExistingOutputs(plan);
             return ToolJson.Serialize(new ToolResult(true,
                 $"{planned.Count} planned output path(s), {existing.Length} already exist.",
-                new { planned, existing }));
+                ToolJson.Data(new DeliveryOutputsPayload(planned, existing))));
         });
 
     public static Task<string> Build(PathSandbox sandbox, string planJson, string[]? overwrite)
@@ -124,7 +124,7 @@ internal static class DeliveryToolHandlers
                 var outputs = await service.ExportAsync(plan, progress: null, token: default,
                     overwrite: overwriteSet).ConfigureAwait(false);
                 return ToolJson.Serialize(new ToolResult(true,
-                    $"Delivery build produced {outputs.Length} output path(s).", outputs));
+                    $"Delivery build produced {outputs.Length} output path(s).", ToolJson.Data(outputs)));
             }
             catch (Exception ex)
             {

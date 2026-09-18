@@ -75,19 +75,17 @@ internal static class CompressionToolHandlers
     public static Task<string> ListAlgorithms()
     {
         var algorithms = CompressionFormats.All
-            .Select(info => new
-            {
-                format = info.Format.ToString(),
-                name = info.Name,
-                aliases = info.Aliases,
-                extensions = info.Extensions,
-                canCompress = info.CanCompress,
-                canDecompress = info.CanDecompress,
-                isStreaming = info.IsStreaming
-            })
+            .Select(info => new CompressionAlgorithmPayload(
+                info.Format.ToString(),
+                info.Name,
+                info.Aliases,
+                info.Extensions,
+                info.CanCompress,
+                info.CanDecompress,
+                info.IsStreaming))
             .ToList();
         return Task.FromResult(ToolJson.Serialize(
-            new ToolResult(true, $"{algorithms.Count} compression algorithm(s) available.", algorithms)));
+            new ToolResult(true, $"{algorithms.Count} compression algorithm(s) available.", ToolJson.Data(algorithms))));
     }
 
     public static Task<string> Compress(
@@ -107,13 +105,11 @@ internal static class CompressionToolHandlers
             var inputInfo = new FileInfo(resolvedInput);
             return ToolJson.Serialize(new ToolResult(true,
                 $"Compressed with {CompressionFormats.GetDisplayName(format)}.",
-                new
-                {
-                    input = resolvedInput,
-                    output = resolvedOutput,
-                    inputBytes = inputInfo.Length,
-                    outputBytes = outputInfo.Length
-                }));
+                ToolJson.Data(new CompressionIoPayload(
+                    resolvedInput,
+                    resolvedOutput,
+                    inputInfo.Length,
+                    outputInfo.Length))));
         });
 
     public static Task<string> Decompress(
@@ -143,12 +139,10 @@ internal static class CompressionToolHandlers
             var inputInfo = new FileInfo(resolvedInput);
             return ToolJson.Serialize(new ToolResult(true,
                 $"Decompressed {CompressionFormats.GetDisplayName(format)}.",
-                new
-                {
-                    input = resolvedInput,
-                    output = resolvedOutput,
-                    inputBytes = inputInfo.Length,
-                    outputBytes = outputInfo.Length
-                }));
+                ToolJson.Data(new CompressionIoPayload(
+                    resolvedInput,
+                    resolvedOutput,
+                    inputInfo.Length,
+                    outputInfo.Length))));
         });
 }

@@ -176,33 +176,31 @@ internal static class DeviceToolHandlers
         => Task.Run(() =>
         {
             var devices = Comm.EnumerateUsbDevices(UsbApiKind.Auto)
-                .Select(d => new
-                {
-                    api = d.ApiName,
-                    sourceApiKind = d.SourceApiKind.ToString(),
-                    vendorId = d.VendorId,
-                    productId = d.ProductId,
-                    serial = d.SerialNumber,
-                    devicePath = d.DevicePath,
-                    deviceKey = d.DeviceKey,
-                    interfaceClass = d.InterfaceClass,
-                    interfaceSubClass = d.InterfaceSubClass,
-                    interfaceProtocol = d.InterfaceProtocol
-                })
+                .Select(d => new UsbDevicePayload(
+                    d.ApiName,
+                    d.SourceApiKind.ToString(),
+                    d.VendorId,
+                    d.ProductId,
+                    d.SerialNumber,
+                    d.DevicePath,
+                    d.DeviceKey,
+                    d.InterfaceClass,
+                    d.InterfaceSubClass,
+                    d.InterfaceProtocol))
                 .ToList();
-            return ToolJson.Serialize(new ToolResult(true, $"{devices.Count} USB device(s).", devices));
+            return ToolJson.Serialize(new ToolResult(true, $"{devices.Count} USB device(s).", ToolJson.Data(devices)));
         });
 
     public static Task<string> ListAdbDevicesAsync()
         => Task.Run(() =>
         {
-            var devices = new List<object>();
+            var devices = new List<AdbTargetPayload>();
             using (var stream = new AdbServerServices("unused").Open("host:devices-l"))
             using (var reader = new StreamReader(stream))
             {
                 if (string.IsNullOrWhiteSpace(reader.ReadLine()))
                 {
-                    return ToolJson.Serialize(new ToolResult(true, "0 adb target(s).", devices));
+                    return ToolJson.Serialize(new ToolResult(true, "0 adb target(s).", ToolJson.Data(devices)));
                 }
 
                 while (reader.ReadLine() is { } line)
@@ -210,11 +208,11 @@ internal static class DeviceToolHandlers
                     var parts = line.Split('\t');
                     if (parts.Length >= 2 && !string.IsNullOrWhiteSpace(parts[0]))
                     {
-                        devices.Add(new { serial = parts[0], state = parts[1] });
+                        devices.Add(new AdbTargetPayload(parts[0], parts[1]));
                     }
                 }
             }
-            return ToolJson.Serialize(new ToolResult(true, $"{devices.Count} adb target(s).", devices));
+            return ToolJson.Serialize(new ToolResult(true, $"{devices.Count} adb target(s).", ToolJson.Data(devices)));
         });
 
     public static Task<string> AdbShellAsync(string serial, string command)
@@ -228,7 +226,8 @@ internal static class DeviceToolHandlers
             using var memory = new MemoryStream();
             stream.CopyTo(memory);
             var output = System.Text.Encoding.UTF8.GetString(memory.ToArray());
-            return ToolJson.Serialize(new ToolResult(true, "Command completed.", new { serial, command, output }));
+            return ToolJson.Serialize(new ToolResult(true, "Command completed.",
+                ToolJson.Data(new AdbShellPayload(serial, command, output))));
         });
 
     public static Task<string> AdbPullAsync(PathSandbox sandbox, string serial, string remotePath, string localPath)
@@ -278,7 +277,7 @@ internal static class DeviceToolHandlers
             }
             var info = new FileInfo(resolvedLocal);
             return ToolJson.Serialize(new ToolResult(true, $"Pulled {remotePath}.",
-                new { serial, remotePath, local = resolvedLocal, bytes = info.Length }));
+                ToolJson.Data(new AdbFileSyncPayload(serial, remotePath, resolvedLocal, info.Length))));
         });
 
     public static Task<string> AdbPushAsync(PathSandbox sandbox, string serial, string localPath, string remotePath)
@@ -292,7 +291,7 @@ internal static class DeviceToolHandlers
             services.Push(resolvedLocal, remotePath);
             var info = new FileInfo(resolvedLocal);
             return ToolJson.Serialize(new ToolResult(true, $"Pushed {remotePath}.",
-                new { serial, remotePath, local = resolvedLocal, bytes = info.Length }));
+                ToolJson.Data(new AdbFileSyncPayload(serial, remotePath, resolvedLocal, info.Length))));
         });
 
     /// <summary>
@@ -314,7 +313,7 @@ internal static class DeviceToolHandlers
             using var session = OpenFastbootSession();
             var variables = session.GetAllVariables();
             return ToolJson.Serialize(new ToolResult(true,
-                $"{variables.Count} fastboot variable(s).", variables));
+                $"{variables.Count} fastboot variable(s).", ToolJson.Data(variables)));
         });
 
     public static Task<string> AdbRebootAsync(string serial, string? mode)
@@ -326,7 +325,7 @@ internal static class DeviceToolHandlers
             using var stream = services.Open(mode is { Length: > 0 } ? $"reboot:{mode}" : "reboot:");
             return ToolJson.Serialize(new ToolResult(true,
                 string.IsNullOrWhiteSpace(mode) ? "Reboot requested." : $"Reboot to {mode} requested.",
-                new { serial, mode }));
+                ToolJson.Data(new AdbRebootPayload(serial, mode))));
         });
 
     public static Task<string> FastbootFlashAsync(PathSandbox sandbox, string partition, string imagePath, bool wipe)
@@ -348,7 +347,7 @@ internal static class DeviceToolHandlers
             var flash = session.ExecuteCommand($"flash:{partition}");
             return flash.State == FastbootResponseState.Success
                 ? ToolJson.Serialize(new ToolResult(true, $"Flashed {partition}.",
-                    new { partition, image = resolvedImage }))
+                    ToolJson.Data(new FlashPayload(partition, resolvedImage))))
                 : ToolJson.Serialize(new ToolResult(false,
                     $"Flash failed: {flash.State} {flash.Text}"));
         });
@@ -360,7 +359,8 @@ internal static class DeviceToolHandlers
             using var session = OpenFastbootSession();
             var response = session.ExecuteCommand($"erase:{partition}");
             return response.State == FastbootResponseState.Success
-                ? ToolJson.Serialize(new ToolResult(true, $"Erased {partition}.", new { partition }))
+                ? ToolJson.Serialize(new ToolResult(true, $"Erased {partition}.",
+                    ToolJson.Data(new PartitionPayload(partition))))
                 : ToolJson.Serialize(new ToolResult(false,
                     $"Erase failed: {response.State} {response.Text}"));
         });
