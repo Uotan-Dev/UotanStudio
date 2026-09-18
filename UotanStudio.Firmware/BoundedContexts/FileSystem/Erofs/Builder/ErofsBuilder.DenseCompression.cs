@@ -17,9 +17,34 @@ public sealed partial class ErofsBuilder
         var encoded = new byte[ErofsCompression.MaximumOutputSize((ErofsAlgorithm)options.Algorithm, raw.Length)];
         var plans = new List<PclusterPlan>();
         long position = 0;
+        // Full-index (pre-big-pcluster) kernels compute a pcluster's output size as the number of
+        // covered logical clusters times the cluster size. A compressed pcluster that also covers
+        // the trailing partial cluster therefore decodes fewer bytes than the kernel expects and
+        // fails with "failed to decompress ... out[...]". The legacy logical planner already
+        // truncates to the cluster boundary; the dense planner must obey the same invariant, so
+        // probes stop at the last full cluster and the partial tail is emitted as Plain.
+        // 全索引（pre-big-pcluster）内核按覆盖的逻辑簇数 × 簇大小计算 pcluster 输出大小。压缩
+        // pcluster 若同时覆盖尾部非整簇，解压字节数会少于内核预期并触发
+        // "failed to decompress ... out[...]"。legacy 逻辑簇规划器已截断到簇边界，dense 规划器
+        // 必须遵守同一不变量：探测止于最后一个完整簇，尾部非整簇按 Plain 输出。
+        var alignedEnd = node.Size / clusterSize * clusterSize;
         while (position < node.Size)
         {
             options.CancellationToken.ThrowIfCancellationRequested();
+            var probeLimit = (int)Math.Min(alignedEnd - position, raw.Length);
+            if (probeLimit <= 0)
+            {
+                // Only the trailing partial cluster remains; it can never join a pcluster.
+                // 只剩尾部非整簇，不能并入任何 pcluster。
+                plans.Add(new PclusterPlan
+                {
+                    SourceOffset = position,
+                    SourceLength = (int)(node.Size - position),
+                    CompressedLength = (int)(node.Size - position),
+                    Plain = true,
+                });
+                break;
+            }
             var available = (int)Math.Min(node.Size - position, raw.Length);
             var buffered = 0;
             var bestLength = 0;
@@ -27,6 +52,7 @@ public sealed partial class ErofsBuilder
             bool Fits(int length)
             {
                 options.CancellationToken.ThrowIfCancellationRequested();
+                if (length > alignedEnd - position) return false;
                 if (length > buffered)
                 {
                     input.Position = position + buffered;

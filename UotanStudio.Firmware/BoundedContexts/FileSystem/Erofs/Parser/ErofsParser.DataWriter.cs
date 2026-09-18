@@ -268,7 +268,6 @@ public sealed partial class ErofsParser
             while (lcn < totalIdx)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (observer is not null && lcn >= 4096) return;
                 var lc = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn, out var ebase, out var compacted4bInitial, out var compacted2b, cachedIndex);
                 if (lc.Type == LclusterTypeNonHead)
                 {
@@ -310,6 +309,13 @@ public sealed partial class ErofsParser
                     var t2 = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, nextLcn, out _, out _, out _, cachedIndex);
                     nextMLa = nextLcn * lclusterSize + t2.ClusterOfs;
                 }
+
+                // Pre-big-pcluster kernels (Linux 5.4 / 5.10, fs/erofs/zmap.c) never clamp the
+                // extent end to i_size: the decompressor must produce exactly the covered whole
+                // clusters, so the kernel expects (nextLcn << lclusterbits) - m_la here.
+                // pre-big-pcluster 内核（Linux 5.4 / 5.10，fs/erofs/zmap.c）不会把 extent 末端
+                // 裁剪到 i_size：解压输出必须恰好等于覆盖的整簇数，即 (nextLcn << lclusterbits) - m_la。
+                var kernelExpectedOutputSize = checked((int)(((long)nextLcn << lclusterBits) - mLa));
 
                 var llen = Math.Min(nextMLa, (long)inode.Size) - mLa;
                 if (llen <= 0)
@@ -467,7 +473,7 @@ public sealed partial class ErofsParser
                 if (observer is not null)
                 {
                     if (!observer((ErofsCompressionAlgorithm)algorithm,
-                        compressed.AsSpan(inputMargin, compressedByteLen - inputMargin), decoded.AsSpan(0, (int)llen), lc.ClusterOfs)) return;
+                        compressed.AsSpan(inputMargin, compressedByteLen - inputMargin), decoded.AsSpan(0, (int)llen), lc.ClusterOfs, kernelExpectedOutputSize)) return;
                 }
                 else output.Write(decoded, 0, (int)llen);
                 lcn = nextLcn;
@@ -499,7 +505,7 @@ public sealed partial class ErofsParser
             if (entry.IsDirectory || entry.IsSymlink || entry.IsSpecialFile) continue;
             var inode = ReadInode(entry.Nid);
             if (!inode.IsCompressed) continue;
-            WriteCompressedData(entry.Nid, inode, Stream.Null, (_, _, _, clusterOfs) =>
+            WriteCompressedData(entry.Nid, inode, Stream.Null, (_, _, _, clusterOfs, _) =>
             {
                 largest = Math.Max(largest, clusterOfs);
                 return true;
@@ -507,6 +513,62 @@ public sealed partial class ErofsParser
         }
 
         return largest;
+    }
+
+    /// <summary>
+    /// Returns the largest shortfall, over all compressed pclusters, between the output a
+    /// pre-big-pcluster kernel demands (covered whole logical clusters, unclamped by i_size) and
+    /// the bytes the stored stream actually decodes to. Zero is required for images that must
+    /// mount on Linux 5.4 / 5.10; a positive value reproduces the device-side
+    /// "failed to decompress %d in[...] out[...]" corruption. Modern (big-pcluster) kernels clamp
+    /// the final extent to i_size, so images using that layout can legitimately report a deficit.
+    /// <para>返回所有压缩 pcluster 中，“pre-big-pcluster 内核要求的输出（覆盖的整逻辑簇数，不按
+    /// i_size 裁剪）”与“实际解压字节数”之间的最大缺口。需要在 Linux 5.4 / 5.10 上挂载的镜像必须
+    /// 为 0；大于 0 即复现设备端 "failed to decompress %d in[...] out[...]" 故障。现代
+    /// （big-pcluster）内核会把最后一个 extent 裁剪到 i_size，因此采用该布局的镜像出现缺口属正常。</para>
+    /// </summary>
+    internal int MaxPclusterKernelCoverageDeficit()
+    {
+        var largest = 0;
+        foreach (var entry in EnumerateEntries())
+        {
+            if (entry.IsDirectory || entry.IsSymlink || entry.IsSpecialFile) continue;
+            var inode = ReadInode(entry.Nid);
+            if (!inode.IsCompressed) continue;
+            WriteCompressedData(entry.Nid, inode, Stream.Null, (_, _, decoded, _, kernelExpected) =>
+            {
+                largest = Math.Max(largest, kernelExpected - decoded.Length);
+                return true;
+            });
+        }
+
+        return largest;
+    }
+
+    /// <summary>Diagnostic companion to <see cref="MaxPclusterKernelCoverageDeficit"/> listing every
+    /// compressed extent whose kernel-expected output exceeds its decoded bytes.
+    /// <para><see cref="MaxPclusterKernelCoverageDeficit"/> 的诊断伴侣，列出所有内核期望输出大于实际
+    /// 解压字节数的压缩 extent。</para></summary>
+    internal List<(string Path, int Expected, int Decoded)> PclusterKernelCoverageDeficits()
+    {
+        var report = new List<(string, int, int)>();
+        foreach (var entry in EnumerateEntries())
+        {
+            if (entry.IsDirectory || entry.IsSymlink || entry.IsSpecialFile) continue;
+            var inode = ReadInode(entry.Nid);
+            if (!inode.IsCompressed) continue;
+            var path = entry.Path;
+            WriteCompressedData(entry.Nid, inode, Stream.Null, (_, _, decoded, _, kernelExpected) =>
+            {
+                if (kernelExpected > decoded.Length)
+                {
+                    report.Add((path, kernelExpected, decoded.Length));
+                }
+                return true;
+            });
+        }
+
+        return report;
     }
 
     /// <summary>

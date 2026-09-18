@@ -145,6 +145,27 @@ public sealed class ErofsOptions
             Fragments = false;
             Dedup = false;
             Metabox = false;
+            // Per-node planning runs on the codec-specific option objects (node.CompressionOptions),
+            // so they must inherit the legacy constraints too; otherwise a preserved rebuild
+            // recompresses edited nodes with modern semantics and merges the unaligned tail into a
+            // compressed pcluster, which pre-big-pcluster kernels reject with
+            // "failed to decompress ... out[...]".
+            // 逐节点规划使用逐 codec 的选项对象（node.CompressionOptions），它们也必须继承 legacy
+            // 约束；否则保留重建会用现代语义重压编辑过的节点，把非整簇尾部并入压缩 pcluster，
+            // 被 pre-big-pcluster 内核以 "failed to decompress ... out[...]" 拒绝。
+            if (SourceCompressionOptions is { } codecOptions)
+            {
+                foreach (var codec in codecOptions.Values)
+                {
+                    codec.LegacyCompatibility = true;
+                    codec.MaxPclusterSize = codec.BlockSize > 0 ? codec.BlockSize : BlockSize;
+                    codec.UseCompactedIndexes = false;
+                    codec.CompressedTailPacking = false;
+                    codec.Fragments = false;
+                    codec.Dedup = false;
+                    codec.Metabox = false;
+                }
+            }
         }
 
         if (MaxPclusterSize < BlockSize || MaxPclusterSize > ErofsCompression.MaxPclusterSize || MaxPclusterSize % BlockSize != 0)

@@ -182,6 +182,38 @@ public class ErofsCompressionConfigurationTests
     }
 
     [Fact]
+    public void Restore_LegacyProfile_CodecsInheritLegacyConstraints()
+    {
+        // Per-node planning consumes the codec-specific option objects, so a legacy primary
+        // profile must push its constraints onto every codec or recompressed nodes would merge
+        // unaligned tails under modern semantics (device-side "failed to decompress ... out[...]").
+        // 逐节点规划读取的是逐 codec 的选项对象，因此 legacy 主档案必须把约束下推到每个 codec，
+        // 否则被重压的节点会按现代语义把非整簇尾部并入压缩 pcluster（设备端
+        // "failed to decompress ... out[...]"）。
+        var options = new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            LegacyCompatibility = true,
+            SourceCompressionOptions = new Dictionary<ErofsCompressionAlgorithm, ErofsOptions>
+            {
+                [ErofsCompressionAlgorithm.Lz4] = new()
+                {
+                    Algorithm = ErofsCompressionAlgorithm.Lz4,
+                    MaxPclusterSize = 1 << 20,
+                    UseCompactedIndexes = true,
+                },
+            },
+        };
+        var parameters = ErofsRebuildMetadata.Capture(options);
+        var restored = ErofsRebuildMetadata.Restore(parameters);
+        restored.Validate();
+        var codec = restored.SourceCompressionOptions![ErofsCompressionAlgorithm.Lz4];
+        Assert.True(codec.LegacyCompatibility);
+        Assert.Equal(codec.BlockSize, codec.MaxPclusterSize);
+        Assert.False(codec.UseCompactedIndexes);
+    }
+
+    [Fact]
     public void Build_Legacy_CompressedHeads_StayClusterAligned()
     {
         // Linux 5.4 / 5.10 legacy full-index decoders place the LZ4 input at the clusterofs recorded
@@ -204,6 +236,36 @@ public class ErofsCompressionConfigurationTests
         });
         using var parser = new ErofsParser(image);
         Assert.Equal(0, parser.MaxCompressedClusterOfs());
+    }
+
+    [Fact]
+    public void Build_Legacy_PartialTail_KeepsKernelClusterCoverage()
+    {
+        // Pre-big-pcluster kernels (Linux 5.4 / 5.10) demand that a compressed pcluster decodes to
+        // exactly its covered whole logical clusters; they never clamp the final extent to i_size.
+        // Feeding only the valid tail bytes (e.g. an 11128-byte file) therefore produces
+        // "failed to decompress 11128 in[...] out[12288]" on device. The planner must keep every
+        // compressed extent on whole clusters and route the unaligned tail through a Plain lcluster.
+        // pre-big-pcluster 内核（Linux 5.4 / 5.10）要求压缩 pcluster 恰好解压为覆盖的整逻辑簇，
+        // 且不会把最后一个 extent 裁剪到 i_size。若只喂尾部的有效字节（如 11128 字节文件），
+        // 设备端就会报 "failed to decompress 11128 in[...] out[12288]"。规划器必须让每个压缩
+        // extent 落在整簇上，把非整簇尾部交给 Plain lcluster。
+        using var source = new TempDirectory();
+        source.WriteBytes("compressible.bin", Enumerable.Repeat((byte)0x42, 11128).ToArray());
+        var random = new byte[11128];
+        new Random(20260918).NextBytes(random);
+        source.WriteBytes("incompressible.bin", random);
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            LegacyCompatibility = true,
+            OptimizeCompression = true,
+        });
+        using var parser = new ErofsParser(image);
+        Assert.Equal(0, parser.MaxCompressedClusterOfs());
+        Assert.Equal(0, parser.MaxPclusterKernelCoverageDeficit());
+        Assert.Equal(Enumerable.Repeat((byte)0x42, 11128).ToArray(), parser.ReadFileBytes("compressible.bin"));
+        Assert.Equal(random, parser.ReadFileBytes("incompressible.bin"));
     }
 
     private static byte[] AlternatingCompressionPayload()
