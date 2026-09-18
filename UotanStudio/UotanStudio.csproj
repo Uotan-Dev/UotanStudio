@@ -18,6 +18,7 @@
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
     <ProjectReference Include="..\UotanStudio.Delivery\UotanStudio.Delivery.csproj" />
+    <ProjectReference Include="..\UotanStudio.Mcp\UotanStudio.Mcp.csproj" />
     <ProjectReference Include="..\UotanStudio.Media\UotanStudio.Media.csproj" />
   </ItemGroup>
 

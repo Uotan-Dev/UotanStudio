@@ -16,16 +16,29 @@ namespace UotanStudio.Mcp;
 /// </summary>
 public sealed class McpServerHost
 {
-    private readonly McpServerConfig _config;
-
     public McpServerHost(McpServerConfig config)
+        : this(new PathSandbox(config.RootDirectory), config.AllowFlash)
     {
-        _config = config;
-        Sandbox = new PathSandbox(config.RootDirectory);
+    }
+
+    /// <summary>
+    /// <para>用现成的沙箱与刷写门控组装宿主，供 HTTP 暴露路径复用同一套工具注册。</para>
+    /// Assembles the host from an existing sandbox plus flash gate, so the HTTP exposure path
+    /// registers exactly the same tool set.
+    /// </summary>
+    public McpServerHost(PathSandbox sandbox, bool allowFlash)
+    {
+        ArgumentNullException.ThrowIfNull(sandbox);
+        Sandbox = sandbox;
+        AllowFlash = allowFlash;
     }
 
     /// <summary>Gets the sandbox all file-touching tools share. <para>所有文件工具共享的沙箱。</para></summary>
     public PathSandbox Sandbox { get; }
+
+    /// <summary>Gets a value indicating whether flashing/wiping/reboot tools are registered.
+    /// <para>获取是否注册刷写、擦除、重启类工具。</para></summary>
+    public bool AllowFlash { get; }
 
     /// <summary>
     /// Builds the complete tool list for the current configuration.
@@ -42,7 +55,7 @@ public sealed class McpServerHost
         tools.AddRange(DeliveryToolFactory.CreateTools(Sandbox));
         tools.AddRange(ProjectToolFactory.CreateTools(Sandbox));
 
-        if (_config.AllowFlash)
+        if (AllowFlash)
         {
             tools.AddRange(DeviceToolFactory.CreateFlashTools(Sandbox));
         }
@@ -50,22 +63,25 @@ public sealed class McpServerHost
         return tools;
     }
 
+    /// <summary>Builds the server options every transport (stdio, HTTP) shares.
+    /// <para>构建各传输（stdio、HTTP）共用的服务器选项。</para></summary>
+    internal static McpServerOptions CreateOptions(IReadOnlyList<McpServerTool> tools) => new()
+    {
+        ServerInfo = new Implementation
+        {
+            Name = "uotanstudio",
+            Version = typeof(McpServerHost).Assembly.GetName().Version?.ToString(3) ?? "0.1.0"
+        },
+        ToolCollection = [.. tools]
+    };
+
     /// <summary>
     /// Runs the server until the client closes the stdio connection or cancellation fires.
     /// <para>运行服务器，直到客户端关闭 stdio 连接或取消触发。</para>
     /// </summary>
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        var tools = BuildTools();
-        var options = new McpServerOptions
-        {
-            ServerInfo = new Implementation
-            {
-                Name = "uotanstudio",
-                Version = typeof(McpServerHost).Assembly.GetName().Version?.ToString(3) ?? "0.1.0"
-            },
-            ToolCollection = [.. tools]
-        };
+        var options = CreateOptions(BuildTools());
 
         var server = McpServer.Create(
             new StdioServerTransport("uotanstudio"),

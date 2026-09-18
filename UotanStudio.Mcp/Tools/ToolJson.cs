@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Mcp.Tools;
@@ -8,9 +9,12 @@ namespace UotanStudio.Mcp.Tools;
 /// <summary>
 /// Shared JSON serialization and result shaping for all MCP tool factories.
 /// <para>所有 MCP 工具工厂共用的 JSON 序列化与结果整形。</para>
-/// A single source-generated-style default options (reflection-based resolver kept for the
-/// arbitrary FirmwareOpResult shapes) is used so tool output is stable across clients.
-/// <para>使用统一的序列化选项，保证工具输出在不同客户端间稳定。</para>
+/// The desktop host runs with <c>JsonSerializer.IsReflectionEnabledByDefault=false</c> (the
+/// <c>PublishAot</c> runtime config), so the resolver must be configured explicitly; tool payloads are
+/// runtime-shaped anonymous objects that no source-generated context can describe.
+/// <para>桌面宿主带有 <c>PublishAot</c> 的运行时配置
+/// （<c>JsonSerializer.IsReflectionEnabledByDefault=false</c>），因此必须显式配置解析器；
+/// 工具负载是运行时构造的匿名对象，源生成上下文无法描述。</para>
 /// </summary>
 internal static class ToolJson
 {
@@ -18,7 +22,8 @@ internal static class ToolJson
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver()
     };
 
     /// <summary>

@@ -39,15 +39,27 @@ public static class McpLauncher
     /// </summary>
     public static async Task RunCompanionAsync(string[] args, CancellationToken cancellationToken = default)
     {
+        EnableDeliveryBuild();
+
+        var host = new McpServerHost(McpServerConfig.Parse(args));
+        await host.RunAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Injects the host-equivalent delivery tool-preparation service so <c>delivery_build</c> works
+    /// inside a desktop session, both for the companion stdio launch and for the settings-page HTTP
+    /// exposure.
+    /// <para>注入与宿主等价的交付工具准备服务，使 <c>delivery_build</c> 在伴随 stdio 启动与设置页的
+    /// HTTP 暴露中均可用。</para>
+    /// </summary>
+    public static void EnableDeliveryBuild()
+    {
         Tools.DeliveryToolFactory.ToolsProvider = static () =>
             new UotanStudio.Services.Delivery.DeliveryToolService(
                 new HttpClient { Timeout = Timeout.InfiniteTimeSpan },
                 System.IO.Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "UotanStudio", "delivery-tools"));
-
-        var host = new McpServerHost(McpServerConfig.Parse(args));
-        await host.RunAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private static bool HasFlag(string[] args, string flag) => args.Any(a =>

@@ -226,12 +226,15 @@ public class AppSettings : IJsonOnDeserialized
     [JsonPropertyName("mcpExposeEnabled")]
     public bool McpExposeEnabled { get; set; }
 
+    /// <summary>Default port of the embedded MCP server. <para>内嵌 MCP 服务器的默认端口。</para></summary>
+    public const int DefaultMcpExposePort = 18321;
+
     /// <summary>
     /// <para>获取或设置 MCP 服务器暴露端口。</para>
     /// Gets or sets the MCP server exposure port.
     /// </summary>
     [JsonPropertyName("mcpExposePort")]
-    public int McpExposePort { get; set; } = 18321;
+    public int McpExposePort { get; set; } = DefaultMcpExposePort;
 }
 
 /// <summary>
