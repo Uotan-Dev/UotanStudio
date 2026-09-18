@@ -45,10 +45,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     // MCP 设置字段
     // MCP settings fields
     private bool _mcpExposeEnabled;
-    private int _mcpExposePort = DefaultMcpExposePort;
-
-    /// <summary>Default port used when persisted settings carry no usable exposure port.</summary>
-    private const int DefaultMcpExposePort = 18321;
+    private int _mcpExposePort = AppSettings.DefaultMcpExposePort;
 
     /// <summary>
     /// <para>获取可用语言列表，从语言服务动态获取。</para>
@@ -271,7 +268,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         }
 
         _mcpExposeEnabled = settings.McpExposeEnabled;
-        _mcpExposePort = settings.McpExposePort is > 0 and <= 65535 ? settings.McpExposePort : DefaultMcpExposePort;
+        _mcpExposePort = settings.McpExposePort is > 0 and <= 65535 ? settings.McpExposePort : AppSettings.DefaultMcpExposePort;
     }
 
     /// <summary>
@@ -353,6 +350,13 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
         var saved = SettingsPersistenceService.Instance.TrySaveSettings(_appSettings, out var error);
         WeakReferenceMessenger.Default.Send(new SettingsSaveCompletedMessage(saved, error));
+
+        // 保存成功后立即按新配置启动/停止内嵌 MCP 服务器；端口占用等失败只记录日志，不影响设置保存。
+        // Apply the exposure state right after a successful save; a busy port only logs and never fails the save.
+        if (saved)
+        {
+            McpExposureService.Instance.Apply(_mcpExposeEnabled, _mcpExposePort);
+        }
     }
 
     internal void FlushPendingSave()
@@ -417,12 +421,11 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>保存 MCP 设置：把连接列表与暴露开关、端口写入应用设置并持久化。</para>
+    /// <para>保存 MCP 设置：把连接列表与暴露开关、端口写入应用设置并持久化；保存成功后立即按新配置
+    /// 启动、换端口或停止内嵌 MCP 服务器。</para>
     /// Saves the MCP settings: writes the connection list plus the exposure toggle and port into the
-    /// application settings and persists them.
-    /// The embedded MCP server is still started by the MCP launch switches, so this command only owns
-    /// the persisted configuration surface.
-    /// <para>内嵌 MCP 服务器仍由 MCP 启动开关启动，因此该命令只负责持久化配置。</para>
+    /// application settings and persists them; a successful save immediately starts, re-targets or
+    /// stops the embedded MCP server per the new configuration.
     /// </summary>
     [RelayCommand]
     private void SaveMcpSettings() => SaveSettings();
@@ -437,6 +440,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         Ai.Reset();
         _appSettings = SettingsPersistenceService.Instance.ResetToDefaults();
         InitializeFromAppSettings(_appSettings);
+        McpExposureService.Instance.Apply(_mcpExposeEnabled, _mcpExposePort);
 
         // 同步语言列表
         Languages.Clear();

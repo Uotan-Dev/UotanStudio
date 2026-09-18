@@ -11,6 +11,7 @@ using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Logging;
+using UotanStudio.Services.Mcp;
 using UotanStudio.Themes;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Shell;
@@ -132,6 +133,10 @@ public partial class App : Application
         var settings = await Task.Run(() => SettingsPersistenceService.Instance.LoadSettings()).ConfigureAwait(true);
         global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers = settings.FirmwareParallelism;
 
+        // 按持久化设置启动内嵌 MCP 服务器（失败只记录日志，不阻断启动）。
+        // Start the embedded MCP server per the persisted settings (failures only log, never block startup).
+        McpExposureService.Instance.Apply(settings.McpExposeEnabled, settings.McpExposePort);
+
         // 2) 应用持久化主题与语言（须在主窗口创建前完成，使主窗口拿到正确的语言/主题；
         //    此时启动窗已显示，DynamicResource 会自动刷新启动窗文案）。
         ApplyTheme(settings.ThemeMode);
@@ -181,6 +186,7 @@ public partial class App : Application
     private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
         if (sender is IClassicDesktopStyleApplicationLifetime desktop) desktop.Exit -= OnDesktopExit;
+        McpExposureService.Instance.Stop();
         try { _desktopServices?.Dispose(); }
         catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Lifecycle", ex.Message); }
         finally

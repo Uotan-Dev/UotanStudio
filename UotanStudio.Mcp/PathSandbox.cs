@@ -12,7 +12,14 @@ namespace UotanStudio.Mcp;
 /// </summary>
 public sealed class PathSandbox
 {
-    private readonly string _root;
+    private readonly string? _root;
+
+    /// <summary>
+    /// <para>不受限沙箱：接受任意路径，供桌面宿主启用的本地 MCP 暴露使用（监听回环地址、由用户显式开启）。</para>
+    /// Unrestricted sandbox: accepts any path; used by the local MCP exposure the desktop host starts
+    /// when the user turns it on (loopback listener, explicit opt-in).
+    /// </summary>
+    public static PathSandbox Unrestricted { get; } = new();
 
     public PathSandbox(string root)
     {
@@ -20,8 +27,15 @@ public sealed class PathSandbox
         _root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
     }
 
-    /// <summary>Gets the canonical sandbox root. <para>获取规范化的沙箱根目录。</para></summary>
-    public string Root => _root;
+    private PathSandbox() => _root = null;
+
+    /// <summary>Gets the canonical sandbox root, or null when unrestricted.
+    /// <para>获取规范化的沙箱根目录；不受限时为 null。</para></summary>
+    public string? Root => _root;
+
+    /// <summary>Gets a value indicating whether every path is accepted.
+    /// <para>获取是否接受任意路径。</para></summary>
+    public bool IsUnrestricted => _root is null;
 
     /// <summary>
     /// Resolves a client-supplied path against the sandbox and verifies containment.
@@ -33,6 +47,17 @@ public sealed class PathSandbox
     public string Resolve(string path, bool mustExist = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        if (_root is null)
+        {
+            var unreserved = Path.GetFullPath(path);
+            if (mustExist && !File.Exists(unreserved) && !Directory.Exists(unreserved))
+            {
+                throw new FileNotFoundException($"File not found: {unreserved}", unreserved);
+            }
+
+            return unreserved;
+        }
 
         var full = Path.IsPathRooted(path)
             ? Path.GetFullPath(path)
