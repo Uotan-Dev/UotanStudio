@@ -16,10 +16,14 @@ public static class BatchFlashService
 {
     /// <summary>
     /// <para>顺序刷写由调用方筛选出的选中分区镜像；任一分区失败不会中断后续分区。每个分区的进度经
-    /// <paramref name="progress"/> 回报，同时发送 <see cref="FlashProgressMessage"/> 供输出面板展示。</para>
+    /// <paramref name="progress"/> 回报，同时发送 <see cref="FlashProgressMessage"/> 供输出面板展示。
+    /// 每个分区在开始前和结束后各写一条日志，内容同时给出镜像文件名与目标分区名，逐条即可还原本次刷写
+    /// 清单。</para>
     /// Flashes the selected partition images filtered by the caller in order; a single-partition failure
     /// never aborts the rest. Per-partition progress is reported through <paramref name="progress"/> and
-    /// broadcast as <see cref="FlashProgressMessage"/> for the output panel.
+    /// broadcast as <see cref="FlashProgressMessage"/> for the output panel. Each partition also writes
+    /// one log line when it starts and one when it finishes, both naming the image file and the target
+    /// partition, so the run can be traced image by image.
     /// </summary>
     /// <param name="device"><para>目标设备。</para>The target device.</param>
     /// <param name="entries">
@@ -51,20 +55,25 @@ public static class BatchFlashService
         for (var i = 0; i < entries.Count; i++)
         {
             var (partition, imagePath) = entries[i];
-            var status = $"Flashing {i + 1}/{entries.Count}: {partition}  正在刷写 {i + 1}/{entries.Count}：{partition}";
+            var step = $"[{i + 1}/{entries.Count}]";
+            var target = $"{Path.GetFileName(imagePath)} -> {partition}";
+            var status = $"{step} Flashing {target}  正在刷写 {target}";
             progress?.Report(new FlashProgress(partition, 0, status));
             WeakReferenceMessenger.Default.Send(new FlashProgressMessage(partition, 0, status));
+            LogService.Instance.Write(LogLevel.Info, "BatchFlash", status);
 
             var result = await FlashService.Default.FlashImageAsync(device, partition, imagePath, progress, ct).ConfigureAwait(false);
             if (result.Success)
             {
                 succeeded++;
+                LogService.Instance.Write(LogLevel.Info, "BatchFlash",
+                    $"{step} Flashed {target} OK: {result.Summary}  刷写成功：{target}");
             }
             else
             {
-                failures.Add($"{partition}: {result.Summary}");
+                failures.Add($"{target}: {result.Summary}");
                 LogService.Instance.Write(LogLevel.Warn, "BatchFlash",
-                    $"Flash {partition} failed, continuing with the next partition: {result.Summary}  {partition} 刷写失败，继续刷写后续分区：{result.Summary}");
+                    $"{step} Flash {target} failed, continuing with the next partition: {result.Summary}  刷写失败：{target}，继续刷写后续分区：{result.Summary}");
             }
 
             if (ct.IsCancellationRequested)
