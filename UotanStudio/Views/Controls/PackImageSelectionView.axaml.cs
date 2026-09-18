@@ -368,7 +368,8 @@ public partial class PackImageSelectionView : UserControl
                 var entry = new PackImageEntry(path, sourceLabel: takenNames.Contains(fileName) ? label : null);
                 entry.UpdateFileInfo(PackImageFileInfo.Read(path));
                 return entry;
-            })) { IsDeliveryOutputs = true }));
+            }))
+        { IsDeliveryOutputs = true }));
         ApplyGroupOptions();
         UpdatePageSize();
         _page = (_groups.Count - 1) / _pageSize;
