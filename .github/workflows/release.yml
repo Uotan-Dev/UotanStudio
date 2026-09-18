@@ -60,7 +60,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0   # 需要完整历史以解析版本标签 / full history for tag-based version
 
@@ -78,7 +78,7 @@ jobs:
           echo "Resolved version: $raw"
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
 
@@ -142,7 +142,7 @@ jobs:
           tar -czf "$RUNNER_TEMP/uotanstudio-${{ matrix.rid }}.tar.gz" -C "$RUNNER_TEMP/publish" .
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: uotanstudio-${{ steps.ver.outputs.version }}-${{ matrix.rid }}
           path: |
@@ -161,7 +161,7 @@ jobs:
       contents: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           path: dist
 
