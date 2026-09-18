@@ -343,14 +343,16 @@ internal static partial class IOKitUsbAPI
     // 请求的委托类型。vtable 本身是 `self` 指向的首个指针；每槽一个 IntPtr 宽。
     // 此双重解引用是经 macOS 验证的调用形——IOKit C 头文件可能误导为单层解引用，
     // 但实际需要双重解引用。</para>
-    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
-        "AOT", "IL3050:MembersWithParametersRequireDynamicCode",
-        Justification = "All T instantiations are delegate types declared statically in this file; NativeAOT generates their marshaling stubs at compile Time.")]
-    public static T GetDelegate<T>(IntPtr self, int offset) where T : class
+    // The generic GetDelegateForFunctionPointer<T> overload is the NativeAOT-safe form:
+    // every T is a statically declared delegate in this file, so the marshaling stub is
+    // generated at compile time instead of requiring runtime emit (IL3050 for the Type overload).
+    // <para>泛型重载是 NativeAOT 安全形态：所有 T 都是本文件静态声明的委托，
+    // marshal 桩在编译期生成，避免 Type 重载要求的运行时动态代码。</para>
+    public static T GetDelegate<T>(IntPtr self, int offset) where T : Delegate
     {
         var vtable = Marshal.ReadIntPtr(self);
         var methodPtr = Marshal.ReadIntPtr(vtable, offset * IntPtr.Size);
-        return (T)(object)Marshal.GetDelegateForFunctionPointer(methodPtr, typeof(T));
+        return Marshal.GetDelegateForFunctionPointer<T>(methodPtr);
     }
 
     // io_service_t IORegistryEntryFromPath(mach_port_t mainPort, const io_string_t path);
