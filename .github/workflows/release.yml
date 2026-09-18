@@ -1,0 +1,172 @@
+# NativeAOT 多架构发布：在 GitHub 托管 runner 支持的全部系统架构上编译、打包并上传产物。
+# NativeAOT multi-architecture release: builds, packages and uploads on every OS/arch
+# combination GitHub-hosted runners support.
+name: Release (NativeAOT)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Override release version (defaults to git tag or run number)"
+        required: false
+        default: ""
+  push:
+    tags:
+      - "v*"
+
+# 同一 ref 的旧发布被取消，避免并发抢占 runner。
+# Cancel superseded runs on the same ref so concurrent pushes don't fight for runners.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
+  PUBLISH_PROJECT: "UotanStudio.Desktop/UotanStudio.Desktop.csproj"
+
+jobs:
+  build:
+    # 每种组合都在目标架构本机构建，NativeAOT 不做跨架构交叉编译。
+    # Each combo builds natively on its own arch; NativeAOT does not cross-compile here.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows
+            runner: windows-latest
+          - rid: win-arm64
+            os: windows
+            runner: windows-11-arm
+          - rid: linux-x64
+            os: linux
+            runner: ubuntu-24.04
+          - rid: linux-arm64
+            os: linux
+            runner: ubuntu-24.04-arm
+          - rid: osx-x64
+            os: macos
+            # 在 Apple Silicon runner 上交叉编译 osx-x64：GitHub 的 Intel macos-13 runner 已趋于下线，
+            # 而 NativeAOT 支持 macOS 同系统跨架构，故复用 macos-latest。
+            # Cross-compile osx-x64 on an Apple Silicon runner: the Intel macos-13 image is being
+            # retired, and NativeAOT supports same-OS cross-arch, so reuse macos-latest.
+            runner: macos-latest
+          - rid: osx-arm64
+            os: macos
+            runner: macos-latest
+    name: ${{ matrix.rid }}
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 需要完整历史以解析版本标签 / full history for tag-based version
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          raw="${{ github.event.inputs.version }}"
+          if [ -z "$raw" ]; then raw="${GITHUB_REF_NAME#v}"; fi
+          case "$raw" in
+            v*[0-9]*|"") raw="${GITHUB_RUN_NUMBER}" ;;
+          esac
+          raw="${raw#v}"
+          echo "version=$raw" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $raw"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # NativeAOT 需要本机 C/C++ 工具链：Linux 走 clang + zlib，macOS 走 Xcode CLT，
+      # Windows 用 runner 自带的 MSVC。
+      # NativeAOT needs a local C/C++ toolchain: clang+zlib on Linux, Xcode CLT on macOS,
+      # and the runner-provided MSVC on Windows.
+      - name: Install NativeAOT toolchain (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang zlib1g-dev libicu-dev
+          clang --version
+
+      - name: Install NativeAOT toolchain (macOS)
+        if: matrix.os == 'macos'
+        run: |
+          xcode-select --install || true
+          sudo xcodebuild -license accept || true
+          clang --version
+
+      - name: Publish NativeAOT (${{ matrix.rid }})
+        shell: bash
+        run: |
+          dotnet publish "$PUBLISH_PROJECT" \
+            -c Release \
+            -r "${{ matrix.rid }}" \
+            --self-contained true \
+            -p:PublishAot=true \
+            -p:DebugType=none \
+            -p:DebugSymbols=false \
+            -o "$RUNNER_TEMP/publish"
+
+      - name: "Package (Windows: zip)"
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "pkg"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          # 排除调试符号与运行时配置，保留原生 exe、依赖 dll 与 Assets。
+          # Exclude pdb/runtimeconfig; keep native exe, dependency dlls and Assets.
+          Get-ChildItem "$env:RUNNER_TEMP/publish" -Recurse |
+            Where-Object { $_.Name -notlike "*.pdb" } |
+            ForEach-Object {
+              $rel = $_.FullName.Substring("$env:RUNNER_TEMP/publish".Length).TrimStart('\','/')
+              $dst = Join-Path $stage $rel
+              if ($_.PSIsContainer) { New-Item -ItemType Directory -Force -Path $dst | Out-Null }
+              else { New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null; Copy-Item $_.FullName $dst -Force }
+            }
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath "$env:RUNNER_TEMP/uotanstudio-${{ matrix.rid }}.zip" -Force
+
+      - name: "Package (Unix: tar.gz)"
+        if: matrix.os != 'windows'
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/publish"
+          find . -name "*.pdb" -delete
+          # 保留可执行位，tar.gz 比 zip 更适合 Unix 分发。
+          # Preserve exec bit; tar.gz suits Unix distribution better than zip.
+          chmod +x UotanStudio.Desktop 2>/dev/null || true
+          tar -czf "$RUNNER_TEMP/uotanstudio-${{ matrix.rid }}.tar.gz" -C "$RUNNER_TEMP/publish" .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: uotanstudio-${{ steps.ver.outputs.version }}-${{ matrix.rid }}
+          path: |
+            ${{ runner.temp }}/uotanstudio-${{ matrix.rid }}.zip
+            ${{ runner.temp }}/uotanstudio-${{ matrix.rid }}.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  # 汇总所有架构产物为一个 GitHub Release（仅打标签时）。
+  # Bundle every arch artifact into one GitHub Release (tag pushes only).
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*/*
+          generate_release_notes: true
