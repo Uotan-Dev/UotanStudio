@@ -119,9 +119,7 @@ public sealed class NodeExecutionEngineTests
         };
 
         using var cts = new CancellationTokenSource();
-#pragma warning disable xUnit1051 // 本测试刻意使用独立 CTS 验证取消传播，而非 TestContext 令牌
         var runTask = engine.ExecuteAsync([stuck], Array.Empty<NodeConnection>(), cts.Token);
-#pragma warning restore xUnit1051
         await Task.Delay(30, TestContext.Current.CancellationToken);
         cts.Cancel();
 

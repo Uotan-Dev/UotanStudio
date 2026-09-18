@@ -105,8 +105,6 @@ public sealed class LanguageService
     /// <para>当 <paramref name="language"/> 为 null 时抛出。</para>
     /// Thrown when <paramref name="language"/> is null.
     /// </exception>
-    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
-        Justification = "ResourceInclude loads XAML resources at runtime which requires reflection.")]
     public void ApplyLanguage(string language)
     {
         ArgumentNullException.ThrowIfNull(language);
@@ -313,8 +311,6 @@ public sealed class LanguageService
     /// <para>当 <paramref name="themeKey"/> 为 null 时抛出。</para>
     /// Thrown when <paramref name="themeKey"/> is null.
     /// </exception>
-    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
-        Justification = "ResourceInclude loads XAML resources at runtime which requires reflection.")]
     public void ApplyTheme(string themeKey)
     {
         ArgumentNullException.ThrowIfNull(themeKey);
