@@ -62,10 +62,12 @@ public sealed class ProjectSettingsDto
     public bool Ext4Compress { get; set; } = true;
 
     /// <summary>
-    /// EROFS compression algorithm ("lz4" or "lz4hc").
-    /// <para>EROFS 压缩算法（"lz4" 或 "lz4hc"）。</para>
+    /// EROFS compression algorithm ("lz4" or "lz4hc"). The default is the HC search because
+    /// <see cref="ErofsCompLevel"/> only feeds that encoder; fast lz4 ignores the level.
+    /// <para>EROFS 压缩算法（"lz4" 或 "lz4hc"）。默认为 HC 搜索，因为 <see cref="ErofsCompLevel"/>
+    /// 只作用于该编码器；快速 lz4 会忽略等级。</para>
     /// </summary>
-    public string ErofsAlgorithm { get; set; } = "lz4";
+    public string ErofsAlgorithm { get; set; } = "lz4hc";
 
     /// <summary>
     /// EROFS compression level.

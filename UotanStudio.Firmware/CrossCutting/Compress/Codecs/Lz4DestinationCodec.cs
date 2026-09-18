@@ -3,10 +3,10 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
+namespace UotanStudio.Firmware.CrossCutting.Compress.Codecs;
 
-// The destination-size encoder is isolated from the general compression API because
-// OTA patches require its exact consumed-input and encoded-byte behavior.
+// The destination-size encoder is kept apart from the general compression API because its callers
+// (OTA patches and EROFS layout planning) need its exact consumed-input and encoded-byte behavior.
 internal static unsafe partial class Lz4DestinationCodec
 {
     private const int MaximumBlockBytes = 256 * 1024 * 1024;
@@ -15,9 +15,9 @@ internal static unsafe partial class Lz4DestinationCodec
     internal static int Encode(ReadOnlySpan<byte> source, Span<byte> target, int algorithm, int level, out int consumed)
     {
         if (source.Length > MaximumBlockBytes || target.Length > MaximumBlockBytes || target.IsEmpty)
-            throw new InvalidDataException("LZ4DIFF block exceeds the bounded destination-size codec limits.");
+            throw new InvalidDataException("LZ4 block exceeds the bounded destination-size codec limits.");
         if (algorithm is not (1 or 2))
-            throw new InvalidDataException("Unknown LZ4DIFF compression algorithm.");
+            throw new InvalidDataException("Unknown destination-size LZ4 algorithm.");
         if (source.Overlaps(target))
             throw new ArgumentException("LZ4 input and output buffers must not overlap.");
         if (source.IsEmpty)
@@ -38,10 +38,14 @@ internal static unsafe partial class Lz4DestinationCodec
             {
                 if (algorithm == 1)
                 {
+                    // The fast path maps the caller level onto liblz4's acceleration (higher level =
+                    // denser here), clamped to the >=1 range the matcher requires.
+                    // 快速路径把调用方等级映射为 liblz4 的 acceleration（此处等级越高越密），
+                    // 并钳制到匹配器要求的 >=1 范围。
                     result = LZ4_compress_generic((LZ4_stream_t*)state, input, output, source.Length,
                         &sourceLength, target.Length, limitedOutput_directive.fillOutput,
                         source.Length < LZ4_64Klimit ? tableType_t.byU16 : tableType_t.byU32,
-                        dict_directive.noDict, dictIssue_directive.noDictIssue, 1);
+                        dict_directive.noDict, dictIssue_directive.noDictIssue, Math.Max(1, level));
                 }
                 else
                 {

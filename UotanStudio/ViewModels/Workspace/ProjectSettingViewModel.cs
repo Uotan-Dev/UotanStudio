@@ -29,9 +29,13 @@ internal partial class ProjectSettingViewModel : Tool
     /// </summary>
     internal static ProjectSettingViewModel EnsureInstance() => Instance ??= new();
 
+    // The codec default is lz4hc because the level combo below only feeds the HC search: with fast
+    // lz4 selected the level is ignored, so a default of "lz4" would silently pack larger images.
+    // 默认编解码器为 lz4hc，因为下方的等级下拉框只作用于 HC 搜索：选择快速 lz4 时该等级会被忽略，
+    // 默认值若为 "lz4" 会静默打出更大的镜像。
     [ObservableProperty]
-    private bool typeEXT4 = false, formatSPARSE = false, eXT4RO = false, sizeOri = false, eXT4Compress = false, eROFSLZ4HC = false, sUPERSPARSE = false,
-        typeEROFS = true, formatRAW = true, eXT4RW = true, sizeAuto = true, eXT4NoCompress = true, eROFSLZ4 = true, sUPERRAW = true;
+    private bool typeEXT4 = false, formatSPARSE = false, eXT4RO = false, sizeOri = false, eXT4Compress = false, eROFSLZ4HC = true, sUPERSPARSE = false,
+        typeEROFS = true, formatRAW = true, eXT4RW = true, sizeAuto = true, eXT4NoCompress = true, eROFSLZ4 = false, sUPERRAW = true;
     [ObservableProperty]
     private int eROFSComGrade = 8, bRComGrade = 3;
     [ObservableProperty]

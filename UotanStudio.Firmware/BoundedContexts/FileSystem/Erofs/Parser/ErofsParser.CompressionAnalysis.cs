@@ -8,7 +8,8 @@ internal sealed class ErofsCompressionEstimate(ErofsOptions options)
     internal ErofsOptions Options { get; } = options;
     internal int Samples { get; private set; }
     internal long SampleBytes { get; private set; }
-    internal Candidate[] Candidates { get; } = Levels(options.Algorithm).Select(level => new Candidate(level)).ToArray();
+    internal Candidate[] Candidates { get; } = Levels(options.Algorithm)
+        .Select(candidate => new Candidate(candidate.Level, candidate.HighCompression)).ToArray();
     internal Candidate Inferred => Candidates.OrderByDescending(c => c.ExactMatches).ThenBy(c => c.Error).ThenBy(c => c.Level).First();
     internal Candidate Smallest => Candidates.OrderBy(c => c.Bytes).ThenBy(c => c.Level).First();
 
@@ -20,7 +21,8 @@ internal sealed class ErofsCompressionEstimate(ErofsOptions options)
         {
             Options.CancellationToken.ThrowIfCancellationRequested();
             var length = ErofsCompression.AlgorithmCompress((ErofsAlgorithm)Options.Algorithm,
-                source, 0, source.Length, target, 0, target.Length, candidate.Level, Options.DictionarySize, Options.WindowBits);
+                source, 0, source.Length, target, 0, target.Length, candidate.Level, candidate.HighCompression,
+                Options.DictionarySize, Options.WindowBits);
             if (length <= 0) throw new InvalidDataException("EROFS compression inference made no progress.");
             candidate.Bytes += length;
             candidate.Error += Math.Abs((double)length - encoded.Length) / encoded.Length;
@@ -30,18 +32,23 @@ internal sealed class ErofsCompressionEstimate(ErofsOptions options)
         SampleBytes += decoded.Length;
     }
 
-    private static int[] Levels(ErofsCompressionAlgorithm algorithm) => algorithm switch
+    // LZ4 stores no encoder identity, so the candidates span both block encoders: the fast matcher
+    // ignores the level, while LZ4HC reaches the optimal parse at 10-12.
+    // LZ4 不存编码器身份，因此候选覆盖两种块编码器：快速匹配器忽略级别，LZ4HC 在 10-12 进入最优
+    // 分析级。
+    private static (int Level, bool HighCompression)[] Levels(ErofsCompressionAlgorithm algorithm) => algorithm switch
     {
-        ErofsCompressionAlgorithm.Lz4 => [1, 3, 6, 9, 12],
-        ErofsCompressionAlgorithm.Lzma => [1, 3, 6, 9],
-        ErofsCompressionAlgorithm.Deflate => [1, 6, 9],
-        ErofsCompressionAlgorithm.Zstd => [1, 3, 9, 15, 19],
+        ErofsCompressionAlgorithm.Lz4 => [(1, false), (1, true), (6, true), (9, true), (12, true)],
+        ErofsCompressionAlgorithm.Lzma => [(1, false), (3, false), (6, false), (9, false)],
+        ErofsCompressionAlgorithm.Deflate => [(1, false), (6, false), (9, false)],
+        ErofsCompressionAlgorithm.Zstd => [(1, false), (3, false), (9, false), (15, false), (19, false)],
         _ => throw new ArgumentOutOfRangeException(nameof(algorithm))
     };
 
-    internal sealed class Candidate(int level)
+    internal sealed class Candidate(int level, bool highCompression)
     {
         internal int Level { get; } = level;
+        internal bool HighCompression { get; } = highCompression;
         internal long Bytes { get; set; }
         internal double Error { get; set; }
         internal int ExactMatches { get; set; }

@@ -50,6 +50,12 @@ internal sealed class RebuildParameters
     public long? SegmentSize { get; set; }
     /// <summary>Gets the original image length in bytes, when known.<para>获取原始镜像字节长度（已知时）。</para></summary>
     public long? SourceLength { get; set; }
+    /// <summary>Gets the source filesystem's own byte size (block count times block size), when known.
+    /// A partition image is usually padded beyond its filesystem, so this is the size a rebuild has to
+    /// be compared against; <see cref="SourceLength"/> includes that padding.
+    /// <para>获取源文件系统自身的字节数（块数 × 块大小，已知时）。分区镜像通常会被填充到超出其文件系统的
+    /// 长度，因此重建体积应与本字段比较；<see cref="SourceLength"/> 含该填充。</para></summary>
+    public long? SourceFilesystemBytes { get; set; }
     /// <summary>Gets the verified EROFS rebuild profile.<para>获取经校验的 EROFS 重建档案。</para></summary>
     public ErofsRebuildParameters? Erofs { get; set; }
 }

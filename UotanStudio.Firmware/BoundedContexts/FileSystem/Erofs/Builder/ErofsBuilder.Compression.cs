@@ -64,21 +64,21 @@ public sealed partial class ErofsBuilder
     {
         // LZ4's upstream destSize API safely supports byte-granular clusters. The
         // other codecs retain the established logical-cluster planner until their
-        // window-specific destSize encoders are available. Dense packing is limited to
-        // modern (non-legacy) images: it can place a pcluster's compressed stream at a
-        // byte-granular, block-misaligned clusterofs that spans several logical clusters,
-        // an arrangement Linux 5.4 / 5.10 legacy full-index decoders cannot read, because
-        // they anchor the LZ4 input at clusterofs and bound it by per-cluster block counts.
-        // Whether the encoded bytes fit MaxPclusterSize says nothing about that legacy
-        // invariant, so legacy always uses the block-aligned logical-cluster planner that
-        // reproduces mkfs.erofs' legacy layout exactly.
-        // dense 打包仅适用于现代（非 legacy）镜像：它可能把 pcluster 的压缩流放在按字节粒度、
-        // 块内不对齐的 clusterofs，且一个 pcluster 跨越多个逻辑簇——这是 Linux 5.4 / 5.10 的
-        // legacy 全索引解码器无法读取的布局，因为它把 LZ4 输入锚定在 clusterofs 并以每簇块数
-        // 作为上界。编码后是否小于 MaxPclusterSize 与此 legacy 不变量无关，故 legacy 恒使用
-        // 与 mkfs.erofs legacy 布局完全一致的块对齐逻辑簇规划器。
-        if (options.OptimizeCompression && !options.LegacyCompatibility
-            && options.Algorithm == ErofsCompressionAlgorithm.Lz4)
+        // window-specific destSize encoders are available.
+        // Dense packing is legal for legacy images too: both index formats store di_clusterofs, so
+        // the kernel derives a pcluster's exact byte length from the next head position (fs/erofs/
+        // zmap.c z_erofs_map_blocks_iter: m_la = (lcn << clusterbits) | clusterofs, m_llen = end -
+        // m_la) and never requires a pcluster to start or end on a logical cluster boundary. What
+        // legacy does require is one physical block per pcluster, no big-pcluster / fragment /
+        // dedup / tail-packing assumptions, and that every extent reach its own head cluster's end
+        // so the trailing partial cluster keeps an index slot for the end-of-file terminator.
+        // dense 打包对 legacy 镜像同样合法：两种索引格式都保存 di_clusterofs，内核由下一个 head
+        // 位置推导 pcluster 的精确字节长度（fs/erofs/zmap.c z_erofs_map_blocks_iter：
+        // m_la = (lcn << clusterbits) | clusterofs、m_llen = end - m_la），并不要求 pcluster 起于
+        // 或止于逻辑簇边界。legacy 真正的硬性要求是：每个 pcluster 只占一个物理块、不依赖
+        // big-pcluster/fragment/dedup/tail-packing，且每个 extent 至少到达其 head 簇边界，以便尾部
+        // 非整簇仍留有索引槽位承载文件末尾终止项。
+        if (options.OptimizeCompression && options.Algorithm == ErofsCompressionAlgorithm.Lz4)
             return TryPlanDenseCompressed(node, blockSize, options);
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         var clusterSize = node.LogicalClusterSize;
@@ -133,10 +133,7 @@ public sealed partial class ErofsBuilder
                 }
 
                 outLen = ErofsCompression.AlgorithmCompress(
-                    (ErofsAlgorithm)options.Algorithm,
-                    raw, 0, candidateLen, compressed, 0, compressed.Length,
-                    Math.Max(1, options.CompressionLevel), options.DictionarySize,
-                    options.WindowBits == 0 && options.Algorithm == ErofsCompressionAlgorithm.Zstd ? 20 : options.WindowBits);
+                    options, raw, 0, candidateLen, compressed, 0, compressed.Length);
                 return outLen > 0 && outLen < options.MaxPclusterSize - 8;
             }
 
@@ -221,10 +218,7 @@ public sealed partial class ErofsBuilder
                 continue;
             }
             var outLen = ErofsCompression.AlgorithmCompress(
-                (ErofsAlgorithm)options.Algorithm,
-                raw, 0, p.SourceLength, compressed, 0, compressed.Length,
-                Math.Max(1, options.CompressionLevel), options.DictionarySize,
-                options.WindowBits == 0 && options.Algorithm == ErofsCompressionAlgorithm.Zstd ? 20 : options.WindowBits);
+                options, raw, 0, p.SourceLength, compressed, 0, compressed.Length);
             if (outLen != p.CompressedLength)
             {
                 throw new InvalidDataException(

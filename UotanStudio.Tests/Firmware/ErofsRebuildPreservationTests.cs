@@ -43,8 +43,11 @@ public class ErofsRebuildPreservationTests
         Assert.NotNull(restored.SourceInodesByPath);
         foreach (var (nid, original) in captured.SourceInodes!)
         {
-            Assert.True(restored.SourceInodesByPath!.TryGetValue(original.Path!, out var record));
-            record = record!;
+            if (!restored.SourceInodesByPath!.TryGetValue(original.Path!, out var record))
+            {
+                Assert.Fail($"The restored path table is missing inode {original.Path}.");
+            }
+
             Assert.Equal(original.Compressed, record.Compressed);
             Assert.Equal(original.InlineData, record.InlineData);
             Assert.Equal(original.Algorithm, record.Algorithm);

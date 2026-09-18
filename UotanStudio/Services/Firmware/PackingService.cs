@@ -165,14 +165,17 @@ internal static class PackingService
             // 新建镜像默认采用 legacy（pre-5.13）布局，使较旧内核（Linux 5.4 / 5.10）无需
             // big-pcluster 特性即可挂载 system/vendor。
             LegacyCompatibility = true,
-            CompressionLevel = settings.EROFSLZ4HC
-                ? Math.Max(settings.EROFSComGrade, 4)
-                : settings.EROFSComGrade,
+            // The panel's LZ4/LZ4HC choice selects the block encoder; EROFS stores no codec enum for
+            // it, so only density and build time differ on disk.
+            // 面板上的 LZ4/LZ4HC 选择决定块编码器；EROFS 不存对应的编解码枚举，因此二者在磁盘上只有
+            // 压缩率与构建时间的差别。
+            Lz4HighCompression = settings.EROFSLZ4HC,
+            CompressionLevel = settings.EROFSComGrade,
         };
 
         LogService.Instance.Write(LogLevel.Info, "Packing",
-            $"Building EROFS image (algo={options.Algorithm}, level={options.CompressionLevel})  " +
-            $"正在构建 EROFS 镜像（算法={options.Algorithm}，级别={options.CompressionLevel}）");
+            $"Building EROFS image (algo={(options.Lz4HighCompression ? "lz4hc" : "lz4")}, level={options.CompressionLevel})  " +
+            $"正在构建 EROFS 镜像（算法={(options.Lz4HighCompression ? "lz4hc" : "lz4")}，级别={options.CompressionLevel}）");
 
         var builder = new ErofsBuilder();
         builder.Build(sourceDirectory, outputPath, options, progress);

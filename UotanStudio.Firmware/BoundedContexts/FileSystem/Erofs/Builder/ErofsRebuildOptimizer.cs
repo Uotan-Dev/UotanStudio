@@ -23,19 +23,24 @@ internal static class ErofsRebuildOptimizer
         {
             token.ThrowIfCancellationRequested();
             foreach (var estimate in estimates)
-                estimate.Options.CompressionLevel = attempt switch
+            {
+                var selected = attempt switch
                 {
-                    0 => estimate.Inferred.Level,
-                    1 => estimate.Smallest.Level,
-                    _ => estimate.Candidates[^1].Level
+                    0 => estimate.Inferred,
+                    1 => estimate.Smallest,
+                    _ => estimate.Candidates[^1],
                 };
+                estimate.Options.CompressionLevel = selected.Level;
+                estimate.Options.Lz4HighCompression = selected.HighCompression;
+            }
             if (estimates.FirstOrDefault() is { } defaultEstimate)
             {
                 options.Algorithm = defaultEstimate.Options.Algorithm;
                 options.CompressionLevel = defaultEstimate.Options.CompressionLevel;
+                options.Lz4HighCompression = defaultEstimate.Options.Lz4HighCompression;
             }
             var profile = string.Join(", ", options.SourceCompressionOptions!.OrderBy(p => p.Key)
-                .Select(p => $"{p.Key}:{p.Value.CompressionLevel}"));
+                .Select(p => $"{p.Key}:{p.Value.CompressionLevel}{(p.Value.Lz4HighCompression ? "hc" : "")}"));
             if (!tried.Add(profile)) continue;
             candidate.SetLength(0);
             candidate.Position = 0;
@@ -61,7 +66,7 @@ internal static class ErofsRebuildOptimizer
             ["SizeExcess"] = Math.Max(0, bestSize - targetSize).ToString(CultureInfo.InvariantCulture),
             ["CompressionProfile"] = bestProfile,
             ["CompressionInference"] = string.Join("; ", estimates.Select(e =>
-                $"{e.Options.Algorithm}: candidate level {e.Inferred.Level}, {e.Samples} samples, {e.SampleBytes} decoded bytes, {e.Inferred.ExactMatches} exact re-encodings; encoder identity and original level remain unproven")),
+                $"{e.Options.Algorithm}: candidate level {e.Inferred.Level} ({(e.Inferred.HighCompression ? "LZ4HC" : "fast LZ4")}), {e.Samples} samples, {e.SampleBytes} decoded bytes, {e.Inferred.ExactMatches} exact re-encodings; the source encoder identity is only inferred from byte-identical re-encodings")),
             ["CompressionAttempts"] = string.Join("; ", attempts)
         };
     }

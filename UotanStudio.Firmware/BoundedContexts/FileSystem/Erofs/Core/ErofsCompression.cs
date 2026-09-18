@@ -3,6 +3,7 @@ using ICSharpCode.SharpZipLib.Zip.Compression;
 using K4os.Compression.LZ4;
 using SevenZip;
 using SevenZip.Compression.LZMA;
+using UotanStudio.Firmware.CrossCutting.Compress.Codecs;
 using ZstdSharp;
 using ZstdSharp.Unsafe;
 
@@ -56,15 +57,9 @@ internal static class ErofsCompression
     }
 
     /// <summary>
-    /// Maps a 1-9 compression level to a K4os LZ4Level (1-4 fast, 5-9 high compression).
-    /// <para>将 1-9 的压缩级别映射为 K4os LZ4Level（1-4 为快速模式，5-9 为高压缩模式）。</para>
-    /// </summary>
-    public static LZ4Level ToLz4Level(int compressionLevel)
-        => (LZ4Level)Math.Clamp(compressionLevel, 0, (int)LZ4Level.L12_MAX);
-
-    /// <summary>
-    /// Compresses a single logical cluster with LZ4 (unchanged legacy behavior), returning the compressed byte count.
-    /// <para>压缩单个逻辑簇（LZ4，与既有实现一致），返回压缩字节数。</para>
+    /// Compresses one pcluster with the managed LZ4 block encoder, returning the compressed byte count
+    /// or zero when the stream does not fit the destination.
+    /// <para>用托管 LZ4 块编码器压缩单个 pcluster，返回压缩字节数；输出放不进目标缓冲区时返回 0。</para>
     /// </summary>
     public static int Compress(
         byte[] source,
@@ -74,7 +69,8 @@ internal static class ErofsCompression
         int targetIndex,
         int targetLength,
         int compressionLevel)
-        => CompressLz4(source, sourceIndex, sourceLength, target, targetIndex, targetLength, compressionLevel);
+        => CompressLz4(source, sourceIndex, sourceLength, target, targetIndex, targetLength, compressionLevel,
+            highCompression: false);
 
     /// <summary>
     /// Decompresses a single pcluster with LZ4 (unchanged legacy behavior), returning the decompressed byte count.
@@ -141,19 +137,64 @@ internal static class ErofsCompression
         int compressionLevel,
         int dictSize,
         int windowBits)
+        => AlgorithmCompress(algorithm, source, sourceIndex, sourceLength, target, targetIndex, targetLength,
+            compressionLevel, highCompression: false, dictSize, windowBits);
+
+    /// <summary>
+    /// Algorithm-dispatched compression with an explicit LZ4 encoder identity.
+    /// <para>按算法分派压缩，并显式指定 LZ4 编码器身份。</para>
+    /// </summary>
+    /// <param name="highCompression">Uses the LZ4HC search for LZ4 payloads instead of the fast
+    /// single-hash matcher; ignored by the other codecs.
+    /// <para>对 LZ4 数据使用 LZ4HC 搜索而非快速单哈希匹配器；其余算法忽略。</para></param>
+    public static int AlgorithmCompress(
+        ErofsAlgorithm algorithm,
+        byte[] source,
+        int sourceIndex,
+        int sourceLength,
+        byte[] target,
+        int targetIndex,
+        int targetLength,
+        int compressionLevel,
+        bool highCompression,
+        int dictSize,
+        int windowBits)
     {
         ValidateRange(source, sourceIndex, sourceLength, nameof(source));
         ValidateRange(target, targetIndex, targetLength, nameof(target));
 
         return algorithm switch
         {
-            ErofsAlgorithm.Lz4 => CompressLz4(source, sourceIndex, sourceLength, target, targetIndex, targetLength, compressionLevel),
+            ErofsAlgorithm.Lz4 => CompressLz4(source, sourceIndex, sourceLength, target, targetIndex, targetLength,
+                compressionLevel, highCompression),
             ErofsAlgorithm.Lzma => CompressLzma(source, sourceIndex, sourceLength, target, targetIndex, targetLength, compressionLevel, dictSize),
             ErofsAlgorithm.Deflate => CompressDeflate(source, sourceIndex, sourceLength, target, targetIndex, targetLength, compressionLevel, windowBits),
             ErofsAlgorithm.Zstd => CompressZstd(source, sourceIndex, sourceLength, target, targetIndex, targetLength, compressionLevel, windowBits),
             _ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, "Unknown EROFS compression algorithm."),
         };
     }
+
+    /// <summary>
+    /// Compresses one pcluster with the codec parameters carried by the options, including the LZ4
+    /// encoder identity selected by <see cref="ErofsOptions.Lz4HighCompression"/>.
+    /// <para>按选项中的编解码参数压缩单个 pcluster，包含 <see cref="ErofsOptions.Lz4HighCompression"/>
+    /// 选择的 LZ4 编码器身份。</para>
+    /// </summary>
+    public static int AlgorithmCompress(
+        ErofsOptions options,
+        byte[] source,
+        int sourceIndex,
+        int sourceLength,
+        byte[] target,
+        int targetIndex,
+        int targetLength)
+        => AlgorithmCompress(
+            (ErofsAlgorithm)options.Algorithm,
+            source, sourceIndex, sourceLength, target, targetIndex, targetLength,
+            Math.Max(1, options.CompressionLevel),
+            options.Algorithm == ErofsCompressionAlgorithm.Lz4 && options.Lz4HighCompression,
+            options.DictionarySize,
+            options.WindowBits == 0 && options.Algorithm == ErofsCompressionAlgorithm.Zstd ? 20 : options.WindowBits);
 
     /// <summary>
     /// Algorithm-dispatched decompression (dictSize/windowBits use the codec defaults).
@@ -199,6 +240,10 @@ internal static class ErofsCompression
     }
 
 
+    /// <summary>
+    /// Encodes one LZ4 block with the managed destination-size encoder ported from liblz4 1.9.4.
+    /// <para>用移植自 liblz4 1.9.4 的托管限定目标大小编码器输出一个 LZ4 块。</para>
+    /// </summary>
     private static int CompressLz4(
         byte[] source,
         int sourceIndex,
@@ -206,8 +251,36 @@ internal static class ErofsCompression
         byte[] target,
         int targetIndex,
         int targetLength,
-        int compressionLevel)
-        => LZ4Codec.Encode(source, sourceIndex, sourceLength, target, targetIndex, targetLength, ToLz4Level(compressionLevel));
+        int compressionLevel,
+        bool highCompression)
+    {
+        if (sourceLength == 0 || targetLength == 0)
+        {
+            return 0;
+        }
+
+        // The destination-size mode always fills the target and reports how much input it consumed,
+        // while the layout planners signal "too big, try a shorter pcluster" with a zero result.
+        // Mapping unconsumed input to zero keeps that contract; a full-length consumption means the
+        // whole cluster fitted and the block is a plain LZ4 stream the kernel decoder accepts.
+        // The fast matcher takes "acceleration" as its skip distance and compresses worse as it grows,
+        // while the panel exposes "higher level = denser" for both encoders, so the level is mapped to
+        // acceleration as 10 - level: level 9 keeps the library default (densest fast output) and
+        // level 0 trades density for speed. The HC search still receives the level directly.
+        // 限定目标大小模式总会填满目标缓冲区并报告实际消费的输入长度，而布局规划器用返回 0 表示
+        // "太大，改用更短的 pcluster"。把未消费完输入映射为 0 即保持该契约；消费完整长度说明整簇
+        // 已放入输出，且块是内核解码器可直接使用的标准 LZ4 流。
+        // 快速匹配器把 acceleration 当作跳过距离，取值越大压缩越差，而面板对两种编码器都暴露
+        // "等级越高越密"的语义，因此按 10 - level 映射：等级 9 保持库默认（最快的稠密输出），
+        // 等级 0 用密度换速度。HC 搜索仍直接接收等级。
+        var encoded = Lz4DestinationCodec.Encode(
+            source.AsSpan(sourceIndex, sourceLength),
+            target.AsSpan(targetIndex, targetLength),
+            highCompression ? 2 : 1,
+            highCompression ? compressionLevel : Math.Clamp(10 - compressionLevel, 1, 10),
+            out var consumed);
+        return consumed == sourceLength ? encoded : 0;
+    }
 
     private static int DecompressLz4(byte[] source, int sourceIndex, int sourceLength, byte[] target, int targetIndex, int targetLength)
         => LZ4Codec.Decode(source, sourceIndex, sourceLength, target, targetIndex, targetLength);

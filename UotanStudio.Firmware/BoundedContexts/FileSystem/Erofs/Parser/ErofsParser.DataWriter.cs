@@ -311,11 +311,15 @@ public sealed partial class ErofsParser
                 }
 
                 // Pre-big-pcluster kernels (Linux 5.4 / 5.10, fs/erofs/zmap.c) never clamp the
-                // extent end to i_size: the decompressor must produce exactly the covered whole
-                // clusters, so the kernel expects (nextLcn << lclusterbits) - m_la here.
-                // pre-big-pcluster 内核（Linux 5.4 / 5.10，fs/erofs/zmap.c）不会把 extent 末端
-                // 裁剪到 i_size：解压输出必须恰好等于覆盖的整簇数，即 (nextLcn << lclusterbits) - m_la。
-                var kernelExpectedOutputSize = checked((int)(((long)nextLcn << lclusterBits) - mLa));
+                // extent end to i_size. A request that lands in the extent's trailing partial
+                // cluster is bounded by that cluster's own index entry (end = (lcn << bits) |
+                // clusterofs), while a request in a fully covered cluster is bounded by the cluster
+                // end, so the largest demanded output is the farther of the two.
+                // pre-big-pcluster 内核（Linux 5.4 / 5.10，fs/erofs/zmap.c）不会把 extent 末端裁剪到
+                // i_size：落在尾部非整簇的请求以该簇自己的索引项为界（end = (lcn << bits) |
+                // clusterofs），落在整簇的请求以簇末端为界，故内核最大期望输出取两者的较大值。
+                var kernelExpectedOutputSize = checked((int)(Math.Max((long)nextLcn << lclusterBits,
+                    Math.Min(nextMLa, (long)inode.Size)) - mLa));
 
                 var llen = Math.Min(nextMLa, (long)inode.Size) - mLa;
                 if (llen <= 0)
@@ -569,6 +573,53 @@ public sealed partial class ErofsParser
         }
 
         return report;
+    }
+
+    /// <summary>Diagnostic companion listing one file's logical cluster index entries exactly as a
+    /// kernel decodes them, to compare a rebuild's index against the verified source image.
+    /// <para>诊断伴侣：按内核的解码方式列出指定文件的每个逻辑簇索引项，用于把重建镜像的索引与已校验
+    /// 的源镜像逐项对照。</para></summary>
+    internal List<(long Lcn, byte Type, int ClusterOfs, long Pblk, uint Delta0, uint Delta1)> DumpIndexClusters(string path)
+    {
+        var wanted = path.TrimStart('/');
+        var match = EnumerateEntries().First(entry => string.Equals(entry.Path.TrimStart('/'), wanted, StringComparison.Ordinal));
+        return IndexRows(match.Nid, ReadInode(match.Nid));
+    }
+
+    /// <summary>Diagnostic companion listing the last index entries of every regular compressed
+    /// file, which is where a rebuild and its source image tend to diverge.
+    /// <para>诊断伴侣：列出每个常规压缩文件的最后若干索引项，重建与源镜像的差异通常就出现在尾部。</para></summary>
+    internal List<(string Path, long Lcn, byte Type, int ClusterOfs, long Pblk)> TailIndexClusters(int count)
+    {
+        var report = new List<(string, long, byte, int, long)>();
+        foreach (var entry in EnumerateEntries())
+        {
+            if (entry.IsDirectory || entry.IsSymlink || entry.IsSpecialFile) continue;
+            var inode = ReadInode(entry.Nid);
+            if (!inode.IsCompressed) continue;
+            var rows = IndexRows(entry.Nid, inode);
+            foreach (var row in rows.Skip(Math.Max(0, rows.Count - count)))
+                report.Add((entry.Path, row.Lcn, row.Type, row.ClusterOfs, row.Pblk));
+        }
+
+        return report;
+    }
+
+    private List<(long Lcn, byte Type, int ClusterOfs, long Pblk, uint Delta0, uint Delta1)> IndexRows(ulong nid, ErofsInode inode)
+    {
+        var headerOffset = AlignUp(_superblock.GetInodeOffset(nid) + inode.OnDiskSize + inode.XattrTotalSize, 8);
+        var header = ZErofsMapHeader.FromBytes(ReadBytes(headerOffset, ZErofsMapHeader.Size, "compressed map header"));
+        var lclusterBits = _superblock.BlockSizeBits + (header.ClusterBits & ZErofsMapHeader.LclusterBitsMask);
+        var totalIdx = ErofsCompression.PclusterCount(inode.Size, 1 << lclusterBits);
+        var rows = new List<(long, byte, int, long, uint, uint)>(totalIdx);
+        for (var lcn = 0L; lcn < totalIdx; lcn++)
+        {
+            var lc = LoadLcluster(nid, inode, headerOffset, header.Advise, lclusterBits, totalIdx, lcn,
+                out _, out _, out _);
+            rows.Add((lcn, lc.Type, lc.ClusterOfs, lc.Pblk, lc.Delta0, lc.Delta1));
+        }
+
+        return rows;
     }
 
     /// <summary>

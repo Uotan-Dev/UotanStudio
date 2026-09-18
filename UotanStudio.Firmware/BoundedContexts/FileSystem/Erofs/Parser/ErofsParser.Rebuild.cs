@@ -11,7 +11,9 @@ public sealed partial class ErofsParser
         foreach (var pair in ReadCompressionOptions())
         {
             var options = pair.Value;
-            algorithms.Add(new JsonObject
+            // 显式转为 JsonNode 命中非泛型 Add 重载；JsonArray.Add<T>(T) 会用反射
+            // 包装非基元类型，NativeAOT 下抛异常（IL2026/IL3050）。
+            algorithms.Add((JsonNode)new JsonObject
             {
                 ["algorithm"] = pair.Key.ToString(),
                 ["dictionarySize"] = pair.Key == ErofsCompressionAlgorithm.Lzma ? options.DictionarySize : null,

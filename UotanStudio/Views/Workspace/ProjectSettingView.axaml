@@ -92,10 +92,12 @@
                        Text="{DynamicResource Dock_EROFSAlgorithm}" />
             <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
                         HorizontalAlignment="Left">
-                <RadioButton FontSize="13" IsChecked="{Binding EROFSLZ4}">
+                <RadioButton FontSize="13" IsChecked="{Binding EROFSLZ4}"
+                             ToolTip.Tip="{DynamicResource Dock_EROFSAlgorithmHint}">
                     <TextBlock Text="lz4" TextWrapping="NoWrap" />
                 </RadioButton>
-                <RadioButton FontSize="13" IsChecked="{Binding EROFSLZ4HC}">
+                <RadioButton FontSize="13" IsChecked="{Binding EROFSLZ4HC}"
+                             ToolTip.Tip="{DynamicResource Dock_EROFSAlgorithmHint}">
                     <TextBlock Text="lz4hc" TextWrapping="NoWrap" />
                 </RadioButton>
             </StackPanel>
@@ -106,9 +108,11 @@
             <TextBlock VerticalAlignment="Center"
                        FontSize="13"
                        TextWrapping="Wrap"
+                       ToolTip.Tip="{DynamicResource Dock_EROFSCompLevelHint}"
                        Text="{DynamicResource Dock_EROFSCompLevel}" />
             <ComboBox MinWidth="155" MaxWidth="240"
                       HorizontalAlignment="Stretch" Padding="5"
+                      ToolTip.Tip="{DynamicResource Dock_EROFSCompLevelHint}"
                       ItemsSource="0123456789" SelectedIndex="{Binding EROFSComGrade}" />
         </controls:ResponsiveFormRow>
         <controls:ResponsiveFormRow Margin="8,10,5,0"

@@ -157,12 +157,13 @@ public sealed class ErofsFormatHandler : IFormatHandler
 
                 var builder = new ErofsBuilder();
                 var options = RepackMetadata.OptionsFor(inputPath, FormatName);
-                // LZ4HC is expressed as a higher LZ4 compression level; EROFS stores no codec enum for it.
-                // LZ4HC 由更高 LZ4 压缩级别表达；EROFS 没有对应的编解码枚举。
+                // The panel selects the LZ4 block encoder through this override key; EROFS itself stores
+                // no codec enum for it, so the on-disk algorithm stays "lz4".
+                // 面板通过该覆盖键选择 LZ4 块编码器；EROFS 本身不存对应编解码枚举，磁盘算法仍为 "lz4"。
                 var lz4hc = string.Equals(options.TryGetValue("ErofsAlgorithm", out var algorithm) ? algorithm : "lz4",
                     "lz4hc", StringComparison.OrdinalIgnoreCase);
                 var compressionLevel = RepackMetadata.IntegerOption(options, "ErofsCompressionLevel",
-                    lz4hc ? 4 : 1);
+                    9);
                 var progressSink = progress is null ? null : FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
                 builder.Build(inputPath, outputPath, new ErofsOptions
                 {
@@ -171,7 +172,8 @@ public sealed class ErofsFormatHandler : IFormatHandler
                     FsConfigPath = RepackMetadata.NullIfEmpty(options, "FsConfigPath"),
                     FileContextsPath = RepackMetadata.NullIfEmpty(options, "FileContextsPath"),
                     Algorithm = ErofsCompressionAlgorithm.Lz4,
-                    CompressionLevel = Math.Max(compressionLevel, lz4hc ? 4 : 1),
+                    Lz4HighCompression = lz4hc,
+                    CompressionLevel = compressionLevel,
                 }, progressSink);
 
                 return FirmwareOpResult.Ok($"Packed '{inputPath}' into '{outputPath}' (EROFS).");

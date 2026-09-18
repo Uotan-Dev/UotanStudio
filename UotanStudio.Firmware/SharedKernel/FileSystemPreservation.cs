@@ -190,6 +190,7 @@ public static class FileSystemPreservation
             Uuid = options.Uuid,
             VolumeName = options.VolumeName,
             SourceLength = source.CanSeek ? source.Length : null,
+            SourceFilesystemBytes = checked((long)parser.Superblock.BlockCount64 * options.BlockSize),
             Erofs = ErofsRebuildMetadata.Capture(options)
         };
     }
@@ -265,12 +266,12 @@ public static class FileSystemPreservation
                 throw new IOException("Filesystem content or attributes changed during rebuilding.");
         }, overwrite: true);
         if (rebuildReport is not null && format == "EROFS" && tables.Rebuild?.Erofs is { } erofsProfile)
-            rebuildReport(BuildErofsReport(erofsProfile, tables.Rebuild.SourceLength, new FileInfo(fullOutput).Length));
+            rebuildReport(BuildErofsReport(erofsProfile, tables.Rebuild, new FileInfo(fullOutput).Length));
         return true;
     }
 
-    /// <summary>Describes the regenerated layout against the source image length and the inherited codec profile.<para>描述相对源镜像长度与继承编解码档案的重建布局。</para></summary>
-    private static Dictionary<string, string> BuildErofsReport(ErofsRebuildParameters profile, long? sourceLength, long rebuiltLength)
+    /// <summary>Describes the regenerated layout against the source filesystem size and the inherited codec profile.<para>描述相对源文件系统体积与继承编解码档案的重建布局。</para></summary>
+    private static Dictionary<string, string> BuildErofsReport(ErofsRebuildParameters profile, RebuildParameters rebuild, long rebuiltLength)
     {
         var report = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -282,12 +283,22 @@ public static class FileSystemPreservation
                 .OrderBy(codec => codec.Algorithm, StringComparer.Ordinal)
                 .Select(codec => $"{codec.Algorithm}: inherited from the verified source image; encoder identity and original level remain unproven"))
         };
-        if (sourceLength is > 0)
+        // A partition image is normally padded past the end of its filesystem, so the rebuilt length is
+        // only comparable to the source filesystem's own block count. Profiles written before that field
+        // existed fall back to the padded image length and say so.
+        // 分区镜像通常会被填充到超出其文件系统的长度，因此重建长度只能与源文件系统自身的块数比较。
+        // 早于该字段写入的档案退回使用填充后的镜像长度，并明确说明。
+        var paddedFallback = rebuild.SourceFilesystemBytes is not > 0;
+        var target = paddedFallback ? rebuild.SourceLength : rebuild.SourceFilesystemBytes;
+        if (target is > 0)
         {
-            var target = sourceLength.Value;
-            report["SourceFilesystemSize"] = target.ToString(CultureInfo.InvariantCulture);
-            report["FitsSourceFilesystemSize"] = (rebuiltLength <= target).ToString();
-            report["SizeExcess"] = Math.Max(0, rebuiltLength - target).ToString(CultureInfo.InvariantCulture);
+            report["SourceFilesystemSize"] = target.Value.ToString(CultureInfo.InvariantCulture);
+            report["FitsSourceFilesystemSize"] = (rebuiltLength <= target.Value).ToString();
+            report["SizeExcess"] = Math.Max(0, rebuiltLength - target.Value).ToString(CultureInfo.InvariantCulture);
+            if (paddedFallback)
+            {
+                report["SourceFilesystemSizeBasis"] = "padded image length (re-extract the source to record the filesystem block count)";
+            }
         }
 
         return report;

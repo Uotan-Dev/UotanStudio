@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Google.Protobuf;
 using K4os.Compression.LZ4;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff;
+using UotanStudio.Firmware.CrossCutting.Compress.Codecs;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 

@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
+using UotanStudio.Firmware.CrossCutting.Compress.Codecs;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

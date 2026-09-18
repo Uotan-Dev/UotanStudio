@@ -12,12 +12,13 @@ public sealed class ErofsOptions
 
     /// <summary>The maximum physical compressed cluster (pcluster) size in bytes; zero selects the default.
     /// <para>最大物理压缩簇（pcluster）字节数；0 表示使用默认值。</para>
-    /// A single pcluster may cover several logical clusters; a larger pcluster lets LZ4 use its full
-    /// 64 KiB history window across block boundaries, which is what keeps the output close to the
-    /// source image. Collapsing this to one filesystem block recompresses each 4 KiB independently and
-    /// noticeably inflates the image.
-    /// <para>一个 pcluster 可覆盖多个逻辑簇；加大的 pcluster 让 LZ4 能跨块使用完整 64 KiB 历史窗口，
-    /// 使输出接近源镜像。若把该值收缩为一个文件系统块，则会独立重压每个 4 KiB 而显著膨胀镜像。</para>
+    /// This caps how many bytes a pcluster's compressed stream may occupy. Keeping LZ4's output close
+    /// to a source image is instead governed by how much *input* one pcluster covers: a byte-granular
+    /// (dense) planner fills each physical block from arbitrarily placed pclusters, while a planner
+    /// that restarts every pcluster on a logical cluster boundary wastes the remainder of each block.
+    /// <para>该值只限制 pcluster 压缩流的字节数。让 LZ4 输出接近源镜像的关键其实是单个 pcluster 覆盖
+    /// 多少输入：按字节粒度（dense）的规划器会用任意起点的 pcluster 填满每个物理块，而每个 pcluster
+    /// 都在逻辑簇边界重启的规划器会浪费每块剩余空间。</para>
     /// </summary>
     public int MaxPclusterSize { get; set; }
 
@@ -29,6 +30,23 @@ public sealed class ErofsOptions
 
     /// <summary>LZ4 maximum match distance; zero denotes the upstream 65535-byte default.</summary>
     public ushort Lz4MaxDistance { get; set; }
+
+    /// <summary>
+    /// Selects the LZ4HC block encoder (bounded search over match candidates) instead of the fast
+    /// single-hash matcher for <see cref="ErofsCompressionAlgorithm.Lz4"/> payloads.
+    /// <para>为 <see cref="ErofsCompressionAlgorithm.Lz4"/> 数据选择 LZ4HC 块编码器（在候选匹配上做
+    /// 有界搜索），而不是快速的单哈希匹配器。</para>
+    /// EROFS stores no encoder identity: the on-disk codec is LZ4 either way, and the kernel only sees
+    /// the resulting block, so this flag trades build time for density exactly like upstream's
+    /// <c>-zlz4</c> versus <c>-zlz4hc</c>. It does not change the declared algorithm.
+    /// <see cref="CompressionLevel"/> selects the HC search depth and is clamped to 1-9, so the
+    /// optimal-parse levels 10-12 are not reachable through these options.
+    /// <para>EROFS 不记录编码器身份：磁盘上的编解码器始终是 LZ4，内核只见最终数据块，因此该开关与上游
+    /// <c>-zlz4</c> 与 <c>-zlz4hc</c> 的取舍一样，只用构建时间换取压缩率，不改变声明的算法。
+    /// <see cref="CompressionLevel"/> 决定 HC 搜索深度并被限制在 1-9，因此最优分析级（10-12）无法通过
+    /// 本选项到达。</para>
+    /// </summary>
+    public bool Lz4HighCompression { get; set; }
 
     /// <summary>Optional source epoch and nanoseconds used by compact inodes.</summary>
     public ulong? BuildTime { get; set; }
@@ -59,10 +77,13 @@ public sealed class ErofsOptions
     /// <para>生成 legacy（pre-5.13）erofs 镜像，不声明 big-pcluster / COMPR_CFGS 不兼容特性，
     /// 使输出可被较旧内核（Linux 5.4 与 5.10）挂载。</para>
     /// Enabling it forces the legacy layout: LZ4 only, <see cref="MaxPclusterSize"/> equal to the block
-    /// size (so every pcluster spans a single logical cluster), and full-size (non-compacted) indexes,
-    /// because compacted indexes and big pclusters were introduced together in Linux 5.13.
-    /// <para>开启时强制 legacy 布局：仅 LZ4、<see cref="MaxPclusterSize"/> 等于块大小（每个 pcluster
-    /// 仅覆盖一个逻辑簇）、使用完整（非紧凑）索引——紧凑索引与 big pcluster 均在 Linux 5.13 才引入。</para>
+    /// size (so each pcluster's stream occupies one physical block), and full-size (non-compacted)
+    /// indexes, because compacted indexes and big pclusters were introduced together in Linux 5.13.
+    /// Pclusters may still start and end at byte-granular offsets: both index formats store
+    /// di_clusterofs, so an older kernel can address them.
+    /// <para>开启时强制 legacy 布局：仅 LZ4、<see cref="MaxPclusterSize"/> 等于块大小（每个 pcluster 的
+    /// 压缩流只占一个物理块）、使用完整（非紧凑）索引——紧凑索引与 big pcluster 均在 Linux 5.13 才
+    /// 引入。pcluster 仍可按字节粒度起讫：两种索引格式都保存 di_clusterofs，旧内核可以寻址。</para>
     /// </summary>
     public bool LegacyCompatibility { get; set; }
 
@@ -127,10 +148,10 @@ public sealed class ErofsOptions
         }
 
         if (MaxPclusterSize == 0) MaxPclusterSize = ErofsCompression.MaxPclusterSize;
-        // Legacy (pre-5.13) images restrict compressed pclusters to a single logical cluster and
-        // drop compacted indexes, whose on-disk support only landed together with big pclusters.
-        // legacy（pre-5.13）镜像把压缩 pcluster 限制为单个逻辑簇，并关闭与 big pcluster 同时引入
-        // 的紧凑索引。
+        // Legacy (pre-5.13) images keep every compressed pcluster inside one physical block and drop
+        // compacted indexes, whose on-disk support only landed together with big pclusters.
+        // legacy（pre-5.13）镜像把每个压缩 pcluster 限制在一个物理块内，并关闭与 big pcluster 同时
+        // 引入的紧凑索引。
         if (LegacyCompatibility)
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4;
@@ -147,12 +168,11 @@ public sealed class ErofsOptions
             Metabox = false;
             // Per-node planning runs on the codec-specific option objects (node.CompressionOptions),
             // so they must inherit the legacy constraints too; otherwise a preserved rebuild
-            // recompresses edited nodes with modern semantics and merges the unaligned tail into a
-            // compressed pcluster, which pre-big-pcluster kernels reject with
-            // "failed to decompress ... out[...]".
+            // recompresses edited nodes with modern semantics and emits big pclusters, fragments or an
+            // inline tail that the older decoder cannot use.
             // 逐节点规划使用逐 codec 的选项对象（node.CompressionOptions），它们也必须继承 legacy
-            // 约束；否则保留重建会用现代语义重压编辑过的节点，把非整簇尾部并入压缩 pcluster，
-            // 被 pre-big-pcluster 内核以 "failed to decompress ... out[...]" 拒绝。
+            // 约束；否则保留重建会用现代语义重压编辑过的节点，产出旧解码器无法使用的 big pcluster、
+            // fragment 或内联尾部。
             if (SourceCompressionOptions is { } codecOptions)
             {
                 foreach (var codec in codecOptions.Values)

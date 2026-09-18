@@ -95,6 +95,14 @@ internal static class ErofsRebuildMetadata
             // EROFS 磁盘格式不记录编码级别，保留档案总是中性默认值；重建时使用托管最大级别，
             // 使输出尽量接近源镜像，而不是有损的级别 1 基线。
             CompressionLevel = parameters.CompressionLevel > 1 ? Math.Clamp(parameters.CompressionLevel, 1, 9) : 9,
+            // Same rationale as the level: the disk format records no LZ4 encoder identity, and the
+            // dense layouts upstream packers produce come from their HC search. A preserved rebuild
+            // targets the source density, so it defaults to the HC encoder; the fast matcher would
+            // measurably inflate the result.
+            // 与压缩级别同理：磁盘格式不记录 LZ4 编码器身份，而上游打包器产出的 dense 布局来自其
+            // HC 搜索。保留式重建以源镜像密度为目标，因此默认使用 HC 编码器；快速匹配器会明显增大
+            // 产物。
+            Lz4HighCompression = true,
             TailPacking = parameters.TailPacking,
             CompressedTailPacking = parameters.CompressedTailPacking,
             UseCompactedIndexes = parameters.UseCompactedIndexes,
@@ -114,6 +122,12 @@ internal static class ErofsRebuildMetadata
             Lz4MaxDistance = checked((ushort)Math.Clamp(parameters.Lz4MaxDistance, 0, ushort.MaxValue)),
             MaxPclusterSize = parameters.MaxPclusterSize,
             LegacyCompatibility = parameters.LegacyCompatibility,
+            // A preserved rebuild exists to reproduce the source image, and upstream packers fill each
+            // physical block with byte-granular (dense) pclusters. Without the same layout the rebuilt
+            // image is measurably larger than its source, so the layout planner is always enabled here.
+            // 保留式重建的目标是复现源镜像，而上游打包器会用按字节粒度（dense）的 pcluster 填满每个
+            // 物理块。若不采用同一布局，重建镜像会明显大于源镜像，因此这里始终启用该布局规划器。
+            OptimizeCompression = true,
         };
 
         if (parameters.Codecs.Count > 0)
@@ -134,6 +148,12 @@ internal static class ErofsRebuildMetadata
                     // neutral 1 in the profile means "unknown" and is rebuilt at the maximum.
                     // 与主级别同理：EROFS 不存编码级别，档案中的中性 1 表示"未知"，按最大级别重建。
                     CompressionLevel = codec.CompressionLevel > 1 ? Math.Clamp(codec.CompressionLevel, 1, 9) : 9,
+                    Lz4HighCompression = true,
+                    // Per-node planning reads these codec objects (node.CompressionOptions), so the
+                    // dense layout has to be enabled on them too, not only on the primary options.
+                    // 逐节点规划读取的就是这些 codec 对象（node.CompressionOptions），因此 dense 布局
+                    // 也必须在其上启用，而不能只设主选项。
+                    OptimizeCompression = true,
                 };
             }
 

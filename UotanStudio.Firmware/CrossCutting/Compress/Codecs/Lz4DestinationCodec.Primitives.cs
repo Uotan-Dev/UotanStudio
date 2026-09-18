@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using reg_t = System.UInt64;
 using size_t = System.UInt32;
 
-namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
+namespace UotanStudio.Firmware.CrossCutting.Compress.Codecs;
 
 internal static unsafe partial class Lz4DestinationCodec
 {

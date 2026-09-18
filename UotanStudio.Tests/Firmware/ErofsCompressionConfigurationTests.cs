@@ -214,44 +214,47 @@ public class ErofsCompressionConfigurationTests
     }
 
     [Fact]
-    public void Build_Legacy_CompressedHeads_StayClusterAligned()
+    public void Build_Legacy_DensePclusters_StayKernelReadable()
     {
-        // Linux 5.4 / 5.10 legacy full-index decoders place the LZ4 input at the clusterofs recorded
-        // for each head lcluster; a byte-granular (dense) packer records non-zero clusterofs, which
-        // those decoders cannot address. Legacy builds must therefore bypass dense packing and keep
-        // every compressed head at its cluster start (clusterofs == 0).
-        // legacy 全索引解码器把 LZ4 输入放在每个 head lcluster 记录的 clusterofs 处；按字节粒度打包的
-        // dense 会记录非零 clusterofs，这是旧内核无法寻址的。故 legacy 构建必须绕过 dense，令每个
-        // 压缩 head 位于其逻辑簇起点（clusterofs == 0）。
+        // Byte-granular (dense) pclusters are legal for legacy images: both index formats store
+        // di_clusterofs, so a pre-5.13 kernel derives each pcluster's exact byte length from the next
+        // head position instead of assuming cluster-aligned extents. The invariant that actually
+        // protects the mount is that every extent decodes to at least the output the index demands,
+        // which is what the coverage deficit check reports.
+        // 按字节粒度的 dense pcluster 对 legacy 镜像是合法的：两种索引格式都保存 di_clusterofs，
+        // 因此 pre-5.13 内核由下一个 head 位置推导每个 pcluster 的精确字节长度，而不假设 extent
+        // 按簇对齐。真正保护挂载的不变量是：每个 extent 的解压输出不得少于索引要求的输出量，
+        // 即覆盖率缺口检查必须为 0。
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", AlternatingCompressionPayload());
         var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             LegacyCompatibility = true,
-            // Route through the dense-by-default optimizer path used by a preserved rebuild so the
-            // test genuinely guards the legacy gate inside TryPlanCompressed.
-            // 与保留重建一样默认走 dense 优化路径，使该测试真正守护 TryPlanCompressed 内的 legacy 门禁。
+            // Route through the dense planner so the test genuinely guards the legacy dense path.
+            // 走 dense 规划器，使该测试真正守护 legacy dense 路径。
             OptimizeCompression = true,
         });
         using var parser = new ErofsParser(image);
-        Assert.Equal(0, parser.MaxCompressedClusterOfs());
+        Assert.True(parser.MaxCompressedClusterOfs() > 0, "legacy builds are expected to pack densely.");
+        Assert.Equal(0, parser.MaxPclusterKernelCoverageDeficit());
+        Assert.Equal(AlternatingCompressionPayload(), parser.ReadFileBytes("data.bin"));
     }
 
     [Fact]
     public void Build_Legacy_PartialTail_KeepsKernelClusterCoverage()
     {
-        // Pre-big-pcluster kernels (Linux 5.4 / 5.10) demand that a compressed pcluster decodes to
-        // exactly its covered whole logical clusters; they never clamp the final extent to i_size.
-        // Feeding only the valid tail bytes (e.g. an 11128-byte file) therefore produces
-        // "failed to decompress 11128 in[...] out[12288]" on device. The planner must keep every
-        // compressed extent on whole clusters and route the unaligned tail through a Plain lcluster.
-        // pre-big-pcluster 内核（Linux 5.4 / 5.10）要求压缩 pcluster 恰好解压为覆盖的整逻辑簇，
-        // 且不会把最后一个 extent 裁剪到 i_size。若只喂尾部的有效字节（如 11128 字节文件），
-        // 设备端就会报 "failed to decompress 11128 in[...] out[12288]"。规划器必须让每个压缩
-        // extent 落在整簇上，把非整簇尾部交给 Plain lcluster。
+        // Pre-big-pcluster kernels derive the demanded output from the index, so a compressed extent
+        // may absorb the trailing partial cluster only while an index slot remains for the
+        // end-of-file terminator. A sub-cluster extent (the 100-byte file below) has no such slot and
+        // must stay Plain, otherwise the decoder is asked for a whole cluster it cannot produce
+        // ("failed to decompress ... out[...]").
+        // pre-big-pcluster 内核由索引推导所需输出，因此压缩 extent 只有在仍留有索引槽位承载文件末尾
+        // 终止项时才能吸收尾部非整簇。不足一簇的 extent（下面的 100 字节文件）没有该槽位，必须保持
+        // Plain，否则解码器会被要求产出一个它无法生成的整簇（"failed to decompress ... out[...]"）。
         using var source = new TempDirectory();
         source.WriteBytes("compressible.bin", Enumerable.Repeat((byte)0x42, 11128).ToArray());
+        source.WriteBytes("tiny.bin", Enumerable.Repeat((byte)0x5a, 100).ToArray());
         var random = new byte[11128];
         new Random(20260918).NextBytes(random);
         source.WriteBytes("incompressible.bin", random);
@@ -262,10 +265,69 @@ public class ErofsCompressionConfigurationTests
             OptimizeCompression = true,
         });
         using var parser = new ErofsParser(image);
-        Assert.Equal(0, parser.MaxCompressedClusterOfs());
         Assert.Equal(0, parser.MaxPclusterKernelCoverageDeficit());
         Assert.Equal(Enumerable.Repeat((byte)0x42, 11128).ToArray(), parser.ReadFileBytes("compressible.bin"));
+        Assert.Equal(Enumerable.Repeat((byte)0x5a, 100).ToArray(), parser.ReadFileBytes("tiny.bin"));
         Assert.Equal(random, parser.ReadFileBytes("incompressible.bin"));
+    }
+
+    [Fact]
+    public void Build_Legacy_MidClusterTail_StaysPlainForOldKernels()
+    {
+        // A final compressed extent that starts inside a cluster shares that cluster's head page with
+        // the preceding pcluster. QEMU on Linux 5.10.180 decoded such a tail to zeros without any
+        // erofs_err or I/O error, and the verified source images keep exactly those tails raw, so the
+        // dense planner must never open the last extent of a file at a non-zero clusterofs.
+        // 起始于簇内部的末尾压缩 extent 与前一个 pcluster 共享该簇的 head 页。QEMU + Linux 5.10.180
+        // 会把这样的尾部解成零数据，且不产生任何 erofs_err 或 I/O 错误；已校验的源镜像正是把这类尾部
+        // 存为原始数据。因此 dense 规划器绝不能让文件的最后一个 extent 以非零 clusterofs 开头。
+        const byte plain = 0, nonHead = 2;
+        var fixture = new (string Name, int Size)[]
+        {
+            ("mixed-a.bin", 5 * 4096 + 1234),
+            ("mixed-b.bin", 9 * 4096 + 777),
+            ("mixed-c.bin", 3 * 4096 + 2049),
+            ("mixed-d.bin", 17 * 4096 + 33),
+        };
+        using var source = new TempDirectory();
+        var random = new Random(20260918);
+        var payloads = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        foreach (var (name, size) in fixture)
+        {
+            var payload = new byte[size];
+            for (var offset = 0; offset < size; offset += 6144)
+            {
+                Array.Fill(payload, (byte)0x41, offset, Math.Min(4096, size - offset));
+                if (offset + 4096 >= size) continue;
+                var length = Math.Min(2048, size - offset - 4096);
+                random.NextBytes(payload.AsSpan(offset + 4096, length));
+            }
+            payloads[name] = payload;
+            source.WriteBytes(name, payload);
+        }
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            LegacyCompatibility = true,
+            OptimizeCompression = true,
+        });
+        using var parser = new ErofsParser(image);
+        var midClusterTails = 0;
+        foreach (var (name, _) in fixture)
+        {
+            // The last logical cluster entry of a legacy file is the end-of-file terminator; the entry
+            // before it heads the extent that covers the tail.
+            // legacy 文件的最后一个逻辑簇索引项是文件末尾终止项，其前一项即覆盖尾部的 extent 的 head。
+            var rows = parser.DumpIndexClusters(name);
+            Assert.True(rows.Count > 1, $"{name} needs more than one logical cluster to be meaningful.");
+            var tail = rows[..^1].Last(row => row.Type != nonHead);
+            Assert.True(tail.Type == plain || tail.ClusterOfs == 0,
+                $"{name} stores its final extent as compressed at clusterofs {tail.ClusterOfs}.");
+            midClusterTails += tail.ClusterOfs == 0 ? 0 : 1;
+            Assert.Equal(payloads[name], parser.ReadFileBytes(name));
+        }
+        Assert.True(midClusterTails > 0, "the fixture produced no mid-cluster tail, so the rule went untested.");
+        Assert.Equal(0, parser.MaxPclusterKernelCoverageDeficit());
     }
 
     private static byte[] AlternatingCompressionPayload()
