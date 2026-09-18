@@ -6,6 +6,8 @@
     <x:String x:Key="Settings_Firmware">固件工具</x:String>
     <x:String x:Key="Settings_FirmwareParallelism">并行数量</x:String>
     <x:String x:Key="Settings_FirmwareParallelismHint">默认 4，可设置为 1–8。用于支持并行的固件打包和解包，修改后对新任务生效。数量越大，内存占用通常越高。</x:String>
+    <x:String x:Key="Settings_ErofsLegacy">EROFS legacy 布局</x:String>
+    <x:String x:Key="Settings_ErofsLegacyHint">新建 EROFS 镜像采用 pre-5.13 布局（不使用 big-pcluster），使 Linux 5.4/5.10 内核可直接挂载。仅当目标内核为 5.13+ 且希望镜像更小时才关闭。</x:String>
     <x:String x:Key="Settings_Flash">烧录设置</x:String>
     <x:String x:Key="Settings_NodeEditor">节点编辑器</x:String>
     <x:String x:Key="Settings_Language">语言</x:String>

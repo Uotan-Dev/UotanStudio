@@ -160,11 +160,11 @@ internal static class PackingService
         var options = new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            // Newly built images default to the legacy (pre-5.13) layout so older kernels
-            // (Linux 5.4 / 5.10) can mount system/vendor without the big-pcluster feature.
-            // 新建镜像默认采用 legacy（pre-5.13）布局，使较旧内核（Linux 5.4 / 5.10）无需
-            // big-pcluster 特性即可挂载 system/vendor。
-            LegacyCompatibility = true,
+            // Legacy layout follows the app-level setting (synced to the shared default at startup
+            // and on change) so both the packing panel and repack honor the same user choice.
+            // legacy 布局跟随应用层设置（启动与变更时同步到共享默认值），使打包面板与重打包
+            // 遵循同一用户选择。
+            LegacyCompatibility = UotanStudio.Firmware.SharedKernel.ErofsBuildDefaults.LegacyCompatibility,
             // The panel's LZ4/LZ4HC choice selects the block encoder; EROFS stores no codec enum for
             // it, so only density and build time differ on disk.
             // 面板上的 LZ4/LZ4HC 选择决定块编码器；EROFS 不存对应的编解码枚举，因此二者在磁盘上只有

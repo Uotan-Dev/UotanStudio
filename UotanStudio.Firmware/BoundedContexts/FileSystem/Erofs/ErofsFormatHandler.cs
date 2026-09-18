@@ -174,6 +174,11 @@ public sealed class ErofsFormatHandler : IFormatHandler
                     Algorithm = ErofsCompressionAlgorithm.Lz4,
                     Lz4HighCompression = lz4hc,
                     CompressionLevel = compressionLevel,
+                    // Repack metadata carries no legacy flag of its own; the app-level setting routes
+                    // through the shared default so rebuilt images honor the user's kernel choice.
+                    // 重打包元数据不记录 legacy 标志；应用层设置经由共享默认值传递，使重建镜像
+                    // 遵循用户对内核的选择。
+                    LegacyCompatibility = SharedKernel.ErofsBuildDefaults.LegacyCompatibility,
                 }, progressSink);
 
                 return FirmwareOpResult.Ok($"Packed '{inputPath}' into '{outputPath}' (EROFS).");

@@ -40,6 +40,14 @@ public class AppSettings : IJsonOnDeserialized
     }
 
     /// <summary>
+    /// <para>获取或设置新建 EROFS 镜像是否使用 legacy（pre-5.13）布局，供旧内核挂载。</para>
+    /// Gets or sets whether newly built EROFS images use the legacy (pre-5.13) layout for older kernels.
+    /// </summary>
+    [JsonPropertyName("erofsLegacyCompatibility")]
+    public bool ErofsLegacyCompatibility { get; set; } =
+        global::UotanStudio.Firmware.SharedKernel.ErofsBuildDefaults.DefaultLegacyCompatibility;
+
+    /// <summary>
     /// <para>获取或设置当前语言的文化名称（如 "en-US"、"zh-CN"）。空字符串表示跟随系统。</para>
     /// Gets or sets the culture name of the current language (e.g., "en-US", "zh-CN"). Empty string means follow system.
     /// </summary>

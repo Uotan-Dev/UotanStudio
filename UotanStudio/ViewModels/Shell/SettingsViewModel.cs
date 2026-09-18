@@ -41,6 +41,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private ThemeMode _selectedThemeMode;
     private bool _autoSave;
     private bool _debugMode;
+    private bool _erofsLegacyCompatibility;
 
     // MCP 设置字段
     // MCP settings fields
@@ -80,6 +81,23 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     {
         get => _mcpExposeEnabled;
         set => SetProperty(ref _mcpExposeEnabled, value);
+    }
+
+    /// <summary>
+    /// <para>获取或设置新建 EROFS 镜像是否使用 legacy（pre-5.13）布局，供旧内核挂载。</para>
+    /// Gets or sets whether newly built EROFS images use the legacy (pre-5.13) layout for older kernels.
+    /// </summary>
+    public bool ErofsLegacyCompatibility
+    {
+        get => _erofsLegacyCompatibility;
+        set
+        {
+            if (SetProperty(ref _erofsLegacyCompatibility, value))
+            {
+                global::UotanStudio.Firmware.SharedKernel.ErofsBuildDefaults.LegacyCompatibility = value;
+                DebouncedSaveSettings();
+            }
+        }
     }
 
     /// <summary>
@@ -235,6 +253,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private void InitializeFromAppSettings(AppSettings settings)
     {
         global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers = settings.FirmwareParallelism;
+        global::UotanStudio.Firmware.SharedKernel.ErofsBuildDefaults.LegacyCompatibility = settings.ErofsLegacyCompatibility;
+        _erofsLegacyCompatibility = settings.ErofsLegacyCompatibility;
         // 根据 CultureName 查找或创建 LanguageInfo
         _selectedLanguage = string.IsNullOrEmpty(settings.CultureName)
             ? LanguageInfo.SystemLanguage
@@ -337,6 +357,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.ThemeMode = _selectedThemeMode;
         _appSettings.AutoSave = _autoSave;
         _appSettings.DebugMode = _debugMode;
+        _appSettings.ErofsLegacyCompatibility = _erofsLegacyCompatibility;
 
         // 合并磁盘上最新的最近打开项目列表，避免防抖保存覆盖「最近打开」记录。
         // Merge the latest recent-projects list from disk so the debounced save never wipes the MRU record.
