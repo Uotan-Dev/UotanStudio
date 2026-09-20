@@ -1,3 +1,5 @@
+using System.Text;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BoundedContexts.Archive.Browsing;
 using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
@@ -43,6 +45,9 @@ internal sealed partial class ImageBrowserSession
         /// F2FS.
         /// </summary>
         F2fs,
+
+        Fat12,
+        Fat32,
 
         /// <summary>
         /// <para>CPIO/TAR 归档。</para>
@@ -124,6 +129,17 @@ internal sealed partial class ImageBrowserSession
             return FilesystemKind.F2fs;
         }
 
+        if (header.Length >= 512 && header[510] == 0x55 && header[511] == 0xAA
+            && Encoding.ASCII.GetString(header, 54, 8).Trim() is "FAT12" or "FAT16")
+        {
+            return FilesystemKind.Fat12;
+        }
+        if (header.Length >= 90 && header[510] == 0x55 && header[511] == 0xAA
+            && Encoding.ASCII.GetString(header, 82, 8).Trim() == "FAT32")
+        {
+            return FilesystemKind.Fat32;
+        }
+
         // CPIO newc 魔数 "070701" 或 "070702"，CPIO bin 魔数 0x71C7（大端）。
         // CPIO newc magic "070701" or "070702", CPIO bin magic 0x71C7 (big-endian).
         if (header.Length >= 6)
@@ -181,6 +197,10 @@ internal sealed partial class ImageBrowserSession
                 }
 
                 return LoadF2fs(path, ct);
+            case FilesystemKind.Fat12:
+                return LoadFat12(path, ct);
+            case FilesystemKind.Fat32:
+                return LoadFat12(path, ct);
             case FilesystemKind.Cpio:
                 return LoadCpio(path, ct);
             default:
@@ -302,6 +322,13 @@ internal sealed partial class ImageBrowserSession
             return new ImageBrowserSession(browser.FormatName, new FileInfo(path).Length, browser, entries, null);
         }
         catch { browser.Dispose(); throw; }
+    }
+
+    private static ImageBrowserSession LoadFat12(string path, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var parser = Fat12ImageParser.Open(path);
+        return new ImageBrowserSession(parser.FormatName, new FileInfo(path).Length, parser, parser.Entries, null);
     }
 
 

@@ -1,7 +1,10 @@
 using System.Buffers.Binary;
+using System.Text;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BoundedContexts.Archive.Browsing;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.BoundedContexts.Executable.Elf;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Magic;
 using UotanStudio.Services.Logging;
@@ -85,7 +88,10 @@ public enum EditorOpenMode
     Partition,
 
     /// <summary>Open as a read-only log document. 以只读日志文档打开。</summary>
-    Log
+    Log,
+
+    /// <summary>Open validated ELF metadata in a read-only information panel.</summary>
+    Elf
 }
 
 /// <summary>
@@ -242,9 +248,9 @@ public static class FileOpenMode
 
     /// <summary>
     /// <para>解析应使用的打开方式；对未知/无扩展名文件，以已加载的头部字节做 magic 兜底，
-    /// 识别出强二进制类型（如 ELF）时返回 <c>Hex</c>。</para>
+    /// 有效 ELF 头进入信息面板，其余强二进制类型返回 <c>Hex</c>。</para>
     /// Resolves the open mode; for unknown/no-extension files, uses the loaded header bytes as a magic
-    /// fallback, returning <c>Hex</c> when a strong binary type (e.g. ELF) is recognized.
+    /// fallback. Valid ELF headers open the information panel; other strong binary types use <c>Hex</c>.
     /// </summary>
     /// <param name="path">
     /// <para>文件名或完整路径。</para>
@@ -256,6 +262,13 @@ public static class FileOpenMode
     /// </param>
     public static EditorOpenMode ResolveMode(string path, byte[]? header, FormatDetectionResult? detection = null)
     {
+        // A complete, valid ELF header wins regardless of suffix. A magic-only or malformed ELF
+        // stays inspectable as hex instead of being claimed by an unrelated extension handler.
+        if (header is not null && header.AsSpan().StartsWith("\u007fELF"u8))
+        {
+            return ElfReader.TryReadHeader(header, out _) ? EditorOpenMode.Elf : EditorOpenMode.Hex;
+        }
+
         // AXML 内容探测优先：AndroidManifest.xml 等二进制 XML 即使扩展名为 .xml（会被文本路由
         // 拦截）也应走 Manifest 编辑器，避免按 UTF-8 文本打开乱码。
         // AXML content sniffing first: binary XML files such as AndroidManifest.xml carry a .xml
@@ -677,7 +690,12 @@ public static class FileOpenMode
     /// Determines whether the header bytes match any filesystem magic (ext4/EROFS/F2FS).
     /// </summary>
     public static bool IsFilesystemMagic(ReadOnlySpan<byte> header) =>
-        IsExt4Magic(header) || IsErofsMagic(header) || IsF2fsMagic(header);
+        IsExt4Magic(header) || IsErofsMagic(header) || IsF2fsMagic(header) || IsFat12Magic(header);
+
+    public static bool IsFat12Magic(ReadOnlySpan<byte> header) =>
+        header.Length >= 512 && header[510] == 0x55 && header[511] == 0xAA
+        && (Encoding.ASCII.GetString(header.Slice(54, 8)).Trim() is "FAT12" or "FAT16"
+            || header.Length >= 90 && Encoding.ASCII.GetString(header.Slice(82, 8)).Trim() == "FAT32");
 
     /// <summary>
     /// <para>是否为 ext4 魔数（小端 0xEF53 位于偏移 1080）。</para>
@@ -954,11 +972,11 @@ public static class FileOpenMode
     /// <para>是否为已知二进制 / 固件扩展名（应走十六进制编辑器）。
     /// 主集合由格式处理器注册表聚合驱动（与 <see cref="IsFirmwareExtension"/> 共用单一数据源），
     /// 未命中注册表但仍是强二进制的残留扩展名（如 <c>.dat/.tgz/.zip/.el/.elf/.so</c>，
-    /// 以及 ELF 魔数兜底的场景）保持 <c>Hex</c>。</para>
+    /// 以及未通过 ELF 头校验的场景）保持 <c>Hex</c>。</para>
     /// Whether the extension is a known binary/firmware one (should open in the hex editor).
     /// The primary set is driven by the aggregated format-handler registry (single data source shared with
     /// <see cref="IsFirmwareExtension"/>); extensions not in the registry yet still strongly binary
-    /// (e.g. <c>.dat/.tgz/.zip/.el/.elf/.so</c>, plus the ELF magic fallback) keep <c>Hex</c>.
+    /// (e.g. <c>.dat/.tgz/.zip/.el/.elf/.so</c>, plus invalid ELF headers) keep <c>Hex</c>.
     /// </summary>
     public static bool IsKnownBinaryExtension(string? ext)
     {

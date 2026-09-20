@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Engines;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Tests.Comm.TestDoubles;

@@ -4,7 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
-using UotanStudio.Firmware.SharedKernel.Containers;
+using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Services;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Firmware;

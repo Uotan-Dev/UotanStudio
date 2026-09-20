@@ -26,7 +26,7 @@ public static class McpLauncher
     /// </summary>
     public static async Task RunHeadlessAsync(string[] args, CancellationToken cancellationToken = default)
     {
-        UotanStudio.Firmware.SharedKernel.FirmwareFormatRegistry.RegisterAll();
+        UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
         var host = new McpServerHost(McpServerConfig.Parse(args));
         await host.RunAsync(cancellationToken).ConfigureAwait(false);
     }

@@ -1,7 +1,9 @@
 using System.Globalization;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

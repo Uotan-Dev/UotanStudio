@@ -1,7 +1,7 @@
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Text.Json;
-using UotanStudio.Firmware.SharedKernel.Containers;
+using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Mcp;
 using UotanStudio.Mcp.Tools;
 using UotanStudio.Services.Delivery;

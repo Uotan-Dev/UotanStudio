@@ -11,7 +11,9 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

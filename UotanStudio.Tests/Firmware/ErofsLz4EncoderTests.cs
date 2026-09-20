@@ -5,6 +5,7 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

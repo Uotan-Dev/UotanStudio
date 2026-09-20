@@ -4,9 +4,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Google.Protobuf;
+using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
-using UotanStudio.Firmware.SharedKernel.Containers;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Projects;
 

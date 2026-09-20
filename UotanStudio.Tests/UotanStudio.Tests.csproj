@@ -50,6 +50,8 @@
     <None Include="TestInfrastructure\ApkSigning\unsigned.apk" CopyToOutputDirectory="PreserveNewest" />
     <None Include="TestInfrastructure\avbtool.py.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="TestInfrastructure\FirmwareMountCheck\run-native-deflate.sh" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TestInfrastructure\FirmwareMountCheck\run-gki-rw.sh" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TestInfrastructure\FirmwareMountCheck\gki-rw-init.sh" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

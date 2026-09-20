@@ -45,7 +45,7 @@ public class AppSettings : IJsonOnDeserialized
     /// </summary>
     [JsonPropertyName("erofsLegacyCompatibility")]
     public bool ErofsLegacyCompatibility { get; set; } =
-        global::UotanStudio.Firmware.SharedKernel.ErofsBuildDefaults.DefaultLegacyCompatibility;
+        global::UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuildDefaults.DefaultLegacyCompatibility;
 
     /// <summary>
     /// <para>获取或设置当前语言的文化名称（如 "en-US"、"zh-CN"）。空字符串表示跟随系统。</para>

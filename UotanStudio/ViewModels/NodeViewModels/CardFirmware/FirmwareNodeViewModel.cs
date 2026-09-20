@@ -1,6 +1,7 @@
 using Avalonia;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Firmware;

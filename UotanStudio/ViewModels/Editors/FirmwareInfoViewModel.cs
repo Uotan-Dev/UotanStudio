@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Mvvm.Controls;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Services;
 

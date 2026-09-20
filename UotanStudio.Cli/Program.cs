@@ -6,8 +6,10 @@ using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Projects;
 

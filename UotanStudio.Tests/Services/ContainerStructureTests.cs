@@ -1,8 +1,8 @@
 using System.IO.Compression;
 using UotanStudio.Comm.Protocols.Fastboot.Utils;
+using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
-using UotanStudio.Firmware.SharedKernel.Containers;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -36,7 +36,7 @@ public sealed class ContainerStructureTests
         var sparse = Path.Combine(temp.Path, "renamed.img");
         UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion.SparseImageConverter.ConvertRawToSparse(raw, sparse);
 
-        UotanStudio.Firmware.SharedKernel.FirmwareFormatRegistry.RegisterAll();
+        UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
         Assert.IsType<LpFormatHandler>(UotanStudio.Firmware.SharedKernel.FormatDetector.Detect(sparse));
         Assert.Equal("super", ImageInputService.DetectFormat(sparse));
         Assert.Equal(ContainerKind.Super, ContainerStructureAnalyzer.Analyze(sparse).Kind);

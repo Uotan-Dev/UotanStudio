@@ -1,4 +1,6 @@
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 using UotanStudio.Firmware.SharedKernel;
 using Xunit;
 

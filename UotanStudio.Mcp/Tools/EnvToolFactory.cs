@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using ModelContextProtocol.Server;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BoundedContexts.Compression;
 using UotanStudio.Firmware.SharedKernel;
 

@@ -10,6 +10,7 @@ using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Writing;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Flash;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -214,6 +215,12 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 }
                 else
                 {
+                    if (!FileOpenMode.IsRockchipParameter(path))
+                    {
+                        CompileError = "Not a recognized partition table: expected LP super metadata, GPT, MBR, Amlogic or a Rockchip parameter file (CMDLINE: mtdparts=...).";
+                        return;
+                    }
+
                     IReadOnlyList<RockchipPartition>? rockchip;
                     try
                     {

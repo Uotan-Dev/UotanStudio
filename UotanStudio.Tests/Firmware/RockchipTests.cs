@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Extraction;
 using UotanStudio.Firmware.SharedKernel;
@@ -135,6 +136,50 @@ public sealed class RockchipTests : IDisposable
         var path = Write(image);
         RockchipExtractor.Extract(path, Path.Combine(_root, "out"), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("test", File.ReadAllText(Path.Combine(_root, "out", "parameter.txt")));
+    }
+
+    [Fact]
+    public async Task Rkaf_PackDirectory_RoundTripsEntries()
+    {
+        var source = Path.Combine(_root, "rkaf-source");
+        Directory.CreateDirectory(Path.Combine(source, "Image"));
+        await File.WriteAllTextAsync(Path.Combine(source, "Image", "boot.img"), "boot payload",
+            TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(source, "parameter.txt"), "test parameter",
+            TestContext.Current.CancellationToken);
+        var image = Path.Combine(_root, "packed-rkaf.img");
+
+        var result = await new RockchipFormatHandler().PackAsync(source, image, TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Summary);
+        var output = Path.Combine(_root, "rkaf-out");
+        RockchipExtractor.Extract(image, output, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal("boot payload", await File.ReadAllTextAsync(Path.Combine(output, "Image", "boot.img"),
+            TestContext.Current.CancellationToken));
+        Assert.Equal("test parameter", await File.ReadAllTextAsync(Path.Combine(output, "parameter.txt"),
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Rkfw_PackDirectory_RoundTripsLoaderAndEmbeddedImage()
+    {
+        var source = Path.Combine(_root, "rkfw-source");
+        Directory.CreateDirectory(source);
+        await File.WriteAllBytesAsync(Path.Combine(source, "BOOT"), "BOOTloader"u8.ToArray(),
+            TestContext.Current.CancellationToken);
+        await File.WriteAllBytesAsync(Path.Combine(source, "embedded-update.img"), BuildRkaf("boot.img", [7, 8, 9]),
+            TestContext.Current.CancellationToken);
+        var image = Path.Combine(_root, "packed-rkfw.img");
+
+        var result = await new RockchipFormatHandler().PackAsync(source, image, TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Summary);
+        var output = Path.Combine(_root, "rkfw-out");
+        RockchipExtractor.Extract(image, output, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal("BOOTloader", await File.ReadAllTextAsync(Path.Combine(output, "BOOT"),
+            TestContext.Current.CancellationToken));
+        Assert.Equal(BuildRkaf("boot.img", [7, 8, 9]), await File.ReadAllBytesAsync(
+            Path.Combine(output, "embedded-update.img"), TestContext.Current.CancellationToken));
     }
 
     private string Write(byte[] image)

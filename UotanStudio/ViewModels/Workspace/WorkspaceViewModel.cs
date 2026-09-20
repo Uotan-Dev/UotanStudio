@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Messages;
 using UotanStudio.Services;
@@ -206,8 +207,17 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             }
 
             FirmwareFormatRegistry.RegisterAll();
-            detection = await Task.Run(() => FormatDetector.DetectDetailed(path)).ConfigureAwait(true);
+            if (header is null || !header.AsSpan().StartsWith("\u007fELF"u8))
+            {
+                detection = await Task.Run(() => FormatDetector.DetectDetailed(path)).ConfigureAwait(true);
+            }
             mode = FileOpenMode.ResolveMode(path, header, detection);
+        }
+
+        if (mode == EditorOpenMode.Elf)
+        {
+            await OpenElfAsync(path);
+            return;
         }
 
         if (mode == EditorOpenMode.Log)
@@ -385,6 +395,12 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     public Task OpenDexAsync(string path) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new DexEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
+        static (document, fullPath) => document.LoadAsync(fullPath));
+
+    /// <summary>Opens or activates an ELF information document for the supplied file.</summary>
+    public Task OpenElfAsync(string path) => OpenOrActivateDocumentAsync(
+        path, static document => document.FilePath,
+        static fullPath => new ElfInfoViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
         static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
@@ -708,6 +724,9 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
                     break;
                 case "Dex":
                     await OpenDexAsync(fullPath);
+                    break;
+                case "Elf":
+                    await OpenElfAsync(fullPath);
                     break;
                 case "Manifest":
                     await OpenManifestAsync(fullPath);

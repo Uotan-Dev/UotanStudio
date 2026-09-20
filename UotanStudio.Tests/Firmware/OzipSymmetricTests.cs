@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto.KeyDatabase;

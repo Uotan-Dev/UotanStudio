@@ -1,7 +1,8 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
+using UotanStudio.Firmware.Application.Containers;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Containers;
 
 namespace UotanStudio.Mcp.Tools;
 

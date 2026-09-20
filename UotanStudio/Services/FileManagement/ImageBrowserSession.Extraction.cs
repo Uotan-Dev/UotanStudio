@@ -36,6 +36,9 @@ internal sealed partial class ImageBrowserSession
             case F2fsParser f2fs:
                 ExtractFilesystem(relativePath, targetDirectory, f2fs.ReadFile);
                 break;
+            case Fat12ImageParser fat12:
+                ExtractFilesystem(relativePath, targetDirectory, fat12.ReadFile);
+                break;
         }
     }
 

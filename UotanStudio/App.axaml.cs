@@ -72,7 +72,7 @@ public partial class App : Application
         _ = Task.Run(() => FileAssociationService.Register());
 
         // 注册全部固件格式处理器，供后续格式自动识别与结构分析使用。
-        UotanStudio.Firmware.SharedKernel.FirmwareFormatRegistry.RegisterAll();
+        UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
 
         // 仅初始化语言包注册表（纯内存操作，快速）；持久化设置的读取与主题/语言 XAML
         // 加载推迟到启动序列中执行，使启动窗能立刻显示，避免首帧出现前的同步阻塞。

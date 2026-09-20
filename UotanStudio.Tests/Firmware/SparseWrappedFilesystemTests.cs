@@ -56,7 +56,7 @@ public sealed class SparseWrappedFilesystemTests
             Assert.Equal(BinaryBlob, File.ReadAllBytes(Path.Combine(outDir, "blob.bin")));
             Assert.Equal("inner content\n", File.ReadAllText(Path.Combine(outDir, "subdir", "inner.txt")));
             Assert.Contains("Extracted", result.Summary);
-            var metadata = UotanStudio.Firmware.SharedKernel.RepackMetadata.Read(outDir)!;
+            var metadata = UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.Read(outDir)!;
             Assert.Equal("EXT4", metadata.Configuration["fileSystem"]!.GetValue<string>());
             Assert.NotNull(metadata.Configuration["superblock"]!["journalInum"]);
         }
@@ -79,7 +79,7 @@ public sealed class SparseWrappedFilesystemTests
             Assert.True(File.Exists(Path.Combine(outDir, "hello.txt")));
             Assert.True(File.Exists(Path.Combine(outDir, "blob.bin")));
             Assert.Equal("hello erofs\n", File.ReadAllText(Path.Combine(outDir, "hello.txt")));
-            var metadata = UotanStudio.Firmware.SharedKernel.RepackMetadata.Read(outDir)!;
+            var metadata = UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.Read(outDir)!;
             Assert.Equal("EROFS", metadata.Configuration["fileSystem"]!.GetValue<string>());
             Assert.NotNull(metadata.Configuration["superblock"]!["availableComprAlgs"]);
             Assert.Equal(BinaryBlob, File.ReadAllBytes(Path.Combine(outDir, "blob.bin")));

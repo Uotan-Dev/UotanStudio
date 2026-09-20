@@ -3,9 +3,10 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
+using UotanStudio.Firmware.Infrastructure.Downloads;
 using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Containers;
 
 namespace UotanStudio.Services.Firmware;
 

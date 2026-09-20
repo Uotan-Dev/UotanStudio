@@ -94,7 +94,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _erofsLegacyCompatibility, value))
             {
-                global::UotanStudio.Firmware.SharedKernel.ErofsBuildDefaults.LegacyCompatibility = value;
+                global::UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility = value;
                 DebouncedSaveSettings();
             }
         }
@@ -253,7 +253,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private void InitializeFromAppSettings(AppSettings settings)
     {
         global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers = settings.FirmwareParallelism;
-        global::UotanStudio.Firmware.SharedKernel.ErofsBuildDefaults.LegacyCompatibility = settings.ErofsLegacyCompatibility;
+        global::UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility = settings.ErofsLegacyCompatibility;
         _erofsLegacyCompatibility = settings.ErofsLegacyCompatibility;
         // 根据 CultureName 查找或创建 LanguageInfo
         _selectedLanguage = string.IsNullOrEmpty(settings.CultureName)

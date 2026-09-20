@@ -1,5 +1,6 @@
 using System.Text;
 using UotanStudio.Firmware;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Services.Compare;

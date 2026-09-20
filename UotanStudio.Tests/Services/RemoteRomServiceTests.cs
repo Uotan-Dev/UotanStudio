@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
-using UotanStudio.Firmware.SharedKernel.Containers;
+using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;

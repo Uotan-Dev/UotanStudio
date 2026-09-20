@@ -16,6 +16,28 @@
 		<vm:MainViewModel />
 	</Design.DataContext>
 	<DockPanel>
+		<Border DockPanel.Dock="Top" IsVisible="{OnPlatform Android=True, Default=False}"
+				Padding="12,8" Background="{DynamicResource SystemControlBackgroundBaseLowBrush}"
+				BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}" BorderThickness="0,0,0,1">
+			<Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
+				<avalonia:MaterialIcon Grid.Column="0" Kind="ToolboxOutline" Width="24" Height="24"
+						VerticalAlignment="Center" />
+				<TextBlock Grid.Column="1" Text="{Binding WindowTitle}" VerticalAlignment="Center"
+						FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+				<Button Grid.Column="2" Command="{Binding MenuVM.NewProjectCommand}" ToolTip.Tip="{DynamicResource Menu_NewProject}"
+						Padding="8" MinWidth="40" MinHeight="40">
+					<avalonia:MaterialIcon Kind="FilePlusOutline" Width="20" Height="20" />
+				</Button>
+				<Button Grid.Column="3" Command="{Binding MenuVM.OpenProjectCommand}" ToolTip.Tip="{DynamicResource Menu_OpenProject}"
+						Padding="8" MinWidth="40" MinHeight="40">
+					<avalonia:MaterialIcon Kind="FolderOpenOutline" Width="20" Height="20" />
+				</Button>
+				<Button Grid.Column="4" Command="{Binding MenuVM.SaveCommand}" ToolTip.Tip="{DynamicResource Menu_Save}"
+						Padding="8" MinWidth="40" MinHeight="40">
+					<avalonia:MaterialIcon Kind="ContentSaveOutline" Width="20" Height="20" />
+				</Button>
+			</Grid>
+		</Border>
 		<TabbedPage Name="MainTabs"
 					TabPlacement="Bottom">
 			<TabbedPage.PageTransition>

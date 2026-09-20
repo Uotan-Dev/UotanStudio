@@ -1,4 +1,5 @@
 using System.Text;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac.Extraction;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac.Models;
 using UotanStudio.Firmware.SharedKernel;

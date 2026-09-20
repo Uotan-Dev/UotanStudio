@@ -416,6 +416,10 @@ public class WorkspaceDockFactory : Factory
                 // 清理失败不影响关闭流程
             }
         }
+        else if (dockable is UotanStudio.ViewModels.Editors.ElfInfoViewModel elfInfo)
+        {
+            elfInfo.Cleanup();
+        }
         else if (dockable is UotanStudio.ViewModels.Editors.FirmwareInfoViewModel firmwareInfo)
         {
             try

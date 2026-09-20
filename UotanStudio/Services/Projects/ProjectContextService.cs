@@ -5,7 +5,7 @@ public sealed class ProjectContextService
 {
     public static ProjectContextService Instance { get; } = new();
     internal ProjectContext Core { get; } = new();
-    private ProjectContextService() => Core.Changed += () => UotanStudio.Firmware.SharedKernel.RepackMetadata.DefaultMetadataRoot = Core.GetMetadataRoot();
+    private ProjectContextService() => Core.Changed += () => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.DefaultMetadataRoot = Core.GetMetadataRoot();
     public string? CurrentSolutionPath => Core.CurrentSolutionPath;
     public string? SolutionName => Core.SolutionName;
     public string? RootDirectory => Core.RootDirectory;
@@ -24,10 +24,10 @@ public sealed class ProjectContextService
     /// <summary>Finds metadata by the owning path, independent of which sub-project is selected.</summary>
     public string? GetMetadataRoot(string path) => Core.GetMetadataRoot(path);
     /// <summary>Captures a fixed metadata context for one source or extraction directory.</summary>
-    public UotanStudio.Firmware.SharedKernel.RepackMetadataContext CaptureMetadataContext(string path)
+    public UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadataContext CaptureMetadataContext(string path)
         => GetMetadataRoot(path) is { } root
-            ? UotanStudio.Firmware.SharedKernel.RepackMetadataContext.FromProjectRoot(root)
-            : UotanStudio.Firmware.SharedKernel.RepackMetadataContext.LocalDirectory;
+            ? UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadataContext.FromProjectRoot(root)
+            : UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadataContext.LocalDirectory;
     public string? ResolvePath(string path) => Core.ResolvePath(path);
     public string? RelativePath(string path) => Core.RelativePath(path);
 }

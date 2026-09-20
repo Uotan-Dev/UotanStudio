@@ -2,10 +2,10 @@ namespace UotanStudio.Services.Firmware;
 
 /// <summary>
 /// <para>新建项目流程目录辅助：空目录判定与默认名称探测。容器结构识别与条目枚举已迁移到
-/// <c>UotanStudio.Firmware.SharedKernel.Containers.ContainerStructureAnalyzer</c>。</para>
+/// <c>UotanStudio.Firmware.Application.Containers.ContainerStructureAnalyzer</c>。</para>
 /// New-project directory helpers: empty-directory check and default-name probing. Container structure
 /// detection and entry enumeration moved to
-/// <c>UotanStudio.Firmware.SharedKernel.Containers.ContainerStructureAnalyzer</c>.
+/// <c>UotanStudio.Firmware.Application.Containers.ContainerStructureAnalyzer</c>.
 /// </summary>
 public static class NewProjectDirectoryHelper
 {

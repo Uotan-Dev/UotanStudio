@@ -1,9 +1,11 @@
+using System.Buffers.Binary;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dts;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
 using UotanStudio.Messages;
 using UotanStudio.Services.Workspace;
@@ -74,6 +76,9 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
     /// The original raw bytes (used for write-back and refresh).
     /// </summary>
     [ObservableProperty] private byte[]? _rawBytes;
+
+    /// <summary>Whether the source is a DTBO table containing one or more overlay blobs.</summary>
+    [ObservableProperty] private bool _isDtboContainer;
 
     /// <summary>
     /// <para>文档已修改状态。</para>
@@ -178,7 +183,22 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
         DeviceTree? tree;
         try
         {
-            tree = DtbFormat.Read(bytes);
+            if (bytes.Length >= 4 && BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(0, 4)) == FdtConstants.DtboMagic)
+            {
+                var (_, _, dtbs) = DtboFormat.Read(bytes);
+                if (dtbs.Count == 0)
+                {
+                    throw new InvalidDataException("DTBO image contains no overlay entries.");
+                }
+
+                IsDtboContainer = true;
+                tree = DtbFormat.Read(dtbs[0]);
+            }
+            else
+            {
+                IsDtboContainer = false;
+                tree = DtbFormat.Read(bytes);
+            }
         }
         catch (Exception ex)
         {
@@ -243,6 +263,12 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
     {
         if (string.IsNullOrWhiteSpace(FilePath))
         {
+            return;
+        }
+
+        if (IsDtboContainer)
+        {
+            CompileError = "DTBO containers are read-only in the DTB editor; edit an extracted overlay instead.";
             return;
         }
 

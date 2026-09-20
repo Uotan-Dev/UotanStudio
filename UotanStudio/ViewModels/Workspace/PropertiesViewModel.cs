@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Magic;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
@@ -451,6 +452,7 @@ internal partial class PropertiesViewModel : Tool
 
         ShowProperties(PropertiesContentType.TextDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
+        AddMagicRow(doc.FilePath);
 
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
         Properties.Add(CreateLocalizedRow("Dock_Properties_Text_FileName", fileName));
@@ -654,6 +656,7 @@ internal partial class PropertiesViewModel : Tool
         }
 
         ShowProperties(PropertiesContentType.DtbDocument);
+        AddMagicRow(doc.FilePath);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
@@ -684,6 +687,7 @@ internal partial class PropertiesViewModel : Tool
         }
 
         ShowProperties(PropertiesContentType.ManifestDocument);
+        AddMagicRow(doc.FilePath);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
@@ -744,6 +748,7 @@ internal partial class PropertiesViewModel : Tool
         }
 
         ShowProperties(PropertiesContentType.ApkDocument);
+        AddMagicRow(doc.FilePath);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
@@ -773,6 +778,7 @@ internal partial class PropertiesViewModel : Tool
         }
 
         ShowProperties(PropertiesContentType.FirmwareDocument);
+        AddMagicRow(doc.FilePath);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
@@ -808,6 +814,7 @@ internal partial class PropertiesViewModel : Tool
         }
 
         ShowProperties(PropertiesContentType.HexDocument);
+        AddMagicRow(doc.FilePath);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
@@ -865,6 +872,7 @@ internal partial class PropertiesViewModel : Tool
         }
 
         ShowProperties(PropertiesContentType.ArscDocument);
+        AddMagicRow(doc.FilePath);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
@@ -999,6 +1007,7 @@ internal partial class PropertiesViewModel : Tool
         }
 
         ShowProperties(PropertiesContentType.DexDocument);
+        AddMagicRow(doc.FilePath);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
@@ -1026,6 +1035,7 @@ internal partial class PropertiesViewModel : Tool
         HasSelection = true;
         SelectedNodeTitle = doc.Title;
 
+        AddMagicRow(doc.FilePath);
         Properties.Add(CreateLocalizedRow("Dock_Properties_FileName", doc.Title));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Path", doc.FilePath ?? string.Empty));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Format", doc.FormatName));
@@ -1059,6 +1069,7 @@ internal partial class PropertiesViewModel : Tool
         HasSelection = true;
         SelectedNodeTitle = entry.Name;
 
+        AddMagicRow(doc.FilePath);
         Properties.Add(CreateLocalizedRow("Dock_Properties_FileName", entry.Name));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Path", entry.Path));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Size", entry.SizeText));
@@ -1084,6 +1095,7 @@ internal partial class PropertiesViewModel : Tool
         ContentType = PropertiesContentType.CompareEntry;
         HasSelection = true;
         SelectedNodeTitle = System.IO.Path.GetFileName(path);
+        AddMagicRow(isDirectory ? null : path);
 
         Properties.Add(CreateLocalizedRow("Dock_Properties_FileName", SelectedNodeTitle));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Path", path));
@@ -1113,6 +1125,7 @@ internal partial class PropertiesViewModel : Tool
 
         ShowProperties(PropertiesContentType.FileAnalysis);
         SelectedNodeTitle = analysis.FilePath ?? analysis.DetectedFormat ?? "Analysis";
+        AddMagicRow(analysis.FilePath);
 
         // Analysis 已包含 "Format" 行（由 FileViewModel 写入），此处不再单独追加，避免重复。
         // The Analysis list already carries the "Format" row (written by FileViewModel),
@@ -1123,6 +1136,28 @@ internal partial class PropertiesViewModel : Tool
         }
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for file analysis '{analysis.FilePath}' ({analysis.Analysis.Count} entries)");
+    }
+
+    private void AddMagicRow(string? path)
+    {
+        var description = "Unknown";
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+        {
+            try
+            {
+                description = FileMagic.IdentifyFile(path)?.Description ?? "Unknown";
+            }
+            catch (IOException)
+            {
+                description = "Unavailable";
+            }
+            catch (UnauthorizedAccessException)
+            {
+                description = "Unavailable";
+            }
+        }
+
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Magic", description));
     }
 
     /// <summary>

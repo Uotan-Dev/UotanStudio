@@ -1,4 +1,5 @@
 using UotanStudio.Firmware;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Views.Controls;
 using Xunit;
@@ -178,6 +179,37 @@ public class FileOpenModeTests
         try
         {
             Assert.False(new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadFormatHandler().CanHandle(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Fat12BootSectorRoutesToFileManager()
+    {
+        var image = new byte[512];
+        image[0] = 0xEB;
+        image[1] = 0x3C;
+        image[2] = 0x90;
+        System.Text.Encoding.ASCII.GetBytes("MSWIN4.1").CopyTo(image, 3);
+        image[11] = 0x00;
+        image[12] = 0x02;
+        image[13] = 1;
+        image[14] = 1;
+        image[16] = 1;
+        image[17] = 0x00;
+        image[18] = 0x02;
+        image[22] = 1;
+        System.Text.Encoding.ASCII.GetBytes("FAT12   ").CopyTo(image, 54);
+        image[510] = 0x55;
+        image[511] = 0xAA;
+        var path = WriteTempFile("renamed.bin", image);
+        try
+        {
+            var header = FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
+            Assert.Equal(EditorOpenMode.FileSystem, FileOpenMode.ResolveMode(path, header));
         }
         finally
         {

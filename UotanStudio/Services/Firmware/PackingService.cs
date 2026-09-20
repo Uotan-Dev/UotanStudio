@@ -4,6 +4,7 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Services.Firmware;
@@ -166,7 +167,7 @@ internal static class PackingService
             // and on change) so both the packing panel and repack honor the same user choice.
             // legacy 布局跟随应用层设置（启动与变更时同步到共享默认值），使打包面板与重打包
             // 遵循同一用户选择。
-            LegacyCompatibility = UotanStudio.Firmware.SharedKernel.ErofsBuildDefaults.LegacyCompatibility,
+            LegacyCompatibility = UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility,
             // The panel selects the codec and, for LZ4, the block encoder through the shared selector
             // vocabulary so the picker drives the builder directly.
             // 面板通过共享的选择器词表选择编解码器，并在 LZ4 下选择块编码器，使下拉框直接驱动构建器。

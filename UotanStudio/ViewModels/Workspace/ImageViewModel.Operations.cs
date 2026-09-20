@@ -175,9 +175,9 @@ internal partial class ImageViewModel
     {
         paths.ValidateExtraction();
         var targetDirectory = ResolveUnpackTargetDirectory(paths);
-        using var metadataScope = UotanStudio.Firmware.SharedKernel.RepackMetadata.UseContext(
+        using var metadataScope = UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UseContext(
             ProjectContextService.Instance.CaptureMetadataContext(targetDirectory));
-        UotanStudio.Firmware.SharedKernel.FirmwareFormatRegistry.RegisterAll();
+        UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
         var handler = FormatDetector.Detect(paths.Source)
             ?? throw new IOException("Unsupported firmware format.");
         if (Directory.Exists(targetDirectory)

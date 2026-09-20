@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.Security.Cryptography;
 using System.Text.Json;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Decompile;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Smali;

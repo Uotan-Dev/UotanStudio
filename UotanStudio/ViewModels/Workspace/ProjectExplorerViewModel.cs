@@ -382,7 +382,7 @@ public sealed partial class ExplorerNode : ObservableObject
             {
                 // ResolveActualMetadataPath applies the single-location rule: the consolidated
                 // .uotan/metadata/<partition>/ when a project is open, the local file otherwise.
-                var resolved = UotanStudio.Firmware.SharedKernel.RepackMetadata.ResolveActualMetadataPath(Path,
+                var resolved = UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.ResolveActualMetadataPath(Path,
                     UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(Path));
                 if (resolved is not null && File.Exists(resolved)) return resolved;
             }

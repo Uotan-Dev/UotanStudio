@@ -4,7 +4,10 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -89,7 +92,7 @@ public sealed class MetadataConsolidationTests : IDisposable
     public async Task OptionsFor_WithDefaultRoot_DiscoversSidecarsAndBackfillsInfo()
     {
         await BuildAndUnpackWithProjectAsync();
-        var options = RepackMetadata.OptionsFor(Extracted, "EXT4");
+        var options = FileSystemPackingOptions.OptionsFor(Extracted, "EXT4");
         Assert.True(options.ContainsKey("FsConfigPath"));
         Assert.EndsWith("system_fs_config", options["FsConfigPath"], StringComparison.Ordinal);
         Assert.True(options.ContainsKey("FileContextsPath"));

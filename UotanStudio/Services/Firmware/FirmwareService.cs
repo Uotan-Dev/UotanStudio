@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys;
 using UotanStudio.Firmware.BoundedContexts.Archive;
 using UotanStudio.Firmware.BoundedContexts.Archive.Extraction;
@@ -23,6 +24,7 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
@@ -30,6 +32,7 @@ using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Extraction;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Services.Firmware;
 

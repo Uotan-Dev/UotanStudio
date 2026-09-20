@@ -39,7 +39,7 @@ public class ErofsRebuildPreservationTests
         Assert.True(captured.SourceInodes is { Count: > 0 });
         Assert.All(captured.SourceInodes!.Values, inode => Assert.False(string.IsNullOrEmpty(inode.Path)));
 
-        var document = new UotanStudio.Firmware.SharedKernel.ErofsRebuildParameters();
+        var document = new UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.ErofsRebuildParameters();
         SetInodes(document, captured);
         var restored = Restore(document);
 
@@ -67,8 +67,8 @@ public class ErofsRebuildPreservationTests
         // metadata.json documents written before path capture carry no Path fields; restore must
         // still build the nid table and leave the path table empty.
         // 路径采集之前写出的 metadata.json 不带 Path 字段；恢复时仍应构建 nid 表且路径表为空。
-        var document = new UotanStudio.Firmware.SharedKernel.ErofsRebuildParameters();
-        document.Inodes.Add(new UotanStudio.Firmware.SharedKernel.ErofsRebuildInode
+        var document = new UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.ErofsRebuildParameters();
+        document.Inodes.Add(new UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.ErofsRebuildInode
         {
             Nid = 7,
             Compressed = true,
@@ -118,11 +118,11 @@ public class ErofsRebuildPreservationTests
         }
     }
 
-    private static void SetInodes(UotanStudio.Firmware.SharedKernel.ErofsRebuildParameters document, ErofsOptions captured)
+    private static void SetInodes(UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.ErofsRebuildParameters document, ErofsOptions captured)
     {
         foreach (var inode in captured.SourceInodes!.OrderBy(pair => pair.Key))
         {
-            document.Inodes.Add(new UotanStudio.Firmware.SharedKernel.ErofsRebuildInode
+            document.Inodes.Add(new UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.ErofsRebuildInode
             {
                 Nid = inode.Key,
                 Path = inode.Value.Path,
@@ -138,7 +138,7 @@ public class ErofsRebuildPreservationTests
         }
     }
 
-    private static ErofsOptions Restore(UotanStudio.Firmware.SharedKernel.ErofsRebuildParameters document)
+    private static ErofsOptions Restore(UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.ErofsRebuildParameters document)
     {
         var method = typeof(UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.ErofsRebuildMetadata)
             .GetMethod("Restore", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
