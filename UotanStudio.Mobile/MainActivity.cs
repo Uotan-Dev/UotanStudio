@@ -42,10 +42,15 @@ public class MainActivity : AvaloniaMainActivity
 
     private sealed class InsetsPaddingListener : Java.Lang.Object, IOnApplyWindowInsetsListener
     {
-        public WindowInsetsCompat OnApplyWindowInsets(View v, WindowInsetsCompat insets)
+        public WindowInsetsCompat? OnApplyWindowInsets(View? v, WindowInsetsCompat? insets)
         {
+            if (v is null || insets is null)
+            {
+                return insets;
+            }
+
             var bars = insets.GetInsets(WindowInsetsCompat.Type.SystemBars());
-            v.SetPadding(bars.Left, bars.Top, bars.Right, bars.Bottom);
+            v!.SetPadding(bars.Left, bars.Top, bars.Right, bars.Bottom);
             return WindowInsetsCompat.Consumed;
         }
     }

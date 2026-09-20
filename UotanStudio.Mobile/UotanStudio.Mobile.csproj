@@ -26,6 +26,16 @@
     <PackageReference Include="Xamarin.AndroidX.Core" />
     <PackageReference Include="Xamarin.AndroidX.Core.Core.Ktx" />
     <PackageReference Include="Xamarin.AndroidX.Core.SplashScreen" />
+    <PackageReference Include="Xamarin.AndroidX.Lifecycle.Common" />
+    <PackageReference Include="Xamarin.AndroidX.Lifecycle.Common.Jvm" />
+    <PackageReference Include="Xamarin.AndroidX.Lifecycle.LiveData.Core" />
+    <PackageReference Include="Xamarin.AndroidX.Lifecycle.Process" />
+    <PackageReference Include="Xamarin.AndroidX.Lifecycle.Runtime" />
+    <PackageReference Include="Xamarin.AndroidX.Lifecycle.Runtime.Android" />
+    <PackageReference Include="Xamarin.AndroidX.Lifecycle.ViewModel" />
+    <PackageReference Include="Xamarin.AndroidX.Lifecycle.ViewModel.Android" />
+    <PackageReference Include="Xamarin.AndroidX.Lifecycle.ViewModelSavedState" />
+    <PackageReference Include="Xamarin.AndroidX.Lifecycle.ViewModelSavedState.Android" />
   </ItemGroup>
 
   <ItemGroup>
