@@ -88,6 +88,8 @@ internal partial class ImageViewModel
             Images.Remove(image);
             if (ReferenceEquals(SelectedImage, image)) SelectedImage = null;
             LogService.Instance.Write(LogLevel.Info, "Images", $"Deleted {image.DisplayName} -> .deleted  已删除 {image.DisplayName}");
+            var relativeDestination = ProjectContextService.Instance.RelativePath(destination);
+            if (relativeDestination is null) throw new IOException("The deleted image is outside the project.");
             OperationHistoryService.Instance.Record(
                 $"Delete {image.DisplayName}",
                 new HistoryOperationDto
@@ -96,7 +98,7 @@ internal partial class ImageViewModel
                     Description = $"Delete {image.DisplayName}",
                     DisplayName = image.DisplayName,
                     RelativePath = image.RelativePath,
-                    DestinationPath = destination
+                    DestinationPath = relativeDestination
                 },
                 () =>
                 {
@@ -207,7 +209,8 @@ internal partial class ImageViewModel
         {
             var outputDir = ProjectContextService.Instance.EnsureOutputDirectory();
             var outputPath = Path.Combine(outputDir, "super.img");
-            if (!await ConfirmPackOverwriteAsync(File.Exists(outputPath) ? [outputPath] : [])) return;
+            var hadExistingOutput = File.Exists(outputPath);
+            if (!await ConfirmPackOverwriteAsync(hadExistingOutput ? [outputPath] : [])) return;
             var deviceSize = ulong.TryParse(settings.SUPERSize, out var parsed) && parsed > 0 ? parsed : 9_126_805_504UL;
             LogService.Instance.Write(LogLevel.Info, "Images", $"Synthesizing super image with {partitions.Count} partition(s)  正在合成 super 镜像（{partitions.Count} 个分区）");
             var result = await _firmware.SynthesizeSuperAsync(partitions, outputPath, deviceSize, settings.SUPERName);
@@ -222,16 +225,15 @@ internal partial class ImageViewModel
             LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
             StatusText = $"Synthesized super image  已合成 super 镜像";
             ProgressPercent = 100;
-            OperationHistoryService.Instance.Record(
-                "Synthesize super image",
-                new HistoryOperationDto
-                {
-                    Kind = HistoryOperationKind.SynthesizeSuper,
-                    Description = "Synthesize super image",
-                    OutputPaths = [outputPath]
-                },
-                () => DeleteFileSafe(outputPath),
-                () => { });
+            if (!hadExistingOutput && File.Exists(outputPath)
+                && ImageViewModel.CreateOutputOperation(HistoryOperationKind.SynthesizeSuper,
+                    "Synthesize super image", [outputPath]) is { } operation)
+            {
+                OperationHistoryService.Instance.Record(
+                    operation.Description, operation,
+                    () => ImageViewModel.UndoOutput(operation),
+                    () => ImageViewModel.RedoOutput(operation));
+            }
         }
         catch (Exception ex)
         {

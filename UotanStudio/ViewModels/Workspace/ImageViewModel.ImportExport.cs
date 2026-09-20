@@ -138,17 +138,18 @@ internal partial class ImageViewModel
 
             LogService.Instance.Write(LogLevel.Info, "Images", $"Imported {imported.Count} image(s)  已导入 {imported.Count} 个镜像");
             StatusText = LanguageService.Instance.GetString("ImageView_OperationDone");
+            var history = CreateOutputOperation(HistoryOperationKind.ImportImages,
+                $"Import {imported.Count} image(s)", imported.Select(e => context.ResolvePath(e.RelativePath)!));
+            if (history is not null)
+            {
+                history.Count = imported.Count;
+                history.RelativePaths = imported.Select(e => e.RelativePath).ToList();
+            }
             OperationHistoryService.Instance.Record(
-                $"Import {imported.Count} image(s)",
-                new HistoryOperationDto
-                {
-                    Kind = HistoryOperationKind.ImportImages,
-                    Description = $"Import {imported.Count} image(s)",
-                    Count = imported.Count,
-                    RelativePaths = imported.Select(e => e.RelativePath).ToList()
-                },
+                $"Import {imported.Count} image(s)", history,
                 () =>
                 {
+                    if (history is not null) UndoOutput(history);
                     foreach (var entry in imported)
                     {
                         Images.Remove(entry);
@@ -156,6 +157,7 @@ internal partial class ImageViewModel
                 },
                 () =>
                 {
+                    if (history is not null) RedoOutput(history);
                     foreach (var entry in imported)
                     {
                         Images.Add(entry);
@@ -227,6 +229,25 @@ internal partial class ImageViewModel
                 Format = formatLabel
             };
             Images.Add(entry);
+            var history = CreateOutputOperation(HistoryOperationKind.ImportImages,
+                $"Import {entry.DisplayName}", [destination]);
+            if (history is not null)
+            {
+                history.Count = 1;
+                history.RelativePaths = [relative];
+            }
+            OperationHistoryService.Instance.Record(
+                history?.Description ?? $"Import {entry.DisplayName}", history,
+                () =>
+                {
+                    if (history is not null) UndoOutput(history);
+                    Images.Remove(entry);
+                },
+                () =>
+                {
+                    if (history is not null) RedoOutput(history);
+                    if (!Images.Contains(entry)) Images.Add(entry);
+                });
             return entry;
         }
         catch (Exception ex)

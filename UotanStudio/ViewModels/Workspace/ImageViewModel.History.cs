@@ -6,6 +6,76 @@ namespace UotanStudio.ViewModels.Workspace;
 
 internal partial class ImageViewModel
 {
+    private static string? ResolveHistoryPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        if (Path.IsPathRooted(path)) return Path.GetFullPath(path);
+        return ProjectContextService.Instance.ResolvePath(path);
+    }
+
+    private static void MoveHistoryPath(string source, string destination)
+    {
+        if (File.Exists(source))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            if (File.Exists(destination) || Directory.Exists(destination)) return;
+            File.Move(source, destination);
+        }
+        else if (Directory.Exists(source))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            if (File.Exists(destination) || Directory.Exists(destination)) return;
+            Directory.Move(source, destination);
+        }
+    }
+
+    internal static void UndoOutput(HistoryOperationDto operation)
+    {
+        for (var index = 0; index < operation.OutputPaths.Count; index++)
+        {
+            var output = ResolveHistoryPath(operation.OutputPaths[index]);
+            var backup = index < operation.BackupPaths.Count ? ResolveHistoryPath(operation.BackupPaths[index]) : null;
+            if (output is null || backup is null) continue;
+            MoveHistoryPath(output, backup);
+        }
+    }
+
+    internal static void RedoOutput(HistoryOperationDto operation)
+    {
+        for (var index = 0; index < operation.OutputPaths.Count; index++)
+        {
+            var output = ResolveHistoryPath(operation.OutputPaths[index]);
+            var backup = index < operation.BackupPaths.Count ? ResolveHistoryPath(operation.BackupPaths[index]) : null;
+            if (output is null || backup is null) continue;
+            MoveHistoryPath(backup, output);
+        }
+    }
+
+    internal static HistoryOperationDto? CreateOutputOperation(
+        HistoryOperationKind kind, string description, IEnumerable<string> outputPaths)
+    {
+        var context = ProjectContextService.Instance;
+        var outputs = outputPaths.Select(context.RelativePath).ToList();
+        if (outputs.Any(path => path is null)) return null;
+
+        var historyId = Guid.NewGuid().ToString("N");
+        var backups = outputs.Select(path =>
+        {
+            var relative = path!.Replace('/', Path.DirectorySeparatorChar);
+            return context.RelativePath(Path.Combine(context.ActiveSubProject!.RootPath,
+                ".deleted", ".history", historyId, relative));
+        }).ToList();
+        if (backups.Any(path => path is null)) return null;
+
+        return new HistoryOperationDto
+        {
+            Kind = kind,
+            Description = description,
+            OutputPaths = outputs.Select(path => path!).ToList(),
+            BackupPaths = backups.Select(path => path!).ToList()
+        };
+    }
+
     /// <summary>
     /// <para>从持久化操作描述符重建撤销/重做动作（供操作历史跨会话恢复）。</para>
     /// Reconstructs undo/redo actions from a persisted operation descriptor (for cross-session history restore).
@@ -19,20 +89,13 @@ internal partial class ImageViewModel
             case HistoryOperationKind.DeleteImage:
                 return ReconstructDelete(operation);
             case HistoryOperationKind.ExtractImage:
-                return (() => DeleteDirectorySafe(operation.OutputPaths.FirstOrDefault() ?? string.Empty), () => { });
+                return (() => UndoOutput(operation), () => RedoOutput(operation));
             case HistoryOperationKind.SynthesizeImg:
             case HistoryOperationKind.SynthesizeBr:
             case HistoryOperationKind.SynthesizeSuper:
-                return (() => DeleteFileSafe(operation.OutputPaths.FirstOrDefault() ?? string.Empty), () => { });
+                return (() => UndoOutput(operation), () => RedoOutput(operation));
             case HistoryOperationKind.SynthesizeDat:
-                return (() =>
-                {
-                    foreach (var path in operation.OutputPaths)
-                    {
-                        DeleteFileSafe(path);
-                    }
-                }, () => { }
-                );
+                return (() => UndoOutput(operation), () => RedoOutput(operation));
             default:
                 LogService.Instance.Write(LogLevel.Warn, "History",
                     $"Unknown history operation kind: {operation.Kind}");
@@ -49,6 +112,8 @@ internal partial class ImageViewModel
         return (
             () =>
             {
+                if (operation.OutputPaths.Count > 0 && operation.BackupPaths.Count == operation.OutputPaths.Count)
+                    UndoOutput(operation);
                 foreach (var relative in operation.RelativePaths)
                 {
                     var entry = vm.Images.FirstOrDefault(i => i.RelativePath == relative);
@@ -60,6 +125,8 @@ internal partial class ImageViewModel
             },
             () =>
             {
+                if (operation.OutputPaths.Count > 0 && operation.BackupPaths.Count == operation.OutputPaths.Count)
+                    RedoOutput(operation);
                 foreach (var relative in operation.RelativePaths)
                 {
                     if (vm.Images.Any(i => i.RelativePath == relative))
@@ -88,16 +155,17 @@ internal partial class ImageViewModel
     private static (Action Undo, Action Redo) ReconstructDelete(HistoryOperationDto operation)
     {
         var vm = EnsureInstance();
-        var source = ProjectContextService.Instance.ResolvePath(operation.RelativePath);
+        var source = ResolveHistoryPath(operation.RelativePath);
+        var destination = ResolveHistoryPath(operation.DestinationPath);
         return (
             () =>
             {
-                if (source is null || !File.Exists(operation.DestinationPath))
+                if (source is null || destination is null || !File.Exists(destination))
                 {
                     return;
                 }
 
-                File.Move(operation.DestinationPath, source);
+                File.Move(destination, source);
                 vm.Images.Add(new ImageEntryViewModel
                 {
                     DisplayName = Path.GetFileName(operation.RelativePath),
@@ -108,12 +176,12 @@ internal partial class ImageViewModel
             },
             () =>
             {
-                if (source is null || !File.Exists(source))
+                if (source is null || destination is null || !File.Exists(source))
                 {
                     return;
                 }
 
-                File.Move(source, operation.DestinationPath);
+                File.Move(source, destination);
                 var entry = vm.Images.FirstOrDefault(i => i.RelativePath == operation.RelativePath);
                 if (entry is not null)
                 {

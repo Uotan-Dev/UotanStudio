@@ -947,20 +947,42 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 
     /// <summary><para>撤销当前页面内的编辑。</para>Undoes edits in the current page.</summary>
     [RelayCommand]
-    private void Undo()
+    private async Task Undo()
     {
         if (_currentTab == ActiveTab.NodeEditor)
+        {
             WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Undo));
-        else CurrentTextEditor()?.Undo();
+            return;
+        }
+
+        if (CurrentTextEditor() is { } editor)
+        {
+            editor.Undo();
+            return;
+        }
+
+        if (_projectOps.CanUndo)
+            await _projectOps.UndoAsync();
     }
 
     /// <summary><para>重做当前页面内的编辑。</para>Redoes edits in the current page.</summary>
     [RelayCommand]
-    private void Redo()
+    private async Task Redo()
     {
         if (_currentTab == ActiveTab.NodeEditor)
+        {
             WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Redo));
-        else CurrentTextEditor()?.Redo();
+            return;
+        }
+
+        if (CurrentTextEditor() is { } editor)
+        {
+            editor.Redo();
+            return;
+        }
+
+        if (_projectOps.CanRedo)
+            await _projectOps.RedoAsync();
     }
 
     /// <summary><para>剪切选中内容：优先委托给活动文档，否则转发到节点编辑器。</para>Cut selection: delegates to the active document first, falling back to the node editor.</summary>

@@ -96,12 +96,19 @@ internal partial class ImageViewModel
                     _ = paths.UnpackedDirectory;
                     if (operation == "extract")
                     {
-                        var (success, skippedEntry, _) = await ExtractEntryAsync(entry, paths, itemProgress);
+                        var hadExistingTarget = File.Exists(paths.UnpackedDirectory) || Directory.Exists(paths.UnpackedDirectory);
+                        var (success, skippedEntry, targetDirectory) = await ExtractEntryAsync(entry, paths, itemProgress);
                         if (skippedEntry) skipped++;
                         else if (success)
                         {
                             succeeded++;
                             entry.IsUnpacked = true;
+                            if (!hadExistingTarget && CreateOutputOperation(HistoryOperationKind.ExtractImage,
+                                    $"Extract {entry.DisplayName}", [targetDirectory]) is { } history)
+                            {
+                                OperationHistoryService.Instance.Record(history.Description, history,
+                                    () => UndoOutput(history), () => RedoOutput(history));
+                            }
                         }
                         else failed++;
                     }
@@ -121,6 +128,21 @@ internal partial class ImageViewModel
                         if (result.Success) succeeded++;
                         else failed++;
                         LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Images", result.Summary);
+                        if (result.Success && conflicts.Length == 0)
+                        {
+                            var kind = operation switch
+                            {
+                                "img" => HistoryOperationKind.SynthesizeImg,
+                                "br" => HistoryOperationKind.SynthesizeBr,
+                                _ => HistoryOperationKind.SynthesizeDat
+                            };
+                            if (CreateOutputOperation(kind, $"Synthesize {operation} for {entry.DisplayName}",
+                                    ImageOutputService.GetPlannedOutputs(paths, operation)) is { } history)
+                            {
+                                OperationHistoryService.Instance.Record(history.Description, history,
+                                    () => UndoOutput(history), () => RedoOutput(history));
+                            }
+                        }
                     }
                 }
                 catch (Exception ex)
