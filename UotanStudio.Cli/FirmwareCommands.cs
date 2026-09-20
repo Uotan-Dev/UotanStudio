@@ -3,8 +3,10 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Decompile;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Smali;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Cli;

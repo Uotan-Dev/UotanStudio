@@ -1,5 +1,5 @@
 using System.Globalization;
-using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 
 namespace UotanStudio.Services.Delivery;

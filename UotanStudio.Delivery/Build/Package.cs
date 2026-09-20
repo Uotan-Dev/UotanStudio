@@ -8,7 +8,8 @@ using System.Text;
 using SharpCompress.Common;
 using SharpCompress.Writers;
 using SharpCompress.Writers.Zip;
-using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Files;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -225,12 +226,7 @@ internal static partial class DeliveryPackageBuilder
 
     /// <summary><para>判断文件名是否为 DAT/BR 刷写工件（.transfer.list/.new.dat[.br]/.patch.dat[.br]）。</para>
     /// Determines whether a filename is a DAT/BR flashing artifact (.transfer.list/.new.dat[.br]/.patch.dat[.br]).</summary>
-    internal static bool IsDatArtifact(string fileName) =>
-        fileName.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase)
-        || fileName.EndsWith(".new.dat", StringComparison.OrdinalIgnoreCase)
-        || fileName.EndsWith(".new.dat.br", StringComparison.OrdinalIgnoreCase)
-        || fileName.EndsWith(".patch.dat", StringComparison.OrdinalIgnoreCase)
-        || fileName.EndsWith(".patch.dat.br", StringComparison.OrdinalIgnoreCase);
+    internal static bool IsDatArtifact(string fileName) => DatFileSet.IsArtifact(fileName);
 
     /// <summary><para>判断文件名是否为可写入 Recovery 的工件（.img 或 DAT 工件）。</para>
     /// Determines whether a filename is a Recovery-flashable artifact (an .img or a DAT artifact).</summary>
@@ -239,28 +235,20 @@ internal static partial class DeliveryPackageBuilder
 
     /// <summary><para>判断两个文件名是否同属一个 DAT 分区组。</para>Determines whether two filenames belong to the same DAT partition set.</summary>
     internal static bool SameDatSet(string first, string second) => IsDatArtifact(first) && IsDatArtifact(second)
-        && DatStem(first).Equals(DatStem(second), StringComparison.OrdinalIgnoreCase);
+        && string.Equals(DatStem(first), DatStem(second), StringComparison.OrdinalIgnoreCase);
 
     /// <summary><para>去掉 DAT 工件后缀返回分区基名；非工件返回原名。</para>
     /// Strips the DAT artifact suffix returning the partition stem; non-artifacts return the name unchanged.</summary>
-    internal static string DatStem(string fileName)
-    {
-        foreach (var suffix in new[] { ".transfer.list", ".new.dat.br", ".new.dat", ".patch.dat.br", ".patch.dat" })
-            if (fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-                return fileName[..^suffix.Length];
-        return fileName;
-    }
+    internal static string DatStem(string fileName) => DatFileSet.Stem(fileName);
 
     private static void ValidateDatArtifacts(IReadOnlyList<DeliveryFile> files)
     {
         foreach (var group in files.Where(f => IsDatArtifact(f.FileName)).GroupBy(f => DatStem(f.FileName), StringComparer.OrdinalIgnoreCase))
         {
             var names = group.Select(f => f.FileName).ToArray();
-            var transfers = names.Count(n => n.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase));
-            var newData = names.Count(n => n.EndsWith(".new.dat", StringComparison.OrdinalIgnoreCase)
-                || n.EndsWith(".new.dat.br", StringComparison.OrdinalIgnoreCase));
-            var patches = names.Count(n => n.EndsWith(".patch.dat", StringComparison.OrdinalIgnoreCase)
-                || n.EndsWith(".patch.dat.br", StringComparison.OrdinalIgnoreCase));
+            var transfers = names.Count(DatFileSet.IsTransferList);
+            var newData = names.Count(DatFileSet.IsNewData);
+            var patches = names.Count(DatFileSet.IsPatchData);
             if (group.Select(f => f.Partition).Distinct(StringComparer.Ordinal).Count() != 1
                 || transfers != 1 || newData != 1 || patches > 1)
                 throw new InvalidDataException($"DAT 文件组须包含唯一的 transfer.list 与 new.dat，最多一个 patch.dat，且分区名一致：{group.Key}");

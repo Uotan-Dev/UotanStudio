@@ -17,6 +17,7 @@
     <PackageVersion Include="AvaloniaEdit.TextMate" Version="12.0.0" />
     <PackageVersion Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3" />
     <PackageVersion Include="Avalonia.Desktop" Version="12.1.2" />
+    <PackageVersion Include="Avalonia.Android" Version="12.1.2" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageVersion Include="Dock.Avalonia" Version="12.1.0.6" />
     <PackageVersion Include="Dock.Avalonia.Diagnostics" Version="12.1.0.6" />
@@ -32,7 +33,8 @@
     <PackageVersion Include="Semi.Avalonia.DataGrid" Version="12.1.0.1" />
     <PackageVersion Include="Semi.Avalonia.Dock" Version="12.0.0.2" />
     <PackageVersion Include="NodifyM.Avalonia" Version="12.0.0" />
-    <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.15" />
+    <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.2.0.3" />
+    <PackageVersion Include="Xamarin.AndroidX.Core" Version="1.19.0.1" />
     <!-- Device communication packages -->
     <PackageVersion Include="AdvancedSharpAdbClient" Version="3.6.16" />
     <PackageVersion Include="LibUsbDotNet" Version="3.0.224" />
@@ -42,7 +44,7 @@
     <!-- UotanStudio.Firmware third-party dependencies -->
     <PackageVersion Include="BrotliSharpLib" Version="0.3.3" />
     <PackageVersion Include="BsDiff" Version="1.1.0" />
-    <PackageVersion Include="Google.Protobuf" Version="3.36.1" />
+    <PackageVersion Include="Google.Protobuf" Version="3.36.2" />
     <PackageVersion Include="K4os.Compression.LZ4" Version="1.3.8" />
     <PackageVersion Include="K4os.Compression.LZ4.Legacy" Version="1.3.8" />
     <PackageVersion Include="K4os.Compression.LZ4.Streams" Version="1.3.8" />

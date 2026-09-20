@@ -1194,5 +1194,11 @@ internal enum UsbDeviceType
     /// HarmonyOS USBManager backend (via IPC bridge).
     /// <para>HarmonyOS USBManager 后端（通过 IPC 桥接）。</para>
     /// </summary>
-    HarmonyOS = 5
+    HarmonyOS = 5,
+
+    /// <summary>
+    /// Android USB Host backend (android.hardware.usb).
+    /// <para>Android USB Host 后端（android.hardware.usb）。</para>
+    /// </summary>
+    Android = 6
 }

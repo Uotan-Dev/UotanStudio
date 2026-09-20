@@ -1,9 +1,9 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
-using UotanStudio.Firmware.CrossCutting.Compress;
-using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
+using UotanStudio.Firmware.BoundedContexts.Compression;
+using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
 
 namespace UotanStudio.Services.Delivery;
 

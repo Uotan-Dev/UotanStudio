@@ -1,9 +1,8 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb;
-using FirmwareAvbVerifier = UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.AvbSignatureVerifier;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
+using FirmwareAvbVerifier = UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification.AvbSignatureVerifier;
 
 namespace UotanStudio.Comm.Protocols.Fastboot.Utils;
 
@@ -18,9 +17,9 @@ namespace UotanStudio.Comm.Protocols.Fastboot.Utils;
 
 /// <summary>
 /// Comm 侧 AVB 哈希描述符解析模型（用于从 vbmeta 辅助数据块中解析描述符）。
-/// 与 Firmware 的 <see cref="UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.AvbHashDescriptor"/>（签名模型）不同。
+/// 与 Firmware 的 <see cref="UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models.AvbHashDescriptor"/>（签名模型）不同。
 /// <para>Comm-side AVB hash descriptor parsing model (for extracting descriptors from vbmeta auxiliary data).
-/// Differs from Firmware's <see cref="UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.AvbHashDescriptor"/> which is a signing model.</para>
+/// Differs from Firmware's <see cref="UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models.AvbHashDescriptor"/> which is a signing model.</para>
 /// </summary>
 public sealed class AvbHashDescriptor(
     ulong tag,

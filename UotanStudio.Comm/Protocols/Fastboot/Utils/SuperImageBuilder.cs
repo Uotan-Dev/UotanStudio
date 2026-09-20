@@ -1,8 +1,10 @@
 using System.Buffers.Binary;
-using System.IO;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Build;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Writing;
 
 namespace UotanStudio.Comm.Protocols.Fastboot.Utils;
 
@@ -300,9 +302,9 @@ public sealed class SuperImageMetadata(
 
 /// <summary>
 /// Reads and builds super partition images. Parsing and construction delegate to
-/// <see cref="MetadataReader"/> and <see cref="MetadataBuilder"/> in <c>UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp</c>,
+/// <see cref="MetadataReader"/> and <see cref="MetadataBuilder"/> in <c>UotanStudio.Firmware.BoundedContexts.BlockImage.Lp</c>,
 /// keeping the LP binary layout implementation in a single place.
-/// <para>读取与构建 super 分区镜像。解析与构建委托给 <c>UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp</c> 的
+/// <para>读取与构建 super 分区镜像。解析与构建委托给 <c>UotanStudio.Firmware.BoundedContexts.BlockImage.Lp</c> 的
 /// <see cref="MetadataReader"/> 与 <see cref="MetadataBuilder"/>，LP 二进制布局实现保持单一来源。</para>
 /// </summary>
 public sealed class SuperImageBuilder

@@ -54,6 +54,8 @@ public sealed class McpServerHost
         tools.AddRange(DeviceToolFactory.CreateTools(Sandbox));
         tools.AddRange(DeliveryToolFactory.CreateTools(Sandbox));
         tools.AddRange(ProjectToolFactory.CreateTools(Sandbox));
+        tools.AddRange(MiscToolFactory.CreateTools(Sandbox));
+        tools.AddRange(EnvToolFactory.CreateTools(Sandbox, AllowFlash));
 
         if (AllowFlash)
         {

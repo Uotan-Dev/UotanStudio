@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Containers;
 
 namespace UotanStudio.Mcp.Tools;
 
@@ -81,7 +82,24 @@ internal static class FirmwareToolFactory
                 Destructive = false
             });
 
-        return [list, detect, metadata, unpack, pack];
+        var extract = McpServerTool.Create(
+            ([Description("Container file path inside the sandbox (super image, payload.bin, or ZIP).")] string containerPath,
+             [Description("Inner entry names to extract: super/payload partition names, or full ZIP member paths.")] string[] entries,
+             [Description("Output directory; created when missing. Must stay inside the sandbox.")] string outputDirectory,
+             [Description("Set when a ZIP's payload partitions alone are selected.")] bool fromPayloadOnly = false,
+             [Description("Decompressed output budget in bytes; exceeded is rejected.")] long maximumOutputBytes = ContainerEntryExtractor.DefaultMaximumOutputBytes) => FirmwareToolHandlers.ExtractAsync(sandbox, containerPath, entries, outputDirectory, fromPayloadOnly, maximumOutputBytes),
+            new McpServerToolCreateOptions
+            {
+                Name = "extract_container_entries",
+                Description = "Extract selected inner entries from a container (super logical partitions, "
+                    + "payload partitions, or ZIP members) into standalone image files.",
+                ReadOnly = false,
+                Idempotent = false,
+                OpenWorld = false,
+                Destructive = false
+            });
+
+        return [list, detect, metadata, unpack, pack, extract];
     }
 }
 
@@ -162,5 +180,24 @@ internal static class FirmwareToolHandlers
 
         var result = await writable.PackAsync(resolvedInput, resolvedOutput).ConfigureAwait(false);
         return ToolJson.Serialize(ToolResult.From(result));
+    }
+
+    public static async Task<string> ExtractAsync(PathSandbox sandbox, string containerPath, string[] entries, string outputDirectory, bool fromPayloadOnly, long maximumOutputBytes)
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        var resolvedInput = sandbox.Resolve(containerPath, mustExist: true);
+        var resolvedOutput = sandbox.ResolveOutput(outputDirectory);
+        var kind = ContainerStructureAnalyzer.Analyze(resolvedInput).Kind;
+        if (kind == ContainerKind.None)
+        {
+            return ToolJson.Serialize(new ToolResult(false, $"Not a supported container (super/payload/zip): {resolvedInput}"));
+        }
+
+        var result = await ContainerEntryExtractor.ExtractAsync(
+            resolvedInput, entries, fromPayloadOnly, CancellationToken.None,
+            resolvedOutput, maximumOutputBytes: maximumOutputBytes).ConfigureAwait(false);
+        return ToolJson.Serialize(new ToolResult(true,
+            $"Extracted {result.Entries.Count} entry(ies) from {kind}.",
+            ToolJson.Data(new ContainerExtractionPayload(kind.ToString(), result.Entries, result.OutputPaths))));
     }
 }

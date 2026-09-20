@@ -1,9 +1,10 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Packing;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Decompile;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Smali;
 
 namespace UotanStudio.Mcp.Tools;
 
@@ -194,7 +195,7 @@ internal static class MiscToolHandlers
         {
             var resolved = sandbox.Resolve(path, mustExist: true);
             GuardMetaSize(resolved);
-            var table = UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.ArscParser.Parse(File.ReadAllBytes(resolved));
+            var table = UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Parsing.ArscParser.Parse(File.ReadAllBytes(resolved));
             var packages = table.Packages.Select(p => new ArscPackagePayload(
                 p.Name,
                 (int)p.Id,

@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Writing;
 
 namespace UotanStudio.Comm.Protocols.Fastboot.Utils;
 

@@ -2,8 +2,8 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 
 namespace UotanStudio.Services.Delivery;

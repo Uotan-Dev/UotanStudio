@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
-using UotanStudio.Firmware.CrossCutting.Compress;
+using UotanStudio.Firmware.BoundedContexts.Compression;
+using UotanStudio.Firmware.BoundedContexts.Compression.Files;
 
 namespace UotanStudio.Mcp.Tools;
 
@@ -100,7 +101,7 @@ internal static class CompressionToolHandlers
             }
 
             var options = new CompressionOptions { Level = level, DictionarySize = dictionarySize };
-            CompressionService.CompressFile(resolvedInput, resolvedOutput, format, options);
+            CompressionFile.CompressFile(resolvedInput, resolvedOutput, format, options);
             var outputInfo = new FileInfo(resolvedOutput);
             var inputInfo = new FileInfo(resolvedInput);
             return ToolJson.Serialize(new ToolResult(true,
@@ -122,7 +123,7 @@ internal static class CompressionToolHandlers
             CompressionFormat format;
             if (algorithm is null)
             {
-                format = CompressionService.DetectFile(resolvedInput);
+                format = CompressionFile.DetectFile(resolvedInput);
                 if (format == CompressionFormat.None)
                 {
                     return ToolJson.Serialize(new ToolResult(false,
@@ -134,7 +135,7 @@ internal static class CompressionToolHandlers
                 return ToolJson.Serialize(new ToolResult(false, $"Unknown compression algorithm: {algorithm}"));
             }
 
-            CompressionService.DecompressFile(resolvedInput, resolvedOutput, format, maximumOutputBytes);
+            CompressionFile.DecompressFile(resolvedInput, resolvedOutput, format, maximumOutputBytes);
             var outputInfo = new FileInfo(resolvedOutput);
             var inputInfo = new FileInfo(resolvedInput);
             return ToolJson.Serialize(new ToolResult(true,

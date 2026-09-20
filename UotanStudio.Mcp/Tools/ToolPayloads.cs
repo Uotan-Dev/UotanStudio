@@ -94,6 +94,25 @@ internal sealed record InputOutputPayload(string Input, string Output);
 
 internal sealed record PathPayload(string Path);
 
+internal sealed record ContainerExtractionPayload(
+    string Kind,
+    IReadOnlyList<string> Entries,
+    IReadOnlyList<string> OutputPaths);
+
+internal sealed record EnvPayload(
+    string Name,
+    string Version,
+    string? Root,
+    bool Unrestricted,
+    bool AllowFlash,
+    string OsDescription,
+    string OsArchitecture,
+    string ProcessArchitecture,
+    string FrameworkDescription,
+    int FormatHandlerCount,
+    IReadOnlyList<string> WritableFormats,
+    IReadOnlyList<string> CompressionFormats);
+
 /// <summary>
 /// Source-generated JSON types for every tool payload crossing <see cref="ToolResult.Data"/>.
 /// <para><see cref="ToolResult.Data"/> 上所有工具负载的 source-gen JSON 类型。</para>
@@ -130,5 +149,7 @@ internal sealed record PathPayload(string Path);
 [JsonSerializable(typeof(ArscSummaryPayload))]
 [JsonSerializable(typeof(InputOutputPayload))]
 [JsonSerializable(typeof(PathPayload))]
+[JsonSerializable(typeof(ContainerExtractionPayload))]
+[JsonSerializable(typeof(EnvPayload))]
 [JsonSerializable(typeof(List<string>))]
 internal sealed partial class McpToolJsonContext : JsonSerializerContext;

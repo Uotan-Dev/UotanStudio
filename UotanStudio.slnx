@@ -6,6 +6,7 @@
   <Project Path="UotanStudio.Comm/UotanStudio.Comm.csproj" />
   <Project Path="UotanStudio.Desktop/UotanStudio.Desktop.csproj" />
   <Project Path="UotanStudio.Firmware/UotanStudio.Firmware.csproj" />
+  <Project Path="UotanStudio.Firmware.MagicGen/UotanStudio.Firmware.MagicGen.csproj" />
   <Project Path="UotanStudio.Delivery/UotanStudio.Delivery.csproj" />
   <Project Path="UotanStudio.Media/UotanStudio.Media.csproj" />
   <Project Path="UotanStudio.Mcp/UotanStudio.Mcp.csproj" />
@@ -14,6 +15,9 @@
     <BuildDependency Project="UotanStudio.Comm/UotanStudio.Comm.csproj" />
     <BuildDependency Project="UotanStudio.Firmware/UotanStudio.Firmware.csproj" />
     <BuildDependency Project="UotanStudio.Delivery/UotanStudio.Delivery.csproj" />
+  </Project>
+  <Project Path="UotanStudio.Mobile/UotanStudio.Mobile.csproj">
+    <BuildDependency Project="UotanStudio/UotanStudio.csproj" />
   </Project>
   <Project Path="UotanStudio.Tests/UotanStudio.Tests.csproj" />
 

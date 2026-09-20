@@ -9,8 +9,11 @@
   </PropertyGroup>
 
   <!-- Explicit RID wins for cross-publishing; ordinary builds use the SDK host RID.
-       Content items propagate through ProjectReference to the application's root. -->
+       Content items propagate through ProjectReference to the application's root.
+       The libusb runtime is not built for Android RIDs; the framework USB Host backend
+       serves that platform instead. -->
   <PropertyGroup>
+    <LibUsbRuntimeIdentifier Condition="'$(TargetFramework)' == 'net10.0-android'">skip</LibUsbRuntimeIdentifier>
     <LibUsbRuntimeIdentifier>$(RuntimeIdentifier)</LibUsbRuntimeIdentifier>
     <LibUsbRuntimeIdentifier Condition="'$(LibUsbRuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</LibUsbRuntimeIdentifier>
     <LibUsbRuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(PlatformTarget)' != '' and '$(PlatformTarget)' != 'AnyCPU'">$([System.Text.RegularExpressions.Regex]::Replace('$(NETCoreSdkRuntimeIdentifier)', '-[^-]+$', '-$(PlatformTarget)'))</LibUsbRuntimeIdentifier>
