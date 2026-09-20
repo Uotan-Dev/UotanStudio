@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
 using System.Text.Json.Serialization;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
 

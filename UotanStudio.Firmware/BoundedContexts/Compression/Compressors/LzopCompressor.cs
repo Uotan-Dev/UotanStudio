@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.Compression.Codecs.Lzo;
 using System.Buffers.Binary;
 using System.IO.Hashing;
+using UotanStudio.Firmware.BoundedContexts.Compression.Codecs.Lzo;
 
 namespace UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
 

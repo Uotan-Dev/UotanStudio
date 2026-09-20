@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.Archive.Internal;
+using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.Archive.Extraction;

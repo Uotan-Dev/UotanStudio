@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 using System.Formats.Tar;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.Archive.Formats.Tar;
 

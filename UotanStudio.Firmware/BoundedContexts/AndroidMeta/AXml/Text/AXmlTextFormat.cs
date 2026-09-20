@@ -1,9 +1,9 @@
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Models;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Resources;
 using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Models;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Resources;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Text;
 

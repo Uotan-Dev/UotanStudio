@@ -1,7 +1,7 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Extraction;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.IO;
 using System.IO.Compression;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Extraction;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.IO;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Models;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 

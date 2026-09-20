@@ -1,7 +1,7 @@
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
 using System.Buffers.Binary;
 using System.IO.Hashing;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Packing;
 

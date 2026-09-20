@@ -1,6 +1,6 @@
+using System.Text;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
-using System.Text;
 
 namespace UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Build;
 

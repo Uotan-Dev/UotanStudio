@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff;
 using System.Buffers.Binary;
 using Google.Protobuf;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.PuffDiff;

@@ -1,6 +1,6 @@
-using DtTree = UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.DeviceTree;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
+using DtTree = UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.DeviceTree;
 
 namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
 

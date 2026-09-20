@@ -31,6 +31,10 @@ public partial class NodeEditorView : UserControl
     private Point _toolboxDragOrigin;
     private bool _suppressToolboxClick;
     private Dictionary<FlowNodeViewModel, Point>? _nodeDragStartLocations;
+    private IPointer? _selectionBoxPointer;
+    private Point _selectionBoxStart;
+    private bool _selectionBoxDragging;
+    private bool _selectionBoxMoved;
 
     public NodeEditorView()
     {
@@ -228,17 +232,85 @@ public partial class NodeEditorView : UserControl
     /// <param name="e"><para>选中变更事件参数。</para>The selection changed args.</param>
     private void OnEditorSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (DataContext is NodeEditorViewModel vm)
+        if (DataContext is not NodeEditorViewModel vm) return;
+        var selected = Editor.SelectedItems?
+            .OfType<FlowNodeViewModel>()
+            .ToList() ?? [];
+        var primary = e.AddedItems.OfType<FlowNodeViewModel>().FirstOrDefault()
+            ?? selected.FirstOrDefault();
+        vm.SetSelection(selected, primary);
+    }
+
+    private void OnSelectionBoxPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(EditorSurface).Properties.IsRightButtonPressed)
         {
-            foreach (var item in e.AddedItems)
-            {
-                if (item is UotanStudio.ViewModels.NodeViewModels.FlowNodeViewModel node)
-                {
-                    vm.SelectNode(node);
-                    break;
-                }
-            }
+            return;
         }
+
+        _selectionBoxPointer = e.Pointer;
+        _selectionBoxStart = e.GetPosition(EditorSurface);
+        _selectionBoxDragging = true;
+        _selectionBoxMoved = false;
+        UpdateSelectionBox(_selectionBoxStart, _selectionBoxStart);
+        e.Pointer.Capture(EditorSurface);
+        e.Handled = true;
+    }
+
+    private void OnSelectionBoxMoved(object? sender, PointerEventArgs e)
+    {
+        if (!_selectionBoxDragging || e.Pointer != _selectionBoxPointer) return;
+        var position = e.GetPosition(EditorSurface);
+        _selectionBoxMoved |= (_selectionBoxStart - position).Length > 4;
+        UpdateSelectionBox(_selectionBoxStart, position);
+        e.Handled = true;
+    }
+
+    private void OnSelectionBoxReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!_selectionBoxDragging || e.Pointer != _selectionBoxPointer) return;
+        var position = e.GetPosition(EditorSurface);
+        if (_selectionBoxMoved && DataContext is NodeEditorViewModel vm)
+            vm.SetSelection(NodesIntersectingSelection(_selectionBoxStart, position));
+        EndSelectionBox(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void OnSelectionBoxCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (_selectionBoxDragging) EndSelectionBox(e.Pointer);
+    }
+
+    private void EndSelectionBox(IPointer pointer)
+    {
+        _selectionBoxDragging = false;
+        _selectionBoxPointer = null;
+        SelectionBox.IsVisible = false;
+        if (pointer.Captured == EditorSurface) pointer.Capture(null);
+    }
+
+    private void UpdateSelectionBox(Point first, Point second)
+    {
+        var rectangle = new Rect(first, second);
+        Canvas.SetLeft(SelectionBox, rectangle.X);
+        Canvas.SetTop(SelectionBox, rectangle.Y);
+        SelectionBox.Width = rectangle.Width;
+        SelectionBox.Height = rectangle.Height;
+        SelectionBox.IsVisible = _selectionBoxMoved;
+    }
+
+    private IReadOnlyList<FlowNodeViewModel> NodesIntersectingSelection(Point first, Point second)
+    {
+        var selection = new Rect(first, second);
+        var result = new List<FlowNodeViewModel>();
+        var seen = new HashSet<FlowNodeViewModel>();
+        foreach (var control in Editor.GetVisualDescendants().OfType<Control>())
+        {
+            if (control.DataContext is not FlowNodeViewModel node || !seen.Add(node)) continue;
+            if (control.TranslatePoint(new Point(), EditorSurface) is not { } topLeft) continue;
+            if (selection.Intersects(new Rect(topLeft, control.Bounds.Size))) result.Add(node);
+        }
+        return result;
     }
 
     private void OnToolboxItemClicked(object? sender, RoutedEventArgs e)

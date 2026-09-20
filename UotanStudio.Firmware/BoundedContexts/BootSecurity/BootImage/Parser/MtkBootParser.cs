@@ -1,6 +1,6 @@
+using System.Text;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
-using System.Text;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 

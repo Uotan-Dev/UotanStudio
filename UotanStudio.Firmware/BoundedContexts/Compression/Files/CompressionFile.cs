@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.Compression.Detection;
 using System.Diagnostics;
+using UotanStudio.Firmware.BoundedContexts.Compression.Detection;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.Compression.Files;

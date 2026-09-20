@@ -1,7 +1,7 @@
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Models;
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Parsing;
 

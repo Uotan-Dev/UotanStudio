@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing;
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Resources;
 

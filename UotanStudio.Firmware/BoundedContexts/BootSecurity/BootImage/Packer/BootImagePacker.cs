@@ -1,9 +1,9 @@
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;

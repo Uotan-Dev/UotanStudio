@@ -1,8 +1,8 @@
+using System.Buffers.Binary;
+using System.Text;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Models;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Parsing;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Resources;
-using System.Buffers.Binary;
-using System.Text;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Writing;
 

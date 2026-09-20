@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Models;
 using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing;
 

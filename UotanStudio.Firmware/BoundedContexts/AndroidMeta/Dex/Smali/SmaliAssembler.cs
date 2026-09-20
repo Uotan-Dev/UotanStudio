@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
 using System.Globalization;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Instructions;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Smali;
 

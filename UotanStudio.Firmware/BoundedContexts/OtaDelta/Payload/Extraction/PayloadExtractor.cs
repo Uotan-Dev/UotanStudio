@@ -1,9 +1,9 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.IO;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Operations;
 using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.IO;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Operations;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using UotanStudio.Firmware.SharedKernel.Streams;
 

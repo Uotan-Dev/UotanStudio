@@ -1034,13 +1034,13 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     public void Clear()
     {
         DetachAllPropertyTracking();
+        SetSelection([]);
         Connections.Clear();
         Nodes.Clear();
         _undoStack.Clear();
         _redoStack.Clear();
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
-        SelectedNode = null;
         ExecutionProgress = 0.0;
         ExecutionStatus = LanguageService.Instance.GetString("Node_StatusReady");
     }

@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.SharedKernel;
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Amlogic;
 

@@ -1,7 +1,7 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
-using System.Buffers.Binary;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 
 namespace UotanStudio.Services.Delivery;

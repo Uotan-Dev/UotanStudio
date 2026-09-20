@@ -1,10 +1,10 @@
+using System.IO.Compression;
+using System.Text;
+using System.Text.RegularExpressions;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.Kernel;
-using System.IO.Compression;
-using System.Text;
-using System.Text.RegularExpressions;
 using UotanStudio.Firmware.SharedKernel.Magic;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.Models;

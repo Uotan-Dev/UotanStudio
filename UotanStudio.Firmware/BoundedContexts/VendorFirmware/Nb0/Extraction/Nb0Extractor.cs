@@ -1,8 +1,7 @@
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Models;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Parsing;
 using System.Buffers;
 using System.Security.Cryptography;
-
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Models;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Parsing;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Extraction;

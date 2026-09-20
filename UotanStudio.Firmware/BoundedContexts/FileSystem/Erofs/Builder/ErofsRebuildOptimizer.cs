@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using System.Globalization;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
 

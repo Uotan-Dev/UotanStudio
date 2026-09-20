@@ -1,8 +1,8 @@
+using System.Buffers;
+using System.Buffers.Binary;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.DataProviders;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
-using System.Buffers;
-using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
 

@@ -1,8 +1,8 @@
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
 using System.IO.Compression;
 using K4os.Compression.LZ4.Streams;
 using SharpCompress.Compressors.BZip2;
 using SharpCompress.Compressors.Xz;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BoundedContexts.Compression;
 using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
 using ZstdSharp;

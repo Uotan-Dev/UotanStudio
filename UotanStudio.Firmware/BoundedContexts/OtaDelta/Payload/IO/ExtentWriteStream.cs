@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Extraction;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Extraction;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.IO;

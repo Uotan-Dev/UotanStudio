@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Models;
 using System.Globalization;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Serialization;
 

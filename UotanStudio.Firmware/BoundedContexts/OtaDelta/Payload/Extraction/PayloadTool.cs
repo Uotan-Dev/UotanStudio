@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Extraction;
 

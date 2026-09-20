@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Exceptions;
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Exceptions;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
 

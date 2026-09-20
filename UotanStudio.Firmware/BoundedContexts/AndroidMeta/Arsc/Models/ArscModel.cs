@@ -1,6 +1,6 @@
+using System.Globalization;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Models;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Resources;
-using System.Globalization;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Models;
 

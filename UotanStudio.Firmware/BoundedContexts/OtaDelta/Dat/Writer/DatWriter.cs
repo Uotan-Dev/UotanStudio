@@ -1,9 +1,9 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Models;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Serialization;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.ImgDiff;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Models;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Serialization;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.ImgDiff;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
 

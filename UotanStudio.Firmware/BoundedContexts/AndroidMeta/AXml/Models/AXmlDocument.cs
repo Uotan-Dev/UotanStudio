@@ -1,7 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Resources;
 using System.Globalization;
-
 using System.Xml.Linq;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Resources;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Models;
 

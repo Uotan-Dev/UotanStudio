@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.IO;
 using ICSharpCode.SharpZipLib.BZip2;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.IO;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff;

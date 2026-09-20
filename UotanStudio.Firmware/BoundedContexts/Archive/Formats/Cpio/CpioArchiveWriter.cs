@@ -1,7 +1,7 @@
-using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 using UotanStudio.Firmware.BoundedContexts.Archive.Writing;
 using UotanStudio.Firmware.SharedKernel.Streams;
 

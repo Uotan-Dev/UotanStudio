@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
 using System.Buffers;
 using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.DataProviders;
 

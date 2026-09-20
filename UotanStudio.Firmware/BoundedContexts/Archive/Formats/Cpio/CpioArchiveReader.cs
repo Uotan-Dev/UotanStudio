@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Streams;
 

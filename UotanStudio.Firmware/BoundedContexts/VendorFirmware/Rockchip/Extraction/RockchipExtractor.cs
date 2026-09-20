@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Models;
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Models;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Streams;
 

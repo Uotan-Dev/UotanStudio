@@ -1,9 +1,9 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Workflow;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Amlogic;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.SonySin;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Workflow;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

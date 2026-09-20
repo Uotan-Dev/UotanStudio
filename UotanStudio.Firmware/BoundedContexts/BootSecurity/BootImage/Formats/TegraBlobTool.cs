@@ -1,6 +1,6 @@
+using System.Buffers.Binary;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
-using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Formats;
 

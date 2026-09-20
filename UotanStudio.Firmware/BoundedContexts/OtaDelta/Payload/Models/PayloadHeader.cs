@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.IO;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.IO;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Models;
 

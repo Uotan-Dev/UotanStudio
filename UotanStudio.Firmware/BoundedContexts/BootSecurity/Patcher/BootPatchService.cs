@@ -1,3 +1,6 @@
+using System.IO.Compression;
+using System.Security.Cryptography;
+using System.Text;
 using UotanStudio.Firmware.BoundedContexts.Archive.Editing;
 using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
@@ -6,9 +9,6 @@ using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.Kernel;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.Models;
-using System.IO.Compression;
-using System.Security.Cryptography;
-using System.Text;
 using UotanStudio.Firmware.BoundedContexts.Compression;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher;

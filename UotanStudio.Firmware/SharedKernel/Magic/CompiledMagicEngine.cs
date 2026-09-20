@@ -555,33 +555,33 @@ public static class CompiledMagicEngine
         switch (rule.Kind)
         {
             case MagicKind.Number:
-            {
-                if (!TryReadNumber(f, offset, rule.NumberType, len, out long actual))
                 {
-                    return false;
-                }
+                    if (!TryReadNumber(f, offset, rule.NumberType, len, out long actual))
+                    {
+                        return false;
+                    }
 
-                if (rule.HasMask)
-                {
-                    actual = ApplyOp(actual, rule.MaskOp, rule.Mask);
-                }
+                    if (rule.HasMask)
+                    {
+                        actual = ApplyOp(actual, rule.MaskOp, rule.Mask);
+                    }
 
-                if (rule.MaskInvert)
-                {
-                    actual = ~actual;
-                }
+                    if (rule.MaskInvert)
+                    {
+                        actual = ~actual;
+                    }
 
-                intValue = actual;
-                matchEnd = offset + WidthOf(rule.NumberType);
-                if (rule.Relation == MagicRelation.Any)
-                {
-                    return true;
-                }
+                    intValue = actual;
+                    matchEnd = offset + WidthOf(rule.NumberType);
+                    if (rule.Relation == MagicRelation.Any)
+                    {
+                        return true;
+                    }
 
-                long expected = rule.Value;
-                bool ok = CompareNumeric(rule, actual, expected);
-                return ok;
-            }
+                    long expected = rule.Value;
+                    bool ok = CompareNumeric(rule, actual, expected);
+                    return ok;
+                }
 
             case MagicKind.String:
                 return TryMatchString(rule, f, offset, len, out strValue, out matchEnd);
@@ -939,29 +939,29 @@ public static class CompiledMagicEngine
         switch (w)
         {
             case 1:
-            {
-                byte b = f[offset];
-                value = SignedByte(t) ? (sbyte)b : b;
-                return true;
-            }
+                {
+                    byte b = f[offset];
+                    value = SignedByte(t) ? (sbyte)b : b;
+                    return true;
+                }
             case 2:
-            {
-                ushort u = be ? BinaryPrimitives.ReadUInt16BigEndian(span) : BinaryPrimitives.ReadUInt16LittleEndian(span);
-                value = SignedShort(t) ? (short)u : u;
-                return true;
-            }
+                {
+                    ushort u = be ? BinaryPrimitives.ReadUInt16BigEndian(span) : BinaryPrimitives.ReadUInt16LittleEndian(span);
+                    value = SignedShort(t) ? (short)u : u;
+                    return true;
+                }
             case 4:
-            {
-                uint u = be ? BinaryPrimitives.ReadUInt32BigEndian(span) : BinaryPrimitives.ReadUInt32LittleEndian(span);
-                value = SignedLong(t) ? (int)u : u;
-                return true;
-            }
+                {
+                    uint u = be ? BinaryPrimitives.ReadUInt32BigEndian(span) : BinaryPrimitives.ReadUInt32LittleEndian(span);
+                    value = SignedLong(t) ? (int)u : u;
+                    return true;
+                }
             case 8:
-            {
-                ulong u = be ? BinaryPrimitives.ReadUInt64BigEndian(span) : BinaryPrimitives.ReadUInt64LittleEndian(span);
-                value = SignedQuad(t) ? (long)u : (long)u;
-                return true;
-            }
+                {
+                    ulong u = be ? BinaryPrimitives.ReadUInt64BigEndian(span) : BinaryPrimitives.ReadUInt64LittleEndian(span);
+                    value = SignedQuad(t) ? (long)u : (long)u;
+                    return true;
+                }
             default:
                 return false;
         }

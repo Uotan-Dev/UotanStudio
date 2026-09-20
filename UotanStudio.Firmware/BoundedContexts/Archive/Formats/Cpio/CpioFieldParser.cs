@@ -1,7 +1,7 @@
-using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.Archive.Formats.Cpio;
 

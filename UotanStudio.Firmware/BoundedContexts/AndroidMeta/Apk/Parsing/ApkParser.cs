@@ -1,11 +1,11 @@
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Models;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing;
+using System.IO.Compression;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Models;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Models;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Parsing;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Models;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.IO;
-using System.IO.Compression;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Parsing;
 

@@ -1,9 +1,9 @@
-using UotanStudio.Firmware.BoundedContexts.Compression.Detection;
-using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 using SharpCompress.Archives;
 using SharpCompress.Readers;
 using UotanStudio.Firmware.BoundedContexts.Archive.Extraction;
+using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 using UotanStudio.Firmware.BoundedContexts.Compression;
+using UotanStudio.Firmware.BoundedContexts.Compression.Detection;
 
 namespace UotanStudio.Firmware.BoundedContexts.Archive.Browsing;
 

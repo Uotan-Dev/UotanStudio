@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Models;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Parsing;
 

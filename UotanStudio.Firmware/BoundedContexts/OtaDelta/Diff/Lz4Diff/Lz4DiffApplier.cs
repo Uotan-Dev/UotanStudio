@@ -1,10 +1,10 @@
-using UotanStudio.Firmware.BoundedContexts.Compression.Codecs.Lz4;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.PuffDiff;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Google.Protobuf;
 using K4os.Compression.LZ4;
+using UotanStudio.Firmware.BoundedContexts.Compression.Codecs.Lz4;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.PuffDiff;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Lz4Diff;
 

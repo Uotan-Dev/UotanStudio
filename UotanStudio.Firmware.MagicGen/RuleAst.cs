@@ -63,4 +63,3 @@ internal enum SkipKind
     None = 0,
     Range = 1,
 }
-

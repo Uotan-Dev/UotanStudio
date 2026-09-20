@@ -1,6 +1,3 @@
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Build;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
 using System.Buffers.Binary;
 using System.Numerics;
 using System.Security.Cryptography;
@@ -11,6 +8,9 @@ using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 using Org.BouncyCastle.OpenSsl;
 using Org.BouncyCastle.Security;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Build;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
 
