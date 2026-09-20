@@ -4,6 +4,7 @@
 
     <!-- 节点编辑器 -->
     <x:String x:Key="Node_Toolbox">工具箱</x:String>
+    <x:String x:Key="Node_Toolbox_Destructive">可能修改设备</x:String>
     <x:String x:Key="Node_Properties">属性</x:String>
     <x:String x:Key="Node_ExecLog">执行日志</x:String>
     <x:String x:Key="Node_Canvas">节点画布</x:String>
@@ -106,13 +107,65 @@
     <x:String x:Key="Node_Conn_Level">级别</x:String>
     <x:String x:Key="Node_Conn_Progress">进度</x:String>
 
+    <!-- 端口数据类型 -->
+    <x:String x:Key="Node_PortType_Any">任意</x:String>
+    <x:String x:Key="Node_PortType_Device">设备</x:String>
+    <x:String x:Key="Node_PortType_Flow">流程</x:String>
+    <x:String x:Key="Node_PortType_Path">路径</x:String>
+    <x:String x:Key="Node_PortType_Data">数据</x:String>
+    <x:String x:Key="Node_PortType_Text">文本</x:String>
+    <x:String x:Key="Node_PortType_Number">数字</x:String>
+    <x:String x:Key="Node_PortType_Boolean">布尔值</x:String>
+
+    <!-- 其他端口名称 -->
+    <x:String x:Key="Node_Conn_ArchivePath">归档路径</x:String>
+    <x:String x:Key="Node_Conn_Body">主体</x:String>
+    <x:String x:Key="Node_Conn_Completed">完成</x:String>
+    <x:String x:Key="Node_Conn_Bootloader">引导程序</x:String>
+    <x:String x:Key="Node_Conn_Cipher">密码</x:String>
+    <x:String x:Key="Node_Conn_Combined">合并结果</x:String>
+    <x:String x:Key="Node_Conn_Compressed">压缩数据</x:String>
+    <x:String x:Key="Node_Conn_Condition">条件</x:String>
+    <x:String x:Key="Node_Conn_Count">次数</x:String>
+    <x:String x:Key="Node_Conn_DexPath">Dex 路径</x:String>
+    <x:String x:Key="Node_Conn_False">否</x:String>
+    <x:String x:Key="Node_Conn_GroupName">组名称</x:String>
+    <x:String x:Key="Node_Conn_Key">密钥</x:String>
+    <x:String x:Key="Node_Conn_Length">长度</x:String>
+    <x:String x:Key="Node_Conn_Merged">合并结果</x:String>
+    <x:String x:Key="Node_Conn_Name">名称</x:String>
+    <x:String x:Key="Node_Conn_Offset">偏移</x:String>
+    <x:String x:Key="Node_Conn_OtaPackage">OTA 包</x:String>
+    <x:String x:Key="Node_Conn_Serial">序列号</x:String>
+    <x:String x:Key="Node_Conn_Signature">签名</x:String>
+    <x:String x:Key="Node_Conn_Signed">已签名</x:String>
+    <x:String x:Key="Node_Conn_SignedApk">已签名 APK</x:String>
+    <x:String x:Key="Node_Conn_Slice">切片</x:String>
+    <x:String x:Key="Node_Conn_SlotA">插槽 A</x:String>
+    <x:String x:Key="Node_Conn_SlotB">插槽 B</x:String>
+    <x:String x:Key="Node_Conn_Summary">摘要</x:String>
+    <x:String x:Key="Node_Conn_ToSparse">转为稀疏</x:String>
+    <x:String x:Key="Node_Conn_TransferList">传输列表</x:String>
+    <x:String x:Key="Node_Conn_True">是</x:String>
+    <x:String x:Key="Node_Conn_Value">值</x:String>
+    <x:String x:Key="Node_Conn_Command">命令</x:String>
+    <x:String x:Key="Node_Conn_LocalPath">本地路径</x:String>
+    <x:String x:Key="Node_Conn_RemotePath">远程路径</x:String>
+    <x:String x:Key="Node_Conn_Package">安装包</x:String>
+    <x:String x:Key="Node_Conn_Bundle">应用包</x:String>
+    <x:String x:Key="Node_Conn_LocalPort">本地端口</x:String>
+    <x:String x:Key="Node_Conn_RemotePort">远程端口</x:String>
+
     <!-- 节点分类 -->
     <x:String x:Key="Node_CatFirmware">固件操作</x:String>
+    <x:String x:Key="Node_CatFirmwareContainer">固件容器</x:String>
+    <x:String x:Key="Node_CatFirmwareImage">镜像处理</x:String>
+    <x:String x:Key="Node_CatAndroid">Android 包和签名</x:String>
+    <x:String x:Key="Node_CatDelivery">交付格式</x:String>
     <x:String x:Key="Node_CatFlash">烧录操作</x:String>
     <x:String x:Key="Node_CatData">数据处理</x:String>
     <x:String x:Key="Node_CatFlow">流程控制</x:String>
     <x:String x:Key="Node_CatOutput">输出</x:String>
-    <x:String x:Key="Node_CatDex">DEX 工具</x:String>
 
     <!-- 节点属性面板 -->
     <x:String x:Key="Node_Prop_Category">类别</x:String>
@@ -131,24 +184,6 @@
     <x:String x:Key="Node_Status_Skipped">已跳过</x:String>
     <x:String x:Key="Node_Status_Cancelled">已取消</x:String>
 
-    <!-- DEX 工具 -->
-    <x:String x:Key="Node_Dex_Parse">解析 DEX</x:String>
-    <x:String x:Key="Node_Dex_Disassemble">逆向 DEX</x:String>
-    <x:String x:Key="Node_Dex_Rebuild">编译 DEX</x:String>
-    <x:String x:Key="Node_Dex_Decompile">反编译 DEX</x:String>
 
     <x:String x:Key="Node_Firmware_SignApk">APK 签名</x:String>
-    <x:String x:Key="Node_Hdc_Shell">HDC Shell 命令</x:String>
-    <x:String x:Key="Node_Hdc_GetProperty">HDC 读取系统参数</x:String>
-    <x:String x:Key="Node_Hdc_Send">HDC 发送文件</x:String>
-    <x:String x:Key="Node_Hdc_Receive">HDC 接收文件</x:String>
-    <x:String x:Key="Node_Hdc_Install">HDC 安装应用</x:String>
-    <x:String x:Key="Node_Hdc_Uninstall">HDC 卸载应用</x:String>
-    <x:String x:Key="Node_Hdc_Forward">HDC 正向端口转发</x:String>
-    <x:String x:Key="Node_Hdc_Reverse">HDC 反向端口转发</x:String>
-    <x:String x:Key="Node_Hdc_ListForwards">HDC 列出转发</x:String>
-    <x:String x:Key="Node_Hdc_Remount">HDC 重新挂载</x:String>
-    <x:String x:Key="Node_Hdc_RemoveForward">HDC 移除正向转发</x:String>
-    <x:String x:Key="Node_Hdc_RemoveReverse">HDC 移除反向转发</x:String>
-    <x:String x:Key="Node_Hdc_ListDebugProcesses">HDC 调试进程列表</x:String>
 </ResourceDictionary>

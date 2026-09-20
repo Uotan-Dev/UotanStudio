@@ -141,6 +141,16 @@ public sealed class MoveNodeCommand : IEditorCommand
         _targets.Add((node, node.Location, newLocation));
     }
 
+    /// <summary>Adds a target with an explicitly captured original position.</summary>
+    public void AddTarget(FlowNodeViewModel node, Point originalLocation, Point newLocation)
+    {
+        if (node == null || originalLocation == newLocation)
+        {
+            return;
+        }
+        _targets.Add((node, originalLocation, newLocation));
+    }
+
     /// <summary>
     /// <para>获取是否包含至少一个有效的移动目标，用于决定命令是否需要入栈。</para>
     /// Gets whether there is at least one valid move target, deciding whether the command needs to be pushed onto the stack.

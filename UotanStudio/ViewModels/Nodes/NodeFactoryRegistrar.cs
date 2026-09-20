@@ -2,80 +2,117 @@ using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.ViewModels.Nodes;
 
-/// <summary>
-/// <para>节点工厂集中注册器：把全部 TypeKey → 工厂映射登记到 <see cref="NodeTypeRegistry"/>。</para>
-/// Central node-factory registrar: registers every TypeKey → factory mapping into <see cref="NodeTypeRegistry"/>.
-/// </summary>
-/// <remarks>
-/// <para>与 UI 无关，可被节点编辑器工具箱初始化与无头 CLI（workflow run）共同调用；重复注册安全
-/// （<see cref="NodeTypeRegistry.Register"/> 覆盖同键工厂）。</para>
-/// UI-independent; invoked by both the node-editor toolbox initialization and the headless CLI
-/// (<c>workflow run</c>). Safe to call repeatedly (<see cref="NodeTypeRegistry.Register"/> overwrites same-key factories).
-/// </remarks>
+/// <summary>Single source of truth for workflow node identity, toolbox metadata and factories.</summary>
 public static class NodeFactoryRegistrar
 {
-    /// <summary>
-    /// <para>注册全部既有节点工厂，确保工程加载与无头执行能按 TypeKey 重建具体节点而非缺失占位。</para>
-    /// Registers all existing node factories so project loading and headless execution can rebuild concrete
-    /// nodes by TypeKey instead of missing placeholders.
-    /// </summary>
+    public static IReadOnlyList<NodeDescriptor> Descriptors { get; } =
+    [
+        D("Firmware.Unpack", "Node_Firmware_Unpack", NodeToolboxGroup.FirmwareContainer, () => FirmwareNodeViewModel.CreateUnpackNode()),
+        D("Firmware.Pack", "Node_Firmware_Pack", NodeToolboxGroup.FirmwareContainer, () => FirmwareNodeViewModel.CreatePackNode()),
+        D("Firmware.Verify", "Node_Firmware_Verify", NodeToolboxGroup.Android, () => FirmwareNodeViewModel.CreateVerifyNode()),
+        D("Firmware.SignApk", "Node_Firmware_SignApk", NodeToolboxGroup.Android, () => new ApkSignNodeViewModel()),
+        D("Firmware.Extract", "Node_Firmware_Extract", NodeToolboxGroup.FirmwareContainer, () => FirmwareNodeViewModel.CreateExtractNode()),
+        D("Firmware.OtaDelta", "Node_Firmware_OtaDelta", NodeToolboxGroup.Delivery, () => ExtendedFirmwareNodeViewModel.CreateOtaDeltaNode()),
+        D("Firmware.MergeSignature", "Node_Firmware_MergeSignature", NodeToolboxGroup.Android, () => ExtendedFirmwareNodeViewModel.CreateMergeSignatureNode()),
+        D("Firmware.MergeDualSlot", "Node_Firmware_MergeDualSlot", NodeToolboxGroup.Delivery, () => ExtendedFirmwareNodeViewModel.CreateMergeDualSlotNode()),
+        D("Firmware.FlashBoot", "Node_Firmware_FlashBoot", NodeToolboxGroup.FirmwareImage, () => ExtendedFirmwareNodeViewModel.CreateFlashBootNode()),
+        D("Firmware.CpioUnpack", "Node_Firmware_CpioUnpack", NodeToolboxGroup.FirmwareContainer, () => CpioNodeViewModel.CreateCpioUnpackNode()),
+        D("Firmware.CpioPack", "Node_Firmware_CpioPack", NodeToolboxGroup.FirmwareContainer, () => CpioNodeViewModel.CreateCpioPackNode()),
+        D("Firmware.SuperUnpack", "Node_Firmware_SuperUnpack", NodeToolboxGroup.FirmwareImage, () => SuperNodeViewModel.CreateSuperUnpackNode()),
+        D("Firmware.SuperPack", "Node_Firmware_SuperPack", NodeToolboxGroup.FirmwareImage, () => SuperNodeViewModel.CreateSuperPackNode()),
+        D("Firmware.Sparse", "Node_Firmware_Sparse", NodeToolboxGroup.FirmwareImage, () => SparseNodeViewModel.CreateSparseNode()),
+        D("Firmware.Dat", "Node_Firmware_Dat", NodeToolboxGroup.Delivery, () => DatNodeViewModel.CreateDatNode()),
+        D("Flash.SelectDevice", "Node_Flash_SelectDevice", NodeToolboxGroup.Flash, () => SelectDeviceNodeViewModel.CreateSelectDeviceNode()),
+        D("Flash.GetProp", "Node_Flash_GetProp", NodeToolboxGroup.Flash, () => DevicePropertyNodeViewModel.CreateDevicePropertyNode()),
+        D("Flash.Flash", "Node_Flash_Flash", NodeToolboxGroup.Flash, () => FlashNodeViewModel.CreateFlashNode(), true),
+        D("Flash.Erase", "Node_Flash_Erase", NodeToolboxGroup.Flash, () => FlashNodeViewModel.CreateEraseNode(), true),
+        D("Flash.Reboot", "Node_Flash_Reboot", NodeToolboxGroup.Flash, () => FlashNodeViewModel.CreateRebootNode(), true),
+        D("Flash.Bootloader", "Node_Flash_Bootloader", NodeToolboxGroup.Flash, () => ExtendedFlashNodeViewModel.CreateFlashBootloaderNode(), true),
+        D("Flash.EraseAll", "Node_Flash_EraseAll", NodeToolboxGroup.Flash, () => ExtendedFlashNodeViewModel.CreateEraseAllNode(), true),
+        D("Flash.OtaSideload", "Node_Flash_OtaSideload", NodeToolboxGroup.Flash, () => ExtendedFlashNodeViewModel.CreateOtaSideloadNode(), true),
+        D("Flash.OverwriteFirmware", "Node_Flash_OverwriteFirmware", NodeToolboxGroup.Flash, () => ExtendedFlashNodeViewModel.CreateOverwriteFirmwareNode(), true),
+        D("Data.ReadFile", "Node_Data_ReadFile", NodeToolboxGroup.Data, () => DataNodeViewModel.CreateFileReadNode()),
+        D("Data.Constant", "Node_Data_Constant", NodeToolboxGroup.Data, () => ConstantNodeViewModel.CreateConstantNode()),
+        D("Data.ProjectImage", "Node_Data_ProjectImage", NodeToolboxGroup.Data, () => ProjectImageNodeViewModel.CreateProjectImageNode()),
+        D("Data.Decrypt", "Node_Data_Decrypt", NodeToolboxGroup.Data, () => DecryptNodeViewModel.CreateDecryptNode()),
+        D("Data.Decompress", "Node_Data_Decompress", NodeToolboxGroup.Data, () => DecompressNodeViewModel.CreateDecompressNode()),
+        D("Data.Convert", "Node_Data_Convert", NodeToolboxGroup.Data, () => DataNodeViewModel.CreateConvertNode()),
+        D("Data.Checksum", "Node_Data_Checksum", NodeToolboxGroup.Data, () => DataNodeViewModel.CreateChecksumNode()),
+        D("Data.Compare", "Node_Data_Compare", NodeToolboxGroup.Data, () => DataNodeViewModel.CreateCompareNode()),
+        D("Data.Concat", "Node_Data_Concat", NodeToolboxGroup.Data, () => ExtendedDataNodeViewModel.CreateConcatNode()),
+        D("Data.Slice", "Node_Data_Slice", NodeToolboxGroup.Data, () => ExtendedDataNodeViewModel.CreateSliceNode()),
+        D("Data.Encrypt", "Node_Data_Encrypt", NodeToolboxGroup.Data, () => ExtendedDataNodeViewModel.CreateEncryptNode()),
+        D("Data.Compress", "Node_Data_Compress", NodeToolboxGroup.Data, () => ExtendedDataNodeViewModel.CreateCompressNode()),
+        D("Data.ByteSwap", "Node_Data_ByteSwap", NodeToolboxGroup.Data, () => ExtendedDataNodeViewModel.CreateByteSwapNode()),
+        D("Flow.Start", "Node_Flow_Start", NodeToolboxGroup.Flow, () => FlowControlNodeViewModel.CreateStartNode()),
+        D("Flow.End", "Node_Flow_End", NodeToolboxGroup.Flow, () => FlowControlNodeViewModel.CreateEndNode()),
+        D("Flow.Branch", "Node_Flow_Branch", NodeToolboxGroup.Flow, () => FlowControlNodeViewModel.CreateBranchNode()),
+        D("Flow.Loop", "Node_Flow_Loop", NodeToolboxGroup.Flow, () => FlowControlNodeViewModel.CreateLoopNode()),
+        D("Flow.Delay", "Node_Flow_Delay", NodeToolboxGroup.Flow, () => FlowControlNodeViewModel.CreateDelayNode()),
+        D("Flow.Parallel", "Node_Flow_Parallel", NodeToolboxGroup.Flow, () => FlowControlNodeViewModel.CreateParallelNode()),
+        D("Flow.Terminate", "Node_Flow_Terminate", NodeToolboxGroup.Flow, () => FlowControlNodeViewModel.CreateTerminateNode()),
+        D("Output.Log", "Node_Output_Log", NodeToolboxGroup.Output, () => OutputNodeViewModel.CreateLogNode()),
+        D("Output.Progress", "Node_Output_Progress", NodeToolboxGroup.Output, () => OutputNodeViewModel.CreateProgressNode()),
+        D("Output.Save", "Node_Output_Save", NodeToolboxGroup.Output, () => OutputNodeViewModel.CreateSaveNode()),
+        D("Output.Notify", "Node_Output_Notify", NodeToolboxGroup.Output, () => ExtendedOutputNodeViewModel.CreateNotifyNode()),
+        D("Output.Console", "Node_Output_Console", NodeToolboxGroup.Output, () => ExtendedOutputNodeViewModel.CreateConsoleOutputNode()),
+        D("Output.FileExport", "Node_Output_FileExport", NodeToolboxGroup.Output, () => ExtendedOutputNodeViewModel.CreateFileExportNode())
+    ];
+
     public static void RegisterAll()
     {
-        foreach (var operation in HdcNodeViewModel.Operations)
-            NodeTypeRegistry.Register("HDC." + operation, () => HdcNodeViewModel.Create(operation));
-        NodeTypeRegistry.Register("Firmware.Unpack", () => NodeViewModels.FirmwareNodeViewModel.CreateUnpackNode());
-        NodeTypeRegistry.Register("Firmware.Pack", () => NodeViewModels.FirmwareNodeViewModel.CreatePackNode());
-        NodeTypeRegistry.Register("Firmware.Verify", () => NodeViewModels.FirmwareNodeViewModel.CreateVerifyNode());
-        NodeTypeRegistry.Register("Firmware.Extract", () => NodeViewModels.FirmwareNodeViewModel.CreateExtractNode());
-        NodeTypeRegistry.Register("Firmware.OtaDelta", () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateOtaDeltaNode());
-        NodeTypeRegistry.Register("Firmware.MergeSignature", () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateMergeSignatureNode());
-        NodeTypeRegistry.Register("Firmware.SignApk", () => new NodeViewModels.ApkSignNodeViewModel());
-        NodeTypeRegistry.Register("Firmware.MergeDualSlot", () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateMergeDualSlotNode());
-        NodeTypeRegistry.Register("Firmware.FlashBoot", () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateFlashBootNode());
-        NodeTypeRegistry.Register("Firmware.CpioUnpack", () => NodeViewModels.CpioNodeViewModel.CreateCpioUnpackNode());
-        NodeTypeRegistry.Register("Firmware.CpioPack", () => NodeViewModels.CpioNodeViewModel.CreateCpioPackNode());
-        NodeTypeRegistry.Register("Firmware.SuperUnpack", () => NodeViewModels.SuperNodeViewModel.CreateSuperUnpackNode());
-        NodeTypeRegistry.Register("Firmware.SuperPack", () => NodeViewModels.SuperNodeViewModel.CreateSuperPackNode());
-        NodeTypeRegistry.Register("Firmware.Sparse", () => NodeViewModels.SparseNodeViewModel.CreateSparseNode());
-        NodeTypeRegistry.Register("Firmware.Dat", () => NodeViewModels.DatNodeViewModel.CreateDatNode());
-        NodeTypeRegistry.Register("Flash.SelectDevice", () => NodeViewModels.SelectDeviceNodeViewModel.CreateSelectDeviceNode());
-        NodeTypeRegistry.Register("Flash.GetProp", () => NodeViewModels.DevicePropertyNodeViewModel.CreateDevicePropertyNode());
-        NodeTypeRegistry.Register("Flash.Flash", () => NodeViewModels.FlashNodeViewModel.CreateFlashNode());
-        NodeTypeRegistry.Register("Flash.Erase", () => NodeViewModels.FlashNodeViewModel.CreateEraseNode());
-        NodeTypeRegistry.Register("Flash.Reboot", () => NodeViewModels.FlashNodeViewModel.CreateRebootNode());
-        NodeTypeRegistry.Register("Flash.Bootloader", () => NodeViewModels.ExtendedFlashNodeViewModel.CreateFlashBootloaderNode());
-        NodeTypeRegistry.Register("Flash.EraseAll", () => NodeViewModels.ExtendedFlashNodeViewModel.CreateEraseAllNode());
-        NodeTypeRegistry.Register("Flash.OtaSideload", () => NodeViewModels.ExtendedFlashNodeViewModel.CreateOtaSideloadNode());
-        NodeTypeRegistry.Register("Flash.OverwriteFirmware", () => NodeViewModels.ExtendedFlashNodeViewModel.CreateOverwriteFirmwareNode());
-        NodeTypeRegistry.Register("Data.ReadFile", () => NodeViewModels.DataNodeViewModel.CreateFileReadNode());
-        NodeTypeRegistry.Register("Data.Constant", () => NodeViewModels.ConstantNodeViewModel.CreateConstantNode());
-        NodeTypeRegistry.Register("Data.ProjectImage", () => NodeViewModels.ProjectImageNodeViewModel.CreateProjectImageNode());
-        NodeTypeRegistry.Register("Data.Decrypt", () => NodeViewModels.DecryptNodeViewModel.CreateDecryptNode());
-        NodeTypeRegistry.Register("Data.Decompress", () => NodeViewModels.DecompressNodeViewModel.CreateDecompressNode());
-        NodeTypeRegistry.Register("Data.Convert", () => NodeViewModels.DataNodeViewModel.CreateConvertNode());
-        NodeTypeRegistry.Register("Data.Checksum", () => NodeViewModels.DataNodeViewModel.CreateChecksumNode());
-        NodeTypeRegistry.Register("Data.Compare", () => NodeViewModels.DataNodeViewModel.CreateCompareNode());
-        NodeTypeRegistry.Register("Data.Concat", () => NodeViewModels.ExtendedDataNodeViewModel.CreateConcatNode());
-        NodeTypeRegistry.Register("Data.Slice", () => NodeViewModels.ExtendedDataNodeViewModel.CreateSliceNode());
-        NodeTypeRegistry.Register("Data.Encrypt", () => NodeViewModels.ExtendedDataNodeViewModel.CreateEncryptNode());
-        NodeTypeRegistry.Register("Data.Compress", () => NodeViewModels.ExtendedDataNodeViewModel.CreateCompressNode());
-        NodeTypeRegistry.Register("Data.ByteSwap", () => NodeViewModels.ExtendedDataNodeViewModel.CreateByteSwapNode());
-        NodeTypeRegistry.Register("Flow.Start", () => NodeViewModels.FlowControlNodeViewModel.CreateStartNode());
-        NodeTypeRegistry.Register("Flow.End", () => NodeViewModels.FlowControlNodeViewModel.CreateEndNode());
-        NodeTypeRegistry.Register("Flow.Branch", () => NodeViewModels.FlowControlNodeViewModel.CreateBranchNode());
-        NodeTypeRegistry.Register("Flow.Loop", () => NodeViewModels.FlowControlNodeViewModel.CreateLoopNode());
-        NodeTypeRegistry.Register("Flow.Delay", () => NodeViewModels.FlowControlNodeViewModel.CreateDelayNode());
-        NodeTypeRegistry.Register("Flow.Parallel", () => NodeViewModels.FlowControlNodeViewModel.CreateParallelNode());
-        NodeTypeRegistry.Register("Flow.Terminate", () => NodeViewModels.FlowControlNodeViewModel.CreateTerminateNode());
-        NodeTypeRegistry.Register("Output.Log", () => NodeViewModels.OutputNodeViewModel.CreateLogNode());
-        NodeTypeRegistry.Register("Output.Progress", () => NodeViewModels.OutputNodeViewModel.CreateProgressNode());
-        NodeTypeRegistry.Register("Output.Save", () => NodeViewModels.OutputNodeViewModel.CreateSaveNode());
-        NodeTypeRegistry.Register("Output.Notify", () => NodeViewModels.ExtendedOutputNodeViewModel.CreateNotifyNode());
-        NodeTypeRegistry.Register("Output.Console", () => NodeViewModels.ExtendedOutputNodeViewModel.CreateConsoleOutputNode());
-        NodeTypeRegistry.Register("Output.FileExport", () => NodeViewModels.ExtendedOutputNodeViewModel.CreateFileExportNode());
-        NodeTypeRegistry.Register("Dex.Parse", () => NodeViewModels.DexNodeViewModel.CreateParseNode());
-        NodeTypeRegistry.Register("Dex.Disassemble", () => NodeViewModels.DexNodeViewModel.CreateDisassembleNode());
-        NodeTypeRegistry.Register("Dex.Rebuild", () => NodeViewModels.DexNodeViewModel.CreateRebuildNode());
-        NodeTypeRegistry.Register("Dex.Decompile", () => NodeViewModels.DexNodeViewModel.CreateDecompileNode());
+        foreach (var descriptor in Descriptors)
+            NodeTypeRegistry.Register(descriptor.TypeKey, descriptor.Factory);
     }
+
+    private static NodeDescriptor D(string typeKey, string resourceKey, NodeToolboxGroup group,
+        Func<FlowNodeViewModel> factory, bool destructive = false)
+    {
+        var capabilities = group switch
+        {
+            NodeToolboxGroup.Flow => NodeCapability.ControlFlow,
+            NodeToolboxGroup.FirmwareContainer or NodeToolboxGroup.FirmwareImage or NodeToolboxGroup.Android or NodeToolboxGroup.Delivery
+                => NodeCapability.ProducesArtifact,
+            NodeToolboxGroup.Flash => NodeCapability.RequiresDevice,
+            _ => NodeCapability.None
+        };
+
+        if (destructive)
+            capabilities |= NodeCapability.MutatesDevice;
+        if (typeKey is "Flash.SelectDevice" or "Flash.GetProp")
+            capabilities |= NodeCapability.ReadsDevice;
+
+        return new(typeKey, resourceKey, group, factory, destructive, capabilities);
+    }
+}
+
+public enum NodeToolboxGroup
+{
+    FirmwareContainer,
+    FirmwareImage,
+    Android,
+    Delivery,
+    Flash,
+    Data,
+    Flow,
+    Output
+}
+
+public sealed record NodeDescriptor(
+    string TypeKey,
+    string NameResourceKey,
+    NodeToolboxGroup Group,
+    Func<FlowNodeViewModel> Factory,
+    bool IsDestructive = false,
+    NodeCapability Capabilities = NodeCapability.None);
+
+[Flags]
+public enum NodeCapability
+{
+    None = 0,
+    ControlFlow = 1 << 0,
+    RequiresDevice = 1 << 1,
+    ReadsDevice = 1 << 2,
+    MutatesDevice = 1 << 3,
+    ProducesArtifact = 1 << 4
 }

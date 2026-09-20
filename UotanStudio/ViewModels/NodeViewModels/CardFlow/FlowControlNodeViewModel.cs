@@ -82,6 +82,7 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Count", PortType = NodePortType.Number });
         node.Output.Add(new NodeConnectorViewModel { Title = "Body", PortType = NodePortType.Flow });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Completed", PortType = NodePortType.Flow });
         node.Output.Add(new NodeConnectorViewModel { Title = "Index", PortType = NodePortType.Number });
         return node;
     }

@@ -4,6 +4,7 @@
 
     <!-- Node Editor -->
     <x:String x:Key="Node_Toolbox">Toolbox</x:String>
+    <x:String x:Key="Node_Toolbox_Destructive">May modify device</x:String>
     <x:String x:Key="Node_Properties">Properties</x:String>
     <x:String x:Key="Node_ExecLog">Execution Log</x:String>
     <x:String x:Key="Node_Canvas">Node Canvas</x:String>
@@ -106,13 +107,65 @@
     <x:String x:Key="Node_Conn_Level">Level</x:String>
     <x:String x:Key="Node_Conn_Progress">Progress</x:String>
 
+    <!-- Port data types -->
+    <x:String x:Key="Node_PortType_Any">Any</x:String>
+    <x:String x:Key="Node_PortType_Device">Device</x:String>
+    <x:String x:Key="Node_PortType_Flow">Flow</x:String>
+    <x:String x:Key="Node_PortType_Path">Path</x:String>
+    <x:String x:Key="Node_PortType_Data">Data</x:String>
+    <x:String x:Key="Node_PortType_Text">Text</x:String>
+    <x:String x:Key="Node_PortType_Number">Number</x:String>
+    <x:String x:Key="Node_PortType_Boolean">Boolean</x:String>
+
+    <!-- Additional connector names -->
+    <x:String x:Key="Node_Conn_ArchivePath">Archive Path</x:String>
+    <x:String x:Key="Node_Conn_Body">Body</x:String>
+    <x:String x:Key="Node_Conn_Completed">Completed</x:String>
+    <x:String x:Key="Node_Conn_Bootloader">Bootloader</x:String>
+    <x:String x:Key="Node_Conn_Cipher">Cipher</x:String>
+    <x:String x:Key="Node_Conn_Combined">Combined</x:String>
+    <x:String x:Key="Node_Conn_Compressed">Compressed</x:String>
+    <x:String x:Key="Node_Conn_Condition">Condition</x:String>
+    <x:String x:Key="Node_Conn_Count">Count</x:String>
+    <x:String x:Key="Node_Conn_DexPath">Dex Path</x:String>
+    <x:String x:Key="Node_Conn_False">False</x:String>
+    <x:String x:Key="Node_Conn_GroupName">Group Name</x:String>
+    <x:String x:Key="Node_Conn_Key">Key</x:String>
+    <x:String x:Key="Node_Conn_Length">Length</x:String>
+    <x:String x:Key="Node_Conn_Merged">Merged</x:String>
+    <x:String x:Key="Node_Conn_Name">Name</x:String>
+    <x:String x:Key="Node_Conn_Offset">Offset</x:String>
+    <x:String x:Key="Node_Conn_OtaPackage">OTA Package</x:String>
+    <x:String x:Key="Node_Conn_Serial">Serial</x:String>
+    <x:String x:Key="Node_Conn_Signature">Signature</x:String>
+    <x:String x:Key="Node_Conn_Signed">Signed</x:String>
+    <x:String x:Key="Node_Conn_SignedApk">Signed APK</x:String>
+    <x:String x:Key="Node_Conn_Slice">Slice</x:String>
+    <x:String x:Key="Node_Conn_SlotA">Slot A</x:String>
+    <x:String x:Key="Node_Conn_SlotB">Slot B</x:String>
+    <x:String x:Key="Node_Conn_Summary">Summary</x:String>
+    <x:String x:Key="Node_Conn_ToSparse">To Sparse</x:String>
+    <x:String x:Key="Node_Conn_TransferList">Transfer List</x:String>
+    <x:String x:Key="Node_Conn_True">True</x:String>
+    <x:String x:Key="Node_Conn_Value">Value</x:String>
+    <x:String x:Key="Node_Conn_Command">Command</x:String>
+    <x:String x:Key="Node_Conn_LocalPath">Local Path</x:String>
+    <x:String x:Key="Node_Conn_RemotePath">Remote Path</x:String>
+    <x:String x:Key="Node_Conn_Package">Package</x:String>
+    <x:String x:Key="Node_Conn_Bundle">Bundle</x:String>
+    <x:String x:Key="Node_Conn_LocalPort">Local Port</x:String>
+    <x:String x:Key="Node_Conn_RemotePort">Remote Port</x:String>
+
     <!-- Node Categories -->
     <x:String x:Key="Node_CatFirmware">Firmware</x:String>
+    <x:String x:Key="Node_CatFirmwareContainer">Firmware Containers</x:String>
+    <x:String x:Key="Node_CatFirmwareImage">Image Processing</x:String>
+    <x:String x:Key="Node_CatAndroid">Android Packages &amp; Signing</x:String>
+    <x:String x:Key="Node_CatDelivery">Delivery Formats</x:String>
     <x:String x:Key="Node_CatFlash">Flash</x:String>
     <x:String x:Key="Node_CatData">Data</x:String>
     <x:String x:Key="Node_CatFlow">Flow</x:String>
     <x:String x:Key="Node_CatOutput">Output</x:String>
-    <x:String x:Key="Node_CatDex">DEX</x:String>
 
     <!-- Node Property Panel -->
     <x:String x:Key="Node_Prop_Category">Category</x:String>
@@ -131,24 +184,6 @@
     <x:String x:Key="Node_Status_Skipped">Skipped</x:String>
     <x:String x:Key="Node_Status_Cancelled">Cancelled</x:String>
 
-    <!-- DEX Tools -->
-    <x:String x:Key="Node_Dex_Parse">Parse DEX</x:String>
-    <x:String x:Key="Node_Dex_Disassemble">Disassemble DEX</x:String>
-    <x:String x:Key="Node_Dex_Rebuild">Rebuild DEX</x:String>
-    <x:String x:Key="Node_Dex_Decompile">Decompile DEX</x:String>
 
     <x:String x:Key="Node_Firmware_SignApk">Sign APK</x:String>
-    <x:String x:Key="Node_Hdc_Shell">HDC Shell</x:String>
-    <x:String x:Key="Node_Hdc_GetProperty">HDC GetProperty</x:String>
-    <x:String x:Key="Node_Hdc_Send">HDC Send</x:String>
-    <x:String x:Key="Node_Hdc_Receive">HDC Receive</x:String>
-    <x:String x:Key="Node_Hdc_Install">HDC Install</x:String>
-    <x:String x:Key="Node_Hdc_Uninstall">HDC Uninstall</x:String>
-    <x:String x:Key="Node_Hdc_Forward">HDC Forward</x:String>
-    <x:String x:Key="Node_Hdc_Reverse">HDC Reverse</x:String>
-    <x:String x:Key="Node_Hdc_ListForwards">HDC ListForwards</x:String>
-    <x:String x:Key="Node_Hdc_Remount">HDC Remount</x:String>
-    <x:String x:Key="Node_Hdc_RemoveForward">HDC Remove Forward</x:String>
-    <x:String x:Key="Node_Hdc_RemoveReverse">HDC Remove Reverse</x:String>
-    <x:String x:Key="Node_Hdc_ListDebugProcesses">HDC Debug Processes</x:String>
 </ResourceDictionary>

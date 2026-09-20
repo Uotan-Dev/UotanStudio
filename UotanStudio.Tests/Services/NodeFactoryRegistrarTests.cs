@@ -1,0 +1,245 @@
+using System.Collections.Concurrent;
+using Avalonia;
+using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Messages;
+using UotanStudio.Services;
+using UotanStudio.Services.Projects;
+using UotanStudio.ViewModels.Nodes;
+using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.ViewModels.Shell;
+using Xunit;
+
+namespace UotanStudio.Tests.Services;
+
+public sealed class NodeFactoryRegistrarTests
+{
+    [Fact]
+    public void Descriptors_HaveUniqueKeysAndReconstructableFactories()
+    {
+        NodeFactoryRegistrar.RegisterAll();
+
+        var descriptors = NodeFactoryRegistrar.Descriptors;
+        Assert.Equal(descriptors.Count, descriptors.Select(d => d.TypeKey).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+
+        foreach (var descriptor in descriptors)
+        {
+            Assert.True(NodeTypeRegistry.Contains(descriptor.TypeKey));
+            var node = NodeTypeRegistry.Create(descriptor.TypeKey);
+            Assert.NotNull(node);
+            Assert.Equal(descriptor.TypeKey, node.TypeKey);
+        }
+    }
+
+    [Fact]
+    public void Descriptors_DoNotContainRemovedHdcOrDexNodes()
+    {
+        var keys = NodeFactoryRegistrar.Descriptors.Select(d => d.TypeKey).ToArray();
+
+        Assert.DoesNotContain(keys, key => key.Contains("Hdc", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(keys, key => key.Contains("Dex", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Descriptors_ExposeExecutionCapabilities()
+    {
+        var flash = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Flash.Flash");
+        Assert.True(flash.IsDestructive);
+        Assert.True(flash.Capabilities.HasFlag(NodeCapability.RequiresDevice));
+        Assert.True(flash.Capabilities.HasFlag(NodeCapability.MutatesDevice));
+
+        var branch = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Flow.Branch");
+        Assert.True(branch.Capabilities.HasFlag(NodeCapability.ControlFlow));
+    }
+
+    [Fact]
+    public void Toolbox_IsBuiltFromTheSameDescriptorSet()
+    {
+        using var editor = new NodeEditorViewModel();
+
+        var toolboxItems = editor.ToolboxCategories.SelectMany(category => category.Items).ToArray();
+        Assert.Equal(NodeFactoryRegistrar.Descriptors.Count, toolboxItems.Length);
+        Assert.Equal(
+            NodeFactoryRegistrar.Descriptors.Select(descriptor => descriptor.TypeKey).OrderBy(key => key),
+            toolboxItems.Select(item => item.TypeKey).OrderBy(key => key));
+    }
+
+    [Fact]
+    public async Task LoadFromAsync_RemovedHdcAndDexNodes_AreSkippedWithoutCompatibility()
+    {
+        var entries = new ConcurrentQueue<LogEntry>();
+        var unsubscribe = LogService.Instance.Subscribe((_, entry) => entries.Enqueue(entry));
+        try
+        {
+            using var editor = new NodeEditorViewModel();
+            var snapshot = new WorkflowSnapshot
+            {
+                Nodes =
+                [
+                    new NodeDto { InstanceId = "hdc", TypeKey = "HDC.Remount", Category = "Flash" },
+                    new NodeDto { InstanceId = "dex", TypeKey = "Dex.Parse", Category = "Dex" }
+                ],
+                Connections =
+                [
+                    new ConnectionDto
+                    {
+                        SourceInstanceId = "hdc",
+                        SourceConnectorTitle = "Flow",
+                        TargetInstanceId = "dex",
+                        TargetConnectorTitle = "Flow"
+                    }
+                ]
+            };
+
+            await editor.LoadFromAsync(snapshot);
+
+            Assert.Empty(editor.Nodes);
+            Assert.Empty(editor.Connections);
+            Assert.Contains(entries, entry => entry is
+            {
+                Level: LogLevel.Warn,
+                Source: "NodeEditor",
+                Message: "Unknown node type 'HDC.Remount' skipped while loading workflow."
+            });
+            Assert.Contains(entries, entry => entry is
+            {
+                Level: LogLevel.Warn,
+                Source: "NodeEditor",
+                Message: "Unknown node type 'Dex.Parse' skipped while loading workflow."
+            });
+        }
+        finally
+        {
+            unsubscribe();
+        }
+    }
+
+    [Fact]
+    public async Task WorkflowSnapshot_PreservesConfigurableNodeState()
+    {
+        using var editor = new NodeEditorViewModel();
+        var constant = NodeTypeRegistry.Create("Data.Constant")!;
+        constant.NodeValueType = "Number";
+        constant.NodeValue = "42";
+        constant.Location = new Point(12, 34);
+        editor.AddNode(constant);
+
+        var image = NodeTypeRegistry.Create("Data.ProjectImage")!;
+        image.SelectedImage = "images/boot.img";
+        editor.AddNode(image);
+
+        var snapshot = new WorkflowSnapshot
+        {
+            Nodes = WorkflowPersistenceService.BuildNodeDtos(editor.Nodes)
+        };
+        using var restored = new NodeEditorViewModel();
+        await restored.LoadFromAsync(snapshot);
+
+        var restoredConstant = Assert.Single(restored.Nodes, node => node.TypeKey == "Data.Constant");
+        Assert.Equal("Number", restoredConstant.NodeValueType);
+        Assert.Equal("42", restoredConstant.NodeValue);
+        Assert.Equal(new Point(12, 34), restoredConstant.Location);
+        var restoredImage = Assert.Single(restored.Nodes, node => node.TypeKey == "Data.ProjectImage");
+        Assert.Equal("images/boot.img", restoredImage.SelectedImage);
+    }
+
+    [Fact]
+    public void UndoDepth_DropsOldestCommand()
+    {
+        using var editor = new NodeEditorViewModel();
+        for (var index = 1; index <= 101; index++)
+        {
+            var node = NodeTypeRegistry.Create("Flow.Start")!;
+            node.Title = $"N{index}";
+            editor.AddNode(node);
+        }
+
+        for (var index = 0; index < 100; index++) editor.Undo();
+
+        var remaining = Assert.Single(editor.Nodes);
+        Assert.Equal("N1", remaining.Title);
+    }
+
+    [Fact]
+    public void CopyPaste_RecreatesConcreteNodeAndConfiguration()
+    {
+        using var editor = new NodeEditorViewModel();
+        var constant = NodeTypeRegistry.Create("Data.Constant")!;
+        constant.NodeValueType = "Boolean";
+        constant.NodeValue = "true";
+        constant.IsSelected = true;
+        editor.AddNode(constant);
+
+        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Copy));
+        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Paste));
+
+        Assert.Equal(2, editor.Nodes.Count);
+        var copy = Assert.Single(editor.Nodes, node => node.Title.EndsWith("(copy)", StringComparison.Ordinal));
+        Assert.Equal("Data.Constant", copy.TypeKey);
+        Assert.Equal("Boolean", copy.NodeValueType);
+        Assert.Equal("true", copy.NodeValue);
+        Assert.NotEmpty(copy.Output);
+    }
+
+    [Fact]
+    public void PropertyEdits_AreUndoableAndRedoable()
+    {
+        using var editor = new NodeEditorViewModel();
+        var constant = NodeTypeRegistry.Create("Data.Constant")!;
+        editor.AddNode(constant);
+
+        constant.NodeValueType = "Number";
+        constant.NodeValue = "42";
+        editor.Undo();
+        Assert.Equal(string.Empty, constant.NodeValue);
+        editor.Undo();
+        Assert.Equal("Text", constant.NodeValueType);
+        editor.Redo();
+        Assert.Equal("Number", constant.NodeValueType);
+        editor.Redo();
+        Assert.Equal("42", constant.NodeValue);
+
+        var reader = NodeTypeRegistry.Create("Data.ReadFile")!;
+        editor.AddNode(reader);
+        var input = Assert.Single(reader.Input);
+        input.InitialValue = "boot.img";
+        editor.Undo();
+        Assert.Null(input.InitialValue);
+        editor.Redo();
+        Assert.Equal("boot.img", input.InitialValue);
+    }
+
+    [Fact]
+    public void ConnectionRemoval_IsUndoableAndRedoable()
+    {
+        using var editor = new NodeEditorViewModel();
+        var source = NodeTypeRegistry.Create("Data.ReadFile")!;
+        var target = NodeTypeRegistry.Create("Data.Concat")!;
+        editor.AddNode(source);
+        editor.AddNode(target);
+
+        editor.CreateConnection(source.Output.Single(), target.Input.First());
+        var connection = Assert.Single(editor.Connections);
+        editor.RemoveConnectionCommand.Execute(connection);
+        Assert.Empty(editor.Connections);
+        editor.Undo();
+        Assert.Same(connection, Assert.Single(editor.Connections));
+        editor.Redo();
+        Assert.Empty(editor.Connections);
+    }
+
+    [Fact]
+    public void Clear_DiscardsEditsFromThePreviousCanvas()
+    {
+        using var editor = new NodeEditorViewModel();
+        editor.AddNode(NodeTypeRegistry.Create("Flow.Start")!);
+        Assert.True(editor.CanUndo);
+
+        editor.Clear();
+
+        Assert.Empty(editor.Nodes);
+        Assert.False(editor.CanUndo);
+        Assert.False(editor.CanRedo);
+        editor.Undo();
+        Assert.Empty(editor.Nodes);
+    }
+}

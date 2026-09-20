@@ -1,4 +1,5 @@
 using NodifyM.Avalonia.ViewModelBase;
+using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 
@@ -131,6 +132,52 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// Gets or sets the port type, used to constrain connection compatibility; defaults to <see cref="NodePortType.Any"/>.
     /// </summary>
     public NodePortType PortType { get; set; } = NodePortType.Any;
+
+    /// <summary>Gets the localized connector name used by the node editor.</summary>
+    public string LocalizedTitle => LanguageService.Instance.GetString("Node_Conn_" + GetResourceSuffix(Title));
+
+    /// <summary>Gets the localized port data type used by the node editor.</summary>
+    public string LocalizedPortTypeDisplay => LanguageService.Instance.GetString("Node_PortType_" + PortType);
+
+    internal void RefreshLocalization()
+    {
+        OnPropertyChanged(nameof(LocalizedTitle));
+        OnPropertyChanged(nameof(LocalizedPortTypeDisplay));
+    }
+
+    private static string GetResourceSuffix(string title) => title switch
+    {
+        "Archive Path" => "ArchivePath",
+        "Device Size" => "DeviceSize",
+        "Group Name" => "GroupName",
+        "Milliseconds" => "Milliseconds",
+        "Output Archive" => "OutputArchive",
+        "Output Path" => "OutputPath",
+        "Signed APK" => "SignedApk",
+        "Slot A" => "SlotA",
+        "Slot B" => "SlotB",
+        "Super Path" => "SuperPath",
+        "To Sparse" => "ToSparse",
+        "Transfer List" => "TransferList",
+        "Branch A" => "BranchA",
+        "Branch B" => "BranchB",
+        "File" => "File",
+        "Key" => "Key",
+        "Name" => "Name",
+        "Value" => "Value",
+        "Text" => "Text",
+        "True" => "True",
+        "False" => "False",
+        "Body" => "Body",
+        "Completed" => "Completed",
+        "Index" => "Index",
+        "Reason" => "Reason",
+        "Merged" => "Merged",
+        "Delta" => "Delta",
+        "Source" => "Source",
+        "Target" => "Target",
+        _ => title.Replace(" ", string.Empty, StringComparison.Ordinal)
+    };
 
     /// <summary>
     /// <para>获取端口类型的显示文本（用于节点图标上的类型标签）。</para>

@@ -19,6 +19,9 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     private bool _isSelected;
     private NodeExecutionStatus _executionStatus = NodeExecutionStatus.Idle;
     private string _typeKey = string.Empty;
+    private string _nodeValueType = "Text";
+    private string _nodeValue = string.Empty;
+    private string _selectedImage = string.Empty;
 
     /// <summary>
     /// <para>节点实例唯一标识。</para>
@@ -34,6 +37,20 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     {
         get => _title;
         set => SetProperty(ref _title, value);
+    }
+
+    /// <summary>Gets the localized title used by the node editor.</summary>
+    public string LocalizedTitle => LanguageService.Instance.GetString(GetTitleResourceKey());
+
+    private string GetTitleResourceKey()
+    {
+        if (!string.IsNullOrWhiteSpace(TypeKey))
+        {
+            var key = "Node_" + TypeKey.Replace(".", "_", StringComparison.Ordinal);
+            if (LanguageService.Instance.GetString(key) != key) return key;
+        }
+
+        return Title;
     }
 
     /// <summary>
@@ -63,7 +80,14 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     public bool IsSelected
     {
         get => _isSelected;
-        set => SetProperty(ref _isSelected, value);
+        set
+        {
+            if (SetProperty(ref _isSelected, value))
+            {
+                OnPropertyChanged(nameof(NodeBorderBrush));
+                OnPropertyChanged(nameof(NodeBorderThickness));
+            }
+        }
     }
 
     /// <summary>
@@ -97,6 +121,15 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
         NodeExecutionStatus.Cancelled or NodeExecutionStatus.Skipped or NodeExecutionStatus.Pending => MutedBorderBrush,
         _ => IdleBorderBrush
     };
+
+    /// <summary>
+    /// Gets the border brush used by the canvas. Selection takes precedence over execution state so a
+    /// selected node remains visible even when it is idle or has a transparent status border.
+    /// </summary>
+    public IBrush NodeBorderBrush => IsSelected ? AccentBorderBrush : StatusBorderBrush;
+
+    /// <summary>Gets the stronger border thickness used for selected nodes.</summary>
+    public double NodeBorderThickness => IsSelected ? 3 : 2;
 
     /// <summary>
     /// <para>获取本地化的执行状态文本（如 “运行中” / “Running”）。</para>
@@ -135,7 +168,11 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     public string TypeKey
     {
         get => _typeKey;
-        set => SetProperty(ref _typeKey, value);
+        set
+        {
+            if (SetProperty(ref _typeKey, value))
+                OnPropertyChanged(nameof(LocalizedTitle));
+        }
     }
 
     /// <summary>
@@ -144,14 +181,22 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// Gets or sets the configurable value type of the node (Text/Number/Boolean/Path), edited in the properties
     /// panel for configurable nodes such as constants. Defaults to <c>Text</c>; ignored by non-configurable nodes.
     /// </summary>
-    public virtual string NodeValueType { get; set; } = "Text";
+    public virtual string NodeValueType
+    {
+        get => _nodeValueType;
+        set => SetProperty(ref _nodeValueType, value);
+    }
 
     /// <summary>
     /// <para>获取或设置节点可配置的值，供常量等可配置节点在属性面板编辑；非可配置节点忽略。</para>
     /// Gets or sets the configurable value of the node, edited in the properties panel for configurable nodes;
     /// ignored by non-configurable nodes.
     /// </summary>
-    public virtual string NodeValue { get; set; } = string.Empty;
+    public virtual string NodeValue
+    {
+        get => _nodeValue;
+        set => SetProperty(ref _nodeValue, value);
+    }
 
     /// <summary>
     /// <para>获取节点是否为常量输入节点（属性面板据此显示常量编辑区）。</para>
@@ -170,7 +215,11 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// Gets or sets the selected project-image relative path (bound by the ProjectImage node's properties
     /// panel); ignored by non-image nodes.
     /// </summary>
-    public virtual string SelectedImage { get; set; } = string.Empty;
+    public virtual string SelectedImage
+    {
+        get => _selectedImage;
+        set => SetProperty(ref _selectedImage, value);
+    }
 
     /// <summary>
     /// <para>获取可选的工程镜像相对路径列表（ProjectImage 节点属性面板绑定）；非镜像节点返回空列表。</para>
@@ -213,6 +262,14 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     {
         _title = title;
         _category = category;
+        LanguageService.Instance.LanguageChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(LocalizedTitle));
+        foreach (var connector in Input.Concat(Output))
+            connector.RefreshLocalization();
     }
 
     /// <summary>

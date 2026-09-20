@@ -79,6 +79,7 @@ internal sealed class ShellComponents : IDisposable
         Modifications.Dispose();
         Menu.Dispose();
         WeakReferenceMessenger.Default.UnregisterAll(Nodes);
+        Nodes.Dispose();
         _projectBinding.Dispose();
         try { Settings.Dispose(); }
         finally { Workspace.Dispose(); }

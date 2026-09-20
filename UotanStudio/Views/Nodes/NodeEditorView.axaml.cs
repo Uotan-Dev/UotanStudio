@@ -1,9 +1,13 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.ViewModels.NodeViewModels.EditorCommands;
 
 namespace UotanStudio.Views.Nodes;
 
@@ -20,6 +24,13 @@ public partial class NodeEditorView : UserControl
     private double _startLeft;
     private double _startCenter;
     private double _startRight;
+    private const double ToolboxDragThreshold = 4;
+    private PointerPressedEventArgs? _toolboxDragTrigger;
+    private NodeToolboxItem? _toolboxDragItem;
+    private IPointer? _toolboxDragPointer;
+    private Point _toolboxDragOrigin;
+    private bool _suppressToolboxClick;
+    private Dictionary<FlowNodeViewModel, Point>? _nodeDragStartLocations;
 
     public NodeEditorView()
     {
@@ -27,10 +38,25 @@ public partial class NodeEditorView : UserControl
         // 订阅画布选中变更：NodifyEditor 内部维护 SelectedItems，需在此同步到 ViewModel
         // Subscribe to canvas selection changes: NodifyEditor keeps its own SelectedItems, so sync to the ViewModel here.
         Editor.SelectionChanged += OnEditorSelectionChanged;
+        Editor.AddHandler(PointerPressedEvent, OnEditorPointerPressed,
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+        Editor.AddHandler(PointerReleasedEvent, OnEditorPointerReleased,
+            RoutingStrategies.Bubble, handledEventsToo: true);
         // 面板变宽/变窄时按可用宽度调整三栏最小宽度：窄面板下三栏等比例缩小而不是溢出被裁。
         // Re-scale the pane minimums with the available width so a narrow pane shrinks all three instead of
         // overflowing (which used to clip the right pane).
         PaneLayout.SizeChanged += (_, _) => ApplyPaneMinimums();
+
+        // Buttons consume bubbling pointer events. Observe the preview route and capture the pointer so
+        // a toolbox drag keeps reporting movement after it leaves the source button.
+        AddHandler(PointerPressedEvent, OnToolboxItemPointerPressed,
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerMovedEvent, OnToolboxItemPointerMoved,
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerReleasedEvent, OnToolboxItemPointerReleased,
+            RoutingStrategies.Bubble, handledEventsToo: true);
+        AddHandler(PointerCaptureLostEvent, OnToolboxItemPointerCaptureLost,
+            RoutingStrategies.Bubble, handledEventsToo: true);
     }
 
     /// <summary>
@@ -217,6 +243,12 @@ public partial class NodeEditorView : UserControl
 
     private void OnToolboxItemClicked(object? sender, RoutedEventArgs e)
     {
+        if (_suppressToolboxClick)
+        {
+            _suppressToolboxClick = false;
+            return;
+        }
+
         if (sender is Button button && button.DataContext is NodeToolboxItem item)
         {
             if (DataContext is NodeEditorViewModel vm)
@@ -225,6 +257,201 @@ public partial class NodeEditorView : UserControl
                 vm.AddNode(node);
             }
         }
+    }
+
+    private void OnEditorPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(Editor).Properties.IsLeftButtonPressed
+            || DataContext is not NodeEditorViewModel)
+        {
+            return;
+        }
+
+        _nodeDragStartLocations = Editor.SelectedItems?
+            .OfType<FlowNodeViewModel>()
+            .ToDictionary(node => node, node => node.Location);
+    }
+
+    private void OnEditorPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_nodeDragStartLocations is not { Count: > 0 }
+            || DataContext is not NodeEditorViewModel vm)
+        {
+            _nodeDragStartLocations = null;
+            return;
+        }
+
+        var command = new MoveNodeCommand();
+        foreach (var (node, originalLocation) in _nodeDragStartLocations)
+        {
+            command.AddTarget(node, originalLocation, node.Location);
+        }
+        _nodeDragStartLocations = null;
+        if (command.HasTargets)
+        {
+            vm.Record(command);
+        }
+    }
+
+    private void OnToolboxItemPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        var button = e.Source is Visual source
+            ? source.GetVisualAncestors().Prepend(source).OfType<Button>().FirstOrDefault()
+            : null;
+        if (button is null
+            || button.DataContext is not NodeToolboxItem item
+            || !e.GetCurrentPoint(button).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        _toolboxDragTrigger = e;
+        _toolboxDragItem = item;
+        _toolboxDragPointer = e.Pointer;
+        _toolboxDragOrigin = e.GetPosition(this);
+        _suppressToolboxClick = false;
+        e.Pointer.Capture(button);
+    }
+
+    private async void OnToolboxItemPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_toolboxDragTrigger is null
+            || _toolboxDragItem is null
+            || e.Pointer != _toolboxDragPointer)
+        {
+            return;
+        }
+
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            ClearToolboxDrag();
+            return;
+        }
+
+        var position = e.GetPosition(this);
+        if (Math.Abs(position.X - _toolboxDragOrigin.X) < ToolboxDragThreshold
+            && Math.Abs(position.Y - _toolboxDragOrigin.Y) < ToolboxDragThreshold)
+        {
+            return;
+        }
+
+        var trigger = _toolboxDragTrigger;
+        var item = _toolboxDragItem;
+        _suppressToolboxClick = true;
+        ClearToolboxDrag();
+        e.Handled = true;
+
+        var transfer = new DataTransfer();
+        transfer.Add(DataTransferItem.CreateText($"uotan-node:{item.TypeKey}"));
+        try
+        {
+            await DragDrop.DoDragDropAsync(trigger, transfer, DragDropEffects.Copy);
+        }
+        finally
+        {
+            // If the button generated a Click for the release, that event consumes the flag first.
+            // Otherwise clear it after input routing so the next intentional click still works.
+            Dispatcher.UIThread.Post(() => _suppressToolboxClick = false, DispatcherPriority.Input);
+        }
+    }
+
+    private void OnToolboxItemPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (e.Pointer == _toolboxDragPointer)
+        {
+            ClearToolboxDrag();
+        }
+    }
+
+    private void OnToolboxItemPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (!_suppressToolboxClick && e.Pointer == _toolboxDragPointer)
+        {
+            ClearToolboxDrag();
+        }
+    }
+
+    private void ClearToolboxDrag()
+    {
+        var pointer = _toolboxDragPointer;
+        _toolboxDragTrigger = null;
+        _toolboxDragItem = null;
+        _toolboxDragPointer = null;
+        if (pointer?.Captured is not null)
+        {
+            pointer.Capture(null);
+        }
+    }
+
+    private static string? ReadNodeDragPayload(IDataTransfer transfer)
+    {
+        var text = transfer.TryGetText();
+        return text is not null && text.StartsWith("uotan-node:", StringComparison.Ordinal)
+            ? text["uotan-node:".Length..]
+            : null;
+    }
+
+    private static NodeToolboxItem? FindToolboxItem(NodeEditorViewModel vm, string typeKey) =>
+        vm.ToolboxCategories
+            .SelectMany(category => category.Items)
+            .FirstOrDefault(candidate => string.Equals(candidate.TypeKey, typeKey, StringComparison.OrdinalIgnoreCase));
+
+    private void OnCanvasDragOver(object? sender, DragEventArgs e)
+    {
+        if (DataContext is not NodeEditorViewModel vm
+            || ReadNodeDragPayload(e.DataTransfer) is not { } typeKey
+            || FindToolboxItem(vm, typeKey) is not { } item)
+        {
+            HideNodeDropPreview();
+            e.DragEffects = DragDropEffects.None;
+            return;
+        }
+
+        ShowNodeDropPreview(e.GetPosition(DropPreviewLayer), item.Name);
+        e.DragEffects = DragDropEffects.Copy;
+        e.Handled = true;
+    }
+
+    private void OnCanvasDragLeave(object? sender, DragEventArgs e)
+    {
+        HideNodeDropPreview();
+    }
+
+    private void OnCanvasDrop(object? sender, DragEventArgs e)
+    {
+        HideNodeDropPreview();
+        if (DataContext is not NodeEditorViewModel vm
+            || ReadNodeDragPayload(e.DataTransfer) is not { } typeKey)
+        {
+            return;
+        }
+
+        if (FindToolboxItem(vm, typeKey) is not { } item)
+        {
+            return;
+        }
+
+        var node = item.CreateNode();
+        node.Location = ToNodeLocation(e.GetPosition(Editor), Editor.OffsetX, Editor.OffsetY);
+        vm.AddNode(node);
+        e.DragEffects = DragDropEffects.Copy;
+        e.Handled = true;
+    }
+
+    internal static Point ToNodeLocation(Point editorPosition, double offsetX, double offsetY) =>
+        new(editorPosition.X - offsetX, editorPosition.Y - offsetY);
+
+    internal void ShowNodeDropPreview(Point position, string title)
+    {
+        NodeDropPreviewTitle.Text = title;
+        Canvas.SetLeft(NodeDropPreview, position.X);
+        Canvas.SetTop(NodeDropPreview, position.Y);
+        NodeDropPreview.IsVisible = true;
+    }
+
+    internal void HideNodeDropPreview()
+    {
+        NodeDropPreview.IsVisible = false;
     }
 
     /// <summary>

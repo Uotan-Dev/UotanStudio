@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -17,7 +18,7 @@ namespace UotanStudio.ViewModels.Nodes;
 /// <para>节点编辑器主视图模型，管理节点画布、连接线、工具箱、选择状态与工作流执行。</para>
 /// Main view model for the node editor, managing the node canvas, connections, toolbox, selection state, and workflow execution.
 /// </summary>
-public partial class NodeEditorViewModel : ViewModelBase
+public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 {
     private ObservableCollection<NodeViewModels.FlowNodeViewModel> _nodes = [];
     private ObservableCollection<NodeViewModels.NodeConnectionViewModel> _connections = [];
@@ -30,6 +31,8 @@ public partial class NodeEditorViewModel : ViewModelBase
 
     private NodeViewModels.FlowNodeViewModel? _selectedNode;
     private ObservableCollection<NodeToolboxCategory> _visibleToolboxCategories = [];
+    private readonly ObservableCollection<NodeViewModels.FlowNodeViewModel> _selectedNodes = [];
+    private readonly ObservableCollection<NodeViewModels.BatchNodeInputViewModel> _batchInputs = [];
     private double _executionProgress;
     private bool _isExecuting;
 
@@ -37,6 +40,9 @@ public partial class NodeEditorViewModel : ViewModelBase
     private readonly Stack<IEditorCommand> _undoStack = [];
     private readonly Stack<IEditorCommand> _redoStack = [];
     private const int MaxUndoDepth = 100;
+    private readonly Dictionary<(object Target, string Property), object?> _trackedPropertyValues = [];
+    private readonly Dictionary<object, PropertyChangedEventHandler> _propertyHandlers = [];
+    private bool _suppressPropertyTracking;
 
     /// <summary>
     /// <para>统一日志服务实例，节点编辑器与执行引擎共享。</para>
@@ -251,10 +257,19 @@ public partial class NodeEditorViewModel : ViewModelBase
     /// </summary>
     public NodeEditorViewModel()
     {
+        SelectedNodes = new ReadOnlyObservableCollection<NodeViewModels.FlowNodeViewModel>(_selectedNodes);
+        BatchInputs = new ReadOnlyObservableCollection<NodeViewModels.BatchNodeInputViewModel>(_batchInputs);
         InitializeToolbox();
         PendingConnection = new PendingConnectionViewModel(this);
         RefreshVisibleToolbox();
         WeakReferenceMessenger.Default.Register<NodeEditorActionMessage>(this, OnNodeEditorAction);
+        LanguageService.Instance.LanguageChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        InitializeToolbox();
+        RefreshVisibleToolbox();
     }
 
     /// <summary>
@@ -277,8 +292,7 @@ public partial class NodeEditorViewModel : ViewModelBase
                 DeleteSelected();
                 break;
             case NodeEditorAction.SelectAll:
-                foreach (var n in Nodes) n.IsSelected = true;
-                if (Nodes.Count > 0) SelectedNode = Nodes.First(n => n.IsSelected);
+                SetSelection(Nodes);
                 break;
             case NodeEditorAction.Copy:
                 CopySelectedToClipboard();
@@ -314,7 +328,12 @@ public partial class NodeEditorViewModel : ViewModelBase
         _undoStack.Push(command);
         if (_undoStack.Count > MaxUndoDepth)
         {
-            _undoStack.Pop();
+            var retained = _undoStack.Take(MaxUndoDepth).ToArray();
+            _undoStack.Clear();
+            for (var index = retained.Length - 1; index >= 0; index--)
+            {
+                _undoStack.Push(retained[index]);
+            }
         }
         _redoStack.Clear();
         OnPropertyChanged(nameof(CanUndo));
@@ -333,7 +352,15 @@ public partial class NodeEditorViewModel : ViewModelBase
             return;
         }
         var command = _undoStack.Pop();
-        command.Undo();
+        _suppressPropertyTracking = true;
+        try
+        {
+            command.Undo();
+        }
+        finally
+        {
+            _suppressPropertyTracking = false;
+        }
         _redoStack.Push(command);
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
@@ -352,7 +379,15 @@ public partial class NodeEditorViewModel : ViewModelBase
             return;
         }
         var command = _redoStack.Pop();
-        command.Execute();
+        _suppressPropertyTracking = true;
+        try
+        {
+            command.Execute();
+        }
+        finally
+        {
+            _suppressPropertyTracking = false;
+        }
         _undoStack.Push(command);
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
@@ -380,7 +415,32 @@ public partial class NodeEditorViewModel : ViewModelBase
     {
         var selected = Nodes.Where(n => n.IsSelected).ToList();
         if (selected.Count == 0) return;
-        _clipboardNodeTitles = selected.Select(n => n.Title).ToList();
+        var selectedSet = selected.ToHashSet();
+        var indexByNode = selected.Select((node, index) => (node, index))
+            .ToDictionary(item => item.node, item => item.index);
+        _clipboard = new NodeClipboard(
+            selected.Select(node => new ClipboardNode(
+                node.TypeKey,
+                node.Title,
+                node.Category,
+                node.Location,
+                node.NodeValueType,
+                node.NodeValue,
+                node.SelectedImage,
+                node.Input
+                    .Where(port => port.HasPersistableInitialValue)
+                    .ToDictionary(port => port.Title, port => port.InitialValue),
+                node.InstanceId)).ToList(),
+            Connections
+                .Where(connection => connection.Source is not null && connection.Target is not null)
+                .Select(connection => (connection, source: selected.FirstOrDefault(node => node.Output.Contains(connection.Source!)), target: selected.FirstOrDefault(node => node.Input.Contains(connection.Target!))))
+                .Where(item => item.source is not null && item.target is not null && selectedSet.Contains(item.source) && selectedSet.Contains(item.target))
+                .Select(item => new ClipboardConnection(
+                    indexByNode[item.source!],
+                    SourceTitle: item.connection.Source!.Title,
+                    indexByNode[item.target!],
+                    TargetTitle: item.connection.Target!.Title))
+                .ToList());
         _log.Write(LogLevel.Info, "NodeEditor", $"Copied {selected.Count} node(s)");
     }
 
@@ -390,132 +450,364 @@ public partial class NodeEditorViewModel : ViewModelBase
     /// </summary>
     private void PasteFromClipboard()
     {
-        if (_clipboardNodeTitles == null || _clipboardNodeTitles.Count == 0) return;
+        if (_clipboard is not { Nodes.Count: > 0 } clipboard) return;
         var offset = new Point(40, 40);
-        foreach (var title in _clipboardNodeTitles)
+        var pasted = new List<NodeViewModels.FlowNodeViewModel>();
+        var pastedIndexByClipboardIndex = new Dictionary<int, int>();
+        for (var clipboardIndex = 0; clipboardIndex < clipboard.Nodes.Count; clipboardIndex++)
         {
-            var node = new NodeViewModels.FlowNodeViewModel(title + " (copy)", NodeViewModels.NodeCategory.Firmware)
+            var item = clipboard.Nodes[clipboardIndex];
+            var node = NodeTypeRegistry.Create(item.TypeKey);
+            if (node is null)
             {
-                Location = _nextNodeLocation
-            };
-            AddNode(node);
-            _nextNodeLocation = new Point(_nextNodeLocation.X + offset.X, _nextNodeLocation.Y + offset.Y);
+                _log.Write(LogLevel.Warn, "NodeEditor", $"Cannot paste unknown node type '{item.TypeKey}'.");
+                continue;
+            }
+            node.Title = item.Title + " (copy)";
+            node.Location = item.Location + offset;
+            if (item.NodeValueType is not null) node.NodeValueType = item.NodeValueType;
+            if (item.NodeValue is not null) node.NodeValue = item.NodeValue;
+            if (item.SelectedImage is not null) node.SelectedImage = item.SelectedImage;
+            foreach (var (title, value) in item.InitialValues)
+            {
+                if (node.Input.FirstOrDefault(port => port.Title == title) is { } port)
+                    port.InitialValue = value;
+            }
+            pasted.Add(node);
+            pastedIndexByClipboardIndex[clipboardIndex] = pasted.Count - 1;
         }
-        _log.Write(LogLevel.Info, "NodeEditor", $"Pasted {_clipboardNodeTitles.Count} node(s)");
+        if (pasted.Count == 0) return;
+
+        var commands = pasted
+            .Select(node => (NodeViewModels.EditorCommands.IEditorCommand)new NodeViewModels.EditorCommands.AddNodeCommand(Nodes, Connections, node))
+            .ToList();
+        foreach (var connection in clipboard.Connections)
+        {
+            if (!pastedIndexByClipboardIndex.TryGetValue(connection.SourceIndex, out var sourceIndex)
+                || !pastedIndexByClipboardIndex.TryGetValue(connection.TargetIndex, out var targetIndex)) continue;
+            var source = pasted[sourceIndex].Output.FirstOrDefault(port => port.Title == connection.SourceTitle);
+            var target = pasted[targetIndex].Input.FirstOrDefault(port => port.Title == connection.TargetTitle);
+            if (source is not null && target is not null)
+                commands.Add(new NodeViewModels.EditorCommands.AddConnectionCommand(Connections, new NodeViewModels.NodeConnectionViewModel(source, target)));
+        }
+        ExecuteCommand(new NodeViewModels.EditorCommands.CompoundCommand(commands));
+        foreach (var node in pasted) AttachNodePropertyTracking(node);
+        _nextNodeLocation = new Point(_nextNodeLocation.X + offset.X, _nextNodeLocation.Y + offset.Y);
+        _log.Write(LogLevel.Info, "NodeEditor", $"Pasted {pasted.Count} node(s)");
     }
 
-    private List<string>? _clipboardNodeTitles;
+    private NodeClipboard? _clipboard;
+
+    private sealed record NodeClipboard(List<ClipboardNode> Nodes, List<ClipboardConnection> Connections);
+    private sealed record ClipboardNode(string TypeKey, string Title, NodeCategory Category, Point Location,
+        string? NodeValueType, string? NodeValue, string? SelectedImage, Dictionary<string, object?> InitialValues, string InstanceId);
+    private sealed record ClipboardConnection(int SourceIndex, string SourceTitle, int TargetIndex, string TargetTitle);
+
+    private void AttachNodePropertyTracking(NodeViewModels.FlowNodeViewModel node)
+    {
+        AttachPropertyTracking(node);
+        foreach (var connector in node.Input.Concat(node.Output))
+        {
+            AttachPropertyTracking(connector);
+        }
+    }
+
+    /// <summary>Gets the nodes currently selected on the canvas.</summary>
+    public ReadOnlyObservableCollection<NodeViewModels.FlowNodeViewModel> SelectedNodes { get; }
+
+    /// <summary>Gets the shared input properties for a multi-node selection.</summary>
+    public ReadOnlyObservableCollection<NodeViewModels.BatchNodeInputViewModel> BatchInputs { get; }
+
+    /// <summary>Gets the number of selected nodes.</summary>
+    public int SelectedNodeCount => _selectedNodes.Count;
+
+    /// <summary>Gets whether at least one node is selected.</summary>
+    public bool HasSelectedNodes => _selectedNodes.Count > 0;
+
+    /// <summary>Gets whether exactly one node is selected.</summary>
+    public bool IsSingleSelection => _selectedNodes.Count == 1;
+
+    /// <summary>Gets whether more than one node is selected.</summary>
+    public bool IsMultipleSelection => _selectedNodes.Count > 1;
+
+    /// <summary>Gets the common category, or an empty value when selected nodes differ.</summary>
+    public string SelectedCategoryDisplay => CommonSelectionValue(nodes => nodes.Select(node => node.Category.ToString()));
+
+    /// <summary>Gets the common type key, or an empty value when selected nodes differ.</summary>
+    public string SelectedTypeDisplay => CommonSelectionValue(nodes => nodes.Select(node => node.TypeKey));
+
+    /// <summary>Gets whether every selected node supports constant-value editing.</summary>
+    public bool CanEditBatchConstant => IsMultipleSelection && _selectedNodes.All(node => node.IsConstantNode);
+
+    /// <summary>Gets whether every selected node supports project-image editing.</summary>
+    public bool CanEditBatchProjectImage => IsMultipleSelection && _selectedNodes.All(node => node.IsProjectImageNode);
+
+    /// <summary>Gets or sets the common constant value type for the current selection.</summary>
+    public string BatchNodeValueType
+    {
+        get => CommonSelectionValue(nodes => nodes.Select(node => node.NodeValueType));
+        set => ApplyBatchNodeProperty(node => node.NodeValueType, (node, value) => node.NodeValueType = value,
+            value, nameof(BatchNodeValueType));
+    }
+
+    /// <summary>Gets or sets the common constant value for the current selection.</summary>
+    public string BatchNodeValue
+    {
+        get => CommonSelectionValue(nodes => nodes.Select(node => node.NodeValue));
+        set => ApplyBatchNodeProperty(node => node.NodeValue, (node, value) => node.NodeValue = value,
+            value, nameof(BatchNodeValue));
+    }
+
+    /// <summary>Gets or sets the common selected image for the current selection.</summary>
+    public string BatchSelectedImage
+    {
+        get => CommonSelectionValue(nodes => nodes.Select(node => node.SelectedImage));
+        set => ApplyBatchNodeProperty(node => node.SelectedImage, (node, value) => node.SelectedImage = value,
+            value, nameof(BatchSelectedImage));
+    }
+
+    private string CommonSelectionValue(Func<IEnumerable<NodeViewModels.FlowNodeViewModel>, IEnumerable<string?>> selector)
+    {
+        if (_selectedNodes.Count == 0) return string.Empty;
+        var values = selector(_selectedNodes).Distinct(StringComparer.Ordinal).ToList();
+        return values.Count == 1 ? values[0] ?? string.Empty : string.Empty;
+    }
+
+    private void ApplyBatchNodeProperty(
+        Func<NodeViewModels.FlowNodeViewModel, string> getter,
+        Action<NodeViewModels.FlowNodeViewModel, string> setter,
+        string value,
+        string propertyName)
+    {
+        if (!CanEditBatchConstant && propertyName is nameof(BatchNodeValueType) or nameof(BatchNodeValue)) return;
+        if (!CanEditBatchProjectImage && propertyName == nameof(BatchSelectedImage)) return;
+
+        var commands = _selectedNodes
+            .Where(node => !string.Equals(getter(node), value, StringComparison.Ordinal))
+            .Select(node => (IEditorCommand)new PropertyChangeCommand(
+                $"Edit {propertyName}",
+                () => setter(node, value),
+                getter(node),
+                value))
+            .ToList();
+        if (commands.Count == 0) return;
+
+        _suppressPropertyTracking = true;
+        try
+        {
+            ExecuteCommand(new CompoundCommand(commands));
+        }
+        finally
+        {
+            _suppressPropertyTracking = false;
+        }
+        RefreshSelectionProperties();
+    }
+
+    /// <summary>
+    /// Synchronizes the canvas selection with the ViewModel. The first item is kept as the primary
+    /// selection for status text, while all selected nodes remain available to the batch panel.
+    /// </summary>
+    public void SetSelection(IEnumerable<NodeViewModels.FlowNodeViewModel> nodes,
+        NodeViewModels.FlowNodeViewModel? primary = null)
+    {
+        ArgumentNullException.ThrowIfNull(nodes);
+        var selected = nodes.Where(Nodes.Contains).Distinct().ToList();
+        foreach (var node in Nodes)
+        {
+            var shouldSelect = selected.Contains(node);
+            if (node.IsSelected != shouldSelect) node.IsSelected = shouldSelect;
+        }
+
+        _selectedNodes.Clear();
+        foreach (var node in selected) _selectedNodes.Add(node);
+        var nextPrimary = primary is not null && selected.Contains(primary) ? primary : selected.FirstOrDefault();
+        SelectedNode = nextPrimary;
+        OnPropertyChanged(nameof(SelectedNodeCount));
+        OnPropertyChanged(nameof(HasSelectedNodes));
+        OnPropertyChanged(nameof(IsSingleSelection));
+        OnPropertyChanged(nameof(IsMultipleSelection));
+        OnPropertyChanged(nameof(SelectedCategoryDisplay));
+        OnPropertyChanged(nameof(SelectedTypeDisplay));
+        OnPropertyChanged(nameof(CanEditBatchConstant));
+        OnPropertyChanged(nameof(CanEditBatchProjectImage));
+        OnPropertyChanged(nameof(BatchNodeValueType));
+        OnPropertyChanged(nameof(BatchNodeValue));
+        OnPropertyChanged(nameof(BatchSelectedImage));
+        RefreshBatchInputs();
+    }
+
+    private void RefreshSelectionProperties()
+    {
+        OnPropertyChanged(nameof(SelectedCategoryDisplay));
+        OnPropertyChanged(nameof(SelectedTypeDisplay));
+        OnPropertyChanged(nameof(BatchNodeValueType));
+        OnPropertyChanged(nameof(BatchNodeValue));
+        OnPropertyChanged(nameof(BatchSelectedImage));
+        RefreshBatchInputs();
+    }
+
+    private void RefreshBatchInputs()
+    {
+        _batchInputs.Clear();
+        if (!IsMultipleSelection) return;
+
+        var common = _selectedNodes
+            .SelectMany(node => node.Input)
+            .GroupBy(port => (port.Title, port.PortType))
+            .Where(group => group.Count() == _selectedNodes.Count)
+            .OrderBy(group => group.Key.Title, StringComparer.Ordinal);
+
+        foreach (var group in common)
+        {
+            var ports = group.ToList();
+            var values = ports.Select(port => port.InitialValue).ToList();
+            var distinct = values.Distinct().ToList();
+            _batchInputs.Add(new BatchNodeInputViewModel(
+                group.Key.Title,
+                group.Key.PortType,
+                distinct.Count == 1 ? distinct[0] : null,
+                distinct.Count > 1,
+                value => ApplyBatchInput(ports, value)));
+        }
+    }
+
+    private void ApplyBatchInput(IReadOnlyList<NodeConnectorViewModel> ports, object? value)
+    {
+        var commands = ports
+            .Where(port => !Equals(port.InitialValue, value))
+            .Select(port => (IEditorCommand)new PropertyChangeCommand(
+                $"Edit input {port.Title}",
+                () => port.InitialValue = value,
+                port.InitialValue,
+                value))
+            .ToList();
+        if (commands.Count == 0) return;
+
+        _suppressPropertyTracking = true;
+        try
+        {
+            ExecuteCommand(new CompoundCommand(commands));
+        }
+        finally
+        {
+            _suppressPropertyTracking = false;
+        }
+        RefreshBatchInputs();
+    }
+
+    private void AttachPropertyTracking(INotifyPropertyChanged target)
+    {
+        if (_propertyHandlers.ContainsKey(target)) return;
+
+        var handler = new PropertyChangedEventHandler((_, args) =>
+            OnTrackedPropertyChanged(target, args.PropertyName));
+        _propertyHandlers[target] = handler;
+        target.PropertyChanged += handler;
+
+        foreach (var property in TrackedProperties(target))
+        {
+            _trackedPropertyValues[(target, property)] = ReadTrackedValue(target, property);
+        }
+    }
+
+    private static IEnumerable<string> TrackedProperties(object target) => target switch
+    {
+        NodeViewModels.FlowNodeViewModel => ["NodeValueType", "NodeValue", "SelectedImage"],
+        NodeViewModels.NodeConnectorViewModel => ["InitialValue"],
+        _ => []
+    };
+
+    private static object? ReadTrackedValue(object target, string property) => (target, property) switch
+    {
+        (NodeViewModels.FlowNodeViewModel node, "NodeValueType") => node.NodeValueType,
+        (NodeViewModels.FlowNodeViewModel node, "NodeValue") => node.NodeValue,
+        (NodeViewModels.FlowNodeViewModel node, "SelectedImage") => node.SelectedImage,
+        (NodeViewModels.NodeConnectorViewModel connector, "InitialValue") => connector.InitialValue,
+        _ => null
+    };
+
+    private static void SetTrackedValue(object target, string property, object? value)
+    {
+        switch (target, property)
+        {
+            case (NodeViewModels.FlowNodeViewModel node, "NodeValueType"):
+                node.NodeValueType = value as string ?? "Text";
+                break;
+            case (NodeViewModels.FlowNodeViewModel node, "NodeValue"):
+                node.NodeValue = value as string ?? string.Empty;
+                break;
+            case (NodeViewModels.FlowNodeViewModel node, "SelectedImage"):
+                node.SelectedImage = value as string ?? string.Empty;
+                break;
+            case (NodeViewModels.NodeConnectorViewModel connector, "InitialValue"):
+                connector.InitialValue = value;
+                break;
+        }
+    }
+
+    private void OnTrackedPropertyChanged(INotifyPropertyChanged target, string? propertyName)
+    {
+        if (propertyName is null || !TrackedProperties(target).Contains(propertyName, StringComparer.Ordinal)) return;
+
+        var key = ((object)target, propertyName);
+        var current = ReadTrackedValue(target, propertyName);
+        var original = _trackedPropertyValues.GetValueOrDefault(key);
+        _trackedPropertyValues[key] = current;
+        if (_suppressPropertyTracking || Equals(original, current)) return;
+
+        var setter = (object? value) =>
+        {
+            _suppressPropertyTracking = true;
+            try
+            {
+                SetTrackedValue(target, propertyName, value);
+            }
+            finally
+            {
+                _suppressPropertyTracking = false;
+            }
+        };
+        Record(new PropertyChangeCommand($"Edit {propertyName}", setter, original, current));
+    }
 
     private void InitializeToolbox()
     {
-        var svc = LanguageService.Instance;
-
-        // 集中注册全部既有节点工厂（供工程加载与无头执行按 TypeKey 重建），工具箱再叠加本地化条目
-        // Centrally register all existing node factories (for project loading and headless execution by TypeKey);
-        // the toolbox then adds localized entries on top.
+        ToolboxCategories.Clear();
         NodeFactoryRegistrar.RegisterAll();
-
-        ToolboxCategories.Add(new NodeToolboxCategory(
-            svc.GetString("Node_CatFirmware"),
-            NodeViewModels.NodeCategory.Firmware,
-            [
-                new NodeToolboxItem(svc.GetString("Node_Firmware_Unpack"), () => NodeViewModels.FirmwareNodeViewModel.CreateUnpackNode()),
-                new NodeToolboxItem(svc.GetString("Node_Firmware_Pack"), () => NodeViewModels.FirmwareNodeViewModel.CreatePackNode()),
-                new NodeToolboxItem(svc.GetString("Node_Firmware_Verify"), () => NodeViewModels.FirmwareNodeViewModel.CreateVerifyNode()),
-                new NodeToolboxItem(svc.GetString("Node_Firmware_SignApk"), () => new NodeViewModels.ApkSignNodeViewModel()),
-                new NodeToolboxItem(svc.GetString("Node_Firmware_Extract"), () => NodeViewModels.FirmwareNodeViewModel.CreateExtractNode()),
-                new NodeToolboxItem(svc.GetString("Node_Firmware_OtaDelta"), () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateOtaDeltaNode()),
-                new NodeToolboxItem(svc.GetString("Node_Firmware_MergeSignature"), () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateMergeSignatureNode()),
-                new NodeToolboxItem(svc.GetString("Node_Firmware_MergeDualSlot"), () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateMergeDualSlotNode()),
-                new NodeToolboxItem(svc.GetString("Node_Firmware_FlashBoot"), () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateFlashBootNode()),
-                new NodeToolboxItem(svc.GetString("Node_Firmware_CpioUnpack"), () => NodeViewModels.CpioNodeViewModel.CreateCpioUnpackNode()),
-                new NodeToolboxItem(svc.GetString("Node_Firmware_CpioPack"), () => NodeViewModels.CpioNodeViewModel.CreateCpioPackNode()),
-                new NodeToolboxItem(svc.GetString("Node_Firmware_SuperUnpack"), () => NodeViewModels.SuperNodeViewModel.CreateSuperUnpackNode()),
-                new NodeToolboxItem(svc.GetString("Node_Firmware_SuperPack"), () => NodeViewModels.SuperNodeViewModel.CreateSuperPackNode()),
-                new NodeToolboxItem(svc.GetString("Node_Firmware_Sparse"), () => NodeViewModels.SparseNodeViewModel.CreateSparseNode()),
-                new NodeToolboxItem(svc.GetString("Node_Firmware_Dat"), () => NodeViewModels.DatNodeViewModel.CreateDatNode()),
-            ]
-        ));
-
-        ToolboxCategories.Add(new NodeToolboxCategory(
-            svc.GetString("Node_CatFlash"),
-            NodeViewModels.NodeCategory.Flash,
-            [
-                .. NodeViewModels.HdcNodeViewModel.Operations.Select(operation => new NodeToolboxItem(
-                    svc.GetString("Node_Hdc_" + operation), () => NodeViewModels.HdcNodeViewModel.Create(operation))),
-                new NodeToolboxItem(svc.GetString("Node_Flash_SelectDevice"), () => NodeViewModels.SelectDeviceNodeViewModel.CreateSelectDeviceNode()),
-                new NodeToolboxItem(svc.GetString("Node_Flash_Flash"), () => NodeViewModels.FlashNodeViewModel.CreateFlashNode()),
-                new NodeToolboxItem(svc.GetString("Node_Flash_Erase"), () => NodeViewModels.FlashNodeViewModel.CreateEraseNode()),
-                new NodeToolboxItem(svc.GetString("Node_Flash_Reboot"), () => NodeViewModels.FlashNodeViewModel.CreateRebootNode()),
-                new NodeToolboxItem(svc.GetString("Node_Flash_Bootloader"), () => NodeViewModels.ExtendedFlashNodeViewModel.CreateFlashBootloaderNode()),
-                new NodeToolboxItem(svc.GetString("Node_Flash_EraseAll"), () => NodeViewModels.ExtendedFlashNodeViewModel.CreateEraseAllNode()),
-                new NodeToolboxItem(svc.GetString("Node_Flash_OtaSideload"), () => NodeViewModels.ExtendedFlashNodeViewModel.CreateOtaSideloadNode()),
-                new NodeToolboxItem(svc.GetString("Node_Flash_OverwriteFirmware"), () => NodeViewModels.ExtendedFlashNodeViewModel.CreateOverwriteFirmwareNode()),
-            ]
-        ));
-
-        ToolboxCategories.Add(new NodeToolboxCategory(
-            svc.GetString("Node_CatData"),
-            NodeViewModels.NodeCategory.Data,
-            [
-                new NodeToolboxItem(svc.GetString("Node_Data_Constant"), () => NodeViewModels.ConstantNodeViewModel.CreateConstantNode()),
-                new NodeToolboxItem(svc.GetString("Node_Data_ProjectImage"), () => NodeViewModels.ProjectImageNodeViewModel.CreateProjectImageNode()),
-                new NodeToolboxItem(svc.GetString("Node_Data_ReadFile"), () => NodeViewModels.DataNodeViewModel.CreateFileReadNode()),
-                new NodeToolboxItem(svc.GetString("Node_Data_Convert"), () => NodeViewModels.DataNodeViewModel.CreateConvertNode()),
-                new NodeToolboxItem(svc.GetString("Node_Data_Checksum"), () => NodeViewModels.DataNodeViewModel.CreateChecksumNode()),
-                new NodeToolboxItem(svc.GetString("Node_Data_Compare"), () => NodeViewModels.DataNodeViewModel.CreateCompareNode()),
-                new NodeToolboxItem(svc.GetString("Node_Data_Concat"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateConcatNode()),
-                new NodeToolboxItem(svc.GetString("Node_Data_Slice"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateSliceNode()),
-                new NodeToolboxItem(svc.GetString("Node_Data_Encrypt"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateEncryptNode()),
-                new NodeToolboxItem(svc.GetString("Node_Data_Decrypt"), () => NodeViewModels.DecryptNodeViewModel.CreateDecryptNode()),
-                new NodeToolboxItem(svc.GetString("Node_Data_Compress"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateCompressNode()),
-                new NodeToolboxItem(svc.GetString("Node_Data_Decompress"), () => NodeViewModels.DecompressNodeViewModel.CreateDecompressNode()),
-                new NodeToolboxItem(svc.GetString("Node_Data_ByteSwap"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateByteSwapNode()),
-            ]
-        ));
-
-        ToolboxCategories.Add(new NodeToolboxCategory(
-            svc.GetString("Node_CatFlow"),
-            NodeViewModels.NodeCategory.Flow,
-            [
-                new NodeToolboxItem(svc.GetString("Node_Flow_Start"), () => NodeViewModels.FlowControlNodeViewModel.CreateStartNode()),
-                new NodeToolboxItem(svc.GetString("Node_Flow_End"), () => NodeViewModels.FlowControlNodeViewModel.CreateEndNode()),
-                new NodeToolboxItem(svc.GetString("Node_Flow_Branch"), () => NodeViewModels.FlowControlNodeViewModel.CreateBranchNode()),
-                new NodeToolboxItem(svc.GetString("Node_Flow_Loop"), () => NodeViewModels.FlowControlNodeViewModel.CreateLoopNode()),
-                new NodeToolboxItem(svc.GetString("Node_Flow_Delay"), () => NodeViewModels.FlowControlNodeViewModel.CreateDelayNode()),
-                new NodeToolboxItem(svc.GetString("Node_Flow_Parallel"), () => NodeViewModels.FlowControlNodeViewModel.CreateParallelNode()),
-                new NodeToolboxItem(svc.GetString("Node_Flow_Terminate"), () => NodeViewModels.FlowControlNodeViewModel.CreateTerminateNode()),
-            ]
-        ));
-
-        ToolboxCategories.Add(new NodeToolboxCategory(
-            svc.GetString("Node_CatOutput"),
-            NodeViewModels.NodeCategory.Output,
-            [
-                new NodeToolboxItem(svc.GetString("Node_Output_Log"), () => NodeViewModels.OutputNodeViewModel.CreateLogNode()),
-                new NodeToolboxItem(svc.GetString("Node_Output_Progress"), () => NodeViewModels.OutputNodeViewModel.CreateProgressNode()),
-                new NodeToolboxItem(svc.GetString("Node_Output_Save"), () => NodeViewModels.OutputNodeViewModel.CreateSaveNode()),
-                new NodeToolboxItem(svc.GetString("Node_Output_Notify"), () => NodeViewModels.ExtendedOutputNodeViewModel.CreateNotifyNode()),
-                new NodeToolboxItem(svc.GetString("Node_Output_Console"), () => NodeViewModels.ExtendedOutputNodeViewModel.CreateConsoleOutputNode()),
-                new NodeToolboxItem(svc.GetString("Node_Output_FileExport"), () => NodeViewModels.ExtendedOutputNodeViewModel.CreateFileExportNode()),
-            ]
-        ));
-
-        // DEX 工具分类：由并行协作者提供 DexNodeViewModel 与 NodeCategory.Dex
-        // DEX tool category: DexNodeViewModel and NodeCategory.Dex are provided by a parallel collaborator.
-        ToolboxCategories.Add(new NodeToolboxCategory(
-            svc.GetString("Node_CatDex"),
-            NodeViewModels.NodeCategory.Dex,
-            [
-                new NodeToolboxItem(svc.GetString("Node_Dex_Parse"), () => NodeViewModels.DexNodeViewModel.CreateParseNode()),
-                new NodeToolboxItem(svc.GetString("Node_Dex_Disassemble"), () => NodeViewModels.DexNodeViewModel.CreateDisassembleNode()),
-                new NodeToolboxItem(svc.GetString("Node_Dex_Rebuild"), () => NodeViewModels.DexNodeViewModel.CreateRebuildNode()),
-                new NodeToolboxItem(svc.GetString("Node_Dex_Decompile"), () => NodeViewModels.DexNodeViewModel.CreateDecompileNode()),
-            ]
-        ));
-
-
+        var language = LanguageService.Instance;
+        foreach (var group in Enum.GetValues<NodeToolboxGroup>())
+        {
+            var descriptors = NodeFactoryRegistrar.Descriptors.Where(d => d.Group == group).ToList();
+            if (descriptors.Count == 0) continue;
+            ToolboxCategories.Add(new NodeToolboxCategory(
+                language.GetString(GetGroupResourceKey(group)),
+                GetNodeCategory(group),
+                new ObservableCollection<NodeToolboxItem>(descriptors.Select(d => new NodeToolboxItem(d, language)))));
+        }
     }
+
+    private static string GetGroupResourceKey(NodeToolboxGroup group) => group switch
+    {
+        NodeToolboxGroup.FirmwareContainer => "Node_CatFirmwareContainer",
+        NodeToolboxGroup.FirmwareImage => "Node_CatFirmwareImage",
+        NodeToolboxGroup.Android => "Node_CatAndroid",
+        NodeToolboxGroup.Delivery => "Node_CatDelivery",
+        NodeToolboxGroup.Flash => "Node_CatFlash",
+        NodeToolboxGroup.Data => "Node_CatData",
+        NodeToolboxGroup.Flow => "Node_CatFlow",
+        NodeToolboxGroup.Output => "Node_CatOutput",
+        _ => "Node_CatFirmware"
+    };
+
+    private static NodeViewModels.NodeCategory GetNodeCategory(NodeToolboxGroup group) => group switch
+    {
+        NodeToolboxGroup.Flash => NodeViewModels.NodeCategory.Flash,
+        NodeToolboxGroup.Data => NodeViewModels.NodeCategory.Data,
+        NodeToolboxGroup.Flow => NodeViewModels.NodeCategory.Flow,
+        NodeToolboxGroup.Output => NodeViewModels.NodeCategory.Output,
+        _ => NodeViewModels.NodeCategory.Firmware
+    };
 
     /// <summary>
     /// <para>将指定节点添加到画布。</para>
@@ -534,6 +826,7 @@ public partial class NodeEditorViewModel : ViewModelBase
         }
 
         ExecuteCommand(new NodeViewModels.EditorCommands.AddNodeCommand(Nodes, Connections, node));
+        AttachNodePropertyTracking(node);
     }
 
     /// <summary>
@@ -600,7 +893,10 @@ public partial class NodeEditorViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void DeleteSelected()
+    private void DeleteSelected() => DeleteSelectedNodes();
+
+    /// <summary>Deletes every selected node as one undoable operation.</summary>
+    public void DeleteSelectedNodes()
     {
         // 删除当前选中的节点及其相关连接，作为单个可撤销命令整批执行
         var toDelete = Nodes.Where(n => n.IsSelected).ToList();
@@ -611,7 +907,7 @@ public partial class NodeEditorViewModel : ViewModelBase
             .ToList();
 
         ExecuteCommand(new NodeViewModels.EditorCommands.CompoundCommand(commands));
-        SelectedNode = null;
+        SetSelection([]);
     }
 
     /// <summary>
@@ -624,9 +920,7 @@ public partial class NodeEditorViewModel : ViewModelBase
     /// </param>
     public void SelectNode(NodeViewModels.FlowNodeViewModel? node)
     {
-        foreach (var n in Nodes) n.IsSelected = false;
-        if (node != null) node.IsSelected = true;
-        SelectedNode = node;
+        SetSelection(node is null ? [] : [node], node);
     }
 
     /// <summary>
@@ -739,11 +1033,26 @@ public partial class NodeEditorViewModel : ViewModelBase
     [RelayCommand]
     public void Clear()
     {
+        DetachAllPropertyTracking();
         Connections.Clear();
         Nodes.Clear();
+        _undoStack.Clear();
+        _redoStack.Clear();
+        OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(CanRedo));
         SelectedNode = null;
         ExecutionProgress = 0.0;
         ExecutionStatus = LanguageService.Instance.GetString("Node_StatusReady");
+    }
+
+    private void DetachAllPropertyTracking()
+    {
+        foreach (var (target, handler) in _propertyHandlers)
+        {
+            ((INotifyPropertyChanged)target).PropertyChanged -= handler;
+        }
+        _propertyHandlers.Clear();
+        _trackedPropertyValues.Clear();
     }
 
     private void OnExecutionProgress(object? sender, double progress)
@@ -885,6 +1194,14 @@ public partial class NodeEditorViewModel : ViewModelBase
         ExecuteCommand(new NodeViewModels.EditorCommands.CompoundCommand(commands));
     }
 
+    /// <summary>Removes one canvas connection through the undoable editor command stack.</summary>
+    [RelayCommand]
+    private void RemoveConnection(NodeViewModels.NodeConnectionViewModel? connection)
+    {
+        if (connection is null || !Connections.Contains(connection)) return;
+        ExecuteCommand(new NodeViewModels.EditorCommands.RemoveConnectionCommand(Connections, connection));
+    }
+
     /// <summary>
     /// <para>从工作流快照重建画布：清空当前节点与连接，按 DTO 重建节点，再尝试匹配重建连接。</para>
     /// Rebuilds the canvas from a workflow snapshot: clears current nodes/connections, rebuilds nodes from DTOs, then attempts to rebuild connections.
@@ -922,6 +1239,7 @@ public partial class NodeEditorViewModel : ViewModelBase
             // Restore input initial values: match input ports by title; the value is a string, leniently converted for numbers/booleans.
             Services.Projects.WorkflowReconstruction.RestoreInitialValues(node, dto.InputInitialValues);
             Nodes.Add(node); // 加载操作直接写入画布，不进入撤销栈
+            AttachNodePropertyTracking(node);
             if (!string.IsNullOrEmpty(dto.InstanceId)) created[dto.InstanceId] = node;
         }
 
@@ -949,6 +1267,19 @@ public partial class NodeEditorViewModel : ViewModelBase
         _log.Write(LogLevel.Info, "NodeEditor",
             $"Loaded {Nodes.Count} node(s), {Connections.Count} connection(s) from snapshot");
         return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        DetachAllPropertyTracking();
+        LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
+        WeakReferenceMessenger.Default.Unregister<NodeEditorActionMessage>(this);
+        _searchDebounceCts?.Cancel();
+        _searchDebounceCts?.Dispose();
+        _runCts?.Cancel();
+        _runCts?.Dispose();
+        _executionLogUnsubscribe?.Invoke();
+        _executionLogUnsubscribe = null;
     }
 }
 
@@ -1018,6 +1349,13 @@ public class NodeToolboxItem
     /// </summary>
     public Func<NodeViewModels.FlowNodeViewModel> CreateNode { get; }
 
+    public string TypeKey { get; }
+
+    public bool IsDestructive { get; }
+
+    public NodeCapability Capabilities { get; }
+
+
     /// <summary>
     /// <para>创建工具箱项。</para>
     /// Creates a toolbox item.
@@ -1034,5 +1372,15 @@ public class NodeToolboxItem
     {
         Name = name;
         CreateNode = createNode;
+        TypeKey = string.Empty;
+    }
+
+    public NodeToolboxItem(NodeDescriptor descriptor, LanguageService language)
+    {
+        Name = language.GetString(descriptor.NameResourceKey);
+        CreateNode = descriptor.Factory;
+        TypeKey = descriptor.TypeKey;
+        IsDestructive = descriptor.IsDestructive;
+        Capabilities = descriptor.Capabilities;
     }
 }

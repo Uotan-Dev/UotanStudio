@@ -182,6 +182,81 @@ public sealed class NodeExecutionEngineTests
     }
 
     [Fact]
+    public async Task Engine_Branch_MergeExecutesAfterTakenPath()
+    {
+        var engine = new NodeExecutionEngine(new MemoryLog());
+        var branch = FlowNode("Branch", "Flow.Branch", ["Condition"], ["True", "False"]);
+        var onTrue = FlowNode("OnTrue", "Test.OnTrue", ["Flow"], ["Flow"]);
+        var onFalse = FlowNode("OnFalse", "Test.OnFalse", ["Flow"], ["Flow"]);
+        var merge = FlowNode("Merge", "Test.Merge", ["Flow"], []);
+        var executed = new List<string>();
+
+        branch.Input[0].InitialValue = true;
+        branch.Action = _ => { branch.WriteOutput("True", true); return Task.CompletedTask; };
+        onTrue.Action = _ => { executed.Add("true"); onTrue.WriteOutput("Flow", true); return Task.CompletedTask; };
+        onFalse.Action = _ => { executed.Add("false"); onFalse.WriteOutput("Flow", true); return Task.CompletedTask; };
+        merge.Action = _ => { executed.Add("merge"); return Task.CompletedTask; };
+
+        var connections = new[]
+        {
+            Conn(branch, "True", onTrue, "Flow"),
+            Conn(branch, "False", onFalse, "Flow"),
+            Conn(onTrue, "Flow", merge, "Flow"),
+            Conn(onFalse, "Flow", merge, "Flow")
+        };
+
+        var result = await engine.ExecuteAsync([branch, onTrue, onFalse, merge], connections, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+        Assert.Equal(["true", "merge"], executed);
+        Assert.Equal(NodeExecutionStatus.Skipped, onFalse.ExecutionStatus);
+        Assert.Equal(NodeExecutionStatus.Succeeded, merge.ExecutionStatus);
+    }
+
+    [Fact]
+    public async Task Engine_FailurePolicy_SkipsDependentsButRunsIndependentNodes()
+    {
+        var engine = new NodeExecutionEngine(new MemoryLog());
+        var failing = FlowNode("Fail", "Test.Fail", [], ["Flow"]);
+        var dependent = FlowNode("Dependent", "Test.Dependent", ["Flow"], []);
+        var independent = FlowNode("Independent", "Test.Independent", [], []);
+        var independentRuns = 0;
+        failing.Action = _ => throw new InvalidOperationException("expected");
+        dependent.Action = _ => throw new InvalidOperationException("must not execute");
+        independent.Action = _ => { independentRuns++; return Task.CompletedTask; };
+
+        var result = await engine.ExecuteAsync(
+            [failing, dependent, independent],
+            [Conn(failing, "Flow", dependent, "Flow")],
+            TestContext.Current.CancellationToken,
+            new NodeExecutionOptions { FailurePolicy = ExecutionFailurePolicy.SkipDependents });
+
+        Assert.Equal(ExecutionStatus.PartiallySucceeded, result.Status);
+        Assert.Equal(1, independentRuns);
+        Assert.Equal(NodeExecutionStatus.Skipped, dependent.ExecutionStatus);
+    }
+
+    [Fact]
+    public async Task Engine_FailurePolicy_FailFastStopsRemainingNodes()
+    {
+        var engine = new NodeExecutionEngine(new MemoryLog());
+        var failing = FlowNode("Fail", "Test.Fail", [], []);
+        var later = FlowNode("Later", "Test.Later", [], []);
+        var laterRuns = 0;
+        failing.Action = _ => throw new InvalidOperationException("expected");
+        later.Action = _ => { laterRuns++; return Task.CompletedTask; };
+
+        var result = await engine.ExecuteAsync(
+            [failing, later],
+            [],
+            TestContext.Current.CancellationToken,
+            new NodeExecutionOptions { FailurePolicy = ExecutionFailurePolicy.FailFast });
+
+        Assert.Equal(ExecutionStatus.Failed, result.Status);
+        Assert.Equal(0, laterRuns);
+    }
+
+    [Fact]
     public async Task Engine_Loop_IteratesBodySubGraph()
     {
         var engine = new NodeExecutionEngine(new MemoryLog());
@@ -229,6 +304,60 @@ public sealed class NodeExecutionEngineTests
         Assert.Equal(2, indexes.Count);
         Assert.Equal(0, indexes[0]);
         Assert.Equal(1, indexes[1]);
+    }
+
+    [Fact]
+    public async Task Engine_Loop_CompletedPathRunsOnceAfterBody()
+    {
+        var engine = new NodeExecutionEngine(new MemoryLog());
+        var loop = FlowNode("Loop", "Flow.Loop", ["Count"], ["Body", "Completed", "Index"]);
+        var body = FlowNode("Body", "Test.Body", ["Flow"], []);
+        var completed = FlowNode("Completed", "Test.Completed", ["Flow"], []);
+        var bodyRuns = 0;
+        var completedRuns = 0;
+        loop.Input[0].InitialValue = 3.0;
+        body.Action = _ => { bodyRuns++; return Task.CompletedTask; };
+        completed.Action = _ => { completedRuns++; return Task.CompletedTask; };
+
+        var result = await engine.ExecuteAsync(
+            [loop, body, completed],
+            [Conn(loop, "Body", body, "Flow"), Conn(loop, "Completed", completed, "Flow")],
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+        Assert.Equal(3, bodyRuns);
+        Assert.Equal(1, completedRuns);
+    }
+
+    [Fact]
+    public async Task Engine_Loop_SkipDependents_SkipsFailedBodyDependentsButRunsCompletedPath()
+    {
+        var engine = new NodeExecutionEngine(new MemoryLog());
+        var loop = FlowNode("Loop", "Flow.Loop", ["Count"], ["Body", "Completed", "Index"]);
+        var failing = FlowNode("Failing", "Test.Failing", ["Flow"], ["Flow"]);
+        var dependent = FlowNode("Dependent", "Test.Dependent", ["Flow"], []);
+        var completed = FlowNode("Completed", "Test.Completed", ["Flow"], []);
+        var dependentRuns = 0;
+        var completedRuns = 0;
+        loop.Input[0].InitialValue = 2.0;
+        failing.Action = _ => throw new InvalidOperationException("expected");
+        dependent.Action = _ => { dependentRuns++; return Task.CompletedTask; };
+        completed.Action = _ => { completedRuns++; return Task.CompletedTask; };
+
+        var result = await engine.ExecuteAsync(
+            [loop, failing, dependent, completed],
+            [
+                Conn(loop, "Body", failing, "Flow"),
+                Conn(failing, "Flow", dependent, "Flow"),
+                Conn(loop, "Completed", completed, "Flow")
+            ],
+            TestContext.Current.CancellationToken,
+            new NodeExecutionOptions { FailurePolicy = ExecutionFailurePolicy.SkipDependents });
+
+        Assert.Equal(ExecutionStatus.PartiallySucceeded, result.Status);
+        Assert.Equal(0, dependentRuns);
+        Assert.Equal(NodeExecutionStatus.Skipped, dependent.ExecutionStatus);
+        Assert.Equal(1, completedRuns);
     }
 
     [Fact]
@@ -294,6 +423,87 @@ public sealed class NodeExecutionEngineTests
         Assert.Equal(NodeExecutionStatus.Succeeded, a.ExecutionStatus);
         Assert.Equal(NodeExecutionStatus.Succeeded, b.ExecutionStatus);
         Assert.Equal(2, peak);
+    }
+
+    [Fact]
+    public async Task Engine_Parallel_MergeRunsOnceAfterBothBranches()
+    {
+        var engine = new NodeExecutionEngine(new MemoryLog());
+        var parallel = FlowNode("Parallel", "Flow.Parallel", ["Flow"], ["Branch A", "Branch B"]);
+        var a = FlowNode("A", "Test.A", ["Flow"], ["Flow"]);
+        var b = FlowNode("B", "Test.B", ["Flow"], ["Flow"]);
+        var merge = FlowNode("Merge", "Test.Merge", ["Flow"], []);
+        var branchRuns = 0;
+        var mergeRuns = 0;
+        a.Action = _ => { Interlocked.Increment(ref branchRuns); return Task.CompletedTask; };
+        b.Action = _ => { Interlocked.Increment(ref branchRuns); return Task.CompletedTask; };
+        merge.Action = _ => { mergeRuns++; return Task.CompletedTask; };
+
+        var result = await engine.ExecuteAsync(
+            [parallel, a, b, merge],
+            [
+                Conn(parallel, "Branch A", a, "Flow"),
+                Conn(parallel, "Branch B", b, "Flow"),
+                Conn(a, "Flow", merge, "Flow"),
+                Conn(b, "Flow", merge, "Flow")
+            ],
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+        Assert.Equal(2, branchRuns);
+        Assert.Equal(1, mergeRuns);
+    }
+
+    [Fact]
+    public async Task Engine_Parallel_SkipDependents_SkipsFailedBranchDependentsAndRunsOtherBranch()
+    {
+        var engine = new NodeExecutionEngine(new MemoryLog());
+        var parallel = FlowNode("Parallel", "Flow.Parallel", ["Flow"], ["Branch A", "Branch B"]);
+        var failing = FlowNode("Failing", "Test.Failing", ["Flow"], ["Flow"]);
+        var dependent = FlowNode("Dependent", "Test.Dependent", ["Flow"], []);
+        var independent = FlowNode("Independent", "Test.Independent", ["Flow"], []);
+        var dependentRuns = 0;
+        var independentRuns = 0;
+        failing.Action = _ => throw new InvalidOperationException("expected");
+        dependent.Action = _ => { dependentRuns++; return Task.CompletedTask; };
+        independent.Action = _ => { Interlocked.Increment(ref independentRuns); return Task.CompletedTask; };
+
+        var result = await engine.ExecuteAsync(
+            [parallel, failing, dependent, independent],
+            [
+                Conn(parallel, "Branch A", failing, "Flow"),
+                Conn(failing, "Flow", dependent, "Flow"),
+                Conn(parallel, "Branch B", independent, "Flow")
+            ],
+            TestContext.Current.CancellationToken,
+            new NodeExecutionOptions { FailurePolicy = ExecutionFailurePolicy.SkipDependents });
+
+        Assert.Equal(ExecutionStatus.PartiallySucceeded, result.Status);
+        Assert.Equal(0, dependentRuns);
+        Assert.Equal(NodeExecutionStatus.Skipped, dependent.ExecutionStatus);
+        Assert.Equal(1, independentRuns);
+    }
+
+    [Fact]
+    public async Task Engine_Parallel_FailFast_DoesNotScheduleRemainingBranchNodes()
+    {
+        var engine = new NodeExecutionEngine(new MemoryLog());
+        var parallel = FlowNode("Parallel", "Flow.Parallel", ["Flow"], ["Branch A"]);
+        var failing = FlowNode("Failing", "Test.Failing", ["Flow"], ["Flow"]);
+        var later = FlowNode("Later", "Test.Later", ["Flow"], []);
+        var laterRuns = 0;
+        failing.Action = _ => throw new InvalidOperationException("expected");
+        later.Action = _ => { laterRuns++; return Task.CompletedTask; };
+
+        var result = await engine.ExecuteAsync(
+            [parallel, failing, later],
+            [Conn(parallel, "Branch A", failing, "Flow"), Conn(failing, "Flow", later, "Flow")],
+            TestContext.Current.CancellationToken,
+            new NodeExecutionOptions { FailurePolicy = ExecutionFailurePolicy.FailFast });
+
+        Assert.Equal(ExecutionStatus.Failed, result.Status);
+        Assert.Equal(0, laterRuns);
+        Assert.Equal(NodeExecutionStatus.Idle, later.ExecutionStatus);
     }
 
     [Fact]

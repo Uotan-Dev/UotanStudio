@@ -78,9 +78,11 @@ public sealed class NodeExecutionEngine
     public async Task<ExecutionResult> ExecuteAsync(
         IReadOnlyList<FlowNodeViewModel> nodes,
         IReadOnlyList<NodeConnection> connections,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        NodeExecutionOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(nodes);
+        options ??= new NodeExecutionOptions();
 
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var token = _cts.Token;
@@ -113,6 +115,7 @@ public sealed class NodeExecutionEngine
             // and nodes belonging to the untaken Branch sub-graph (marked Skipped).
             var handledByFlow = new HashSet<string>();
             var skippedByBranch = new HashSet<string>();
+            var skippedByFailure = new HashSet<string>();
 
             foreach (var node in order)
             {
@@ -138,6 +141,15 @@ public sealed class NodeExecutionEngine
                     continue;
                 }
 
+                if (skippedByFailure.Contains(node.InstanceId))
+                {
+                    node.ExecutionStatus = NodeExecutionStatus.Skipped;
+                    NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
+                    _log.Write(LogLevel.Debug, "Engine", $"Node '{node.InstanceId}' skipped because an upstream node failed");
+                    completed++;
+                    continue;
+                }
+
                 bool succeeded;
                 try
                 {
@@ -153,6 +165,19 @@ public sealed class NodeExecutionEngine
                 if (!succeeded)
                 {
                     lock (failLock) { failedNodes.Add(node.InstanceId); }
+
+                    switch (options.FailurePolicy)
+                    {
+                        case ExecutionFailurePolicy.FailFast:
+                            aborted = true;
+                            break;
+                        case ExecutionFailurePolicy.SkipDependents:
+                            MarkDownstreamSkipped(node, byId, connections, skippedByFailure);
+                            break;
+                    }
+
+                    if (aborted)
+                        break;
                 }
 
                 completed++;
@@ -163,8 +188,12 @@ public sealed class NodeExecutionEngine
                 {
                     try
                     {
-                        await ApplyFlowControlAsync(node, byId, connections, order, flowOut, token,
-                            handledByFlow, skippedByBranch, failedNodes, failLock).ConfigureAwait(false);
+                        if (await ApplyFlowControlAsync(node, byId, connections, order, flowOut, token,
+                            handledByFlow, skippedByBranch, skippedByFailure, failedNodes, failLock, options).ConfigureAwait(false))
+                        {
+                            aborted = true;
+                            break;
+                        }
                     }
                     catch (OperationCanceledException)
                     {
@@ -175,8 +204,10 @@ public sealed class NodeExecutionEngine
                 }
             }
 
-            var result = aborted
+            var result = aborted && failedNodes.Count == 0
                 ? ExecutionResult.Cancelled()
+                : aborted
+                    ? ExecutionResult.Failed("Execution stopped after a node failure", failedNodes)
                 : failedNodes.Count > 0
                     ? ExecutionResult.PartiallySucceeded(failedNodes)
                     : ExecutionResult.Succeeded(total);
@@ -275,7 +306,7 @@ public sealed class NodeExecutionEngine
     /// control-flow sub-graph as Skipped, Flow.Loop iterates the Body sub-graph (bounded by
     /// <see cref="MaxLoopIterations"/>), and Flow.Parallel runs the branch sub-graphs concurrently.
     /// </summary>
-    private async Task ApplyFlowControlAsync(
+    private async Task<bool> ApplyFlowControlAsync(
         FlowNodeViewModel node,
         IReadOnlyDictionary<string, FlowNodeViewModel> byId,
         IReadOnlyList<NodeConnection>? connections,
@@ -284,8 +315,10 @@ public sealed class NodeExecutionEngine
         CancellationToken token,
         HashSet<string> handledByFlow,
         HashSet<string> skippedByBranch,
+        HashSet<string> skippedByFailure,
         List<string> failedNodes,
-        object failLock)
+        object failLock,
+        NodeExecutionOptions options)
     {
         switch (node.TypeKey)
         {
@@ -295,6 +328,11 @@ public sealed class NodeExecutionEngine
                     var condition = NodeDataUtil.ToBool(trueConnector?.Data, false);
                     var untakenTitle = condition ? "False" : "True";
                     var untaken = CollectFlowReachable(node, untakenTitle, flowOut);
+                    var takenTitle = condition ? "True" : "False";
+                    var taken = CollectFlowReachable(node, takenTitle, flowOut);
+                    // A branch join is reachable from both sides. It must remain executable
+                    // when the untaken side is skipped, so only the untaken-only set is marked.
+                    untaken.ExceptWith(taken);
                     foreach (var target in untaken) skippedByBranch.Add(target.InstanceId);
                     if (untaken.Count > 0)
                     {
@@ -313,6 +351,8 @@ public sealed class NodeExecutionEngine
                             $"Loop '{node.InstanceId}' requested {requested} iterations, clamped to {MaxLoopIterations}");
                     }
                     var body = CollectFlowReachable(node, "Body", flowOut);
+                    var completed = CollectFlowReachable(node, "Completed", flowOut);
+                    body.ExceptWith(completed);
                     if (body.Count == 0) break;
 
                     var bodyOrder = topologicalOrder.Where(body.Contains).ToList();
@@ -326,11 +366,25 @@ public sealed class NodeExecutionEngine
                         _log.Write(LogLevel.Debug, "Engine", $"Loop '{node.InstanceId}' iteration {i + 1}/{iterations}");
                         foreach (var bodyNode in bodyOrder)
                         {
+                            if (skippedByFailure.Contains(bodyNode.InstanceId))
+                            {
+                                MarkNodeSkipped(bodyNode, "an upstream loop-body node failed");
+                                continue;
+                            }
+
                             var succeeded = await ExecuteSingleNodeAsync(bodyNode, byId, connections, token,
                                 p => SafeReportProgress(0, 1, p)).ConfigureAwait(false);
                             if (!succeeded)
                             {
-                                lock (failLock) { failedNodes.Add(bodyNode.InstanceId); }
+                                lock (failLock)
+                                {
+                                    failedNodes.Add(bodyNode.InstanceId);
+                                    if (options.FailurePolicy == ExecutionFailurePolicy.SkipDependents)
+                                        MarkDownstreamSkipped(bodyNode, byId, connections, skippedByFailure);
+                                }
+
+                                if (options.FailurePolicy == ExecutionFailurePolicy.FailFast)
+                                    return true;
                             }
                         }
                     }
@@ -343,35 +397,79 @@ public sealed class NodeExecutionEngine
                     var branchConnectors = node.Output.Where(c => c.PortType == NodePortType.Flow).ToList();
                     if (branchConnectors.Count == 0) break;
 
-                    var tasks = new List<Task>();
+                    var branches = new List<(string Connector, HashSet<FlowNodeViewModel> Nodes)>();
                     foreach (var connector in branchConnectors)
                     {
                         var branch = CollectFlowReachable(node, connector.Title, flowOut);
-                        if (branch.Count == 0) continue;
+                        if (branch.Count > 0)
+                            branches.Add((connector.Title, branch));
+                    }
+
+                    var ownership = branches
+                        .SelectMany(branch => branch.Nodes.Select(branchNode => (branchNode, branch.Connector)))
+                        .GroupBy(item => item.branchNode.InstanceId)
+                        .ToDictionary(group => group.Key, group => group.Count());
+                    var stop = 0;
+                    var tasks = new List<Task>();
+                    foreach (var (connectorTitle, allBranchNodes) in branches)
+                    {
+                        // A node reachable from two branches is a merge point, not branch-local
+                        // work. Leave it for the main topological pass so it executes once after
+                        // both branches have produced their outputs.
+                        var branch = allBranchNodes
+                            .Where(branchNode => ownership[branchNode.InstanceId] == 1)
+                            .ToHashSet();
                         var branchOrder = topologicalOrder.Where(branch.Contains).ToList();
                         foreach (var branchNode in branch) handledByFlow.Add(branchNode.InstanceId);
 
                         _log.Write(LogLevel.Info, "Engine",
-                            $"Parallel '{node.InstanceId}' dispatching branch '{connector.Title}' with {branchOrder.Count} node(s)");
+                            $"Parallel '{node.InstanceId}' dispatching branch '{connectorTitle}' with {branchOrder.Count} node(s)");
                         tasks.Add(Task.Run(async () =>
                         {
                             foreach (var branchNode in branchOrder)
                             {
                                 token.ThrowIfCancellationRequested();
+                                if (Volatile.Read(ref stop) != 0) break;
+                                bool skip;
+                                lock (failLock) { skip = skippedByFailure.Contains(branchNode.InstanceId); }
+                                if (skip)
+                                {
+                                    MarkNodeSkipped(branchNode, "an upstream parallel-branch node failed");
+                                    continue;
+                                }
+
                                 var succeeded = await ExecuteSingleNodeAsync(branchNode, byId, connections, token,
                                     p => SafeReportProgress(0, 1, p)).ConfigureAwait(false);
                                 if (!succeeded)
                                 {
-                                    lock (failLock) { failedNodes.Add(branchNode.InstanceId); }
+                                    lock (failLock)
+                                    {
+                                        failedNodes.Add(branchNode.InstanceId);
+                                        if (options.FailurePolicy == ExecutionFailurePolicy.SkipDependents)
+                                            MarkDownstreamSkipped(branchNode, byId, connections, skippedByFailure);
+                                    }
+
+                                    if (options.FailurePolicy == ExecutionFailurePolicy.FailFast)
+                                        Interlocked.Exchange(ref stop, 1);
                                 }
                             }
                         }, token));
                     }
 
                     if (tasks.Count > 0) await Task.WhenAll(tasks).ConfigureAwait(false);
+                    if (stop != 0) return true;
                     break;
                 }
         }
+
+        return false;
+    }
+
+    private void MarkNodeSkipped(FlowNodeViewModel node, string reason)
+    {
+        node.ExecutionStatus = NodeExecutionStatus.Skipped;
+        NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
+        _log.Write(LogLevel.Debug, "Engine", $"Node '{node.InstanceId}' skipped because {reason}");
     }
 
     /// <summary>
@@ -403,6 +501,34 @@ public sealed class NodeExecutionEngine
             }
         }
         return visited;
+    }
+
+    private static void MarkDownstreamSkipped(
+        FlowNodeViewModel failed,
+        IReadOnlyDictionary<string, FlowNodeViewModel> byId,
+        IReadOnlyList<NodeConnection>? connections,
+        HashSet<string> skipped)
+    {
+        if (connections is null) return;
+
+        var outgoing = connections
+            .Where(connection => connection.SourceInstanceId == failed.InstanceId)
+            .Select(connection => connection.TargetInstanceId)
+            .Where(byId.ContainsKey)
+            .ToArray();
+        var queue = new Queue<string>(outgoing);
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            if (!skipped.Add(current)) continue;
+            foreach (var next in connections
+                .Where(connection => connection.SourceInstanceId == current)
+                .Select(connection => connection.TargetInstanceId)
+                .Where(byId.ContainsKey))
+            {
+                queue.Enqueue(next);
+            }
+        }
     }
 
     /// <summary>
@@ -591,7 +717,12 @@ public sealed class ExecutionResult
     /// <para>创建失败结果。</para>
     /// Creates a failed result.
     /// </summary>
-    public static ExecutionResult Failed(string error) => new() { Status = ExecutionStatus.Failed, ErrorMessage = error };
+    public static ExecutionResult Failed(string error, IReadOnlyList<string>? failed = null) => new()
+    {
+        Status = ExecutionStatus.Failed,
+        ErrorMessage = error,
+        FailedNodes = failed ?? Array.Empty<string>()
+    };
 
     /// <summary>
     /// <para>创建部分成功结果。</para>
