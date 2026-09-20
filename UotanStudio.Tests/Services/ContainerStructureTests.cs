@@ -1,8 +1,8 @@
-﻿using System.Buffers.Binary;
 using System.IO.Compression;
 using UotanStudio.Comm.Protocols.Fastboot.Utils;
-using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
-using UotanStudio.Services.Delivery;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
+using UotanStudio.Firmware.SharedKernel.Containers;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -34,7 +34,7 @@ public sealed class ContainerStructureTests
         expected.CopyTo(image, checked((int)extent.TargetData * 512));
         File.WriteAllBytes(raw, image);
         var sparse = Path.Combine(temp.Path, "renamed.img");
-        UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse.SparseImageConverter.ConvertRawToSparse(raw, sparse);
+        UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion.SparseImageConverter.ConvertRawToSparse(raw, sparse);
 
         UotanStudio.Firmware.SharedKernel.FirmwareFormatRegistry.RegisterAll();
         Assert.IsType<LpFormatHandler>(UotanStudio.Firmware.SharedKernel.FormatDetector.Detect(sparse));
@@ -105,8 +105,8 @@ public sealed class ContainerStructureTests
     public void IsDirectoryEmptyOrMissing_MissingOrEmpty_True()
     {
         using var temp = new TempDirectory();
-        Assert.True(ContainerStructureAnalyzer.IsDirectoryEmptyOrMissing(Path.Combine(temp.Path, "not-created")));
-        Assert.True(ContainerStructureAnalyzer.IsDirectoryEmptyOrMissing(temp.Path));
+        Assert.True(NewProjectDirectoryHelper.IsDirectoryEmptyOrMissing(Path.Combine(temp.Path, "not-created")));
+        Assert.True(NewProjectDirectoryHelper.IsDirectoryEmptyOrMissing(temp.Path));
     }
 
     [Fact]
@@ -114,9 +114,9 @@ public sealed class ContainerStructureTests
     {
         using var temp = new TempDirectory();
         File.WriteAllText(Path.Combine(temp.Path, "file.txt"), "x");
-        Assert.False(ContainerStructureAnalyzer.IsDirectoryEmptyOrMissing(temp.Path));
-        Assert.False(ContainerStructureAnalyzer.IsDirectoryEmptyOrMissing(" "));
-        Assert.False(ContainerStructureAnalyzer.IsDirectoryEmptyOrMissing(null));
+        Assert.False(NewProjectDirectoryHelper.IsDirectoryEmptyOrMissing(temp.Path));
+        Assert.False(NewProjectDirectoryHelper.IsDirectoryEmptyOrMissing(" "));
+        Assert.False(NewProjectDirectoryHelper.IsDirectoryEmptyOrMissing(null));
     }
 
     // ============== GetNextDefaultName ==============
@@ -126,14 +126,14 @@ public sealed class ContainerStructureTests
     {
         using var temp = new TempDirectory();
         Directory.CreateDirectory(Path.Combine(temp.Path, "NewProject1"));
-        Assert.Equal("NewProject2", ContainerStructureAnalyzer.GetNextDefaultName(temp.Path));
-        Assert.Equal("NewProject3", ContainerStructureAnalyzer.GetNextDefaultName(temp.Path, ["NewProject2"]));
+        Assert.Equal("NewProject2", NewProjectDirectoryHelper.GetNextDefaultName(temp.Path));
+        Assert.Equal("NewProject3", NewProjectDirectoryHelper.GetNextDefaultName(temp.Path, ["NewProject2"]));
         // 空目录且无占用：返回第一个名称。
         // Fresh directory with no reservations: the first name is returned.
-        Assert.Equal("NewProject1", ContainerStructureAnalyzer.GetNextDefaultName(Path.Combine(temp.Path, "fresh")));
+        Assert.Equal("NewProject1", NewProjectDirectoryHelper.GetNextDefaultName(Path.Combine(temp.Path, "fresh")));
         // 空目录但名称被显式占用：跳到下一个。
         // Fresh directory but the name is explicitly reserved: skip to the next one.
-        Assert.Equal("NewProject2", ContainerStructureAnalyzer.GetNextDefaultName(
+        Assert.Equal("NewProject2", NewProjectDirectoryHelper.GetNextDefaultName(
             Path.Combine(temp.Path, "fresh2"), ["NewProject1"]));
     }
 
@@ -169,7 +169,7 @@ public sealed class ContainerStructureTests
         using var temp = new TempDirectory();
         var source = temp.WriteBytes("boot.img", new byte[4096]);
         var payload = Path.Combine(temp.Path, "payload.bin");
-        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadBuilder())
+        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder.PayloadBuilder())
         {
             await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
         }
@@ -201,7 +201,7 @@ public sealed class ContainerStructureTests
         using var temp = new TempDirectory();
         var source = temp.WriteBytes("boot.img", new byte[4096]);
         var payload = Path.Combine(temp.Path, "payload.bin");
-        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadBuilder())
+        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder.PayloadBuilder())
         {
             await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
         }
@@ -281,7 +281,7 @@ public sealed class ContainerStructureTests
         using var temp = new TempDirectory();
         var source = temp.WriteBytes("boot.img", new byte[4096]);
         var payload = Path.Combine(temp.Path, "payload.bin");
-        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadBuilder())
+        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder.PayloadBuilder())
         {
             await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
         }
@@ -388,7 +388,7 @@ public sealed class ContainerStructureTests
         new Random(11).NextBytes(content);
         var source = temp.WriteBytes("boot.img", content);
         var payload = Path.Combine(temp.Path, "payload.bin");
-        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadBuilder())
+        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder.PayloadBuilder())
         {
             await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
         }
@@ -427,7 +427,7 @@ public sealed class ContainerStructureTests
         using var temp = new TempDirectory();
         var source = temp.WriteBytes("boot.img", new byte[4096]);
         var payload = Path.Combine(temp.Path, "payload.bin");
-        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadBuilder())
+        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder.PayloadBuilder())
         {
             await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
         }

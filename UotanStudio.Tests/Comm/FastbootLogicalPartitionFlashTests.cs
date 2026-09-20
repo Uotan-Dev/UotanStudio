@@ -1,6 +1,6 @@
 using System.Text;
 using UotanStudio.Comm.Protocols.Fastboot;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
 using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;

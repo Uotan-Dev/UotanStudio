@@ -1,11 +1,11 @@
 using System.IO.Hashing;
 using System.Security.Cryptography;
 using Google.Protobuf;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Zucchini;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Models;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Zucchini;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

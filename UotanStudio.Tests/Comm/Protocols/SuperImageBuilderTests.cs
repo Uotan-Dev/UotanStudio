@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using UotanStudio.Comm.Protocols.Fastboot.Utils;
-using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

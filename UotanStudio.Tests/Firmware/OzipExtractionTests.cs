@@ -1,8 +1,8 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Extraction;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
 using Xunit;
 

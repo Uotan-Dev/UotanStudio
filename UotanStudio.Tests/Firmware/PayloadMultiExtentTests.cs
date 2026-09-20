@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using BsDiff;
 using Google.Protobuf;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Models;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using Xunit;
 

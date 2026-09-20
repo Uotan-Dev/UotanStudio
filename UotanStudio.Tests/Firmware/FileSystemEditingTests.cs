@@ -1,8 +1,16 @@
-﻿using System.Text;
+using System.Text;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
 using UotanStudio.Firmware.SharedKernel;
 using Xunit;
 

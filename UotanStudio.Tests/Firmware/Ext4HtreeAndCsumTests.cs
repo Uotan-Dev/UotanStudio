@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -16,6 +18,7 @@ public class Ext4HtreeAndCsumTests
     private const int BlockSize = 4096;
     private const uint Ext4IndexFlag = 0x0000_1000;
     private const uint FeatureCompatDirIndex = 0x0020;
+    private const byte DtDir = 2;
 
     [Fact]
     public void Builder_SmallDir_ListAllEntries()
@@ -100,6 +103,12 @@ public class Ext4HtreeAndCsumTests
             Assert.Equal((byte)'.', image[block0 + 12 + 8]);
             Assert.Equal((byte)'.', image[block0 + 12 + 9]);
             Assert.Equal(1, image[block0 + 12 + 12 + 4]); // hash_version = EXT2_HASH_HALF_MD4
+
+            // "." 与 ".." 的 file_type 必须为 DT_DIR(2)，否则 e2fsck 会报
+            // "Setting filetype for entry '.' ... to 2"。
+            // The "."/".." file_type must be DT_DIR (2); e2fsck otherwise rewrites it.
+            Assert.Equal(DtDir, image[block0 + 7]);
+            Assert.Equal(DtDir, image[block0 + 12 + 7]);
         }
         finally
         {

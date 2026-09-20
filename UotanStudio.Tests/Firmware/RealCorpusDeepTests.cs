@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Tests.Infrastructure;
 using Xunit;

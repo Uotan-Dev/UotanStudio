@@ -172,6 +172,20 @@ internal static class WslTestHelpers
     private static string AvbToolPath => Path.Combine(AppContext.BaseDirectory, "TestInfrastructure", "avbtool.py");
 
     /// <summary>
+    /// Path to the bundled independent DAT full-OTA reference decoder copied to the test output.
+    /// <para>随测试复制的独立 DAT 全量解码参考脚本路径。</para>
+    /// </summary>
+    public static string Dat2ImgPath => Path.Combine(AppContext.BaseDirectory, "TestInfrastructure", "dat2img.py");
+
+    /// <summary>
+    /// Runs the pinned dat2img.py reference decoder through WSL Python, passing each path as a
+    /// separate argument so spaced paths survive.
+    /// <para>通过 WSL Python 运行固定 dat2img.py 参考解码器，逐参数传递路径以保留含空格的路径。</para>
+    /// </summary>
+    public static (string Output, int ExitCode) RunDat2Img(string newDatPath, string transferListPath, string outputImagePath, int timeoutMs = 120000)
+        => RunWslExecutable("python3", [ToWslPath(Dat2ImgPath), ToWslPath(newDatPath), ToWslPath(transferListPath), ToWslPath(outputImagePath)], timeoutMs);
+
+    /// <summary>
     /// 通过 Python 直接运行固定工具，独立传递参数以保留含空格的路径。
     /// <para>Runs the pinned tool directly through Python, preserving spaced paths as separate arguments.</para>
     /// </summary>

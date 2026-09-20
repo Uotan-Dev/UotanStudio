@@ -2,6 +2,9 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -199,6 +202,119 @@ public class ErofsMultiDeviceTests
         var (output, exitCode) = RunWsl($"fsck.erofs {wslPath}");
 
         Assert.True(exitCode == 0, $"fsck.erofs failed (exit={exitCode}):\n{output}");
+    }
+
+    [Fact]
+    public void Builder_MultiDevice_WritesReadableDeviceTable()
+    {
+        using var temp = new TempDirectory();
+        WriteText(temp, "hello.txt", "hello erofs\n");
+        WriteText(temp, "dir/nested.txt", "nested content");
+
+        var builder = new ErofsBuilder();
+        var imagePath = System.IO.Path.Combine(temp.Path, "multi.erofs");
+        var specs = new[] { new ErofsDeviceSpec("device-a", 8192), new ErofsDeviceSpec("device-b", 16384) };
+        builder.Build(
+            temp.Path,
+            imagePath,
+            new ErofsOptions { Compress = false, ExtraDeviceCount = 2, ExtraDeviceImages = specs });
+
+        var bytes = File.ReadAllBytes(imagePath);
+        using var parser = new ErofsParser(imagePath);
+        var sb = parser.Superblock;
+
+        Assert.True(sb.HasDeviceTable);
+        Assert.Equal((ushort)2, sb.ExtraDevices);
+        Assert.True(sb.DevtSlotoff > 0);
+
+        // The parser already reads the table; verify the raw slots hold the declared tags, block
+        // counts and unified addresses (device 0 implicitly covers [0, BlockCount64)).
+        var tableOffset = (int)sb.DevtSlotoff * ErofsDeviceSlot.Size;
+        var slotA = ErofsDeviceSlot.FromBytes(bytes.AsSpan(tableOffset, ErofsDeviceSlot.Size));
+        var slotB = ErofsDeviceSlot.FromBytes(bytes.AsSpan(tableOffset + ErofsDeviceSlot.Size, ErofsDeviceSlot.Size));
+        Assert.Equal("device-a", Encoding.UTF8.GetString(slotA.Tag).TrimEnd('\0'));
+        Assert.Equal("device-b", Encoding.UTF8.GetString(slotB.Tag).TrimEnd('\0'));
+        Assert.Equal(2UL, slotA.Blocks);
+        Assert.Equal(4UL, slotB.Blocks);
+        Assert.Equal(sb.BlockCount64, slotA.UniAddr);
+        Assert.Equal(sb.BlockCount64 + 2, slotB.UniAddr);
+
+        // Declaring extra devices does not disturb the base filesystem on device 0.
+        using var output = new MemoryStream();
+        parser.ReadFile("dir/nested.txt", output);
+        Assert.Equal("nested content"u8.ToArray(), output.ToArray());
+    }
+
+    [Fact]
+    public void Builder_MultiDevice_DescriptorCountMismatch_Throws()
+    {
+        using var temp = new TempDirectory();
+        WriteText(temp, "hello.txt", "hello erofs\n");
+        var builder = new ErofsBuilder();
+        Assert.Throws<NotSupportedException>(() => builder.Build(
+            temp.Path,
+            System.IO.Path.Combine(temp.Path, "m.erofs"),
+            new ErofsOptions
+            {
+                Compress = false,
+                ExtraDeviceCount = 2,
+                ExtraDeviceImages = [new ErofsDeviceSpec("only-one", 8192)],
+            }));
+    }
+
+    [Fact]
+    public void Builder_MultiDevice_NonAlignedDeviceSize_Throws()
+    {
+        using var temp = new TempDirectory();
+        WriteText(temp, "hello.txt", "hello erofs\n");
+        var builder = new ErofsBuilder();
+        Assert.Throws<ArgumentOutOfRangeException>(() => builder.Build(
+            temp.Path,
+            System.IO.Path.Combine(temp.Path, "m.erofs"),
+            new ErofsOptions
+            {
+                Compress = false,
+                ExtraDeviceCount = 1,
+                ExtraDeviceImages = [new ErofsDeviceSpec("misaligned", 4097)],
+            }));
+    }
+
+    [Fact]
+    public void Builder_MultiDeviceTable_FsckAndDumpErofsPass()
+    {
+        if (!IsWslAvailable()) { Assert.Skip("WSL not available"); }
+        if (!IsToolAvailable("fsck.erofs")) { Assert.Skip("required tools missing"); }
+
+        using var temp = new TempDirectory();
+        WriteText(temp, "hello.txt", "hello erofs\n");
+        WriteText(temp, "dir/nested.txt", "nested content");
+
+        var builder = new ErofsBuilder();
+        var imagePath = System.IO.Path.Combine(temp.Path, "multi.erofs");
+        builder.Build(
+            temp.Path,
+            imagePath,
+            new ErofsOptions
+            {
+                Compress = false,
+                ExtraDeviceCount = 2,
+                ExtraDeviceImages =
+                [
+                    new ErofsDeviceSpec("device-a", 8192),
+                    new ErofsDeviceSpec("device-b", 16384),
+                ],
+            });
+
+        var wslPath = ToWslPath(imagePath);
+
+        // fsck.erofs must validate a device table whose extra devices are declared but unused
+        // (no inode references them), so the base filesystem is still self-consistent.
+        var (fsck, fsckExit) = RunWsl($"fsck.erofs {wslPath}");
+        Assert.True(fsckExit == 0, $"fsck.erofs failed (exit={fsckExit}):\n{fsck}");
+
+        // dump.erofs parses the superblock with the device-table incompat feature set.
+        var (dump, dumpExit) = RunWsl($"dump.erofs {wslPath}");
+        Assert.True(dumpExit == 0, $"dump.erofs failed (exit={dumpExit}):\n{dump}");
     }
 
     // ---- WSL helpers (mirroring WslCrossValidationTests). ----

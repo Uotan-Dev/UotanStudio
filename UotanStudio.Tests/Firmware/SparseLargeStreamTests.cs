@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.DataProviders;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

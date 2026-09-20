@@ -1,5 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Reader;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

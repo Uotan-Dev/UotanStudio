@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;

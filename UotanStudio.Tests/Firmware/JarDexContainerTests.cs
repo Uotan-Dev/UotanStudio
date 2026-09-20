@@ -1,7 +1,8 @@
 using System.IO.Compression;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Model;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Containers;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Keys;
 using UotanStudio.Views.Controls;

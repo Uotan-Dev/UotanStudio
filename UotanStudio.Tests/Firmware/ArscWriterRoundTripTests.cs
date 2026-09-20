@@ -1,5 +1,7 @@
 using System.IO.Compression;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Models;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Parsing;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Writing;
 using UotanStudio.Tests.Infrastructure;
 using Xunit;
 

@@ -1,8 +1,13 @@
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
 
 namespace UotanStudio.Tests.Firmware;
 
@@ -87,6 +92,29 @@ internal static class FirmwareMountImages
         Build("erofs-lz4-full-index", "erofs", "ro", path => new ErofsBuilder().Build(source, path, new ErofsOptions { UseCompactedIndexes = false }));
         Build("erofs-fragments-dedup", "erofs", "ro", path => new ErofsBuilder().Build(source, path, new ErofsOptions { Fragments = true, Dedup = true }));
         Build("erofs-metabox", "erofs", "ro", path => new ErofsBuilder().Build(source, path, new ErofsOptions { Metabox = true }));
+        // Device-table (multi-device) EROFS is an incompatible superblock feature that the Linux kernel
+        // only learned to mount from 5.13 onward, so this case is never added to the era-5.10 matrix and
+        // is mounted only by a device-table-capable guest. Extra devices are declared (tags + block
+        // counts) while all content stays on device 0, matching the builder's declaration-only mode.
+        // 设备表（多设备）EROFS 是内核从 5.13 起才支持挂载的不兼容超级块特性，因此本用例从不进入
+        // 5.10 矩阵，只由支持设备表的客户机挂载。额外设备仅声明（tag 与块数），全部内容仍在设备 0，
+        // 与打包器的“仅声明”模式一致。
+        Build("erofs-multi-device", "erofs", "ro", path => new ErofsBuilder().Build(source, path, new ErofsOptions
+        {
+            Compress = false,
+            ExtraDeviceCount = 2,
+            ExtraDeviceImages = [new ErofsDeviceSpec("uotan-a", 8192), new ErofsDeviceSpec("uotan-b", 16384)],
+        }));
+        // Legacy compact-inode image: the era-matched GKI 5.10 kernel rejects the modern default
+        // writer output (dot-omitted / nlink-1 i_format bit and, for device tables, the superblock
+        // incompat bit — both post-5.10). LegacyCompatibility is the 5.10-mountable path and doubles
+        // as the regression check that the multi-device superblock edits, which are all behind
+        // <c>extraDevices > 0</c>, leave the ordinary single-device layout byte-identical.
+        // legacy 紧凑 inode 镜像：时代匹配的 GKI 5.10 内核会拒绝现代默认输出（dot-omitted / nlink-1
+        // 的 i_format 位，以及设备表的超级块不兼容位——两者都晚于 5.10）。LegacyCompatibility 是可被
+        // 5.10 挂载的路径，同时用作回归检查：全部位于 <c>extraDevices > 0</c> 之后的多设备超级块改动
+        // 不会改变常规单设备布局的字节。
+        Build("erofs-legacy-flat", "erofs", "ro", path => new ErofsBuilder().Build(source, path, new ErofsOptions { Compress = false, LegacyCompatibility = true }));
         Build("f2fs-flat", "f2fs", "ro,norecovery", path => F2fsBuilder.Build(source, path));
         foreach (var algorithm in new[] { CompressionAlgorithm.Lz4, CompressionAlgorithm.Zstd, CompressionAlgorithm.Lzo })
             Build("f2fs-" + algorithm.ToString().ToLowerInvariant(), "f2fs", "ro,norecovery", path => F2fsBuilder.Build(source, path, new F2fsOptions { EnableCompression = true, CompressionAlgorithm = algorithm }));

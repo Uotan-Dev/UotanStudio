@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.CrossCutting.Compress;
-using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
-using UotanStudio.Firmware.CrossCutting.Compress.Internal.Xz;
+using UotanStudio.Firmware.BoundedContexts.Compression;
+using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
+using UotanStudio.Firmware.BoundedContexts.Compression.Internal.Xz;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

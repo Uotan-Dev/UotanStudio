@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

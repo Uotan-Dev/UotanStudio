@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using BsDiff;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Models;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Reader;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

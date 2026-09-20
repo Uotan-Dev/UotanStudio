@@ -1,5 +1,8 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Build;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Writing;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

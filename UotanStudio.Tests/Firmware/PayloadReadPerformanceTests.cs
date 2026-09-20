@@ -1,9 +1,11 @@
 using System.Security.Cryptography;
 using Google.Protobuf;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
+using UotanStudio.Firmware.BoundedContexts.Compression;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Extraction;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.IO;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Operations;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
-using UotanStudio.Firmware.CrossCutting.Compress;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

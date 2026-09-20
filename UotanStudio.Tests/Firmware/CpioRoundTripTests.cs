@@ -1,8 +1,8 @@
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Formats.Tar;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Writing;
+using UotanStudio.Firmware.BoundedContexts.Archive;
+using UotanStudio.Firmware.BoundedContexts.Archive.Formats.Tar;
+using UotanStudio.Firmware.BoundedContexts.Archive.Models;
+using UotanStudio.Firmware.BoundedContexts.Archive.Writing;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

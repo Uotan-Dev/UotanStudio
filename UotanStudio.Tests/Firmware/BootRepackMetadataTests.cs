@@ -1,5 +1,7 @@
-using System.Text.Json.Nodes;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Services.Firmware;
 using UotanStudio.ViewModels.Workspace;

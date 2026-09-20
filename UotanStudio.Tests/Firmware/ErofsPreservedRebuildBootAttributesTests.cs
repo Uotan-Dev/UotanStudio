@@ -1,4 +1,6 @@
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.Tests.Infrastructure;

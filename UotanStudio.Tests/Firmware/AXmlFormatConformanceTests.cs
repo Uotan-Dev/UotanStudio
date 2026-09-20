@@ -1,5 +1,7 @@
 using System.Xml.Linq;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Models;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Writing;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

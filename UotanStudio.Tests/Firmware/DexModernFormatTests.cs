@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Model;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

@@ -1,7 +1,8 @@
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
-using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

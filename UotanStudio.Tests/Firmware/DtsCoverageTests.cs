@@ -1,5 +1,6 @@
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dts;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

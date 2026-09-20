@@ -1,5 +1,6 @@
-using UotanStudio.Firmware.CrossCutting.Compress;
-using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
+using UotanStudio.Firmware.BoundedContexts.Compression;
+using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
+using UotanStudio.Firmware.BoundedContexts.Compression.Detection;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -89,7 +90,7 @@ public class LzopCompressionTests
     {
         var compressed = CompressionService.Compress("lzop round trip"u8.ToArray(), CompressionFormat.Lzop);
 
-        Assert.Equal(CompressionFormat.Lzop, CompressionFormats.Detect(compressed));
+        Assert.Equal(CompressionFormat.Lzop, CompressionDetector.Detect(compressed));
     }
 
     [Fact]

@@ -1,8 +1,10 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac.Extraction;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac.Models;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

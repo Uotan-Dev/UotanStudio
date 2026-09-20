@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.PuffDiff;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

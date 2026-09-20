@@ -1,7 +1,13 @@
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 using UotanStudio.Firmware.SharedKernel;
 using Xunit;
 using F2fsFormatHandler = UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.F2fsFormatHandler;
@@ -213,7 +219,7 @@ public sealed class MetadataJsonTests : IDisposable
                 break;
             default:
                 new F2fsFormatHandler();
-                UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.F2fsBuilder.Build(source, image,
+                UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder.F2fsBuilder.Build(source, image,
                     new UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.F2fsOptions { FsConfigPath = cfg, FileContextsPath = ctx });
                 handler = new F2fsFormatHandler();
                 break;
@@ -229,7 +235,7 @@ public sealed class MetadataJsonTests : IDisposable
         {
             case "EXT4": using (var parser = new Ext4Parser(image)) parser.ReadFile(path, output); break;
             case "EROFS": using (var parser = new ErofsParser(image)) parser.ReadFile(path, output); break;
-            default: using (var parser = new UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.F2fsParser(image)) parser.ReadFile(path, output); break;
+            default: using (var parser = new UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser.F2fsParser(image)) parser.ReadFile(path, output); break;
         }
         output.Position = 0;
         return new StreamReader(output).ReadToEnd();

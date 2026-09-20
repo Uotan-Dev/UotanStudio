@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Extraction;
 using UotanStudio.Firmware.SharedKernel;
 using Xunit;
 

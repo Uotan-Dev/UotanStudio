@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.OnePlusOps;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.OnePlusOps.Crypto;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.OnePlusOps.Extraction;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

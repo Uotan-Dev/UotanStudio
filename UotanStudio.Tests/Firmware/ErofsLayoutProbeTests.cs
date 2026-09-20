@@ -1,4 +1,6 @@
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

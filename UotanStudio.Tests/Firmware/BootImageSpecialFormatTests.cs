@@ -1,7 +1,9 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
+using UotanStudio.Firmware.BoundedContexts.Archive;
+using UotanStudio.Firmware.BoundedContexts.Archive.Editing;
+using UotanStudio.Firmware.BoundedContexts.Archive.Models;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Formats;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

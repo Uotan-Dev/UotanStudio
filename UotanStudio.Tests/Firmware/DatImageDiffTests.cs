@@ -1,7 +1,7 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Reader;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.ImgDiff;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -33,6 +33,60 @@ public class DatImageDiffTests
         using var output = new MemoryStream();
         Assert.ThrowsAny<IOException>(() => ImageDeltaPatch.Apply(new MemoryStream(Expand(Source)), new MemoryStream(Expand(Patch)), output, 4095));
         Assert.True(output.Length <= 4095);
+    }
+
+    [Fact]
+    public void Create_Apply_NormalOnly_RoundTrips()
+    {
+        var source = Block(2, 0x11); var target = Block(2, 0x22);
+        AssertRoundTrip(source, target);
+    }
+
+    [Fact]
+    public void Create_Apply_NormalPlusRaw_RoundTrips()
+    {
+        var source = Block(1, 0x33); var target = Block(3, 0x44);
+        AssertRoundTrip(source, target);
+    }
+
+    [Fact]
+    public void Create_Apply_RawOnlyWhenEmptySource_RoundTrips()
+    {
+        AssertRoundTrip([], Block(2, 0x55));
+    }
+
+    [Fact]
+    public void Create_ThroughDatReader_RebuildsTarget()
+    {
+        var source = Block(1, 0x66); var target = Block(3, 0x77);
+        var patch = BuildPatch(source, target);
+        using var temp = new TempDirectory();
+        var list = temp.Write("list", $"4\n3\n0\n0\nimgdiff 0 {patch.Length} {Hash(source)} {Hash(target)} 2,0,3 1 2,0,1\n");
+        var output = Path.Combine(temp.Path, "out.img");
+        DatReader.Unpack(list, temp.WriteBytes("new.dat", []), temp.WriteBytes("patch.dat", patch), temp.WriteBytes("old.img", source), output);
+        Assert.Equal(target, File.ReadAllBytes(output));
+    }
+
+    private static void AssertRoundTrip(byte[] source, byte[] target)
+    {
+        var patch = BuildPatch(source, target);
+        using var output = new MemoryStream();
+        ImageDeltaPatch.Apply(new MemoryStream(source), new MemoryStream(patch), output, target.LongLength);
+        Assert.Equal(target, output.ToArray());
+    }
+
+    private static byte[] BuildPatch(byte[] source, byte[] target)
+    {
+        using var patch = new MemoryStream();
+        ImageDeltaPatch.Create(new MemoryStream(source), new MemoryStream(target), patch);
+        return patch.ToArray();
+    }
+
+    private static byte[] Block(int count, byte fill)
+    {
+        var data = new byte[count * 4096];
+        for (var i = 0; i < data.Length; i++) data[i] = (byte)(fill ^ i);
+        return data;
     }
 
     private static string Hash(byte[] data) => Convert.ToHexString(SHA1.HashData(data));

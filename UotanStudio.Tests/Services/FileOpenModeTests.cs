@@ -148,6 +148,43 @@ public class FileOpenModeTests
         }
     }
 
+    [Theory]
+    [InlineData("renamed.bin", "ANDROID!")]
+    [InlineData("renamed.img", "VNDRBOOT")]
+    [InlineData("renamed.bin", "CrAU")]
+    [InlineData("renamed.img", "AVBf")]
+    [InlineData("renamed.bin", "RKFW")]
+    [InlineData("renamed.img", "RKAF")]
+    public void StrongFirmwareMagicIgnoresExtension(string fileName, string magic)
+    {
+        var bytes = System.Text.Encoding.ASCII.GetBytes(magic);
+        var path = WriteTempFile(fileName, bytes);
+        try
+        {
+            var header = FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
+            Assert.Equal(EditorOpenMode.Firmware, FileOpenMode.ResolveMode(path, header));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void OrdinaryBinDoesNotBecomePayloadFromExtension()
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        var path = WriteTempFile("ordinary.bin", [0x01, 0x02, 0x03, 0x04]);
+        try
+        {
+            Assert.False(new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadFormatHandler().CanHandle(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Fact]
     public void ExtensionLessZipMagicRoutesToFileManager()
     {

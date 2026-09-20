@@ -1,10 +1,10 @@
 using System.IO.Compression;
 using System.Net;
-using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
-using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
 using UotanStudio.Services.Delivery;
 using UotanStudio.ViewModels.Shell;
 using Xunit;
@@ -68,7 +68,7 @@ public sealed class DeliveryTests : IDisposable
         Assert.NotNull(manifest.DynamicPartitionMetadata);
         Assert.Equal("system", Assert.Single(Assert.Single(manifest.DynamicPartitionMetadata.Groups).PartitionNames));
         var extracted = Path.Combine(_root, "extracted"); Directory.CreateDirectory(extracted);
-        UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadParser.Extract(payload, ["system"], extracted);
+        UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser.PayloadParser.Extract(payload, ["system"], extracted);
         Assert.Equal(expected, File.ReadAllBytes(Path.Combine(extracted, "system.img")));
     }
 
@@ -95,7 +95,7 @@ public sealed class DeliveryTests : IDisposable
         using var zip = ZipFile.OpenRead(Path.Combine(plan.OutputDirectory, "ota.zip"));
         var payload = Path.Combine(_root, "payload.bin");
         zip.GetEntry("payload.bin")!.ExtractToFile(payload);
-        var metadata = UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadParser.GetPayloadMetadata(payload);
+        var metadata = UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser.PayloadParser.GetPayloadMetadata(payload);
         var partition = Assert.Single(metadata.Manifest.Partitions);
         Assert.Equal("vm-bootsys", partition.PartitionName);
         Assert.Equal(SHA256.HashData(File.ReadAllBytes(file.SourcePath!)), partition.NewPartitionInfo!.Hash.ToByteArray());
@@ -511,7 +511,7 @@ public sealed class DeliveryTests : IDisposable
         }, token: TestContext.Current.CancellationToken);
         using var compressed = File.OpenRead(Path.Combine(output, "super.zst"));
         using var decoded = new MemoryStream();
-        UotanStudio.Firmware.CrossCutting.Compress.Compressors.ZstdCompressor.Decompress(compressed, decoded);
+        UotanStudio.Firmware.BoundedContexts.Compression.Compressors.ZstdCompressor.Decompress(compressed, decoded);
         Assert.Equal(SHA256.HashData(File.ReadAllBytes(raw)), SHA256.HashData(decoded.ToArray()));
     }
 

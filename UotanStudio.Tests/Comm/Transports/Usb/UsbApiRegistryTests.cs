@@ -408,4 +408,26 @@ public class UsbApiRegistryTests
         Assert.Same(boom, observed);
         Assert.Null(initial);
     }
+
+    // ============== Default registry platform coverage ==============
+
+    [Fact]
+    public void CreateDefault_NonAndroidRuntime_AndroidUsbHost_NotRegistered()
+    {
+        var registry = UsbApiRegistry.CreateDefault();
+
+        Assert.DoesNotContain(registry.GetApiNames(), name => string.Equals(name, "android", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void CreateDefault_NonAndroidRuntime_EnumerateAndroidKind_ReturnsEmpty()
+    {
+        var registry = UsbApiRegistry.CreateDefault();
+
+        var infos = registry.CreateAll()
+            .Where(p => p.ApiKind == UsbApiKind.AndroidUsbHost)
+            .SelectMany(p => p.EnumerateDeviceInfos());
+
+        Assert.Empty(infos);
+    }
 }

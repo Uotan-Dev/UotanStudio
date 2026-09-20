@@ -1,5 +1,7 @@
 using System.Formats.Tar;
+using System.IO.Compression;
 using System.Text.Json;
+using UotanStudio.Firmware.SharedKernel.Containers;
 using UotanStudio.Mcp;
 using UotanStudio.Mcp.Tools;
 using UotanStudio.Services.Delivery;
@@ -91,6 +93,27 @@ public class McpSandboxTests : IDisposable
     }
 
     [Fact]
+    public void BuildTools_RegistersMiscTools_WithUniqueSnakeCaseNames()
+    {
+        var config = new McpServerConfig { RootDirectory = _root, AllowFlash = false };
+        var names = new McpServerHost(config).BuildTools()
+            .Select(t => t.ProtocolTool.Name)
+            .ToList();
+
+        foreach (var expected in new[]
+        {
+            "dex_disassemble", "dex_decompile", "dex_assemble", "dex_info",
+            "axml_parse", "arsc_parse", "apk_strip_signatures",
+        })
+        {
+            Assert.Contains(expected, names);
+        }
+
+        Assert.Equal(names.Count, names.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(names, name => Assert.Matches("^[a-z0-9]+(_[a-z0-9]+)*$", name));
+    }
+
+    [Fact]
     public async Task ListFormats_ReportsRegisteredHandlers()
     {
         var sandbox = new PathSandbox(_root);
@@ -98,6 +121,75 @@ public class McpSandboxTests : IDisposable
         using var document = JsonDocument.Parse(json);
         Assert.True(document.RootElement.GetProperty("success").GetBoolean());
         Assert.True(document.RootElement.GetProperty("data").GetArrayLength() > 0);
+    }
+
+    [Fact]
+    public void GetEnv_ReportsVersionHandlersAndCodecs()
+    {
+        var sandbox = new PathSandbox(_root);
+        using var document = JsonDocument.Parse(EnvToolHandlers.GetEnv(sandbox, allowFlash: false));
+        var root = document.RootElement;
+        Assert.True(root.GetProperty("success").GetBoolean());
+
+        var data = root.GetProperty("data");
+        Assert.Equal("uotanstudio", data.GetProperty("name").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(data.GetProperty("version").GetString()));
+        Assert.False(data.GetProperty("allowFlash").GetBoolean());
+        Assert.Equal(_root, data.GetProperty("root").GetString());
+        Assert.True(data.GetProperty("formatHandlerCount").GetInt32() > 0);
+        Assert.NotEmpty(data.GetProperty("writableFormats").EnumerateArray().ToList());
+        Assert.Contains(data.GetProperty("compressionFormats").EnumerateArray(),
+            e => e.GetString() == "Zstd");
+    }
+
+    [Fact]
+    public void BuildTools_RegistersGetEnvTool()
+    {
+        var config = new McpServerConfig { RootDirectory = _root, AllowFlash = false };
+        var names = new McpServerHost(config).BuildTools().Select(t => t.ProtocolTool.Name).ToList();
+        Assert.Contains("get_env", names);
+    }
+
+    [Fact]
+    public void BuildTools_RegistersExtractContainerEntriesTool()
+    {
+        var config = new McpServerConfig { RootDirectory = _root, AllowFlash = false };
+        var names = new McpServerHost(config).BuildTools().Select(t => t.ProtocolTool.Name).ToList();
+        Assert.Contains("extract_container_entries", names);
+    }
+
+    [Fact]
+    public async Task ExtractContainerEntries_ZipMember_ProducesStandaloneImage()
+    {
+        var sandbox = new PathSandbox(_root);
+        var zipPath = Path.Combine(_root, "rom.zip");
+        var content = new byte[4096];
+        Random.Shared.NextBytes(content);
+        using (var fs = File.Create(zipPath))
+        using (var archive = new ZipArchive(fs, ZipArchiveMode.Create))
+        {
+            using var entryStream = archive.CreateEntry("images/system.img").Open();
+            entryStream.Write(content);
+        }
+
+        var json = await FirmwareToolHandlers.ExtractAsync(sandbox, zipPath, ["images/system.img"], "extracted",
+            fromPayloadOnly: false, maximumOutputBytes: ContainerEntryExtractor.DefaultMaximumOutputBytes);
+        using var document = JsonDocument.Parse(json);
+        Assert.True(document.RootElement.GetProperty("success").GetBoolean(), json);
+        var data = document.RootElement.GetProperty("data");
+        Assert.Equal("Zip", data.GetProperty("kind").GetString());
+        Assert.Equal("images/system.img", data.GetProperty("entries")[0].GetString());
+        var outputPath = data.GetProperty("outputPaths")[0].GetString();
+        Assert.NotNull(outputPath);
+        Assert.True(content.AsSpan().SequenceEqual(File.ReadAllBytes(outputPath!)), "extracted bytes differ");
+    }
+
+    [Fact]
+    public async Task ExtractContainerEntries_RejectsPathsOutsideSandbox()
+    {
+        var sandbox = new PathSandbox(_root);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => FirmwareToolHandlers.ExtractAsync(sandbox, @"..\evil.zip", ["x"], "out", false, 1024 * 1024));
     }
 
     [Fact]

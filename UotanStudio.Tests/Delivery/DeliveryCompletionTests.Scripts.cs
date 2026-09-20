@@ -240,7 +240,7 @@ public sealed partial class DeliveryCompletionTests
     {
         var boot = Image("boot");
         var sparse = Path.Combine(_root, "sparse-boot.img");
-        UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse.SparseImageConverter.ConvertRawToSparse(boot.SourcePath, sparse);
+        UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion.SparseImageConverter.ConvertRawToSparse(boot.SourcePath, sparse);
         var plan = new DeliveryPlan
         {
             PackSuper = true,

@@ -1,4 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Models;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Reader;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

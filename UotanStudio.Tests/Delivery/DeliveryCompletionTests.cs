@@ -4,9 +4,10 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using Google.Protobuf;
-using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
+using UotanStudio.Firmware.SharedKernel.Containers;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Firmware;
 using Xunit;
@@ -175,7 +176,7 @@ public sealed partial class DeliveryCompletionTests : IDisposable
     {
         var image = Image("boot");
         var sparse = Path.Combine(_root, "boot-sparse.img");
-        UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse.SparseImageConverter.ConvertRawToSparse(image.SourcePath, sparse);
+        UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion.SparseImageConverter.ConvertRawToSparse(image.SourcePath, sparse);
         var alternate = Image("alternative") with { Partition = "boot", Optional = true };
         var plan = new DeliveryPlan
         {

@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using Google.Protobuf;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using UotanStudio.Firmware.SharedKernel;
 using Xunit;

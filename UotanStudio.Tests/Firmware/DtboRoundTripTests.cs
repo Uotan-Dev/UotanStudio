@@ -1,6 +1,6 @@
-using System.Text;
-using UotanStudio.Firmware;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
 using UotanStudio.Firmware.SharedKernel;
 using Xunit;
 

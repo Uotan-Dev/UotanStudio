@@ -1,4 +1,7 @@
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -105,8 +108,8 @@ public class ErofsRebuildPreservationTests
         {
             var options = parser.ReadRebuildOptions();
             var repacked = new ErofsBuilder().Build(extracted, options);
-            var superblock = UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.ErofsSuperblock.FromImage(repacked);
-            Assert.Equal(UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.ErofsSuperblock.IncompatLz4_0Padding,
+            var superblock = UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models.ErofsSuperblock.FromImage(repacked);
+            Assert.Equal(UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models.ErofsSuperblock.IncompatLz4_0Padding,
                 superblock.FeatureIncompat);
 
             using var verify = new ErofsParser(repacked);

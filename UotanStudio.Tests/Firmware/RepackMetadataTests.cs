@@ -1,9 +1,14 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
+using UotanStudio.Firmware.BoundedContexts.Archive;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip;
 using UotanStudio.Firmware.SharedKernel;
@@ -135,8 +140,8 @@ public sealed class RepackMetadataTests : IDisposable
         var original = RepackMetadata.Read(Extracted)!.Configuration;
         var sparsePath = Path.Combine(_root, "sparse.img");
         var sparseOutput = Path.Combine(_root, "sparse-output");
-        UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse.SparseImageConverter.ConvertRawToSparse(Image, sparsePath);
-        var result = await new UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse.SparseFormatHandler()
+        UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion.SparseImageConverter.ConvertRawToSparse(Image, sparsePath);
+        var result = await new UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.SparseFormatHandler()
             .UnpackAsync(sparsePath, sparseOutput, cancellationToken: Cancellation);
         Assert.True(result.Success, result.Summary);
         var wrapped = RepackMetadata.Read(sparseOutput)!;

@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.IO;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.IO;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using Xunit;
 

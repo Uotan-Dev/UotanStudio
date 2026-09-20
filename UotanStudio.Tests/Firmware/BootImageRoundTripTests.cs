@@ -1,4 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

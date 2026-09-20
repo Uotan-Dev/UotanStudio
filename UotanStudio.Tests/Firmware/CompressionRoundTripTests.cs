@@ -1,7 +1,9 @@
 using System.Buffers.Binary;
 using System.IO.Hashing;
-using UotanStudio.Firmware.CrossCutting.Compress;
-using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
+using UotanStudio.Firmware.BoundedContexts.Compression;
+using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
+using UotanStudio.Firmware.BoundedContexts.Compression.Detection;
+using UotanStudio.Firmware.BoundedContexts.Compression.Files;
 using UotanStudio.Firmware.SharedKernel.Streams;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -45,7 +47,7 @@ public class CompressionRoundTripTests
     public void Gzip_Detection_IdentifiesMagic()
     {
         var compressed = CompressionService.Compress("hello gzip"u8.ToArray(), CompressionFormat.Gzip);
-        Assert.Equal(CompressionFormat.Gzip, CompressionFormats.Detect(compressed));
+        Assert.Equal(CompressionFormat.Gzip, CompressionDetector.Detect(compressed));
     }
 
     [Fact]
@@ -57,7 +59,7 @@ public class CompressionRoundTripTests
         var outputPath = Path.Combine(temp.Path, "output.br");
 
         var progress = new SyncProgress<(long Processed, long Total)>();
-        CompressionService.CompressFile(inputPath, outputPath, CompressionFormat.Brotli,
+        CompressionFile.CompressFile(inputPath, outputPath, CompressionFormat.Brotli,
             progress: progress,
             cancellationToken: TestContext.Current.CancellationToken);
 
@@ -79,7 +81,7 @@ public class CompressionRoundTripTests
         Assert.True(LzopCompressor.IsLzopFormat(lzop));
         Assert.Equal(payload, LzopCompressor.Decompress(lzop));
         Assert.Equal(payload, CompressionService.Decompress(lzop, CompressionFormat.Lzop));
-        Assert.Equal(CompressionFormat.Lzop, CompressionFormats.Detect(lzop));
+        Assert.Equal(CompressionFormat.Lzop, CompressionDetector.Detect(lzop));
     }
 
     [Fact]

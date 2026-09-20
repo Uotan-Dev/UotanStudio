@@ -1,11 +1,11 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Extraction;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
+using UotanStudio.Firmware.BoundedContexts.Archive;
+using UotanStudio.Firmware.BoundedContexts.Archive.Extraction;
+using UotanStudio.Firmware.BoundedContexts.Archive.Models;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Extraction;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Extraction;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
 using UotanStudio.Firmware.SharedKernel;
 using Xunit;
@@ -101,7 +101,7 @@ public sealed class ParentExtractionReviewTests : IDisposable
     {
         using var archive = NewcArchive(NewcEntry("entry", "DATA"u8.ToArray()));
         using var source = new FragmentedReadStream(archive.ToArray(), seekable: false);
-        var reader = new UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Formats.Cpio.CpioArchiveReader();
+        var reader = new UotanStudio.Firmware.BoundedContexts.Archive.Formats.Cpio.CpioArchiveReader();
         Assert.ThrowsAny<IOException>(() => reader.ReadEntriesStreaming(source,
             ArchiveFormat.NewAscii, 16, TestContext.Current.CancellationToken).ToArray());
         Assert.True(source.Position <= 19);
@@ -114,7 +114,7 @@ public sealed class ParentExtractionReviewTests : IDisposable
         using var source = new FragmentedReadStream(archive.ToArray(), seekable: false);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         cancellation.Cancel();
-        var reader = new UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Formats.Cpio.CpioArchiveReader();
+        var reader = new UotanStudio.Firmware.BoundedContexts.Archive.Formats.Cpio.CpioArchiveReader();
         Assert.ThrowsAny<OperationCanceledException>(() => reader.ReadEntriesStreaming(source,
             ArchiveFormat.NewAscii, 4096, cancellation.Token).ToArray());
         Assert.Equal(0, source.Position);

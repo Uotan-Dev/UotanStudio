@@ -1,6 +1,6 @@
 using System.Text;
-using UotanStudio.Firmware;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac.Extraction;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac.Models;
 using UotanStudio.Firmware.SharedKernel;
 using Xunit;
 

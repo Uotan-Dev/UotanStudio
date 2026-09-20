@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dts;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

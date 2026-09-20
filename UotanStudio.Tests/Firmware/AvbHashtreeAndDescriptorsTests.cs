@@ -1,7 +1,10 @@
 using System.Security.Cryptography;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Build;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -27,7 +30,7 @@ public class AvbHashtreeAndDescriptorsTests
         var data = new byte[100];
         new Random(7).NextBytes(data);
 
-        var result = AvbHashtreeBuilder.Build(data, salt);
+        using var result = AvbHashtreeBuilder.Build(data, salt);
 
         // 单个数据块：树为空，根摘要即该块（补零到 4096）的摘要。
         // Single data block: the tree is empty and the root digest is the block digest itself.
@@ -48,7 +51,7 @@ public class AvbHashtreeAndDescriptorsTests
         var data = new byte[8192];
         new Random(11).NextBytes(data);
 
-        var result = AvbHashtreeBuilder.Build(data, salt);
+        using var result = AvbHashtreeBuilder.Build(data, salt);
 
         // Level 0：两个数据块摘要（64 字节）零填充到 4096；root = SHA256(salt || level0 块)。
         // Level 0: two block digests (64 bytes) zero-padded to 4096; root = SHA256(salt || level0 block).
@@ -71,10 +74,10 @@ public class AvbHashtreeAndDescriptorsTests
         var data = new byte[200 * 1024];
         new Random(42).NextBytes(data);
 
-        var fromBytes = AvbHashtreeBuilder.Build(data, salt);
+        using var fromBytes = AvbHashtreeBuilder.Build(data, salt);
         using (var stream = new MemoryStream(data, writable: false))
         {
-            var fromStream = AvbHashtreeBuilder.Build(stream, salt);
+            using var fromStream = AvbHashtreeBuilder.Build(stream, salt);
             Assert.Equal(fromBytes.RootDigest, fromStream.RootDigest);
             Assert.Equal(fromBytes.TreeBytes, fromStream.TreeBytes);
             Assert.Equal(fromBytes.TreeSize, fromStream.TreeSize);
@@ -83,7 +86,7 @@ public class AvbHashtreeAndDescriptorsTests
 
         using var temp = new TempDirectory();
         var path = temp.WriteBytes("image.img", data);
-        var fromPath = AvbHashtreeBuilder.Build(path, salt);
+        using var fromPath = AvbHashtreeBuilder.Build(path, salt);
         Assert.Equal(fromBytes.RootDigest, fromPath.RootDigest);
         Assert.Equal(fromBytes.TreeBytes, fromPath.TreeBytes);
         Assert.Equal(fromBytes.TreeSize, fromPath.TreeSize);
@@ -196,7 +199,7 @@ public class AvbHashtreeAndDescriptorsTests
 
         // tree_offset == 对齐后镜像大小；树大小与根摘要与独立构建一致。
         // tree_offset equals the aligned image size; tree size and root digest match an independent build.
-        var expectedTree = AvbHashtreeBuilder.Build(imagePath, salt, 4096, 4096);
+        using var expectedTree = AvbHashtreeBuilder.Build(imagePath, salt, 4096, 4096);
         Assert.Equal((ulong)expectedTree.ImageSize, hashtree.TreeOffset);
         Assert.Equal((ulong)expectedTree.TreeSize, hashtree.TreeSize);
         Assert.Equal(expectedTree.RootDigest, hashtree.RootDigest);
@@ -235,6 +238,31 @@ public class AvbHashtreeAndDescriptorsTests
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task Build_SpillToFileBacking_MatchesInlineByteForByte()
+    {
+        var salt = new byte[32];
+        RandomNumberGenerator.Fill(salt);
+        var data = BuildPatternedImage(1024 * 1024);
+
+        // 1 MiB -> 256 数据块 -> 两层树（8192 + 4096）。阈值 0 强制临时文件后备，阈值上限保持内联。
+        // 1 MiB -> 256 data blocks -> a two-level tree. Threshold 0 forces the temp-file store; a huge threshold stays inline.
+        using var inline = AvbHashtreeBuilder.BuildCore(new MemoryStream(data, writable: false), salt, 4096, 4096, long.MaxValue);
+        using var spilled = AvbHashtreeBuilder.BuildCore(new MemoryStream(data, writable: false), salt, 4096, 4096, 0);
+
+        Assert.True(spilled.TreeSize > 4096);
+        Assert.Equal(inline.RootDigest, spilled.RootDigest);
+        Assert.Equal(inline.TreeSize, spilled.TreeSize);
+        Assert.Equal(inline.ImageSize, spilled.ImageSize);
+        Assert.Equal(inline.TreeBytes, spilled.TreeBytes);
+
+        // 写镜像路径：流式输出必须与完整树字节逐字节相同。
+        // The image-writing path: the streamed copy must be byte-identical to the full tree bytes.
+        using var sink = new MemoryStream();
+        await spilled.WriteTreeToAsync(sink, TestContext.Current.CancellationToken);
+        Assert.Equal(spilled.TreeBytes, sink.ToArray());
     }
 
     private static byte[] BuildMinimalVbmeta()
