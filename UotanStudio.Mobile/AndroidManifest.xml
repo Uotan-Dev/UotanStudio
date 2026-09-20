@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- package/versionCode/versionName are generated from ApplicationId,
+       ApplicationVersion and ApplicationDisplayVersion in the csproj;
+       hardcoding them here conflicts with the .NET Android build. -->
+  <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+  <!-- USB Host (OTG) communication: enumerate/open attached devices and request
+       UsbManager permission per device. No root required. -->
+  <uses-permission android:name="android.permission.USB" />
+  <uses-feature android:name="android.software.usb" android:required="false" />
+  <!-- Project file read/write/management: scoped-storage safe. READ/WRITE_EXTERNAL_STORAGE
+       only take effect on API <= 32; MANAGE_EXTERNAL_STORAGE covers broad file-manager
+       access on API 30+ (user must grant "All files access" in system settings).
+       <para>项目文件读取/写入/管理：兼容分区存储。READ/WRITE_EXTERNAL_STORAGE 仅在
+       API <= 32 生效；MANAGE_EXTERNAL_STORAGE 覆盖 API 30+ 的文件管理器级访问
+       （需用户在系统设置中授予"所有文件访问"）。</para> -->
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+  <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+  <application android:label="UotanStudio" android:requestLegacyExternalStorage="true" />
+</manifest>
