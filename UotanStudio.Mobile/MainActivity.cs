@@ -1,8 +1,8 @@
-using AndroidX.Core.View;
 using Android.App;
 using Android.Content.PM;
 using Android.OS;
 using Android.Views;
+using AndroidX.Core.View;
 using Avalonia.Android;
 
 namespace UotanStudio.Mobile;
