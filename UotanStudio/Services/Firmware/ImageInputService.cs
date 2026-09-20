@@ -95,7 +95,7 @@ internal sealed class ImageInputService
         if (filePath.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase)) return "dat";
         if (filePath.EndsWith(".dat", StringComparison.OrdinalIgnoreCase)) return "dat";
         if (filePath.EndsWith(".br", StringComparison.OrdinalIgnoreCase)) return "brotli";
-        if (new UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp.LpFormatHandler().CanHandle(filePath)) return "super";
+        if (new UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.LpFormatHandler().CanHandle(filePath)) return "super";
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
         switch (extension)
         {

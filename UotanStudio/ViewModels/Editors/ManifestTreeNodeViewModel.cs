@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Models;
 
 namespace UotanStudio.ViewModels.Editors;
 

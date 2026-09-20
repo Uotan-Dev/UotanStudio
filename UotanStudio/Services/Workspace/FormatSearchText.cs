@@ -1,8 +1,11 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Parsing;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Smali;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dts;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
 using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Services.Workspace;

@@ -1,11 +1,7 @@
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
-using FormatDetector = UotanStudio.Firmware.SharedKernel.FormatDetector;
 
 namespace UotanStudio.ViewModels.Workspace;
 

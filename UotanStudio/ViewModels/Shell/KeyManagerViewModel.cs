@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Services;
@@ -305,7 +304,7 @@ public partial class KeyManagerViewModel : ViewModelBase
     private Task GenerateApkCertificateAsync()
     {
         var name = string.IsNullOrWhiteSpace(CertificateAlias) ? Name : CertificateAlias;
-        var subject = new UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningKeyOptions
+        var subject = new UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys.ApkSigningKeyOptions
         {
             CommonName = CommonName,
             OrganizationalUnit = OrganizationalUnit,
@@ -315,19 +314,19 @@ public partial class KeyManagerViewModel : ViewModelBase
             Country = CountryCode,
         };
         var keyType = AlgorithmIndex == 1
-            ? UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningKeyType.EcP256
-            : UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningKeyType.Rsa2048;
+            ? UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys.ApkSigningKeyType.EcP256
+            : UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys.ApkSigningKeyType.Rsa2048;
         // Map the selected size/curve onto the concrete key type: RSA sizes first, then EC curves.
         // 把选中的位数/曲线映射到具体密钥类型：先 RSA 位数，再 EC 曲线。
         var size = SelectedApkKeySize;
         keyType = size switch
         {
-            2048 => UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningKeyType.Rsa2048,
-            3072 => UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningKeyType.Rsa3072,
-            4096 => UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningKeyType.Rsa4096,
-            384 => UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningKeyType.EcP384,
-            521 => UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningKeyType.EcP521,
-            _ => UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningKeyType.EcP256,
+            2048 => UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys.ApkSigningKeyType.Rsa2048,
+            3072 => UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys.ApkSigningKeyType.Rsa3072,
+            4096 => UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys.ApkSigningKeyType.Rsa4096,
+            384 => UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys.ApkSigningKeyType.EcP384,
+            521 => UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys.ApkSigningKeyType.EcP521,
+            _ => UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys.ApkSigningKeyType.EcP256,
         };
         var password = KeystorePassword;
         var validity = ValidityYears;

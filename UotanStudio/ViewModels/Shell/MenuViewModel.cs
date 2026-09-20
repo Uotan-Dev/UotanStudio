@@ -6,6 +6,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Firmware.SharedKernel.Containers;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;

@@ -513,7 +513,7 @@ public sealed class FlashService : IFlashService
         ArgumentException.ThrowIfNullOrEmpty(imagePath);
         try
         {
-            var header = UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse.SparseReader.PeekHeader(imagePath);
+            var header = UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO.SparseReader.PeekHeader(imagePath);
             if (header.IsValid())
             {
                 return checked((long)header.TotalBlocks * header.BlockSize);
@@ -556,7 +556,7 @@ public sealed class FlashService : IFlashService
         {
             using var fs = File.OpenRead(path);
             Span<byte> header = stackalloc byte[4];
-            return fs.Read(header) == 4 && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header) == UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse.SparseFormat.SparseHeaderMagic;
+            return fs.Read(header) == 4 && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header) == UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.SparseFormat.SparseHeaderMagic;
         }
 
         if (imageLength <= maxDownloadSize)
@@ -581,11 +581,11 @@ public sealed class FlashService : IFlashService
             if (!string.Equals(sparsePath, imagePath, StringComparison.OrdinalIgnoreCase))
             {
                 Report(progress, partition, 2, "Converting to sparse... 正在转换为稀疏格式...");
-                UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse.SparseImageConverter.ConvertRawToSparse(imagePath, sparsePath);
+                UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion.SparseImageConverter.ConvertRawToSparse(imagePath, sparsePath);
             }
 
             Report(progress, partition, 4, "Splitting sparse image... 正在拆分稀疏镜像...");
-            UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse.SparseImageConverter.ResparseImage(
+            UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion.SparseImageConverter.ResparseImage(
                 sparsePath, Path.Combine(tempDir, "chunk_{0}.sparse"), maxDownloadSize);
 
             var chunks = Directory.GetFiles(tempDir, "chunk_*.sparse")

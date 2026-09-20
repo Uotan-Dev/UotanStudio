@@ -194,7 +194,7 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
             Path.GetFileNameWithoutExtension(targetFull) + ".delta");
 
         context.Log.Write(LogLevel.Info, Title, $"Generating delta {source} -> {target}...  正在生成差分包...");
-        var result = await UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.DeltaEngine.GenerateDeltaAsync(
+        var result = await UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Engines.DeltaEngine.GenerateDeltaAsync(
             source, target, output, context.CancellationToken).ConfigureAwait(false);
 
         if (result.Success)

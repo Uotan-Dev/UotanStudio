@@ -1,21 +1,33 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json.Nodes;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Extraction;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys;
+using UotanStudio.Firmware.BoundedContexts.Archive;
+using UotanStudio.Firmware.BoundedContexts.Archive.Extraction;
+using UotanStudio.Firmware.BoundedContexts.Archive.Models;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Build;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.Models;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
-using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Extraction;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
 using UotanStudio.Firmware.SharedKernel;
 
@@ -392,7 +404,7 @@ public sealed class FirmwareService
         {
             return await Task.Run(() =>
             {
-                using var keyMaterial = UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSignerKeyMaterial.Load(
+                using var keyMaterial = UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys.ApkSignerKeyMaterial.Load(
                     keyPath, keyPassword, certPath, certPassword);
                 var options = new UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningOptions
                 {
@@ -652,9 +664,9 @@ public sealed class FirmwareService
         return new FirmwareOpResult { Success = result.Success, Summary = result.Summary };
     }
 
-    private static byte[] DecompressRamdisk(byte[] raw, UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.CompressionType compression)
+    private static byte[] DecompressRamdisk(byte[] raw, UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models.CompressionType compression)
     {
-        return compression == UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.CompressionType.None || raw.Length == 0
+        return compression == UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models.CompressionType.None || raw.Length == 0
             ? raw
             : BootCompressor.TryDecompress(raw, compression) ?? raw;
     }

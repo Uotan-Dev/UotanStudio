@@ -1,5 +1,8 @@
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.ViewModels.Workspace;
 
@@ -117,7 +120,7 @@ internal static class PackingService
             ["Ext4Compress"] = settings.EXT4Compress ? "1" : "0",
         } : new Dictionary<string, string>
         {
-            ["ErofsAlgorithm"] = settings.EROFSLZ4HC ? "lz4hc" : "lz4",
+            ["ErofsAlgorithm"] = settings.SelectedErofsAlgorithm,
             ["ErofsCompressionLevel"] = settings.EROFSComGrade.ToString(System.Globalization.CultureInfo.InvariantCulture),
         };
     }
@@ -159,23 +162,31 @@ internal static class PackingService
     {
         var options = new ErofsOptions
         {
-            Algorithm = ErofsCompressionAlgorithm.Lz4,
             // Legacy layout follows the app-level setting (synced to the shared default at startup
             // and on change) so both the packing panel and repack honor the same user choice.
             // legacy 布局跟随应用层设置（启动与变更时同步到共享默认值），使打包面板与重打包
             // 遵循同一用户选择。
             LegacyCompatibility = UotanStudio.Firmware.SharedKernel.ErofsBuildDefaults.LegacyCompatibility,
-            // The panel's LZ4/LZ4HC choice selects the block encoder; EROFS stores no codec enum for
-            // it, so only density and build time differ on disk.
-            // 面板上的 LZ4/LZ4HC 选择决定块编码器；EROFS 不存对应的编解码枚举，因此二者在磁盘上只有
-            // 压缩率与构建时间的差别。
-            Lz4HighCompression = settings.EROFSLZ4HC,
-            CompressionLevel = settings.EROFSComGrade,
+            // The panel selects the codec and, for LZ4, the block encoder through the shared selector
+            // vocabulary so the picker drives the builder directly.
+            // 面板通过共享的选择器词表选择编解码器，并在 LZ4 下选择块编码器，使下拉框直接驱动构建器。
         };
+        (options.Algorithm, options.Lz4HighCompression) = ErofsAlgorithmSelectors.Parse(settings.SelectedErofsAlgorithm);
+        // A modern codec implies the modern (5.13+) layout: legacy EROFS only encodes LZ4, so the
+        // panel's legacy toggle is dropped for LZMA/DEFLATE/ZSTD selections rather than silently
+        // rebuilding as LZ4. HC carries the same implication from a density angle — legacy caps
+        // every pcluster at one physical block, so HC saves only bytes that always round up to
+        // the same block count, and forcing modern is what makes HC actually shrink the image.
+        // 选择现代编解码器即隐含现代（5.13+）布局：legacy erofs 仅编码 LZ4，因此对
+        // LZMA/DEFLATE/ZSTD 面板的 legacy 开关会被放弃，而不是静默改回 LZ4 重建。HC 从密度角度
+        // 也有同样的隐含要求：legacy 把每个 pcluster 限死在一个物理块，HC 省下的字节一定会被舍入
+        // 到同样的块数，强制现代布局才能让 HC 真正缩小镜像。
+        if (options.Algorithm != ErofsCompressionAlgorithm.Lz4 || options.Lz4HighCompression) options.LegacyCompatibility = false;
+        options.CompressionLevel = settings.EROFSComGrade;
 
         LogService.Instance.Write(LogLevel.Info, "Packing",
-            $"Building EROFS image (algo={(options.Lz4HighCompression ? "lz4hc" : "lz4")}, level={options.CompressionLevel})  " +
-            $"正在构建 EROFS 镜像（算法={(options.Lz4HighCompression ? "lz4hc" : "lz4")}，级别={options.CompressionLevel}）");
+            $"Building EROFS image (algo={settings.SelectedErofsAlgorithm}, level={options.CompressionLevel})  " +
+            $"正在构建 EROFS 镜像（算法={settings.SelectedErofsAlgorithm}，级别={options.CompressionLevel}）");
 
         var builder = new ErofsBuilder();
         builder.Build(sourceDirectory, outputPath, options, progress);

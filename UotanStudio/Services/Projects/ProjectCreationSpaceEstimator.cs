@@ -1,7 +1,7 @@
 using System.IO.Compression;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.SharedKernel.Containers;
 using UotanStudio.Services.Delivery;
-using UotanStudio.Services.Firmware;
 
 namespace UotanStudio.Services.Projects;
 

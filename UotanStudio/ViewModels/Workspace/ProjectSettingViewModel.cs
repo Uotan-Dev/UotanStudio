@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
 using UotanStudio.Messages;
 using UotanStudio.Services.Projects;
 
@@ -34,12 +35,20 @@ internal partial class ProjectSettingViewModel : Tool
     // 默认编解码器为 lz4hc，因为下方的等级下拉框只作用于 HC 搜索：选择快速 lz4 时该等级会被忽略，
     // 默认值若为 "lz4" 会静默打出更大的镜像。
     [ObservableProperty]
-    private bool typeEXT4 = false, formatSPARSE = false, eXT4RO = false, sizeOri = false, eXT4Compress = false, eROFSLZ4HC = true, sUPERSPARSE = false,
-        typeEROFS = true, formatRAW = true, eXT4RW = true, sizeAuto = true, eXT4NoCompress = true, eROFSLZ4 = false, sUPERRAW = true;
+    private bool typeEXT4 = false, formatSPARSE = false, eXT4RO = false, sizeOri = false, eXT4Compress = false, sUPERSPARSE = false,
+        typeEROFS = true, formatRAW = true, eXT4RW = true, sizeAuto = true, eXT4NoCompress = true, sUPERRAW = true;
+    [ObservableProperty]
+    private string selectedErofsAlgorithm = ErofsAlgorithmSelectors.Lz4HighCompression;
     [ObservableProperty]
     private int eROFSComGrade = 8, bRComGrade = 3;
     [ObservableProperty]
     private string projectName = "", sUPERSize = "9126805504", sUPERName = "qti_dynamic_partitions", uTCTime = "1230768000", dATSeg = "15";
+
+    /// <summary>
+    /// <para>供 EROFS 算法下拉框绑定：按显示顺序排列的可选编解码器令牌。</para>
+    /// Picker choices for the EROFS codec combo, in display order.
+    /// </summary>
+    public IReadOnlyList<string> ErofsAlgorithmOptions => ErofsAlgorithmSelectors.Ordered;
 
     /// <summary>
     /// <para>创建打包设置面板视图模型并注册单例实例；订阅工程上下文变更消息以在子项目切换时自动加载设置。</para>
@@ -91,7 +100,7 @@ internal partial class ProjectSettingViewModel : Tool
         Ext4ReadWrite = EXT4RW,
         SizeAuto = SizeAuto,
         Ext4Compress = EXT4Compress,
-        ErofsAlgorithm = EROFSLZ4HC ? "lz4hc" : "lz4",
+        ErofsAlgorithm = SelectedErofsAlgorithm,
         ErofsCompLevel = EROFSComGrade,
         BrCompLevel = BRComGrade,
         SuperSize = SUPERSize,
@@ -119,7 +128,6 @@ internal partial class ProjectSettingViewModel : Tool
 
         var isExt4 = string.Equals(dto.ImageType, "EXT4", StringComparison.OrdinalIgnoreCase);
         var isSparse = string.Equals(dto.ImageFormat, "SPARSE", StringComparison.OrdinalIgnoreCase);
-        var isLz4Hc = string.Equals(dto.ErofsAlgorithm, "lz4hc", StringComparison.OrdinalIgnoreCase);
         var isSuperSparse = string.Equals(dto.SuperFormat, "SPARSE", StringComparison.OrdinalIgnoreCase);
 
         TypeEXT4 = isExt4;
@@ -132,8 +140,12 @@ internal partial class ProjectSettingViewModel : Tool
         SizeOri = !dto.SizeAuto;
         EXT4NoCompress = !dto.Ext4Compress;
         EXT4Compress = dto.Ext4Compress;
-        EROFSLZ4 = !isLz4Hc;
-        EROFSLZ4HC = isLz4Hc;
+        // Legacy projects stored only "lz4"/"lz4hc"; those tokens stay valid picker choices, and the
+        // historical HC default is retained for an empty value.
+        // 旧工程仅存 "lz4"/"lz4hc"；这些令牌仍是有效的下拉选项，空值沿用历史上的 HC 默认。
+        SelectedErofsAlgorithm = string.IsNullOrWhiteSpace(dto.ErofsAlgorithm)
+            ? ErofsAlgorithmSelectors.Lz4HighCompression
+            : ErofsAlgorithmSelectors.Normalize(dto.ErofsAlgorithm);
         EROFSComGrade = dto.ErofsCompLevel;
         BRComGrade = dto.BrCompLevel;
         SUPERSize = dto.SuperSize;

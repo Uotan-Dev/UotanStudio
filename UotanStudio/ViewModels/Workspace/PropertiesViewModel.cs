@@ -895,13 +895,13 @@ internal partial class PropertiesViewModel : Tool
 
         switch (node.Payload)
         {
-            case UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.ResPackage pkg:
+            case UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Models.ResPackage pkg:
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNode", pkg.Name));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeKind", $"0x{pkg.Id:x2}"));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeChildren", pkg.Types.Count.ToString("N0")));
                 break;
 
-            case UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.ResType type:
+            case UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Models.ResType type:
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNode", $"0x{type.Id:x2}"));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeKind", "type"));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeDetail", type.ConfigDescription));

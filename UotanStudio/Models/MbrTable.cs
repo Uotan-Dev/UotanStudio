@@ -109,6 +109,64 @@ public static class MbrTable
         data.Length >= SectorSize && data[510] == SignatureLo && data[511] == SignatureHi;
 
     /// <summary>
+    /// Identifies a populated MBR partition table without mistaking a FAT volume boot record for a disk.
+    /// <para>检查有效的非空 MBR 分区项，排除同样带有 55 AA 签名的 FAT 卷引导扇区。</para>
+    /// </summary>
+    public static bool HasPartitionTable(ReadOnlySpan<byte> data)
+    {
+        if (!HasSignature(data) || IsFatBootRecord(data))
+        {
+            return false;
+        }
+
+        var populated = false;
+        for (var i = 0; i < MaxPrimaryPartitions; i++)
+        {
+            var entry = data.Slice(PartitionTableOffset + i * PartitionEntrySize, PartitionEntrySize);
+            if (entry.IndexOfAnyExcept((byte)0) < 0)
+            {
+                continue;
+            }
+
+            var start = BinaryPrimitives.ReadUInt32LittleEndian(entry[8..]);
+            var size = BinaryPrimitives.ReadUInt32LittleEndian(entry[12..]);
+            // Do not compare against the probe length: standalone partition-table exports are valid inputs.
+            if (entry[0] is not (0 or BootableFlag) || entry[4] == 0 || start == 0 || size == 0
+                || (ulong)start + size > 1UL << 32)
+            {
+                return false;
+            }
+            populated = true;
+        }
+        return populated;
+    }
+
+    private static bool IsFatBootRecord(ReadOnlySpan<byte> data)
+    {
+        if (data[0] != 0xE9 && !(data[0] == 0xEB && data[2] == 0x90))
+        {
+            return false;
+        }
+        var sectorBytes = BinaryPrimitives.ReadUInt16LittleEndian(data[11..]);
+        var clusterSectors = data[13];
+        var reserved = BinaryPrimitives.ReadUInt16LittleEndian(data[14..]);
+        var roots = BinaryPrimitives.ReadUInt16LittleEndian(data[17..]);
+        var sectors16 = BinaryPrimitives.ReadUInt16LittleEndian(data[19..]);
+        var sectors = sectors16 != 0 ? (uint)sectors16 : BinaryPrimitives.ReadUInt32LittleEndian(data[32..]);
+        var fat16 = BinaryPrimitives.ReadUInt16LittleEndian(data[22..]);
+        var fatSectors = fat16 != 0 ? (uint)fat16 : BinaryPrimitives.ReadUInt32LittleEndian(data[36..]);
+        if (sectorBytes is not (512 or 1024 or 2048 or 4096)
+            || clusterSectors is 0 or > 128 || (clusterSectors & (clusterSectors - 1)) != 0
+            || reserved == 0 || data[16] is not (1 or 2) || fatSectors == 0
+            || data[21] is not (0xF0 or >= 0xF8) || (fat16 == 0 ? roots != 0 : roots == 0))
+        {
+            return false;
+        }
+        var rootSectors = ((ulong)roots * 32 + sectorBytes - 1) / sectorBytes;
+        return sectors > reserved + (ulong)data[16] * fatSectors + rootSectors;
+    }
+
+    /// <summary>
     /// <para>解析分区类型文本：支持 0x 十六进制与十进制，失败返回 <c>false</c>。</para>
     /// Parses a partition-type text: 0x-hex or decimal are supported; returns <c>false</c> on failure.
     /// </summary>

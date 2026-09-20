@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using UotanStudio.Firmware.SharedKernel.Containers;
 using UotanStudio.Services;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Firmware;
@@ -238,7 +239,7 @@ public partial class NewProjectWindow : Window
         Closing += (_, e) => e.Cancel = _isCreating;
         Closed += (_, _) => { _analysisGeneration++; DetachImageHandlers(); };
 
-        ProjectNameBox.Text = ContainerStructureAnalyzer.GetNextDefaultName(_baseDirectory, ReservedNames);
+        ProjectNameBox.Text = NewProjectDirectoryHelper.GetNextDefaultName(_baseDirectory, ReservedNames);
         UpdateLocationText();
         UpdateCreateEnabled();
     }
@@ -709,7 +710,7 @@ public partial class NewProjectWindow : Window
         if (ReservedNames.Contains(name, StringComparer.OrdinalIgnoreCase)) return false;
         return ProjectLocationBox.Text is { } location
             && !string.IsNullOrWhiteSpace(location)
-            && ContainerStructureAnalyzer.IsDirectoryEmptyOrMissing(location);
+            && NewProjectDirectoryHelper.IsDirectoryEmptyOrMissing(location);
     }
 }
 

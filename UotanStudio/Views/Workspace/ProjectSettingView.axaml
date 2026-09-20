@@ -90,17 +90,11 @@
                                     ColumnSpacing="5">
             <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
                        Text="{DynamicResource Dock_EROFSAlgorithm}" />
-            <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
-                        HorizontalAlignment="Left">
-                <RadioButton FontSize="13" IsChecked="{Binding EROFSLZ4}"
-                             ToolTip.Tip="{DynamicResource Dock_EROFSAlgorithmHint}">
-                    <TextBlock Text="lz4" TextWrapping="NoWrap" />
-                </RadioButton>
-                <RadioButton FontSize="13" IsChecked="{Binding EROFSLZ4HC}"
-                             ToolTip.Tip="{DynamicResource Dock_EROFSAlgorithmHint}">
-                    <TextBlock Text="lz4hc" TextWrapping="NoWrap" />
-                </RadioButton>
-            </StackPanel>
+            <ComboBox MinWidth="145" MaxWidth="240" Padding="5"
+                      HorizontalAlignment="Left"
+                      ToolTip.Tip="{DynamicResource Dock_EROFSAlgorithmHint}"
+                      ItemsSource="{Binding ErofsAlgorithmOptions}"
+                      SelectedItem="{Binding SelectedErofsAlgorithm}" />
         </controls:ResponsiveFormRow>
         <controls:ResponsiveFormRow Margin="8,10,5,0"
                                     MinLabelWidth="90" MaxLabelWidth="90"

@@ -47,7 +47,7 @@
     <x:String x:Key="Dock_NoCompress">不压</x:String>
     <x:String x:Key="Dock_Compress">压缩</x:String>
     <x:String x:Key="Dock_EROFSAlgorithm">EROFS算法</x:String>
-    <x:String x:Key="Dock_EROFSAlgorithmHint">lz4 打包更快；lz4hc 用更多打包时间换取更小镜像。两者写盘的编解码器都是 LZ4。</x:String>
+    <x:String x:Key="Dock_EROFSAlgorithmHint">lz4 打包更快；lz4hc 用更多打包时间换取更小镜像（两者写盘的编解码器都是 LZ4）。lzma、deflate 与 zstd 会选用不同的磁盘编解码器。压缩等级只作用于带搜索的编码器。</x:String>
     <x:String x:Key="Dock_EROFSCompLevel">EROFS压缩等级</x:String>
     <x:String x:Key="Dock_EROFSCompLevelHint">等级越高压缩越密：对 lz4hc 是搜索深度，对快速 lz4 是密度与速度的权衡。</x:String>
     <x:String x:Key="Dock_SUPERSize">SUPER大小</x:String>

@@ -166,7 +166,7 @@ public partial class FirmwareInfoViewModel : Document
     /// <para>固件文件路径。</para>
     /// The firmware file path.
     /// </param>
-    public async Task LoadAsync(string path)
+    public async Task LoadAsync(string path, FormatDetectionResult? detection = null)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -197,7 +197,8 @@ public partial class FirmwareInfoViewModel : Document
 
             // Detect 内部为同步文件读取（流式读头部），放后台线程避免阻塞 UI。
             // Detect performs synchronous file reads (streamed headers); run it on a background thread.
-            var handler = await Task.Run(() => FormatDetector.Detect(path)).ConfigureAwait(true);
+            var detectionResult = detection ?? await Task.Run(() => FormatDetector.DetectDetailed(path)).ConfigureAwait(true);
+            var handler = detectionResult?.Handler;
             if (handler is null)
             {
                 ErrorMessage = UnrecognizedLabel;

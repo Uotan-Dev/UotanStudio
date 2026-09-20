@@ -1,8 +1,9 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.BoundedContexts.Archive.Browsing;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Magic;
 using UotanStudio.Services.Logging;
 
 namespace UotanStudio.Views.Controls;
@@ -98,7 +99,7 @@ public static class FileOpenMode
     /// <para>自动打开时用于格式与二进制内容判定的有界文件头长度。</para>
     /// Bounded file-header length used for format and binary-content detection during automatic opening.
     /// </summary>
-    public const int ContentProbeLength = 8192;
+    public const int ContentProbeLength = 65536;
 
     /// <summary>
     /// <para>解析指定文件应使用的打开方式。规则：<c>.dts→Text</c>、<c>.dtb/.dtbo→Dtb</c>、
@@ -253,14 +254,14 @@ public static class FileOpenMode
     /// <para>可选的已加载文件头部字节；为 <c>null</c> 时不计 magic 兜底。</para>
     /// Optional loaded file header bytes; magic fallback is skipped when <c>null</c>.
     /// </param>
-    public static EditorOpenMode ResolveMode(string path, byte[]? header)
+    public static EditorOpenMode ResolveMode(string path, byte[]? header, FormatDetectionResult? detection = null)
     {
         // AXML 内容探测优先：AndroidManifest.xml 等二进制 XML 即使扩展名为 .xml（会被文本路由
         // 拦截）也应走 Manifest 编辑器，避免按 UTF-8 文本打开乱码。
         // AXML content sniffing first: binary XML files such as AndroidManifest.xml carry a .xml
         // extension (which the text route would claim), so the AXML magic must win to avoid opening
         // them as mangled UTF-8 text.
-        if (header is not null && UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.AXmlParser.IsAxml(header))
+        if (header is not null && UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing.AXmlParser.IsAxml(header))
         {
             return EditorOpenMode.Axml;
         }
@@ -281,6 +282,12 @@ public static class FileOpenMode
         if (header is not null && IsDexMagic(header))
         {
             return EditorOpenMode.Dex;
+        }
+
+        // Strong firmware signatures take precedence over any misleading or missing extension.
+        if (header is not null && IsFirmwareMagic(header))
+        {
+            return EditorOpenMode.Firmware;
         }
 
         // ZIP 容器魔数：PK 头按内容命中文件管理器浏览；.apk/.jar 的专用编辑器仍由扩展名路由
@@ -328,6 +335,26 @@ public static class FileOpenMode
             return EditorOpenMode.Partition;
         }
 
+        // A validated handler must remain authoritative even when the file uses a vendor-specific
+        // suffix (for example sparse-super fragments such as .0). Extension lists are only hints;
+        // otherwise a successfully detected firmware object fell through to the generic hex editor.
+        if (detection is { Confidence: not DetectionConfidence.ExtensionOnly })
+        {
+            var formatName = detection.Handler.FormatName;
+            if (formatName.Contains("Resource Table", StringComparison.OrdinalIgnoreCase))
+            {
+                return EditorOpenMode.Arsc;
+            }
+
+            if (formatName.Contains("Compressed", StringComparison.OrdinalIgnoreCase)
+                || formatName.Contains("Archive", StringComparison.OrdinalIgnoreCase))
+            {
+                return EditorOpenMode.FileSystem;
+            }
+
+            return EditorOpenMode.Firmware;
+        }
+
         var mode = ResolveMode(path);
         if (mode is EditorOpenMode.Text or EditorOpenMode.Log && header is not null && IsBinaryContent(header))
         {
@@ -345,7 +372,7 @@ public static class FileOpenMode
 
         // ARSC 内容探测：resources.arsc 为 0x0002 表头。
         // ARSC content sniffing: resources.arsc carries the 0x0002 table header.
-        if (header is not null && UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.ArscParser.IsArsc(header))
+        if (header is not null && UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Parsing.ArscParser.IsArsc(header))
         {
             return EditorOpenMode.Arsc;
         }
@@ -360,7 +387,7 @@ public static class FileOpenMode
         if (header is not null && header.Length > 0 && string.IsNullOrEmpty(Path.GetExtension(path)))
         {
             FirmwareFormatRegistry.RegisterAll();
-            if (FormatDetector.Detect(path) is not null)
+            if ((detection ?? FormatDetector.DetectDetailed(path)) is not null)
             {
                 return EditorOpenMode.Firmware;
             }
@@ -368,7 +395,7 @@ public static class FileOpenMode
 
         // Auto 分支的 magic 兜底：识别出强二进制类型视为十六进制。
         // Magic fallback for the Auto branch: a recognized strongly-binary type opens as hex.
-        if (header is not null && ManagedMagic.Detect(header) is not null)
+        if (header is not null && FileMagic.Describe(header) is not null)
         {
             return EditorOpenMode.Hex;
         }
@@ -598,8 +625,8 @@ public static class FileOpenMode
         }
 
         var magic = BinaryPrimitives.ReadUInt32BigEndian(header);
-        return magic == UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.FdtConstants.FdtMagic
-            || magic == UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.FdtConstants.DtboMagic;
+        return magic == UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.FdtConstants.FdtMagic
+            || magic == UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.FdtConstants.DtboMagic;
     }
 
     /// <summary>
@@ -609,6 +636,31 @@ public static class FileOpenMode
     public static bool IsDexMagic(ReadOnlySpan<byte> header) =>
         header.Length >= 4 && header[0] == (byte)'d' && header[1] == (byte)'e'
             && header[2] == (byte)'x' && header[3] == (byte)'\n';
+
+    /// <summary>Checks strong Android/vendor firmware signatures independent of the file extension.</summary>
+    public static bool IsFirmwareMagic(ReadOnlySpan<byte> header)
+    {
+        if (header.Length >= 8 && (header[..8].SequenceEqual("ANDROID!"u8)
+            || header[..8].SequenceEqual("VNDRBOOT"u8)))
+        {
+            return true;
+        }
+
+        if (header.Length >= 4 && (header[..4].SequenceEqual("CrAU"u8)
+            || header[..4].SequenceEqual("AVBf"u8)
+            || header[..4].SequenceEqual("RKFW"u8)
+            || header[..4].SequenceEqual("RKAF"u8)
+            || header[..4].SequenceEqual(new byte[] { 0x55, 0xAA, 0x5A, 0xA5 })))
+        {
+            return true;
+        }
+
+        return header.Length >= 0x28
+            && (header.Slice(0x24, 4).SequenceEqual(new byte[] { 0x18, 0x28, 0x6F, 0x01 })
+                || header.Slice(0x24, 4).SequenceEqual(new byte[] { 0xED, 0xFE, 0x0F, 0x00 })
+                || header.Slice(0x24, 4).SequenceEqual(new byte[] { 0x00, 0x0F, 0xFE, 0xED })
+                || header.Slice(0x24, 4).SequenceEqual(new byte[] { 0x01, 0x6F, 0x28, 0x18 }));
+    }
 
     /// <summary>
     /// <para>是否为 ZIP 容器魔数（"PK\x03\x04" / "PK\x05\x06" / "PK\x07\x08"，覆盖空归档与跨卷条目）。</para>
@@ -675,7 +727,7 @@ public static class FileOpenMode
     public static bool IsLpMetadataMagic(ReadOnlySpan<byte> header) =>
         header.Length >= LpMetadataHeaderLength
         && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(4096, 4))
-            == UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp.MetadataFormat.LP_METADATA_GEOMETRY_MAGIC;
+            == UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models.MetadataFormat.LP_METADATA_GEOMETRY_MAGIC;
 
     /// <summary>
     /// <para>判断头部字节是否为 Rockchip parameter 文本：内容须为可打印 ASCII/文本控制字符
@@ -810,11 +862,11 @@ public static class FileOpenMode
         header.Length >= 520 && header.Slice(512, 8).SequenceEqual("EFI PART"u8);
 
     /// <summary>
-    /// <para>判断头部字节是否携带 MBR 签名（0x55AA @510）。</para>
-    /// Whether the header bytes carry the MBR signature (0x55AA @510).
+    /// <para>判断头部是否包含有效的非空 MBR 分区表，排除 FAT 卷引导扇区。</para>
+    /// Whether the header contains a populated MBR partition table rather than a FAT boot record.
     /// </summary>
     public static bool IsMbrMagic(ReadOnlySpan<byte> header) =>
-        header.Length >= 512 && header[510] == 0x55 && header[511] == 0xAA;
+        UotanStudio.Models.MbrTable.HasPartitionTable(header);
 
     /// <summary>
     /// <para>判断文件内容是否为 GPT 分区表（读取头部并检查 "EFI PART" 签名）。

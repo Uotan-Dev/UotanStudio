@@ -3,8 +3,9 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Containers;
 
 namespace UotanStudio.Services.Firmware;
 
@@ -74,7 +75,7 @@ public sealed class RemoteRomService(HttpClient client)
             var metadata = PayloadParser.GetPayloadMetadata(new MemoryStream(payloadBytes, writable: false));
             var entries = metadata.Manifest.Partitions
                 .Where(p => !string.IsNullOrWhiteSpace(p.PartitionName))
-                .Select(p => new ContainerEntry(p.PartitionName, "payload", checked((long)p.Operations.SelectMany(o => o.DstExtents).Aggregate(0UL, (total, extent) => total + extent.NumBlocks) * metadata.BlockSize), true))
+                .Select(p => new ContainerEntry(p.PartitionName, "payload", PayloadParser.GetPartitionSize(p, metadata.BlockSize), true))
                 .ToArray();
             return new(uri, fileName, ContainerKind.Payload, entries, length, true);
         }
@@ -96,7 +97,7 @@ public sealed class RemoteRomService(HttpClient client)
                 {
                     var metadata = PayloadParser.GetPayloadMetadata(new MemoryStream(manifestBytes, writable: false));
                     entries.AddRange(metadata.Manifest.Partitions.Where(p => !string.IsNullOrWhiteSpace(p.PartitionName)).Select(p =>
-                        new ContainerEntry(p.PartitionName, "payload", checked((long)p.Operations.SelectMany(o => o.DstExtents).Aggregate(0UL, (total, extent) => total + extent.NumBlocks) * metadata.BlockSize), true)
+                        new ContainerEntry(p.PartitionName, "payload", PayloadParser.GetPartitionSize(p, metadata.BlockSize), true)
                         { PayloadMemberPath = payload.Name }));
                 }
                 catch { }

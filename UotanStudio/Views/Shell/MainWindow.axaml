@@ -14,8 +14,8 @@
    Icon="/Assets/UotanToolbox.png"
    Title=""
    MinWidth="720"
-   ExtendClientAreaToDecorationsHint="True"
-   ExtendClientAreaTitleBarHeightHint="32">
+   ExtendClientAreaToDecorationsHint="{OnPlatform Android=False, Default=True}"
+   ExtendClientAreaTitleBarHeightHint="{OnPlatform Android=0, Default=32}">
 	<Window.Resources>
 		<ControlTheme x:Key="DeviceSelectorItemTheme" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
 			<Setter Property="Header" Value="{Binding DisplayName, x:DataType=devices:DeviceInfo}" />

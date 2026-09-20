@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Magic;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Workspace;
@@ -478,7 +479,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
                     const int probeSize = 4096;
                     using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, probeSize, FileOptions.SequentialScan);
                     int read = fs.Read(_magicProbeBuffer, 0, probeSize);
-                    magic = ManagedMagic.Detect(_magicProbeBuffer.AsSpan(0, read));
+                    magic = FileMagic.Describe(_magicProbeBuffer.AsSpan(0, read));
                 }
                 catch
                 {

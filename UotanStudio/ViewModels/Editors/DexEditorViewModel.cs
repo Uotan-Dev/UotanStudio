@@ -3,6 +3,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Containers;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Smali;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Keys;

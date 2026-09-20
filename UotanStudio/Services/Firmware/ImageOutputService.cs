@@ -1,5 +1,7 @@
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.BoundedContexts.Compression.Files;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Services.Firmware;
@@ -61,8 +63,8 @@ internal static class ImageOutputService
             if (operation == "br")
             {
                 var compressed = dat + ".br";
-                UotanStudio.Firmware.CrossCutting.Compress.CompressionService.CompressFile(dat, compressed,
-                    UotanStudio.Firmware.CrossCutting.Compress.CompressionFormat.Brotli,
+                CompressionFile.CompressFile(dat, compressed,
+                    UotanStudio.Firmware.BoundedContexts.Compression.CompressionFormat.Brotli,
                     new() { Level = brotliLevel },
                     FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.Compressing));
                 dat = compressed;

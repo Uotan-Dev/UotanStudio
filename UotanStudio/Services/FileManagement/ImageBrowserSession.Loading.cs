@@ -1,9 +1,10 @@
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.BoundedContexts.Archive.Browsing;
+using UotanStudio.Firmware.BoundedContexts.Archive.Models;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Services.FileManagement;

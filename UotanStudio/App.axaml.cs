@@ -45,7 +45,14 @@ public partial class App : Application
             }
         };
 #if DEBUG
-        this.AttachDeveloperTools();
+        // DevTools 只在桌面运行时挂载：移动端没有开发者工具实例，连接尝试会
+        // 以 DevToolsUnreachableException 致命崩溃（见真机 logcat 08:18 记录）。
+        // Attach DevTools on desktop only: on mobile there is no DevTools instance and
+        // the connection attempt crashes with DevToolsUnreachableException.
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            this.AttachDeveloperTools();
+        }
 #endif
     }
 

@@ -2,7 +2,11 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Models;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Text;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Writing;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Resources;
 using UotanStudio.Services;
 using UotanStudio.Services.Workspace;
 

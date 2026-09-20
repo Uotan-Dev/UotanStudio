@@ -61,7 +61,7 @@
     <x:String x:Key="Dock_NoCompress">None</x:String>
     <x:String x:Key="Dock_Compress">Compress</x:String>
     <x:String x:Key="Dock_EROFSAlgorithm">EROFS Codec</x:String>
-    <x:String x:Key="Dock_EROFSAlgorithmHint">lz4 packs faster; lz4hc spends more time searching for a smaller image. EROFS records the same LZ4 codec either way.</x:String>
+    <x:String x:Key="Dock_EROFSAlgorithmHint">lz4 packs faster; lz4hc spends more time searching for a smaller image (EROFS records the same LZ4 codec either way). lzma, deflate and zstd choose a different on-disk codec. The compression level only affects the searching encoders.</x:String>
     <x:String x:Key="Dock_EROFSCompLevel">EROFS Level</x:String>
     <x:String x:Key="Dock_EROFSCompLevelHint">Higher values search harder for a smaller image: it drives the lz4hc search depth and the fast lz4 density/speed trade-off.</x:String>
     <x:String x:Key="Dock_SUPERSize">SUPER Size</x:String>

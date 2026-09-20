@@ -4,7 +4,9 @@ using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Writing;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Flash;
@@ -185,7 +187,10 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             LpMetadata? lp = null;
             try
             {
-                lp = await Task.Run(() => MetadataReader.ReadFromImageFile(path), default).ConfigureAwait(true);
+                lp = await Task.Run(() =>
+                    new UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.LpFormatHandler().CanHandle(path)
+                        ? MetadataReader.ReadFromImageFile(path)
+                        : null, default).ConfigureAwait(true);
             }
             catch
             {
@@ -409,7 +414,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 return true;
             }
 
-            if (MbrTable.HasSignature(bytes) && !AmlogicTable.HasMagic(bytes))
+            if (MbrTable.HasPartitionTable(bytes) && !AmlogicTable.HasMagic(bytes))
             {
                 var info = MbrTable.Parse(bytes);
                 _source = PartitionTableSource.Mbr;

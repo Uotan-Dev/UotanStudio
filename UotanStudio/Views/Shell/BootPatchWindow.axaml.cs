@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.Models;
 using UotanStudio.Services;
 
 namespace UotanStudio.Views.Shell;

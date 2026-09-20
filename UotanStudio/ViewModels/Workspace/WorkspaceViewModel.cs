@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
+using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Compare;
@@ -185,6 +186,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         // 避免 .dtb 落入 FileViewModel 被当作普通二进制（十六进制）打开。
         // Auto mode: resolve by extension+content; DTB/DTBO blobs route to the
         // dual-pane editor instead of being opened as a plain binary (hex) document.
+        FormatDetectionResult? detection = null;
         if (mode == EditorOpenMode.Auto)
         {
             // 有界读取文件头参与格式与二进制内容探测：专用格式按魔数路由，其余明显二进制
@@ -203,7 +205,9 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
                 // Fall back to extension-only resolution when the header cannot be read.
             }
 
-            mode = FileOpenMode.ResolveMode(path, header);
+            FirmwareFormatRegistry.RegisterAll();
+            detection = await Task.Run(() => FormatDetector.DetectDetailed(path)).ConfigureAwait(true);
+            mode = FileOpenMode.ResolveMode(path, header, detection);
         }
 
         if (mode == EditorOpenMode.Log)
@@ -264,7 +268,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         // Firmware metadata panel: extensions registered by the format handlers (.img/.pac/.ops/.nb0 etc.).
         if (mode == EditorOpenMode.Firmware)
         {
-            await OpenFirmwareAsync(path);
+            await OpenFirmwareAsync(path, detection);
             return;
         }
 
@@ -274,6 +278,12 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         if (mode == EditorOpenMode.FileSystem)
         {
             await OpenFileSystemAsync(path);
+            return;
+        }
+
+        if (mode == EditorOpenMode.Partition)
+        {
+            await OpenPartitionAsync(path);
             return;
         }
 
@@ -447,7 +457,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>要打开的固件文件路径。</para>
     /// The path of the firmware file to open.
     /// </param>
-    public async Task OpenFirmwareAsync(string path)
+    public async Task OpenFirmwareAsync(string path, FormatDetectionResult? detection = null)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -484,7 +494,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
 
         try
         {
-            await document.LoadAsync(fullPath);
+            await document.LoadAsync(fullPath, detection);
         }
         catch (Exception ex)
         {

@@ -1,5 +1,7 @@
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Containers;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Smali;
 
 namespace UotanStudio.Services.Workspace;
 
