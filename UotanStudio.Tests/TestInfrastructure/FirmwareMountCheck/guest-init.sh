@@ -9,7 +9,11 @@ mkdir -p /mnt
 echo KERNEL_BEGIN
 uname -a
 cat /proc/cmdline
-grep -E 'CONFIG_(EXT4_FS|EROFS_FS|F2FS_FS|VIRTIO_BLK|DEVTMPFS|BLK_DEV_LOOP)' /reference/kernel.config
+if [ -r /reference/kernel.config ]; then
+    grep -E 'CONFIG_(EXT4_FS|EROFS_FS|F2FS_FS|VIRTIO_BLK|DEVTMPFS|BLK_DEV_LOOP)' /reference/kernel.config
+else
+    echo KERNEL_CONFIG_UNAVAILABLE
+fi
 echo KERNEL_END
 for module in virtio_pci virtio_blk ext4 erofs f2fs; do
     modprobe "$module" || echo "MODULE_LOAD_FAILED $module"
