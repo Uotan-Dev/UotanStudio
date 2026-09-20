@@ -49,9 +49,16 @@ public class MainActivity : AvaloniaMainActivity
                 return insets;
             }
 
-            var bars = insets.GetInsets(WindowInsetsCompat.Type.SystemBars());
-            v.SetPadding(bars.Left, bars.Top, bars.Right, bars.Bottom);
-            return WindowInsetsCompat.Consumed;
+            var view = v;
+            var currentInsets = insets;
+            var bars = currentInsets.GetInsets(WindowInsetsCompat.Type.SystemBars());
+            if (bars is null)
+            {
+                return currentInsets;
+            }
+
+            view.SetPadding(bars.Left, bars.Top, bars.Right, bars.Bottom);
+            return currentInsets;
         }
     }
 }

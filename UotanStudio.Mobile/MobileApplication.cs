@@ -2,6 +2,7 @@ using Android.App;
 using Android.Runtime;
 using Avalonia;
 using Avalonia.Android;
+using Avalonia.Media;
 
 namespace UotanStudio.Mobile;
 
@@ -21,6 +22,7 @@ public class MobileApplication(IntPtr javaReference, JniHandleOwnership transfer
             // <para>Inter 不含中文字形；嵌入字体会把中文全部渲染成豆腐块。此处不设置
             // 默认字体，让 Skia 回退到覆盖中文的系统字体（Roboto/NotoSansCJK）。</para>
             .UseAndroid()
+            .With(new FontManagerOptions { DefaultFamilyName = "sans-serif" })
             .With(new SkiaOptions { MaxGpuResourceSizeBytes = 1024 * 1024 * 16 })
             .UseSkia();
 }
