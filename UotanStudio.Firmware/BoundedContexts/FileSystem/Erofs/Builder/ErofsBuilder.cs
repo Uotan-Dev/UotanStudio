@@ -1,11 +1,13 @@
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Checksums;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 using System.Buffers.Binary;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.SharedKernel;
 
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
 
 public sealed partial class ErofsBuilder
 {
@@ -990,13 +992,23 @@ public sealed partial class ErofsBuilder
 
         if (extraDevices > 0)
         {
+            var descriptors = options.ExtraDeviceImages
+                ?? throw new NotSupportedException("EROFS multi-device output requires ExtraDeviceImages descriptors.");
             var slotBuffer = new byte[ErofsDeviceSlot.Size];
-            var slotCount = extraDevices;
-            for (var i = 0; i < slotCount; i++)
+            // Device 0 is the implicit main image covering unified blocks [0, totalBlocks); each extra
+            // device's unified address starts where the previous device ends.
+            // 设备 0 是隐式主镜像，覆盖统一块 [0, totalBlocks)；每个额外设备的统一地址从上一个设备结束处开始。
+            var uniAddr = (ulong)totalBlocks;
+            for (var i = 0; i < extraDevices; i++)
             {
-                var slot = new ErofsDeviceSlot { Blocks = 0, UniAddr = 0 };
+                var descriptor = descriptors[i];
+                var blocks = (ulong)(descriptor.SizeBytes / blockSize);
+                var tag = new byte[ErofsDeviceSlot.TagSize];
+                System.Text.Encoding.UTF8.GetBytes(descriptor.Tag, tag);
+                var slot = new ErofsDeviceSlot { Tag = tag, Blocks = blocks, UniAddr = uniAddr };
                 slot.WriteTo(slotBuffer);
                 WriteAt(output, devtOffset + i * ErofsDeviceSlot.Size, slotBuffer, slotBuffer.Length);
+                uniAddr += blocks;
             }
         }
 

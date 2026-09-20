@@ -1,7 +1,9 @@
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 using System.Buffers.Binary;
 using System.Text.Json.Nodes;
 
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 
 public sealed partial class ErofsParser
 {

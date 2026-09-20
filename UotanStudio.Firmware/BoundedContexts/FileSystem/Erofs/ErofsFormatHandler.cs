@@ -1,3 +1,7 @@
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
@@ -157,13 +161,28 @@ public sealed class ErofsFormatHandler : IFormatHandler
 
                 var builder = new ErofsBuilder();
                 var options = RepackMetadata.OptionsFor(inputPath, FormatName);
-                // The panel selects the LZ4 block encoder through this override key; EROFS itself stores
-                // no codec enum for it, so the on-disk algorithm stays "lz4".
-                // 面板通过该覆盖键选择 LZ4 块编码器；EROFS 本身不存对应编解码枚举，磁盘算法仍为 "lz4"。
-                var lz4hc = string.Equals(options.TryGetValue("ErofsAlgorithm", out var algorithm) ? algorithm : "lz4",
-                    "lz4hc", StringComparison.OrdinalIgnoreCase);
+                // The panel selects the codec through this override key; a preserved source image (no
+                // overrides) is rebuilt earlier by TryRestore with its own algorithms, so this builder
+                // path only runs for explicit user selection or a fresh tree.
+                // 面板通过该覆盖键选择编解码器；保留的源镜像（无覆盖）在更早的 TryRestore 分支按其自身算法
+                // 重建，因此本构建路径只在用户显式选择或全新目录时运行。
+                var (algorithm, lz4HighCompression) = ErofsAlgorithmSelectors.Parse(
+                    options.TryGetValue("ErofsAlgorithm", out var selector) ? selector : null);
                 var compressionLevel = RepackMetadata.IntegerOption(options, "ErofsCompressionLevel",
                     9);
+                // A modern codec selection implies the modern layout: legacy (pre-5.13) EROFS cannot
+                // encode LZMA/DEFLATE/ZSTD, so honouring the picker requires dropping the user's legacy
+                // flag rather than silently rebuilding as LZ4. HC shares the same requirement from a
+                // density angle: legacy caps every pcluster at one physical block, so the HC search
+                // saves bytes that always round up to the same block count. Forcing modern lets HC
+                // actually shrink the image, matching upstream -zlz4hc semantics.
+                // 选择现代编解码器即隐含现代布局：legacy（pre-5.13）erofs 无法编码 LZMA/DEFLATE/ZSTD，
+                // 要遵循选择器就必须放弃用户的 legacy 标志，而不是静默改回 LZ4 重建。HC 从密度角度
+                // 也有同样要求：legacy 把每个 pcluster 限死在一个物理块，HC 搜索省下的字节一定会被
+                // 舍入到同样的块数。强制现代布局才能让 HC 实际缩小镜像，与上游 -zlz4hc 的语义一致。
+                var legacyCompatibility = algorithm == ErofsCompressionAlgorithm.Lz4
+                    && !lz4HighCompression
+                    && SharedKernel.ErofsBuildDefaults.LegacyCompatibility;
                 var progressSink = progress is null ? null : FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
                 builder.Build(inputPath, outputPath, new ErofsOptions
                 {
@@ -171,14 +190,14 @@ public sealed class ErofsFormatHandler : IFormatHandler
                     VolumeName = options.TryGetValue("VolumeName", out var volume) ? volume : "erofs",
                     FsConfigPath = RepackMetadata.NullIfEmpty(options, "FsConfigPath"),
                     FileContextsPath = RepackMetadata.NullIfEmpty(options, "FileContextsPath"),
-                    Algorithm = ErofsCompressionAlgorithm.Lz4,
-                    Lz4HighCompression = lz4hc,
+                    Algorithm = algorithm,
+                    Lz4HighCompression = lz4HighCompression,
                     CompressionLevel = compressionLevel,
                     // Repack metadata carries no legacy flag of its own; the app-level setting routes
                     // through the shared default so rebuilt images honor the user's kernel choice.
                     // 重打包元数据不记录 legacy 标志；应用层设置经由共享默认值传递，使重建镜像
                     // 遵循用户对内核的选择。
-                    LegacyCompatibility = SharedKernel.ErofsBuildDefaults.LegacyCompatibility,
+                    LegacyCompatibility = legacyCompatibility,
                 }, progressSink);
 
                 return FirmwareOpResult.Ok($"Packed '{inputPath}' into '{outputPath}' (EROFS).");

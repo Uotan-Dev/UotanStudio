@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
 
 namespace UotanStudio.Firmware.SharedKernel;
 

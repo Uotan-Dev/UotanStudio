@@ -1,4 +1,6 @@
-﻿using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb;
 
@@ -17,11 +19,6 @@ public sealed class AvbFormatHandler : IFormatHandler
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
         {
             return false;
-        }
-        var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
-        if (ext == "vbmeta" || Path.GetFileName(filePath).StartsWith("vbmeta", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
         }
         try
         {

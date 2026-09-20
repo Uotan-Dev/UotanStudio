@@ -1,4 +1,3 @@
-﻿using System.Security.Cryptography;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Helpers;
 

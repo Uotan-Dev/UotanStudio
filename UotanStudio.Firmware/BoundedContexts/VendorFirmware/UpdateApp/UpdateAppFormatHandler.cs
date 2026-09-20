@@ -18,11 +18,6 @@ public sealed class UpdateAppFormatHandler : IFormatHandler
         {
             return false;
         }
-        var name = Path.GetFileName(filePath).ToLowerInvariant();
-        if (name.StartsWith("update", StringComparison.Ordinal) && name.EndsWith(".app", StringComparison.Ordinal))
-        {
-            return true;
-        }
         try
         {
             using var fs = File.OpenRead(filePath);

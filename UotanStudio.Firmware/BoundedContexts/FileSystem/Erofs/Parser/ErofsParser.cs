@@ -1,7 +1,9 @@
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Checksums;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 using System.Buffers;
 using System.Buffers.Binary;
 
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 
 public sealed record ErofsFileEntry(
     string Path,

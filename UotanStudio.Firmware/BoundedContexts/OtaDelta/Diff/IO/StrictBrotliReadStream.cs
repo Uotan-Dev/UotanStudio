@@ -1,7 +1,7 @@
 using System.Buffers;
 using System.IO.Compression;
 
-namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff;
+namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.IO;
 
 // BrotliStream treats an incomplete stream's EOF as a normal read end. Patches need
 // the decoder's Done state so that truncation after the last output byte still fails.

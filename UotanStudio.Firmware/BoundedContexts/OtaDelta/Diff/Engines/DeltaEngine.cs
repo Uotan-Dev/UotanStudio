@@ -1,4 +1,5 @@
-namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff;
+namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Engines;
 
 /// <summary>Creates and applies streaming BSDIFF40 patches. <para>流式生成和应用 BSDIFF40 补丁。</para></summary>
 public static class DeltaEngine

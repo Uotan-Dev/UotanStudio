@@ -1,8 +1,9 @@
-using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
 using System.Text;
 using UotanStudio.Firmware.SharedKernel;
 
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
 
 public sealed partial class F2fsBuilder
 {

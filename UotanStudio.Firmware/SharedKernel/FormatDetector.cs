@@ -1,4 +1,18 @@
-﻿namespace UotanStudio.Firmware.SharedKernel;
+namespace UotanStudio.Firmware.SharedKernel;
+
+public enum DetectionConfidence
+{
+    Unknown,
+    ExtensionOnly,
+    ValidatedStructure,
+    StrongMagic
+}
+
+public sealed record FormatDetectionResult(
+    IReadonlyFormatHandler Handler,
+    DetectionConfidence Confidence,
+    string Evidence,
+    int ProbeLength);
 
 public static class FormatDetector
 {
@@ -87,6 +101,21 @@ public static class FormatDetector
     /// Reads the leading bytes of a file.
     /// <para>读取文件头部字节。</para>
     /// </summary>
+    public static FormatDetectionResult? DetectDetailed(string filePath, int probeLength = 65536)
+    {
+        var handler = Detect(filePath);
+        if (handler is null) return null;
+        var header = ReadHeader(filePath, Math.Clamp(probeLength, 4, 1024 * 1024));
+        var magic = Magic.FileMagic.Describe(header);
+        var extension = Path.GetExtension(filePath).TrimStart('.');
+        var extensionClaim = !string.IsNullOrEmpty(extension)
+            && handler.FileExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase);
+        return new FormatDetectionResult(handler,
+            magic is not null ? DetectionConfidence.StrongMagic
+                : extensionClaim ? DetectionConfidence.ExtensionOnly : DetectionConfidence.ValidatedStructure,
+            magic ?? (extensionClaim ? $"extension:{extension}" : "handler-validation"), header.Length);
+    }
+
     public static byte[] ReadHeader(string filePath, int count)
     {
         using var fs = File.OpenRead(filePath);

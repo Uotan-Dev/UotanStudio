@@ -1,0 +1,51 @@
+# UotanStudio local firmware magic.
+#
+# 这些是上游 file(1) Magdir 未覆盖（或刻意不识别）的 Android / 引导 / 固件魔数。
+# 作为本地片段汇入同一编译流程，运行时不再解析文本；描述保持与旧内置规则一致。
+# These are Android / boot / firmware magics the upstream file(1) Magdir omits or
+# deliberately does not identify. They are folded into the same compile-to-C# pipeline.
+#
+# 强度：本地条目高于上游兜底规则，确保专有固件优先于普通 ASCII/八位组匹配。
+# Strength: local entries outrank generic upstream fallbacks (ASCII/octet-stream).
+
+# Android vendor boot image header.
+0	string		VNDRBOOT	Android vendor boot image
+!:strength +60
+
+# Android device tree overlay / DTBO partition headers (both page variants).
+0	string		DTBH		Android device tree overlay header
+!:strength +60
+0	string		DTBO		Android device tree overlay image
+!:strength +60
+
+# Android OTA update payload ("CrAU" + major version).
+0	string		CrAU		Android OTA payload
+!:mime		application/octet-stream
+!:strength +60
+
+# Android Verified Boot footer / hashtree descriptor magic ("AVBf").
+0	string		AVBf		Android Verified Boot image
+!:mime		application/octet-stream
+!:strength +60
+
+# Android binary XML (AXML): AndroidManifest.xml / res/*.xml inside APKs carry many NUL bytes;
+# must be recognised before text routing so it is not opened as UTF-8 XML by extension.
+0	string		\x03\x00\x08\x00	Android binary XML
+!:strength +30
+
+# Rockchip firmware loader headers.
+0	string		RKFW		Rockchip firmware image
+!:strength +60
+0	string		RKAF		Rockchip firmware image
+!:strength +60
+
+# Android sparse image superblock magic (little-endian 0xed26ff3a). The +80 strength
+# deliberately beats the upstream "GLS_BINARY_LSB_FIRST" false positive on the same bytes.
+0	lelong		0xed26ff3a	Android sparse image
+!:mime		application/octet-stream
+!:strength +80
+
+# Flattened Device Tree blob (big-endian magic 0xd00dfeed). Upstream 5.48 leaves these as `data`.
+0	belong		0xd00dfeed	Flattened device tree blob
+!:mime		application/octet-stream
+!:strength +40

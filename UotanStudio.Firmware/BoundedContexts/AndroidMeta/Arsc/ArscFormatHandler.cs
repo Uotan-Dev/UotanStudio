@@ -1,4 +1,7 @@
-﻿using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Models;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Parsing;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Writing;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc;
 

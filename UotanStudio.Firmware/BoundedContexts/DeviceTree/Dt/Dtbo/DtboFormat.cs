@@ -1,4 +1,5 @@
-﻿namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
+namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
 
 public sealed class DtboHeader
 {

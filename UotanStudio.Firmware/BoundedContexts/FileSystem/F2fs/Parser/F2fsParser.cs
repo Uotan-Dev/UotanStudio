@@ -1,8 +1,10 @@
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
 using System.Buffers.Binary;
 
 using System.Text;
 
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
 
 public sealed record F2fsFileEntry(string Path, long Size, uint Inode, F2fsParser.F2fsEntryKind Kind, string? SymlinkTarget = null, uint Uid = 0, uint Gid = 0, ushort Mode = 0, IReadOnlyDictionary<string, byte[]>? Xattrs = null, uint DeviceId = 0, uint Flags = 0);
 

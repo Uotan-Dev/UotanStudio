@@ -1,4 +1,8 @@
-﻿using UotanStudio.Firmware.SharedKernel;
+using DtTree = UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.DeviceTree;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
 
@@ -194,7 +198,7 @@ public sealed class DtFormatHandler : IFormatHandler
 
     private static int CountProperties(DeviceTreeNode node) => node.Properties.Count + node.Children.Sum(CountProperties);
 
-    private static string Describe(DeviceTree tree)
+    private static string Describe(DtTree tree)
     {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"Device tree blob (FDT v{tree.Version})");
@@ -202,7 +206,7 @@ public sealed class DtFormatHandler : IFormatHandler
         return sb.ToString();
     }
 
-    private static string SerializeDts(DeviceTree tree)
+    private static string SerializeDts(DtTree tree)
     {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("/dts-v1/;");

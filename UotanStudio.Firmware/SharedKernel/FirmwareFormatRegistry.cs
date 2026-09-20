@@ -17,16 +17,16 @@ public static class FirmwareFormatRegistry
                 return;
             }
 
-            Register(new BoundedContexts.Archive.Cpio.CpioFormatHandler());
-            Register(new CrossCutting.Compress.CompressFormatHandler());
+            Register(new BoundedContexts.Archive.CpioFormatHandler());
+            Register(new BoundedContexts.Compression.CompressFormatHandler());
 
             Register(new BoundedContexts.OtaDelta.Payload.PayloadFormatHandler());
             Register(new BoundedContexts.OtaDelta.Dat.DatFormatHandler());
             Register(new BoundedContexts.OtaDelta.Diff.DiffFormatHandler());
 
-            Register(new BoundedContexts.LogicalPartition.Lp.LpFormatHandler());
+            Register(new BoundedContexts.BlockImage.Lp.LpFormatHandler());
 
-            Register(new BoundedContexts.FileSystem.Sparse.SparseFormatHandler());
+            Register(new BoundedContexts.BlockImage.Sparse.SparseFormatHandler());
             Register(new BoundedContexts.FileSystem.Ext4.Ext4FormatHandler());
             Register(new BoundedContexts.FileSystem.Erofs.ErofsFormatHandler());
             Register(new BoundedContexts.FileSystem.F2fs.F2fsFormatHandler());

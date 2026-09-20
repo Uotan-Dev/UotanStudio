@@ -1,4 +1,5 @@
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Checksums;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
 
 public sealed partial class ErofsBuilder
 {

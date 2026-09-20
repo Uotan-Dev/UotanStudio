@@ -1,4 +1,6 @@
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
 
 public sealed partial class ErofsBuilder
 {

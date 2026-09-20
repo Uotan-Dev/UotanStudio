@@ -1,5 +1,6 @@
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Models;
 using UotanStudio.Firmware.SharedKernel;
 
@@ -22,10 +23,6 @@ public sealed class PayloadFormatHandler : IFormatHandler
             return false;
         }
 
-        var extension = Path.GetExtension(filePath);
-        var extensionMatch = extension.Equals(".bin", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".payload", StringComparison.OrdinalIgnoreCase);
-
         try
         {
             using var fs = File.OpenRead(filePath);
@@ -38,10 +35,10 @@ public sealed class PayloadFormatHandler : IFormatHandler
         }
         catch
         {
-            return extensionMatch;
+            return false;
         }
 
-        return extensionMatch;
+        return false;
     }
 
     /// <summary>

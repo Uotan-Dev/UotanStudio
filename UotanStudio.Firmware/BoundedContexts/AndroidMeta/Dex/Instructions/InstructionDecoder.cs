@@ -1,4 +1,4 @@
-﻿using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Model;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Instructions;
 

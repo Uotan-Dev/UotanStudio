@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff;
 using System.Globalization;
 using UotanStudio.Firmware.SharedKernel;
 

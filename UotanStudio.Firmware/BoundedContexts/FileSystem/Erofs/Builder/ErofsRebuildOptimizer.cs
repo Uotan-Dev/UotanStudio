@@ -1,6 +1,7 @@
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using System.Globalization;
 
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
 
 /// <summary>Infers encoder candidates and retains the smallest complete rebuild within a bounded search.</summary>
 internal static class ErofsRebuildOptimizer

@@ -1,6 +1,9 @@
-﻿using System.Text;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
+using System.Text;
 
-namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
+namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
 
 public class VendorBootPacker
 {

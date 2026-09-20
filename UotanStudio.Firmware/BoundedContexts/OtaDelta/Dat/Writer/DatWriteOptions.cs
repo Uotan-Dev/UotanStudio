@@ -1,4 +1,4 @@
-namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
+namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
 
 public sealed class DatWriteOptions
 {

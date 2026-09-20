@@ -2,10 +2,11 @@ using System.Buffers.Binary;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Core;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Models;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
 
 namespace UotanStudio.Firmware.SharedKernel;
 

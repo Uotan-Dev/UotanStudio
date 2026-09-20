@@ -1,11 +1,11 @@
 using System.Security.Cryptography;
 using Google.Protobuf;
+using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
-using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
-namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
 
 public sealed partial class PayloadBuilder
 {

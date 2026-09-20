@@ -1,3 +1,5 @@
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;

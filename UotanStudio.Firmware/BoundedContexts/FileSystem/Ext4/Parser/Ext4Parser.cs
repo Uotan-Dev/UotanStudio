@@ -1,8 +1,8 @@
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Models;
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Core;
 
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 
 public sealed class Ext4Parser : IDisposable
 {

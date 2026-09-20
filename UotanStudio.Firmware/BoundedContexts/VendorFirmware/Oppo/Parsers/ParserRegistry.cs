@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Exceptions;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Parsers;

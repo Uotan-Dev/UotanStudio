@@ -1,5 +1,7 @@
-﻿using System.Text;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Model;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Reading;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Writing;
+using System.Text;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
 
@@ -52,7 +54,7 @@ public sealed class DexFile
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         if (!File.Exists(path)) throw new DexException($"DEX file not found: {path}");
         using var stream = File.OpenRead(path);
-        return Load(AXml.AndroidMetadataReader.Read(stream));
+        return Load(UotanStudio.Firmware.BoundedContexts.AndroidMeta.IO.AndroidMetadataReader.Read(stream));
     }
 
     /// <summary>

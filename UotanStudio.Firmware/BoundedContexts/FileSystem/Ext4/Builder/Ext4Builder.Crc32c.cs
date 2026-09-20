@@ -1,6 +1,6 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 
 public sealed partial class Ext4Builder
 {

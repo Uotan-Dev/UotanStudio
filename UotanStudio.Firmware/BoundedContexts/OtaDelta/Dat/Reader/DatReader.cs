@@ -1,12 +1,15 @@
-using System.IO.Compression;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Models;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.IO;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.ImgDiff;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.IO;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
-namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
+namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Reader;
 
 /// <summary>Reconstructs Android block OTA images with bounded streams. <para>通过有界流重建 Android 块 OTA 镜像。</para></summary>
 public static class DatReader

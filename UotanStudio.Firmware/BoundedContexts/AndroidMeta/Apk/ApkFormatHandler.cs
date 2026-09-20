@@ -1,3 +1,5 @@
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Models;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Parsing;
 using System.IO.Compression;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Streams;
@@ -147,8 +149,8 @@ public sealed class ApkFormatHandler : IFormatHandler
 
     /// <summary>
     /// Packs the input into firmware asynchronously. Directories are rebuilt into an APK via
-    /// <see cref="Signing.ApkRepacker"/>; APK files are copied through.
-    /// <para>异步将输入打包为固件。目录经 <see cref="Signing.ApkRepacker"/> 重建为 APK；APK 文件直接复制。</para>
+    /// <see cref="UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Packing.ApkRepacker"/>; APK files are copied through.
+    /// <para>异步将输入打包为固件。目录经 <see cref="UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Packing.ApkRepacker"/> 重建为 APK；APK 文件直接复制。</para>
     /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
@@ -167,7 +169,7 @@ public sealed class ApkFormatHandler : IFormatHandler
 
             if (Directory.Exists(inputPath))
             {
-                Signing.ApkRepacker.Repack(inputPath, outputPath, cancellationToken: cancellationToken);
+                UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Packing.ApkRepacker.Repack(inputPath, outputPath, cancellationToken: cancellationToken);
                 return Task.FromResult(FirmwareOpResult.Ok($"APK repacked to {outputPath}", [outputPath]));
             }
 

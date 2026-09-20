@@ -1,4 +1,6 @@
-﻿using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac.Extraction;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac.Models;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac;
 

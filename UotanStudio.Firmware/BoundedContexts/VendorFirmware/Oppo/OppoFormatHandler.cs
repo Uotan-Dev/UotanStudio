@@ -1,4 +1,5 @@
-﻿using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Extraction;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
@@ -9,7 +10,7 @@ public sealed class OppoFormatHandler : IFormatHandler
 
     public string FormatName => "Oppo Firmware (OFP/OPS/OZIP)";
 
-    public IReadOnlyList<string> FileExtensions { get; } = ["ofp", "ops", "ozip", "bin"];
+    public IReadOnlyList<string> FileExtensions { get; } = ["ofp", "ops", "ozip"];
 
     /// <summary>
     /// Determines whether this handler can process the given file.
@@ -26,10 +27,7 @@ public sealed class OppoFormatHandler : IFormatHandler
         var strongExtension = extension.Equals(".ofp", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".ops", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".ozip", StringComparison.OrdinalIgnoreCase);
-        var genericBin = extension.Equals(".bin", StringComparison.OrdinalIgnoreCase);
-
-
-        if (!strongExtension && !genericBin)
+        if (!strongExtension)
         {
             return false;
         }

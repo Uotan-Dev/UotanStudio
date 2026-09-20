@@ -1,7 +1,9 @@
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 using System.Buffers;
 using System.Buffers.Binary;
 
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 
 public sealed partial class ErofsParser
 {
@@ -512,6 +514,31 @@ public sealed partial class ErofsParser
             WriteCompressedData(entry.Nid, inode, Stream.Null, (_, _, _, clusterOfs, _) =>
             {
                 largest = Math.Max(largest, clusterOfs);
+                return true;
+            });
+        }
+
+        return largest;
+    }
+
+    /// <summary>
+    /// Returns the largest compressed stream (in bytes) among all pclusters. A value above the block
+    /// size proves the image stores a genuine multi-block big pcluster, whose index head carries the
+    /// CBLKCNT marker so the kernel spans several physical blocks in one extent.
+    /// <para>返回所有 pcluster 中最大的压缩流字节数。大于块大小即证明镜像存储了真正的多块 big
+    /// pcluster：其索引 head 携带 CBLKCNT 标记，使内核单个 extent 跨越多个物理块。</para>
+    /// </summary>
+    internal int MaxCompressedPclusterBytes()
+    {
+        var largest = 0;
+        foreach (var entry in EnumerateEntries())
+        {
+            if (entry.IsDirectory || entry.IsSymlink || entry.IsSpecialFile) continue;
+            var inode = ReadInode(entry.Nid);
+            if (!inode.IsCompressed) continue;
+            WriteCompressedData(entry.Nid, inode, Stream.Null, (_, encoded, _, _, _) =>
+            {
+                largest = Math.Max(largest, encoded.Length);
                 return true;
             });
         }

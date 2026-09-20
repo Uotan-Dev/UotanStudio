@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0;
+namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Models;
 
 public sealed class Nb0EntryHeader
 {

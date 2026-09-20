@@ -1,4 +1,4 @@
-namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
+namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Exceptions;
 
 public sealed class UnsupportedOppVersionException : OppException
 {

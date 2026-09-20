@@ -1,4 +1,5 @@
-﻿using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Exceptions;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto.Algorithms;

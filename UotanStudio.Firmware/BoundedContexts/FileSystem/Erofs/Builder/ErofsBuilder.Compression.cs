@@ -1,9 +1,10 @@
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 using System.Buffers.Binary;
 using System.Numerics;
 using System.Security.Cryptography;
-using System.Text;
 
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
 
 public sealed partial class ErofsBuilder
 {

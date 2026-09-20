@@ -1,9 +1,12 @@
-﻿using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.SharedKernel;
 
-namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
+namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
 
 public class BootImagePacker
 {

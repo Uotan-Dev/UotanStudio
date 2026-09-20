@@ -1,6 +1,8 @@
-﻿using System.Text;
+using DtTree = UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.DeviceTree;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
+using System.Text;
 
-namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
 
 public static class DtbFormat
 {
@@ -8,7 +10,7 @@ public static class DtbFormat
     /// Parses a device tree from a byte array in DTB format.
     /// <para>从 DTB 格式的字节数组解析设备树。</para>
     /// </summary>
-    public static DeviceTree Read(byte[] data)
+    public static DtTree Read(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);
         return Read(data.AsSpan());
@@ -18,7 +20,7 @@ public static class DtbFormat
     /// Parses a device tree from a span in DTB format.
     /// <para>从 DTB 格式的字节跨度解析设备树。</para>
     /// </summary>
-    public static DeviceTree Read(ReadOnlySpan<byte> data)
+    public static DtTree Read(ReadOnlySpan<byte> data)
     {
         var header = FdtHeader.ReadFrom(data);
         if (!header.IsValidMagic)
@@ -30,7 +32,7 @@ public static class DtbFormat
             throw new InvalidDataException($"Data size ({data.Length}) is smaller than declared total size ({header.TotalSize})");
         }
 
-        var tree = new DeviceTree
+        var tree = new DtTree
         {
             BootCpuId = header.BootCpuidPhys,
             Version = header.Version
@@ -64,7 +66,7 @@ public static class DtbFormat
     /// Serializes a device tree to binary DTB format.
     /// <para>将设备树序列化为二进制 DTB 格式。</para>
     /// </summary>
-    public static byte[] Write(DeviceTree tree)
+    public static byte[] Write(DtTree tree)
     {
         ArgumentNullException.ThrowIfNull(tree);
 
@@ -179,7 +181,7 @@ public static class DtbFormat
         return result;
     }
 
-    private static void ParseStructure(ReadOnlySpan<byte> structBlock, ReadOnlySpan<byte> stringsBlock, DeviceTree tree)
+    private static void ParseStructure(ReadOnlySpan<byte> structBlock, ReadOnlySpan<byte> stringsBlock, DtTree tree)
     {
         var cursor = 0;
 

@@ -1,21 +1,29 @@
-﻿using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Files;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Models;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Reader;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
+using System.Buffers.Binary;
 using System.Globalization;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
 
 public sealed class DatFormatHandler : IFormatHandler
 {
-    private static readonly string[] DataFileSuffixes = [".new.dat.br", ".new.dat", ".patch.dat.br", ".patch.dat"];
+    private static readonly string[] DataFileSuffixes = DatFileSet.DataSuffixes;
 
     public string FormatName => "Android DAT (transfer list)";
 
     public IReadOnlyList<string> FileExtensions { get; } = ["list"];
 
     /// <summary>
-    /// Determines whether this handler can process the given file: a .list file must look like a transfer list (leading version / block-count lines), while a .dat file must be paired with a sibling *.transfer.list.
-    /// <para>判断该处理器能否处理指定文件：.list 文件须形如 transfer list（开头的版本/块数行）， .dat 文件须存在同目录配套的 *.transfer.list。</para>
+    /// Determines whether this handler can process the given file: a transfer-list / .list file must look like a
+    /// transfer list (leading version / block-count lines), while a data file (.new.dat / .new.dat.br /
+    /// .patch.dat / .patch.dat.br) must be paired with a sibling *.transfer.list.
+    /// <para>判断该处理器能否处理指定文件：transfer list / .list 文件须形如 transfer list（开头的版本/块数行），
+    /// 数据文件（.new.dat/.new.dat.br/.patch.dat/.patch.dat.br）须存在同目录配套的 *.transfer.list。</para>
     /// </summary>
     public bool CanHandle(string filePath)
     {
@@ -24,8 +32,10 @@ public sealed class DatFormatHandler : IFormatHandler
             return false;
         }
 
-        var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
-        if (ext == "dat")
+        // Data files are matched by their compound suffix rather than Path.GetExtension, which returns
+        // only ".br"/".dat" and cannot tell a Brotli DAT from an unrelated .br archive.
+        // 数据文件按复合后缀匹配而非 Path.GetExtension：后者只返回 ".br"/".dat"，无法把 Brotli DAT 与无关 .br 区分开。
+        if (DatFileSet.IsDataFile(Path.GetFileName(filePath)))
         {
             return FindTransferList(filePath) is not null;
         }
@@ -115,24 +125,315 @@ public sealed class DatFormatHandler : IFormatHandler
     }
 
     /// <summary>
-    /// Not supported: unpacking a DAT image pair is intentionally out of scope for the read-only handler.
-    /// <para>不支持：DAT 镜像对解包有意不纳入该只读处理器。</para>
+    /// Reconstructs the partition image from a full-OTA DAT pair and writes it as
+    /// <c>&lt;stem&gt;.img</c> into the output directory. Incremental DAT pairs (those using
+    /// move/stash/diff/imgdiff commands) are rejected: a source image is required and the read-only
+    /// handler has no channel to receive one.
+    /// <para>由全量 OTA DAT 镜像对重建分区镜像，并以 <c>&lt;词干&gt;.img</c> 写入输出目录。增量 DAT 镜像对
+    /// （使用 move/stash/diff/imgdiff 命令）会被拒绝：其需要基座镜像，而只读处理器没有接收基座的通道。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
-    private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => Task.FromResult(FirmwareOpResult.Fail(
-            "Unpacking a DAT image pair is not supported by this read-only handler.  该只读处理器不支持解包 DAT 镜像对。"));
+    private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var transferListPath = FindTransferList(filePath);
+        if (transferListPath is null)
+        {
+            return Task.FromResult(FirmwareOpResult.Fail(
+                $"No transfer list found for '{filePath}'. 未找到对应的 transfer list。"));
+        }
+
+        var dataPath = FindDataFile(filePath);
+        if (dataPath is null)
+        {
+            return Task.FromResult(FirmwareOpResult.Fail(
+                "No .new.dat/.new.dat.br companion for the transfer list. 未找到配套的 .new.dat 数据文件。"));
+        }
+
+        TransferList transferList;
+        try
+        {
+            transferList = TransferListParser.Parse(transferListPath);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return Task.FromResult(FirmwareOpResult.Fail(
+                $"Failed to parse transfer list '{transferListPath}': {ex.Message}"));
+        }
+
+        if (transferList.Commands.Any(c => c.Kind is TransferListCommandKind.Move or TransferListCommandKind.Stash
+                or TransferListCommandKind.Diff or TransferListCommandKind.Imgdiff))
+        {
+            return Task.FromResult(FirmwareOpResult.Fail(
+                "Incremental DAT extraction needs a source image, which this handler does not accept. " +
+                "Convert a full OTA instead. 增量 DAT 解包需要基座镜像，本处理器不接受基座；请改用于全量 OTA。"));
+        }
+
+        var outputName = DatFileSet.Stem(Path.GetFileName(transferListPath));
+        if (string.IsNullOrEmpty(outputName) || outputName.Contains('/') || outputName.Contains('\\')
+            || outputName.Contains("..", StringComparison.Ordinal))
+        {
+            return Task.FromResult(FirmwareOpResult.Fail($"Invalid DAT output name derived from '{transferListPath}'."));
+        }
+
+        var outputImagePath = Path.GetFullPath(Path.Combine(outputDirectory, outputName + ".img"));
+        var brotliCompressed = DatFileSet.IsBrotli(dataPath);
+        IFirmwareProgress? firmwareProgress = options?.Progress;
+        var progress = firmwareProgress is null ? null : new FirmwareProgressBridge(firmwareProgress);
+
+        return Task.Run(() =>
+        {
+            try
+            {
+                DatReader.Unpack(transferListPath, dataPath, outputImagePath, brotliCompressed, progress);
+                var bytes = new FileInfo(outputImagePath).Length;
+                return FirmwareOpResult.Ok(
+                    $"Reconstructed {outputName}.img ({bytes} bytes) from DAT transfer list v{transferList.Version}. " +
+                    $"由 transfer list v{transferList.Version} 重建 {outputName}.img（{bytes} 字节）。",
+                    [Path.GetFileName(outputImagePath)],
+                    new Dictionary<string, string>
+                    {
+                        ["OutputImage"] = outputImagePath,
+                        ["TransferList"] = Path.GetFileName(transferListPath),
+                        ["DataFile"] = Path.GetFileName(dataPath),
+                        ["BrotliCompressed"] = brotliCompressed ? "true" : "false",
+                        ["SizeBytes"] = bytes.ToString(CultureInfo.InvariantCulture),
+                    });
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                return FirmwareOpResult.Fail($"Failed to unpack DAT '{filePath}': {ex.Message}");
+            }
+        }, cancellationToken);
+    }
+
+    /// <summary>Bridges the reader's fractional progress to <see cref="IFirmwareProgress"/>.
+    /// <para>把读取器的小数进度桥接到 <see cref="IFirmwareProgress"/>。</para></summary>
+    private sealed class FirmwareProgressBridge(IFirmwareProgress sink) : IProgress<double>
+    {
+        public void Report(double value) => sink.Report(value * 100d, "Unpacking DAT 解包 DAT");
+    }
 
     /// <summary>
-    /// Not supported: packing a DAT image pair is intentionally out of scope for the read-only handler.
-    /// <para>不支持：DAT 镜像对打包有意不纳入该只读处理器。</para>
+    /// Packs a source image (raw or Android-sparse) into the DAT image pair.
+    /// <para>将源镜像（原始或 Android 稀疏）打包为 DAT 镜像对。</para>
     /// </summary>
+    /// <param name="inputPath">
+    /// Source image path. A sparse image is converted to raw before block-splitting.
+    /// <para>源镜像路径。稀疏镜像会先转为原始镜像再分块。</para>
+    /// </param>
+    /// <param name="outputPath">
+    /// Either a directory (the pair takes the input image's stem) or an explicit
+    /// <c>&lt;stem&gt;.transfer.list</c> path (the sibling data file is derived from it).
+    /// <para>目录（以源镜像词干命名镜像对）或显式 <c>&lt;词干&gt;.transfer.list</c> 路径（同级数据文件由它推导）。</para>
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <remarks>
+    /// Both files land together or the previous pair stays intact; on failure the staging
+    /// directory and backups are removed so a partial write never replaces the user's existing
+    /// <c>.new.dat</c> / <c>.transfer.list</c> with mismatched halves.
+    /// <para>两个文件要么一起落盘，要么保留原有镜像对不变；失败时清理暂存与备份，避免半写状态覆盖用户已有的
+    /// <c>.new.dat</c> / <c>.transfer.list</c> 组合。</para>
+    /// </remarks>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
-        => Task.FromResult(FirmwareOpResult.Fail(
-            "Packing a DAT image pair is not supported by this read-only handler.  该只读处理器不支持打包 DAT 镜像对。"));
+        => PackAsync(inputPath, outputPath, (IProgress<FileSystemByteProgress>?)null, cancellationToken);
+
+    /// <inheritdoc cref="PackAsync(string, string, CancellationToken)"/>
+    public Task<FirmwareOpResult> PackAsync(
+        string inputPath,
+        string outputPath,
+        IProgress<FileSystemByteProgress>? progress,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(inputPath) || !File.Exists(inputPath))
+            {
+                return FirmwareOpResult.Fail(
+                    $"Input image not found: {inputPath ?? "<empty>"}  找不到输入镜像。");
+            }
+
+            var inputFull = Path.GetFullPath(inputPath);
+            var outputFull = Path.GetFullPath(outputPath);
+            var brotli = ReadBrotliFlag();
+            var maxRangeBlocks = ReadMaxRangeBlocks();
+            string transferListPath, dataPath;
+            if (outputFull.EndsWith(DatFileSet.TransferListSuffix, StringComparison.OrdinalIgnoreCase))
+            {
+                transferListPath = outputFull;
+                var listStem = outputFull[..^DatFileSet.TransferListSuffix.Length];
+                dataPath = listStem + (brotli ? ".new.dat.br" : ".new.dat");
+            }
+            else
+            {
+                var inputStem = Path.GetFileNameWithoutExtension(inputFull);
+                if (string.IsNullOrEmpty(inputStem) || inputStem.Contains('/', StringComparison.Ordinal)
+                    || inputStem.Contains('\\', StringComparison.Ordinal) || inputStem.Contains("..", StringComparison.Ordinal))
+                {
+                    return FirmwareOpResult.Fail($"Invalid DAT stem derived from '{inputFull}'.");
+                }
+
+                transferListPath = Path.Combine(outputFull, inputStem + DatFileSet.TransferListSuffix);
+                dataPath = Path.Combine(outputFull, inputStem + (brotli ? ".new.dat.br" : ".new.dat"));
+            }
+
+            var directory = Path.GetDirectoryName(transferListPath)!;
+            if (!string.Equals(directory, Path.GetDirectoryName(dataPath), StringComparison.Ordinal))
+            {
+                return FirmwareOpResult.Fail(
+                    "Transfer list and data file must sit in the same directory. 两者必须位于同一目录。");
+            }
+
+            Directory.CreateDirectory(directory);
+            var staging = Path.Combine(directory, ".uotan-dat-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(staging);
+            // Always stage the plain ".new.dat" name: DatWriter appends ".br" itself when
+            // compressing and then deletes the plain file, so passing ".new.dat.br" here would
+            // produce "<stem>.new.dat.br.br".
+            // 始终以 ".new.dat" 名称暂存：DatWriter 在压缩时自行追加 ".br" 并删除原始文件，
+            // 若此处传 ".new.dat.br" 会产出 "<词干>.new.dat.br.br"。
+            var stem = DatFileSet.Stem(Path.GetFileName(transferListPath));
+            var stagedList = Path.Combine(staging, Path.GetFileName(transferListPath));
+            var stagedDataPlain = Path.Combine(staging, stem + ".new.dat");
+            var published = new List<string>();
+            var backups = new List<(string Target, string Backup)>();
+            try
+            {
+                var effectiveInput = inputFull;
+                if (IsSparse(inputFull))
+                {
+                    var raw = Path.Combine(staging, "raw.img");
+                    SparseImageConverter.ConvertSparseToRaw([inputFull], raw);
+                    effectiveInput = raw;
+                }
+
+                var writeOptions = new DatWriteOptions
+                {
+                    CompressWithBrotli = brotli,
+                    MaxCommandRangeBlocks = maxRangeBlocks,
+                };
+                var byteProgress = progress is null
+                    ? null
+                    : FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.WritingDat);
+                DatWriter.Write(effectiveInput, stagedDataPlain, stagedList, writeOptions, byteProgress);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var stagedDataFinal = brotli ? stagedDataPlain + ".br" : stagedDataPlain;
+                if (!File.Exists(stagedDataFinal) || !File.Exists(stagedList))
+                {
+                    return FirmwareOpResult.Fail(
+                        $"DatWriter did not produce the expected artifacts under '{staging}'.");
+                }
+
+                BackUpIfExists(transferListPath, staging, backups);
+                BackUpIfExists(dataPath, staging, backups);
+
+                File.Move(stagedList, transferListPath);
+                published.Add(transferListPath);
+                File.Move(stagedDataFinal, dataPath);
+                published.Add(dataPath);
+
+                var size = new FileInfo(transferListPath).Length + new FileInfo(dataPath).Length;
+                return FirmwareOpResult.Ok(
+                    $"Wrote DAT image pair '{Path.GetFileName(transferListPath)}' + "
+                    + $"'{Path.GetFileName(dataPath)}' ({size} bytes). 已写出 DAT 镜像对。",
+                    [Path.GetFileName(transferListPath), Path.GetFileName(dataPath)],
+                    new Dictionary<string, string>
+                    {
+                        ["TransferList"] = transferListPath,
+                        ["DataFile"] = dataPath,
+                        ["BrotliCompressed"] = brotli ? "true" : "false",
+                        ["TotalBytes"] = size.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    });
+            }
+            catch (OperationCanceledException)
+            {
+                RollbackPublished(published, backups);
+                throw;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException
+                    or ArgumentException or InvalidOperationException)
+            {
+                RollbackPublished(published, backups);
+                return FirmwareOpResult.Fail($"Failed to pack DAT '{inputFull}': {ex.Message}");
+            }
+            finally
+            {
+                TryDeleteDirectory(staging);
+            }
+        }, cancellationToken);
+    }
+
+    private static void BackUpIfExists(
+        string target,
+        string staging,
+        List<(string Target, string Backup)> backups)
+    {
+        if (!File.Exists(target))
+        {
+            return;
+        }
+
+        var backup = Path.Combine(staging, ".backup-" + Guid.NewGuid().ToString("N"));
+        File.Move(target, backup);
+        backups.Add((target, backup));
+    }
+
+    private static void RollbackPublished(List<string> published, List<(string Target, string Backup)> backups)
+    {
+        foreach (var path in published)
+        {
+            try { File.Delete(path); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+
+        foreach (var (target, backup) in backups)
+        {
+            try { if (File.Exists(backup)) File.Move(backup, target, overwrite: true); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
+    private static bool IsSparse(string path)
+    {
+        try
+        {
+            var header = FormatDetector.ReadHeader(path, 4);
+            return header.Length == 4
+                && BinaryPrimitives.ReadUInt32LittleEndian(header) == SparseFormat.SparseHeaderMagic;
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    private static bool ReadBrotliFlag()
+        => RepackMetadata.PackingOverrides is { } overrides
+            && overrides.TryGetValue("DatBrotli", out var value)
+            && bool.TryParse(value, out var parsed) && parsed;
+
+    private static int ReadMaxRangeBlocks()
+        => RepackMetadata.PackingOverrides is { } overrides
+            && overrides.TryGetValue("DatMaxCommandRangeBlocks", out var raw)
+            && int.TryParse(raw, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsed) && parsed > 0
+            ? parsed : 0;
 
     /// <summary>
     /// Resolves the companion transfer list for a given path.

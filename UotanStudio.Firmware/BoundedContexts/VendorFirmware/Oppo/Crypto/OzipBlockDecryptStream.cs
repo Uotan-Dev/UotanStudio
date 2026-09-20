@@ -1,4 +1,5 @@
-﻿using System.Security.Cryptography;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Exceptions;
+using System.Security.Cryptography;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto;

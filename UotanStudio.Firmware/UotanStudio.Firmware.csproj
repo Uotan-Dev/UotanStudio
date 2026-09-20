@@ -6,22 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Update="Payload\Core\Lz4DestinationCodec.LICENSE"
+    <None Update="BoundedContexts\Compression\Codecs\Lz4\Lz4DestinationCodec.LICENSE"
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"
           Pack="true" PackagePath="licenses/Lz4DestinationCodec.LICENSE" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- 上游 file(1) 可读 magic 文本规则（github.com/file/file 的 magic/Magdir/），作为嵌入式资源 -->
-    <EmbeddedResource Include="SharedKernel\Magic\android.magic" />
-    <EmbeddedResource Include="SharedKernel\Magic\archive.magic" />
-    <EmbeddedResource Include="SharedKernel\Magic\compress.magic" />
-    <EmbeddedResource Include="SharedKernel\Magic\elf.magic" />
-    <EmbeddedResource Include="SharedKernel\Magic\filesystems.magic" />
-    <EmbeddedResource Include="SharedKernel\Magic\linux.magic" />
-    <EmbeddedResource Include="SharedKernel\Magic\sun.magic" />
-    <!-- 内置精炼 magic 规则（固件相关子集），运行时由 ManagedMagic 加载 -->
-    <EmbeddedResource Include="SharedKernel\Magic\firmware.magic" />
   </ItemGroup>
 
   <ItemGroup>

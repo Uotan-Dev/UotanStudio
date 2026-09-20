@@ -1,3 +1,5 @@
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz.Extraction;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz.Models;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz;

@@ -1,8 +1,10 @@
-﻿using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
-namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
+namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 
 public class VendorBootParser : IDisposable
 {

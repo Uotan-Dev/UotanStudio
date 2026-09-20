@@ -1,3 +1,5 @@
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 
 public sealed class ErofsOptions
@@ -108,6 +110,17 @@ public sealed class ErofsOptions
     public int ExtraDeviceCount { get; set; }
 
     /// <summary>
+    /// Optional descriptors for the extra devices referenced by the device table. One entry per
+    /// <see cref="ExtraDeviceCount"/> device (device ids 1..N). The builder writes each tag, block
+    /// count and unified address into the on-disk device table; file data still lands on device 0,
+    /// so this declares the layout rather than placing blobs on the secondary images.
+    /// <para>可选的额外设备描述符，对应设备表引用的设备（id 1..N），每项对应一个
+    /// <see cref="ExtraDeviceCount"/>。打包器把每个设备的 tag、块数与统一地址写入磁盘设备表；
+    /// 文件数据仍落在设备 0，因此本选项声明的是布局，而非把数据块放到二级设备上。</para>
+    /// </summary>
+    public IReadOnlyList<ErofsDeviceSpec>? ExtraDeviceImages { get; set; }
+
+    /// <summary>
     /// Optional path to an Android-style <c>fs_config</c> file (<c>path uid gid mode capabilities</c>)
     /// applied over the source tree; matching entries override the scanned uid/gid/mode.
     /// <para>可选的 Android 风格 <c>fs_config</c> 文件路径（<c>path uid gid mode capabilities</c>），
@@ -154,7 +167,14 @@ public sealed class ErofsOptions
         // 引入的紧凑索引。
         if (LegacyCompatibility)
         {
-            Algorithm = ErofsCompressionAlgorithm.Lz4;
+            // Legacy (pre-5.13) EROFS has no encoding other than LZ4 with a fixed distance; declaring a
+            // modern codec here would either be silently dropped or emit a kernel-rejected superblock.
+            // Refuse explicitly so callers surface the conflict to the user instead of coercing.
+            // legacy（pre-5.13）erofs 仅支持固定距离的 LZ4；在此声明现代编解码器要么被静默丢弃，要么
+            // 产出内核拒绝的超级块。显式报错，让调用方向用户暴露冲突而不是内部降型。
+            if (Algorithm != ErofsCompressionAlgorithm.Lz4)
+                throw new NotSupportedException(
+                    $"EROFS legacy (pre-5.13) layout supports only LZ4; {Algorithm} requires the modern big-pcluster feature.");
             MaxPclusterSize = BlockSize;
             UseCompactedIndexes = false;
             // Linux 5.4 only understands the LZ4_0_PADDING incompatible bit; fragments,
@@ -211,15 +231,29 @@ public sealed class ErofsOptions
                 "ExtraDeviceCount must be non-negative.");
         }
 
-        // The builder has no input path for backing device images; writing an all-zero device
-        // table would silently produce an image whose extra devices are unreadable. Refuse
-        // explicitly until multi-device output is actually implemented.
-        // 打包器没有外部设备镜像的输入路径；写全零设备表会静默产出额外设备不可读的镜像。
-        // 在真正实现多设备输出前显式拒绝。
+        // Multi-device output requires an explicit descriptor for every declared extra device; the
+        // builder has no way to infer a device's tag or size, and writing an all-zero device table
+        // would silently produce an image whose extra devices are unreadable. Rebuilds preserve only
+        // the extra-device count, never the backing device contents, so a rebuild profile that declares
+        // extra devices is rejected here exactly as before.
+        // 多设备输出要求为每个声明的额外设备提供显式描述符；打包器无法推断设备的 tag 或大小，
+        // 写全零设备表会静默产出额外设备不可读的镜像。重建仅保留额外设备数量、从不保留其内容，
+        // 因此声明了额外设备的重建档案仍会在此被拒绝，与之前一致。
         if (ExtraDeviceCount > 0)
         {
-            throw new NotSupportedException(
-                "EROFS multi-device output is not implemented: ExtraDeviceCount must be 0.");
+            if (ExtraDeviceImages is null || ExtraDeviceImages.Count != ExtraDeviceCount)
+                throw new NotSupportedException(
+                    "EROFS multi-device output requires one ExtraDeviceImages descriptor per declared device.");
+            for (var i = 0; i < ExtraDeviceImages.Count; i++)
+            {
+                var spec = ExtraDeviceImages[i];
+                if (string.IsNullOrEmpty(spec.Tag) || System.Text.Encoding.UTF8.GetByteCount(spec.Tag) >= ErofsDeviceSlot.TagSize)
+                    throw new ArgumentOutOfRangeException(nameof(ExtraDeviceImages),
+                        $"Extra device {i} needs a non-empty tag shorter than {ErofsDeviceSlot.TagSize} bytes.");
+                if (spec.SizeBytes <= 0 || spec.SizeBytes % BlockSize != 0)
+                    throw new ArgumentOutOfRangeException(nameof(ExtraDeviceImages),
+                        $"Extra device {i} size must be a positive, block-aligned byte count.");
+            }
         }
 
 
@@ -239,3 +273,11 @@ public sealed class ErofsOptions
 internal sealed record ErofsSourceInode(ulong Mtime, uint MtimeNanoseconds, bool Extended,
     bool Compressed, ErofsCompressionAlgorithm Algorithm, bool CompactIndexes, bool InlineData, int LogicalClusterSize,
     string? Path = null);
+
+/// <summary>
+/// Declares one extra device for the EROFS device table: a NUL-safe tag and the device size in bytes
+/// (block-aligned). The device table records the tag and the block count derived from <paramref name="SizeBytes"/>.
+/// <para>声明设备表中的一个额外设备：以 NUL 结尾的 tag 与以字节表示、块对齐的设备大小。
+/// 设备表记录该 tag 以及由 <paramref name="SizeBytes"/> 推导出的块数。</para>
+/// </summary>
+public sealed record ErofsDeviceSpec(string Tag, long SizeBytes);

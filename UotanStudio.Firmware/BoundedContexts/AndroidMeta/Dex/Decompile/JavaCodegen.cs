@@ -1,6 +1,6 @@
-﻿using System.Text;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
+using System.Text;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Instructions;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Model;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Decompile;
 

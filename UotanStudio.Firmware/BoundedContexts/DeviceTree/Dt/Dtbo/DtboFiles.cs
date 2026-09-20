@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -5,7 +6,7 @@ using System.Text.Json;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
-namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
 
 public static partial class DtboFormat
 {

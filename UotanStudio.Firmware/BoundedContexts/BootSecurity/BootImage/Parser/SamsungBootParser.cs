@@ -1,6 +1,6 @@
-﻿using System.Text;
+using System.Text;
 
-namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
+namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 
 public class SamsungBootParser : IDisposable
 {

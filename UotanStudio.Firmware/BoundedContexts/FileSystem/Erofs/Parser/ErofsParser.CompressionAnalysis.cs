@@ -1,4 +1,6 @@
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 
 internal delegate bool CompressionObserver(ErofsCompressionAlgorithm algorithm,
     ReadOnlySpan<byte> encoded, ReadOnlySpan<byte> decoded, int clusterOfs, int kernelExpectedOutputSize);

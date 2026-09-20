@@ -1,8 +1,11 @@
-﻿
+using DtTree = UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.DeviceTree;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Overlay;
+
 
 using System.Text;
 
-namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dts;
 
 public class DtsParseError
 {
@@ -32,12 +35,12 @@ public enum DtsParseErrorSeverity
 
 public class DtsParseResult
 {
-    public DeviceTree? Tree { get; }
+    public DtTree? Tree { get; }
     public List<DtsParseError> Errors { get; }
     public bool IsSuccess => Errors.Count == 0;
     public bool HasPartialTree => Tree != null && Errors.Count > 0;
 
-    public DtsParseResult(DeviceTree? tree, List<DtsParseError> errors)
+    public DtsParseResult(DtTree? tree, List<DtsParseError> errors)
     {
         Tree = tree;
         Errors = errors ?? new List<DtsParseError>();
@@ -82,7 +85,7 @@ public static class DtsFormat
         return parser.ParseWithErrorCapture(useRecovery: true);
     }
 
-    public static string Write(DeviceTree tree)
+    public static string Write(DtTree tree)
     {
         if (tree is null)
             throw new ArgumentNullException(nameof(tree));
@@ -90,7 +93,7 @@ public static class DtsFormat
         return writer.Write(tree);
     }
 
-    public static string Write(DeviceTree tree, DtsWriteOptions options)
+    public static string Write(DtTree tree, DtsWriteOptions options)
     {
         if (tree is null)
             throw new ArgumentNullException(nameof(tree));
@@ -104,7 +107,7 @@ public static class DtsFormat
     /// Writes DTS and returns a map of node path to the 1-based line of its '{'.
     /// <para>序列化DTS并返回 节点路径-&gt;开括号行号 映射。</para>
     /// </summary>
-    public static Dictionary<string, int> GetNodeLineMap(DeviceTree tree)
+    public static Dictionary<string, int> GetNodeLineMap(DtTree tree)
     {
         if (tree is null)
             throw new ArgumentNullException(nameof(tree));
@@ -117,7 +120,7 @@ public static class DtsFormat
     /// Merges the overlay tree into the base tree and returns the merged base tree.
     /// <para>将 overlay 树合并到基树并返回合并后的基树。</para>
     /// </summary>
-    public static DeviceTree MergeOverlay(DeviceTree baseTree, DeviceTree overlayTree)
+    public static DtTree MergeOverlay(DtTree baseTree, DtTree overlayTree)
     {
         if (baseTree is null)
             throw new ArgumentNullException(nameof(baseTree));

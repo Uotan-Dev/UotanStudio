@@ -51,16 +51,10 @@ internal static class PartitionInfoHelper
                 continue;
             }
 
-            ulong blocks = 0;
-            foreach (var op in part.Operations)
-            {
-                foreach (var ext in op.DstExtents)
-                {
-                    blocks += ext.NumBlocks;
-                }
-            }
-
-            var bytes = blocks * manifest.BlockSize;
+            // Authoritative destination size: declared new_partition_info.size, else the highest
+            // destination-extent end. Summing extent blocks under-reports SOURCE_COPY-dominated
+            // incremental partitions to near zero.
+            var bytes = (ulong)Math.Max(0, UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Extraction.PayloadExtractor.ProgressSize(part, manifest.BlockSize));
 
             list.Add(new PartitionInfoData
             {

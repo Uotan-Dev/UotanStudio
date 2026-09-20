@@ -1,3 +1,8 @@
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -11,6 +16,13 @@ internal sealed class BootRepackConfiguration
     public BootImageHeader? Header { get; set; }
     public VendorBootHeader? VendorHeader { get; set; }
     public List<VendorRamdiskTableEntry> RamdiskTable { get; set; } = [];
+
+    /// <summary>
+    /// Non-null when the source image carries a trailing AVB footer. Rebuilding would drop
+    /// that footer and its vbmeta, breaking verified boot, so packing is refused.
+    /// <para>源镜像尾部含 AVB footer 时非空。重打包会丢弃该 footer 及其 vbmeta，破坏验证启动，因此拒绝打包。</para>
+    /// </summary>
+    public AvbFooterState? Footer { get; set; }
 
     internal static JsonObject FromImage(string path)
     {
@@ -29,6 +41,15 @@ internal sealed class BootRepackConfiguration
             configuration = new() { Magic = "VNDRBOOT", VendorHeader = parser.Header, RamdiskTable = [.. parser.RamdiskTable] };
         }
         else throw new InvalidDataException("Unsupported boot image magic.");
+        if (AvbFooter.TryReadFile(path) is { } footer)
+            configuration.Footer = new AvbFooterState
+            {
+                VersionMajor = footer.VersionMajor,
+                VersionMinor = footer.VersionMinor,
+                OriginalImageSize = footer.OriginalImageSize,
+                VbmetaOffset = footer.VbmetaOffset,
+                VbmetaSize = footer.VbmetaSize
+            };
         return (JsonObject)JsonSerializer.SerializeToNode(configuration, BootRepackJsonContext.Default.BootRepackConfiguration)!;
     }
 
@@ -39,6 +60,10 @@ internal sealed class BootRepackConfiguration
             throw new InvalidDataException("Missing Boot repack metadata.");
         var configuration = metadata.Configuration.Deserialize(BootRepackJsonContext.Default.BootRepackConfiguration)
             ?? throw new InvalidDataException("Missing Boot configuration.");
+        if (configuration.Footer is not null)
+            throw new InvalidDataException(
+                "The source boot image carries an AVB footer; rebuilding this directory would drop the footer and its vbmeta and can break verified boot. Use an AVB-aware re-signing workflow. " +
+                "源 Boot 镜像含 AVB footer，重打包会丢弃该 footer 及其 vbmeta，可能破坏验证启动。请使用支持 AVB 的重签名流程。");
         if (Path.GetFullPath(outputPath).Equals(Path.GetFullPath(Path.Combine(directory, RepackMetadata.FileName)),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
             throw new IOException("Boot output must not replace its configuration.");
@@ -93,7 +118,22 @@ internal sealed class BootRepackConfiguration
     }
 }
 
+/// <summary>
+/// Persisted description of a source image's trailing AVB footer, kept for inspection and to
+/// gate packing. Only the footer fields are recorded; the vbmeta payload itself is never rebuilt.
+/// <para>记录源镜像尾部 AVB footer 的字段，供检视并约束打包。仅保存 footer 字段，绝不重建 vbmeta 载荷。</para>
+/// </summary>
+internal sealed class AvbFooterState
+{
+    public uint VersionMajor { get; set; }
+    public uint VersionMinor { get; set; }
+    public ulong OriginalImageSize { get; set; }
+    public ulong VbmetaOffset { get; set; }
+    public ulong VbmetaSize { get; set; }
+}
+
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     IgnoreReadOnlyProperties = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(BootRepackConfiguration))]
+[JsonSerializable(typeof(AvbFooterState))]
 internal partial class BootRepackJsonContext : JsonSerializerContext;

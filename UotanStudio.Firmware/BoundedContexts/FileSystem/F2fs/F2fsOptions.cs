@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 
 public sealed class F2fsOptions

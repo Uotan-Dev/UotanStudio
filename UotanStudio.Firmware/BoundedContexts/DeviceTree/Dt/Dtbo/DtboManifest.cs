@@ -1,6 +1,7 @@
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
 using System.Text.Json.Serialization;
 
-namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
 
 internal sealed class DtboManifest
 {

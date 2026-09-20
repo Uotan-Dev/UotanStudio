@@ -1,9 +1,11 @@
-﻿
+using DtTree = UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.DeviceTree;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
+
 
 using System.Buffers.Binary;
 using System.Text;
 
-namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dts;
 
 internal sealed class DtsWriter
 {
@@ -20,7 +22,7 @@ internal sealed class DtsWriter
 
     public IReadOnlyDictionary<string, int> NodeStartLines => _nodeStartLines;
 
-    public string Write(DeviceTree tree)
+    public string Write(DtTree tree)
     {
         _sb.Clear();
         _indent = 0;

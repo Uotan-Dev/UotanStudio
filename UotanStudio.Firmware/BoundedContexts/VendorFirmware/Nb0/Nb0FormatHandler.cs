@@ -1,4 +1,8 @@
-﻿using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Extraction;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Models;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Packing;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Parsing;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0;
 
@@ -6,7 +10,7 @@ public sealed class Nb0FormatHandler : IFormatHandler
 {
     public string FormatName => "FIH Mobile NB0 Firmware";
 
-    public IReadOnlyList<string> FileExtensions => ["nb0", "bin"];
+    public IReadOnlyList<string> FileExtensions => ["nb0"];
 
     /// <summary>
     /// Determines whether the file matches this format.
@@ -17,11 +21,6 @@ public sealed class Nb0FormatHandler : IFormatHandler
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
         {
             return false;
-        }
-        var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
-        if (ext == "nb0")
-        {
-            return true;
         }
         try
         {
@@ -38,7 +37,29 @@ public sealed class Nb0FormatHandler : IFormatHandler
                 return false;
             }
             var required = 4L + (count * Nb0EntryHeader.StructSize);
-            return required <= stream.Length;
+            if (required > stream.Length)
+            {
+                return false;
+            }
+
+            // The table must describe entries contained by the file. This rejects ordinary
+            // .bin/.tflite/font data whose first four bytes happen to be a small integer.
+            for (var i = 0; i < count; i++)
+            {
+                var entry = new byte[Nb0EntryHeader.StructSize];
+                if (stream.Read(entry) != entry.Length)
+                {
+                    return false;
+                }
+                var offset = BitConverter.ToUInt32(entry[..4]);
+                var size = BitConverter.ToUInt32(entry, 4);
+                if ((long)offset + size > stream.Length - required)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
         catch
         {

@@ -1,12 +1,6 @@
-using System.Buffers.Binary;
-using System.Security.Cryptography;
-using Google.Protobuf;
-using SharpCompress.Compressors.BZip2;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 
-namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
 
 public sealed partial class PayloadBuilder
 {
@@ -14,13 +8,13 @@ public sealed partial class PayloadBuilder
     {
         var format = compressionType switch
         {
-            CompressionType.None => UotanStudio.Firmware.CrossCutting.Compress.CompressionFormat.None,
-            CompressionType.BZip2 => UotanStudio.Firmware.CrossCutting.Compress.CompressionFormat.Bzip2,
-            CompressionType.Xz => UotanStudio.Firmware.CrossCutting.Compress.CompressionFormat.Xz,
+            CompressionType.None => UotanStudio.Firmware.BoundedContexts.Compression.CompressionFormat.None,
+            CompressionType.BZip2 => UotanStudio.Firmware.BoundedContexts.Compression.CompressionFormat.Bzip2,
+            CompressionType.Xz => UotanStudio.Firmware.BoundedContexts.Compression.CompressionFormat.Xz,
             _ => throw new PayloadGenerationException("Unsupported payload REPLACE compression.")
         };
-        UotanStudio.Firmware.CrossCutting.Compress.CompressionService.Compress(inputStream, outputStream, format,
-            new UotanStudio.Firmware.CrossCutting.Compress.CompressionOptions
+        UotanStudio.Firmware.BoundedContexts.Compression.CompressionService.Compress(inputStream, outputStream, format,
+            new UotanStudio.Firmware.BoundedContexts.Compression.CompressionOptions
             {
                 MaxDegreeOfParallelism = 1,
                 DictionarySize = 1u << 20

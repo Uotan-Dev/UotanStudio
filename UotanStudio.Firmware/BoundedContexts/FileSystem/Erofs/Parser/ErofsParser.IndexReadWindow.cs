@@ -1,4 +1,4 @@
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 
 public sealed partial class ErofsParser
 {

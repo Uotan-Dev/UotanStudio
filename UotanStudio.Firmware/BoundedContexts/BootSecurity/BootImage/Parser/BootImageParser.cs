@@ -1,7 +1,9 @@
-﻿using System.Security.Cryptography;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
+using System.Security.Cryptography;
 using System.Text;
 
-namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
+namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 
 public class BootImageParser : IDisposable
 {

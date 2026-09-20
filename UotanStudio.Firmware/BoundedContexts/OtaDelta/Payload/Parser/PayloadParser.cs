@@ -1,5 +1,6 @@
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Extraction;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.IO;
 using System.IO.Compression;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Models;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
@@ -7,7 +8,7 @@ using UotanStudio.Firmware.SharedKernel;
 using SharpZipCompressionMethod = ICSharpCode.SharpZipLib.Zip.CompressionMethod;
 using SharpZipZipFile = ICSharpCode.SharpZipLib.Zip.ZipFile;
 
-namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 
 public static partial class PayloadParser
 {
@@ -335,6 +336,22 @@ public static partial class PayloadParser
         Guard.ThrowIfNull(stream, nameof(stream));
         var (manifest, header) = await ReadManifestAsync(stream, cancellationToken).ConfigureAwait(false);
         return BuildMetadata(manifest, header);
+    }
+
+    /// <summary>
+    /// Returns the authoritative destination size (in bytes) for a partition update. Prefers the
+    /// manifest's declared <c>new_partition_info.size</c> and otherwise falls back to the highest
+    /// destination-extent end offset. Incremental payloads dominated by <c>SOURCE_COPY</c> operations
+    /// carry an empty destination-extent list, so the declared size is the only honest figure
+    /// available before the partition is actually reconstructed.
+    /// <para>返回分区更新的权威目标大小（字节）。优先使用 manifest 声明的
+    /// <c>new_partition_info.size</c>，否则回退到最高目标 extent 结束偏移。以 <c>SOURCE_COPY</c>
+    /// 为主的增量载荷目标 extent 为空，声明大小是唯一在重建前可信的数值。</para>
+    /// </summary>
+    public static long GetPartitionSize(PartitionUpdate partition, uint blockSize)
+    {
+        Guard.ThrowIfNull(partition, nameof(partition));
+        return PayloadExtractor.ProgressSize(partition, blockSize);
     }
 
     /// <summary>

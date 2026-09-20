@@ -3,6 +3,8 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
 
 namespace UotanStudio.Firmware.SharedKernel;
 
@@ -464,6 +466,7 @@ public sealed class RepackMetadata
         }
         if (extractionProperties is not null)
             foreach (var pair in extractionProperties) metadata.SourceProperties[pair.Key] = pair.Value;
+        var hasBootAvbFooter = handler is BootImageFormatHandler && metadata.Configuration.ContainsKey("footer");
         metadata.CanPackDirectory = handler.FormatName switch
         {
             "EXT4" or "EROFS" or "F2FS" or "CPIO/TAR Archive" or "NTPI Firmware Package"
@@ -472,7 +475,7 @@ public sealed class RepackMetadata
             "Device Tree (DTB/DTBO)" => metadata.Configuration.Count > 0,
             "Android Sparse Image (simg)" => File.Exists(Path.Combine(outputDirectory,
                 Path.GetFileNameWithoutExtension(sourcePath) + ".raw")),
-            "Android Boot / Vendor Boot Image" => metadata.Configuration.Count > 0,
+            "Android Boot / Vendor Boot Image" => metadata.Configuration.Count > 0 && !hasBootAvbFooter,
             _ => false
         };
         var optionKeys = handler.FormatName switch
@@ -490,6 +493,7 @@ public sealed class RepackMetadata
         if (handler.FormatName == "CPIO/TAR Archive") metadata.PackingNotes += " The directory packer writes newc CPIO.";
         if (handler.FormatName == "Android OTA Payload (payload.bin)") metadata.PackingNotes += " The directory packer creates an unsigned full payload.";
         if (handler.FormatName == "Android Logical Partition (super)") metadata.PackingNotes += " The directory packer creates new default LP groups and geometry.";
+        if (hasBootAvbFooter) metadata.PackingNotes += " The source boot image carries an AVB footer; the directory cannot be rebuilt without dropping verified-boot data, so repacking is disabled until re-signed through an AVB-aware workflow.";
         if (metadata.Configuration.ContainsKey("superblock"))
             metadata.PackingNotes += metadata.Configuration["fileSystem"]?.GetValue<string>() == "EROFS"
                 ? " EROFS edits inherit codec parameters, UUID, volume and inode attributes from the verified original image; compression level is not recorded on disk. Physical layout is regenerated."
@@ -499,7 +503,7 @@ public sealed class RepackMetadata
         if (handler is BoundedContexts.FileSystem.Ext4.Ext4FormatHandler
             or BoundedContexts.FileSystem.Erofs.ErofsFormatHandler
             or BoundedContexts.FileSystem.F2fs.F2fsFormatHandler
-            || handler is BoundedContexts.FileSystem.Sparse.SparseFormatHandler
+            || handler is BoundedContexts.BlockImage.Sparse.SparseFormatHandler
                 && metadata.Configuration["fileSystem"]?.GetValue<string>() is "EXT4" or "EROFS" or "F2FS")
         {
             var partition = DetectPartitionName(Path.GetFileName(sourcePath));
@@ -561,20 +565,20 @@ public sealed class RepackMetadata
             var superblock = configuration.ContainsKey("superblock") ? configuration["superblock"] as JsonObject : null;
             if (handler.FormatName == "Android Sparse Image (simg)")
             {
-                using var image = BoundedContexts.FileSystem.Sparse.SparseReader.FromImageFile(sourcePath);
-                using var logical = new BoundedContexts.FileSystem.Sparse.SparseReadStream(image);
+                using var image = BoundedContexts.BlockImage.Sparse.IO.SparseReader.FromImageFile(sourcePath);
+                using var logical = new BoundedContexts.BlockImage.Sparse.IO.SparseReadStream(image);
                 switch (configuration["fileSystem"]?.GetValue<string>())
                 {
                     case "EXT4":
-                        using (var parser = new BoundedContexts.FileSystem.Ext4.Ext4Parser(logical))
+                        using (var parser = new UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser.Ext4Parser(logical))
                             FileSystemMetadataGenerator.GenerateForExt4(metadataDirectory, partitionName, parser, superblock);
                         break;
                     case "EROFS":
-                        using (var parser = new BoundedContexts.FileSystem.Erofs.ErofsParser(logical))
+                        using (var parser = new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser.ErofsParser(logical))
                             FileSystemMetadataGenerator.GenerateForErofs(metadataDirectory, partitionName, parser, superblock);
                         break;
                     case "F2FS":
-                        using (var parser = new BoundedContexts.FileSystem.F2fs.F2fsParser(logical))
+                        using (var parser = new UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser.F2fsParser(logical))
                             FileSystemMetadataGenerator.GenerateForF2fs(metadataDirectory, partitionName, parser, superblock);
                         break;
                 }
@@ -585,21 +589,21 @@ public sealed class RepackMetadata
             switch (handler.FormatName)
             {
                 case "EXT4":
-                    using (var parser = new BoundedContexts.FileSystem.Ext4.Ext4Parser(stream))
+                    using (var parser = new UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser.Ext4Parser(stream))
                     {
                         FileSystemMetadataGenerator.GenerateForExt4(metadataDirectory, partitionName, parser, superblock);
                     }
 
                     break;
                 case "EROFS":
-                    using (var parser = new BoundedContexts.FileSystem.Erofs.ErofsParser(stream))
+                    using (var parser = new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser.ErofsParser(stream))
                     {
                         FileSystemMetadataGenerator.GenerateForErofs(metadataDirectory, partitionName, parser, superblock);
                     }
 
                     break;
                 case "F2FS":
-                    using (var parser = new BoundedContexts.FileSystem.F2fs.F2fsParser(stream))
+                    using (var parser = new UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser.F2fsParser(stream))
                     {
                         FileSystemMetadataGenerator.GenerateForF2fs(metadataDirectory, partitionName, parser, superblock);
                     }

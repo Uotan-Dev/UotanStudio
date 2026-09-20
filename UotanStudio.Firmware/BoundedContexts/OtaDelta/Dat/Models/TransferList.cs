@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
+namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Models;
 
 /// <summary>Identifies an Android transfer command. <para>标识 Android 传输命令。</para></summary>
 public enum TransferListCommandKind

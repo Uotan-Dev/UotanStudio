@@ -1,10 +1,10 @@
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Models;
 using System.Security.Cryptography;
 using Google.Protobuf;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 
-namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
 
 /// <summary>
 /// Builds optionally signed payloads from block-aligned partitions using at most 65536 operations of up to 1 MiB each.
@@ -303,7 +303,7 @@ public sealed partial class PayloadBuilder : IDisposable
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            using var data = UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.BinaryDeltaPatch.CreateTemporaryStream();
+            using var data = UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff.BinaryDeltaPatch.CreateTemporaryStream();
             var manifest = BuildManifest(data, cancellationToken);
             if (_signingKey is not null)
             {
@@ -316,7 +316,7 @@ public sealed partial class PayloadBuilder : IDisposable
             output.Write(header);
             output.Write(manifestBytes);
             data.Position = 0;
-            UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.BinaryDeltaPatch.CopyExactly(data, output, data.Length, cancellationToken);
+            UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff.BinaryDeltaPatch.CopyExactly(data, output, data.Length, cancellationToken);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception) when (cancellationToken.IsCancellationRequested)
@@ -353,6 +353,12 @@ public sealed partial class PayloadBuilder : IDisposable
             cancellationToken.ThrowIfCancellationRequested();
             if (!names.Add(partition.PartitionName)) throw new PayloadGenerationException("Duplicate payload partition name.");
             var update = _postinstall.TryGetValue(partition.PartitionName, out var config) ? config.Clone() : new PartitionUpdate { PartitionName = partition.PartitionName };
+            if (partition.Incremental)
+            {
+                WriteIncrementalPartition(partition, data, update, chunkSize, ref operationCount, cancellationToken);
+                manifest.Partitions.Add(update);
+                continue;
+            }
             using var partitionHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             if (partition.OperationType == InstallOperation.Types.Type.Zero)
             {
@@ -423,6 +429,7 @@ public sealed partial class PayloadBuilder : IDisposable
             foreach (var partition in _partitions)
             {
                 partition.ImageStream?.Dispose();
+                partition.SourceStream?.Dispose();
             }
 
             _partitions.Clear();
@@ -440,6 +447,11 @@ public sealed partial class PayloadBuilder : IDisposable
         public ulong SizeBytes { get; set; }
         public InstallOperation.Types.Type OperationType { get; set; }
         public CompressionType CompressionType { get; set; }
+
+        /// <summary>When true the partition is emitted as SOURCE_COPY (unchanged blocks) + REPLACE (changed blocks).</summary>
+        public bool Incremental { get; set; }
+        public string? SourcePath { get; set; }
+        public Stream? SourceStream { get; set; }
     }
 }
 

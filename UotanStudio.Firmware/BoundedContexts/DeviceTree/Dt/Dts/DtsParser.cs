@@ -1,9 +1,11 @@
+using DtTree = UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.DeviceTree;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
 
 
 using System.Buffers.Binary;
 using System.Text;
 
-namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dts;
 
 internal sealed class DtsParser
 {
@@ -58,7 +60,7 @@ internal sealed class DtsParser
     {
         if (useRecovery) _errorRecovery = true;
         _parseErrors.Clear();
-        DeviceTree? tree = null;
+        DtTree? tree = null;
         try
         {
             tree = Parse();
@@ -94,11 +96,11 @@ internal sealed class DtsParser
         public DtsRecoveryException(string message) : base(message) { }
     }
 
-    private DeviceTree Parse()
+    private DtTree Parse()
     {
         SkipWhitespaceAndComments();
 
-        DeviceTree? tree = null;
+        DtTree? tree = null;
 
         while (_pos < _text.Length)
         {
@@ -137,7 +139,7 @@ internal sealed class DtsParser
 
         if (tree is null)
         {
-            if (_isPlugin) tree = new DeviceTree();
+            if (_isPlugin) tree = new DtTree();
             else
             {
                 ThrowParseError("No root node found in DTS source");
@@ -194,12 +196,12 @@ internal sealed class DtsParser
         _memReserves.Add(new MemoryReservation { Address = address, Size = size });
     }
 
-    private DeviceTree ParseRootNode()
+    private DtTree ParseRootNode()
     {
         Expect("/");
         SkipWhitespaceAndComments();
         Expect("{");
-        var tree = new DeviceTree();
+        var tree = new DtTree();
         ParseNodeBody(tree.Root);
         return tree;
     }
@@ -708,7 +710,7 @@ internal sealed class DtsParser
         return values.ToArray();
     }
 
-    private void ResolveLabelReferences(DeviceTree tree)
+    private void ResolveLabelReferences(DtTree tree)
     {
         uint maxPhandle = 0;
         var maxScanned = false;

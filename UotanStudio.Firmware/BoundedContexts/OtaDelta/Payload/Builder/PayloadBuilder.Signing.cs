@@ -1,10 +1,10 @@
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Models;
 using System.Security.Cryptography;
 using Google.Protobuf;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 
-namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
 
 public sealed partial class PayloadBuilder
 {

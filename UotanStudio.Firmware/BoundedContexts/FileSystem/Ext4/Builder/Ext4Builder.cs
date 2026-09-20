@@ -1,10 +1,10 @@
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Index;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Models;
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Core;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Journal;
 using UotanStudio.Firmware.SharedKernel;
 
-namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 
 public sealed partial class Ext4Builder
 {
