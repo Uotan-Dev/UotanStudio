@@ -1,0 +1,87 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:UotanStudio.ViewModels.Editors"
+             xmlns:controls="using:UotanStudio.Views.Controls"
+             x:Class="UotanStudio.Views.Editors.ElfInfoView"
+             x:DataType="vm:ElfInfoViewModel">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Padding="16,12" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{DynamicResource Dock_Elf_Title}" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding FilePath}" TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding FilePath}" Opacity="0.7" />
+                </StackPanel>
+                <Button Grid.Column="1" Content="{DynamicResource Dock_Elf_OpenHex}"
+                        Command="{Binding OpenHexCommand}" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+        <StackPanel DockPanel.Dock="Top" IsVisible="{Binding IsBusy}" Margin="16,8" Spacing="6">
+            <TextBlock Text="{DynamicResource Dock_Elf_Loading}" />
+            <ProgressBar IsIndeterminate="True" Height="3" />
+        </StackPanel>
+        <Border DockPanel.Dock="Top" Classes="error-banner"
+                IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Classes="error-banner" Text="{Binding ErrorMessage}" />
+        </Border>
+        <TabControl IsVisible="{Binding IsRecognized}" Margin="12,8">
+            <TabItem Header="{DynamicResource Dock_Elf_Header}">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding Fields}" Margin="4,12">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ElfFieldRow">
+                                <controls:ResponsiveFormRow MinLabelWidth="170" MaxLabelWidth="210"
+                                                            MinEditorWidth="180" ColumnSpacing="16" RowSpacing="4" Margin="4,5">
+                                    <TextBlock Text="{Binding Name}" TextWrapping="Wrap" Opacity="0.75" />
+                                    <SelectableTextBlock Text="{Binding Value}" FontFamily="Consolas" TextWrapping="Wrap" />
+                                </controls:ResponsiveFormRow>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="{DynamicResource Dock_Elf_Segments}">
+                <DockPanel Margin="0,8">
+                    <TextBlock DockPanel.Dock="Top" Margin="8" Text="{DynamicResource Dock_Elf_NoSegments}"
+                               IsVisible="{Binding !Segments.Count}" Opacity="0.7" />
+                    <DataGrid ItemsSource="{Binding Segments}" IsReadOnly="True" AutoGenerateColumns="False"
+                              CanUserResizeColumns="True" GridLinesVisibility="Horizontal" FontFamily="Consolas">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn x:DataType="vm:ElfSegmentRow" Header="#" Binding="{Binding Index}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSegmentRow" Header="{DynamicResource Dock_Elf_Type}" Binding="{Binding Type}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSegmentRow" Header="{DynamicResource Dock_Elf_Flags}" Binding="{Binding Flags}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSegmentRow" Header="{DynamicResource Dock_Elf_Offset}" Binding="{Binding Offset}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSegmentRow" Header="{DynamicResource Dock_Elf_VirtualAddress}" Binding="{Binding VirtualAddress}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSegmentRow" Header="{DynamicResource Dock_Elf_PhysicalAddress}" Binding="{Binding PhysicalAddress}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSegmentRow" Header="{DynamicResource Dock_Elf_FileBytes}" Binding="{Binding FileSize}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSegmentRow" Header="{DynamicResource Dock_Elf_MemoryBytes}" Binding="{Binding MemorySize}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSegmentRow" Header="{DynamicResource Dock_Elf_Alignment}" Binding="{Binding Alignment}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+            <TabItem Header="{DynamicResource Dock_Elf_Sections}">
+                <DockPanel Margin="0,8">
+                    <TextBlock DockPanel.Dock="Top" Margin="8" Text="{DynamicResource Dock_Elf_NoSections}"
+                               IsVisible="{Binding !Sections.Count}" Opacity="0.7" />
+                    <DataGrid ItemsSource="{Binding Sections}" IsReadOnly="True" AutoGenerateColumns="False"
+                              CanUserResizeColumns="True" GridLinesVisibility="Horizontal" FontFamily="Consolas">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn x:DataType="vm:ElfSectionRow" Header="#" Binding="{Binding Index}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSectionRow" Header="{DynamicResource Dock_Elf_Name}" Binding="{Binding Name}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSectionRow" Header="{DynamicResource Dock_Elf_Type}" Binding="{Binding Type}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSectionRow" Header="{DynamicResource Dock_Elf_Flags}" Binding="{Binding Flags}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSectionRow" Header="{DynamicResource Dock_Elf_Address}" Binding="{Binding Address}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSectionRow" Header="{DynamicResource Dock_Elf_Offset}" Binding="{Binding Offset}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSectionRow" Header="{DynamicResource Dock_Elf_Size}" Binding="{Binding Size}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSectionRow" Header="{DynamicResource Dock_Elf_Link}" Binding="{Binding Link}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSectionRow" Header="{DynamicResource Dock_Elf_Info}" Binding="{Binding Info}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSectionRow" Header="{DynamicResource Dock_Elf_Alignment}" Binding="{Binding Alignment}" />
+                            <DataGridTextColumn x:DataType="vm:ElfSectionRow" Header="{DynamicResource Dock_Elf_EntrySize}" Binding="{Binding EntrySize}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</UserControl>
