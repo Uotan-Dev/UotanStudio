@@ -220,7 +220,87 @@
 
                         <!-- 选中节点后的属性面板 -->
                         <StackPanel Margin="8" Spacing="6"
-                                    IsVisible="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                    IsVisible="{Binding IsMultipleSelection}">
+                            <TextBlock Text="{DynamicResource Node_BatchSelection}"
+                                       FontWeight="SemiBold" FontSize="13" />
+                            <TextBlock FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}">
+                                <Run Text="{Binding SelectedNodeCount}" />
+                                <Run Text=" " />
+                                <Run Text="{DynamicResource Node_BatchSelectedSuffix}" />
+                            </TextBlock>
+                            <Separator Margin="0,4" />
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Grid.Column="0" Text="{DynamicResource Node_Prop_Category}"
+                                           FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Margin="0,0,8,0" />
+                                <TextBlock Grid.Column="1" Text="{Binding SelectedCategoryDisplay}"
+                                           FontSize="12" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Grid.Column="0" Text="{DynamicResource Node_Prop_Type}"
+                                           FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Margin="0,0,8,0" />
+                                <TextBlock Grid.Column="1" Text="{Binding SelectedTypeDisplay}"
+                                           FontSize="12" TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                            <StackPanel Spacing="4" IsVisible="{Binding CanEditBatchConstant}">
+                                <Separator Margin="0,4" />
+                                <TextBlock Text="{DynamicResource Node_BatchConstant}" FontSize="11"
+                                           FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" />
+                                <Grid ColumnDefinitions="Auto,*">
+                                    <TextBlock Grid.Column="0" Text="{DynamicResource Node_Const_ValueType}"
+                                               FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                               Margin="0,4,8,0" VerticalAlignment="Center" />
+                                    <ComboBox Grid.Column="1" FontSize="12"
+                                              ItemsSource="{x:Static nodeVm:FlowNodeViewModel.ValueTypeOptions}"
+                                              SelectedItem="{Binding BatchNodeValueType, Mode=TwoWay}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="Auto,*">
+                                    <TextBlock Grid.Column="0" Text="{DynamicResource Node_Const_Value}"
+                                               FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                               Margin="0,4,8,0" />
+                                    <TextBox Grid.Column="1" FontSize="12" Height="24"
+                                             Text="{Binding BatchNodeValue, Mode=TwoWay}"
+                                             Watermark="{DynamicResource Node_BatchMixed}" />
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel Spacing="4" IsVisible="{Binding CanEditBatchProjectImage}">
+                                <Separator Margin="0,4" />
+                                <Grid ColumnDefinitions="Auto,*">
+                                    <TextBlock Grid.Column="0" Text="{DynamicResource Node_ProjImg_Select}"
+                                               FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                               Margin="0,4,8,0" />
+                                    <TextBox Grid.Column="1" FontSize="12" Height="24"
+                                             Text="{Binding BatchSelectedImage, Mode=TwoWay}"
+                                             Watermark="{DynamicResource Node_BatchMixed}" />
+                                </Grid>
+                            </StackPanel>
+                            <TextBlock Text="{DynamicResource Node_Prop_Inputs}" FontSize="11"
+                                       FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       Margin="0,4,0,0" />
+                            <ItemsControl ItemsSource="{Binding BatchInputs}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type nodeVm:BatchNodeInputViewModel}">
+                                        <Grid ColumnDefinitions="Auto,*" Margin="0,2">
+                                            <TextBlock Grid.Column="0" FontSize="12" Margin="0,2,8,0"
+                                                       VerticalAlignment="Center" Text="{Binding LocalizedTitle}" />
+                                            <TextBox Grid.Column="1" FontSize="12" Height="24"
+                                                     Text="{Binding TextValue, Mode=TwoWay}"
+                                                     IsVisible="{Binding IsTextOrPathPort}"
+                                                     Watermark="{DynamicResource Node_BatchMixed}" />
+                                            <NumericUpDown Grid.Column="1" FontSize="12" Height="24"
+                                                           Value="{Binding NumberValue, Mode=TwoWay}"
+                                                           IsVisible="{Binding IsNumberPort}" />
+                                            <CheckBox Grid.Column="1" IsChecked="{Binding BooleanValue, Mode=TwoWay}"
+                                                      IsVisible="{Binding IsBooleanPort}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <StackPanel Margin="8" Spacing="6"
+                                    IsVisible="{Binding IsSingleSelection}">
                             <TextBlock Text="{Binding SelectedNode.LocalizedTitle}"
                                        FontWeight="SemiBold" FontSize="13"
                                        Margin="0,0,0,4" />
@@ -378,7 +458,11 @@
                 PointerReleased="OnSplitterReleased" PointerCaptureLost="OnSplitterCaptureLost" />
 
         <!-- 中央节点画布区域 - 使用 Grid 叠加小地图 -->
-        <Grid Grid.Column="2"
+        <Grid Grid.Column="2" x:Name="EditorSurface"
+              PointerPressed="OnSelectionBoxPressed"
+              PointerMoved="OnSelectionBoxMoved"
+              PointerReleased="OnSelectionBoxReleased"
+              PointerCaptureLost="OnSelectionBoxCaptureLost"
               DragDrop.AllowDrop="True"
               DragDrop.DragOver="OnCanvasDragOver"
               DragDrop.DragLeave="OnCanvasDragLeave"
