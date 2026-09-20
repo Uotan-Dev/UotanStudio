@@ -210,6 +210,29 @@ public sealed class ProjectBoundaryOptimizationTests : IDisposable
     }
 
     [Fact]
+    public void RebaseSnapshot_ConvertsLegacyAbsolutePaths_AndRetainsPortablePaths()
+    {
+        var source = Path.Combine(_root, "source");
+        var destination = Path.Combine(_root, "destination");
+        var operation = new HistoryOperationDto
+        {
+            Kind = HistoryOperationKind.SynthesizeSuper,
+            Description = "super",
+            RelativePath = "images/system.img",
+            DestinationPath = Path.Combine(source, "output", "super.img"),
+            OutputPaths = [Path.Combine(source, "output", "super.img")],
+            BackupPaths = [Path.Combine(source, ".deleted", ".history", "id", "super.img")]
+        };
+
+        var rebased = ProjectHistory.RebaseSnapshot([operation], source, destination);
+
+        Assert.Equal("images/system.img", rebased[0].RelativePath);
+        Assert.Equal("output/super.img", rebased[0].DestinationPath);
+        Assert.Equal("output/super.img", Assert.Single(rebased[0].OutputPaths));
+        Assert.Equal(".deleted/.history/id/super.img", Assert.Single(rebased[0].BackupPaths));
+    }
+
+    [Fact]
     public void OpenSolution_RootIsTheSolutionsOwnDirectory_NotBlockedBySiblingFile()
     {
         var context = new ProjectContext();

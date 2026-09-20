@@ -13,6 +13,18 @@ internal static class WorkflowReconstruction
         if (string.IsNullOrEmpty(dto.TypeKey) || !NodeTypeRegistry.Contains(dto.TypeKey)) return false;
         // A faulty registered factory must not become an "unknown type" warning during refactoring.
         node = NodeTypeRegistry.Create(dto.TypeKey)!;
+        if (dto.NodeValueType is not null && node.IsConstantNode)
+        {
+            node.NodeValueType = dto.NodeValueType;
+        }
+        if (dto.NodeValue is not null && node.IsConstantNode)
+        {
+            node.NodeValue = dto.NodeValue;
+        }
+        if (dto.SelectedImage is not null && node.IsProjectImageNode)
+        {
+            node.SelectedImage = dto.SelectedImage;
+        }
         return true;
     }
 

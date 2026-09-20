@@ -146,5 +146,7 @@ public sealed class ProjectOperationsService
         => _session.ImportPackageAsync(archive, destination, cancellationToken);
     public Task<bool> UndoAsync(CancellationToken cancellationToken = default) => _session.UndoAsync(cancellationToken);
     public Task<bool> RedoAsync(CancellationToken cancellationToken = default) => _session.RedoAsync(cancellationToken);
+    internal bool CanUndo => _session.History.CanUndo;
+    internal bool CanRedo => _session.History.CanRedo;
     public Task ExportAsync(string output, CancellationToken cancellationToken = default) => _session.ExportAsync(output, cancellationToken);
 }

@@ -82,6 +82,15 @@ public sealed class NodeDto
     /// </summary>
     public string TypeKey { get; set; } = string.Empty;
 
+    /// <summary>Configurable node value type, when the node exposes one.</summary>
+    public string? NodeValueType { get; set; }
+
+    /// <summary>Configurable node value, when the node exposes one.</summary>
+    public string? NodeValue { get; set; }
+
+    /// <summary>Selected project-image relative path, when the node references an image.</summary>
+    public string? SelectedImage { get; set; }
+
     /// <summary>
     /// <para>输入端口用户编辑初始值映射（端口标题 → 字符串值）。仅持久化用户显式填写的值。</para>
     /// User-edited initial values of input ports (port title → string value). Only explicitly set values are persisted.

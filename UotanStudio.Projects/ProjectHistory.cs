@@ -84,6 +84,9 @@ public sealed class HistoryOperationDto
     /// <para>操作产出的输出文件/目录路径（撤销时删除）。</para>
     /// </summary>
     public List<string> OutputPaths { get; set; } = [];
+
+    /// <summary>Project-relative paths used to stage outputs while an operation is undone.</summary>
+    public List<string> BackupPaths { get; set; } = [];
 }
 
 /// <summary>
@@ -352,6 +355,40 @@ public sealed class ProjectHistory
         }
 
         return operations;
+    }
+
+    /// <summary>
+    /// Copies a history snapshot for Save As and rebases legacy absolute paths into the destination root.
+    /// Relative paths are already portable and are retained unchanged.
+    /// </summary>
+    internal static List<HistoryOperationDto> RebaseSnapshot(
+        IReadOnlyList<HistoryOperationDto> operations, string sourceRoot, string destinationRoot)
+    {
+        var source = Path.GetFullPath(sourceRoot);
+        var destination = Path.GetFullPath(destinationRoot);
+        return operations.Select(operation => new HistoryOperationDto
+        {
+            Kind = operation.Kind,
+            Description = operation.Description,
+            DisplayName = operation.DisplayName,
+            Count = operation.Count,
+            RelativePath = RebasePath(operation.RelativePath, source, destination),
+            DestinationPath = RebasePath(operation.DestinationPath, source, destination),
+            RelativePaths = operation.RelativePaths.Select(path => RebasePath(path, source, destination)).ToList(),
+            OutputPaths = operation.OutputPaths.Select(path => RebasePath(path, source, destination)).ToList(),
+            BackupPaths = operation.BackupPaths.Select(path => RebasePath(path, source, destination)).ToList()
+        }).ToList();
+    }
+
+    private static string RebasePath(string path, string sourceRoot, string destinationRoot)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path)) return path;
+        var full = Path.GetFullPath(path);
+        var prefix = Path.TrimEndingDirectorySeparator(sourceRoot) + Path.DirectorySeparatorChar;
+        return full.StartsWith(prefix, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
+            ? Path.GetRelativePath(destinationRoot, Path.Combine(destinationRoot, Path.GetRelativePath(sourceRoot, full)))
+                .Replace(Path.DirectorySeparatorChar, '/')
+            : path;
     }
 
     /// <summary>

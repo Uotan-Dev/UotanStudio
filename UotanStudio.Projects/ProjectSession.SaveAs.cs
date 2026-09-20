@@ -35,7 +35,9 @@ public sealed partial class ProjectSession
         var images = _workspace.CaptureImages();
         var packing = _workspace.CaptureSettings();
         var documents = _workspace.CaptureDocuments(destinationDirectory);
-        var history = History.CaptureSnapshot();
+        var history = Context.RootDirectory is { } sourceRoot
+            ? ProjectHistory.RebaseSnapshot(History.CaptureSnapshot(), sourceRoot, destinationDirectory)
+            : History.CaptureSnapshot();
 
         if (context.RootDirectory is null || context.SubProjects.Count == 0)
         {

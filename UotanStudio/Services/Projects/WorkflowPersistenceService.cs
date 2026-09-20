@@ -23,6 +23,9 @@ public static class WorkflowPersistenceService
                 X = n.Location.X,
                 Y = n.Location.Y,
                 TypeKey = n.TypeKey,
+                NodeValueType = n.IsConstantNode ? n.NodeValueType : null,
+                NodeValue = n.IsConstantNode ? n.NodeValue : null,
+                SelectedImage = n.IsProjectImageNode ? n.SelectedImage : null,
                 InputInitialValues = BuildInitialValueMap(n)
             });
         }
