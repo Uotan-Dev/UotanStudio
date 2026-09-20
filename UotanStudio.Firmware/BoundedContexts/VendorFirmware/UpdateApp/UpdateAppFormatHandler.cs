@@ -21,13 +21,28 @@ public sealed class UpdateAppFormatHandler : IFormatHandler
         try
         {
             using var fs = File.OpenRead(filePath);
-            Span<byte> magic = stackalloc byte[4];
-            if (fs.Read(magic) != 4)
+            // Huawei packages commonly reserve a zero-filled preamble before the
+            // first 0x55AA5AA5 entry (the supplied production sample starts at
+            // offset 0x60).  Detection must therefore inspect a bounded prefix
+            // instead of assuming the signature is at offset zero.
+            const int probeLimit = 4096;
+            Span<byte> window = stackalloc byte[4];
+            Span<byte> candidate = stackalloc byte[4];
+            var read = 0;
+            while (read < probeLimit && fs.ReadByte() is var value && value >= 0)
             {
-                return false;
+                window[read % 4] = (byte)value;
+                read++;
+                if (read >= 4)
+                {
+                    for (var i = 0; i < 4; i++)
+                        candidate[i] = window[(read - 4 + i) % 4];
+                    if (candidate.SequenceEqual(UpdateAppProcessor.MagicBytes))
+                        return true;
+                }
             }
 
-            return magic.SequenceEqual(UpdateAppProcessor.MagicBytes);
+            return false;
         }
         catch
         {

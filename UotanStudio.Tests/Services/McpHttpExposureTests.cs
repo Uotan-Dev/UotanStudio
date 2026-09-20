@@ -7,6 +7,7 @@ using ModelContextProtocol.Protocol;
 using UotanStudio.Mcp;
 using UotanStudio.Mcp.Http;
 using UotanStudio.Services.Mcp;
+using UotanStudio.Tests.Infrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
@@ -24,8 +25,12 @@ public sealed class McpHttpExposureTests
     public async Task HttpHost_StreamableHttpClientRoundTrip_ListsAndCallsTools()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var file = Path.Combine(Path.GetTempPath(), $"uotan-mcp-exposure-{Guid.NewGuid():N}.bin");
-        await File.WriteAllBytesAsync(file, [0x55, 0x4F, 0x54, 0x41], cancellationToken);
+        var corpusFile = FirmwareCorpus.FindFile("UPDATE.APP");
+        if (corpusFile is null)
+        {
+            Assert.Skip("UPDATE.APP is required for the MCP detection round trip.");
+        }
+        var file = corpusFile!;
 
         try
         {
@@ -61,7 +66,6 @@ public sealed class McpHttpExposureTests
         }
         finally
         {
-            File.Delete(file);
         }
     }
 
