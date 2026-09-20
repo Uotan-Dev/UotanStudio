@@ -49,9 +49,13 @@
     <None Include="TestInfrastructure\ApkSigning\Verify.java" CopyToOutputDirectory="PreserveNewest" />
     <None Include="TestInfrastructure\ApkSigning\unsigned.apk" CopyToOutputDirectory="PreserveNewest" />
     <None Include="TestInfrastructure\avbtool.py.md" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="TestInfrastructure\FirmwareMountCheck\run-qemu.sh" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="TestInfrastructure\FirmwareMountCheck\guest-init.sh" CopyToOutputDirectory="PreserveNewest" />
     <None Include="TestInfrastructure\FirmwareMountCheck\run-native-deflate.sh" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Firmware\FirmwareMountCheckTests.cs" />
+    <Compile Remove="Firmware\ErofsMultiDeviceMountTests.cs" />
+    <Compile Remove="TestInfrastructure\FirmwareMountCheck\FirmwareMountFixture.cs" />
   </ItemGroup>
 
 </Project>

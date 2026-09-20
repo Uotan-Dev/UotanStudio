@@ -50,7 +50,14 @@ public sealed class NativeFileSystemInteropTests
         Assert.Equal(SHA256.HashData(expected), hash.Hash);
     }
 
-    public static TheoryData<string> PackedCases => new(FirmwareMountFixture.CaseNames);
+    private static readonly string[] PackedCaseNames =
+    [
+        "ext4-default", "ext4-no-journal", "erofs-flat", "erofs-lz4", "erofs-lzma",
+        "erofs-deflate", "erofs-zstd", "erofs-lz4-full-index", "erofs-fragments-dedup",
+        "erofs-metabox", "f2fs-flat", "f2fs-lz4", "f2fs-zstd", "f2fs-lzo"
+    ];
+
+    public static TheoryData<string> PackedCases => new(PackedCaseNames);
 
     [Theory]
     [MemberData(nameof(PackedCases))]
