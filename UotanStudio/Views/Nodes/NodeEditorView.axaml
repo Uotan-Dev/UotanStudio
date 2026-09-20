@@ -480,12 +480,13 @@
                 <!-- 节点模板 -->
                 <nodify:NodifyEditor.ItemTemplate>
                     <DataTemplate DataType="{x:Type nodeVm:FlowNodeViewModel}">
-                        <nodify:Node Header="{Binding LocalizedTitle}"
-                                     Input="{Binding Input}"
-                                     Output="{Binding Output}"
-                                     Location="{Binding Location, Mode=TwoWay}"
-                                     BorderBrush="{Binding StatusBorderBrush}"
-                                     BorderThickness="2">
+                                     <nodify:Node Header="{Binding LocalizedTitle}"
+                                          Input="{Binding Input}"
+                                          Output="{Binding Output}"
+                                          Location="{Binding Location, Mode=TwoWay}"
+                                          IsSelected="{Binding IsSelected, Mode=TwoWay}"
+                                          BorderBrush="{Binding NodeBorderBrush}"
+                                          BorderThickness="{Binding NodeBorderThickness}">
                             <nodify:Node.InputConnectorTemplate>
                                 <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
                                     <nodify:NodeInput IsConnected="{Binding IsConnected}"
@@ -579,6 +580,16 @@
             </Canvas>
 
             <!-- 小地图 - 作为叠加层放在 Grid 中，而非 NodifyEditor 的子元素 -->
+            <Canvas IsHitTestVisible="False">
+                <Border x:Name="SelectionBox"
+                        IsVisible="False"
+                        BorderBrush="{DynamicResource SemiColorPrimary}"
+                        Background="{DynamicResource SemiColorPrimaryLight}"
+                        Opacity="0.35"
+                        BorderThickness="1"
+                        IsHitTestVisible="False" />
+            </Canvas>
+
             <nodify:NodifyEditorMinimap Editor="{Binding #Editor}"
                                         HorizontalAlignment="Right"
                                         VerticalAlignment="Bottom"
