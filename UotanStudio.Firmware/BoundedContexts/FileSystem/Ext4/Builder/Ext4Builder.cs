@@ -1,7 +1,9 @@
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Index;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Models;
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Index;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Models;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
@@ -667,7 +669,7 @@ public sealed partial class Ext4Builder
     private static void Populate(Node node, IReadOnlyCollection<string> excludedFiles)
     {
         var children = Directory.EnumerateFileSystemEntries(node.FullPath)
-            .Where(path => (SharedKernel.FileSystemEditPlan.Current is { } plan ? plan.Includes(path) : !SharedKernel.RepackMetadata.IsMetadataFile(path)))
+            .Where(path => (UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemEditPlan.Current is { } plan ? plan.Includes(path) : !UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.IsMetadataFile(path)))
             .OrderBy(static p => Path.GetFileName(p), StringComparer.Ordinal);
         var excludedSet = excludedFiles.Count == 0
             ? null
@@ -727,9 +729,9 @@ public sealed partial class Ext4Builder
 
     private static void ApplyPreservedAttributes(Node node)
     {
-        if (SharedKernel.FileSystemEditPlan.Current is not { } plan) return;
+        if (UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemEditPlan.Current is not { } plan) return;
         var entry = plan.Get(node.FullPath);
-        node.Name = SharedKernel.FileSystemEditPlan.Name(entry.Path);
+        node.Name = UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemEditPlan.Name(entry.Path);
         node.RelativePath = entry.Path;
         node.Mode = entry.Mode;
         node.Uid = entry.Uid;

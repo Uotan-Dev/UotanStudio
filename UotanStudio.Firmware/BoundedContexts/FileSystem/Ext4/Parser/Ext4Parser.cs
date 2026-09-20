@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Models;
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 
@@ -304,7 +304,7 @@ public sealed class Ext4Parser : IDisposable
 
         var entries = ListFiles();
         var totalCount = entries.Count;
-        var hostPaths = new SharedKernel.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path));
+        var hostPaths = new UotanStudio.Firmware.BoundedContexts.FileSystem.Extraction.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path));
         var totalBytes = entries.Where(e => e.Kind != Ext4EntryKind.Directory
                 && (e.Kind == Ext4EntryKind.Symlink || overwrite || !File.Exists(hostPaths.Resolve(e.Path))))
             .Sum(e => e.Kind == Ext4EntryKind.Symlink ? Encoding.UTF8.GetByteCount(e.SymlinkTarget ?? string.Empty)

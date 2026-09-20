@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Models;
 using System.Buffers;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Packing;
 
@@ -75,7 +75,7 @@ public sealed class Nb0Packer
         var entries = new List<Nb0Entry>();
         foreach (var filePath in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories).OrderBy(f => f, StringComparer.Ordinal))
         {
-            if (SharedKernel.RepackMetadata.IsMetadataFile(filePath)) continue;
+            if (UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.IsMetadataFile(filePath)) continue;
             var relative = Path.GetRelativePath(sourceDirectory, filePath).Replace('\\', '/');
             entries.Add(new Nb0Entry(relative, filePath));
         }
@@ -214,7 +214,7 @@ public sealed class Nb0PackerBuilder
     {
         foreach (var filePath in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories).OrderBy(f => f, StringComparer.Ordinal))
         {
-            if (SharedKernel.RepackMetadata.IsMetadataFile(filePath)) continue;
+            if (UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.IsMetadataFile(filePath)) continue;
             var relative = Path.GetRelativePath(directoryPath, filePath).Replace('\\', '/');
             var name = string.IsNullOrEmpty(prefix) ? relative : $"{prefix}/{relative}";
             _entries.Add(new Nb0Entry(name, filePath));

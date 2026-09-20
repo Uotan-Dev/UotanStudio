@@ -40,6 +40,6 @@ public sealed class Ext4Options
     public string? FileContextsPath { get; init; }
 
     /// <summary>Preloaded override tables; when set they take precedence over the path-based sources above.</summary>
-    internal IReadOnlyDictionary<string, SharedKernel.FsConfigEntry>? FsConfig { get; set; }
+    internal IReadOnlyDictionary<string, UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.FsConfigEntry>? FsConfig { get; set; }
     internal IReadOnlyDictionary<string, string>? FileContexts { get; set; }
 }

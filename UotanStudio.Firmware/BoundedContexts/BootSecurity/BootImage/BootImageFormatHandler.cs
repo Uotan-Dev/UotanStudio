@@ -1,13 +1,25 @@
+using System.Text;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Formats;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
-using System.Text;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
 
-public sealed class BootImageFormatHandler : IFormatHandler
+public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
+    void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
+    {
+        metadata.Configuration = BootRepackConfiguration.FromImage(sourcePath);
+        var hasAvbFooter = metadata.Configuration.ContainsKey("footer");
+        metadata.CanPackDirectory = metadata.Configuration.Count > 0 && !hasAvbFooter;
+        if (hasAvbFooter)
+        {
+            metadata.PackingNotes = " The source boot image carries an AVB footer; the directory cannot be rebuilt without dropping verified-boot data, so repacking is disabled until re-signed through an AVB-aware workflow.";
+        }
+    }
+
     private const string BootMagic = "ANDROID!";
     private const string VendorBootMagic = "VNDRBOOT";
 
@@ -157,7 +169,7 @@ public sealed class BootImageFormatHandler : IFormatHandler
     /// <para>异步提取固件内容。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)

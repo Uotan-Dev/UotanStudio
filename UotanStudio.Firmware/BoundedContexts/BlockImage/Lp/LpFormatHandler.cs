@@ -1,15 +1,22 @@
+using System.Buffers.Binary;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Build;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Writing;
-using System.Buffers.Binary;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.BlockImage.Lp;
 
-public sealed class LpFormatHandler : IFormatHandler
+public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
+    void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
+    {
+        metadata.CanPackDirectory = true;
+        metadata.PackingNotes = " The directory packer creates new default LP groups and geometry.";
+    }
+
     public string FormatName => "Android Logical Partition (super)";
 
     public IReadOnlyList<string> FileExtensions => ["img", "super", "simg", "sparse", "raw"];
@@ -114,7 +121,7 @@ public sealed class LpFormatHandler : IFormatHandler
     /// <para>提取完整的主设备分区及零 extent，逐文件原子提交。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private async Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)

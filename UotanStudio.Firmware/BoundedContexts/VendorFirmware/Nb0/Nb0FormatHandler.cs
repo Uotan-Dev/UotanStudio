@@ -3,11 +3,17 @@ using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Models;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Packing;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Parsing;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0;
 
-public sealed class Nb0FormatHandler : IFormatHandler
+public sealed class Nb0FormatHandler : IFormatHandler, IRepackMetadataProvider
 {
+    void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
+    {
+        metadata.CanPackDirectory = true;
+    }
+
     public string FormatName => "FIH Mobile NB0 Firmware";
 
     public IReadOnlyList<string> FileExtensions => ["nb0"];
@@ -100,7 +106,7 @@ public sealed class Nb0FormatHandler : IFormatHandler
     /// <para>异步提取固件内容。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)

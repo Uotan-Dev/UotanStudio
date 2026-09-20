@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Text.Json;
+using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
-namespace UotanStudio.Firmware.SharedKernel;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 
 /// <summary>
 /// One parsed <c>fs_config</c> entry: POSIX identity and permission bits for an image path.

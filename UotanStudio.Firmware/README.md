@@ -15,11 +15,34 @@
 | `BoundedContexts/BlockImage` | Sparse 块映射、原始镜像转换、LP/Super 元数据与逻辑分区布局 |
 | `BoundedContexts/OtaDelta` | Payload、DAT、增量操作与差分应用 |
 | `BoundedContexts/VendorFirmware` | 厂商固件容器与对应封装协议 |
-| `SharedKernel` | 通用格式契约、识别/注册入口、流与范围校验等共享基础能力 |
+| `SharedKernel` | 通用格式契约、基于处理器的识别、进度、流与范围校验等共享基础能力 |
+| `SharedKernel/Repacking` | 通用重打包元数据、显式上下文、原子 JSON 保存和格式扩展契约 |
+| `Application/Formats` | 内置格式处理器的注册与组装 |
+| `Application/Containers` | 组合 ZIP、Payload、LP/Super 能力，分析容器结构并提取选定成员 |
+| `Infrastructure/Downloads` | HTTP 下载、GitHub 镜像选择与网络传输 |
 
 通用压缩是供其他上下文调用的支撑上下文。它拥有算法选择、压缩参数与压缩流语义，不能依赖归档、文件系统、OTA、启动镜像或宿主。归档上下文拥有成员列表和成员提取语义，可以调用压缩上下文处理外层压缩。文件系统簇、Payload 操作和启动镜像 ramdisk 的专有封装仍由各自上下文解析，通用编码器不负责解释这些领域结构。
 
-`SharedKernel/FirmwareFormatRegistry` 是内置处理器的组装入口，集中注册上下文处理器；不要把各格式的实现移入共享内核。
+`Application/Formats/FirmwareFormatRegistry` 是内置处理器的组装入口，集中注册上下文处理器。`SharedKernel/FormatDetector` 只面向已注册的 `IReadonlyFormatHandler`，不构造具体格式实现。
+
+依赖方向为：宿主、CLI、MCP 调用应用编排或上下文入口；应用编排调用上下文；上下文使用共享契约和基础能力。`SharedKernel` 不引用 `BoundedContexts`、`Application` 或 `Infrastructure`；上下文不引用 `Application`、`Infrastructure` 或宿主。下载基础设施由需要网络的调用方显式使用。
+
+这些边界位于同一个程序集内，按实际格式职责组织，不统一增加 `Entity`、`Repository`、事件总线或多层转发。现有上下文之间仍有明确的格式组合，例如 Sparse 的文件系统提取与文件系统重建的 Sparse 输出；本次没有把这些依赖拆成独立程序集。
+
+## 重打包与文件系统元数据
+
+`SharedKernel/Repacking/RepackMetadata` 负责通用来源信息、元数据路径和操作上下文、解包后的保存顺序及有界原子发布。`IRepackMetadataProvider` 由需要重建信息的格式处理器实现：配置阶段提供该格式的配置、选项和目录打包能力，捕获阶段在 JSON 发布前完成附属数据保存。新增格式通过该契约接入，不在共享层增加具体格式类型判断。未实现契约的处理器仍保存通用来源信息，但不声明目录重建能力。
+
+| 目录 | 职责 |
+| --- | --- |
+| `FileSystem/Metadata` | `fs_config`、SELinux 标签、分区信息及版本化元数据文档 |
+| `FileSystem/Extraction` | Linux 镜像路径到宿主可用路径的映射与提取路径记录 |
+| `FileSystem/Rebuilding` | 原始参数读取、打包选项合并、编辑计划、内容保存与镜像重建 |
+| `FileSystem/Erofs/Builder` | EROFS 构建器及兼容性默认值 |
+
+`FileSystemRepackMetadata` 统一处理 EXT4、EROFS、F2FS 和包含这些文件系统的 Sparse 输入。Boot 的配置和 AVB 限制由 Boot 处理器提供，DTBO 配置由设备树处理器提供。通用元数据对象不再依赖这些解析器或构建器。
+
+`FileSystemByteProgress` 保留在共享契约中，因为格式接口的打包重载和 `UnpackOptions` 对所有调用方公开该进度类型。它不负责选择文件系统实现。
 
 ## 压缩能力入口
 
@@ -85,3 +108,17 @@ NTPi 的 `Compression/Lzma2Compressor` 实际还处理 `NTDECOMP` 头部、长�
 原 `FileSystem.Sparse`、`LogicalPartition.Lp` 分别改为 `BlockImage.Sparse`、`BlockImage.Lp`，并按具体职责使用子命名空间。各格式原本堆叠在根命名空间的类型也改用对应职责目录的命名空间。
 
 文件操作调用从 `CompressionService.CompressFile/DecompressFile/DecompressFileAuto/DetectFile` 改为 `CompressionFile` 的同名方法；头部识别调用从 `CompressionFormats.Detect` 或 `CompressionService.Detect` 改为 `CompressionDetector.Detect`。取消、大小限制、进度上报、异常及发布策略保持原调用语义。
+
+共享层整理后的主要命名空间迁移：
+
+| 原位置 | 新位置 |
+| --- | --- |
+| `SharedKernel.FirmwareFormatRegistry` | `Application.Formats.FirmwareFormatRegistry` |
+| `SharedKernel.Containers` | `Application.Containers` |
+| `SharedKernel.RepackMetadata` / `RepackMetadataContext` | `SharedKernel.Repacking` |
+| `SharedKernel.FileSystemMetadataGenerator` / `FileSystemMetadataOverrides` / `FsConfigEntry` | `BoundedContexts.FileSystem.Metadata` |
+| `SharedKernel.FileSystemPreservation` | `BoundedContexts.FileSystem.Rebuilding` |
+| `SharedKernel.ErofsBuildDefaults` | `BoundedContexts.FileSystem.Erofs.Builder` |
+| `SharedKernel.HttpDownload` / `GitHubMirrorSite` | `Infrastructure.Downloads` |
+
+表中命名空间均省略 `UotanStudio.Firmware.` 前缀。仓库内调用同步迁移；外部源码需要更新引用并重新编译。元数据文件名、JSON schema、版本和字段保持原契约，已有项目元数据不需要迁移。只按名称伪装成内置格式的自定义处理器不再获得该格式的重建策略；自定义处理器应显式实现 `IRepackMetadataProvider`。

@@ -2,8 +2,9 @@ using System.IO.Compression;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
+using UotanStudio.Firmware.SharedKernel;
 
-namespace UotanStudio.Firmware.SharedKernel.Containers;
+namespace UotanStudio.Firmware.Application.Containers;
 
 /// <summary>
 /// <para>容器结构分析器：识别 super / payload.bin / ZIP 并枚举内部可勾选条目。

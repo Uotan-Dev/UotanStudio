@@ -2,7 +2,7 @@ using System.IO.Compression;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
 
-namespace UotanStudio.Firmware.SharedKernel.Containers;
+namespace UotanStudio.Firmware.Application.Containers;
 
 /// <summary>
 /// <para>一次定向提取的结果：成功提取的容器内部条目及其输出文件路径。</para>

@@ -1,7 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
+using UotanStudio.Firmware.SharedKernel;
 
-namespace UotanStudio.Firmware.SharedKernel;
+namespace UotanStudio.Firmware.Infrastructure.Downloads;
 
 /// <summary><para>GitHub 加速镜像站点描述；BaseUrl 为空表示源站直连。</para>
 /// A GitHub accelerator mirror; an empty BaseUrl means the origin.</summary>

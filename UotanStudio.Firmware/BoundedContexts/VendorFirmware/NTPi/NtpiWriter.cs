@@ -1,4 +1,4 @@
-﻿using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Compression;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Compression;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Crypto;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Exceptions;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Helpers;
@@ -49,7 +49,7 @@ public sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compressor 
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
         var files = Directory.GetFiles(inputDir, "*", SearchOption.AllDirectories)
-            .Where(path => !SharedKernel.RepackMetadata.IsMetadataFile(path))
+            .Where(path => !UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.IsMetadataFile(path))
             .Where(path => !Path.GetFullPath(path).Equals(outputFullPath, pathComparison));
         var entries = new List<FileEntry>();
         var sourcePaths = new Dictionary<string, string>(StringComparer.Ordinal);

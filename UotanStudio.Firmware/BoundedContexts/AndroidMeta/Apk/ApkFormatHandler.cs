@@ -1,7 +1,8 @@
+using System.IO.Compression;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Models;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Parsing;
-using System.IO.Compression;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk;
@@ -64,7 +65,7 @@ public sealed class ApkFormatHandler : IFormatHandler
     /// <para>异步提取固件内容。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)

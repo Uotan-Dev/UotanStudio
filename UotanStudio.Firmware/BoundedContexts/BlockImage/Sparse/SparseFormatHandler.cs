@@ -1,14 +1,23 @@
+using System.Buffers.Binary;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
-using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
 
-public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
+public sealed class SparseFormatHandler : SharedKernel.IFormatHandler, IRepackMetadataProvider
 {
+    void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
+        => FileSystemRepackMetadata.Configure(metadata, sourcePath, outputDirectory, sparse: true);
+
+    Task IRepackMetadataProvider.CaptureRepackMetadataAsync(RepackMetadata metadata, string sourcePath, string outputDirectory,
+        string metadataDirectory, CancellationToken cancellationToken)
+        => FileSystemRepackMetadata.CaptureAsync(metadata, sourcePath, outputDirectory, metadataDirectory, cancellationToken, sparse: true);
+
     public string FormatName => "Android Sparse Image (simg)";
 
     public IReadOnlyList<string> FileExtensions => ["img", "simg", "sparse"];
@@ -70,7 +79,7 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
     /// <para>异步提取固件内容。</para>
     /// </summary>
     public Task<SharedKernel.FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, SharedKernel.UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => SharedKernel.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
+        => UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, frozen => UnpackCoreAsync(frozen, outputDirectory, options, cancellationToken));
 
     private Task<SharedKernel.FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, SharedKernel.UnpackOptions? options = null, CancellationToken cancellationToken = default)
@@ -183,14 +192,14 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
     {
         try
         {
-            if (Directory.Exists(inputPath) && SharedKernel.FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
+            if (Directory.Exists(inputPath) && UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
                 return Task.FromResult(SharedKernel.FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes."));
             if (Directory.Exists(inputPath))
             {
 
 
                 var rawFile = Directory.EnumerateFiles(inputPath)
-                    .FirstOrDefault(path => !SharedKernel.RepackMetadata.IsMetadataFile(path));
+                    .FirstOrDefault(path => !UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.IsMetadataFile(path));
                 if (rawFile == null)
                 {
                     return Task.FromResult(SharedKernel.FirmwareOpResult.Fail("Input directory is empty."));

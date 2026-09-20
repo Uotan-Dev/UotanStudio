@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
+using UotanStudio.Firmware.SharedKernel;
 
-namespace UotanStudio.Firmware.SharedKernel;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 
 /// <summary>
 /// Machine-readable mirror of the Android-style filesystem sidecars, persisted beside

@@ -41,7 +41,7 @@ public sealed class F2fsOptions
     public IReadOnlyDictionary<string, Dictionary<string, byte[]>>? FileXattrs { get; init; }
 
     /// <summary>Preloaded override tables; when set they take precedence over the path-based sources above.</summary>
-    internal IReadOnlyDictionary<string, SharedKernel.FsConfigEntry>? FsConfig { get; set; }
+    internal IReadOnlyDictionary<string, UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.FsConfigEntry>? FsConfig { get; set; }
     internal IReadOnlyDictionary<string, string>? FileContexts { get; set; }
 
     /// <summary>

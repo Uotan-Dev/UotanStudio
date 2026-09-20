@@ -1,7 +1,10 @@
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
+using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
-namespace UotanStudio.Firmware.SharedKernel;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Extraction;
 
 /// <summary>Maps image paths to portable host names without merging case aliases or treating Linux backslashes as separators.</summary>
 internal sealed class PortableExtractionPaths

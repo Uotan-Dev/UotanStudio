@@ -1,13 +1,21 @@
-using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.Archive.Extraction;
 using UotanStudio.Firmware.BoundedContexts.Archive.Formats.Cpio;
+using UotanStudio.Firmware.BoundedContexts.Archive.Models;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.Archive;
 
-public sealed class CpioFormatHandler : IFormatHandler
+public sealed class CpioFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
+    void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
+    {
+        metadata.CanPackDirectory = true;
+        metadata.PackingNotes = " The directory packer writes newc CPIO.";
+    }
+
     private readonly CpioArchive _archive = new();
 
     public string FormatName => "CPIO/TAR Archive";
@@ -129,7 +137,7 @@ public sealed class CpioFormatHandler : IFormatHandler
     /// <para>将固件文件解包到输出目录。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)

@@ -1,13 +1,26 @@
-using DtTree = UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.DeviceTree;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
+using DtTree = UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.DeviceTree;
 
 namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
 
-public sealed class DtFormatHandler : IFormatHandler
+public sealed class DtFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
+    void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
+    {
+        using var input = File.OpenRead(sourcePath);
+        Span<byte> magic = stackalloc byte[4];
+        input.ReadExactly(magic);
+        if (System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(magic) == FdtConstants.DtboMagic)
+        {
+            metadata.Configuration = DtboFormat.CreateConfiguration(input);
+        }
+        metadata.CanPackDirectory = metadata.Configuration.Count > 0;
+    }
+
     public string FormatName => "Device Tree (DTB/DTBO)";
 
     public IReadOnlyList<string> FileExtensions => ["dtb", "dtbo", "img"];
@@ -95,7 +108,7 @@ public sealed class DtFormatHandler : IFormatHandler
     /// <para>异步提取固件内容。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)

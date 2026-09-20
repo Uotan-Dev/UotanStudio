@@ -1,12 +1,13 @@
+using System.Buffers.Binary;
+using System.Globalization;
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Files;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Models;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Reader;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
-using System.Buffers.Binary;
-using System.Globalization;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
 
@@ -133,7 +134,7 @@ public sealed class DatFormatHandler : IFormatHandler
     /// （使用 move/stash/diff/imgdiff 命令）会被拒绝：其需要基座镜像，而只读处理器没有接收基座的通道。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options, CancellationToken cancellationToken)

@@ -1,13 +1,20 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Models;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
 
-public sealed class PayloadFormatHandler : IFormatHandler
+public sealed class PayloadFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
+    void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
+    {
+        metadata.CanPackDirectory = true;
+        metadata.PackingNotes = " The directory packer creates an unsigned full payload.";
+    }
+
     public string FormatName => "Android OTA Payload (payload.bin)";
 
     public IReadOnlyList<string> FileExtensions { get; } = ["bin", "payload"];
@@ -89,7 +96,7 @@ public sealed class PayloadFormatHandler : IFormatHandler
     /// <para>将载荷的所有分区解包到输出目录。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)

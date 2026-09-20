@@ -1,5 +1,6 @@
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Extraction;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Models;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Packing;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip;
@@ -63,7 +64,7 @@ public sealed class RockchipFormatHandler : IFormatHandler
     /// <para>异步提取固件内容。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
@@ -85,9 +86,22 @@ public sealed class RockchipFormatHandler : IFormatHandler
     /// Packs the input into firmware asynchronously.
     /// <para>异步将输入打包为固件。</para>
     /// </summary>
-    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default) =>
-
-        Task.FromResult(FirmwareOpResult.Fail("Rockchip RKAF/RKFW packing is not supported by this handler."));
+    public async Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await RockchipPacker.PackAsync(inputPath, outputPath, cancellationToken).ConfigureAwait(false);
+            var entries = RockchipExtractor.List(outputPath);
+            return FirmwareOpResult.Ok($"Packed Rockchip firmware with {entries.Count} entries.",
+                entries: [.. entries.Select(static e => e.Name)],
+                metadata: new Dictionary<string, string> { ["FileCount"] = entries.Count.ToString() });
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            return FirmwareOpResult.Fail(ex.Message);
+        }
+    }
 
     private static IProgress<double>? ToProgress(IFirmwareProgress? progress)
         => progress is null ? null : new ProgressAdapter(progress);

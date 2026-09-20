@@ -56,7 +56,7 @@ internal readonly record struct Ext4DirectoryEntry
 
             var availableNameBytes = block.Length - offset - 8;
             var actualNameLength = Math.Min(nameLength, Math.Max(availableNameBytes, 0));
-            var name = SharedKernel.PortableExtractionPaths.NameEncoding.GetString(block.Slice(offset + 8, actualNameLength));
+            var name = UotanStudio.Firmware.BoundedContexts.FileSystem.Extraction.PortableExtractionPaths.NameEncoding.GetString(block.Slice(offset + 8, actualNameLength));
             if (nameLength == 0)
             {
 

@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
+using UotanStudio.Firmware.SharedKernel;
 
-namespace UotanStudio.Firmware.SharedKernel;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 
 /// <summary>Resolves image paths and inherited Linux attributes independently of host filesystem metadata.</summary>
 internal sealed class FileSystemEditPlan

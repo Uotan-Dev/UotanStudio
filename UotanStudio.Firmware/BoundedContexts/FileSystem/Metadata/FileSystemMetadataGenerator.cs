@@ -4,8 +4,9 @@ using System.Text.Json.Nodes;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
+using UotanStudio.Firmware.SharedKernel;
 
-namespace UotanStudio.Firmware.SharedKernel;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 
 /// <summary>
 /// Generates Android-style filesystem metadata files (<c>fs_config</c>, <c>file_contexts</c>, <c>partition_info</c>)

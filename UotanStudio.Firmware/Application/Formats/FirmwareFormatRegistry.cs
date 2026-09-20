@@ -1,4 +1,5 @@
-namespace UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel;
+namespace UotanStudio.Firmware.Application.Formats;
 
 public static class FirmwareFormatRegistry
 {
@@ -49,6 +50,8 @@ public static class FirmwareFormatRegistry
             Register(new BoundedContexts.VendorFirmware.Dz.DzFormatHandler());
             Register(new BoundedContexts.VendorFirmware.UpdateApp.UpdateAppFormatHandler());
             Register(new BoundedContexts.VendorFirmware.Rockchip.RockchipFormatHandler());
+            Register(new BoundedContexts.VendorFirmware.Amlogic.AmlogicFormatHandler());
+            Register(new BoundedContexts.VendorFirmware.SonySin.SonySinFormatHandler());
 
             IsRegistered = true;
         }

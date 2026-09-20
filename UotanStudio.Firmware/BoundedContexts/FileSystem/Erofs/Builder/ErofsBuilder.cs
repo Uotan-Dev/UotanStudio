@@ -1,10 +1,11 @@
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Checksums;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 using System.Buffers.Binary;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Checksums;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
@@ -186,7 +187,7 @@ public sealed partial class ErofsBuilder
         ErofsOptions? options,
         params string[] excludedPaths)
     {
-        SharedKernel.FileSystemPreservation.RejectLossyDirectoryRebuild(directoryPath);
+        UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemPreservation.RejectLossyDirectoryRebuild(directoryPath);
         ArgumentNullException.ThrowIfNull(directoryPath);
         if (!Directory.Exists(directoryPath))
         {
@@ -363,7 +364,7 @@ public sealed partial class ErofsBuilder
             };
             foreach (var childPath in Directory.EnumerateFileSystemEntries(fullPath))
             {
-                if (SharedKernel.FileSystemEditPlan.Current is { } plan ? !plan.Includes(childPath) : SharedKernel.RepackMetadata.IsMetadataFile(childPath)) continue;
+                if (UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemEditPlan.Current is { } plan ? !plan.Includes(childPath) : UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.IsMetadataFile(childPath)) continue;
                 var childFullPath = Path.GetFullPath(childPath);
                 if (excludedPaths?.Contains(childFullPath) == true)
                 {
@@ -573,14 +574,14 @@ public sealed partial class ErofsBuilder
         var ordered = new List<BuildNode>();
         CollectPreOrder(root, ordered);
         BindXattrs(ordered, options);
-        if (SharedKernel.FileSystemEditPlan.Current is { } editPlan)
+        if (UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemEditPlan.Current is { } editPlan)
             foreach (var node in ordered)
             {
                 var entry = editPlan.Get(node.FullPath);
                 node.OriginalInode = entry.Inode;
                 node.SourceInode = options.SourceInodes?.GetValueOrDefault(entry.Inode);
                 if ((entry.Mode & 0xF000) == 0x8000) { node.FullPath = editPlan.ContentSource(node.FullPath); node.Size = new FileInfo(node.FullPath).Length; }
-                node.Name = SharedKernel.FileSystemEditPlan.Name(entry.Path);
+                node.Name = UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemEditPlan.Name(entry.Path);
                 node.Uid = entry.Uid;
                 node.Gid = entry.Gid;
                 node.ModeOverride = entry.Mode;

@@ -1,5 +1,6 @@
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;

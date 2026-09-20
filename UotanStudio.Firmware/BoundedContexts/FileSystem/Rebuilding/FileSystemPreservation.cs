@@ -13,12 +13,16 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Extraction;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
+using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
-namespace UotanStudio.Firmware.SharedKernel;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 
 /// <summary>Retains source semantics and resolves edited host files into filesystem builders with original or inherited Linux attributes.</summary>
 public static class FileSystemPreservation

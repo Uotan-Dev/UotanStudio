@@ -1,4 +1,5 @@
-namespace UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
 
 /// <summary>
 /// <para>进程级 EROFS 构建默认值，宿主设置在启动时同步到这里，使不依赖 UI 的构建路径

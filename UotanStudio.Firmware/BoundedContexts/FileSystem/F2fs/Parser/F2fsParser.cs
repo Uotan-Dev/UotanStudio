@@ -1,8 +1,7 @@
+using System.Buffers.Binary;
+using System.Text;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
-using System.Buffers.Binary;
-
-using System.Text;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
 
@@ -264,7 +263,7 @@ public sealed class F2fsParser : IDisposable
 
         var entries = ListFiles();
         var totalCount = entries.Count;
-        var hostPaths = new SharedKernel.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path));
+        var hostPaths = new UotanStudio.Firmware.BoundedContexts.FileSystem.Extraction.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path));
         var totalBytes = entries.Where(e => e.Kind != F2fsEntryKind.Directory
                 && (e.Kind == F2fsEntryKind.Symlink || overwrite || !File.Exists(hostPaths.Resolve(e.Path))))
             .Sum(e => e.Kind == F2fsEntryKind.Symlink ? Encoding.UTF8.GetByteCount(e.SymlinkTarget ?? string.Empty)

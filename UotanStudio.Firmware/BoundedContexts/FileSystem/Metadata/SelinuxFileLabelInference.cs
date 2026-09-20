@@ -1,7 +1,9 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
+using UotanStudio.Firmware.SharedKernel;
 
-namespace UotanStudio.Firmware.SharedKernel;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 
 /// <summary>Infers file object contexts without inventing process domains or executable entrypoint types.</summary>
 internal sealed class SelinuxFileLabelInference

@@ -1,12 +1,13 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
 

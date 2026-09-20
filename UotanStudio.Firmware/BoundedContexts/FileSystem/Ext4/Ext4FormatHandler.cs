@@ -1,11 +1,20 @@
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 
-public sealed class Ext4FormatHandler : IFormatHandler
+public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider
 {
+    void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
+        => FileSystemRepackMetadata.Configure(metadata, sourcePath, outputDirectory);
+
+    Task IRepackMetadataProvider.CaptureRepackMetadataAsync(RepackMetadata metadata, string sourcePath, string outputDirectory,
+        string metadataDirectory, CancellationToken cancellationToken)
+        => FileSystemRepackMetadata.CaptureAsync(metadata, sourcePath, outputDirectory, metadataDirectory, cancellationToken);
+
     public string FormatName => "EXT4";
 
     public IReadOnlyList<string> FileExtensions { get; } = ["img", "ext4"];
@@ -86,7 +95,7 @@ public sealed class Ext4FormatHandler : IFormatHandler
     /// <para>异步提取固件内容。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
+        => UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, frozen => UnpackCoreAsync(frozen, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
@@ -155,13 +164,13 @@ public sealed class Ext4FormatHandler : IFormatHandler
                 Directory.CreateDirectory(directory);
             }
 
-            var options = RepackMetadata.OptionsFor(inputPath, FormatName);
+            var options = FileSystemPackingOptions.OptionsFor(inputPath, FormatName);
             var progressSink = progress is null ? null : FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
             Ext4Builder.Build(inputPath, outputPath, new Ext4Options
             {
-                BlockSize = RepackMetadata.IntegerOption(options, "BlockSize", 4096),
-                FsConfigPath = RepackMetadata.NullIfEmpty(options, "FsConfigPath"),
-                FileContextsPath = RepackMetadata.NullIfEmpty(options, "FileContextsPath"),
+                BlockSize = FileSystemPackingOptions.IntegerOption(options, "BlockSize", 4096),
+                FsConfigPath = FileSystemPackingOptions.NullIfEmpty(options, "FsConfigPath"),
+                FileContextsPath = FileSystemPackingOptions.NullIfEmpty(options, "FileContextsPath"),
                 EnableSparse = IsTrue(options, "EnableSparse"),
                 Ext4Compress = IsTrue(options, "Ext4Compress"),
             }, progressSink);

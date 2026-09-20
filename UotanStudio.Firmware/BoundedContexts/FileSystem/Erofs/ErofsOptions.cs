@@ -137,7 +137,7 @@ public sealed class ErofsOptions
     public string? FileContextsPath { get; set; }
 
     /// <summary>Preloaded override tables; when set they take precedence over the path-based sources above.</summary>
-    internal IReadOnlyDictionary<string, SharedKernel.FsConfigEntry>? FsConfig { get; set; }
+    internal IReadOnlyDictionary<string, UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.FsConfigEntry>? FsConfig { get; set; }
     internal IReadOnlyDictionary<string, string>? FileContexts { get; set; }
 
     /// <summary>
@@ -220,7 +220,7 @@ public sealed class ErofsOptions
         if (Compress && UseCompactedIndexes && BlockSize > 16384)
             throw new NotSupportedException("Compacted EROFS indexes require logical clusters no larger than 16384 bytes.");
 
-        if (string.IsNullOrEmpty(VolumeName) && SharedKernel.FileSystemEditPlan.Current is null)
+        if (string.IsNullOrEmpty(VolumeName) && UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemEditPlan.Current is null)
         {
             VolumeName = "erofs";
         }

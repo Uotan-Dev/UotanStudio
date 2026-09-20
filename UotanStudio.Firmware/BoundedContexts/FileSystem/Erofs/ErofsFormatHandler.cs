@@ -2,12 +2,21 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 
-public sealed class ErofsFormatHandler : IFormatHandler
+public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
+    void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
+        => FileSystemRepackMetadata.Configure(metadata, sourcePath, outputDirectory);
+
+    Task IRepackMetadataProvider.CaptureRepackMetadataAsync(RepackMetadata metadata, string sourcePath, string outputDirectory,
+        string metadataDirectory, CancellationToken cancellationToken)
+        => FileSystemRepackMetadata.CaptureAsync(metadata, sourcePath, outputDirectory, metadataDirectory, cancellationToken);
+
     public string FormatName => "EROFS";
 
     public IReadOnlyList<string> FileExtensions { get; } = ["img", "erofs"];
@@ -94,7 +103,7 @@ public sealed class ErofsFormatHandler : IFormatHandler
     /// <para>将 erofs 镜像解包到输出目录。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
+        => UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, frozen => UnpackCoreAsync(frozen, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
@@ -160,7 +169,7 @@ public sealed class ErofsFormatHandler : IFormatHandler
                 }
 
                 var builder = new ErofsBuilder();
-                var options = RepackMetadata.OptionsFor(inputPath, FormatName);
+                var options = FileSystemPackingOptions.OptionsFor(inputPath, FormatName);
                 // The panel selects the codec through this override key; a preserved source image (no
                 // overrides) is rebuilt earlier by TryRestore with its own algorithms, so this builder
                 // path only runs for explicit user selection or a fresh tree.
@@ -168,7 +177,7 @@ public sealed class ErofsFormatHandler : IFormatHandler
                 // 重建，因此本构建路径只在用户显式选择或全新目录时运行。
                 var (algorithm, lz4HighCompression) = ErofsAlgorithmSelectors.Parse(
                     options.TryGetValue("ErofsAlgorithm", out var selector) ? selector : null);
-                var compressionLevel = RepackMetadata.IntegerOption(options, "ErofsCompressionLevel",
+                var compressionLevel = FileSystemPackingOptions.IntegerOption(options, "ErofsCompressionLevel",
                     9);
                 // A modern codec selection implies the modern layout: legacy (pre-5.13) EROFS cannot
                 // encode LZMA/DEFLATE/ZSTD, so honouring the picker requires dropping the user's legacy
@@ -182,14 +191,14 @@ public sealed class ErofsFormatHandler : IFormatHandler
                 // 舍入到同样的块数。强制现代布局才能让 HC 实际缩小镜像，与上游 -zlz4hc 的语义一致。
                 var legacyCompatibility = algorithm == ErofsCompressionAlgorithm.Lz4
                     && !lz4HighCompression
-                    && SharedKernel.ErofsBuildDefaults.LegacyCompatibility;
+                    && UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility;
                 var progressSink = progress is null ? null : FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
                 builder.Build(inputPath, outputPath, new ErofsOptions
                 {
-                    BlockSize = RepackMetadata.IntegerOption(options, "BlockSize", 4096),
+                    BlockSize = FileSystemPackingOptions.IntegerOption(options, "BlockSize", 4096),
                     VolumeName = options.TryGetValue("VolumeName", out var volume) ? volume : "erofs",
-                    FsConfigPath = RepackMetadata.NullIfEmpty(options, "FsConfigPath"),
-                    FileContextsPath = RepackMetadata.NullIfEmpty(options, "FileContextsPath"),
+                    FsConfigPath = FileSystemPackingOptions.NullIfEmpty(options, "FsConfigPath"),
+                    FileContextsPath = FileSystemPackingOptions.NullIfEmpty(options, "FileContextsPath"),
                     Algorithm = algorithm,
                     Lz4HighCompression = lz4HighCompression,
                     CompressionLevel = compressionLevel,

@@ -1,6 +1,8 @@
+using System.Text;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
-using System.Text;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
@@ -325,7 +327,7 @@ public sealed partial class F2fsBuilder
             SetFilePermissions(node, fullPath, isDir: true, isSymlink: false);
             foreach (var childPath in Directory.EnumerateFileSystemEntries(fullPath))
             {
-                if (SharedKernel.FileSystemEditPlan.Current is { } plan ? !plan.Includes(childPath) : SharedKernel.RepackMetadata.IsMetadataFile(childPath)) continue;
+                if (UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemEditPlan.Current is { } plan ? !plan.Includes(childPath) : UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.IsMetadataFile(childPath)) continue;
                 var childFullPath = Path.GetFullPath(childPath);
                 if (excludedPaths?.Contains(childFullPath) == true)
                 {

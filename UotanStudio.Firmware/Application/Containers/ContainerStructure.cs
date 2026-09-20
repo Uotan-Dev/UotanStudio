@@ -1,4 +1,4 @@
-namespace UotanStudio.Firmware.SharedKernel.Containers;
+namespace UotanStudio.Firmware.Application.Containers;
 
 /// <summary>
 /// <para>容器类型：无 / super / payload.bin / ZIP 归档。</para>

@@ -1,12 +1,21 @@
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 
-public sealed class F2fsFormatHandler : IFormatHandler
+public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
+    void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
+        => FileSystemRepackMetadata.Configure(metadata, sourcePath, outputDirectory);
+
+    Task IRepackMetadataProvider.CaptureRepackMetadataAsync(RepackMetadata metadata, string sourcePath, string outputDirectory,
+        string metadataDirectory, CancellationToken cancellationToken)
+        => FileSystemRepackMetadata.CaptureAsync(metadata, sourcePath, outputDirectory, metadataDirectory, cancellationToken);
+
     public string FormatName => "F2FS";
 
     public IReadOnlyList<string> FileExtensions { get; } = ["img", "f2fs"];
@@ -140,13 +149,13 @@ public sealed class F2fsFormatHandler : IFormatHandler
                     return FirmwareOpResult.Fail($"Input path is not a directory: '{inputPath}'.");
                 }
 
-                var options = RepackMetadata.OptionsFor(inputPath, FormatName);
+                var options = FileSystemPackingOptions.OptionsFor(inputPath, FormatName);
                 F2fsBuilder.Build(inputPath, outputPath, new F2fsOptions
                 {
-                    BlockSize = RepackMetadata.IntegerOption(options, "BlockSize", 4096),
-                    SegmentSize = RepackMetadata.IntegerOption(options, "SegmentSize", 2 * 1024 * 1024),
+                    BlockSize = FileSystemPackingOptions.IntegerOption(options, "BlockSize", 4096),
+                    SegmentSize = FileSystemPackingOptions.IntegerOption(options, "SegmentSize", 2 * 1024 * 1024),
                     VolumeName = options.TryGetValue("VolumeName", out var volume) ? volume : "f2fs",
-                    FsConfigPath = RepackMetadata.NullIfEmpty(options, "FsConfigPath"),
+                    FsConfigPath = FileSystemPackingOptions.NullIfEmpty(options, "FsConfigPath"),
                 });
 
                 return FirmwareOpResult.Ok($"Packed '{inputPath}' into '{outputPath}' (F2FS).");

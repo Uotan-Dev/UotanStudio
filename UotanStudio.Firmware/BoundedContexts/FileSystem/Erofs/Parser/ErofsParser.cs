@@ -1,7 +1,7 @@
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Checksums;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 using System.Buffers;
 using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Checksums;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 
@@ -352,7 +352,7 @@ public sealed partial class ErofsParser : IDisposable
         // 即使畸形镜像含重复路径，也保持 ReadFile 的首次命中语义。
         var firstNids = new Dictionary<string, ulong>(StringComparer.Ordinal);
         foreach (var entry in entries) firstNids.TryAdd(entry.Path, entry.Nid);
-        var hostPaths = new SharedKernel.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path).Concat(_directoryPaths));
+        var hostPaths = new UotanStudio.Firmware.BoundedContexts.FileSystem.Extraction.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path).Concat(_directoryPaths));
         foreach (var directory in _directoryPaths)
             Directory.CreateDirectory(hostPaths.Resolve(directory));
         var firstSizes = entries.GroupBy(e => e.Path, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Size, StringComparer.Ordinal);

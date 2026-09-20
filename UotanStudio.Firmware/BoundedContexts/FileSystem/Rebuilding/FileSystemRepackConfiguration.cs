@@ -7,8 +7,9 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Models;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
+using UotanStudio.Firmware.SharedKernel;
 
-namespace UotanStudio.Firmware.SharedKernel;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 
 internal static class FileSystemRepackConfiguration
 {

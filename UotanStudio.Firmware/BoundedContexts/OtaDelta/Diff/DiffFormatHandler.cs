@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff;
 using System.Globalization;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff;
@@ -98,7 +98,7 @@ public sealed class DiffFormatHandler : IFormatHandler
     /// <para>不支持：应用补丁需要源文件；请使用 DeltaEngine.ApplyDeltaAsync。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+        => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)

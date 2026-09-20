@@ -1,4 +1,5 @@
-namespace UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel;
+namespace UotanStudio.Firmware.SharedKernel.Repacking;
 
 /// <summary>
 /// Explicit metadata context distinguishing "explicit project root", "explicit no-project local
