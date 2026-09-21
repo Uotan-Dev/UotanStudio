@@ -13,7 +13,12 @@
     <x:String x:Key="Node_ZoomOut">Zoom Out</x:String>
     <x:String x:Key="Node_ResetZoom">Reset Zoom</x:String>
     <x:String x:Key="Node_ToggleMinimap">Toggle Minimap</x:String>
-    <x:String x:Key="Node_DeleteSelected">Delete Selected</x:String>
+    <x:String x:Key="Node_DeleteSelected">Delete nodes</x:String>
+    <x:String x:Key="Node_DeleteSelectionCount">Delete nodes ({0})</x:String>
+    <x:String x:Key="Node_BatchSelection">Batch selection</x:String>
+    <x:String x:Key="Node_BatchSelectedSuffix">nodes selected</x:String>
+    <x:String x:Key="Node_BatchConstant">Common constant properties</x:String>
+    <x:String x:Key="Node_BatchMixed">Mixed values</x:String>
     <x:String x:Key="Node_Run">Run</x:String>
     <x:String x:Key="Node_Stop">Stop</x:String>
     <x:String x:Key="Node_NodesLabel"> nodes</x:String>

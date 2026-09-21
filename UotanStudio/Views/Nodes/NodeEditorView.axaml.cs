@@ -46,6 +46,14 @@ public partial class NodeEditorView : UserControl
             RoutingStrategies.Tunnel, handledEventsToo: true);
         Editor.AddHandler(PointerReleasedEvent, OnEditorPointerReleased,
             RoutingStrategies.Bubble, handledEventsToo: true);
+        EditorSurface.AddHandler(PointerPressedEvent, OnSelectionBoxPressed,
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+        EditorSurface.AddHandler(PointerMovedEvent, OnSelectionBoxMoved,
+            RoutingStrategies.Bubble, handledEventsToo: true);
+        EditorSurface.AddHandler(PointerReleasedEvent, OnSelectionBoxReleased,
+            RoutingStrategies.Bubble, handledEventsToo: true);
+        EditorSurface.AddHandler(PointerCaptureLostEvent, OnSelectionBoxCaptureLost,
+            RoutingStrategies.Bubble, handledEventsToo: true);
         // 面板变宽/变窄时按可用宽度调整三栏最小宽度：窄面板下三栏等比例缩小而不是溢出被裁。
         // Re-scale the pane minimums with the available width so a narrow pane shrinks all three instead of
         // overflowing (which used to clip the right pane).
@@ -243,7 +251,8 @@ public partial class NodeEditorView : UserControl
 
     private void OnSelectionBoxPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (!e.GetCurrentPoint(EditorSurface).Properties.IsRightButtonPressed)
+        if (e.GetCurrentPoint(EditorSurface).Properties.PointerUpdateKind
+            != PointerUpdateKind.RightButtonPressed)
         {
             return;
         }
@@ -261,7 +270,8 @@ public partial class NodeEditorView : UserControl
     {
         if (!_selectionBoxDragging || e.Pointer != _selectionBoxPointer) return;
         var position = e.GetPosition(EditorSurface);
-        _selectionBoxMoved |= (_selectionBoxStart - position).Length > 4;
+        var delta = _selectionBoxStart - position;
+        _selectionBoxMoved |= Math.Sqrt((delta.X * delta.X) + (delta.Y * delta.Y)) > 4;
         UpdateSelectionBox(_selectionBoxStart, position);
         e.Handled = true;
     }
@@ -270,8 +280,7 @@ public partial class NodeEditorView : UserControl
     {
         if (!_selectionBoxDragging || e.Pointer != _selectionBoxPointer) return;
         var position = e.GetPosition(EditorSurface);
-        if (_selectionBoxMoved && DataContext is NodeEditorViewModel vm)
-            vm.SetSelection(NodesIntersectingSelection(_selectionBoxStart, position));
+        if (_selectionBoxMoved) SelectNodesInRectangle(_selectionBoxStart, position);
         EndSelectionBox(e.Pointer);
         e.Handled = true;
     }
@@ -291,7 +300,7 @@ public partial class NodeEditorView : UserControl
 
     private void UpdateSelectionBox(Point first, Point second)
     {
-        var rectangle = new Rect(first, second);
+        var rectangle = CreateSelectionRectangle(first, second);
         Canvas.SetLeft(SelectionBox, rectangle.X);
         Canvas.SetTop(SelectionBox, rectangle.Y);
         SelectionBox.Width = rectangle.Width;
@@ -301,17 +310,44 @@ public partial class NodeEditorView : UserControl
 
     private IReadOnlyList<FlowNodeViewModel> NodesIntersectingSelection(Point first, Point second)
     {
-        var selection = new Rect(first, second);
+        var selection = CreateSelectionRectangle(first, second);
         var result = new List<FlowNodeViewModel>();
-        var seen = new HashSet<FlowNodeViewModel>();
-        foreach (var control in Editor.GetVisualDescendants().OfType<Control>())
+        if (DataContext is not NodeEditorViewModel vm) return result;
+
+        foreach (var node in vm.Nodes)
         {
-            if (control.DataContext is not FlowNodeViewModel node || !seen.Add(node)) continue;
-            if (control.TranslatePoint(new Point(), EditorSurface) is not { } topLeft) continue;
-            if (selection.Intersects(new Rect(topLeft, control.Bounds.Size))) result.Add(node);
+            if (Editor.ContainerFromItem(node) is not Control container) continue;
+            var controls = container.GetVisualDescendants()
+                .OfType<Control>()
+                .Where(control => ReferenceEquals(control.DataContext, node))
+                .Prepend(container);
+            Rect? nodeBounds = null;
+            foreach (var control in controls)
+            {
+                if (control.TranslatePoint(new Point(), EditorSurface) is not { } topLeft) continue;
+                var bounds = new Rect(topLeft, control.Bounds.Size);
+                nodeBounds = nodeBounds is { } existing ? existing.Union(bounds) : bounds;
+            }
+
+            if (nodeBounds is { } value && selection.Intersects(value)) result.Add(node);
         }
+
         return result;
     }
+
+    internal int SelectNodesInRectangle(Point first, Point second)
+    {
+        var selected = NodesIntersectingSelection(first, second);
+        Editor.SelectedItems = selected.ToList();
+        if (DataContext is NodeEditorViewModel vm) vm.SetSelection(selected);
+        return selected.Count;
+    }
+
+    internal static Rect CreateSelectionRectangle(Point first, Point second) => new(
+        Math.Min(first.X, second.X),
+        Math.Min(first.Y, second.Y),
+        Math.Abs(second.X - first.X),
+        Math.Abs(second.Y - first.Y));
 
     private void OnToolboxItemClicked(object? sender, RoutedEventArgs e)
     {

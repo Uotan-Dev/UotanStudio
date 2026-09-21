@@ -78,12 +78,16 @@
                     </ToggleButton>
                     <Border Width="1" Height="20" Background="{DynamicResource BorderBrush}"
                             Margin="4,0" />
-                    <Button MinWidth="92" Height="28" Padding="6,0"
+                    <Button x:Name="DeleteSelectedButton"
+                            MinWidth="92" Height="28" Padding="6,0"
                             Command="{Binding DeleteSelectedCommand}"
-                            ToolTip.Tip="{DynamicResource Node_DeleteSelected}">
+                            IsEnabled="{Binding HasSelectedNodes}"
+                            ToolTip.Tip="{Binding DeleteSelectionText}">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                             <avalonia:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
-                            <TextBlock Text="{DynamicResource Node_DeleteSelected}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="DeleteSelectedLabel"
+                                       Text="{Binding DeleteSelectionText}"
+                                       VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -261,7 +265,7 @@
                                                Margin="0,4,8,0" />
                                     <TextBox Grid.Column="1" FontSize="12" Height="24"
                                              Text="{Binding BatchNodeValue, Mode=TwoWay}"
-                                             Watermark="{DynamicResource Node_BatchMixed}" />
+                                             PlaceholderText="{DynamicResource Node_BatchMixed}" />
                                 </Grid>
                             </StackPanel>
                             <StackPanel Spacing="4" IsVisible="{Binding CanEditBatchProjectImage}">
@@ -272,7 +276,7 @@
                                                Margin="0,4,8,0" />
                                     <TextBox Grid.Column="1" FontSize="12" Height="24"
                                              Text="{Binding BatchSelectedImage, Mode=TwoWay}"
-                                             Watermark="{DynamicResource Node_BatchMixed}" />
+                                             PlaceholderText="{DynamicResource Node_BatchMixed}" />
                                 </Grid>
                             </StackPanel>
                             <TextBlock Text="{DynamicResource Node_Prop_Inputs}" FontSize="11"
@@ -287,7 +291,7 @@
                                             <TextBox Grid.Column="1" FontSize="12" Height="24"
                                                      Text="{Binding TextValue, Mode=TwoWay}"
                                                      IsVisible="{Binding IsTextOrPathPort}"
-                                                     Watermark="{DynamicResource Node_BatchMixed}" />
+                                                     PlaceholderText="{DynamicResource Node_BatchMixed}" />
                                             <NumericUpDown Grid.Column="1" FontSize="12" Height="24"
                                                            Value="{Binding NumberValue, Mode=TwoWay}"
                                                            IsVisible="{Binding IsNumberPort}" />
@@ -459,10 +463,6 @@
 
         <!-- 中央节点画布区域 - 使用 Grid 叠加小地图 -->
         <Grid Grid.Column="2" x:Name="EditorSurface"
-              PointerPressed="OnSelectionBoxPressed"
-              PointerMoved="OnSelectionBoxMoved"
-              PointerReleased="OnSelectionBoxReleased"
-              PointerCaptureLost="OnSelectionBoxCaptureLost"
               DragDrop.AllowDrop="True"
               DragDrop.DragOver="OnCanvasDragOver"
               DragDrop.DragLeave="OnCanvasDragLeave"

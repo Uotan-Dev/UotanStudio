@@ -13,7 +13,12 @@
     <x:String x:Key="Node_ZoomOut">缩小</x:String>
     <x:String x:Key="Node_ResetZoom">重置缩放</x:String>
     <x:String x:Key="Node_ToggleMinimap">切换小地图</x:String>
-    <x:String x:Key="Node_DeleteSelected">删除选中</x:String>
+    <x:String x:Key="Node_DeleteSelected">删除节点</x:String>
+    <x:String x:Key="Node_DeleteSelectionCount">删除节点（{0}）</x:String>
+    <x:String x:Key="Node_BatchSelection">批量选择</x:String>
+    <x:String x:Key="Node_BatchSelectedSuffix">个节点已选中</x:String>
+    <x:String x:Key="Node_BatchConstant">共同常量属性</x:String>
+    <x:String x:Key="Node_BatchMixed">值不一致</x:String>
     <x:String x:Key="Node_Run">运行</x:String>
     <x:String x:Key="Node_Stop">停止</x:String>
     <x:String x:Key="Node_NodesLabel"> 节点</x:String>

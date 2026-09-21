@@ -270,6 +270,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     {
         InitializeToolbox();
         RefreshVisibleToolbox();
+        OnPropertyChanged(nameof(DeleteSelectionText));
+        OnPropertyChanged(nameof(SelectedCategoryDisplay));
+        OnPropertyChanged(nameof(SelectedTypeDisplay));
+        RefreshBatchInputs();
     }
 
     /// <summary>
@@ -362,6 +366,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             _suppressPropertyTracking = false;
         }
         _redoStack.Push(command);
+        RefreshSelectionProperties();
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
         _log.Write(LogLevel.Info, "NodeEditor", $"Undo: {command.DisplayName}");
@@ -389,6 +394,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             _suppressPropertyTracking = false;
         }
         _undoStack.Push(command);
+        RefreshSelectionProperties();
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
         _log.Write(LogLevel.Info, "NodeEditor", $"Redo: {command.DisplayName}");
@@ -530,11 +536,16 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// <summary>Gets whether more than one node is selected.</summary>
     public bool IsMultipleSelection => _selectedNodes.Count > 1;
 
-    /// <summary>Gets the common category, or an empty value when selected nodes differ.</summary>
-    public string SelectedCategoryDisplay => CommonSelectionValue(nodes => nodes.Select(node => node.Category.ToString()));
+    /// <summary>Gets the localized label for deleting the current selection.</summary>
+    public string DeleteSelectionText => HasSelectedNodes
+        ? LanguageService.Instance.GetString("Node_DeleteSelectionCount", SelectedNodeCount)
+        : LanguageService.Instance.GetString("Node_DeleteSelected");
 
-    /// <summary>Gets the common type key, or an empty value when selected nodes differ.</summary>
-    public string SelectedTypeDisplay => CommonSelectionValue(nodes => nodes.Select(node => node.TypeKey));
+    /// <summary>Gets the common category, or a localized mixed-value label when selected nodes differ.</summary>
+    public string SelectedCategoryDisplay => CommonSelectionDisplay(nodes => nodes.Select(node => node.Category.ToString()));
+
+    /// <summary>Gets the common type key, or a localized mixed-value label when selected nodes differ.</summary>
+    public string SelectedTypeDisplay => CommonSelectionDisplay(nodes => nodes.Select(node => node.TypeKey));
 
     /// <summary>Gets whether every selected node supports constant-value editing.</summary>
     public bool CanEditBatchConstant => IsMultipleSelection && _selectedNodes.All(node => node.IsConstantNode);
@@ -573,20 +584,31 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         return values.Count == 1 ? values[0] ?? string.Empty : string.Empty;
     }
 
+    private string CommonSelectionDisplay(Func<IEnumerable<NodeViewModels.FlowNodeViewModel>, IEnumerable<string?>> selector)
+    {
+        if (_selectedNodes.Count == 0) return string.Empty;
+        var values = selector(_selectedNodes).Distinct(StringComparer.Ordinal).ToList();
+        return values.Count == 1
+            ? values[0] ?? string.Empty
+            : LanguageService.Instance.GetString("Node_BatchMixed");
+    }
+
     private void ApplyBatchNodeProperty(
         Func<NodeViewModels.FlowNodeViewModel, string> getter,
         Action<NodeViewModels.FlowNodeViewModel, string> setter,
         string value,
         string propertyName)
     {
-        if (!CanEditBatchConstant && propertyName is nameof(BatchNodeValueType) or nameof(BatchNodeValue)) return;
+        if (!CanEditBatchConstant
+            && (propertyName == nameof(BatchNodeValueType)
+                || propertyName == nameof(BatchNodeValue))) return;
         if (!CanEditBatchProjectImage && propertyName == nameof(BatchSelectedImage)) return;
 
         var commands = _selectedNodes
             .Where(node => !string.Equals(getter(node), value, StringComparison.Ordinal))
             .Select(node => (IEditorCommand)new PropertyChangeCommand(
                 $"Edit {propertyName}",
-                () => setter(node, value),
+                propertyValue => setter(node, propertyValue as string ?? string.Empty),
                 getter(node),
                 value))
             .ToList();
@@ -613,6 +635,11 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     {
         ArgumentNullException.ThrowIfNull(nodes);
         var selected = nodes.Where(Nodes.Contains).Distinct().ToList();
+        foreach (var node in _selectedNodes)
+        {
+            if (!selected.Contains(node)) node.IsSelected = false;
+        }
+
         foreach (var node in Nodes)
         {
             var shouldSelect = selected.Contains(node);
@@ -627,6 +654,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(HasSelectedNodes));
         OnPropertyChanged(nameof(IsSingleSelection));
         OnPropertyChanged(nameof(IsMultipleSelection));
+        OnPropertyChanged(nameof(DeleteSelectionText));
         OnPropertyChanged(nameof(SelectedCategoryDisplay));
         OnPropertyChanged(nameof(SelectedTypeDisplay));
         OnPropertyChanged(nameof(CanEditBatchConstant));
@@ -635,6 +663,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(BatchNodeValue));
         OnPropertyChanged(nameof(BatchSelectedImage));
         RefreshBatchInputs();
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
     }
 
     private void RefreshSelectionProperties()
@@ -678,7 +707,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             .Where(port => !Equals(port.InitialValue, value))
             .Select(port => (IEditorCommand)new PropertyChangeCommand(
                 $"Edit input {port.Title}",
-                () => port.InitialValue = value,
+                propertyValue => port.InitialValue = propertyValue,
                 port.InitialValue,
                 value))
             .ToList();
@@ -892,7 +921,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         ShowMinimap = !ShowMinimap;
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(HasSelectedNodes))]
     private void DeleteSelected() => DeleteSelectedNodes();
 
     /// <summary>Deletes every selected node as one undoable operation.</summary>

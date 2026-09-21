@@ -209,6 +209,144 @@ public sealed class NodeFactoryRegistrarTests
     }
 
     [Fact]
+    public void SetSelection_MultipleNodes_SynchronizesSelectionAndBatchState()
+    {
+        using var editor = new NodeEditorViewModel();
+        var first = NodeTypeRegistry.Create("Data.Constant")!;
+        var second = NodeTypeRegistry.Create("Data.Constant")!;
+        editor.AddNode(first);
+        editor.AddNode(second);
+
+        editor.SetSelection([first, second], second);
+
+        Assert.Equal(2, editor.SelectedNodeCount);
+        Assert.True(editor.HasSelectedNodes);
+        Assert.True(editor.IsMultipleSelection);
+        Assert.False(editor.IsSingleSelection);
+        Assert.Same(second, editor.SelectedNode);
+        Assert.Collection(editor.SelectedNodes,
+            node => Assert.Same(first, node),
+            node => Assert.Same(second, node));
+        Assert.True(first.IsSelected);
+        Assert.True(second.IsSelected);
+        Assert.Equal(new Thickness(3), first.NodeBorderThickness);
+        Assert.True(editor.DeleteSelectedCommand.CanExecute(null));
+
+        editor.SetSelection([first]);
+
+        Assert.True(editor.IsSingleSelection);
+        Assert.False(editor.IsMultipleSelection);
+        Assert.False(second.IsSelected);
+        Assert.Equal(new Thickness(2), second.NodeBorderThickness);
+
+        editor.SetSelection([]);
+
+        Assert.False(editor.HasSelectedNodes);
+        Assert.Null(editor.SelectedNode);
+        Assert.False(editor.DeleteSelectedCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void BatchNodeValue_MultipleConstants_UpdatesAsSingleUndoableEdit()
+    {
+        using var editor = new NodeEditorViewModel();
+        var first = NodeTypeRegistry.Create("Data.Constant")!;
+        first.NodeValue = "first";
+        var second = NodeTypeRegistry.Create("Data.Constant")!;
+        second.NodeValue = "second";
+        editor.AddNode(first);
+        editor.AddNode(second);
+        editor.SetSelection([first, second]);
+
+        Assert.True(editor.CanEditBatchConstant);
+        Assert.Equal(string.Empty, editor.BatchNodeValue);
+
+        editor.BatchNodeValue = "shared";
+
+        Assert.Equal("shared", first.NodeValue);
+        Assert.Equal("shared", second.NodeValue);
+
+        editor.Undo();
+
+        Assert.Equal("first", first.NodeValue);
+        Assert.Equal("second", second.NodeValue);
+
+        editor.Redo();
+
+        Assert.Equal("shared", first.NodeValue);
+        Assert.Equal("shared", second.NodeValue);
+    }
+
+    [Fact]
+    public void BatchInput_MultipleCompatibleNodes_UpdatesAsSingleUndoableEdit()
+    {
+        using var editor = new NodeEditorViewModel();
+        var first = NodeTypeRegistry.Create("Data.ReadFile")!;
+        var firstInput = Assert.Single(first.Input);
+        firstInput.InitialValue = "first.img";
+        var second = NodeTypeRegistry.Create("Data.ReadFile")!;
+        var secondInput = Assert.Single(second.Input);
+        secondInput.InitialValue = "second.img";
+        editor.AddNode(first);
+        editor.AddNode(second);
+        editor.SetSelection([first, second]);
+
+        var batchInput = Assert.Single(editor.BatchInputs);
+        Assert.True(batchInput.IsMixed);
+
+        batchInput.TextValue = "shared.img";
+
+        Assert.False(batchInput.IsMixed);
+        Assert.Equal("shared.img", firstInput.InitialValue);
+        Assert.Equal("shared.img", secondInput.InitialValue);
+
+        editor.Undo();
+
+        Assert.Equal("first.img", firstInput.InitialValue);
+        Assert.Equal("second.img", secondInput.InitialValue);
+        Assert.True(Assert.Single(editor.BatchInputs).IsMixed);
+
+        editor.Redo();
+
+        Assert.Equal("shared.img", firstInput.InitialValue);
+        Assert.Equal("shared.img", secondInput.InitialValue);
+        Assert.False(Assert.Single(editor.BatchInputs).IsMixed);
+    }
+
+    [Fact]
+    public void DeleteSelectedNodes_MultipleConnectedNodes_DeletesAndRestoresAsSingleEdit()
+    {
+        using var editor = new NodeEditorViewModel();
+        var source = NodeTypeRegistry.Create("Data.ReadFile")!;
+        var target = NodeTypeRegistry.Create("Data.Concat")!;
+        editor.AddNode(source);
+        editor.AddNode(target);
+        editor.CreateConnection(source.Output.Single(), target.Input.First());
+        var connection = Assert.Single(editor.Connections);
+        editor.SetSelection([source, target]);
+
+        editor.DeleteSelectedNodes();
+
+        Assert.Empty(editor.Nodes);
+        Assert.Empty(editor.Connections);
+        Assert.Empty(editor.SelectedNodes);
+        Assert.False(source.IsSelected);
+        Assert.False(target.IsSelected);
+
+        editor.Undo();
+
+        Assert.Equal(2, editor.Nodes.Count);
+        Assert.Same(connection, Assert.Single(editor.Connections));
+        Assert.False(source.IsSelected);
+        Assert.False(target.IsSelected);
+
+        editor.Redo();
+
+        Assert.Empty(editor.Nodes);
+        Assert.Empty(editor.Connections);
+    }
+
+    [Fact]
     public void ConnectionRemoval_IsUndoableAndRedoable()
     {
         using var editor = new NodeEditorViewModel();

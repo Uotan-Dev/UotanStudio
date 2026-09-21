@@ -129,7 +129,7 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     public IBrush NodeBorderBrush => IsSelected ? AccentBorderBrush : StatusBorderBrush;
 
     /// <summary>Gets the stronger border thickness used for selected nodes.</summary>
-    public double NodeBorderThickness => IsSelected ? 3 : 2;
+    public Thickness NodeBorderThickness => IsSelected ? new Thickness(3) : new Thickness(2);
 
     /// <summary>
     /// <para>获取本地化的执行状态文本（如 “运行中” / “Running”）。</para>
