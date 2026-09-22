@@ -91,6 +91,17 @@ dotnet format UotanStudio.slnx style --no-restore --verify-no-changes
 
 测试项目是可执行的 xUnit v3 测试宿主。异步测试使用 `async Task`、`await` 和 `TestContext.Current.CancellationToken`；测试方法中禁止 `.Result`、`.Wait()` 和 `.GetAwaiter().GetResult()`。同步等待只能留在明确的同步基础设施边界，并且不得因此让 xUnit analyzer 报警。
 
+测试命令使用 `global.json` 选择的 Microsoft.Testing.Platform。项目级和解决方案级入口分别使用 `--project` 与 `--solution`；定向测试优先使用 xUnit v3 原生过滤参数，并用 `--minimum-expected-tests 1` 防止过滤条件失效时把“零测试”误报为成功：
+
+```text
+dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Shell.ChecksumServiceTests --minimum-expected-tests 1
+dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-method UotanStudio.Tests.Shell.ChecksumServiceTests.ComputeAsync_KnownVectors_ProducesStandardDigests --minimum-expected-tests 1
+dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter "FullyQualifiedName~ChecksumServiceTests" --minimum-expected-tests 1
+dotnet test --solution UotanStudio.slnx --no-restore
+```
+
+`--filter-class`、`--filter-method`、`--filter-namespace` 和 `--filter-trait` 属于 xUnit v3 原生简单过滤器；同一命令不得把它们与 `--filter` 或 `--filter-query` 混用。传统 `--filter` 仅为现有 VSTest 过滤表达式和 CI 脚本保留。过滤后返回零测试时先检查选择器，不得归类为测试代码失败。
+
 测试名称使用 `Method_Scenario_ExpectedBehavior`，遵循 Arrange/Act/Assert，优先验证真实格式互操作性、失败回滚、取消和边界，而不是只验证内部对象往返。跨平台、WSL、QEMU、真实设备和真实语料测试缺少环境时应明确跳过并写出原因。
 
 测试项目中保留的 `CS0618` 抑制只用于覆盖旧的整镜像内存型构建 API；生产代码必须使用文件路径或流式重载。不要用项目级 `NoWarn` 隐藏新的生产警告，也不要用它掩盖可修复的空引用、裁剪或异步问题。

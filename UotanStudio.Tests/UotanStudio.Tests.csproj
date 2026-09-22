@@ -19,46 +19,18 @@
     <ProjectReference Include="..\UotanStudio.Delivery\UotanStudio.Delivery.csproj" />
     <!-- Comm library under test (AVB verification wiring / protocol tests) -->
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
-    <ProjectReference Include="..\UotanStudio.Cli\UotanStudio.Cli.csproj" />
     <ProjectReference Include="..\UotanStudio.Mcp\UotanStudio.Mcp.csproj" />
     <!-- Media library under test (platform video decoder abstraction / NV12 conversion) -->
     <ProjectReference Include="..\UotanStudio.Media\UotanStudio.Media.csproj" />
-    <!-- Application backend services: CLI, flashing, persistence, comparison, and workflow execution. -->
+    <!-- Application backend services: flashing, persistence, comparison, and workflow execution. -->
     <ProjectReference Include="..\UotanStudio\UotanStudio.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- xunit.v3 基于 Microsoft.Testing.Platform（.NET 10 新测试体验）：
-         不再引用 VSTest 体系的 Microsoft.NET.Test.Sdk / xunit.runner.visualstudio，
-         dotnet test 配合 TestingPlatformDotnetTestSupport=true 走 MTP 通道。 -->
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="Avalonia.Headless" />
     <!-- MCP 工具清单测试经由 UotanStudio.Mcp 暴露的 McpServerTool 元数据，需 Core 程序集参与重载解析。 -->
     <PackageReference Include="ModelContextProtocol.Core" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- 测试夹具：真实世界 DEX 文件随构建复制到输出目录 -->
-    <None Include="Firmware\Files\**\*.dex" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="TestInfrastructure\Media\*.aac;TestInfrastructure\Media\*.h265;TestInfrastructure\Media\*.obu" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="TestInfrastructure\Media\black-64x64.h264" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="TestInfrastructure\Media\openh264-qcif-cabac.h264" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="Firmware\Files\review-native-rkfw.img" CopyToOutputDirectory="PreserveNewest" />
-    <!-- 固定 avbtool 随测试复制并直接运行；明确文件名使缺失夹具导致构建失败。 -->
-    <None Include="TestInfrastructure\avbtool.py" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="TestInfrastructure\dat2img.py" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="TestInfrastructure\ApkSigning\Verify.java" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="TestInfrastructure\ApkSigning\unsigned.apk" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="TestInfrastructure\avbtool.py.md" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="TestInfrastructure\FirmwareMountCheck\run-native-deflate.sh" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="TestInfrastructure\FirmwareMountCheck\run-gki-rw.sh" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="TestInfrastructure\FirmwareMountCheck\gki-rw-init.sh" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Remove="Firmware\FirmwareMountCheckTests.cs" />
-    <Compile Remove="Firmware\ErofsMultiDeviceMountTests.cs" />
-    <Compile Remove="TestInfrastructure\FirmwareMountCheck\FirmwareMountFixture.cs" />
   </ItemGroup>
 
 </Project>

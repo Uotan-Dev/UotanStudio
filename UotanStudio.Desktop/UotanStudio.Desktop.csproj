@@ -20,7 +20,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\UotanStudio\UotanStudio.csproj" />
-    <ProjectReference Include="..\UotanStudio.Cli\UotanStudio.Cli.csproj" />
     <ProjectReference Include="..\UotanStudio.Mcp\UotanStudio.Mcp.csproj" />
   </ItemGroup>
 

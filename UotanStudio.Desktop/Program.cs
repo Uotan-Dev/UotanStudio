@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Logging;
 using Dock.Settings;
-using UotanStudio.Cli;
 
 namespace UotanStudio.Desktop;
 
@@ -35,11 +34,6 @@ sealed class Program
             {
                 return 0;
             }
-        }
-
-        if (CliProgram.IsCommandLineMode(args))
-        {
-            return CliProgram.RunAsync(CliProgram.StripModeSwitch(args)).GetAwaiter().GetResult();
         }
 
         if (UotanStudio.Mcp.McpLauncher.IsCompanionRequested(args))
