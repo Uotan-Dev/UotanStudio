@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace UotanStudio.Services.Delivery;
 
 /// <summary>
-/// Public, reflection-free entry point that lets headless consumers (the command line) drive delivery
+/// Public, reflection-free entry point that lets headless consumers drive delivery
 /// validation, output listing, tool preparation and builds from a serialized <see cref="DeliveryPlan"/>
 /// JSON contract. It deliberately exposes only plain types so no internal plan/build record crosses the
 /// assembly boundary and no <c>InternalsVisibleTo</c> grant is needed.

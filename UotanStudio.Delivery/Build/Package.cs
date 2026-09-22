@@ -186,7 +186,7 @@ internal static partial class DeliveryPackageBuilder
     }
 
     // Inspect actual local headers rather than predicting ZIP64 extra field lengths.
-    private static Dictionary<string, (long Offset, ulong Size)> ReadStoredRanges(string path)
+    internal static Dictionary<string, (long Offset, ulong Size)> ReadStoredRanges(string path)
     {
         using var input = File.OpenRead(path);
         var result = new Dictionary<string, (long, ulong)>(StringComparer.Ordinal);
@@ -334,7 +334,7 @@ internal static partial class DeliveryPackageBuilder
         await output.WriteAsync(Encoding.UTF8.GetBytes(text), token);
     }
 
-    private static X509Certificate2 LoadCertificate(string path)
+    internal static X509Certificate2 LoadCertificate(string path)
     {
         var info = new FileInfo(path);
         if (!info.Exists || info.Length > 65536) throw new InvalidDataException("签名证书不存在或超过 64 KiB。");

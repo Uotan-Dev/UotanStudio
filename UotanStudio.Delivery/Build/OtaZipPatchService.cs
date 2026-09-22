@@ -23,6 +23,24 @@ public sealed record OtaZipPatchResult(
     IReadOnlyList<string> ReplacedEntries,
     bool OuterSignatureInvalidated);
 
+/// <summary>Options for rebuilding an existing A/B OTA around a replacement Payload.</summary>
+public sealed record OtaZipRebuildOptions
+{
+    public required string PayloadPath { get; init; }
+    public IReadOnlyDictionary<string, string> ReplacementFiles { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+    public string CertificatePath { get; init; } = "";
+    public string SigningKeyPath { get; init; } = "";
+    public bool VerifyOutput { get; init; } = true;
+}
+
+/// <summary>Result of a verified, atomically published A/B OTA rebuild.</summary>
+public sealed record OtaZipRebuildResult(
+    string OutputPath,
+    IReadOnlyList<string> ReplacedEntries,
+    bool OuterSignatureApplied,
+    OtaZipVerificationResult Verification);
+
 /// <summary>Structural and property-level verification result for an OTA ZIP.</summary>
 public sealed record OtaZipVerificationResult(
     bool IsValid,
@@ -34,6 +52,169 @@ public sealed record OtaZipVerificationResult(
 public static class OtaZipPatchService
 {
     private const long MaximumEntryLength = 16L * 1024 * 1024 * 1024;
+    private const ulong MaximumPayloadMetadataLength = 64UL * 1024 * 1024;
+    private const int PropertyRangeReservation = 512;
+
+    /// <summary>
+    /// Rebuilds an existing A/B OTA around a replacement Payload, regenerates properties and offset metadata,
+    /// optionally signs the complete ZIP, verifies it, and atomically publishes it.
+    /// </summary>
+    public static Task<OtaZipRebuildResult> RebuildAsync(
+        string inputPath,
+        string outputPath,
+        OtaZipRebuildOptions options,
+        CancellationToken cancellationToken = default)
+        => RebuildCoreAsync(inputPath, outputPath, options, null, cancellationToken);
+
+    internal static Task<OtaZipRebuildResult> RebuildAsync(
+        string inputPath,
+        string outputPath,
+        OtaZipRebuildOptions options,
+        IDeliverySigningKeyProvider signingKeys,
+        CancellationToken cancellationToken = default)
+        => RebuildCoreAsync(inputPath, outputPath, options, signingKeys, cancellationToken);
+
+    private static async Task<OtaZipRebuildResult> RebuildCoreAsync(
+        string inputPath,
+        string outputPath,
+        OtaZipRebuildOptions options,
+        IDeliverySigningKeyProvider? signingKeys,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(inputPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        ArgumentNullException.ThrowIfNull(options);
+        if (!File.Exists(inputPath))
+        {
+            throw new FileNotFoundException("OTA ZIP was not found.", inputPath);
+        }
+        if (!File.Exists(options.PayloadPath))
+        {
+            throw new FileNotFoundException("Replacement Payload was not found.", options.PayloadPath);
+        }
+        if ((options.CertificatePath.Length == 0) != (options.SigningKeyPath.Length == 0))
+        {
+            throw new InvalidDataException("OTA whole-file signing requires both a certificate and a private key.");
+        }
+
+        var replacements = NormalizeReplacements(options.ReplacementFiles);
+        foreach (var generated in new[] { "payload.bin", "payload_properties.txt", "META-INF/com/android/metadata", "META-INF/com/android/otacert" })
+        {
+            if (replacements.ContainsKey(generated))
+            {
+                throw new InvalidDataException($"OTA rebuild owns generated entry '{generated}'.");
+            }
+        }
+
+        var output = Path.GetFullPath(outputPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(output)!);
+        var suffix = ".tmp-" + Guid.NewGuid().ToString("N");
+        var staged = output + suffix + ".zip";
+        var provisional = output + suffix + ".provisional.zip";
+        var propertiesPath = output + suffix + ".properties";
+        var metadataPath = output + suffix + ".metadata";
+        var certificatePath = output + suffix + ".otacert";
+        try
+        {
+            var payloadProperties = await CreatePayloadPropertiesAsync(options.PayloadPath, cancellationToken)
+                .ConfigureAwait(false);
+            await File.WriteAllTextAsync(propertiesPath, payloadProperties.Text, new UTF8Encoding(false), cancellationToken)
+                .ConfigureAwait(false);
+
+            var metadataBase = ReadMetadataBase(inputPath);
+            await File.WriteAllTextAsync(
+                metadataPath,
+                BuildMetadata(metadataBase, "", ""),
+                new UTF8Encoding(false),
+                cancellationToken).ConfigureAwait(false);
+
+            replacements["payload.bin"] = options.PayloadPath;
+            replacements["payload_properties.txt"] = propertiesPath;
+            replacements["META-INF/com/android/metadata"] = metadataPath;
+            if (options.CertificatePath.Length > 0)
+            {
+                using var certificate = DeliveryPackageBuilder.LoadCertificate(options.CertificatePath);
+                await File.WriteAllTextAsync(
+                    certificatePath,
+                    certificate.ExportCertificatePem(),
+                    new UTF8Encoding(false),
+                    cancellationToken).ConfigureAwait(false);
+                replacements["META-INF/com/android/otacert"] = certificatePath;
+            }
+
+            await PatchAsync(
+                inputPath,
+                provisional,
+                new OtaZipPatchOptions { ReplacementFiles = replacements, AllowPayloadReplacement = true },
+                cancellationToken).ConfigureAwait(false);
+            var expectedRanges = DeliveryPackageBuilder.ReadStoredRanges(provisional);
+            var payloadRange = RequiredRange(expectedRanges, "payload.bin");
+            var propertiesRange = RequiredRange(expectedRanges, "payload_properties.txt");
+            var metadataRange = RequiredRange(expectedRanges, "META-INF/com/android/metadata");
+            var streaming =
+                $"payload.bin:{payloadRange.Offset}:{payloadRange.Size},payload_properties.txt:{propertiesRange.Offset}:{propertiesRange.Size},metadata:{metadataRange.Offset}:{metadataRange.Size}";
+            var all = $"payload_metadata.bin:{payloadRange.Offset}:{payloadProperties.MetadataSize},{streaming}";
+            await File.WriteAllTextAsync(
+                metadataPath,
+                BuildMetadata(metadataBase, streaming, all),
+                new UTF8Encoding(false),
+                cancellationToken).ConfigureAwait(false);
+
+            await PatchAsync(
+                inputPath,
+                staged,
+                new OtaZipPatchOptions { ReplacementFiles = replacements, AllowPayloadReplacement = true },
+                cancellationToken).ConfigureAwait(false);
+            var actualRanges = DeliveryPackageBuilder.ReadStoredRanges(staged);
+            foreach (var entry in new[] { "payload.bin", "payload_properties.txt", "META-INF/com/android/metadata" })
+            {
+                if (RequiredRange(actualRanges, entry) != RequiredRange(expectedRanges, entry))
+                {
+                    throw new InvalidDataException($"OTA ZIP entry offset changed while finalizing {entry} metadata.");
+                }
+            }
+
+            var verification = Verify(staged);
+            if (options.VerifyOutput && !verification.IsValid)
+            {
+                throw new InvalidDataException("Rebuilt OTA verification failed: " + string.Join("; ", verification.Errors));
+            }
+            var signed = options.SigningKeyPath.Length > 0;
+            if (signed)
+            {
+                await DeliveryPackageBuilder.SignAsync(
+                    staged,
+                    new DeliveryPackageOptions
+                    {
+                        CertificatePath = options.CertificatePath,
+                        SigningKeyPath = options.SigningKeyPath
+                    },
+                    cancellationToken,
+                    signingKeys).ConfigureAwait(false);
+                verification = Verify(staged);
+                if (options.VerifyOutput && !verification.IsValid)
+                {
+                    throw new InvalidDataException("Signed OTA verification failed: " + string.Join("; ", verification.Errors));
+                }
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(staged, output, overwrite: true);
+            return new(
+                output,
+                [.. replacements.Keys.Order(StringComparer.Ordinal)],
+                signed,
+                verification);
+        }
+        finally
+        {
+            File.Delete(staged);
+            File.Delete(provisional);
+            File.Delete(propertiesPath);
+            File.Delete(metadataPath);
+            File.Delete(certificatePath);
+        }
+    }
 
     /// <summary>Patches selected ZIP members and atomically publishes the new archive.</summary>
     public static async Task<OtaZipPatchResult> PatchAsync(string inputPath, string outputPath,
@@ -140,7 +321,7 @@ public static class OtaZipPatchService
             Span<byte> header = stackalloc byte[24];
             payloadStream.ReadExactly(header);
             if (!header[..4].SequenceEqual("CrAU"u8)) errors.Add("payload.bin has an invalid CrAU magic.");
-            else if (BinaryPrimitives.ReadUInt64LittleEndian(header[4..12]) is 2 or 3)
+            else if (BinaryPrimitives.ReadUInt64BigEndian(header[4..12]) is 2 or 3)
             {
                 try
                 {
@@ -148,18 +329,18 @@ public static class OtaZipPatchService
                     var metadata = PayloadParser.GetPayloadMetadata(manifestStream);
                     properties["PAYLOAD_MANIFEST_PARTITIONS"] = metadata.Manifest.Partitions.Count.ToString();
                     properties["PAYLOAD_MANIFEST_LENGTH"] = metadata.ManifestLength.ToString();
+                    var actualMetadataSize = checked((long)metadata.ManifestLength + metadata.MetadataSignatureLength + 24);
                     if (properties.TryGetValue("METADATA_SIZE", out var metadataSizeText)
-                        && long.TryParse(metadataSizeText, out var declaredMetadataSize)
-                        && declaredMetadataSize != checked((long)metadata.ManifestLength + 24))
-                        errors.Add($"METADATA_SIZE={declaredMetadataSize} does not equal manifest length plus CrAU header ({metadata.ManifestLength + 24}).");
+                        && (!long.TryParse(metadataSizeText, out var declaredMetadataSize)
+                            || declaredMetadataSize != actualMetadataSize))
+                        errors.Add($"METADATA_SIZE={metadataSizeText} does not equal the CrAU metadata prefix ({actualMetadataSize}).");
                     if (metadata.Manifest.Partitions.Count == 0) warnings.Add("Payload manifest contains no partition updates.");
                     if (properties.TryGetValue("METADATA_HASH", out var metadataHash)
                         && metadataHash.Length > 0)
                     {
                         using var metadataInput = payload.Open();
-                        SkipExactly(metadataInput, 24);
                         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-                        CopyExactly(metadataInput, new HashingStream(hash), checked((long)metadata.ManifestLength));
+                        CopyExactly(metadataInput, new HashingStream(hash), actualMetadataSize);
                         var actualMetadataHash = Convert.ToBase64String(hash.GetHashAndReset());
                         if (!string.Equals(actualMetadataHash, metadataHash, StringComparison.Ordinal))
                             errors.Add("METADATA_HASH does not match the CrAU manifest bytes.");
@@ -206,6 +387,82 @@ public static class OtaZipPatchService
         return result;
     }
 
+    private static async Task<(string Text, ulong MetadataSize)> CreatePayloadPropertiesAsync(
+        string payloadPath,
+        CancellationToken cancellationToken)
+    {
+        await using var input = new FileStream(payloadPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        if (input.Length < 24 || input.Length > MaximumEntryLength)
+        {
+            throw new InvalidDataException("Replacement Payload length is outside the supported range.");
+        }
+        var header = new byte[24];
+        await input.ReadExactlyAsync(header, cancellationToken).ConfigureAwait(false);
+        if (!header.AsSpan(0, 4).SequenceEqual("CrAU"u8)
+            || BinaryPrimitives.ReadUInt64BigEndian(header.AsSpan(4, 8)) is not (2 or 3))
+        {
+            throw new InvalidDataException("Replacement Payload has an invalid CrAU header or version.");
+        }
+        var manifestLength = BinaryPrimitives.ReadUInt64BigEndian(header.AsSpan(12, 8));
+        var signatureLength = BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(20, 4));
+        var metadataSize = checked(24UL + manifestLength + signatureLength);
+        if (manifestLength == 0 || metadataSize > MaximumPayloadMetadataLength || metadataSize > (ulong)input.Length)
+        {
+            throw new InvalidDataException("Replacement Payload metadata length is outside the supported range.");
+        }
+
+        input.Position = 0;
+        using var metadataHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        await CopyExactlyAsync(input, new HashingStream(metadataHash), checked((long)metadataSize), cancellationToken)
+            .ConfigureAwait(false);
+        input.Position = 0;
+        var fileHash = await SHA256.HashDataAsync(input, cancellationToken).ConfigureAwait(false);
+        var text =
+            $"FILE_HASH={Convert.ToBase64String(fileHash)}\n" +
+            $"FILE_SIZE={input.Length}\n" +
+            $"METADATA_HASH={Convert.ToBase64String(metadataHash.GetHashAndReset())}\n" +
+            $"METADATA_SIZE={metadataSize}\n";
+        return (text, metadataSize);
+    }
+
+    private static string ReadMetadataBase(string inputPath)
+    {
+        using var archive = ZipFile.OpenRead(inputPath);
+        var entry = archive.GetEntry("META-INF/com/android/metadata");
+        if (entry is null)
+        {
+            return "ota-type=AB\n";
+        }
+        if (entry.Length > 1024 * 1024)
+        {
+            throw new InvalidDataException("OTA metadata exceeds 1 MiB.");
+        }
+        using var reader = new StreamReader(entry.Open(), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        var lines = reader.ReadToEnd().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Where(line => !line.StartsWith("ota-streaming-property-files=", StringComparison.Ordinal)
+                && !line.StartsWith("ota-property-files=", StringComparison.Ordinal));
+        return string.Join('\n', lines) + "\n";
+    }
+
+    private static string BuildMetadata(string metadataBase, string streaming, string all)
+    {
+        if (streaming.Length > PropertyRangeReservation || all.Length > PropertyRangeReservation)
+        {
+            throw new InvalidDataException("OTA property ranges exceed reserved metadata space.");
+        }
+        return metadataBase
+            + "ota-streaming-property-files=" + streaming.PadRight(PropertyRangeReservation) + "\n"
+            + "ota-property-files=" + all.PadRight(PropertyRangeReservation) + "\n";
+    }
+
+    private static (long Offset, ulong Size) RequiredRange(
+        IReadOnlyDictionary<string, (long Offset, ulong Size)> ranges,
+        string entry)
+        => ranges.TryGetValue(entry, out var range)
+            ? range
+            : throw new InvalidDataException($"Rebuilt OTA is missing required stored entry: {entry}");
+
     private static string NormalizeEntryName(string name)
     {
         var normalized = name.Replace('\\', '/');
@@ -246,6 +503,26 @@ public static class OtaZipPatchService
             var read = input.Read(buffer, 0, (int)Math.Min(buffer.Length, count));
             if (read == 0) throw new EndOfStreamException("Unexpected end of Payload while reading manifest.");
             output.Write(buffer, 0, read);
+            count -= read;
+        }
+    }
+
+    private static async Task CopyExactlyAsync(
+        Stream input,
+        Stream output,
+        long count,
+        CancellationToken cancellationToken)
+    {
+        var buffer = new byte[64 * 1024];
+        while (count > 0)
+        {
+            var read = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, count)), cancellationToken)
+                .ConfigureAwait(false);
+            if (read == 0)
+            {
+                throw new EndOfStreamException("Unexpected end of Payload while hashing metadata.");
+            }
+            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             count -= read;
         }
     }

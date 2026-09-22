@@ -7,6 +7,7 @@ using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Keys;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Delivery;
@@ -23,7 +24,7 @@ public sealed class PayloadSigningTests : IDisposable
     [InlineData(2048, 0)]
     public void Builder_SignsBothRangesAndRejectsTampering(int bits, int length)
     {
-        using var key = RSA.Create(bits);
+        using var key = SigningTestKeys.Create(bits);
         using var builder = new PayloadBuilder();
         var original = RandomNumberGenerator.GetBytes(length);
         using var input = new MemoryStream(original);
@@ -31,7 +32,7 @@ public sealed class PayloadSigningTests : IDisposable
         builder.WithSigningKey(key).AddPartition("system", input).Build(output);
         var bytes = output.ToArray();
         AssertSignatures(bytes, key);
-        using var wrongKey = RSA.Create(bits);
+        using var wrongKey = SigningTestKeys.Create(bits, alternate: true);
         var (metadata, _, metaSignature, _) = Decode(bytes);
         Assert.False(wrongKey.VerifyData(metadata, metaSignature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
         var path = Path.Combine(_root, "payload.bin");
