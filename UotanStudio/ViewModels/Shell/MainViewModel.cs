@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Composition;
 using UotanStudio.Messages;
+using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;
@@ -63,10 +64,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _modifications.Changed += OnModificationsChanged;
         WorkspaceVM.PropertyChanged += OnWorkspacePropertyChanged;
         WeakReferenceMessenger.Default.Register<ProjectContextChangedMessage>(this, OnProjectContextChanged);
+        WeakReferenceMessenger.Default.Register<LanguageStateChangedMessage>(this, OnLanguageStateChanged);
         UpdateWindowTitle();
     }
 
     private void OnProjectContextChanged(object recipient, ProjectContextChangedMessage message) => UpdateWindowTitle();
+
+    private void OnLanguageStateChanged(object recipient, LanguageStateChangedMessage message) => UpdateWindowTitle();
 
     private void OnModificationsChanged(object? sender, EventArgs e) => UpdateWindowTitle();
 
@@ -78,9 +82,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private void UpdateWindowTitle()
     {
         var context = ProjectContextService.Instance;
+        var applicationTitle = LanguageService.Instance.GetString("MainWindow_Title");
         var title = context.IsProjectOpen && context.SolutionName is { Length: > 0 } name
-            ? $"{name} - UotanStudio"
-            : "UotanStudio";
+            ? $"{name} - {applicationTitle}"
+            : applicationTitle;
         WindowTitle = _modifications.HasUnsavedChanges ? "\u25cf " + title : title;
     }
 

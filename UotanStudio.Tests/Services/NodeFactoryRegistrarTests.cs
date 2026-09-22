@@ -14,6 +14,38 @@ namespace UotanStudio.Tests.Services;
 public sealed class NodeFactoryRegistrarTests
 {
     [Fact]
+    public async Task Register_ConcurrentFactories_PreservesCreationAndSnapshotAfterRemoval()
+    {
+        var prefix = "tests.concurrent." + Guid.NewGuid().ToString("N") + ".";
+        var token = TestContext.Current.CancellationToken;
+        try
+        {
+            await Task.WhenAll(Enumerable.Range(0, 8).Select(worker => Task.Run(() =>
+            {
+                for (var index = 0; index < 64; index++)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var key = prefix + worker + "." + index;
+                    NodeTypeRegistry.Register(key, () => PatchNodeViewModel.Create("Patch.CheckFormat"));
+                    Assert.True(NodeTypeRegistry.Contains(key));
+                    Assert.IsType<PatchNodeViewModel>(NodeTypeRegistry.Create(key));
+                    var snapshot = NodeTypeRegistry.Keys;
+                    Assert.True(NodeTypeRegistry.Unregister(key));
+                    Assert.Contains(key, snapshot);
+                    Assert.False(NodeTypeRegistry.Contains(key));
+                }
+            }, token)));
+        }
+        finally
+        {
+            foreach (var key in NodeTypeRegistry.Keys.Where(key => key.StartsWith(prefix, StringComparison.Ordinal)))
+            {
+                NodeTypeRegistry.Unregister(key);
+            }
+        }
+    }
+
+    [Fact]
     public void Descriptors_HaveUniqueKeysAndReconstructableFactories()
     {
         NodeFactoryRegistrar.RegisterAll();
@@ -49,6 +81,10 @@ public sealed class NodeFactoryRegistrarTests
 
         var branch = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Flow.Branch");
         Assert.True(branch.Capabilities.HasFlag(NodeCapability.ControlFlow));
+
+        var download = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Network.Download");
+        Assert.True(download.Capabilities.HasFlag(NodeCapability.RequiresNetwork));
+        Assert.True(download.Capabilities.HasFlag(NodeCapability.ProducesArtifact));
     }
 
     [Fact]
@@ -64,7 +100,7 @@ public sealed class NodeFactoryRegistrarTests
     }
 
     [Fact]
-    public async Task LoadFromAsync_RemovedHdcAndDexNodes_AreSkippedWithoutCompatibility()
+    public async Task LoadFromAsync_UnavailableNodes_ArePreservedAsPlaceholders()
     {
         var entries = new ConcurrentQueue<LogEntry>();
         var unsubscribe = LogService.Instance.Subscribe((_, entry) => entries.Enqueue(entry));
@@ -92,20 +128,12 @@ public sealed class NodeFactoryRegistrarTests
 
             await editor.LoadFromAsync(snapshot);
 
-            Assert.Empty(editor.Nodes);
+            Assert.Equal(2, editor.Nodes.Count);
+            Assert.All(editor.Nodes, node => Assert.True(node.IsUnavailable));
             Assert.Empty(editor.Connections);
-            Assert.Contains(entries, entry => entry is
-            {
-                Level: LogLevel.Warn,
-                Source: "NodeEditor",
-                Message: "Unknown node type 'HDC.Remount' skipped while loading workflow."
-            });
-            Assert.Contains(entries, entry => entry is
-            {
-                Level: LogLevel.Warn,
-                Source: "NodeEditor",
-                Message: "Unknown node type 'Dex.Parse' skipped while loading workflow."
-            });
+            var roundTrip = WorkflowPersistenceService.BuildNodeDtos(editor.Nodes);
+            Assert.Contains(roundTrip, node => node.TypeKey == "HDC.Remount");
+            Assert.Contains(roundTrip, node => node.TypeKey == "Dex.Parse");
         }
         finally
         {
@@ -363,6 +391,37 @@ public sealed class NodeFactoryRegistrarTests
         Assert.Same(connection, Assert.Single(editor.Connections));
         editor.Redo();
         Assert.Empty(editor.Connections);
+    }
+
+    [Fact]
+    public void CreateConnection_SameDirectionConnectors_RejectsConnection()
+    {
+        using var editor = new NodeEditorViewModel();
+        var first = NodeTypeRegistry.Create("Data.Concat")!;
+        var second = NodeTypeRegistry.Create("Data.Concat")!;
+        editor.AddNode(first);
+        editor.AddNode(second);
+
+        editor.CreateConnection(first.Input.First(), second.Input.First());
+        editor.CreateConnection(first.Output.Single(), second.Output.Single());
+
+        Assert.Empty(editor.Connections);
+    }
+
+    [Fact]
+    public void CreateConnection_InputDraggedToOutput_CreatesCanonicalConnection()
+    {
+        using var editor = new NodeEditorViewModel();
+        var source = NodeTypeRegistry.Create("Data.ReadFile")!;
+        var target = NodeTypeRegistry.Create("Data.Concat")!;
+        editor.AddNode(source);
+        editor.AddNode(target);
+
+        editor.CreateConnection(target.Input.First(), source.Output.Single());
+
+        var connection = Assert.Single(editor.Connections);
+        Assert.Same(source.Output.Single(), connection.Source);
+        Assert.Same(target.Input.First(), connection.Target);
     }
 
     [Fact]

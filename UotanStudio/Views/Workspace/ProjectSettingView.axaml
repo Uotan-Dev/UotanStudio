@@ -15,13 +15,16 @@
                                     ColumnSpacing="5">
             <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
                        Text="{DynamicResource Dock_ImageType}" />
-            <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
+            <StackPanel MinWidth="210" Orientation="Horizontal" Spacing="12"
                         HorizontalAlignment="Left">
-                <RadioButton FontSize="13" IsChecked="{Binding TypeEXT4}">
+                <RadioButton GroupName="ImageType" FontSize="13" IsChecked="{Binding TypeEXT4}">
                     <TextBlock Text="EXT4" TextWrapping="NoWrap" />
                 </RadioButton>
-                <RadioButton FontSize="13" IsChecked="{Binding TypeEROFS}">
+                <RadioButton GroupName="ImageType" FontSize="13" IsChecked="{Binding TypeEROFS}">
                     <TextBlock Text="EROFS" TextWrapping="NoWrap" />
+                </RadioButton>
+                <RadioButton GroupName="ImageType" FontSize="13" IsChecked="{Binding TypeF2FS}">
+                    <TextBlock Text="F2FS" TextWrapping="NoWrap" />
                 </RadioButton>
             </StackPanel>
         </controls:ResponsiveFormRow>

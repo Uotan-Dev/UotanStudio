@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using UotanStudio.Comm.Protocols.Hdc;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
 using UotanStudio.Services.Keys;
 using Xunit;
 
@@ -116,6 +117,30 @@ public sealed class KeyLibraryTests : IDisposable
         File.WriteAllText(path, rsa.ExportSubjectPublicKeyInfoPem());
         Assert.Throws<InvalidDataException>(() => Library.Import("public", ManagedKeyKind.Payload, path, ""));
         Assert.Single(Library.List());
+    }
+
+    [Fact]
+    public void AvbGenerateAndImport_PublishesMatchingPkmdAndRegeneratesLegacyCopy()
+    {
+        var library = Library;
+        var generated = library.Generate("avb-generated", ManagedKeyKind.Avb, 2048);
+        var pkmdPath = library.EnsureAvbPublicKey(generated);
+        var originalPkmd = File.ReadAllBytes(pkmdPath);
+        using (var publicKey = AvbRsaPublicKeyCodec.Import(originalPkmd))
+        {
+            Assert.Equal(
+                generated.Fingerprint,
+                "SHA256:" + Convert.ToHexString(SHA256.HashData(publicKey.ExportSubjectPublicKeyInfo())));
+        }
+
+        File.Delete(pkmdPath);
+        Assert.Equal(originalPkmd, File.ReadAllBytes(library.EnsureAvbPublicKey(generated)));
+
+        using var source = RSA.Create(4096);
+        var sourcePath = Path.Combine(_root, "external-avb.pem");
+        File.WriteAllText(sourcePath, source.ExportPkcs8PrivateKeyPem());
+        var imported = library.Import("avb-imported", ManagedKeyKind.Avb, sourcePath, "");
+        Assert.Equal(AvbRsaPublicKeyCodec.Export(source), File.ReadAllBytes(library.EnsureAvbPublicKey(imported)));
     }
 
     [Fact]

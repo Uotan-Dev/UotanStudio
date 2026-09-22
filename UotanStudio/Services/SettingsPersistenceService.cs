@@ -20,7 +20,7 @@ public class AppSettings : IJsonOnDeserialized
         AdditionalSettings?.Remove("HdcPath");
     }
 
-    /// <summary>Maximum concurrent firmware workers. Missing or invalid persisted values use four.</summary>
+    /// <summary>Maximum concurrent firmware workers. Missing or invalid persisted values use the detected physical core count.</summary>
     [JsonPropertyName("firmwareParallelism")]
     public int FirmwareParallelism
     {

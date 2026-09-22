@@ -886,6 +886,60 @@ public sealed class FirmwareService
     }
 
     /// <summary>
+    /// Merges an ordered set of Android sparse chunks into one raw image. The destination is replaced
+    /// atomically, and source chunks are deleted only after the merged image has been fully published.
+    /// </summary>
+    public async Task<FirmwareOpResult> MergeSparseChunksAsync(
+        IReadOnlyList<string> chunkPaths,
+        string outputPath,
+        bool deleteSources = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(chunkPaths);
+        try
+        {
+            if (chunkPaths.Count == 0)
+            {
+                return FirmwareOpResult.Fail("At least one sparse chunk is required.");
+            }
+
+            var chunks = chunkPaths.Select(Path.GetFullPath).ToArray();
+            if (chunks.Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal).Count()
+                != chunks.Length)
+            {
+                return FirmwareOpResult.Fail("Sparse chunk paths must be unique.");
+            }
+
+            await Task.Run(() => SparseImageConverter.ConvertSparseToRawCancellable(chunks, outputPath, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+
+            if (deleteSources)
+            {
+                foreach (var chunk in chunks)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    File.Delete(chunk);
+                }
+            }
+
+            return new FirmwareOpResult
+            {
+                Success = true,
+                Summary = $"Merged {chunks.Length} sparse chunk(s) into '{outputPath}'.",
+                Entries = [.. chunks.Select(path => Path.GetFileName(path) ?? path)]
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return FirmwareOpResult.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Unpacks an Android sparse image to a directory: when the inner content is a filesystem
     /// (ext4/erofs/f2fs) it is cascade-unpacked via the corresponding streaming parser, otherwise
     /// it falls back to a plain raw conversion. A thin wrapper over

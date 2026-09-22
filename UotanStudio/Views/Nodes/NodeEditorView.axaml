@@ -11,6 +11,10 @@
              x:Class="UotanStudio.Views.Nodes.NodeEditorView"
              x:DataType="vm:NodeEditorViewModel">
     <UserControl.Styles>
+        <Style Selector="nodify|Connection.selected">
+            <Setter Property="Stroke" Value="{DynamicResource SemiColorPrimary}" />
+            <Setter Property="StrokeThickness" Value="4" />
+        </Style>
         <!-- 三栏之间的分隔线（圆角边缘 + 单侧投影）与拖动条，样式与交付页保持一致。 -->
         <!-- Divider (rounded edge plus one-sided shadow) and drag handle between the three panes,
              matching the delivery page. -->
@@ -46,6 +50,20 @@
                          PlaceholderText="{DynamicResource Node_SearchNodes}"
                          Text="{Binding SearchText}"
                          VerticalAlignment="Center" />
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" Margin="6,0,0,0">
+                    <Button Width="28" Height="28" Padding="0" Click="OnImportTemplateClick"
+                            ToolTip.Tip="{DynamicResource Node_ImportTemplate}">
+                        <avalonia:MaterialIcon Kind="FileImportOutline" Width="16" Height="16" />
+                    </Button>
+                    <Button Width="28" Height="28" Padding="0" Click="OnExportTemplateClick"
+                            ToolTip.Tip="{DynamicResource Node_ExportTemplate}">
+                        <avalonia:MaterialIcon Kind="FileExportOutline" Width="16" Height="16" />
+                    </Button>
+                    <Button Width="28" Height="28" Padding="0" Click="OnExportCompositeClick"
+                            ToolTip.Tip="{DynamicResource Node_ExportComposite}">
+                        <avalonia:MaterialIcon Kind="PuzzleOutline" Width="16" Height="16" />
+                    </Button>
+                </StackPanel>
 
                 <!-- 右侧: 缩放控制 + 小地图开关 -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
@@ -81,7 +99,7 @@
                     <Button x:Name="DeleteSelectedButton"
                             MinWidth="92" Height="28" Padding="6,0"
                             Command="{Binding DeleteSelectedCommand}"
-                            IsEnabled="{Binding HasSelectedNodes}"
+                            IsEnabled="{Binding HasSelection}"
                             ToolTip.Tip="{Binding DeleteSelectionText}">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                             <avalonia:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
@@ -95,6 +113,10 @@
                 <!-- 中间: 运行控制 -->
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
                             VerticalAlignment="Center" Spacing="4">
+                    <Button x:Name="PreviewPatchButton" Height="28" Padding="8,0"
+                            Command="{Binding PreviewCommand}"
+                            Content="{DynamicResource Node_Patch_Preview}"
+                            ToolTip.Tip="{DynamicResource Node_Patch_PreviewHint}" />
                     <Button Width="28" Height="28" Padding="0"
                             Command="{Binding RunCommand}"
                             ToolTip.Tip="{DynamicResource Node_Run}">
@@ -128,6 +150,57 @@
                 </TextBlock>
             </DockPanel>
         </Border>
+
+        <Expander x:Name="PatchChangesPanel" DockPanel.Dock="Bottom" MaxHeight="300"
+                  Header="{Binding PatchOutcomeText}" IsExpanded="True"
+                  IsVisible="{Binding HasPatchReview}">
+            <StackPanel Spacing="4">
+                <TextBlock Text="{DynamicResource Node_Patch_ReportHint}" TextWrapping="Wrap" Margin="8,0" />
+                <TextBlock Text="{DynamicResource Node_Patch_CompositeReportHint}" TextWrapping="Wrap" Margin="8,0" />
+                <TextBlock Text="{DynamicResource Node_Patch_CompositeReportTruncated}" IsVisible="{Binding CompositeReportTruncated}"
+                           TextWrapping="Wrap" Margin="8,0" />
+                <ListBox x:Name="CompositeExecutionList" ItemsSource="{Binding CompositeExecutions}" MaxHeight="140">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:PatchCompositeExecutionViewModel}">
+                            <StackPanel Spacing="3" Margin="4">
+                                <TextBlock Text="{Binding Identity}" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Parent}" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Applicability}" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Status}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Error}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <ListBox x:Name="PatchChangeList" ItemsSource="{Binding PatchChanges}" MaxHeight="240">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:PatchChangeViewModel}">
+                            <StackPanel Spacing="3" Margin="4">
+                                <TextBlock Text="{Binding Kind}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding StagedBy}" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Path}" TextWrapping="Wrap" />
+                                <TextBlock Text="{DynamicResource Node_Patch_BinaryPreviewHint}" IsVisible="{Binding HasBinaryPreview}" TextWrapping="Wrap" />
+                                <ScrollViewer MaxHeight="160" IsVisible="{Binding HasBinaryPreview}">
+                                    <TextBlock Text="{Binding BinaryPreview}" TextWrapping="Wrap" FontSize="11" />
+                                </ScrollViewer>
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                                    <StackPanel Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="{DynamicResource Node_Patch_Before}" />
+                                        <TextBlock Text="{Binding BeforeHash}" FontSize="11" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding BeforeText}" FontSize="11" TextWrapping="Wrap" MaxHeight="100" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="2">
+                                        <TextBlock Text="{DynamicResource Node_Patch_After}" />
+                                        <TextBlock Text="{Binding AfterHash}" FontSize="11" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding AfterText}" FontSize="11" TextWrapping="Wrap" MaxHeight="100" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+        </Expander>
 
         <!-- 底部执行日志面板（状态栏上方） -->
         <Border DockPanel.Dock="Bottom" MaxHeight="180"
@@ -212,6 +285,50 @@
                 <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Node_Properties}"
                            FontWeight="SemiBold" FontSize="13"
                            Margin="8,8,8,4" />
+                <Border x:Name="VisualPluginWorkspace" DockPanel.Dock="Bottom"
+                        Margin="8,12,8,8" CornerRadius="6" ClipToBounds="True"
+                        BorderBrush="{DynamicResource EditorPaneSplitterBackgroundBrush}" BorderThickness="1"
+                        IsVisible="{Binding ShowVisualPluginWorkspace}">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Padding="10,8" CornerRadius="5,5,0,0"
+                                BorderBrush="{DynamicResource EditorPaneSplitterBackgroundBrush}"
+                                BorderThickness="0,0,0,1">
+                            <Border.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackground}" />
+                            </Border.Background>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <avalonia:MaterialIcon Kind="PuzzleOutline" Width="16" Height="16" />
+                                <TextBlock Text="{DynamicResource Node_PluginWorkspace}" FontWeight="SemiBold"
+                                           FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <StackPanel Margin="10" Spacing="8">
+                            <TextBlock Text="{DynamicResource Node_PluginWorkspaceEmpty}" FontSize="11"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       TextWrapping="Wrap" IsVisible="{Binding !EditableVisualPlugins.Count}" />
+                            <ComboBox x:Name="VisualPluginSelector" Height="28" FontSize="12"
+                                      ItemsSource="{Binding EditableVisualPlugins}"
+                                      SelectedItem="{Binding SelectedVisualPlugin, Mode=TwoWay}"
+                                      IsVisible="{Binding !!EditableVisualPlugins.Count}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <Button x:Name="OpenVisualPluginEditorButton" Height="28" Padding="8,0"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                    Click="OnOpenVisualPluginEditorClick"
+                                    IsEnabled="{Binding !!SelectedVisualPlugin}"
+                                    IsVisible="{Binding !!EditableVisualPlugins.Count}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <avalonia:MaterialIcon Kind="GraphOutline" Width="15" Height="15" />
+                                    <TextBlock Text="{DynamicResource Node_OpenPluginEditor}" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
                 <ScrollViewer>
                     <Grid>
                         <!-- 未选中节点时的占位提示 -->
@@ -405,17 +522,29 @@
                             <ItemsControl ItemsSource="{Binding SelectedNode.Input}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
-                                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,2">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" Margin="0,2">
                                             <TextBlock Grid.Column="0" FontSize="12" Margin="0,2,8,0"
                                                        VerticalAlignment="Center">
                                                 <Run Text="• " />
                                                 <Run Text="{Binding LocalizedTitle}" />
                                             </TextBlock>
                                             <!-- 文本 / 路径：文本框 + 路径浏览 -->
-                                            <TextBox Grid.Column="1" FontSize="12" Height="24"
+                                            <TextBox Grid.Column="1" FontSize="12" MinHeight="{Binding EditorMinHeight}"
+                                                     AcceptsReturn="{Binding IsMultiline}"
+                                                     TextWrapping="Wrap"
                                                      Text="{Binding InitialValue, Mode=TwoWay}"
-                                                     IsVisible="{Binding IsTextOrPathPort}">
+                                                     IsVisible="{Binding UsesTextEditor}">
                                             </TextBox>
+                                            <ComboBox Grid.Column="1" FontSize="12"
+                                                      ItemsSource="{Binding Choices}"
+                                                      SelectedItem="{Binding SelectedChoice, Mode=TwoWay}"
+                                                      IsVisible="{Binding HasChoices}">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type nodeVm:NodePortChoice}">
+                                                        <TextBlock Text="{Binding DisplayName}" />
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
                                             <!-- 数值：数值框 -->
                                             <NumericUpDown Grid.Column="1" FontSize="12" Height="24"
                                                            Value="{Binding InitialNumberValue, Mode=TwoWay}"
@@ -430,6 +559,10 @@
                                                     IsVisible="{Binding IsPathPort}"
                                                     Click="OnBrowsePathClick"
                                                     Tag="{Binding}" />
+                                            <TextBlock Grid.Row="1" Grid.ColumnSpan="3" Margin="0,4,0,6"
+                                                       FontSize="11" TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       Text="{Binding LocalizedHint}" IsVisible="{Binding HasHint}" />
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -443,10 +576,15 @@
                             <ItemsControl ItemsSource="{Binding SelectedNode.Output}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
-                                        <TextBlock FontSize="12" Margin="0,1">
-                                            <Run Text="• " />
-                                            <Run Text="{Binding LocalizedTitle}" />
-                                        </TextBlock>
+                                        <StackPanel Spacing="2" Margin="0,1">
+                                            <TextBlock FontSize="12">
+                                                <Run Text="• " />
+                                                <Run Text="{Binding LocalizedTitle}" />
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding DataPreview}" FontSize="11"
+                                                       TextWrapping="Wrap" MaxHeight="120"
+                                                       Foreground="{DynamicResource SecondaryTextBrush}" />
+                                        </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
@@ -463,6 +601,7 @@
 
         <!-- 中央节点画布区域 - 使用 Grid 叠加小地图 -->
         <Grid Grid.Column="2" x:Name="EditorSurface"
+              ClipToBounds="True"
               DragDrop.AllowDrop="True"
               DragDrop.DragOver="OnCanvasDragOver"
               DragDrop.DragLeave="OnCanvasDragLeave"
@@ -475,6 +614,8 @@
                                  RemoveConnectionCommand="{Binding RemoveConnectionCommand}"
                                  AllowAlign="True"
                                  AllowAutoPanning="True"
+                                 HorizontalAlignment="Stretch"
+                                 VerticalAlignment="Stretch"
                                  x:Name="Editor">
 
                 <!-- 节点模板 -->
@@ -541,6 +682,7 @@
                 <nodify:NodifyEditor.ConnectionTemplate>
                     <DataTemplate DataType="{x:Type nodeVm:NodeConnectionViewModel}">
                         <nodify:Connection Source="{Binding Source.Anchor}"
+                                           Classes.selected="{Binding IsSelected}"
                                            Target="{Binding Target.Anchor}" />
                     </DataTemplate>
                 </nodify:NodifyEditor.ConnectionTemplate>
@@ -560,8 +702,7 @@
             <Canvas x:Name="DropPreviewLayer" IsHitTestVisible="False">
                 <Border x:Name="NodeDropPreview"
                         IsVisible="False"
-                        MinWidth="140" MaxWidth="220"
-                        Padding="10,8"
+                        Width="180" Height="72"
                         CornerRadius="4"
                         Background="{DynamicResource SemiColorPrimaryLight}"
                         BorderBrush="{DynamicResource SemiColorPrimary}"
@@ -571,11 +712,6 @@
                     <Border.RenderTransform>
                         <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}" />
                     </Border.RenderTransform>
-                    <TextBlock x:Name="NodeDropPreviewTitle"
-                               FontSize="12"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextForeground}"
-                               TextTrimming="CharacterEllipsis" />
                 </Border>
             </Canvas>
 

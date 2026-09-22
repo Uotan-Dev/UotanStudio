@@ -67,6 +67,13 @@ public sealed partial class ProjectSession
         _operationGate.Release();
     }
 
+    /// <summary>Runs a host file operation without allowing Save As, close or autosave to interleave.</summary>
+    public Task ExecuteFileOperationAsync(Func<Task> operation, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        return RunOperationAsync(operation, cancellationToken: cancellationToken);
+    }
+
     private async Task RunOperationAsync(Func<Task> operation, bool changingProject = false, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

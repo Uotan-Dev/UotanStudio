@@ -17,6 +17,35 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecuteFileOperation_ProjectChange_WaitsUntilFileOperationFinishes()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var original = Path.Combine(_root, "original.uotan");
+        var next = Path.Combine(_root, "next.uotan");
+        await _projects.CreateNewSolutionAsync(original, cancellationToken: token);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var operation = _projects.ExecuteFileOperationAsync(async () =>
+        {
+            entered.SetResult();
+            await release.Task.WaitAsync(token);
+        }, token);
+        await entered.Task.WaitAsync(token);
+        var change = _projects.CreateNewSolutionAsync(next, cancellationToken: token);
+        try
+        {
+            Assert.True(_projects.IsBusy);
+            Assert.False(change.IsCompleted);
+            Assert.Equal(original, _projects.CurrentProjectPath);
+            Assert.False(File.Exists(next));
+        }
+        finally { release.TrySetResult(); }
+        await Task.WhenAll(operation, change);
+        Assert.Equal(next, _projects.CurrentProjectPath);
+        Assert.False(_projects.IsBusy);
+    }
+
+    [Fact]
     public async Task CreateAndOpen_RestoresDataInOrder_ExcludesMissingImages()
     {
         var path = Path.Combine(_root, "sample.uotan");

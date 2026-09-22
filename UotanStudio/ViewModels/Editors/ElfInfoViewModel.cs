@@ -45,6 +45,15 @@ public partial class ElfInfoViewModel : Document
     /// <summary>Section-header rows, including named NOBITS sections.</summary>
     [ObservableProperty] private IReadOnlyList<ElfSectionRow> _sections = [];
 
+    /// <summary>Selected program header, synchronized with the properties pane.</summary>
+    [ObservableProperty] private ElfSegmentRow? _selectedSegment;
+
+    /// <summary>Selected section header, synchronized with the properties pane.</summary>
+    [ObservableProperty] private ElfSectionRow? _selectedSection;
+
+    /// <summary>Header, segment or section page currently visible.</summary>
+    [ObservableProperty] private int _selectedPageIndex;
+
     /// <summary>Loads only ELF metadata; replaced or closed loads cannot publish stale results.</summary>
     public async Task LoadAsync(string path, CancellationToken cancellationToken = default)
     {
@@ -62,6 +71,8 @@ public partial class ElfInfoViewModel : Document
         ErrorMessage = string.Empty;
         _info = null;
         Fields = [];
+        SelectedSegment = null;
+        SelectedSection = null;
         Segments = [];
         Sections = [];
         try
@@ -117,6 +128,8 @@ public partial class ElfInfoViewModel : Document
         LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
         _info = null;
         Fields = [];
+        SelectedSegment = null;
+        SelectedSection = null;
         Segments = [];
         Sections = [];
         IsRecognized = false;

@@ -8,6 +8,22 @@ namespace UotanStudio.Tests.Services;
 
 public class TextSearchServiceTests
 {
+    [Fact]
+    public void Apply_AdjacentInsertionDeletionAndUnicode_PreservesUntouchedText()
+    {
+        TextSearchMatch[] matches = [new(0, 0, "", "前"), new(0, 2, "😀", ""), new(2, 1, "a", "后"), new(3, 0, "", "!")];
+        Assert.Equal("前后!中", TextSearchService.Apply("😀a中", matches));
+        Assert.Equal("", TextSearchService.Apply("a", [new(0, 1, "a", "")]));
+    }
+
+    [Fact]
+    public void Apply_NoMatches_ReusesValidatedOriginal()
+    {
+        var text = new string('x', 1024);
+        Assert.Same(text, TextSearchService.Apply(text, []));
+        Assert.Throws<IOException>(() => TextSearchService.Apply(new string('x', TextSearchService.MaximumTextLength + 1), []));
+    }
+
     private static IReadOnlyList<TextSearchMatch> Find(string text, TextSearchOptions options, int start = 0, int? length = null)
         => TextSearchService.Find(text, options, start, length, TestContext.Current.CancellationToken);
 

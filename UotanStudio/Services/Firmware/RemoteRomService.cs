@@ -19,6 +19,9 @@ public sealed record RemoteRomAnalysis(
     long? ContentLength,
     bool SupportsPartitionSelection);
 
+/// <summary>Describes a successfully published remote incremental-payload merge.</summary>
+public sealed record RemotePayloadMergeResult(IReadOnlyList<string> PartitionNames, IReadOnlyList<string> OutputPaths);
+
 /// <summary>
 /// Probes direct ROM URLs and downloads the selected content when a project is created.
 /// Header and payload manifest reads use HTTP range requests; the complete package is only
@@ -137,6 +140,91 @@ public sealed class RemoteRomService(HttpClient client)
         }
     }
 
+    /// <summary>
+    /// Applies selected partitions from a remote raw Payload against explicitly mapped local base images.
+    /// All partitions are reconstructed and verified in a staging directory before any destination image is replaced.
+    /// </summary>
+    public async Task<RemotePayloadMergeResult> MergeIncrementalPayloadAsync(
+        Uri uri,
+        IReadOnlyList<string> partitionNames,
+        IReadOnlyDictionary<string, string> sourceImages,
+        string outputDirectory,
+        long baseOffset = 0,
+        IProgress<(long Processed, long Total)>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        ArgumentNullException.ThrowIfNull(partitionNames);
+        ArgumentNullException.ThrowIfNull(sourceImages);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+        if (baseOffset < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(baseOffset));
+        }
+
+        var selected = partitionNames
+            .Select(name => name?.Trim() ?? string.Empty)
+            .Where(name => name.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (selected.Length == 0)
+        {
+            throw new ArgumentException("At least one partition must be selected.", nameof(partitionNames));
+        }
+
+        var normalizedSources = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (partition, sourcePath) in sourceImages)
+        {
+            if (string.IsNullOrWhiteSpace(partition) || string.IsNullOrWhiteSpace(sourcePath))
+            {
+                throw new ArgumentException("Source-image mappings require non-empty partition names and paths.", nameof(sourceImages));
+            }
+
+            var fullPath = Path.GetFullPath(sourcePath);
+            if (!File.Exists(fullPath))
+            {
+                throw new FileNotFoundException($"Source image for partition '{partition}' was not found.", fullPath);
+            }
+            normalizedSources[partition] = fullPath;
+        }
+
+        var outputRoot = Path.GetFullPath(outputDirectory);
+        var parent = Directory.GetParent(outputRoot)?.FullName
+            ?? throw new InvalidOperationException("The output directory must have a parent directory.");
+        Directory.CreateDirectory(parent);
+        var transactionId = Guid.NewGuid().ToString("N");
+        var staging = Path.Combine(parent, $".{Path.GetFileName(outputRoot)}.payload-{transactionId}.staging");
+        var backup = Path.Combine(parent, $".{Path.GetFileName(outputRoot)}.payload-{transactionId}.backup");
+        Directory.CreateDirectory(staging);
+
+        try
+        {
+            await using var stream = new HttpRangeStream(_client, uri, baseOffset);
+            foreach (var partition in selected)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await PayloadParser.ExtractAsync(stream, [partition], staging, cancellationToken,
+                    sourceImages: normalizedSources, byteProgress: progress).ConfigureAwait(false);
+                stream.Seek(0, SeekOrigin.Begin);
+
+                var stagedPath = GetPartitionImagePath(staging, partition);
+                if (!File.Exists(stagedPath))
+                {
+                    throw new InvalidDataException($"Payload did not produce the selected partition '{partition}'.");
+                }
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            Directory.CreateDirectory(outputRoot);
+            return PublishMergedPartitions(selected, staging, backup, outputRoot, cancellationToken);
+        }
+        finally
+        {
+            TryDeleteDirectory(staging);
+            TryDeleteEmptyDirectory(backup);
+        }
+    }
+
     public async Task DownloadZipEntriesAsync(Uri uri, IReadOnlyList<string> names, string outputDirectory,
         IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default)
     {
@@ -170,6 +258,25 @@ public sealed class RemoteRomService(HttpClient client)
             ?? throw new InvalidOperationException("The remote ZIP has no range-readable payload.bin entry.");
         var offset = await GetZipDataOffsetAsync(uri, payload, cancellationToken).ConfigureAwait(false);
         await ExtractPayloadPartitionsAsync(uri, partitionNames, outputDirectory, offset, progress, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Applies selected partitions from a stored payload.bin inside a remote ZIP.</summary>
+    public async Task<RemotePayloadMergeResult> MergeZipIncrementalPayloadAsync(
+        Uri uri,
+        IReadOnlyList<string> partitionNames,
+        IReadOnlyDictionary<string, string> sourceImages,
+        string outputDirectory,
+        IProgress<(long Processed, long Total)>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var length = await GetLengthAsync(uri, cancellationToken).ConfigureAwait(false);
+        var entries = await ReadZipEntryDetailsAsync(uri, length, cancellationToken).ConfigureAwait(false);
+        var payload = entries.Values.FirstOrDefault(entry =>
+                entry.Name.EndsWith("payload.bin", StringComparison.OrdinalIgnoreCase) && entry.Method == 0)
+            ?? throw new InvalidOperationException("The remote ZIP has no range-readable payload.bin entry.");
+        var offset = await GetZipDataOffsetAsync(uri, payload, cancellationToken).ConfigureAwait(false);
+        return await MergeIncrementalPayloadAsync(uri, partitionNames, sourceImages, outputDirectory, offset, progress,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<string> DownloadToTempAsync(Uri uri, string fileName, CancellationToken cancellationToken)
@@ -211,6 +318,127 @@ public sealed class RemoteRomService(HttpClient client)
     }
 
     private static void TryDelete(string path) { try { File.Delete(path); } catch { } }
+
+    private static RemotePayloadMergeResult PublishMergedPartitions(
+        IReadOnlyList<string> partitionNames,
+        string stagingDirectory,
+        string backupDirectory,
+        string outputDirectory,
+        CancellationToken cancellationToken)
+    {
+        var published = new List<(string Target, string? Backup)>();
+        var outputPaths = new List<string>(partitionNames.Count);
+        try
+        {
+            foreach (var partition in partitionNames)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var staged = GetPartitionImagePath(stagingDirectory, partition);
+                var target = GetPartitionImagePath(outputDirectory, partition);
+                string? saved = null;
+                if (File.Exists(target))
+                {
+                    Directory.CreateDirectory(backupDirectory);
+                    saved = GetPartitionImagePath(backupDirectory, partition);
+                    File.Move(target, saved, overwrite: false);
+                }
+
+                try
+                {
+                    File.Move(staged, target, overwrite: false);
+                }
+                catch
+                {
+                    if (saved is not null)
+                    {
+                        File.Move(saved, target, overwrite: false);
+                    }
+                    throw;
+                }
+
+                published.Add((target, saved));
+                outputPaths.Add(target);
+            }
+        }
+        catch (Exception publicationError)
+        {
+            List<Exception>? rollbackErrors = null;
+            for (var i = published.Count - 1; i >= 0; i--)
+            {
+                var (target, saved) = published[i];
+                try
+                {
+                    File.Delete(target);
+                    if (saved is not null)
+                    {
+                        File.Move(saved, target, overwrite: false);
+                    }
+                }
+                catch (Exception rollbackError)
+                {
+                    rollbackErrors ??= [];
+                    rollbackErrors.Add(rollbackError);
+                }
+            }
+
+            if (rollbackErrors is not null)
+            {
+                rollbackErrors.Insert(0, publicationError);
+                throw new AggregateException("Payload publication failed and rollback was incomplete.", rollbackErrors);
+            }
+            throw;
+        }
+
+        TryDeleteDirectory(backupDirectory);
+        return new RemotePayloadMergeResult([.. partitionNames], outputPaths);
+    }
+
+    private static string GetPartitionImagePath(string directory, string partition)
+    {
+        if (Path.IsPathRooted(partition) || partition.Contains('/') || partition.Contains('\\')
+            || partition.Contains("..", StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"Invalid partition name '{partition}'.");
+        }
+
+        var root = Path.GetFullPath(directory);
+        var candidate = Path.GetFullPath(Path.Combine(root, partition + ".img"));
+        var rootPrefix = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (!candidate.StartsWith(rootPrefix, comparison))
+        {
+            throw new InvalidDataException($"Partition path escapes the output directory: '{partition}'.");
+        }
+        return candidate;
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private static void TryDeleteEmptyDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path) && !Directory.EnumerateFileSystemEntries(path).Any())
+            {
+                Directory.Delete(path);
+            }
+        }
+        catch
+        {
+        }
+    }
 
     private async Task<long?> GetLengthAsync(Uri uri, CancellationToken cancellationToken)
     {

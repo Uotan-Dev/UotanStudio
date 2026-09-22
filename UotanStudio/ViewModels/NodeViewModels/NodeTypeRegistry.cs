@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
@@ -7,7 +9,7 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 /// </summary>
 public static class NodeTypeRegistry
 {
-    private static readonly Dictionary<string, Func<FlowNodeViewModel>> _factories = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, Func<FlowNodeViewModel>> _factories = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// <para>注册节点工厂。重复注册同一 TypeKey 时覆盖旧工厂。</para>
@@ -21,6 +23,10 @@ public static class NodeTypeRegistry
         ArgumentNullException.ThrowIfNull(factory);
         _factories[typeKey] = factory;
     }
+
+    /// <summary>Removes a dynamically registered node type.</summary>
+    public static bool Unregister(string typeKey)
+        => !string.IsNullOrWhiteSpace(typeKey) && _factories.TryRemove(typeKey, out _);
 
     /// <summary>
     /// <para>按 TypeKey 创建节点实例；未注册时返回 <c>null</c>。</para>
@@ -47,5 +53,5 @@ public static class NodeTypeRegistry
     /// <para>获取全部已注册 TypeKey 列表。</para>
     /// Gets all registered TypeKeys.
     /// </summary>
-    public static IReadOnlyCollection<string> Keys => _factories.Keys;
+    public static IReadOnlyCollection<string> Keys => [.. _factories.Keys];
 }

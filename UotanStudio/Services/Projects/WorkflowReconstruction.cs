@@ -6,11 +6,20 @@ namespace UotanStudio.Services.Projects;
 /// <summary>Shared node creation, input conversion and endpoint lookup for canvas and CLI loading.</summary>
 internal static class WorkflowReconstruction
 {
-    /// <summary>Creates a registered node; registration and unknown-type diagnostics remain with the caller.</summary>
-    internal static bool TryCreateNode(NodeDto dto, out FlowNodeViewModel node)
+    /// <summary>Creates a registered node or, when requested, a lossless unavailable-node placeholder.</summary>
+    internal static bool TryCreateNode(NodeDto dto, out FlowNodeViewModel node, bool preserveUnknown = false,
+        bool restoreInstanceId = false)
     {
         node = null!;
-        if (string.IsNullOrEmpty(dto.TypeKey) || !NodeTypeRegistry.Contains(dto.TypeKey)) return false;
+        if (string.IsNullOrEmpty(dto.TypeKey)) return false;
+        if (!NodeTypeRegistry.Contains(dto.TypeKey))
+        {
+            if (!preserveUnknown) return false;
+            node = new MissingNodeViewModel(dto, $"Node type '{dto.TypeKey}' is unavailable.");
+            RestoreInstanceId(node, dto, restoreInstanceId);
+            RestoreInitialValues(node, dto.InputInitialValues, dto.InputInitialValuesByPortId);
+            return true;
+        }
         // A faulty registered factory must not become an "unknown type" warning during refactoring.
         node = NodeTypeRegistry.Create(dto.TypeKey)!;
         if (dto.NodeValueType is not null && node.IsConstantNode)
@@ -25,18 +34,39 @@ internal static class WorkflowReconstruction
         {
             node.SelectedImage = dto.SelectedImage;
         }
+        RestoreInstanceId(node, dto, restoreInstanceId);
         return true;
     }
 
-    /// <summary>Restores named data inputs without changing Flow inputs, runtime data or missing ports.</summary>
-    internal static void RestoreInitialValues(FlowNodeViewModel node, Dictionary<string, string>? values)
+    private static void RestoreInstanceId(FlowNodeViewModel node, NodeDto dto, bool restoreInstanceId)
     {
-        if (values is not { Count: > 0 }) return;
-        foreach (var (title, value) in values)
+        if (restoreInstanceId && !string.IsNullOrWhiteSpace(dto.InstanceId))
+            node.InstanceId = dto.InstanceId;
+    }
+
+    /// <summary>Restores named data inputs without changing Flow inputs, runtime data or missing ports.</summary>
+    internal static void RestoreInitialValues(FlowNodeViewModel node, Dictionary<string, string>? values,
+        Dictionary<string, string>? valuesByPortId = null)
+    {
+        if (valuesByPortId is { Count: > 0 })
         {
-            var input = node.Input.FirstOrDefault(port => string.Equals(port.Title, title, StringComparison.Ordinal));
-            if (input is null || input.PortType == NodePortType.Flow) continue;
-            input.InitialValue = ConvertInputValue(input.PortType, value);
+            foreach (var (portId, value) in valuesByPortId)
+            {
+                var input = node.Input.FirstOrDefault(port => string.Equals(port.StableId, portId, StringComparison.Ordinal));
+                if (input is null || input.PortType == NodePortType.Flow) continue;
+                input.InitialValue = ConvertInputValue(input.PortType, value);
+            }
+            return;
+        }
+
+        if (values is { Count: > 0 })
+        {
+            foreach (var (title, value) in values)
+            {
+                var input = node.Input.FirstOrDefault(port => string.Equals(port.Title, title, StringComparison.Ordinal));
+                if (input is null || input.PortType == NodePortType.Flow) continue;
+                input.InitialValue = ConvertInputValue(input.PortType, value);
+            }
         }
     }
 
@@ -54,17 +84,26 @@ internal static class WorkflowReconstruction
     /// </summary>
     internal static (FlowNodeViewModel? Node, NodeConnectorViewModel? Port) ResolveEndpoint(
         IEnumerable<FlowNodeViewModel> nodes, IReadOnlyDictionary<string, FlowNodeViewModel> created,
-        string? instanceId, string title, bool output, bool fallbackOnMissingPort)
+        string? instanceId, string title, bool output, bool fallbackOnMissingPort, string? portId = null)
     {
         FlowNodeViewModel? node = null;
         if (!string.IsNullOrEmpty(instanceId)) created.TryGetValue(instanceId, out node);
-        var port = FindPort(node, title, output);
+        var port = FindPort(node, portId, title, output);
         if (node is not null && (!fallbackOnMissingPort || port is not null)) return (node, port);
         foreach (var candidate in nodes)
-            if (FindPort(candidate, title, output) is { } match) return (candidate, match);
+            if (FindPort(candidate, portId, title, output) is { } match) return (candidate, match);
         return (null, null);
     }
 
-    private static NodeConnectorViewModel? FindPort(FlowNodeViewModel? node, string title, bool output)
-        => node is null ? null : (output ? node.Output : node.Input).FirstOrDefault(port => port.Title == title);
+    private static NodeConnectorViewModel? FindPort(FlowNodeViewModel? node, string? portId, string title, bool output)
+    {
+        if (node is null) return null;
+        var ports = output ? node.Output : node.Input;
+        if (!string.IsNullOrWhiteSpace(portId))
+        {
+            var byId = ports.FirstOrDefault(port => string.Equals(port.StableId, portId, StringComparison.Ordinal));
+            if (byId is not null) return byId;
+        }
+        return ports.FirstOrDefault(port => string.Equals(port.Title, title, StringComparison.Ordinal));
+    }
 }

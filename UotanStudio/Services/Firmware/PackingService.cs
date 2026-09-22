@@ -3,6 +3,8 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Repacking;
 using UotanStudio.ViewModels.Workspace;
@@ -13,7 +15,7 @@ namespace UotanStudio.Services.Firmware;
 /// <para>打包服务，桥接 <see cref="ProjectSettingViewModel"/> 的面板设置到
 /// EXT4/EROFS/boot 镜像的构建调用。</para>
 /// Packing service, bridging <see cref="ProjectSettingViewModel"/> panel settings to
-/// EXT4/EROFS/boot image build calls.
+/// EXT4/EROFS/F2FS/boot image build calls.
 /// </summary>
 internal static class PackingService
 {
@@ -46,7 +48,7 @@ internal static class PackingService
                 // Let the packing-settings panel override the unpacked metadata for filesystem images.
                 var estimated = EstimateSourceBytes(sourceDirectory);
                 imageProgress.Report((0, estimated));
-                var focused = settings is not null && metadata.FormatName is "EXT4" or "EROFS";
+                var focused = settings is not null && metadata.FormatName is "EXT4" or "EROFS" or "F2FS";
                 if (focused)
                 {
                     // 仅当用户真正切换了文件系统格式（EROFS ↔ EXT4）时申请打包覆盖走全新目录打包；
@@ -56,7 +58,7 @@ internal static class PackingService
                     // requests packing overrides (and a fresh build). When the target equals the source
                     // format we reuse the preserved-metadata rebuild to restore
                     // SELinux/capability/hardlink/symlink exactly instead of downgrading the output.
-                    var targetFormat = settings!.TypeEXT4 ? "EXT4" : "EROFS";
+                    var targetFormat = settings!.TypeEXT4 ? "EXT4" : settings.TypeF2FS ? "F2FS" : "EROFS";
                     if (targetFormat == metadata.FormatName)
                     {
                         var preserved = RegisteredFirmwareFormats.PackDirectoryAsync(metadata.FormatName, sourceDirectory, outputPath, progress: progress)
@@ -88,6 +90,11 @@ internal static class PackingService
                 return BuildExt4(sourceDirectory, outputPath, settings, sw, imageProgress);
             }
 
+            if (settings.TypeF2FS)
+            {
+                return BuildF2fs(sourceDirectory, outputPath, settings, sw, imageProgress);
+            }
+
             return BuildErofs(sourceDirectory, outputPath, settings, sw, imageProgress);
         }
         catch (Exception ex)
@@ -115,14 +122,22 @@ internal static class PackingService
     /// </summary>
     private static IReadOnlyDictionary<string, string> BuildOverrideOptions(ProjectSettingViewModel settings, string format)
     {
-        return format == "EXT4" ? new Dictionary<string, string>
+        return format switch
         {
-            ["EnableSparse"] = settings.FormatSPARSE ? "1" : "0",
-            ["Ext4Compress"] = settings.EXT4Compress ? "1" : "0",
-        } : new Dictionary<string, string>
-        {
-            ["ErofsAlgorithm"] = settings.SelectedErofsAlgorithm,
-            ["ErofsCompressionLevel"] = settings.EROFSComGrade.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "EXT4" => new Dictionary<string, string>
+            {
+                ["EnableSparse"] = settings.FormatSPARSE ? "1" : "0",
+                ["Ext4Compress"] = settings.EXT4Compress ? "1" : "0",
+            },
+            "F2FS" => new Dictionary<string, string>
+            {
+                ["EnableSparse"] = settings.FormatSPARSE ? "1" : "0",
+            },
+            _ => new Dictionary<string, string>
+            {
+                ["ErofsAlgorithm"] = settings.SelectedErofsAlgorithm,
+                ["ErofsCompressionLevel"] = settings.EROFSComGrade.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            },
         };
     }
 
@@ -196,6 +211,26 @@ internal static class PackingService
         var size = new FileInfo(outputPath).Length;
         var summary = $"EROFS image built: {outputPath} ({size:N0} bytes, {sw.Elapsed.TotalSeconds:F1}s)  " +
                       $"EROFS 镜像已构建：{outputPath}（{size:N0} 字节，{sw.Elapsed.TotalSeconds:F1} 秒）";
+        LogService.Instance.Write(LogLevel.Info, "Packing", summary);
+        return (true, summary);
+    }
+
+    private static (bool Success, string Summary) BuildF2fs(
+        string sourceDirectory,
+        string outputPath,
+        ProjectSettingViewModel settings,
+        System.Diagnostics.Stopwatch sw,
+        IProgress<(long Processed, long Total)>? progress)
+    {
+        F2fsBuilder.Build(sourceDirectory, outputPath, new F2fsOptions
+        {
+            EnableSparse = settings.FormatSPARSE,
+        });
+        var size = new FileInfo(outputPath).Length;
+        progress?.Report((size, size));
+        sw.Stop();
+
+        var summary = $"F2FS image built: {outputPath} ({size:N0} bytes, {sw.Elapsed.TotalSeconds:F1}s)";
         LogService.Instance.Write(LogLevel.Info, "Packing", summary);
         return (true, summary);
     }

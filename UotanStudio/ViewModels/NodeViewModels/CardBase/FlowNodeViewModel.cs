@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Media;
 using NodifyM.Avalonia.ViewModelBase;
@@ -27,7 +28,7 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// <para>节点实例唯一标识。</para>
     /// Unique identifier of the node instance.
     /// </summary>
-    public string InstanceId { get; } = Guid.NewGuid().ToString("N");
+    public string InstanceId { get; internal set; } = Guid.NewGuid().ToString("N");
 
     /// <summary>
     /// <para>获取或设置节点的显示标题。</para>
@@ -210,6 +211,9 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// </summary>
     public virtual bool IsProjectImageNode => false;
 
+    /// <summary>Whether the original node implementation is unavailable and execution must be blocked.</summary>
+    public virtual bool IsUnavailable => false;
+
     /// <summary>
     /// <para>获取或设置选中的工程镜像相对路径（ProjectImage 节点属性面板绑定）；非镜像节点忽略。</para>
     /// Gets or sets the selected project-image relative path (bound by the ProjectImage node's properties
@@ -262,7 +266,18 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     {
         _title = title;
         _category = category;
+        Input.CollectionChanged += (_, e) => SetConnectorDirection(e, isInput: true);
+        Output.CollectionChanged += (_, e) => SetConnectorDirection(e, isInput: false);
         LanguageService.Instance.LanguageChanged += OnLanguageChanged;
+    }
+
+    private static void SetConnectorDirection(NotifyCollectionChangedEventArgs e, bool isInput)
+    {
+        if (e.NewItems is null) return;
+        foreach (NodeConnectorViewModel connector in e.NewItems)
+        {
+            connector.IsInput = isInput;
+        }
     }
 
     private void OnLanguageChanged(object? sender, EventArgs e)

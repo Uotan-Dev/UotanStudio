@@ -154,6 +154,7 @@ public partial class FirmwareInfoViewModel : Document
     /// </summary>
     public FirmwareInfoViewModel()
     {
+        LanguageService.Instance.LanguageChanged += OnLanguageChanged;
     }
 
     /// <summary>
@@ -167,13 +168,18 @@ public partial class FirmwareInfoViewModel : Document
     /// <para>固件文件路径。</para>
     /// The firmware file path.
     /// </param>
-    public async Task LoadAsync(string path, FormatDetectionResult? detection = null)
+    public async Task LoadAsync(string path, FormatDetectionResult? detection = null, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(path))
+        if (_closed || string.IsNullOrWhiteSpace(path))
         {
             return;
         }
 
+        _loadCancellation?.Cancel();
+        using var source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _loadCancellation = source;
+        _rawMetadata = null;
+        MetadataGroups.Clear();
         FilePath = path;
         Title = Path.GetFileName(path);
 
@@ -198,7 +204,8 @@ public partial class FirmwareInfoViewModel : Document
 
             // Detect 内部为同步文件读取（流式读头部），放后台线程避免阻塞 UI。
             // Detect performs synchronous file reads (streamed headers); run it on a background thread.
-            var detectionResult = detection ?? await Task.Run(() => FormatDetector.DetectDetailed(path)).ConfigureAwait(true);
+            var detectionResult = detection ?? await Task.Run(() => FormatDetector.DetectDetailed(path), source.Token).ConfigureAwait(true);
+            source.Token.ThrowIfCancellationRequested();
             var handler = detectionResult?.Handler;
             if (handler is null)
             {
@@ -214,7 +221,8 @@ public partial class FirmwareInfoViewModel : Document
             // 必须在后台线程执行，否则整文件读取会阻塞 UI。
             // Some handlers parse synchronously (Apk/Arsc/Dt/Nb0/Ntpi etc. read files directly);
             // run them on a background thread so the file reads never block the UI.
-            var result = await Task.Run(() => handler.ReadMetadataAsync(path)).ConfigureAwait(true);
+            var result = await Task.Run(() => handler.ReadMetadataAsync(path, source.Token), source.Token).ConfigureAwait(true);
+            source.Token.ThrowIfCancellationRequested();
             if (!result.Success)
             {
                 ErrorMessage = result.Summary;
@@ -222,16 +230,21 @@ public partial class FirmwareInfoViewModel : Document
                 return;
             }
 
-            Summary = result.Summary;
-
+            _rawSummary = result.Summary;
+            var fields = new Dictionary<string, string>
+            {
+                ["FileName"] = Path.GetFileName(path),
+                ["FileSize"] = new FileInfo(path).Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            };
             if (result.Metadata is not null)
             {
-                foreach (var kv in result.Metadata)
+                foreach (var (key, value) in result.Metadata)
                 {
-                    Metadata.Add(new PropertyRow(kv.Key, kv.Value));
+                    fields[key] = value;
                 }
             }
-            HasMetadata = Metadata.Count > 0;
+            _rawMetadata = fields;
+            RefreshMetadata();
 
             // 结构化组件列表优先（名称 + 大小），未提供时回退到纯名称条目列表。
             // Prefer the structured component list (name + size); fall back to the plain name list.
@@ -252,8 +265,16 @@ public partial class FirmwareInfoViewModel : Document
                 HasEntries = Entries.Count > 0;
             }
         }
+        catch (OperationCanceledException) when (source.IsCancellationRequested)
+        {
+            // Closing or replacing a document must not publish stale metadata.
+        }
         catch (Exception ex)
         {
+            if (_closed || !ReferenceEquals(_loadCancellation, source))
+            {
+                return;
+            }
             ErrorMessage = ex.Message;
             HasError = true;
             LogService.Instance.Write(LogLevel.Error, "FirmwareInfo",
@@ -261,7 +282,11 @@ public partial class FirmwareInfoViewModel : Document
         }
         finally
         {
-            IsBusy = false;
+            if (ReferenceEquals(_loadCancellation, source))
+            {
+                _loadCancellation = null;
+                IsBusy = false;
+            }
         }
     }
 
@@ -272,6 +297,12 @@ public partial class FirmwareInfoViewModel : Document
     /// </summary>
     public void Cleanup()
     {
+        _closed = true;
+        _loadCancellation?.Cancel();
+        LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
+        _rawMetadata = null;
+        _rawSummary = string.Empty;
+        MetadataGroups.Clear();
         Metadata.Clear();
         Entries.Clear();
         Components.Clear();

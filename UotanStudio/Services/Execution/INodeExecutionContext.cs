@@ -1,3 +1,6 @@
+using UotanStudio.Services.Patching;
+using UotanStudio.Services.Projects;
+
 namespace UotanStudio.Services.Execution;
 
 /// <summary>
@@ -17,6 +20,12 @@ public interface INodeExecutionContext
     /// Cancellation token.
     /// </summary>
     CancellationToken CancellationToken { get; }
+
+    /// <summary>Shared staging owned by the outermost execution, including nested composites.</summary>
+    PatchRun? Patches => null;
+
+    /// <summary>Resource scope of the currently executing composite or package editor.</summary>
+    VisualPluginPackage? Package => null;
 
     /// <summary>
     /// <para>报告节点执行进度（0.0 ~ 1.0）。</para>

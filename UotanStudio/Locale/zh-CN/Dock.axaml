@@ -523,4 +523,13 @@
     <x:String x:Key="Dock_Elf_Link">关联节区</x:String>
     <x:String x:Key="Dock_Elf_Info">附加信息</x:String>
     <x:String x:Key="Dock_Elf_EntrySize">条目大小</x:String>
+    <x:String x:Key="Dock_Properties_Log_Error">错误</x:String>
+    <x:String x:Key="Dock_Properties_Log_MatchingEntries">匹配日志数</x:String>
+    <x:String x:Key="Dock_Properties_Log_Search">搜索条件</x:String>
+    <x:String x:Key="Dock_Properties_Partition_Group">分区组</x:String>
+    <x:String x:Key="Dock_Properties_Partition_Source">分区来源</x:String>
+    <x:String x:Key="Dock_Properties_SelectedEntry">选中条目</x:String>
+    <x:String x:Key="Dock_Properties_SelectedResource">选中资源</x:String>
+    <x:String x:Key="Dock_Properties_Type_LogDocument">离线日志</x:String>
+    <x:String x:Key="Dock_Properties_Type_PartitionDocument">分区表</x:String>
 </ResourceDictionary>

@@ -32,7 +32,7 @@ public sealed class ImageEntryDto
 public sealed class ProjectSettingsDto
 {
     /// <summary>
-    /// Image type ("EXT4" or "EROFS").
+    /// Image type ("EXT4", "EROFS" or "F2FS").
     /// <para>镜像类型（"EXT4" 或 "EROFS"）。</para>
     /// </summary>
     public string ImageType { get; set; } = "EROFS";

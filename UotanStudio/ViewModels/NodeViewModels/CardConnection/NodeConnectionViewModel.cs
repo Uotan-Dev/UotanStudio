@@ -9,6 +9,13 @@ public partial class NodeConnectionViewModel : ViewModelBase
     private NodeConnectorViewModel? _source;
     private NodeConnectorViewModel? _target;
 
+    /// <summary>Whether this connection is selected on the canvas.</summary>
+    public bool IsSelected
+    {
+        get;
+        internal set => SetProperty(ref field, value);
+    }
+
     /// <summary>
     /// <para>获取或设置连接的源连接器（输出端口）。</para>
     /// Gets or sets the source connector (output port) of the connection.

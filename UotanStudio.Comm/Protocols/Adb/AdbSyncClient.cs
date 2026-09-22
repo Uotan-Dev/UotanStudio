@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Adb;
@@ -202,9 +203,7 @@ public sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = AdbS
                 break;
             }
 
-            var chunk = new byte[read];
-            Buffer.BlockCopy(buffer, 0, chunk, 0, read);
-            var dataPacket = BuildV1Packet(SyncIds.Data, chunk);
+            var dataPacket = BuildV1Packet(SyncIds.Data, buffer.AsSpan(0, read));
             stream.Write(dataPacket);
         }
 
@@ -352,14 +351,12 @@ public sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = AdbS
     /// </summary>
     /// <param name="id">The 4-byte command id. 4 字节命令 id。</param>
     /// <param name="payload">The packet payload. 数据包负载。</param>
-    private static byte[] BuildV1Packet(string id, byte[] payload)
+    private static byte[] BuildV1Packet(string id, ReadOnlySpan<byte> payload)
     {
         var packet = new byte[V1HeaderSize + payload.Length];
-        var idBytes = Encoding.ASCII.GetBytes(id);
-
-        Buffer.BlockCopy(idBytes, 0, packet, 0, 4);
-        Buffer.BlockCopy(BitConverter.GetBytes((uint)payload.Length), 0, packet, 4, 4);
-        Buffer.BlockCopy(payload, 0, packet, V1HeaderSize, payload.Length);
+        Encoding.ASCII.GetBytes(id, packet.AsSpan(0, 4));
+        BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(4, 4), (uint)payload.Length);
+        payload.CopyTo(packet.AsSpan(V1HeaderSize));
         return packet;
     }
 

@@ -53,6 +53,7 @@ public sealed class LogService : IUnifiedLog
     private readonly ConcurrentQueue<LogEntry> _entries = new();
     private readonly object _subscribersLock = new();
     private readonly List<EventHandler<LogEntry>> _subscribers = [];
+    private EventHandler<LogEntry>[] _subscriberSnapshot = [];
     private volatile LogLevel _minimumLevel = LogLevel.Trace;
     private int _maxQueueSize = 5000;
 
@@ -106,15 +107,9 @@ public sealed class LogService : IUnifiedLog
         while (_entries.Count > _maxQueueSize && _entries.TryDequeue(out _)) { }
 
         // 触发订阅者回调（线程安全）
-        List<EventHandler<LogEntry>>? handlers = null;
-        lock (_subscribersLock)
-        {
-            if (_subscribers.Count > 0)
-            {
-                handlers = new List<EventHandler<LogEntry>>(_subscribers);
-            }
-        }
-        if (handlers != null)
+        // Subscriptions change much less frequently than messages; publish immutable snapshots.
+        var handlers = Volatile.Read(ref _subscriberSnapshot);
+        if (handlers.Length != 0)
         {
             foreach (var h in handlers)
             {
@@ -168,12 +163,14 @@ public sealed class LogService : IUnifiedLog
         lock (_subscribersLock)
         {
             _subscribers.Add(handler);
+            Volatile.Write(ref _subscriberSnapshot, _subscribers.ToArray());
         }
         return () =>
         {
             lock (_subscribersLock)
             {
                 _subscribers.Remove(handler);
+                Volatile.Write(ref _subscriberSnapshot, _subscribers.ToArray());
             }
         };
     }

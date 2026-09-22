@@ -72,6 +72,10 @@ public sealed class ProjectOperationsService
     /// <summary>Persists the delivery plan and panel visibility by rewriting only the solution file.</summary>
     public Task PersistSolutionStateAsync() => _session.PersistSolutionStateAsync();
 
+    /// <summary>Holds the project session gate while a patch graph reads and publishes project files.</summary>
+    internal Task ExecuteFileOperationAsync(Func<Task> operation, CancellationToken cancellationToken)
+        => _session.ExecuteFileOperationAsync(operation, cancellationToken);
+
     private Dictionary<string, JsonElement>? CaptureSolutionState()
     {
         var state = new Dictionary<string, JsonElement>();

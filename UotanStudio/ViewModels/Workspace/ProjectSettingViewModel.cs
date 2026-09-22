@@ -35,8 +35,9 @@ internal partial class ProjectSettingViewModel : Tool
     // 默认编解码器为 lz4hc，因为下方的等级下拉框只作用于 HC 搜索：选择快速 lz4 时该等级会被忽略，
     // 默认值若为 "lz4" 会静默打出更大的镜像。
     [ObservableProperty]
-    private bool typeEXT4 = false, formatSPARSE = false, eXT4RO = false, sizeOri = false, eXT4Compress = false, sUPERSPARSE = false,
-        typeEROFS = true, formatRAW = true, eXT4RW = true, sizeAuto = true, eXT4NoCompress = true, sUPERRAW = true;
+    private bool typeEXT4 = false, typeF2FS = false, formatSPARSE = false, eXT4RO = false, sizeOri = false,
+        eXT4Compress = false, sUPERSPARSE = false, typeEROFS = true, formatRAW = true, eXT4RW = true,
+        sizeAuto = true, eXT4NoCompress = true, sUPERRAW = true;
     [ObservableProperty]
     private string selectedErofsAlgorithm = ErofsAlgorithmSelectors.Lz4HighCompression;
     [ObservableProperty]
@@ -95,7 +96,7 @@ internal partial class ProjectSettingViewModel : Tool
     /// </returns>
     public ProjectSettingsDto ToDto() => new()
     {
-        ImageType = TypeEXT4 ? "EXT4" : "EROFS",
+        ImageType = TypeEXT4 ? "EXT4" : TypeF2FS ? "F2FS" : "EROFS",
         ImageFormat = FormatSPARSE ? "SPARSE" : "RAW",
         Ext4ReadWrite = EXT4RW,
         SizeAuto = SizeAuto,
@@ -127,11 +128,13 @@ internal partial class ProjectSettingViewModel : Tool
         }
 
         var isExt4 = string.Equals(dto.ImageType, "EXT4", StringComparison.OrdinalIgnoreCase);
+        var isF2fs = string.Equals(dto.ImageType, "F2FS", StringComparison.OrdinalIgnoreCase);
         var isSparse = string.Equals(dto.ImageFormat, "SPARSE", StringComparison.OrdinalIgnoreCase);
         var isSuperSparse = string.Equals(dto.SuperFormat, "SPARSE", StringComparison.OrdinalIgnoreCase);
 
         TypeEXT4 = isExt4;
-        TypeEROFS = !isExt4;
+        TypeEROFS = !isExt4 && !isF2fs;
+        TypeF2FS = isF2fs;
         FormatRAW = !isSparse;
         FormatSPARSE = isSparse;
         EXT4RO = !dto.Ext4ReadWrite;
@@ -174,7 +177,7 @@ internal partial class ProjectSettingViewModel : Tool
         // 仅当面板处于默认状态（EROFS + RAW）时才自动切换，避免覆盖用户手动选择。
         // Only auto-switch when the panel is at its default state (EROFS + RAW) to avoid
         // overriding a manual selection.
-        bool isDefaultState = TypeEROFS && !TypeEXT4 && FormatRAW && !FormatSPARSE;
+        bool isDefaultState = TypeEROFS && !TypeEXT4 && !TypeF2FS && FormatRAW && !FormatSPARSE;
 
         if (!isDefaultState)
         {
@@ -186,14 +189,17 @@ internal partial class ProjectSettingViewModel : Tool
             case "ext4":
                 TypeEXT4 = true;
                 TypeEROFS = false;
+                TypeF2FS = false;
                 break;
             case "erofs":
                 TypeEROFS = true;
                 TypeEXT4 = false;
+                TypeF2FS = false;
                 break;
             case "f2fs":
-                // F2FS 无打包支持，保持当前设置。
-                // F2FS has no pack support; leave settings unchanged.
+                TypeF2FS = true;
+                TypeEXT4 = false;
+                TypeEROFS = false;
                 break;
         }
     }

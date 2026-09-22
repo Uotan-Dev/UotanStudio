@@ -6,11 +6,12 @@ using System.Text.Json.Serialization;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
 
 namespace UotanStudio.Services.Keys;
 
 /// <summary>Supported key purposes; purpose determines the exported public key format.</summary>
-public enum ManagedKeyKind { Adb, Hdc, Payload, Jar, Apk, Zip }
+public enum ManagedKeyKind { Adb, Hdc, Payload, Jar, Apk, Zip, Avb }
 
 /// <summary>Export bundle choices for a freshly generated APK signing certificate.</summary>
 /// <summary>新生成 APK 签名证书的导出格式组合。</summary>
@@ -303,6 +304,42 @@ public sealed class KeyLibraryService
     public string PrivatePath(ManagedKey key) => Path.Combine(KeyDirectory(key.Id), PrivateName(key.Kind));
     public string PublicText(ManagedKey key) => Encoding.UTF8.GetString(ReadBounded(PrivatePath(key) + ".pub"));
 
+    /// <summary>Returns the validated libavb public-key blob for an AVB library entry.</summary>
+    public string EnsureAvbPublicKey(ManagedKey key)
+    {
+        if (key.Kind != ManagedKeyKind.Avb)
+        {
+            throw new InvalidOperationException("Only AVB keys have an avb_pkmd.bin public-key blob.");
+        }
+        var path = Path.Combine(KeyDirectory(key.Id), "avb_pkmd.bin");
+        if (File.Exists(path))
+        {
+            using var imported = AvbRsaPublicKeyCodec.Import(ReadBounded(path));
+            if (!string.Equals(
+                key.Fingerprint,
+                "SHA256:" + Convert.ToHexString(SHA256.HashData(imported.ExportSubjectPublicKeyInfo())),
+                StringComparison.Ordinal))
+            {
+                throw new InvalidDataException("AVB public-key blob does not match the library entry.");
+            }
+            return path;
+        }
+
+        var temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            using var privateKey = LoadPrivateKey(PrivatePath(key));
+            Write(temporary, AvbRsaPublicKeyCodec.Export(privateKey));
+            try { File.Move(temporary, path, overwrite: false); }
+            catch (IOException) when (File.Exists(path)) { }
+        }
+        finally
+        {
+            File.Delete(temporary);
+        }
+        return EnsureAvbPublicKey(key);
+    }
+
     /// <summary>Certificate file path for a Payload key; the file may not exist for keys created before certificates.</summary>
     public string CertificatePath(ManagedKey key) => PrivatePath(key) + ".crt";
 
@@ -513,7 +550,7 @@ public sealed class KeyLibraryService
             // APK and ZIP keys keep PKCS#8 PEM so a single format covers RSA/EC material (ZIP
             // signing needs an RSA key for OTA; read via LoadPrivateKey); Payload inherited the format.
             // APK 与 ZIP 密钥统一存 PKCS#8 PEM（兼容 RSA 与 EC）；ZIP 用于 OTA 签名需要 RSA。Payload 沿用该格式。
-            var privateText = kind is ManagedKeyKind.Apk or ManagedKeyKind.Payload or ManagedKeyKind.Zip
+            var privateText = kind is ManagedKeyKind.Apk or ManagedKeyKind.Payload or ManagedKeyKind.Zip or ManagedKeyKind.Avb
                 ? key.ExportPkcs8PrivateKeyPem()
                 : ((RSA)key).ExportRSAPrivateKeyPem();
             Write(path, privateText);
@@ -528,6 +565,10 @@ public sealed class KeyLibraryService
             }
             else publicText = key.ExportSubjectPublicKeyInfoPem() + "\n";
             Write(path + ".pub", publicText);
+            if (kind == ManagedKeyKind.Avb)
+            {
+                Write(Path.Combine(staging, "avb_pkmd.bin"), AvbRsaPublicKeyCodec.Export((RSA)key));
+            }
             if (kind is ManagedKeyKind.Payload or ManagedKeyKind.Jar or ManagedKeyKind.Apk or ManagedKeyKind.Zip)
                 Write(Path.Combine(staging, PrivateName(kind) + ".crt"), CreateCertificate(name, key));
             Write(Path.Combine(staging, "key.json"), JsonSerializer.Serialize(key2, KeyLibraryJsonContext.Default.ManagedKey));
@@ -545,6 +586,7 @@ public sealed class KeyLibraryService
         ManagedKeyKind.Jar => "jar-key.pem",
         ManagedKeyKind.Apk => "apk-key.pem",
         ManagedKeyKind.Zip => "zip-key.pem",
+        ManagedKeyKind.Avb => "avb-key.pem",
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
@@ -585,9 +627,10 @@ public sealed class KeyLibraryService
             // OTA ZIP signing uses a platform-style RSA key.
             // OTA ZIP 签名使用平台风格的 RSA 密钥。
             ManagedKeyKind.Zip => bits is 2048 or 4096,
+            ManagedKeyKind.Avb => bits is 2048 or 4096,
             _ => false
         }))
-            throw new ArgumentException("密钥位数与用途不匹配：ADB 2048、HDC 3072、Payload/JAR/ZIP 2048/4096、APK RSA 2048–4096 或 EC 256/384/521。");
+            throw new ArgumentException("密钥位数与用途不匹配：ADB 2048、HDC 3072、Payload/JAR/ZIP/AVB 2048/4096、APK RSA 2048–4096 或 EC 256/384/521。");
     }
 
     private static void Write(string path, string text)

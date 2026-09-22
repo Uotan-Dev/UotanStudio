@@ -27,6 +27,6 @@ internal static class DocumentNotifications
         HexEditorViewModel hex => new(hex),
         FileViewModel file => new(file),
         FileManagerEditorViewModel manager => new(manager),
-        _ => new((FileViewModel?)null)
+        _ => new(document as Dock.Model.Mvvm.Controls.Document)
     };
 }

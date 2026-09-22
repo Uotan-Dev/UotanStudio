@@ -141,6 +141,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         catch (Exception ex)
         {
             context.Log.Write(LogLevel.Error, Title, $"Firmware node failed: {ex.Message}  固件节点执行失败。");
+            throw;
         }
     }
 
@@ -149,8 +150,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         var path = PathText(ReadInput("Firmware Path"));
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
-            context.Log.Write(LogLevel.Warn, Title, $"Firmware path not found: {path ?? "<empty>"}  找不到固件路径。");
-            return;
+            throw new FileNotFoundException("Firmware input was not found.", path);
         }
 
         var outputDir = DeriveOutputDir(path);
@@ -162,8 +162,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
             var result = await dt.UnpackAsync(path, outputDir, cancellationToken: context.CancellationToken).ConfigureAwait(false);
             if (!result.Success)
             {
-                context.Log.Write(LogLevel.Error, Title, result.Summary);
-                return;
+                throw new InvalidDataException(result.Summary);
             }
             WriteOutput("Output Dir", outputDir);
             WriteOutput("Partitions", result.Entries);
@@ -177,8 +176,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
             var oppo = await service.ExtractOppoAsync(path, outputDir, true, context.CancellationToken).ConfigureAwait(false);
             if (!oppo.Success)
             {
-                context.Log.Write(LogLevel.Warn, Title, $"Unpack failed: {boot.Summary} | {oppo.Summary}  解包失败。");
-                return;
+                throw new InvalidDataException($"Unpack failed: {boot.Summary} | {oppo.Summary}");
             }
 
             WriteOutput("Output Dir", outputDir);
@@ -198,8 +196,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         var config = PathText(ReadInput("Config"));
         if (string.IsNullOrWhiteSpace(inputDir) || !Directory.Exists(inputDir))
         {
-            context.Log.Write(LogLevel.Warn, Title, $"Input directory not found: {inputDir ?? "<empty>"}  找不到输入目录。");
-            return;
+            throw new DirectoryNotFoundException($"Input directory was not found: {inputDir}");
         }
 
         var outputPath = string.IsNullOrWhiteSpace(config)
@@ -215,15 +212,13 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         {
             if (!repack.CanPackDirectory)
             {
-                context.Log.Write(LogLevel.Error, Title, repack.PackingNotes);
-                return;
+                throw new InvalidDataException(repack.PackingNotes);
             }
             var packed = await RegisteredFirmwareFormats.PackDirectoryAsync(repack.FormatName, inputDir,
                 outputPath, context.CancellationToken, throwIfUnsupported: true).ConfigureAwait(false);
             if (!packed.Success)
             {
-                context.Log.Write(LogLevel.Error, Title, packed.Summary);
-                return;
+                throw new InvalidDataException(packed.Summary);
             }
             WriteOutput("Firmware", outputPath);
             context.Log.Write(LogLevel.Info, Title, packed.Summary);
@@ -233,8 +228,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
 
         if (!result.Success)
         {
-            context.Log.Write(LogLevel.Error, Title, $"Pack failed: {result.Summary}  打包失败。");
-            return;
+            throw new InvalidDataException(result.Summary);
         }
 
         WriteOutput("Firmware", outputPath);
@@ -246,8 +240,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         var path = PathText(ReadInput("Firmware"));
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
-            context.Log.Write(LogLevel.Warn, Title, $"Firmware path not found: {path ?? "<empty>"}  找不到固件路径。");
-            return;
+            throw new FileNotFoundException("Firmware input was not found.", path);
         }
 
         var service = FirmwareService.Instance;
@@ -275,8 +268,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         var partition = Convert.ToString(ReadInput("Partition Name"), System.Globalization.CultureInfo.InvariantCulture);
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
-            context.Log.Write(LogLevel.Warn, Title, $"Firmware path not found: {path ?? "<empty>"}  找不到固件路径。");
-            return;
+            throw new FileNotFoundException("Firmware input was not found.", path);
         }
 
         var outputDir = DeriveOutputDir(path);
@@ -285,8 +277,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
             .ConfigureAwait(false);
         if (!result.Success)
         {
-            context.Log.Write(LogLevel.Error, Title, $"Extract failed: {result.Summary}  提取失败。");
-            return;
+            throw new InvalidDataException(result.Summary);
         }
 
         var imagePath = string.IsNullOrWhiteSpace(partition)

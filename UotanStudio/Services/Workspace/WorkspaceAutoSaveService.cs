@@ -25,12 +25,12 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
     private Task? _initialization;
     private Window? _mainWindow;
 
-    internal WorkspaceAutoSaveService(WorkspaceViewModel workspace, SettingsViewModel settings, ProjectOperationsService projects)
+    internal WorkspaceAutoSaveService(WorkspaceViewModel workspace, SettingsViewModel settings, ProjectOperationsService projects, string? sessionPath = null)
     {
         _workspace = workspace;
         _settings = settings;
         _projects = projects;
-        _sessionPath = Path.Combine(Path.GetDirectoryName(SettingsPersistenceService.Instance.SettingsFilePath)!, "workspace-session.json");
+        _sessionPath = sessionPath ?? Path.Combine(Path.GetDirectoryName(SettingsPersistenceService.Instance.SettingsFilePath)!, "workspace-session.json");
         _coordinator = new AutoSaveCoordinator(SaveEditedDocumentsAsync) { Enabled = settings.AutoSave };
         _settings.PropertyChanged += OnSettingsChanged;
         _timer.Tick += OnTick;
@@ -203,7 +203,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "AutoSave", ex.Message); }
     }
 
-    private async Task SaveSessionAsync()
+    internal async Task SaveSessionAsync()
     {
         if (!_initialized || _projects.IsBusy) return;
         try
@@ -213,7 +213,6 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
             // (WriteIfChangedAsync only avoids the disk write, not the build).
             var signature = ComputeSessionSignature();
             if (string.Equals(signature, _lastSessionSignature, StringComparison.Ordinal)) return;
-            _lastSessionSignature = signature;
 
             var documents = WorkspaceSessionCapture.Documents(_workspace.Layout, Environment.CurrentDirectory);
             foreach (var document in documents)
@@ -248,6 +247,8 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                 }
             }
             await AtomicJsonFile.WriteIfChangedAsync(_sessionPath, snapshot, AppSettingsJsonContext.Default.WorkspaceSessionSnapshot);
+            // A failed publication must remain eligible for the next timer/close retry.
+            _lastSessionSignature = signature;
         }
         catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "AutoSave", $"Save workspace failed: {ex.Message}"); }
     }

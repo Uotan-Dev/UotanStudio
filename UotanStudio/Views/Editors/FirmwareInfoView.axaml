@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:sys="using:System"
+             xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
              x:Class="UotanStudio.Views.Editors.FirmwareInfoView"
@@ -12,7 +13,7 @@
     <Border DockPanel.Dock="Top" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             IsVisible="{Binding IsBusy}">
-      <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.LoadingLabel}"
+      <TextBlock Text="{DynamicResource FirmwareInfo_Loading}"
                  VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
     </Border>
 
@@ -22,18 +23,18 @@
       <TextBlock Classes="error-banner" Text="{Binding ErrorMessage}" />
     </Border>
 
-    <ScrollViewer>
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
       <StackPanel Margin="16" Spacing="14">
 
         <!-- 面板标题 -->
-        <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.TitleLabel}"
+        <TextBlock Text="{DynamicResource FirmwareInfo_Title}"
                    FontSize="20" FontWeight="SemiBold" />
 
         <!-- 格式名 -->
         <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
                 IsVisible="{Binding IsRecognized}">
           <StackPanel Spacing="8">
-            <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.FormatNameLabel}"
+            <TextBlock Text="{DynamicResource FirmwareInfo_FormatName}"
                        FontWeight="SemiBold" FontSize="13" />
             <TextBlock Text="{Binding FormatName}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
           </StackPanel>
@@ -43,9 +44,9 @@
         <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
                 IsVisible="{Binding IsRecognized}">
           <StackPanel Spacing="8">
-            <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.SummaryLabel}"
+            <TextBlock Text="{DynamicResource FirmwareInfo_Summary}"
                        FontWeight="SemiBold" FontSize="13" />
-            <TextBlock Text="{Binding Summary}" FontSize="12" TextWrapping="Wrap" />
+            <SelectableTextBlock Text="{Binding Summary}" FontSize="12" TextWrapping="Wrap" />
           </StackPanel>
         </Border>
 
@@ -53,17 +54,27 @@
         <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
                 IsVisible="{Binding HasMetadata}">
           <StackPanel Spacing="8">
-            <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.MetadataLabel}"
+            <TextBlock Text="{DynamicResource FirmwareInfo_Metadata}"
                        FontWeight="SemiBold" FontSize="13" />
-            <ItemsControl ItemsSource="{Binding Metadata}">
+            <ItemsControl ItemsSource="{Binding MetadataGroups}">
               <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="viewmodels:PropertyRow">
-                  <Grid ColumnDefinitions="180,*" Margin="0,2">
-                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="SemiBold" FontSize="12"
-                               TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Column="1" Text="{Binding Value}" FontFamily="Consolas" FontSize="12"
-                               TextWrapping="Wrap" />
-                  </Grid>
+                <DataTemplate x:DataType="viewmodels:FirmwareMetadataGroup">
+                  <StackPanel Spacing="6" Margin="0,8">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" />
+                    <ItemsControl ItemsSource="{Binding Rows}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="viewmodels:PropertyRow">
+                          <controls:ResponsiveFormRow MinLabelWidth="170" MaxLabelWidth="210"
+                                                      MinEditorWidth="180" ColumnSpacing="16" RowSpacing="4" Margin="0,3">
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                       FontSize="12" TextWrapping="Wrap" />
+                            <SelectableTextBlock Text="{Binding Value}" FontFamily="Consolas"
+                                                 FontSize="12" TextWrapping="Wrap" />
+                          </controls:ResponsiveFormRow>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
@@ -74,7 +85,7 @@
         <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
                 IsVisible="{Binding HasComponents}">
           <StackPanel Spacing="8">
-            <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.ComponentsLabel}"
+            <TextBlock Text="{DynamicResource FirmwareInfo_Components}"
                        FontWeight="SemiBold" FontSize="13" />
             <ItemsControl ItemsSource="{Binding Components}">
               <ItemsControl.ItemTemplate>
@@ -95,7 +106,7 @@
         <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
                 IsVisible="{Binding HasEntries}">
           <StackPanel Spacing="8">
-            <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.EntriesLabel}"
+            <TextBlock Text="{DynamicResource FirmwareInfo_Entries}"
                        FontWeight="SemiBold" FontSize="13" />
             <ItemsControl ItemsSource="{Binding Entries}">
               <ItemsControl.ItemTemplate>

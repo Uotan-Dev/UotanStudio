@@ -132,51 +132,17 @@ public partial class ProjectExplorerView : UserControl
         }
     }
 
-    private void OnOpenAsText(object? sender, RoutedEventArgs e)
+    private void OnOpenWith(object? sender, RoutedEventArgs e)
     {
-        OpenWith(EditorOpenMode.Text);
-    }
-
-    private void OnOpenAsLog(object? sender, RoutedEventArgs e) => OpenWith(EditorOpenMode.Log);
-
-    private void OnOpenAsHex(object? sender, RoutedEventArgs e)
-    {
-        OpenWith(EditorOpenMode.Hex);
-    }
-
-    private void OnOpenAsDtb(object? sender, RoutedEventArgs e)
-    {
-        OpenWith(EditorOpenMode.Dtb);
-    }
-
-    private void OnOpenAsDex(object? sender, RoutedEventArgs e)
-    {
-        OpenWith(EditorOpenMode.Dex);
-    }
-
-    private void OnOpenAsAxml(object? sender, RoutedEventArgs e)
-    {
-        OpenWith(EditorOpenMode.Axml);
-    }
-
-    private void OnOpenAsArsc(object? sender, RoutedEventArgs e)
-    {
-        OpenWith(EditorOpenMode.Arsc);
-    }
-
-    private void OnOpenAsApk(object? sender, RoutedEventArgs e)
-    {
-        OpenWith(EditorOpenMode.Apk);
-    }
-
-    private void OnOpenAsFirmware(object? sender, RoutedEventArgs e)
-    {
-        OpenWith(EditorOpenMode.Firmware);
-    }
-
-    private void OnOpenAsFileSystem(object? sender, RoutedEventArgs e)
-    {
-        OpenWith(EditorOpenMode.FileSystem);
+        if (sender is MenuItem { Tag: EditorOpenMode mode } item)
+        {
+            var target = item.DataContext as ExplorerNode ?? ProjectTree.SelectedItem as ExplorerNode;
+            if (target is { IsDirectory: false, IsPlaceholder: false })
+            {
+                WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(target.Path, mode));
+            }
+            e.Handled = true;
+        }
     }
 
     /// <summary>
@@ -258,14 +224,6 @@ public partial class ProjectExplorerView : UserControl
         if (ProjectTree.SelectedItem is ExplorerNode node && node.IsDirectory)
         {
             _ = ProjectOperationsService.Instance.ImportSubProjectAsync(node.Path);
-        }
-    }
-
-    private void OpenWith(EditorOpenMode mode)
-    {
-        if (ProjectTree.SelectedItem is ExplorerNode node && !node.IsDirectory && !node.IsPlaceholder)
-        {
-            WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(node.Path, mode));
         }
     }
 

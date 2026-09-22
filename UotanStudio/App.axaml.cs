@@ -45,10 +45,6 @@ public partial class App : Application
             }
         };
 #if DEBUG
-        // DevTools 只在桌面运行时挂载：移动端没有开发者工具实例，连接尝试会
-        // 以 DevToolsUnreachableException 致命崩溃（见真机 logcat 08:18 记录）。
-        // Attach DevTools on desktop only: on mobile there is no DevTools instance and
-        // the connection attempt crashes with DevToolsUnreachableException.
         if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
         {
             this.AttachDeveloperTools();
@@ -96,15 +92,6 @@ public partial class App : Application
             splash.StartupTask = RunStartupSequenceAsync(splash, (SplashViewModel)splash.DataContext);
             // Close 触发 Ursa SplashWindow 的 CanClose（等待启动序列）→ CreateNextWindow 过渡。
             splash.Close();
-        }
-        else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
-        {
-            var viewModel = new MainViewModel();
-            singleViewPlatform.MainView = new MainView
-            {
-                DataContext = viewModel
-            };
-            _ = viewModel.InitializeAutoSaveAsync();
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -174,7 +161,7 @@ public partial class App : Application
         }
 
         // 应用命令行选项：打开解决方案 / 导入文件（失败仅记日志，不阻断启动）。
-        // Apply command-line options: open a solution / import files (failures only log, never block startup).
+        // Apply startup file-association inputs: open a solution / import files (failures only log, never block startup).
         if (StartupFiles.Length > 0)
         {
             await ApplyStartupFilesAsync(splashWindow, StartupFiles).ConfigureAwait(true);
@@ -207,7 +194,7 @@ public partial class App : Application
 
     /// <summary>
     /// <para>应用命令行选项：打开指定解决方案并导入文件（失败仅记日志，不阻断启动）。</para>
-    /// Applies the command-line options: opens the specified solution and imports files (failures only log,
+    /// Applies startup file-association inputs: opens the specified solution and imports files (failures only log,
     /// never block startup).
     /// </summary>
     private async Task ApplyStartupFilesAsync(MainSplashWindow splashWindow, string[] files)

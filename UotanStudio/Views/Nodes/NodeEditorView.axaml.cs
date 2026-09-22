@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -5,9 +6,12 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using UotanStudio.Services.Projects;
+using UotanStudio.Services.VisualPlugins;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
 using UotanStudio.ViewModels.NodeViewModels.EditorCommands;
+using UotanStudio.Views.Shell;
 
 namespace UotanStudio.Views.Nodes;
 
@@ -17,6 +21,7 @@ public partial class NodeEditorView : UserControl
     private const double LeftPaneMinimum = 150;
     private const double CenterPaneMinimum = 200;
     private const double RightPaneMinimum = 150;
+    private const double ConnectionHitTestThickness = 10;
 
     private bool _draggingLeft;
     private bool _draggingRight;
@@ -42,6 +47,7 @@ public partial class NodeEditorView : UserControl
         // 订阅画布选中变更：NodifyEditor 内部维护 SelectedItems，需在此同步到 ViewModel
         // Subscribe to canvas selection changes: NodifyEditor keeps its own SelectedItems, so sync to the ViewModel here.
         Editor.SelectionChanged += OnEditorSelectionChanged;
+        Editor.AddHandler(KeyDownEvent, OnEditorKeyDown, RoutingStrategies.Bubble);
         Editor.AddHandler(PointerPressedEvent, OnEditorPointerPressed,
             RoutingStrategies.Tunnel, handledEventsToo: true);
         Editor.AddHandler(PointerReleasedEvent, OnEditorPointerReleased,
@@ -249,6 +255,17 @@ public partial class NodeEditorView : UserControl
         vm.SetSelection(selected, primary);
     }
 
+    private void OnOpenVisualPluginEditorClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is NodeEditorViewModel
+            {
+                SelectedVisualPlugin: { Kind: VisualPluginKind.CompositeNode } registration
+            })
+        {
+            new VisualPluginEditorWindow(registration).Show();
+        }
+    }
+
     private void OnSelectionBoxPressed(object? sender, PointerPressedEventArgs e)
     {
         if (e.GetCurrentPoint(EditorSurface).Properties.PointerUpdateKind
@@ -370,14 +387,120 @@ public partial class NodeEditorView : UserControl
     private void OnEditorPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(Editor).Properties.IsLeftButtonPressed
-            || DataContext is not NodeEditorViewModel)
+            || DataContext is not NodeEditorViewModel vm)
         {
             return;
         }
 
+        var connection = FindConnectionAt(e);
+        if (connection?.DataContext is NodeConnectionViewModel selected)
+        {
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Alt)) return;
+            Editor.SelectedItems = new List<FlowNodeViewModel>();
+            vm.SelectConnection(selected);
+            Editor.Focus();
+            _nodeDragStartLocations = null;
+            e.Handled = true;
+            return;
+        }
+        vm.SelectConnection(null);
         _nodeDragStartLocations = Editor.SelectedItems?
             .OfType<FlowNodeViewModel>()
             .ToDictionary(node => node, node => node.Location);
+    }
+
+    private NodifyM.Avalonia.Controls.Connection? FindConnectionAt(PointerEventArgs e)
+    {
+        foreach (var connection in Editor.GetVisualDescendants()
+                     .OfType<NodifyM.Avalonia.Controls.Connection>()
+                     .Reverse())
+        {
+            var tolerance = ConnectionHitTestThickness / (2 * Math.Max(Editor.Zoom, 0.01));
+            if (IsConnectionHit(connection, e.GetPosition(connection), tolerance)) return connection;
+        }
+
+        return null;
+    }
+
+    internal static bool IsConnectionHit(
+        NodifyM.Avalonia.Controls.Connection connection,
+        Point point,
+        double tolerance)
+    {
+        var direction = connection.Direction == NodifyM.Avalonia.Controls.ConnectionDirection.Forward ? 1d : -1d;
+        var spacing = new Vector(connection.Spacing * direction, 0);
+        var source = connection.Source;
+        var target = connection.Target;
+        var start = source + spacing;
+        var end = target - spacing;
+        var delta = target - source;
+        var smooth = Math.Min(100, Math.Abs(delta.Y));
+        var offset = Math.Max(smooth, Math.Abs(delta.X) / 2);
+        offset = Math.Min(100 + Math.Sqrt(Math.Abs(delta.X) * 25), offset);
+        var control = new Vector(offset * direction, 0);
+
+        if (DistanceToSegment(point, source, start) <= tolerance
+            || DistanceToSegment(point, end, target) <= tolerance)
+        {
+            return true;
+        }
+
+        var previous = start;
+        for (var index = 1; index <= 32; index++)
+        {
+            var t = index / 32d;
+            var current = CubicBezier(start, start + control, end - control, end, t);
+            if (DistanceToSegment(point, previous, current) <= tolerance) return true;
+            previous = current;
+        }
+
+        return false;
+    }
+
+    private static Point CubicBezier(Point start, Point control1, Point control2, Point end, double t)
+    {
+        var remaining = 1 - t;
+        return new Point(
+            (remaining * remaining * remaining * start.X)
+            + (3 * remaining * remaining * t * control1.X)
+            + (3 * remaining * t * t * control2.X)
+            + (t * t * t * end.X),
+            (remaining * remaining * remaining * start.Y)
+            + (3 * remaining * remaining * t * control1.Y)
+            + (3 * remaining * t * t * control2.Y)
+            + (t * t * t * end.Y));
+    }
+
+    private static double DistanceToSegment(Point point, Point start, Point end)
+    {
+        var segment = end - start;
+        var lengthSquared = segment.X * segment.X + segment.Y * segment.Y;
+        if (lengthSquared <= double.Epsilon) return Distance(point, start);
+        var projection = Math.Clamp(((point - start).X * segment.X + (point - start).Y * segment.Y) / lengthSquared, 0, 1);
+        return Distance(point, start + segment * projection);
+
+        static double Distance(Point first, Point second)
+        {
+            var x = first.X - second.X;
+            var y = first.Y - second.Y;
+            return Math.Sqrt(x * x + y * y);
+        }
+    }
+
+    private void OnEditorKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Source is Visual source && source.GetSelfAndVisualAncestors().OfType<TextBox>().Any()) return;
+        if (DataContext is not NodeEditorViewModel vm) return;
+        if (e.Key == Key.Delete && e.KeyModifiers == KeyModifiers.None && vm.HasSelection)
+        {
+            vm.DeleteSelectedCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && vm.SelectedConnection is not null)
+        {
+            vm.SelectConnection(null);
+            e.Handled = true;
+        }
     }
 
     private void OnEditorPointerReleased(object? sender, PointerReleasedEventArgs e)
@@ -515,7 +638,7 @@ public partial class NodeEditorView : UserControl
             return;
         }
 
-        ShowNodeDropPreview(e.GetPosition(DropPreviewLayer), item.Name);
+        ShowNodeDropPreview(e.GetPosition(DropPreviewLayer));
         e.DragEffects = DragDropEffects.Copy;
         e.Handled = true;
     }
@@ -549,9 +672,8 @@ public partial class NodeEditorView : UserControl
     internal static Point ToNodeLocation(Point editorPosition, double offsetX, double offsetY) =>
         new(editorPosition.X - offsetX, editorPosition.Y - offsetY);
 
-    internal void ShowNodeDropPreview(Point position, string title)
+    internal void ShowNodeDropPreview(Point position)
     {
-        NodeDropPreviewTitle.Text = title;
         Canvas.SetLeft(NodeDropPreview, position.X);
         Canvas.SetTop(NodeDropPreview, position.Y);
         NodeDropPreview.IsVisible = true;
@@ -570,14 +692,58 @@ public partial class NodeEditorView : UserControl
     /// <param name="e">Routed event args.</param>
     private async void OnBrowsePathClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is not Button { Tag: NodeConnectorViewModel connector } || VisualRoot is not Window window)
+        if (sender is not Button { Tag: NodeConnectorViewModel connector }
+            || TopLevel.GetTopLevel(this) is not { } topLevel)
         {
             return;
         }
 
-        var storage = window.StorageProvider;
-        if (storage is null)
+        var storage = topLevel.StorageProvider;
+        if (connector.IsDirectoryPath)
         {
+            if (!storage.CanPickFolder)
+            {
+                SetPathPickerUnavailableStatus();
+                return;
+            }
+            var folders = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            {
+                Title = Services.LanguageService.Instance.GetString("Node_Patch_SelectFolder"),
+                AllowMultiple = false
+            });
+            if (folders.Count > 0 && folders[0].TryGetLocalPath() is { Length: > 0 } folderPath)
+            {
+                connector.InitialValue = folderPath;
+            }
+            return;
+        }
+        if (IsOutputFilePath(connector))
+        {
+            if (!storage.CanSave)
+            {
+                SetPathPickerUnavailableStatus();
+                return;
+            }
+
+            var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = Services.LanguageService.Instance.GetString("Menu_SaveAs"),
+                DefaultExtension = connector.OutputExtension,
+                SuggestedFileName = connector.InitialValue is string initialPath
+                    && !string.IsNullOrWhiteSpace(initialPath)
+                    ? Path.GetFileName(initialPath)
+                    : connector.SuggestedOutputName
+            });
+            if (file?.TryGetLocalPath() is { Length: > 0 } outputPath)
+            {
+                connector.InitialValue = outputPath;
+            }
+            return;
+        }
+
+        if (!storage.CanOpen)
+        {
+            SetPathPickerUnavailableStatus();
             return;
         }
 
@@ -591,4 +757,83 @@ public partial class NodeEditorView : UserControl
             connector.InitialValue = localPath;
         }
     }
+
+    internal static bool IsOutputFilePath(NodeConnectorViewModel connector) =>
+        string.Equals(connector.Title, "Output Path", StringComparison.Ordinal);
+
+    private void SetPathPickerUnavailableStatus()
+    {
+        if (DataContext is NodeEditorViewModel vm)
+        {
+            vm.ExecutionStatus = Services.LanguageService.Instance.GetString("Node_FilePickerUnavailable");
+        }
+    }
+
+    private async void OnImportTemplateClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not NodeEditorViewModel vm || TopLevel.GetTopLevel(this) is not { } topLevel) return;
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Services.LanguageService.Instance.GetString("Node_ImportTemplate"),
+            AllowMultiple = false,
+            FileTypeFilter = [VisualPluginFileType()]
+        });
+        if (files.FirstOrDefault()?.TryGetLocalPath() is not { } path) return;
+        try
+        {
+            var package = await VisualPluginFile.LoadAsync(path);
+            vm.ImportTemplate(package);
+            vm.ExecutionStatus = Services.LanguageService.Instance.GetString("Node_ImportSucceeded");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException or InvalidOperationException)
+        {
+            vm.ExecutionStatus = string.Format(Services.LanguageService.Instance.GetString("Node_OperationFailed"), ex.Message);
+        }
+    }
+
+    private async void OnExportTemplateClick(object? sender, RoutedEventArgs e)
+        => await ExportPackageAsync(VisualPluginKind.WorkflowTemplate);
+
+    private async void OnExportCompositeClick(object? sender, RoutedEventArgs e)
+        => await ExportPackageAsync(VisualPluginKind.CompositeNode);
+
+    private async Task ExportPackageAsync(VisualPluginKind kind)
+    {
+        if (DataContext is not NodeEditorViewModel vm || TopLevel.GetTopLevel(this) is not { } topLevel) return;
+        var composite = kind == VisualPluginKind.CompositeNode;
+        var fallbackName = Services.LanguageService.Instance.GetString(
+            composite ? "Node_DefaultCompositeName" : "Node_DefaultTemplateName");
+        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = Services.LanguageService.Instance.GetString(
+                composite ? "Node_ExportComposite" : "Node_ExportTemplate"),
+            SuggestedFileName = VisualPluginPackageBuilder.NormalizeId(fallbackName) + ".uotanplugin.json",
+            DefaultExtension = "json",
+            FileTypeChoices = [VisualPluginFileType()]
+        });
+        if (file?.TryGetLocalPath() is not { } path) return;
+        try
+        {
+            var rawName = Path.GetFileName(path);
+            var suffix = ".uotanplugin.json";
+            var name = rawName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                ? rawName[..^suffix.Length]
+                : Path.GetFileNameWithoutExtension(rawName);
+            var package = vm.CreateVisualPluginPackage(name,
+                VisualPluginPackageBuilder.NormalizeId(name), kind);
+            await VisualPluginFile.SaveAsync(path, package);
+            if (composite) await VisualPluginManager.Instance.InstallAsync(path);
+            vm.ExecutionStatus = Services.LanguageService.Instance.GetString(
+                composite ? "Node_CompositeExported" : "Node_TemplateExported");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
+        {
+            vm.ExecutionStatus = string.Format(Services.LanguageService.Instance.GetString("Node_OperationFailed"), ex.Message);
+        }
+    }
+
+    private static FilePickerFileType VisualPluginFileType() => new("Uotan visual plugin JSON")
+    {
+        Patterns = ["*.uotanplugin.json", "*.json"]
+    };
 }

@@ -536,19 +536,32 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task OpenProjectAsync()
     {
-        var path = await PickProjectFileAsync(isSave: false);
-        if (path == null)
+        try
         {
-            return;
-        }
+            var path = await PickProjectFileAsync(isSave: false);
+            if (path == null)
+            {
+                return;
+            }
 
-        await OpenProjectFromPathAsync(path);
+            await OpenProjectFromPathAsync(path);
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Project", $"Open project failed: {ex.Message}");
+            var owner = DialogService.GetOwnerWindow();
+            if (owner is not null)
+            {
+                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_OpenFailed"),
+                    LanguageService.Instance.GetString("Menu_OpenProjectFolderFailed"), Ursa.Controls.MessageBoxIcon.Error);
+            }
+        }
     }
 
     /// <summary>
     /// <para>从指定路径打开解决方案（供菜单与命令行共用）：加载固件项目与节点项目，重建镜像清单、打包设置、
     /// 画布与操作历史。返回是否成功。</para>
-    /// Opens the solution at the specified path (shared by the menu and the command line): loads the firmware
+    /// Opens the solution at the specified path (shared by the menu and file associations): loads the firmware
     /// and node projects, rebuilding the image list, packing settings, canvas and operation history. Returns
     /// whether the open succeeded.
     /// </summary>
@@ -561,7 +574,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// <para>将若干文件导入当前解决方案的镜像清单（供命令行与菜单共用）。</para>
-    /// Imports the given files into the current solution's image list (shared by the command line and the menu).
+    /// Imports the given files into the current solution's image list (shared by file associations and the menu).
     /// </summary>
     public async Task ImportFilesAsync(string[] paths)
     {
@@ -1141,6 +1154,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private static Window? _logWindow;
 
     private static Window? _keyManagerWindow;
+    private static Window? _visualPluginManagerWindow;
     private static Window? _apkSigningWindow;
     private static Window? _bootPatchWindow;
     private static ChecksumWindow? _checksumWindow;
@@ -1150,6 +1164,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private void OpenKeyManager() => ShowKeyManagerWindow();
 
     internal static void ShowKeyManagerWindow() => ShowWindow(ref _keyManagerWindow, () => new KeyManagerWindow());
+
+    /// <summary>Opens or activates the independent visual-plugin manager.</summary>
+    [RelayCommand]
+    private void OpenVisualPluginManager() => ShowWindow(ref _visualPluginManagerWindow,
+        () => new VisualPluginManagerWindow());
 
     [RelayCommand]
     private void OpenApkSigner() => ShowApkSigningWindow();
@@ -1295,10 +1314,6 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             && desktop.MainWindow is { } window)
         {
             dialog.ShowDialog(window);
-        }
-        else if (Application.Current?.ApplicationLifetime is ISingleViewApplicationLifetime)
-        {
-            dialog.Show();
         }
     }
 

@@ -250,6 +250,9 @@ internal partial class PropertiesViewModel : Tool
         {
             var typeName = ContentType switch
             {
+                PropertiesContentType.ElfDocument => LanguageService.Instance.GetString("Dock_Elf_Title"),
+                PropertiesContentType.PartitionDocument => LanguageService.Instance.GetString("Dock_Properties_Type_PartitionDocument"),
+                PropertiesContentType.LogDocument => LanguageService.Instance.GetString("Dock_Properties_Type_LogDocument"),
                 PropertiesContentType.ScreenMirror => LanguageService.Instance.GetString("Tab_ScreenMirror"),
                 PropertiesContentType.Image => LanguageService.Instance.GetString("Dock_Properties_Type_Image"),
                 PropertiesContentType.FileAnalysis => LanguageService.Instance.GetString("Dock_Properties_Type_FileAnalysis"),
@@ -328,6 +331,12 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     private void OnActiveDocumentChanged(object recipient, ActiveDocumentChangedMessage message)
     {
+        RefreshActiveDocument(message);
+        ObserveDocument(message.ActiveDocument);
+    }
+
+    private void RefreshActiveDocument(ActiveDocumentChangedMessage message)
+    {
         if (RefreshTypedDocument(message)) return;
 
         var doc = message.Document;
@@ -345,7 +354,10 @@ internal partial class PropertiesViewModel : Tool
                 || ContentType == PropertiesContentType.FileManagerDocument
                 || ContentType == PropertiesContentType.FileManagerEntry
                 || ContentType == PropertiesContentType.CompareEntry
-                || ContentType == PropertiesContentType.ScreenMirror)
+                || ContentType == PropertiesContentType.ScreenMirror
+                || ContentType == PropertiesContentType.ElfDocument
+                || ContentType == PropertiesContentType.PartitionDocument
+                || ContentType == PropertiesContentType.LogDocument)
             {
                 ClearProperties();
                 ResetSelection();
@@ -374,15 +386,21 @@ internal partial class PropertiesViewModel : Tool
     {
         switch (message)
         {
+            case { ActiveDocument: ElfInfoViewModel elf }: RefreshForElfDocument(elf); return true;
+            case { ActiveDocument: PartitionEditorViewModel partition }: RefreshForPartitionDocument(partition); return true;
+            case { ActiveDocument: LogEditorViewModel log }: RefreshForLogDocument(log); return true;
             case { ActiveDocument: ScreenMirrorViewModel mirror }: RefreshForScreenMirror(mirror); return true;
+            case { DtbDocument: { SelectedNode: { } node } dtb }: RefreshForDtbNode(dtb, node); return true;
             case { DtbDocument: { } dtb }: RefreshForDtbDocument(dtb); return true;
             case { DexDocument: { } dex }: RefreshForDexDocument(dex); return true;
+            case { ManifestDocument: { SelectedNode: { } node } manifest }: RefreshForManifestNode(manifest, node); return true;
             case { ManifestDocument: { } manifest }: RefreshForManifestDocument(manifest); return true;
+            case { ArscDocument: { SelectedNode: { } node } arsc }: RefreshForArscNode(arsc, node); return true;
             case { ArscDocument: { } arsc }: RefreshForArscDocument(arsc); return true;
             case { ApkDocument: { } apk }: RefreshForApkDocument(apk); return true;
             case { FirmwareDocument: { } firmware }: RefreshForFirmwareDocument(firmware); return true;
             case { HexDocument: { } hex }: RefreshForHexDocument(hex); return true;
-            case { FileManagerDocument: { } manager }: RefreshForFileManagerDocument(manager); return true;
+            case { FileManagerDocument: { } manager }: RefreshForFileManagerEntry(manager.SelectedEntry, manager); return true;
             default: return false;
         }
     }
@@ -623,6 +641,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     private void ClearProperties()
     {
+        StopObservingDocument();
         Interlocked.Increment(ref _imageDetailsGeneration);
         StopMirrorUpdates();
         ClearLanguageSelector();
@@ -790,7 +809,10 @@ internal partial class PropertiesViewModel : Tool
             Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_Summary", doc.Summary));
         }
         Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_MetadataCount", doc.Metadata.Count.ToString("N0")));
-        Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_Components", doc.Components.Count.ToString("N0")));
+        if (doc.HasComponents)
+        {
+            Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_Components", doc.Components.Count.ToString("N0")));
+        }
 
         foreach (var row in doc.Metadata)
         {
@@ -1020,6 +1042,15 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_FieldCount", doc.FieldCount.ToString("N0")));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_StringCount", doc.StringCount.ToString("N0")));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_TypeCount", doc.TypeCount.ToString("N0")));
+
+        if (!string.IsNullOrEmpty(doc.SelectedEntry))
+        {
+            Properties.Add(CreateLocalizedRow("Dock_Properties_SelectedEntry", doc.SelectedEntry));
+        }
+        if (doc.SelectedResource is { } resource)
+        {
+            Properties.Add(CreateLocalizedRow("Dock_Properties_SelectedResource", resource.Name));
+        }
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for DEX document '{doc.FilePath}'");
     }
@@ -1302,5 +1333,14 @@ public enum PropertiesContentType
     CompareEntry,
 
     /// <summary>Live screen-mirror parameters and rates.</summary>
-    ScreenMirror
+    ScreenMirror,
+
+    /// <summary>ELF header or selected segment/section metadata.</summary>
+    ElfDocument,
+
+    /// <summary>Partition table or selected partition.</summary>
+    PartitionDocument,
+
+    /// <summary>Offline log document and filter state.</summary>
+    LogDocument
 }

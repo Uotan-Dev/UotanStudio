@@ -1,3 +1,4 @@
+using System.Text;
 using NodifyM.Avalonia.ViewModelBase;
 using UotanStudio.Services;
 
@@ -10,6 +11,7 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 public partial class NodeConnectorViewModel : ConnectorViewModelBase
 {
     private Guid _id = Guid.NewGuid();
+    private string _portId = string.Empty;
     private int _maxConnections;
     private object? _data;
     private object? _initialValue;
@@ -42,7 +44,36 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     public object? Data
     {
         get => _data;
-        set => SetProperty(ref _data, value);
+        set
+        {
+            if (SetProperty(ref _data, value))
+            {
+                OnPropertyChanged(nameof(DataPreview));
+            }
+        }
+    }
+
+    /// <summary>Bounded display of an execution result; binary buffers are never formatted as text.</summary>
+    public string DataPreview
+    {
+        get
+        {
+            var text = Data switch
+            {
+                null => string.Empty,
+                string value => ValueResourcePrefix is null ? value : LanguageService.Instance.GetString(ValueResourcePrefix + value),
+                bool value => LanguageService.Instance.GetString(value ? "Node_Conn_True" : "Node_Conn_False"),
+                Services.Patching.PatchWorkspace workspace => workspace.Root,
+                Services.Patching.PatchAsset asset => asset.Name,
+                Services.Patching.PatchImageEdits edits => string.Join(Environment.NewLine,
+                    edits.Items.Take(8).Select(edit => edit.Path[..Math.Min(edit.Path.Length, 160)])),
+                IReadOnlyList<string> values => string.Join(Environment.NewLine, values.Take(8).Select(value => value[..Math.Min(value.Length, 160)])),
+                byte[] bytes => $"{bytes.Length:N0} B",
+                IFormattable number => number.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
+                _ => string.Empty
+            };
+            return text.Length <= 800 ? text : text[..800] + "…";
+        }
     }
 
     /// <summary>
@@ -55,8 +86,65 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     public object? InitialValue
     {
         get => _initialValue;
-        set => SetProperty(ref _initialValue, value);
+        set
+        {
+            if (SetProperty(ref _initialValue, value))
+            {
+                OnPropertyChanged(nameof(SelectedChoice));
+                OnPropertyChanged(nameof(InitialNumberValue));
+                OnPropertyChanged(nameof(InitialBooleanValue));
+            }
+        }
     }
+
+    /// <summary>Stable choices whose labels are localized without changing persisted values.</summary>
+    public IReadOnlyList<NodePortChoice> Choices { get; init; } = [];
+
+    /// <summary>Whether this input uses a selection editor.</summary>
+    public bool HasChoices => Choices.Count > 0;
+
+    /// <summary>Optional schema-owned guidance; it is not part of persisted workflow data.</summary>
+    public string? HintResourceKey { get; init; }
+
+    /// <summary>Optional localized display mapping for stable string output values.</summary>
+    public string? ValueResourcePrefix { get; init; }
+
+    /// <summary>Whether this connector has format-specific editing guidance.</summary>
+    public bool HasHint => HintResourceKey is not null;
+
+    /// <summary>Localized guidance describing the accepted value or format dialect.</summary>
+    public string LocalizedHint => HintResourceKey is null ? string.Empty : LanguageService.Instance.GetString(HintResourceKey);
+
+    /// <summary>Selected option mapped to the ordinary persisted initial value.</summary>
+    public NodePortChoice? SelectedChoice
+    {
+        get => Choices.FirstOrDefault(choice => string.Equals(choice.Value, Convert.ToString(InitialValue), StringComparison.Ordinal));
+        set
+        {
+            if (value is not null)
+            {
+                InitialValue = value.Value;
+            }
+        }
+    }
+
+    /// <summary>Whether text accepts line breaks in the properties editor.</summary>
+    public bool IsMultiline { get; init; }
+
+    /// <summary>Minimum height for single-line or multiline input.</summary>
+    public double EditorMinHeight => IsMultiline ? 76 : 24;
+
+    /// <summary>Whether the browse action must select a folder.</summary>
+    public bool IsDirectoryPath { get; init; }
+
+    /// <summary>Suggested suffix used by output file pickers.</summary>
+    public string OutputExtension { get; init; } = "img";
+
+    /// <summary>Default output name when no path has been entered.</summary>
+    public string SuggestedOutputName { get; init; } = "super.img";
+
+    /// <summary>Whether a free-text editor is used rather than a choice editor.</summary>
+    public bool UsesTextEditor => IsTextOrPathPort && !HasChoices;
 
     /// <summary>
     /// <para>是否存在需要持久化的非空初始值（用户显式填写过）。Output 端口或 Flow/Any 端口无初始值语义，返回 <c>false</c>。</para>
@@ -134,7 +222,15 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     public NodePortType PortType { get; set; } = NodePortType.Any;
 
     /// <summary>Gets the localized connector name used by the node editor.</summary>
-    public string LocalizedTitle => LanguageService.Instance.GetString("Node_Conn_" + GetResourceSuffix(Title));
+    public string LocalizedTitle
+    {
+        get
+        {
+            var key = "Node_Conn_" + GetResourceSuffix(Title);
+            var localized = LanguageService.Instance.GetString(key);
+            return string.Equals(localized, key, StringComparison.Ordinal) ? Title : localized;
+        }
+    }
 
     /// <summary>Gets the localized port data type used by the node editor.</summary>
     public string LocalizedPortTypeDisplay => LanguageService.Instance.GetString("Node_PortType_" + PortType);
@@ -143,6 +239,46 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     {
         OnPropertyChanged(nameof(LocalizedTitle));
         OnPropertyChanged(nameof(LocalizedPortTypeDisplay));
+        OnPropertyChanged(nameof(DataPreview));
+        OnPropertyChanged(nameof(LocalizedHint));
+        foreach (var choice in Choices)
+        {
+            choice.RefreshLocalization();
+        }
+    }
+
+    /// <summary>Stable non-localized identifier used by portable workflows and visual plugins.</summary>
+    public string PortId
+    {
+        get => _portId;
+        set => SetProperty(ref _portId, value);
+    }
+
+    /// <summary>Configured stable id, or a deterministic compatibility id derived from the legacy title.</summary>
+    public string StableId => string.IsNullOrWhiteSpace(_portId) ? CreateCompatibilityId(Title) : _portId;
+
+    /// <summary>Creates a deterministic ASCII id for legacy connectors that only have a title.</summary>
+    public static string CreateCompatibilityId(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return "port";
+        var builder = new StringBuilder(Math.Min(title.Length, 128));
+        var separator = false;
+        foreach (var character in title)
+        {
+            if (char.IsAsciiLetterOrDigit(character))
+            {
+                builder.Append(char.ToLowerInvariant(character));
+                separator = false;
+            }
+            else if (!separator && builder.Length > 0)
+            {
+                builder.Append('-');
+                separator = true;
+            }
+            if (builder.Length == 128) break;
+        }
+        if (builder is [.., '-']) builder.Length--;
+        return builder.Length == 0 ? "port" : builder.ToString();
     }
 
     private static string GetResourceSuffix(string title) => title switch
@@ -192,6 +328,9 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
         NodePortType.Text => "Text",
         NodePortType.Number => "Number",
         NodePortType.Boolean => "Bool",
+        NodePortType.PatchWorkspace => "PatchWorkspace",
+        NodePortType.ImageEdits => "ImageEdits",
+        NodePortType.PatchAsset => "PatchAsset",
         _ => "Any"
     };
 }

@@ -52,8 +52,12 @@ public sealed class SharedEntryPointTests
             DocumentNotifications.Publish(hex);
             Assert.Same(hex, received[2].HexDocument);
             Assert.Null(received[2].Document);
-            DocumentNotifications.Publish(new Document());
-            Assert.Null(received[3].ActiveDocument);
+            var generic = new Document();
+            DocumentNotifications.Publish(generic);
+            Assert.Same(generic, received[3].ActiveDocument);
+            Assert.Null(received[3].Document);
+            DocumentNotifications.Publish(null);
+            Assert.Null(received[4].ActiveDocument);
         }
         finally { WeakReferenceMessenger.Default.UnregisterAll(recipient); }
     }
@@ -108,7 +112,7 @@ public sealed class SharedEntryPointTests
         node.Input.Add(flow);
         WorkflowReconstruction.RestoreInitialValues(node, new() { ["Number"] = "1.25", ["Boolean"] = "true", ["Flow"] = "replace", ["Missing"] = "ignored" });
         Assert.Equal(1.25, number.InitialValue);
-        Assert.Equal(true, boolean.InitialValue);
+        Assert.True(Assert.IsType<bool>(boolean.InitialValue));
         Assert.Equal("runtime", number.Data);
         Assert.Equal("keep", flow.InitialValue);
         WorkflowReconstruction.RestoreInitialValues(node, new() { ["Number"] = "invalid" });

@@ -14,8 +14,8 @@
    Icon="/Assets/UotanToolbox.png"
    Title=""
    MinWidth="720"
-   ExtendClientAreaToDecorationsHint="{OnPlatform Android=False, Default=True}"
-   ExtendClientAreaTitleBarHeightHint="{OnPlatform Android=0, Default=32}">
+   ExtendClientAreaToDecorationsHint="True"
+   ExtendClientAreaTitleBarHeightHint="32">
 	<Window.Resources>
 		<ControlTheme x:Key="DeviceSelectorItemTheme" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
 			<Setter Property="Header" Value="{Binding DisplayName, x:DataType=devices:DeviceInfo}" />
@@ -279,6 +279,9 @@
 				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_KeyManager}" Command="{Binding MenuVM.OpenKeyManagerCommand}">
 					<MenuItem.Icon><avalonia:MaterialIcon Kind="KeyChain" Width="16" Height="16" /></MenuItem.Icon>
+				 </MenuItem>
+				 <MenuItem Header="{DynamicResource Menu_VisualPluginManager}" Command="{Binding MenuVM.OpenVisualPluginManagerCommand}">
+					<MenuItem.Icon><avalonia:MaterialIcon Kind="PuzzleOutline" Width="16" Height="16" /></MenuItem.Icon>
 				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_ApkSigner}" Command="{Binding MenuVM.OpenApkSignerCommand}">
 					<MenuItem.Icon><avalonia:MaterialIcon Kind="FileCertificateOutline" Width="16" Height="16" /></MenuItem.Icon>

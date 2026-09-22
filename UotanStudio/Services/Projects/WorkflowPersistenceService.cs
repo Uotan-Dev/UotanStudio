@@ -26,13 +26,16 @@ public static class WorkflowPersistenceService
                 NodeValueType = n.IsConstantNode ? n.NodeValueType : null,
                 NodeValue = n.IsConstantNode ? n.NodeValue : null,
                 SelectedImage = n.IsProjectImageNode ? n.SelectedImage : null,
-                InputInitialValues = BuildInitialValueMap(n)
+                InputInitialValues = BuildInitialValueMap(n, useStableIds: false),
+                InputInitialValuesByPortId = BuildInitialValueMap(n, useStableIds: true),
+                InputPorts = BuildPortDtos(n.Input),
+                OutputPorts = BuildPortDtos(n.Output)
             });
         }
         return result;
     }
 
-    private static Dictionary<string, string>? BuildInitialValueMap(FlowNodeViewModel node)
+    private static Dictionary<string, string>? BuildInitialValueMap(FlowNodeViewModel node, bool useStableIds)
     {
         Dictionary<string, string>? map = null;
         foreach (var connector in node.Input)
@@ -50,11 +53,20 @@ public static class WorkflowPersistenceService
                 continue;
             }
 
-            (map ??= []).Add(connector.Title, text);
+            (map ??= []).Add(useStableIds ? connector.StableId : connector.Title, text);
         }
 
         return map;
     }
+
+    private static List<NodePortDto> BuildPortDtos(IEnumerable<NodeConnectorViewModel> ports)
+        => [.. ports.Select(port => new NodePortDto
+        {
+            Id = port.StableId,
+            Title = port.Title,
+            PortType = port.PortType.ToString(),
+            MaxConnections = port.MaxConnections
+        })];
 
     /// <summary>
     /// <para>由节点与连接集合构建连接 DTO 列表，解析每个连接器所属节点以持久化源/目标实例 ID（供无头执行等场景可靠重建拓扑）。</para>
@@ -71,6 +83,8 @@ public static class WorkflowPersistenceService
             {
                 SourceConnectorTitle = c.Source.Title,
                 TargetConnectorTitle = c.Target.Title,
+                SourcePortId = c.Source.StableId,
+                TargetPortId = c.Target.StableId,
                 SourceInstanceId = FindOwnerNodeId(nodes, c.Source),
                 TargetInstanceId = FindOwnerNodeId(nodes, c.Target)
             });

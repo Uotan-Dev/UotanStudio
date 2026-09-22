@@ -523,4 +523,13 @@
     <x:String x:Key="Dock_Elf_Link">Link</x:String>
     <x:String x:Key="Dock_Elf_Info">Info</x:String>
     <x:String x:Key="Dock_Elf_EntrySize">Entry size</x:String>
+    <x:String x:Key="Dock_Properties_Log_Error">Error</x:String>
+    <x:String x:Key="Dock_Properties_Log_MatchingEntries">Matching entries</x:String>
+    <x:String x:Key="Dock_Properties_Log_Search">Search filter</x:String>
+    <x:String x:Key="Dock_Properties_Partition_Group">Partition group</x:String>
+    <x:String x:Key="Dock_Properties_Partition_Source">Partition source</x:String>
+    <x:String x:Key="Dock_Properties_SelectedEntry">Selected entry</x:String>
+    <x:String x:Key="Dock_Properties_SelectedResource">Selected resource</x:String>
+    <x:String x:Key="Dock_Properties_Type_LogDocument">Offline log</x:String>
+    <x:String x:Key="Dock_Properties_Type_PartitionDocument">Partition table</x:String>
 </ResourceDictionary>

@@ -54,13 +54,18 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
 
     private readonly List<LogEntryViewModel> _allEntries = [];
     private const int MaxEntries = 5000;
+    internal const int MaximumCharacters = 2 * 1024 * 1024;
+    private const int BatchEntries = 250;
+    private const int BatchCharacters = 128 * 1024;
+    private long _historyCharacters;
     private Action? _unsubscribe;
     private bool _disposed;
 
     /// <summary><para>待刷新日志队列锁。</para>Gate for the pending log backlog.</para></summary>
     private readonly object _pendingGate = new();
-    private readonly List<LogEntry> _pendingEntries = [];
-    private readonly HashSet<string> _sourceSet = new(StringComparer.Ordinal);
+    private readonly Queue<LogEntry> _pendingEntries = new();
+    private long _pendingCharacters;
+    private readonly Dictionary<string, int> _sourceCounts = new(StringComparer.Ordinal);
 
     /// <summary><para>100ms 批量刷新定时器，与全局日志面板共用同一批量约定。</para>100 ms flush timer, sharing the batched convention with the global log panel.</para></summary>
     private readonly DispatcherTimer _flushTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
@@ -108,25 +113,21 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
     partial void OnLevelFilterChanged(LogLevel? value) => ReapplyFilter();
     partial void OnSourceFilterChanged(string value) => ReapplyFilter();
 
-    public WorkspaceLogViewModel()
+    public WorkspaceLogViewModel() : this(true) { }
+
+    internal WorkspaceLogViewModel(bool live)
     {
-        _unsubscribe = LogService.Instance.Subscribe(OnLogEnqueued);
-        _flushTimer.Tick += (_, _) => FlushPending();
-        _flushTimer.Start();
-        foreach (var e in LogService.Instance.Entries)
+        if (live)
         {
-            // 历史回填与实时订阅同一通道范围：仅固件/烧录通道。
-            // History backfill honors the same channel scope as the live subscription.
-            var channel = LogService.ChannelOf(e.Source);
-            if (channel is LogChannel.Firmware or LogChannel.Flash)
+            _unsubscribe = LogService.Instance.Subscribe(OnLogEnqueued);
+            _flushTimer.Tick += (_, _) => FlushPending();
+            _flushTimer.Start();
+            foreach (var entry in LogService.Instance.Entries)
             {
-                TrackEntry(e);
+                Enqueue(entry);
             }
         }
-
-        // 历史回填走整体重建（单次 Reset），不走逐条 Add。
-        // History backfill goes through one bulk rebuild (single Reset) instead of per-item Adds.
-        ReapplyFilter();
+        FlushPending();
     }
 
     /// <summary>
@@ -137,6 +138,9 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
     /// entry during log storms.
     /// </summary>
     private void OnLogEnqueued(object? sender, LogEntry entry)
+        => Enqueue(entry);
+
+    internal void Enqueue(LogEntry entry)
     {
         var channel = LogService.ChannelOf(entry.Source);
         if (channel != LogChannel.Firmware && channel != LogChannel.Flash)
@@ -146,16 +150,31 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
 
         lock (_pendingGate)
         {
-            _pendingEntries.Add(entry);
+            if (_disposed)
+            {
+                return;
+            }
+            _pendingEntries.Enqueue(entry);
+            _pendingCharacters += (long)entry.Message.Length + entry.Source.Length;
+            // Bound the display backlog even while the UI dispatcher is blocked.
+            while (_pendingEntries.Count > MaxEntries || _pendingCharacters > MaximumCharacters)
+            {
+                var removed = _pendingEntries.Dequeue();
+                _pendingCharacters -= (long)removed.Message.Length + removed.Source.Length;
+            }
         }
     }
 
     /// <summary>
-    /// <para>定时批量刷新：一次性把积压日志追加到集合并批量裁剪超限条目。</para>
-    /// Timed batch flush: appends the whole backlog at once and trims over-limit entries in bulk.
+    /// <para>按条数与字符预算分批刷新，只淘汰筛选视图中实际过期的条目。</para>
+    /// Flushes a bounded batch and removes only expired entries actually present in the filtered view.
     /// </summary>
-    private void FlushPending()
+    internal void FlushPending()
     {
+        if (_disposed)
+        {
+            return;
+        }
         List<LogEntry> batch;
         lock (_pendingGate)
         {
@@ -163,35 +182,62 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
             {
                 return;
             }
-            batch = new List<LogEntry>(_pendingEntries);
-            _pendingEntries.Clear();
-        }
-
-        // 一批日志先统一登记，再按命中筛选一次性追加（最多两次集合事件）。
-        // Track the whole batch first, then append all filter hits in one Apply
-        // (at most two collection events).
-        var added = new List<LogEntryViewModel>(batch.Count);
-        foreach (var entry in batch)
-        {
-            var vm = TrackEntry(entry);
-            if (MatchesFilter(vm))
+            batch = new List<LogEntry>(BatchEntries);
+            long characters = 0;
+            while (_pendingEntries.TryPeek(out var next) && batch.Count < BatchEntries)
             {
-                added.Add(vm);
+                var length = (long)next.Message.Length + next.Source.Length;
+                // Allow one large entry to make progress; the backlog has a hard character cap.
+                if (batch.Count > 0 && characters + length > BatchCharacters)
+                {
+                    break;
+                }
+                batch.Add(_pendingEntries.Dequeue());
+                characters += length;
+                _pendingCharacters -= length;
             }
         }
-
-        Entries.Apply(0, added);
-
-        // 批量裁剪：一次移除全部超限条目，替代逐条 Remove 的 O(n) 查找。
-        // Bulk trim: remove all over-limit entries in one pass instead of per-entry Remove.
-        var overflow = _allEntries.Count - MaxEntries;
-        if (overflow <= 0)
+        if (batch.Count == 0)
         {
             return;
         }
-        var removed = _allEntries.Take(overflow).ToArray();
-        Entries.Apply(removed.Length, Array.Empty<LogEntryViewModel>());
+        var previousCount = _allEntries.Count;
+        var added = new List<LogEntryViewModel>(batch.Count);
+        foreach (var entry in batch)
+        {
+            TrackEntry(entry);
+        }
+        var overflow = 0;
+        var visibleRemoved = 0;
+        while (_allEntries.Count - overflow > MaxEntries || _historyCharacters > MaximumCharacters)
+        {
+            var removed = _allEntries[overflow];
+            _historyCharacters -= removed.Text.Length;
+            // Count only entries actually present in the filtered view, including debounced searches.
+            if (overflow < previousCount && visibleRemoved < Entries.Count
+                && ReferenceEquals(Entries[visibleRemoved], removed))
+            {
+                visibleRemoved++;
+            }
+            if (--_sourceCounts[removed.Source] == 0)
+            {
+                _sourceCounts.Remove(removed.Source);
+                if (removed.Source.Length != 0)
+                {
+                    Sources.Remove(removed.Source);
+                }
+            }
+            overflow++;
+        }
+        for (var i = Math.Max(previousCount, overflow); i < _allEntries.Count; i++)
+        {
+            if (MatchesFilter(_allEntries[i]))
+            {
+                added.Add(_allEntries[i]);
+            }
+        }
         _allEntries.RemoveRange(0, overflow);
+        Entries.Apply(visibleRemoved, added);
     }
 
     /// <summary>
@@ -207,8 +253,10 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
             entry.Message);
 
         _allEntries.Add(vm);
-
-        if (_sourceSet.Add(entry.Source))
+        _historyCharacters += vm.Text.Length;
+        var sourceCount = _sourceCounts.GetValueOrDefault(entry.Source);
+        _sourceCounts[entry.Source] = sourceCount + 1;
+        if (sourceCount == 0 && entry.Source.Length != 0)
         {
             Sources.Add(entry.Source);
         }
@@ -248,21 +296,31 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
     /// <summary><para>清空全部日志条目。Clears all log entries.</para></summary>
     public void Clear()
     {
+        lock (_pendingGate)
+        {
+            _pendingEntries.Clear();
+            _pendingCharacters = 0;
+        }
         _allEntries.Clear();
+        _historyCharacters = 0;
         Entries.Clear();
         Sources.Clear();
-        _sourceSet.Clear();
+        _sourceCounts.Clear();
         Sources.Add(string.Empty);
     }
 
     public void Dispose()
     {
         if (_disposed) return;
-        _disposed = true;
+        lock (_pendingGate)
+        {
+            _disposed = true;
+        }
         _flushTimer.Stop();
         _searchDebounce?.Stop();
         _unsubscribe?.Invoke();
         _unsubscribe = null;
+        Clear();
         GC.SuppressFinalize(this);
     }
 }

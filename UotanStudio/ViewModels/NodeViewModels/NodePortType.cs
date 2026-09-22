@@ -30,4 +30,12 @@ public enum NodePortType
 
     /// <summary><para>布尔值。</para>Boolean value.</summary>
     Boolean,
+
+    /// <summary>Execution-owned patch directory and its staged file overlay.</summary>
+    PatchWorkspace,
+
+    /// <summary>Immutable package resource reference with verified consumption.</summary>
+    PatchAsset,
+    /// <summary>Immutable configuration edits for one image rebuild.</summary>
+    ImageEdits,
 }

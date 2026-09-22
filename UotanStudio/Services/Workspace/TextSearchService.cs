@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace UotanStudio.Services.Workspace;
@@ -101,21 +100,41 @@ internal static class TextSearchService
 
     internal static string Apply(string text, IReadOnlyList<TextSearchMatch> matches)
     {
-        var result = new StringBuilder();
+        long resultLength = 0;
         var offset = 0;
         foreach (var match in matches)
         {
             if (match.Offset < offset || match.Offset > text.Length || match.Length > text.Length - match.Offset
                 || !text.AsSpan(match.Offset, match.Length).SequenceEqual(match.Value))
                 throw new IOException("The document changed after searching. Search again.");
-            if ((long)result.Length + match.Offset - offset + match.Replacement.Length > MaximumTextLength)
+            resultLength += (long)match.Offset - offset + match.Replacement.Length;
+            if (resultLength > MaximumTextLength)
                 throw new IOException("Replacement exceeds the 8 MiB text limit.");
-            result.Append(text, offset, match.Offset - offset).Append(match.Replacement);
             offset = match.Offset + match.Length;
         }
-        if ((long)result.Length + text.Length - offset > MaximumTextLength)
+        resultLength += text.Length - offset;
+        if (resultLength > MaximumTextLength)
             throw new IOException("Replacement exceeds the 8 MiB text limit.");
-        return result.Append(text, offset, text.Length - offset).ToString();
+        if (matches.Count == 0)
+        {
+            return text;
+        }
+        // The immutable source and match snapshot determine the exact result size before allocation.
+        return string.Create((int)resultLength, (text, matches), static (destination, state) =>
+        {
+            var sourceOffset = 0;
+            var written = 0;
+            foreach (var match in state.matches)
+            {
+                var unchanged = state.text.AsSpan(sourceOffset, match.Offset - sourceOffset);
+                unchanged.CopyTo(destination[written..]);
+                written += unchanged.Length;
+                match.Replacement.AsSpan().CopyTo(destination[written..]);
+                written += match.Replacement.Length;
+                sourceOffset = match.Offset + match.Length;
+            }
+            state.text.AsSpan(sourceOffset).CopyTo(destination[written..]);
+        });
     }
 
     private static string PreserveCase(string source, string replacement)

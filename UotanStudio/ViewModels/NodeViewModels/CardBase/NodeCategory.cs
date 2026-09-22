@@ -34,5 +34,7 @@ public enum NodeCategory
     /// <para>输出节点。</para>
     /// Output node.
     /// </summary>
-    Output
+    Output,
+    /// <summary>Host-rendered composite node provided by a visual-plugin graph.</summary>
+    Plugin
 }

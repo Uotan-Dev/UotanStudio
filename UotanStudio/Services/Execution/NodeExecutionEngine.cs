@@ -1,3 +1,5 @@
+using UotanStudio.Services.Patching;
+using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Services.Execution;
@@ -17,6 +19,8 @@ public sealed class NodeExecutionEngine
     private readonly IUnifiedLog _log;
     private CancellationTokenSource? _cts;
     private volatile bool _isRunning;
+    private PatchRun? _patches;
+    private VisualPluginPackage? _package;
 
     /// <summary>
     /// <para>创建执行引擎。</para>
@@ -83,6 +87,13 @@ public sealed class NodeExecutionEngine
     {
         ArgumentNullException.ThrowIfNull(nodes);
         options ??= new NodeExecutionOptions();
+        if (_isRunning)
+        {
+            throw new InvalidOperationException("The workflow engine is already running.");
+        }
+        var ownsPatches = options.SharedPatches is null;
+        _patches = options.SharedPatches ?? new PatchRun(options.Preview);
+        _package = options.Package;
 
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var token = _cts.Token;
@@ -90,6 +101,32 @@ public sealed class NodeExecutionEngine
 
         try
         {
+            // Execution data belongs to one run; edited preconditions must not reuse an earlier result.
+            foreach (var node in nodes)
+            {
+                node.ExecutionStatus = NodeExecutionStatus.Idle;
+                foreach (var input in node.Input)
+                {
+                    input.Data = input.InitialValue;
+                }
+                foreach (var output in node.Output)
+                {
+                    output.Data = null;
+                }
+            }
+            if (options.ValidatePackage is not null)
+            {
+                var errors = options.ValidatePackage();
+                if (errors.Count > 0)
+                {
+                    return RejectPreflight(nodes, string.Join(Environment.NewLine, errors));
+                }
+            }
+            var patchPolicy = PatchWorkflowPolicy.Inspect(nodes);
+            if ((_patches.Preview || patchPolicy.HasPatches) && !patchPolicy.Safe)
+            {
+                return RejectPreflight(nodes, LanguageService.Instance.GetString("Node_Patch_UnsupportedGraph"));
+            }
             _log.Write(LogLevel.Info, "Engine", $"Starting execution with {nodes.Count} nodes, {connections?.Count ?? 0} connections");
 
             // 拓扑排序
@@ -97,7 +134,7 @@ public sealed class NodeExecutionEngine
             if (order == null)
             {
                 _log.Write(LogLevel.Error, "Engine", "Cycle detected in workflow, cannot execute");
-                return ExecutionResult.Failed("Cycle detected in workflow");
+                return RejectPreflight(nodes, "Cycle detected in workflow");
             }
 
             _log.Write(LogLevel.Debug, "Engine", $"Topological order computed: {order.Count} nodes");
@@ -109,6 +146,11 @@ public sealed class NodeExecutionEngine
             var aborted = false;
             var byId = nodes.ToDictionary(n => n.InstanceId);
             var flowOut = BuildFlowEdges(nodes, connections);
+            var gateError = PatchGatePolicy.Validate(nodes, connections, flowOut);
+            if (gateError is not null)
+            {
+                return RejectPreflight(nodes, gateError);
+            }
 
             // 已被 Loop / Parallel 子图调度执行过的节点（主循环跳过），与 Branch 未选中分支涉及的节点（标记 Skipped）。
             // Nodes already executed by Loop / Parallel sub-graph scheduling (skipped by the main loop),
@@ -134,6 +176,7 @@ public sealed class NodeExecutionEngine
 
                 if (skippedByBranch.Contains(node.InstanceId))
                 {
+                    RecordSkippedComposite(node, CompositeSkipReason.Condition);
                     node.ExecutionStatus = NodeExecutionStatus.Skipped;
                     NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
                     _log.Write(LogLevel.Debug, "Engine", $"Node '{node.InstanceId}' skipped by branch condition");
@@ -143,6 +186,7 @@ public sealed class NodeExecutionEngine
 
                 if (skippedByFailure.Contains(node.InstanceId))
                 {
+                    RecordSkippedComposite(node, CompositeSkipReason.UpstreamFailure);
                     node.ExecutionStatus = NodeExecutionStatus.Skipped;
                     NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
                     _log.Write(LogLevel.Debug, "Engine", $"Node '{node.InstanceId}' skipped because an upstream node failed");
@@ -212,12 +256,41 @@ public sealed class NodeExecutionEngine
                     ? ExecutionResult.PartiallySucceeded(failedNodes)
                     : ExecutionResult.Succeeded(total);
 
+            RecordUnreachedComposites(nodes, CompositeSkipReason.NotReached);
+            if (ownsPatches)
+            {
+                try
+                {
+                    await _patches.CompleteAsync(result.Status == ExecutionStatus.Succeeded, token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    result = ExecutionResult.Cancelled();
+                }
+                catch (Exception error)
+                {
+                    result = ExecutionResult.Failed(error.Message, failedNodes);
+                    _log.Write(LogLevel.Error, "Engine", error.Message);
+                }
+            }
+            result.PatchChanges = _patches.Changes;
+            result.PatchOutcome = _patches.Outcome;
+            result.CompositeExecutions = _patches.CompositeExecutions;
+            result.CompositeReportTruncated = _patches.CompositeReportTruncated;
             _log.Write(aborted ? LogLevel.Warn : LogLevel.Info, "Engine", aborted ? "Execution aborted" : $"Execution completed: {result.Status}");
             ExecutionCompleted?.Invoke(this, new ExecutionCompletedEventArgs(result));
             return result;
         }
         finally
         {
+            if (ownsPatches && _patches is not null)
+            {
+                try { await _patches.DisposeAsync().ConfigureAwait(false); }
+                catch (IOException error) { _log.Write(LogLevel.Warn, "Engine", error.Message); }
+                catch (UnauthorizedAccessException error) { _log.Write(LogLevel.Warn, "Engine", error.Message); }
+            }
+            _patches = null;
+            _package = null;
             _isRunning = false;
             _cts?.Dispose();
             _cts = null;
@@ -271,11 +344,18 @@ public sealed class NodeExecutionEngine
         node.ExecutionStatus = NodeExecutionStatus.Running;
         NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
 
+        int? compositeInvocation = null;
+        string? compositeError = null;
+
         try
         {
+            if (node is CompositeNodeViewModel composite && _patches is not null)
+            {
+                compositeInvocation = _patches.BeginComposite(composite);
+            }
             FlowInputs(node, byId, connections);
 
-            var context = new ExecutionContextImpl(_log, token, progress);
+            var context = new ExecutionContextImpl(_log, token, progress, _patches, _package);
             _log.Write(LogLevel.Info, "Engine", $"Executing node '{node.Title}' (id={node.InstanceId})");
             await node.ExecuteAsync(context).ConfigureAwait(false);
 
@@ -292,10 +372,19 @@ public sealed class NodeExecutionEngine
         }
         catch (Exception ex)
         {
+            compositeError = ex.Message;
+            _patches?.RecordFailure(ex);
             node.ExecutionStatus = NodeExecutionStatus.Failed;
             NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
             _log.Write(LogLevel.Error, "Engine", $"Node '{node.InstanceId}' failed: {ex.Message}");
             return false;
+        }
+        finally
+        {
+            if (compositeInvocation is { } invocation)
+            {
+                _patches!.EndComposite(invocation, node.ExecutionStatus, compositeError);
+            }
         }
     }
 
@@ -323,12 +412,16 @@ public sealed class NodeExecutionEngine
         switch (node.TypeKey)
         {
             case "Flow.Branch":
+            case "Patch.ApplyGate":
                 {
-                    var trueConnector = node.Output.FirstOrDefault(c => string.Equals(c.Title, "True", StringComparison.Ordinal));
+                    var isGate = node.TypeKey == "Patch.ApplyGate";
+                    var trueTitle = isGate ? "Apply" : "True";
+                    var falseTitle = isGate ? "Skip" : "False";
+                    var trueConnector = node.Output.FirstOrDefault(c => string.Equals(c.Title, trueTitle, StringComparison.Ordinal));
                     var condition = NodeDataUtil.ToBool(trueConnector?.Data, false);
-                    var untakenTitle = condition ? "False" : "True";
+                    var untakenTitle = condition ? falseTitle : trueTitle;
                     var untaken = CollectFlowReachable(node, untakenTitle, flowOut);
-                    var takenTitle = condition ? "True" : "False";
+                    var takenTitle = condition ? trueTitle : falseTitle;
                     var taken = CollectFlowReachable(node, takenTitle, flowOut);
                     // A branch join is reachable from both sides. It must remain executable
                     // when the untaken side is skipped, so only the untaken-only set is marked.
@@ -467,9 +560,38 @@ public sealed class NodeExecutionEngine
 
     private void MarkNodeSkipped(FlowNodeViewModel node, string reason)
     {
+        RecordSkippedComposite(node, CompositeSkipReason.UpstreamFailure);
         node.ExecutionStatus = NodeExecutionStatus.Skipped;
         NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
         _log.Write(LogLevel.Debug, "Engine", $"Node '{node.InstanceId}' skipped because {reason}");
+    }
+
+    private void RecordSkippedComposite(FlowNodeViewModel node, CompositeSkipReason reason)
+    {
+        if (node is CompositeNodeViewModel composite)
+        {
+            _patches?.RecordSkippedComposite(composite, reason);
+        }
+    }
+
+    private void RecordUnreachedComposites(IReadOnlyList<FlowNodeViewModel> nodes, CompositeSkipReason reason)
+    {
+        foreach (var node in nodes)
+        {
+            if (node is CompositeNodeViewModel && node.ExecutionStatus is NodeExecutionStatus.Idle or NodeExecutionStatus.Pending)
+            {
+                RecordSkippedComposite(node, reason);
+            }
+        }
+    }
+
+    private ExecutionResult RejectPreflight(IReadOnlyList<FlowNodeViewModel> nodes, string error)
+    {
+        RecordUnreachedComposites(nodes, CompositeSkipReason.PreflightRejected);
+        var result = ExecutionResult.Failed(error);
+        result.CompositeExecutions = _patches!.CompositeExecutions;
+        result.CompositeReportTruncated = _patches.CompositeReportTruncated;
+        return result;
     }
 
     /// <summary>
@@ -683,6 +805,17 @@ public sealed class NodeConnection
 /// </summary>
 public sealed class ExecutionResult
 {
+    /// <summary>Composite invocation evidence; success here does not imply file publication.</summary>
+    public IReadOnlyList<PatchCompositeExecution> CompositeExecutions { get; internal set; } = [];
+
+    /// <summary>Whether skipped composite rows were omitted due to the report capacity.</summary>
+    public bool CompositeReportTruncated { get; internal set; }
+
+    /// <summary>Patch-owned file effects, including previewed or discarded changes.</summary>
+    public IReadOnlyList<PatchChange> PatchChanges { get; internal set; } = [];
+
+    /// <summary>Publication outcome, independent of non-patch workflow effects.</summary>
+    public PatchRunOutcome PatchOutcome { get; internal set; }
     /// <summary>
     /// <para>执行状态。</para>
     /// Execution status.
@@ -799,15 +932,20 @@ internal sealed class ExecutionContextImpl : INodeExecutionContext
     private readonly CancellationToken _token;
     private readonly Action<double> _progress;
 
-    public ExecutionContextImpl(IUnifiedLog log, CancellationToken token, Action<double> progress)
+    public ExecutionContextImpl(IUnifiedLog log, CancellationToken token, Action<double> progress, PatchRun? patches = null,
+        VisualPluginPackage? package = null)
     {
         _log = log;
         _token = token;
         _progress = progress;
+        Patches = patches;
+        Package = package;
     }
 
     public IUnifiedLog Log => _log;
     public CancellationToken CancellationToken => _token;
+    public PatchRun? Patches { get; }
+    public VisualPluginPackage? Package { get; }
 
     public void ReportProgress(double progress)
     {

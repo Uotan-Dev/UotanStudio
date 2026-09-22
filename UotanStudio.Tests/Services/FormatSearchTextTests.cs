@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Models;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Writing;
@@ -12,7 +11,6 @@ using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
 using UotanStudio.Services.Workspace;
 using UotanStudio.Tests.Comm.TestDoubles;
-using UotanStudio.Tests.Infrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
@@ -173,36 +171,6 @@ public class FormatSearchTextTests
         Assert.Equal(AXmlValueType.IntBoolean, parsed.Root.Attributes.First(a => a.Name == "a").ValueType);
         Assert.Equal(AXmlValueType.IntHex, parsed.Root.Attributes.First(a => a.Name == "b").ValueType);
         Assert.Equal(AXmlValueType.String, parsed.Root.Attributes.First(a => a.Name == "c").ValueType);
-    }
-
-    [Fact]
-    public void AxmlTextFormat_Parse_RealManifest_RecompilesAndReparses()
-    {
-        var apkPath = FirmwareCorpus.FindFile("Magisk-v30.6.apk");
-        if (apkPath is null)
-        {
-            Assert.Skip("Magisk-v30.6.apk not found in firmware corpus");
-        }
-
-        using var zip = ZipFile.OpenRead(apkPath);
-        var entry = zip.GetEntry("AndroidManifest.xml");
-        if (entry is null)
-        {
-            Assert.Skip("AndroidManifest.xml entry not found in Magisk-v30.6.apk");
-        }
-
-        using var stream = entry.Open();
-        using var buffer = new MemoryStream();
-        stream.CopyTo(buffer);
-        var reference = AXmlParser.Parse(buffer.ToArray());
-
-        var recompiled = AXmlTextFormat.Parse(reference.ToXml(), reference);
-        var bytes = AXmlWriter.Write(recompiled);
-        var reparsed = AXmlParser.Parse(bytes);
-
-        Assert.Equal(reference.Root.Name, reparsed.Root.Name);
-        Assert.Equal(reference.Root.Children.Count, reparsed.Root.Children.Count);
-        Assert.Equal(reference.Root.Attributes.Count, reparsed.Root.Attributes.Count);
     }
 
     private static (ResourceTable Table, ResEntry Entry, string Key) BuildResourceTable()

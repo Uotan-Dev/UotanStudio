@@ -55,6 +55,28 @@ public class ViewLocator : IDataTemplate
         if (factory is not null)
         {
             var view = factory();
+            if (param is UotanStudio.ViewModels.Editors.ElfInfoViewModel
+                or UotanStudio.ViewModels.Editors.PartitionEditorViewModel
+                or UotanStudio.ViewModels.Editors.LogEditorViewModel
+                or UotanStudio.ViewModels.Editors.DexEditorViewModel
+                or UotanStudio.ViewModels.Editors.FirmwareInfoViewModel
+                or UotanStudio.ViewModels.Editors.DtbEditorViewModel
+                or UotanStudio.ViewModels.Editors.ManifestEditorViewModel
+                or UotanStudio.ViewModels.Editors.ArscEditorViewModel
+                or UotanStudio.ViewModels.Editors.FileManagerEditorViewModel
+                or UotanStudio.ViewModels.Editors.FileViewModel
+                or UotanStudio.ViewModels.Editors.HexEditorViewModel
+                or UotanStudio.ViewModels.Editors.ApkEditorViewModel)
+            {
+                if (view is UserControl editor && editor.Background is null)
+                {
+                    editor.Background = Avalonia.Media.Brushes.Transparent;
+                }
+                // Tunnel before child selection handlers so their more specific properties win.
+                view.AddHandler(Avalonia.Input.InputElement.PointerPressedEvent,
+                    (_, _) => UotanStudio.Services.Workspace.DocumentNotifications.Publish((Dock.Model.Mvvm.Controls.Document)param),
+                    Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+            }
             _viewCache.Add(param, view);
             return view;
         }

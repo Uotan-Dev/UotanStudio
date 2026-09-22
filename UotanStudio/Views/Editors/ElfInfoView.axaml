@@ -24,7 +24,7 @@
                 IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
             <TextBlock Classes="error-banner" Text="{Binding ErrorMessage}" />
         </Border>
-        <TabControl IsVisible="{Binding IsRecognized}" Margin="12,8">
+        <TabControl SelectedIndex="{Binding SelectedPageIndex, Mode=TwoWay}" IsVisible="{Binding IsRecognized}" Margin="12,8">
             <TabItem Header="{DynamicResource Dock_Elf_Header}">
                 <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                     <ItemsControl ItemsSource="{Binding Fields}" Margin="4,12">
@@ -44,7 +44,7 @@
                 <DockPanel Margin="0,8">
                     <TextBlock DockPanel.Dock="Top" Margin="8" Text="{DynamicResource Dock_Elf_NoSegments}"
                                IsVisible="{Binding !Segments.Count}" Opacity="0.7" />
-                    <DataGrid ItemsSource="{Binding Segments}" IsReadOnly="True" AutoGenerateColumns="False"
+                    <DataGrid ItemsSource="{Binding Segments}" SelectedItem="{Binding SelectedSegment, Mode=TwoWay}" IsReadOnly="True" AutoGenerateColumns="False"
                               CanUserResizeColumns="True" GridLinesVisibility="Horizontal" FontFamily="Consolas">
                         <DataGrid.Columns>
                             <DataGridTextColumn x:DataType="vm:ElfSegmentRow" Header="#" Binding="{Binding Index}" />
@@ -64,7 +64,7 @@
                 <DockPanel Margin="0,8">
                     <TextBlock DockPanel.Dock="Top" Margin="8" Text="{DynamicResource Dock_Elf_NoSections}"
                                IsVisible="{Binding !Sections.Count}" Opacity="0.7" />
-                    <DataGrid ItemsSource="{Binding Sections}" IsReadOnly="True" AutoGenerateColumns="False"
+                    <DataGrid ItemsSource="{Binding Sections}" SelectedItem="{Binding SelectedSection, Mode=TwoWay}" IsReadOnly="True" AutoGenerateColumns="False"
                               CanUserResizeColumns="True" GridLinesVisibility="Horizontal" FontFamily="Consolas">
                         <DataGrid.Columns>
                             <DataGridTextColumn x:DataType="vm:ElfSectionRow" Header="#" Binding="{Binding Index}" />

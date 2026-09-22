@@ -10,6 +10,7 @@ namespace UotanStudio.Services.Projects;
 [JsonSerializable(typeof(WorkflowSnapshot))]
 [JsonSerializable(typeof(List<NodeDto>))]
 [JsonSerializable(typeof(List<ConnectionDto>))]
+[JsonSerializable(typeof(List<NodePortDto>))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
@@ -96,6 +97,31 @@ public sealed class NodeDto
     /// User-edited initial values of input ports (port title → string value). Only explicitly set values are persisted.
     /// </summary>
     public Dictionary<string, string>? InputInitialValues { get; set; }
+
+    /// <summary>User-edited initial values keyed by stable input port id.</summary>
+    public Dictionary<string, string>? InputInitialValuesByPortId { get; set; }
+
+    /// <summary>Input schema retained so unavailable node types can be represented without data loss.</summary>
+    public List<NodePortDto> InputPorts { get; set; } = [];
+
+    /// <summary>Output schema retained so unavailable node types can be represented without data loss.</summary>
+    public List<NodePortDto> OutputPorts { get; set; } = [];
+}
+
+/// <summary>Stable persisted node-port schema.</summary>
+public sealed class NodePortDto
+{
+    /// <summary>Stable non-localized port identifier.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Display title retained for compatibility and missing-node presentation.</summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>Serialized node port type name.</summary>
+    public string PortType { get; set; } = "Any";
+
+    /// <summary>Maximum allowed connections; zero means unlimited.</summary>
+    public int MaxConnections { get; set; }
 }
 
 /// <summary>
@@ -104,6 +130,12 @@ public sealed class NodeDto
 /// </summary>
 public sealed class ConnectionDto
 {
+    /// <summary>Stable source port id.</summary>
+    public string? SourcePortId { get; set; }
+
+    /// <summary>Stable target port id.</summary>
+    public string? TargetPortId { get; set; }
+
     /// <summary>
     /// <para>源连接器标题。</para>
     /// Source connector title.

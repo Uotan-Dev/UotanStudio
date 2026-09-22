@@ -12,6 +12,9 @@ using UotanStudio.ViewModels.Editors;
 /// </summary>
 public class ActiveDocumentChangedMessage
 {
+    /// <summary>Preserves document identity for editors without a legacy typed payload.</summary>
+    public ActiveDocumentChangedMessage(Document? activeDocument) => ActiveDocument = activeDocument;
+
     /// <summary>Creates a selection notification for a screen-mirror document.</summary>
     public ActiveDocumentChangedMessage(ScreenMirrorViewModel screenMirror) => ActiveDocument = screenMirror;
     /// <summary>
