@@ -22,9 +22,6 @@ public static class TopLevelExtensions
             return TopLevel.GetTopLevel(window);
         }
 
-        return Application.Current?.ApplicationLifetime is ISingleViewApplicationLifetime singleView
-            && singleView.MainView is { } mainView
-            ? TopLevel.GetTopLevel(mainView)
-            : null;
+        return null;
     }
 }

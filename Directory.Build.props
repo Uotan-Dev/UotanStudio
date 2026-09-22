@@ -1,7 +1,6 @@
 <Project>
 
   <PropertyGroup>
-    <!-- Mobile entry projects override this with their own platform TFM (net10.0-android). -->
     <TargetFramework Condition="'$(TargetFramework)' == ''">net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>

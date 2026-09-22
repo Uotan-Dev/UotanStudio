@@ -34,11 +34,5 @@ public enum UsbApiKind
     /// Uses the HarmonyOS USBManager backend via IPC bridge service.
     /// <para>使用基于 IPC 桥接服务的 HarmonyOS USBManager 后端。</para>
     /// </summary>
-    HarmonyOS = 4,
-
-    /// <summary>
-    /// Uses the Android USB Host backend (android.hardware.usb) on the mobile runtime.
-    /// <para>在移动运行时使用 Android USB Host 后端（android.hardware.usb）。</para>
-    /// </summary>
-    AndroidUsbHost = 5
+    HarmonyOS = 4
 }
