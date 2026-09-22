@@ -37,16 +37,49 @@ public sealed class PatchAsset
         {
             throw new InvalidDataException(string.Join(Environment.NewLine, errors));
         }
+        if (package.BundleRoot is { } root)
+        {
+            var rootErrors = VisualPluginValidation.Validate(root);
+            if (rootErrors.Count != 0)
+            {
+                throw new InvalidDataException(string.Join(Environment.NewLine, rootErrors));
+            }
+        }
         var source = new VisualPluginPackage
         {
             Kind = VisualPluginKind.CompositeNode,
             Manifest = new VisualPluginManifest { Id = package.Manifest.Id, Name = package.Manifest.Name },
             Assets = package.Assets.Select(asset => asset.Snapshot()).ToList(),
-            BundlePath = package.BundlePath
+            BundlePath = package.BundlePath,
+            BundleRoot = SnapshotResourceScope(package.BundleRoot ?? package)
         };
         var selected = source.Assets.SingleOrDefault(asset => string.Equals(asset.Id, id, StringComparison.Ordinal))
             ?? throw new InvalidDataException($"Patch resource '{id}' does not exist.");
         return new PatchAsset(source, selected);
+    }
+
+    private static VisualPluginPackage SnapshotResourceScope(VisualPluginPackage package)
+    {
+        // Capture the archive's complete resource inventory without retaining mutable editor graphs.
+        // A child resource shares its archive with siblings whose entries must remain validated.
+        var snapshot = new VisualPluginPackage
+        {
+            Kind = VisualPluginKind.CompositeNode,
+            Manifest = new VisualPluginManifest { Id = package.Manifest.Id, Name = package.Manifest.Name },
+            Assets = package.Assets.Select(asset => asset.Snapshot()).ToList()
+        };
+        foreach (var node in package.Graph.Nodes.Where(node => node.CompositePackage is not null))
+        {
+            var child = SnapshotResourceScope(node.CompositePackage!);
+            snapshot.Graph.Nodes.Add(new NodeDto
+            {
+                InstanceId = node.InstanceId,
+                TypeKey = child.NodeTypeKey,
+                CompositePackage = child
+            });
+            snapshot.Manifest.RequiredNodeTypes.Add(child.NodeTypeKey);
+        }
+        return snapshot;
     }
 
     /// <summary>Verifies and copies resource bytes to a caller-owned staging stream.</summary>

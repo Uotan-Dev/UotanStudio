@@ -32,6 +32,7 @@ public sealed partial class ProjectSession
 
         var destinationDirectory = Path.GetDirectoryName(fullPath)!;
         var node = _workspace.CaptureWorkflow(destinationName);
+        node.EnsureSupportedVersion();
         var images = _workspace.CaptureImages();
         var packing = _workspace.CaptureSettings();
         var documents = _workspace.CaptureDocuments(destinationDirectory);

@@ -6,8 +6,8 @@ public sealed partial class PatchNodeViewModel
 {
     private static void ConfigureStructuredNode(PatchNodeViewModel node)
     {
-        var json = node.TypeKey is "Patch.JsonQuery" or "Patch.JsonEdit";
-        var edit = node.TypeKey is "Patch.JsonEdit" or "Patch.IniEdit";
+        var json = node.TypeKey is "Config.Json.Query" or "Config.Json.Edit";
+        var edit = node.TypeKey is "Config.Json.Edit" or "Config.Ini.Edit";
         node.AddInput("Text", NodePortType.Text, string.Empty, multiline: true,
             hint: json ? "Node_Patch_JsonHint" : "Node_Patch_IniHint");
         if (json)
@@ -37,8 +37,8 @@ public sealed partial class PatchNodeViewModel
 
     private void ExecuteStructuredNode(CancellationToken token)
     {
-        var json = TypeKey is "Patch.JsonQuery" or "Patch.JsonEdit";
-        if (TypeKey is "Patch.JsonQuery" or "Patch.IniQuery")
+        var json = TypeKey is "Config.Json.Query" or "Config.Json.Edit";
+        if (TypeKey is "Config.Json.Query" or "Config.Ini.Query")
         {
             var value = json ? JsonPatch.Read(Text("Text"), Text("JSON Pointer"), token)
                 : IniPatch.Read(Text("Text"), Text("Section"), Text("Key"), token);

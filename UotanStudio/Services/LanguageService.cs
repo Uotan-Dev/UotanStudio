@@ -133,7 +133,7 @@ public sealed class LanguageService
         else
         {
             // 未注册的语言包，使用默认模块列表
-            modules = ["Common", "Menu", "Dock", "Node", "Settings", "Device"];
+            modules = ["Common", "Menu", "Dock", "Node", "Settings", "Device", "Interaction"];
         }
 
         // 按模块加载语言资源。先全部创建完成，确保替换时不会暴露半套语言资源。
@@ -207,12 +207,14 @@ public sealed class LanguageService
             ("en-US", "Menu") => new global::UotanStudio.Locale.EnUs.Menu(),
             ("en-US", "Dock") => new global::UotanStudio.Locale.EnUs.Dock(),
             ("en-US", "Node") => new global::UotanStudio.Locale.EnUs.Node(),
+            ("en-US", "Interaction") => new global::UotanStudio.Locale.EnUs.Interaction(),
             ("en-US", "Settings") => new global::UotanStudio.Locale.EnUs.Settings(),
             ("en-US", "Device") => new global::UotanStudio.Locale.EnUs.Device(),
             ("zh-CN", "Common") => new global::UotanStudio.Locale.ZhCn.Common(),
             ("zh-CN", "Menu") => new global::UotanStudio.Locale.ZhCn.Menu(),
             ("zh-CN", "Dock") => new global::UotanStudio.Locale.ZhCn.Dock(),
             ("zh-CN", "Node") => new global::UotanStudio.Locale.ZhCn.Node(),
+            ("zh-CN", "Interaction") => new global::UotanStudio.Locale.ZhCn.Interaction(),
             ("zh-CN", "Settings") => new global::UotanStudio.Locale.ZhCn.Settings(),
             ("zh-CN", "Device") => new global::UotanStudio.Locale.ZhCn.Device(),
             _ => throw new ArgumentException($"Unsupported locale module: {language}/{module}", nameof(module)),

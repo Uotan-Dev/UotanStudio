@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
+using UotanStudio.Services.Projects;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 
@@ -32,7 +33,7 @@ public class OutputNodeViewModel : FlowNodeViewModel
         var node = new OutputNodeViewModel("Log Output")
         {
             Location = new Point(100, 100),
-            TypeKey = "Output.Log"
+            TypeKey = "Feedback.Log.Write"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Message", PortType = NodePortType.Text });
         node.Input.Add(new NodeConnectorViewModel { Title = "Level", PortType = NodePortType.Text });
@@ -48,7 +49,7 @@ public class OutputNodeViewModel : FlowNodeViewModel
         var node = new OutputNodeViewModel("Progress Report")
         {
             Location = new Point(100, 100),
-            TypeKey = "Output.Progress"
+            TypeKey = "Feedback.Progress.Report"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Progress", PortType = NodePortType.Number });
         node.Input.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
@@ -64,17 +65,20 @@ public class OutputNodeViewModel : FlowNodeViewModel
         var node = new OutputNodeViewModel("Save Result")
         {
             Location = new Point(100, 100),
-            TypeKey = "Output.Save"
+            TypeKey = "File.Artifact.Publish"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Artifact", PortType = NodePortType.Artifact });
         node.Input.Add(new NodeConnectorViewModel { Title = "Path", PortType = NodePortType.Path });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Path", PortType = NodePortType.Path });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Artifact", PortType = NodePortType.Artifact });
         return node;
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的输出逻辑：Output.Log 写日志、Output.Progress 上报进度、Output.Save 保存文件。</para>
-    /// Dispatches the output logic by the node type key (TypeKey): Output.Log writes a log entry, Output.Progress reports
-    /// progress, and Output.Save writes a file.
+    /// <para>按节点类型键（TypeKey）分发对应的输出逻辑：Feedback.Log.Write 写日志、Feedback.Progress.Report 上报进度、File.Artifact.Publish 保存文件。</para>
+    /// Dispatches the output logic by the node type key (TypeKey): Feedback.Log.Write writes a log entry, Feedback.Progress.Report reports
+    /// progress, and File.Artifact.Publish writes a file.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -88,15 +92,14 @@ public class OutputNodeViewModel : FlowNodeViewModel
     {
         switch (TypeKey)
         {
-            case "Output.Log":
+            case "Feedback.Log.Write":
                 ExecuteLog(context);
                 break;
-            case "Output.Progress":
+            case "Feedback.Progress.Report":
                 ExecuteProgress(context);
                 break;
-            case "Output.Save":
-                ExecuteSave(context);
-                break;
+            case "File.Artifact.Publish":
+                return ExecuteSaveAsync(context);
             default:
                 return base.ExecuteAsync(context);
         }
@@ -123,24 +126,20 @@ public class OutputNodeViewModel : FlowNodeViewModel
             string.IsNullOrEmpty(status) ? $"Progress {percent:0.0}%  进度。" : $"Progress {percent:0.0}% — {status}  进度。");
     }
 
-    private void ExecuteSave(INodeExecutionContext context)
+    private async Task ExecuteSaveAsync(INodeExecutionContext context)
     {
-        var data = NodeDataUtil.ToBytes(ReadInput("Data")) ?? [];
         var path = Convert.ToString(ReadInput("Path"), CultureInfo.InvariantCulture);
-        if (string.IsNullOrWhiteSpace(path))
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var data = ReadInput("Data");
+        var artifact = ReadInput("Artifact");
+        if ((data is null) == (artifact is null))
         {
-            context.Log.Write(LogLevel.Warn, Title, "No output Path.  缺少输出路径。");
-            return;
+            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Publish_ChooseSource"));
         }
-
-        var directory = Path.GetDirectoryName(path);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        File.WriteAllBytes(path, data);
-        context.Log.Write(LogLevel.Info, Title, $"Saved {data.Length} bytes to '{path}'  已保存。");
+        var length = await NodeArtifactPublisher.PublishAsync(artifact ?? data, path, context.CancellationToken).ConfigureAwait(false);
+        WriteOutput("Path", Path.GetFullPath(path));
+        WriteOutput("Artifact", new FileArtifact(Path.GetFullPath(path)));
+        context.Log.Write(LogLevel.Info, Title, $"Saved {length} bytes to '{path}'.");
     }
 
     private static LogLevel? ParseLogLevel(string text)

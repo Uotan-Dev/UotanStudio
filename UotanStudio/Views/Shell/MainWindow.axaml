@@ -240,6 +240,10 @@
 							  ToggleType="CheckBox"
 							  IsChecked="{Binding MenuVM.WorkspacePanels.ProjectSettingVisible, Mode=OneWay}"
 							  Command="{Binding MenuVM.ToggleProjectSettingCommand}" />
+					<MenuItem Header="{DynamicResource Menu_WindowPlugins}"
+							  ToggleType="CheckBox"
+							  IsChecked="{Binding MenuVM.WorkspacePanels.PluginToolVisible, Mode=OneWay}"
+							  Command="{Binding MenuVM.TogglePluginToolCommand}" />
 					<MenuItem Header="{DynamicResource Menu_WindowImages}"
 							  ToggleType="CheckBox"
 							  IsChecked="{Binding MenuVM.WorkspacePanels.ImagesViewVisible, Mode=OneWay}"

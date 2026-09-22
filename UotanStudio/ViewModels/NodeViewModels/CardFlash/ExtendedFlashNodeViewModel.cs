@@ -31,18 +31,7 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
     /// <para>创建默认的 bootloader 刷写节点。</para>
     /// Creates a default flash-bootloader node.
     /// </summary>
-    public static ExtendedFlashNodeViewModel CreateFlashBootloaderNode()
-    {
-        var node = new ExtendedFlashNodeViewModel("Flash Bootloader")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Flash.Bootloader"
-        };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Bootloader", PortType = NodePortType.Path });
-        node.Output.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
-        return node;
-    }
+    public static FlashNodeViewModel CreateFlashBootloaderNode() => FlashNodeViewModel.CreateFlashPreset("bootloader");
 
     /// <summary>
     /// <para>创建默认的全部擦除节点，擦除设备上的所有分区。</para>
@@ -53,7 +42,7 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
         var node = new ExtendedFlashNodeViewModel("Erase All")
         {
             Location = new Point(100, 100),
-            TypeKey = "Flash.EraseAll"
+            TypeKey = "Device.Storage.EraseAll"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
         node.Output.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
@@ -69,7 +58,7 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
         var node = new ExtendedFlashNodeViewModel("OTA Sideload")
         {
             Location = new Point(100, 100),
-            TypeKey = "Flash.OtaSideload"
+            TypeKey = "Device.Ota.Sideload"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
         node.Input.Add(new NodeConnectorViewModel { Title = "OTA Package", PortType = NodePortType.Path });
@@ -82,29 +71,17 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
     /// Creates a default firmware-overwrite node that overwrites a partition with an external image
     /// (defaults to <c>super</c>, overridable).
     /// </summary>
-    public static ExtendedFlashNodeViewModel CreateOverwriteFirmwareNode()
-    {
-        var node = new ExtendedFlashNodeViewModel("Overwrite Firmware")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Flash.OverwriteFirmware"
-        };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Partition", PortType = NodePortType.Text, InitialValue = "super" });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Firmware", PortType = NodePortType.Path });
-        node.Output.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
-        return node;
-    }
+    public static FlashNodeViewModel CreateOverwriteFirmwareNode() => FlashNodeViewModel.CreateFlashPreset("super");
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的扩展烧录逻辑：Flash.Bootloader 刷写 bootloader 分区、
-    /// Flash.EraseAll 调 <see cref="FlashService.EraseAllAsync"/>、Flash.OtaSideload 调
-    /// <see cref="FlashService.FlashSideloadAsync"/>、Flash.OverwriteFirmware 覆盖指定分区。
+    /// <para>按节点类型键（TypeKey）分发对应的扩展烧录逻辑：Device.Partition.Flash 刷写 bootloader 分区、
+    /// Device.Storage.EraseAll 调 <see cref="FlashService.EraseAllAsync"/>、Device.Ota.Sideload 调
+    /// <see cref="FlashService.FlashSideloadAsync"/>、Device.Partition.Flash 覆盖指定分区。
     /// 设备缺失时告警并短路。</para>
-    /// Dispatches extended flash logic by the node type key (TypeKey): Flash.Bootloader flashes the
-    /// bootloader partition, Flash.EraseAll calls <see cref="FlashService.EraseAllAsync"/>,
-    /// Flash.OtaSideload calls <see cref="FlashService.FlashSideloadAsync"/>, and
-    /// Flash.OverwriteFirmware overwrites the selected partition. A missing device logs a warning and
+    /// Dispatches extended flash logic by the node type key (TypeKey): Device.Partition.Flash flashes the
+    /// bootloader partition, Device.Storage.EraseAll calls <see cref="FlashService.EraseAllAsync"/>,
+    /// Device.Ota.Sideload calls <see cref="FlashService.FlashSideloadAsync"/>, and
+    /// Device.Partition.Flash overwrites the selected partition. A missing device logs a warning and
     /// short-circuits.
     /// </summary>
     /// <param name="context">
@@ -122,17 +99,11 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
             context.CancellationToken.ThrowIfCancellationRequested();
             switch (TypeKey)
             {
-                case "Flash.Bootloader":
-                    await ExecuteFlashBootloaderAsync(context).ConfigureAwait(false);
-                    break;
-                case "Flash.EraseAll":
+                case "Device.Storage.EraseAll":
                     await ExecuteEraseAllAsync(context).ConfigureAwait(false);
                     break;
-                case "Flash.OtaSideload":
+                case "Device.Ota.Sideload":
                     await ExecuteOtaSideloadAsync(context).ConfigureAwait(false);
-                    break;
-                case "Flash.OverwriteFirmware":
-                    await ExecuteOverwriteAsync(context).ConfigureAwait(false);
                     break;
                 default:
                     await base.ExecuteAsync(context).ConfigureAwait(false);
@@ -146,37 +117,10 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
         catch (Exception ex)
         {
             context.Log.Write(LogLevel.Error, Title, $"Extended flash node failed: {ex.Message}  扩展烧录节点执行失败。");
+            throw;
         }
     }
 
-    private async Task ExecuteFlashBootloaderAsync(INodeExecutionContext context)
-    {
-        var device = NodeDataUtil.ToDevice(ReadInput("Device"));
-        if (device is null)
-        {
-            context.Log.Write(LogLevel.Warn, Title, "No device connected. 未连接设备。");
-            WriteOutput("Status", "no-device");
-            return;
-        }
-
-        var bootloader = Text(ReadInput("Bootloader"));
-        if (string.IsNullOrWhiteSpace(bootloader) || !File.Exists(bootloader))
-        {
-            context.Log.Write(LogLevel.Warn, Title, $"Bootloader path invalid: {bootloader ?? "<empty>"}  引导加载器路径无效。");
-            WriteOutput("Status", "invalid");
-            return;
-        }
-
-        var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
-        var result = await FlashService.Default.FlashImageAsync(
-            new DeviceInfo(device), "bootloader", bootloader, progress, context.CancellationToken).ConfigureAwait(false);
-
-        WriteOutput("Status", result.Summary);
-        context.Log.Write(result.Success ? LogLevel.Info : LogLevel.Error, Title,
-            result.Success
-                ? $"{result.Summary}  引导加载器刷写完成。"
-                : $"Bootloader flash failed: {result.Summary}  引导加载器刷写失败。");
-    }
 
     private async Task ExecuteEraseAllAsync(INodeExecutionContext context)
     {
@@ -185,7 +129,7 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
         {
             context.Log.Write(LogLevel.Warn, Title, "No device connected. 未连接设备。");
             WriteOutput("Status", "no-device");
-            return;
+            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Device_InvalidInput"));
         }
 
         var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
@@ -193,6 +137,10 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
             new DeviceInfo(device), progress, context.CancellationToken).ConfigureAwait(false);
 
         WriteOutput("Status", result.Summary);
+        if (!result.Success)
+        {
+            throw new InvalidOperationException(result.Summary);
+        }
         context.Log.Write(result.Success ? LogLevel.Info : LogLevel.Error, Title,
             result.Success
                 ? $"{result.Summary}  整机擦除完成。"
@@ -206,7 +154,7 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
         {
             context.Log.Write(LogLevel.Warn, Title, "No device connected. 未连接设备。");
             WriteOutput("Status", "no-device");
-            return;
+            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Device_InvalidInput"));
         }
 
         var package = Text(ReadInput("OTA Package"));
@@ -214,7 +162,7 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
         {
             context.Log.Write(LogLevel.Warn, Title, $"OTA package invalid: {package ?? "<empty>"}  OTA 包路径无效。");
             WriteOutput("Status", "invalid");
-            return;
+            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Device_InvalidInput"));
         }
 
         var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
@@ -222,46 +170,16 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
             new DeviceInfo(device), package, progress, context.CancellationToken).ConfigureAwait(false);
 
         WriteOutput("Status", result.Summary);
+        if (!result.Success)
+        {
+            throw new InvalidOperationException(result.Summary);
+        }
         context.Log.Write(result.Success ? LogLevel.Info : LogLevel.Error, Title,
             result.Success
                 ? $"{result.Summary}  OTA 侧载完成。"
                 : $"OTA sideload failed: {result.Summary}  OTA 侧载失败。");
     }
 
-    private async Task ExecuteOverwriteAsync(INodeExecutionContext context)
-    {
-        var device = NodeDataUtil.ToDevice(ReadInput("Device"));
-        if (device is null)
-        {
-            context.Log.Write(LogLevel.Warn, Title, "No device connected. 未连接设备。");
-            WriteOutput("Status", "no-device");
-            return;
-        }
-
-        var partition = Text(ReadInput("Partition"));
-        if (string.IsNullOrWhiteSpace(partition))
-        {
-            partition = "super";
-        }
-
-        var firmware = Text(ReadInput("Firmware"));
-        if (string.IsNullOrWhiteSpace(firmware) || !File.Exists(firmware))
-        {
-            context.Log.Write(LogLevel.Warn, Title, $"Firmware path invalid: {firmware ?? "<empty>"}  固件路径无效。");
-            WriteOutput("Status", "invalid");
-            return;
-        }
-
-        var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
-        var result = await FlashService.Default.FlashImageAsync(
-            new DeviceInfo(device), partition, firmware, progress, context.CancellationToken).ConfigureAwait(false);
-
-        WriteOutput("Status", result.Summary);
-        context.Log.Write(result.Success ? LogLevel.Info : LogLevel.Error, Title,
-            result.Success
-                ? $"{result.Summary}  固件覆盖完成。"
-                : $"Firmware overwrite failed: {result.Summary}  固件覆盖失败。");
-    }
 
     private static string? Text(object? value) => Convert.ToString(value, CultureInfo.InvariantCulture);
 }

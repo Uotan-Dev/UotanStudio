@@ -29,7 +29,7 @@ public sealed class PatchGateTests
         });
         var controller = scenario == "zero-loop"
             ? (FlowNodeViewModel)FlowControlNodeViewModel.CreateLoopNode()
-            : PatchNodeViewModel.Create("Patch.Assert");
+            : PatchNodeViewModel.Create("Validation.Boolean.Assert");
         if (scenario == "zero-loop")
         {
             controller.Input.Single(port => port.Title == "Count").InitialValue = 0;
@@ -59,7 +59,7 @@ public sealed class PatchGateTests
     [Fact]
     public async Task Execute_UpstreamFailure_ReportsCompositeSkipWithoutInvokingPackage()
     {
-        var failure = PatchNodeViewModel.Create("Patch.Assert");
+        var failure = PatchNodeViewModel.Create("Validation.Boolean.Assert");
         var invoked = false;
         var composite = new CompositeNodeViewModel(new VisualPluginPackage
         {
@@ -94,7 +94,7 @@ public sealed class PatchGateTests
         var inner = new VisualPluginPackage
         {
             Kind = VisualPluginKind.CompositeNode,
-            Manifest = new VisualPluginManifest { Id = "tests.parent-evidence-inner", Name = "Inner", RequiredNodeTypes = ["Patch.ApplyGate"] },
+            Manifest = new VisualPluginManifest { Id = "tests.parent-evidence-inner", Name = "Inner", RequiredNodeTypes = ["Flow.Applicability.Gate"] },
             Graph = new WorkflowSnapshot { Nodes = WorkflowPersistenceService.BuildNodeDtos([start]) }
         };
         NodeFactoryRegistrar.RegisterVisualPlugin(inner);
@@ -111,7 +111,7 @@ public sealed class PatchGateTests
                 TestContext.Current.CancellationToken);
 
             var conflict = expected == UotanStudio.Services.Patching.CompositeApplicability.Conflict;
-            Assert.Equal(conflict ? ExecutionStatus.PartiallySucceeded : ExecutionStatus.Succeeded, result.Status);
+            Assert.Equal(conflict ? ExecutionStatus.Failed : ExecutionStatus.Succeeded, result.Status);
             if (conflict)
             {
                 Assert.Equal(UotanStudio.Services.Patching.PatchRunOutcome.Conflict, result.PatchOutcome);
@@ -218,11 +218,11 @@ public sealed class PatchGateTests
     }
 
     [Theory]
-    [InlineData("Patch.ImageWriteText")]
-    [InlineData("Patch.ImageApplyTexts")]
-    [InlineData("Patch.ImageSetAttributes")]
-    [InlineData("Patch.ImageSetXattr")]
-    [InlineData("Patch.ImageDeleteXattr")]
+    [InlineData("Image.Text.Stage")]
+    [InlineData("Image.Edit.Apply")]
+    [InlineData("Image.File.SetAttributes")]
+    [InlineData("Image.Xattr.Set")]
+    [InlineData("Image.Xattr.Delete")]
     public async Task Execute_UnguardedImageWrite_RejectsBeforeAnyNodeExecutes(string type)
     {
         var gate = Gate(true, true, false);
@@ -282,7 +282,7 @@ public sealed class PatchGateTests
         var package = new VisualPluginPackage
         {
             Kind = VisualPluginKind.CompositeNode,
-            Manifest = new VisualPluginManifest { Id = "tests.gate-inner", Name = "Inner", RequiredNodeTypes = ["Patch.WriteText"] },
+            Manifest = new VisualPluginManifest { Id = "tests.gate-inner", Name = "Inner", RequiredNodeTypes = ["File.Text.Publish"] },
             Graph = new WorkflowSnapshot { Nodes = WorkflowPersistenceService.BuildNodeDtos([write]) }
         };
         var composite = new CompositeNodeViewModel(package);
@@ -306,14 +306,15 @@ public sealed class PatchGateTests
         var package = new VisualPluginPackage
         {
             Kind = VisualPluginKind.CompositeNode,
-            Manifest = new VisualPluginManifest { Id = "tests.gate-public-flow", Name = "Inner", RequiredNodeTypes = ["Patch.WriteText"] },
-            Graph = new WorkflowSnapshot { Nodes = WorkflowPersistenceService.BuildNodeDtos([write]) }
+            Manifest = new VisualPluginManifest { Id = "tests.gate-public-flow", Name = "Inner", RequiredNodeTypes = ["File.Text.Publish"] },
+            Graph = new WorkflowSnapshot { Nodes = WorkflowPersistenceService.BuildNodeDtos([write]) },
+            Inputs = [new VisualPluginPortDefinition { Id = "flow", Name = "Flow", NodeInstanceId = write.InstanceId, PortId = "flow", PortType = "Flow" }]
         };
         var composite = new CompositeNodeViewModel(package);
         var gate = Gate(apply, true, false);
 
         var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([gate, composite],
-            [Connect(gate, "Apply", composite, "Flow")], TestContext.Current.CancellationToken);
+            [Connect(gate, "Apply", composite, "flow")], TestContext.Current.CancellationToken);
 
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         Assert.Equal(apply, File.Exists(target));
@@ -335,7 +336,7 @@ public sealed class PatchGateTests
 
     private static PatchNodeViewModel Gate(bool compatible, bool original, bool desired)
     {
-        var node = PatchNodeViewModel.Create("Patch.ApplyGate");
+        var node = PatchNodeViewModel.Create("Flow.Applicability.Gate");
         node.Input.Single(port => port.Title == "Compatible").InitialValue = compatible;
         node.Input.Single(port => port.Title == "Original State Matches").InitialValue = original;
         node.Input.Single(port => port.Title == "Desired State Matches").InitialValue = desired;
@@ -344,7 +345,7 @@ public sealed class PatchGateTests
 
     private static PatchNodeViewModel Writer(string path)
     {
-        var node = PatchNodeViewModel.Create("Patch.WriteText");
+        var node = PatchNodeViewModel.Create("File.Text.Publish");
         node.Input.Single(port => port.Title == "Output Path").InitialValue = path;
         node.Input.Single(port => port.Title == "Text").InitialValue = "changed";
         return node;

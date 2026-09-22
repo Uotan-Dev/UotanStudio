@@ -10,6 +10,69 @@ namespace UotanStudio.Tests.Services;
 public sealed class VisualPluginBundleTests
 {
     [Fact]
+    public async Task SaveAsync_NestedSameAssetIds_PreservesDistinctScopedBytesWithoutRegistry()
+    {
+        using var temp = new TempDirectory();
+        var token = TestContext.Current.CancellationToken;
+        var root = CreatePackage();
+        root.Manifest.Id = "tests.root";
+        foreach (var (name, contents) in new[] { ("first", "first bytes"), ("second", "different bytes") })
+        {
+            var source = Path.Combine(temp.Path, name);
+            await File.WriteAllTextAsync(source, contents, token);
+            var child = CreatePackage();
+            child.Manifest.Id = "tests." + name;
+            child.Assets.Add(await VisualPluginAsset.FromFileAsync("resource", source, token));
+            root.Graph.Nodes.Add(new NodeDto { InstanceId = name, TypeKey = child.NodeTypeKey, CompositePackage = child });
+            root.Manifest.RequiredNodeTypes.Add(child.NodeTypeKey);
+        }
+        var path = Path.Combine(temp.Path, "nested.uotanplugin");
+        await VisualPluginBundle.SaveAsync(path, root, token);
+        File.Delete(Path.Combine(temp.Path, "first"));
+        File.Delete(Path.Combine(temp.Path, "second"));
+
+        var loaded = VisualPluginBundle.Load(path);
+        using var first = new MemoryStream();
+        using var second = new MemoryStream();
+        await VisualPluginBundle.CopyAssetAsync(loaded.Graph.Nodes[0].CompositePackage!, "resource", first, token);
+        await VisualPluginBundle.CopyAssetAsync(loaded.Graph.Nodes[1].CompositePackage!, "resource", second, token);
+
+        Assert.Equal("first bytes", System.Text.Encoding.UTF8.GetString(first.ToArray()));
+        Assert.Equal("different bytes", System.Text.Encoding.UTF8.GetString(second.ToArray()));
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            Assert.Equal(3, archive.Entries.Count);
+        }
+        // A loaded embedded resource can be republished without its original authoring sources.
+        var republished = Path.Combine(temp.Path, "republished.uotanplugin");
+        await VisualPluginBundle.SaveAsync(republished, loaded, token);
+        var reloaded = VisualPluginBundle.Load(republished);
+        await VisualPluginBundle.CopyAssetAsync(reloaded.Graph.Nodes[1].CompositePackage!, "resource", Stream.Null, token);
+    }
+
+    [Fact]
+    public void Validate_NestedAssets_EnforcesAggregateResourceBudget()
+    {
+        var root = CreatePackage();
+        root.Manifest.Id = "tests.root";
+        for (var index = 0; index < 2; index++)
+        {
+            var child = CreatePackage();
+            child.Manifest.Id = "tests.child" + index;
+            child.Assets = Enumerable.Range(0, 129).Select(asset => new VisualPluginAsset
+            {
+                Id = "resource" + asset,
+                Name = "resource",
+                Length = 0,
+                Sha256 = new string('0', 64)
+            }).ToList();
+            root.Graph.Nodes.Add(new NodeDto { InstanceId = "child" + index, TypeKey = child.NodeTypeKey, CompositePackage = child });
+            root.Manifest.RequiredNodeTypes.Add(child.NodeTypeKey);
+        }
+        Assert.Contains(VisualPluginValidation.Validate(root), error => error.Contains("total bundle", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Manager_FailedMigration_RestoresJsonAndRemovesNewBundle()
     {
         using var temp = new TempDirectory();
@@ -83,7 +146,7 @@ public sealed class VisualPluginBundleTests
     }
 
     [Fact]
-    public async Task LoadAsync_LegacyVersionOneJson_RemainsSupported()
+    public async Task LoadAsync_LegacyVersionOneJson_IsRejected()
     {
         using var temp = new TempDirectory();
         var path = Path.Combine(temp.Path, "legacy.json");
@@ -91,10 +154,7 @@ public sealed class VisualPluginBundleTests
             """{"FormatVersion":1,"Manifest":{"Id":"legacy.patch","Name":"Legacy"}}""",
             TestContext.Current.CancellationToken);
 
-        var package = await VisualPluginFile.LoadAsync(path, TestContext.Current.CancellationToken);
-
-        Assert.Equal(1, package.FormatVersion);
-        Assert.Empty(package.Assets);
+        await Assert.ThrowsAsync<InvalidDataException>(() => VisualPluginFile.LoadAsync(path, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -172,8 +232,9 @@ public sealed class VisualPluginBundleTests
         await VisualPluginBundle.SaveAsync(path, package, TestContext.Current.CancellationToken);
         using (var archive = ZipFile.Open(path, ZipArchiveMode.Update))
         {
-            archive.GetEntry("assets/resource")!.Delete();
-            await using var entry = archive.CreateEntry("assets/resource").Open();
+            var assetEntry = "assets/" + package.Assets[0].Sha256.ToLowerInvariant();
+            archive.GetEntry(assetEntry)!.Delete();
+            await using var entry = archive.CreateEntry(assetEntry).Open();
             await entry.WriteAsync("modified"u8.ToArray(), TestContext.Current.CancellationToken);
         }
         var loaded = VisualPluginBundle.Load(path);

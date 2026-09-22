@@ -17,8 +17,16 @@ public static class VisualPluginFile
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete,
             65536, FileOptions.SequentialScan);
         EnsureSize(stream.Length);
-        var package = JsonSerializer.Deserialize(stream, VisualPluginJsonContext.Default.VisualPluginPackage)
-            ?? throw new InvalidDataException("Visual-plugin package is empty.");
+        VisualPluginPackage package;
+        try
+        {
+            package = JsonSerializer.Deserialize(stream, VisualPluginJsonContext.Default.VisualPluginPackage)
+                ?? throw new InvalidDataException("Visual-plugin package is empty.");
+        }
+        catch (JsonException error)
+        {
+            throw new InvalidDataException("Visual-plugin package has an invalid or unsupported document structure.", error);
+        }
         EnsureValid(package);
         return package;
     }
@@ -38,7 +46,7 @@ public static class VisualPluginFile
             await VisualPluginBundle.SaveAsync(path, package, cancellationToken).ConfigureAwait(false);
             return;
         }
-        if (package.Assets.Count > 0)
+        if (VisualPluginBundle.EnumerateScopes(package).Any(scope => scope.Assets.Count > 0))
         {
             throw new InvalidDataException("Packages with resources must be saved as .uotanplugin bundles.");
         }
@@ -63,9 +71,17 @@ public static class VisualPluginFile
             65536, FileOptions.Asynchronous | FileOptions.SequentialScan);
         EnsureSize(stream.Length);
 
-        var package = await JsonSerializer.DeserializeAsync(stream,
-            VisualPluginJsonContext.Default.VisualPluginPackage, cancellationToken).ConfigureAwait(false)
-            ?? throw new InvalidDataException("Visual-plugin package is empty.");
+        VisualPluginPackage package;
+        try
+        {
+            package = await JsonSerializer.DeserializeAsync(stream,
+                VisualPluginJsonContext.Default.VisualPluginPackage, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidDataException("Visual-plugin package is empty.");
+        }
+        catch (JsonException error)
+        {
+            throw new InvalidDataException("Visual-plugin package has an invalid or unsupported document structure.", error);
+        }
         EnsureValid(package);
         return package;
     }
@@ -81,7 +97,7 @@ public static class VisualPluginFile
         var errors = VisualPluginValidation.Validate(package);
         if (errors.Count > 0)
             throw new InvalidDataException(string.Join(Environment.NewLine, errors));
-        if (package.Assets.Count > 0)
+        if (VisualPluginBundle.EnumerateScopes(package).Any(scope => scope.Assets.Count > 0))
         {
             throw new InvalidDataException("JSON packages cannot provide bundled resources.");
         }

@@ -10,12 +10,12 @@ public sealed partial class PatchNodeViewModel
     {
         switch (node.TypeKey)
         {
-            case "Patch.BinaryFind":
-            case "Patch.BinaryReplace":
+            case "Binary.Pattern.Find":
+            case "Binary.Pattern.Replace":
                 node.AddInput("Path", NodePortType.Path);
-                node.AddInput("Find", NodePortType.Text, "", hint: node.TypeKey == "Patch.BinaryFind" ? "Node_Patch_BinaryFindHint" : "Node_Patch_BinaryReplaceHint");
+                node.AddInput("Find", NodePortType.Text, "", hint: node.TypeKey == "Binary.Pattern.Find" ? "Node_Patch_BinaryFindHint" : "Node_Patch_BinaryReplaceHint");
                 node.AddInput("Find Mask", NodePortType.Text, "");
-                if (node.TypeKey == "Patch.BinaryReplace")
+                if (node.TypeKey == "Binary.Pattern.Replace")
                 {
                     node.AddInput("Replacement", NodePortType.Text, "");
                     node.AddInput("Replace Mask", NodePortType.Text, "");
@@ -28,10 +28,10 @@ public sealed partial class PatchNodeViewModel
                 node.AddOutput("Offsets", NodePortType.Any);
                 node.AddOutput("Count", NodePortType.Number);
                 return;
-            case "Patch.DetectFormat":
-            case "Patch.CheckFormat":
+            case "Validation.Format.Detect":
+            case "Validation.Format.Check":
                 node.AddInput("Path", NodePortType.Path, hint: "Node_Patch_FormatHint");
-                if (node.TypeKey == "Patch.CheckFormat")
+                if (node.TypeKey == "Validation.Format.Check")
                 {
                     node.AddInput("Expected Format", NodePortType.Text, "Json",
                         choices: Enum.GetNames<PatchFormatKind>().Where(name => name != "Unknown").ToArray());
@@ -43,21 +43,21 @@ public sealed partial class PatchNodeViewModel
                 node.AddOutput("Detail", NodePortType.Text, "Node_PatchFormat_");
                 node.AddOutput("Structure Valid", NodePortType.Boolean);
                 return;
-            case "Patch.Workspace":
+            case "Workspace.Directory.Open":
                 node.AddInput("Root", NodePortType.Path, directory: true);
                 node.AddOutput("Workspace", NodePortType.PatchWorkspace);
                 return;
-            case "Patch.HashFile":
-            case "Patch.VerifyHash":
+            case "Validation.File.Hash":
+            case "Validation.Hash.Verify":
                 node.AddInput("Path", NodePortType.Path);
-                if (node.TypeKey == "Patch.VerifyHash")
+                if (node.TypeKey == "Validation.Hash.Verify")
                 {
                     node.AddInput("Expected Hash", NodePortType.Text, string.Empty);
                     node.AddOutput("Valid", NodePortType.Boolean);
                 }
                 node.AddOutput("Hash", NodePortType.Text);
                 return;
-            case "Patch.AssertCount":
+            case "Validation.Count.Assert":
                 node.AddInput("Count", NodePortType.Number, 0d);
                 node.AddInput("Expected Matches", NodePortType.Number, 1d);
                 node.AddOutput("Valid", NodePortType.Boolean);
@@ -67,7 +67,7 @@ public sealed partial class PatchNodeViewModel
         node.AddOutput("Workspace", NodePortType.PatchWorkspace);
         switch (node.TypeKey)
         {
-            case "Patch.PartitionPath":
+            case "Workspace.Partition.Resolve":
                 node.AddInput("Partition", NodePortType.Text, "vendor", choices:
                     ["system", "vendor", "product", "system_ext", "odm", "vendor_dlkm", "odm_dlkm", "system_dlkm"]);
                 node.AddInput("Layout", NodePortType.Text, "PartitionDirectories",
@@ -77,7 +77,7 @@ public sealed partial class PatchNodeViewModel
                 node.AddOutput("Relative Path", NodePortType.Text);
                 node.AddOutput("Exists", NodePortType.Boolean);
                 break;
-            case "Patch.WorkspaceFind":
+            case "Workspace.File.Find":
                 node.AddInput("Pattern", NodePortType.Text, "vendor/etc/*.xml");
                 node.AddInput("Expected Matches", NodePortType.Number, 1d);
                 node.AddOutput("Path", NodePortType.Path);
@@ -86,34 +86,34 @@ public sealed partial class PatchNodeViewModel
                 node.AddOutput("Relative Paths", NodePortType.Any);
                 node.AddOutput("Count", NodePortType.Number);
                 break;
-            case "Patch.WorkspaceRead":
+            case "Workspace.Text.Read":
                 node.AddInput("Relative Path", NodePortType.Text, string.Empty);
                 node.AddOutput("Text", NodePortType.Text);
                 node.AddOutput("Encoding", NodePortType.Text);
                 node.AddOutput("Hash", NodePortType.Text);
                 break;
-            case "Patch.StageText":
+            case "Workspace.Text.Stage":
                 node.AddInput("Relative Path", NodePortType.Text, string.Empty);
                 node.AddInput("Text", NodePortType.Text, string.Empty, multiline: true);
                 node.AddInput("Encoding", NodePortType.Text, "utf8", choices: ["utf8", "utf8-bom", "utf16-le", "utf16-be"]);
                 node.AddInput("Operation", NodePortType.Text, "Replace", choices: Enum.GetNames<PatchFileMode>());
                 break;
-            case "Patch.ImportFile":
-            case "Patch.CopyFile":
-                node.AddInput("Source", node.TypeKey == "Patch.ImportFile" ? NodePortType.Path : NodePortType.Text, string.Empty);
+            case "Workspace.File.Import":
+            case "Workspace.File.Copy":
+                node.AddInput("Source", node.TypeKey == "Workspace.File.Import" ? NodePortType.Path : NodePortType.Text, string.Empty);
                 node.AddInput("Relative Path", NodePortType.Text, string.Empty);
                 node.AddInput("Operation", NodePortType.Text, "Add", choices: Enum.GetNames<PatchFileMode>());
                 node.AddInput("Expected Hash", NodePortType.Text, string.Empty);
                 break;
-            case "Patch.DeleteFile":
+            case "Workspace.File.Delete":
                 node.AddInput("Relative Path", NodePortType.Text, string.Empty);
                 node.AddInput("Expected Hash", NodePortType.Text, string.Empty);
                 break;
-            case "Patch.FileExists":
+            case "Workspace.File.Exists":
                 node.AddInput("Relative Path", NodePortType.Text, string.Empty);
                 node.AddOutput("Exists", NodePortType.Boolean);
                 break;
-            case "Patch.VerifyChanges":
+            case "Validation.Changes.Verify":
                 node.AddInput("Expected Paths", NodePortType.Text, string.Empty, multiline: true);
                 node.AddOutput("Valid", NodePortType.Boolean);
                 break;
@@ -128,9 +128,9 @@ public sealed partial class PatchNodeViewModel
         var token = context.CancellationToken;
         switch (TypeKey)
         {
-            case "Patch.BinaryFind":
-            case "Patch.BinaryReplace":
-                var offsets = TypeKey == "Patch.BinaryReplace"
+            case "Binary.Pattern.Find":
+            case "Binary.Pattern.Replace":
+                var offsets = TypeKey == "Binary.Pattern.Replace"
                     ? await run.StageBinaryAsync(Text("Path"), Text("Find"), Text("Find Mask"), Text("Replacement"), Text("Replace Mask"),
                         long.Parse(Text("Start Offset"), System.Globalization.CultureInfo.InvariantCulture),
                         long.Parse(Text("Search Length"), System.Globalization.CultureInfo.InvariantCulture),
@@ -144,11 +144,11 @@ public sealed partial class PatchNodeViewModel
                 WriteOutput("Offsets", offsets);
                 WriteOutput("Count", offsets.Count);
                 return;
-            case "Patch.DetectFormat":
-            case "Patch.CheckFormat":
+            case "Validation.Format.Detect":
+            case "Validation.Format.Check":
                 var expectedFormat = PatchFormatKind.Unknown;
                 var required = PatchFormatEvidence.Structure;
-                if (TypeKey == "Patch.CheckFormat")
+                if (TypeKey == "Validation.Format.Check")
                 {
                     if (!Enum.TryParse(Text("Expected Format"), out expectedFormat) || !Enum.IsDefined(expectedFormat)
                         || expectedFormat == PatchFormatKind.Unknown
@@ -162,18 +162,18 @@ public sealed partial class PatchNodeViewModel
                 WriteOutput("Evidence", probe.Evidence.ToString());
                 WriteOutput("Detail", probe.Detail);
                 WriteOutput("Structure Valid", !probe.Rejected && probe.Evidence == PatchFormatEvidence.Structure);
-                if (TypeKey == "Patch.CheckFormat")
+                if (TypeKey == "Validation.Format.Check")
                 {
                     WriteOutput("Match", probe.Matches(expectedFormat, required));
                 }
                 return;
-            case "Patch.Workspace":
+            case "Workspace.Directory.Open":
                 WriteOutput("Workspace", run.OpenWorkspace(Text("Root")));
                 return;
-            case "Patch.HashFile":
-            case "Patch.VerifyHash":
+            case "Validation.File.Hash":
+            case "Validation.Hash.Verify":
                 var hash = await run.HashAsync(Text("Path"), token).ConfigureAwait(false);
-                if (TypeKey == "Patch.VerifyHash")
+                if (TypeKey == "Validation.Hash.Verify")
                 {
                     var expected = Text("Expected Hash");
                     if (expected.Length != 64 || !expected.All(char.IsAsciiHexDigit))
@@ -188,7 +188,7 @@ public sealed partial class PatchNodeViewModel
                 }
                 WriteOutput("Hash", hash);
                 return;
-            case "Patch.AssertCount":
+            case "Validation.Count.Assert":
                 var actual = Convert.ToDouble(ReadInput("Count"), System.Globalization.CultureInfo.InvariantCulture);
                 if (!double.IsFinite(actual) || actual != Count())
                 {
@@ -202,14 +202,14 @@ public sealed partial class PatchNodeViewModel
         run.CheckWorkspace(workspace);
         switch (TypeKey)
         {
-            case "Patch.PartitionPath":
+            case "Workspace.Partition.Resolve":
                 var mapped = PatchPartitionPath.Resolve(workspace, Text("Partition"), Text("Layout"), Text("Partition Path"));
                 var resolved = workspace.Resolve(mapped);
                 WriteOutput("Relative Path", mapped);
                 WriteOutput("Path", resolved);
                 WriteOutput("Exists", await run.ExistsAsync(resolved, token).ConfigureAwait(false));
                 break;
-            case "Patch.WorkspaceFind":
+            case "Workspace.File.Find":
                 var files = await run.FindAsync(workspace.Root, Text("Pattern"), Count(), token).ConfigureAwait(false);
                 var relative = files.Select(path => Path.GetRelativePath(workspace.Root, path).Replace('\\', '/')).ToArray();
                 WriteOutput("Files", files);
@@ -218,29 +218,29 @@ public sealed partial class PatchNodeViewModel
                 WriteOutput("Relative Path", relative.Length == 1 ? relative[0] : null);
                 WriteOutput("Count", files.Count);
                 break;
-            case "Patch.WorkspaceRead":
+            case "Workspace.Text.Read":
                 var document = await run.ReadTextAsync(workspace.Resolve(Text("Relative Path")), token).ConfigureAwait(false);
                 WriteOutput("Text", document.Text);
                 WriteOutput("Encoding", document.Encoding);
                 WriteOutput("Hash", document.Sha256);
                 break;
-            case "Patch.StageText":
+            case "Workspace.Text.Stage":
                 await run.StageTextAsync(workspace.Resolve(Text("Relative Path")), Text("Text"), Text("Encoding"),
                     Operation<PatchFileMode>(), token).ConfigureAwait(false);
                 break;
-            case "Patch.ImportFile":
-            case "Patch.CopyFile":
-                var source = TypeKey == "Patch.CopyFile" ? workspace.Resolve(Text("Source")) : Text("Source");
+            case "Workspace.File.Import":
+            case "Workspace.File.Copy":
+                var source = TypeKey == "Workspace.File.Copy" ? workspace.Resolve(Text("Source")) : Text("Source");
                 await run.StageCopyAsync(source, workspace.Resolve(Text("Relative Path")), Operation<PatchFileMode>(),
                     Text("Expected Hash"), token).ConfigureAwait(false);
                 break;
-            case "Patch.DeleteFile":
+            case "Workspace.File.Delete":
                 await run.StageDeleteAsync(workspace.Resolve(Text("Relative Path")), Text("Expected Hash"), token).ConfigureAwait(false);
                 break;
-            case "Patch.FileExists":
+            case "Workspace.File.Exists":
                 WriteOutput("Exists", await run.ExistsAsync(workspace.Resolve(Text("Relative Path")), token).ConfigureAwait(false));
                 break;
-            case "Patch.VerifyChanges":
+            case "Validation.Changes.Verify":
                 await run.VerifyChangesAsync(workspace,
                     Text("Expected Paths").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries), token).ConfigureAwait(false);
                 WriteOutput("Valid", true);

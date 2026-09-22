@@ -37,7 +37,7 @@ public class DevicePropertyNodeViewModel : FlowNodeViewModel
         var node = new DevicePropertyNodeViewModel("Get Property")
         {
             Location = new Point(100, 100),
-            TypeKey = "Flash.GetProp"
+            TypeKey = "Device.Property.Read"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
         node.Input.Add(new NodeConnectorViewModel { Title = "Name", PortType = NodePortType.Text });
@@ -46,8 +46,8 @@ public class DevicePropertyNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发属性查询逻辑：Flash.GetProp 查询设备属性并输出值。</para>
-    /// Dispatches the property query logic by the node type key (TypeKey): Flash.GetProp queries the
+    /// <para>按节点类型键（TypeKey）分发属性查询逻辑：Device.Property.Read 查询设备属性并输出值。</para>
+    /// Dispatches the property query logic by the node type key (TypeKey): Device.Property.Read queries the
     /// device property and outputs the value.
     /// </summary>
     /// <param name="context">
@@ -65,7 +65,7 @@ public class DevicePropertyNodeViewModel : FlowNodeViewModel
             context.CancellationToken.ThrowIfCancellationRequested();
             switch (TypeKey)
             {
-                case "Flash.GetProp":
+                case "Device.Property.Read":
                     await ExecuteGetPropAsync(context).ConfigureAwait(false);
                     break;
                 default:

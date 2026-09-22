@@ -22,6 +22,60 @@ public static partial class VisualPluginValidation
     {
         ArgumentNullException.ThrowIfNull(package);
         var errors = new List<string>();
+        var ancestors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var nodeBudget = MaximumNodeCount;
+        var assetBudget = VisualPluginBundle.MaximumAssetCount;
+        var byteBudget = VisualPluginBundle.MaximumTotalAssetSize;
+        void Visit(VisualPluginPackage current, int depth)
+        {
+            if (depth > 32 || current.Manifest is null || !ancestors.Add(current.Manifest.Id ?? string.Empty))
+            {
+                errors.Add("Composite package nesting is recursive, invalid or exceeds 32 levels.");
+                return;
+            }
+            nodeBudget -= current.Graph?.Nodes?.Count ?? 0;
+            if (nodeBudget < 0)
+            {
+                errors.Add("Composite packages exceed the total embedded node budget.");
+                ancestors.Remove(current.Manifest.Id ?? string.Empty);
+                return;
+            }
+            errors.AddRange(ValidateCore(current));
+            if (errors.Count == 0)
+            {
+                assetBudget -= current.Assets.Count;
+                byteBudget -= current.Assets.Sum(asset => asset.Length);
+                if (assetBudget < 0 || byteBudget < 0)
+                {
+                    errors.Add("Embedded resources exceed the total bundle count or byte budget.");
+                }
+            }
+            if (errors.Count == 0 && current.Graph is not null)
+            {
+                foreach (var node in current.Graph.Nodes)
+                {
+                    if (node.CompositePackage is not { } embedded)
+                    {
+                        continue;
+                    }
+                    if (node.TypeKey != embedded.NodeTypeKey || embedded.Kind != VisualPluginKind.CompositeNode)
+                    {
+                        errors.Add("Embedded composite identity does not match its node type.");
+                        break;
+                    }
+                    Visit(embedded, depth + 1);
+                }
+            }
+            ancestors.Remove(current.Manifest.Id ?? string.Empty);
+        }
+        Visit(package, 0);
+        return errors;
+    }
+
+    private static IReadOnlyList<string> ValidateCore(VisualPluginPackage package)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        var errors = new List<string>();
         // Nullable annotations do not prevent explicit JSON nulls in untrusted packages.
         if (package.Manifest is null || package.Graph is null || package.Inputs is null || package.Outputs is null)
         {
@@ -31,7 +85,7 @@ public static partial class VisualPluginValidation
         {
             errors.Add("Unknown visual-plugin package kind.");
         }
-        if (package.FormatVersion is not (1 or VisualPluginPackage.CurrentFormatVersion))
+        if (package.FormatVersion != VisualPluginPackage.CurrentFormatVersion)
             errors.Add($"Unsupported visual-plugin format version {package.FormatVersion}.");
 
         if (package.Assets is null || package.Assets.Count > VisualPluginBundle.MaximumAssetCount)
@@ -114,10 +168,14 @@ public static partial class VisualPluginValidation
             errors.Add("Plugin name must contain between 1 and 128 characters.");
         if (string.IsNullOrWhiteSpace(manifest.Version) || manifest.Version.Length > 64)
             errors.Add("Plugin version must contain between 1 and 64 characters.");
-        if (manifest.NodeApiVersion != 1)
+        if (manifest.NodeApiVersion != 2)
             errors.Add($"Unsupported node API version {manifest.NodeApiVersion}.");
 
         var graph = package.Graph;
+        if (graph.FormatVersion != WorkflowSnapshot.CurrentFormatVersion)
+        {
+            errors.Add($"Unsupported embedded workflow version {graph.FormatVersion}.");
+        }
         if (graph.Nodes is null || graph.Connections is null
             || graph.Nodes.Any(node => node is null || node.InputPorts is null || node.OutputPorts is null)
             || graph.Connections.Any(connection => connection is null)
@@ -240,27 +298,37 @@ public static partial class VisualPluginValidation
                 errors.Add($"Composite port '{port.Id}' has unknown type '{port.PortType}'.");
             if (!input && port.Required)
                 errors.Add($"Composite output '{port.Id}' cannot be required.");
-            if (!endpoints.Add((port.NodeInstanceId, port.PortId)))
-                errors.Add($"Composite {(input ? "input" : "output")} endpoint '{port.NodeInstanceId}:{port.PortId}' is exposed more than once.");
-            if (string.IsNullOrWhiteSpace(port.NodeInstanceId) || !nodesById.TryGetValue(port.NodeInstanceId, out var node))
+            if (port.AdditionalBindings is null || port.AdditionalBindings.Any(binding => binding is null)
+                || port.AdditionalBindings.Count > MaximumPortCount || !input && port.AdditionalBindings.Count != 0)
             {
-                errors.Add($"Composite port '{port.Id}' references missing node '{port.NodeInstanceId}'.");
+                errors.Add($"Composite port '{port.Id}' has invalid additional bindings.");
                 continue;
             }
+            foreach (var binding in port.GetBindings())
+            {
+                if (!endpoints.Add((binding.NodeInstanceId, binding.PortId)))
+                    errors.Add($"Composite {(input ? "input" : "output")} endpoint '{port.NodeInstanceId}:{port.PortId}' is exposed more than once.");
+                if (string.IsNullOrWhiteSpace(binding.NodeInstanceId) || !nodesById.TryGetValue(binding.NodeInstanceId, out var node))
+                {
+                    errors.Add($"Composite port '{port.Id}' references missing node '{port.NodeInstanceId}'.");
+                    continue;
+                }
 
-            var candidates = input ? node.InputPorts : node.OutputPorts;
-            var candidate = candidates.FirstOrDefault(candidate =>
-                candidate is not null && string.Equals(candidate.Id, port.PortId, StringComparison.Ordinal));
-            if (candidates.Count > 0 && candidate is null)
-                errors.Add($"Composite port '{port.Id}' references missing internal port '{port.PortId}'.");
-            else if (candidate is not null
-                     && !string.Equals(candidate.PortType, port.PortType, StringComparison.OrdinalIgnoreCase))
-                errors.Add($"Composite port '{port.Id}' type does not match internal port '{port.PortId}'.");
+                var candidates = input ? node.InputPorts : node.OutputPorts;
+                var candidate = candidates.FirstOrDefault(candidate =>
+                    candidate is not null && string.Equals(candidate.Id, binding.PortId, StringComparison.Ordinal));
+                if (candidates.Count > 0 && candidate is null)
+                    errors.Add($"Composite port '{port.Id}' references missing internal port '{port.PortId}'.");
+                else if (candidate is not null
+                         && !string.Equals(candidate.PortType, port.PortType, StringComparison.OrdinalIgnoreCase))
+                    errors.Add($"Composite port '{port.Id}' type does not match internal port '{port.PortId}'.");
+            }
         }
     }
 
     private static bool IsKnownPortType(string value) => value is
-        "Any" or "Device" or "Flow" or "Path" or "Data" or "Text" or "Number" or "Boolean" or "PatchWorkspace" or "PatchAsset";
+        "Any" or "Device" or "Flow" or "Path" or "Data" or "Text" or "Number" or "Boolean" or "PatchWorkspace" or "PatchAsset"
+        or "ImageEdits" or "UiComponent" or "UiForm" or "Record" or "List" or "Artifact";
 
     [GeneratedRegex("^[a-z0-9][a-z0-9._-]{2,127}$", RegexOptions.CultureInvariant)]
     private static partial Regex PluginIdPattern();

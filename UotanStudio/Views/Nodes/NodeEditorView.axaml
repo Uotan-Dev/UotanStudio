@@ -10,7 +10,42 @@
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
              x:Class="UotanStudio.Views.Nodes.NodeEditorView"
              x:DataType="vm:NodeEditorViewModel">
+    <UserControl.Resources>
+        <DataTemplate x:Key="ToolboxOperationTemplate" DataType="{x:Type vm:NodeToolboxItem}">
+            <Grid ColumnDefinitions="*,Auto,28" Margin="0,1">
+                <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="6,4" Click="OnToolboxItemClicked" ToolTip.Tip="{Binding TypeKey}">
+                    <StackPanel Spacing="1">
+                        <TextBlock Text="{Binding Name}" FontSize="12" TextWrapping="Wrap" />
+                        <TextBlock Text="{DynamicResource Node_Toolbox_Destructive}" FontSize="10"
+                                   Foreground="{DynamicResource LogErrorBrush}" IsVisible="{Binding IsDestructive}" />
+                    </StackPanel>
+                </Button>
+                <Button Grid.Column="1" Content="⋯" Padding="4" IsVisible="{Binding HasPresets}"
+                        ToolTip.Tip="{DynamicResource Node_Toolbox_Presets}" Tag="toolbox-preset">
+                    <Button.Flyout>
+                        <Flyout>
+                            <ItemsControl ItemsSource="{Binding Presets}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:NodeToolboxPreset}">
+                                        <Button Content="{Binding Name}" Command="{Binding CreateCommand}"
+                                                HorizontalAlignment="Stretch" Margin="0,2" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                <Button Grid.Column="2" Content="{Binding FavoriteGlyph}" Command="{Binding ToggleFavoriteCommand}"
+                        Classes.favorite="{Binding IsFavorite}"
+                        ToolTip.Tip="{Binding FavoriteHint}" Padding="2" VerticalAlignment="Stretch" />
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
     <UserControl.Styles>
+        <Style Selector="Button.favorite">
+            <Setter Property="Foreground" Value="{DynamicResource AccentColor}" />
+        </Style>
         <Style Selector="nodify|Connection.selected">
             <Setter Property="Stroke" Value="{DynamicResource SemiColorPrimary}" />
             <Setter Property="StrokeThickness" Value="4" />
@@ -58,6 +93,24 @@
                     <Button Width="28" Height="28" Padding="0" Click="OnExportTemplateClick"
                             ToolTip.Tip="{DynamicResource Node_ExportTemplate}">
                         <avalonia:MaterialIcon Kind="FileExportOutline" Width="16" Height="16" />
+                    </Button>
+                    <Button Width="28" Height="28" Padding="0" Click="OnEncapsulateClick"
+                            ToolTip.Tip="{DynamicResource Node_Encapsulate}" IsEnabled="{Binding HasSelectedNodes}">
+                        <avalonia:MaterialIcon Kind="Group" Width="16" Height="16" />
+                    </Button>
+                    <Button Width="28" Height="28" Padding="0" Click="OnExpandCompositeClick"
+                            ToolTip.Tip="{DynamicResource Node_ExpandComposite}">
+                        <avalonia:MaterialIcon Kind="Ungroup" Width="16" Height="16" />
+                    </Button>
+                    <Button x:Name="CollapseCompositeButton" Width="28" Height="28" Padding="0"
+                            Click="OnCollapseCompositeClick"
+                            IsVisible="{Binding CanCollapseExpandedComposite}"
+                            ToolTip.Tip="{DynamicResource Node_CollapseComposite}">
+                        <avalonia:MaterialIcon Kind="Undo" Width="16" Height="16" />
+                    </Button>
+                    <Button Width="28" Height="28" Padding="0" Click="OnEditCompositeClick"
+                            ToolTip.Tip="{DynamicResource Plugin_EditGraph}">
+                        <avalonia:MaterialIcon Kind="PencilOutline" Width="16" Height="16" />
                     </Button>
                     <Button Width="28" Height="28" Padding="0" Click="OnExportCompositeClick"
                             ToolTip.Tip="{DynamicResource Node_ExportComposite}">
@@ -246,26 +299,21 @@
                     <ItemsControl ItemsSource="{Binding VisibleToolboxCategories}" Margin="4">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:NodeToolboxCategory}">
-                                <Expander Header="{Binding Name}" IsExpanded="True" Margin="0,2">
-                                    <ItemsControl ItemsSource="{Binding Items}" Margin="8,0">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate DataType="{x:Type vm:NodeToolboxItem}">
-                                                <Button HorizontalAlignment="Stretch"
-                                                        HorizontalContentAlignment="Center"
-                                                        Padding="6,4" Margin="0,1"
-                                                        Click="OnToolboxItemClicked">
-                                                    <StackPanel Spacing="1">
-                                                        <TextBlock Text="{Binding Name}" FontSize="12" />
-                                                        <StackPanel Orientation="Horizontal" Spacing="6">
-                                                            <TextBlock Text="{DynamicResource Node_Toolbox_Destructive}"
-                                                                       FontSize="10" Foreground="{DynamicResource LogErrorBrush}"
-                                                                       IsVisible="{Binding IsDestructive}" />
-                                                        </StackPanel>
-                                                    </StackPanel>
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
+                                <Expander Header="{Binding Name}" IsExpanded="{Binding IsExpanded, Mode=TwoWay}" Margin="0,2">
+                                    <StackPanel Margin="4,0">
+                                        <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding !HasFamilies}"
+                                                      ItemTemplate="{StaticResource ToolboxOperationTemplate}" />
+                                        <ItemsControl ItemsSource="{Binding Families}" IsVisible="{Binding HasFamilies}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type vm:NodeToolboxCategory}">
+                                                    <Expander Header="{Binding Name}" IsExpanded="{Binding IsExpanded, Mode=TwoWay}">
+                                                        <ItemsControl ItemsSource="{Binding Items}"
+                                                                      ItemTemplate="{StaticResource ToolboxOperationTemplate}" />
+                                                    </Expander>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
                                 </Expander>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -434,7 +482,7 @@
                                            Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" />
                                 <TextBlock Grid.Column="1"
-                                           Text="{Binding SelectedNode.Category}"
+                                           Text="{Binding SelectedCategoryDisplay}"
                                            FontSize="12" />
                             </Grid>
 
@@ -519,7 +567,8 @@
                             <TextBlock Text="{DynamicResource Node_Prop_Inputs}"
                                        FontSize="11" FontWeight="SemiBold"
                                        Foreground="{DynamicResource SecondaryTextBrush}" />
-                            <ItemsControl ItemsSource="{Binding SelectedNode.Input}">
+                            <CheckBox Content="{DynamicResource Node_AdvancedParameters}" IsChecked="{Binding ShowAdvancedParameters}" />
+                            <ItemsControl ItemsSource="{Binding SelectedParameterInputs}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
                                         <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" Margin="0,2">
@@ -533,12 +582,13 @@
                                                      AcceptsReturn="{Binding IsMultiline}"
                                                      TextWrapping="Wrap"
                                                      Text="{Binding InitialValue, Mode=TwoWay}"
+                                                     PasswordChar="{Binding EditorPasswordChar}"
                                                      IsVisible="{Binding UsesTextEditor}">
                                             </TextBox>
                                             <ComboBox Grid.Column="1" FontSize="12"
                                                       ItemsSource="{Binding Choices}"
                                                       SelectedItem="{Binding SelectedChoice, Mode=TwoWay}"
-                                                      IsVisible="{Binding HasChoices}">
+                                                      IsVisible="{Binding CanEditChoice}">
                                                 <ComboBox.ItemTemplate>
                                                     <DataTemplate DataType="{x:Type nodeVm:NodePortChoice}">
                                                         <TextBlock Text="{Binding DisplayName}" />
@@ -548,20 +598,22 @@
                                             <!-- 数值：数值框 -->
                                             <NumericUpDown Grid.Column="1" FontSize="12" Height="24"
                                                            Value="{Binding InitialNumberValue, Mode=TwoWay}"
-                                                           IsVisible="{Binding IsNumberPort}" />
+                                                           IsVisible="{Binding CanEditNumber}" />
                                             <!-- 布尔：开关 -->
                                             <CheckBox Grid.Column="1" FontSize="12"
                                                       IsChecked="{Binding InitialBooleanValue, Mode=TwoWay}"
-                                                      IsVisible="{Binding IsBooleanPort}"
+                                                      IsVisible="{Binding CanEditBoolean}"
                                                       VerticalContentAlignment="Center" />
                                             <Button Grid.Column="2" Content="…" Width="26" Height="24" Padding="0"
                                                     Margin="4,0,0,0" FontSize="12"
-                                                    IsVisible="{Binding IsPathPort}"
+                                                    IsVisible="{Binding CanBrowsePath}"
                                                     Click="OnBrowsePathClick"
                                                     Tag="{Binding}" />
+                                            <TextBlock Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding SourceDescription}"
+                                                       IsVisible="{Binding HasConnectedSource}" TextWrapping="Wrap" FontSize="12" />
                                             <TextBlock Grid.Row="1" Grid.ColumnSpan="3" Margin="0,4,0,6"
-                                                       FontSize="11" TextWrapping="Wrap"
-                                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       FontSize="12" LineHeight="18" TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                        Text="{Binding LocalizedHint}" IsVisible="{Binding HasHint}" />
                                         </Grid>
                                     </DataTemplate>
@@ -702,16 +754,58 @@
             <Canvas x:Name="DropPreviewLayer" IsHitTestVisible="False">
                 <Border x:Name="NodeDropPreview"
                         IsVisible="False"
-                        Width="180" Height="72"
-                        CornerRadius="4"
-                        Background="{DynamicResource SemiColorPrimaryLight}"
-                        BorderBrush="{DynamicResource SemiColorPrimary}"
-                        BorderThickness="2"
                         Opacity="0.82"
                         RenderTransformOrigin="0%,0%">
                     <Border.RenderTransform>
                         <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}" />
                     </Border.RenderTransform>
+                    <nodify:Node x:DataType="nodeVm:FlowNodeViewModel"
+                                 Header="{Binding LocalizedTitle}"
+                                 Input="{Binding Input}"
+                                 Output="{Binding Output}">
+                        <nodify:Node.InputConnectorTemplate>
+                            <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
+                                <nodify:NodeInput IsConnected="{Binding IsConnected}">
+                                    <nodify:NodeInput.Header>
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <Border CornerRadius="3" Padding="4,1"
+                                                    VerticalAlignment="Center"
+                                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                                    BorderThickness="1">
+                                                <TextBlock Text="{Binding LocalizedPortTypeDisplay}"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            </Border>
+                                            <TextBlock Text="{Binding LocalizedTitle}"
+                                                       FontSize="12" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </nodify:NodeInput.Header>
+                                </nodify:NodeInput>
+                            </DataTemplate>
+                        </nodify:Node.InputConnectorTemplate>
+                        <nodify:Node.OutputConnectorTemplate>
+                            <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
+                                <nodify:NodeOutput IsConnected="{Binding IsConnected}">
+                                    <nodify:NodeOutput.Header>
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <Border CornerRadius="3" Padding="4,1"
+                                                    VerticalAlignment="Center"
+                                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                                    BorderThickness="1">
+                                                <TextBlock Text="{Binding LocalizedPortTypeDisplay}"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            </Border>
+                                            <TextBlock Text="{Binding LocalizedTitle}"
+                                                       FontSize="12" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </nodify:NodeOutput.Header>
+                                </nodify:NodeOutput>
+                            </DataTemplate>
+                        </nodify:Node.OutputConnectorTemplate>
+                    </nodify:Node>
                 </Border>
             </Canvas>
 

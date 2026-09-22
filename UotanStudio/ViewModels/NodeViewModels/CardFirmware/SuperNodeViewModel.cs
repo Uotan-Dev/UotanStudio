@@ -32,7 +32,7 @@ public class SuperNodeViewModel : FlowNodeViewModel
         var node = new SuperNodeViewModel("Super Unpack")
         {
             Location = new Point(100, 100),
-            TypeKey = "Firmware.SuperUnpack"
+            TypeKey = "Image.Super.Unpack"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Super Path", PortType = NodePortType.Path });
         node.Output.Add(new NodeConnectorViewModel { Title = "Output Dir", PortType = NodePortType.Path });
@@ -48,7 +48,7 @@ public class SuperNodeViewModel : FlowNodeViewModel
         var node = new SuperNodeViewModel("Super Pack")
         {
             Location = new Point(100, 100),
-            TypeKey = "Firmware.SuperPack"
+            TypeKey = "Image.Super.Pack"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Output Path", PortType = NodePortType.Path });
         node.Input.Add(new NodeConnectorViewModel { Title = "Device Size", PortType = NodePortType.Number });
@@ -59,10 +59,10 @@ public class SuperNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的 super 逻辑：Firmware.SuperUnpack 从 super 镜像解出逻辑分区、
-    /// Firmware.SuperPack 将分区镜像合成为 super 镜像。</para>
-    /// Dispatches super logic by the node type key (TypeKey): Firmware.SuperUnpack extracts logical partitions
-    /// from a super image, and Firmware.SuperPack synthesizes a super image from partition images.
+    /// <para>按节点类型键（TypeKey）分发对应的 super 逻辑：Image.Super.Unpack 从 super 镜像解出逻辑分区、
+    /// Image.Super.Pack 将分区镜像合成为 super 镜像。</para>
+    /// Dispatches super logic by the node type key (TypeKey): Image.Super.Unpack extracts logical partitions
+    /// from a super image, and Image.Super.Pack synthesizes a super image from partition images.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -78,10 +78,10 @@ public class SuperNodeViewModel : FlowNodeViewModel
         {
             switch (TypeKey)
             {
-                case "Firmware.SuperUnpack":
+                case "Image.Super.Unpack":
                     await ExecuteUnpackAsync(context).ConfigureAwait(false);
                     break;
-                case "Firmware.SuperPack":
+                case "Image.Super.Pack":
                     await ExecutePackAsync(context).ConfigureAwait(false);
                     break;
                 default:
@@ -96,6 +96,7 @@ public class SuperNodeViewModel : FlowNodeViewModel
         catch (Exception ex)
         {
             context.Log.Write(LogLevel.Error, Title, $"Super node failed: {ex.Message}  super 节点执行失败。");
+            throw;
         }
     }
 
@@ -104,8 +105,7 @@ public class SuperNodeViewModel : FlowNodeViewModel
         var superPath = PathText(ReadInput("Super Path"));
         if (string.IsNullOrWhiteSpace(superPath) || !File.Exists(superPath))
         {
-            context.Log.Write(LogLevel.Warn, Title, $"Super image not found: {superPath ?? "<empty>"}  找不到 super 镜像。");
-            return;
+            throw new InvalidOperationException($"Super image not found: {superPath ?? "<empty>"}  找不到 super 镜像。");
         }
 
         var outputDir = DeriveOutputDir(superPath);
@@ -114,8 +114,7 @@ public class SuperNodeViewModel : FlowNodeViewModel
             .ConfigureAwait(false);
         if (!result.Success)
         {
-            context.Log.Write(LogLevel.Error, Title, $"Super unpack failed: {result.Summary}  解包 super 失败。");
-            return;
+            throw new InvalidOperationException($"Super unpack failed: {result.Summary}  解包 super 失败。");
         }
 
         WriteOutput("Output Dir", outputDir);
@@ -131,14 +130,12 @@ public class SuperNodeViewModel : FlowNodeViewModel
 
         if (string.IsNullOrWhiteSpace(outputPath))
         {
-            context.Log.Write(LogLevel.Warn, Title, "Output Path is empty.  输出路径为空。");
-            return;
+            throw new InvalidOperationException("Output Path is empty.  输出路径为空。");
         }
 
         if (deviceSizeValue <= 0)
         {
-            context.Log.Write(LogLevel.Warn, Title, "Device Size must be a positive number (bytes).  Device Size 必须为正数（字节）。");
-            return;
+            throw new InvalidOperationException("Device Size must be a positive number (bytes).  Device Size 必须为正数（字节）。");
         }
 
         var partitions = new List<SuperPartitionInput>();
@@ -173,8 +170,7 @@ public class SuperNodeViewModel : FlowNodeViewModel
 
         if (partitions.Count == 0)
         {
-            context.Log.Write(LogLevel.Warn, Title, "No valid partitions supplied.  未提供有效分区。");
-            return;
+            throw new InvalidOperationException("No valid partitions supplied.  未提供有效分区。");
         }
 
         if (skipped)
@@ -187,8 +183,7 @@ public class SuperNodeViewModel : FlowNodeViewModel
             .ConfigureAwait(false);
         if (!result.Success)
         {
-            context.Log.Write(LogLevel.Error, Title, $"Super pack failed: {result.Summary}  合成 super 失败。");
-            return;
+            throw new InvalidOperationException($"Super pack failed: {result.Summary}  合成 super 失败。");
         }
 
         WriteOutput("Result", result.Summary);

@@ -1,5 +1,7 @@
+using UotanStudio.Projects.Interactions;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
+using UotanStudio.Services.Interactions;
 using UotanStudio.ViewModels.NodeViewModels;
 using Xunit;
 
@@ -11,6 +13,22 @@ namespace UotanStudio.Tests.Services;
 /// </summary>
 public sealed class NodeExecutionEngineTests
 {
+    [Fact]
+    public async Task ExecuteAsync_ConnectedNullOutput_DoesNotReuseIgnoredInputDefault()
+    {
+        var source = new TestNodeViewModel("source", NodeCategory.Data);
+        source.Output.Add(new NodeConnectorViewModel { Title = "Value", PortType = NodePortType.Text });
+        var target = new TestNodeViewModel("target", NodeCategory.Data);
+        target.Input.Add(new NodeConnectorViewModel { Title = "Value", PortType = NodePortType.Text, InitialValue = "ignored" });
+        object? observed = "not executed";
+        target.Action = _ => { observed = target.ReadInput("Value"); return Task.CompletedTask; };
+
+        await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([source, target],
+            [new NodeConnection { SourceInstanceId = source.InstanceId, SourceConnector = "Value", TargetInstanceId = target.InstanceId, TargetConnector = "Value" }],
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(observed);
+    }
     /// <summary>
     /// <para>测试用节点，允许注入自定义执行逻辑。</para>
     /// Test node allowing injection of custom execution logic.
@@ -157,7 +175,7 @@ public sealed class NodeExecutionEngineTests
     {
         var engine = new NodeExecutionEngine(new MemoryLog());
 
-        var branch = FlowNode("Branch", "Flow.Branch", ["Condition"], ["True", "False"]);
+        var branch = FlowNode("Branch", "Flow.Condition.Branch", ["Condition"], ["True", "False"]);
         var onTrue = FlowNode("OnTrue", "Test.OnTrue", ["Flow"], []);
         var onFalse = FlowNode("OnFalse", "Test.OnFalse", ["Flow"], []);
         var executed = new List<string>();
@@ -185,7 +203,7 @@ public sealed class NodeExecutionEngineTests
     public async Task Engine_Branch_MergeExecutesAfterTakenPath()
     {
         var engine = new NodeExecutionEngine(new MemoryLog());
-        var branch = FlowNode("Branch", "Flow.Branch", ["Condition"], ["True", "False"]);
+        var branch = FlowNode("Branch", "Flow.Condition.Branch", ["Condition"], ["True", "False"]);
         var onTrue = FlowNode("OnTrue", "Test.OnTrue", ["Flow"], ["Flow"]);
         var onFalse = FlowNode("OnFalse", "Test.OnFalse", ["Flow"], ["Flow"]);
         var merge = FlowNode("Merge", "Test.Merge", ["Flow"], []);
@@ -261,7 +279,7 @@ public sealed class NodeExecutionEngineTests
     {
         var engine = new NodeExecutionEngine(new MemoryLog());
 
-        var loop = FlowNode("Loop", "Flow.Loop", ["Count"], ["Body", "Index"]);
+        var loop = FlowNode("Loop", "Flow.Collection.Loop", ["Count"], ["Body", "Index"]);
         var body1 = FlowNode("Body1", "Test.Body1", ["Flow"], []);
         var body2 = FlowNode("Body2", "Test.Body2", ["Flow"], []);
         var after = FlowNode("After", "Test.After", ["Flow"], []);
@@ -289,7 +307,7 @@ public sealed class NodeExecutionEngineTests
     {
         var engine = new NodeExecutionEngine(new MemoryLog());
 
-        var loop = FlowNode("Loop", "Flow.Loop", ["Count"], ["Body", "Index"]);
+        var loop = FlowNode("Loop", "Flow.Collection.Loop", ["Count"], ["Body", "Index"]);
         var body = FlowNode("Body", "Test.Body", ["Flow"], []);
         var indexes = new List<object?>();
 
@@ -306,11 +324,90 @@ public sealed class NodeExecutionEngineTests
         Assert.Equal(1, indexes[1]);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Engine_InteractionInsideScheduledScope_HonorsCancelAndRunsJoin(bool parallel)
+    {
+        var owner = FlowNode("Owner", parallel ? "Flow.Execution.Parallel" : "Flow.Collection.Loop",
+            parallel ? ["Flow"] : ["Count"], parallel ? ["Branch A", "Branch B"] : ["Body", "Completed"]);
+        if (!parallel)
+        {
+            owner.Input[0].InitialValue = 2;
+        }
+        var dialog = FlowNode("Dialog", "UI.Dialog.Show", ["Flow"], ["Submitted", "Cancelled"]);
+        var submitted = FlowNode("Submitted", "Test.Submit", ["Flow"], ["Completed"]);
+        var cancelled = FlowNode("Cancelled", "Test.Cancel", ["Flow"], ["Completed"]);
+        var join = FlowNode("Join", "Test.Join", ["Flow"], []);
+        var independent = FlowNode("Independent", "Test.Independent", ["Flow"], []);
+        var submits = 0;
+        var cancels = 0;
+        var joins = 0;
+        dialog.Action = _ =>
+        {
+            dialog.WriteOutput("Submitted", false);
+            dialog.WriteOutput("Cancelled", true);
+            return Task.CompletedTask;
+        };
+        submitted.Action = _ => { submits++; return Task.CompletedTask; };
+        cancelled.Action = _ => { cancels++; return Task.CompletedTask; };
+        join.Action = _ => { joins++; return Task.CompletedTask; };
+        var edges = new List<NodeConnection>
+        {
+            Conn(owner, parallel ? "Branch A" : "Body", dialog, "Flow"),
+            Conn(dialog, "Submitted", submitted, "Flow"),
+            Conn(dialog, "Cancelled", cancelled, "Flow"),
+            Conn(submitted, "Completed", join, "Flow"),
+            Conn(cancelled, "Completed", join, "Flow"),
+            Conn(owner, parallel ? "Branch B" : "Completed", independent, "Flow")
+        };
+        var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync(
+            [owner, dialog, submitted, cancelled, join, independent], edges, TestContext.Current.CancellationToken,
+            new NodeExecutionOptions { Interactions = new SupportedInteractionHost() });
+
+        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+        Assert.Equal(0, submits);
+        Assert.Equal(parallel ? 1 : 2, cancels);
+        Assert.Equal(parallel ? 1 : 2, joins);
+        Assert.Equal(NodeExecutionStatus.Succeeded, independent.ExecutionStatus);
+    }
+
+    [Fact]
+    public async Task Engine_LoopChangingDecision_ResetsSkippedBranchesPerIteration()
+    {
+        var loop = FlowNode("Loop", "Flow.Collection.Loop", ["Count"], ["Body"]);
+        loop.Input[0].InitialValue = 2;
+        var dialog = FlowNode("Dialog", "UI.Dialog.Show", ["Flow"], ["Submitted", "Cancelled"]);
+        var accepted = FlowNode("Accepted", "Test.Accepted", ["Flow"], []);
+        var rejected = FlowNode("Rejected", "Test.Rejected", ["Flow"], []);
+        var prompts = 0;
+        var accepts = 0;
+        var rejects = 0;
+        dialog.Action = _ =>
+        {
+            var submit = prompts++ == 1;
+            dialog.WriteOutput("Submitted", submit);
+            dialog.WriteOutput("Cancelled", !submit);
+            return Task.CompletedTask;
+        };
+        accepted.Action = _ => { accepts++; return Task.CompletedTask; };
+        rejected.Action = _ => { rejects++; return Task.CompletedTask; };
+
+        var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([loop, dialog, accepted, rejected],
+            [Conn(loop, "Body", dialog, "Flow"), Conn(dialog, "Submitted", accepted, "Flow"),
+                Conn(dialog, "Cancelled", rejected, "Flow")], TestContext.Current.CancellationToken,
+            new NodeExecutionOptions { Interactions = new SupportedInteractionHost() });
+
+        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+        Assert.Equal(1, accepts);
+        Assert.Equal(1, rejects);
+    }
+
     [Fact]
     public async Task Engine_Loop_CompletedPathRunsOnceAfterBody()
     {
         var engine = new NodeExecutionEngine(new MemoryLog());
-        var loop = FlowNode("Loop", "Flow.Loop", ["Count"], ["Body", "Completed", "Index"]);
+        var loop = FlowNode("Loop", "Flow.Collection.Loop", ["Count"], ["Body", "Completed", "Index"]);
         var body = FlowNode("Body", "Test.Body", ["Flow"], []);
         var completed = FlowNode("Completed", "Test.Completed", ["Flow"], []);
         var bodyRuns = 0;
@@ -333,7 +430,7 @@ public sealed class NodeExecutionEngineTests
     public async Task Engine_Loop_SkipDependents_SkipsFailedBodyDependentsButRunsCompletedPath()
     {
         var engine = new NodeExecutionEngine(new MemoryLog());
-        var loop = FlowNode("Loop", "Flow.Loop", ["Count"], ["Body", "Completed", "Index"]);
+        var loop = FlowNode("Loop", "Flow.Collection.Loop", ["Count"], ["Body", "Completed", "Index"]);
         var failing = FlowNode("Failing", "Test.Failing", ["Flow"], ["Flow"]);
         var dependent = FlowNode("Dependent", "Test.Dependent", ["Flow"], []);
         var completed = FlowNode("Completed", "Test.Completed", ["Flow"], []);
@@ -365,7 +462,7 @@ public sealed class NodeExecutionEngineTests
     {
         var engine = new NodeExecutionEngine(new MemoryLog());
 
-        var parallel = FlowNode("Parallel", "Flow.Parallel", ["Flow"], ["Branch A", "Branch B"]);
+        var parallel = FlowNode("Parallel", "Flow.Execution.Parallel", ["Flow"], ["Branch A", "Branch B"]);
         var a = FlowNode("A", "Test.A", ["Flow"], []);
         var b = FlowNode("B", "Test.B", ["Flow"], []);
 
@@ -429,7 +526,7 @@ public sealed class NodeExecutionEngineTests
     public async Task Engine_Parallel_MergeRunsOnceAfterBothBranches()
     {
         var engine = new NodeExecutionEngine(new MemoryLog());
-        var parallel = FlowNode("Parallel", "Flow.Parallel", ["Flow"], ["Branch A", "Branch B"]);
+        var parallel = FlowNode("Parallel", "Flow.Execution.Parallel", ["Flow"], ["Branch A", "Branch B"]);
         var a = FlowNode("A", "Test.A", ["Flow"], ["Flow"]);
         var b = FlowNode("B", "Test.B", ["Flow"], ["Flow"]);
         var merge = FlowNode("Merge", "Test.Merge", ["Flow"], []);
@@ -458,7 +555,7 @@ public sealed class NodeExecutionEngineTests
     public async Task Engine_Parallel_SkipDependents_SkipsFailedBranchDependentsAndRunsOtherBranch()
     {
         var engine = new NodeExecutionEngine(new MemoryLog());
-        var parallel = FlowNode("Parallel", "Flow.Parallel", ["Flow"], ["Branch A", "Branch B"]);
+        var parallel = FlowNode("Parallel", "Flow.Execution.Parallel", ["Flow"], ["Branch A", "Branch B"]);
         var failing = FlowNode("Failing", "Test.Failing", ["Flow"], ["Flow"]);
         var dependent = FlowNode("Dependent", "Test.Dependent", ["Flow"], []);
         var independent = FlowNode("Independent", "Test.Independent", ["Flow"], []);
@@ -488,7 +585,7 @@ public sealed class NodeExecutionEngineTests
     public async Task Engine_Parallel_FailFast_DoesNotScheduleRemainingBranchNodes()
     {
         var engine = new NodeExecutionEngine(new MemoryLog());
-        var parallel = FlowNode("Parallel", "Flow.Parallel", ["Flow"], ["Branch A"]);
+        var parallel = FlowNode("Parallel", "Flow.Execution.Parallel", ["Flow"], ["Branch A"]);
         var failing = FlowNode("Failing", "Test.Failing", ["Flow"], ["Flow"]);
         var later = FlowNode("Later", "Test.Later", ["Flow"], []);
         var laterRuns = 0;
@@ -511,7 +608,7 @@ public sealed class NodeExecutionEngineTests
     {
         var engine = new NodeExecutionEngine(new MemoryLog());
 
-        var loop = FlowNode("Loop", "Flow.Loop", ["Count"], ["Body", "Index"]);
+        var loop = FlowNode("Loop", "Flow.Collection.Loop", ["Count"], ["Body", "Index"]);
         var body = FlowNode("Body", "Test.Body", ["Flow"], []);
         var runs = 0;
 
@@ -530,6 +627,13 @@ public sealed class NodeExecutionEngineTests
     /// <para>构造测试连接。</para>
     /// Builds a test connection.
     /// </summary>
+    private sealed class SupportedInteractionHost : IWorkflowInteractionService
+    {
+        public bool IsSupported => true;
+        public Task<InteractionResult> ShowAsync(InteractionRequest request, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("This scheduler test supplies interaction output through its test node.");
+    }
+
     private static NodeConnection Conn(FlowNodeViewModel source, string sourceConnector, FlowNodeViewModel target, string targetConnector)
         => new()
         {

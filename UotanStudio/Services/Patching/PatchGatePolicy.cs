@@ -10,7 +10,7 @@ internal static class PatchGatePolicy
     internal static string? Validate(IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnection>? connections,
         Dictionary<string, List<(string Connector, FlowNodeViewModel Target)>> flow)
     {
-        var gates = nodes.Where(node => node.TypeKey == "Patch.ApplyGate").ToArray();
+        var gates = nodes.Where(node => node.TypeKey == "Flow.Applicability.Gate").ToArray();
         if (gates.Length == 0)
         {
             return null;
@@ -38,7 +38,7 @@ internal static class PatchGatePolicy
             }
         }
 
-        foreach (var controller in nodes.Where(node => node.TypeKey is "Flow.Loop" or "Flow.Parallel"))
+        foreach (var controller in nodes.Where(node => node.TypeKey is "Flow.Collection.Loop" or "Flow.Execution.Parallel"))
         {
             var body = Reach(Edges(controller.InstanceId, flow).Where(edge => edge.Connector != "Completed")
                 .Select(edge => edge.Target.InstanceId), flow);
@@ -80,9 +80,8 @@ internal static class PatchGatePolicy
 
     private static bool TypeMutates(string type, HashSet<string> visiting, int depth)
     {
-        if (type is "Patch.WriteText" or "Patch.StageText" or "Patch.ImportFile" or "Patch.CopyFile"
-            or "Patch.DeleteFile" or "Patch.ImportAsset" or "Patch.BinaryReplace" or "Patch.ImageWriteText" or "Patch.ImageApplyTexts" or "Patch.ImageSetAttributes"
-            or "Patch.ImageSetXattr" or "Patch.ImageDeleteXattr")
+        if (NodeFactoryRegistrar.Descriptors.Any(descriptor => descriptor.TypeKey == type
+            && descriptor.Capabilities.HasFlag(NodeCapability.StagedWrite)))
         {
             return true;
         }
@@ -99,7 +98,9 @@ internal static class PatchGatePolicy
         {
             return true;
         }
-        var mutates = package.Graph.Nodes.Any(node => TypeMutates(node.TypeKey, visiting, depth + 1));
+        var mutates = package.Graph.Nodes.Any(node => node.CompositePackage is { } embedded
+            ? PackageMutates(embedded, visiting, depth + 1)
+            : TypeMutates(node.TypeKey, visiting, depth + 1));
         visiting.Remove(package.NodeTypeKey);
         return mutates;
     }

@@ -50,7 +50,7 @@ internal sealed class ProjectWorkspaceCoordinator : IProjectWorkspace
     public Task RestoreWorkflowAsync(NodeProjectSnapshot snapshot)
         => NodeEditor?.LoadFromAsync(new WorkflowSnapshot
         {
-            FormatVersion = 1,
+            FormatVersion = snapshot.FormatVersion,
             Nodes = snapshot.Nodes,
             Connections = snapshot.Connections
         }) ?? Task.CompletedTask;
@@ -60,7 +60,7 @@ internal sealed class ProjectWorkspaceCoordinator : IProjectWorkspace
         var nodes = NodeEditor ?? throw new InvalidOperationException("No node editor is bound.");
         return new NodeProjectSnapshot
         {
-            FormatVersion = 1,
+            FormatVersion = NodeProjectSnapshot.CurrentFormatVersion,
             ProjectName = projectName,
             Nodes = WorkflowPersistenceService.BuildNodeDtos(nodes.Nodes),
             Connections = WorkflowPersistenceService.BuildConnectionDtos(nodes.Nodes, nodes.Connections)

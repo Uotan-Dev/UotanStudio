@@ -38,6 +38,13 @@ public class WorkspaceDockFactory : Factory
         projectSetting.Title = LanguageService.Instance.GetString("Dock_ProjectSetting");
         projectSetting.CanClose = true;
 
+        var pluginTool = new PluginToolViewModel
+        {
+            Id = WorkspacePanelService.PluginTool,
+            Title = LanguageService.Instance.GetString("Dock_Plugins"),
+            CanClose = true
+        };
+
         _projectExplorer?.Dispose();
         var projectExplorer = _projectExplorer = new ProjectExplorerViewModel
         {
@@ -135,7 +142,7 @@ public class WorkspaceDockFactory : Factory
             // 打包设置面板默认隐藏，经「窗口」菜单唤出，不进入初始可见列表。
             // The packing settings panel is hidden by default (invoked from the Window menu), so it
             // starts outside the visible list.
-            VisibleDockables = CreateList<IDockable>(projectExplorer)
+            VisibleDockables = CreateList<IDockable>(projectExplorer, pluginTool)
         };
 
         var bottomTools = new ToolDock
@@ -192,6 +199,7 @@ public class WorkspaceDockFactory : Factory
         var panels = WorkspacePanelService.Instance;
         panels.Register(WorkspacePanelService.ProjectExplorer, projectExplorer, leftTools, visible: true);
         panels.Register(WorkspacePanelService.ProjectSetting, projectSetting, leftTools, visible: false);
+        panels.Register(WorkspacePanelService.PluginTool, pluginTool, leftTools, visible: true);
         panels.Register(WorkspacePanelService.ImagesView, imagesView, rightToolsTop, visible: true);
         if (aiAssistant is not null)
             panels.Register(WorkspacePanelService.AiAssistant, aiAssistant, rightToolsTop, visible: true);

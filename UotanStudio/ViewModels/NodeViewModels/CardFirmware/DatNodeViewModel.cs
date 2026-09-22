@@ -33,7 +33,7 @@ public class DatNodeViewModel : FlowNodeViewModel
         var node = new DatNodeViewModel("Write DAT")
         {
             Location = new Point(100, 100),
-            TypeKey = "Firmware.Dat"
+            TypeKey = "Build.Dat.Convert"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Transfer List", PortType = NodePortType.Path });
         node.Input.Add(new NodeConnectorViewModel { Title = "Output", PortType = NodePortType.Path });
@@ -42,8 +42,8 @@ public class DatNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发 DAT 写出逻辑：Firmware.Dat 从输入镜像写出 DAT 镜像对。</para>
-    /// Dispatches DAT writing logic by the node type key (TypeKey): Firmware.Dat writes the DAT image pair
+    /// <para>按节点类型键（TypeKey）分发 DAT 写出逻辑：Build.Dat.Convert 从输入镜像写出 DAT 镜像对。</para>
+    /// Dispatches DAT writing logic by the node type key (TypeKey): Build.Dat.Convert writes the DAT image pair
     /// from the input image.
     /// </summary>
     /// <param name="context">
@@ -58,7 +58,7 @@ public class DatNodeViewModel : FlowNodeViewModel
     {
         try
         {
-            if (TypeKey != "Firmware.Dat")
+            if (TypeKey != "Build.Dat.Convert")
             {
                 await base.ExecuteAsync(context).ConfigureAwait(false);
                 return;
@@ -68,8 +68,7 @@ public class DatNodeViewModel : FlowNodeViewModel
             var output = PathText(ReadInput("Output"));
             if (string.IsNullOrWhiteSpace(input) || !File.Exists(input))
             {
-                context.Log.Write(LogLevel.Warn, Title, $"Input image not found: {input ?? "<empty>"}  找不到输入镜像。");
-                return;
+                throw new InvalidOperationException($"Input image not found: {input ?? "<empty>"}  找不到输入镜像。");
             }
 
             if (string.IsNullOrWhiteSpace(output))
@@ -82,8 +81,7 @@ public class DatNodeViewModel : FlowNodeViewModel
                 .ConfigureAwait(false);
             if (!result.Success)
             {
-                context.Log.Write(LogLevel.Error, Title, $"DAT write failed: {result.Summary}  写出 DAT 失败。");
-                return;
+                throw new InvalidOperationException($"DAT write failed: {result.Summary}  写出 DAT 失败。");
             }
 
             WriteOutput("Result", result.Summary);
@@ -96,6 +94,7 @@ public class DatNodeViewModel : FlowNodeViewModel
         catch (Exception ex)
         {
             context.Log.Write(LogLevel.Error, Title, $"DAT node failed: {ex.Message}  DAT 节点执行失败。");
+            throw;
         }
     }
 

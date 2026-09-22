@@ -42,6 +42,7 @@ public sealed class ProjectDataWorkspace : IProjectWorkspace
     /// <inheritdoc />
     public Task RestoreWorkflowAsync(NodeProjectSnapshot snapshot)
     {
+        snapshot.EnsureSupportedVersion();
         Workflow = snapshot;
         return Task.CompletedTask;
     }

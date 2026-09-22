@@ -38,4 +38,14 @@ public enum NodePortType
     PatchAsset,
     /// <summary>Immutable configuration edits for one image rebuild.</summary>
     ImageEdits,
+    /// <summary>Declarative user-interface component, never a native control.</summary>
+    UiComponent,
+    /// <summary>Validated declarative form layout and field schema.</summary>
+    UiForm,
+    /// <summary>Named typed values returned by an operation.</summary>
+    Record,
+    /// <summary>Ordered collection of values.</summary>
+    List,
+    /// <summary>File-backed artifact reference for bounded processing.</summary>
+    Artifact,
 }

@@ -36,13 +36,22 @@ public class FlashNodeViewModel : FlowNodeViewModel
         var node = new FlashNodeViewModel("Flash Partition")
         {
             Location = new Point(100, 100),
-            TypeKey = "Flash.Flash"
+            TypeKey = "Device.Partition.Flash"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
         node.Input.Add(new NodeConnectorViewModel { Title = "Partition", PortType = NodePortType.Text });
         node.Input.Add(new NodeConnectorViewModel { Title = "Image", PortType = NodePortType.Path });
         node.Output.Add(new NodeConnectorViewModel { Title = "Result", PortType = NodePortType.Boolean });
         node.Output.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
+        return node;
+    }
+
+    /// <summary>Creates a partition-flash preset using the same explicit partition input and execution contract.</summary>
+    public static FlashNodeViewModel CreateFlashPreset(string partition)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(partition);
+        var node = CreateFlashNode();
+        node.Input.Single(input => input.Title == "Partition").InitialValue = partition;
         return node;
     }
 
@@ -55,7 +64,7 @@ public class FlashNodeViewModel : FlowNodeViewModel
         var node = new FlashNodeViewModel("Erase Partition")
         {
             Location = new Point(100, 100),
-            TypeKey = "Flash.Erase"
+            TypeKey = "Device.Partition.Erase"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
         node.Input.Add(new NodeConnectorViewModel { Title = "Partition", PortType = NodePortType.Text });
@@ -73,7 +82,7 @@ public class FlashNodeViewModel : FlowNodeViewModel
         var node = new FlashNodeViewModel("Reboot Device")
         {
             Location = new Point(100, 100),
-            TypeKey = "Flash.Reboot"
+            TypeKey = "Device.Power.Reboot"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
         node.Input.Add(new NodeConnectorViewModel { Title = "Mode", PortType = NodePortType.Text });
@@ -82,13 +91,13 @@ public class FlashNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的烧录逻辑：Flash.Flash 调
-    /// <see cref="FlashService.FlashImageAsync"/>、Flash.Erase 调
-    /// <see cref="FlashService.ErasePartitionAsync"/>、Flash.Reboot 调
+    /// <para>按节点类型键（TypeKey）分发对应的烧录逻辑：Device.Partition.Flash 调
+    /// <see cref="FlashService.FlashImageAsync"/>、Device.Partition.Erase 调
+    /// <see cref="FlashService.ErasePartitionAsync"/>、Device.Power.Reboot 调
     /// <see cref="DeviceMonitorService.RebootAsync"/>。设备缺失时告警并短路。</para>
-    /// Dispatches flash logic by the node type key (TypeKey): Flash.Flash calls
-    /// <see cref="FlashService.FlashImageAsync"/>, Flash.Erase calls
-    /// <see cref="FlashService.ErasePartitionAsync"/>, and Flash.Reboot calls
+    /// Dispatches flash logic by the node type key (TypeKey): Device.Partition.Flash calls
+    /// <see cref="FlashService.FlashImageAsync"/>, Device.Partition.Erase calls
+    /// <see cref="FlashService.ErasePartitionAsync"/>, and Device.Power.Reboot calls
     /// <see cref="DeviceMonitorService.RebootAsync"/>. A missing device logs a warning and short-circuits.
     /// </summary>
     /// <param name="context">
@@ -106,13 +115,13 @@ public class FlashNodeViewModel : FlowNodeViewModel
             context.CancellationToken.ThrowIfCancellationRequested();
             switch (TypeKey)
             {
-                case "Flash.Flash":
+                case "Device.Partition.Flash":
                     await ExecuteFlashAsync(context).ConfigureAwait(false);
                     break;
-                case "Flash.Erase":
+                case "Device.Partition.Erase":
                     await ExecuteEraseAsync(context).ConfigureAwait(false);
                     break;
-                case "Flash.Reboot":
+                case "Device.Power.Reboot":
                     await ExecuteRebootAsync(context).ConfigureAwait(false);
                     break;
                 default:
@@ -127,6 +136,7 @@ public class FlashNodeViewModel : FlowNodeViewModel
         catch (Exception ex)
         {
             context.Log.Write(LogLevel.Error, Title, $"Flash node failed: {ex.Message}  烧录节点执行失败。");
+            throw;
         }
     }
 
@@ -138,7 +148,7 @@ public class FlashNodeViewModel : FlowNodeViewModel
             context.Log.Write(LogLevel.Warn, Title, "No device connected. 未连接设备。");
             WriteOutput("Result", false);
             WriteOutput("Status", "no-device");
-            return;
+            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Device_InvalidInput"));
         }
 
         var partition = Text(ReadInput("Partition"));
@@ -147,7 +157,7 @@ public class FlashNodeViewModel : FlowNodeViewModel
             context.Log.Write(LogLevel.Warn, Title, "No partition specified. 未指定分区。");
             WriteOutput("Result", false);
             WriteOutput("Status", "missing-partition");
-            return;
+            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Device_InvalidInput"));
         }
 
         var image = Text(ReadInput("Image"));
@@ -156,7 +166,7 @@ public class FlashNodeViewModel : FlowNodeViewModel
             context.Log.Write(LogLevel.Warn, Title, $"Image path invalid or missing: {image ?? "<empty>"}  镜像路径无效或缺失。");
             WriteOutput("Result", false);
             WriteOutput("Status", "invalid-image");
-            return;
+            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Device_InvalidInput"));
         }
 
         var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
@@ -165,6 +175,10 @@ public class FlashNodeViewModel : FlowNodeViewModel
 
         WriteOutput("Result", result.Success);
         WriteOutput("Status", result.Summary);
+        if (!result.Success)
+        {
+            throw new InvalidOperationException(result.Summary);
+        }
         context.Log.Write(result.Success ? LogLevel.Info : LogLevel.Error, Title,
             result.Success
                 ? $"{result.Summary}  刷写完成。"
@@ -179,7 +193,7 @@ public class FlashNodeViewModel : FlowNodeViewModel
             context.Log.Write(LogLevel.Warn, Title, "No device connected. 未连接设备。");
             WriteOutput("Result", false);
             WriteOutput("Status", "no-device");
-            return;
+            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Device_InvalidInput"));
         }
 
         var partition = Text(ReadInput("Partition"));
@@ -188,7 +202,7 @@ public class FlashNodeViewModel : FlowNodeViewModel
             context.Log.Write(LogLevel.Warn, Title, "No partition specified. 未指定分区。");
             WriteOutput("Result", false);
             WriteOutput("Status", "missing-partition");
-            return;
+            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Device_InvalidInput"));
         }
 
         var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
@@ -197,6 +211,10 @@ public class FlashNodeViewModel : FlowNodeViewModel
 
         WriteOutput("Result", result.Success);
         WriteOutput("Status", result.Summary);
+        if (!result.Success)
+        {
+            throw new InvalidOperationException(result.Summary);
+        }
         context.Log.Write(result.Success ? LogLevel.Info : LogLevel.Error, Title,
             result.Success
                 ? $"{result.Summary}  擦除完成。"
@@ -210,7 +228,7 @@ public class FlashNodeViewModel : FlowNodeViewModel
         {
             context.Log.Write(LogLevel.Warn, Title, "No device connected. 未连接设备。");
             WriteOutput("Status", "no-device");
-            return;
+            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Device_InvalidInput"));
         }
 
         var mode = Text(ReadInput("Mode"));
@@ -218,6 +236,10 @@ public class FlashNodeViewModel : FlowNodeViewModel
             device, mode ?? "now", context.CancellationToken).ConfigureAwait(false);
 
         WriteOutput("Status", ok ? $"rebooted:{mode ?? "now"}" : "reboot-failed");
+        if (!ok)
+        {
+            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Device_RebootFailed"));
+        }
         context.Log.Write(ok ? LogLevel.Info : LogLevel.Error, Title,
             ok
                 ? $"Reboot requested. device={device.Serial} mode={mode ?? "now"}  已请求重启。"

@@ -6,9 +6,10 @@ namespace UotanStudio.Services.Projects;
 public sealed class VisualPluginPackage
 {
     /// <summary>Current visual-plugin file format.</summary>
-    public const int CurrentFormatVersion = 2;
+    public const int CurrentFormatVersion = 3;
 
     /// <summary>File format version.</summary>
+    [JsonRequired]
     public int FormatVersion { get; set; } = CurrentFormatVersion;
 
     /// <summary>How the package is exposed by the host.</summary>
@@ -33,6 +34,10 @@ public sealed class VisualPluginPackage
     /// <summary>Trusted archive location assigned by the loader, never accepted from JSON.</summary>
     [JsonIgnore]
     public string? BundlePath { get; internal set; }
+
+    /// <summary>Validated root manifest owning the shared archive of an embedded package.</summary>
+    [JsonIgnore]
+    internal VisualPluginPackage? BundleRoot { get; set; }
 
     /// <summary>Stable node type registered by a composite-node package.</summary>
     [JsonIgnore]
@@ -68,7 +73,7 @@ public sealed class VisualPluginManifest
     public string Author { get; set; } = string.Empty;
 
     /// <summary>Required host node API version.</summary>
-    public int NodeApiVersion { get; set; } = 1;
+    public int NodeApiVersion { get; set; } = 2;
 
     /// <summary>Supported operating-system identifiers. An empty list means all host platforms.</summary>
     public List<string> Platforms { get; set; } = [];
@@ -89,6 +94,20 @@ public sealed class VisualPluginManifest
 /// <summary>Public composite-node port mapped to one internal graph endpoint.</summary>
 public sealed class VisualPluginPortDefinition
 {
+    /// <summary>Whether values must be masked and omitted from ordinary persisted defaults.</summary>
+    public bool IsSensitive { get; set; }
+    /// <summary>Additional internal input targets sharing this public input.</summary>
+    public List<VisualPluginPortBinding> AdditionalBindings { get; set; } = [];
+
+    /// <summary>Enumerates the stable internal endpoints of this interface.</summary>
+    public IEnumerable<VisualPluginPortBinding> GetBindings()
+    {
+        yield return new VisualPluginPortBinding { NodeInstanceId = NodeInstanceId, PortId = PortId };
+        foreach (var binding in AdditionalBindings)
+        {
+            yield return binding;
+        }
+    }
     /// <summary>Stable public port identifier.</summary>
     public string Id { get; set; } = string.Empty;
 
@@ -109,4 +128,14 @@ public sealed class VisualPluginPortDefinition
 
     /// <summary>Whether an input must receive a connection or a non-empty default value.</summary>
     public bool Required { get; set; }
+}
+
+/// <summary>A stable endpoint inside a composite graph.</summary>
+public sealed class VisualPluginPortBinding
+{
+    /// <summary>Internal node identity.</summary>
+    public string NodeInstanceId { get; set; } = string.Empty;
+
+    /// <summary>Internal port identity.</summary>
+    public string PortId { get; set; } = string.Empty;
 }

@@ -103,19 +103,19 @@ public sealed class PatchQueryTests : IDisposable
     [Fact]
     public async Task Execute_StagedDiscoveryConditionsAndFormatCheck_UsesOneViewAndRestoresSettings()
     {
-        var open = PatchNodeViewModel.Create("Patch.Workspace");
+        var open = PatchNodeViewModel.Create("Workspace.Directory.Open");
         Set(open, "Root", _root);
-        var stage = PatchNodeViewModel.Create("Patch.StageText");
+        var stage = PatchNodeViewModel.Create("Workspace.Text.Stage");
         Set(stage, "Relative Path", "nested/config.bin");
         Set(stage, "Operation", "Add");
         Set(stage, "Text", "{\"enabled\":true}");
-        var find = PatchNodeViewModel.Create("Patch.WorkspaceFind");
+        var find = PatchNodeViewModel.Create("Workspace.File.Find");
         Set(find, "Pattern", "nested/*.bin");
-        var check = PatchNodeViewModel.Create("Patch.CheckFormat");
+        var check = PatchNodeViewModel.Create("Validation.Format.Check");
         Set(check, "Expected Format", "Json");
-        var condition = PatchNodeViewModel.Create("Patch.Condition");
+        var condition = PatchNodeViewModel.Create("Validation.Condition.Evaluate");
         Set(condition, "Operation", "FileExists");
-        var directory = PatchNodeViewModel.Create("Patch.Condition");
+        var directory = PatchNodeViewModel.Create("Validation.Condition.Evaluate");
         Set(directory, "Operation", "DirectoryExists");
         Set(directory, "Value", Path.Combine(_root, "nested"));
         NodeFactoryRegistrar.RegisterAll();
@@ -137,12 +137,12 @@ public sealed class PatchQueryTests : IDisposable
     [Fact]
     public async Task Execute_FailedFormatAssertion_DiscardsPriorStaging()
     {
-        var writer = PatchNodeViewModel.Create("Patch.WriteText");
+        var writer = PatchNodeViewModel.Create("File.Text.Publish");
         var path = Path.Combine(_root, "not-json.bin");
         Set(writer, "Output Path", path);
         Set(writer, "Text", "{broken}");
-        var check = PatchNodeViewModel.Create("Patch.CheckFormat");
-        var assert = PatchNodeViewModel.Create("Patch.Assert");
+        var check = PatchNodeViewModel.Create("Validation.Format.Check");
+        var assert = PatchNodeViewModel.Create("Validation.Boolean.Assert");
         var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([writer, check, assert],
             [Connect(writer, "Path", check, "Path"), Connect(check, "Match", assert, "Condition")], Token);
         Assert.NotEqual(ExecutionStatus.Succeeded, result.Status);

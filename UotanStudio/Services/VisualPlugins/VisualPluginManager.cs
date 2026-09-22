@@ -99,7 +99,7 @@ public sealed class VisualPluginManager
             for (var index = pending.Count - 1; index >= 0; index--)
             {
                 var package = pending[index];
-                if (!package.Manifest.RequiredNodeTypes.All(available.Contains)) continue;
+                if (!GetExternalNodeTypes(package).All(available.Contains)) continue;
                 if (!package.Manifest.Dependencies.All(dependency => available.Contains("VisualPlugin." + dependency.Id))) continue;
                 NodeFactoryRegistrar.RegisterVisualPlugin(package, () => GetExecutionErrors(package));
                 _registeredTypeKeys.Add(package.NodeTypeKey);
@@ -111,7 +111,7 @@ public sealed class VisualPluginManager
 
         foreach (var package in pending)
         {
-            var missing = package.Manifest.RequiredNodeTypes.Where(type => !available.Contains(type)).ToArray();
+            var missing = GetExternalNodeTypes(package).Where(type => !available.Contains(type)).ToArray();
             if (missing.Length > 0)
             {
                 errorsById[package.Manifest.Id].Add("Unavailable node dependencies: " + string.Join(", ", missing));
@@ -269,7 +269,8 @@ public sealed class VisualPluginManager
     {
         var oldPath = previous?.FilePath;
         var destination = oldPath ?? Path.Combine(_directory, package.Manifest.Id + ".uotanplugin.json");
-        if (package.Assets.Count > 0 && !destination.EndsWith(".uotanplugin", StringComparison.OrdinalIgnoreCase))
+        if (VisualPluginBundle.EnumerateScopes(package).Any(scope => scope.Assets.Count > 0)
+            && !destination.EndsWith(".uotanplugin", StringComparison.OrdinalIgnoreCase))
         {
             destination = Path.Combine(_directory, package.Manifest.Id + ".uotanplugin");
         }
@@ -377,6 +378,31 @@ public sealed class VisualPluginManager
         }
     }
 
+    private static IEnumerable<string> GetExternalNodeTypes(VisualPluginPackage package)
+    {
+        // Packages have already passed bounded structural validation before this traversal.
+        var embedded = package.Graph.Nodes.Where(node => node.CompositePackage is not null)
+            .ToLookup(node => node.TypeKey, node => node.CompositePackage!, StringComparer.OrdinalIgnoreCase);
+        foreach (var type in package.Manifest.RequiredNodeTypes)
+        {
+            if (embedded.Contains(type))
+            {
+                if (embedded[type].Any(child => child.Assets.Count > 0 && child.BundlePath is null))
+                {
+                    yield return type;
+                }
+                foreach (var dependency in embedded[type].SelectMany(GetExternalNodeTypes))
+                {
+                    yield return dependency;
+                }
+            }
+            else
+            {
+                yield return type;
+            }
+        }
+    }
+
     private static bool SupportsCurrentPlatform(IReadOnlyCollection<string> platforms)
     {
         if (platforms.Count == 0) return true;
@@ -409,7 +435,7 @@ public sealed class VisualPluginManager
 
             states[typeKey] = 1;
             stack.Add(typeKey);
-            foreach (var dependency in packages[typeKey].Manifest.RequiredNodeTypes.Concat(
+            foreach (var dependency in GetExternalNodeTypes(packages[typeKey]).Concat(
                          packages[typeKey].Manifest.Dependencies.Select(dependency => "VisualPlugin." + dependency.Id)))
                 if (packages.ContainsKey(dependency)) Visit(dependency);
             stack.RemoveAt(stack.Count - 1);

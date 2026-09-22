@@ -34,7 +34,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
         var node = new ExtendedDataNodeViewModel("Concat")
         {
             Location = new Point(100, 100),
-            TypeKey = "Data.Concat"
+            TypeKey = "Data.Bytes.Concat"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data A", PortType = NodePortType.Data });
         node.Input.Add(new NodeConnectorViewModel { Title = "Data B", PortType = NodePortType.Data });
@@ -51,7 +51,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
         var node = new ExtendedDataNodeViewModel("Slice")
         {
             Location = new Point(100, 100),
-            TypeKey = "Data.Slice"
+            TypeKey = "Data.Bytes.Slice"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
         node.Input.Add(new NodeConnectorViewModel { Title = "Offset", PortType = NodePortType.Number });
@@ -69,7 +69,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
         var node = new ExtendedDataNodeViewModel("Encrypt")
         {
             Location = new Point(100, 100),
-            TypeKey = "Data.Encrypt"
+            TypeKey = "Data.Cipher.Encrypt"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
         node.Input.Add(new NodeConnectorViewModel { Title = "Key", PortType = NodePortType.Data });
@@ -87,7 +87,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
         var node = new ExtendedDataNodeViewModel("Compress")
         {
             Location = new Point(100, 100),
-            TypeKey = "Data.Compress"
+            TypeKey = "Data.Compression.Compress"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
         node.Input.Add(new NodeConnectorViewModel { Title = "Algorithm", PortType = NodePortType.Text });
@@ -104,7 +104,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
         var node = new ExtendedDataNodeViewModel("Byte Swap")
         {
             Location = new Point(100, 100),
-            TypeKey = "Data.ByteSwap"
+            TypeKey = "Data.Bytes.Swap"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
         node.Output.Add(new NodeConnectorViewModel { Title = "Swapped", PortType = NodePortType.Data });
@@ -112,10 +112,10 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的扩展数据处理逻辑：Data.Concat 拼接、Data.Slice 切片、Data.Encrypt 加密、
-    /// Data.Compress 压缩、Data.ByteSwap 字节序转换。</para>
-    /// Dispatches extended data-processing logic by the node type key (TypeKey): Data.Concat concatenates, Data.Slice extracts
-    /// a range, Data.Encrypt encrypts, Data.Compress compresses, and Data.ByteSwap converts byte order.
+    /// <para>按节点类型键（TypeKey）分发对应的扩展数据处理逻辑：Data.Bytes.Concat 拼接、Data.Bytes.Slice 切片、Data.Cipher.Encrypt 加密、
+    /// Data.Compression.Compress 压缩、Data.Bytes.Swap 字节序转换。</para>
+    /// Dispatches extended data-processing logic by the node type key (TypeKey): Data.Bytes.Concat concatenates, Data.Bytes.Slice extracts
+    /// a range, Data.Cipher.Encrypt encrypts, Data.Compression.Compress compresses, and Data.Bytes.Swap converts byte order.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -129,19 +129,19 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
     {
         switch (TypeKey)
         {
-            case "Data.Concat":
+            case "Data.Bytes.Concat":
                 ExecuteConcat(context);
                 break;
-            case "Data.Slice":
+            case "Data.Bytes.Slice":
                 ExecuteSlice(context);
                 break;
-            case "Data.Encrypt":
+            case "Data.Cipher.Encrypt":
                 ExecuteEncrypt(context);
                 break;
-            case "Data.Compress":
+            case "Data.Compression.Compress":
                 ExecuteCompress(context);
                 break;
-            case "Data.ByteSwap":
+            case "Data.Bytes.Swap":
                 ExecuteByteSwap(context);
                 break;
             default:

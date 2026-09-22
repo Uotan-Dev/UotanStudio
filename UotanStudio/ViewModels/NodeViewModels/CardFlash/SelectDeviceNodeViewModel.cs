@@ -35,7 +35,7 @@ public class SelectDeviceNodeViewModel : FlowNodeViewModel
         var node = new SelectDeviceNodeViewModel("Select Device")
         {
             Location = new Point(100, 100),
-            TypeKey = "Flash.SelectDevice"
+            TypeKey = "Device.Target.Select"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Serial", PortType = NodePortType.Text });
         node.Output.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
@@ -44,8 +44,8 @@ public class SelectDeviceNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发设备选择逻辑：Flash.SelectDevice 从序列号或首台设备解析设备并输出。</para>
-    /// Dispatches the device selection logic by the node type key (TypeKey): Flash.SelectDevice resolves
+    /// <para>按节点类型键（TypeKey）分发设备选择逻辑：Device.Target.Select 从序列号或首台设备解析设备并输出。</para>
+    /// Dispatches the device selection logic by the node type key (TypeKey): Device.Target.Select resolves
     /// a device from the serial or the first scanned device and outputs it.
     /// </summary>
     /// <param name="context">
@@ -60,7 +60,7 @@ public class SelectDeviceNodeViewModel : FlowNodeViewModel
     {
         switch (TypeKey)
         {
-            case "Flash.SelectDevice":
+            case "Device.Target.Select":
                 ExecuteSelect(context);
                 break;
             default:

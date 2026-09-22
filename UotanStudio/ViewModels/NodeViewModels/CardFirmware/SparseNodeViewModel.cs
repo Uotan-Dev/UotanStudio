@@ -32,7 +32,7 @@ public class SparseNodeViewModel : FlowNodeViewModel
         var node = new SparseNodeViewModel("Sparse Convert")
         {
             Location = new Point(100, 100),
-            TypeKey = "Firmware.Sparse"
+            TypeKey = "Image.Sparse.Convert"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Input", PortType = NodePortType.Path });
         node.Input.Add(new NodeConnectorViewModel { Title = "Output", PortType = NodePortType.Path });
@@ -42,8 +42,8 @@ public class SparseNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发稀疏转换逻辑：Firmware.Sparse 按 “To Sparse” 输入在 raw/sparse 之间转换。</para>
-    /// Dispatches sparse conversion logic by the node type key (TypeKey): Firmware.Sparse converts between
+    /// <para>按节点类型键（TypeKey）分发稀疏转换逻辑：Image.Sparse.Convert 按 “To Sparse” 输入在 raw/sparse 之间转换。</para>
+    /// Dispatches sparse conversion logic by the node type key (TypeKey): Image.Sparse.Convert converts between
     /// raw and sparse according to the “To Sparse” input.
     /// </summary>
     /// <param name="context">
@@ -58,7 +58,7 @@ public class SparseNodeViewModel : FlowNodeViewModel
     {
         try
         {
-            if (TypeKey != "Firmware.Sparse")
+            if (TypeKey != "Image.Sparse.Convert")
             {
                 await base.ExecuteAsync(context).ConfigureAwait(false);
                 return;
@@ -69,8 +69,7 @@ public class SparseNodeViewModel : FlowNodeViewModel
             var toSparse = NodeDataUtil.ToBool(ReadInput("To Sparse"), true);
             if (string.IsNullOrWhiteSpace(input) || !File.Exists(input))
             {
-                context.Log.Write(LogLevel.Warn, Title, $"Input image not found: {input ?? "<empty>"}  找不到输入镜像。");
-                return;
+                throw new InvalidOperationException($"Input image not found: {input ?? "<empty>"}  找不到输入镜像。");
             }
 
             if (string.IsNullOrWhiteSpace(output))
@@ -83,8 +82,7 @@ public class SparseNodeViewModel : FlowNodeViewModel
                 .ConfigureAwait(false);
             if (!result.Success)
             {
-                context.Log.Write(LogLevel.Error, Title, $"Sparse conversion failed: {result.Summary}  稀疏转换失败。");
-                return;
+                throw new InvalidOperationException($"Sparse conversion failed: {result.Summary}  稀疏转换失败。");
             }
 
             WriteOutput("Result", result.Summary);
@@ -97,6 +95,7 @@ public class SparseNodeViewModel : FlowNodeViewModel
         catch (Exception ex)
         {
             context.Log.Write(LogLevel.Error, Title, $"Sparse node failed: {ex.Message}  稀疏转换节点执行失败。");
+            throw;
         }
     }
 

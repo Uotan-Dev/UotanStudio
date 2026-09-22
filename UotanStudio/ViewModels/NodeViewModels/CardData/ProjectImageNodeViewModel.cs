@@ -40,7 +40,7 @@ public class ProjectImageNodeViewModel : FlowNodeViewModel
         var node = new ProjectImageNodeViewModel("Project Image")
         {
             Location = new Point(100, 100),
-            TypeKey = "Data.ProjectImage"
+            TypeKey = "Resource.Project.Image"
         };
         node.Output.Add(new NodeConnectorViewModel { Title = "Path", PortType = NodePortType.Path });
         return node;
@@ -71,8 +71,8 @@ public class ProjectImageNodeViewModel : FlowNodeViewModel
         => _cachedAvailableImages ??= ComputeAvailableImages();
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发执行逻辑：Data.ProjectImage 输出选中镜像的绝对路径。</para>
-    /// Dispatches execution logic by the node type key (TypeKey): Data.ProjectImage outputs the absolute
+    /// <para>按节点类型键（TypeKey）分发执行逻辑：Resource.Project.Image 输出选中镜像的绝对路径。</para>
+    /// Dispatches execution logic by the node type key (TypeKey): Resource.Project.Image outputs the absolute
     /// path of the selected image.
     /// </summary>
     /// <param name="context">
@@ -87,7 +87,7 @@ public class ProjectImageNodeViewModel : FlowNodeViewModel
     {
         switch (TypeKey)
         {
-            case "Data.ProjectImage":
+            case "Resource.Project.Image":
                 ExecuteProjectImage(context);
                 break;
             default:

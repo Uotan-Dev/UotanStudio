@@ -37,6 +37,8 @@
     <x:String x:Key="Dock_Properties_Size">Size</x:String>
     <x:String x:Key="Dock_Properties_NoSelection">Select a file to view details</x:String>
     <x:String x:Key="Dock_ProjectSetting">Packing Settings</x:String>
+    <x:String x:Key="Dock_Plugins">Plugins</x:String>
+    <x:String x:Key="PluginTool_Description">Apply a patch plan from an installed workflow template.</x:String>
     <x:String x:Key="Dock_ImagesView">Image Manager</x:String>
     <x:String x:Key="Dock_AiAssistant">AI Assistant</x:String>
     <x:String x:Key="AI_NewConversation">New conversation</x:String>

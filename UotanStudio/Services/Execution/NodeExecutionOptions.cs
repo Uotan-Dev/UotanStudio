@@ -1,3 +1,4 @@
+using UotanStudio.Services.Interactions;
 using UotanStudio.Services.Patching;
 using UotanStudio.Services.Projects;
 
@@ -19,6 +20,11 @@ public enum ExecutionFailurePolicy
 /// <summary>Execution policy supplied to <see cref="NodeExecutionEngine.ExecuteAsync"/>.</summary>
 public sealed record NodeExecutionOptions
 {
+    /// <summary>Composite entry node activation; inactive-only descendants are skipped before execution.</summary>
+    internal IReadOnlyDictionary<string, bool>? EntryActivation { get; init; }
+    /// <summary>Host service used by declarative interaction nodes.</summary>
+    public IWorkflowInteractionService Interactions { get; init; } = UnsupportedWorkflowInteractionService.Instance;
+
     /// <summary>Gets the failure policy. The default blocks dependents but preserves independent branches.</summary>
     public ExecutionFailurePolicy FailurePolicy { get; init; } = ExecutionFailurePolicy.SkipDependents;
 

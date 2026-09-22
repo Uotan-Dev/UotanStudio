@@ -14,6 +14,7 @@
         <Border Padding="10,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Content="{DynamicResource Node_EditInterface}" Click="EditInterfaceClick" IsEnabled="{Binding !IsExecuting}" />
                     <icons:MaterialIcon Kind="PuzzleOutline" Width="18" Height="18" />
                     <TextBlock x:Name="PluginNameText" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <TextBlock x:Name="PluginVersionText" FontSize="11" Opacity="0.65" VerticalAlignment="Center" />

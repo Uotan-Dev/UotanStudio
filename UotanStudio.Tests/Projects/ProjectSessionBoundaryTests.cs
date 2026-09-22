@@ -17,6 +17,41 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
     }
 
     [Fact]
+    public async Task OpenProject_OldNodeSchema_PreservesCurrentContextAndWorkspace()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var original = Path.Combine(_root, "original.uotan");
+        await _projects.CreateNewSolutionAsync(original, cancellationToken: token);
+        var oldProject = Path.Combine(_root, "legacy.uotan");
+        var other = new ProjectSession(new ProjectDataWorkspace());
+        await other.CreateNewSolutionAsync(oldProject, cancellationToken: token);
+        await File.WriteAllTextAsync(other.Context.NodeProjectPath!,
+            "{\"FormatVersion\":1,\"ProjectName\":\"legacy\",\"Nodes\":[],\"Connections\":[]}", token);
+        _workspace.Events.Clear();
+
+        Assert.False(await _projects.OpenProjectFromPathAsync(oldProject, cancellationToken: token));
+
+        Assert.Equal(original, _projects.CurrentProjectPath);
+        Assert.Empty(_workspace.Events);
+        Assert.Contains("\"FormatVersion\":1", await File.ReadAllTextAsync(other.Context.NodeProjectPath!, token));
+    }
+
+    [Fact]
+    public async Task SaveNodeProject_UnsupportedSchema_PreservesExistingDocument()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var path = Path.Combine(_root, "existing.uotannode");
+        Assert.True(await SolutionPersistenceService.SaveNodeProjectAsync(path, new NodeProjectSnapshot(), token));
+        var previous = await File.ReadAllBytesAsync(path, token);
+
+        Assert.False(await SolutionPersistenceService.SaveNodeProjectAsync(path, new NodeProjectSnapshot { FormatVersion = 1 }, token));
+
+        Assert.Equal(previous, await File.ReadAllBytesAsync(path, token));
+        Assert.Equal(NodeProjectSnapshot.CurrentFormatVersion,
+            (await SolutionPersistenceService.LoadNodeProjectAsync(path, token))!.FormatVersion);
+    }
+
+    [Fact]
     public async Task ExecuteFileOperation_ProjectChange_WaitsUntilFileOperationFinishes()
     {
         var token = TestContext.Current.CancellationToken;

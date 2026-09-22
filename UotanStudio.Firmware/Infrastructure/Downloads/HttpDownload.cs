@@ -21,6 +21,7 @@ public sealed record GitHubMirrorSite
 /// </summary>
 public static class HttpDownload
 {
+    public const string DefaultBrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
     /// <summary><para>镜像站测速的候选列表；源站直连始终参与测速。</para>
     /// Candidate mirrors for speed probing; the origin always participates.</summary>
     private static readonly List<GitHubMirrorSite> MirrorSites =
@@ -102,7 +103,7 @@ public static class HttpDownload
     /// Speed-probes mirrors and the origin by fetching 256 KiB each and returns sources fastest-first;
     /// failed probes sort last, and a wholly failed probe degrades to origin-first order.</summary>
     public static async Task<IReadOnlyList<Uri>> SelectSourcesBySpeedAsync(Uri url, HttpClient client,
-        CancellationToken cancellationToken, string? userAgent = null)
+        CancellationToken cancellationToken, string? requestHeaders = null)
     {
         var sources = EnumerateSources(url).ToArray();
         if (sources.Length == 1) return sources;
@@ -115,7 +116,7 @@ public static class HttpDownload
                 try
                 {
                     var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-                    using var request = CreateRequest(source, userAgent);
+                    using var request = CreateRequest(source, requestHeaders);
                     request.Headers.Range = new RangeHeaderValue(0, SpeedProbeBytes - 1);
                     using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
                     response.EnsureSuccessStatusCode();
@@ -154,16 +155,16 @@ public static class HttpDownload
     /// Downloads to a file: picks sources by speed probe, then tries each in order; returns the source used.</summary>
     public static async Task<Uri> DownloadAsync(HttpClient client, Uri url, string destination,
         IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default,
-        string? userAgent = null)
+        string? requestHeaders = null)
     {
-        var sources = await SelectSourcesBySpeedAsync(url, client, cancellationToken, userAgent).ConfigureAwait(false);
+        var sources = await SelectSourcesBySpeedAsync(url, client, cancellationToken, requestHeaders).ConfigureAwait(false);
         List<string> errors = [];
         foreach (var source in sources)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                await DownloadSingleAsync(client, source, destination, progress, cancellationToken, userAgent).ConfigureAwait(false);
+                await DownloadSingleAsync(client, source, destination, progress, cancellationToken, requestHeaders).ConfigureAwait(false);
                 return source;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -182,27 +183,27 @@ public static class HttpDownload
     /// Downloads from one source (range-parallel where supported), committing the destination atomically.</summary>
     public static async Task DownloadSingleAsync(HttpClient client, Uri uri, string destination,
         IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default,
-        string? userAgent = null)
+        string? requestHeaders = null)
     {
         var temporary = destination + $".part-{Guid.NewGuid():N}";
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(destination))!);
-            var (length, supportsRanges) = await ProbeAsync(client, uri, cancellationToken, userAgent).ConfigureAwait(false);
+            var (length, supportsRanges) = await ProbeAsync(client, uri, cancellationToken, requestHeaders).ConfigureAwait(false);
             if (supportsRanges && length >= ParallelDownloadThreshold)
             {
                 try
                 {
-                    await DownloadParallelAsync(client, uri, temporary, length, progress, cancellationToken, userAgent).ConfigureAwait(false);
+                    await DownloadParallelAsync(client, uri, temporary, length, progress, cancellationToken, requestHeaders).ConfigureAwait(false);
                 }
                 catch (InvalidOperationException)
                 {
                     TryDelete(temporary);
-                    await DownloadSequentialAsync(client, uri, temporary, length, progress, cancellationToken, userAgent).ConfigureAwait(false);
+                    await DownloadSequentialAsync(client, uri, temporary, length, progress, cancellationToken, requestHeaders).ConfigureAwait(false);
                 }
             }
             else
-                await DownloadSequentialAsync(client, uri, temporary, length, progress, cancellationToken, userAgent).ConfigureAwait(false);
+                await DownloadSequentialAsync(client, uri, temporary, length, progress, cancellationToken, requestHeaders).ConfigureAwait(false);
 
             File.Move(temporary, destination, overwrite: true);
         }
@@ -214,9 +215,9 @@ public static class HttpDownload
     }
 
     private static async Task<(long Length, bool SupportsRanges)> ProbeAsync(HttpClient client, Uri uri,
-        CancellationToken cancellationToken, string? userAgent)
+        CancellationToken cancellationToken, string? requestHeaders)
     {
-        using var request = CreateRequest(uri, userAgent);
+        using var request = CreateRequest(uri, requestHeaders);
         request.Headers.Range = new RangeHeaderValue(0, 0);
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
@@ -225,9 +226,9 @@ public static class HttpDownload
     }
 
     private static async Task DownloadSequentialAsync(HttpClient client, Uri uri, string destination, long total,
-        IProgress<(long Processed, long Total)>? progress, CancellationToken cancellationToken, string? userAgent)
+        IProgress<(long Processed, long Total)>? progress, CancellationToken cancellationToken, string? requestHeaders)
     {
-        using var request = CreateRequest(uri, userAgent);
+        using var request = CreateRequest(uri, requestHeaders);
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         total = total > 0 ? total : response.Content.Headers.ContentLength ?? 0;
@@ -245,7 +246,7 @@ public static class HttpDownload
     }
 
     private static async Task DownloadParallelAsync(HttpClient client, Uri uri, string destination, long total,
-        IProgress<(long Processed, long Total)>? progress, CancellationToken cancellationToken, string? userAgent)
+        IProgress<(long Processed, long Total)>? progress, CancellationToken cancellationToken, string? requestHeaders)
     {
         await using (var preallocate = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.ReadWrite, TransferBufferBytes, FileOptions.SequentialScan))
             preallocate.SetLength(total);
@@ -261,7 +262,7 @@ public static class HttpDownload
         var options = new ParallelOptions { MaxDegreeOfParallelism = ParallelWorkers, CancellationToken = cancellationToken };
         await Parallel.ForEachAsync(ranges, options, async (range, token) =>
         {
-            using var request = CreateRequest(uri, userAgent);
+            using var request = CreateRequest(uri, requestHeaders);
             request.Headers.Range = new RangeHeaderValue(range.Start, range.End);
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
@@ -295,26 +296,68 @@ public static class HttpDownload
 
     /// <summary><para>构造带浏览器式标头的 GET 请求，避免镜像站的机器人拦截。</para>
     /// Builds a GET with browser-style headers to avoid mirror bot filtering.</summary>
-    public static HttpRequestMessage CreateRequest(Uri uri, string? userAgent = null)
+    public static HttpRequestMessage CreateRequest(Uri uri, string? requestHeaders = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, uri);
-        request.Headers.TryAddWithoutValidation("User-Agent", NormalizeUserAgent(userAgent));
-        request.Headers.Referrer = new Uri(uri.GetLeftPart(UriPartial.Authority) + "/");
-        request.Headers.TryAddWithoutValidation("Accept-Encoding", "identity");
-        request.Headers.TryAddWithoutValidation("Sec-Fetch-Dest", "empty");
-        request.Headers.TryAddWithoutValidation("Sec-Fetch-Mode", "cors");
-        request.Headers.TryAddWithoutValidation("Sec-Fetch-Site", "cross-site");
+        foreach (var (name, value) in ParseRequestHeaders(requestHeaders))
+        {
+            if (!request.Headers.TryAddWithoutValidation(name, value))
+            {
+                throw new ArgumentException($"'{name}' is not valid for a GET request.", nameof(requestHeaders));
+            }
+        }
+
+        if (!request.Headers.UserAgent.Any()) request.Headers.TryAddWithoutValidation("User-Agent", DefaultBrowserUserAgent);
+        if (request.Headers.Referrer is null) request.Headers.Referrer = new Uri(uri.GetLeftPart(UriPartial.Authority) + "/");
+        if (!request.Headers.Contains("Accept-Encoding")) request.Headers.TryAddWithoutValidation("Accept-Encoding", "identity");
+        if (!request.Headers.Contains("Sec-Fetch-Dest")) request.Headers.TryAddWithoutValidation("Sec-Fetch-Dest", "empty");
+        if (!request.Headers.Contains("Sec-Fetch-Mode")) request.Headers.TryAddWithoutValidation("Sec-Fetch-Mode", "cors");
+        if (!request.Headers.Contains("Sec-Fetch-Site")) request.Headers.TryAddWithoutValidation("Sec-Fetch-Site", "cross-site");
         return request;
     }
 
-    private static string NormalizeUserAgent(string? userAgent)
+    private static IReadOnlyList<KeyValuePair<string, string>> ParseRequestHeaders(string? requestHeaders)
     {
-        var value = string.IsNullOrWhiteSpace(userAgent) ? "UotanStudio/1.0" : userAgent.Trim();
-        if (value.Length > 512 || value.Contains('\r', StringComparison.Ordinal)
-            || value.Contains('\n', StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(requestHeaders)) return [];
+        if (requestHeaders.Length > 16 * 1024)
         {
-            throw new ArgumentException("User-Agent must be a single line no longer than 512 characters.", nameof(userAgent));
+            throw new ArgumentException("Request headers must not exceed 16 KiB.", nameof(requestHeaders));
         }
-        return value;
+
+        List<KeyValuePair<string, string>> headers = [];
+        foreach (var line in requestHeaders.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            var separator = line.IndexOf(':');
+            if (separator <= 0)
+            {
+                // Existing workflows stored a bare User-Agent on this stable port.
+                if (headers.Count == 0 && line.Contains('/', StringComparison.Ordinal)
+                    && !line.Contains('\r', StringComparison.Ordinal))
+                {
+                    headers.Add(new KeyValuePair<string, string>("User-Agent", line.Trim()));
+                    continue;
+                }
+                throw new ArgumentException("Each request header must use the 'Name: Value' format.", nameof(requestHeaders));
+            }
+
+            var name = line[..separator].Trim();
+            var value = line[(separator + 1)..].Trim();
+            if (name.Length == 0 || value.Length == 0 || !name.All(IsHeaderNameCharacter)
+                || value.Contains('\r', StringComparison.Ordinal) || value.Contains('\n', StringComparison.Ordinal))
+            {
+                throw new ArgumentException("Request headers must use valid single-line names and values.", nameof(requestHeaders));
+            }
+            if (string.Equals(name, "Range", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException("The Range request header is managed by the downloader.", nameof(requestHeaders));
+            }
+            headers.Add(new KeyValuePair<string, string>(name, value));
+            if (headers.Count > 64) throw new ArgumentException("At most 64 request headers are allowed.", nameof(requestHeaders));
+        }
+        return headers;
     }
+
+    private static bool IsHeaderNameCharacter(char value)
+        => char.IsAsciiLetterOrDigit(value) || value is '!' or '#' or '$' or '%' or '&' or '\'' or '*' or '+' or '-' or '.' or '^' or '_' or '`' or '|' or '~';
 }

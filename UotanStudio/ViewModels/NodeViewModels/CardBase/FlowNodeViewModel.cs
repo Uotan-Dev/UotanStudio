@@ -103,6 +103,9 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
             if (SetProperty(ref _executionStatus, value))
             {
                 OnPropertyChanged(nameof(StatusBorderBrush));
+                // The canvas binds this derived brush rather than StatusBorderBrush directly.
+                // Notify it here so an unselected node repaints as soon as execution finishes.
+                OnPropertyChanged(nameof(NodeBorderBrush));
                 OnPropertyChanged(nameof(StatusDisplay));
             }
         }
@@ -116,7 +119,7 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// </summary>
     public IBrush StatusBorderBrush => ExecutionStatus switch
     {
-        NodeExecutionStatus.Running => AccentBorderBrush,
+        NodeExecutionStatus.Running or NodeExecutionStatus.WaitingForInput => AccentBorderBrush,
         NodeExecutionStatus.Succeeded => SuccessBorderBrush,
         NodeExecutionStatus.Failed => FailureBorderBrush,
         NodeExecutionStatus.Cancelled or NodeExecutionStatus.Skipped or NodeExecutionStatus.Pending => MutedBorderBrush,

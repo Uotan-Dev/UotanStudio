@@ -10,7 +10,7 @@ public sealed class ApkSignNodeViewModel : FlowNodeViewModel
     /// <summary>Creates the signing node and its ports. <para>创建签名节点及其端口。</para></summary>
     public ApkSignNodeViewModel() : base("Sign APK", NodeCategory.Firmware)
     {
-        TypeKey = "Firmware.SignApk";
+        TypeKey = "Build.Apk.Sign";
         foreach (var title in new[] { "APK Path", "Output Path", "Private Key", "Certificate" })
             Input.Add(new NodeConnectorViewModel { Title = title, PortType = NodePortType.Path });
         foreach (var title in new[] { "V1", "V2", "V3" })

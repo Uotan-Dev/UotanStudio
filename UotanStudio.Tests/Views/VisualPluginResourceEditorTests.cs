@@ -50,7 +50,7 @@ public sealed class VisualPluginResourceEditorTests(NodeEditorUiFixture fixture)
                     var dependencyInput = window.FindControl<TextBox>("DependenciesInput")!;
                     dependencyInput.Text = "tests.editor-base 2.0.0 3.0.0";
                     Dispatcher.UIThread.RunJobs();
-                    var write = PatchNodeViewModel.Create("Patch.WriteText");
+                    var write = PatchNodeViewModel.Create("File.Text.Publish");
                     var target = Path.Combine(temp.Path, "must-not-publish");
                     write.Input.Single(port => port.Title == "Output Path").InitialValue = target;
                     editor.Nodes.Add(write);
@@ -128,7 +128,7 @@ public sealed class VisualPluginResourceEditorTests(NodeEditorUiFixture fixture)
                     Assert.Equal("config", Assert.IsType<VisualPluginAsset>(Assert.Single(list.Items)).Id);
                     Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), block => block.Text == "config" && block.IsVisible);
 
-                    var resource = PatchNodeViewModel.Create("Patch.Asset");
+                    var resource = PatchNodeViewModel.Create("Resource.Asset.Open");
                     resource.Input.Single(port => port.Title == "Asset ID").InitialValue = "config";
                     editor.Nodes.Add(resource);
                     await editor.PreviewCommand.ExecuteAsync(null);

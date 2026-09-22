@@ -23,6 +23,7 @@ public static class WorkflowPersistenceService
                 X = n.Location.X,
                 Y = n.Location.Y,
                 TypeKey = n.TypeKey,
+                CompositePackage = (n as CompositeNodeViewModel)?.Package,
                 NodeValueType = n.IsConstantNode ? n.NodeValueType : null,
                 NodeValue = n.IsConstantNode ? n.NodeValue : null,
                 SelectedImage = n.IsProjectImageNode ? n.SelectedImage : null,
@@ -41,7 +42,7 @@ public static class WorkflowPersistenceService
         foreach (var connector in node.Input)
         {
             // Membership in Input is authoritative even before the node view initializes IsInput.
-            if (connector.InitialValue is null
+            if (connector.IsSensitive || connector.InitialValue is null
                 || connector.PortType is not (NodePortType.Path or NodePortType.Text or NodePortType.Number or NodePortType.Boolean))
             {
                 continue;

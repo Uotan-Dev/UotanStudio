@@ -47,8 +47,8 @@ public sealed class EntryPointCompatibilityTests
         {
             await editor.LoadFromAsync(new WorkflowSnapshot
             {
-                Nodes = [new() { TypeKey = "Flow.Start", InstanceId = "a", Title = "Saved title", X = 12, Y = 34 },
-                    new() { TypeKey = "Flow.End", InstanceId = "b" }],
+                Nodes = [new() { TypeKey = "Flow.Execution.Start", InstanceId = "a", Title = "Saved title", X = 12, Y = 34 },
+                    new() { TypeKey = "Flow.Execution.End", InstanceId = "b" }],
                 Connections = [new() { SourceInstanceId = "A", TargetInstanceId = "B", SourceConnectorTitle = "Flow", TargetConnectorTitle = "Flow" }]
             });
             Assert.Equal("Start", editor.Nodes[0].Title);

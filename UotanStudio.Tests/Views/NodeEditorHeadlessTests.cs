@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
@@ -38,7 +39,7 @@ public sealed class NodeEditorHeadlessTests(NodeEditorUiFixture fixture)
             dispatchTask = fixture.Session.Dispatch(() =>
             {
                 using var editor = new NodeEditorViewModel();
-                var node = NodeTypeRegistry.Create("Data.Constant")!;
+                var node = NodeTypeRegistry.Create("Data.Value.Constant")!;
                 editor.AddNode(node);
                 var connection = new NodeConnectionViewModel(
                     new NodeConnectorViewModel { Anchor = new Point(50, 50) },
@@ -121,7 +122,7 @@ public sealed class NodeEditorHeadlessTests(NodeEditorUiFixture fixture)
             dispatchTask = fixture.Session.Dispatch(() =>
             {
                 using var editor = new NodeEditorViewModel();
-                var node = NodeTypeRegistry.Create("Data.Constant")!;
+                var node = NodeTypeRegistry.Create("Data.Value.Constant")!;
                 editor.AddNode(node);
                 var connection = new NodeConnectionViewModel(new NodeConnectorViewModel(), new NodeConnectorViewModel());
                 editor.Connections.Add(connection);
@@ -260,8 +261,8 @@ public sealed class NodeEditorHeadlessTests(NodeEditorUiFixture fixture)
                 Assert.False(selectionBox.IsVisible);
                 Assert.False(deleteButton.IsEnabled);
 
-                var first = NodeTypeRegistry.Create("Data.Constant")!;
-                var second = NodeTypeRegistry.Create("Data.Constant")!;
+                var first = NodeTypeRegistry.Create("Data.Value.Constant")!;
+                var second = NodeTypeRegistry.Create("Data.Value.Constant")!;
                 editor.AddNode(first);
                 editor.AddNode(second);
                 editor.SetSelection([first, second]);
@@ -323,7 +324,7 @@ public sealed class NodeEditorHeadlessTests(NodeEditorUiFixture fixture)
     }
 
     [Fact]
-    public async Task NodeDropPreview_ShowMoveAndHide_TracksCanvasPosition()
+    public async Task NodeDropPreview_ShowMoveAndHide_UsesActualNodeVisualAndTracksCanvasPosition()
     {
         var session = fixture.Session;
         Task dispatchTask;
@@ -333,28 +334,54 @@ public sealed class NodeEditorHeadlessTests(NodeEditorUiFixture fixture)
             {
                 using var editor = new NodeEditorViewModel();
                 var view = new NodeEditorView { DataContext = editor };
-                view.Measure(new Size(1200, 700));
-                view.Arrange(new Rect(0, 0, 1200, 700));
+                var item = editor.ToolboxCategories
+                    .SelectMany(category => category.Items)
+                    .Single(candidate => candidate.TypeKey == "Image.File.SetAttributes");
+                var actualNodeViewModel = item.CreateNode();
+                editor.Nodes.Add(actualNodeViewModel);
+                var window = new Window { Content = view, Width = 1200, Height = 700 };
+                window.Show();
+                window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
 
-                var preview = view.FindControl<Border>("NodeDropPreview");
-                Assert.NotNull(preview);
-                Assert.False(preview.IsVisible);
+                try
+                {
+                    var preview = view.FindControl<Border>("NodeDropPreview");
+                    Assert.NotNull(preview);
+                    Assert.False(preview.IsVisible);
 
-                view.ShowNodeDropPreview(new Point(320, 240));
+                    view.ShowNodeDropPreview(new Point(320, 240), item);
+                    window.UpdateLayout();
+                    Dispatcher.UIThread.RunJobs();
 
-                Assert.True(preview.IsVisible);
-                Assert.Equal(320, Canvas.GetLeft(preview));
-                Assert.Equal(240, Canvas.GetTop(preview));
-                Assert.Empty(preview.GetVisualDescendants().OfType<TextBlock>());
+                    Assert.True(preview.IsVisible);
+                    Assert.Equal(320, Canvas.GetLeft(preview));
+                    Assert.Equal(240, Canvas.GetTop(preview));
+                    var previewNode = Assert.Single(preview.GetVisualDescendants()
+                        .OfType<NodifyM.Avalonia.Controls.Node>());
+                    var actualNode = Assert.Single(view.GetVisualDescendants()
+                        .OfType<NodifyM.Avalonia.Controls.Node>(),
+                        node => ReferenceEquals(node.DataContext, actualNodeViewModel));
+                    Assert.Equal(((FlowNodeViewModel)preview.DataContext!).LocalizedTitle, previewNode.Header);
+                    Assert.Equal(actualNode.Bounds.Size, previewNode.Bounds.Size);
+                    Assert.Equal(actualNodeViewModel.Input.Count,
+                        preview.GetVisualDescendants().OfType<NodifyM.Avalonia.Controls.NodeInput>().Count());
+                    Assert.Equal(actualNodeViewModel.Output.Count,
+                        preview.GetVisualDescendants().OfType<NodifyM.Avalonia.Controls.NodeOutput>().Count());
 
-                view.ShowNodeDropPreview(new Point(480, 360));
+                    view.ShowNodeDropPreview(new Point(480, 360), item);
 
-                Assert.Equal(480, Canvas.GetLeft(preview));
-                Assert.Equal(360, Canvas.GetTop(preview));
+                    Assert.Equal(480, Canvas.GetLeft(preview));
+                    Assert.Equal(360, Canvas.GetTop(preview));
 
-                view.HideNodeDropPreview();
+                    view.HideNodeDropPreview();
 
-                Assert.False(preview.IsVisible);
+                    Assert.False(preview.IsVisible);
+                }
+                finally
+                {
+                    window.Close();
+                }
             }, TestContext.Current.CancellationToken);
         }
 

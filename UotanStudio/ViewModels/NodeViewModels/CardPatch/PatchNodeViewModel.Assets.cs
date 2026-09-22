@@ -8,7 +8,7 @@ public sealed partial class PatchNodeViewModel
 {
     private static void ConfigureAssetNode(PatchNodeViewModel node)
     {
-        if (node.TypeKey == "Patch.Asset")
+        if (node.TypeKey == "Resource.Asset.Open")
         {
             node.AddInput("Asset ID", NodePortType.Text, string.Empty, hint: "Node_Patch_AssetHint");
             node.AddOutput("Asset", NodePortType.PatchAsset);
@@ -18,7 +18,7 @@ public sealed partial class PatchNodeViewModel
             return;
         }
         node.AddInput("Asset", NodePortType.PatchAsset, hint: "Node_Patch_AssetHint");
-        if (node.TypeKey == "Patch.AssetText")
+        if (node.TypeKey == "Resource.Asset.ReadText")
         {
             node.AddOutput("Text", NodePortType.Text);
             node.AddOutput("Encoding", NodePortType.Text);
@@ -33,7 +33,7 @@ public sealed partial class PatchNodeViewModel
 
     private async Task ExecuteAssetNodeAsync(INodeExecutionContext context)
     {
-        if (TypeKey == "Patch.Asset")
+        if (TypeKey == "Resource.Asset.Open")
         {
             var package = context.Package
                 ?? throw new InvalidDataException(LanguageService.Instance.GetString("Node_Patch_MissingPackage"));
@@ -46,7 +46,7 @@ public sealed partial class PatchNodeViewModel
         }
         var asset = ReadInput("Asset") as PatchAsset
             ?? throw new InvalidDataException(LanguageService.Instance.GetString("Node_Patch_MissingAsset"));
-        if (TypeKey == "Patch.AssetText")
+        if (TypeKey == "Resource.Asset.ReadText")
         {
             var document = await asset.ReadTextAsync(context.CancellationToken).ConfigureAwait(false);
             WriteOutput("Text", document.Text);

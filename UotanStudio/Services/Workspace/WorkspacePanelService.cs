@@ -19,6 +19,9 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// <summary>打包设置面板键。 Packing settings panel key.</summary>
     public const string ProjectSetting = "ProjectSetting";
 
+    /// <summary>Plugins panel key. The persisted value preserves visibility in existing workspace snapshots.</summary>
+    public const string PluginTool = "PatchTool";
+
     /// <summary>镜像管理面板键。 Image manager panel key.</summary>
     public const string ImagesView = "ImagesView";
 
@@ -97,6 +100,10 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _projectSettingVisible;
+
+    /// <summary>Whether the plugins panel is visible.</summary>
+    [ObservableProperty]
+    private bool _pluginToolVisible = true;
 
     /// <summary>
     /// <para>镜像管理面板当前是否可见。</para>
@@ -304,6 +311,9 @@ public sealed partial class WorkspacePanelService : ObservableObject
                 break;
             case ProjectSetting:
                 ProjectSettingVisible = value;
+                break;
+            case PluginTool:
+                PluginToolVisible = value;
                 break;
             case ImagesView:
                 ImagesViewVisible = value;

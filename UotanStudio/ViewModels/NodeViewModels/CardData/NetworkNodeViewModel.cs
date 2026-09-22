@@ -18,10 +18,10 @@ public sealed class NetworkNodeViewModel : FlowNodeViewModel
     }
 
     public static NetworkNodeViewModel CreateDownloadNode(HttpClient? httpClient = null)
-        => Create("Network.Download", "Download", httpClient);
+        => Create("Network.File.Download", "Download", httpClient);
 
     public static NetworkNodeViewModel CreateGitHubDownloadNode(HttpClient? httpClient = null)
-        => Create("Network.GitHubDownload", "GitHub Mirror Download", httpClient);
+        => Create("Network.GitHub.Download", "GitHub Mirror Download", httpClient);
 
     private static NetworkNodeViewModel Create(string typeKey, string title, HttpClient? httpClient)
     {
@@ -41,10 +41,10 @@ public sealed class NetworkNodeViewModel : FlowNodeViewModel
         });
         node.Input.Add(new NodeConnectorViewModel
         {
-            Title = "User Agent",
+            Title = "Request Headers",
             PortId = "user-agent",
             PortType = NodePortType.Text,
-            InitialValue = "UotanStudio/1.0"
+            InitialValue = "User-Agent: " + HttpDownload.DefaultBrowserUserAgent
         });
         node.Output.Add(new NodeConnectorViewModel { Title = "Path", PortId = "path", PortType = NodePortType.Path });
         node.Output.Add(new NodeConnectorViewModel { Title = "Source URL", PortId = "source-url", PortType = NodePortType.Text });
@@ -56,7 +56,7 @@ public sealed class NetworkNodeViewModel : FlowNodeViewModel
     {
         var urlText = Convert.ToString(ReadInput("URL"), CultureInfo.InvariantCulture)?.Trim();
         var outputPath = Convert.ToString(ReadInput("Output Path"), CultureInfo.InvariantCulture)?.Trim();
-        var userAgent = Convert.ToString(ReadInput("User Agent"), CultureInfo.InvariantCulture)?.Trim();
+        var requestHeaders = Convert.ToString(ReadInput("Request Headers"), CultureInfo.InvariantCulture)?.Trim();
         if (!Uri.TryCreate(urlText, UriKind.Absolute, out var uri)
             || uri.Scheme is not ("http" or "https"))
         {
@@ -67,7 +67,7 @@ public sealed class NetworkNodeViewModel : FlowNodeViewModel
             throw new InvalidOperationException("Output Path is required.");
         }
 
-        var useMirrors = string.Equals(TypeKey, "Network.GitHubDownload", StringComparison.Ordinal);
+        var useMirrors = string.Equals(TypeKey, "Network.GitHub.Download", StringComparison.Ordinal);
         if (useMirrors && !HttpDownload.IsGitHubUrl(uri))
         {
             throw new InvalidOperationException("GitHub Mirror Download only accepts GitHub download addresses.");
@@ -84,12 +84,12 @@ public sealed class NetworkNodeViewModel : FlowNodeViewModel
         if (useMirrors)
         {
             source = await HttpDownload.DownloadAsync(_httpClient, uri, outputPath, progress,
-                context.CancellationToken, userAgent).ConfigureAwait(false);
+                context.CancellationToken, requestHeaders).ConfigureAwait(false);
         }
         else
         {
             await HttpDownload.DownloadSingleAsync(_httpClient, uri, outputPath, progress,
-                context.CancellationToken, userAgent).ConfigureAwait(false);
+                context.CancellationToken, requestHeaders).ConfigureAwait(false);
             source = uri;
         }
 

@@ -16,6 +16,9 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     private object? _data;
     private object? _initialValue;
 
+    /// <summary>Whether the current invocation obtains this input from an upstream connection.</summary>
+    internal bool HasRuntimeSource { get; set; }
+
     /// <summary>
     /// <para>获取或设置连接器的唯一标识符。</para>
     /// Gets or sets the unique identifier of the connector.
@@ -58,12 +61,17 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     {
         get
         {
+            if (IsSensitive && Data is not null)
+            {
+                return LanguageService.Instance.GetString("Interaction_SensitiveValue");
+            }
             var text = Data switch
             {
                 null => string.Empty,
                 string value => ValueResourcePrefix is null ? value : LanguageService.Instance.GetString(ValueResourcePrefix + value),
                 bool value => LanguageService.Instance.GetString(value ? "Node_Conn_True" : "Node_Conn_False"),
                 Services.Patching.PatchWorkspace workspace => workspace.Root,
+                Services.Projects.FileArtifact artifact => artifact.Path,
                 Services.Patching.PatchAsset asset => asset.Name,
                 Services.Patching.PatchImageEdits edits => string.Join(Environment.NewLine,
                     edits.Items.Take(8).Select(edit => edit.Path[..Math.Min(edit.Path.Length, 160)])),
@@ -99,6 +107,12 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
 
     /// <summary>Stable choices whose labels are localized without changing persisted values.</summary>
     public IReadOnlyList<NodePortChoice> Choices { get; init; } = [];
+
+    /// <summary>Whether execution requires a bound value or a configured default.</summary>
+    public bool IsRequired { get; set; }
+
+    /// <summary>Whether encapsulation should publish this parameter on the composite interface.</summary>
+    public bool ExposeOnComposite { get; set; }
 
     /// <summary>Whether this input uses a selection editor.</summary>
     public bool HasChoices => Choices.Count > 0;
@@ -144,7 +158,7 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     public string SuggestedOutputName { get; init; } = "super.img";
 
     /// <summary>Whether a free-text editor is used rather than a choice editor.</summary>
-    public bool UsesTextEditor => IsTextOrPathPort && !HasChoices;
+    public bool UsesTextEditor => IsTextOrPathPort && !HasChoices && !HasConnectedSource;
 
     /// <summary>
     /// <para>是否存在需要持久化的非空初始值（用户显式填写过）。Output 端口或 Flow/Any 端口无初始值语义，返回 <c>false</c>。</para>
@@ -152,9 +166,27 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// Flow/Any ports have no initial-value semantics and return <c>false</c>.
     /// </summary>
     public bool HasPersistableInitialValue
-        => _initialValue is not null
+        => !IsSensitive && _initialValue is not null
            && IsInput
            && PortType is NodePortType.Path or NodePortType.Text or NodePortType.Number or NodePortType.Boolean;
+
+    /// <summary>Sensitive values are excluded from saved initial values and result previews.</summary>
+    public bool IsSensitive
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(DataPreview));
+                OnPropertyChanged(nameof(HasPersistableInitialValue));
+                OnPropertyChanged(nameof(EditorPasswordChar));
+            }
+        }
+    }
+
+    /// <summary>Masks sensitive literal editing without affecting the underlying value.</summary>
+    public char EditorPasswordChar => IsSensitive ? '●' : '\0';
 
     /// <summary>
     /// <para>是否为文本或路径输入端口（在属性面板渲染文本框）。</para>
@@ -221,11 +253,18 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// </summary>
     public NodePortType PortType { get; set; } = NodePortType.Any;
 
+    /// <summary>Schema-provided display label, independent of runtime endpoint identity.</summary>
+    public string? DisplayName { get; set; }
+
     /// <summary>Gets the localized connector name used by the node editor.</summary>
     public string LocalizedTitle
     {
         get
         {
+            if (DisplayName is not null)
+            {
+                return DisplayName;
+            }
             var key = "Node_Conn_" + GetResourceSuffix(Title);
             var localized = LanguageService.Instance.GetString(key);
             return string.Equals(localized, key, StringComparison.Ordinal) ? Title : localized;
@@ -255,10 +294,10 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     }
 
     /// <summary>Configured stable id, or a deterministic compatibility id derived from the legacy title.</summary>
-    public string StableId => string.IsNullOrWhiteSpace(_portId) ? CreateCompatibilityId(Title) : _portId;
+    public string StableId => string.IsNullOrWhiteSpace(_portId) ? CreateStableId(Title) : _portId;
 
     /// <summary>Creates a deterministic ASCII id for legacy connectors that only have a title.</summary>
-    public static string CreateCompatibilityId(string? title)
+    public static string CreateStableId(string? title)
     {
         if (string.IsNullOrWhiteSpace(title)) return "port";
         var builder = new StringBuilder(Math.Min(title.Length, 128));

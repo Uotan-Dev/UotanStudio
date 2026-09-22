@@ -23,6 +23,9 @@ namespace UotanStudio.ViewModels.Nodes;
 /// </summary>
 public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 {
+    /// <summary>Interaction service supplied by the visible desktop host.</summary>
+    public Services.Interactions.IWorkflowInteractionService Interactions { get; set; }
+        = Services.Interactions.UnsupportedWorkflowInteractionService.Instance;
     /// <summary>Resource scope supplied by the composite editor; ordinary project canvases have no package scope.</summary>
     public Services.Projects.VisualPluginPackage? ResourcePackage { get; set; }
 
@@ -176,6 +179,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     private void OnConnectionsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
+        RefreshParameterPresentation();
+        Services.Interactions.InteractionSchemaResolver.Refresh(Nodes, Connections);
         if (_selectedConnection is not null && !Connections.Contains(_selectedConnection))
         {
             SelectConnection(null);
@@ -302,10 +307,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         set => SetProperty(ref _isExecuting, value);
     }
 
-    /// <summary>
-    /// <para>执行日志面板条目集合（底部面板展示），记录执行引擎、编辑器及节点状态变更。</para>
-    /// Execution log panel entries (shown in the bottom panel), recording engine, editor and node status changes.
-    /// </summary>
+    /// <summary>Short workflow summaries shown in the bottom panel; detailed diagnostics remain in the global log.</summary>
     public ObservableCollection<string> ExecutionLog { get; } = [];
 
     /// <summary>Installed composite nodes available for isolated graph editing.</summary>
@@ -325,20 +327,15 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// <para>执行期间订阅 LogService 的退订委托。</para>
     /// Unsubscribe delegate for the LogService subscription during execution.
     /// </summary>
-    private Action? _executionLogUnsubscribe;
 
-    /// <summary>
-    /// <para>执行日志条数上限，超过后移除最旧条目，防止长工作流下集合无限增长。</para>
-    /// Execution log entry cap; the oldest entries are removed beyond it to keep the
-    /// collection bounded for long-running workflows.
-    /// </summary>
-    private const int MaxExecutionLogEntries = 1000;
+
+    private Action? _executionLogUnsubscribe;
+    private readonly HashSet<string> _executionLogSources = new(StringComparer.Ordinal);
 
     /// <summary>
     /// <para>执行日志允许的日志来源集合（Engine、NodeEditor 或任一节点 Title）。</para>
     /// Allowed log sources for the execution log (Engine, NodeEditor, or any node Title).
     /// </summary>
-    private readonly HashSet<string> _executionLogSources = new(StringComparer.Ordinal);
 
     /// <summary>
     /// <para>获取是否能执行撤销操作。</para>
@@ -490,6 +487,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         _redoStack.Clear();
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
+        OnPropertyChanged(nameof(CanCollapseExpandedComposite));
     }
 
     /// <summary>
@@ -517,6 +515,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         RefreshSelectionProperties();
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
+        OnPropertyChanged(nameof(CanCollapseExpandedComposite));
         _log.Write(LogLevel.Info, "NodeEditor", $"Undo: {command.DisplayName}");
     }
 
@@ -545,6 +544,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         RefreshSelectionProperties();
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
+        OnPropertyChanged(nameof(CanCollapseExpandedComposite));
         _log.Write(LogLevel.Info, "NodeEditor", $"Redo: {command.DisplayName}");
     }
 
@@ -584,7 +584,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
                 node.Input
                     .Where(port => port.HasPersistableInitialValue)
                     .ToDictionary(port => port.Title, port => port.InitialValue),
-                node.InstanceId)).ToList(),
+                node.InstanceId, (node as CompositeNodeViewModel)?.Package)).ToList(),
             Connections
                 .Where(connection => connection.Source is not null && connection.Target is not null)
                 .Select(connection => (connection, source: selected.FirstOrDefault(node => node.Output.Contains(connection.Source!)), target: selected.FirstOrDefault(node => node.Input.Contains(connection.Target!))))
@@ -611,7 +611,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         for (var clipboardIndex = 0; clipboardIndex < clipboard.Nodes.Count; clipboardIndex++)
         {
             var item = clipboard.Nodes[clipboardIndex];
-            var node = NodeTypeRegistry.Create(item.TypeKey);
+            var node = item.CompositePackage is { } package ? new CompositeNodeViewModel(package) : NodeTypeRegistry.Create(item.TypeKey);
             if (node is null)
             {
                 _log.Write(LogLevel.Warn, "NodeEditor", $"Cannot paste unknown node type '{item.TypeKey}'.");
@@ -654,7 +654,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     private sealed record NodeClipboard(List<ClipboardNode> Nodes, List<ClipboardConnection> Connections);
     private sealed record ClipboardNode(string TypeKey, string Title, NodeCategory Category, Point Location,
-        string? NodeValueType, string? NodeValue, string? SelectedImage, Dictionary<string, object?> InitialValues, string InstanceId);
+        string? NodeValueType, string? NodeValue, string? SelectedImage, Dictionary<string, object?> InitialValues, string InstanceId,
+        VisualPluginPackage? CompositePackage);
     private sealed record ClipboardConnection(int SourceIndex, string SourceTitle, int TargetIndex, string TargetTitle);
 
     private void AttachNodePropertyTracking(NodeViewModels.FlowNodeViewModel node)
@@ -692,7 +693,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         : LanguageService.Instance.GetString("Node_DeleteSelected");
 
     /// <summary>Gets the common category, or a localized mixed-value label when selected nodes differ.</summary>
-    public string SelectedCategoryDisplay => CommonSelectionDisplay(nodes => nodes.Select(node => node.Category.ToString()));
+    public string SelectedCategoryDisplay => CommonSelectionDisplay(nodes => nodes.Select(node =>
+        LanguageService.Instance.GetString("Node_Category_" + (NodeFactoryRegistrar.Descriptors.FirstOrDefault(
+            descriptor => descriptor.TypeKey == node.TypeKey)?.CategoryPath ?? "Composite"))));
 
     /// <summary>Gets the common type key, or a localized mixed-value label when selected nodes differ.</summary>
     public string SelectedTypeDisplay => CommonSelectionDisplay(nodes => nodes.Select(node => node.TypeKey));
@@ -801,6 +804,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         foreach (var node in selected) _selectedNodes.Add(node);
         var nextPrimary = primary is not null && selected.Contains(primary) ? primary : selected.FirstOrDefault();
         SelectedNode = nextPrimary;
+        RefreshParameterPresentation();
         OnPropertyChanged(nameof(SelectedNodeCount));
         OnPropertyChanged(nameof(HasSelectedNodes));
         OnPropertyChanged(nameof(HasSelection));
@@ -929,6 +933,14 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     private void OnTrackedPropertyChanged(INotifyPropertyChanged target, string? propertyName)
     {
+        if (propertyName == nameof(NodeConnectorViewModel.InitialValue))
+        {
+            RefreshParameterPresentation();
+        }
+        if (target is NodeConnectorViewModel && propertyName == nameof(NodeConnectorViewModel.InitialValue))
+        {
+            Services.Interactions.InteractionSchemaResolver.Refresh(Nodes, Connections);
+        }
         if (propertyName is null || !TrackedProperties(target).Contains(propertyName, StringComparer.Ordinal)) return;
 
         var key = ((object)target, propertyName);
@@ -952,50 +964,6 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         Record(new PropertyChangeCommand($"Edit {propertyName}", setter, original, current));
     }
 
-    private void InitializeToolbox()
-    {
-        ToolboxCategories.Clear();
-        NodeFactoryRegistrar.RegisterAll();
-        var language = LanguageService.Instance;
-        foreach (var group in Enum.GetValues<NodeToolboxGroup>())
-        {
-            var descriptors = NodeFactoryRegistrar.Descriptors.Where(d => d.Group == group).ToList();
-            if (descriptors.Count == 0) continue;
-            ToolboxCategories.Add(new NodeToolboxCategory(
-                language.GetString(GetGroupResourceKey(group)),
-                GetNodeCategory(group),
-                new ObservableCollection<NodeToolboxItem>(descriptors.Select(d => new NodeToolboxItem(d, language)))));
-        }
-    }
-
-    private static string GetGroupResourceKey(NodeToolboxGroup group) => group switch
-    {
-        NodeToolboxGroup.FirmwareContainer => "Node_CatFirmwareContainer",
-        NodeToolboxGroup.FirmwareImage => "Node_CatFirmwareImage",
-        NodeToolboxGroup.Android => "Node_CatAndroid",
-        NodeToolboxGroup.Delivery => "Node_CatDelivery",
-        NodeToolboxGroup.Flash => "Node_CatFlash",
-        NodeToolboxGroup.Data => "Node_CatData",
-        NodeToolboxGroup.Network => "Node_CatNetwork",
-        NodeToolboxGroup.Flow => "Node_CatFlow",
-        NodeToolboxGroup.Output => "Node_CatOutput",
-        NodeToolboxGroup.Patch => "Node_CatPatch",
-        NodeToolboxGroup.VisualPlugins => "Node_CatVisualPlugins",
-        _ => "Node_CatFirmware"
-    };
-
-    private static NodeViewModels.NodeCategory GetNodeCategory(NodeToolboxGroup group) => group switch
-    {
-        NodeToolboxGroup.Flash => NodeViewModels.NodeCategory.Flash,
-        NodeToolboxGroup.Data => NodeViewModels.NodeCategory.Data,
-        NodeToolboxGroup.Network => NodeViewModels.NodeCategory.Data,
-        NodeToolboxGroup.Patch => NodeViewModels.NodeCategory.Data,
-        NodeToolboxGroup.Flow => NodeViewModels.NodeCategory.Flow,
-        NodeToolboxGroup.Output => NodeViewModels.NodeCategory.Output,
-        NodeToolboxGroup.VisualPlugins => NodeViewModels.NodeCategory.Plugin,
-        _ => NodeViewModels.NodeCategory.Firmware
-    };
-
     /// <summary>
     /// <para>将指定节点添加到画布。</para>
     /// Adds the specified node to the canvas.
@@ -1004,9 +972,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// <para>要添加的节点。</para>
     /// The node to add.
     /// </param>
-    public void AddNode(NodeViewModels.FlowNodeViewModel node)
+    public void AddNode(NodeViewModels.FlowNodeViewModel node, bool preserveLocation = false)
     {
-        if (node.Location == DefaultNodeLocation)
+        if (!preserveLocation && (node.Location == DefaultNodeLocation || node.Location == default))
         {
             node.Location = _nextNodeLocation;
             _nextNodeLocation = new Point(_nextNodeLocation.X + 40, _nextNodeLocation.Y + 40);
@@ -1168,21 +1136,12 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         // 清空执行日志并订阅相关日志源（Engine、NodeEditor 或任一节点 Title）
         // Clear the execution log and subscribe to relevant log sources (Engine, NodeEditor, or any node Title).
         ExecutionLog.Clear();
-        _executionLogSources.Clear();
-        _executionLogSources.Add("Engine");
-        _executionLogSources.Add("NodeEditor");
-        foreach (var n in Nodes)
-        {
-            if (!string.IsNullOrEmpty(n.Title)) _executionLogSources.Add(n.Title);
-        }
-        _executionLogUnsubscribe = _log.Subscribe(OnExecutionLogEnqueued);
+        AppendExecutionLog(LanguageService.Instance.GetString(preview ? "Node_Patch_Preview" : "Node_Run"));
 
         try
         {
             _engine ??= new NodeExecutionEngine(_log);
             _engine.ProgressChanged += OnExecutionProgress;
-            _engine.NodeStatusChanged += OnNodeStatusChanged;
-            _engine.ExecutionCompleted += OnExecutionCompleted;
 
             var nodes = Nodes.ToList();
             var connections = Connections
@@ -1201,7 +1160,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             await ProjectOperationsService.Instance.ExecuteFileOperationAsync(async () =>
             {
                 result = await _engine.ExecuteAsync(nodes, connections, _runCts.Token,
-                    new NodeExecutionOptions { Preview = preview, Package = ResourcePackage, ValidatePackage = ValidatePackage }).ConfigureAwait(false);
+                    new NodeExecutionOptions { Preview = preview, Package = ResourcePackage, ValidatePackage = ValidatePackage, Interactions = Interactions }).ConfigureAwait(false);
             }, _runCts.Token).ConfigureAwait(false);
             if (result is null) { throw new InvalidOperationException("Workflow returned no execution result."); }
 
@@ -1223,25 +1182,22 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
                 Services.Execution.ExecutionStatus.Failed => result.ErrorMessage ?? LanguageService.Instance.GetString("Node_Patch_RunFailed"),
                 _ => LanguageService.Instance.GetString("Node_StatusReady")
             };
+            AppendExecutionLog(ExecutionStatus);
         }
         catch (Exception ex)
         {
             _log.Write(LogLevel.Error, "NodeEditor", $"Run failed: {ex.Message}");
             ExecutionStatus = $"Run failed: {ex.Message}";
+            AppendExecutionLog(ExecutionStatus);
         }
         finally
         {
             // 退订执行日志，避免跨次运行的重复收集
             // Unsubscribe from the execution log to avoid duplicate collection across runs.
-            _executionLogUnsubscribe?.Invoke();
-            _executionLogUnsubscribe = null;
-
             IsExecuting = false;
             if (_engine != null)
             {
                 _engine.ProgressChanged -= OnExecutionProgress;
-                _engine.NodeStatusChanged -= OnNodeStatusChanged;
-                _engine.ExecutionCompleted -= OnExecutionCompleted;
             }
             _runCts?.Dispose();
             _runCts = null;
@@ -1294,18 +1250,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         ExecutionProgress = progress;
     }
 
-    /// <summary>
-    /// <para>向执行日志追加一行并裁剪超限条目（保持集合有界）。</para>
-    /// Appends one line to the execution log and trims over-limit entries (bounded collection).
-    /// </summary>
+    /// <summary>Appends one line to the execution log for the current run.</summary>
     private void AppendExecutionLog(string line)
     {
         ExecutionLog.Add(line);
-        var overflow = ExecutionLog.Count - MaxExecutionLogEntries;
-        for (var i = 0; i < overflow; i++)
-        {
-            ExecutionLog.RemoveAt(0);
-        }
     }
 
     private void OnNodeStatusChanged(object? sender, NodeStatusChangedEventArgs e)
@@ -1378,32 +1326,6 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// <para>应用搜索过滤，更新 <see cref="VisibleToolboxCategories"/>。</para>
     /// Applies the search filter, updating <see cref="VisibleToolboxCategories"/>.
     /// </summary>
-    private void RefreshVisibleToolbox()
-    {
-        var keyword = (SearchText ?? string.Empty).Trim();
-
-        VisibleToolboxCategories.Clear();
-
-        if (string.IsNullOrEmpty(keyword))
-        {
-            foreach (var cat in ToolboxCategories)
-            {
-                VisibleToolboxCategories.Add(cat);
-            }
-            return;
-        }
-
-        foreach (var cat in ToolboxCategories)
-        {
-            var matchedItems = cat.Items
-                .Where(i => i.Name.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
-                .ToList();
-            if (matchedItems.Count > 0)
-            {
-                VisibleToolboxCategories.Add(new NodeToolboxCategory(cat.Name, cat.Category, new ObservableCollection<NodeToolboxItem>(matchedItems)));
-            }
-        }
-    }
 
     /// <summary>
     /// <para>断开连接器上的所有连接，由 NodifyEditor 的 DisconnectConnectorCommand 触发。</para>
@@ -1451,7 +1373,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     public Task LoadFromAsync(Services.Projects.WorkflowSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        Clear();
+        snapshot.EnsureSupportedVersion();
+        var restoredNodes = new List<FlowNodeViewModel>();
+        var restoredConnections = new List<NodeConnectionViewModel>();
 
         // 重建节点：按 TypeKey 查注册表创建具体节点；未注册的类型跳过并告警（软件未发布，无旧工程兼容需求）
         // Rebuild nodes: create concrete nodes via the registry by TypeKey; skip and warn on unregistered types
@@ -1474,8 +1398,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             // Restore input initial values: match input ports by title; the value is a string, leniently converted for numbers/booleans.
             Services.Projects.WorkflowReconstruction.RestoreInitialValues(node, dto.InputInitialValues,
                 dto.InputInitialValuesByPortId);
-            Nodes.Add(node); // 加载操作直接写入画布，不进入撤销栈
-            AttachNodePropertyTracking(node);
+            restoredNodes.Add(node);
             if (!string.IsNullOrEmpty(dto.InstanceId)) created[dto.InstanceId] = node;
         }
 
@@ -1483,17 +1406,18 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         //（简易匹配，仅当标题唯一时成功）。
         // Rebuild connections: prefer exact matching via persisted source/target instance IDs (new snapshots);
         // fall back to connector-title matching when absent (lenient matching, succeeds only when titles are unique).
+        Services.Interactions.InteractionSchemaResolver.RefreshFromSnapshot(restoredNodes, created, snapshot);
         foreach (var cdto in snapshot.Connections)
         {
-            var (_, src) = Services.Projects.WorkflowReconstruction.ResolveEndpoint(Nodes, created,
+            var (_, src) = Services.Projects.WorkflowReconstruction.ResolveEndpoint(restoredNodes, created,
                 cdto.SourceInstanceId, cdto.SourceConnectorTitle, output: true, fallbackOnMissingPort: true,
                 cdto.SourcePortId);
-            var (_, tgt) = Services.Projects.WorkflowReconstruction.ResolveEndpoint(Nodes, created,
+            var (_, tgt) = Services.Projects.WorkflowReconstruction.ResolveEndpoint(restoredNodes, created,
                 cdto.TargetInstanceId, cdto.TargetConnectorTitle, output: false, fallbackOnMissingPort: true,
                 cdto.TargetPortId);
             if (src != null && tgt != null)
             {
-                Connections.Add(new NodeViewModels.NodeConnectionViewModel(src, tgt));
+                restoredConnections.Add(new NodeConnectionViewModel(src, tgt));
             }
             else
             {
@@ -1502,6 +1426,16 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             }
         }
 
+        Clear();
+        foreach (var node in restoredNodes)
+        {
+            Nodes.Add(node);
+            AttachNodePropertyTracking(node);
+        }
+        foreach (var connection in restoredConnections)
+        {
+            Connections.Add(connection);
+        }
         _log.Write(LogLevel.Info, "NodeEditor",
             $"Loaded {Nodes.Count} node(s), {Connections.Count} connection(s) from snapshot");
         return Task.CompletedTask;
@@ -1533,6 +1467,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         }
         if (imported.Count == 0) throw new InvalidDataException("The workflow template contains no importable nodes.");
 
+        Services.Interactions.InteractionSchemaResolver.RefreshFromSnapshot(imported, created, graph);
         var commands = imported.Select(node => (IEditorCommand)new AddNodeCommand(Nodes, Connections, node)).ToList();
         foreach (var connection in graph.Connections)
         {
@@ -1570,107 +1505,5 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         _runCts?.Dispose();
         _executionLogUnsubscribe?.Invoke();
         _executionLogUnsubscribe = null;
-    }
-}
-
-/// <summary>
-/// <para>节点工具箱分类，包含同类别的节点项列表。</para>
-/// Node toolbox category, containing a list of node items in the same category.
-/// </summary>
-public class NodeToolboxCategory
-{
-    /// <summary>
-    /// <para>获取分类名称。</para>
-    /// Gets the category name.
-    /// </summary>
-    public string Name { get; }
-
-    /// <summary>
-    /// <para>获取节点类别。</para>
-    /// Gets the node category.
-    /// </summary>
-    public NodeViewModels.NodeCategory Category { get; }
-
-    /// <summary>
-    /// <para>获取分类下的节点项列表。</para>
-    /// Gets the list of node items in this category.
-    /// </summary>
-    public ObservableCollection<NodeToolboxItem> Items { get; }
-
-    /// <summary>
-    /// <para>创建工具箱分类。</para>
-    /// Creates a toolbox category.
-    /// </summary>
-    /// <param name="name">
-    /// <para>分类名称。</para>
-    /// The category name.
-    /// </param>
-    /// <param name="category">
-    /// <para>节点类别。</para>
-    /// The node category.
-    /// </param>
-    /// <param name="items">
-    /// <para>分类下的节点项列表。</para>
-    /// The list of node items in this category.
-    /// </param>
-    public NodeToolboxCategory(string name, NodeViewModels.NodeCategory category, ObservableCollection<NodeToolboxItem> items)
-    {
-        Name = name;
-        Category = category;
-        Items = items;
-    }
-}
-
-/// <summary>
-/// <para>节点工具箱项，表示工具箱中可添加到画布的节点模板。</para>
-/// Node toolbox item, representing a node template in the toolbox that can be added to the canvas.
-/// </summary>
-public class NodeToolboxItem
-{
-    /// <summary>
-    /// <para>获取节点项名称。</para>
-    /// Gets the node item name.
-    /// </summary>
-    public string Name { get; }
-
-    /// <summary>
-    /// <para>获取创建节点实例的工厂方法。</para>
-    /// Gets the factory method to create a node instance.
-    /// </summary>
-    public Func<NodeViewModels.FlowNodeViewModel> CreateNode { get; }
-
-    public string TypeKey { get; }
-
-    public bool IsDestructive { get; }
-
-    public NodeCapability Capabilities { get; }
-
-
-    /// <summary>
-    /// <para>创建工具箱项。</para>
-    /// Creates a toolbox item.
-    /// </summary>
-    /// <param name="name">
-    /// <para>节点项名称。</para>
-    /// The node item name.
-    /// </param>
-    /// <param name="createNode">
-    /// <para>创建节点实例的工厂方法。</para>
-    /// The factory method to create a node instance.
-    /// </param>
-    public NodeToolboxItem(string name, Func<NodeViewModels.FlowNodeViewModel> createNode)
-    {
-        Name = name;
-        CreateNode = createNode;
-        TypeKey = string.Empty;
-    }
-
-    public NodeToolboxItem(NodeDescriptor descriptor, LanguageService language)
-    {
-        Name = descriptor.DisplayName ?? language.GetString(descriptor.NameResourceKey);
-        CreateNode = descriptor.Factory;
-        TypeKey = descriptor.TypeKey;
-        IsDestructive = descriptor.IsDestructive;
-        Capabilities = descriptor.Capabilities;
     }
 }

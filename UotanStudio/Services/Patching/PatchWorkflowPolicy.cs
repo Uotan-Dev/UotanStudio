@@ -36,7 +36,14 @@ internal static class PatchWorkflowPolicy
         }
         foreach (var node in package.Graph.Nodes)
         {
-            InspectType(node.TypeKey, visiting, ref hasPatches, ref safe, depth + 1);
+            if (node.CompositePackage is { } embedded)
+            {
+                InspectPackage(embedded, visiting, ref hasPatches, ref safe, depth + 1);
+            }
+            else
+            {
+                InspectType(node.TypeKey, visiting, ref hasPatches, ref safe, depth + 1);
+            }
         }
         visiting.Remove(package.NodeTypeKey);
     }
@@ -45,10 +52,11 @@ internal static class PatchWorkflowPolicy
         ref bool hasPatches, ref bool safe, int depth)
     {
         if (type is null) { safe = false; return; }
-        if (type.StartsWith("Patch.", StringComparison.Ordinal))
+        var descriptor = NodeFactoryRegistrar.Descriptors.FirstOrDefault(candidate => candidate.TypeKey == type);
+        if (NodeFactoryRegistrar.BuiltInTypeKeys.Contains(type) && descriptor is not null)
         {
-            hasPatches = true;
-            safe &= NodeFactoryRegistrar.BuiltInTypeKeys.Contains(type);
+            hasPatches |= descriptor.Capabilities.HasFlag(NodeCapability.PatchOperation);
+            safe &= descriptor.Capabilities.HasFlag(NodeCapability.PatchSafe);
         }
         else if (NodeFactoryRegistrar.TryGetVisualPluginPackage(type, out var package))
         {
@@ -56,8 +64,7 @@ internal static class PatchWorkflowPolicy
         }
         else
         {
-            safe &= type is "Data.Constant" or "Data.ProjectImage" or "Output.Log" or "Output.Progress"
-                or "Flow.Start" or "Flow.End" or "Flow.Branch" or "Flow.Loop" or "Flow.Delay" or "Flow.Parallel" or "Flow.Terminate";
+            safe = false;
         }
     }
 }

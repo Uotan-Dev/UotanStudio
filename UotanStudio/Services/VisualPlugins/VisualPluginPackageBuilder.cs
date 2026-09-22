@@ -1,6 +1,4 @@
-using System.Globalization;
 using System.Text;
-using Avalonia;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
@@ -13,7 +11,7 @@ public static class VisualPluginPackageBuilder
     /// <summary>Creates a package from the current graph and derives dependencies and public ports.</summary>
     public static VisualPluginPackage Create(string name, string id, VisualPluginKind kind,
         IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnectionViewModel> connections,
-        string author = "")
+        string author = "", bool portable = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(nodes);
@@ -27,12 +25,19 @@ public static class VisualPluginPackageBuilder
         {
             Nodes = WorkflowPersistenceService.BuildNodeDtos(nodes),
             Connections = WorkflowPersistenceService.BuildConnectionDtos(nodes, connections)
+                .Where(edge => edge.SourceInstanceId is not null && edge.TargetInstanceId is not null).ToList()
         };
-        RemoveMachineSpecificPathDefaults(graph);
+        if (portable)
+        {
+            RemoveMachineSpecificPathDefaults(graph);
+        }
         var descriptors = NodeFactoryRegistrar.Descriptors.ToDictionary(
             descriptor => descriptor.TypeKey, StringComparer.OrdinalIgnoreCase);
         var capabilities = nodes
-            .Select(node => descriptors.GetValueOrDefault(node.TypeKey)?.Capabilities ?? NodeCapability.None)
+            .Select(node => node is CompositeNodeViewModel composite
+                ? composite.Package.Manifest.Capabilities.Aggregate(NodeCapability.None, (current, name) =>
+                    Enum.TryParse<NodeCapability>(name, out var capability) ? current | capability : current)
+                : descriptors.GetValueOrDefault(node.TypeKey)?.Capabilities ?? NodeCapability.None)
             .Aggregate(NodeCapability.None, (current, next) => current | next);
         var package = new VisualPluginPackage
         {
@@ -55,8 +60,15 @@ public static class VisualPluginPackageBuilder
 
         if (kind == VisualPluginKind.CompositeNode)
         {
-            package.Inputs = BuildPublicPorts(nodes, connections, input: true);
-            package.Outputs = BuildPublicPorts(nodes, connections, input: false);
+            var boundary = CompositeBoundaryAnalyzer.Analyze(nodes, connections);
+            package.Inputs = [.. boundary.Inputs];
+            package.Outputs = [.. boundary.Outputs];
+            foreach (var port in package.Inputs.Where(port => portable && port.PortType == nameof(NodePortType.Path)
+                         && LooksAbsolutePath(port.DefaultValue)))
+            {
+                port.DefaultValue = null;
+                port.Required = true;
+            }
         }
 
         var errors = VisualPluginValidation.Validate(package);
@@ -68,11 +80,11 @@ public static class VisualPluginPackageBuilder
     /// Rebuilds an installed package while retaining its manifest contract and stable public port identities.
     /// </summary>
     public static VisualPluginPackage CreateUpdated(VisualPluginPackage existing,
-        IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnectionViewModel> connections)
+        IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnectionViewModel> connections, bool portable = true)
     {
         ArgumentNullException.ThrowIfNull(existing);
         var updated = Create(existing.Manifest.Name, existing.Manifest.Id, existing.Kind,
-            nodes, connections, existing.Manifest.Author);
+            nodes, connections, existing.Manifest.Author, portable);
         updated.Manifest.Version = existing.Manifest.Version;
         updated.Manifest.Description = existing.Manifest.Description;
         updated.Manifest.NodeApiVersion = existing.Manifest.NodeApiVersion;
@@ -86,11 +98,14 @@ public static class VisualPluginPackageBuilder
         updated.Manifest.Conflicts = [.. existing.Manifest.Conflicts];
         updated.Assets = [.. existing.Assets];
         updated.BundlePath = existing.BundlePath;
+        updated.BundleRoot = existing.BundleRoot;
 
         if (existing.Kind == VisualPluginKind.CompositeNode)
         {
-            PreservePublicPortContract(existing.Inputs, updated.Inputs);
-            PreservePublicPortContract(existing.Outputs, updated.Outputs);
+            // An interface is a saved contract. Re-analysis offers additions but cannot silently
+            // remove a published port or overwrite an explicit public label.
+            updated.Inputs = existing.Inputs.Select(ClonePort).ToList();
+            updated.Outputs = existing.Outputs.Select(ClonePort).ToList();
         }
 
         var errors = VisualPluginValidation.Validate(updated);
@@ -115,80 +130,23 @@ public static class VisualPluginPackageBuilder
         return slug.Length >= 3 ? slug : "local." + slug;
     }
 
-    private static List<VisualPluginPortDefinition> BuildPublicPorts(
-        IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnectionViewModel> connections, bool input)
+    private static VisualPluginPortDefinition ClonePort(VisualPluginPortDefinition port) => new()
     {
-        var result = new List<VisualPluginPortDefinition>();
-        var usedIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var (node, nodeIndex) in nodes.Select((node, index) => (node, index)))
+        Id = port.Id,
+        Name = port.Name,
+        PortType = port.PortType,
+        NodeInstanceId = port.NodeInstanceId,
+        PortId = port.PortId,
+        DefaultValue = port.IsSensitive ? null : port.DefaultValue,
+        Required = port.Required,
+        IsSensitive = port.IsSensitive,
+        AdditionalBindings = port.AdditionalBindings.Select(binding => new VisualPluginPortBinding
         {
-            var ports = input ? node.Input : node.Output;
-            foreach (var port in ports.Where(port => port.PortType != NodePortType.Flow))
-            {
-                var connected = input
-                    ? connections.Any(connection => ReferenceEquals(connection.Target, port))
-                    : connections.Any(connection => ReferenceEquals(connection.Source, port));
-                if (connected) continue;
+            NodeInstanceId = binding.NodeInstanceId,
+            PortId = binding.PortId
+        }).ToList()
+    };
 
-                var baseId = $"{(input ? "in" : "out")}-{nodeIndex + 1}-{port.StableId}";
-                var publicId = CreateUniquePortId(baseId, usedIds);
-                result.Add(new VisualPluginPortDefinition
-                {
-                    Id = publicId,
-                    Name = $"{node.Title} / {port.Title}",
-                    PortType = port.PortType.ToString(),
-                    NodeInstanceId = node.InstanceId,
-                    PortId = port.StableId,
-                    DefaultValue = GetPortableDefaultValue(input, port)
-                });
-            }
-        }
-        return result;
-    }
-
-    private static void PreservePublicPortContract(IReadOnlyList<VisualPluginPortDefinition> existing,
-        IList<VisualPluginPortDefinition> updated)
-    {
-        var existingByEndpoint = existing
-            .GroupBy(port => (port.NodeInstanceId, port.PortId))
-            .ToDictionary(group => group.Key, group => group.First());
-        var matched = new HashSet<VisualPluginPortDefinition>();
-        var usedIds = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var port in updated)
-        {
-            if (!existingByEndpoint.TryGetValue((port.NodeInstanceId, port.PortId), out var previous)) continue;
-            port.Id = previous.Id;
-            port.Name = previous.Name;
-            port.Required = previous.Required;
-            matched.Add(port);
-            usedIds.Add(port.Id);
-        }
-
-        foreach (var port in updated.Where(port => !matched.Contains(port)))
-            port.Id = CreateUniquePortId(port.Id, usedIds);
-    }
-
-    private static string CreateUniquePortId(string baseId, ISet<string> usedIds)
-    {
-        const int maximumLength = 128;
-        var normalizedBase = baseId[..Math.Min(baseId.Length, maximumLength)];
-        if (usedIds.Add(normalizedBase)) return normalizedBase;
-
-        for (var suffix = 2; ; suffix++)
-        {
-            var ending = $"-{suffix}";
-            var candidate = normalizedBase[..Math.Min(normalizedBase.Length, maximumLength - ending.Length)] + ending;
-            if (usedIds.Add(candidate)) return candidate;
-        }
-    }
-
-    private static string? GetPortableDefaultValue(bool input, NodeConnectorViewModel port)
-    {
-        if (!input || port.InitialValue is null) return null;
-        var value = Convert.ToString(port.InitialValue, CultureInfo.InvariantCulture);
-        return port.PortType == NodePortType.Path && LooksAbsolutePath(value) ? null : value;
-    }
 
     private static void RemoveMachineSpecificPathDefaults(WorkflowSnapshot graph)
     {

@@ -90,6 +90,7 @@
     <x:String x:Key="Menu_Window">窗口</x:String>
     <x:String x:Key="Menu_WindowProjectExplorer">项目资源管理器</x:String>
     <x:String x:Key="Menu_WindowProjectSetting">打包设置</x:String>
+    <x:String x:Key="Menu_WindowPlugins">插件</x:String>
     <x:String x:Key="Menu_WindowImages">镜像管理</x:String>
     <x:String x:Key="Menu_WindowProperties">属性</x:String>
     <x:String x:Key="Menu_WindowWorkspaceLog">输出</x:String>

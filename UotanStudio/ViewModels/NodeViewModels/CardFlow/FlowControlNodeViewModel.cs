@@ -31,7 +31,7 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
         var node = new FlowControlNodeViewModel("Start")
         {
             Location = new Point(100, 100),
-            TypeKey = "Flow.Start"
+            TypeKey = "Flow.Execution.Start"
         };
         node.Output.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
         return node;
@@ -46,7 +46,7 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
         var node = new FlowControlNodeViewModel("End")
         {
             Location = new Point(100, 100),
-            TypeKey = "Flow.End"
+            TypeKey = "Flow.Execution.End"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
         return node;
@@ -61,7 +61,7 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
         var node = new FlowControlNodeViewModel("Branch")
         {
             Location = new Point(100, 100),
-            TypeKey = "Flow.Branch"
+            TypeKey = "Flow.Condition.Branch"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Condition", PortType = NodePortType.Boolean });
         node.Output.Add(new NodeConnectorViewModel { Title = "True", PortType = NodePortType.Flow });
@@ -78,7 +78,7 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
         var node = new FlowControlNodeViewModel("Loop")
         {
             Location = new Point(100, 100),
-            TypeKey = "Flow.Loop"
+            TypeKey = "Flow.Collection.Loop"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Count", PortType = NodePortType.Number });
         node.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
@@ -97,7 +97,7 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
         var node = new FlowControlNodeViewModel("Delay")
         {
             Location = new Point(100, 100),
-            TypeKey = "Flow.Delay"
+            TypeKey = "Flow.Execution.Delay"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Milliseconds", PortType = NodePortType.Number });
         node.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
@@ -114,7 +114,7 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
         var node = new FlowControlNodeViewModel("Parallel")
         {
             Location = new Point(100, 100),
-            TypeKey = "Flow.Parallel"
+            TypeKey = "Flow.Execution.Parallel"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
         node.Output.Add(new NodeConnectorViewModel { Title = "Branch A", PortType = NodePortType.Flow });
@@ -131,7 +131,7 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
         var node = new FlowControlNodeViewModel("Terminate")
         {
             Location = new Point(100, 100),
-            TypeKey = "Flow.Terminate"
+            TypeKey = "Flow.Execution.Terminate"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
         node.Output.Add(new NodeConnectorViewModel { Title = "Reason", PortType = NodePortType.Text });
@@ -139,13 +139,13 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的流程控制逻辑：Flow.Start/End 标记、Flow.Branch 按条件选路径（引擎据此跳过未选分支子图）、
-    /// Flow.Loop 校验迭代次数（引擎据此迭代执行 Body 子图并逐次写入 Index 输出）、Flow.Delay 延迟、
-    /// Flow.Parallel 分派并行语义（引擎并发执行各分支子图）、Flow.Terminate 中止整个工作流。</para>
-    /// Dispatches flow-control logic by the node type key (TypeKey): Flow.Start/End are markers, Flow.Branch selects a path
-    /// by condition (the engine skips the untaken branch sub-graph), Flow.Loop validates the iteration count (the engine
-    /// iterates the Body sub-graph writing the Index output per iteration), Flow.Delay pauses, Flow.Parallel dispatches
-    /// concurrency semantics (the engine runs branch sub-graphs concurrently), and Flow.Terminate aborts the workflow.
+    /// <para>按节点类型键（TypeKey）分发对应的流程控制逻辑：Flow.Execution.Start/End 标记、Flow.Condition.Branch 按条件选路径（引擎据此跳过未选分支子图）、
+    /// Flow.Collection.Loop 校验迭代次数（引擎据此迭代执行 Body 子图并逐次写入 Index 输出）、Flow.Execution.Delay 延迟、
+    /// Flow.Execution.Parallel 分派并行语义（引擎并发执行各分支子图）、Flow.Execution.Terminate 中止整个工作流。</para>
+    /// Dispatches flow-control logic by the node type key (TypeKey): Flow.Execution.Start/End are markers, Flow.Condition.Branch selects a path
+    /// by condition (the engine skips the untaken branch sub-graph), Flow.Collection.Loop validates the iteration count (the engine
+    /// iterates the Body sub-graph writing the Index output per iteration), Flow.Execution.Delay pauses, Flow.Execution.Parallel dispatches
+    /// concurrency semantics (the engine runs branch sub-graphs concurrently), and Flow.Execution.Terminate aborts the workflow.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -159,24 +159,24 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     {
         switch (TypeKey)
         {
-            case "Flow.Start":
+            case "Flow.Execution.Start":
                 context.Log.Write(LogLevel.Info, Title, "Workflow entered.  工作流入口。");
                 break;
-            case "Flow.End":
+            case "Flow.Execution.End":
                 context.Log.Write(LogLevel.Info, Title, "Workflow reached the end node.  到达结束节点。");
                 break;
-            case "Flow.Branch":
+            case "Flow.Condition.Branch":
                 ExecuteBranch(context);
                 break;
-            case "Flow.Loop":
+            case "Flow.Collection.Loop":
                 ExecuteLoop(context);
                 break;
-            case "Flow.Delay":
+            case "Flow.Execution.Delay":
                 return ExecuteDelayAsync(context);
-            case "Flow.Parallel":
+            case "Flow.Execution.Parallel":
                 context.Log.Write(LogLevel.Info, Title, "Parallel branches dispatched.  分支并行分派。");
                 break;
-            case "Flow.Terminate":
+            case "Flow.Execution.Terminate":
                 context.Log.Write(LogLevel.Warn, Title, "Terminate requested.  请求终止工作流。");
                 throw new OperationCanceledException("Workflow terminated by Terminate node");
             default:

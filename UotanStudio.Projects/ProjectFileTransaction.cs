@@ -11,6 +11,10 @@ internal sealed class ProjectFileTransaction : IDisposable
 
     internal async Task StageAsync<T>(string path, T value, JsonTypeInfo<T> type, CancellationToken token)
     {
+        if (value is NodeProjectSnapshot node)
+        {
+            node.EnsureSupportedVersion();
+        }
         path = Path.GetFullPath(path);
         if (_files.Any(f => string.Equals(f.Path, path, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
             throw new InvalidDataException("Duplicate transaction destination.");

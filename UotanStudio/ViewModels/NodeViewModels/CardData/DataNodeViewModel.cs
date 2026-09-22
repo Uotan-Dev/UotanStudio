@@ -33,7 +33,7 @@ public class DataNodeViewModel : FlowNodeViewModel
         var node = new DataNodeViewModel("Read File")
         {
             Location = new Point(100, 100),
-            TypeKey = "Data.ReadFile"
+            TypeKey = "File.Binary.Read"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Path", PortType = NodePortType.Path });
         node.Output.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
@@ -49,7 +49,7 @@ public class DataNodeViewModel : FlowNodeViewModel
         var node = new DataNodeViewModel("Format Convert")
         {
             Location = new Point(100, 100),
-            TypeKey = "Data.Convert"
+            TypeKey = "Data.Value.Convert"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Input", PortType = NodePortType.Data });
         node.Input.Add(new NodeConnectorViewModel { Title = "Format", PortType = NodePortType.Text });
@@ -66,7 +66,7 @@ public class DataNodeViewModel : FlowNodeViewModel
         var node = new DataNodeViewModel("Checksum")
         {
             Location = new Point(100, 100),
-            TypeKey = "Data.Checksum"
+            TypeKey = "Validation.Data.Hash"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
         node.Input.Add(new NodeConnectorViewModel { Title = "Algorithm", PortType = NodePortType.Text });
@@ -83,7 +83,7 @@ public class DataNodeViewModel : FlowNodeViewModel
         var node = new DataNodeViewModel("Compare")
         {
             Location = new Point(100, 100),
-            TypeKey = "Data.Compare"
+            TypeKey = "Data.Value.Compare"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data A", PortType = NodePortType.Data });
         node.Input.Add(new NodeConnectorViewModel { Title = "Data B", PortType = NodePortType.Data });
@@ -92,10 +92,10 @@ public class DataNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的数据处理逻辑：Data.ReadFile 读取文件、Data.Convert 做格式转换、
-    /// Data.Checksum 计算哈希、Data.Compare 比较两段数据。</para>
-    /// Dispatches data-processing logic by the node type key (TypeKey): Data.ReadFile reads a file, Data.Convert performs
-    /// conversion, Data.Checksum computes a hash, and Data.Compare compares two data chunks.
+    /// <para>按节点类型键（TypeKey）分发对应的数据处理逻辑：File.Binary.Read 读取文件、Data.Value.Convert 做格式转换、
+    /// Validation.Data.Hash 计算哈希、Data.Value.Compare 比较两段数据。</para>
+    /// Dispatches data-processing logic by the node type key (TypeKey): File.Binary.Read reads a file, Data.Value.Convert performs
+    /// conversion, Validation.Data.Hash computes a hash, and Data.Value.Compare compares two data chunks.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -110,16 +110,16 @@ public class DataNodeViewModel : FlowNodeViewModel
         var token = context.CancellationToken;
         switch (TypeKey)
         {
-            case "Data.ReadFile":
+            case "File.Binary.Read":
                 ExecuteReadFile(context);
                 break;
-            case "Data.Convert":
+            case "Data.Value.Convert":
                 ExecuteConvert(context);
                 break;
-            case "Data.Checksum":
+            case "Validation.Data.Hash":
                 ExecuteChecksum(context);
                 break;
-            case "Data.Compare":
+            case "Data.Value.Compare":
                 ExecuteCompare(context);
                 break;
             default:

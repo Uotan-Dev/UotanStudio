@@ -7,9 +7,9 @@ public sealed partial class PatchNodeViewModel
     private static void ConfigureFstabNode(PatchNodeViewModel node)
     {
         node.AddInput("Text", NodePortType.Text, "", multiline: true,
-            hint: node.TypeKey == "Patch.FstabAdd" ? "Node_Patch_FstabAddHint" : "Node_Patch_FstabHint");
+            hint: node.TypeKey == "Config.Fstab.Add" ? "Node_Patch_FstabAddHint" : "Node_Patch_FstabHint");
         node.AddInput("Mount Point", NodePortType.Text, "/system");
-        if (node.TypeKey == "Patch.FstabAdd")
+        if (node.TypeKey == "Config.Fstab.Add")
         {
             node.AddInput("Block Device", NodePortType.Text, "system");
             node.AddInput("File System", NodePortType.Text, "ext4");
@@ -21,7 +21,7 @@ public sealed partial class PatchNodeViewModel
         node.AddInput("File System Filter", NodePortType.Text, "");
         node.AddInput("Field", NodePortType.Text, "FsMgrFlags", choices: Enum.GetNames<FstabField>());
         node.AddInput("Expected Matches", NodePortType.Number, 1d);
-        if (node.TypeKey == "Patch.FstabEdit")
+        if (node.TypeKey == "Config.Fstab.Edit")
         {
             node.AddInput("Operation", NodePortType.Text, "SetValue", choices: Enum.GetNames<FstabOperation>());
             node.AddInput("Value", NodePortType.Text, "");
@@ -39,14 +39,14 @@ public sealed partial class PatchNodeViewModel
 
     private void ExecuteFstabNode(CancellationToken token)
     {
-        if (TypeKey == "Patch.FstabAdd")
+        if (TypeKey == "Config.Fstab.Add")
         {
             SetResult(FstabPatch.Add(Text("Text"), Text("Block Device"), Text("Mount Point"), Text("File System"),
                 Text("Mount Options"), Text("Fs Mgr Flags"), token));
             return;
         }
         var field = Enum.Parse<FstabField>(Text("Field"));
-        if (TypeKey == "Patch.FstabQuery")
+        if (TypeKey == "Config.Fstab.Query")
         {
             var values = FstabPatch.Read(Text("Text"), Text("Mount Point"), Text("File System Filter"), field, Count(), token);
             WriteOutput("Values", values);

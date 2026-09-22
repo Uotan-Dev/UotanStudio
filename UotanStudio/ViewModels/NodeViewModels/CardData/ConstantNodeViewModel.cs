@@ -29,7 +29,7 @@ public class ConstantNodeViewModel : FlowNodeViewModel
         var node = new ConstantNodeViewModel("Constant")
         {
             Location = new Point(100, 100),
-            TypeKey = "Data.Constant",
+            TypeKey = "Data.Value.Constant",
             NodeValueType = "Text"
         };
         node.Output.Add(new NodeConnectorViewModel { Title = "Value", PortType = NodePortType.Text, IsInput = false });

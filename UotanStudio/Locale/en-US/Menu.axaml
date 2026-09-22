@@ -90,6 +90,7 @@
     <x:String x:Key="Menu_Window">Window</x:String>
     <x:String x:Key="Menu_WindowProjectExplorer">Project Explorer</x:String>
     <x:String x:Key="Menu_WindowProjectSetting">Packing Settings</x:String>
+    <x:String x:Key="Menu_WindowPlugins">Plugins</x:String>
     <x:String x:Key="Menu_WindowImages">Images</x:String>
     <x:String x:Key="Menu_WindowProperties">Properties</x:String>
     <x:String x:Key="Menu_WindowWorkspaceLog">Output</x:String>

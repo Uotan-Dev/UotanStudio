@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using UotanStudio.Firmware.Infrastructure.Downloads;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.ViewModels.NodeViewModels;
@@ -10,7 +11,7 @@ namespace UotanStudio.Tests.Services;
 public sealed class NetworkNodeTests
 {
     [Fact]
-    public async Task Download_CustomUserAgent_StreamsToPathAndReportsSource()
+    public async Task Download_CustomRequestHeaders_StreamsToPathAndReportsSource()
     {
         var handler = new DownloadHandler("node payload"u8.ToArray());
         using var client = new HttpClient(handler);
@@ -20,12 +21,13 @@ public sealed class NetworkNodeTests
         {
             SetInput(node, "URL", "https://downloads.example.test/firmware.bin");
             SetInput(node, "Output Path", output);
-            SetInput(node, "User Agent", "UotanStudio-Node-Test/2.0");
+            SetInput(node, "Request Headers", "User-Agent: UotanStudio-Node-Test/2.0\nX-Download-Mode: test");
 
             await node.ExecuteAsync(new TestExecutionContext(TestContext.Current.CancellationToken));
 
             Assert.Equal("node payload", await File.ReadAllTextAsync(output, TestContext.Current.CancellationToken));
             Assert.All(handler.UserAgents, value => Assert.Equal("UotanStudio-Node-Test/2.0", value));
+            Assert.All(handler.DownloadModes, value => Assert.Equal("test", value));
             Assert.Equal(Path.GetFullPath(output), GetOutput(node, "Path"));
             Assert.Equal("https://downloads.example.test/firmware.bin", GetOutput(node, "Source URL"));
             Assert.Equal(12d, GetOutput(node, "Bytes"));
@@ -34,6 +36,16 @@ public sealed class NetworkNodeTests
         {
             File.Delete(output);
         }
+    }
+
+    [Fact]
+    public void GitHubDownload_RequestHeaders_DefaultToBrowserUserAgent()
+    {
+        var node = NetworkNodeViewModel.CreateGitHubDownloadNode();
+        var headers = Assert.Single(node.Input, port => port.PortId == "user-agent");
+
+        Assert.Equal("Request Headers", headers.Title);
+        Assert.Equal("User-Agent: " + HttpDownload.DefaultBrowserUserAgent, headers.InitialValue);
     }
 
     [Fact]
@@ -77,7 +89,7 @@ public sealed class NetworkNodeTests
     }
 
     [Fact]
-    public async Task Download_UserAgentContainsNewline_RejectsWithoutPublishing()
+    public async Task Download_MalformedRequestHeader_RejectsWithoutPublishing()
     {
         var handler = new DownloadHandler("payload"u8.ToArray());
         using var client = new HttpClient(handler);
@@ -85,7 +97,7 @@ public sealed class NetworkNodeTests
         var output = Path.Combine(Path.GetTempPath(), $"uotanstudio-network-{Guid.NewGuid():N}.bin");
         SetInput(node, "URL", "https://downloads.example.test/firmware.bin");
         SetInput(node, "Output Path", output);
-        SetInput(node, "User Agent", "valid\r\nInjected: value");
+        SetInput(node, "Request Headers", "Malformed header");
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             node.ExecuteAsync(new TestExecutionContext(TestContext.Current.CancellationToken)));
@@ -104,10 +116,12 @@ public sealed class NetworkNodeTests
         : HttpMessageHandler
     {
         public List<string?> UserAgents { get; } = [];
+        public List<string?> DownloadModes { get; } = [];
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             UserAgents.Add(request.Headers.UserAgent.ToString());
+            DownloadModes.Add(request.Headers.TryGetValues("X-Download-Mode", out var values) ? Assert.Single(values) : null);
             var response = new HttpResponseMessage(statusCode)
             {
                 RequestMessage = request,

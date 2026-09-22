@@ -11,7 +11,7 @@ public sealed partial class PatchNodeViewModel
         node.AddInput("File System", NodePortType.Text, "EXT4", choices: ["EXT4", "EROFS"]);
         node.AddInput("Image Path", NodePortType.Text, "/build.prop");
         node.AddInput("Attribute Name", NodePortType.Text, "user.patch");
-        if (node.TypeKey == "Patch.ImageSetXattr") { node.AddInput("Hex Value", NodePortType.Text, "", multiline: true); }
+        if (node.TypeKey == "Image.Xattr.Set") { node.AddInput("Hex Value", NodePortType.Text, "", multiline: true); }
         node.AddInput("Check Old Value", NodePortType.Boolean, false);
         node.AddInput("Expected Exists", NodePortType.Boolean, true);
         node.AddInput("Expected Hex Value", NodePortType.Text, "", multiline: true);
@@ -24,7 +24,7 @@ public sealed partial class PatchNodeViewModel
     {
         var check = Boolean("Check Old Value");
         var edit = new FileSystemXattrEdit(Text("Image Path"), Text("Attribute Name"),
-            TypeKey == "Patch.ImageSetXattr" ? XattrHex("Hex Value") : null,
+            TypeKey == "Image.Xattr.Set" ? XattrHex("Hex Value") : null,
             check, check && Boolean("Expected Exists") ? XattrHex("Expected Hex Value") : null);
         WriteOutput("Changed", await GetRun(context).StageImageXattrAsync(Text("Path"), Text("File System"), edit,
             PositiveImageBytes("Image Capacity"), PositiveImageBytes("Extraction Budget"), context.CancellationToken).ConfigureAwait(false));

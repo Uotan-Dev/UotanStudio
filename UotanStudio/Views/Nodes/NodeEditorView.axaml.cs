@@ -40,6 +40,8 @@ public partial class NodeEditorView : UserControl
     private Point _selectionBoxStart;
     private bool _selectionBoxDragging;
     private bool _selectionBoxMoved;
+    private string? _dropPreviewTypeKey;
+    private FlowNodeViewModel? _dropPreviewNode;
 
     public NodeEditorView()
     {
@@ -380,6 +382,7 @@ public partial class NodeEditorView : UserControl
             {
                 var node = item.CreateNode();
                 vm.AddNode(node);
+                vm.RecordToolboxUse(item.TypeKey);
             }
         }
     }
@@ -530,6 +533,8 @@ public partial class NodeEditorView : UserControl
             ? source.GetVisualAncestors().Prepend(source).OfType<Button>().FirstOrDefault()
             : null;
         if (button is null
+            || button.Command is not null
+            || button.Tag is "toolbox-preset"
             || button.DataContext is not NodeToolboxItem item
             || !e.GetCurrentPoint(button).Properties.IsLeftButtonPressed)
         {
@@ -638,7 +643,7 @@ public partial class NodeEditorView : UserControl
             return;
         }
 
-        ShowNodeDropPreview(e.GetPosition(DropPreviewLayer));
+        ShowNodeDropPreview(e.GetPosition(DropPreviewLayer), item);
         e.DragEffects = DragDropEffects.Copy;
         e.Handled = true;
     }
@@ -664,7 +669,8 @@ public partial class NodeEditorView : UserControl
 
         var node = item.CreateNode();
         node.Location = ToNodeLocation(e.GetPosition(Editor), Editor.OffsetX, Editor.OffsetY);
-        vm.AddNode(node);
+        vm.AddNode(node, preserveLocation: true);
+        vm.RecordToolboxUse(item.TypeKey);
         e.DragEffects = DragDropEffects.Copy;
         e.Handled = true;
     }
@@ -672,8 +678,15 @@ public partial class NodeEditorView : UserControl
     internal static Point ToNodeLocation(Point editorPosition, double offsetX, double offsetY) =>
         new(editorPosition.X - offsetX, editorPosition.Y - offsetY);
 
-    internal void ShowNodeDropPreview(Point position)
+    internal void ShowNodeDropPreview(Point position, NodeToolboxItem item)
     {
+        if (!string.Equals(_dropPreviewTypeKey, item.TypeKey, StringComparison.Ordinal))
+        {
+            _dropPreviewTypeKey = item.TypeKey;
+            _dropPreviewNode = item.CreateNode();
+            NodeDropPreview.DataContext = _dropPreviewNode;
+        }
+
         Canvas.SetLeft(NodeDropPreview, position.X);
         Canvas.SetTop(NodeDropPreview, position.Y);
         NodeDropPreview.IsVisible = true;
@@ -782,7 +795,20 @@ public partial class NodeEditorView : UserControl
         try
         {
             var package = await VisualPluginFile.LoadAsync(path);
-            vm.ImportTemplate(package);
+            if (package.Kind == VisualPluginKind.CompositeNode)
+            {
+                if (VisualPluginBundle.EnumerateScopes(package).Any(scope => scope.Assets.Count > 0))
+                {
+                    package = (await VisualPluginManager.Instance.InstallAsync(path)).Package;
+                }
+                var node = new CompositeNodeViewModel(package);
+                vm.AddNode(node);
+                vm.SetSelection([node]);
+            }
+            else
+            {
+                vm.ImportTemplate(package);
+            }
             vm.ExecutionStatus = Services.LanguageService.Instance.GetString("Node_ImportSucceeded");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException or InvalidOperationException)
@@ -834,6 +860,6 @@ public partial class NodeEditorView : UserControl
 
     private static FilePickerFileType VisualPluginFileType() => new("Uotan visual plugin JSON")
     {
-        Patterns = ["*.uotanplugin.json", "*.json"]
+        Patterns = ["*.uotanplugin", "*.uotanplugin.json", "*.json"]
     };
 }

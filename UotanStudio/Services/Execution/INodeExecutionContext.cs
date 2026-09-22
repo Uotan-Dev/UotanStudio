@@ -1,3 +1,4 @@
+using UotanStudio.Services.Interactions;
 using UotanStudio.Services.Patching;
 using UotanStudio.Services.Projects;
 
@@ -26,6 +27,15 @@ public interface INodeExecutionContext
 
     /// <summary>Resource scope of the currently executing composite or package editor.</summary>
     VisualPluginPackage? Package => null;
+
+    /// <summary>Host interaction boundary; noninteractive hosts explicitly reject requests.</summary>
+    IWorkflowInteractionService Interactions => UnsupportedWorkflowInteractionService.Instance;
+
+    /// <summary>Reports a user wait without blocking the UI thread.</summary>
+    IDisposable BeginUserInteractionWait() => new InteractionWaitScope(null);
+
+    /// <summary>Transfers a runtime handle to the current invocation for unconditional cleanup.</summary>
+    void RegisterResource(IAsyncDisposable resource) => throw new NotSupportedException("The execution context does not own runtime resources.");
 
     /// <summary>
     /// <para>报告节点执行进度（0.0 ~ 1.0）。</para>

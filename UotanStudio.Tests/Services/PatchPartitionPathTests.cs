@@ -60,7 +60,7 @@ public sealed class PatchPartitionPathTests
             await File.WriteAllTextAsync(target, "original", token);
         }
         await using var run = new PatchRun();
-        var node = PatchNodeViewModel.Create("Patch.PartitionPath");
+        var node = PatchNodeViewModel.Create("Workspace.Partition.Resolve");
         node.Input.Single(port => port.Title == "Workspace").InitialValue = run.OpenWorkspace(temp.Path);
         var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([node], [], token,
             new NodeExecutionOptions { SharedPatches = run });
@@ -116,7 +116,7 @@ public sealed class PatchPartitionPathTests
         var workspace = run.OpenWorkspace(temp.Path);
         var target = workspace.Resolve("vendor/etc/build.prop");
         await run.StageTextAsync(target, "ro.test=1", "utf8", PatchFileMode.Add, token);
-        var node = PatchNodeViewModel.Create("Patch.PartitionPath");
+        var node = PatchNodeViewModel.Create("Workspace.Partition.Resolve");
         node.Input.Single(port => port.Title == "Workspace").InitialValue = workspace;
         var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([node], [], token,
             new NodeExecutionOptions { SharedPatches = run });

@@ -32,12 +32,12 @@ public sealed class PatchApplicabilityTests
         using var temp = new TempDirectory();
         var token = TestContext.Current.CancellationToken;
         var target = Path.Combine(temp.Path, "output");
-        var check = PatchNodeViewModel.Create("Patch.Applicability");
+        var check = PatchNodeViewModel.Create("Validation.Applicability.Check");
         Set(check, "Compatible", compatible);
         Set(check, "Original State Matches", original);
         Set(check, "Desired State Matches", desired);
         var branch = FlowControlNodeViewModel.CreateBranchNode();
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         Set(write, "Output Path", target);
         Set(write, "Text", "patched");
 
@@ -58,10 +58,10 @@ public sealed class PatchApplicabilityTests
     {
         using var temp = new TempDirectory();
         var target = Path.Combine(temp.Path, "output");
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         Set(write, "Output Path", target);
         Set(write, "Text", "must not publish");
-        var check = PatchNodeViewModel.Create("Patch.Applicability");
+        var check = PatchNodeViewModel.Create("Validation.Applicability.Check");
         Set(check, "Compatible", true);
         Set(check, "Original State Matches", bothMatch);
         Set(check, "Desired State Matches", bothMatch);
@@ -78,7 +78,7 @@ public sealed class PatchApplicabilityTests
     [Fact]
     public async Task Execute_ApplicableWithoutMutation_ReportsNoChangesRatherThanApplied()
     {
-        var check = PatchNodeViewModel.Create("Patch.Applicability");
+        var check = PatchNodeViewModel.Create("Validation.Applicability.Check");
         Set(check, "Compatible", true);
         Set(check, "Original State Matches", true);
 

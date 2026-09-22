@@ -33,7 +33,7 @@ public class DecompressNodeViewModel : FlowNodeViewModel
         var node = new DecompressNodeViewModel("Decompress")
         {
             Location = new Point(100, 100),
-            TypeKey = "Data.Decompress"
+            TypeKey = "Data.Compression.Decompress"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
         node.Input.Add(new NodeConnectorViewModel { Title = "Algorithm", PortType = NodePortType.Text });
@@ -42,8 +42,8 @@ public class DecompressNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的解压逻辑：Data.Decompress 解压输入数据。</para>
-    /// Dispatches decompression logic by the node type key (TypeKey): Data.Decompress decompresses the input data.
+    /// <para>按节点类型键（TypeKey）分发对应的解压逻辑：Data.Compression.Decompress 解压输入数据。</para>
+    /// Dispatches decompression logic by the node type key (TypeKey): Data.Compression.Decompress decompresses the input data.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -57,7 +57,7 @@ public class DecompressNodeViewModel : FlowNodeViewModel
     {
         switch (TypeKey)
         {
-            case "Data.Decompress":
+            case "Data.Compression.Decompress":
                 ExecuteDecompress(context);
                 break;
             default:

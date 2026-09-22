@@ -35,10 +35,10 @@ public sealed class PatchNodeTests : IDisposable
         {
             new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image);
         }
-        var read = PatchNodeViewModel.Create("Patch.ImageReadText");
+        var read = PatchNodeViewModel.Create("Image.Text.Read");
         Set(read, "Path", image);
         Set(read, "File System", format);
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         var target = Path.Combine(_root, "extracted.prop");
         Set(write, "Output Path", target);
         var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([read, write],
@@ -75,13 +75,13 @@ public sealed class PatchNodeTests : IDisposable
         {
             new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image);
         }
-        var write = PatchNodeViewModel.Create(batch ? "Patch.ImageApplyTexts" : "Patch.ImageWriteText");
+        var write = PatchNodeViewModel.Create(batch ? "Image.Edit.Apply" : "Image.Text.Stage");
         Set(write, "Path", image);
         Set(write, "File System", format);
         if (!batch) { Set(write, "Text", "patched"); }
         Set(write, "Image Capacity", "67108864");
-        var first = PatchNodeViewModel.Create("Patch.ImageCollectText");
-        var second = PatchNodeViewModel.Create("Patch.ImageCollectText");
+        var first = PatchNodeViewModel.Create("Image.Edit.CollectText");
+        var second = PatchNodeViewModel.Create("Image.Edit.CollectText");
         Set(first, "Text", "patched");
         Set(second, "Image Path", "/other.prop");
         Set(second, "Text", "second");
@@ -111,8 +111,8 @@ public sealed class PatchNodeTests : IDisposable
         else { new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image); }
         await using var observer = new PatchRun();
         var original = await observer.ReadImageAttributesAsync(image, format, "/build.prop", token);
-        var edit = PatchNodeViewModel.Create("Patch.ImageSetAttributes");
-        var read = PatchNodeViewModel.Create("Patch.ImageReadAttributes");
+        var edit = PatchNodeViewModel.Create("Image.File.SetAttributes");
+        var read = PatchNodeViewModel.Create("Image.File.ReadAttributes");
         foreach (var node in new[] { edit, read })
         {
             Set(node, "Path", image);
@@ -153,7 +153,7 @@ public sealed class PatchNodeTests : IDisposable
                     ["build.prop"] = [new() { Name = "user.binary", Value = [0, 255] }, new() { Name = "user.empty", Value = [] }]
                 }
             });
-        var read = PatchNodeViewModel.Create("Patch.ImageReadXattr");
+        var read = PatchNodeViewModel.Create("Image.Xattr.Read");
         Set(read, "Path", image);
         Set(read, "File System", "EROFS");
         Set(read, "Attribute Name", name);
@@ -178,8 +178,8 @@ public sealed class PatchNodeTests : IDisposable
         var image = Path.Combine(_root, "system.img");
         if (format == "EXT4") { UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder.Ext4Builder.Build(source, image); }
         else { new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image); }
-        var edit = PatchNodeViewModel.Create("Patch.ImageSetXattr");
-        var read = PatchNodeViewModel.Create("Patch.ImageReadXattr");
+        var edit = PatchNodeViewModel.Create("Image.Xattr.Set");
+        var read = PatchNodeViewModel.Create("Image.Xattr.Read");
         foreach (var node in new[] { edit, read })
         {
             Set(node, "Path", image);
@@ -223,7 +223,7 @@ public sealed class PatchNodeTests : IDisposable
                 64 * 1024 * 1024, 1024 * 1024, token));
             await seed.CompleteAsync(true, token);
         }
-        var delete = PatchNodeViewModel.Create("Patch.ImageDeleteXattr");
+        var delete = PatchNodeViewModel.Create("Image.Xattr.Delete");
         Set(delete, "Path", image);
         Set(delete, "File System", format);
         Set(delete, "Attribute Name", "user.patch");
@@ -244,7 +244,7 @@ public sealed class PatchNodeTests : IDisposable
     public void ImageXattrEdit_PersistenceRetainsAbsentGuardAndEmptyValue()
     {
         NodeFactoryRegistrar.RegisterAll();
-        var node = PatchNodeViewModel.Create("Patch.ImageSetXattr");
+        var node = PatchNodeViewModel.Create("Image.Xattr.Set");
         Set(node, "Hex Value", "");
         Set(node, "Check Old Value", true);
         Set(node, "Expected Exists", false);
@@ -266,11 +266,11 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData(true, true)]
     public async Task Execute_FileContextEntry_PreviewsOrPublishesRuleLifecycle(bool preview, bool delete)
     {
-        var edit = PatchNodeViewModel.Create(delete ? "Patch.FileContextDelete" : "Patch.FileContextAdd");
+        var edit = PatchNodeViewModel.Create(delete ? "Config.FileContexts.Delete" : "Config.FileContexts.Add");
         const string rule = "/path u:object_r:vendor_file:s0\n";
         Set(edit, "Text", delete ? "# keep\n" + rule : "# keep\n");
         Set(edit, "Path Expression", "/path");
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         var target = Path.Combine(_root, "entry_file_contexts");
         Set(write, "Output Path", target);
         var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([edit, write],
@@ -291,12 +291,12 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData(true)]
     public async Task Execute_FileContextEdit_PreviewsOrPublishesLabel(bool preview)
     {
-        var edit = PatchNodeViewModel.Create("Patch.FileContextEdit");
+        var edit = PatchNodeViewModel.Create("Config.FileContexts.Edit");
         Set(edit, "Text", "/vendor/bin/test -- u:object_r:old_exec:s0\r\n");
         Set(edit, "Path Expression", "/vendor/bin/test");
         Set(edit, "File Kind", "Regular");
         Set(edit, "Context", "u:object_r:new_exec:s0");
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         var target = Path.Combine(_root, "vendor_file_contexts");
         Set(write, "Output Path", target);
         var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([edit, write],
@@ -319,10 +319,10 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData(true, true)]
     public async Task Execute_FsConfigEntry_PreviewsOrPublishesAdditionAndDeletion(bool preview, bool delete)
     {
-        var edit = PatchNodeViewModel.Create(delete ? "Patch.FsConfigDelete" : "Patch.FsConfigAdd");
+        var edit = PatchNodeViewModel.Create(delete ? "Config.FsConfig.Delete" : "Config.FsConfig.Add");
         Set(edit, "Text", delete ? "# keep\nfile 0 0 420 0\n" : "# keep\n");
         Set(edit, "Image Path", "file");
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         var target = Path.Combine(_root, "entry_fs_config");
         Set(write, "Output Path", target);
         var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([edit, write],
@@ -343,14 +343,14 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData(true)]
     public async Task Execute_FsConfigEdit_PreviewsOrPublishesMetadata(bool preview)
     {
-        var edit = PatchNodeViewModel.Create("Patch.FsConfigEdit");
+        var edit = PatchNodeViewModel.Create("Config.FsConfig.Edit");
         Set(edit, "Text", "vendor/bin/test 0 0 493 0\r\n");
         Set(edit, "Image Path", "vendor/bin/test");
         Set(edit, "UID", "1000");
         Set(edit, "Mode", "0644");
-        var query = PatchNodeViewModel.Create("Patch.FsConfigQuery");
+        var query = PatchNodeViewModel.Create("Config.FsConfig.Query");
         Set(query, "Image Path", "vendor/bin/test");
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         var target = Path.Combine(_root, "vendor_fs_config");
         Set(write, "Output Path", target);
         var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([edit, query, write],
@@ -370,12 +370,12 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData(true)]
     public async Task Execute_InitRcReferences_AssertionBlocksUnresolvedPublication(bool externalKnown)
     {
-        var check = PatchNodeViewModel.Create("Patch.InitRcReferences");
+        var check = PatchNodeViewModel.Create("Config.InitRc.FindReferences");
         const string text = "on boot\nstart target\n";
         Set(check, "Text", text);
         Set(check, "External Services", externalKnown ? "target" : "");
-        var assert = PatchNodeViewModel.Create("Patch.Assert");
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var assert = PatchNodeViewModel.Create("Validation.Boolean.Assert");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         var target = Path.Combine(_root, "init.checked.rc");
         Set(write, "Output Path", target);
         Set(write, "Text", text);
@@ -392,14 +392,14 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData(true)]
     public async Task Execute_InitRcArgument_PreviewsOrPublishesEscapedValue(bool preview)
     {
-        var edit = PatchNodeViewModel.Create("Patch.InitRcArgumentEdit");
+        var edit = PatchNodeViewModel.Create("Config.InitRc.EditArgument");
         Set(edit, "Text", "on boot\n    setprop key old # keep\n");
         Set(edit, "Section Kind", "Action");
         Set(edit, "Selector", "boot");
         Set(edit, "Directive", "setprop");
         Set(edit, "Argument Index", 1d);
         Set(edit, "Value", "new value");
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         var target = Path.Combine(_root, "init.argument.rc");
         Set(write, "Output Path", target);
         var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([edit, write],
@@ -420,14 +420,14 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData(true)]
     public async Task Execute_InitRcAnchoredAdd_PreviewsOrPublishesOrderedCommands(bool preview)
     {
-        var add = PatchNodeViewModel.Create("Patch.InitRcAdd");
+        var add = PatchNodeViewModel.Create("Config.InitRc.AddCommand");
         Set(add, "Text", "on boot\n    start target\n");
         Set(add, "Section Kind", "Action");
         Set(add, "Selector", "boot");
         Set(add, "Statement", "setprop ready 1");
         Set(add, "Placement", "BeforeAnchor");
         Set(add, "Anchor Statement", "start target");
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         var target = Path.Combine(_root, "init.ordered.rc");
         Set(write, "Output Path", target);
         var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([add, write],
@@ -448,11 +448,11 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData(true)]
     public async Task Execute_InitRcHeader_PreviewsOrPublishesServiceArguments(bool preview)
     {
-        var edit = PatchNodeViewModel.Create("Patch.InitRcHeaderEdit");
+        var edit = PatchNodeViewModel.Create("Config.InitRc.EditHeader");
         Set(edit, "Text", "service test /old # retain\r\n    user root\r\n");
         Set(edit, "Selector", "test");
         Set(edit, "Replacement", "service test /vendor/bin/test --ready");
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         var target = Path.Combine(_root, "init.header.rc");
         Set(write, "Output Path", target);
         var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([edit, write],
@@ -474,10 +474,10 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData(true)]
     public async Task Execute_InitRcAddSection_PreviewsOrPublishesCompleteService(bool preview)
     {
-        var add = PatchNodeViewModel.Create("Patch.InitRcAddSection");
+        var add = PatchNodeViewModel.Create("Config.InitRc.AddSection");
         Set(add, "Text", "# retained\r\n");
         Set(add, "Section Text", "service test /vendor/bin/test\r\n    user system");
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         var target = Path.Combine(_root, "init.new.rc");
         Set(write, "Output Path", target);
         var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([add, write],
@@ -501,7 +501,7 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData(true, true)]
     public async Task Execute_InitRcEdit_PreviewsOrPublishesExactText(bool preview, bool add)
     {
-        var edit = PatchNodeViewModel.Create(add ? "Patch.InitRcAdd" : "Patch.InitRcEdit");
+        var edit = PatchNodeViewModel.Create(add ? "Config.InitRc.AddCommand" : "Config.InitRc.EditCommand");
         Set(edit, "Text", add ? "service test /vendor/bin/test\r\n" : "service test /vendor/bin/test\r\n\tuser root # keep\r\n");
         Set(edit, "Selector", "test");
         if (add)
@@ -513,10 +513,10 @@ public sealed class PatchNodeTests : IDisposable
             Set(edit, "Directive", "user");
             Set(edit, "Replacement", "user system");
         }
-        var query = PatchNodeViewModel.Create("Patch.InitRcQuery");
+        var query = PatchNodeViewModel.Create("Config.InitRc.Query");
         Set(query, "Selector", "test");
         Set(query, "Directive", "user");
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         var target = Path.Combine(_root, "init.test.rc");
         Set(write, "Output Path", target);
         var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([edit, query, write],
@@ -540,7 +540,7 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData(true, true)]
     public async Task Execute_FstabEdit_PreservesLayoutThroughPreviewAndPublication(bool preview, bool add)
     {
-        var edit = PatchNodeViewModel.Create(add ? "Patch.FstabAdd" : "Patch.FstabEdit");
+        var edit = PatchNodeViewModel.Create(add ? "Config.Fstab.Add" : "Config.Fstab.Edit");
         Set(edit, "Text", "# keep\r\nsystem\t/system ext4 ro wait,logical\r\n");
         if (add)
         {
@@ -551,7 +551,7 @@ public sealed class PatchNodeTests : IDisposable
             Set(edit, "Operation", "SetFlag");
             Set(edit, "Flag Name", "first_stage_mount");
         }
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         var target = Path.Combine(_root, "fstab.output");
         Set(write, "Output Path", target);
         var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([edit, write],
@@ -629,14 +629,14 @@ public sealed class PatchNodeTests : IDisposable
         var input = Path.Combine(_root, "input.prop");
         var output = Path.Combine(_root, "output.prop");
         await File.WriteAllTextAsync(input, "# keep\nro.test=old\n", token);
-        var read = PatchNodeViewModel.Create("Patch.ReadText");
+        var read = PatchNodeViewModel.Create("File.Text.Read");
         Set(read, "Path", input);
-        var edit = PatchNodeViewModel.Create("Patch.PropertyEdit");
+        var edit = PatchNodeViewModel.Create("Config.AndroidProperty.Edit");
         Set(edit, "Key", "ro.test");
         Set(edit, "Value", "new");
         Set(edit, "Check Old Value", true);
         Set(edit, "Expected Old Value", "old");
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         Set(write, "Output Path", output);
 
         var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([read, edit, write],
@@ -650,9 +650,9 @@ public sealed class PatchNodeTests : IDisposable
     [Fact]
     public async Task Execute_FailedAssertion_SkipsDependentWrite()
     {
-        var assertion = PatchNodeViewModel.Create("Patch.Assert");
+        var assertion = PatchNodeViewModel.Create("Validation.Boolean.Assert");
         var output = Path.Combine(_root, "must-not-exist");
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         Set(write, "Output Path", output);
         Set(write, "Text", "unexpected");
         await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([assertion, write],
@@ -687,7 +687,7 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData("12", "13", "15", false)]
     public async Task Execute_VersionRange_NormalizesAndroidMajorVersions(string value, string minimum, string maximum, bool expected)
     {
-        var condition = PatchNodeViewModel.Create("Patch.Condition");
+        var condition = PatchNodeViewModel.Create("Validation.Condition.Evaluate");
         Set(condition, "Operation", "VersionRange");
         Set(condition, "Value", value);
         Set(condition, "Expected Value", minimum);
@@ -701,7 +701,7 @@ public sealed class PatchNodeTests : IDisposable
     public void BuildRuntime_PersistedOptionsAndMultilineText_RestoresStableValues()
     {
         NodeFactoryRegistrar.RegisterAll();
-        var node = PatchNodeViewModel.Create("Patch.Text");
+        var node = PatchNodeViewModel.Create("Config.Text.Edit");
         Set(node, "Operation", "InsertAfter");
         Set(node, "Replacement", "\nfirst\nsecond");
         var snapshot = new WorkflowSnapshot { Nodes = WorkflowPersistenceService.BuildNodeDtos([node]) };
@@ -716,10 +716,10 @@ public sealed class PatchNodeTests : IDisposable
     private static void Set(FlowNodeViewModel node, string port, object value) => node.Input.Single(input => input.Title == port).InitialValue = value;
 
     [Theory]
-    [InlineData("Patch.JsonEdit", "{\"enabled\":false}", "JSON Value", "true", "{\"enabled\":true}", false)]
-    [InlineData("Patch.JsonEdit", "{\"enabled\":false}", "JSON Value", "true", "{\"enabled\":true}", true)]
-    [InlineData("Patch.IniEdit", "[service]\nenabled=false\n", "Value", "true", "[service]\nenabled=true\n", false)]
-    [InlineData("Patch.IniEdit", "[service]\nenabled=false\n", "Value", "true", "[service]\nenabled=true\n", true)]
+    [InlineData("Config.Json.Edit", "{\"enabled\":false}", "JSON Value", "true", "{\"enabled\":true}", false)]
+    [InlineData("Config.Json.Edit", "{\"enabled\":false}", "JSON Value", "true", "{\"enabled\":true}", true)]
+    [InlineData("Config.Ini.Edit", "[service]\nenabled=false\n", "Value", "true", "[service]\nenabled=true\n", false)]
+    [InlineData("Config.Ini.Edit", "[service]\nenabled=false\n", "Value", "true", "[service]\nenabled=true\n", true)]
     public async Task Execute_StructuredPatch_PreviewsPublishesAndRestoresOptions(string type, string inputText,
         string valuePort, string value, string expected, bool composite)
     {
@@ -727,12 +727,12 @@ public sealed class PatchNodeTests : IDisposable
         var input = Path.Combine(_root, "input.conf");
         var output = Path.Combine(_root, "output.conf");
         await File.WriteAllTextAsync(input, inputText, token);
-        var read = PatchNodeViewModel.Create("Patch.ReadText");
+        var read = PatchNodeViewModel.Create("File.Text.Read");
         Set(read, "Path", input);
         var edit = PatchNodeViewModel.Create(type);
         Set(edit, valuePort, value);
         Set(edit, "Check Old Value", true);
-        if (type == "Patch.JsonEdit")
+        if (type == "Config.Json.Edit")
         {
             Set(edit, "JSON Pointer", "/enabled");
             Set(edit, "Expected Old JSON", "false");
@@ -743,7 +743,7 @@ public sealed class PatchNodeTests : IDisposable
             Set(edit, "Key", "enabled");
             Set(edit, "Expected Old Value", "false");
         }
-        var write = PatchNodeViewModel.Create("Patch.WriteText");
+        var write = PatchNodeViewModel.Create("File.Text.Publish");
         Set(write, "Output Path", output);
         NodeFactoryRegistrar.RegisterAll();
         var snapshot = new WorkflowSnapshot { Nodes = WorkflowPersistenceService.BuildNodeDtos([edit]) };
@@ -762,7 +762,7 @@ public sealed class PatchNodeTests : IDisposable
                 Outputs = [new VisualPluginPortDefinition { Id = "result", Name = "Text", NodeInstanceId = edit.InstanceId, PortId = "text", PortType = "Text" }]
             });
         }
-        var connections = new[] { Connect(read, "Text", operation, "Text"), Connect(operation, "Text", write, "Text"), Connect(read, "Encoding", write, "Encoding") };
+        var connections = new[] { Connect(read, "Text", operation, composite ? "source" : "Text"), Connect(operation, composite ? "result" : "Text", write, "Text"), Connect(read, "Encoding", write, "Encoding") };
         var preview = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([read, operation, write], connections, token,
             new NodeExecutionOptions { Preview = true });
         Assert.Equal(ExecutionStatus.Succeeded, preview.Status);
@@ -775,15 +775,15 @@ public sealed class PatchNodeTests : IDisposable
     }
 
     [Theory]
-    [InlineData("Patch.JsonQuery", "{\"x\":null}", "JSON Value", "null", true)]
-    [InlineData("Patch.JsonQuery", "{}", "JSON Value", "", false)]
-    [InlineData("Patch.IniQuery", "x=", "Value", "", true)]
-    [InlineData("Patch.IniQuery", "", "Value", "", false)]
+    [InlineData("Config.Json.Query", "{\"x\":null}", "JSON Value", "null", true)]
+    [InlineData("Config.Json.Query", "{}", "JSON Value", "", false)]
+    [InlineData("Config.Ini.Query", "x=", "Value", "", true)]
+    [InlineData("Config.Ini.Query", "", "Value", "", false)]
     public async Task Execute_StructuredQuery_ReportsMissingSeparately(string type, string text, string port, string expected, bool exists)
     {
         var node = PatchNodeViewModel.Create(type);
         Set(node, "Text", text);
-        Set(node, type == "Patch.JsonQuery" ? "JSON Pointer" : "Key", type == "Patch.JsonQuery" ? "/x" : "x");
+        Set(node, type == "Config.Json.Query" ? "JSON Pointer" : "Key", type == "Config.Json.Query" ? "/x" : "x");
         var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([node], [], TestContext.Current.CancellationToken);
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         Assert.Equal(expected, node.Output.Single(output => output.Title == port).Data);

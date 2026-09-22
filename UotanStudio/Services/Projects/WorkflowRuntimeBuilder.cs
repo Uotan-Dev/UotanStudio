@@ -9,6 +9,7 @@ internal static class WorkflowRuntimeBuilder
     internal static WorkflowRuntime Build(WorkflowSnapshot snapshot, bool preserveUnknown)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        snapshot.EnsureSupportedVersion();
         var nodes = new List<FlowNodeViewModel>(snapshot.Nodes.Count);
         var created = new Dictionary<string, FlowNodeViewModel>(StringComparer.Ordinal);
         var errors = new List<string>();
@@ -24,10 +25,12 @@ internal static class WorkflowRuntimeBuilder
 
             WorkflowReconstruction.RestoreInitialValues(node, dto.InputInitialValues,
                 dto.InputInitialValuesByPortId);
+            node.Location = new Avalonia.Point(dto.X, dto.Y);
             nodes.Add(node);
             if (!string.IsNullOrWhiteSpace(dto.InstanceId)) created[dto.InstanceId] = node;
         }
 
+        Interactions.InteractionSchemaResolver.RefreshFromSnapshot(nodes, created, snapshot);
         var connections = new List<NodeConnection>(snapshot.Connections.Count);
         foreach (var dto in snapshot.Connections)
         {

@@ -22,11 +22,35 @@ internal partial class WorkflowJsonContext : JsonSerializerContext;
 /// </summary>
 public sealed class WorkflowSnapshot
 {
+    /// <summary>Workflow schema using the redesigned node contract.</summary>
+    public const int CurrentFormatVersion = 2;
     /// <summary>
     /// <para>工程文件格式版本。</para>
     /// Project file format version.
     /// </summary>
-    public int FormatVersion { get; set; } = 1;
+    [JsonRequired]
+    public int FormatVersion { get; set; } = CurrentFormatVersion;
+
+    /// <summary>Rejects unsupported workflow contracts before reconstruction or publication.</summary>
+    public void EnsureSupportedVersion()
+    {
+        if (FormatVersion != CurrentFormatVersion)
+        {
+            throw new InvalidDataException($"Unsupported workflow format version {FormatVersion}; expected {CurrentFormatVersion}.");
+        }
+        foreach (var node in Nodes)
+        {
+            if (node.CompositePackage is not { } package)
+            {
+                continue;
+            }
+            var errors = VisualPluginValidation.Validate(package);
+            if (package.NodeTypeKey != node.TypeKey || errors.Count != 0)
+            {
+                throw new InvalidDataException("Invalid embedded composite: " + string.Join(Environment.NewLine, errors));
+            }
+        }
+    }
 
     /// <summary>
     /// <para>节点 DTO 列表。</para>
@@ -82,6 +106,9 @@ public sealed class NodeDto
     /// Stable node type key matching a NodeTypeRegistry key.
     /// </summary>
     public string TypeKey { get; set; } = string.Empty;
+
+    /// <summary>Version-pinned definition of a locally encapsulated composite.</summary>
+    public VisualPluginPackage? CompositePackage { get; set; }
 
     /// <summary>Configurable node value type, when the node exposes one.</summary>
     public string? NodeValueType { get; set; }

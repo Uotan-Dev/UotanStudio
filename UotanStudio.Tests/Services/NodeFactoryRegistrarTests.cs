@@ -14,6 +14,126 @@ namespace UotanStudio.Tests.Services;
 public sealed class NodeFactoryRegistrarTests
 {
     [Fact]
+    public async Task RegisterVisualPlugin_ConcurrentUpdates_PreservesDescriptorSnapshotsAndPackages()
+    {
+        var prefix = "tests.registry." + Guid.NewGuid().ToString("N") + ".";
+        var token = TestContext.Current.CancellationToken;
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(worker => Task.Run(() =>
+        {
+            for (var index = 0; index < 32; index++)
+            {
+                token.ThrowIfCancellationRequested();
+                var package = new VisualPluginPackage
+                {
+                    Kind = VisualPluginKind.CompositeNode,
+                    Manifest = new VisualPluginManifest { Id = prefix + worker + "." + index, Name = "Concurrent composite" }
+                };
+                try
+                {
+                    NodeFactoryRegistrar.RegisterVisualPlugin(package);
+                    var snapshot = NodeFactoryRegistrar.Descriptors;
+                    Assert.Single(snapshot, descriptor => descriptor.TypeKey == package.NodeTypeKey);
+                    Assert.True(NodeFactoryRegistrar.TryGetVisualPluginPackage(package.NodeTypeKey, out var registered));
+                    Assert.Same(package, registered);
+                    NodeFactoryRegistrar.RegisterAll();
+                    Assert.IsType<CompositeNodeViewModel>(NodeTypeRegistry.Create(package.NodeTypeKey));
+                    NodeFactoryRegistrar.UnregisterVisualPlugin(package.NodeTypeKey);
+                    Assert.Single(snapshot, descriptor => descriptor.TypeKey == package.NodeTypeKey);
+                    Assert.False(NodeFactoryRegistrar.TryGetVisualPluginPackage(package.NodeTypeKey, out _));
+                    Assert.False(NodeTypeRegistry.Contains(package.NodeTypeKey));
+                }
+                finally
+                {
+                    NodeFactoryRegistrar.UnregisterVisualPlugin(package.NodeTypeKey);
+                }
+            }
+        }, token)));
+    }
+
+    [Fact]
+    public void Toolbox_ObjectFamiliesAndAliases_MakesPatchOperationsDiscoverable()
+    {
+        using var editor = new NodeEditorViewModel();
+        var binary = Assert.Single(editor.ToolboxCategories.SelectMany(category => category.Items), item => item.TypeKey == "Binary.Pattern.Replace");
+
+        Assert.True(binary.Matches("hexpatch"));
+        Assert.True(binary.Matches("Binary.Pattern"));
+        Assert.True(binary.Matches("二进制"));
+        Assert.Contains(editor.ToolboxCategories, category => category.Identity == "Configuration"
+            && category.Families.Any(family => family.Identity == "Configuration/Json"));
+        Assert.DoesNotContain(editor.ToolboxCategories, category => category.Identity == "Patch");
+    }
+
+    [Fact]
+    public void ParameterSchema_ConditionalInputs_PreservesValuesAndProtectionDefaults()
+    {
+        var descriptor = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Image.File.SetAttributes");
+        var node = descriptor.Factory();
+        var guard = node.Input.Single(input => input.Title == "Check Old Value");
+        var expected = node.Input.Single(input => input.Title == "Expected UID");
+        expected.InitialValue = "1000";
+
+        Assert.True(expected.IsAdvanced);
+        Assert.False(expected.IsVisibleWhen!(node));
+        guard.InitialValue = true;
+        Assert.True(expected.IsVisibleWhen(node));
+        guard.InitialValue = false;
+        Assert.Equal("1000", expected.InitialValue);
+        Assert.True(node.Input.Single(input => input.Title == "Extraction Budget").IsAdvanced);
+    }
+
+    [Fact]
+    public void ParameterSchema_ConnectedOperation_LeavesPotentiallyRelevantInputsVisible()
+    {
+        var descriptor = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Config.Json.Edit");
+        var node = descriptor.Factory();
+        var operation = node.Input.Single(input => input.Title == "Operation");
+        var value = node.Input.Single(input => input.Title == "JSON Value");
+        operation.InitialValue = "Delete";
+        Assert.False(value.IsVisibleWhen!(node));
+
+        operation.SourceDescription = "upstream operation";
+
+        Assert.True(value.IsVisibleWhen(node));
+    }
+
+    [Fact]
+    public void Descriptors_NewIdentityContract_HasThreeSegmentsAndFrozenPortIds()
+    {
+        foreach (var descriptor in NodeFactoryRegistrar.Descriptors.Where(descriptor => NodeFactoryRegistrar.BuiltInTypeKeys.Contains(descriptor.TypeKey)))
+        {
+            Assert.Equal(3, descriptor.TypeKey.Split('.').Length);
+            var node = descriptor.Factory();
+            foreach (var port in node.Input.Concat(node.Output))
+            {
+                Assert.False(string.IsNullOrWhiteSpace(port.PortId));
+                var identity = port.StableId;
+                port.Title = "Renamed display label";
+                Assert.Equal(identity, port.StableId);
+            }
+        }
+    }
+
+    [Fact]
+    public void CreateFlashPreset_DifferentTargets_UsesOneExplicitPartitionContract()
+    {
+        var boot = ExtendedFirmwareNodeViewModel.CreateFlashBootNode();
+        var bootloader = ExtendedFlashNodeViewModel.CreateFlashBootloaderNode();
+        var super = ExtendedFlashNodeViewModel.CreateOverwriteFirmwareNode();
+
+        Assert.All(new[] { boot, bootloader, super }, node =>
+        {
+            Assert.Equal("Device.Partition.Flash", node.TypeKey);
+            Assert.Contains(node.Input, input => input.Title == "Image");
+        });
+        Assert.Equal("boot", boot.Input.Single(input => input.Title == "Partition").InitialValue);
+        Assert.Equal("bootloader", bootloader.Input.Single(input => input.Title == "Partition").InitialValue);
+        Assert.Equal("super", super.Input.Single(input => input.Title == "Partition").InitialValue);
+        Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Device.Partition.Flash");
+        Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "File.Artifact.Publish");
+    }
+
+    [Fact]
     public async Task Register_ConcurrentFactories_PreservesCreationAndSnapshotAfterRemoval()
     {
         var prefix = "tests.concurrent." + Guid.NewGuid().ToString("N") + ".";
@@ -26,7 +146,7 @@ public sealed class NodeFactoryRegistrarTests
                 {
                     token.ThrowIfCancellationRequested();
                     var key = prefix + worker + "." + index;
-                    NodeTypeRegistry.Register(key, () => PatchNodeViewModel.Create("Patch.CheckFormat"));
+                    NodeTypeRegistry.Register(key, () => PatchNodeViewModel.Create("Validation.Format.Check"));
                     Assert.True(NodeTypeRegistry.Contains(key));
                     Assert.IsType<PatchNodeViewModel>(NodeTypeRegistry.Create(key));
                     var snapshot = NodeTypeRegistry.Keys;
@@ -74,15 +194,15 @@ public sealed class NodeFactoryRegistrarTests
     [Fact]
     public void Descriptors_ExposeExecutionCapabilities()
     {
-        var flash = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Flash.Flash");
+        var flash = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Device.Partition.Flash");
         Assert.True(flash.IsDestructive);
         Assert.True(flash.Capabilities.HasFlag(NodeCapability.RequiresDevice));
         Assert.True(flash.Capabilities.HasFlag(NodeCapability.MutatesDevice));
 
-        var branch = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Flow.Branch");
+        var branch = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Flow.Condition.Branch");
         Assert.True(branch.Capabilities.HasFlag(NodeCapability.ControlFlow));
 
-        var download = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Network.Download");
+        var download = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Network.File.Download");
         Assert.True(download.Capabilities.HasFlag(NodeCapability.RequiresNetwork));
         Assert.True(download.Capabilities.HasFlag(NodeCapability.ProducesArtifact));
     }
@@ -145,13 +265,13 @@ public sealed class NodeFactoryRegistrarTests
     public async Task WorkflowSnapshot_PreservesConfigurableNodeState()
     {
         using var editor = new NodeEditorViewModel();
-        var constant = NodeTypeRegistry.Create("Data.Constant")!;
+        var constant = NodeTypeRegistry.Create("Data.Value.Constant")!;
         constant.NodeValueType = "Number";
         constant.NodeValue = "42";
         constant.Location = new Point(12, 34);
         editor.AddNode(constant);
 
-        var image = NodeTypeRegistry.Create("Data.ProjectImage")!;
+        var image = NodeTypeRegistry.Create("Resource.Project.Image")!;
         image.SelectedImage = "images/boot.img";
         editor.AddNode(image);
 
@@ -162,11 +282,11 @@ public sealed class NodeFactoryRegistrarTests
         using var restored = new NodeEditorViewModel();
         await restored.LoadFromAsync(snapshot);
 
-        var restoredConstant = Assert.Single(restored.Nodes, node => node.TypeKey == "Data.Constant");
+        var restoredConstant = Assert.Single(restored.Nodes, node => node.TypeKey == "Data.Value.Constant");
         Assert.Equal("Number", restoredConstant.NodeValueType);
         Assert.Equal("42", restoredConstant.NodeValue);
         Assert.Equal(new Point(12, 34), restoredConstant.Location);
-        var restoredImage = Assert.Single(restored.Nodes, node => node.TypeKey == "Data.ProjectImage");
+        var restoredImage = Assert.Single(restored.Nodes, node => node.TypeKey == "Resource.Project.Image");
         Assert.Equal("images/boot.img", restoredImage.SelectedImage);
     }
 
@@ -176,7 +296,7 @@ public sealed class NodeFactoryRegistrarTests
         using var editor = new NodeEditorViewModel();
         for (var index = 1; index <= 101; index++)
         {
-            var node = NodeTypeRegistry.Create("Flow.Start")!;
+            var node = NodeTypeRegistry.Create("Flow.Execution.Start")!;
             node.Title = $"N{index}";
             editor.AddNode(node);
         }
@@ -191,7 +311,7 @@ public sealed class NodeFactoryRegistrarTests
     public void CopyPaste_RecreatesConcreteNodeAndConfiguration()
     {
         using var editor = new NodeEditorViewModel();
-        var constant = NodeTypeRegistry.Create("Data.Constant")!;
+        var constant = NodeTypeRegistry.Create("Data.Value.Constant")!;
         constant.NodeValueType = "Boolean";
         constant.NodeValue = "true";
         constant.IsSelected = true;
@@ -202,7 +322,7 @@ public sealed class NodeFactoryRegistrarTests
 
         Assert.Equal(2, editor.Nodes.Count);
         var copy = Assert.Single(editor.Nodes, node => node.Title.EndsWith("(copy)", StringComparison.Ordinal));
-        Assert.Equal("Data.Constant", copy.TypeKey);
+        Assert.Equal("Data.Value.Constant", copy.TypeKey);
         Assert.Equal("Boolean", copy.NodeValueType);
         Assert.Equal("true", copy.NodeValue);
         Assert.NotEmpty(copy.Output);
@@ -212,7 +332,7 @@ public sealed class NodeFactoryRegistrarTests
     public void PropertyEdits_AreUndoableAndRedoable()
     {
         using var editor = new NodeEditorViewModel();
-        var constant = NodeTypeRegistry.Create("Data.Constant")!;
+        var constant = NodeTypeRegistry.Create("Data.Value.Constant")!;
         editor.AddNode(constant);
 
         constant.NodeValueType = "Number";
@@ -226,7 +346,7 @@ public sealed class NodeFactoryRegistrarTests
         editor.Redo();
         Assert.Equal("42", constant.NodeValue);
 
-        var reader = NodeTypeRegistry.Create("Data.ReadFile")!;
+        var reader = NodeTypeRegistry.Create("File.Binary.Read")!;
         editor.AddNode(reader);
         var input = Assert.Single(reader.Input);
         input.InitialValue = "boot.img";
@@ -240,8 +360,8 @@ public sealed class NodeFactoryRegistrarTests
     public void SetSelection_MultipleNodes_SynchronizesSelectionAndBatchState()
     {
         using var editor = new NodeEditorViewModel();
-        var first = NodeTypeRegistry.Create("Data.Constant")!;
-        var second = NodeTypeRegistry.Create("Data.Constant")!;
+        var first = NodeTypeRegistry.Create("Data.Value.Constant")!;
+        var second = NodeTypeRegistry.Create("Data.Value.Constant")!;
         editor.AddNode(first);
         editor.AddNode(second);
 
@@ -278,9 +398,9 @@ public sealed class NodeFactoryRegistrarTests
     public void BatchNodeValue_MultipleConstants_UpdatesAsSingleUndoableEdit()
     {
         using var editor = new NodeEditorViewModel();
-        var first = NodeTypeRegistry.Create("Data.Constant")!;
+        var first = NodeTypeRegistry.Create("Data.Value.Constant")!;
         first.NodeValue = "first";
-        var second = NodeTypeRegistry.Create("Data.Constant")!;
+        var second = NodeTypeRegistry.Create("Data.Value.Constant")!;
         second.NodeValue = "second";
         editor.AddNode(first);
         editor.AddNode(second);
@@ -309,10 +429,10 @@ public sealed class NodeFactoryRegistrarTests
     public void BatchInput_MultipleCompatibleNodes_UpdatesAsSingleUndoableEdit()
     {
         using var editor = new NodeEditorViewModel();
-        var first = NodeTypeRegistry.Create("Data.ReadFile")!;
+        var first = NodeTypeRegistry.Create("File.Binary.Read")!;
         var firstInput = Assert.Single(first.Input);
         firstInput.InitialValue = "first.img";
-        var second = NodeTypeRegistry.Create("Data.ReadFile")!;
+        var second = NodeTypeRegistry.Create("File.Binary.Read")!;
         var secondInput = Assert.Single(second.Input);
         secondInput.InitialValue = "second.img";
         editor.AddNode(first);
@@ -345,8 +465,8 @@ public sealed class NodeFactoryRegistrarTests
     public void DeleteSelectedNodes_MultipleConnectedNodes_DeletesAndRestoresAsSingleEdit()
     {
         using var editor = new NodeEditorViewModel();
-        var source = NodeTypeRegistry.Create("Data.ReadFile")!;
-        var target = NodeTypeRegistry.Create("Data.Concat")!;
+        var source = NodeTypeRegistry.Create("File.Binary.Read")!;
+        var target = NodeTypeRegistry.Create("Data.Bytes.Concat")!;
         editor.AddNode(source);
         editor.AddNode(target);
         editor.CreateConnection(source.Output.Single(), target.Input.First());
@@ -378,8 +498,8 @@ public sealed class NodeFactoryRegistrarTests
     public void ConnectionRemoval_IsUndoableAndRedoable()
     {
         using var editor = new NodeEditorViewModel();
-        var source = NodeTypeRegistry.Create("Data.ReadFile")!;
-        var target = NodeTypeRegistry.Create("Data.Concat")!;
+        var source = NodeTypeRegistry.Create("File.Binary.Read")!;
+        var target = NodeTypeRegistry.Create("Data.Bytes.Concat")!;
         editor.AddNode(source);
         editor.AddNode(target);
 
@@ -397,8 +517,8 @@ public sealed class NodeFactoryRegistrarTests
     public void CreateConnection_SameDirectionConnectors_RejectsConnection()
     {
         using var editor = new NodeEditorViewModel();
-        var first = NodeTypeRegistry.Create("Data.Concat")!;
-        var second = NodeTypeRegistry.Create("Data.Concat")!;
+        var first = NodeTypeRegistry.Create("Data.Bytes.Concat")!;
+        var second = NodeTypeRegistry.Create("Data.Bytes.Concat")!;
         editor.AddNode(first);
         editor.AddNode(second);
 
@@ -412,8 +532,8 @@ public sealed class NodeFactoryRegistrarTests
     public void CreateConnection_InputDraggedToOutput_CreatesCanonicalConnection()
     {
         using var editor = new NodeEditorViewModel();
-        var source = NodeTypeRegistry.Create("Data.ReadFile")!;
-        var target = NodeTypeRegistry.Create("Data.Concat")!;
+        var source = NodeTypeRegistry.Create("File.Binary.Read")!;
+        var target = NodeTypeRegistry.Create("Data.Bytes.Concat")!;
         editor.AddNode(source);
         editor.AddNode(target);
 
@@ -428,7 +548,7 @@ public sealed class NodeFactoryRegistrarTests
     public void Clear_DiscardsEditsFromThePreviousCanvas()
     {
         using var editor = new NodeEditorViewModel();
-        editor.AddNode(NodeTypeRegistry.Create("Flow.Start")!);
+        editor.AddNode(NodeTypeRegistry.Create("Flow.Execution.Start")!);
         Assert.True(editor.CanUndo);
 
         editor.Clear();

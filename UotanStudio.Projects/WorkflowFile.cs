@@ -11,6 +11,7 @@ public static class WorkflowFile
         if (string.IsNullOrEmpty(path)) return false;
         try
         {
+            snapshot.EnsureSupportedVersion();
             await AtomicJsonFile.WriteIfChangedAsync(path, snapshot, WorkflowJsonContext.Default.WorkflowSnapshot, cancellationToken).ConfigureAwait(false);
             return true;
         }
@@ -30,7 +31,9 @@ public static class WorkflowFile
         {
             await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 65536, FileOptions.Asynchronous | FileOptions.SequentialScan);
             if (stream.Length > 32 * 1024 * 1024) throw new InvalidDataException("Project state exceeds 32 MiB.");
-            return await JsonSerializer.DeserializeAsync(stream, WorkflowJsonContext.Default.WorkflowSnapshot, cancellationToken).ConfigureAwait(false);
+            var snapshot = await JsonSerializer.DeserializeAsync(stream, WorkflowJsonContext.Default.WorkflowSnapshot, cancellationToken).ConfigureAwait(false);
+            snapshot?.EnsureSupportedVersion();
+            return snapshot;
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)

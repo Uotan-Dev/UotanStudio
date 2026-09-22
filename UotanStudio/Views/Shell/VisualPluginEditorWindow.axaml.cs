@@ -15,6 +15,7 @@ namespace UotanStudio.Views.Shell;
 public partial class VisualPluginEditorWindow : Window
 {
     private VisualPluginRegistration? _registration;
+    private Action<VisualPluginPackage>? _publishLocal;
     private readonly NodeEditorViewModel _editor = new(showVisualPluginWorkspace: false);
     private WindowToastManager? _toastManager;
     private VisualPluginManager _manager = VisualPluginManager.Instance;
@@ -61,16 +62,37 @@ public partial class VisualPluginEditorWindow : Window
         _ = _editor.LoadFromAsync(registration.Package.Graph);
     }
 
+    /// <summary>Edits an embedded composite without installing it in the global catalog.</summary>
+    public VisualPluginEditorWindow(VisualPluginPackage package, Action<VisualPluginPackage> publish) : this()
+    {
+        _publishLocal = publish;
+        SetResourceScope(package);
+        ResourcePanel.IsEnabled = true;
+        RequirementsPanel.IsEnabled = true;
+        SavePluginButton.IsEnabled = true;
+        Title = LanguageService.Instance.GetString("Plugin_EditGraph") + " - " + package.Manifest.Name;
+        PluginNameText.Text = package.Manifest.Name;
+        PluginVersionText.Text = package.Manifest.Version;
+        _ = _editor.LoadFromAsync(package.Graph);
+    }
+
     private async void SaveClick(object? sender, RoutedEventArgs e)
     {
-        if (_registration is not { } registration) return;
+        if (_registration is null && _publishLocal is null) return;
         if (!TryBeginResourceOperation()) return;
         try
         {
             EnsureValidRequirements();
             var updated = VisualPluginPackageBuilder.CreateUpdated(_editor.ResourcePackage!,
-                _editor.Nodes, _editor.Connections);
-            _registration = await _manager.UpdateAsync(registration, updated, _lifetime.Token);
+                _editor.Nodes, _editor.Connections, portable: _publishLocal is null);
+            if (_publishLocal is { } publish)
+            {
+                publish(updated);
+                SetResourceScope(updated);
+                Close();
+                return;
+            }
+            _registration = await _manager.UpdateAsync(_registration!, updated, _lifetime.Token);
             SetResourceScope(_registration.Package);
             ShowResult(LanguageService.Instance.GetString("Plugin_GraphSaved"), NotificationType.Success);
         }
@@ -82,6 +104,48 @@ public partial class VisualPluginEditorWindow : Window
         catch (OperationCanceledException) { }
         finally { EndResourceOperation(); }
     }
+
+    private async void EditInterfaceClick(object? sender, RoutedEventArgs e)
+    {
+        if (_editor.IsExecuting || _editor.ResourcePackage is not { } package)
+        {
+            return;
+        }
+        var analysis = CompositeBoundaryAnalyzer.Analyze(_editor.Nodes, _editor.Connections);
+        var inputs = package.Inputs.Select(CloneInterfacePort).ToArray();
+        var outputs = package.Outputs.Select(CloneInterfacePort).ToArray();
+        var inputTargets = inputs.SelectMany(port => port.GetBindings()).Select(binding => (binding.NodeInstanceId, binding.PortId)).ToHashSet();
+        var outputTargets = outputs.Select(port => (port.NodeInstanceId, port.PortId)).ToHashSet();
+        var review = new CompositeBoundaryAnalysis(inputs, outputs,
+            analysis.Inputs.Concat(analysis.InputCandidates).Where(port => !inputTargets.Contains((port.NodeInstanceId, port.PortId))).ToArray(),
+            analysis.Outputs.Concat(analysis.OutputCandidates).Where(port => !outputTargets.Contains((port.NodeInstanceId, port.PortId))).ToArray());
+        var dialog = new Nodes.CompositeInterfaceWindow(review, package.Manifest.Name);
+        if (await dialog.ShowDialog<bool>(this))
+        {
+            var result = dialog.GetBoundary();
+            package.Inputs = [.. result.Inputs];
+            package.Outputs = [.. result.Outputs];
+            package.Manifest.Name = dialog.CompositeName;
+            PluginNameText.Text = package.Manifest.Name;
+        }
+    }
+
+    private static VisualPluginPortDefinition CloneInterfacePort(VisualPluginPortDefinition port) => new()
+    {
+        Id = port.Id,
+        Name = port.Name,
+        PortType = port.PortType,
+        NodeInstanceId = port.NodeInstanceId,
+        PortId = port.PortId,
+        DefaultValue = port.DefaultValue,
+        Required = port.Required,
+        IsSensitive = port.IsSensitive,
+        AdditionalBindings = port.AdditionalBindings.Select(binding => new VisualPluginPortBinding
+        {
+            NodeInstanceId = binding.NodeInstanceId,
+            PortId = binding.PortId
+        }).ToList()
+    };
 
     private void SetResourceScope(VisualPluginPackage package)
     {
@@ -192,7 +256,7 @@ public partial class VisualPluginEditorWindow : Window
             var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
                 Title = LanguageService.Instance.GetString("Plugin_ExportBundle"),
-                SuggestedFileName = _registration!.Id + ".uotanplugin",
+                SuggestedFileName = _editor.ResourcePackage!.Manifest.Id + ".uotanplugin",
                 DefaultExtension = "uotanplugin",
                 FileTypeChoices = [new FilePickerFileType(LanguageService.Instance.GetString("Plugin_ExportBundle"))
                 {
@@ -215,7 +279,7 @@ public partial class VisualPluginEditorWindow : Window
 
     private bool TryBeginResourceOperation()
     {
-        if (_registration is null) return false;
+        if (_registration is null && _publishLocal is null) return false;
         if (_resourceBusy || _editor.IsExecuting)
         {
             ShowResult(LanguageService.Instance.GetString("Plugin_ResourceBusy"), NotificationType.Warning);
@@ -232,9 +296,9 @@ public partial class VisualPluginEditorWindow : Window
     private void EndResourceOperation()
     {
         _resourceBusy = false;
-        ResourcePanel.IsEnabled = _registration is not null;
-        RequirementsPanel.IsEnabled = _registration is not null;
-        SavePluginButton.IsEnabled = _registration is not null;
+        ResourcePanel.IsEnabled = _registration is not null || _publishLocal is not null;
+        RequirementsPanel.IsEnabled = ResourcePanel.IsEnabled;
+        SavePluginButton.IsEnabled = ResourcePanel.IsEnabled;
         GraphHost.IsEnabled = true;
     }
 

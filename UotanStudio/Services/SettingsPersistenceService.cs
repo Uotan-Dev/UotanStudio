@@ -18,6 +18,9 @@ public class AppSettings : IJsonOnDeserialized
     {
         AdditionalSettings?.Remove("hdcPath");
         AdditionalSettings?.Remove("HdcPath");
+        FavoriteNodeTypes ??= [];
+        RecentNodeTypes ??= [];
+        ExpandedNodeCategories ??= [];
     }
 
     /// <summary>Maximum concurrent firmware workers. Missing or invalid persisted values use the detected physical core count.</summary>
@@ -34,6 +37,9 @@ public class AppSettings : IJsonOnDeserialized
     {
         var copy = (AppSettings)MemberwiseClone();
         copy.RecentProjects = [.. RecentProjects];
+        copy.FavoriteNodeTypes = [.. FavoriteNodeTypes];
+        copy.RecentNodeTypes = [.. RecentNodeTypes];
+        copy.ExpandedNodeCategories = [.. ExpandedNodeCategories];
         copy.McpServers = [.. McpServers];
         copy.AdditionalSettings = AdditionalSettings is null ? null : new(AdditionalSettings);
         return copy;
@@ -145,6 +151,15 @@ public class AppSettings : IJsonOnDeserialized
     /// </summary>
     [JsonPropertyName("recentProjects")]
     public List<string> RecentProjects { get; set; } = [];
+
+    /// <summary>Stable node keys pinned in the toolbox, independent of project workflow data.</summary>
+    public List<string> FavoriteNodeTypes { get; set; } = [];
+
+    /// <summary>Recently inserted node keys, newest first.</summary>
+    public List<string> RecentNodeTypes { get; set; } = [];
+
+    /// <summary>Expanded toolbox category and family identities.</summary>
+    public List<string> ExpandedNodeCategories { get; set; } = [];
 
     /// <summary>
     /// <para>获取或设置设为"当前签名"的 ADB 密钥库条目 Id；空字符串表示使用启动自动生成的运行时身份。</para>

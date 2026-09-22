@@ -8,7 +8,7 @@ public sealed partial class PatchNodeViewModel
     private static void ConfigureImageBatch(PatchNodeViewModel node)
     {
         node.AddInput("Image Edits", NodePortType.ImageEdits, hint: "Node_Patch_ImageBatchHint");
-        if (node.TypeKey == "Patch.ImageCollectText")
+        if (node.TypeKey == "Image.Edit.CollectText")
         {
             node.AddInput("Image Path", NodePortType.Text, "/build.prop");
             node.AddInput("Text", NodePortType.Text, "", multiline: true);
@@ -31,11 +31,11 @@ public sealed partial class PatchNodeViewModel
     {
         var input = ReadInput("Image Edits");
         var edits = input as PatchImageEdits;
-        if (input is not null && edits is null || edits is null && TypeKey == "Patch.ImageApplyTexts")
+        if (input is not null && edits is null || edits is null && TypeKey == "Image.Edit.Apply")
         {
             throw new InvalidDataException(Services.LanguageService.Instance.GetString("Node_Patch_ImageEditsRequired"));
         }
-        if (TypeKey == "Patch.ImageCollectText")
+        if (TypeKey == "Image.Edit.CollectText")
         {
             var next = (edits ?? PatchImageEdits.Empty).Append(new(Text("Image Path"), Text("Text"), Text("Encoding"), Text("Expected Hash")));
             WriteOutput("Image Edits", next);

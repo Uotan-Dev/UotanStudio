@@ -1,3 +1,4 @@
+using UotanStudio.Services.Interactions;
 using UotanStudio.Services.Patching;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.NodeViewModels;
@@ -21,6 +22,8 @@ public sealed class NodeExecutionEngine
     private volatile bool _isRunning;
     private PatchRun? _patches;
     private VisualPluginPackage? _package;
+    private IWorkflowInteractionService _interactions = UnsupportedWorkflowInteractionService.Instance;
+    private readonly System.Collections.Concurrent.ConcurrentStack<IAsyncDisposable> _resources = new();
 
     /// <summary>
     /// <para>创建执行引擎。</para>
@@ -94,6 +97,7 @@ public sealed class NodeExecutionEngine
         var ownsPatches = options.SharedPatches is null;
         _patches = options.SharedPatches ?? new PatchRun(options.Preview);
         _package = options.Package;
+        _interactions = options.Interactions;
 
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var token = _cts.Token;
@@ -121,6 +125,11 @@ public sealed class NodeExecutionEngine
                 {
                     return RejectPreflight(nodes, string.Join(Environment.NewLine, errors));
                 }
+            }
+            var interactionError = WorkflowInteractionPreflight.Validate(nodes, _interactions);
+            if (interactionError is not null)
+            {
+                return RejectPreflight(nodes, interactionError);
             }
             var patchPolicy = PatchWorkflowPolicy.Inspect(nodes);
             if ((_patches.Preview || patchPolicy.HasPatches) && !patchPolicy.Safe)
@@ -156,7 +165,7 @@ public sealed class NodeExecutionEngine
             // Nodes already executed by Loop / Parallel sub-graph scheduling (skipped by the main loop),
             // and nodes belonging to the untaken Branch sub-graph (marked Skipped).
             var handledByFlow = new HashSet<string>();
-            var skippedByBranch = new HashSet<string>();
+            var skippedByBranch = GetInactiveEntryNodes(options.EntryActivation, connections);
             var skippedByFailure = new HashSet<string>();
 
             foreach (var node in order)
@@ -253,7 +262,9 @@ public sealed class NodeExecutionEngine
                 : aborted
                     ? ExecutionResult.Failed("Execution stopped after a node failure", failedNodes)
                 : failedNodes.Count > 0
-                    ? ExecutionResult.PartiallySucceeded(failedNodes)
+                    ? nodes.Any(node => node.ExecutionStatus == NodeExecutionStatus.Succeeded)
+                        ? ExecutionResult.PartiallySucceeded(failedNodes)
+                        : ExecutionResult.Failed("No nodes completed successfully", failedNodes)
                     : ExecutionResult.Succeeded(total);
 
             RecordUnreachedComposites(nodes, CompositeSkipReason.NotReached);
@@ -283,6 +294,17 @@ public sealed class NodeExecutionEngine
         }
         finally
         {
+            while (_resources.TryPop(out var resource))
+            {
+                try
+                {
+                    await resource.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception error)
+                {
+                    _log.Write(LogLevel.Error, "Engine", $"Runtime resource cleanup failed: {error.Message}");
+                }
+            }
             if (ownsPatches && _patches is not null)
             {
                 try { await _patches.DisposeAsync().ConfigureAwait(false); }
@@ -355,7 +377,12 @@ public sealed class NodeExecutionEngine
             }
             FlowInputs(node, byId, connections);
 
-            var context = new ExecutionContextImpl(_log, token, progress, _patches, _package);
+            var context = new ExecutionContextImpl(_log, token, progress, _patches, _package, _interactions,
+                waiting =>
+                {
+                    node.ExecutionStatus = waiting ? NodeExecutionStatus.WaitingForInput : NodeExecutionStatus.Running;
+                    NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
+                }, _resources.Push);
             _log.Write(LogLevel.Info, "Engine", $"Executing node '{node.Title}' (id={node.InstanceId})");
             await node.ExecuteAsync(context).ConfigureAwait(false);
 
@@ -409,12 +436,34 @@ public sealed class NodeExecutionEngine
         object failLock,
         NodeExecutionOptions options)
     {
+        if (node.TypeKey is not ("Flow.Condition.Branch" or "Flow.Applicability.Gate" or "Flow.Collection.Loop" or "Flow.Execution.Parallel"))
+        {
+            var inactive = new HashSet<FlowNodeViewModel>();
+            var active = new HashSet<FlowNodeViewModel>();
+            foreach (var output in node.Output.Where(port => port.PortType == NodePortType.Flow))
+            {
+                var reachable = CollectFlowReachable(node, output.Title, flowOut);
+                if (output.Data is false)
+                {
+                    inactive.UnionWith(reachable);
+                }
+                else
+                {
+                    active.UnionWith(reachable);
+                }
+            }
+            inactive.ExceptWith(active);
+            foreach (var target in inactive)
+            {
+                skippedByBranch.Add(target.InstanceId);
+            }
+        }
         switch (node.TypeKey)
         {
-            case "Flow.Branch":
-            case "Patch.ApplyGate":
+            case "Flow.Condition.Branch":
+            case "Flow.Applicability.Gate":
                 {
-                    var isGate = node.TypeKey == "Patch.ApplyGate";
+                    var isGate = node.TypeKey == "Flow.Applicability.Gate";
                     var trueTitle = isGate ? "Apply" : "True";
                     var falseTitle = isGate ? "Skip" : "False";
                     var trueConnector = node.Output.FirstOrDefault(c => string.Equals(c.Title, trueTitle, StringComparison.Ordinal));
@@ -434,7 +483,7 @@ public sealed class NodeExecutionEngine
                     }
                     break;
                 }
-            case "Flow.Loop":
+            case "Flow.Collection.Loop":
                 {
                     var requested = NodeDataUtil.ToInt(node.ReadInput("Count"), 0);
                     var iterations = Math.Clamp(requested, 0, MaxLoopIterations);
@@ -457,35 +506,20 @@ public sealed class NodeExecutionEngine
                         token.ThrowIfCancellationRequested();
                         node.WriteOutput("Index", i);
                         _log.Write(LogLevel.Debug, "Engine", $"Loop '{node.InstanceId}' iteration {i + 1}/{iterations}");
-                        foreach (var bodyNode in bodyOrder)
+                        var scope = await ExecuteScopeAsync(bodyOrder, byId, connections, flowOut,
+                            token, skippedByFailure, options).ConfigureAwait(false);
+                        failedNodes.AddRange(scope.FailedNodes);
+                        skippedByFailure.UnionWith(scope.SkippedByFailure);
+                        if (scope.Stop)
                         {
-                            if (skippedByFailure.Contains(bodyNode.InstanceId))
-                            {
-                                MarkNodeSkipped(bodyNode, "an upstream loop-body node failed");
-                                continue;
-                            }
-
-                            var succeeded = await ExecuteSingleNodeAsync(bodyNode, byId, connections, token,
-                                p => SafeReportProgress(0, 1, p)).ConfigureAwait(false);
-                            if (!succeeded)
-                            {
-                                lock (failLock)
-                                {
-                                    failedNodes.Add(bodyNode.InstanceId);
-                                    if (options.FailurePolicy == ExecutionFailurePolicy.SkipDependents)
-                                        MarkDownstreamSkipped(bodyNode, byId, connections, skippedByFailure);
-                                }
-
-                                if (options.FailurePolicy == ExecutionFailurePolicy.FailFast)
-                                    return true;
-                            }
+                            return true;
                         }
                     }
 
                     foreach (var bodyNode in body) handledByFlow.Add(bodyNode.InstanceId);
                     break;
                 }
-            case "Flow.Parallel":
+            case "Flow.Execution.Parallel":
                 {
                     var branchConnectors = node.Output.Where(c => c.PortType == NodePortType.Flow).ToList();
                     if (branchConnectors.Count == 0) break;
@@ -502,60 +536,144 @@ public sealed class NodeExecutionEngine
                         .SelectMany(branch => branch.Nodes.Select(branchNode => (branchNode, branch.Connector)))
                         .GroupBy(item => item.branchNode.InstanceId)
                         .ToDictionary(group => group.Key, group => group.Count());
+                    var tasks = new List<Task<ScopeExecutionResult>>();
                     var stop = 0;
-                    var tasks = new List<Task>();
                     foreach (var (connectorTitle, allBranchNodes) in branches)
                     {
-                        // A node reachable from two branches is a merge point, not branch-local
-                        // work. Leave it for the main topological pass so it executes once after
-                        // both branches have produced their outputs.
-                        var branch = allBranchNodes
-                            .Where(branchNode => ownership[branchNode.InstanceId] == 1)
-                            .ToHashSet();
+                        // Shared merge points remain in the parent scope and execute once.
+                        var branch = allBranchNodes.Where(branchNode => ownership[branchNode.InstanceId] == 1).ToHashSet();
                         var branchOrder = topologicalOrder.Where(branch.Contains).ToList();
-                        foreach (var branchNode in branch) handledByFlow.Add(branchNode.InstanceId);
-
+                        foreach (var branchNode in branch)
+                        {
+                            handledByFlow.Add(branchNode.InstanceId);
+                        }
                         _log.Write(LogLevel.Info, "Engine",
                             $"Parallel '{node.InstanceId}' dispatching branch '{connectorTitle}' with {branchOrder.Count} node(s)");
-                        tasks.Add(Task.Run(async () =>
-                        {
-                            foreach (var branchNode in branchOrder)
-                            {
-                                token.ThrowIfCancellationRequested();
-                                if (Volatile.Read(ref stop) != 0) break;
-                                bool skip;
-                                lock (failLock) { skip = skippedByFailure.Contains(branchNode.InstanceId); }
-                                if (skip)
-                                {
-                                    MarkNodeSkipped(branchNode, "an upstream parallel-branch node failed");
-                                    continue;
-                                }
-
-                                var succeeded = await ExecuteSingleNodeAsync(branchNode, byId, connections, token,
-                                    p => SafeReportProgress(0, 1, p)).ConfigureAwait(false);
-                                if (!succeeded)
-                                {
-                                    lock (failLock)
-                                    {
-                                        failedNodes.Add(branchNode.InstanceId);
-                                        if (options.FailurePolicy == ExecutionFailurePolicy.SkipDependents)
-                                            MarkDownstreamSkipped(branchNode, byId, connections, skippedByFailure);
-                                    }
-
-                                    if (options.FailurePolicy == ExecutionFailurePolicy.FailFast)
-                                        Interlocked.Exchange(ref stop, 1);
-                                }
-                            }
-                        }, token));
+                        var inheritedFailures = new HashSet<string>(skippedByFailure);
+                        tasks.Add(Task.Run(() => ExecuteScopeAsync(branchOrder, byId, connections, flowOut,
+                            token, inheritedFailures, options, () => Volatile.Read(ref stop) != 0,
+                            () => Interlocked.Exchange(ref stop, 1)), token));
                     }
-
-                    if (tasks.Count > 0) await Task.WhenAll(tasks).ConfigureAwait(false);
-                    if (stop != 0) return true;
+                    var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+                    foreach (var result in results)
+                    {
+                        failedNodes.AddRange(result.FailedNodes);
+                        skippedByFailure.UnionWith(result.SkippedByFailure);
+                    }
+                    if (results.Any(result => result.Stop))
+                    {
+                        return true;
+                    }
                     break;
                 }
         }
 
         return false;
+    }
+
+    private sealed record ScopeExecutionResult(List<string> FailedNodes, HashSet<string> SkippedByFailure, bool Stop);
+
+    private async Task<ScopeExecutionResult> ExecuteScopeAsync(List<FlowNodeViewModel> order,
+        IReadOnlyDictionary<string, FlowNodeViewModel> byId, IReadOnlyList<NodeConnection>? connections,
+        Dictionary<string, List<(string Connector, FlowNodeViewModel Target)>> flowOut,
+        CancellationToken token, HashSet<string> inheritedFailures, NodeExecutionOptions options,
+        Func<bool>? shouldStop = null, Action? stopOthers = null)
+    {
+        var members = order.ToHashSet();
+        var scopedFlow = flowOut.ToDictionary(pair => pair.Key,
+            pair => pair.Value.Where(edge => members.Contains(edge.Target)).ToList());
+        var handled = new HashSet<string>();
+        var skipped = new HashSet<string>();
+        var failures = new HashSet<string>(inheritedFailures);
+        var failed = new List<string>();
+        var scopeLock = new object();
+        foreach (var node in order)
+        {
+            foreach (var input in node.Input)
+            {
+                input.Data = input.InitialValue;
+            }
+            foreach (var output in node.Output)
+            {
+                output.Data = null;
+            }
+        }
+        foreach (var node in order)
+        {
+            token.ThrowIfCancellationRequested();
+            if (shouldStop?.Invoke() == true)
+            {
+                return new ScopeExecutionResult(failed, failures, true);
+            }
+            if (handled.Contains(node.InstanceId))
+            {
+                continue;
+            }
+            if (skipped.Contains(node.InstanceId) || failures.Contains(node.InstanceId))
+            {
+                node.ExecutionStatus = NodeExecutionStatus.Skipped;
+                NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
+                RecordSkippedComposite(node, skipped.Contains(node.InstanceId)
+                    ? CompositeSkipReason.Condition : CompositeSkipReason.UpstreamFailure);
+                continue;
+            }
+            var succeeded = await ExecuteSingleNodeAsync(node, byId, connections, token,
+                progress => SafeReportProgress(0, 1, progress)).ConfigureAwait(false);
+            if (!succeeded)
+            {
+                failed.Add(node.InstanceId);
+                if (options.FailurePolicy == ExecutionFailurePolicy.SkipDependents)
+                {
+                    MarkDownstreamSkipped(node, byId, connections, failures);
+                }
+                if (options.FailurePolicy == ExecutionFailurePolicy.FailFast)
+                {
+                    stopOthers?.Invoke();
+                    return new ScopeExecutionResult(failed, failures, true);
+                }
+            }
+            else if (await ApplyFlowControlAsync(node, byId, connections, order, scopedFlow, token,
+                         handled, skipped, failures, failed, scopeLock, options).ConfigureAwait(false))
+            {
+                stopOthers?.Invoke();
+                return new ScopeExecutionResult(failed, failures, true);
+            }
+        }
+        return new ScopeExecutionResult(failed, failures, false);
+    }
+
+    private static HashSet<string> GetInactiveEntryNodes(IReadOnlyDictionary<string, bool>? entries,
+        IReadOnlyList<NodeConnection>? connections)
+    {
+        if (entries is null || entries.Count == 0)
+        {
+            return [];
+        }
+        var outgoing = (connections ?? []).GroupBy(edge => edge.SourceInstanceId)
+            .ToDictionary(group => group.Key, group => group.Select(edge => edge.TargetInstanceId).ToArray());
+        HashSet<string> Reach(bool active)
+        {
+            var result = new HashSet<string>();
+            var pending = new Queue<string>(entries.Where(entry => entry.Value == active).Select(entry => entry.Key));
+            while (pending.TryDequeue(out var current))
+            {
+                if (!result.Add(current))
+                {
+                    continue;
+                }
+                if (outgoing.TryGetValue(current, out var targets))
+                {
+                    foreach (var target in targets)
+                    {
+                        pending.Enqueue(target);
+                    }
+                }
+            }
+            return result;
+        }
+        var skipped = Reach(false);
+        skipped.ExceptWith(Reach(true));
+        return skipped;
     }
 
     private void MarkNodeSkipped(FlowNodeViewModel node, string reason)
@@ -686,6 +804,7 @@ public sealed class NodeExecutionEngine
         // First inject user-set initial values for unconnected inputs, then let connected upstream values override them (when present).
         foreach (var input in target.Input)
         {
+            input.HasRuntimeSource = false;
             if (input is { Data: null } && input.InitialValue is not null)
             {
                 input.Data = input.InitialValue;
@@ -702,11 +821,13 @@ public sealed class NodeExecutionEngine
 
             var sourceConnector = sourceNode.Output.FirstOrDefault(c => string.Equals(c.Title, conn.SourceConnector, StringComparison.Ordinal));
             var targetConnector = target.Input.FirstOrDefault(c => string.Equals(c.Title, conn.TargetConnector, StringComparison.Ordinal));
-            // 仅当上游输出携带非空值时覆盖：Flow 端口等无数据输出的连接不得清掉用户填写的初始值。
-            // Only override when the upstream output carries a non-null value: connections on data-less ports
-            // (e.g. Flow) must not wipe user-provided initial values.
-            if (sourceConnector != null && targetConnector != null && sourceConnector.Data is not null)
+            // A connected data output is authoritative even when absent (cancelled or hidden form fields).
+            // Flow signals may intentionally have no payload.
+            if (sourceConnector != null && targetConnector != null
+                && (sourceConnector.Data is not null || targetConnector.PortType != NodePortType.Flow))
             {
+                targetConnector.IsSensitive |= sourceConnector.IsSensitive;
+                targetConnector.HasRuntimeSource = true;
                 targetConnector.Data = sourceConnector.Data;
             }
         }
@@ -928,24 +1049,47 @@ public sealed class ExecutionCompletedEventArgs : EventArgs
 /// </summary>
 internal sealed class ExecutionContextImpl : INodeExecutionContext
 {
+    private readonly Action<IAsyncDisposable>? _registerResource;
+    private readonly Action<bool>? _userWait;
     private readonly IUnifiedLog _log;
     private readonly CancellationToken _token;
     private readonly Action<double> _progress;
 
     public ExecutionContextImpl(IUnifiedLog log, CancellationToken token, Action<double> progress, PatchRun? patches = null,
-        VisualPluginPackage? package = null)
+        VisualPluginPackage? package = null, IWorkflowInteractionService? interactions = null, Action<bool>? userWait = null,
+        Action<IAsyncDisposable>? registerResource = null)
     {
         _log = log;
         _token = token;
         _progress = progress;
         Patches = patches;
         Package = package;
+        Interactions = interactions ?? UnsupportedWorkflowInteractionService.Instance;
+        _userWait = userWait;
+        _registerResource = registerResource;
     }
 
     public IUnifiedLog Log => _log;
     public CancellationToken CancellationToken => _token;
     public PatchRun? Patches { get; }
     public VisualPluginPackage? Package { get; }
+    public IWorkflowInteractionService Interactions { get; }
+
+    public void RegisterResource(IAsyncDisposable resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        if (_registerResource is null)
+        {
+            throw new NotSupportedException("The execution context does not own runtime resources.");
+        }
+        _registerResource(resource);
+    }
+
+    public IDisposable BeginUserInteractionWait()
+    {
+        _userWait?.Invoke(true);
+        return new InteractionWaitScope(() => _userWait?.Invoke(false));
+    }
 
     public void ReportProgress(double progress)
     {

@@ -50,6 +50,7 @@ internal static class ViewModelViewRegistry
         [typeof(AiSettingsViewModel)] = () => new AiSettingsView(),
         [typeof(ProjectExplorerViewModel)] = () => new ProjectExplorerView(),
         [typeof(ProjectSettingViewModel)] = () => new ProjectSettingView(),
+        [typeof(PluginToolViewModel)] = () => new PatchToolView(),
         [typeof(PropertiesViewModel)] = () => new PropertiesView(),
         [typeof(DeviceViewModel)] = () => new DeviceView(),
         [typeof(WorkspaceLogViewModel)] = () => new WorkspaceLogView(),

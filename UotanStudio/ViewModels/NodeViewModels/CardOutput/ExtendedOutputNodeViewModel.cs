@@ -27,16 +27,7 @@ public class ExtendedOutputNodeViewModel : FlowNodeViewModel
     /// <para>创建默认的通知节点。</para>
     /// Creates a default notification node that emits a desktop notification.
     /// </summary>
-    public static ExtendedOutputNodeViewModel CreateNotifyNode()
-    {
-        var node = new ExtendedOutputNodeViewModel("Notify")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Output.Notify"
-        };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Message", PortType = NodePortType.Text });
-        return node;
-    }
+    public static InteractionNodeViewModel CreateNotifyNode() => InteractionNodeViewModel.Create("UI.Notification.Show");
 
     /// <summary>
     /// <para>创建默认的控制台输出节点。</para>
@@ -47,7 +38,7 @@ public class ExtendedOutputNodeViewModel : FlowNodeViewModel
         var node = new ExtendedOutputNodeViewModel("Console Output")
         {
             Location = new Point(100, 100),
-            TypeKey = "Output.Console"
+            TypeKey = "Feedback.Console.Write"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Text", PortType = NodePortType.Text });
         return node;
@@ -57,23 +48,11 @@ public class ExtendedOutputNodeViewModel : FlowNodeViewModel
     /// <para>创建默认的文件导出节点，将数据写入指定路径。</para>
     /// Creates a default file-export node that writes data to a specified path.
     /// </summary>
-    public static ExtendedOutputNodeViewModel CreateFileExportNode()
-    {
-        var node = new ExtendedOutputNodeViewModel("File Export")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Output.FileExport"
-        };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Path", PortType = NodePortType.Path });
-        return node;
-    }
+    public static OutputNodeViewModel CreateFileExportNode() => OutputNodeViewModel.CreateSaveNode();
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的扩展输出逻辑：Output.Notify 通知、
-    /// Output.Console 控制台输出、Output.FileExport 文件导出。</para>
-    /// Dispatches extended output logic by the node type key (TypeKey): Output.Notify emits a notification-style log entry,
-    /// Output.Console prints to the console and log, and Output.FileExport writes a file.
+    /// <para>执行控制台输出。通知与文件发布工厂返回各自的专用节点。</para>
+    /// Executes console output; notification and publication factories return their dedicated node implementations.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -87,14 +66,8 @@ public class ExtendedOutputNodeViewModel : FlowNodeViewModel
     {
         switch (TypeKey)
         {
-            case "Output.Notify":
-                context.Log.Write(LogLevel.Warn, Title, $"NOTIFY: {NodeDataUtil.ToDisplay(ReadInput("Message"))}  通知。");
-                break;
-            case "Output.Console":
+            case "Feedback.Console.Write":
                 ExecuteConsole(context);
-                break;
-            case "Output.FileExport":
-                ExecuteFileExport(context);
                 break;
             default:
                 return base.ExecuteAsync(context);
@@ -111,23 +84,4 @@ public class ExtendedOutputNodeViewModel : FlowNodeViewModel
         context.Log.Write(LogLevel.Info, Title, text);
     }
 
-    private void ExecuteFileExport(INodeExecutionContext context)
-    {
-        var data = NodeDataUtil.ToBytes(ReadInput("Data")) ?? [];
-        var path = Convert.ToString(ReadInput("Path"), CultureInfo.InvariantCulture);
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            context.Log.Write(LogLevel.Warn, Title, "No export Path.  缺少导出路径。");
-            return;
-        }
-
-        var directory = Path.GetDirectoryName(path);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        File.WriteAllBytes(path, data);
-        context.Log.Write(LogLevel.Info, Title, $"Exported {data.Length} bytes to '{path}'  已导出。");
-    }
 }

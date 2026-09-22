@@ -104,6 +104,10 @@ public static class SolutionPersistenceService
 
         try
         {
+            if (snapshot is NodeProjectSnapshot node)
+            {
+                node.EnsureSupportedVersion();
+            }
             if (await AtomicJsonFile.WriteIfChangedAsync(path, snapshot, typeInfo, cancellationToken).ConfigureAwait(false))
                 ProjectDiagnostics.Write(ProjectLogLevel.Info, "Persistence", $"Saved {label}: {path}");
             return true;
@@ -136,9 +140,7 @@ public static class SolutionPersistenceService
                 case FirmwareProjectSnapshot firmware when firmware.FormatVersion != 1 || firmware.Images is null
                     || firmware.Images.Any(image => image is null || string.IsNullOrWhiteSpace(image.RelativePath)):
                     throw new InvalidDataException("Invalid or unsupported firmware project snapshot.");
-                case NodeProjectSnapshot node when node.FormatVersion != 1 || node.Nodes is null || node.Connections is null
-                    || node.Nodes.Any(item => item is null) || node.Connections.Any(item => item is null):
-                    throw new InvalidDataException("Invalid or unsupported workflow snapshot.");
+                case NodeProjectSnapshot node: node.EnsureSupportedVersion(); break;
             }
             ProjectDiagnostics.Write(ProjectLogLevel.Info, "Persistence", $"Loaded {label}: {path}");
             return result;
@@ -282,11 +284,25 @@ public sealed class OpenDocumentDto
 /// </summary>
 public sealed class NodeProjectSnapshot
 {
+    /// <summary>Node project schema using the redesigned workflow contract.</summary>
+    public const int CurrentFormatVersion = WorkflowSnapshot.CurrentFormatVersion;
     /// <summary>
     /// Project file format version (currently 1).
     /// <para>项目文件格式版本（当前为 1）。</para>
     /// </summary>
-    public int FormatVersion { get; set; } = 1;
+    [JsonRequired]
+    public int FormatVersion { get; set; } = CurrentFormatVersion;
+
+    /// <summary>Validates the complete graph before changing a project context or publishing it.</summary>
+    public void EnsureSupportedVersion()
+    {
+        if (Nodes is null || Connections is null || Nodes.Any(node => node is null)
+            || Connections.Any(edge => edge is null))
+        {
+            throw new InvalidDataException("Invalid node project graph.");
+        }
+        new WorkflowSnapshot { FormatVersion = FormatVersion, Nodes = Nodes, Connections = Connections }.EnsureSupportedVersion();
+    }
 
     /// <summary>
     /// Project name (without extension).

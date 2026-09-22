@@ -37,7 +37,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         var node = new FirmwareNodeViewModel("Unpack Firmware")
         {
             Location = new Point(100, 100),
-            TypeKey = "Firmware.Unpack"
+            TypeKey = "Firmware.Container.Unpack"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Firmware Path", PortType = NodePortType.Path });
         node.Output.Add(new NodeConnectorViewModel { Title = "Output Dir", PortType = NodePortType.Path });
@@ -54,7 +54,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         var node = new FirmwareNodeViewModel("Pack Firmware")
         {
             Location = new Point(100, 100),
-            TypeKey = "Firmware.Pack"
+            TypeKey = "Firmware.Container.Pack"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Input Dir", PortType = NodePortType.Path });
         node.Input.Add(new NodeConnectorViewModel { Title = "Config", PortType = NodePortType.Text });
@@ -71,7 +71,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         var node = new FirmwareNodeViewModel("Verify Signature")
         {
             Location = new Point(100, 100),
-            TypeKey = "Firmware.Verify"
+            TypeKey = "Validation.Signature.Verify"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Firmware", PortType = NodePortType.Path });
         node.Output.Add(new NodeConnectorViewModel { Title = "Valid", PortType = NodePortType.Boolean });
@@ -88,7 +88,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         var node = new FirmwareNodeViewModel("Extract Partition")
         {
             Location = new Point(100, 100),
-            TypeKey = "Firmware.Extract"
+            TypeKey = "Firmware.Container.Extract"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Firmware", PortType = NodePortType.Path });
         node.Input.Add(new NodeConnectorViewModel { Title = "Partition Name", PortType = NodePortType.Text });
@@ -97,10 +97,10 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的固件逻辑：Firmware.Unpack 解包（boot/oppo/dt）、Firmware.Pack 打包（boot/cpio/dtbo）、
-    /// Firmware.Verify 校验 AVB 签名或计算哈希、Firmware.Extract 从 payload 提取分区。</para>
-    /// Dispatches firmware logic by the node type key (TypeKey): Firmware.Unpack unpacks (boot/oppo/dt), Firmware.Pack packs
-    /// (boot/cpio/dtbo), Firmware.Verify verifies the AVB signature or computes a hash, and Firmware.Extract extracts a
+    /// <para>按节点类型键（TypeKey）分发对应的固件逻辑：Firmware.Container.Unpack 解包（boot/oppo/dt）、Firmware.Container.Pack 打包（boot/cpio/dtbo）、
+    /// Validation.Signature.Verify 校验 AVB 签名或计算哈希、Firmware.Container.Extract 从 payload 提取分区。</para>
+    /// Dispatches firmware logic by the node type key (TypeKey): Firmware.Container.Unpack unpacks (boot/oppo/dt), Firmware.Container.Pack packs
+    /// (boot/cpio/dtbo), Validation.Signature.Verify verifies the AVB signature or computes a hash, and Firmware.Container.Extract extracts a
     /// partition from a payload.
     /// </summary>
     /// <param name="context">
@@ -117,16 +117,16 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         {
             switch (TypeKey)
             {
-                case "Firmware.Unpack":
+                case "Firmware.Container.Unpack":
                     await ExecuteUnpackAsync(context).ConfigureAwait(false);
                     break;
-                case "Firmware.Pack":
+                case "Firmware.Container.Pack":
                     await ExecutePackAsync(context).ConfigureAwait(false);
                     break;
-                case "Firmware.Verify":
+                case "Validation.Signature.Verify":
                     await ExecuteVerifyAsync(context).ConfigureAwait(false);
                     break;
-                case "Firmware.Extract":
+                case "Firmware.Container.Extract":
                     await ExecuteExtractAsync(context).ConfigureAwait(false);
                     break;
                 default:

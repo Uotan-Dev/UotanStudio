@@ -52,7 +52,7 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
             dispatch = fixture.DispatchAsync(async () =>
             {
                 using var editor = new NodeEditorViewModel();
-                var node = PatchNodeViewModel.Create("Patch.BinaryReplace");
+                var node = PatchNodeViewModel.Create("Binary.Pattern.Replace");
                 node.Input.Single(port => port.Title == "Path").InitialValue = path;
                 node.Input.Single(port => port.Title == "Find").InitialValue = "AA BB";
                 node.Input.Single(port => port.Title == "Replacement").InitialValue = "CC DD";
@@ -86,37 +86,37 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
     }
 
     [Theory]
-    [InlineData("Patch.PartitionPath", "Layout", "Resolve partition file path", "解析分区文件路径")]
-    [InlineData("Patch.BinaryFind", "Find", "Find masked binary pattern", "查找掩码二进制模式")]
-    [InlineData("Patch.BinaryReplace", "Find", "Replace masked binary pattern", "替换掩码二进制模式")]
-    [InlineData("Patch.FstabQuery", "Text", "Query Android fstab", "查询 Android fstab")]
-    [InlineData("Patch.FstabEdit", "Text", "Edit Android fstab", "编辑 Android fstab")]
-    [InlineData("Patch.FstabAdd", "Text", "Add Android fstab entry", "新增 Android fstab 条目")]
-    [InlineData("Patch.InitRcQuery", "Text", "Query Android init.rc", "查询 Android init.rc")]
-    [InlineData("Patch.FsConfigQuery", "Text", "Query UotanStudio fs_config", "查询 UotanStudio fs_config")]
-    [InlineData("Patch.ImageReadText", "Path", "Read text inside filesystem image", "读取文件系统镜像内文本")]
-    [InlineData("Patch.ImageWriteText", "Path", "Write text inside filesystem image", "写入文件系统镜像内文本")]
-    [InlineData("Patch.ImageCollectText", "Image Edits", "Collect image text edit", "收集镜像文本修改")]
-    [InlineData("Patch.ImageApplyTexts", "Image Edits", "Apply image text edits", "应用镜像文本修改集")]
-    [InlineData("Patch.ImageReadAttributes", "Path", "Read image file attributes", "读取镜像文件属性")]
-    [InlineData("Patch.ImageReadXattr", "Path", "Read image extended attribute", "读取镜像扩展属性")]
-    [InlineData("Patch.ImageSetXattr", "Path", "Set image user attribute", "设置镜像用户扩展属性")]
-    [InlineData("Patch.ImageDeleteXattr", "Path", "Delete image user attribute", "删除镜像用户扩展属性")]
-    [InlineData("Patch.ImageSetAttributes", "Path", "Set image file attributes", "设置镜像文件属性")]
-    [InlineData("Patch.FileContextQuery", "Text", "Query file_contexts rule", "查询 file_contexts 规则")]
-    [InlineData("Patch.FileContextAdd", "Text", "Add file_contexts rule", "新增 file_contexts 规则")]
-    [InlineData("Patch.FileContextDelete", "Text", "Delete file_contexts rule", "删除 file_contexts 规则")]
-    [InlineData("Patch.FileContextEdit", "Text", "Edit file_contexts label", "编辑 file_contexts 标签")]
-    [InlineData("Patch.FsConfigAdd", "Text", "Add UotanStudio fs_config entry", "新增 UotanStudio fs_config 条目")]
-    [InlineData("Patch.FsConfigDelete", "Text", "Delete UotanStudio fs_config entry", "删除 UotanStudio fs_config 条目")]
-    [InlineData("Patch.FsConfigEdit", "Text", "Edit UotanStudio fs_config", "编辑 UotanStudio fs_config")]
-    [InlineData("Patch.InitRcReferences", "Text", "Check init service references", "检查 init 服务引用")]
-    [InlineData("Patch.InitRcArgumentEdit", "Text", "Edit Android init.rc argument", "编辑 Android init.rc 参数")]
-    [InlineData("Patch.InitRcAdd", "Placement", "Add Android init.rc statement", "新增 Android init.rc 条目")]
-    [InlineData("Patch.InitRcHeaderEdit", "Text", "Edit Android init.rc header", "编辑 Android init.rc 头部")]
-    [InlineData("Patch.InitRcAddSection", "Text", "Add Android init.rc section", "新增 Android init.rc 区块")]
-    [InlineData("Patch.InitRcAdd", "Text", "Add Android init.rc statement", "新增 Android init.rc 条目")]
-    [InlineData("Patch.InitRcEdit", "Text", "Edit Android init.rc", "编辑 Android init.rc")]
+    [InlineData("Workspace.Partition.Resolve", "Layout", "Resolve partition file path", "解析分区文件路径")]
+    [InlineData("Binary.Pattern.Find", "Find", "Find masked binary pattern", "查找掩码二进制模式")]
+    [InlineData("Binary.Pattern.Replace", "Find", "Replace masked binary pattern", "替换掩码二进制模式")]
+    [InlineData("Config.Fstab.Query", "Text", "Query Android fstab", "查询 Android fstab")]
+    [InlineData("Config.Fstab.Edit", "Text", "Edit Android fstab", "编辑 Android fstab")]
+    [InlineData("Config.Fstab.Add", "Text", "Add Android fstab entry", "新增 Android fstab 条目")]
+    [InlineData("Config.InitRc.Query", "Text", "Query Android init.rc", "查询 Android init.rc")]
+    [InlineData("Config.FsConfig.Query", "Text", "Query UotanStudio fs_config", "查询 UotanStudio fs_config")]
+    [InlineData("Image.Text.Read", "Path", "Read text inside filesystem image", "读取文件系统镜像内文本")]
+    [InlineData("Image.Text.Stage", "Path", "Write text inside filesystem image", "写入文件系统镜像内文本")]
+    [InlineData("Image.Edit.CollectText", "Image Edits", "Collect image text edit", "收集镜像文本修改")]
+    [InlineData("Image.Edit.Apply", "Image Edits", "Apply image text edits", "应用镜像文本修改集")]
+    [InlineData("Image.File.ReadAttributes", "Path", "Read image file attributes", "读取镜像文件属性")]
+    [InlineData("Image.Xattr.Read", "Path", "Read image extended attribute", "读取镜像扩展属性")]
+    [InlineData("Image.Xattr.Set", "Path", "Set image user attribute", "设置镜像用户扩展属性")]
+    [InlineData("Image.Xattr.Delete", "Path", "Delete image user attribute", "删除镜像用户扩展属性")]
+    [InlineData("Image.File.SetAttributes", "Path", "Set image file attributes", "设置镜像文件属性")]
+    [InlineData("Config.FileContexts.Query", "Text", "Query file_contexts rule", "查询 file_contexts 规则")]
+    [InlineData("Config.FileContexts.Add", "Text", "Add file_contexts rule", "新增 file_contexts 规则")]
+    [InlineData("Config.FileContexts.Delete", "Text", "Delete file_contexts rule", "删除 file_contexts 规则")]
+    [InlineData("Config.FileContexts.Edit", "Text", "Edit file_contexts label", "编辑 file_contexts 标签")]
+    [InlineData("Config.FsConfig.Add", "Text", "Add UotanStudio fs_config entry", "新增 UotanStudio fs_config 条目")]
+    [InlineData("Config.FsConfig.Delete", "Text", "Delete UotanStudio fs_config entry", "删除 UotanStudio fs_config 条目")]
+    [InlineData("Config.FsConfig.Edit", "Text", "Edit UotanStudio fs_config", "编辑 UotanStudio fs_config")]
+    [InlineData("Config.InitRc.FindReferences", "Text", "Check init service references", "检查 init 服务引用")]
+    [InlineData("Config.InitRc.EditArgument", "Text", "Edit Android init.rc argument", "编辑 Android init.rc 参数")]
+    [InlineData("Config.InitRc.AddCommand", "Placement", "Add Android init.rc statement", "新增 Android init.rc 条目")]
+    [InlineData("Config.InitRc.EditHeader", "Text", "Edit Android init.rc header", "编辑 Android init.rc 头部")]
+    [InlineData("Config.InitRc.AddSection", "Text", "Add Android init.rc section", "新增 Android init.rc 区块")]
+    [InlineData("Config.InitRc.AddCommand", "Text", "Add Android init.rc statement", "新增 Android init.rc 条目")]
+    [InlineData("Config.InitRc.EditCommand", "Text", "Edit Android init.rc", "编辑 Android init.rc")]
     public async Task Properties_TargetQuery_ShowsLocalizedGuidance(string type, string hintPort, string english, string chinese)
     {
         Task dispatch;
@@ -140,7 +140,7 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
                         Dispatcher.UIThread.RunJobs();
                         window.UpdateLayout();
                         var layout = node.Input.Single(port => port.Title == hintPort);
-                        if (type == "Patch.PartitionPath")
+                        if (type == "Workspace.Partition.Resolve")
                         {
                             Assert.Equal(3, layout.Choices.Count);
                             Assert.Equal("PartitionDirectories", layout.InitialValue);
@@ -221,7 +221,7 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
             dispatch = fixture.DispatchAsync(async () =>
             {
                 using var editor = new NodeEditorViewModel();
-                editor.Nodes.Add(PatchNodeViewModel.Create("Patch.Applicability"));
+                editor.Nodes.Add(PatchNodeViewModel.Create("Validation.Applicability.Check"));
                 var view = new NodeEditorView { DataContext = editor };
                 var window = new Window { Content = view, Width = 1400, Height = 900 };
                 try
@@ -245,8 +245,8 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
     }
 
     [Theory]
-    [InlineData("Patch.Applicability", "Check patch applicability", "检查补丁适用性")]
-    [InlineData("Patch.ApplyGate", "Gate patch application", "控制补丁应用")]
+    [InlineData("Validation.Applicability.Check", "Check patch applicability", "检查补丁适用性")]
+    [InlineData("Flow.Applicability.Gate", "Gate patch application", "控制补丁应用")]
     public async Task Properties_Applicability_ExposesLocalizedStateAndBranchGuidance(string type, string english, string chinese)
     {
         Task dispatch;
@@ -298,10 +298,10 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
             dispatch = fixture.Session.Dispatch(() =>
             {
                 // Loading directly must succeed; LanguageService otherwise falls back after duplicate-key errors.
-                Assert.Equal("Check format precondition", new global::UotanStudio.Locale.EnUs.Node()["Node_Patch_CheckFormat"]);
-                Assert.Equal("检查格式条件", new global::UotanStudio.Locale.ZhCn.Node()["Node_Patch_CheckFormat"]);
+                Assert.Equal("Check format precondition", new global::UotanStudio.Locale.EnUs.Node()["Node_Validation_Format_Check"]);
+                Assert.Equal("检查格式条件", new global::UotanStudio.Locale.ZhCn.Node()["Node_Validation_Format_Check"]);
                 using var editor = new NodeEditorViewModel();
-                var node = PatchNodeViewModel.Create("Patch.CheckFormat");
+                var node = PatchNodeViewModel.Create("Validation.Format.Check");
                 editor.Nodes.Add(node);
                 editor.SetSelection([node]);
                 var view = new NodeEditorView { DataContext = editor };
@@ -357,7 +357,7 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
                 dispatch = fixture.DispatchAsync(async () =>
                 {
                     using var editor = new NodeEditorViewModel();
-                    var writer = PatchNodeViewModel.Create("Patch.WriteText");
+                    var writer = PatchNodeViewModel.Create("File.Text.Publish");
                     var output = Path.Combine(root, "output.prop");
                     writer.Input.Single(port => port.Title == "Output Path").InitialValue = output;
                     writer.Input.Single(port => port.Title == "Text").InitialValue = "ro.test=new\n";
@@ -392,9 +392,9 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
     }
 
     [Theory]
-    [InlineData("Patch.Text", "Replacement", "InsertAfter", "\nfirst\nsecond")]
-    [InlineData("Patch.JsonEdit", "JSON Value", "Set", "{\n  \"enabled\": true\n}")]
-    [InlineData("Patch.IniEdit", "Text", "Delete", "[service]\nenabled=true")]
+    [InlineData("Config.Text.Edit", "Replacement", "InsertAfter", "\nfirst\nsecond")]
+    [InlineData("Config.Json.Edit", "JSON Value", "Set", "{\n  \"enabled\": true\n}")]
+    [InlineData("Config.Ini.Edit", "Text", "Delete", "[service]\nenabled=true")]
     public async Task Properties_PatchSelected_ChoiceAndMultilineEditorsUpdatePersistedValues(
         string type, string valuePort, string selectedOperation, string content)
     {
@@ -430,7 +430,7 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
                     Assert.Equal(selectedOperation, operation.InitialValue);
                     Assert.Equal(content, replacement.InitialValue);
                     Assert.True(text.Bounds.Height >= 76);
-                    if (type is "Patch.JsonEdit" or "Patch.IniEdit")
+                    if (type is "Config.Json.Edit" or "Config.Ini.Edit")
                     {
                         var source = patch.Input.Single(port => port.Title == "Text");
                         foreach (var language in new[] { "zh-CN", "en-US" })
@@ -441,8 +441,8 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
                             Assert.DoesNotContain("Node_Patch_", source.LocalizedHint, StringComparison.Ordinal);
                             Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(),
                                 block => block.IsVisible && block.Text == source.LocalizedHint);
-                            Assert.Equal(language == "zh-CN" ? type == "Patch.JsonEdit" ? "编辑 JSON 值" : "编辑 INI 值"
-                                : type == "Patch.JsonEdit" ? "Edit JSON value" : "Edit INI value", patch.LocalizedTitle);
+                            Assert.Equal(language == "zh-CN" ? type == "Config.Json.Edit" ? "编辑 JSON 值" : "编辑 INI 值"
+                                : type == "Config.Json.Edit" ? "Edit JSON value" : "Edit INI value", patch.LocalizedTitle);
                             Assert.Equal(content, replacement.InitialValue);
                         }
                     }

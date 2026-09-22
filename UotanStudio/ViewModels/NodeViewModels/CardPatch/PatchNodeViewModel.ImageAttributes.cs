@@ -11,7 +11,7 @@ public sealed partial class PatchNodeViewModel
         node.AddInput("Path", NodePortType.Path, hint: "Node_Patch_ImageAttributesHint");
         node.AddInput("File System", NodePortType.Text, "EXT4", choices: ["EXT4", "EROFS"]);
         node.AddInput("Image Path", NodePortType.Text, "/build.prop");
-        if (node.TypeKey == "Patch.ImageReadAttributes")
+        if (node.TypeKey == "Image.File.ReadAttributes")
         {
             node.AddOutput("UID", NodePortType.Text);
             node.AddOutput("GID", NodePortType.Text);
@@ -33,7 +33,7 @@ public sealed partial class PatchNodeViewModel
     private async Task ExecuteImageAttributesAsync(INodeExecutionContext context)
     {
         var run = GetRun(context);
-        if (TypeKey == "Patch.ImageReadAttributes")
+        if (TypeKey == "Image.File.ReadAttributes")
         {
             var attributes = await run.ReadImageAttributesAsync(Text("Path"), Text("File System"), Text("Image Path"), context.CancellationToken).ConfigureAwait(false);
             WriteOutput("UID", attributes.Uid.ToString(CultureInfo.InvariantCulture));

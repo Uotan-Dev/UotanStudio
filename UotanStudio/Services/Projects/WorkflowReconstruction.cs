@@ -12,6 +12,17 @@ internal static class WorkflowReconstruction
     {
         node = null!;
         if (string.IsNullOrEmpty(dto.TypeKey)) return false;
+        if (dto.CompositePackage is { } embedded)
+        {
+            var errors = VisualPluginValidation.Validate(embedded);
+            if (errors.Count > 0 || embedded.NodeTypeKey != dto.TypeKey)
+            {
+                throw new InvalidDataException("Invalid embedded composite: " + string.Join(Environment.NewLine, errors));
+            }
+            node = new CompositeNodeViewModel(embedded);
+            RestoreInstanceId(node, dto, restoreInstanceId);
+            return true;
+        }
         if (!NodeTypeRegistry.Contains(dto.TypeKey))
         {
             if (!preserveUnknown) return false;
@@ -79,15 +90,18 @@ internal static class WorkflowReconstruction
     };
 
     /// <summary>
-    /// Resolves IDs first, then the first matching title. The canvas falls back on a missing port;
-    /// the CLI preserves an ID-matched node and lets the execution engine handle a missing port.
+    /// Stable identities are authoritative: a missing endpoint must never bind to another node by name.
     /// </summary>
     internal static (FlowNodeViewModel? Node, NodeConnectorViewModel? Port) ResolveEndpoint(
         IEnumerable<FlowNodeViewModel> nodes, IReadOnlyDictionary<string, FlowNodeViewModel> created,
         string? instanceId, string title, bool output, bool fallbackOnMissingPort, string? portId = null)
     {
         FlowNodeViewModel? node = null;
-        if (!string.IsNullOrEmpty(instanceId)) created.TryGetValue(instanceId, out node);
+        if (!string.IsNullOrEmpty(instanceId))
+        {
+            created.TryGetValue(instanceId, out node);
+            return (node, FindPort(node, portId, title, output));
+        }
         var port = FindPort(node, portId, title, output);
         if (node is not null && (!fallbackOnMissingPort || port is not null)) return (node, port);
         foreach (var candidate in nodes)
@@ -101,8 +115,7 @@ internal static class WorkflowReconstruction
         var ports = output ? node.Output : node.Input;
         if (!string.IsNullOrWhiteSpace(portId))
         {
-            var byId = ports.FirstOrDefault(port => string.Equals(port.StableId, portId, StringComparison.Ordinal));
-            if (byId is not null) return byId;
+            return ports.FirstOrDefault(port => string.Equals(port.StableId, portId, StringComparison.Ordinal));
         }
         return ports.FirstOrDefault(port => string.Equals(port.Title, title, StringComparison.Ordinal));
     }

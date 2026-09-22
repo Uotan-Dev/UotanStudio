@@ -15,6 +15,9 @@ public enum NodeExecutionStatus
     /// <summary><para>正在执行。</para>Running.</summary>
     Running,
 
+    /// <summary>Awaiting user input from the host.</summary>
+    WaitingForInput,
+
     /// <summary><para>执行成功。</para>Succeeded.</summary>
     Succeeded,
 

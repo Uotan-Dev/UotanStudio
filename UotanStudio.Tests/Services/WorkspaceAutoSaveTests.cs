@@ -108,7 +108,7 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
             Panels = new() { [WorkspacePanelService.ProjectExplorer] = false, [WorkspacePanelService.ImagesView] = true },
             Documents = [new() { Kind = "Text", RelativePath = Path.Combine(_root, "outside.json"), OpenMode = (int)EditorOpenMode.Text, IsActive = true }],
             Docks = [new() { Id = "LeftPane", Proportion = 0.3, ActiveId = "ImagesView" }],
-            DraftWorkflow = new() { Nodes = [new() { InstanceId = "test", TypeKey = "Data.ReadFile", InputInitialValues = new() { ["Path"] = "boot.img" } }] },
+            DraftWorkflow = new() { Nodes = [new() { InstanceId = "test", TypeKey = "File.Binary.Read", InputInitialValues = new() { ["Path"] = "boot.img" } }] },
             WindowWidth = 1280,
             WindowHeight = 720,
             WindowX = 40,

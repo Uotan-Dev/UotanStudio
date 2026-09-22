@@ -38,11 +38,23 @@ public static class VisualPluginBundle
         {
             throw new InvalidDataException("Patch manifest exceeds its declared length.");
         }
-        var package = JsonSerializer.Deserialize(bytes, VisualPluginJsonContext.Default.VisualPluginPackage)
-            ?? throw new InvalidDataException("Patch manifest is empty.");
+        VisualPluginPackage package;
+        try
+        {
+            package = JsonSerializer.Deserialize(bytes, VisualPluginJsonContext.Default.VisualPluginPackage)
+                ?? throw new InvalidDataException("Patch manifest is empty.");
+        }
+        catch (JsonException error)
+        {
+            throw new InvalidDataException("Patch manifest has an invalid or unsupported document structure.", error);
+        }
         EnsureValid(package);
         ValidateEntries(archive, package);
-        package.BundlePath = Path.GetFullPath(path);
+        foreach (var scope in EnumerateScopes(package))
+        {
+            scope.BundlePath = Path.GetFullPath(path);
+            scope.BundleRoot = package;
+        }
         return package;
     }
 
@@ -70,11 +82,18 @@ public static class VisualPluginBundle
                     {
                         await output.WriteAsync(manifest, cancellationToken).ConfigureAwait(false);
                     }
-                    foreach (var asset in package.Assets)
+                    var written = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var (scope, asset) in EnumerateScopes(package).SelectMany(scope =>
+                                 scope.Assets.Select(asset => (scope, asset))))
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        await using var output = archive.CreateEntry("assets/" + asset.Id, CompressionLevel.NoCompression).Open();
-                        await CopyAssetAsync(package, asset.Id, output, cancellationToken).ConfigureAwait(false);
+                        var entryName = GetEntryName(asset);
+                        if (!written.Add(entryName))
+                        {
+                            continue;
+                        }
+                        await using var output = archive.CreateEntry(entryName, CompressionLevel.NoCompression).Open();
+                        await CopyAssetAsync(scope, asset.Id, output, cancellationToken).ConfigureAwait(false);
                     }
                 }
                 await file.FlushAsync(cancellationToken).ConfigureAwait(false);
@@ -112,8 +131,9 @@ public static class VisualPluginBundle
         }
         await using var file = OpenBundle(package.BundlePath);
         using var archive = new ZipArchive(file, ZipArchiveMode.Read);
-        ValidateEntries(archive, package);
-        await using var entry = archive.GetEntry("assets/" + id)!.Open();
+        EnsureValid(package.BundleRoot ?? package);
+        ValidateEntries(archive, package.BundleRoot ?? package);
+        await using var entry = archive.GetEntry(GetEntryName(asset))!.Open();
         await CopyVerifiedAsync(entry, destination, asset, cancellationToken).ConfigureAwait(false);
     }
 
@@ -153,7 +173,16 @@ public static class VisualPluginBundle
 
     private static void ValidateEntries(ZipArchive archive, VisualPluginPackage package)
     {
-        var expected = package.Assets.ToDictionary(asset => "assets/" + asset.Id, asset => asset.Length, StringComparer.Ordinal);
+        var expected = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (var asset in EnumerateScopes(package).SelectMany(scope => scope.Assets))
+        {
+            var name = GetEntryName(asset);
+            if (expected.TryGetValue(name, out var length) && length != asset.Length)
+            {
+                throw new InvalidDataException("Resources with the same content hash declare different lengths.");
+            }
+            expected[name] = asset.Length;
+        }
         expected.Add(ManifestName, -1);
         foreach (var entry in archive.Entries)
         {
@@ -184,6 +213,21 @@ public static class VisualPluginBundle
         {
             file.Dispose();
             throw;
+        }
+    }
+
+    private static string GetEntryName(VisualPluginAsset asset) => "assets/" + asset.Sha256.ToLowerInvariant();
+
+    /// <summary>Enumerates a structurally validated embedded graph without using registry or global state.</summary>
+    internal static IEnumerable<VisualPluginPackage> EnumerateScopes(VisualPluginPackage package)
+    {
+        yield return package;
+        foreach (var child in package.Graph.Nodes.Select(node => node.CompositePackage).OfType<VisualPluginPackage>())
+        {
+            foreach (var scope in EnumerateScopes(child))
+            {
+                yield return scope;
+            }
         }
     }
 

@@ -22,9 +22,9 @@ public sealed class VisualPluginTests
     [InlineData("\"Graph\":{\"Nodes\":null}")]
     [InlineData("\"Graph\":{\"Nodes\":[null]}")]
     [InlineData("\"Graph\":{\"Connections\":[null]}")]
-    [InlineData("\"Graph\":{\"Nodes\":[{\"InstanceId\":\"n\",\"TypeKey\":\"Data.Constant\",\"InputPorts\":null}]}")]
-    [InlineData("\"Graph\":{\"Nodes\":[{\"InstanceId\":\"n\",\"TypeKey\":\"Data.Constant\",\"OutputPorts\":[null]}]}")]
-    [InlineData("\"Graph\":{\"Nodes\":[{\"InstanceId\":\"n\",\"TypeKey\":\"Data.Constant\",\"OutputPorts\":[{\"Id\":null}]}]}")]
+    [InlineData("\"Graph\":{\"Nodes\":[{\"InstanceId\":\"n\",\"TypeKey\":\"Data.Value.Constant\",\"InputPorts\":null}]}")]
+    [InlineData("\"Graph\":{\"Nodes\":[{\"InstanceId\":\"n\",\"TypeKey\":\"Data.Value.Constant\",\"OutputPorts\":[null]}]}")]
+    [InlineData("\"Graph\":{\"Nodes\":[{\"InstanceId\":\"n\",\"TypeKey\":\"Data.Value.Constant\",\"OutputPorts\":[{\"Id\":null}]}]}")]
     [InlineData("\"Kind\":255")]
     public async Task VisualPluginFile_MalformedPackage_RejectsThroughValidation(string member)
     {
@@ -32,7 +32,7 @@ public sealed class VisualPluginTests
         var path = Path.Combine(temp.Path, "malformed.uotanplugin.json");
         var manifest = member.StartsWith("\"Manifest\"", StringComparison.Ordinal)
             ? string.Empty
-            : "\"Manifest\":{\"Id\":\"tests.invalid\",\"Name\":\"Invalid input\",\"RequiredNodeTypes\":[\"Data.Constant\"]},";
+            : "\"Manifest\":{\"Id\":\"tests.invalid\",\"Name\":\"Invalid input\",\"RequiredNodeTypes\":[\"Data.Value.Constant\"]},";
         await File.WriteAllTextAsync(path, "{" + manifest + member + "}", TestContext.Current.CancellationToken);
 
         await Assert.ThrowsAsync<InvalidDataException>(
@@ -93,9 +93,9 @@ public sealed class VisualPluginTests
         package.Graph.Nodes.Add(new NodeDto
         {
             InstanceId = package.Graph.Nodes[0].InstanceId,
-            TypeKey = "Data.Constant"
+            TypeKey = "Data.Value.Constant"
         });
-        package.Manifest.RequiredNodeTypes = [package.NodeTypeKey, "Data.Constant"];
+        package.Manifest.RequiredNodeTypes = [package.NodeTypeKey, "Data.Value.Constant"];
 
         var errors = VisualPluginValidation.Validate(package);
 
@@ -107,8 +107,9 @@ public sealed class VisualPluginTests
     public async Task CompositeNode_ExecutesInternalGraphAndMapsPublicOutput()
     {
         NodeFactoryRegistrar.RegisterAll();
-        var constant = NodeTypeRegistry.Create("Data.Constant")!;
+        var constant = NodeTypeRegistry.Create("Data.Value.Constant")!;
         constant.NodeValue = "portable";
+        Assert.Single(constant.Output).ExposeOnComposite = true;
         var package = VisualPluginPackageBuilder.Create("Portable constant", "tests.portable-constant",
             VisualPluginKind.CompositeNode, [constant], []);
         var composite = new CompositeNodeViewModel(package);
@@ -122,9 +123,10 @@ public sealed class VisualPluginTests
     public void PackageBuilder_AbsolutePathDefaults_AreRemovedForPortability()
     {
         NodeFactoryRegistrar.RegisterAll();
-        var node = NodeTypeRegistry.Create("Data.ReadFile")!;
+        var node = NodeTypeRegistry.Create("File.Binary.Read")!;
         var path = Assert.Single(node.Input, port => port.PortType == NodePortType.Path);
         path.InitialValue = OperatingSystem.IsWindows() ? @"C:\firmware\boot.img" : "/firmware/boot.img";
+        path.ExposeOnComposite = true;
 
         var package = VisualPluginPackageBuilder.Create("Portable path", "tests.portable-path",
             VisualPluginKind.CompositeNode, [node], []);
@@ -137,8 +139,9 @@ public sealed class VisualPluginTests
     public void PackageBuilder_LongInternalPortId_ProducesBoundedPublicId()
     {
         NodeFactoryRegistrar.RegisterAll();
-        var constant = NodeTypeRegistry.Create("Data.Constant")!;
+        var constant = NodeTypeRegistry.Create("Data.Value.Constant")!;
         Assert.Single(constant.Output).PortId = new string('a', 128);
+        Assert.Single(constant.Output).ExposeOnComposite = true;
 
         var package = VisualPluginPackageBuilder.Create("Bounded port", "tests.bounded-port",
             VisualPluginKind.CompositeNode, [constant], []);
@@ -151,7 +154,7 @@ public sealed class VisualPluginTests
     public void ImportTemplate_AppendsRemapsAndUndoesAsOneEdit()
     {
         NodeFactoryRegistrar.RegisterAll();
-        var constant = NodeTypeRegistry.Create("Data.Constant")!;
+        var constant = NodeTypeRegistry.Create("Data.Value.Constant")!;
         var package = VisualPluginPackageBuilder.Create("Template", "tests.template",
             VisualPluginKind.WorkflowTemplate, [constant], []);
         using var editor = new NodeEditorViewModel();
@@ -181,8 +184,9 @@ public sealed class VisualPluginTests
     public async Task CreateUpdated_ReorderedGraph_PreservesPublicPortContractAndManifest()
     {
         NodeFactoryRegistrar.RegisterAll();
-        var constant = NodeTypeRegistry.Create("Data.Constant")!;
-        var reader = NodeTypeRegistry.Create("Data.ReadFile")!;
+        var constant = NodeTypeRegistry.Create("Data.Value.Constant")!;
+        var reader = NodeTypeRegistry.Create("File.Binary.Read")!;
+        Assert.Single(reader.Input, port => port.PortType == NodePortType.Path).IsRequired = true;
         var package = VisualPluginPackageBuilder.Create("Stable contract", "tests.stable-contract",
             VisualPluginKind.CompositeNode, [constant, reader], [], "Tester");
         package.Manifest.Version = "2.3.4";
@@ -212,7 +216,8 @@ public sealed class VisualPluginTests
     public async Task CompositeNode_MissingRequiredInput_ThrowsBeforeExecutingGraph()
     {
         NodeFactoryRegistrar.RegisterAll();
-        var reader = NodeTypeRegistry.Create("Data.ReadFile")!;
+        var reader = NodeTypeRegistry.Create("File.Binary.Read")!;
+        Assert.Single(reader.Input, port => port.PortType == NodePortType.Path).IsRequired = true;
         var package = VisualPluginPackageBuilder.Create("Required input", "tests.required-input",
             VisualPluginKind.CompositeNode, [reader], []);
         var input = Assert.Single(package.Inputs);
@@ -225,6 +230,33 @@ public sealed class VisualPluginTests
 
         Assert.Contains("required", error.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(input.Name, error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CompositeNode_ConnectedNullRequiredInput_DoesNotUseStoredDefault()
+    {
+        NodeFactoryRegistrar.RegisterAll();
+        var reader = NodeTypeRegistry.Create("File.Binary.Read")!;
+        var package = VisualPluginPackageBuilder.Create("Required input", "tests.connected-null",
+            VisualPluginKind.CompositeNode, [reader], []);
+        var definition = Assert.Single(package.Inputs);
+        definition.Required = true;
+        var composite = new CompositeNodeViewModel(package);
+        var input = Assert.Single(composite.Input);
+        input.InitialValue = "must-not-be-read.bin";
+        var source = new FlowNodeViewModel("Null source", NodeCategory.Data);
+        source.Output.Add(new NodeConnectorViewModel { Title = "Value", IsInput = false, PortType = NodePortType.Path });
+        var result = await new NodeExecutionEngine(new TestExecutionContext(TestContext.Current.CancellationToken))
+            .ExecuteAsync([source, composite], [new NodeConnection
+            {
+                SourceInstanceId = source.InstanceId, SourceConnector = "Value",
+                TargetInstanceId = composite.InstanceId, TargetConnector = definition.Id
+            }], TestContext.Current.CancellationToken);
+
+        Assert.Equal(NodeExecutionStatus.Failed, composite.ExecutionStatus);
+        Assert.Contains(composite.InstanceId, result.FailedNodes);
+        Assert.Null(input.Data);
+        Assert.True(input.HasRuntimeSource);
     }
 
     [Fact]
@@ -284,7 +316,7 @@ public sealed class VisualPluginTests
         var managerDirectory = Path.Combine(temp.Path, "installed");
         Directory.CreateDirectory(sourceDirectory);
         NodeFactoryRegistrar.RegisterAll();
-        var constant = NodeTypeRegistry.Create("Data.Constant")!;
+        var constant = NodeTypeRegistry.Create("Data.Value.Constant")!;
         var package = VisualPluginPackageBuilder.Create("Managed", "tests.managed",
             VisualPluginKind.CompositeNode, [constant], []);
         var source = Path.Combine(sourceDirectory, "managed.uotanplugin.json");
@@ -301,7 +333,7 @@ public sealed class VisualPluginTests
         Assert.False(disabled.IsEnabled);
 
         var replacement = VisualPluginPackageBuilder.Create("Managed", "tests.managed",
-            VisualPluginKind.CompositeNode, [NodeTypeRegistry.Create("Data.Constant")!], []);
+            VisualPluginKind.CompositeNode, [NodeTypeRegistry.Create("Data.Value.Constant")!], []);
         replacement.Manifest.Description = "Updated graph";
         await manager.UpdateAsync(disabled, replacement, TestContext.Current.CancellationToken);
         var updated = Assert.Single(manager.Registrations);
@@ -422,7 +454,7 @@ public sealed class VisualPluginTests
     {
         using var temp = new TempDirectory();
         NodeFactoryRegistrar.RegisterAll();
-        var first = CreateDependencyPackage("tests.rollback-a", "Data.Constant");
+        var first = CreateDependencyPackage("tests.rollback-a", "Data.Value.Constant");
         var second = CreateDependencyPackage("tests.rollback-b", first.NodeTypeKey);
         await VisualPluginFile.SaveAsync(Path.Combine(temp.Path, "a.uotanplugin.json"), first,
             TestContext.Current.CancellationToken);
@@ -439,7 +471,7 @@ public sealed class VisualPluginTests
         Assert.All(manager.Registrations, item => Assert.True(item.IsAvailable));
         var restored = await VisualPluginFile.LoadAsync(registration.FilePath,
             TestContext.Current.CancellationToken);
-        Assert.Equal(["Data.Constant"], restored.Manifest.RequiredNodeTypes);
+        Assert.Equal(["Data.Value.Constant"], restored.Manifest.RequiredNodeTypes);
     }
 
     private static VisualPluginPackage CreateTemplatePackage() => new()
@@ -449,7 +481,7 @@ public sealed class VisualPluginTests
         {
             Id = "tests.roundtrip",
             Name = "Round trip",
-            RequiredNodeTypes = ["Data.Constant", "Output.Log"]
+            RequiredNodeTypes = ["Data.Value.Constant", "Feedback.Log.Write"]
         },
         Graph = new WorkflowSnapshot
         {
@@ -458,13 +490,13 @@ public sealed class VisualPluginTests
                 new NodeDto
                 {
                     InstanceId = "source",
-                    TypeKey = "Data.Constant",
+                    TypeKey = "Data.Value.Constant",
                     OutputPorts = [new NodePortDto { Id = "value", Title = "Value", PortType = "Text" }]
                 },
                 new NodeDto
                 {
                     InstanceId = "target",
-                    TypeKey = "Output.Log",
+                    TypeKey = "Feedback.Log.Write",
                     InputPorts = [new NodePortDto { Id = "input", Title = "Input", PortType = "Text" }]
                 }
             ],

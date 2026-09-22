@@ -363,6 +363,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         // Merge the latest recent-projects list from disk so the debounced save never wipes the MRU record.
         var latest = SettingsPersistenceService.Instance.LoadSettings();
         _appSettings.RecentProjects = latest.RecentProjects;
+        _appSettings.FavoriteNodeTypes = latest.FavoriteNodeTypes;
+        _appSettings.RecentNodeTypes = latest.RecentNodeTypes;
+        _appSettings.ExpandedNodeCategories = latest.ExpandedNodeCategories;
 
         // MCP 设置
         _appSettings.McpServers = [.. McpServers];

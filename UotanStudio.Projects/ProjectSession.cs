@@ -151,7 +151,7 @@ public sealed partial class ProjectSession
         };
         var node = new NodeProjectSnapshot
         {
-            FormatVersion = 1,
+            FormatVersion = NodeProjectSnapshot.CurrentFormatVersion,
             ProjectName = solutionName,
             Nodes = [],
             Connections = []
@@ -212,10 +212,14 @@ public sealed partial class ProjectSession
 
         var target = new ProjectContext();
         target.OpenSolution(path, solution);
-        SolutionState = solution.State;
         var firmware = target.FirmwareProjectPath is { } firmwarePath
             ? await SolutionPersistenceService.LoadFirmwareProjectAsync(firmwarePath, cancellationToken) : null;
         var node = await SolutionPersistenceService.LoadNodeProjectAsync(target.NodeProjectPath!, cancellationToken);
+        if (node is null && File.Exists(target.NodeProjectPath))
+        {
+            ProjectDiagnostics.Write(ProjectLogLevel.Error, "Menu", "Open aborted: invalid or unsupported node project.");
+            return false;
+        }
         var history = new ProjectHistory();
         if (target.StateDirectory is { } stateDirectory)
         {
@@ -224,6 +228,7 @@ public sealed partial class ProjectSession
         }
         cancellationToken.ThrowIfCancellationRequested();
         Context.OpenSolution(path, solution);
+        SolutionState = solution.State;
         CurrentProjectPath = Path.GetFullPath(path);
         _workspace.ChangeProjectRoot(Context.RootDirectory!, preserveDocuments: false);
 

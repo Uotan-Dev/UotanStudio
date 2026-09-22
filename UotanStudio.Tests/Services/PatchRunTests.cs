@@ -194,7 +194,7 @@ public sealed class PatchRunTests : IDisposable
     {
         NodeFactoryRegistrar.RegisterAll();
         var path = Path.Combine(_root, "not-published.prop");
-        var writer = PatchNodeViewModel.Create("Patch.WriteText");
+        var writer = PatchNodeViewModel.Create("File.Text.Publish");
         Set(writer, "Output Path", path);
         Set(writer, "Text", "new");
         FlowNodeViewModel source = writer;
@@ -204,14 +204,14 @@ public sealed class PatchRunTests : IDisposable
             var package = new VisualPluginPackage
             {
                 Kind = VisualPluginKind.CompositeNode,
-                Manifest = new VisualPluginManifest { Id = "tests.atomic-patch", Name = "Atomic patch", RequiredNodeTypes = ["Patch.WriteText"] },
+                Manifest = new VisualPluginManifest { Id = "tests.atomic-patch", Name = "Atomic patch", RequiredNodeTypes = ["File.Text.Publish"] },
                 Graph = new WorkflowSnapshot { Nodes = WorkflowPersistenceService.BuildNodeDtos([writer]) },
                 Outputs = [new VisualPluginPortDefinition { Id = "done", Name = "Done", NodeInstanceId = writer.InstanceId, PortId = "completed", PortType = "Flow" }]
             };
             source = new CompositeNodeViewModel(package);
             outputPort = "Done";
         }
-        var fail = PatchNodeViewModel.Create("Patch.Assert");
+        var fail = PatchNodeViewModel.Create("Validation.Boolean.Assert");
         var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([source, fail],
             [Connect(source, outputPort, fail, "Flow")], Token);
         Assert.NotEqual(ExecutionStatus.Succeeded, result.Status);
@@ -236,21 +236,21 @@ public sealed class PatchRunTests : IDisposable
     public async Task Engine_WorkspaceFileNodes_ReadOverlayAndPublishOnlyNetChanges()
     {
         var source = await WriteAsync("source.prop", "ro.test=ready\n");
-        var open = PatchNodeViewModel.Create("Patch.Workspace");
+        var open = PatchNodeViewModel.Create("Workspace.Directory.Open");
         Set(open, "Root", _root);
-        var import = PatchNodeViewModel.Create("Patch.ImportFile");
+        var import = PatchNodeViewModel.Create("Workspace.File.Import");
         Set(import, "Source", source);
         Set(import, "Relative Path", "temporary.prop");
-        var copy = PatchNodeViewModel.Create("Patch.CopyFile");
+        var copy = PatchNodeViewModel.Create("Workspace.File.Copy");
         Set(copy, "Source", "temporary.prop");
         Set(copy, "Relative Path", "result.prop");
-        var delete = PatchNodeViewModel.Create("Patch.DeleteFile");
+        var delete = PatchNodeViewModel.Create("Workspace.File.Delete");
         Set(delete, "Relative Path", "temporary.prop");
-        var read = PatchNodeViewModel.Create("Patch.WorkspaceRead");
+        var read = PatchNodeViewModel.Create("Workspace.Text.Read");
         Set(read, "Relative Path", "result.prop");
-        var verify = PatchNodeViewModel.Create("Patch.VerifyChanges");
+        var verify = PatchNodeViewModel.Create("Validation.Changes.Verify");
         Set(verify, "Expected Paths", "result.prop");
-        var hash = PatchNodeViewModel.Create("Patch.VerifyHash");
+        var hash = PatchNodeViewModel.Create("Validation.Hash.Verify");
         Set(hash, "Path", Path.Combine(_root, "result.prop"));
         Set(hash, "Expected Hash", Convert.ToHexString(SHA256.HashData("ro.test=ready\n"u8)));
         var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([open, import, copy, delete, read, verify, hash],
@@ -271,7 +271,7 @@ public sealed class PatchRunTests : IDisposable
     public async Task Engine_Preview_ProducesReportWithoutWriting()
     {
         var path = Path.Combine(_root, "preview.prop");
-        var writer = PatchNodeViewModel.Create("Patch.WriteText");
+        var writer = PatchNodeViewModel.Create("File.Text.Publish");
         Set(writer, "Output Path", path);
         Set(writer, "Text", "new");
         var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([writer], [], Token,
@@ -285,7 +285,7 @@ public sealed class PatchRunTests : IDisposable
     [Fact]
     public async Task Engine_PatchMixedWithImmediateOutput_RejectsBeforeAnyWrite()
     {
-        var patch = PatchNodeViewModel.Create("Patch.WriteText");
+        var patch = PatchNodeViewModel.Create("File.Text.Publish");
         Set(patch, "Output Path", Path.Combine(_root, "patch.prop"));
         var unsafeOutput = OutputNodeViewModel.CreateSaveNode();
         var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([patch, unsafeOutput], [], Token);

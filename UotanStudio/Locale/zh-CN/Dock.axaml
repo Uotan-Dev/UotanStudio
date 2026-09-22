@@ -37,6 +37,8 @@
     <x:String x:Key="Dock_Properties_Size">大小</x:String>
     <x:String x:Key="Dock_Properties_NoSelection">选择文件以查看详情</x:String>
     <x:String x:Key="Dock_ProjectSetting">打包设置</x:String>
+    <x:String x:Key="Dock_Plugins">插件</x:String>
+    <x:String x:Key="PluginTool_Description">从已安装的工作流模板中一键应用修补方案。</x:String>
     <x:String x:Key="Dock_ImagesView">镜像文件管理</x:String>
     <x:String x:Key="Dock_ImageType">镜像类型</x:String>
     <x:String x:Key="Dock_ImageFormat">镜像格式</x:String>

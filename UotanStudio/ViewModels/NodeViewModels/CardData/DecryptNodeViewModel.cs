@@ -34,7 +34,7 @@ public class DecryptNodeViewModel : FlowNodeViewModel
         var node = new DecryptNodeViewModel("Decrypt")
         {
             Location = new Point(100, 100),
-            TypeKey = "Data.Decrypt"
+            TypeKey = "Data.Cipher.Decrypt"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
         node.Input.Add(new NodeConnectorViewModel { Title = "Key", PortType = NodePortType.Data });
@@ -44,8 +44,8 @@ public class DecryptNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的解密逻辑：Data.Decrypt 解密输入数据。</para>
-    /// Dispatches decryption logic by the node type key (TypeKey): Data.Decrypt decrypts the input data.
+    /// <para>按节点类型键（TypeKey）分发对应的解密逻辑：Data.Cipher.Decrypt 解密输入数据。</para>
+    /// Dispatches decryption logic by the node type key (TypeKey): Data.Cipher.Decrypt decrypts the input data.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -59,7 +59,7 @@ public class DecryptNodeViewModel : FlowNodeViewModel
     {
         switch (TypeKey)
         {
-            case "Data.Decrypt":
+            case "Data.Cipher.Decrypt":
                 ExecuteDecrypt(context);
                 break;
             default:
