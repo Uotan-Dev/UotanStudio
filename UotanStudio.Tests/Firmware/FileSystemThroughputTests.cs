@@ -32,7 +32,7 @@ public class FileSystemThroughputTests
         using var output = new MemoryStream();
         long? Map(uint logical) => logical < 300 ? logical : logical < 310 ? null : logical - 100;
         var count = 520 * block - 17;
-        MappedBlockCopy.Copy(source, output, count, block, Map);
+        MappedBlockCopy.Copy(source, output, count, block, Map, TestContext.Current.CancellationToken);
         var expected = new byte[count];
         for (uint logical = 0; logical * block < count; logical++)
             if (Map(logical) is { } physical)
@@ -47,7 +47,7 @@ public class FileSystemThroughputTests
     public void MappedCopy_TruncatedPhysicalBlockStillFails()
     {
         using var source = new MemoryStream(new byte[4095]);
-        Assert.Throws<InvalidDataException>(() => MappedBlockCopy.Copy(source, Stream.Null, 1, 4096, _ => 0));
+        Assert.Throws<InvalidDataException>(() => MappedBlockCopy.Copy(source, Stream.Null, 1, 4096, _ => 0, TestContext.Current.CancellationToken));
     }
 
     [Fact]

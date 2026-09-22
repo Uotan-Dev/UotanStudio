@@ -131,7 +131,9 @@ public class Ext4Tests
                 Assert.True(metadata.Success);
                 Assert.Equal(BlockSize.ToString(), metadata.Metadata["BlockSize"]);
                 Assert.True(long.Parse(metadata.Metadata["PartitionSize"]) > 0);
-                Assert.True(int.Parse(metadata.Metadata["FileCount"]) >= 2);
+                Assert.Empty(metadata.Components);
+                Assert.Empty(metadata.Entries);
+                Assert.DoesNotContain("FileCount", metadata.Metadata.Keys);
                 Assert.Contains("EXT4", metadata.Summary);
 
                 var unpackDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());

@@ -5,6 +5,7 @@ using Org.BouncyCastle.Security;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
 using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -22,7 +23,7 @@ public sealed class AvbReleaseStringTests
     [Fact]
     public async Task SignVbmeta_EmbedsPinnedReleaseString()
     {
-        using var rsa = RSA.Create(2048);
+        using var rsa = SigningTestKeys.Create(2048);
         var privateKey = (RsaKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
         using var temp = new TempDirectory();
         var seed = new byte[256];

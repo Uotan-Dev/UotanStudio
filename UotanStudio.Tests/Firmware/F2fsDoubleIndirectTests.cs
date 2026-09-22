@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Diagnostics;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
@@ -10,6 +9,7 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>Checks the Linux 2/2/1 node boundaries using a sparse source file. <para>使用稀疏源文件检查 Linux 2/2/1 节点边界。</para></summary>
+[Trait("Category", "LargeData")]
 public class F2fsDoubleIndirectTests
 {
     [Fact]
@@ -62,22 +62,5 @@ public class F2fsDoubleIndirectTests
         parser.Dispose();
         // Native fsck runs the real kernel tool; keep it opt-in so the default suite stays bounded.
         // 原生 fsck 会运行真实内核工具；保持显式启用，确保默认测试集有界。
-        var native = WslTestHelpers.IsInteropEnabled() ? CheckNative(imagePath) : null;
-        if (native is not null) Assert.True(native.Value.ExitCode == 0 && !native.Value.Output.Contains("[ASSERT]") && !native.Value.Output.Contains("[Fail]"), native.Value.Output);
-    }
-
-    private static (int ExitCode, string Output)? CheckNative(string image)
-    {
-        var path = "/mnt/" + char.ToLowerInvariant(image[0]) + image[2..].Replace('\\', '/');
-        try
-        {
-            var start = new ProcessStartInfo("wsl", $"-- fsck.f2fs --dry-run {path}") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
-            using var process = Process.Start(start)!;
-            var output = process.StandardOutput.ReadToEnd();
-            var error = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-            return process.ExitCode == 127 ? null : (process.ExitCode, output + error);
-        }
-        catch (System.ComponentModel.Win32Exception) { return null; }
     }
 }

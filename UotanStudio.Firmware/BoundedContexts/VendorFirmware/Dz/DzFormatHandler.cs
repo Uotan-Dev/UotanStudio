@@ -94,9 +94,13 @@ public sealed class DzFormatHandler : IFormatHandler
         {
             cancellationToken.ThrowIfCancellationRequested();
             var kdz = IsKdz(filePath);
+            var selected = options?.CreateSelectedEntrySet();
+            Func<string, bool>? filter = selected is null ? null : selected.Contains;
             var count = kdz
-                ? KdzExtractor.Extract(filePath, outputDirectory, overwrite: options?.Overwrite ?? true, cancellationToken: cancellationToken)
-                : DzExtractor.Extract(filePath, outputDirectory, overwrite: options?.Overwrite ?? true, cancellationToken: cancellationToken);
+                ? KdzExtractor.Extract(filePath, outputDirectory, filter,
+                    overwrite: options?.Overwrite ?? true, cancellationToken: cancellationToken)
+                : DzExtractor.Extract(filePath, outputDirectory, filter,
+                    overwrite: options?.Overwrite ?? true, cancellationToken: cancellationToken);
             var kind = kdz ? "embedded files" : "decompressed chunks";
             return Task.FromResult(FirmwareOpResult.Ok($"Extracted {count} {kind} to {outputDirectory}"));
         }

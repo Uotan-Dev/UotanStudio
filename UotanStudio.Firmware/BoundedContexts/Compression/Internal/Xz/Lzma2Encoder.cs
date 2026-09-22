@@ -42,20 +42,24 @@ internal static class Lzma2Encoder
             Parallel.For(
                 0, windowCount,
                 new ParallelOptions { MaxDegreeOfParallelism = dop },
-                i =>
+                () => CreateEncoder(dictionarySize),
+                (i, _, encoder) =>
                 {
                     var start = windowStarts[i];
                     var chunkSize = Math.Min(UncompressedChunkMax, data.Length - start);
-                    compressed[i] = Lzma1Compress(data, start, chunkSize, dictionarySize);
-                });
+                    compressed[i] = Lzma1Compress(encoder, data, start, chunkSize);
+                    return encoder;
+                },
+                _ => { });
         }
         else
         {
+            Encoder? encoder = null;
             for (var i = 0; i < windowCount; i++)
             {
                 var start = windowStarts[i];
                 var chunkSize = Math.Min(UncompressedChunkMax, data.Length - start);
-                compressed[i] = Lzma1Compress(data, start, chunkSize, dictionarySize);
+                compressed[i] = Lzma1Compress(encoder ??= CreateEncoder(dictionarySize), data, start, chunkSize);
             }
         }
 
@@ -98,14 +102,15 @@ internal static class Lzma2Encoder
     }
 
     /// <summary>
-    /// Streaming encode: reads input in fixed 2 MiB windows and encodes them into a raw LZMA2 stream written to output.
-    /// <para>流式编码：从 input 按固定 2 MiB 窗口读取并编码为 LZMA2 原始流， 写入 output。</para>
+    /// Streaming encode: reads independent 64 KiB windows and writes a raw LZMA2 stream.
+    /// <para>流式编码：读取独立的 64 KiB 窗口并写出 LZMA2 原始流。</para>
     /// </summary>
     public static long Encode(Stream input, Stream output, uint dictionarySize = DefaultDictionarySize,
         int? maxDegreeOfParallelism = null, Action<byte[], int, int>? onOriginalWindow = null)
     {
         var dop = Parallelism.Resolve(maxDegreeOfParallelism, 2);
         var windows = new List<byte[]>(dop);
+        var encoders = new Encoder?[dop];
         long total = 0;
         var firstChunk = true;
 
@@ -138,13 +143,13 @@ internal static class Lzma2Encoder
                 Parallel.For(
                     0, windows.Count,
                     new ParallelOptions { MaxDegreeOfParallelism = dop },
-                    i => compressed[i] = Lzma1Compress(windows[i], 0, windows[i].Length, dictionarySize));
+                    i => compressed[i] = Lzma1Compress(encoders[i] ??= CreateEncoder(dictionarySize), windows[i], 0, windows[i].Length));
             }
             else
             {
                 for (var i = 0; i < windows.Count; i++)
                 {
-                    compressed[i] = Lzma1Compress(windows[i], 0, windows[i].Length, dictionarySize);
+                    compressed[i] = Lzma1Compress(encoders[i] ??= CreateEncoder(dictionarySize), windows[i], 0, windows[i].Length);
                 }
             }
 
@@ -181,8 +186,8 @@ internal static class Lzma2Encoder
     }
 
     /// <summary>
-    /// Reads one window of up to 2 MiB from the stream; returns null at EOF.
-    /// <para>从流中读取至多 2 MiB 的一个窗口；EOF 时返回 null。</para>
+    /// Reads one window of up to 64 KiB from the stream; returns null at EOF.
+    /// <para>从流中读取至多 64 KiB 的一个窗口；EOF 时返回 null。</para>
     /// </summary>
     private static byte[]? ReadWindow(Stream input)
     {
@@ -202,16 +207,25 @@ internal static class Lzma2Encoder
     }
 
     /// <summary>
-    /// Compresses one data block with an independent LZMA1 encoder; returns raw LZMA1 data without the 5-byte property header.
-    /// <para>用独立的 LZMA1 编码器压缩一个数据块，返回不含 5 字节属性头的裸 LZMA1 数据。</para>
+    /// Creates an encoder owned exclusively by one worker for this encoding call.
+    /// <para>创建本次编码调用中由单个 worker 独占的编码器。</para>
     /// </summary>
-    private static byte[] Lzma1Compress(byte[] data, int start, int count, uint dictionarySize)
+    private static Encoder CreateEncoder(uint dictionarySize)
     {
         var encoder = new Encoder();
         encoder.SetCoderProperties(
             [CoderPropID.DictionarySize, CoderPropID.PosStateBits, CoderPropID.LitPosBits, CoderPropID.LitContextBits],
             [(int)dictionarySize, 2, 0, 3]);
 
+        // Retain the original dictionary setting: changing it also changes the SDK's
+        // match-finder hash table, which can change compressed bytes on real firmware.
+        return encoder;
+    }
+
+    private static byte[] Lzma1Compress(Encoder encoder, byte[] data, int start, int count)
+    {
+        // SDK Code resets probability/history state and releases streams for every invocation.
+        // Reuse only its scratch arrays within one worker; never share an encoder concurrently.
         using var input = new MemoryStream(data, start, count, writable: false);
         using var output = new MemoryStream();
         encoder.Code(input, output, count, -1, null);

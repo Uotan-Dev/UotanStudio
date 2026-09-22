@@ -82,13 +82,17 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
                         ["Type"] = "boot",
                         ["HeaderVersion"] = ((int)h.HeaderVersion).ToString(),
                         ["PageSize"] = h.PageSize.ToString(),
+                        ["HeaderSize"] = h.HeaderSize.ToString(),
+                        ["ProductName"] = h.ProductName,
                         ["KernelSize"] = h.KernelSize.ToString(),
                         ["RamdiskSize"] = h.RamdiskSize.ToString(),
                         ["SecondSize"] = h.SecondSize.ToString(),
                         ["DtbSize"] = h.DtbSize.ToString(),
                         ["OsVersion"] = h.OsVersionString,
                         ["CommandLine"] = h.CommandLine,
-                        ["KernelCompression"] = h.KernelCompression.ToString()
+                        ["KernelCompression"] = h.KernelCompression.ToString(),
+                        ["RamdiskCompression"] = h.RamdiskCompression.ToString(),
+                        ["OsVersionRaw"] = $"0x{h.OsVersion:X8}"
                     }, components:
                     [
                         FirmwareComponent.Of("kernel", h.KernelSize),
@@ -114,7 +118,13 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
                         ["VendorRamdiskSize"] = h.VendorRamdiskSize.ToString(),
                         ["DtbSize"] = h.DtbSize.ToString(),
                         ["RamdiskTableEntryCount"] = parser.RamdiskTable.Count.ToString(),
-                        ["VendorCmdline"] = h.VendorCmdline
+                        ["VendorCmdline"] = h.VendorCmdline,
+                        ["VendorName"] = h.VendorName,
+                        ["HeaderSize"] = h.VendorHeaderSize.ToString(),
+                        ["KernelLoadAddress"] = $"0x{h.KernelLoadAddress:X8}",
+                        ["RamdiskLoadAddress"] = $"0x{h.RamdiskLoadAddress:X8}",
+                        ["TagsLoadAddress"] = $"0x{h.TagsLoadAddress:X8}",
+                        ["DtbAddress"] = $"0x{h.DtbAddress:X16}"
                     });
                 }
 

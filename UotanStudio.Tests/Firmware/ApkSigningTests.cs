@@ -6,6 +6,7 @@ using System.Text;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Packing;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -18,18 +19,18 @@ namespace UotanStudio.Tests.Firmware;
 public class ApkSigningTests : IDisposable
 {
     private readonly string _root;
-    private readonly ApkSignerKeyMaterial _keyMaterial;
+    private ApkSignerKeyMaterial? _keyMaterial;
+    private ApkSignerKeyMaterial KeyMaterial => _keyMaterial ??= TestKeyFactory.CreateRsa(_root).Material;
 
     public ApkSigningTests()
     {
         _root = Path.Combine(Path.GetTempPath(), "uotan-apk-signing-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        (_keyMaterial, _) = TestKeyFactory.CreateRsa(_root);
     }
 
     public void Dispose()
     {
-        _keyMaterial.Dispose();
+        _keyMaterial?.Dispose();
         try { Directory.Delete(_root, recursive: true); } catch { /* best effort 尽力清理 */ }
     }
 
@@ -63,10 +64,10 @@ public class ApkSigningTests : IDisposable
         var input = CreateMinimalApk("disabled.apk", out _);
         var output = Path.Combine(_root, "existing.apk");
         File.WriteAllText(output, "preserve");
-        Assert.Throws<ArgumentException>(() => ApkSigner.Sign(input, output, _keyMaterial,
+        Assert.Throws<ArgumentException>(() => ApkSigner.Sign(input, output, KeyMaterial,
             new ApkSigningOptions { EnableV1 = false, EnableV2 = false, EnableV3 = false }, TestContext.Current.CancellationToken));
         Assert.Equal("preserve", File.ReadAllText(output));
-        Assert.Throws<ArgumentException>(() => ApkSigner.Sign(input, input, _keyMaterial, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Throws<ArgumentException>(() => ApkSigner.Sign(input, input, KeyMaterial, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -92,7 +93,7 @@ public class ApkSigningTests : IDisposable
         var unsigned = Path.Combine(_root, "content.apk");
         var signed = Path.Combine(_root, "content-signed.apk");
         ApkRepacker.Repack(dir, unsigned, cancellationToken: TestContext.Current.CancellationToken);
-        ApkSigner.Sign(unsigned, signed, _keyMaterial, cancellationToken: TestContext.Current.CancellationToken);
+        ApkSigner.Sign(unsigned, signed, KeyMaterial, cancellationToken: TestContext.Current.CancellationToken);
         using var archive = System.IO.Compression.ZipFile.OpenRead(signed);
         foreach (var name in new[] { "payload.bin", "resources.arsc" })
         {
@@ -104,34 +105,24 @@ public class ApkSigningTests : IDisposable
     [Fact]
     public void KeyMaterial_RejectsMismatchedCertificate()
     {
+        _ = KeyMaterial;
         var other = Path.Combine(_root, "other");
         Directory.CreateDirectory(other);
-        using var otherMaterial = TestKeyFactory.CreateRsa(other).Material;
+        using var otherMaterial = TestKeyFactory.CreateRsa(other, alternate: true).Material;
         Assert.Throws<CryptographicException>(() => ApkSignerKeyMaterial.Load(
             Path.Combine(_root, "test.pk8"), null, Path.Combine(other, "test.crt"), null));
     }
 
     [Fact]
-    public void ZipSections_Locate_FindsEocdOfMinimalZip()
-    {
-        var apkPath = CreateMinimalApk("sections.apk", out _);
-        using var stream = new FileStream(apkPath, FileMode.Open, FileAccess.Read);
-        var sections = ApkZipSections.Locate(stream);
-
-        // EOCD runs to EOF and the central directory lies before it.
-        // EOCD 延伸到文件末尾，中央目录位于其前。
-        Assert.Equal(stream.Length, sections.EocdOffset + sections.EocdSize);
-        Assert.True(sections.CentralDirectoryOffset > 0);
-        Assert.True(sections.CentralDirectorySize > 0);
-        Assert.Equal(sections.EocdOffset, sections.CentralDirectoryOffset + sections.CentralDirectorySize);
-    }
-
-    [Fact]
-    public void ContentDigest_PatchesEocdOffsetWithoutMutatingSource()
+    public void ContentDigest_ValidZip_IsDeterministicAndPreservesSource()
     {
         var apkPath = CreateMinimalApk("digest.apk", out var zipContentLength);
         using var stream = new FileStream(apkPath, FileMode.Open, FileAccess.Read);
         var sections = ApkZipSections.Locate(stream);
+        Assert.Equal(stream.Length, sections.EocdOffset + sections.EocdSize);
+        Assert.True(sections.CentralDirectoryOffset > 0);
+        Assert.True(sections.CentralDirectorySize > 0);
+        Assert.Equal(sections.EocdOffset, sections.CentralDirectoryOffset + sections.CentralDirectorySize);
         var eocd = ReadRange(stream, sections.EocdOffset, sections.EocdSize);
 
         var digest = ApkContentDigest.ComputeApkDigest(
@@ -139,6 +130,10 @@ public class ApkSigningTests : IDisposable
             sections.CentralDirectoryOffset, sections.CentralDirectorySize, eocd, "SHA256", TestContext.Current.CancellationToken);
 
         Assert.Equal(32, digest.Length);
+        var repeated = ApkContentDigest.ComputeApkDigest(
+            stream, zipContentLength, sections.CentralDirectoryOffset,
+            sections.CentralDirectoryOffset, sections.CentralDirectorySize, eocd, "SHA256", TestContext.Current.CancellationToken);
+        Assert.Equal(digest, repeated);
         // Source EOCD must stay untouched.
         // 源 EOCD 必须未被改动。
         var after = ReadRange(stream, sections.EocdOffset, sections.EocdSize);
@@ -146,56 +141,31 @@ public class ApkSigningTests : IDisposable
     }
 
     [Fact]
-    public void ContentDigest_IsDeterministic()
-    {
-        var apkPath = CreateMinimalApk("digest2.apk", out var zipContentLength);
-        using var stream = new FileStream(apkPath, FileMode.Open, FileAccess.Read);
-        var sections = ApkZipSections.Locate(stream);
-        var eocd = ReadRange(stream, sections.EocdOffset, sections.EocdSize);
-
-        var first = ApkContentDigest.ComputeApkDigest(
-            stream, zipContentLength, sections.CentralDirectoryOffset,
-            sections.CentralDirectoryOffset, sections.CentralDirectorySize, eocd, "SHA256", TestContext.Current.CancellationToken);
-        var second = ApkContentDigest.ComputeApkDigest(
-            stream, zipContentLength, sections.CentralDirectoryOffset,
-            sections.CentralDirectoryOffset, sections.CentralDirectorySize, eocd, "SHA256", TestContext.Current.CancellationToken);
-
-        Assert.Equal(first, second);
-    }
-
-    [Fact]
-    public void Sign_RsaSignsApk_AndRoundTripsSigningBlock()
-    {
-        var input = CreateMinimalApk("sign-input.apk", out _);
-        var output = Path.Combine(_root, "signed.apk");
-
-        ApkSigner.Sign(input, output, _keyMaterial, new ApkSigningOptions(), TestContext.Current.CancellationToken);
-
-        Assert.True(File.Exists(output));
-        using var stream = new FileStream(output, FileMode.Open, FileAccess.Read);
-        var sections = ApkZipSections.Locate(stream);
-        var found = ApkSigningBlock.Find(stream, sections);
-        Assert.NotNull(found);
-
-        var pairs = ApkSigningBlock.ParsePairs(found!.Value.Contents);
-        Assert.Contains(pairs, p => p.Id == ApkSignatureConstants.V2BlockId);
-        Assert.Contains(pairs, p => p.Id == ApkSignatureConstants.V3BlockId);
-
-        // The EOCD central-directory offset must point past the signing block.
-        // EOCD 的中央目录偏移必须指向签名块之后。
-        var blockEnd = found.Value.Offset + found.Value.Contents.Length;
-        Assert.Equal(blockEnd, sections.CentralDirectoryOffset);
-    }
-
-    [Fact]
-    public void Sign_StripsExistingSignatures_WhenResigning()
+    public void Sign_InitialAndRepeatedSigning_PreservesLayoutAndReplacesSignatures()
     {
         var input = CreateMinimalApk("resign-input.apk", out _);
         var first = Path.Combine(_root, "first-signed.apk");
         var second = Path.Combine(_root, "second-signed.apk");
 
-        ApkSigner.Sign(input, first, _keyMaterial, new ApkSigningOptions(), TestContext.Current.CancellationToken);
-        ApkSigner.Sign(first, second, _keyMaterial, new ApkSigningOptions(), TestContext.Current.CancellationToken);
+        ApkSigner.Sign(input, first, KeyMaterial, new ApkSigningOptions(), TestContext.Current.CancellationToken);
+        {
+            Assert.True(File.Exists(first));
+            using var initialStream = new FileStream(first, FileMode.Open, FileAccess.Read);
+            var initialSections = ApkZipSections.Locate(initialStream);
+            var initialFound = ApkSigningBlock.Find(initialStream, initialSections);
+            Assert.NotNull(initialFound);
+
+            var initialPairs = ApkSigningBlock.ParsePairs(initialFound!.Value.Contents);
+            Assert.Contains(initialPairs, p => p.Id == ApkSignatureConstants.V2BlockId);
+            Assert.Contains(initialPairs, p => p.Id == ApkSignatureConstants.V3BlockId);
+
+            // The EOCD central-directory offset must point past the signing block.
+            // EOCD 的中央目录偏移必须指向签名块之后。
+            var blockEnd = initialFound.Value.Offset + initialFound.Value.Contents.Length;
+            Assert.Equal(blockEnd, initialSections.CentralDirectoryOffset);
+        }
+
+        ApkSigner.Sign(first, second, KeyMaterial, new ApkSigningOptions(), TestContext.Current.CancellationToken);
 
         using var stream = new FileStream(second, FileMode.Open, FileAccess.Read);
         var sections = ApkZipSections.Locate(stream);
@@ -206,6 +176,7 @@ public class ApkSigningTests : IDisposable
         // 恰好一个 v2 对：旧签名块在重新签名前被剥离。
         var pairs = ApkSigningBlock.ParsePairs(found!.Value.Contents);
         Assert.Equal(1, pairs.Count(p => p.Id == ApkSignatureConstants.V2BlockId));
+        Assert.Equal(1, pairs.Count(p => p.Id == ApkSignatureConstants.V3BlockId));
     }
 
     [Fact]
@@ -220,7 +191,7 @@ public class ApkSigningTests : IDisposable
             EnableV3 = false,
         };
 
-        ApkSigner.Sign(input, output, _keyMaterial, options, TestContext.Current.CancellationToken);
+        ApkSigner.Sign(input, output, KeyMaterial, options, TestContext.Current.CancellationToken);
 
         using var stream = new FileStream(output, FileMode.Open, FileAccess.Read);
         using var archive = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Read);
@@ -247,7 +218,7 @@ public class ApkSigningTests : IDisposable
         // The CMS over the SF must verify with the signer certificate.
         // 对 SF 的 CMS 必须能用签名者证书校验。
         var sf = Encoding.ASCII.GetBytes("Signature-Version: 1.0\r\n\r\n");
-        var cmsBytes = ApkV1Signer.SignSignatureFile(sf, _keyMaterial);
+        var cmsBytes = ApkV1Signer.SignSignatureFile(sf, KeyMaterial);
 
         var signedCms = new SignedCms(new ContentInfo(sf), detached: true);
         signedCms.Decode(cmsBytes);
@@ -392,15 +363,15 @@ public class ApkSigningTests : IDisposable
 }
 
 /// <summary>
-/// Creates deterministic test keys/certificates for signing tests (test-only; no key material
+/// Creates isolated test keys/certificates for signing tests (test-only; no key material
 /// is bundled into the product).
 /// <para>为签名测试生成确定性测试密钥/证书（仅测试使用；产品不内置任何密钥材料）。</para>
 /// </summary>
 internal static class TestKeyFactory
 {
-    public static (ApkSignerKeyMaterial Material, string KeyPath) CreateRsa(string root)
+    public static (ApkSignerKeyMaterial Material, string KeyPath) CreateRsa(string root, bool alternate = false)
     {
-        using var rsa = RSA.Create(2048);
+        using var rsa = SigningTestKeys.Create(2048, alternate);
         var request = new CertificateRequest("CN=UotanStudio Test", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(10));
 

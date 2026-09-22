@@ -53,7 +53,7 @@ internal class PayloadExtractor
     /// Optional factory opening a partition-exclusive read-only payload stream (disposed before return).
     /// <para>可选的工厂，用于打开分区专属只读载荷流（返回前释放）。</para>
     /// </param>
-    private void ExtractPartition(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize, CancellationToken cancellationToken, IReadOnlyDictionary<string, string>? sourceImages, IProgress<(long Processed, long Total)>? byteProgress = null, Func<Stream>? openPayloadStream = null)
+    private void ExtractPartition(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize, CancellationToken cancellationToken, IReadOnlyDictionary<string, string>? sourceImages, IProgress<(long Processed, long Total)>? byteProgress = null, Func<Stream>? openPayloadStream = null, int? operationWorkers = null)
     {
         ArgumentNullException.ThrowIfNull(partition);
         ArgumentNullException.ThrowIfNull(outFilename);
@@ -67,6 +67,7 @@ internal class PayloadExtractor
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+        var workers = operationWorkers ?? SharedKernel.FirmwareParallelism.Workers;
         if (blockSize == 0) throw new PartitionExtractionException("Payload block size must be nonzero.", partition.PartitionName);
         var fullOutputPath = Path.GetFullPath(outFilename);
         Directory.CreateDirectory(Path.GetDirectoryName(fullOutputPath)!);
@@ -186,7 +187,7 @@ internal class PayloadExtractor
                         parallelOps.OrderBy(o => o.DataOffset),
                         new ParallelOptions
                         {
-                            MaxDegreeOfParallelism = SharedKernel.FirmwareParallelism.Workers,
+                            MaxDegreeOfParallelism = workers,
                             CancellationToken = cancellationToken
                         },
                         op => OperationProcessor.ProcessOperation(op, outFile, opStream, baseOffset, blockSize, writeLock, streamLock, cancellationToken, progressTracker));
@@ -203,7 +204,7 @@ internal class PayloadExtractor
                         parallelOps.OrderBy(o => o.DataOffset),
                         new ParallelOptions
                         {
-                            MaxDegreeOfParallelism = SharedKernel.FirmwareParallelism.Workers,
+                            MaxDegreeOfParallelism = workers,
                             CancellationToken = cancellationToken
                         },
                         op => OperationProcessor.ProcessOperation(op, outFile, stream!, baseOffset, blockSize, writeLock, streamLock, cancellationToken, progressTracker));
@@ -298,16 +299,19 @@ internal class PayloadExtractor
         byteProgress?.Report((0, totalBytes));
 
         var workers = SharedKernel.FirmwareParallelism.Workers;
+        var partitionWorkers = Math.Max(1, Math.Min(workers, selected.Length));
+        // Split a single operation's budget; nested Parallel loops must not multiply it.
+        var operationWorkers = Math.Max(1, workers / partitionWorkers);
         try
         {
             Parallel.ForEach(
                 selected,
-                new ParallelOptions { MaxDegreeOfParallelism = workers },
+                new ParallelOptions { MaxDegreeOfParallelism = partitionWorkers },
                 partition =>
                 {
                     var outFilename = GetSafeOutputPath(outputDir, partition.PartitionName);
                     IProgress<(long Processed, long Total)>? sink = crossProgress is null ? null : new PartitionDeltaForwarder(crossProgress);
-                    ExtractPartition(partition, outFilename, stream, baseOffset, manifest.BlockSize, CancellationToken.None, sourceImages, sink, openPayloadStream);
+                    ExtractPartition(partition, outFilename, stream, baseOffset, manifest.BlockSize, CancellationToken.None, sourceImages, sink, openPayloadStream, operationWorkers);
                 });
         }
         catch (AggregateException ex)
@@ -355,16 +359,19 @@ internal class PayloadExtractor
         byteProgress?.Report((0, totalBytes));
 
         var workers = SharedKernel.FirmwareParallelism.Workers;
+        var partitionWorkers = Math.Max(1, Math.Min(workers, selected.Length));
+        var operationWorkers = Math.Max(1, workers / partitionWorkers);
         try
         {
             await Parallel.ForEachAsync(
                 selected,
-                new ParallelOptions { MaxDegreeOfParallelism = workers, CancellationToken = cancellationToken },
+                new ParallelOptions { MaxDegreeOfParallelism = partitionWorkers, CancellationToken = cancellationToken },
                 async (partition, token) =>
                 {
                     var outFilename = GetSafeOutputPath(outputDir, partition.PartitionName);
                     IProgress<(long Processed, long Total)>? sink = crossProgress is null ? null : new PartitionDeltaForwarder(crossProgress);
-                    await ExtractPartitionAsync(partition, outFilename, stream, baseOffset, manifest.BlockSize, token, sourceImages, sink, openPayloadStream).ConfigureAwait(false);
+                    await Task.Run(() => ExtractPartition(partition, outFilename, stream, baseOffset, manifest.BlockSize,
+                        token, sourceImages, sink, openPayloadStream, operationWorkers), token).ConfigureAwait(false);
                 }).ConfigureAwait(false);
         }
         catch (AggregateException ex)

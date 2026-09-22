@@ -52,6 +52,11 @@ public sealed class Ext4Parser : IDisposable
     private byte[] _inodeBuffer = [];
     private readonly Dictionary<string, Ext4FileEntry> _entries = new(StringComparer.Ordinal);
     private bool _walked;
+    private readonly int _maximumEntries = int.MaxValue;
+    private readonly long _maximumPathCharacters = long.MaxValue;
+    private readonly CancellationToken _readCancellation;
+    private int _visitedEntries;
+    private long _pathCharacters;
     private Journal.JournalOverlay _journalOverlay = Journal.JournalOverlay.Empty;
 
     /// <summary>
@@ -84,15 +89,26 @@ public sealed class Ext4Parser : IDisposable
     /// Parses an ext4 image from an existing stream (ownership is transferred).
     /// <para>从既有流解析 ext4 镜像（所有权转移）。</para>
     /// </summary>
-    public Ext4Parser(Stream stream)
+    public Ext4Parser(Stream stream) : this(stream, int.MaxValue, long.MaxValue, CancellationToken.None)
+    {
+    }
+
+    /// <summary>Parses a stream with explicit directory-entry/path budgets and cancellable metadata/content reads.</summary>
+    public Ext4Parser(Stream stream, int maximumEntries, long maximumPathCharacters, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(stream);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumEntries);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumPathCharacters);
+        cancellationToken.ThrowIfCancellationRequested();
         if (!stream.CanRead || !stream.CanSeek)
         {
             throw new ArgumentException("Stream must be readable and seekable.", nameof(stream));
         }
 
         _stream = stream;
+        _maximumEntries = maximumEntries;
+        _maximumPathCharacters = maximumPathCharacters;
+        _readCancellation = cancellationToken;
         Initialize();
     }
 
@@ -100,6 +116,9 @@ public sealed class Ext4Parser : IDisposable
 
     internal byte[] SourceUuid => _superblock.Uuid;
     internal string SourceVolumeName => _superblock.VolumeName;
+
+    /// <summary>The parsed superblock used for metadata inspection.</summary>
+    internal Ext4Superblock Superblock => _superblock;
 
     public long BlockSize => _blockSize;
 
@@ -228,6 +247,7 @@ public sealed class Ext4Parser : IDisposable
     /// </summary>
     public IReadOnlyList<Ext4FileEntry> ListFiles()
     {
+        _readCancellation.ThrowIfCancellationRequested();
         if (!_walked)
         {
             WalkDirectory(RootInodeNumber, string.Empty, new HashSet<uint>(), 0);
@@ -252,6 +272,7 @@ public sealed class Ext4Parser : IDisposable
     /// </summary>
     public void ReadFile(string path, Stream output)
     {
+        _readCancellation.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(output);
         var entry = FindEntry(path);
 
@@ -378,6 +399,7 @@ public sealed class Ext4Parser : IDisposable
 
     private void WalkDirectory(uint dirInode, string prefix, HashSet<uint> visitedDirectories, int depth)
     {
+        _readCancellation.ThrowIfCancellationRequested();
 
 
         if (depth > MaxDirectoryDepth)
@@ -410,6 +432,7 @@ public sealed class Ext4Parser : IDisposable
             }
             foreach (var entry in Ext4DirectoryEntry.Enumerate(block))
             {
+                _readCancellation.ThrowIfCancellationRequested();
                 if (entry.Inode == 0 || entry.Name.Length == 0)
                 {
                     continue;
@@ -425,11 +448,17 @@ public sealed class Ext4Parser : IDisposable
                     continue;
                 }
 
+                var childPath = prefix.Length == 0 ? entry.Name : prefix + "/" + entry.Name;
+                if (_visitedEntries >= _maximumEntries || childPath.Length > _maximumPathCharacters - _pathCharacters)
+                {
+                    throw new InvalidDataException("ext4 directory enumeration exceeds its entry or path budget.");
+                }
+                _visitedEntries++;
+                _pathCharacters += childPath.Length;
                 var child = ReadInode(entry.Inode);
                 var childXattrs = MergeXattrs(
                     ParseInlineXattrs(_inodeBuffer, _inodeSize),
                     ReadExternalXattrBlock(child));
-                var childPath = prefix.Length == 0 ? entry.Name : prefix + "/" + entry.Name;
                 var kind = ClassifyKind(entry.FileType, child);
                 var symlinkTarget = kind == Ext4EntryKind.Symlink ? ReadSymlinkTarget(child) : null;
 
@@ -687,6 +716,7 @@ public sealed class Ext4Parser : IDisposable
 
     private void ReadInodeContent(Ext4Inode inode, long size, Stream output)
     {
+        _readCancellation.ThrowIfCancellationRequested();
         if (inode.HasInlineData)
         {
             var length = (int)Math.Min(size, inode.InlineData.Length);
@@ -700,7 +730,7 @@ public sealed class Ext4Parser : IDisposable
 
         if (!_journalOverlay.HasOverlay)
         {
-            SharedKernel.Streams.MappedBlockCopy.Copy(_stream, output, size, _blockSize, logical => MapBlock(inode, logical));
+            SharedKernel.Streams.MappedBlockCopy.Copy(_stream, output, size, _blockSize, logical => MapBlock(inode, logical), _readCancellation);
             return;
         }
 
@@ -710,6 +740,7 @@ public sealed class Ext4Parser : IDisposable
         var remaining = size;
         for (var logical = 0u; logical < blockCount; logical++)
         {
+            _readCancellation.ThrowIfCancellationRequested();
             var physical = MapBlock(inode, logical);
             buffer.AsSpan().Clear();
             if (physical is not null)
@@ -769,6 +800,7 @@ public sealed class Ext4Parser : IDisposable
 
     private void ReadExactlyAt(long offset, byte[] buffer)
     {
+        _readCancellation.ThrowIfCancellationRequested();
         if (offset < 0 || offset > _stream.Length || buffer.Length > _stream.Length - offset)
         {
             throw new InvalidDataException(

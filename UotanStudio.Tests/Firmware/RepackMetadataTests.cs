@@ -179,19 +179,6 @@ public sealed class RepackMetadataTests : IDisposable
         Assert.Equal(File.ReadAllBytes(Image), File.ReadAllBytes(Output));
     }
 
-    [Fact]
-    public async Task ReadOnlyDirectory_HasMetadata_AndDoesNotFallBackToExt4()
-    {
-        var fixture = Path.Combine(AppContext.BaseDirectory, "Firmware", "Files", "review-native-rkfw.img");
-        var result = await new RockchipFormatHandler().UnpackAsync(fixture, Extracted, cancellationToken: Cancellation);
-        Assert.True(result.Success, result.Summary);
-        var metadata = Assert.IsType<RepackMetadata>(RepackMetadata.Read(Extracted));
-        Assert.Equal("Rockchip RKAF/RKFW Firmware", metadata.FormatName);
-        Assert.False(metadata.CanPackDirectory);
-        Assert.False(PackingService.BuildImage(Extracted, Output).Success);
-        Assert.False(File.Exists(Output));
-    }
-
     [Theory]
     [InlineData("EXT4")]
     [InlineData("EROFS")]

@@ -47,10 +47,12 @@ public static class PacExtractor
     /// Extracts all entries from a PAC file to the output directory.
     /// <para>将 PAC 文件中的所有条目提取到输出目录。</para>
     /// </summary>
-    public static int Extract(string imagePath, string outDir, Func<string, bool>? nameFilter = null)
+    public static int Extract(string imagePath, string outDir, Func<string, bool>? nameFilter = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(imagePath);
         ArgumentException.ThrowIfNullOrEmpty(outDir);
+        cancellationToken.ThrowIfCancellationRequested();
 
         Directory.CreateDirectory(outDir);
         var outputRoot = Path.GetFullPath(outDir);
@@ -67,6 +69,7 @@ public static class PacExtractor
         var count = 0;
         for (var i = 0; i < head.FileCount; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             fs.Seek(SprdHead.Size + (i * SprdFile.StructFixedSize), SeekOrigin.Begin);
             var file = SprdFile.Read(reader);
 
@@ -113,6 +116,7 @@ public static class PacExtractor
                     var buffer = new byte[ChunkSize];
                     while (remaining > 0)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         var toRead = (int)Math.Min(ChunkSize, remaining);
                         var read = fs.Read(buffer, 0, toRead);
                         if (read == 0)
@@ -138,9 +142,11 @@ public static class PacExtractor
     /// Verifies the head CRC and data CRC of a PAC file.
     /// <para>校验 PAC 文件的头部 CRC 与数据区 CRC。</para>
     /// </summary>
-    public static (bool HeadOk, bool DataOk) Check(string imagePath)
+    public static (bool HeadOk, bool DataOk) Check(string imagePath,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(imagePath);
+        cancellationToken.ThrowIfCancellationRequested();
 
         using var fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read);
         using var reader = new BinaryReader(fs);
@@ -166,6 +172,7 @@ public static class PacExtractor
         long totalRead = 0;
         while (totalRead < totalSize)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var toRead = (int)Math.Min(ChunkSize, totalSize - totalRead);
             var read = fs.Read(buffer, 0, toRead);
             if (read == 0)

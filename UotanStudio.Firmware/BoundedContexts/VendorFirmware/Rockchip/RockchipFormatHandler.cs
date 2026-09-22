@@ -87,10 +87,17 @@ public sealed class RockchipFormatHandler : IFormatHandler
     /// <para>异步将输入打包为固件。</para>
     /// </summary>
     public async Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+        => await PackAsync(inputPath, outputPath, new RockchipPackOptions(), cancellationToken).ConfigureAwait(false);
+
+    public async Task<FirmwareOpResult> PackAsync(
+        string inputPath,
+        string outputPath,
+        RockchipPackOptions options,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            await RockchipPacker.PackAsync(inputPath, outputPath, cancellationToken).ConfigureAwait(false);
+            await RockchipPacker.PackAsync(inputPath, outputPath, options, cancellationToken).ConfigureAwait(false);
             var entries = RockchipExtractor.List(outputPath);
             return FirmwareOpResult.Ok($"Packed Rockchip firmware with {entries.Count} entries.",
                 entries: [.. entries.Select(static e => e.Name)],

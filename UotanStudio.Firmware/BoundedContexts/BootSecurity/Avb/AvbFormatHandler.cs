@@ -136,48 +136,12 @@ public sealed class AvbFormatHandler : IFormatHandler
                     FileOptions.SequentialScan);
 
 
-                if (fs.Length >= AvbVBMetaImageHeader.Size)
-                {
-                    Span<byte> head = stackalloc byte[AvbVBMetaImageHeader.Size];
-                    fs.Position = 0;
-                    if (fs.Read(head) == AvbVBMetaImageHeader.Size)
-                    {
-                        var header = AvbVBMetaImageHeader.FromBytes(head);
-                        if (header.IsValid())
-                        {
-                            var summary = $"VBMeta header parsed.\nAlgorithm: {header.AlgorithmType}\n" +
-                                          $"Descriptors size: {header.DescriptorsSize} bytes\n" +
-                                          $"Rollback index: {header.RollbackIndex}\nRelease: {header.ReleaseString}";
-                            return FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
-                            {
-                                ["AlgorithmType"] = header.AlgorithmType.ToString(),
-                                ["DescriptorsSize"] = header.DescriptorsSize.ToString(),
-                                ["RollbackIndex"] = header.RollbackIndex.ToString(),
-                                ["ReleaseString"] = header.ReleaseString
-                            });
-                        }
-                    }
-                }
-
-                if (fs.Length >= AvbFooter.Size)
-                {
-                    Span<byte> tail = stackalloc byte[AvbFooter.Size];
-                    fs.Position = fs.Length - AvbFooter.Size;
-                    if (fs.Read(tail) == AvbFooter.Size && AvbFooter.TryLoad(tail) is { } footer)
-                    {
-                        var summary = $"AVB signed image.\nFooter version: {footer.VersionMajor}.{footer.VersionMinor}\n" +
-                                       $"VBMeta: {footer.VbmetaSize} bytes at offset {footer.VbmetaOffset}";
-                        return FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
-                        {
-                            ["FooterVersion"] = $"{footer.VersionMajor}.{footer.VersionMinor}",
-                            ["OriginalImageSize"] = footer.OriginalImageSize.ToString(),
-                            ["VbmetaOffset"] = footer.VbmetaOffset.ToString(),
-                            ["VbmetaSize"] = footer.VbmetaSize.ToString()
-                        });
-                    }
-                }
-
-                return FirmwareOpResult.Fail("No AVB footer or VBMeta image found.");
+                var metadata = AvbMetadataReader.Read(fs, cancellationToken);
+                return FirmwareOpResult.Ok("AVB", metadata: metadata);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {

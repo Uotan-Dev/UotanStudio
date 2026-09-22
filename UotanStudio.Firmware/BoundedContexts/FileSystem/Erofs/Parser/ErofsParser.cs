@@ -63,6 +63,11 @@ public sealed partial class ErofsParser : IDisposable
     private readonly ErofsDeviceSlot[]? _deviceSlots;
     private bool _flatDevice;
     private List<ErofsFileEntry>? _fileTable;
+    private readonly int _maximumEntries;
+    private readonly long _maximumPathCharacters;
+    private readonly CancellationToken _readCancellation;
+    private int _visitedEntries;
+    private long _pathCharacters;
     private List<string> _directoryPaths = [];
     private readonly List<ErofsFileEntry> _directoryEntries = [];
     private ErofsInode? _packedInode;
@@ -83,6 +88,19 @@ public sealed partial class ErofsParser : IDisposable
     public ErofsParser(Stream stream)
         : this(stream, ownsStream: false)
     {
+    }
+
+    /// <summary>Reads a seekable image with explicit directory-entry/path budgets and cancellable reads; leaves the stream open.</summary>
+    public ErofsParser(Stream stream, int maximumEntries, long maximumPathCharacters, CancellationToken cancellationToken)
+        : this(RequireSeekable(stream), false, maximumEntries, maximumPathCharacters, cancellationToken)
+    {
+    }
+
+    private static Stream RequireSeekable(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        if (!stream.CanRead || !stream.CanSeek) { throw new ArgumentException("A readable seekable image stream is required.", nameof(stream)); }
+        return stream;
     }
 
     /// <summary>
@@ -128,8 +146,15 @@ public sealed partial class ErofsParser : IDisposable
         return streams;
     }
 
-    private ErofsParser(Stream stream, bool ownsStream)
+    private ErofsParser(Stream stream, bool ownsStream, int maximumEntries = int.MaxValue,
+        long maximumPathCharacters = long.MaxValue, CancellationToken cancellationToken = default)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumEntries);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumPathCharacters);
+        cancellationToken.ThrowIfCancellationRequested();
+        _maximumEntries = maximumEntries;
+        _maximumPathCharacters = maximumPathCharacters;
+        _readCancellation = cancellationToken;
         ArgumentNullException.ThrowIfNull(stream);
         Stream? sourceToDisposeOnFailure = ownsStream ? stream : null;
         try
@@ -298,6 +323,7 @@ public sealed partial class ErofsParser : IDisposable
 
     public IReadOnlyList<ErofsFileEntry> EnumerateFiles()
     {
+        _readCancellation.ThrowIfCancellationRequested();
         _fileTable ??= EnumerateFilesCore();
         return _fileTable;
     }
@@ -547,6 +573,7 @@ public sealed partial class ErofsParser : IDisposable
 
     private byte[] ReadBytes(long offset, int length, string what)
     {
+        _readCancellation.ThrowIfCancellationRequested();
         if (offset < 0 || length < 0 || offset > _imageSize || length > _imageSize - offset)
         {
             throw new InvalidDataException($"{what} exceeds the image bounds.");
@@ -632,6 +659,7 @@ public sealed partial class ErofsParser : IDisposable
 
     private void WalkDirectory(ulong nid, string prefix, HashSet<ulong> visitedDirectories, List<ErofsFileEntry> result, List<string> directories)
     {
+        _readCancellation.ThrowIfCancellationRequested();
         if (!visitedDirectories.Add(nid))
         {
 
@@ -657,7 +685,15 @@ public sealed partial class ErofsParser : IDisposable
 
         foreach (var entry in ReadDirectory(nid, inode))
         {
+            _readCancellation.ThrowIfCancellationRequested();
             if (entry.Name is "." or "..") continue;
+            var candidatePath = JoinPath(prefix, entry.Name);
+            if (_visitedEntries >= _maximumEntries || candidatePath.Length > _maximumPathCharacters - _pathCharacters)
+            {
+                throw new InvalidDataException("EROFS directory enumeration exceeds its entry or path budget.");
+            }
+            _visitedEntries++;
+            _pathCharacters += candidatePath.Length;
             if (entry.FileType == ErofsInode.FileTypeDirectory)
             {
 
@@ -667,7 +703,7 @@ public sealed partial class ErofsParser : IDisposable
                     continue;
                 }
 
-                var directoryPath = JoinPath(prefix, entry.Name);
+                var directoryPath = candidatePath;
                 directories.Add(directoryPath);
                 WalkDirectory(entry.Nid, directoryPath, visitedDirectories, result, directories);
                 continue;
@@ -680,7 +716,7 @@ public sealed partial class ErofsParser : IDisposable
                     ErofsInode.FileTypeSocket)
             {
                 var fileInode = ReadInode(entry.Nid);
-                var path = JoinPath(prefix, entry.Name);
+                var path = candidatePath;
                 var fileEntry = new ErofsFileEntry(path, (long)fileInode.Size, entry.Nid)
                 {
                     Mode = fileInode.Mode,
@@ -928,7 +964,15 @@ public sealed partial class ErofsParser : IDisposable
             var offset = done < flatLength ? checked(flatStart + done)
                 : checked(_superblock.GetInodeOffset(nid) + inode.InlineDataOffset + done - flatLength);
             var block = ReadBytes(offset, blockLength, "Directory data");
-            result.AddRange(ParseDirectoryData(block, dirBlockSize, blockLength));
+            foreach (var entry in ParseDirectoryData(block, dirBlockSize, blockLength))
+            {
+                _readCancellation.ThrowIfCancellationRequested();
+                if ((long)result.Count >= (long)_maximumEntries + 2)
+                {
+                    throw new InvalidDataException("EROFS directory block entries exceed the configured budget.");
+                }
+                result.Add(entry);
+            }
         }
 
         return result;

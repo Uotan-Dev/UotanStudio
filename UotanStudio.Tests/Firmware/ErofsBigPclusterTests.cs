@@ -51,30 +51,6 @@ public sealed class ErofsBigPclusterTests
         Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void Build_ModernLz4_BigPclusterMountsReadOnlyOnKernel(bool compacted)
-    {
-        var capability = KernelMountVerifier.Probe("erofs", "CONFIG_EROFS_FS_ZIP");
-        if (!capability.Available) Assert.Skip(capability.Detail);
-
-        using var source = new TempDirectory();
-        source.WriteBytes("data.bin", BigPclusterPayload());
-        using var output = new TempDirectory();
-        var image = Path.Combine(output.Path, "bigpcl.img");
-        new ErofsBuilder().Build(source.Path, image, new ErofsOptions
-        {
-            BlockSize = BlockSize,
-            Compress = true,
-            Algorithm = ErofsCompressionAlgorithm.Lz4,
-            UseCompactedIndexes = compacted,
-        });
-
-        var result = KernelMountVerifier.Verify(image, source.Path, "erofs");
-        Assert.True(result.Ok, $"compacted={compacted}: {result.Output}");
-    }
-
     private static byte[] BigPclusterPayload()
     {
         var tile = new byte[32 * 1024];

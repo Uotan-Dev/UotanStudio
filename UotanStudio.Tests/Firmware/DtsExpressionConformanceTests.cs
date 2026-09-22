@@ -17,9 +17,7 @@ public class DtsExpressionConformanceTests
         Assert.NotNull(result.Tree);
         var prop = result.Tree!.Root.FindProperty("test-prop");
         Assert.NotNull(prop);
-        var cells = prop!.GetCells();
-        Assert.True(cells.Length == 1, $"Expected single cell but got {cells.Length} for expression '{expr}'");
-        return cells[0];
+        return Assert.Single(prop!.GetCells());
     }
 
     // ---- Precedence ----

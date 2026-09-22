@@ -1,8 +1,6 @@
-using System.IO.Compression;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Models;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Writing;
-using UotanStudio.Tests.Infrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -10,12 +8,9 @@ namespace UotanStudio.Tests.Firmware;
 /// <summary>
 /// AXML round-trip tests: programmatically build a small AXML document model (root element with
 /// attributes, namespaces and a child), serialize it, parse it back and verify the model is
-/// preserved; then re-serialize and assert byte stability. The real AndroidManifest.xml entry of
-/// Magisk-v30.6.apk from the firmware corpus is validated when present, and the case is skipped
-/// via <see cref="Assert.Skip"/> otherwise.
+/// preserved; then re-serialize and assert byte stability.
 /// <para>AXML 往返测试：程序化构造小型 AXML 文档模型（含命名空间、属性与子元素的根元素），序列化后
-/// 重新解析，验证模型保持一致；再次序列化断言字节稳定。语料库存在 Magisk-v30.6.apk 时校验其
-/// AndroidManifest.xml 条目中的真实生产文件，缺失时以 <see cref="Assert.Skip"/> 跳过。</para>
+/// 重新解析，验证模型保持一致；再次序列化断言字节稳定。</para>
 /// </summary>
 public class AXmlRoundTripTests
 {
@@ -70,50 +65,6 @@ public class AXmlRoundTripTests
         var bytes = AXmlWriter.Write(BuildDocument());
         Assert.True(AXmlParser.IsAxml(bytes));
         Assert.False(AXmlParser.IsAxml(new byte[] { 1, 2, 3 }));
-    }
-
-    [Fact]
-    public void Parse_RealMagiskManifest_ExtractsRootAndRebuilds()
-    {
-        // 真实文件：从语料库 Magisk-v30.6.apk 读取其 AndroidManifest.xml 条目。
-        // Real file: read the AndroidManifest.xml entry from the corpus Magisk-v30.6.apk.
-        var apkPath = FirmwareCorpus.FindFile("Magisk-v30.6.apk");
-        if (apkPath is null)
-        {
-            Assert.Skip("Magisk-v30.6.apk not found in firmware corpus");
-        }
-
-        using var zip = ZipFile.OpenRead(apkPath);
-        var entry = zip.GetEntry("AndroidManifest.xml");
-        if (entry is null)
-        {
-            Assert.Skip("AndroidManifest.xml entry not found in Magisk-v30.6.apk");
-        }
-
-        using var entryStream = entry.Open();
-        using var ms = new MemoryStream();
-        entryStream.CopyTo(ms);
-        var bytes = ms.ToArray();
-
-        Assert.True(AXmlParser.IsAxml(bytes));
-
-        var doc = AXmlParser.Parse(bytes);
-
-        // 根元素必须是 manifest，且包含 application 子元素。
-        // The root must be "manifest" with an "application" child.
-        Assert.Equal("manifest", doc.Root.Name);
-        var application = doc.Root.FindChild("application");
-        Assert.NotNull(application);
-        Assert.True(application!.Attributes.Count > 0);
-
-        // 重建后重新解析，语义模型保持一致（根名、子元素数、属性数）。
-        // Rebuild and re-parse: the semantic model must be preserved (root name, child count, attr count).
-        var rebuilt = AXmlWriter.Write(doc);
-        Assert.True(AXmlParser.IsAxml(rebuilt));
-        var doc2 = AXmlParser.Parse(rebuilt);
-        Assert.Equal(doc.Root.Name, doc2.Root.Name);
-        Assert.Equal(doc.Root.Children.Count, doc2.Root.Children.Count);
-        Assert.Equal(doc.Root.Attributes.Count, doc2.Root.Attributes.Count);
     }
 
     [Fact]

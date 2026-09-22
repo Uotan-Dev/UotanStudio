@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Models;
 using UotanStudio.Firmware.SharedKernel;
@@ -31,8 +32,22 @@ public static class RockchipExtractor
         using var stream = File.OpenRead(imagePath);
         var entries = ReadEntries(stream);
         var paths = entries.Select(e => FileExtraction.ResolvePath(outputDirectory, e.Name)).ToArray();
+        stream.Position = 0;
+        Span<byte> magicBytes = stackalloc byte[4];
+        stream.ReadExactly(magicBytes);
+        var magic = BinaryPrimitives.ReadUInt32LittleEndian(magicBytes);
+        var templateName = magic == RkFwHeader.MagicRkfw ? "rkfw-header.bin" : "rkaf-header.bin";
+        var templateSize = magic == RkFwHeader.MagicRkfw ? RkFwHeader.StructSize : 2048;
+        var templatePath = FileExtraction.ResolvePath(outputDirectory, templateName);
         if (paths.Distinct(StringComparer.OrdinalIgnoreCase).Count() != paths.Length)
             throw new InvalidDataException("Duplicate Rockchip output paths.");
+        if (!overwrite && (File.Exists(templatePath) || paths.Any(File.Exists)))
+            throw new IOException("One or more Rockchip output files already exist and overwrite is disabled.");
+        FileExtraction.WriteAtomic(templatePath, output =>
+        {
+            stream.Position = 0;
+            StreamCopy.CopyExactly(stream, output, templateSize, cancellationToken: cancellationToken);
+        }, overwrite);
         var total = entries.Sum(e => e.Size);
         long copied = 0;
         for (var i = 0; i < entries.Count; i++)
@@ -76,6 +91,7 @@ public static class RockchipExtractor
             (header.BootOffset < (long)header.ImageOffset + header.ImageSize &&
              header.ImageOffset < (long)header.BootOffset + header.BootSize))
             throw new InvalidDataException("Invalid or overlapping RKFW payload regions.");
+        ValidateRkfwMd5(stream);
         stream.Position = header.BootOffset;
         var loaderTag = reader.ReadUInt32();
         var loaderName = loaderTag switch
@@ -94,13 +110,18 @@ public static class RockchipExtractor
     private static List<RkfwEntry> ReadRkaf(BinaryReader reader)
     {
         var stream = reader.BaseStream;
-        Span<byte> header = stackalloc byte[140];
+        if (stream.Length < 2052)
+            throw new InvalidDataException("RKAF image is shorter than its fixed header and checksum.");
+        Span<byte> header = stackalloc byte[2048];
         stream.ReadExactly(header);
         var declaredLength = (long)BinaryPrimitives.ReadUInt32LittleEndian(header[4..]) + 4;
-        FileExtraction.ValidateRange(0, declaredLength, stream.Length, "RKAF image");
+        if (declaredLength != stream.Length)
+            throw new InvalidDataException($"RKAF length declares {declaredLength} bytes, actual length is {stream.Length}.");
+        ValidateRkafChecksum(stream, declaredLength);
         var count = BinaryPrimitives.ReadUInt32LittleEndian(header[136..]);
-        var tableEnd = checked(140L + count * 112L);
-        FileExtraction.ValidateRange(140, count * 112L, declaredLength, "RKAF entry table");
+        if (count == 0 || count > 16)
+            throw new InvalidDataException("RKAF entry count is outside the supported range.");
+        const long tableEnd = 2048;
         var entries = new List<RkfwEntry>();
         Span<byte> descriptor = stackalloc byte[112];
         Span<byte> parameterHeader = stackalloc byte[8];
@@ -112,10 +133,8 @@ public static class RockchipExtractor
             var path = ReadString(descriptor.Slice(32, 64));
             if (path == "SELF") continue;
             long offset = BinaryPrimitives.ReadUInt32LittleEndian(descriptor[96..]);
-            var allocated = BinaryPrimitives.ReadUInt32LittleEndian(descriptor[104..]);
             long size = BinaryPrimitives.ReadUInt32LittleEndian(descriptor[108..]);
-            if (size > allocated) throw new InvalidDataException("RKAF entry exceeds its allocated length.");
-            CheckRegion(offset, allocated, tableEnd, declaredLength);
+            CheckRegion(offset, size, tableEnd, declaredLength - 4);
             if (name == "parameter")
             {
                 if (size < 12) throw new InvalidDataException("Truncated RKAF parameter wrapper.");
@@ -142,5 +161,57 @@ public static class RockchipExtractor
     {
         if (offset < headerSize) throw new InvalidDataException("Rockchip payload overlaps its header or table.");
         FileExtraction.ValidateRange(offset, size, length, "Rockchip payload");
+    }
+
+    private static void ValidateRkfwMd5(Stream stream)
+    {
+        if (stream.Length < RkFwHeader.StructSize + 32)
+            throw new InvalidDataException("RKFW image is missing its MD5 trailer.");
+        Span<byte> stored = stackalloc byte[32];
+        stream.Position = stream.Length - stored.Length;
+        stream.ReadExactly(stored);
+        foreach (var value in stored)
+        {
+            if (value is not (>= (byte)'0' and <= (byte)'9') and not (>= (byte)'a' and <= (byte)'f'))
+                throw new InvalidDataException("RKFW MD5 trailer is not lowercase hexadecimal ASCII.");
+        }
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
+        stream.Position = 0;
+        var remaining = stream.Length - stored.Length;
+        var buffer = new byte[128 * 1024];
+        while (remaining > 0)
+        {
+            var read = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+            if (read == 0) throw new EndOfStreamException();
+            hash.AppendData(buffer, 0, read);
+            remaining -= read;
+        }
+        var actual = Encoding.ASCII.GetBytes(Convert.ToHexStringLower(hash.GetHashAndReset()));
+        if (!CryptographicOperations.FixedTimeEquals(stored, actual))
+            throw new InvalidDataException("RKFW MD5 checksum mismatch.");
+    }
+
+    private static void ValidateRkafChecksum(Stream stream, long length)
+    {
+        stream.Position = 0;
+        var remaining = length - 4;
+        var crc = 0U;
+        var buffer = new byte[128 * 1024];
+        while (remaining > 0)
+        {
+            var read = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+            if (read == 0) throw new EndOfStreamException();
+            foreach (var value in buffer.AsSpan(0, read))
+            {
+                crc ^= (uint)value << 24;
+                for (var bit = 0; bit < 8; bit++)
+                    crc = (crc & 0x80000000) != 0 ? (crc << 1) ^ 0x04C10DB7U : crc << 1;
+            }
+            remaining -= read;
+        }
+        Span<byte> stored = stackalloc byte[4];
+        stream.ReadExactly(stored);
+        if (BinaryPrimitives.ReadUInt32LittleEndian(stored) != crc)
+            throw new InvalidDataException("RKAF CRC checksum mismatch.");
     }
 }

@@ -23,6 +23,14 @@ public sealed class Ext4Options
 
     public bool IncludeJournal { get; set; } = true;
 
+    /// <summary>Optional exact filesystem capacity in bytes; must be block aligned.</summary>
+    public long? TargetSizeBytes { get; init; }
+
+    /// <summary>Sets the EXT4 read-only compatible feature bit.</summary>
+    public bool ReadOnly { get; init; }
+
+    internal CancellationToken CancellationToken { get; init; }
+
     /// <summary>
     /// Optional path to an Android-style <c>fs_config</c> file (<c>path uid gid mode capabilities</c>)
     /// applied over the source tree; matching entries override the scanned uid/gid/mode.

@@ -220,11 +220,22 @@ public static class FileSystemPreservation
         };
     }
 
-    /// <summary>Rebuilds the extraction tree using validated source metadata, without retaining the original image.</summary>
+    /// <summary>
+    /// Rebuilds the extraction tree using validated source metadata, without retaining the original image.
+    /// An optional output limit bounds the emitted file extent before publication. For sparse output this
+    /// is the container size, not the logical partition size.
+    /// </summary>
     public static bool TryRestore(string inputDirectory, string outputPath, string format,
         CancellationToken cancellationToken = default,
-        Action<IReadOnlyDictionary<string, string>>? rebuildReport = null)
+        Action<IReadOnlyDictionary<string, string>>? rebuildReport = null,
+        long? maximumOutputBytes = null,
+        IReadOnlyList<FileSystemAttributeEdit>? attributeEdits = null,
+        IReadOnlyList<FileSystemXattrEdit>? xattrEdits = null)
     {
+        if (maximumOutputBytes is <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maximumOutputBytes));
+        }
         var metadata = RepackMetadata.Read(inputDirectory);
         if (metadata is null) return false;
         if (metadata.FormatName != format) throw new InvalidDataException("Filesystem metadata format does not match the requested image format.");
@@ -264,10 +275,21 @@ public static class FileSystemPreservation
         }
         var tables = FileSystemMetadataOverrides.LoadTables(metadataDirectory, metadata.SourceFileName, id);
         var plan = new FileSystemEditPlan(inputDirectory, manifest, projection, RepackMetadata.DetectPartitionName(metadata.SourceFileName));
+        if (xattrEdits is not null) { plan.ApplyUserXattrs(xattrEdits, cancellationToken); }
+        var effectiveFsConfig = new Dictionary<string, FsConfigEntry>(tables.FsConfig, StringComparer.Ordinal);
+        if (attributeEdits is not null)
+        {
+            foreach (var (path, attributes) in plan.ApplyAttributes(attributeEdits, cancellationToken))
+            {
+                effectiveFsConfig[path] = attributes;
+            }
+        }
         using var editScope = plan.Enter();
         FileExtraction.WriteAtomic(fullOutput, output =>
         {
-            BuildEdited(inputDirectory, output, format, tables.FsConfig, tables.FileContexts, tables.Rebuild,
+            using var bounded = maximumOutputBytes is { } capacity
+                ? new CapacityWriteStream(output, capacity, cancellationToken) : null;
+            BuildEdited(inputDirectory, (Stream?)bounded ?? output, format, effectiveFsConfig, tables.FileContexts, tables.Rebuild,
                 metadata.PackingOptions, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             var current = RepackMetadata.Read(inputDirectory);

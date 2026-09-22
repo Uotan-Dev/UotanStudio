@@ -76,7 +76,20 @@ public sealed class PacFormatHandler : IFormatHandler
     {
         try
         {
-            var count = PacExtractor.Extract(filePath, outputDirectory);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (options?.VerifyChecksums == true)
+            {
+                var (headOk, dataOk) = PacExtractor.Check(filePath, cancellationToken);
+                if (!headOk || !dataOk)
+                {
+                    return Task.FromResult(FirmwareOpResult.Fail(
+                        $"PAC checksum verification failed (header: {headOk}, data: {dataOk})."));
+                }
+            }
+
+            var selected = options?.CreateSelectedEntrySet();
+            var count = PacExtractor.Extract(filePath, outputDirectory,
+                selected is null ? null : selected.Contains, cancellationToken);
             return Task.FromResult(FirmwareOpResult.Ok($"Extracted {count} files to {outputDirectory}"));
         }
         catch (Exception ex)

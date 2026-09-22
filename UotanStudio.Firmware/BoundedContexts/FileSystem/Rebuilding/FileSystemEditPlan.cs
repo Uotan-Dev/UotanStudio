@@ -104,6 +104,113 @@ internal sealed class FileSystemEditPlan
         }
     }
 
+    internal IReadOnlyDictionary<string, FsConfigEntry> ApplyAttributes(IReadOnlyList<FileSystemAttributeEdit> edits, CancellationToken token)
+    {
+        if (edits.Count > 256) { throw new InvalidDataException("Too many filesystem attribute edits."); }
+        var original = entries.ToDictionary(pair => pair.Key,
+            pair => (pair.Value.Uid, pair.Value.Gid, Permissions: (ushort)(pair.Value.Mode & 0xFFF)), StringComparer.Ordinal);
+        var requested = new Dictionary<string, (uint Uid, uint Gid, ushort Permissions)>(StringComparer.Ordinal);
+        var targets = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var edit in edits)
+        {
+            token.ThrowIfCancellationRequested();
+            ArgumentNullException.ThrowIfNull(edit);
+            ArgumentNullException.ThrowIfNull(edit.Path);
+            var path = edit.Path.TrimStart('/');
+            if (edit.Path.Length is 0 or > 4096 || path.Contains('\\') || path.Contains('\0')
+                || path.Length > 0 && path.Split('/').Any(part => part is "" or "." or "..")
+                || !targets.Add(path) || edit.Permissions > 0xFFF || edit.ExpectedPermissions is > 0xFFF)
+            {
+                throw new InvalidDataException("Invalid or duplicate filesystem attribute target.");
+            }
+            if (!entries.TryGetValue(path, out var entry)) { throw new FileNotFoundException("Attribute target is missing.", path); }
+            var before = original[path];
+            if (edit.ExpectedUid is { } uid && uid != before.Uid
+                || edit.ExpectedGid is { } gid && gid != before.Gid
+                || edit.ExpectedPermissions is { } mode && mode != before.Permissions)
+            {
+                throw new InvalidDataException("Filesystem attribute old-value guard failed.");
+            }
+            var desired = (edit.Uid, edit.Gid, edit.Permissions);
+            var aliases = entry.Inode != 0 && (entry.Mode & 0xF000) == 0x8000
+                ? entries.Values.Where(item => item.Inode == entry.Inode && (item.Mode & 0xF000) == 0x8000)
+                : [entry];
+            foreach (var alias in aliases)
+            {
+                token.ThrowIfCancellationRequested();
+                if (requested.TryGetValue(alias.Path, out var previous) && previous != desired)
+                {
+                    throw new InvalidDataException("Conflicting attributes for hard-linked files.");
+                }
+                if ((alias.Mode & 0xFFF) != edit.Permissions && alias.Xattrs?.TryGetValue("system.posix_acl_access", out var acl) == true)
+                {
+                    alias.Xattrs["system.posix_acl_access"] = PosixAclPermissions.Apply(acl, edit.Permissions);
+                }
+                requested[alias.Path] = desired;
+                alias.Uid = edit.Uid;
+                alias.Gid = edit.Gid;
+                alias.Mode = (ushort)((alias.Mode & 0xF000) | edit.Permissions);
+            }
+        }
+        return requested.ToDictionary(pair => pair.Key,
+            pair => new FsConfigEntry(pair.Value.Uid, pair.Value.Gid, pair.Value.Permissions), StringComparer.Ordinal);
+    }
+
+    internal void ApplyUserXattrs(IReadOnlyList<FileSystemXattrEdit> edits, CancellationToken token)
+    {
+        if (edits.Count > 256) { throw new InvalidDataException("Too many extended attribute edits."); }
+        var requested = new Dictionary<(string Path, string Name), byte[]?>();
+        var xattrOriginals = new Dictionary<(string Path, string Name), byte[]?>();
+        var targets = new HashSet<(string Path, string Name)>();
+        foreach (var edit in edits)
+        {
+            token.ThrowIfCancellationRequested();
+            ArgumentNullException.ThrowIfNull(edit);
+            ArgumentNullException.ThrowIfNull(edit.Path);
+            ArgumentNullException.ThrowIfNull(edit.Name);
+            var path = edit.Path.TrimStart('/');
+            if (edit.Path.Length is 0 or > 4096 || path.Contains('\\') || path.Contains('\0')
+                || path.Length > 0 && path.Split('/').Any(part => part is "" or "." or "..")
+                || !edit.Name.StartsWith("user.", StringComparison.Ordinal) || edit.Name.Length is <= 5 or > 255
+                || edit.Name.Any(character => character is < '!' or > '~')
+                || edit.Value?.Length > 65536 || edit.ExpectedValue?.Length > 65536 || !targets.Add((path, edit.Name)))
+            {
+                throw new InvalidDataException("Invalid or duplicate user extended attribute edit.");
+            }
+            if (!entries.TryGetValue(path, out var entry)) { throw new FileNotFoundException("Extended attribute target is missing.", path); }
+            var current = entry.Xattrs?.GetValueOrDefault(edit.Name);
+            // Guards refer to the source attributes even if a prior request addressed a hardlink alias.
+            var original = xattrOriginals.GetValueOrDefault((path, edit.Name), current);
+            if (edit.CheckOldValue && !SameXattr(original, edit.ExpectedValue))
+            {
+                throw new InvalidDataException("Extended attribute old-value guard failed.");
+            }
+            var aliases = entry.Inode != 0 && (entry.Mode & 0xF000) == 0x8000
+                ? entries.Values.Where(item => item.Inode == entry.Inode && (item.Mode & 0xF000) == 0x8000)
+                : [entry];
+            foreach (var alias in aliases)
+            {
+                token.ThrowIfCancellationRequested();
+                var key = (alias.Path, edit.Name);
+                if (requested.TryGetValue(key, out var previous) && !SameXattr(previous, edit.Value))
+                {
+                    throw new InvalidDataException("Conflicting extended attributes for hard-linked files.");
+                }
+                xattrOriginals.TryAdd(key, alias.Xattrs?.GetValueOrDefault(edit.Name));
+                requested[key] = edit.Value;
+                if (edit.Value is null) { alias.Xattrs?.Remove(edit.Name); }
+                else
+                {
+                    alias.Xattrs ??= new(StringComparer.Ordinal);
+                    alias.Xattrs[edit.Name] = edit.Value.ToArray();
+                }
+            }
+        }
+    }
+
+    private static bool SameXattr(byte[]? first, byte[]? second)
+        => first is null ? second is null : second is not null && first.AsSpan().SequenceEqual(second);
+
     internal string ContentSource(string fullPath) => contentSources.GetValueOrDefault(Relative(fullPath), fullPath);
     internal bool Includes(string fullPath) => hostPaths.ContainsKey(Relative(fullPath));
     internal PreservedInodeEntry Get(string fullPath) => entries[hostPaths[Relative(fullPath)]];

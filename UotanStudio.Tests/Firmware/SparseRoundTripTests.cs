@@ -4,6 +4,7 @@ using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.DataProviders;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
+using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -27,6 +28,41 @@ public class SparseRoundTripTests
 
         Assert.Throws<ArgumentOutOfRangeException>(() => SparseImageConverter.ConvertRawToSparse(input, output, blockSize: 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => SparseImageConverter.ConvertRawToSparse(input, output, blockSize: 6));
+    }
+
+    [Fact]
+    public void ConvertSparseToRaw_InvalidChunk_PreservesExistingDestination()
+    {
+        using var temp = new TempDirectory();
+        var raw = temp.WriteBytes("raw.img", BuildBytes(BlockSize * 2, 9));
+        var sparse = Path.Combine(temp.Path, "valid.sparse");
+        SparseImageConverter.ConvertRawToSparse(raw, sparse, BlockSize);
+        var invalid = temp.WriteBytes("invalid.sparse", "not sparse"u8.ToArray());
+        var existing = "existing destination"u8.ToArray();
+        var output = temp.WriteBytes("merged.img", existing);
+
+        Assert.ThrowsAny<Exception>(() => SparseImageConverter.ConvertSparseToRawCancellable([sparse, invalid], output,
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(existing, File.ReadAllBytes(output));
+    }
+
+    [Fact]
+    public void ConvertSparseToRaw_PreCancelled_PreservesExistingDestination()
+    {
+        using var temp = new TempDirectory();
+        var raw = temp.WriteBytes("raw.img", BuildBytes(BlockSize * 2, 9));
+        var sparse = Path.Combine(temp.Path, "valid.sparse");
+        SparseImageConverter.ConvertRawToSparse(raw, sparse, BlockSize);
+        var existing = "existing destination"u8.ToArray();
+        var output = temp.WriteBytes("merged.img", existing);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() => SparseImageConverter.ConvertSparseToRawCancellable([sparse], output,
+            cancellation.Token));
+
+        Assert.Equal(existing, File.ReadAllBytes(output));
     }
 
     [Fact]

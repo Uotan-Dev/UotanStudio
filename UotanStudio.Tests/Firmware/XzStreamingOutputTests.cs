@@ -16,8 +16,8 @@ public class XzStreamingOutputTests
         => AssertSpooling(length, 1, verifyRoundTrip: true);
 
     [Fact]
-    public void Crc64Spooling_PreservesLegacyBytesOnly()
-        => AssertSpooling(2097169, 4, verifyRoundTrip: false);
+    public void Crc64Spooling_PreservesArrayStreamIdentityAndRoundTrips()
+        => AssertSpooling(2097169, 4, verifyRoundTrip: true);
 
     [Fact]
     public void LargeCompressibleInput_DoesNotFallBackToUncompressedChunks()
@@ -42,9 +42,6 @@ public class XzStreamingOutputTests
         using var output = new NonSeekableOutput();
         XzCompressor.Compress(input, output, checkType: check, maxDegreeOfParallelism: 1);
         Assert.Equal(expected, output.Bytes);
-        // CRC64 is retained byte-for-byte here; the existing writer uses a different
-        // CRC64 variant than XZ and its interoperability defect is outside this optimization.
-        // CRC64 此处仅验证旧字节兼容；既有写端 CRC64 变体不符 XZ，另行记录该格式缺陷。
         if (verifyRoundTrip) Assert.Equal(data, XzCompressor.Decompress(output.Bytes));
     }
 

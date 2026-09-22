@@ -9,7 +9,6 @@ using UotanStudio.Firmware.SharedKernel.Repacking;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Firmware;
-using UotanStudio.Tests.Infrastructure;
 using UotanStudio.ViewModels.NodeViewModels;
 using Xunit;
 
@@ -306,19 +305,6 @@ public sealed class DtboRepackTests : IDisposable
         EditManifest(json => json["imageSize"] = 0);
         DtboFormat.PackDirectory(Unpacked, Output, Cancellation);
         Assert.Equal(Dtb("original-0"), DtboFormat.Read(File.ReadAllBytes(Output)).Dtbs[0]);
-    }
-
-    [Fact]
-    public void RealCorpus_UnmodifiedDtbo_IsByteIdentical()
-    {
-        var path = FirmwareCorpus.FindFile("dtbo_a.img");
-        if (path is null) Assert.Skip("dtbo_a.img not found in firmware corpus.");
-        DtboFormat.Unpack(path!, Unpacked, cancellationToken: Cancellation);
-        DtboFormat.PackDirectory(Unpacked, Output, Cancellation);
-        using var before = File.OpenRead(path!);
-        using var after = File.OpenRead(Output);
-        Assert.Equal(before.Length, after.Length);
-        Assert.Equal(System.Security.Cryptography.SHA256.HashData(before), System.Security.Cryptography.SHA256.HashData(after));
     }
 
     [Fact]

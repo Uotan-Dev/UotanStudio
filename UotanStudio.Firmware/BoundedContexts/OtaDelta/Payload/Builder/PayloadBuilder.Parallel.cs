@@ -19,7 +19,7 @@ public sealed partial class PayloadBuilder
     public PayloadBuilder WithCompressionWorkers(int workers)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(workers, 1);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(workers, 8);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(workers, SharedKernel.FirmwareParallelism.MaximumWorkers);
         _compressionWorkers = workers;
         return this;
     }

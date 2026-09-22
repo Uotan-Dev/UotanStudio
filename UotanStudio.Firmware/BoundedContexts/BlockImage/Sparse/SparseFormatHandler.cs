@@ -57,6 +57,7 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler, IRepackMe
     {
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var header = SparseReader.PeekHeader(filePath);
             var fileSize = (long)header.TotalBlocks * header.BlockSize;
             var summary = $"Sparse image: {header.TotalChunks} chunks, {header.TotalBlocks} blocks x {header.BlockSize}B = {fileSize} bytes";
@@ -65,8 +66,17 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler, IRepackMe
                 ["BlockSize"] = header.BlockSize.ToString(),
                 ["TotalBlocks"] = header.TotalBlocks.ToString(),
                 ["TotalChunks"] = header.TotalChunks.ToString(),
-                ["ImageSize"] = fileSize.ToString()
+                ["ImageSize"] = fileSize.ToString(),
+                ["MajorVersion"] = header.MajorVersion.ToString(),
+                ["MinorVersion"] = header.MinorVersion.ToString(),
+                ["FileHeaderSize"] = header.FileHeaderSize.ToString(),
+                ["ChunkHeaderSize"] = header.ChunkHeaderSize.ToString(),
+                ["ImageChecksum"] = $"0x{header.ImageChecksum:X8}"
             }));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

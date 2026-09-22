@@ -5,8 +5,10 @@ namespace UotanStudio.Firmware.SharedKernel.Streams;
 /// <summary>Copies physically contiguous block runs with a bounded buffer; holes remain zero filled.</summary>
 internal static class MappedBlockCopy
 {
-    internal static void Copy(Stream source, Stream destination, long size, int blockSize, Func<uint, long?> mapBlock)
+    internal static void Copy(Stream source, Stream destination, long size, int blockSize, Func<uint, long?> mapBlock,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentOutOfRangeException.ThrowIfNegative(size);
         if (size == 0) return;
         const int maximumBuffer = 1024 * 1024;
@@ -22,10 +24,12 @@ internal static class MappedBlockCopy
             long? pending = mapBlock(0);
             while (logical < blocks)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var first = pending;
                 var run = 1;
                 while (run < capacity / blockSize && logical + (uint)run < blocks)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     pending = mapBlock(logical + (uint)run);
                     if (first is null ? pending is not null : pending != checked(first + run)) break;
                     run++;
@@ -44,7 +48,9 @@ internal static class MappedBlockCopy
                     buffer.AsSpan(0, readLength).Clear();
                 }
                 var written = (int)Math.Min(remaining, readLength);
+                cancellationToken.ThrowIfCancellationRequested();
                 destination.Write(buffer, 0, written);
+                cancellationToken.ThrowIfCancellationRequested();
                 remaining -= written;
                 logical += (uint)run;
                 if (logical < blocks && run == capacity / blockSize) pending = mapBlock(logical);

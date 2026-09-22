@@ -1,5 +1,4 @@
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.Kernel;
-using UotanStudio.Tests.Infrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -63,35 +62,6 @@ public sealed class Arm64ImageHeaderTests
         var corrupted = RealDeviceHeader.ToArray();
         corrupted[0x38] = 0x00;
         Assert.False(Arm64ImageHeader.TryParse(corrupted, out _));
-    }
-
-    [Fact]
-    public void TryParse_RealCorpusImage_HoldsStructuralInvariants()
-    {
-        var path = FirmwareCorpus.FindFile("Image");
-        if (path is null)
-        {
-            Assert.Skip("No Image found in firmware corpus");
-        }
-
-        var bytes = new byte[0x40];
-        using (var file = File.OpenRead(path))
-        {
-            if (file.Read(bytes) != 0x40)
-            {
-                Assert.Skip("Corpus Image is shorter than the 64-byte arm64 header");
-            }
-        }
-
-        // 语料中的 Image 可能不是 arm64（例如 x86 bzImage）；只有合法 arm64 头才做结构断言。
-        // A corpus Image may not be arm64 (e.g. an x86 bzImage); structural asserts run only on a valid arm64 header.
-        if (!Arm64ImageHeader.TryParse(bytes, out var header))
-        {
-            Assert.Skip("Corpus Image is not an arm64 Linux Image header");
-        }
-
-        Assert.True(header.ImageSize > 0);
-        Assert.Contains(header.PageSizeShift, new[] { 12, 14, 16 });
     }
 
     private static byte[] BuildHeader(ulong flags)

@@ -8,6 +8,7 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Extraction;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Repacking;
 using Xunit;
@@ -69,6 +70,97 @@ public sealed class FileSystemPreservationTests : IDisposable
         var changed = await handler.PackAsync(extracted, output, Token);
         Assert.True(changed.Success, changed.Summary);
         Assert.Equal("changed-content", ReadImageFile(format, output, "data"));
+    }
+
+    [Theory]
+    [InlineData("EXT4")]
+    [InlineData("EROFS")]
+    public async Task TryRestore_PartitionCapacity_RejectsOversizeAndPreservesOutput(string format)
+    {
+        var (_, _, extracted) = await ExtractAsync(format);
+        await File.WriteAllTextAsync(Path.Combine(extracted, "data"), "patched-content", Token);
+        var reference = Path.Combine(_root, "reference.img");
+        Assert.True(FileSystemPreservation.TryRestore(extracted, reference, format, Token));
+        var capacity = new FileInfo(reference).Length;
+        var output = Path.Combine(_root, "bounded.img");
+        await File.WriteAllTextAsync(output, "keep-original-output", Token);
+
+        Assert.Throws<IOException>(() => FileSystemPreservation.TryRestore(extracted, output, format, Token,
+            maximumOutputBytes: capacity - 1));
+
+        Assert.Equal("keep-original-output", await File.ReadAllTextAsync(output, Token));
+        Assert.Empty(Directory.GetFiles(_root, "*.tmp-*"));
+        Assert.True(FileSystemPreservation.TryRestore(extracted, output, format, Token, maximumOutputBytes: capacity));
+        Assert.Equal(capacity, new FileInfo(output).Length);
+        Assert.Equal("patched-content", ReadImageFile(format, output, "data"));
+    }
+
+    [Theory]
+    [InlineData("EXT4")]
+    [InlineData("EROFS")]
+    public async Task TryRestore_ExplicitAttributes_ChangesInodeWithoutChangingContent(string format)
+    {
+        var (_, _, extracted) = await ExtractAsync(format);
+        var output = Path.Combine(_root, "attributes.img");
+        Assert.True(FileSystemPreservation.TryRestore(extracted, output, format, Token,
+            attributeEdits: [new("/data", 1234, 2345, 0x1ED)]));
+        Assert.Equal("original-content", ReadImageFile(format, output, "data"));
+        if (format == "EXT4")
+        {
+            using var parser = new Ext4Parser(output);
+            var entry = parser.ListFiles().Single(entry => entry.Path == "data");
+            Assert.Equal(1234u, entry.Uid);
+            Assert.Equal(2345u, entry.Gid);
+            Assert.Equal(0x81ED, entry.Mode);
+        }
+        else
+        {
+            using var parser = new ErofsParser(output);
+            var entry = parser.EnumerateFiles().Single(entry => entry.Path == "data");
+            Assert.Equal(1234u, entry.Uid);
+            Assert.Equal(2345u, entry.Gid);
+            Assert.Equal(0x81ED, entry.Mode);
+        }
+        // Requests never rewrite the authenticated preservation snapshot.
+        var unchanged = Path.Combine(_root, "unchanged.img");
+        Assert.True(FileSystemPreservation.TryRestore(extracted, unchanged, format, Token));
+    }
+
+    [Theory]
+    [InlineData("EXT4")]
+    [InlineData("EROFS")]
+    public async Task TryRestore_AttributeGuardFails_PreservesExistingOutput(string format)
+    {
+        var (_, _, extracted) = await ExtractAsync(format);
+        var output = Path.Combine(_root, "attributes.img");
+        await File.WriteAllTextAsync(output, "existing", Token);
+        Assert.Throws<InvalidDataException>(() => FileSystemPreservation.TryRestore(extracted, output, format, Token,
+            attributeEdits: [new("/data", 1234, 2345, 0x1ED, ExpectedUid: uint.MaxValue)]));
+        Assert.Equal("existing", await File.ReadAllTextAsync(output, Token));
+    }
+
+    [Theory]
+    [InlineData("EXT4")]
+    [InlineData("EROFS")]
+    public async Task TryRestore_UserXattr_WritesActualBytesAndHonorsAbsenceGuard(string format)
+    {
+        var (handler, _, extracted) = await ExtractAsync(format);
+        var output = Path.Combine(_root, "xattr.img");
+        Assert.True(FileSystemPreservation.TryRestore(extracted, output, format, Token,
+            xattrEdits: [new("/data", "user.patch", [0, 255, 128], true)]));
+        using (var image = File.OpenRead(output))
+        {
+            Assert.Equal(new byte[] { 0, 255, 128 }, UotanStudio.Firmware.BoundedContexts.Patching.ImageAttributeReader.ReadXattr(
+                image, format, "/data", "user.patch", Token));
+        }
+        var secondTree = Path.Combine(_root, "second");
+        Assert.True((await handler.UnpackAsync(output, secondTree, cancellationToken: Token)).Success);
+        var removed = Path.Combine(_root, "removed.img");
+        Assert.True(FileSystemPreservation.TryRestore(secondTree, removed, format, Token,
+            xattrEdits: [new("/data", "user.patch", null, true, [0, 255, 128])]));
+        using var result = File.OpenRead(removed);
+        Assert.Null(UotanStudio.Firmware.BoundedContexts.Patching.ImageAttributeReader.ReadXattr(result, format, "/data", "user.patch", Token));
+        Assert.Equal("original-content", ReadImageFile(format, removed, "data"));
     }
 
     [Theory]

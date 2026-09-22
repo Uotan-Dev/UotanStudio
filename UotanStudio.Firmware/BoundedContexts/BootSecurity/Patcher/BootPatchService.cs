@@ -9,6 +9,7 @@ using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.Kernel;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.Models;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Workflow;
 using UotanStudio.Firmware.BoundedContexts.Compression;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher;
@@ -443,14 +444,7 @@ public sealed class BootPatchService
         {
             if (entry.Data is not { Length: > 0 } data || data.Length > 4 * 1024 * 1024) continue;
             var text = Encoding.UTF8.GetString(data);
-            var updated = text;
-            if (!options.KeepVerity)
-            {
-                updated = System.Text.RegularExpressions.Regex.Replace(updated, @"(?i)([, ]|^)(avb|verify)(=[^, ]+)?", "$1");
-                updated = System.Text.RegularExpressions.Regex.Replace(updated, @"(?i),avb_keys=[^, ]+", string.Empty);
-            }
-            if (!options.KeepForceEncryption)
-                updated = System.Text.RegularExpressions.Regex.Replace(updated, @"(?i)([, ]|^)(forceencrypt|fileencryption|forcefdeorfbe)(=[^, ]+)?", "$1");
+            var updated = FstabVerificationEditor.Patch(text, !options.KeepVerity, !options.KeepForceEncryption);
             if (!string.Equals(updated, text, StringComparison.Ordinal))
             {
                 editor.AddOrReplace(entry.Name, Encoding.UTF8.GetBytes(updated), entry.Metadata);

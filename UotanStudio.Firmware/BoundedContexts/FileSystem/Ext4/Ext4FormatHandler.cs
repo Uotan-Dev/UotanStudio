@@ -65,20 +65,35 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider
         {
             cancellationToken.ThrowIfCancellationRequested();
             using var parser = new Ext4Parser(filePath);
-            var entries = parser.ListFiles();
+            cancellationToken.ThrowIfCancellationRequested();
+            var sb = parser.Superblock;
             var metadata = new Dictionary<string, string>
             {
                 ["PartitionSize"] = parser.PartitionSize.ToString(),
                 ["BlockSize"] = parser.BlockSize.ToString(),
                 ["BlockCount"] = parser.BlockCount.ToString(),
                 ["InodeCount"] = parser.InodeCount.ToString(),
-                ["FileCount"] = parser.FileCount.ToString(),
-                ["DirectoryCount"] = parser.DirectoryCount.ToString(),
+                ["Uuid"] = MetadataDisplay.Uuid(sb.Uuid),
+                ["VolumeName"] = sb.VolumeName,
+                ["FreeBlocksCount"] = MetadataDisplay.Number(sb.FreeBlocksCount),
+                ["FreeInodesCount"] = MetadataDisplay.Number(sb.FreeInodesCount),
+                ["FirstDataBlock"] = MetadataDisplay.Number(sb.FirstDataBlock),
+                ["BlocksPerGroup"] = MetadataDisplay.Number(sb.BlocksPerGroup),
+                ["InodesPerGroup"] = MetadataDisplay.Number(sb.InodesPerGroup),
+                ["RevLevel"] = MetadataDisplay.Number(sb.RevLevel),
+                ["InodeSize"] = MetadataDisplay.Number(sb.InodeSize),
+                ["EffectiveDescSize"] = MetadataDisplay.Number(sb.EffectiveDescSize),
+                ["DefHashVersion"] = MetadataDisplay.Number(sb.DefHashVersion),
+                ["JournalInum"] = MetadataDisplay.Number(sb.JournalInum),
+                ["LastOrphan"] = MetadataDisplay.Number(sb.LastOrphan),
+                ["Checksum"] = $"0x{sb.Checksum:X8}",
+                ["FeatureCompat"] = MetadataDisplay.Flags(sb.FeatureCompat, (1, "dir_prealloc"), (2, "imagic_inodes"), (4, "has_journal"), (8, "ext_attr"), (16, "resize_inode"), (32, "dir_index"), (64, "lazy_bg"), (128, "exclude_inode"), (256, "exclude_bitmap"), (512, "sparse_super2"), (1024, "fast_commit"), (2048, "stable_inodes"), (4096, "orphan_file")),
+                ["FeatureIncompat"] = MetadataDisplay.Flags(sb.FeatureIncompat, (1, "compression"), (2, "filetype"), (4, "needs_recovery"), (8, "journal_dev"), (16, "meta_bg"), (64, "extents"), (128, "64bit"), (256, "mmp"), (512, "flex_bg"), (1024, "ea_inode"), (4096, "dirdata"), (8192, "csum_seed"), (16384, "largedir"), (32768, "inline_data"), (65536, "encrypt"), (131072, "casefold")),
+                ["FeatureRoCompat"] = MetadataDisplay.Flags(sb.FeatureRoCompat, (1, "sparse_super"), (2, "large_file"), (4, "btree_dir"), (8, "huge_file"), (16, "gdt_csum"), (32, "dir_nlink"), (64, "extra_isize"), (128, "has_snapshot"), (256, "quota"), (512, "bigalloc"), (1024, "metadata_csum"), (2048, "replica"), (4096, "readonly"), (8192, "project"), (16384, "shared_blocks"), (32768, "verity"), (65536, "orphan_present")),
+                ["State"] = MetadataDisplay.Flags(sb.State, (1, "clean"), (2, "errors"), (4, "orphan_recovery")),
             };
-            var summary = $"EXT4 image: {parser.BlockCount} blocks x {parser.BlockSize}B = {parser.PartitionSize} bytes, "
-                + $"{parser.InodeCount} inodes, {parser.FileCount} files, {parser.DirectoryCount} directories.";
-            var components = entries.Select(e => FirmwareComponent.Of(e.Path, e.Size)).ToList();
-            return Task.FromResult(FirmwareOpResult.Ok(summary, [.. entries.Select(e => e.Path)], metadata, components));
+            var summary = $"EXT4 image: {parser.BlockCount} blocks x {parser.BlockSize}B = {parser.PartitionSize} bytes, {parser.InodeCount} inodes.";
+            return Task.FromResult(FirmwareOpResult.Ok(summary, metadata: metadata));
         }
         catch (OperationCanceledException)
         {

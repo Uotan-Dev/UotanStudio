@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
 using Org.BouncyCastle.Crypto;
@@ -671,7 +670,7 @@ public static class AvbSigner
         uint requiredMinor)
     {
         var keyNumBytes = keyBits / 8;
-        var publicKeyBlob = BuildAvbRsaPublicKeyBlob(key, keyBits);
+        var publicKeyBlob = AvbRsaPublicKeyCodec.Export(key, keyBits);
         var auxSize = checked((ulong)publicKeyBlob.Length + (ulong)descriptorBytes.Length);
         var authSize = checked(Sha256Size + (ulong)keyNumBytes);
 
@@ -741,40 +740,6 @@ public static class AvbSigner
         return header;
     }
 
-    private static byte[] BuildAvbRsaPublicKeyBlob(RsaKeyParameters key, int keyBits)
-    {
-        var keyNumBytes = keyBits / 8;
-        var modulus = ToFixedLengthModulus(key, keyNumBytes);
-        var n = new BigInteger(modulus, isUnsigned: true, isBigEndian: true);
-        var n0inv = ComputeN0Inv(modulus);
-        var rr = BigInteger.ModPow(BigInteger.One << (keyBits * 2), BigInteger.One, n);
-        var rrBytes = ToBigEndianPadded(rr, keyNumBytes);
-
-        var blob = new byte[checked(8 + (keyNumBytes * 2))];
-        WriteUInt32BE(blob, 0, (uint)keyBits);
-        WriteUInt32BE(blob, 4, n0inv);
-        modulus.CopyTo(blob, 8);
-        rrBytes.CopyTo(blob, 8 + keyNumBytes);
-        return blob;
-    }
-
-    private static byte[] ToFixedLengthModulus(RsaKeyParameters key, int keyNumBytes)
-    {
-        var modulus = key.Modulus.ToByteArrayUnsigned();
-        if (modulus.Length == keyNumBytes)
-        {
-            return modulus;
-        }
-
-        if (modulus.Length > keyNumBytes)
-        {
-            return modulus.AsSpan(modulus.Length - keyNumBytes, keyNumBytes).ToArray();
-        }
-
-        var padded = new byte[keyNumBytes];
-        modulus.CopyTo(padded, keyNumBytes - modulus.Length);
-        return padded;
-    }
 
     /// <summary>
     /// Serializes hash descriptors in the upstream libavb hash descriptor layout.
@@ -1123,42 +1088,6 @@ public static class AvbSigner
         }
 
         return end == 0 ? string.Empty : Encoding.ASCII.GetString(bytes[..end]);
-    }
-
-    private static uint ComputeN0Inv(byte[] modulusBigEndian)
-    {
-
-        var count = Math.Min(4, modulusBigEndian.Length);
-        var low = 0U;
-        for (var i = 0; i < count; i++)
-        {
-            low = (low << 8) | modulusBigEndian[modulusBigEndian.Length - count + i];
-        }
-
-
-        var inverse = 1U;
-        for (var i = 0; i < 5; i++)
-        {
-            inverse = unchecked(inverse * (2U - (low * inverse)));
-        }
-
-        return unchecked(0U - inverse);
-    }
-
-    private static byte[] ToBigEndianPadded(BigInteger value, int length)
-    {
-        var bytes = value.ToByteArray(isUnsigned: true, isBigEndian: true);
-        var padded = new byte[length];
-        if (bytes.Length >= length)
-        {
-            Array.Copy(bytes, bytes.Length - length, padded, 0, length);
-        }
-        else
-        {
-            bytes.CopyTo(padded, length - bytes.Length);
-        }
-
-        return padded;
     }
 
     private static bool PathsEqual(string first, string second)

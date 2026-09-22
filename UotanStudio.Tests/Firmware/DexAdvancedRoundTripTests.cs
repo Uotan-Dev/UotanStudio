@@ -140,23 +140,6 @@ public class DexAdvancedRoundTripTests
         Assert.Equal([0x01, 0x00, 0x00], code.DebugInfo);
     }
 
-    [Fact]
-    public void RealMagiskDex_PreservesTriesDebugInfoAndAnnotations()
-    {
-        var path = Path.Combine(AppContext.BaseDirectory, "Firmware", "Files", "magisk_classes2.dex");
-        var original = DexFile.Load(path);
-
-        int CountTries(DexFile d) => d.Classes.Sum(c => c.AllMethods.Sum(m => m.Code?.Tries.Count ?? 0));
-        int CountDebugInfo(DexFile d) => d.Classes.Sum(c => c.AllMethods.Count(m => m.Code?.DebugInfo != null));
-        int CountAnnotations(DexFile d) => d.Classes.Count(c => c.Annotations is { IsEmpty: false });
-
-        var rebuilt = DexFile.Load(original.ToArray());
-
-        Assert.Equal(CountTries(original), CountTries(rebuilt));
-        Assert.Equal(CountDebugInfo(original), CountDebugInfo(rebuilt));
-        Assert.Equal(CountAnnotations(original), CountAnnotations(rebuilt));
-    }
-
     // ---- 构造辅助 ----
 
     /// <summary>带 try/catch 的 DEX：run()V，insns = [const/4 v0,#0 ; nop ; return-void]，

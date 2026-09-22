@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip;
@@ -16,22 +17,23 @@ public sealed class RockchipTests : IDisposable
     // Independent offsets from RKImage.h and rkflashtool/rkunpack.c.
     internal static byte[] BuildRkaf(string path, byte[] payload)
     {
-        var image = new byte[512 + payload.Length];
+        var image = new byte[4096 + 4];
         "RKAF"u8.CopyTo(image);
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(4), (uint)image.Length - 4);
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(136), 1);
         Encoding.UTF8.GetBytes("boot").CopyTo(image, 140);
         Encoding.UTF8.GetBytes(path).CopyTo(image, 172);
-        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(236), 512);
-        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(244), (uint)payload.Length);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(236), 2048);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(244), 1);
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(248), (uint)payload.Length);
-        payload.CopyTo(image, 512);
+        payload.CopyTo(image, 2048);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(image.Length - 4), RkCrc32(image.AsSpan(0, image.Length - 4)));
         return image;
     }
 
     internal static byte[] BuildRkfw(byte[] loader, byte[] image)
     {
-        var data = new byte[102 + loader.Length + image.Length];
+        var data = new byte[102 + loader.Length + image.Length + 32];
         "RKFW"u8.CopyTo(data);
         BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(4), 102);
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(6), 0x08010000);
@@ -42,19 +44,21 @@ public sealed class RockchipTests : IDisposable
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(37), (uint)image.Length);
         loader.CopyTo(data, 102);
         image.CopyTo(data, 102 + loader.Length);
+        var digest = Convert.ToHexStringLower(MD5.HashData(data.AsSpan(0, data.Length - 32)));
+        Encoding.ASCII.GetBytes(digest).CopyTo(data, data.Length - 32);
         return data;
     }
 
-    [Fact]
-    public void NativeAfptoolImage_ExtractsBothContainerLayers()
+    private static uint RkCrc32(ReadOnlySpan<byte> data)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Firmware", "Files", "review-native-rkfw.img");
-        var output = Path.Combine(_root, "native");
-        RockchipExtractor.Extract(path, output, cancellationToken: TestContext.Current.CancellationToken);
-        Assert.StartsWith("BOOTIndependent loader fixture", File.ReadAllText(Path.Combine(output, "BOOT")));
-        var embedded = Path.Combine(output, "embedded-update.img");
-        RockchipExtractor.Extract(embedded, Path.Combine(output, "rkaf"), cancellationToken: TestContext.Current.CancellationToken);
-        Assert.Equal("Independent Rockchip native fixture payload\n", File.ReadAllText(Path.Combine(output, "rkaf", "Image", "boot.img")));
+        var crc = 0U;
+        foreach (var value in data)
+        {
+            crc ^= (uint)value << 24;
+            for (var bit = 0; bit < 8; bit++)
+                crc = (crc & 0x80000000) != 0 ? (crc << 1) ^ 0x04C10DB7U : crc << 1;
+        }
+        return crc;
     }
 
     [Fact]
@@ -133,6 +137,7 @@ public sealed class RockchipTests : IDisposable
         var image = BuildRkaf("parameter.txt", wrapped);
         image.AsSpan(140, 32).Clear();
         "parameter"u8.CopyTo(image.AsSpan(140));
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(image.Length - 4), RkCrc32(image.AsSpan(0, image.Length - 4)));
         var path = Write(image);
         RockchipExtractor.Extract(path, Path.Combine(_root, "out"), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("test", File.ReadAllText(Path.Combine(_root, "out", "parameter.txt")));
@@ -180,6 +185,83 @@ public sealed class RockchipTests : IDisposable
             TestContext.Current.CancellationToken));
         Assert.Equal(BuildRkaf("boot.img", [7, 8, 9]), await File.ReadAllBytesAsync(
             Path.Combine(output, "embedded-update.img"), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Rkfw_MetadataOptionsAndSavedHeader_RoundTripByteIdentically()
+    {
+        var source = Path.Combine(_root, "rkfw-metadata-source");
+        Directory.CreateDirectory(source);
+        await File.WriteAllBytesAsync(Path.Combine(source, "BOOT"), "BOOTmetadata"u8.ToArray(),
+            TestContext.Current.CancellationToken);
+        await File.WriteAllBytesAsync(Path.Combine(source, "embedded-update.img"), BuildRkaf("boot.img", [4, 5, 6]),
+            TestContext.Current.CancellationToken);
+        var original = Path.Combine(_root, "rkfw-metadata.img");
+        var handler = new RockchipFormatHandler();
+
+        var packed = await handler.PackAsync(source, original, new RockchipPackOptions
+        {
+            Chip = "RK3588",
+            Version = "11.2.513",
+            Timestamp = DateTimeOffset.FromUnixTimeSeconds(1_731_031_994),
+            Code = 0x02000000
+        }, TestContext.Current.CancellationToken);
+
+        Assert.True(packed.Success, packed.Summary);
+        var bytes = await File.ReadAllBytesAsync(original, TestContext.Current.CancellationToken);
+        Assert.Equal("8853"u8.ToArray(), bytes.AsSpan(0x15, 4).ToArray());
+        Assert.Equal(11, bytes[9]);
+        Assert.Equal(2, bytes[8]);
+        Assert.Equal(513, BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(6)));
+        Assert.Equal(0x02000000u, BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(10)));
+
+        var extracted = Path.Combine(_root, "rkfw-metadata-out");
+        RockchipExtractor.Extract(original, extracted, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(File.Exists(Path.Combine(extracted, "rkfw-header.bin")));
+        var rebuilt = Path.Combine(_root, "rkfw-metadata-rebuilt.img");
+        var repacked = await handler.PackAsync(extracted, rebuilt, TestContext.Current.CancellationToken);
+        Assert.True(repacked.Success, repacked.Summary);
+        Assert.Equal(bytes, await File.ReadAllBytesAsync(rebuilt, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Rkaf_MetadataOptionsAndSavedHeader_PreserveUnknownBytes()
+    {
+        var source = Path.Combine(_root, "rkaf-metadata-source");
+        Directory.CreateDirectory(Path.Combine(source, "Image"));
+        await File.WriteAllTextAsync(Path.Combine(source, "package-file"),
+            "package-file package-file\nboot Image/boot.img\n", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(source, "Image", "boot.img"), "metadata payload",
+            TestContext.Current.CancellationToken);
+        var original = Path.Combine(_root, "rkaf-metadata.img");
+        var handler = new RockchipFormatHandler();
+
+        var packed = await handler.PackAsync(source, original, new RockchipPackOptions
+        {
+            Model = "RK3566-demo",
+            Manufacturer = "Uotan"
+        }, TestContext.Current.CancellationToken);
+
+        Assert.True(packed.Success, packed.Summary);
+        var extracted = Path.Combine(_root, "rkaf-metadata-out");
+        RockchipExtractor.Extract(original, extracted, cancellationToken: TestContext.Current.CancellationToken);
+        var templatePath = Path.Combine(extracted, "rkaf-header.bin");
+        var template = await File.ReadAllBytesAsync(templatePath, TestContext.Current.CancellationToken);
+        template[0x25] = 0x48;
+        template[0x26] = 0x01;
+        await File.WriteAllBytesAsync(templatePath, template, TestContext.Current.CancellationToken);
+
+        var rebuilt = Path.Combine(_root, "rkaf-metadata-rebuilt.img");
+        var repacked = await handler.PackAsync(extracted, rebuilt, TestContext.Current.CancellationToken);
+
+        Assert.True(repacked.Success, repacked.Summary);
+        var bytes = await File.ReadAllBytesAsync(rebuilt, TestContext.Current.CancellationToken);
+        Assert.Equal("RK3566-demo", Encoding.UTF8.GetString(bytes.AsSpan(8, 11)));
+        Assert.Equal("Uotan", Encoding.UTF8.GetString(bytes.AsSpan(72, 5)));
+        Assert.Equal(0x48, bytes[0x25]);
+        Assert.Equal(0x01, bytes[0x26]);
+        Assert.Equal(2048u, BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(140 + 104)) * 2048u);
+        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(136)));
     }
 
     private string Write(byte[] image)

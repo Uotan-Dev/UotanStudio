@@ -66,6 +66,69 @@ public static partial class KernelToolchainService
         return result;
     }
 
+    /// <summary>Locates and decodes a compressed binary kallsyms table from a raw or compressed kernel image.</summary>
+    public static async Task<KallsymsBinaryResult> ReadKallsymsBinaryAsync(
+        string path,
+        CancellationToken cancellationToken = default)
+    {
+        var data = await ReadBoundedAsync(path, cancellationToken).ConfigureAwait(false);
+        var type = BootCompressor.Detect(data.AsSpan(0, Math.Min(data.Length, 16)).ToArray());
+        var decoded = type == CompressionType.None ? data : BootCompressor.TryDecompress(data, type)
+            ?? throw new InvalidDataException($"Unable to decompress kernel as {type}.");
+        if (decoded.LongLength > MaximumKernelBytes)
+        {
+            throw new InvalidDataException("Decompressed kernel exceeds the configured limit.");
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        return KallsymsBinaryReader.Read(decoded);
+    }
+
+    /// <summary>Extracts a binary kallsyms table to a conventional text file using atomic publication.</summary>
+    public static async Task<KallsymsBinaryMetadata> ExtractKallsymsAsync(
+        string inputPath,
+        string outputPath,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await ReadKallsymsBinaryAsync(inputPath, cancellationToken).ConfigureAwait(false);
+        await FileExtraction.WriteAtomicAsync(outputPath, async output =>
+        {
+            await using var writer = new StreamWriter(output, new UTF8Encoding(false), 64 * 1024, leaveOpen: true);
+            foreach (var symbol in result.Symbols)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await writer.WriteLineAsync($"{symbol.Address:x16} {symbol.Type} {symbol.Name}".AsMemory(), cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }, overwrite: true, cancellationToken).ConfigureAwait(false);
+        return result.Metadata;
+    }
+
+    /// <summary>Creates an ELF64 executable containing the raw kernel and a decoded kallsyms symbol table.</summary>
+    public static async Task<KernelElfResult> BuildSymbolizedElfAsync(
+        string inputPath,
+        string outputPath,
+        KernelElfOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        var data = await ReadBoundedAsync(inputPath, cancellationToken).ConfigureAwait(false);
+        var type = BootCompressor.Detect(data.AsSpan(0, Math.Min(data.Length, 16)).ToArray());
+        var decoded = type == CompressionType.None ? data : BootCompressor.TryDecompress(data, type)
+            ?? throw new InvalidDataException($"Unable to decompress kernel as {type}.");
+        if (decoded.LongLength > MaximumKernelBytes)
+        {
+            throw new InvalidDataException("Decompressed kernel exceeds the configured limit.");
+        }
+        var kallsyms = KallsymsBinaryReader.Read(decoded);
+        cancellationToken.ThrowIfCancellationRequested();
+        return await KernelElfWriter.WriteAsync(
+            decoded,
+            kallsyms.Symbols,
+            outputPath,
+            options ?? new KernelElfOptions(),
+            cancellationToken).ConfigureAwait(false);
+    }
+
     private static async Task<byte[]> ReadBoundedAsync(string path, CancellationToken cancellationToken)
     {
         var info = new FileInfo(path);

@@ -1,4 +1,5 @@
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
@@ -67,7 +68,8 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider
             try
             {
                 using var parser = new F2fsParser(filePath);
-                var files = parser.ListFiles();
+                cancellationToken.ThrowIfCancellationRequested();
+                var sb = parser.Superblock;
                 var metadata = new Dictionary<string, string>
                 {
                     ["Format"] = "F2FS",
@@ -76,16 +78,47 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider
                     ["BlockCount"] = parser.BlockCount.ToString(),
                     ["ImageSize"] = parser.ImageSize.ToString(),
                     ["InodeCount"] = parser.InodeCount.ToString(),
-                    ["FileCount"] = parser.FileCount.ToString(),
-                    ["DirectoryCount"] = parser.DirectoryCount.ToString(),
                     ["VolumeName"] = parser.VolumeName,
+                    ["Uuid"] = MetadataDisplay.Uuid(sb.Uuid),
+                    ["MajorVersion"] = MetadataDisplay.Number(sb.MajorVersion),
+                    ["MinorVersion"] = MetadataDisplay.Number(sb.MinorVersion),
+                    ["SectorSize"] = MetadataDisplay.Number(sb.SectorSize),
+                    ["SectorsPerBlock"] = MetadataDisplay.Number(sb.SectorsPerBlock),
+                    ["BlocksPerSeg"] = MetadataDisplay.Number(sb.BlocksPerSeg),
+                    ["SegsPerSec"] = MetadataDisplay.Number(sb.SegsPerSec),
+                    ["SecsPerZone"] = MetadataDisplay.Number(sb.SecsPerZone),
+                    ["ChecksumOffset"] = MetadataDisplay.Number(sb.ChecksumOffset),
+                    ["SectionCount"] = MetadataDisplay.Number(sb.SectionCount),
+                    ["SegmentCount"] = MetadataDisplay.Number(sb.SegmentCount),
+                    ["SegmentCountCkpt"] = MetadataDisplay.Number(sb.SegmentCountCkpt),
+                    ["SegmentCountSit"] = MetadataDisplay.Number(sb.SegmentCountSit),
+                    ["SegmentCountNat"] = MetadataDisplay.Number(sb.SegmentCountNat),
+                    ["SegmentCountSsa"] = MetadataDisplay.Number(sb.SegmentCountSsa),
+                    ["SegmentCountMain"] = MetadataDisplay.Number(sb.SegmentCountMain),
+                    ["Segment0Blkaddr"] = MetadataDisplay.Number(sb.Segment0Blkaddr),
+                    ["CpBlkaddr"] = MetadataDisplay.Number(sb.CpBlkaddr),
+                    ["SitBlkaddr"] = MetadataDisplay.Number(sb.SitBlkaddr),
+                    ["NatBlkaddr"] = MetadataDisplay.Number(sb.NatBlkaddr),
+                    ["SsaBlkaddr"] = MetadataDisplay.Number(sb.SsaBlkaddr),
+                    ["MainBlkaddr"] = MetadataDisplay.Number(sb.MainBlkaddr),
+                    ["RootIno"] = MetadataDisplay.Number(sb.RootIno),
+                    ["NodeIno"] = MetadataDisplay.Number(sb.NodeIno),
+                    ["MetaIno"] = MetadataDisplay.Number(sb.MetaIno),
+                    ["CpPayload"] = MetadataDisplay.Number(sb.CpPayload),
+                    ["Feature"] = MetadataDisplay.Flags(sb.Feature, (1, "encryption"), (2, "blkzoned"), (4, "atomic_write"), (8, "extra_attr"), (16, "project_quota"), (32, "inode_checksum"), (64, "flexible_inline_xattr"), (128, "quota_ino"), (256, "inode_crtime"), (512, "lost_found"), (1024, "verity"), (2048, "sb_checksum"), (4096, "casefold"), (8192, "compression"), (16384, "readonly"), (32768, "device_alias")),
+                    ["Version"] = System.Text.Encoding.UTF8.GetString(sb.Version).TrimEnd('\0'),
+                    ["CheckpointVer"] = MetadataDisplay.Number(parser.Checkpoint.CheckpointVer),
+                    ["UserBlockCount"] = MetadataDisplay.Number(parser.Checkpoint.UserBlockCount),
+                    ["ValidBlockCount"] = MetadataDisplay.Number(parser.Checkpoint.ValidBlockCount),
+                    ["RsvdSegmentCount"] = MetadataDisplay.Number(parser.Checkpoint.RsvdSegmentCount),
+                    ["OverprovSegmentCount"] = MetadataDisplay.Number(parser.Checkpoint.OverprovSegmentCount),
+                    ["FreeSegmentCount"] = MetadataDisplay.Number(parser.Checkpoint.FreeSegmentCount),
+                    ["ValidNodeCount"] = MetadataDisplay.Number(parser.Checkpoint.ValidNodeCount),
+                    ["NextFreeNid"] = MetadataDisplay.Number(parser.Checkpoint.NextFreeNid),
+                    ["ElapsedTime"] = MetadataDisplay.Number(parser.Checkpoint.ElapsedTime),
+                    ["CheckpointFlags"] = MetadataDisplay.Flags(parser.Checkpoint.CkptFlags, (1, "unmount"), (2, "orphan_present"), (4, "compact_summary"), (8, "error"), (16, "fsck_needed"), (32, "fastboot"), (64, "crc_recovery"), (128, "nat_bits"), (256, "trimmed"), (512, "no_crc_recovery"), (1024, "large_nat_bitmap"), (2048, "checkpoint_disabled"), (4096, "quota_needs_fsck"), (8192, "checkpoint_disabled_quick"), (16384, "resizefs")),
                 };
-                var components = files.Select(file => FirmwareComponent.Of(file.Path, file.Size)).ToList();
-                return FirmwareOpResult.Ok(
-                    $"{files.Count} entries in F2FS image '{filePath}'.",
-                    [.. files.Select(file => file.Path)],
-                    metadata,
-                    components);
+                return FirmwareOpResult.Ok("F2FS filesystem metadata.", metadata: metadata);
             }
             catch (OperationCanceledException)
             {
@@ -155,7 +188,12 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider
                     BlockSize = FileSystemPackingOptions.IntegerOption(options, "BlockSize", 4096),
                     SegmentSize = FileSystemPackingOptions.IntegerOption(options, "SegmentSize", 2 * 1024 * 1024),
                     VolumeName = options.TryGetValue("VolumeName", out var volume) ? volume : "f2fs",
+                    EnableSparse = !options.TryGetValue("EnableSparse", out var sparse) || IsTrue(sparse),
+                    EnableCompression = options.TryGetValue("EnableCompression", out var compression) && IsTrue(compression),
+                    CompressionAlgorithm = ParseCompressionAlgorithm(options),
+                    CompressionLevel = FileSystemPackingOptions.IntegerOption(options, "CompressionLevel", 0),
                     FsConfigPath = FileSystemPackingOptions.NullIfEmpty(options, "FsConfigPath"),
+                    FileContextsPath = FileSystemPackingOptions.NullIfEmpty(options, "FileContextsPath"),
                 });
 
                 return FirmwareOpResult.Ok($"Packed '{inputPath}' into '{outputPath}' (F2FS).");
@@ -170,4 +208,13 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider
             }
         }, cancellationToken);
     }
+
+    private static CompressionAlgorithm ParseCompressionAlgorithm(IReadOnlyDictionary<string, string> options)
+        => options.TryGetValue("CompressionAlgorithm", out var value) &&
+            Enum.TryParse<CompressionAlgorithm>(value, ignoreCase: true, out var algorithm)
+                ? algorithm
+                : CompressionAlgorithm.Lz4;
+
+    private static bool IsTrue(string value)
+        => value is "1" || bool.TryParse(value, out var enabled) && enabled;
 }

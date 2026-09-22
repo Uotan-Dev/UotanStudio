@@ -55,7 +55,8 @@ public class BoundedFormatSecurityTests
             BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(SprdHead.Size + 1552, 4), (uint)(bytes.Length - 1));
             File.WriteAllBytes(path, bytes);
 
-            Assert.Throws<InvalidDataException>(() => PacExtractor.Extract(path, output));
+            Assert.Throws<InvalidDataException>(() => PacExtractor.Extract(
+                path, output, cancellationToken: TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -87,7 +88,8 @@ public class BoundedFormatSecurityTests
             bytes[^1] = 0x5A;
             File.WriteAllBytes(path, bytes);
 
-            Assert.Equal(1, PacExtractor.Extract(path, output));
+            Assert.Equal(1, PacExtractor.Extract(
+                path, output, cancellationToken: TestContext.Current.CancellationToken));
             Assert.Equal(new byte[] { 0x5A }, File.ReadAllBytes(Path.Combine(output, "nested", "file.bin")));
         }
         finally

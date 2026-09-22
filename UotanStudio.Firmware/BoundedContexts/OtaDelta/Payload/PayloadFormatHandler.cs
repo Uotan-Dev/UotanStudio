@@ -68,6 +68,13 @@ public sealed class PayloadFormatHandler : IFormatHandler, IRepackMetadataProvid
                     ["PartitionCount"] = metadata.PartitionNames.Count.ToString(),
                     ["BlockSize"] = metadata.BlockSize.ToString(),
                     ["MinorVersion"] = metadata.Manifest.MinorVersion.ToString(),
+                    ["ManifestLength"] = MetadataDisplay.Number(metadata.ManifestLength),
+                    ["MetadataSignatureLength"] = MetadataDisplay.Number(metadata.MetadataSignatureLength),
+                    ["BaseOffset"] = MetadataDisplay.Number(metadata.BaseOffset),
+                    ["MaxTimestamp"] = MetadataDisplay.Number(metadata.MaxTimestamp),
+                    ["SignaturesOffset"] = MetadataDisplay.Number(metadata.SignaturesOffset),
+                    ["SignaturesSize"] = MetadataDisplay.Number(metadata.SignaturesSize),
+                    ["PartialUpdate"] = metadata.Manifest.PartialUpdate.ToString(),
                 };
 
                 var components = PartitionInfoHelper.ComputePartitionInfo(metadata.Manifest)

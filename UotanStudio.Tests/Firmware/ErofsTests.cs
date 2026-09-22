@@ -212,7 +212,9 @@ public class ErofsTests
 
         var result = await handler.ReadMetadataAsync(imagePath, TestContext.Current.CancellationToken);
         Assert.True(result.Success);
-        Assert.Equal("1", result.Metadata["FileCount"]);
+        Assert.Empty(result.Components);
+        Assert.Empty(result.Entries);
+        Assert.DoesNotContain("FileCount", result.Metadata.Keys);
         Assert.Contains("EROFS", result.Summary);
     }
 
@@ -238,7 +240,7 @@ public class ErofsTests
     }
 
     [Fact]
-    public void BuildParse_FilePathFactory_StreamsOnDemand()
+    public void BuildParse_FilePathFactory_ReadsAndExtractsAllFiles()
     {
         using var temp = new TempDirectory();
         WriteText(temp, "file.txt", "stream payload");
@@ -256,6 +258,11 @@ public class ErofsTests
         Assert.Equal("stream payload", Encoding.UTF8.GetString(parser.ReadFileBytes("file.txt")));
         Assert.Equal(new byte[] { 1, 2, 3 }, parser.ReadFileBytes("dir/data.bin"));
         Assert.Equal(image.Length, parser.ImageSize);
+
+        var outDir = System.IO.Path.Combine(temp.Path, "out");
+        parser.ExtractToDirectory(outDir);
+        Assert.Equal("stream payload", File.ReadAllText(System.IO.Path.Combine(outDir, "file.txt")));
+        Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(System.IO.Path.Combine(outDir, "dir", "data.bin")));
     }
 
     [Fact]
@@ -270,24 +277,6 @@ public class ErofsTests
         using var fs = File.OpenRead(imagePath);
         using var parser = new ErofsParser(fs);
         Assert.Equal("stream payload", Encoding.UTF8.GetString(parser.ReadFileBytes("file.txt")));
-    }
-
-    [Fact]
-    public void BuildParse_FilePathFactory_ExtractToDirectory_WritesAllFiles()
-    {
-        using var temp = new TempDirectory();
-        WriteText(temp, "file.txt", "payload");
-        temp.WriteBytes("dir/data.bin", [1, 2, 3]);
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = true });
-        var imagePath = System.IO.Path.Combine(temp.Path, "image.erofs");
-        File.WriteAllBytes(imagePath, image);
-        var outDir = System.IO.Path.Combine(temp.Path, "out");
-
-        using var parser = new ErofsParser(imagePath);
-        parser.ExtractToDirectory(outDir);
-
-        Assert.Equal("payload", File.ReadAllText(System.IO.Path.Combine(outDir, "file.txt")));
-        Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(System.IO.Path.Combine(outDir, "dir", "data.bin")));
     }
 
     [Fact]

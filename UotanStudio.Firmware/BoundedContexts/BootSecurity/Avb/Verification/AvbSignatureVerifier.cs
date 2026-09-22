@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Org.BouncyCastle.Crypto;
@@ -151,46 +152,7 @@ public static class AvbSignatureVerifier
     /// <para>将 AVB 格式 RSA 公钥数据块导入 RSA 实例。</para>
     /// </summary>
     public static RSA? ImportAvbRsaPublicKey(byte[]? avbRsaPublicKeyBlob)
-    {
-        if (avbRsaPublicKeyBlob is not { Length: >= 8 })
-        {
-            return null;
-        }
-
-        var keyNumBits = BinaryPrimitives.ReadUInt32BigEndian(avbRsaPublicKeyBlob);
-        if (keyNumBits is not (2048 or 4096 or 8192))
-        {
-            return null;
-        }
-
-        var keyNumBytes = (int)(keyNumBits / 8);
-        if (avbRsaPublicKeyBlob.Length != 8 + 2 * keyNumBytes)
-        {
-            return null;
-        }
-
-        var modulus = avbRsaPublicKeyBlob.AsSpan(8, keyNumBytes).ToArray();
-
-        if ((modulus[^1] & 1) == 0 || (modulus[0] & 0x80) == 0)
-        {
-            return null;
-        }
-
-        try
-        {
-            var rsa = RSA.Create();
-            rsa.ImportParameters(new RSAParameters
-            {
-                Modulus = modulus,
-                Exponent = [1, 0, 1]
-            });
-            return rsa;
-        }
-        catch
-        {
-            return null;
-        }
-    }
+        => avbRsaPublicKeyBlob is null ? null : AvbRsaPublicKeyCodec.TryImport(avbRsaPublicKeyBlob);
 
     /// <summary>
     /// Imports a PEM or DER public key / certificate into an RSA instance.

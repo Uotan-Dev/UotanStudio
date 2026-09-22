@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.DataProviders;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
+using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
 
@@ -13,32 +14,80 @@ public static class SparseImageConverter
     /// <para>将一个或多个稀疏镜像转换为原始镜像文件。</para>
     /// </summary>
     public static void ConvertSparseToRaw(IEnumerable<string> inputFiles, string outputFile)
-    {
-        using var outputStream = new FileStream(outputFile, FileMode.Create, FileAccess.Write, FileShare.None, 1024 * 1024);
-        long maxFileSize = 0;
+        => ConvertSparseToRawCancellable(inputFiles, outputFile, CancellationToken.None);
 
-        foreach (var inputFile in inputFiles)
+    /// <summary>
+    /// Converts one or more sparse image chunks to a raw image with cancellation and atomic publication.
+    /// </summary>
+    public static void ConvertSparseToRawCancellable(IEnumerable<string> inputFiles, string outputFile, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(inputFiles);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputFile);
+        var inputs = inputFiles.Select(Path.GetFullPath).ToArray();
+        if (inputs.Length == 0)
         {
-            var header = SparseReader.PeekHeader(inputFile);
-            var fileSize = (long)header.TotalBlocks * header.BlockSize;
-            if (fileSize > maxFileSize)
+            throw new ArgumentException("At least one sparse input image is required.", nameof(inputFiles));
+        }
+
+        var destination = Path.GetFullPath(outputFile);
+        var destinationDirectory = Path.GetDirectoryName(destination)!;
+        Directory.CreateDirectory(destinationDirectory);
+        var temporary = Path.Combine(destinationDirectory, $".{Path.GetFileName(destination)}.{Guid.NewGuid():N}.tmp");
+        long maxFileSize = 0;
+        try
+        {
+            foreach (var inputFile in inputs)
             {
-                maxFileSize = fileSize;
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!File.Exists(inputFile))
+                {
+                    throw new FileNotFoundException("Sparse input image was not found.", inputFile);
+                }
+                if (string.Equals(inputFile, destination, OperatingSystem.IsWindows()
+                        ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                {
+                    throw new IOException("A sparse input image cannot also be the output image.");
+                }
+                var header = SparseReader.PeekHeader(inputFile);
+                var fileSize = checked((long)header.TotalBlocks * header.BlockSize);
+                if (fileSize > maxFileSize)
+                {
+                    maxFileSize = fileSize;
+                }
+            }
+
+            using (var outputStream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 1024))
+            using (var cancellable = new CountingWriteStream(outputStream, long.MaxValue, leaveOpen: true,
+                       cancellationToken: cancellationToken))
+            {
+                if (maxFileSize > 0)
+                {
+                    cancellable.SetLength(maxFileSize);
+                }
+
+                foreach (var inputFile in inputs)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    using var sparseFile = SparseReader.FromImageFile(inputFile);
+                    sparseFile.WriteRawToStream(cancellable);
+                }
+
+                cancellable.Flush();
+                outputStream.Flush(flushToDisk: true);
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(temporary, destination, overwrite: true);
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(temporary);
+            }
+            catch
+            {
             }
         }
-
-        if (maxFileSize > 0)
-        {
-            outputStream.SetLength(maxFileSize);
-        }
-
-        foreach (var inputFile in inputFiles)
-        {
-            using var sparseFile = SparseReader.FromImageFile(inputFile);
-            sparseFile.WriteRawToStream(outputStream);
-        }
-
-        outputStream.Flush();
     }
 
     /// <summary>

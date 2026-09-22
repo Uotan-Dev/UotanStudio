@@ -36,8 +36,8 @@ public static class XzCompressor
     }
 
     /// <summary>
-    /// Compresses bounded 2 MiB input windows, spooling compressed data to a temporary file before writing the container.
-    /// <para>按有界 2 MiB 窗口压缩输入，将压缩数据暂存到自动清理的文件后写出容器。</para>
+    /// Compresses bounded 64 KiB input windows, spooling compressed data before writing the container.
+    /// <para>按有界 64 KiB 窗口压缩输入，将压缩数据暂存后写出容器。</para>
     /// </summary>
     public static void Compress(Stream input, Stream output, uint dictionarySize = Lzma2Encoder.DefaultDictionarySize,
         byte checkType = XzContainer.CheckTypeCrc32, int? maxDegreeOfParallelism = null)
@@ -58,7 +58,7 @@ public static class XzCompressor
                 FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536,
                 FileOptions.DeleteOnClose | FileOptions.SequentialScan);
 
-            var crc64 = new System.IO.Hashing.Crc64();
+            var crc64 = new XzCrc64();
             var crc32 = new System.IO.Hashing.Crc32();
 
             var total = Lzma2Encoder.Encode(input, lzma2, dictionarySize, maxDegreeOfParallelism,

@@ -264,6 +264,61 @@ public class PacFormatHandlerTests
     }
 
     [Fact]
+    public async Task Unpack_SelectedEntries_ExtractsOnlyExactNames()
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        var root = CreateTempDir();
+        var path = Path.Combine(root, "firmware.pac");
+        var outDir = Path.Combine(root, "out");
+        try
+        {
+            File.WriteAllBytes(path, BuildPac(("boot.img", [1, 2, 3]), ("vendor.img", [4, 5, 6])));
+            var handler = FormatDetector.Detect(path);
+            Assert.NotNull(handler);
+
+            var result = await handler.UnpackAsync(path, outDir,
+                new UnpackOptions { SelectedEntries = ["VENDOR.IMG"] }, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.Summary);
+            Assert.False(File.Exists(Path.Combine(outDir, "boot.img")));
+            Assert.Equal([4, 5, 6],
+                await File.ReadAllBytesAsync(Path.Combine(outDir, "vendor.img"), TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Unpack_ChecksumVerificationFails_DoesNotPublishEntries()
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        var root = CreateTempDir();
+        var path = Path.Combine(root, "firmware.pac");
+        var outDir = Path.Combine(root, "out");
+        try
+        {
+            var bytes = BuildPac(("boot.img", [1, 2, 3]));
+            bytes[SprdHead.Size - 1] ^= 0xFF;
+            File.WriteAllBytes(path, bytes);
+            var handler = FormatDetector.Detect(path);
+            Assert.NotNull(handler);
+
+            var result = await handler.UnpackAsync(path, outDir,
+                new UnpackOptions { VerifyChecksums = true }, TestContext.Current.CancellationToken);
+
+            Assert.False(result.Success);
+            Assert.Contains("checksum", result.Summary, StringComparison.OrdinalIgnoreCase);
+            Assert.False(Directory.Exists(outDir));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Check_Crc16ChecksumsMatch()
     {
         var root = CreateTempDir();
@@ -271,7 +326,7 @@ public class PacFormatHandlerTests
         try
         {
             File.WriteAllBytes(path, BuildPac(("nvram.bin", [0x11, 0x22, 0x33])));
-            var (headOk, dataOk) = PacExtractor.Check(path);
+            var (headOk, dataOk) = PacExtractor.Check(path, TestContext.Current.CancellationToken);
             Assert.True(headOk);
             Assert.True(dataOk);
         }
@@ -293,7 +348,7 @@ public class PacFormatHandlerTests
             // The data CRC lives at head offset Size-2; flip its high byte to corrupt it.
             bytes[SprdHead.Size - 1] ^= 0xFF;
             File.WriteAllBytes(path, bytes);
-            var (_, dataOk) = PacExtractor.Check(path);
+            var (_, dataOk) = PacExtractor.Check(path, TestContext.Current.CancellationToken);
             Assert.False(dataOk);
         }
         finally

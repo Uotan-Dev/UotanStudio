@@ -83,7 +83,9 @@ public sealed class UpdateAppFormatHandler : IFormatHandler
     {
         try
         {
+            var selected = options?.CreateSelectedEntrySet();
             var count = UpdateAppProcessor.Extract(filePath, outputDirectory,
+                selected?.ToList(),
                 overwrite: options?.Overwrite ?? true, cancellationToken: cancellationToken);
             return Task.FromResult(FirmwareOpResult.Ok($"Extracted {count} partitions to {outputDirectory}"));
         }

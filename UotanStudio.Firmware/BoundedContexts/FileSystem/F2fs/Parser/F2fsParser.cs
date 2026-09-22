@@ -104,6 +104,12 @@ public sealed class F2fsParser : IDisposable
     internal byte[] SourceUuid => _superblock.Uuid;
     internal string SourceVolumeName => _superblock.VolumeName;
 
+    /// <summary>The parsed superblock used for metadata inspection.</summary>
+    internal F2fsSuperblock Superblock => _superblock;
+
+    /// <summary>The active checkpoint selected by the parser.</summary>
+    internal F2fsCheckpoint Checkpoint => _checkpoint;
+
     public long BlockSize => _blockSize;
 
     public long SegmentSize => (long)_blockSize * _blocksPerSeg;

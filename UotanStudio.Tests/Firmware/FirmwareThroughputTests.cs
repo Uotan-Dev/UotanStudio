@@ -14,6 +14,7 @@ public class FirmwareThroughputTests
     [InlineData(CompressionType.None)]
     [InlineData(CompressionType.BZip2)]
     [InlineData(CompressionType.Xz)]
+    [Trait("Category", "LargeData")]
     public void ParallelBuild_PreservesOrderedPayloadAndExtractedHash(CompressionType compression)
     {
         using var temp = new TempDirectory();
@@ -77,7 +78,7 @@ public class FirmwareThroughputTests
 
     [Theory]
     [InlineData(0)]
-    [InlineData(9)]
+    [InlineData(65)]
     public void Build_RejectsUnboundedWorkerCount(int workers)
     {
         using var builder = new PayloadBuilder();

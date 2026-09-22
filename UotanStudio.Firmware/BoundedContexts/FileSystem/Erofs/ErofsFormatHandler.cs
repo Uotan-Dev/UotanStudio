@@ -68,7 +68,8 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
             try
             {
                 using var parser = new ErofsParser(filePath);
-                var files = parser.EnumerateFiles();
+                cancellationToken.ThrowIfCancellationRequested();
+                var sb = parser.Superblock;
                 var metadata = new Dictionary<string, string>
                 {
                     ["Format"] = "EROFS",
@@ -76,16 +77,27 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
                     ["Blocks"] = parser.BlockCount.ToString(),
                     ["ImageSize"] = parser.ImageSize.ToString(),
                     ["InodeCount"] = parser.InodeCount.ToString(),
-                    ["FileCount"] = files.Count.ToString(),
                     ["RootNid"] = parser.RootNid.ToString(),
                     ["VolumeName"] = parser.VolumeName,
+                    ["Uuid"] = MetadataDisplay.Uuid(sb.Uuid),
+                    ["Checksum"] = $"0x{sb.Checksum:X8}",
+                    ["SbExtSlots"] = MetadataDisplay.Number(sb.SbExtSlots),
+                    ["BuildTime"] = MetadataDisplay.Number(sb.BuildTime),
+                    ["BuildTimeNsec"] = MetadataDisplay.Number(sb.BuildTimeNsec),
+                    ["MetaBlkAddr"] = MetadataDisplay.Number(sb.MetaBlkAddr),
+                    ["XattrBlkAddr"] = MetadataDisplay.Number(sb.XattrBlkAddr),
+                    ["ExtraDevices"] = MetadataDisplay.Number(sb.ExtraDevices),
+                    ["DevtSlotoff"] = MetadataDisplay.Number(sb.DevtSlotoff),
+                    ["DirBlkBits"] = MetadataDisplay.Number(sb.DirBlkBits),
+                    ["XattrPrefixCount"] = MetadataDisplay.Number(sb.XattrPrefixCount),
+                    ["XattrPrefixStart"] = MetadataDisplay.Number(sb.XattrPrefixStart),
+                    ["PackedNid"] = MetadataDisplay.Number(sb.PackedNid),
+                    ["MetaBoxNid"] = MetadataDisplay.Number(sb.MetaBoxNid),
+                    ["FeatureCompat"] = MetadataDisplay.Flags(sb.FeatureCompat, (1, "sb_checksum"), (2, "mtime"), (4, "xattr_filter"), (8, "shared_ea_in_metabox"), (16, "plain_xattr_pfx"), (32, "ishare_xattrs")),
+                    ["FeatureIncompat"] = MetadataDisplay.Flags(sb.FeatureIncompat, (1, "lz4_0padding"), (2, "compression_cfgs/big_pcluster"), (4, "chunked_file"), (8, "device_table/compress_head2"), (16, "ztailpacking"), (32, "fragments/dedupe"), (64, "xattr_prefixes"), (128, "48bit"), (256, "metabox")),
+                    ["AvailableCompressionAlgorithms"] = MetadataDisplay.Flags(sb.EffectiveComprAlgs, (1, "LZ4"), (2, "LZMA"), (4, "DEFLATE"), (8, "Zstandard")),
                 };
-                var components = files.Select(file => FirmwareComponent.Of(file.Path, file.Size)).ToList();
-                return FirmwareOpResult.Ok(
-                    $"{files.Count} files in EROFS image '{filePath}'.",
-                    [.. files.Select(file => file.Path)],
-                    metadata,
-                    components);
+                return FirmwareOpResult.Ok("EROFS filesystem metadata.", metadata: metadata);
             }
             catch (OperationCanceledException)
             {

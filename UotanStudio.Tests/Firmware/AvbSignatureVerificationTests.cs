@@ -7,6 +7,7 @@ using Org.BouncyCastle.Security;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -29,7 +30,7 @@ public class AvbSignatureVerificationTests
     [Fact]
     public void Verify_ValidSelfSignedVbmeta_Passes()
     {
-        using var rsa = RSA.Create(2048);
+        using var rsa = SigningTestKeys.Create(2048);
         var (vbmeta, _) = BuildMinimalSelfSignedVbmeta(rsa);
 
         var result = AvbSignatureVerifier.Verify(vbmeta);
@@ -44,7 +45,7 @@ public class AvbSignatureVerificationTests
     [Fact]
     public void Verify_TamperedVbmeta_Fails()
     {
-        using var rsa = RSA.Create(2048);
+        using var rsa = SigningTestKeys.Create(2048);
         var (vbmeta, _) = BuildMinimalSelfSignedVbmeta(rsa);
 
         // Flip a byte inside the release string (header), which does not change parsing.
@@ -61,7 +62,7 @@ public class AvbSignatureVerificationTests
     [InlineData(20)] // auxiliary_data_block_size
     public void Verify_TamperedSerializedBlockSizeField_Fails(int fieldOffset)
     {
-        using var rsa = RSA.Create(2048);
+        using var rsa = SigningTestKeys.Create(2048);
         var (vbmeta, _) = BuildMinimalSelfSignedVbmeta(rsa);
         vbmeta[fieldOffset + 7] ^= 1;
 
@@ -74,7 +75,7 @@ public class AvbSignatureVerificationTests
     [Fact]
     public void Verify_OverflowingStoredHashRange_DoesNotThrowAndFails()
     {
-        using var rsa = RSA.Create(2048);
+        using var rsa = SigningTestKeys.Create(2048);
         var (vbmeta, _) = BuildMinimalSelfSignedVbmeta(rsa);
         WriteUInt64BE(vbmeta, 32, ulong.MaxValue);
         WriteUInt64BE(vbmeta, 40, 1);
@@ -88,7 +89,7 @@ public class AvbSignatureVerificationTests
     [Fact]
     public void Verify_PssSignature_IsRejected()
     {
-        using var rsa = RSA.Create(2048);
+        using var rsa = SigningTestKeys.Create(2048);
         var (vbmeta, _) = BuildMinimalSelfSignedVbmeta(rsa, RSASignaturePadding.Pss);
 
         var result = AvbSignatureVerifier.Verify(vbmeta);
@@ -100,8 +101,8 @@ public class AvbSignatureVerificationTests
     [Fact]
     public void Verify_WrongTrustedKey_Fails()
     {
-        using var signer = RSA.Create(2048);
-        using var other = RSA.Create(2048);
+        using var signer = SigningTestKeys.Create(2048);
+        using var other = SigningTestKeys.Create(2048, alternate: true);
         var (vbmeta, _) = BuildMinimalSelfSignedVbmeta(signer);
 
         var result = AvbSignatureVerifier.Verify(vbmeta, trustedPublicKey: other);
@@ -114,7 +115,7 @@ public class AvbSignatureVerificationTests
     [Fact]
     public void VerifySignature_ExplicitPublicKeyBlob_Verifies()
     {
-        using var rsa = RSA.Create(2048);
+        using var rsa = SigningTestKeys.Create(2048);
         var (vbmeta, publicKeyBlob) = BuildMinimalSelfSignedVbmeta(rsa);
 
         var signature = new byte[Rsa2048SignatureSize];
@@ -129,7 +130,7 @@ public class AvbSignatureVerificationTests
     [Fact]
     public void ImportAvbRsaPublicKey_RoundTripsModulus()
     {
-        using var rsa = RSA.Create(2048);
+        using var rsa = SigningTestKeys.Create(2048);
         var parameters = rsa.ExportParameters(false);
         var blob = BuildAvbRsaPublicKeyBlob(parameters.Modulus!);
 
@@ -140,9 +141,9 @@ public class AvbSignatureVerificationTests
     }
 
     [Fact]
-    public async Task SignVbmeta_RoundTrip_AvbVerifierVerifies()
+    public async Task SignVbmeta_SignedImage_VerifiesThenRejectsTampering()
     {
-        using var rsa = RSA.Create(2048);
+        using var rsa = SigningTestKeys.Create(2048);
         var privateKey = (RsaPrivateCrtKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
         var root = CreateTempDir();
         try
@@ -180,45 +181,12 @@ public class AvbSignatureVerificationTests
             Assert.Equal("sha256", descriptor.HashAlgorithm);
             Assert.Equal(salt, descriptor.Salt);
             Assert.Equal(digest, descriptor.Digest);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
 
-    [Fact]
-    public async Task SignVbmeta_TamperedBytes_VerificationFails()
-    {
-        using var rsa = RSA.Create(2048);
-        var privateKey = (RsaPrivateCrtKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
-        var root = CreateTempDir();
-        try
-        {
-            var vbmetaPath = Path.Combine(root, "vbmeta.img");
-            var outputPath = Path.Combine(root, "vbmeta.signed.img");
-            await File.WriteAllBytesAsync(vbmetaPath, BuildUnsignedVbmetaTemplate(), TestContext.Current.CancellationToken);
-
-            var salt = new byte[Sha256Size];
-            RandomNumberGenerator.Fill(salt);
-            var digest = new byte[Sha256Size];
-            RandomNumberGenerator.Fill(digest);
-
-            var result = await AvbSigner.SignVbmetaAsync(
-                vbmetaPath, privateKey, outputPath,
-                [new AvbHashDescriptor { PartitionName = "boot", Salt = salt, Digest = digest }],
-                TestContext.Current.CancellationToken);
-            Assert.True(result.Success, result.ErrorMessage);
-
-            // Flip a byte inside the release string area of the header: parsing is unaffected,
-            // but the stored digest and signature no longer match.
-            var signed = await File.ReadAllBytesAsync(outputPath, TestContext.Current.CancellationToken);
+            // Reuse the verified image so rejection cannot be caused by an invalid fixture.
             signed[140] ^= 0xFF;
-
-            var verify = AvbVerifier.VerifyVBMeta(signed);
-
-            Assert.True(verify.IsSigned);
-            Assert.False(verify.IsValid);
+            var tamperedVerification = AvbVerifier.VerifyVBMeta(signed);
+            Assert.True(tamperedVerification.IsSigned);
+            Assert.False(tamperedVerification.IsValid);
         }
         finally
         {
@@ -227,9 +195,9 @@ public class AvbSignatureVerificationTests
     }
 
     [Fact]
-    public async Task AddHashFooter_RoundTrip_AvbVerifierVerifies()
+    public async Task AddHashFooter_SignedImage_VerifiesThenRejectsTampering()
     {
-        using var rsa = RSA.Create(2048);
+        using var rsa = SigningTestKeys.Create(2048);
         var privateKey = (RsaPrivateCrtKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
         var root = CreateTempDir();
         try
@@ -263,39 +231,12 @@ public class AvbSignatureVerificationTests
             var vbmetaVerify = AvbVerifier.VerifyVBMeta(vbmetaBytes);
             Assert.True(vbmetaVerify.IsValid, vbmetaVerify.ErrorMessage);
             Assert.Single(AvbSignatureVerifier.ExtractDescriptors(vbmetaBytes));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
 
-    [Fact]
-    public async Task AddHashFooter_TamperedVbmeta_VerificationFails()
-    {
-        using var rsa = RSA.Create(2048);
-        var privateKey = (RsaPrivateCrtKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
-        var root = CreateTempDir();
-        try
-        {
-            var imagePath = Path.Combine(root, "boot.img");
-            var outputPath = Path.Combine(root, "boot.signed.img");
-            await File.WriteAllBytesAsync(imagePath, new byte[4096 * 2], TestContext.Current.CancellationToken);
-
-            var result = await AvbSigner.AddHashFooterAsync(
-                imagePath, "boot", privateKey, outputPath, TestContext.Current.CancellationToken);
-            Assert.True(result.Success, result.ErrorMessage);
-
-            // Tamper a byte inside the appended vbmeta header (release string area).
-            var signed = await File.ReadAllBytesAsync(outputPath, TestContext.Current.CancellationToken);
-            var footer = AvbFooter.TryLoad(signed)!.Value;
             var tampered = (byte[])signed.Clone();
             tampered[(int)footer.VbmetaOffset + 140] ^= 0xFF;
-
-            var verify = AvbVerifier.Verify(tampered);
-
-            Assert.True(verify.IsSigned);
-            Assert.False(verify.IsValid);
+            var tamperedVerification = AvbVerifier.Verify(tampered);
+            Assert.True(tamperedVerification.IsSigned);
+            Assert.False(tamperedVerification.IsValid);
         }
         finally
         {
@@ -384,11 +325,8 @@ public class AvbSignatureVerificationTests
     {
         // Montgomery inverse: n0inv = -modulus^{-1} mod 2^32 (modulus is odd).
         // Newton iteration over the low 32 bits doubles correct bits each round.
-        uint a = 0;
-        for (var i = 0; i < 4 && i < modulus.Length; i++)
-        {
-            a |= (uint)modulus[i] << (8 * i);
-        }
+        var lowWord = modulus.AsSpan(modulus.Length - sizeof(uint));
+        var a = BinaryPrimitives.ReadUInt32BigEndian(lowWord);
 
         uint inv = 1;
         for (var i = 0; i < 5; i++)
@@ -461,7 +399,7 @@ public class AvbSignatureVerificationTests
     [Fact]
     public async Task DisableVbmetaVerification_SetsFlagsAndZeroesAuthBlock()
     {
-        using var rsa = RSA.Create(2048);
+        using var rsa = SigningTestKeys.Create(2048);
         var (vbmeta, _) = BuildMinimalSelfSignedVbmeta(rsa);
         var sourcePath = Path.Combine(Path.GetTempPath(), $"avb_disable_{Guid.NewGuid():N}.img");
         var outputPath = sourcePath + ".disabled";

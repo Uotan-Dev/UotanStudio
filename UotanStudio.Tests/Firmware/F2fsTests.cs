@@ -44,7 +44,7 @@ public class F2fsTests
             File.WriteAllBytes(Path.Combine(root, "large.bin"), largeBytes);
 
             var image = F2fsBuilder.Build(root);
-            Assert.True(BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(1024, 4)) == 0xF2F52010u);
+            Assert.Equal(0xF2F52010u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(1024, 4)));
 
             using var parser = new F2fsParser(new MemoryStream(image, writable: false));
             Assert.Equal(BlockSize, parser.BlockSize);
@@ -138,7 +138,9 @@ public class F2fsTests
                 Assert.True(metadata.Success);
                 Assert.Equal(BlockSize.ToString(), metadata.Metadata["BlockSize"]);
                 Assert.True(long.Parse(metadata.Metadata["ImageSize"]) > 0);
-                Assert.True(int.Parse(metadata.Metadata["FileCount"]) >= 2);
+                Assert.Empty(metadata.Components);
+                Assert.Empty(metadata.Entries);
+                Assert.DoesNotContain("FileCount", metadata.Metadata.Keys);
                 Assert.Contains("F2FS", metadata.Summary);
 
                 var unpackDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());

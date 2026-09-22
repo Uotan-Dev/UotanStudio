@@ -17,6 +17,11 @@ public sealed partial class ErofsParser
 
     private void WriteFileData(ulong nid, ErofsInode inode, Stream output)
     {
+        _readCancellation.ThrowIfCancellationRequested();
+        if (_readCancellation.CanBeCanceled)
+        {
+            output = new CancellableOutput(output, _readCancellation);
+        }
         if (IsSpecialFile(inode))
         {
 

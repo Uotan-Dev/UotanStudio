@@ -5,6 +5,7 @@ using System.Text;
 using UotanStudio.Firmware.BoundedContexts.Archive;
 using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 using UotanStudio.Firmware.BoundedContexts.Compression;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz.Extraction;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz.Models;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Extraction;
@@ -30,6 +31,23 @@ public sealed class FirmwareExtractionConformanceTests : IDisposable
         Assert.Equal(2, DzExtractor.Extract(path, Path.Combine(_root, "out"), cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal("one", File.ReadAllText(Path.Combine(_root, "out", "one.bin")));
         Assert.Equal("second payload", File.ReadAllText(Path.Combine(_root, "out", "two.bin")));
+    }
+
+    [Fact]
+    public async Task DzHandler_SelectedEntries_ExtractsOnlyExactNames()
+    {
+        var path = Write("selected.dz", BuildDz([
+            ("boot.img", "boot"u8.ToArray(), 10u),
+            ("vendor.img", "vendor"u8.ToArray(), 12u)]));
+        var output = Path.Combine(_root, "selected-dz");
+
+        var result = await new DzFormatHandler().UnpackAsync(path, output,
+            new UnpackOptions { SelectedEntries = ["VENDOR.IMG"] }, TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Summary);
+        Assert.False(File.Exists(Path.Combine(output, "boot.img")));
+        Assert.Equal("vendor", await File.ReadAllTextAsync(
+            Path.Combine(output, "vendor.img"), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -105,6 +123,23 @@ public sealed class FirmwareExtractionConformanceTests : IDisposable
         Write("UPDATE.APP", entry[..^1]);
         Assert.Throws<InvalidDataException>(() => UpdateAppProcessor.Extract(path, output, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(new byte[] { 1, 2, 3, 4 }, File.ReadAllBytes(Path.Combine(output, "system.img")));
+    }
+
+    [Fact]
+    public async Task UpdateAppHandler_SelectedEntries_ExtractsOnlyExactNames()
+    {
+        var path = Write("SELECTED.APP", [
+            .. BuildUpdateEntry("SYSTEM", [1, 2, 3, 4]),
+            .. BuildUpdateEntry("VENDOR", [5, 6, 7, 8])]);
+        var output = Path.Combine(_root, "selected-update-app");
+
+        var result = await new UpdateAppFormatHandler().UnpackAsync(path, output,
+            new UnpackOptions { SelectedEntries = ["vendor"] }, TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Summary);
+        Assert.False(File.Exists(Path.Combine(output, "system.img")));
+        Assert.Equal([5, 6, 7, 8], await File.ReadAllBytesAsync(
+            Path.Combine(output, "vendor.img"), TestContext.Current.CancellationToken));
     }
 
     [Fact]

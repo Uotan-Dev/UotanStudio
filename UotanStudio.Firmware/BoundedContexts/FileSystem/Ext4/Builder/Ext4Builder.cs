@@ -5,6 +5,7 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Models;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 
@@ -129,8 +130,9 @@ public sealed partial class Ext4Builder
             {
                 var counter = progress is null ? null
                     : new ExtractionByteCounter(EstimateSourceBytes(sourceDirectory), progress);
-                Stream sink = output;
-                if (counter is not null) sink = counter.Wrap(output);
+                Stream sink = new CountingWriteStream(output, long.MaxValue, leaveOpen: true,
+                    cancellationToken: effective.CancellationToken);
+                if (counter is not null) sink = counter.Wrap(sink);
                 BuildCore(sourceDirectory, sink, effective, 0, freshDestination: true, excludedFiles: [fullOutputPath, temporaryPath], plannedRoot);
                 output.Flush(flushToDisk: true);
                 counter?.Complete();
@@ -231,6 +233,12 @@ public sealed partial class Ext4Builder
             throw new ArgumentOutOfRangeException(nameof(options), $"Ext4 inode size must be at least 128 and a power of two (got {inodeSize}).");
         }
 
+        if (options.TargetSizeBytes is { } targetSize
+            && (targetSize <= 0 || targetSize % blockSize != 0))
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), "EXT4 target size must be positive and block aligned.");
+        }
+
         if (!Directory.Exists(sourceDirectory))
         {
             throw new DirectoryNotFoundException($"Source directory not found: '{sourceDirectory}'.");
@@ -271,6 +279,7 @@ public sealed partial class Ext4Builder
 
     private static void BuildCore(string sourceDirectory, Stream output, Ext4Options options, long baseOffset, bool freshDestination, IReadOnlyCollection<string> excludedFiles, Node? plannedRoot = null, int minimumGroupCount = 1)
     {
+        options.CancellationToken.ThrowIfCancellationRequested();
         var blockSize = options.BlockSize;
         var inodeSize = options.InodeSize;
 
@@ -330,19 +339,39 @@ public sealed partial class Ext4Builder
         var blocksPerGroup = (int)Math.Min(maxBlockGroupBlocks,
             ((minimumGroupBlocks + 7) / 8) * 8);
 
+        var requestedBlocks = options.TargetSizeBytes is { } targetSizeBytes
+            ? targetSizeBytes / blockSize
+            : (long?)null;
+        if (requestedBlocks is { } fixedBlocks)
+        {
+            if (fixedBlocks < minimumGroupBlocks)
+            {
+                throw new InvalidOperationException(
+                    $"Requested EXT4 capacity {options.TargetSizeBytes} bytes is too small for the filesystem content.");
+            }
+            blocksPerGroup = checked((int)Math.Min(maxBlockGroupBlocks, ((fixedBlocks + 7) / 8) * 8));
+        }
+
 
         var gdtBlocks = 1L;
         var group0Extra = 1L + gdtBlocks;
         var estimatedTotal = group0Extra + metaPerGroup + totalDataBlocks + journalBlocks;
-        var groupCount = Math.Max(minimumGroupCount, (int)((estimatedTotal + blocksPerGroup - 1) / blocksPerGroup));
-        groupCount = Math.Max(groupCount, (int)Math.Ceiling((double)maxInode / inodesPerGroup));
+        var requiredInodeGroups = (int)Math.Ceiling((double)maxInode / inodesPerGroup);
+        var groupCount = requestedBlocks is { } targetBlocks
+            ? checked((int)((targetBlocks + blocksPerGroup - 1) / blocksPerGroup))
+            : Math.Max(minimumGroupCount, (int)((estimatedTotal + blocksPerGroup - 1) / blocksPerGroup));
+        if (requestedBlocks is not null && requiredInodeGroups > groupCount)
+        {
+            throw new InvalidOperationException("Requested EXT4 capacity cannot hold the inode table.");
+        }
+        groupCount = Math.Max(groupCount, requiredInodeGroups);
 
 
         gdtBlocks = Math.Max(1, (long)Math.Ceiling(groupCount * 64.0 / blockSize));
 
 
         var descsPerGdtBlock = blockSize / 64;
-        var fsBlocks = (long)groupCount * blocksPerGroup;
+        var fsBlocks = requestedBlocks ?? (long)groupCount * blocksPerGroup;
         var maxGrowthBlocks = fsBlocks < ((1L << 32) / 1024) ? fsBlocks * 1024 : 0xFFFF_FFFFL;
         var reservedGroups = (maxGrowthBlocks + blocksPerGroup - 1) / blocksPerGroup;
         var reservedGdtBlocks = (int)Math.Min(blockSize / 4, (reservedGroups + descsPerGdtBlock - 1) / descsPerGdtBlock);
@@ -355,6 +384,11 @@ public sealed partial class Ext4Builder
 
         if (totalBlocksNeeded > (long)groupCount * blocksPerGroup)
         {
+            if (requestedBlocks is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Requested EXT4 capacity {options.TargetSizeBytes} bytes is too small for filesystem metadata and content.");
+            }
             groupCount = (int)((totalBlocksNeeded + blocksPerGroup - 1) / blocksPerGroup);
             gdtBlocks = Math.Max(1, (long)Math.Ceiling(groupCount * 64.0 / blockSize));
             fsBlocks = (long)groupCount * blocksPerGroup;
@@ -367,7 +401,12 @@ public sealed partial class Ext4Builder
                 + (groupCount - 1) * metaPerGroup + backupGroupCount * (1 + gdtBlocks + reservedGdtBlocks);
         }
 
-        var totalBlocks = (long)groupCount * blocksPerGroup;
+        var totalBlocks = requestedBlocks ?? (long)groupCount * blocksPerGroup;
+        if (totalBlocksNeeded > totalBlocks)
+        {
+            throw new InvalidOperationException(
+                $"Requested EXT4 capacity {options.TargetSizeBytes} bytes is too small for filesystem metadata and content.");
+        }
         var usedBlocks = totalBlocksNeeded;
 
 
@@ -407,7 +446,7 @@ public sealed partial class Ext4Builder
                 group.FirstDataBlock = groupStart + 2 + inodeTableBlocks;
             }
 
-            group.BlocksInGroup = blocksPerGroup;
+            group.BlocksInGroup = Math.Min(blocksPerGroup, totalBlocks - groupStart);
             group.InodesInGroup = inodesPerGroup;
             if (group.FirstDataBlock >= groupStart + blocksPerGroup)
                 throw new InvalidOperationException("EXT4 group metadata leaves no room for file data.");
@@ -429,6 +468,11 @@ public sealed partial class Ext4Builder
         if (!AllocateDataBlocksMultiGroup(nodes, groups, blocksPerGroup, blockSize, journalBlocks, out var journalStart))
         {
             // Group boundaries can add extent-tree blocks after the initial layout estimate.
+            if (requestedBlocks is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Requested EXT4 capacity {options.TargetSizeBytes} bytes is too small after extent allocation.");
+            }
             BuildCore(sourceDirectory, output, options, baseOffset, freshDestination, excludedFiles, root, checked(groupCount + 1));
             return;
         }
@@ -488,7 +532,8 @@ public sealed partial class Ext4Builder
 
         WriteSuperblock(superblock, blockSize, inodeSize, (uint)inodesPerGroup, totalBlocks, usedBlocks,
             (int)Math.Max(0, totalInodes - totalFreeInodes), uuid, blocksPerGroup, options.EnableMetadataCsum,
-            includeJournal ? JournalInodeNumber : 0u, includeJournal, reservedGdtBlocks, journalIBlock, journalSize, options.VolumeName);
+            includeJournal ? JournalInodeNumber : 0u, includeJournal, reservedGdtBlocks, journalIBlock, journalSize, options.VolumeName,
+            options.ReadOnly);
         WriteAt(output, baseOffset, 1024, superblock, superblock.Length);
 
         foreach (var bg in BackupSuperblockGroups(groupCount))
@@ -571,7 +616,7 @@ public sealed partial class Ext4Builder
         var cursor = groups[0].FirstDataBlock;
         if (journalBlocks > 0)
         {
-            if (journalBlocks > blocksPerGroup - cursor)
+            if (journalBlocks > groups[0].BlocksInGroup - cursor)
                 throw new InvalidOperationException("EXT4 group zero cannot hold its metadata and internal journal.");
             journalStart = cursor;
             cursor += journalBlocks;
@@ -580,7 +625,7 @@ public sealed partial class Ext4Builder
 
         bool EnsureSpace()
         {
-            while (cursor >= (long)(groupIndex + 1) * blocksPerGroup)
+            while (cursor >= (long)groupIndex * blocksPerGroup + groups[groupIndex].BlocksInGroup)
             {
                 if (++groupIndex >= groups.Count) return false;
                 cursor = groups[groupIndex].FirstDataBlock;
@@ -598,7 +643,7 @@ public sealed partial class Ext4Builder
                 while (remaining > 0)
                 {
                     if (!EnsureSpace()) return false;
-                    var available = (long)(groupIndex + 1) * blocksPerGroup - cursor;
+                    var available = (long)groupIndex * blocksPerGroup + groups[groupIndex].BlocksInGroup - cursor;
                     var count = checked((ushort)Math.Min(Math.Min(remaining, available), MaxExtentLength));
                     node.Extents.Add((checked((uint)logical), checked((ulong)cursor), count));
                     groups[groupIndex].UsedBlocks += count;
@@ -1086,7 +1131,7 @@ public sealed partial class Ext4Builder
 
     private static void WriteSuperblock(
         Span<byte> block, int blockSize, int inodeSize, uint inodesPerGroup, long totalBlocks, long usedBlocks, int usedInodes, byte[] uuid, int blocksPerGroup, bool enableMetadataCsum, uint journalInum, bool hasJournal,
-        int reservedGdtBlocks, ReadOnlySpan<byte> journalIBlock, long journalSize, string volumeName)
+        int reservedGdtBlocks, ReadOnlySpan<byte> journalIBlock, long journalSize, string volumeName, bool readOnly)
     {
         block.Clear();
         var totalInodes = inodesPerGroup * ((totalBlocks + blocksPerGroup - 1) / blocksPerGroup);
@@ -1127,7 +1172,7 @@ public sealed partial class Ext4Builder
 
         WriteU32(block, 0x5C, 0x0038u | (hasJournal ? FeatureCompatHasJournal : 0u));
         WriteU32(block, 0x60, 0x02C2);
-        WriteU32(block, 0x64, 0x006Bu | (enableMetadataCsum ? 0x0400u : 0u));
+        WriteU32(block, 0x64, 0x006Bu | (enableMetadataCsum ? 0x0400u : 0u) | (readOnly ? 0x1000u : 0u));
         Encoding.UTF8.GetBytes(volumeName, block[0x78..0x88]);
         uuid.AsSpan().CopyTo(block[0x68..0x78]);
 
@@ -1415,7 +1460,7 @@ public sealed partial class Ext4Builder
         // padding 位被置位，清零会报 "Padding at end of block bitmap is not set"。
         // 真实 mke2fs 因块组恰占满位图块（blocks_per_group == 8 × blockSize）无需处理；
         // 采用自适应的小块组时，位图块尾部多余位必须强制置 1。</para>
-        for (var bit = blocksPerGroup; bit < bitmap.Length * 8L; bit++)
+        for (var bit = group.BlocksInGroup; bit < bitmap.Length * 8L; bit++)
         {
             MarkBlockUsed(bitmap, bit);
         }

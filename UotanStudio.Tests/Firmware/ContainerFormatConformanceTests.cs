@@ -7,6 +7,7 @@ using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -18,10 +19,11 @@ public class ContainerFormatConformanceTests
     [InlineData(BootImageVersion.V0)]
     [InlineData(BootImageVersion.V1)]
     [InlineData(BootImageVersion.V2)]
-    public void BootLegacyCommandLine_PreservesUtf8Across511ByteBoundary(BootImageVersion version)
+    public void BootLegacyImage_PreservesCommandLineAndMatchesMkbootimgId(BootImageVersion version)
     {
         var commandLine = new string('a', 510) + "中" + new string('b', 100);
         var packer = BootPacker(version, commandLine);
+        packer.Header.Ids = Enumerable.Repeat(0xababababu, 8).ToArray();
         var data = Pack(packer);
         var expected = Encoding.UTF8.GetBytes(commandLine);
         Assert.Equal(expected.AsSpan(0, 511).ToArray(), data.AsSpan(64, 511).ToArray());
@@ -31,28 +33,29 @@ public class ContainerFormatConformanceTests
         using var parser = new BootImageParser();
         parser.Parse(data);
         Assert.Equal(commandLine, parser.Header.CommandLine);
-    }
-
-    [Theory]
-    [InlineData(BootImageVersion.V0)]
-    [InlineData(BootImageVersion.V1)]
-    [InlineData(BootImageVersion.V2)]
-    public void BootImageId_MatchesMkbootimgComponentAndLengthSequence(BootImageVersion version)
-    {
-        var packer = BootPacker(version, "test");
-        packer.Header.Ids = Enumerable.Repeat(0xababababu, 8).ToArray();
-        var data = Pack(packer);
         using var signed = new MemoryStream();
         using var writer = new BinaryWriter(signed, Encoding.UTF8, true);
         var parts = new List<byte[]> { packer.Kernel, packer.Ramdisk, packer.Second };
-        if (version >= BootImageVersion.V1) parts.Add(packer.RecoveryDtbo);
-        if (version >= BootImageVersion.V2) parts.Add(packer.Dtb);
-        foreach (var part in parts) { writer.Write(part); writer.Write((uint)part.Length); }
-        var expected = SHA1.HashData(signed.ToArray());
-        Assert.Equal(expected, data.AsSpan(576, 20).ToArray());
+        if (version >= BootImageVersion.V1)
+        {
+            parts.Add(packer.RecoveryDtbo);
+        }
+        if (version >= BootImageVersion.V2)
+        {
+            parts.Add(packer.Dtb);
+        }
+        foreach (var part in parts)
+        {
+            writer.Write(part);
+            writer.Write((uint)part.Length);
+        }
+        var expectedId = SHA1.HashData(signed.ToArray());
+        Assert.Equal(expectedId, data.AsSpan(576, 20).ToArray());
         Assert.Equal(new byte[12], data.AsSpan(596, 12).ToArray());
         if (version >= BootImageVersion.V1)
+        {
             Assert.Equal(version == BootImageVersion.V2 ? 1660u : 1648u, BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(1644)));
+        }
         if (version == BootImageVersion.V2)
         {
             Assert.Equal((uint)packer.Dtb.Length, BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(1648)));
@@ -116,7 +119,7 @@ public class ContainerFormatConformanceTests
     [InlineData(4096, 1u, false)]
     public void AvbAlgorithm_MustMatchActualRsaKeyAndSignature(int keyBits, uint algorithm, bool expected)
     {
-        using var key = RSA.Create(keyBits);
+        using var key = SigningTestKeys.Create(keyBits);
         var (image, publicKey, signature, signedData) = SignedVbmeta(key, algorithm);
         Assert.True(key.VerifyData(signedData, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
         Assert.Equal(expected, AvbSignatureVerifier.Verify(image).SignatureIsValid);
@@ -127,7 +130,7 @@ public class ContainerFormatConformanceTests
     [Fact]
     public void AvbSignatureSize_MustEqualAlgorithmWidthEvenWhenRangeFits()
     {
-        using var key = RSA.Create(2048);
+        using var key = SigningTestKeys.Create(2048);
         var (image, blob, signature, _) = SignedVbmeta(key, 1);
         BinaryPrimitives.WriteUInt64BigEndian(image.AsSpan(56), 255);
         Assert.False(AvbSignatureVerifier.Verify(image).SignatureIsValid);
