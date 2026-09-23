@@ -4,6 +4,7 @@ using System.Text;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Extraction;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
+using UotanStudio.Services.Flash;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -50,7 +51,7 @@ public sealed class OzipExtractionTests
     }
 
     [Fact]
-    public void Extract_ImageAfterFirstEncryptionUnit_IsWrittenByteExactly()
+    public async Task Extract_ImageAfterFirstEncryptionUnit_IsWrittenByteExactly()
     {
         var image = CreatePattern(96 * 1024);
         Encoding.ASCII.GetBytes("ANDROID!").CopyTo(image, 0);
@@ -76,6 +77,22 @@ public sealed class OzipExtractionTests
 
             Assert.True(result.ExtractedFileCount >= 3);
             Assert.Equal(image, File.ReadAllBytes(Path.Combine(outputPath, "firmware-update_boot.img")));
+
+            var selectedOutput = Path.Combine(root, "selected");
+            var selected = reader.Extract(inputPath, selectedOutput,
+                new OppExtractOptions
+                {
+                    SelectedEntries = ["firmware-update/boot.img"]
+                });
+            Assert.Equal(1, selected.ExtractedFileCount);
+            Assert.Equal(image, File.ReadAllBytes(Path.Combine(selectedOutput, "firmware-update_boot.img")));
+            Assert.Single(Directory.GetFiles(selectedOutput));
+
+            var listed = await FlashOppoContainerService.ListAsync(inputPath, TestContext.Current.CancellationToken);
+            Assert.Equal("boot", Assert.Single(listed).Name);
+            var published = await FlashOppoContainerService.ExtractAsync(
+                inputPath, ["firmware-update/boot.img"], root, TestContext.Current.CancellationToken);
+            Assert.Equal(image, File.ReadAllBytes(Path.Combine(published, "firmware-update_boot.img")));
         }
         finally
         {

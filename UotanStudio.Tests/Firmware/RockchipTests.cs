@@ -208,6 +208,15 @@ public sealed class RockchipTests : IDisposable
         }, TestContext.Current.CancellationToken);
 
         Assert.True(packed.Success, packed.Summary);
+        var preview = await handler.ReadMetadataAsync(original, TestContext.Current.CancellationToken);
+        Assert.True(preview.Success, preview.Summary);
+        Assert.Equal("RKFW", preview.Metadata["Container"]);
+        Assert.Equal("11.2.513", preview.Metadata["RkfwVersion"]);
+        Assert.Equal("0x02000000", preview.Metadata["MergeVersion"]);
+        Assert.Equal("0x33353838", preview.Metadata["ChipId"]);
+        Assert.Equal("2024-11-08 02:13:14", preview.Metadata["ReleaseTime"]);
+        Assert.Equal("NotVerified", preview.Metadata["ChecksumStatus"]);
+        Assert.Contains(preview.Components!, component => component.Name == "embedded-update.img/boot.img" && component.SizeBytes == 3);
         var bytes = await File.ReadAllBytesAsync(original, TestContext.Current.CancellationToken);
         Assert.Equal("8853"u8.ToArray(), bytes.AsSpan(0x15, 4).ToArray());
         Assert.Equal(11, bytes[9]);
@@ -222,6 +231,20 @@ public sealed class RockchipTests : IDisposable
         var repacked = await handler.PackAsync(extracted, rebuilt, TestContext.Current.CancellationToken);
         Assert.True(repacked.Success, repacked.Summary);
         Assert.Equal(bytes, await File.ReadAllBytesAsync(rebuilt, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Rkfw_MetadataPreview_DoesNotValidatePayloadButExtractionDoes()
+    {
+        var image = BuildRkfw("BOOTloader"u8.ToArray(), BuildRkaf("boot.img", [1, 2, 3]));
+        image[108] ^= 0x01;
+        var path = Write(image);
+
+        var preview = await new RockchipFormatHandler().ReadMetadataAsync(path, TestContext.Current.CancellationToken);
+
+        Assert.True(preview.Success, preview.Summary);
+        Assert.Equal("NotVerified", preview.Metadata["ChecksumStatus"]);
+        Assert.Throws<InvalidDataException>(() => RockchipExtractor.List(path));
     }
 
     [Fact]

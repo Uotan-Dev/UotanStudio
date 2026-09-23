@@ -38,7 +38,7 @@ public class PayloadIntegrityTests
     }
 
     [Theory]
-    [InlineData(14)]
+    [InlineData(15)]
     [InlineData(65535)]
     public void UnknownOperation_IsRejectedBeforeCommit(int operationType)
     {
