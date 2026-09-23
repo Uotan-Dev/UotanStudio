@@ -17,7 +17,6 @@ public sealed class FastbootUdpTransport : ICommTransport
     private readonly SemaphoreSlim _ioLock = new(1, 1);
     private readonly FastbootUdpPackets _packets;
     private readonly int _defaultTimeoutMs;
-    private readonly int _maxTransmissionAttempts;
 
     private UdpClient? _client;
     private bool _connected;
@@ -75,7 +74,6 @@ public sealed class FastbootUdpTransport : ICommTransport
         Host = host;
         Port = port;
         _defaultTimeoutMs = timeoutMs;
-        _maxTransmissionAttempts = maxTransmissionAttempts;
         _packets = new FastbootUdpPackets(new IPEndPoint(IPAddress.Parse(host), port), maxTransmissionAttempts);
         _client = new UdpClient();
 
