@@ -58,28 +58,42 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(HasSelectedDevice));
-                OnPropertyChanged(nameof(ShowSelectPlaceholder));
-                OnPropertyChanged(nameof(SelectedDeviceName));
-                OnPropertyChanged(nameof(DeviceDetail));
-                OnPropertyChanged(nameof(CanOpenAdbShell));
-                OnPropertyChanged(nameof(CanFastbootReadInfo));
-                OnPropertyChanged(nameof(CanRebootToFastbootd));
-                OnPropertyChanged(nameof(CanQuickFlash));
-                OnPropertyChanged(nameof(CanBackupRestore));
-                OnPropertyChanged(nameof(CanScreenMirror));
-                OpenAdbShellCommand.NotifyCanExecuteChanged();
-                HdcOperationCommand.NotifyCanExecuteChanged();
-                FastbootReadInfoCommand.NotifyCanExecuteChanged();
-                QuickFlashCommand.NotifyCanExecuteChanged();
-                BackupPartitionCommand.NotifyCanExecuteChanged();
-                RestorePartitionCommand.NotifyCanExecuteChanged();
-                ScreenMirrorCommand.NotifyCanExecuteChanged();
+                NotifySelectedDeviceProperties();
                 foreach (var device in Devices)
                 {
                     device.NotifySelectionChanged();
                 }
             }
         }
+    }
+
+    internal void NotifyConnectionChanged(DeviceInfo device)
+    {
+        if (ReferenceEquals(SelectedDevice, device))
+        {
+            NotifySelectedDeviceProperties();
+            _ = EnrichDeviceInfoAsync(device);
+        }
+    }
+
+    private void NotifySelectedDeviceProperties()
+    {
+        OnPropertyChanged(nameof(ShowSelectPlaceholder));
+        OnPropertyChanged(nameof(SelectedDeviceName));
+        OnPropertyChanged(nameof(DeviceDetail));
+        OnPropertyChanged(nameof(CanOpenAdbShell));
+        OnPropertyChanged(nameof(CanFastbootReadInfo));
+        OnPropertyChanged(nameof(CanRebootToFastbootd));
+        OnPropertyChanged(nameof(CanQuickFlash));
+        OnPropertyChanged(nameof(CanBackupRestore));
+        OnPropertyChanged(nameof(CanScreenMirror));
+        OpenAdbShellCommand.NotifyCanExecuteChanged();
+        HdcOperationCommand.NotifyCanExecuteChanged();
+        FastbootReadInfoCommand.NotifyCanExecuteChanged();
+        QuickFlashCommand.NotifyCanExecuteChanged();
+        BackupPartitionCommand.NotifyCanExecuteChanged();
+        RestorePartitionCommand.NotifyCanExecuteChanged();
+        ScreenMirrorCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -223,7 +237,8 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         var selectedKey = SelectedDevice?.Key;
         try
         {
-            var scanned = await Task.Run(() => DeviceMonitorService.Instance.Scan()).ConfigureAwait(true);
+            var scanned = await Task.Run(() =>
+                DeviceMonitorService.GroupPhysicalDevices(DeviceMonitorService.Instance.Scan())).ConfigureAwait(true);
 
             // 差量更新：列表无变化直接跳过，有变化时按键保留/替换/插入/移除，
             // 避免 ObservableCollection 整表 Reset 造成选中丢失与界面闪烁。
@@ -234,7 +249,8 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             {
                 for (var i = 0; i < scanned.Count; i++)
                 {
-                    if (Devices[i].Key != scanned[i].Key || Devices[i].State != scanned[i].State)
+                    if (Devices[i].Key != (scanned[i][0].PhysicalId ?? scanned[i][0].Key) ||
+                        !Devices[i].MatchesConnections(scanned[i]))
                     {
                         changed = true;
                         break;
@@ -245,12 +261,18 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             {
                 for (var i = 0; i < scanned.Count; i++)
                 {
-                    var match = i < Devices.Count && Devices[i].Key == scanned[i].Key ? Devices[i] : null;
+                    var match = i < Devices.Count &&
+                        Devices[i].Key == (scanned[i][0].PhysicalId ?? scanned[i][0].Key)
+                        ? Devices[i] : null;
                     if (match is not null)
                     {
-                        if (match.State != scanned[i].State)
+                        if (!match.MatchesConnections(scanned[i]))
                         {
-                            Devices[i] = new DeviceInfo(scanned[i], this);
+                            var replacement = new DeviceInfo(scanned[i], this);
+                            var selectedEndpoint = scanned[i].FirstOrDefault(endpoint => endpoint.Key == match.Device.Key);
+                            if (selectedEndpoint is not null)
+                                replacement.SelectedConnection = selectedEndpoint;
+                            Devices[i] = replacement;
                         }
                         continue;
                     }

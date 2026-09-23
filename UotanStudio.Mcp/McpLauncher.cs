@@ -37,11 +37,12 @@ public static class McpLauncher
     /// <para>伴随桌面 UI 运行 MCP 服务器，注入与宿主等价的交付工具准备服务，
     /// 使 delivery_build 在伴随模式可用。</para>
     /// </summary>
-    public static async Task RunCompanionAsync(string[] args, CancellationToken cancellationToken = default)
+    public static async Task RunCompanionAsync(string[] args, Tools.IDeviceManagerGateway deviceManager,
+        CancellationToken cancellationToken = default)
     {
         EnableDeliveryBuild();
 
-        var host = new McpServerHost(McpServerConfig.Parse(args));
+        var host = new McpServerHost(McpServerConfig.Parse(args), deviceManager);
         await host.RunAsync(cancellationToken).ConfigureAwait(false);
     }
 

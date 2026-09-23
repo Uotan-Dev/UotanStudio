@@ -1,4 +1,6 @@
 using AdvancedSharpAdbClient;
+using AdvancedSharpAdbClient.Models;
+using AdvancedSharpAdbClient.Receivers;
 using UotanStudio.Comm;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Bootrom;
@@ -6,8 +8,11 @@ using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Hdc;
+using UotanStudio.Comm.Protocols.Scrcpy;
 using UotanStudio.Comm.Transports.Abstractions;
+using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Services.Flash;
 
 namespace UotanStudio.Services.Devices;
 
@@ -59,6 +64,8 @@ public sealed class DetectedDevice
     public required DeviceProtocolKind Protocol { get; init; }
     /// <summary>传输类型。 Transport kind.</summary>
     public required DeviceTransportKind Transport { get; init; }
+    /// <summary>Verified physical identity shared by protocol endpoints, or null when unavailable.</summary>
+    public string? PhysicalId { get; init; }
     /// <summary>状态文本（device/offline/fastboot/edl/maskrom/loader…）。 State text.</summary>
     public string State { get; set; } = string.Empty;
     /// <summary>USB 厂商 ID（非 USB 为 0）。 USB vendor ID.</summary>
@@ -69,6 +76,9 @@ public sealed class DetectedDevice
     public string DisplayName => Transport == DeviceTransportKind.Tcp
         ? $"{Serial} (network)"
         : $"{Serial} ({State})";
+
+    /// <summary>Connection choice shown when one physical device exposes several protocols.</summary>
+    public string ConnectionLabel => $"{Protocol} · {Transport} · {Serial}";
 }
 
 /// <summary>
@@ -80,7 +90,7 @@ public sealed class DetectedDevice
 /// and protocol sessions go through UotanStudio.Comm; interaction with the official Google
 /// adb server (network devices, state queries, reboots) uses AdvancedSharpAdbClient.
 /// </summary>
-public sealed class DeviceMonitorService : IDisposable
+public sealed partial class DeviceMonitorService : IDisposable
 {
     /// <summary>
     /// <para>单例实例。</para>
@@ -89,62 +99,281 @@ public sealed class DeviceMonitorService : IDisposable
     public static DeviceMonitorService Instance { get; } = new();
 
     private readonly CommKit _comm = CommKit.Default;
+    private static HdcDeviceService HdcOperations => HdcDeviceService.FromSettings();
+
+    /// <summary>Runs a command on the selected HDC target.</summary>
+    public Task<string> HdcShellAsync(DetectedDevice device, string command, CancellationToken cancellationToken = default)
+        => HdcOperations.ShellAsync(device, command, cancellationToken);
+
+    /// <summary>Reads a parameter from the selected HDC target.</summary>
+    public Task<string> HdcPropertyAsync(DetectedDevice device, string name, CancellationToken cancellationToken = default)
+        => HdcOperations.GetPropertyAsync(device, name, cancellationToken);
+
+    /// <summary>Sends a file to the selected HDC target.</summary>
+    public Task<string> HdcSendFileAsync(DetectedDevice device, string localPath, string remotePath, CancellationToken cancellationToken = default)
+        => HdcOperations.SendFileAsync(device, localPath, remotePath, cancellationToken);
+
+    /// <summary>Receives a file from the selected HDC target.</summary>
+    public Task<string> HdcReceiveFileAsync(DetectedDevice device, string remotePath, string localPath, CancellationToken cancellationToken = default)
+        => HdcOperations.ReceiveFileAsync(device, remotePath, localPath, cancellationToken);
+
+    /// <summary>Installs a package on the selected HDC target.</summary>
+    public Task<string> HdcInstallAsync(DetectedDevice device, string localPath, CancellationToken cancellationToken = default)
+        => HdcOperations.InstallAsync(device, localPath, cancellationToken);
+
+    /// <summary>Uninstalls a package from the selected HDC target.</summary>
+    public Task<string> HdcUninstallAsync(DetectedDevice device, string bundle, CancellationToken cancellationToken = default)
+        => HdcOperations.UninstallAsync(device, bundle, cancellationToken);
+
+    /// <summary>Disconnects the selected HDC network target.</summary>
+    public Task<string> HdcDisconnectAsync(DetectedDevice device, CancellationToken cancellationToken = default)
+        => HdcOperations.DisconnectAsync(device, cancellationToken);
+
+    /// <summary>Enumerates serial endpoints without assigning an unverified device protocol.</summary>
+    public IReadOnlyList<string> EnumerateSerialPorts()
+        => SerialTransport.GetAvailablePorts().OrderBy(port => port, StringComparer.Ordinal).ToArray();
+
+    internal static void RequireSerialTarget(SerialConnectionOptions selected, IReadOnlyList<string> ports)
+    {
+        ArgumentNullException.ThrowIfNull(selected);
+        ArgumentNullException.ThrowIfNull(ports);
+        ArgumentException.ThrowIfNullOrWhiteSpace(selected.PortName);
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (!ports.Any(port => string.Equals(port, selected.PortName, comparison)))
+            throw new IOException("The selected serial target is no longer present. Refresh the device list.");
+    }
+
+    /// <summary>Runs a preflighted Firehose bundle on the selected EDL serial target.</summary>
+    public Task FlashEdlSerialAsync(SerialConnectionOptions serial, string folder, string? programmerPath,
+        FirehoseConfiguration? configuration = null, bool includeUfsProvision = false,
+        CancellationToken cancellationToken = default)
+    {
+        RequireSerialTarget(serial, EnumerateSerialPorts());
+        return FlashEdlBundleService.FlashSerialCoreAsync(
+            token => EdlSerialBootstrap.ConnectAsync(serial, programmerPath, configuration, token),
+            folder, includeUfsProvision, cancellationToken);
+    }
+
+    /// <summary>Runs a preflighted bundle against the selected USB EDL device.</summary>
+    public Task FlashEdlBundleAsync(DetectedDevice device, string folder, string programmerPath,
+        CancellationToken cancellationToken = default)
+        => FlashEdlBundleService.FlashAsync(device, folder, programmerPath, cancellationToken);
+
+    /// <summary>Routes deployment and connection through the selected ADB server or native USB target.</summary>
+    public ManagedMirrorSession StartMirror(DetectedDevice device,
+        string jarPath, ScrcpyServerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(options);
+        var session = OpenAdbSession(device)
+            ?? throw new InvalidOperationException($"ADB session unavailable: {device.Serial}.");
+        if (session.Connection.UsesServer)
+        {
+            using (session)
+            {
+                var mirror = StartAdbServerMirror(device, jarPath, options);
+                return new ManagedMirrorSession(mirror.Client, mirror.Shell, null);
+            }
+        }
+
+        // A native client keeps the session alive until the presentation owner releases it.
+        try
+        {
+            session.Connect();
+            var mirror = StartAdbUsbMirror(session, jarPath, options);
+            return new ManagedMirrorSession(mirror.Client, mirror.Shell, session);
+        }
+        catch
+        {
+            session.Dispose();
+            throw;
+        }
+    }
+
+    private (ScrcpyClient Client, Stream Shell) StartAdbServerMirror(DetectedDevice device, string jarPath,
+        ScrcpyServerOptions options)
+    {
+        RequireAdbServerDevice(device);
+        ArgumentNullException.ThrowIfNull(options);
+        var server = new AdbServerServices(device.Serial, DeviceCommunicationConfiguration.ServerHost,
+            DeviceCommunicationConfiguration.AdbServerPort);
+        server.Push(jarPath, ScrcpyConstants.ServerDevicePath);
+        var shell = server.Open("shell:" + options.BuildShellCommand());
+        try { return (new ScrcpyClient(server, options), shell); }
+        catch { shell.Dispose(); throw; }
+    }
+
+    /// <summary>Deploys and opens a native USB mirror stream on a manager-created session.</summary>
+    private static (ScrcpyClient Client, Stream Shell) StartAdbUsbMirror(AdbSession session, string jarPath,
+        ScrcpyServerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(options);
+        if (session.Connection.UsesServer)
+            throw new ArgumentException("A native USB ADB session is required.", nameof(session));
+        ScrcpyServerManager.PushServer(session, jarPath);
+        var shell = new AdbServiceStream(ScrcpyServerManager.StartServer(session, options));
+        try { return (new ScrcpyClient(session, options), shell); }
+        catch { shell.Dispose(); throw; }
+    }
+
+    /// <summary>Opens an external shell after verifying the selected server target.</summary>
+    public void OpenInteractiveShell(DetectedDevice device)
+        => DeviceShellService.OpenInteractiveShell(device);
+
+    /// <summary>Relays a selected ADB or HDC shell to the embedded terminal process.</summary>
+    public async Task RunInteractiveShellAsync(DetectedDevice device, Stream input, Stream output,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        if (device.Protocol == DeviceProtocolKind.Adb)
+        {
+            using var session = OpenAdbSession(device)
+                ?? throw new IOException("The selected ADB target is unavailable.");
+            await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
+            using var shell = new AdbServiceStream(session.OpenStream("shell:"))
+            {
+                ReadTimeout = 1000
+            };
+            await RelayShellAsync(shell, input, output, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+        if (device.Protocol == DeviceProtocolKind.Hdc)
+        {
+            if (!UseHdcServerFor(device)) throw new IOException("HDC server is required for the interactive shell.");
+            using var server = new HdcServerClient(DeviceCommunicationConfiguration.ServerHost,
+                HdcServerClient.DefaultServerPort);
+            var target = server.ListTargetDetails().SingleOrDefault(item =>
+                string.Equals(item.ConnectKey, device.Serial, StringComparison.Ordinal));
+            if (target is null || !string.Equals(target.State, "Connected", StringComparison.OrdinalIgnoreCase))
+                throw new IOException("The HDC server target is not ready.");
+            await server.RunInteractiveShellAsync(device.Serial, input, output, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+        throw new ArgumentException("An ADB or HDC target is required.", nameof(device));
+    }
+
+    private static async Task RelayShellAsync(Stream shell, Stream input, Stream output, CancellationToken token)
+    {
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var writer = Task.Run(async () =>
+        {
+            try { await input.CopyToAsync(shell, lifetime.Token).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+            catch (IOException) when (lifetime.IsCancellationRequested) { }
+        }, lifetime.Token);
+        try
+        {
+            var buffer = new byte[8192];
+            while (true)
+            {
+                token.ThrowIfCancellationRequested();
+                int count;
+                try { count = await shell.ReadAsync(buffer, token).ConfigureAwait(false); }
+                catch (TimeoutException) when (!token.IsCancellationRequested) { continue; }
+                if (count == 0) break;
+                await output.WriteAsync(buffer.AsMemory(0, count), token).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            await lifetime.CancelAsync().ConfigureAwait(false);
+            shell.Dispose();
+            await writer.ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Stops the selected host server and refreshes the managed device list.</summary>
+    public Task StopAdbServerAsync(CancellationToken cancellationToken = default)
+        => DebugBridgeServerControl.StopAdbAsync(cancellationToken);
+
+    /// <summary>Stops the selected host server and refreshes the managed device list.</summary>
+    public Task StopHdcServerAsync(CancellationToken cancellationToken = default)
+        => DebugBridgeServerControl.StopHdcAsync(cancellationToken);
+
+    /// <summary>Disconnects only the selected network ADB target.</summary>
+    public Task DisconnectAdbAsync(DetectedDevice device)
+    {
+        if (device.Protocol != DeviceProtocolKind.Adb || device.Transport != DeviceTransportKind.Tcp)
+            throw new ArgumentException("A network ADB target is required.", nameof(device));
+        var client = AdbServerClient;
+        if (client is null) return Task.CompletedTask;
+        _ = RequireAdbServerTarget(client, device.Serial);
+        return client.DisconnectAsync(device.Serial);
+    }
     private IDisposable? _usbMonitor;
     private DeviceMonitor? _adbMonitor;
     private Timer? _debounce;
-    private CancellationTokenSource? _hdcMonitorLifetime;
+    private CancellationTokenSource? _debugBridgeMonitorLifetime;
 
-    private async Task MonitorHdcTargetsAsync(CancellationToken ct)
+    private async Task MonitorDebugBridgeTargetsAsync(CancellationToken ct)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
         string? previous = null;
-        // server 不存在（连接被拒绝）时按退避拉长轮询间隔，避免每 3 秒固定产生
-        // 一组首次机会异常（SocketException + 取消超时）；探测到 server 后恢复 3 秒。
-        // When the server is absent (connection refused), back off the polling interval to
-        // avoid emitting a fixed batch of first-chance exceptions every 3 seconds
-        // (SocketException + cancellation timeout); restore 3 s once a server is seen.
-        var intervalMs = 3000;
         try
         {
-            while (true)
+            while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
             {
-                var nextTick = timer.WaitForNextTickAsync(ct).AsTask();
-                if (intervalMs != 3000)
+                // Poll both servers even when they were absent at startup. A listening server
+                // with no targets still changes USB ownership and must invalidate discovery.
+                var adb = await ReadAdbSnapshotAsync(ct).ConfigureAwait(false);
+                var hdc = await ReadHdcSnapshotAsync(ct).ConfigureAwait(false);
+                var snapshot = adb + "\nHDC\n" + hdc;
+                if (snapshot == previous)
                 {
-                    var delay = Task.Delay(intervalMs, ct);
-                    await Task.WhenAny(nextTick, delay).ConfigureAwait(false);
-                    if (!nextTick.IsCompleted) continue;
+                    continue;
                 }
-                if (!await nextTick.ConfigureAwait(false)) return;
-
-                string snapshot;
-                var listening = DebugBridgeRoute.UseHdcServer();
-                if (listening)
-                {
-                    intervalMs = 3000;
-                    try
-                    {
-                        using var server = new HdcServerClient();
-                        snapshot = System.Text.Encoding.UTF8.GetString(await server.ExecuteAsync(
-                            string.Empty, "list targets -v", 1500, ct).ConfigureAwait(false));
-                    }
-                    catch (Exception) when (!ct.IsCancellationRequested) { snapshot = string.Empty; }
-                }
-                else
-                {
-                    intervalMs = Math.Min(intervalMs * 2, 60000);
-                    snapshot = string.Empty;
-                }
-                if (snapshot == previous) continue;
                 previous = snapshot;
                 lock (_sync)
                 {
-                    if (ct.IsCancellationRequested) return;
+                    if (ct.IsCancellationRequested)
+                    {
+                        return;
+                    }
                     ScheduleChange();
                 }
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
+
+    private static async Task<string> ReadAdbSnapshotAsync(CancellationToken ct)
+    {
+        try
+        {
+            if (!await DeviceCommunicationConfiguration.ProbeAdbServerAsync(ct).ConfigureAwait(false))
+            {
+                return "absent";
+            }
+            var server = new AdbClient();
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(3));
+            var devices = await server.GetDevicesAsync(timeout.Token).ConfigureAwait(false);
+            return "listening:" + string.Join("\n", devices.OrderBy(d => d.Serial, StringComparer.Ordinal)
+                .Select(d => $"{d.Serial}:{d.State}"));
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            return "unavailable";
+        }
+    }
+
+    private static async Task<string> ReadHdcSnapshotAsync(CancellationToken ct)
+    {
+        try
+        {
+            if (!await DeviceCommunicationConfiguration.ProbeHdcServerAsync(ct).ConfigureAwait(false))
+            {
+                return "absent";
+            }
+            using var server = new HdcServerClient();
+            var response = await server.ExecuteAsync(string.Empty, "list targets -v", 1500, ct).ConfigureAwait(false);
+            return "listening:" + System.Text.Encoding.UTF8.GetString(response);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            return "unavailable";
+        }
     }
     private volatile bool _started;
     private volatile IReadOnlyList<DetectedDevice>? _cachedScan;
@@ -174,8 +403,8 @@ public sealed class DeviceMonitorService : IDisposable
             }
 
             _started = true;
-            _hdcMonitorLifetime = new CancellationTokenSource();
-            _ = MonitorHdcTargetsAsync(_hdcMonitorLifetime.Token);
+            _debugBridgeMonitorLifetime = new CancellationTokenSource();
+            _ = MonitorDebugBridgeTargetsAsync(_debugBridgeMonitorLifetime.Token);
         }
 
         LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Device monitor starting (initial full USB scan).");
@@ -299,12 +528,13 @@ public sealed class DeviceMonitorService : IDisposable
     private IReadOnlyList<DetectedDevice> ScanCore()
     {
         var devices = new List<DetectedDevice>();
+        var usbInfos = _comm.EnumerateUsbDevices();
         // Server identities are authoritative; never join unrelated enumeration orders.
         var adbClient = AdbServerClient;
         var adbDevices = adbClient?.GetDevices().ToList();
         using var hdcServer = ProbeHdcServer();
         var hdcTargets = hdcServer?.ListTargetDetails();
-        foreach (var info in _comm.EnumerateUsbDevices())
+        foreach (var info in usbInfos)
         {
             var protocol = Classify(info);
             if (protocol is null)
@@ -312,18 +542,31 @@ public sealed class DeviceMonitorService : IDisposable
                 continue;
             }
 
-            if (protocol == DeviceProtocolKind.Adb && adbClient is not null) continue;
-            if (protocol == DeviceProtocolKind.Hdc && hdcServer is not null) continue;
+            var physicalId = PhysicalUsbId(info, info.SerialNumber);
+            if (protocol == DeviceProtocolKind.Adb && adbDevices is not null &&
+                (adbDevices.Any(target =>
+                    string.Equals(target.Serial, info.SerialNumber, StringComparison.Ordinal) ||
+                    physicalId is not null && string.Equals(physicalId,
+                        FindServerUsbIdentity(usbInfos, target.Serial, DeviceProtocolKind.Adb),
+                        StringComparison.Ordinal)) ||
+                    string.IsNullOrWhiteSpace(info.SerialNumber) && adbDevices.Count != 0))
+                continue;
+            if (protocol == DeviceProtocolKind.Hdc && hdcServer is not null)
+                continue;
             if (protocol == DeviceProtocolKind.Hdc && HdcDirectSessionPool.FindOwnedDevice(info.DevicePath) is { } owned)
             {
                 if (!devices.Any(d => d.Key == owned.Key)) devices.Add(owned);
                 continue;
             }
             var serial = info.SerialNumber;
+            if (protocol == DeviceProtocolKind.Fastboot && string.IsNullOrWhiteSpace(serial))
+                serial = ReadFastbootSerial(info);
             devices.Add(new DetectedDevice
             {
                 Key = info.DeviceKey,
                 Serial = serial ?? $"{info.VendorId:X4}:{info.ProductId:X4}",
+                PhysicalId = PhysicalUsbId(info,
+                    !string.IsNullOrWhiteSpace(info.SerialNumber) ? info.SerialNumber : serial),
                 Protocol = protocol.Value,
                 Transport = DeviceTransportKind.Usb,
                 State = protocol.Value switch
@@ -346,10 +589,14 @@ public sealed class DeviceMonitorService : IDisposable
         if (hdcTargets is not null)
         {
             foreach (var target in hdcTargets)
+            {
+                if (!IsSupportedHdcTarget(target)) continue;
                 devices.Add(new DetectedDevice
                 {
                     Key = "hdc:" + target.ConnectKey,
                     Serial = target.ConnectKey,
+                    PhysicalId = target.Transport == "USB"
+                        ? FindServerUsbIdentity(usbInfos, target.ConnectKey, DeviceProtocolKind.Hdc) : null,
                     Protocol = DeviceProtocolKind.Hdc,
                     Transport = target.Transport switch
                     {
@@ -361,6 +608,7 @@ public sealed class DeviceMonitorService : IDisposable
                     State = target.State.Equals("Connected", StringComparison.OrdinalIgnoreCase) ? "device"
                         : target.State.Equals("Unauthorized", StringComparison.OrdinalIgnoreCase) ? "unauthorized" : "offline",
                 });
+            }
         }
 
         if (adbDevices is not null)
@@ -371,6 +619,8 @@ public sealed class DeviceMonitorService : IDisposable
                 {
                     Key = "adb:" + d.Serial,
                     Serial = d.Serial,
+                    PhysicalId = !d.Serial.Contains(':')
+                        ? FindServerUsbIdentity(usbInfos, d.Serial, DeviceProtocolKind.Adb) : null,
                     Protocol = DeviceProtocolKind.Adb,
                     Transport = d.Serial.Contains(':') ? DeviceTransportKind.Tcp : DeviceTransportKind.Usb,
                     State = d.State.ToString().ToLowerInvariant(),
@@ -384,7 +634,101 @@ public sealed class DeviceMonitorService : IDisposable
             }
         }
 
-        return devices;
+        return CoalesceSameEndpoint(devices);
+    }
+
+    internal static bool IsSupportedHdcTarget(HdcTargetInfo target)
+        => target.Transport is "USB" or "TCP";
+
+    private static string? PhysicalUsbId(ushort vendorId, ushort productId, string? serial)
+    {
+        if (string.IsNullOrWhiteSpace(serial) || serial == "UNKNOWN" ||
+            serial.Length > 128 || serial.Any(char.IsControl))
+            return null;
+        return $"usb:{vendorId:X4}:{productId:X4}:{serial}";
+    }
+
+    internal static string? PhysicalUsbId(UsbDeviceInfo info, string? serial)
+        => info.ContainerId is { } container && container != Guid.Empty
+            ? $"usb-container:{container:N}"
+            : PhysicalUsbId(info.VendorId, info.ProductId, serial);
+
+    internal static string? FindServerUsbIdentity(IReadOnlyList<UsbDeviceInfo> infos, string serial,
+        DeviceProtocolKind protocol)
+    {
+        var ids = infos.Where(info => Classify(info) == protocol &&
+                (string.Equals(info.SerialNumber, serial, StringComparison.Ordinal) ||
+                    info.ContainerId.HasValue && InstanceIdMatchesSerial(info.DeviceInstanceId, serial)))
+            .Select(info => PhysicalUsbId(info, info.SerialNumber))
+            .Where(id => id is not null).Distinct(StringComparer.Ordinal).Take(2).ToArray();
+        return ids.Length == 1 ? ids[0] : null;
+    }
+
+    private static bool InstanceIdMatchesSerial(string? instanceId, string serial)
+    {
+        if (string.IsNullOrWhiteSpace(instanceId)) return false;
+        var separator = instanceId.LastIndexOf('\\');
+        return separator >= 0 && string.Equals(instanceId[(separator + 1)..], serial,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static IReadOnlyList<IReadOnlyList<DetectedDevice>> GroupPhysicalDevices(
+        IEnumerable<DetectedDevice> endpoints)
+        => endpoints.GroupBy(device => device.PhysicalId ?? device.Key, StringComparer.Ordinal)
+            .Select(group => (IReadOnlyList<DetectedDevice>)group.ToArray()).ToArray();
+
+    internal static IReadOnlyList<DetectedDevice> CoalesceSameEndpoint(IEnumerable<DetectedDevice> candidates)
+    {
+        var byKey = new Dictionary<string, DetectedDevice>(StringComparer.Ordinal);
+        foreach (var device in candidates)
+        {
+            if (byKey.TryGetValue(device.Key, out var existing))
+            {
+                if (EndpointStateRank(device.State) > EndpointStateRank(existing.State))
+                    byKey[device.Key] = device;
+            }
+            else
+            {
+                byKey.Add(device.Key, device);
+            }
+        }
+        return byKey.Values.ToArray();
+    }
+
+    private static int EndpointStateRank(string state) => state switch
+    {
+        "device" or "online" or "fastboot" or "loader" => 2,
+        "unauthorized" => 1,
+        _ => 0
+    };
+
+    private string? ReadFastbootSerial(UsbDeviceInfo info)
+    {
+        IUsbDeviceSession? usb = null;
+        FastbootSession? session = null;
+        try
+        {
+            usb = _comm.OpenUsbDeviceSessionByKey(info.DeviceKey);
+            if (usb is null || !new FastbootFactory(2000).TryCreate(usb, out var protocolSession) ||
+                protocolSession is not FastbootSession fastboot)
+                return null;
+            session = fastboot;
+            var serial = session.GetVariable("serialno", useCache: false).Trim();
+            return serial.Length is > 0 and <= 128 &&
+                   serial.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.')
+                ? serial : null;
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Debug, "DeviceMonitor",
+                $"Fastboot serial unavailable for {info.DeviceKey}: {ex.Message}");
+            return null;
+        }
+        finally
+        {
+            session?.Dispose();
+            if (session is null) usb?.Dispose();
+        }
     }
 
     /// <summary>
@@ -415,14 +759,64 @@ public sealed class DeviceMonitorService : IDisposable
     /// changes across mode switches).
     /// </summary>
     public IUsbDeviceSession? OpenUsbSession(DetectedDevice device)
-        => device.Transport == DeviceTransportKind.Usb
-            ? _comm.OpenUsbDeviceSessionByKey(device.Key)
-            : null;
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        if (device.Protocol == DeviceProtocolKind.Adb &&
+            (device.Key.StartsWith("adb:", StringComparison.Ordinal) ||
+                DebugBridgeRoute.AdbServerOwns(device.Serial)))
+            throw new IOException("ADB server owns this target; direct USB access is prohibited.");
+        if (device.Protocol == DeviceProtocolKind.Hdc && DebugBridgeRoute.UseHdcServer())
+            throw new IOException("HDC server owns this protocol; direct USB access is prohibited.");
+        var direct = ResolveDirectUsbDevice(device);
+        return direct.Transport == DeviceTransportKind.Usb
+            ? _comm.OpenUsbDeviceSessionByKey(direct.Key) : null;
+    }
+
+    internal static DetectedDevice ResolveDirectUsbDevice(DetectedDevice device)
+    {
+        if (!device.Key.StartsWith("adb:", StringComparison.Ordinal) &&
+            !device.Key.StartsWith("hdc:", StringComparison.Ordinal))
+        {
+            return device;
+        }
+        var matches = CommKit.Default.EnumerateUsbDevices()
+            .Where(info => Classify(info) == device.Protocol &&
+                string.Equals(info.SerialNumber, device.Serial, StringComparison.Ordinal)).ToArray();
+        var match = RequireUniqueUsbIdentity(matches);
+        return new DetectedDevice
+        {
+            Key = match.DeviceKey,
+            Serial = device.Serial,
+            Protocol = device.Protocol,
+            Transport = DeviceTransportKind.Usb,
+            State = "device",
+            VendorId = match.VendorId,
+            ProductId = match.ProductId
+        };
+    }
+
+    internal static UsbDeviceInfo RequireUniqueUsbIdentity(IReadOnlyList<UsbDeviceInfo> matches)
+    {
+        if (matches.Count != 1)
+        {
+            throw new IOException("The server target cannot be uniquely matched to a physical USB device. Refresh the device list and select the USB target.");
+        }
+        return matches[0];
+    }
 
     /// <summary>Opens a server service session when a server exists, otherwise the exact USB device.</summary>
     public AdbSession? OpenAdbSession(DetectedDevice device)
     {
         if (device.Protocol != DeviceProtocolKind.Adb) return null;
+        if (device.Key.StartsWith("adb:", StringComparison.Ordinal))
+        {
+            if (!DebugBridgeRoute.UseAdbServer())
+                throw new IOException("The selected ADB server target is unavailable. Refresh and select the USB target for direct access.");
+            return new AdbSession(new AdbServerServices(device.Serial,
+                DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort));
+        }
+        if (device.Transport == DeviceTransportKind.Tcp && !DebugBridgeRoute.UseAdbServer())
+            throw new IOException("A network ADB target requires the ADB server.");
         return DebugBridgeRoute.OpenAdb(device.Serial, () =>
         {
             var usb = OpenUsbSession(device);
@@ -438,8 +832,34 @@ public sealed class DeviceMonitorService : IDisposable
     /// </summary>
     public FastbootSession? OpenFastbootSession(DetectedDevice device)
     {
+        if (device.Protocol != DeviceProtocolKind.Fastboot)
+            throw new ArgumentException("A Fastboot target is required.", nameof(device));
+
         var usb = OpenUsbSession(device);
-        return usb is null ? null : new FastbootSession(new UsbDeviceTransport(usb));
+        if (usb is null) return null;
+        var factory = new FastbootFactory();
+        if (!factory.TryCreate(usb, out var protocolSession) || protocolSession is not FastbootSession session)
+        {
+            usb.Dispose();
+            throw new InvalidOperationException("The device does not expose a fastboot interface.");
+        }
+
+        if (!session.IsConnected)
+        {
+            session.Dispose();
+            throw new InvalidOperationException("Fastboot session is not connected.");
+        }
+        return session;
+    }
+
+    internal static bool UseHdcServerFor(DetectedDevice device, string host = DeviceCommunicationConfiguration.ServerHost, int? port = null)
+    {
+        if (device.Protocol != DeviceProtocolKind.Hdc || string.IsNullOrWhiteSpace(device.Serial))
+            throw new ArgumentException("An HDC target with a connect key is required.", nameof(device));
+        if (DebugBridgeRoute.UseHdcServer(host, port)) return true;
+        if (device.Transport != DeviceTransportKind.Usb)
+            throw new IOException("A non-USB HDC target requires the HDC server.");
+        return false;
     }
 
     /// <summary>
@@ -448,6 +868,8 @@ public sealed class DeviceMonitorService : IDisposable
     /// </summary>
     public EdlSession? OpenEdlSession(DetectedDevice device)
     {
+        if (device.Protocol != DeviceProtocolKind.Edl)
+            throw new ArgumentException("An EDL target is required.", nameof(device));
         var usb = OpenUsbSession(device);
         return usb is null ? null : new EdlSession(new UsbDeviceTransport(usb));
     }
@@ -458,6 +880,8 @@ public sealed class DeviceMonitorService : IDisposable
     /// </summary>
     public RkdlSession? OpenRkdlSession(DetectedDevice device)
     {
+        if (device.Protocol != DeviceProtocolKind.Rkdl)
+            throw new ArgumentException("An RKDL target is required.", nameof(device));
         var usb = OpenUsbSession(device);
         return usb is null ? null : new RkdlSession(new UsbDeviceTransport(usb));
     }
@@ -472,6 +896,7 @@ public sealed class DeviceMonitorService : IDisposable
     public HdcSession? OpenHdcSession(DetectedDevice device)
     {
         if (device.Protocol != DeviceProtocolKind.Hdc) return null;
+        _ = UseHdcServerFor(device);
         // A host channel is required even for USB targets managed by the official server.
         // Do not feed host frames into the legacy direct-device session transport.
         return DebugBridgeRoute.OpenHdc(device.Serial, () => HdcDirectSessionPool.Acquire(device));
@@ -481,7 +906,63 @@ public sealed class DeviceMonitorService : IDisposable
     /// <para>获取与 Google 官方 adb server 交互的客户端；server 未运行时返回 <c>null</c>。</para>
     /// Gets a client for the official Google adb server, or <c>null</c> when it is not running.
     /// </summary>
-    public AdbClient? AdbServerClient => ProbeAdbServer();
+    private AdbClient? AdbServerClient => ProbeAdbServer();
+
+    /// <summary>Executes a shell command against the exact selected ADB server target.</summary>
+    public string ExecuteAdbServerShell(DetectedDevice device, string command)
+    {
+        if (device.Protocol != DeviceProtocolKind.Adb)
+            throw new ArgumentException("An ADB target is required.", nameof(device));
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+        var client = AdbServerClient ?? throw new IOException("The ADB server is unavailable.");
+        var target = RequireAdbServerTarget(client, device.Serial);
+        var receiver = new ConsoleOutputReceiver();
+        client.ExecuteRemoteCommand(command, target, receiver);
+        return receiver.ToString() ?? string.Empty;
+    }
+
+    /// <summary>Checks whether the ADB server can manage the selected target.</summary>
+    public bool HasAdbServer => AdbServerClient is not null;
+
+    /// <summary>Requires the exact server-owned ADB target without opening a direct USB session.</summary>
+    public void RequireAdbServerDevice(DetectedDevice device)
+    {
+        if (device.Protocol != DeviceProtocolKind.Adb)
+            throw new ArgumentException("An ADB target is required.", nameof(device));
+        var client = AdbServerClient ?? throw new IOException("The ADB server is unavailable.");
+        _ = RequireAdbServerTarget(client, device.Serial);
+    }
+
+    /// <summary>Probes the selected ADB target, releasing the session after the check.</summary>
+    public bool ProbeAdb(DetectedDevice device)
+    {
+        try
+        {
+            using var session = OpenAdbSession(device);
+            if (session is null) return false;
+            session.Connect();
+            return session.Connection.IsConnected;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Probes the selected Fastboot target and reads its product variable.</summary>
+    public (bool Ready, string? Product) ProbeFastboot(DetectedDevice device)
+    {
+        using var session = OpenFastbootSession(device);
+        if (session is null) return (false, null);
+        try { return (true, session.GetVariable("product", useCache: false)); }
+        catch { return (false, null); }
+    }
+
+    /// <summary>Checks whether the selected RKDL target is responsive.</summary>
+    public bool ProbeRkdl(DetectedDevice device)
+    {
+        using var session = OpenRkdlSession(device);
+        if (session is null) return false;
+        try { return session.IsRockchipDevice() && session.TestDeviceReady(); }
+        catch { return false; }
+    }
 
     /// <summary>Probes on demand; server errors never grant direct USB access.</summary>
     private AdbClient? ProbeAdbServer()
@@ -490,6 +971,20 @@ public sealed class DeviceMonitorService : IDisposable
         var client = new AdbClient();
         _ = client.GetAdbVersion();
         return client;
+    }
+
+    internal static DeviceData RequireAdbServerTarget(AdbClient client, string serial)
+        => client.GetDevices().FirstOrDefault(d => string.Equals(d.Serial, serial, StringComparison.Ordinal))
+            ?? throw new IOException("The ADB server does not contain the selected target. Direct USB fallback is prohibited while the server is running.");
+
+    private static DeviceData? ResolveAdbServerTarget(AdbClient? client, DetectedDevice device)
+    {
+        if (client is null) return null;
+        var target = client.GetDevices().FirstOrDefault(d =>
+            string.Equals(d.Serial, device.Serial, StringComparison.Ordinal));
+        if (target is null && device.Key.StartsWith("adb:", StringComparison.Ordinal))
+            throw new IOException("The selected ADB server target is no longer present.");
+        return target;
     }
 
     /// <summary>Checks the current HDC server and propagates handshake errors.</summary>
@@ -577,38 +1072,30 @@ public sealed class DeviceMonitorService : IDisposable
             }
         }
 
-        var client = AdbServerClient;
-        if (client is null)
-        {
-            return false;
-        }
-
-        var data = client.GetDevices().FirstOrDefault(d => d.Serial == device.Serial);
-        if (data is null)
-        {
-            return false;
-        }
-
-        await client.RebootAsync(adbTarget, data, cancellationToken).ConfigureAwait(false);
-        return true;
+        return false;
     }
 
     /// <summary>
-    /// <para>查询 ADB 设备状态（优先 adb server；不可达时通过直连会话执行 get-state）。</para>
-    /// Queries the ADB device state (adb server preferred; direct session get-state fallback).
+    /// <para>查询 ADB 设备状态（优先 adb server；不可达时通过直连握手确认状态）。</para>
+    /// Queries the ADB device state (adb server preferred; direct handshake when the server connection is refused).
     /// </summary>
-    public async Task<string> GetAdbStateAsync(string serial)
+    public async Task<string> GetAdbStateAsync(string serial, CancellationToken cancellationToken = default)
     {
         var client = AdbServerClient;
-        if (client is not null)
+        var data = client?.GetDevices().FirstOrDefault(d => string.Equals(d.Serial, serial, StringComparison.Ordinal));
+        if (data is not null) return data.State.ToString().ToLowerInvariant();
+        var targets = Scan().Where(d => d.Protocol == DeviceProtocolKind.Adb &&
+            string.Equals(d.Serial, serial, StringComparison.Ordinal)).Take(2).ToArray();
+        if (targets.Length != 1 || targets[0].Key.StartsWith("adb:", StringComparison.Ordinal))
+            return "unknown";
+        var target = targets[0];
+        using var session = OpenAdbSession(target);
+        if (session is null)
         {
-            var data = client.GetDevices().FirstOrDefault(d => d.Serial == serial);
-            if (data is not null)
-            {
-                return data.State.ToString().ToLowerInvariant();
-            }
+            return "unknown";
         }
-        return await Task.FromResult("unknown").ConfigureAwait(false);
+        await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
+        return session.Connection.IsConnected ? "device" : "unknown";
     }
 
     /// <summary>
@@ -619,13 +1106,15 @@ public sealed class DeviceMonitorService : IDisposable
     {
         if (device.Protocol == DeviceProtocolKind.Hdc)
         {
-            using var hdc = new HdcServerClient();
             var decoder = new AdbLogcatLineDecoder(line => onEntry(AdbLogcatEntry.Parse(line)));
             try
             {
-                if (DebugBridgeRoute.UseHdcServer())
+                if (UseHdcServerFor(device))
+                {
+                    using var hdc = new HdcServerClient();
                     await hdc.ExecuteStreamingAsync(device.Serial, "shell hilog -v year",
                         bytes => decoder.Feed(bytes), cancellationToken).ConfigureAwait(false);
+                }
                 else
                     await Task.Run(() =>
                     {
@@ -640,7 +1129,7 @@ public sealed class DeviceMonitorService : IDisposable
             throw new ArgumentException("Logcat requires an ADB device.", nameof(device));
         cancellationToken.ThrowIfCancellationRequested();
         var client = AdbServerClient;
-        var serverDevice = client?.GetDevices().FirstOrDefault(d => d.Serial == device.Serial);
+        var serverDevice = ResolveAdbServerTarget(client, device);
         if (client is not null && serverDevice is not null)
         {
             var reader = new AdbLogcatReader(async (command, onLine, token) =>
@@ -717,7 +1206,7 @@ public sealed class DeviceMonitorService : IDisposable
         {
             token.ThrowIfCancellationRequested();
             var client = AdbServerClient;
-            var serverDevice = client?.GetDevices().FirstOrDefault(d => d.Serial == device.Serial);
+            var serverDevice = ResolveAdbServerTarget(client, device);
             var exitCode = 0;
             if (client is not null && serverDevice is not null)
             {
@@ -870,9 +1359,9 @@ public sealed class DeviceMonitorService : IDisposable
             _adbMonitor = null;
             _debounce?.Dispose();
             _debounce = null;
-            _hdcMonitorLifetime?.Cancel();
-            _hdcMonitorLifetime?.Dispose();
-            _hdcMonitorLifetime = null;
+            _debugBridgeMonitorLifetime?.Cancel();
+            _debugBridgeMonitorLifetime?.Dispose();
+            _debugBridgeMonitorLifetime = null;
             HdcDirectSessionPool.Clear();
             _started = false;
         }

@@ -16,6 +16,9 @@ public sealed class DeviceLogBufferTests
         Assert.Equal(2, targets.Count);
         Assert.Equal("USB", Assert.Single(targets, t => t.ConnectKey == "phone").Transport);
         Assert.Equal("Unauthorized", Assert.Single(targets, t => t.Transport == "TCP").State);
+        Assert.True(DeviceMonitorService.IsSupportedHdcTarget(new HdcTargetInfo("phone", "USB", "Connected", "")));
+        Assert.True(DeviceMonitorService.IsSupportedHdcTarget(new HdcTargetInfo("192.0.2.1:5555", "TCP", "Connected", "")));
+        Assert.False(DeviceMonitorService.IsSupportedHdcTarget(new HdcTargetInfo("COM3", "UART", "Ready", "")));
         Assert.Empty(HdcTargetInfo.Parse("[Empty]\n"));
         Assert.Throws<IOException>(() => HdcTargetInfo.Parse("[Fail]server unavailable"));
         Assert.Throws<InvalidDataException>(() => HdcTargetInfo.Parse("incomplete"));

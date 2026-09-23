@@ -8,7 +8,7 @@ public partial class ScreenMirrorViewModel
 {
     private string _audioBackend = string.Empty;
     internal string AudioBackend => _audioBackend;
-    private void AudioLoop(ScrcpyClient client, CancellationToken token)
+    private void AudioLoop(Services.Devices.ManagedMirrorSession client, CancellationToken token)
     {
         IAudioDecoder? decoder = null;
         IAudioSink? sink = null;

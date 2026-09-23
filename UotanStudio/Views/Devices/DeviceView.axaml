@@ -339,6 +339,20 @@
 
                         <!-- 设备详情（绑定 SelectedDevice） -->
                         <StackPanel Spacing="12" DataContext="{Binding SelectedDevice}">
+                        <ComboBox ItemsSource="{Binding Connections}"
+                                  SelectedItem="{Binding SelectedConnection, Mode=TwoWay}"
+                                  IsVisible="{Binding HasMultipleConnections}"
+                                  HorizontalAlignment="Left" MinWidth="180">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding Protocol}" />
+                                        <TextBlock Text="{Binding Transport}" Opacity="0.7" />
+                                        <TextBlock Text="{Binding Serial}" Opacity="0.7" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
 
                         <!-- 头部：名称 + 徽标 -->
                         <Border Classes="InfoCard">
@@ -431,6 +445,11 @@
                                                Text="{DynamicResource Device_Codename}" />
                                     <TextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
                                                Text="{Binding CodeName}" />
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal"
+                                                HorizontalAlignment="Right" IsVisible="{Binding IsAdb}">
+                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_SuAccess}" />
+                                        <CheckBox IsChecked="{Binding HasSu}" IsEnabled="False" />
+                                    </StackPanel>
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Classes="CardLabel"
                                                Text="{DynamicResource Device_AndroidVersion}" />

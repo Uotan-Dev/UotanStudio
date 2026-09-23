@@ -12,11 +12,62 @@ namespace UotanStudio.ViewModels.Devices;
 /// <para>初始化设备信息。</para>
 /// Initializes the device info.
 /// </remarks>
-public partial class DeviceInfo(DetectedDevice device, DeviceViewModel? owner = null) : ViewModelBase
+public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceViewModel? owner = null) : ViewModelBase
 {
+    /// <summary>Creates a single-endpoint device entry.</summary>
+    public DeviceInfo(DetectedDevice device, DeviceViewModel? owner = null) : this([device], owner) { }
 
-    /// <summary>底层枚举设备。 The underlying detected device.</summary>
-    public DetectedDevice Device { get; } = device;
+    /// <summary>Verified protocol endpoints for this physical device.</summary>
+    public IReadOnlyList<DetectedDevice> Connections { get; } = endpoints.Count > 0
+        ? endpoints.ToArray() : throw new ArgumentException("A device requires an endpoint.", nameof(endpoints));
+
+    /// <summary>The selected endpoint used for device operations.</summary>
+    public DetectedDevice Device { get; private set; } = endpoints[0];
+
+    /// <summary>Whether the device has more than one communication endpoint.</summary>
+    public bool HasMultipleConnections => Connections.Count > 1;
+
+    /// <summary>Chooses the protocol endpoint without changing the selected physical device.</summary>
+    public DetectedDevice SelectedConnection
+    {
+        get => Device;
+        set
+        {
+            var connection = Connections.FirstOrDefault(endpoint => ReferenceEquals(endpoint, value));
+            if (connection is null && value is not null)
+            {
+                connection = Connections.FirstOrDefault(endpoint => endpoint.Key == value.Key);
+            }
+            if (connection is null || ReferenceEquals(Device, connection)) return;
+            Device = connection;
+            foreach (var property in new[]
+            {
+                nameof(Device), nameof(SelectedConnection), nameof(Serial), nameof(State),
+                nameof(Mode), nameof(Protocol), nameof(Transport), nameof(DisplayName),
+                nameof(ListTitle), nameof(ListSubtitle), nameof(LinkPort), nameof(UsbIds),
+                nameof(VendorName), nameof(IsAdb), nameof(IsHdc), nameof(HasSystemInfo),
+                nameof(IsFastboot), nameof(SupportsFastbootd), nameof(IsEdl), nameof(IsRkdl),
+                nameof(IsUsb), nameof(IsNetwork), nameof(IsSerial)
+            })
+                OnPropertyChanged(property);
+            owner?.NotifyConnectionChanged(this);
+        }
+    }
+
+    internal bool MatchesConnections(IReadOnlyList<DetectedDevice> endpoints)
+    {
+        if (Connections.Count != endpoints.Count) return false;
+        for (var index = 0; index < endpoints.Count; index++)
+        {
+            var current = Connections[index];
+            var next = endpoints[index];
+            if (current.Key != next.Key || current.Serial != next.Serial ||
+                current.State != next.State || current.Protocol != next.Protocol ||
+                current.Transport != next.Transport)
+                return false;
+        }
+        return true;
+    }
 
     /// <summary>
     /// <para>获取或设置当前条目是否为全局选中设备（顶栏选择器打勾标记；
@@ -52,7 +103,7 @@ public partial class DeviceInfo(DetectedDevice device, DeviceViewModel? owner = 
     }
 
     /// <summary>稳定键。 Stable key.</summary>
-    public string Key => Device.Key;
+    public string Key => Connections[0].PhysicalId ?? Connections[0].Key;
 
     /// <summary>设备序列号。 Device serial.</summary>
     public string Serial => Device.Serial;
@@ -152,6 +203,13 @@ public partial class DeviceInfo(DetectedDevice device, DeviceViewModel? owner = 
 
     /// <summary>是否为 ADB 设备。 Whether the device is in ADB mode.</summary>
     public bool IsAdb => Device.Protocol == DeviceProtocolKind.Adb;
+
+    /// <summary>Whether a noninteractive root shell was confirmed during the latest ADB scan.</summary>
+    public bool HasSu
+    {
+        get;
+        set => SetProperty(ref field, value);
+    }
 
     /// <summary>Whether this is an HDC device.</summary>
     public bool IsHdc => Device.Protocol == DeviceProtocolKind.Hdc;

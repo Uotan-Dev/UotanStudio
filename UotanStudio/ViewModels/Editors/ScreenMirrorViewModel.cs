@@ -35,20 +35,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// </remarks>
 public partial class ScreenMirrorViewModel : Document
 {
-    /// <summary>Reuses the server's selected USB target without competing for its interface.</summary>
-    internal static bool ShouldUseAdbServer(Services.Devices.DeviceTransportKind transport, Func<bool> serverPresent)
-    {
-        if (transport == Services.Devices.DeviceTransportKind.Tcp) return true;
-        return transport == Services.Devices.DeviceTransportKind.Usb && serverPresent();
-    }
-
-    private const int ConnectRetryCount = 20;
-    private const int ConnectRetryDelayMs = 250;
-    private const int ReadTimeoutMs = 3000;
-
-    private AdbSession? _session;
-    private ScrcpyClient? _client;
-    private Stream? _shellStream;
+    private Services.Devices.ManagedMirrorSession? _client;
     private int _starting;
     private readonly object _frameLock = new();
     private Views.Editors.ScreenMirrorPixelBuffer? _pendingFrame;
@@ -127,126 +114,41 @@ public partial class ScreenMirrorViewModel : Document
         {
             try
             {
-                var device = UotanStudio.Services.Devices.DeviceMonitorService.Instance.FindDeviceBySerial(serial)
+                var device = UotanStudio.Services.Devices.DeviceMonitorService.Instance.Scan()
+                    .SingleOrDefault(candidate => candidate.Serial == serial &&
+                        candidate.Protocol == Services.Devices.DeviceProtocolKind.Adb)
                     ?? throw new InvalidOperationException($"Device {serial} is not connected. 设备 {serial} 未连接。");
                 var options = CreateOptionsFromSettings();
                 _streamOptions = options;
-                if (ShouldUseAdbServer(device.Transport, Comm.Protocols.Common.DebugBridgeRoute.UseAdbServer))
+                StatusText = GetLocalizedString("ScreenMirror_Installing");
+                var mirror = Services.Devices.DeviceMonitorService.Instance.StartMirror(
+                    device, ResolveServerJarPath(), options);
+                if (_disposed)
                 {
-                    var server = new AdbServerServices(serial);
-                    server.Push(ResolveServerJarPath(), ScrcpyConstants.ServerDevicePath);
-                    if (_disposed) return;
-                    _shellStream = server.Open("shell:" + options.BuildShellCommand());
-                    _client = new ScrcpyClient(server, options);
-                    BeginStreaming();
+                    mirror.Dispose();
+                    return;
                 }
-                else
-                {
-                    var session = UotanStudio.Services.Devices.DeviceMonitorService.Instance.OpenAdbSession(device)
-                        ?? throw new InvalidOperationException($"ADB session unavailable: {serial}.");
-                    try
-                    {
-                        session.Connect();
-                        Start(session, options);
-                    }
-                    catch
-                    {
-                        // Start takes ownership before deployment. A failed handshake
-                        // happens earlier and must release its USB handle here.
-                        if (!ReferenceEquals(_session, session)) session.Dispose();
-                        throw;
-                    }
-                }
+                _client = mirror;
+                StatusText = GetLocalizedString("ScreenMirror_Connecting");
+                BeginStreaming();
             }
             catch (Exception ex)
             {
-                StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + ex.Message;
+                StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + global::UotanStudio.Services.UserError.Describe(ex);
                 UotanStudio.Services.LogService.Instance.Write(
                     UotanStudio.Services.LogLevel.Error, "ScreenMirror", $"Start failed: {ex.Message}");
                 _client?.Dispose(); _client = null;
-                _shellStream?.Dispose(); _shellStream = null;
-                _session?.Dispose(); _session = null;
             }
             finally { Interlocked.Exchange(ref _starting, 0); }
         });
     }
 
-    /// <summary>
-    /// <para>启动投屏：推送服务端、启动进程、连接 socket 并进入解码循环。</para>
-    /// Starts mirroring: pushes the server, launches it, connects the sockets
-    /// and enters the decode loop.
-    /// </summary>
-    /// <param name="session"><para>已连接的 ADB 会话。</para>The established ADB session.</param>
-    /// <param name="options"><para>服务端启动选项。</para>Server launch options.</param>
-    public void Start(AdbSession session, ScrcpyServerOptions options)
-    {
-        _streamOptions = options;
-        if (_session is not null)
-        {
-            throw new InvalidOperationException("Mirroring is already running. 投屏已在运行中。");
-        }
-
-        _session = session ?? throw new ArgumentNullException(nameof(session));
-        ArgumentNullException.ThrowIfNull(options);
-
-        var jarPath = ResolveServerJarPath();
-        StatusText = GetLocalizedString("ScreenMirror_Installing");
-
-        ScrcpyServerManager.PushServer(session, jarPath);
-        _shellStream = new AdbServiceStream(ScrcpyServerManager.StartServer(session, options));
-
-        StatusText = GetLocalizedString("ScreenMirror_Connecting");
-        _client = new ScrcpyClient(session, options);
-        BeginStreaming();
-    }
-
     private void BeginStreaming()
     {
-        if (_disposed) { _client?.Dispose(); _shellStream?.Dispose(); return; }
+        if (_disposed) { _client?.Dispose(); return; }
         var client = _client ?? throw new InvalidOperationException("Missing scrcpy client.");
-        // Drain server output during streaming so logging cannot block the remote process.
-        var shell = _shellStream;
-        var serverOutput = new System.Text.StringBuilder();
-        _ = Task.Run(() =>
-        {
-            if (shell is null) return;
-            try
-            {
-                byte[] buffer = new byte[4096];
-                int count;
-                while (!_disposed)
-                {
-                    try { count = shell.Read(buffer, 0, buffer.Length); }
-                    catch (TimeoutException) { continue; }
-                    catch (IOException ex) when (ex.InnerException is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.TimedOut }) { continue; }
-                    if (count == 0) break;
-                    string text = System.Text.Encoding.UTF8.GetString(buffer, 0, count);
-                    lock (serverOutput)
-                    {
-                        serverOutput.Append(text);
-                        if (serverOutput.Length > 4096) serverOutput.Remove(0, serverOutput.Length - 4096);
-                    }
-                    UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Debug, "ScreenMirror", text);
-                }
-            }
-            catch (Exception) { /* Closing the owned shell cancels the reader. */ }
-        });
-        try { ConnectWithRetry(client); }
-        catch (Exception error)
-        {
-            string detail;
-            lock (serverOutput) detail = serverOutput.ToString().Trim();
-            if (detail.Length > 0)
-            {
-                string summary = string.Join("\n", detail.Split('\n')
-                    .Where(line => line.Contains("ERROR:", StringComparison.Ordinal) && !line.Contains("Exception on thread", StringComparison.Ordinal)
-                        || line.TrimStart().StartsWith("--video-", StringComparison.Ordinal))
-                    .Take(6));
-                throw new IOException(summary.Length > 0 ? summary : error.Message, error);
-            }
-            throw;
-        }
-        if (_disposed) { client.Dispose(); shell?.Dispose(); return; }
+        client.Connect();
+        if (_disposed) { client.Dispose(); return; }
 
         DeviceName = client.DeviceName;
         StatusText = GetLocalizedString("ScreenMirror_Mirroring");
@@ -316,14 +218,10 @@ public partial class ScreenMirrorViewModel : Document
         _audioThread = null;
 
         _client?.Dispose();
-        _shellStream?.Dispose();
 
         _client = null;
-        _shellStream = null;
         _cts?.Dispose();
         _cts = null;
-        _session?.Dispose();
-        _session = null;
 
         // Clear on the owning UI thread; capture the old bitmap so a queued cleanup
         // cannot dispose a replacement created by a subsequent reconnect.
@@ -433,25 +331,7 @@ public partial class ScreenMirrorViewModel : Document
             + $"未找到 scrcpy 服务端 jar。请将 scrcpy-server {ScrcpyConstants.ServerVersion} 放置到 Assets/scrcpy-server.jar。");
     }
 
-    private void ConnectWithRetry(ScrcpyClient client)
-    {
-        for (var attempt = 0; ; attempt++)
-        {
-            try
-            {
-                client.Connect(ReadTimeoutMs);
-                return;
-            }
-            catch (Exception) when (attempt < ConnectRetryCount - 1)
-            {
-                // The server process needs a moment to open its sockets.
-                // 服务端进程需要短暂时间打开 socket。
-                Thread.Sleep(ConnectRetryDelayMs);
-            }
-        }
-    }
-
-    private void DecodeLoop(ScrcpyClient client, CancellationToken token)
+    private void DecodeLoop(Services.Devices.ManagedMirrorSession client, CancellationToken token)
     {
         try
         {
@@ -508,7 +388,7 @@ public partial class ScreenMirrorViewModel : Document
                 UotanStudio.Services.LogLevel.Error, "ScreenMirror", $"Decode failed: {exception.Message}");
             Dispatcher.UIThread.Post(() =>
             {
-                if (!_disposed) StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + exception.Message;
+                if (!_disposed) StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + global::UotanStudio.Services.UserError.Describe(exception);
             });
         }
         catch (Exception) when (token.IsCancellationRequested) { }

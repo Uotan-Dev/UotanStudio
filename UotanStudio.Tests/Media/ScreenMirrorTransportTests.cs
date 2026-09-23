@@ -1,26 +1,24 @@
+using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Services.Devices;
-using UotanStudio.ViewModels.Editors;
 using Xunit;
 
 namespace UotanStudio.Tests.Media;
 
 public sealed class ScreenMirrorTransportTests
 {
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void Usb_UsesServerPresenceRegardlessOfTargetList(bool present)
-        => Assert.Equal(present, ScreenMirrorViewModel.ShouldUseAdbServer(DeviceTransportKind.Usb, () => present));
-
-    [Theory]
-    [InlineData(DeviceTransportKind.Tcp, true)]
-    [InlineData(DeviceTransportKind.Unknown, false)]
-    public void ExistingRoutes_DoNotProbeServer(DeviceTransportKind transport, bool expected)
-        => Assert.Equal(expected, ScreenMirrorViewModel.ShouldUseAdbServer(transport,
-            () => throw new InvalidOperationException("Unexpected server probe.")));
-
     [Fact]
-    public void ServerFailure_DoesNotSilentlyFallBackToUsb()
-        => Assert.Throws<IOException>(() => ScreenMirrorViewModel.ShouldUseAdbServer(
-            DeviceTransportKind.Usb, () => throw new IOException("Server state is unknown.")));
+    public void OpenAdbSession_NetworkTargetWithoutServer_DoesNotOpenUsb()
+    {
+        if (DebugBridgeRoute.UseAdbServer())
+            Assert.Skip("An ADB server is running; the absent-server route cannot be tested.");
+
+        var target = new DetectedDevice
+        {
+            Key = "adb:192.0.2.1:5555",
+            Serial = "192.0.2.1:5555",
+            Protocol = DeviceProtocolKind.Adb,
+            Transport = DeviceTransportKind.Tcp
+        };
+        Assert.Throws<IOException>(() => DeviceMonitorService.Instance.OpenAdbSession(target));
+    }
 }

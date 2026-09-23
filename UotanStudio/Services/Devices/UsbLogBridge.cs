@@ -1,4 +1,5 @@
 using UotanStudio.Comm.Diagnostics;
+using UotanStudio.Comm.Protocols.Common;
 
 namespace UotanStudio.Services.Devices;
 
@@ -43,5 +44,23 @@ public sealed class UsbLogBridge : IUsbLogger
     /// <para>将本桥安装为 Comm 层的 USB 诊断记录器。</para>
     /// Installs this bridge as the Comm-layer USB diagnostics logger.
     /// </summary>
-    public static void Install() => UsbTrace.Logger = new UsbLogBridge();
+    public static void Install()
+    {
+        lock (InstallLock)
+        {
+            UsbTrace.Logger = new UsbLogBridge();
+            DebugBridgeRoute.ServerAvailabilityChanged -= LogServerAvailability;
+            DebugBridgeRoute.ServerAvailabilityChanged += LogServerAvailability;
+        }
+    }
+
+    private static readonly Lock InstallLock = new();
+
+    internal static void LogServerAvailability(string host, int port, bool listening)
+    {
+        var message = listening
+            ? $"Debug bridge server endpoint {host}:{port} is listening; device operations use the server."
+            : $"Debug bridge server connection refused at {host}:{port}; server is absent, using direct USB for available USB targets.";
+        LogService.Instance.Write(LogLevel.Info, "DeviceCommunication", message);
+    }
 }

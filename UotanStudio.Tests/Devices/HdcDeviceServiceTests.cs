@@ -23,7 +23,7 @@ public sealed class HdcDeviceServiceTests
     [Fact]
     public async Task InvalidTargetAndBundle_AreRejectedBeforeStartingHdc()
     {
-        var service = new HdcDeviceService("nonexistent-hdc-test-executable");
+        var service = new HdcDeviceService();
         var device = new DetectedDevice { Key = "test", Serial = "test", Protocol = DeviceProtocolKind.Adb, Transport = DeviceTransportKind.Tcp };
         await Assert.ThrowsAsync<ArgumentException>(() => service.ShellAsync(device, "true", TestContext.Current.CancellationToken));
         await Assert.ThrowsAsync<ArgumentException>(() => service.UninstallAsync(device, "-h;anything", TestContext.Current.CancellationToken));

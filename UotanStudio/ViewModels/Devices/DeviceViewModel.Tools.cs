@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -62,10 +61,7 @@ public partial class DeviceViewModel
     }
 
     /// <summary>
-    /// <para>打开选中设备的 ADB Shell 终端：使用设置中配置的 ADB 路径（未配置则用 PATH 中的 adb），
-    /// 在新控制台窗口执行 <c>adb -s &lt;serial&gt; shell</c>。</para>
-    /// Opens an interactive ADB shell for the selected device in a new console window, running
-    /// <c>adb -s &lt;serial&gt; shell</c> with the adb binary from settings (or PATH when unset).
+    /// Opens the selected device's interactive shell in the managed terminal dock.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanOpenAdbShell))]
     private void OpenAdbShell()
@@ -78,27 +74,13 @@ public partial class DeviceViewModel
 
         try
         {
-            var adbPath = device.Protocol == DeviceProtocolKind.Hdc ? HdcDeviceService.ResolveExecutable() : SettingsPersistenceService.Instance.LoadSettings().AdbPath;
-            if (string.IsNullOrWhiteSpace(adbPath))
-            {
-                adbPath = "adb";
-            }
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = adbPath,
-                UseShellExecute = true
-            };
-            psi.ArgumentList.Add(device.Protocol == DeviceProtocolKind.Hdc ? "-t" : "-s");
-            psi.ArgumentList.Add(device.Serial);
-            psi.ArgumentList.Add("shell");
-            Process.Start(psi);
+            DeviceMonitorService.Instance.OpenInteractiveShell(device.Device);
             StatusText = $"{LanguageService.Instance.GetString("Device_OpenAdbShell")} {device.Serial} OK";
             LogService.Instance.Write(LogLevel.Info, "DeviceManager", $"Open {device.Mode} shell for {device.Serial}.");
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Device_OpenAdbShell")} {device.Serial} FAIL";
+            StatusText = $"{LanguageService.Instance.GetString("Device_OpenAdbShell")} {device.Serial} {LanguageService.Instance.GetString("UserError_Failed")}";
             LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"Open {device.Mode} shell for {device.Serial} failed: {ex.Message}");
         }
     }
@@ -124,29 +106,20 @@ public partial class DeviceViewModel
             var sb = new StringBuilder();
             await Task.Run(() =>
             {
-                var session = DeviceMonitorService.Instance.OpenFastbootSession(device.Device);
-                if (session is null)
+                DeviceMonitorService.Instance.RunFastboot(device.Device, fb =>
                 {
-                    throw new InvalidOperationException("No fastboot session available. 无法建立 fastboot 会话。");
-                }
-
-                using var fb = session;
-                if (!fb.IsConnected)
-                {
-                    throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。");
-                }
-
-                foreach (var name in new[] { "product", "version-bootloader", "variant", "secure", "unlocked", "current-slot", "is-userspace", "partition-type:boot", "partition-size:boot" })
-                {
-                    try
+                    foreach (var name in new[] { "product", "version-bootloader", "variant", "secure", "unlocked", "current-slot", "is-userspace", "partition-type:boot", "partition-size:boot" })
                     {
-                        sb.AppendLine($"{name}={fb.GetVariable(name, useCache: false)}");
+                        try
+                        {
+                            sb.AppendLine($"{name}={fb.GetVariable(name, useCache: false)}");
+                        }
+                        catch
+                        {
+                            sb.AppendLine($"{name}=--");
+                        }
                     }
-                    catch
-                    {
-                        sb.AppendLine($"{name}=--");
-                    }
-                }
+                });
             }).ConfigureAwait(true);
 
             StatusText = $"{LanguageService.Instance.GetString("Device_FastbootReadInfo")} {device.Serial} OK";
@@ -154,7 +127,7 @@ public partial class DeviceViewModel
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Device_FastbootReadInfo")} {device.Serial} FAIL";
+            StatusText = $"{LanguageService.Instance.GetString("Device_FastbootReadInfo")} {device.Serial} {LanguageService.Instance.GetString("UserError_Failed")}";
             LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"Fastboot read info {device.Serial} failed: {ex.Message}");
         }
     }

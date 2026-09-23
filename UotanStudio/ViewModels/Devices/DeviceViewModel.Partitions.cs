@@ -148,17 +148,8 @@ public partial class DeviceViewModel
                 var percent = Math.Clamp(bp.Percent, 0, 100);
                 StatusText = $"[{percent}%] {bp.Status}";
             });
-            var result = await Task.Run(() =>
-            {
-                using var session = DeviceMonitorService.Instance.OpenFastbootSession(device.Device)
-                    ?? throw new InvalidOperationException("No fastboot session available. 无法建立 fastboot 会话。");
-                if (!session.IsConnected)
-                {
-                    throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。");
-                }
-
-                return BackupService.BackupFastbootPartition(session, partitionName, outPath, progress, CancellationToken.None);
-            }).ConfigureAwait(true);
+            var result = await BackupService.BackupPartitionAsync(
+                device, partitionName, outPath, progress, CancellationToken.None).ConfigureAwait(true);
             StatusText = result.Success
                 ? $"{LanguageService.Instance.GetString("Backup_Done")} {partitionName}"
                 : $"{LanguageService.Instance.GetString("Backup_Failed")} {partitionName}: {result.Summary}";
@@ -233,17 +224,8 @@ public partial class DeviceViewModel
                 var percent = Math.Clamp(bp.Percent, 0, 100);
                 StatusText = $"[{percent}%] {bp.Status}";
             });
-            var result = await Task.Run(() =>
-            {
-                using var session = DeviceMonitorService.Instance.OpenFastbootSession(device.Device)
-                    ?? throw new InvalidOperationException("No fastboot session available. 无法建立 fastboot 会话。");
-                if (!session.IsConnected)
-                {
-                    throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。");
-                }
-
-                return BackupService.RestoreFastbootPartition(session, partitionName, imagePath, progress, CancellationToken.None);
-            }).ConfigureAwait(true);
+            var result = await BackupService.RestorePartitionAsync(
+                device, partitionName, imagePath, progress, CancellationToken.None).ConfigureAwait(true);
             StatusText = result.Success
                 ? $"{LanguageService.Instance.GetString("Backup_RestoreDone")} {partitionName}"
                 : $"{LanguageService.Instance.GetString("Backup_RestoreFailed")} {partitionName}: {result.Summary}";
@@ -318,13 +300,8 @@ public partial class DeviceViewModel
                 var percent = Math.Clamp(bp.Percent, 0, 100);
                 StatusText = $"[{percent}%] {bp.Status}";
             });
-            var result = await Task.Run(() =>
-            {
-                using var session = DeviceMonitorService.Instance.OpenEdlSession(device.Device)
-                    ?? throw new InvalidOperationException("No EDL session available. 无法建立 EDL 会话。");
-                var (startSector, sectorCount) = BackupService.ResolveEdlPartitionGeometry(rawProgramPath, partitionName);
-                return BackupService.BackupEdlPartitionAsync(session, partitionName, startSector, sectorCount, outPath, progress, CancellationToken.None);
-            }).ConfigureAwait(true);
+            var result = await BackupService.BackupEdlPartitionAsync(
+                device, partitionName, outPath, rawProgramPath, progress, CancellationToken.None).ConfigureAwait(true);
             StatusText = result.Success
                 ? $"{LanguageService.Instance.GetString("Backup_Done")} {partitionName}"
                 : $"{LanguageService.Instance.GetString("Backup_Failed")} {partitionName}: {result.Summary}";
@@ -382,16 +359,13 @@ public partial class DeviceViewModel
                 var percent = Math.Clamp(bp.Percent, 0, 100);
                 StatusText = $"[{percent}%] {bp.Status}";
             });
-            var result = await Task.Run(() =>
-            {
-                using var session = DeviceMonitorService.Instance.OpenEdlSession(device.Device)
-                    ?? throw new InvalidOperationException("No EDL session available. 无法建立 EDL 会话。");
-                var entries = RawProgramParser.ParseAll([rawProgramPath], imageDir);
-                var entry = FlashService.FindEdlTarget(entries, partitionName, imagePath: null)
-                    ?? throw new InvalidOperationException(
-                        $"Partition '{partitionName}' not found in rawprogram: {rawProgramPath}. 分区 '{partitionName}' 未在 rawprogram 中匹配到。");
-                return BackupService.RestoreEdlPartitionAsync(session, entry, imageDir, progress, CancellationToken.None);
-            }).ConfigureAwait(true);
+            var entries = RawProgramParser.ParseAll([rawProgramPath], imageDir);
+            var entry = FlashService.FindEdlTarget(entries, partitionName, imagePath: null)
+                ?? throw new InvalidOperationException(
+                    $"Partition '{partitionName}' not found in rawprogram: {rawProgramPath}. 分区 '{partitionName}' 未在 rawprogram 中匹配到。");
+            var result = await DeviceMonitorService.Instance.RunEdlAsync(device.Device,
+                session => BackupService.RestoreEdlPartitionAsync(
+                    session, entry, imageDir, progress, CancellationToken.None)).ConfigureAwait(true);
             StatusText = result.Success
                 ? $"{LanguageService.Instance.GetString("Backup_RestoreDone")} {partitionName}"
                 : $"{LanguageService.Instance.GetString("Backup_RestoreFailed")} {partitionName}: {result.Summary}";

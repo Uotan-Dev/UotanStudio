@@ -11,6 +11,23 @@ namespace UotanStudio.Tests.Devices;
 public sealed class HdcReadOnlyDeviceTests
 {
     [Fact]
+    public async Task RunningServer_ManagedHostChannelMatchesOfficialTargetList()
+    {
+        var executable = Environment.GetEnvironmentVariable("UOTAN_TEST_HDC_EXE");
+        if (string.IsNullOrWhiteSpace(executable))
+            Assert.Skip("Set UOTAN_TEST_HDC_EXE to validate the running official server.");
+
+        var ct = TestContext.Current.CancellationToken;
+        using var client = new HdcServerClient();
+        var managed = await Task.Run(() => client.ListTargetDetails(), ct);
+        var official = HdcTargetInfo.Parse(await HdcCommandClient.RunAsync(
+            executable, ["-s", $"{client.ServerHost}:{client.ServerPort}", "list", "targets", "-v"], ct));
+        Assert.Equal(official, managed);
+        Assert.All(managed.Where(target => target.Transport == "UART"),
+            target => Assert.False(DeviceMonitorService.IsSupportedHdcTarget(target)));
+    }
+
+    [Fact]
     public async Task ConnectedDevice_ManagedChannelMatchesOfficialClient_AndReadsLogs()
     {
         var key = Environment.GetEnvironmentVariable("UOTAN_TEST_HDC_TARGET");
@@ -33,7 +50,7 @@ public sealed class HdcReadOnlyDeviceTests
             Transport = DeviceTransportKind.Tcp,
             State = "device"
         };
-        var service = new HdcDeviceService(executable);
+        var service = new HdcDeviceService();
         foreach (var property in new[] { "const.product.model", "const.ohos.fullname", "const.ohos.apiversion" })
         {
             var official = await HdcCommandClient.RunAsync(executable, ["-t", key, "shell", "param", "get", property], ct);
@@ -83,7 +100,7 @@ public sealed class HdcReadOnlyDeviceTests
             Transport = DeviceTransportKind.Tcp,
             State = "device"
         };
-        var service = new HdcDeviceService(executable);
+        var service = new HdcDeviceService();
         // A regular, public system file; local destination deliberately includes spaces.
         const string remote = "/system/bin/toybox";
         var expected = (await service.ShellAsync(device, "sha256sum " + remote, ct)).Split(' ')[0];

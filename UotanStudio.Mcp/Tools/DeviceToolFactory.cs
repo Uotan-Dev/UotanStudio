@@ -1,10 +1,6 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
-using UotanStudio.Comm;
-using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Fastboot;
-using UotanStudio.Comm.Transports.Usb.Abstractions;
-using UotanStudio.Comm.Transports.Usb.Core;
 using IOException = System.IO.IOException;
 using Path = System.IO.Path;
 
@@ -22,10 +18,10 @@ namespace UotanStudio.Mcp.Tools;
 /// </summary>
 internal static class DeviceToolFactory
 {
-    internal static IReadOnlyList<McpServerTool> CreateTools(PathSandbox sandbox)
+    internal static IReadOnlyList<McpServerTool> CreateTools(PathSandbox sandbox, IDeviceManagerGateway manager)
     {
         var list = McpServerTool.Create(
-            () => DeviceToolHandlers.ListDevicesAsync(),
+            () => DeviceToolHandlers.ListDevicesAsync(manager),
             new McpServerToolCreateOptions
             {
                 Name = "list_devices",
@@ -38,7 +34,7 @@ internal static class DeviceToolFactory
             });
 
         var adbDevices = McpServerTool.Create(
-            () => DeviceToolHandlers.ListAdbDevicesAsync(),
+            () => DeviceToolHandlers.ListAdbDevicesAsync(manager),
             new McpServerToolCreateOptions
             {
                 Name = "adb_devices",
@@ -52,7 +48,7 @@ internal static class DeviceToolFactory
 
         var adbShell = McpServerTool.Create(
             ([Description("Target serial from adb_devices.")] string serial,
-             [Description("Shell command to execute on the device.")] string command) => DeviceToolHandlers.AdbShellAsync(serial, command),
+             [Description("Shell command to execute on the device.")] string command) => DeviceToolHandlers.AdbShellAsync(manager, serial, command),
             new McpServerToolCreateOptions
             {
                 Name = "adb_shell",
@@ -68,7 +64,7 @@ internal static class DeviceToolFactory
         var adbPull = McpServerTool.Create(
             ([Description("Target serial from adb_devices.")] string serial,
              [Description("Remote path on the device.")] string remotePath,
-             [Description("Local file path inside the sandbox.")] string localPath) => DeviceToolHandlers.AdbPullAsync(sandbox, serial, remotePath, localPath),
+             [Description("Local file path inside the sandbox.")] string localPath) => DeviceToolHandlers.AdbPullAsync(manager, sandbox, serial, remotePath, localPath),
             new McpServerToolCreateOptions
             {
                 Name = "adb_pull",
@@ -82,7 +78,7 @@ internal static class DeviceToolFactory
         var adbPush = McpServerTool.Create(
             ([Description("Target serial from adb_devices.")] string serial,
              [Description("Local file path inside the sandbox.")] string localPath,
-             [Description("Remote path on the device.")] string remotePath) => DeviceToolHandlers.AdbPushAsync(sandbox, serial, localPath, remotePath),
+             [Description("Remote path on the device.")] string remotePath) => DeviceToolHandlers.AdbPushAsync(manager, sandbox, serial, localPath, remotePath),
             new McpServerToolCreateOptions
             {
                 Name = "adb_push",
@@ -94,7 +90,7 @@ internal static class DeviceToolFactory
             });
 
         var fastbootVariables = McpServerTool.Create(
-            () => DeviceToolHandlers.FastbootVariablesAsync(),
+            () => DeviceToolHandlers.FastbootVariablesAsync(manager),
             new McpServerToolCreateOptions
             {
                 Name = "fastboot_variables",
@@ -115,11 +111,11 @@ internal static class DeviceToolFactory
     /// <para>刷写/擦除/重启类工具：仅在 <c>--allow-flash</c> 时由
     /// <see cref="McpServerHost.BuildTools"/> 调用。</para>
     /// </summary>
-    internal static IReadOnlyList<McpServerTool> CreateFlashTools(PathSandbox sandbox)
+    internal static IReadOnlyList<McpServerTool> CreateFlashTools(PathSandbox sandbox, IDeviceManagerGateway manager)
     {
         var reboot = McpServerTool.Create(
             ([Description("Target serial from adb_devices.")] string serial,
-             [Description("Reboot mode: empty, bootloader, recovery, fastboot, sideload.")] string? mode = null) => DeviceToolHandlers.AdbRebootAsync(serial, mode),
+             [Description("Reboot mode: empty, bootloader, recovery, fastboot, sideload.")] string? mode = null) => DeviceToolHandlers.AdbRebootAsync(manager, serial, mode),
             new McpServerToolCreateOptions
             {
                 Name = "adb_reboot",
@@ -134,7 +130,7 @@ internal static class DeviceToolFactory
         var fastbootFlash = McpServerTool.Create(
             ([Description("Partition name, e.g. boot, system.")] string partition,
              [Description("Image file path inside the sandbox.")] string imagePath,
-             [Description("Wipe the partition before flashing.")] bool wipe = false) => DeviceToolHandlers.FastbootFlashAsync(sandbox, partition, imagePath, wipe),
+             [Description("Wipe the partition before flashing.")] bool wipe = false) => DeviceToolHandlers.FastbootFlashAsync(manager, sandbox, partition, imagePath, wipe),
             new McpServerToolCreateOptions
             {
                 Name = "fastboot_flash",
@@ -146,7 +142,7 @@ internal static class DeviceToolFactory
             });
 
         var fastbootErase = McpServerTool.Create(
-            ([Description("Partition name.")] string partition) => DeviceToolHandlers.FastbootEraseAsync(partition),
+            ([Description("Partition name.")] string partition) => DeviceToolHandlers.FastbootEraseAsync(manager, partition),
             new McpServerToolCreateOptions
             {
                 Name = "fastboot_erase",
@@ -170,12 +166,10 @@ internal static class DeviceToolFactory
 /// </summary>
 internal static class DeviceToolHandlers
 {
-    private static readonly CommKit Comm = new();
-
-    public static Task<string> ListDevicesAsync()
+    public static Task<string> ListDevicesAsync(IDeviceManagerGateway manager)
         => Task.Run(() =>
         {
-            var devices = Comm.EnumerateUsbDevices(UsbApiKind.Auto)
+            var devices = manager.ListUsbDevices()
                 .Select(d => new UsbDevicePayload(
                     d.ApiName,
                     d.SourceApiKind.ToString(),
@@ -191,55 +185,37 @@ internal static class DeviceToolHandlers
             return ToolJson.Serialize(new ToolResult(true, $"{devices.Count} USB device(s).", ToolJson.Data(devices)));
         });
 
-    public static Task<string> ListAdbDevicesAsync()
+    public static Task<string> ListAdbDevicesAsync(IDeviceManagerGateway manager)
         => Task.Run(() =>
         {
-            var devices = new List<AdbTargetPayload>();
-            using (var stream = new AdbServerServices("unused").Open("host:devices-l"))
-            using (var reader = new StreamReader(stream))
-            {
-                if (string.IsNullOrWhiteSpace(reader.ReadLine()))
-                {
-                    return ToolJson.Serialize(new ToolResult(true, "0 adb target(s).", ToolJson.Data(devices)));
-                }
-
-                while (reader.ReadLine() is { } line)
-                {
-                    var parts = line.Split('\t');
-                    if (parts.Length >= 2 && !string.IsNullOrWhiteSpace(parts[0]))
-                    {
-                        devices.Add(new AdbTargetPayload(parts[0], parts[1]));
-                    }
-                }
-            }
+            var devices = manager.ListAdbTargets()
+                .Select(target => new AdbTargetPayload(target.Serial, target.State)).ToList();
             return ToolJson.Serialize(new ToolResult(true, $"{devices.Count} adb target(s).", ToolJson.Data(devices)));
         });
 
-    public static Task<string> AdbShellAsync(string serial, string command)
+    public static Task<string> AdbShellAsync(IDeviceManagerGateway manager, string serial, string command)
         => Task.Run(() =>
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(serial);
             ArgumentException.ThrowIfNullOrWhiteSpace(command);
-            var services = new AdbServerServices(serial);
-            services.ValidateTarget();
-            using var stream = services.Open("shell:" + command);
-            using var memory = new MemoryStream();
-            stream.CopyTo(memory);
-            var output = System.Text.Encoding.UTF8.GetString(memory.ToArray());
+            var output = manager.RunAdbService(serial, "shell:" + command, stream =>
+            {
+                using var memory = new MemoryStream();
+                stream.CopyTo(memory);
+                return System.Text.Encoding.UTF8.GetString(memory.ToArray());
+            });
             return ToolJson.Serialize(new ToolResult(true, "Command completed.",
                 ToolJson.Data(new AdbShellPayload(serial, command, output))));
         });
 
-    public static Task<string> AdbPullAsync(PathSandbox sandbox, string serial, string remotePath, string localPath)
+    public static Task<string> AdbPullAsync(IDeviceManagerGateway manager, PathSandbox sandbox, string serial, string remotePath, string localPath)
         => Task.Run(() =>
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(serial);
             ArgumentException.ThrowIfNullOrWhiteSpace(remotePath);
             var resolvedLocal = sandbox.ResolveOutput(localPath);
-            var services = new AdbServerServices(serial);
-            services.ValidateTarget();
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(resolvedLocal))!);
-            using (var stream = services.Open("sync:"))
+            manager.RunAdbService(serial, "sync:", stream =>
             {
                 SendSync(stream, "RECV", System.Text.Encoding.UTF8.GetBytes(remotePath));
                 using var output = File.Create(resolvedLocal);
@@ -255,6 +231,7 @@ internal static class DeviceToolHandlers
                     }
                     if (id == "FAIL")
                     {
+                        if (length > 65536) throw new IOException("ADB sync failure message is too large.");
                         var message = new byte[length];
                         stream.ReadExactly(message);
                         throw new IOException("ADB sync pull failed: " + System.Text.Encoding.UTF8.GetString(message));
@@ -263,6 +240,7 @@ internal static class DeviceToolHandlers
                     {
                         throw new IOException("Invalid ADB sync response.");
                     }
+                    if (length > 65536) throw new IOException("ADB sync data chunk is too large.");
                     var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent((int)length);
                     try
                     {
@@ -274,21 +252,20 @@ internal static class DeviceToolHandlers
                         System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
                     }
                 }
-            }
+                return true;
+            });
             var info = new FileInfo(resolvedLocal);
             return ToolJson.Serialize(new ToolResult(true, $"Pulled {remotePath}.",
                 ToolJson.Data(new AdbFileSyncPayload(serial, remotePath, resolvedLocal, info.Length))));
         });
 
-    public static Task<string> AdbPushAsync(PathSandbox sandbox, string serial, string localPath, string remotePath)
+    public static Task<string> AdbPushAsync(IDeviceManagerGateway manager, PathSandbox sandbox, string serial, string localPath, string remotePath)
         => Task.Run(() =>
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(serial);
             ArgumentException.ThrowIfNullOrWhiteSpace(remotePath);
             var resolvedLocal = sandbox.Resolve(localPath, mustExist: true);
-            var services = new AdbServerServices(serial);
-            services.ValidateTarget();
-            services.Push(resolvedLocal, remotePath);
+            manager.PushAdbFile(serial, resolvedLocal, remotePath);
             var info = new FileInfo(resolvedLocal);
             return ToolJson.Serialize(new ToolResult(true, $"Pushed {remotePath}.",
                 ToolJson.Data(new AdbFileSyncPayload(serial, remotePath, resolvedLocal, info.Length))));
@@ -307,89 +284,57 @@ internal static class DeviceToolHandlers
         stream.Write(data);
     }
 
-    public static Task<string> FastbootVariablesAsync()
+    public static Task<string> FastbootVariablesAsync(IDeviceManagerGateway manager)
         => Task.Run(() =>
         {
-            using var session = OpenFastbootSession();
-            var variables = session.GetAllVariables();
+            var variables = manager.RunFastboot(session => session.GetAllVariables());
             return ToolJson.Serialize(new ToolResult(true,
                 $"{variables.Count} fastboot variable(s).", ToolJson.Data(variables)));
         });
 
-    public static Task<string> AdbRebootAsync(string serial, string? mode)
+    public static Task<string> AdbRebootAsync(IDeviceManagerGateway manager, string serial, string? mode)
         => Task.Run(() =>
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(serial);
-            var services = new AdbServerServices(serial);
-            services.ValidateTarget();
-            using var stream = services.Open(mode is { Length: > 0 } ? $"reboot:{mode}" : "reboot:");
+            manager.RunAdbService(serial, mode is { Length: > 0 } ? $"reboot:{mode}" : "reboot:", _ => true);
             return ToolJson.Serialize(new ToolResult(true,
                 string.IsNullOrWhiteSpace(mode) ? "Reboot requested." : $"Reboot to {mode} requested.",
                 ToolJson.Data(new AdbRebootPayload(serial, mode))));
         });
 
-    public static Task<string> FastbootFlashAsync(PathSandbox sandbox, string partition, string imagePath, bool wipe)
+    public static Task<string> FastbootFlashAsync(IDeviceManagerGateway manager, PathSandbox sandbox, string partition, string imagePath, bool wipe)
         => Task.Run(() =>
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(partition);
             var resolvedImage = sandbox.Resolve(imagePath, mustExist: true);
-            using var session = OpenFastbootSession();
-            if (wipe)
+            return manager.RunFastboot(session =>
             {
-                session.ExecuteCommand($"erase:{partition}");
-            }
-            var response = session.DownloadFile(resolvedImage);
-            if (response.State != FastbootResponseState.Success)
-            {
-                return ToolJson.Serialize(new ToolResult(false,
-                    $"Download failed: {response.State} {response.Text}"));
-            }
-            var flash = session.ExecuteCommand($"flash:{partition}");
-            return flash.State == FastbootResponseState.Success
-                ? ToolJson.Serialize(new ToolResult(true, $"Flashed {partition}.",
-                    ToolJson.Data(new FlashPayload(partition, resolvedImage))))
-                : ToolJson.Serialize(new ToolResult(false,
-                    $"Flash failed: {flash.State} {flash.Text}"));
+                if (wipe) session.ExecuteCommand($"erase:{partition}").ThrowIfFailed();
+                var response = session.DownloadFile(resolvedImage);
+                if (response.State != FastbootResponseState.Success)
+                    return ToolJson.Serialize(new ToolResult(false,
+                        $"Download failed: {response.State} {response.Text}"));
+                var flash = session.ExecuteCommand($"flash:{partition}");
+                return flash.State == FastbootResponseState.Success
+                    ? ToolJson.Serialize(new ToolResult(true, $"Flashed {partition}.",
+                        ToolJson.Data(new FlashPayload(partition, resolvedImage))))
+                    : ToolJson.Serialize(new ToolResult(false,
+                        $"Flash failed: {flash.State} {flash.Text}"));
+            });
         });
 
-    public static Task<string> FastbootEraseAsync(string partition)
+    public static Task<string> FastbootEraseAsync(IDeviceManagerGateway manager, string partition)
         => Task.Run(() =>
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(partition);
-            using var session = OpenFastbootSession();
-            var response = session.ExecuteCommand($"erase:{partition}");
-            return response.State == FastbootResponseState.Success
-                ? ToolJson.Serialize(new ToolResult(true, $"Erased {partition}.",
-                    ToolJson.Data(new PartitionPayload(partition))))
-                : ToolJson.Serialize(new ToolResult(false,
-                    $"Erase failed: {response.State} {response.Text}"));
+            return manager.RunFastboot(session =>
+            {
+                var response = session.ExecuteCommand($"erase:{partition}");
+                return response.State == FastbootResponseState.Success
+                    ? ToolJson.Serialize(new ToolResult(true, $"Erased {partition}.",
+                        ToolJson.Data(new PartitionPayload(partition))))
+                    : ToolJson.Serialize(new ToolResult(false,
+                        $"Erase failed: {response.State} {response.Text}"));
+            });
         });
-
-    /// <summary>
-    /// Opens the first matching fastboot USB device as a session; released via dispose.
-    /// <para>打开第一个匹配的 fastboot USB 设备会话；通过 Dispose 释放。</para>
-    /// </summary>
-    private static FastbootSession OpenFastbootSession()
-    {
-        var factory = new FastbootFactory();
-        var transport = Comm.OpenUsbDeviceSession(UsbApiKind.Auto, FastbootFilter());
-        if (transport is null
-            || !factory.TryCreate(transport, out var session)
-            || session is not FastbootSession fastboot)
-        {
-            throw new InvalidOperationException("No fastboot device found.");
-        }
-        return fastboot;
-    }
-
-    /// <summary>
-    /// Fastboot matches the Google interface class/subclass/protocol triplet.
-    /// <para>fastboot 按 Google 接口 class/subclass/protocol 三元组匹配。</para>
-    /// </summary>
-    private static UsbDeviceFilter FastbootFilter() => new()
-    {
-        InterfaceClass = 0xFF,
-        InterfaceSubClass = 0x42,
-        InterfaceProtocol = 0x03
-    };
 }

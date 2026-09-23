@@ -16,8 +16,8 @@ namespace UotanStudio.Mcp;
 /// </summary>
 public sealed class McpServerHost
 {
-    public McpServerHost(McpServerConfig config)
-        : this(new PathSandbox(config.RootDirectory), config.AllowFlash)
+    public McpServerHost(McpServerConfig config, IDeviceManagerGateway? deviceManager = null)
+        : this(new PathSandbox(config.RootDirectory), config.AllowFlash, deviceManager)
     {
     }
 
@@ -26,12 +26,15 @@ public sealed class McpServerHost
     /// Assembles the host from an existing sandbox plus flash gate, so the HTTP exposure path
     /// registers exactly the same tool set.
     /// </summary>
-    public McpServerHost(PathSandbox sandbox, bool allowFlash)
+    public McpServerHost(PathSandbox sandbox, bool allowFlash, IDeviceManagerGateway? deviceManager = null)
     {
         ArgumentNullException.ThrowIfNull(sandbox);
         Sandbox = sandbox;
         AllowFlash = allowFlash;
+        DeviceManager = deviceManager ?? new HeadlessDeviceManagerGateway();
     }
+
+    private IDeviceManagerGateway DeviceManager { get; }
 
     /// <summary>Gets the sandbox all file-touching tools share. <para>所有文件工具共享的沙箱。</para></summary>
     public PathSandbox Sandbox { get; }
@@ -51,7 +54,7 @@ public sealed class McpServerHost
         var tools = new List<McpServerTool>();
         tools.AddRange(FirmwareToolFactory.CreateTools(Sandbox));
         tools.AddRange(CompressionToolFactory.CreateTools(Sandbox));
-        tools.AddRange(DeviceToolFactory.CreateTools(Sandbox));
+        tools.AddRange(DeviceToolFactory.CreateTools(Sandbox, DeviceManager));
         tools.AddRange(DeliveryToolFactory.CreateTools(Sandbox));
         tools.AddRange(ProjectToolFactory.CreateTools(Sandbox));
         tools.AddRange(MiscToolFactory.CreateTools(Sandbox));
@@ -59,7 +62,7 @@ public sealed class McpServerHost
 
         if (AllowFlash)
         {
-            tools.AddRange(DeviceToolFactory.CreateFlashTools(Sandbox));
+            tools.AddRange(DeviceToolFactory.CreateFlashTools(Sandbox, DeviceManager));
         }
 
         return tools;

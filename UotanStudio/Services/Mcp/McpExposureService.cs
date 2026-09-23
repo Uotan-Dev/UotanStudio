@@ -65,7 +65,8 @@ internal sealed class McpExposureService
             await StopCoreAsync("MCP exposure restarting.").ConfigureAwait(false);
 
             McpLauncher.EnableDeliveryBuild();
-            var tools = new McpServerHost(PathSandbox.Unrestricted, allowFlash: false).BuildTools();
+            var tools = new McpServerHost(PathSandbox.Unrestricted, allowFlash: false,
+                new DesktopDeviceManagerGateway()).BuildTools();
             var host = new McpHttpServerHost(tools);
             host.Start(effectivePort);
 

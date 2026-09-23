@@ -37,7 +37,6 @@ public partial class ScreenMirrorViewModel
             if (_startTask is { } start) await start;
             _cts?.Cancel();
             _client?.Dispose();
-            _shellStream?.Dispose();
             await Task.Run(() =>
             {
                 if (_decodeThread is { IsAlive: true } video && !video.Join(6000)) throw new TimeoutException("Video decoder did not stop; reconnect was cancelled.");
@@ -61,7 +60,7 @@ public partial class ScreenMirrorViewModel
         }
         catch (Exception error)
         {
-            StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + error.Message;
+            StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + global::UotanStudio.Services.UserError.Describe(error);
             LogService.Instance.Write(LogLevel.Error, "ScreenMirror", error.Message);
         }
         finally { IsApplyingMirrorSettings = false; }

@@ -3,6 +3,7 @@ using UotanStudio.Comm;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Services.Devices;
 using Xunit;
 
 namespace UotanStudio.Tests.Devices;
@@ -11,6 +12,59 @@ namespace UotanStudio.Tests.Devices;
 [Collection("HDC direct hardware")]
 public sealed class HdcDirectReadOnlyDeviceTests
 {
+    [Fact]
+    public void DirectUsb_FirstShellAfterAuthentication_ProducesOutput()
+    {
+        var serial = Environment.GetEnvironmentVariable("UOTAN_TEST_HDC_USB_SERIAL");
+        if (string.IsNullOrWhiteSpace(serial))
+            Assert.Skip("Set UOTAN_TEST_HDC_USB_SERIAL for direct USB read-only validation; the server must be stopped.");
+        HdcDirectSessionPool.Clear();
+        var device = Assert.Single(DeviceMonitorService.Instance.Scan(), candidate =>
+            candidate.Protocol == DeviceProtocolKind.Hdc && candidate.Transport == DeviceTransportKind.Usb &&
+            candidate.Key.Contains(serial, StringComparison.OrdinalIgnoreCase));
+
+        try
+        {
+            using var session = HdcDirectSessionPool.Acquire(device);
+            Assert.Equal("first", Encoding.UTF8.GetString(session.ExecuteCommand("printf first", 10000).Stdout));
+        }
+        finally { HdcDirectSessionPool.Retain([]); }
+    }
+
+    [Fact]
+    public async Task DirectUsb_RefreshDuringActiveLease_DefersConnectionDisposal()
+    {
+        var serial = Environment.GetEnvironmentVariable("UOTAN_TEST_HDC_USB_SERIAL");
+        if (string.IsNullOrWhiteSpace(serial))
+            Assert.Skip("Set UOTAN_TEST_HDC_USB_SERIAL for direct USB read-only validation; the server must be stopped.");
+        var device = Assert.Single(DeviceMonitorService.Instance.Scan(), candidate =>
+            candidate.Protocol == DeviceProtocolKind.Hdc && candidate.Transport == DeviceTransportKind.Usb &&
+            candidate.Key.Contains(serial, StringComparison.OrdinalIgnoreCase));
+
+        var ct = TestContext.Current.CancellationToken;
+        using (var lease = HdcDirectSessionPool.Acquire(device))
+        {
+            using var logging = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            logging.CancelAfter(TimeSpan.FromSeconds(3));
+            long received = 0;
+            var logs = Task.Run(() => lease.CreateShellClient("hilog -v year").ExecuteStreaming(
+                bytes => Interlocked.Add(ref received, bytes.Length), null, logging.Token), ct);
+            await Task.Delay(250, ct);
+            HdcDirectSessionPool.Retain([]);
+            Assert.True(lease.IsConnected);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await logs);
+            Assert.True(received > 0);
+            using var transfer = new HdcSyncClient(lease.Connection);
+            using var receivedFile = new MemoryStream();
+            transfer.RecvStream("/system/bin/toybox", receivedFile, ct);
+            Assert.True(receivedFile.Length > 0);
+            Assert.Throws<IOException>(() => HdcDirectSessionPool.Acquire(device));
+        }
+
+        using var reopened = HdcDirectSessionPool.Acquire(device);
+        Assert.True(reopened.IsConnected);
+    }
+
     [Fact]
     public async Task DirectUsb_ConcurrentShellAndHiLog_CancelThenReuse()
     {
@@ -22,8 +76,9 @@ public sealed class HdcDirectReadOnlyDeviceTests
             InterfaceClass = 0xff,
             InterfaceSubClass = 0x50,
             InterfaceProtocol = 1,
-        }).Where(d => d.SerialNumber == serial && d.Interfaces.Any(i => i.Endpoints.Count >= 2)).ToArray();
-        Assert.True(targets.Length > 0, "The selected HDC USB interface has no readable endpoint descriptors. Check that it is present and that an official HDC server or another application does not own the port.");
+        }).Where(d => string.Equals(d.SerialNumber, serial, StringComparison.Ordinal) ||
+            d.DeviceInstanceId?.EndsWith("\\" + serial, StringComparison.OrdinalIgnoreCase) == true).ToArray();
+        Assert.True(targets.Length > 0, "The selected HDC USB interface was not enumerated. Check its PnP instance and whether an official HDC server owns the port.");
         var target = Assert.Single(targets);
         using var usb = CommKit.Default.OpenUsbDeviceSessionByKey(target.DeviceKey);
         Assert.NotNull(usb);

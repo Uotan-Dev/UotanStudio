@@ -1,9 +1,8 @@
 using System.Text;
-using AdvancedSharpAdbClient;
-using AdvancedSharpAdbClient.Receivers;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
+using UotanStudio.Services.Flash;
 
 namespace UotanStudio.ViewModels.Devices;
 
@@ -28,21 +27,21 @@ public partial class DeviceViewModel
     /// <summary>
     /// <para>拉取 ADB 设备扩展信息（getprop / 系统级 / 电池 / 内存 / 存储）。官方 adb server 会枚举
     /// USB 与网络设备，因此无论传输类型都优先经 AdvancedSharpAdbClient 通过 adb server 执行 shell；
-    /// adb server 不可用或设备不在其列表中时，仅对 USB 设备回退到 UotanStudio.Comm 原生 USB 会话。</para>
+    /// 仅在 server 连接被拒绝时使用统一会话入口解析 USB 直连。</para>
     /// Retrieves extended ADB device info (getprop / system-level / battery / memory / storage).
     /// The official adb server enumerates both USB and network devices, so regardless of transport
     /// the shell runs via AdvancedSharpAdbClient against the adb server first; only when the server
-    /// is unavailable or the device is absent from its list does a USB device fall back to the
-    /// UotanStudio.Comm native USB session.
+    /// connection is refused does the shared session route resolve direct USB.
     /// </summary>
     private async Task EnrichAdbInfoAsync(DeviceInfo device)
     {
+        var endpoint = device.Device;
         Dictionary<string, string>? info = null;
         try
         {
             info = await Task.Run(() =>
                 QueryViaAdbServer(device)
-                ?? (device.IsUsb ? QueryViaNativeUsb(device) : null)
+                ?? QueryViaAdbSession(device)
             ).ConfigureAwait(true);
         }
         catch
@@ -50,12 +49,17 @@ public partial class DeviceViewModel
             // 属性拉取失败不影响主流程（设备可能未授权）。
         }
 
-        if (info is null)
+        if (info is null || !ReferenceEquals(device.Device, endpoint))
         {
             return;
         }
 
         ApplyAdbProperties(device, info);
+        device.HasSu = await FlashSuService.HasSuAsync(device.Device, CancellationToken.None);
+        if (SelectedDevice == device)
+        {
+            OnPropertyChanged(nameof(DeviceDetail));
+        }
         if (SelectedDevice == device)
         {
             OnPropertyChanged(nameof(DeviceDetail));
@@ -64,30 +68,26 @@ public partial class DeviceViewModel
 
     /// <summary>
     /// <para>经 AdvancedSharpAdbClient 通过官方 adb server（127.0.0.1:5037）按序列号匹配设备并拉取属性；
-    /// 设备不在列表中或 server 未运行时返回 null。</para>
+    /// 仅 server 连接被拒绝时返回 null；缺失目标必须报错。</para>
     /// Queries device properties via AdvancedSharpAdbClient against the official adb server
-    /// (127.0.0.1:5037), matching the device by serial; returns null when the device is absent
-    /// from the list or the server is not running.
+    /// (127.0.0.1:5037), matching the device by serial; returns null only when the server connection is refused.
     /// </summary>
     private static Dictionary<string, string>? QueryViaAdbServer(DeviceInfo device)
     {
-        var client = DeviceMonitorService.Instance.AdbServerClient;
-        if (client is null)
+        var monitor = DeviceMonitorService.Instance;
+        if (!monitor.HasAdbServer ||
+            !device.Device.Key.StartsWith("adb:", StringComparison.Ordinal) &&
+            !UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.AdbServerOwns(device.Device.Serial))
         {
             return null;
         }
 
-        var target = client.GetDevices()
-            .FirstOrDefault(d => string.Equals(d.Serial, device.Serial, StringComparison.Ordinal));
-        return target is null
-            ? null
-            : DevicePropertyReader.ReadAdbProperties(cmd =>
+        monitor.RequireAdbServerDevice(device.Device);
+        return DevicePropertyReader.ReadAdbProperties(cmd =>
         {
             try
             {
-                var receiver = new ConsoleOutputReceiver();
-                client.ExecuteRemoteCommand(cmd, target, receiver);
-                return receiver.ToString() ?? string.Empty;
+                return monitor.ExecuteAdbServerShell(device.Device, cmd);
             }
             catch
             {
@@ -101,24 +101,17 @@ public partial class DeviceViewModel
     /// Queries device properties via a UotanStudio.Comm native USB ADB session; returns null when
     /// the session is unavailable or not connected.
     /// </summary>
-    private static Dictionary<string, string>? QueryViaNativeUsb(DeviceInfo device)
+    private static Dictionary<string, string>? QueryViaAdbSession(DeviceInfo device)
     {
-        var session = DeviceMonitorService.Instance.OpenAdbSession(device.Device);
-        if (session is null)
-        {
-            return null;
-        }
-
         try
         {
-            session.Connect();
-            return session.Connection.IsConnected
-                ? DevicePropertyReader.ReadAdbProperties(cmd => RunShell(session, cmd), LanguageService.Instance.GetString)
-                : null;
+            return DeviceMonitorService.Instance.RunAdb(device.Device,
+                session => DevicePropertyReader.ReadAdbProperties(
+                    cmd => RunShell(session, cmd), LanguageService.Instance.GetString));
         }
-        finally
+        catch (InvalidOperationException)
         {
-            session.Dispose();
+            return null;
         }
     }
 
@@ -128,46 +121,38 @@ public partial class DeviceViewModel
     /// </summary>
     private async Task EnrichFastbootInfoAsync(DeviceInfo device)
     {
+        var endpoint = device.Device;
         Dictionary<string, string>? info = null;
         try
         {
             info = await Task.Run(() =>
-            {
-                var session = DeviceMonitorService.Instance.OpenFastbootSession(device.Device);
-                if (session is null)
+                DeviceMonitorService.Instance.RunFastboot(endpoint, session =>
                 {
-                    return null;
-                }
-
-                try
-                {
-                    return !session.IsConnected
-                        ? null
-                        : new Dictionary<string, string>(StringComparer.Ordinal)
-                        {
-                            ["product"] = session.GetVariable("product", useCache: false),
-                            ["bl"] = session.GetVariable("unlocked", useCache: false),
-                            ["slot"] = session.GetVariable("current-slot", useCache: false),
-                            ["userspace"] = session.GetVariable("is-userspace", useCache: false),
-                            ["variant"] = session.GetVariable("variant", useCache: false),
-                        };
-                }
-                catch
-                {
-                    return null;
-                }
-                finally
-                {
-                    session.Dispose();
-                }
-            }).ConfigureAwait(true);
+                    try
+                    {
+                        return !session.IsConnected
+                            ? null
+                            : new Dictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["product"] = session.GetVariable("product", useCache: false),
+                                ["bl"] = session.GetVariable("unlocked", useCache: false),
+                                ["slot"] = session.GetVariable("current-slot", useCache: false),
+                                ["userspace"] = session.GetVariable("is-userspace", useCache: false),
+                                ["variant"] = session.GetVariable("variant", useCache: false),
+                            };
+                    }
+                    catch
+                    {
+                        return null;
+                    }
+                }, CancellationToken.None)).ConfigureAwait(true);
         }
         catch
         {
             // 属性拉取失败不影响主流程。
         }
 
-        if (info is null)
+        if (info is null || !ReferenceEquals(device.Device, endpoint))
         {
             return;
         }

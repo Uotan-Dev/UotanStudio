@@ -42,65 +42,25 @@ public partial class DeviceViewModel
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Device_Connect")} {device.Serial} FAIL";
+            StatusText = $"{LanguageService.Instance.GetString("Device_Connect")} {device.Serial} {LanguageService.Instance.GetString("UserError_Failed")}";
             LogService.Instance.Write(LogLevel.Error, "DeviceManager",
                 $"Connect {device.Serial} failed: {ex.Message}");
         }
     }
 
     private static bool TryAdb(DeviceInfo device)
-    {
-        var session = DeviceMonitorService.Instance.OpenAdbSession(device.Device);
-        if (session is null)
-        {
-            return false;
-        }
-
-        try
-        {
-            session.Connect();
-            return session.Connection.IsConnected;
-        }
-        catch { return false; }
-        finally { session.Dispose(); }
-    }
+        => DeviceMonitorService.Instance.ProbeAdb(device.Device);
 
     private static bool TryFastboot(DeviceInfo device)
     {
-        var session = DeviceMonitorService.Instance.OpenFastbootSession(device.Device);
-        if (session is null)
-        {
-            return false;
-        }
-
-        try
-        {
-            var product = session.GetVariable("product", useCache: false);
-            if (!string.IsNullOrEmpty(product))
-            {
-                device.Model = product;
-            }
-
-            return true;
-        }
-        catch { return false; }
-        finally { session.Dispose(); }
+        var (ready, product) = DeviceMonitorService.Instance.ProbeFastboot(device.Device);
+        if (ready && !string.IsNullOrEmpty(product)) device.Model = product;
+        return ready;
     }
 
     private static bool TryRkdl(DeviceInfo device)
     {
-        var session = DeviceMonitorService.Instance.OpenRkdlSession(device.Device);
-        if (session is null)
-        {
-            return false;
-        }
-
-        try
-        {
-            return session.IsRockchipDevice() && session.TestDeviceReady();
-        }
-        catch { return false; }
-        finally { session.Dispose(); }
+        return DeviceMonitorService.Instance.ProbeRkdl(device.Device);
     }
 
     /// <summary>
@@ -122,16 +82,12 @@ public partial class DeviceViewModel
         {
             if (device.Protocol == DeviceProtocolKind.Hdc)
             {
-                await HdcDeviceService.FromSettings().DisconnectAsync(device.Device).ConfigureAwait(true);
+                await DeviceMonitorService.Instance.HdcDisconnectAsync(device.Device).ConfigureAwait(true);
                 await DeviceMonitorService.Instance.ForceRefreshAsync().ConfigureAwait(true);
             }
             else if (device.Transport == "Network")
             {
-                var client = DeviceMonitorService.Instance.AdbServerClient;
-                if (client is not null)
-                {
-                    await client.DisconnectAsync(device.Serial).ConfigureAwait(true);
-                }
+                await DeviceMonitorService.Instance.DisconnectAdbAsync(device.Device).ConfigureAwait(true);
             }
             device.State = "offline";
             StatusText = $"{LanguageService.Instance.GetString("Device_Disconnect")} {device.Serial} OK";
@@ -139,7 +95,7 @@ public partial class DeviceViewModel
         }
         catch
         {
-            StatusText = $"{LanguageService.Instance.GetString("Device_Disconnect")} {device.Serial} FAIL";
+            StatusText = $"{LanguageService.Instance.GetString("Device_Disconnect")} {device.Serial} {LanguageService.Instance.GetString("UserError_Failed")}";
         }
     }
 
@@ -200,7 +156,7 @@ public partial class DeviceViewModel
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Device_Reboot")} {device.Serial} -> {mode} FAIL";
+            StatusText = $"{LanguageService.Instance.GetString("Device_Reboot")} {device.Serial} -> {mode} {LanguageService.Instance.GetString("UserError_Failed")}";
             LogService.Instance.Write(LogLevel.Error, "DeviceManager",
                 $"Reboot {device.Serial} -> {mode} failed: {ex.Message}");
         }

@@ -1,17 +1,16 @@
 using System.Globalization;
 using System.Text;
-using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Hdc;
 
 namespace UotanStudio.Services.Devices;
 
 /// <summary>OpenHarmony device operations shared by UI and workflows.
 /// <para>界面与工作流共用的 OpenHarmony 设备操作。</para></summary>
-public sealed class HdcDeviceService(string executable = "hdc", string host = "127.0.0.1", int? port = null)
+internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = null)
 {
     private readonly int _port = port ?? HdcServerClient.DefaultServerPort;
-    /// <summary>Creates a service using automatically located HDC. 使用自动查找的 HDC 创建服务。</summary>
-    public static HdcDeviceService FromSettings() => new(ResolveExecutable());
+    /// <summary>Creates a service for the configured HDC host channel.</summary>
+    public static HdcDeviceService FromSettings() => new();
 
     /// <summary>Locates HDC in PATH or the standard DevEco installation.
     /// <para>从 PATH 或 DevEco 标准安装位置自动查找 HDC。</para></summary>
@@ -91,10 +90,7 @@ public sealed class HdcDeviceService(string executable = "hdc", string host = "1
     private bool IsDirect(DetectedDevice device)
     {
         ValidateDevice(device);
-        if (DebugBridgeRoute.UseHdcServer(host, _port)) return false;
-        if (device.Transport != DeviceTransportKind.Usb || device.Key.StartsWith("hdc:", StringComparison.Ordinal))
-            throw new IOException("HDC server is unavailable; refresh discovery before opening direct USB.");
-        return true;
+        return !DeviceMonitorService.UseHdcServerFor(device, host, _port);
     }
 
     private static Task<string> DirectTaskAsync(DetectedDevice device, Func<HdcSession, string> operation, CancellationToken ct)
@@ -107,12 +103,59 @@ public sealed class HdcDeviceService(string executable = "hdc", string host = "1
         }, ct);
 
     /// <summary>Executes an official task with the exact selected target. 对固定目标执行官方任务。</summary>
-    public Task<string> RunTaskAsync(DetectedDevice device, IEnumerable<string> arguments, CancellationToken ct = default)
+    public async Task<string> RunTaskAsync(DetectedDevice device, IEnumerable<string> arguments, CancellationToken ct = default)
     {
         ValidateDevice(device);
-        if (!DebugBridgeRoute.UseHdcServer(host, _port))
+        if (!DeviceMonitorService.UseHdcServerFor(device, host, _port))
             throw new NotSupportedException("This operation requires an official HDC server target; it cannot take over an active direct USB session.");
-        return HdcCommandClient.RunAsync(executable, ["-s", $"{host}:{_port}", "-t", device.Serial, .. arguments], ct);
+        var parts = arguments.ToArray();
+        if (parts.Length == 0 || parts.Any(part => string.IsNullOrWhiteSpace(part) ||
+            part.Any(c => char.IsWhiteSpace(c) || c == '\0')))
+            throw new ArgumentException("HDC host command arguments must be nonempty single tokens.", nameof(arguments));
+        using var server = new HdcServerClient(host, _port);
+        var text = Encoding.UTF8.GetString(await server.ExecuteAsync(device.Serial,
+            string.Join(' ', parts), cancellationToken: ct).ConfigureAwait(false)).TrimEnd('\0');
+        HdcServerClient.ThrowOnFailure(text);
+        return text;
+    }
+
+    // Without the upstream "remote" option, the local server performs host-side
+    // file/app transfer itself; only the command and bounded status cross this channel.
+    private async Task<string> RunFileTaskAsync(DetectedDevice device, IEnumerable<string> arguments, CancellationToken ct)
+    {
+        ValidateDevice(device);
+        if (!DeviceMonitorService.UseHdcServerFor(device, host, _port))
+            throw new NotSupportedException("HDC server target is unavailable.");
+        var parts = arguments.ToArray();
+        if (parts.Length == 0 || parts[0] is not ("file" or "install"))
+            throw new ArgumentException("A host file or install task is required.", nameof(arguments));
+        if (parts.Any(part => string.IsNullOrWhiteSpace(part) ||
+            part.Any(c => c is '"' or '\0' || char.IsControl(c))))
+            throw new ArgumentException("Invalid HDC file task argument.", nameof(arguments));
+        var command = string.Join(' ', parts.Select(part =>
+            part.Any(char.IsWhiteSpace) ? $"\"{part}\"" : part));
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromMinutes(5));
+        using var server = new HdcServerClient(host, _port);
+        using var output = new MemoryStream();
+        try
+        {
+            await server.ExecuteStreamingAsync(device.Serial, command, bytes =>
+            {
+                if (output.Length + bytes.Length > HdcServerClient.MaximumOutputBytes)
+                    throw new InvalidDataException("HDC file task output limit exceeded.");
+                output.Write(bytes);
+            }, timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException("HDC file task exceeded 300000 ms.");
+        }
+        var result = Encoding.UTF8.GetString(output.GetBuffer().AsSpan(0, checked((int)output.Length))).TrimEnd('\0');
+        if (string.IsNullOrWhiteSpace(result))
+            throw new IOException("HDC file task ended without a completion response.");
+        HdcServerClient.ThrowOnFailure(result);
+        return result;
     }
 
     /// <summary>Sends a local file or directory through the selected HDC connection.</summary>
@@ -127,7 +170,7 @@ public sealed class HdcDeviceService(string executable = "hdc", string host = "1
             transfer.Send(path, remotePath, cancellationToken: ct);
             return "File sent successfully.";
         }, ct);
-        return RunTaskAsync(device, ["file", "send", path, remotePath], ct);
+        return RunFileTaskAsync(device, ["file", "send", path, remotePath], ct);
     }
 
     /// <summary>Receives to a temporary local file and atomically publishes on success.
@@ -149,7 +192,7 @@ public sealed class HdcDeviceService(string executable = "hdc", string host = "1
                     transfer.Recv(remotePath, temporary, ct);
                     return "File received successfully.";
                 }, ct).ConfigureAwait(false)
-                : await RunTaskAsync(device, ["file", "recv", remotePath, temporary], ct).ConfigureAwait(false);
+                : await RunFileTaskAsync(device, ["file", "recv", remotePath, temporary], ct).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
             if (!File.Exists(temporary)) throw new IOException("HDC did not produce a regular file.");
             File.Move(temporary, path, overwrite: true);
@@ -167,7 +210,7 @@ public sealed class HdcDeviceService(string executable = "hdc", string host = "1
             throw new ArgumentException("HDC installation requires a HAP, HSP or APP package.", nameof(localPath));
         if (IsDirect(device)) return await DirectTaskAsync(device,
             session => new HdcAppClient(session.Connection).Install(path, ct), ct).ConfigureAwait(false);
-        var result = await RunTaskAsync(device, ["install", path], ct).ConfigureAwait(false);
+        var result = await RunFileTaskAsync(device, ["install", path], ct).ConfigureAwait(false);
         RequireApplicationSuccess(result, uninstall: false);
         return result;
     }

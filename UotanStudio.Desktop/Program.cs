@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Logging;
+using Avalonia.Media;
 using Dock.Settings;
 
 namespace UotanStudio.Desktop;
@@ -17,6 +18,36 @@ sealed class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        if (args is ["--managed-device-shell", var protocolName, var serial])
+        {
+            using var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (_, e) =>
+            {
+                e.Cancel = true;
+                cts.Cancel();
+            };
+            try
+            {
+                if (!Enum.TryParse<UotanStudio.Services.Devices.DeviceProtocolKind>(protocolName, out var protocol) ||
+                    protocol is not (UotanStudio.Services.Devices.DeviceProtocolKind.Adb or
+                        UotanStudio.Services.Devices.DeviceProtocolKind.Hdc))
+                    throw new ArgumentException("An ADB or HDC protocol is required.");
+                var manager = UotanStudio.Services.Devices.DeviceMonitorService.Instance;
+                var target = manager.Scan().SingleOrDefault(candidate => candidate.Protocol == protocol &&
+                    string.Equals(candidate.Serial, serial, StringComparison.Ordinal))
+                    ?? throw new IOException("The selected server target is no longer available.");
+                manager.RunInteractiveShellAsync(target, Console.OpenStandardInput(),
+                    Console.OpenStandardOutput(), cts.Token).GetAwaiter().GetResult();
+                return 0;
+            }
+            catch (OperationCanceledException) when (cts.IsCancellationRequested) { return 0; }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine(error.Message);
+                return 1;
+            }
+        }
+
         if (UotanStudio.Mcp.McpLauncher.IsHeadlessRequested(args))
         {
             using var cts = new CancellationTokenSource();
@@ -38,7 +69,8 @@ sealed class Program
 
         if (UotanStudio.Mcp.McpLauncher.IsCompanionRequested(args))
         {
-            _ = Task.Run(() => UotanStudio.Mcp.McpLauncher.RunCompanionAsync(args));
+            _ = Task.Run(() => UotanStudio.Mcp.McpLauncher.RunCompanionAsync(
+                args, new UotanStudio.Services.Mcp.DesktopDeviceManagerGateway()));
         }
 
         App.StartupFiles = args.Where(File.Exists).ToArray();
@@ -55,7 +87,10 @@ sealed class Program
     {
         var builder = AppBuilder.Configure<App>()
             .UsePlatformDetect()
-            .WithInterFont()
+            .With(new FontManagerOptions
+            {
+                DefaultFamilyName = "avares://UotanStudio/Assets/Fonts#MiSans"
+            })
             .WithDockSettings(new DockSettingsOptions
             {
                 CommandBarMergingEnabled = true,

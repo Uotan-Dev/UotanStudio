@@ -10,22 +10,22 @@ public partial class DeviceViewModel
     private static bool TryHdc(DeviceInfo device)
     {
         // Do not route HDC devices into ADB or claim a host-only handshake proves device reachability.
-        return HdcDeviceService.FromSettings().ShellAsync(device.Device, "echo __UOTAN_HDC_READY__")
+        return DeviceMonitorService.Instance.HdcShellAsync(device.Device, "echo __UOTAN_HDC_READY__")
             .GetAwaiter().GetResult().Trim() == "__UOTAN_HDC_READY__";
     }
 
     private async Task EnrichHdcInfoAsync(DeviceInfo device)
     {
-        var service = HdcDeviceService.FromSettings();
+        var monitor = DeviceMonitorService.Instance;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         async Task<string> Parameter(string name)
         {
-            try { return (await service.GetPropertyAsync(device.Device, name, timeout.Token)).Trim(); }
+            try { return (await monitor.HdcPropertyAsync(device.Device, name, timeout.Token)).Trim(); }
             catch (Exception ex) when (ex is IOException or TimeoutException) { return "--"; }
         }
         async Task Optional(string command, Action<string> apply)
         {
-            try { apply(await service.ShellAsync(device.Device, command, timeout.Token)); }
+            try { apply(await monitor.HdcShellAsync(device.Device, command, timeout.Token)); }
             catch (Exception ex) when (ex is IOException or TimeoutException)
             {
                 LogService.Instance.Write(LogLevel.Debug, "DeviceManager", $"Optional HDC detail unavailable: {ex.Message}");
@@ -71,7 +71,7 @@ public partial class DeviceViewModel
         if (device?.IsHdc != true || owner is null) return;
         var language = LanguageService.Instance;
         var title = language.GetString("Device_Hdc" + operation);
-        var service = HdcDeviceService.FromSettings();
+        var monitor = DeviceMonitorService.Instance;
         try
         {
             string result;
@@ -92,8 +92,8 @@ public partial class DeviceViewModel
                     : null;
                 if (operation == "Send" && remote is null) return;
                 if (!await DialogService.ConfirmAsync(owner, title, $"{device.Serial}\n{path}\n{remote}")) return;
-                result = operation == "Install" ? await service.InstallAsync(device.Device, path, cancellationToken)
-                    : await service.SendFileAsync(device.Device, path, remote!, cancellationToken);
+                result = operation == "Install" ? await monitor.HdcInstallAsync(device.Device, path, cancellationToken)
+                    : await monitor.HdcSendFileAsync(device.Device, path, remote!, cancellationToken);
             }
             else if (operation == "Receive")
             {
@@ -103,14 +103,14 @@ public partial class DeviceViewModel
                 { Title = title, SuggestedFileName = Path.GetFileName(remote) });
                 var path = file?.TryGetLocalPath();
                 if (path is null) return;
-                result = await service.ReceiveFileAsync(device.Device, remote, path, cancellationToken);
+                result = await monitor.HdcReceiveFileAsync(device.Device, remote, path, cancellationToken);
             }
             else if (operation == "Uninstall")
             {
                 var bundle = await DialogService.InputAsync(owner, language.GetString("Device_HdcBundleName"));
                 if (bundle is null) return;
                 if (!await DialogService.ConfirmAsync(owner, title, $"{device.Serial}\n{bundle}")) return;
-                result = await service.UninstallAsync(device.Device, bundle, cancellationToken);
+                result = await monitor.HdcUninstallAsync(device.Device, bundle, cancellationToken);
             }
             else throw new NotSupportedException(operation);
             StatusText = $"{title}: {result.Trim()}";
@@ -119,9 +119,9 @@ public partial class DeviceViewModel
         catch (OperationCanceledException) { StatusText = language.GetString("Device_HdcCancelled"); }
         catch (Exception ex)
         {
-            StatusText = $"{title}: {ex.Message}";
+            StatusText = $"{title}: {(global::UotanStudio.Services.UserError.Describe(ex))}";
             LogService.Instance.Write(LogLevel.Error, "DeviceManager", StatusText);
-            await DialogService.ShowAsync(owner, title, ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+            await DialogService.ShowAsync(owner, title, global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 }
