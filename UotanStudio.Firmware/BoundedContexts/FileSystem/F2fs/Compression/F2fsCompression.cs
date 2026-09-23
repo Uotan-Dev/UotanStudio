@@ -27,7 +27,7 @@ internal static class F2fsCompression
     /// </summary>
     public static byte[]? CompressCluster(ReadOnlySpan<byte> data, CompressionAlgorithm algorithm, int level = 0)
     {
-        if (data.Length > ClusterBytes)
+        if (data.Length > 1024 * 1024)
         {
             throw new ArgumentOutOfRangeException(nameof(data), $"Cluster data exceeds {ClusterBytes} bytes.");
         }

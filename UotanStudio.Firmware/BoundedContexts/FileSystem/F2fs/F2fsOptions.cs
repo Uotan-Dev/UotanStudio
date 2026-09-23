@@ -3,6 +3,15 @@ namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 
 public sealed class F2fsOptions
 {
+    /// <summary>Use native f2fs-tools for Android ro, project_quota and extra_attr features.</summary>
+    public bool AndroidNativeProfile { get; init; }
+
+    /// <summary>Required fixed raw-image capacity for the Android native profile.</summary>
+    public long? AndroidImageSizeBytes { get; init; }
+
+    /// <summary>Explicit WSL distribution when native tools are run from Windows.</summary>
+    public string? NativeWslDistribution { get; init; }
+
     public int BlockSize { get; init; } = 4096;
 
     public long SegmentSize { get; init; } = 2L * 1024 * 1024;
@@ -20,6 +29,8 @@ public sealed class F2fsOptions
     public CompressionAlgorithm CompressionAlgorithm { get; init; } = CompressionAlgorithm.Lz4;
 
     public int CompressionLevel { get; init; }
+
+    public CancellationToken CancellationToken { get; init; }
 
     /// <summary>
     /// Optional path to an Android-style <c>fs_config</c> file (<c>path uid gid mode capabilities</c>)
@@ -50,6 +61,14 @@ public sealed class F2fsOptions
     /// </summary>
     internal void Validate()
     {
+        if (AndroidNativeProfile && AndroidImageSizeBytes is null)
+        {
+            throw new ArgumentException("Android F2FS profile requires an explicit image capacity.");
+        }
+        if (AndroidNativeProfile && CompressionLevel != 0)
+        {
+            throw new ArgumentException("Native sload.f2fs does not accept a compression level.");
+        }
         if (BlockSize != 4096)
         {
             throw new ArgumentOutOfRangeException(nameof(BlockSize), "F2FS block size must be 4096 bytes.");

@@ -1,5 +1,17 @@
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 
+public enum Ext4BlockSharingMode
+{
+    Independent,
+    ShareDuplicateData,
+}
+
+public enum Ext4CapacityMode
+{
+    Default,
+    Minimize,
+}
+
 public sealed class Ext4Options
 {
     public int BlockSize { get; init; } = 4096;
@@ -15,6 +27,12 @@ public sealed class Ext4Options
 
     public byte[]? Uuid { get; init; }
 
+    /// <summary>EXT4 casefold filename encoding ID; currently only UTF-8 (1) is supported.</summary>
+    public ushort? CasefoldEncoding { get; init; }
+
+    /// <summary>EXT4 casefold encoding flags inherited from the source superblock.</summary>
+    public ushort CasefoldEncodingFlags { get; init; }
+
     public bool PreservePermissions { get; set; } = true;
 
     public bool PreserveTimestamps { get; set; } = true;
@@ -26,10 +44,22 @@ public sealed class Ext4Options
     /// <summary>Optional exact filesystem capacity in bytes; must be block aligned.</summary>
     public long? TargetSizeBytes { get; init; }
 
+    /// <summary>Controls whether the rebuilt filesystem keeps normal capacity or trims unused trailing blocks.</summary>
+    public Ext4CapacityMode CapacityMode { get; init; }
+
     /// <summary>Sets the EXT4 read-only compatible feature bit.</summary>
     public bool ReadOnly { get; init; }
 
+    /// <summary>Controls whether byte-identical regular-file data blocks may share physical blocks.</summary>
+    public Ext4BlockSharingMode BlockSharingMode { get; init; }
+
     internal CancellationToken CancellationToken { get; init; }
+
+    internal Func<ReadOnlyMemory<byte>, byte[]>? BlockHashProvider { get; init; }
+
+    internal string? BlockIndexDirectory { get; init; }
+
+    internal Action? SharedBlockPlanCompleted { get; init; }
 
     /// <summary>
     /// Optional path to an Android-style <c>fs_config</c> file (<c>path uid gid mode capabilities</c>)

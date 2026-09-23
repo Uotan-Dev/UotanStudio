@@ -74,7 +74,7 @@ internal readonly struct ZErofsMapHeader
 
     public byte ClusterBits { get; }
 
-    public ushort ExtentsHi => (ushort)((AlgorithmType << 8) | ClusterBits);
+    public ushort ExtentsHi => (ushort)(AlgorithmType | ClusterBits << 8);
 
     public ErofsAlgorithm Algorithm => (ErofsAlgorithm)(AlgorithmType & AlgorithmTypeMask);
 

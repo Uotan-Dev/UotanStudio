@@ -2,6 +2,7 @@ using System.Text;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Native;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 using UotanStudio.Firmware.SharedKernel;
 
@@ -83,11 +84,23 @@ public sealed partial class F2fsBuilder
         FileSystemPreservation.RejectLossyDirectoryRebuild(sourceDirectory);
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceDirectory);
         ArgumentNullException.ThrowIfNull(outputPath);
+        if (options?.AndroidNativeProfile == true)
+        {
+            options.Validate();
+            AndroidF2fsImageBuilder.BuildAsync(sourceDirectory, outputPath, options.AndroidImageSizeBytes!.Value,
+                new NativeFileSystemTools(options.NativeWslDistribution), fsConfigPath: options.FsConfigPath,
+                fileContextsPath: options.FileContextsPath, enableCompression: options.EnableCompression,
+                compressionAlgorithm: options.CompressionAlgorithm,
+                cancellationToken: options.CancellationToken).GetAwaiter().GetResult();
+            return;
+        }
         var fullOutputPath = Path.GetFullPath(outputPath);
         var outputDirectory = Path.GetDirectoryName(fullOutputPath)!;
         var temporaryPath = Path.Combine(outputDirectory, $".{Path.GetFileName(fullOutputPath)}.{Guid.NewGuid():N}.tmp");
         Directory.CreateDirectory(outputDirectory);
-        var root = CollectNodes(Path.GetFullPath(sourceDirectory), [fullOutputPath, temporaryPath]);
+        var cancellationToken = options?.CancellationToken ?? default;
+        cancellationToken.ThrowIfCancellationRequested();
+        var root = CollectNodes(Path.GetFullPath(sourceDirectory), [fullOutputPath, temporaryPath], cancellationToken);
 
         try
         {
@@ -96,9 +109,11 @@ public sealed partial class F2fsBuilder
                        FileOptions.SequentialScan))
             {
                 WriteImageCore(root, temporary, 0, freshDestination: true, options);
+                cancellationToken.ThrowIfCancellationRequested();
                 temporary.Flush(flushToDisk: true);
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             File.Move(temporaryPath, fullOutputPath, overwrite: true);
         }
         finally
@@ -113,6 +128,10 @@ public sealed partial class F2fsBuilder
     /// </summary>
     public static void Build(string sourceDirectory, Stream output, F2fsOptions? options = null)
     {
+        if (options?.AndroidNativeProfile == true)
+        {
+            throw new NotSupportedException("Android native F2FS builds require a file output path.");
+        }
         FileSystemPreservation.RejectLossyDirectoryRebuild(sourceDirectory);
         ArgumentNullException.ThrowIfNull(output);
         if (!output.CanWrite)
@@ -125,7 +144,9 @@ public sealed partial class F2fsBuilder
             : [];
         var temporaryPath = Path.Combine(Path.GetTempPath(), $"uotan-f2fs-{Guid.NewGuid():N}.tmp");
         var stagingExclusions = excludedPaths.Append(Path.GetFullPath(temporaryPath)).ToArray();
-        var root = CollectNodes(Path.GetFullPath(sourceDirectory), stagingExclusions);
+        var cancellationToken = options?.CancellationToken ?? default;
+        cancellationToken.ThrowIfCancellationRequested();
+        var root = CollectNodes(Path.GetFullPath(sourceDirectory), stagingExclusions, cancellationToken);
         if (output.CanSeek && SupportsResizeWithoutMutation(output))
         {
             WriteImageCore(root, output, output.Position, freshDestination: false, options);
@@ -211,6 +232,7 @@ public sealed partial class F2fsBuilder
         ArgumentNullException.ThrowIfNull(output);
         var effective = options ?? new F2fsOptions();
         effective.Validate();
+        effective.CancellationToken.ThrowIfCancellationRequested();
         var blockSize = effective.BlockSize;
 
 
@@ -220,9 +242,11 @@ public sealed partial class F2fsBuilder
         if (FileSystemEditPlan.Current is { } editPlan)
             foreach (var node in ordered)
             {
+                effective.CancellationToken.ThrowIfCancellationRequested();
                 var entry = editPlan.Get(node.FullPath);
+                node.SourceMetadata = entry.Metadata;
                 node.OriginalInode = entry.Inode;
-                node.SemanticFlags = entry.Flags & 0x100F8u;
+                node.SemanticFlags = entry.Flags & FileSystemEditPlan.F2fsSemanticFlagMask;
                 if ((entry.Mode & 0xF000) == 0x8000) { node.FullPath = editPlan.ContentSource(node.FullPath); node.Size = new FileInfo(node.FullPath).Length; }
                 node.Name = FileSystemEditPlan.Name(entry.Path);
                 node.Mode = entry.Mode;
@@ -249,6 +273,7 @@ public sealed partial class F2fsBuilder
         foreach (var (alias, canonical) in hardlinks) alias.Ino = canonical.Ino;
         SharedKernel.FirmwareParallelism.ForEach(ordered, node =>
         {
+            effective.CancellationToken.ThrowIfCancellationRequested();
             if (!node.IsDirectory)
             {
                 PlanFileData(node, effective);
@@ -260,6 +285,7 @@ public sealed partial class F2fsBuilder
         });
 
         var layout = ComputeLayout(ordered, effective);
+        effective.CancellationToken.ThrowIfCancellationRequested();
         var plan = AllocateBlocks(ordered, layout);
 
 
@@ -275,18 +301,27 @@ public sealed partial class F2fsBuilder
         CollectNatEntries(ordered, nat);
 
         layout.ReservedCompressionBlocks = ordered.Where(static n => n.IsCompressedFile).Sum(static n => (long)n.DataBlockCount - n.AllocatedDataBlockCount);
-        var superblock = CreateSuperblock(layout, effective, hasCompressedFiles: ordered.Exists(static n => n.IsCompressedFile), hasXattrs: ordered.Exists(static n => n.XattrWords > 0));
+        var metadataFeatures = (ordered.Exists(static n => n.ExtraWords > 0) ? 0x8u : 0)
+                | (ordered.Exists(static n => n.SourceMetadata?.ProjectId is not null) ? 0x10u : 0)
+                | (ordered.Exists(static n => n.SourceMetadata?.BirthTime is not null) ? 0x100u : 0);
+        var superblock = CreateSuperblock(layout, effective, ordered.Exists(static n => n.IsCompressedFile),
+            ordered.Exists(static n => n.XattrWords > 0), metadataFeatures);
         WriteSuperblock(output, baseOffset, superblock, blockSize);
+        effective.CancellationToken.ThrowIfCancellationRequested();
         var inodeCount = (uint)ordered.Count;
         var validNodeCount = (uint)layout.NodeBlocks;
         WriteCheckpoints(output, baseOffset, layout, plan, validNodeCount, inodeCount);
         WriteSit(output, baseOffset, layout, plan, blockSize);
         WriteNat(output, baseOffset, layout, nat);
-        WriteMainArea(output, baseOffset, ordered, blockSize);
+        WriteMainArea(output, baseOffset, ordered, blockSize, effective.CancellationToken);
+        effective.CancellationToken.ThrowIfCancellationRequested();
         WriteSsa(output, baseOffset, layout, plan, blockSize);
     }
 
-    private static BuildNode CollectNodes(string fullSourcePath, IReadOnlyCollection<string> excludedPaths)
+    private static BuildNode CollectNodes(
+        string fullSourcePath,
+        IReadOnlyCollection<string> excludedPaths,
+        CancellationToken cancellationToken)
     {
         if (!Directory.Exists(fullSourcePath))
         {
@@ -298,11 +333,16 @@ public sealed partial class F2fsBuilder
             : new HashSet<string>(
                 excludedPaths.Select(Path.GetFullPath),
                 OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-        return CollectNode(fullSourcePath, isRoot: true, exclusions);
+        return CollectNode(fullSourcePath, isRoot: true, exclusions, cancellationToken);
     }
 
-    private static BuildNode CollectNode(string fullPath, bool isRoot, HashSet<string>? excludedPaths)
+    private static BuildNode CollectNode(
+        string fullPath,
+        bool isRoot,
+        HashSet<string>? excludedPaths,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var attributes = File.GetAttributes(fullPath);
         var name = isRoot ? string.Empty : Path.GetFileName(fullPath);
         if ((attributes & FileAttributes.ReparsePoint) != 0)
@@ -327,6 +367,7 @@ public sealed partial class F2fsBuilder
             SetFilePermissions(node, fullPath, isDir: true, isSymlink: false);
             foreach (var childPath in Directory.EnumerateFileSystemEntries(fullPath))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemEditPlan.Current is { } plan ? !plan.Includes(childPath) : UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.IsMetadataFile(childPath)) continue;
                 var childFullPath = Path.GetFullPath(childPath);
                 if (excludedPaths?.Contains(childFullPath) == true)
@@ -334,7 +375,7 @@ public sealed partial class F2fsBuilder
                     continue;
                 }
 
-                var child = CollectNode(childFullPath, isRoot: false, excludedPaths);
+                var child = CollectNode(childFullPath, isRoot: false, excludedPaths, cancellationToken);
                 child.Parent = node;
                 node.Children.Add(child);
             }
@@ -462,6 +503,31 @@ public sealed partial class F2fsBuilder
 
     private static void PlanFileData(BuildNode node, F2fsOptions options)
     {
+        var preservedCompression = node.SourceMetadata?.F2fsCompression;
+        var compress = node.SourceMetadata is null ? options.EnableCompression : preservedCompression is not null;
+        if (preservedCompression is not null)
+        {
+            if (preservedCompression.LogClusterSize is < 2 or > 8 || (preservedCompression.Flags & 0xFE) != 0)
+            {
+                throw new NotSupportedException("Unsupported preserved F2FS compression contract.");
+            }
+            node.ClusterPages = 1 << preservedCompression.LogClusterSize;
+            node.CompressedAlgorithm = preservedCompression.Algorithm switch
+            {
+                0 => CompressionAlgorithm.Lzo,
+                1 => CompressionAlgorithm.Lz4,
+                2 => CompressionAlgorithm.Zstd,
+                _ => throw new NotSupportedException("Unsupported preserved F2FS compression algorithm.")
+            };
+            node.CompressionLevel = preservedCompression.Flags >> 8;
+            node.CompressFlags = preservedCompression.Flags;
+            node.IsCompressedFile = true;
+        }
+        else
+        {
+            node.CompressedAlgorithm = options.CompressionAlgorithm;
+            node.CompressionLevel = options.CompressionLevel;
+        }
         var content = node.IsSymlink ? Encoding.UTF8.GetBytes(node.SymlinkTarget ?? string.Empty) : null;
         var size = node.Size;
         var maxInlineData = (F2fsNode.DefAddrsPerInode - node.XattrWords - node.ExtraWords - F2fsNode.DefInlineReservedSize) * 4;
@@ -470,7 +536,7 @@ public sealed partial class F2fsBuilder
             return;
         }
 
-        if (size <= maxInlineData)
+        if (size <= maxInlineData && preservedCompression is null)
         {
             node.InlineData = true;
             node.InlineBytes = node.IsSymlink ? content! : ReadFileBytes(node.FullPath, size);
@@ -478,7 +544,7 @@ public sealed partial class F2fsBuilder
         }
 
 
-        if (options.EnableCompression && !node.IsSymlink && size > F2fsCompression.ClusterBytes)
+        if (compress && !node.IsSymlink && (preservedCompression is not null || size > node.ClusterPages * options.BlockSize))
         {
 
 
@@ -498,6 +564,7 @@ public sealed partial class F2fsBuilder
         var allocated = 0;
         for (var i = 0; i < dataBlocks; i++)
         {
+            options.CancellationToken.ThrowIfCancellationRequested();
             if (holes?[i] == true)
             {
                 node.DataBlockAddrs[i] = 0;
@@ -522,8 +589,8 @@ public sealed partial class F2fsBuilder
     private static bool TryPlanCompressedFileData(BuildNode node, F2fsOptions options)
     {
         var blockSize = options.BlockSize;
-        var clusterBytes = F2fsCompression.ClusterBytes;
-        var clusterPages = F2fsCompression.ClusterPages;
+        var clusterPages = node.ClusterPages;
+        var clusterBytes = clusterPages * blockSize;
         var dataBlocks = (int)((node.Size + blockSize - 1) / blockSize);
         var clusterCount = (dataBlocks + clusterPages - 1) / clusterPages;
 
@@ -542,6 +609,7 @@ public sealed partial class F2fsBuilder
         using var source = File.OpenRead(node.FullPath);
         for (var c = 0; c < clusterCount; c++)
         {
+            options.CancellationToken.ThrowIfCancellationRequested();
             var logical = c * clusterPages;
             var clusterBlocks = Math.Min(clusterPages, dataBlocks - logical);
             var toRead = (int)Math.Min(clusterBytes, Math.Max(0, node.Size - (long)logical * blockSize));
@@ -553,8 +621,8 @@ public sealed partial class F2fsBuilder
 
                 var payload = F2fsCompression.CompressCluster(
                     clusterBuffer.AsSpan(0, clusterBytes),
-                    options.CompressionAlgorithm,
-                    options.CompressionLevel);
+                    node.CompressedAlgorithm,
+                    node.CompressionLevel);
                 var payloadBlocks = payload is null ? 0 : (payload.Length + blockSize - 1) / blockSize;
                 if (payload is not null && payloadBlocks < clusterPages)
                 {
@@ -592,7 +660,7 @@ public sealed partial class F2fsBuilder
             }
         }
 
-        if (!anyCompressed)
+        if (!anyCompressed && node.SourceMetadata?.F2fsCompression is null)
         {
 
 
@@ -604,8 +672,6 @@ public sealed partial class F2fsBuilder
         node.AllocatedDataBlockCount = allocated;
         node.CompressedClusterSizes = compressedSizes;
         node.IsCompressedFile = true;
-        node.CompressedAlgorithm = options.CompressionAlgorithm;
-        node.CompressionLevel = options.CompressionLevel;
         return true;
     }
 
@@ -1336,10 +1402,13 @@ public sealed partial class F2fsBuilder
         public uint XattrNid;
         public uint XattrBlock;
         public byte[] XattrBytes = [];
-        public int ExtraWords => IsCompressedFile ? 9 : XattrBytes.Length > 0 ? 1 : 0;
+        public Metadata.FileSystemInodeMetadata? SourceMetadata;
+        public int ClusterPages = F2fsCompression.ClusterPages;
+        public ushort CompressFlags;
+        public int ExtraWords => IsCompressedFile ? 9 : SourceMetadata?.BirthTime is not null ? 6 : SourceMetadata?.ProjectId is not null ? 2 : XattrBytes.Length > 0 ? 1 : 0;
         public int XattrWords => XattrBytes.Length == 0 ? 0 : 128;
-        public int InodeAddressCount => IsCompressedFile ? (F2fsNode.DefAddrsPerInode - ExtraWords - XattrWords) & ~(F2fsCompression.ClusterPages - 1) : F2fsNode.DefAddrsPerInode - ExtraWords - XattrWords;
-        public int DataAddressesPerNode => IsCompressedFile ? F2fsNode.AddrsPerBlock & ~(F2fsCompression.ClusterPages - 1) : F2fsNode.AddrsPerBlock;
+        public int InodeAddressCount => IsCompressedFile ? (F2fsNode.DefAddrsPerInode - ExtraWords - XattrWords) & ~(ClusterPages - 1) : F2fsNode.DefAddrsPerInode - ExtraWords - XattrWords;
+        public int DataAddressesPerNode => IsCompressedFile ? F2fsNode.AddrsPerBlock & ~(ClusterPages - 1) : F2fsNode.AddrsPerBlock;
         public List<byte[]> DirBlocks = [];
         public List<uint> DirBlockAddrs = [];
         public uint DirDepth;

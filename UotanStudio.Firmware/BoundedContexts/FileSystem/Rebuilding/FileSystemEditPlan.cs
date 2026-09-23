@@ -7,12 +7,18 @@ namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 /// <summary>Resolves image paths and inherited Linux attributes independently of host filesystem metadata.</summary>
 internal sealed class FileSystemEditPlan
 {
+    internal const uint Ext4SemanticFlagMask = 0x600304F8u;
+    internal const uint F2fsSemanticFlagMask = 0x200114F8u;
+
     private static readonly AsyncLocal<FileSystemEditPlan?> Active = new();
     private readonly Dictionary<string, PreservedInodeEntry> entries = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> hostPaths = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> contentSources = new(StringComparer.Ordinal);
     internal string Root { get; }
     internal static FileSystemEditPlan? Current => Active.Value;
+    internal IReadOnlyDictionary<string, PreservedInodeEntry> Entries => entries;
+    internal IEnumerable<(string HostPath, PreservedInodeEntry Entry)> Files =>
+        hostPaths.Select(pair => (Path.Combine(Root, pair.Key.Replace('/', Path.DirectorySeparatorChar)), entries[pair.Value]));
 
     internal FileSystemEditPlan(string root, FileSystemPreservationManifest manifest, Dictionary<string, string> projection, string? partition = null)
     {
@@ -70,7 +76,9 @@ internal sealed class FileSystemEditPlan
                 var permissions = donor.Mode & 0x0FFF;
                 if (!directory && (donor.Mode & 0xF000) == 0x4000) permissions &= ~0xE49;
                 selected = Copy(donor, image, (ushort)(type | permissions));
+                if (!directory) selected.Flags &= ~0x40000000u;
                 selected.Inode = 0;
+                selected.Metadata = null;
                 selected.SymlinkTarget = null;
                 var executable = !directory && IsExecutable(Path.Combine(Root, host.Replace('/', Path.DirectorySeparatorChar)));
                 if ((donor.Mode & 0xF000) == 0x4000) InheritDirectoryAcl(selected, directory, executable);
@@ -228,8 +236,11 @@ internal sealed class FileSystemEditPlan
 
     private static void ValidateAttributes(PreservedInodeEntry entry)
     {
-        if ((entry.Flags & (0x800u | 0x100000u | 0x20000000u | 0x40000000u)) != 0)
-            throw new InvalidDataException($"Encrypted, verity, project-inherited or casefold inode requires a dedicated semantic writer: {entry.Path}");
+        entry.Metadata?.Validate();
+        if ((entry.Flags & (0x800u | 0x100000u)) != 0)
+            throw new InvalidDataException($"Encrypted or verity inode requires a dedicated semantic writer: {entry.Path}");
+        if ((entry.Flags & 0x40000000u) != 0 && (entry.Mode & 0xF000) != 0x4000)
+            throw new InvalidDataException($"Casefold flag belongs only on directories: {entry.Path}");
         entry.Xattrs?.Remove("system.data");
         if (entry.Xattrs?.Keys.Any(k => k is "security.ima" or "security.evm" or "security.fsverity" or "security.fscrypt" or "encryption.c") == true)
             throw new InvalidDataException($"Content authentication/encryption attributes require a dedicated writer: {entry.Path}");
@@ -308,12 +319,14 @@ internal sealed class FileSystemEditPlan
     private static PreservedInodeEntry Copy(PreservedInodeEntry source, string path, ushort mode) => new()
     {
         Path = path,
+        Size = source.Size,
         Inode = source.Inode,
         DeviceId = source.DeviceId,
         Flags = source.Flags,
         Mode = mode,
         Uid = source.Uid,
         Gid = source.Gid,
+        Metadata = source.Metadata,
         SymlinkTarget = source.SymlinkTarget,
         Xattrs = source.Xattrs?.ToDictionary(p => p.Key, p => p.Value.ToArray(), StringComparer.Ordinal)
     };

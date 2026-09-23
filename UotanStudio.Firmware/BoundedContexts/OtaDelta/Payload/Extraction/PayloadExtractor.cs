@@ -11,11 +11,22 @@ namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Extraction;
 
 internal class PayloadExtractor
 {
+    internal const long DefaultMaximumPartitionBytes = 64L * 1024 * 1024 * 1024;
+
+    private readonly long maximumPartitionBytes;
+
+    internal PayloadExtractor(long maximumPartitionBytes = DefaultMaximumPartitionBytes)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumPartitionBytes);
+        this.maximumPartitionBytes = maximumPartitionBytes;
+    }
+
     private static readonly HashSet<InstallOperation.Types.Type> ParallelizableTypes =
     [
         InstallOperation.Types.Type.Replace,
         InstallOperation.Types.Type.ReplaceBz,
         InstallOperation.Types.Type.ReplaceXz,
+        InstallOperation.Types.Type.ReplaceZstd,
         InstallOperation.Types.Type.Zero,
         InstallOperation.Types.Type.Discard
     ];
@@ -69,6 +80,7 @@ internal class PayloadExtractor
         cancellationToken.ThrowIfCancellationRequested();
         var workers = operationWorkers ?? SharedKernel.FirmwareParallelism.Workers;
         if (blockSize == 0) throw new PartitionExtractionException("Payload block size must be nonzero.", partition.PartitionName);
+        var totalSize = GetValidatedPartitionSize(partition, blockSize);
         var fullOutputPath = Path.GetFullPath(outFilename);
         Directory.CreateDirectory(Path.GetDirectoryName(fullOutputPath)!);
         var tempPath = fullOutputPath + ".tmp-" + Guid.NewGuid().ToString("N");
@@ -76,32 +88,6 @@ internal class PayloadExtractor
         {
             using (var outFile = new FileStream(tempPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920))
             {
-
-                long totalSize = 0;
-                try
-                {
-                    foreach (var op in partition.Operations)
-                    {
-                        foreach (var ext in op.DstExtents)
-                        {
-                            var endBlock = checked(ext.StartBlock + ext.NumBlocks);
-                            var endOffset = checked(endBlock * blockSize);
-                            totalSize = Math.Max(totalSize, checked((long)endOffset));
-                        }
-                    }
-                }
-                catch (OverflowException ex)
-                {
-                    throw new PartitionExtractionException("Destination extent end offset exceeds the supported range", partition.PartitionName, ex);
-                }
-
-                if (partition.NewPartitionInfo is { } targetInfo)
-                {
-                    var declaredSize = checked((long)targetInfo.Size);
-                    if (totalSize > declaredSize)
-                        throw new PartitionExtractionException("Destination extents exceed the declared partition size.", partition.PartitionName);
-                    totalSize = declaredSize;
-                }
                 if (totalSize > 0)
                 {
                     outFile.SetLength(totalSize);
@@ -254,6 +240,75 @@ internal class PayloadExtractor
         {
             File.Delete(tempPath);
         }
+    }
+
+    private long GetValidatedPartitionSize(PartitionUpdate partition, uint blockSize)
+    {
+        long inferredSize = 0;
+        try
+        {
+            foreach (var operation in partition.Operations)
+            {
+                ulong operationBytes = 0;
+                foreach (var extent in operation.DstExtents)
+                {
+                    var extentBytes = checked(extent.NumBlocks * blockSize);
+                    operationBytes = checked(operationBytes + extentBytes);
+                    var endBlock = checked(extent.StartBlock + extent.NumBlocks);
+                    var endOffset = checked(endBlock * blockSize);
+                    inferredSize = Math.Max(inferredSize, checked((long)endOffset));
+                }
+
+                if (operation.DstLength != 0 && operation.DstLength != operationBytes)
+                {
+                    throw new PartitionExtractionException(
+                        $"Operation destination length {operation.DstLength} does not match its extents ({operationBytes} bytes).",
+                        partition.PartitionName);
+                }
+            }
+        }
+        catch (OverflowException ex)
+        {
+            throw new PartitionExtractionException(
+                "Destination extent end offset exceeds the supported range.", partition.PartitionName, ex);
+        }
+
+        if (inferredSize > maximumPartitionBytes)
+        {
+            throw new PartitionExtractionException(
+                $"Destination extents require {inferredSize} bytes, exceeding the configured per-partition limit of {maximumPartitionBytes} bytes.",
+                partition.PartitionName);
+        }
+
+        if (partition.NewPartitionInfo is not { } targetInfo)
+        {
+            return inferredSize;
+        }
+
+        long declaredSize;
+        try
+        {
+            declaredSize = checked((long)targetInfo.Size);
+        }
+        catch (OverflowException ex)
+        {
+            throw new PartitionExtractionException(
+                "Declared partition size exceeds the supported range.", partition.PartitionName, ex);
+        }
+
+        if (declaredSize > maximumPartitionBytes)
+        {
+            throw new PartitionExtractionException(
+                $"Declared partition size {declaredSize} exceeds the configured per-partition limit of {maximumPartitionBytes} bytes.",
+                partition.PartitionName);
+        }
+
+        if (inferredSize > declaredSize)
+        {
+            throw new PartitionExtractionException("Destination extents exceed the declared partition size.", partition.PartitionName);
+        }
+
+        return declaredSize;
     }
 
     /// <summary>

@@ -144,7 +144,8 @@ internal static class OperationProcessor
 
         var isReplace = op.Type is InstallOperation.Types.Type.Replace
             or InstallOperation.Types.Type.ReplaceBz
-            or InstallOperation.Types.Type.ReplaceXz;
+            or InstallOperation.Types.Type.ReplaceXz
+            or InstallOperation.Types.Type.ReplaceZstd;
         if (isReplace)
         {
             using var cursor = new IndependentReadStream(stream, streamLock);
@@ -198,6 +199,9 @@ internal static class OperationProcessor
                 break;
             case InstallOperation.Types.Type.ReplaceXz:
                 CompressionService.Decompress(input, output, CompressionFormat.Xz, output.Length, cancellationToken);
+                break;
+            case InstallOperation.Types.Type.ReplaceZstd:
+                ZstdReplaceDecoder.Decode(input, output, cancellationToken);
                 break;
             default:
                 throw new PayloadUnsupportedOperationException($"Unsupported replace operation type: {op.Type}", op.Type.ToString());

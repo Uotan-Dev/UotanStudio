@@ -20,6 +20,38 @@ public static class RockchipExtractor
     /// <summary>Reads container entry metadata.<para>读取容器条目元数据。</para></summary>
     public static List<RkfwEntry> ReadMetadata(string imagePath) => List(imagePath);
 
+    /// <summary>Reads bounded RKFW headers and the embedded RKAF table without scanning payload checksums.</summary>
+    public static (RkFwHeader Header, List<RkfwEntry> Entries) PreviewRkfw(string imagePath)
+    {
+        using var stream = File.OpenRead(imagePath);
+        using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
+        var header = RkFwHeader.Read(reader);
+        if (header.Tag != RkFwHeader.MagicRkfw || header.HeaderSize < RkFwHeader.StructSize ||
+            header.HeaderSize > stream.Length || stream.Length < RkFwHeader.StructSize + 32)
+            throw new InvalidDataException("Invalid RKFW header length or magic.");
+        CheckRegion(header.BootOffset, header.BootSize, header.HeaderSize, stream.Length - 32);
+        CheckRegion(header.ImageOffset, header.ImageSize, header.HeaderSize, stream.Length - 32);
+        if (header.BootSize < 4 || header.ImageSize < 2052 ||
+            (header.BootOffset < (long)header.ImageOffset + header.ImageSize &&
+             header.ImageOffset < (long)header.BootOffset + header.BootSize))
+            throw new InvalidDataException("Invalid or overlapping RKFW payload regions.");
+        stream.Position = header.BootOffset;
+        var loaderName = reader.ReadUInt32() switch
+        {
+            0x544F4F42 => "BOOT",
+            0x2052444C => "LDR",
+            _ => throw new InvalidDataException("Invalid RKFW loader magic.")
+        };
+        var entries = new List<RkfwEntry>
+        {
+            new(loaderName, header.BootOffset, header.BootSize, RkfwEntryType.Boot),
+            new("embedded-update.img", header.ImageOffset, header.ImageSize, RkfwEntryType.Image)
+        };
+        entries.AddRange(ReadRkaf(reader, header.ImageOffset, header.ImageSize, validateChecksum: false)
+            .Select(entry => entry with { Name = $"embedded-update.img/{entry.Name}", Offset = header.ImageOffset + entry.Offset }));
+        return (header, entries);
+    }
+
     /// <summary>Extracts validated entries with atomic file replacement.<para>校验条目后以原子文件替换方式提取。</para></summary>
     /// <param name="imagePath">The source image path. 源镜像路径。</param>
     /// <param name="outputDirectory">The output directory. 输出目录。</param>
@@ -107,17 +139,21 @@ public static class RockchipExtractor
             new("embedded-update.img", header.ImageOffset, header.ImageSize, RkfwEntryType.Image)];
     }
 
-    private static List<RkfwEntry> ReadRkaf(BinaryReader reader)
+    private static List<RkfwEntry> ReadRkaf(BinaryReader reader, long baseOffset = 0, long? imageLength = null,
+        bool validateChecksum = true)
     {
         var stream = reader.BaseStream;
-        if (stream.Length < 2052)
+        var length = imageLength ?? stream.Length;
+        if (length < 2052)
             throw new InvalidDataException("RKAF image is shorter than its fixed header and checksum.");
         Span<byte> header = stackalloc byte[2048];
+        stream.Position = baseOffset;
         stream.ReadExactly(header);
         var declaredLength = (long)BinaryPrimitives.ReadUInt32LittleEndian(header[4..]) + 4;
-        if (declaredLength != stream.Length)
-            throw new InvalidDataException($"RKAF length declares {declaredLength} bytes, actual length is {stream.Length}.");
-        ValidateRkafChecksum(stream, declaredLength);
+        if (BinaryPrimitives.ReadUInt32LittleEndian(header) != RkFwHeader.MagicRkaf || declaredLength != length)
+            throw new InvalidDataException($"Invalid RKAF magic or length: declared {declaredLength}, actual {length}.");
+        if (validateChecksum)
+            ValidateRkafChecksum(stream, declaredLength);
         var count = BinaryPrimitives.ReadUInt32LittleEndian(header[136..]);
         if (count == 0 || count > 16)
             throw new InvalidDataException("RKAF entry count is outside the supported range.");
@@ -127,7 +163,7 @@ public static class RockchipExtractor
         Span<byte> parameterHeader = stackalloc byte[8];
         for (uint i = 0; i < count; i++)
         {
-            stream.Position = 140L + i * 112L;
+            stream.Position = baseOffset + 140L + i * 112L;
             stream.ReadExactly(descriptor);
             var name = ReadString(descriptor[..32]);
             var path = ReadString(descriptor.Slice(32, 64));
@@ -138,7 +174,7 @@ public static class RockchipExtractor
             if (name == "parameter")
             {
                 if (size < 12) throw new InvalidDataException("Truncated RKAF parameter wrapper.");
-                stream.Position = offset;
+                stream.Position = baseOffset + offset;
                 stream.ReadExactly(parameterHeader);
                 if (!parameterHeader[..4].SequenceEqual("PARM"u8) ||
                     BinaryPrimitives.ReadUInt32LittleEndian(parameterHeader[4..]) != size - 12)

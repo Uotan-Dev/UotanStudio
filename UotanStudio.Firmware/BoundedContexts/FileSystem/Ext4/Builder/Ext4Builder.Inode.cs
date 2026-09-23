@@ -160,7 +160,8 @@ public sealed partial class Ext4Builder
         WriteU16(inode, 122, (ushort)(node.Gid >> 16));
         WriteU16(inode, 26, node.IsDirectory ? (ushort)(2 + node.Children.Count(static c => c.IsDirectory)) : node.LinkCount);
         var allocatedBlocks = isFastSymlink || node.IsInlineData ? 0 : node.DataBlockCount + node.LeafBlocks.Length + node.IndexBlocks.Length;
-        WriteU32(inode, 28, (uint)(allocatedBlocks * (blockSize / 512)));
+        var allocatedSectors = checked((ulong)(allocatedBlocks + node.AttributeValueBlocks + (node.ExternalXattrs is null ? 0 : 1)) * (uint)(blockSize / 512));
+        WriteInodeBlockCount(inode, allocatedSectors, node.Inode);
         WriteU32(inode, 32, flags | node.SemanticFlags);
         if (inodeSize >= 256)
         {
@@ -168,13 +169,34 @@ public sealed partial class Ext4Builder
         }
 
 
-        if (inodeSize > 128 && !node.IsInlineData && !isFastSymlink)
+        if (inodeSize >= 128 + Ext4ExtraIsize)
         {
             WriteU16(inode, 128, Ext4ExtraIsize);
         }
 
 
-        if (node.Xattrs is { Count: > 0 } && !node.IsInlineData && inodeSize > 160)
+        WriteSourceMetadata(inode, node.SourceMetadata);
+        if (node.AttributeValue is { } attributeValue)
+        {
+            WriteU32(inode, 8, ComputeCrc32(attributeValue, ComputeCrc32(uuid, uint.MaxValue)));
+            WriteU32(inode, 12, 0);
+            WriteU32(inode, 36, 1);
+        }
+        if (node.ExternalXattrs is { } external)
+        {
+            WriteU32(inode, 104, (uint)node.XattrBlock);
+            WriteU16(inode, 118, (ushort)((ulong)node.XattrBlock >> 32));
+            if (enableMetadataCsum)
+            {
+                Span<byte> address = stackalloc byte[8];
+                BinaryPrimitives.WriteUInt64LittleEndian(address, (ulong)node.XattrBlock);
+                var checksum = ComputeCrc32Continue(ComputeCrc32(uuid, uint.MaxValue), address);
+                WriteU32(external, 16, 0);
+                WriteU32(external, 16, ComputeCrc32Continue(checksum, external));
+            }
+            WriteAt(output, baseOffset, node.XattrBlock * blockSize, external, blockSize);
+        }
+        else if (node.Xattrs is { Count: > 0 } && !node.IsInlineData)
         {
             WriteInodeXattrs(inode, inodeSize, node.Xattrs);
         }
@@ -193,6 +215,7 @@ public sealed partial class Ext4Builder
                 var crc = ComputeCrc32(uuid, 0xFFFF_FFFF);
                 var identity = new byte[8];
                 WriteU32(identity, 0, node.Inode);
+                WriteU32(identity, 4, node.SourceMetadata?.Generation ?? 0);
                 crc = ComputeCrc32Continue(crc, identity);
                 var tailOffset = 12 + EntriesPerBlock(blockSize) * 12;
                 crc = ComputeCrc32Continue(crc, data.AsSpan(0, tailOffset));
@@ -201,6 +224,16 @@ public sealed partial class Ext4Builder
             var metaOffset = checked(blockAddress * blockSize);
             WriteAt(output, baseOffset, metaOffset, data, blockSize);
         }
+    }
+
+    internal static void WriteInodeBlockCount(Span<byte> inode, ulong allocatedSectors, uint inodeNumber)
+    {
+        if (allocatedSectors > 0x0000_FFFF_FFFF_FFFFUL)
+        {
+            throw new InvalidOperationException($"EXT4 inode {inodeNumber} block count exceeds the 48-bit on-disk limit.");
+        }
+        WriteU32(inode, 28, (uint)allocatedSectors);
+        WriteU16(inode, 116, (ushort)(allocatedSectors >> 32));
     }
 
     /// <summary>
@@ -247,12 +280,12 @@ public sealed partial class Ext4Builder
     {
 
 
-        const int extraIsiz = 28;
+        const int extraIsiz = Ext4ExtraIsize;
         var xattrStart = 128 + extraIsiz;
         var available = inodeSize - xattrStart - 4;
         if (available < 8)
         {
-            return;
+            throw new InvalidDataException("EXT4 inode has no room for extended attributes.");
         }
 
 
@@ -339,8 +372,10 @@ public sealed partial class Ext4Builder
         [
             ("user.", 1),
             ("trusted.", 4),
+            ("lustre.", 5),
             ("security.", 6),
             ("system.", 7),
+            ("encryption.", 9),
         ];
         foreach (var (prefix, index) in namespaces)
         {
@@ -352,11 +387,6 @@ public sealed partial class Ext4Builder
                     continue;
                 }
 
-
-                if (index == 7)
-                {
-                    continue;
-                }
 
                 nameIndex = index;
                 shortName = rest;

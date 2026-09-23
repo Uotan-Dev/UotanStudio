@@ -10,6 +10,21 @@ namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 
 public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
+    /// <summary>Reads the number of external devices without accessing their data or parsing inodes.</summary>
+    public static ushort ReadExtraDeviceCount(string imagePath)
+    {
+        using var input = File.OpenRead(imagePath);
+        input.Seek(ErofsSuperblock.SuperblockOffset, SeekOrigin.Begin);
+        Span<byte> superblock = stackalloc byte[ErofsSuperblock.SuperblockSize];
+        input.ReadExactly(superblock);
+        var parsed = ErofsSuperblock.FromBytes(superblock);
+        if (parsed.ExtraDevices > 0 && !parsed.HasDeviceTable)
+        {
+            throw new InvalidDataException("EROFS declares extra devices without a device table.");
+        }
+        return parsed.ExtraDevices;
+    }
+
     void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
         => FileSystemRepackMetadata.Configure(metadata, sourcePath, outputDirectory);
 
@@ -67,7 +82,9 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                using var parser = new ErofsParser(filePath);
+                using var input = File.OpenRead(filePath);
+                using var parser = UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemPreservation
+                    .OpenErofsParser(input, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 var sb = parser.Superblock;
                 var metadata = new Dictionary<string, string>
@@ -125,7 +142,9 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                using var parser = new ErofsParser(filePath);
+                using var input = File.OpenRead(filePath);
+                using var parser = UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemPreservation
+                    .OpenErofsParser(input, cancellationToken);
                 parser.ExtractToDirectory(outputDirectory, overwrite: options?.Overwrite ?? true, byteProgress: FileSystemByteProgress.ForStage(options?.FileSystemProgress, FileSystemWorkStage.Extracting), cancellationToken: cancellationToken);
                 var files = parser.EnumerateFiles();
                 return FirmwareOpResult.Ok(

@@ -24,6 +24,9 @@ public sealed class UnpackOptions
     /// <summary>Receives measured bytes for filesystem extraction and preservation phases.</summary>
     public IProgress<FileSystemByteProgress>? FileSystemProgress { get; set; }
 
+    /// <summary>EROFS external device images in device-table order (ids 1..N).</summary>
+    public IReadOnlyList<string>? ErofsExtraDevicePaths { get; set; }
+
     internal HashSet<string>? CreateSelectedEntrySet()
     {
         if (SelectedEntries is not { Count: > 0 })

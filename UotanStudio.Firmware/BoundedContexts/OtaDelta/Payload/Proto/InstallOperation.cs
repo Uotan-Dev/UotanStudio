@@ -36,7 +36,9 @@ public sealed class InstallOperation : IMessage<InstallOperation>
 
             Lz4diffBsdiff = 12,
 
-            Lz4diffPuffdiff = 13
+            Lz4diffPuffdiff = 13,
+
+            ReplaceZstd = 14
         }
     }
 

@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
@@ -175,7 +176,16 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                if (Directory.Exists(inputPath) && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
+                var requestedOptions = FileSystemPackingOptions.OptionsFor(inputPath, FormatName);
+                if (requestedOptions.TryGetValue("AndroidNativeProfile", out var nativeProfile)
+                    && IsTrue(nativeProfile) && RepackMetadata.Read(inputPath) is not null)
+                {
+                    return FirmwareOpResult.Fail(
+                        "Native Android F2FS cannot rebuild an extracted image with preserved source metadata; use a new directory with explicit fs_config and file_contexts.");
+                }
+                if (Directory.Exists(inputPath)
+                    && RepackMetadata.Read(inputPath)?.FormatName == FormatName
+                    && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
                     return FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes.");
                 if (!Directory.Exists(inputPath))
                 {
@@ -183,18 +193,43 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider
                 }
 
                 var options = FileSystemPackingOptions.OptionsFor(inputPath, FormatName);
-                F2fsBuilder.Build(inputPath, outputPath, new F2fsOptions
+                var sparseOutput = options.TryGetValue("OutputSparseContainer", out var outerSparse) && IsTrue(outerSparse);
+                var fullOutputPath = Path.GetFullPath(outputPath);
+                var rawOutput = sparseOutput
+                    ? Path.Combine(Path.GetDirectoryName(fullOutputPath)!, "." + Path.GetFileName(fullOutputPath) + "." + Guid.NewGuid().ToString("N") + ".raw.tmp")
+                    : fullOutputPath;
+                Directory.CreateDirectory(Path.GetDirectoryName(fullOutputPath)!);
+                try
                 {
-                    BlockSize = FileSystemPackingOptions.IntegerOption(options, "BlockSize", 4096),
-                    SegmentSize = FileSystemPackingOptions.IntegerOption(options, "SegmentSize", 2 * 1024 * 1024),
-                    VolumeName = options.TryGetValue("VolumeName", out var volume) ? volume : "f2fs",
-                    EnableSparse = !options.TryGetValue("EnableSparse", out var sparse) || IsTrue(sparse),
-                    EnableCompression = options.TryGetValue("EnableCompression", out var compression) && IsTrue(compression),
-                    CompressionAlgorithm = ParseCompressionAlgorithm(options),
-                    CompressionLevel = FileSystemPackingOptions.IntegerOption(options, "CompressionLevel", 0),
-                    FsConfigPath = FileSystemPackingOptions.NullIfEmpty(options, "FsConfigPath"),
-                    FileContextsPath = FileSystemPackingOptions.NullIfEmpty(options, "FileContextsPath"),
-                });
+                    F2fsBuilder.Build(inputPath, rawOutput, new F2fsOptions
+                    {
+                        BlockSize = FileSystemPackingOptions.IntegerOption(options, "BlockSize", 4096),
+                        SegmentSize = FileSystemPackingOptions.IntegerOption(options, "SegmentSize", 2 * 1024 * 1024),
+                        VolumeName = options.TryGetValue("VolumeName", out var volume) ? volume : "f2fs",
+                        EnableSparse = !options.TryGetValue("EnableSparse", out var sparse) || IsTrue(sparse),
+                        EnableCompression = options.TryGetValue("EnableCompression", out var compression) && IsTrue(compression),
+                        CompressionAlgorithm = ParseCompressionAlgorithm(options),
+                        CompressionLevel = FileSystemPackingOptions.IntegerOption(options, "CompressionLevel", 0),
+                        AndroidNativeProfile = options.TryGetValue("AndroidNativeProfile", out var androidProfile) && IsTrue(androidProfile),
+                        AndroidImageSizeBytes = options.TryGetValue("AndroidImageSizeBytes", out var imageSize)
+                            && long.TryParse(imageSize, out var parsedSize) ? parsedSize : null,
+                        NativeWslDistribution = FileSystemPackingOptions.NullIfEmpty(options, "NativeWslDistribution"),
+                        FsConfigPath = FileSystemPackingOptions.NullIfEmpty(options, "FsConfigPath"),
+                        FileContextsPath = FileSystemPackingOptions.NullIfEmpty(options, "FileContextsPath"),
+                        CancellationToken = cancellationToken,
+                    });
+                    if (sparseOutput)
+                    {
+                        SparseImageConverter.ConvertRawToSparseAtomic(rawOutput, fullOutputPath, cancellationToken: cancellationToken);
+                    }
+                }
+                finally
+                {
+                    if (sparseOutput)
+                    {
+                        File.Delete(rawOutput);
+                    }
+                }
 
                 return FirmwareOpResult.Ok($"Packed '{inputPath}' into '{outputPath}' (F2FS).");
             }
@@ -210,10 +245,17 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider
     }
 
     private static CompressionAlgorithm ParseCompressionAlgorithm(IReadOnlyDictionary<string, string> options)
-        => options.TryGetValue("CompressionAlgorithm", out var value) &&
-            Enum.TryParse<CompressionAlgorithm>(value, ignoreCase: true, out var algorithm)
-                ? algorithm
-                : CompressionAlgorithm.Lz4;
+    {
+        if (!options.TryGetValue("CompressionAlgorithm", out var value))
+        {
+            return CompressionAlgorithm.Lz4;
+        }
+
+        return Enum.TryParse<CompressionAlgorithm>(value, ignoreCase: true, out var algorithm)
+            && Enum.IsDefined(algorithm)
+            ? algorithm
+            : throw new InvalidDataException($"Unsupported F2FS compression algorithm '{value}'.");
+    }
 
     private static bool IsTrue(string value)
         => value is "1" || bool.TryParse(value, out var enabled) && enabled;

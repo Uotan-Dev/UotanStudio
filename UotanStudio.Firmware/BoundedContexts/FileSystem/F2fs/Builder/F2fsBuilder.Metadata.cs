@@ -7,7 +7,7 @@ namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
 
 public sealed partial class F2fsBuilder
 {
-    private static F2fsSuperblock CreateSuperblock(Layout layout, F2fsOptions options, bool hasCompressedFiles, bool hasXattrs)
+    private static F2fsSuperblock CreateSuperblock(Layout layout, F2fsOptions options, bool hasCompressedFiles, bool hasXattrs, uint metadataFeatures)
     {
         return new F2fsSuperblock
         {
@@ -46,7 +46,7 @@ public sealed partial class F2fsBuilder
             Version = new byte[256],
 
 
-            Feature = (hasCompressedFiles ? FeatureCompression | 0x0008u : 0) | (hasXattrs ? 0x48u : 0),
+            Feature = (hasCompressedFiles ? FeatureCompression | 0x0008u : 0) | (hasXattrs ? 0x48u : 0) | metadataFeatures,
         };
     }
 
@@ -261,10 +261,16 @@ public sealed partial class F2fsBuilder
         }
     }
 
-    private static void WriteMainArea(Stream output, long baseOffset, List<BuildNode> ordered, int blockSize)
+    private static void WriteMainArea(
+        Stream output,
+        long baseOffset,
+        List<BuildNode> ordered,
+        int blockSize,
+        CancellationToken cancellationToken)
     {
         foreach (var node in ordered)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             WriteInodeNode(output, baseOffset, node, blockSize);
             if (node.XattrNid != 0)
             {
@@ -280,7 +286,7 @@ public sealed partial class F2fsBuilder
                     WriteDnode(output, baseOffset, node, dnode, blockSize);
                 }
 
-                WriteFileDataBlocks(output, baseOffset, node, blockSize);
+                WriteFileDataBlocks(output, baseOffset, node, blockSize, cancellationToken);
             }
             else if (node.IsDirectory)
             {
@@ -358,8 +364,13 @@ public sealed partial class F2fsBuilder
                 ? KernelCompressionAlgorithmId(node.CompressedAlgorithm)
                 : (byte)0,
             LogClusterSize = node.IsCompressedFile
-                ? LogClusterSizeFromBytes(F2fsCompression.ClusterBytes)
+                ? LogClusterSizeFromBytes(node.ClusterPages * blockSize)
                 : (byte)0,
+            CompressFlags = node.CompressFlags,
+            Advise = node.SourceMetadata?.F2fsAdvise ?? 0,
+            Generation = node.SourceMetadata?.Generation ?? 0,
+            ProjectId = node.SourceMetadata?.ProjectId,
+            BirthTime = node.SourceMetadata?.BirthTime,
             Pino = node.Parent?.Ino ?? 0,
 
 
@@ -369,10 +380,12 @@ public sealed partial class F2fsBuilder
             Extent = node.Extent,
             Addr = BuildInodeAddrs(node),
             Nid = BuildInodeNids(node),
-            Mtime = node.Mtime > 0 ? (ulong)node.Mtime : 0,
-            MtimeNsec = node.MtimeNsec,
-            Ctime = node.Ctime > 0 ? (ulong)node.Ctime : 0,
-            CtimeNsec = node.CtimeNsec,
+            Atime = unchecked((ulong)(node.SourceMetadata?.AccessTime?.Seconds ?? node.Mtime)),
+            AtimeNsec = node.SourceMetadata?.AccessTime?.Nanoseconds ?? node.MtimeNsec,
+            Mtime = unchecked((ulong)(node.SourceMetadata?.ModificationTime?.Seconds ?? node.Mtime)),
+            MtimeNsec = node.SourceMetadata?.ModificationTime?.Nanoseconds ?? node.MtimeNsec,
+            Ctime = unchecked((ulong)(node.SourceMetadata?.ChangeTime?.Seconds ?? node.Ctime)),
+            CtimeNsec = node.SourceMetadata?.ChangeTime?.Nanoseconds ?? node.CtimeNsec,
             ExtraIsize = (ushort)(node.ExtraWords * 4),
             CompressedBlocks = node.IsCompressedFile ? (ulong)(node.DataBlockCount - node.AllocatedDataBlockCount) : 0,
             InlineXattrSize = (ushort)node.XattrWords,
@@ -416,7 +429,12 @@ public sealed partial class F2fsBuilder
         WriteAt(output, baseOffset + dnode.BlockAddr * blockSize, block);
     }
 
-    private static void WriteFileDataBlocks(Stream output, long baseOffset, BuildNode node, int blockSize)
+    private static void WriteFileDataBlocks(
+        Stream output,
+        long baseOffset,
+        BuildNode node,
+        int blockSize,
+        CancellationToken cancellationToken)
     {
         if (node.InlineData || node.DataBlockCount == 0)
         {
@@ -425,7 +443,7 @@ public sealed partial class F2fsBuilder
 
         if (node.IsCompressedFile)
         {
-            WriteCompressedFileDataBlocks(output, baseOffset, node, blockSize);
+            WriteCompressedFileDataBlocks(output, baseOffset, node, blockSize, cancellationToken);
             return;
         }
 
@@ -435,6 +453,7 @@ public sealed partial class F2fsBuilder
         var buffer = new byte[1 << 16];
         for (var logical = 0; logical < node.DataBlockCount; logical++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var address = node.DataBlockAddrs[logical];
             var remaining = blockSize;
             while (remaining > 0)
@@ -462,10 +481,15 @@ public sealed partial class F2fsBuilder
     /// Second-pass data write for a compressed file: re-streams the source in 64 KB clusters.
     /// <para>压缩文件的第二遍数据写出：按 64 KB 簇流式重读源文件。</para>
     /// </summary>
-    private static void WriteCompressedFileDataBlocks(Stream output, long baseOffset, BuildNode node, int blockSize)
+    private static void WriteCompressedFileDataBlocks(
+        Stream output,
+        long baseOffset,
+        BuildNode node,
+        int blockSize,
+        CancellationToken cancellationToken)
     {
-        var clusterBytes = F2fsCompression.ClusterBytes;
-        var clusterPages = F2fsCompression.ClusterPages;
+        var clusterPages = node.ClusterPages;
+        var clusterBytes = clusterPages * blockSize;
         var algorithm = node.CompressedAlgorithm;
         var level = node.CompressionLevel;
         var clusterBuffer = new byte[clusterBytes];
@@ -473,6 +497,7 @@ public sealed partial class F2fsBuilder
         using var source = File.OpenRead(node.FullPath);
         for (var c = 0; c < node.CompressedClusterSizes!.Length; c++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var logical = c * clusterPages;
             var clusterBlocks = Math.Min(clusterPages, node.DataBlockCount - logical);
             var toRead = (int)Math.Min(clusterBytes, Math.Max(0, node.Size - (long)logical * blockSize));
@@ -492,6 +517,11 @@ public sealed partial class F2fsBuilder
                     throw new InvalidOperationException(
                         $"F2FS source file '{node.FullPath}' changed between the layout and write passes "
                         + $"(cluster {c}).  F2FS 源文件在两遍构建之间发生了变化。");
+                }
+                if ((node.CompressFlags & 1) != 0)
+                {
+                    BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(4),
+                        Crc32(F2fsSuperblock.Magic, payload.AsSpan(F2fsCompression.ClusterHeaderSize)));
                 }
 
                 var payloadBlocks = (payload.Length + blockSize - 1) / blockSize;

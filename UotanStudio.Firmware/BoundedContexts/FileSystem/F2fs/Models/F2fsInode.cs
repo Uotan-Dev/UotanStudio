@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
 
@@ -88,6 +89,25 @@ internal sealed record F2fsInode
 
     public uint CtimeNsec { get; init; }
 
+    public ulong Atime { get; init; }
+    public uint AtimeNsec { get; init; }
+    public uint Generation { get; init; }
+    public uint? ProjectId { get; init; }
+    public FileSystemTimestamp? BirthTime { get; init; }
+
+    public FileSystemInodeMetadata Metadata => new()
+    {
+        AccessTime = new(unchecked((long)Atime), AtimeNsec),
+        ChangeTime = new(unchecked((long)Ctime), CtimeNsec),
+        ModificationTime = new(unchecked((long)Mtime), MtimeNsec),
+        BirthTime = BirthTime,
+        Generation = Generation,
+        ProjectId = ProjectId,
+        LinkCount = Links,
+        F2fsAdvise = Advise,
+        F2fsCompression = IsCompressed ? new(CompressAlgorithm, LogClusterSize, CompressFlags) : null
+    };
+
     public ushort ExtraIsize { get; init; }
 
     public ushort InlineXattrSize { get; init; }
@@ -174,6 +194,11 @@ internal sealed record F2fsInode
             Links = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetLinks..]),
             Size = BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetSize..]),
             Blocks = BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetBlocks..]),
+            Atime = BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetAtime..]),
+            AtimeNsec = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetAtimeNsec..]),
+            Generation = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetGeneration..]),
+            ProjectId = extraSize >= 8 ? BinaryPrimitives.ReadUInt32LittleEndian(node[364..]) : null,
+            BirthTime = extraSize >= 24 ? new(BinaryPrimitives.ReadInt64LittleEndian(node[372..]), BinaryPrimitives.ReadUInt32LittleEndian(node[380..])) : null,
             Mtime = BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetMtime..]),
             MtimeNsec = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetMtimeNsec..]),
             Ctime = BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetCtime..]),
@@ -217,13 +242,14 @@ internal sealed record F2fsInode
         BinaryPrimitives.WriteUInt64LittleEndian(node[OffsetBlocks..], Blocks);
 
 
-        BinaryPrimitives.WriteUInt64LittleEndian(node[OffsetAtime..], Mtime);
+        Metadata.Validate();
+        BinaryPrimitives.WriteUInt64LittleEndian(node[OffsetAtime..], Atime);
         BinaryPrimitives.WriteUInt64LittleEndian(node[OffsetCtime..], Ctime);
         BinaryPrimitives.WriteUInt64LittleEndian(node[OffsetMtime..], Mtime);
-        BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetAtimeNsec..], 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetAtimeNsec..], AtimeNsec);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetCtimeNsec..], CtimeNsec);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetMtimeNsec..], MtimeNsec);
-        BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetGeneration..], 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetGeneration..], Generation);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetCurrentDepth..], CurrentDepth);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetXattrNid..], XattrNid);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetFlags..], Flags);
@@ -241,6 +267,15 @@ internal sealed record F2fsInode
         {
             BinaryPrimitives.WriteUInt16LittleEndian(node[OffsetExtraIsize..], ExtraIsize);
             BinaryPrimitives.WriteUInt16LittleEndian(node[OffsetInlineXattrSize..], InlineXattrSize);
+            if (ExtraIsize >= 8)
+            {
+                BinaryPrimitives.WriteUInt32LittleEndian(node[364..], ProjectId ?? 0);
+            }
+            if (ExtraIsize >= 24)
+            {
+                BinaryPrimitives.WriteInt64LittleEndian(node[372..], BirthTime?.Seconds ?? 0);
+                BinaryPrimitives.WriteUInt32LittleEndian(node[380..], BirthTime?.Nanoseconds ?? 0);
+            }
             if (ExtraIsize >= 36)
             {
                 BinaryPrimitives.WriteUInt64LittleEndian(node[384..], CompressedBlocks);

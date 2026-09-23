@@ -43,14 +43,14 @@ internal static class FileSystemRepackMetadata
         }
         Directory.CreateDirectory(metadataDirectory);
         GenerateFileSystemMetadata(metadataDirectory, RepackMetadata.DetectPartitionName(Path.GetFileName(sourcePath)),
-            metadata.FormatName, sourcePath, metadata.Configuration);
+            metadata.FormatName, sourcePath, metadata.Configuration, cancellationToken);
         metadata.CanPackDirectory = true;
-        metadata.PackingNotes = "Retains the original image and verifies the extracted projection. Unmodified images restore exactly; unsupported semantic edits fail before output publication.";
+        metadata.PackingNotes = "Retains structured inode metadata and hash-deduplicated content objects, not the original image. Snapshot replay does not require the source image or host tree. Physical layout is regenerated; attributes and file content are verified before publication.";
         await FileSystemPreservation.CaptureAsync(sourcePath, outputDirectory, metadataDirectory, metadata, cancellationToken).ConfigureAwait(false);
     }
 
     private static void GenerateFileSystemMetadata(string metadataDirectory, string partitionName,
-        string formatName, string sourcePath, JsonObject configuration)
+        string formatName, string sourcePath, JsonObject configuration, CancellationToken cancellationToken)
     {
         try
         {
@@ -94,7 +94,7 @@ internal static class FileSystemRepackMetadata
 
                     break;
                 case "EROFS":
-                    using (var parser = new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser.ErofsParser(stream))
+                    using (var parser = FileSystemPreservation.OpenErofsParser(stream, cancellationToken))
                     {
                         FileSystemMetadataGenerator.GenerateForErofs(metadataDirectory, partitionName, parser, superblock);
                     }

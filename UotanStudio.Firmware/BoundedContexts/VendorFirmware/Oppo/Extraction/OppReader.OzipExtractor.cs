@@ -13,6 +13,7 @@ public sealed partial class OppReader
         string outputDir,
         bool overwrite,
         string? keyId,
+        HashSet<string>? selected,
         IProgress<OppExtractProgress>? progress, CancellationToken cancellationToken)
     {
         if (archive.Entries.Count == 1 && archive.Entries[0].EncryptedSize > 0)
@@ -53,6 +54,7 @@ public sealed partial class OppReader
 
         foreach (var entry in entries)
         {
+            if (selected is not null && !selected.Contains(entry.FullName)) continue;
             progress?.Report(new OppExtractProgress(entries.Length, completed, entry.FullName));
             cancellationToken.ThrowIfCancellationRequested();
 

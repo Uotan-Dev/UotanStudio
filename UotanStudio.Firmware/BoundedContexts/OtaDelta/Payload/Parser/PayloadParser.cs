@@ -383,7 +383,7 @@ public static partial class PayloadParser
     /// embedded payload.bin to a temporary file, then extract from that file.
     /// <para>从本地载荷文件中提取分区。ZIP 包裹的载荷先把内嵌 payload.bin 物化到临时文件，再从该文件提取。</para>
     /// </summary>
-    public static void Extract(string filepath, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null)
+    public static void Extract(string filepath, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
     {
         Guard.ThrowIfNull(filepath);
         Guard.ThrowIfNullOrWhiteSpace(filepath);
@@ -395,7 +395,7 @@ public static partial class PayloadParser
         {
             using var plan = BuildExtractPlan(filepath, ref tempPath);
             var resolvedSourceImages = ResolveSourceImages(plan.Manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
-            new PayloadExtractor().ExtractPartitions(
+            new PayloadExtractor(maximumPartitionBytes).ExtractPartitions(
                 plan.Manifest, plan.OuterStream, plan.Header.BaseOffset, extractFiles, outputDir ?? string.Empty, resolvedSourceImages,
                 openPayloadStream: plan.OpenPayloadStream);
         }
@@ -430,7 +430,7 @@ public static partial class PayloadParser
     /// 其映射到前置字节，分区提取映射到其余部分，Total 为作业总字节。上报节流为每 100ms 至多一次，
     /// 阶段边界与最终各上报一次 (total, total)。无可靠总量时 Total 为 0。</para>
     /// </param>
-    public static async Task ExtractAsync(string filepath, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null)
+    public static async Task ExtractAsync(string filepath, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
     {
         Guard.ThrowIfNull(filepath);
         Guard.ThrowIfNullOrWhiteSpace(filepath);
@@ -451,7 +451,7 @@ public static partial class PayloadParser
                 sink = new OffsetByteProgress(byteProgress, plan.ContainerOffset, plan.TotalBytes);
             }
 
-            var extractor = new PayloadExtractor();
+            var extractor = new PayloadExtractor(maximumPartitionBytes);
             await extractor.ExtractPartitionsAsync(
                 plan.Manifest, plan.OuterStream, plan.Header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken,
                 resolvedSourceImages, sink, plan.OpenPayloadStream).ConfigureAwait(false);
@@ -474,7 +474,7 @@ public static partial class PayloadParser
     /// Extracts partitions from a payload stream.
     /// <para>从载荷流中提取分区。</para>
     /// </summary>
-    public static void Extract(Stream stream, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null)
+    public static void Extract(Stream stream, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
     {
         Guard.ThrowIfNull(stream, nameof(stream));
         extractFiles ??= [];
@@ -483,7 +483,7 @@ public static partial class PayloadParser
         {
             var (manifest, header) = ReadManifest(stream);
             var resolvedSourceImages = ResolveSourceImages(manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
-            new PayloadExtractor().ExtractPartitions(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, resolvedSourceImages);
+            new PayloadExtractor(maximumPartitionBytes).ExtractPartitions(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, resolvedSourceImages);
         }
         finally
         {
@@ -505,7 +505,7 @@ public static partial class PayloadParser
     /// <para>可选的字节级进度回调，上报 (Processed, Total) 元组；上报节流为每 100ms 至多一次，
     /// 阶段结束时强制上报一次，最终上报 (total, total)。无可靠总量时 Total 为 0。</para>
     /// </param>
-    public static async Task ExtractAsync(Stream stream, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null)
+    public static async Task ExtractAsync(Stream stream, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
     {
         Guard.ThrowIfNull(stream, nameof(stream));
         extractFiles ??= [];
@@ -514,7 +514,7 @@ public static partial class PayloadParser
         {
             var (manifest, header) = await ReadManifestAsync(stream, cancellationToken).ConfigureAwait(false);
             var resolvedSourceImages = ResolveSourceImages(manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
-            var extractor = new PayloadExtractor();
+            var extractor = new PayloadExtractor(maximumPartitionBytes);
             await extractor.ExtractPartitionsAsync(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken, resolvedSourceImages, byteProgress).ConfigureAwait(false);
         }
         finally

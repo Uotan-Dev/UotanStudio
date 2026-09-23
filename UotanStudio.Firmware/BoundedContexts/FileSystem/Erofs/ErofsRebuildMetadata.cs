@@ -1,4 +1,5 @@
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 using UotanStudio.Firmware.SharedKernel;
@@ -33,6 +34,8 @@ internal static class ErofsRebuildMetadata
             SuperblockChecksum = options.SuperblockChecksum,
             MtimeFeature = options.SourceMtimeFeature,
             XattrFilterFeature = options.SourceXattrFilterFeature,
+            SourceSharedEaInMetabox = options.SourceSharedEaInMetabox,
+            SourceMetaboxCompressed = options.SourceMetaboxCompressed,
             BuildTime = options.BuildTime,
             BuildTimeNanoseconds = options.BuildTimeNanoseconds,
             BuildTimeOffset = options.BuildTimeOffset,
@@ -60,6 +63,19 @@ internal static class ErofsRebuildMetadata
             }
         }
 
+        if (options.SourceDeviceTable is { } devices)
+        {
+            foreach (var device in devices)
+            {
+                parameters.SourceDevices.Add(new ErofsRebuildDevice
+                {
+                    Tag = device.Tag.ToArray(),
+                    Blocks = device.Blocks,
+                    UniAddr = device.UniAddr
+                });
+            }
+        }
+
         if (options.SourceInodes is { } inodes)
         {
             foreach (var inode in inodes.OrderBy(pair => pair.Key))
@@ -76,6 +92,8 @@ internal static class ErofsRebuildMetadata
                     CompactIndexes = inode.Value.CompactIndexes,
                     InlineData = inode.Value.InlineData,
                     LogicalClusterSize = inode.Value.LogicalClusterSize,
+                    SourceExtentClusterSize = inode.Value.SourceExtentClusterSize,
+                    SourceExtentRecordSize = inode.Value.SourceExtentRecordSize,
                 });
             }
         }
@@ -116,6 +134,8 @@ internal static class ErofsRebuildMetadata
             SuperblockChecksum = parameters.SuperblockChecksum,
             SourceMtimeFeature = parameters.MtimeFeature,
             SourceXattrFilterFeature = parameters.XattrFilterFeature,
+            SourceSharedEaInMetabox = parameters.SourceSharedEaInMetabox,
+            SourceMetaboxCompressed = parameters.SourceMetaboxCompressed,
             BuildTime = parameters.BuildTime,
             BuildTimeNanoseconds = parameters.BuildTimeNanoseconds,
             BuildTimeOffset = parameters.BuildTimeOffset,
@@ -132,6 +152,19 @@ internal static class ErofsRebuildMetadata
             // 物理块。若不采用同一布局，重建镜像会明显大于源镜像，因此这里始终启用该布局规划器。
             OptimizeCompression = true,
         };
+
+        if (parameters.SourceDevices is { Count: > 0 } devices)
+        {
+            if (devices.Count > ushort.MaxValue)
+                throw new InvalidDataException("EROFS source device table exceeds the on-disk limit.");
+            options.SourceDeviceTable = devices.Select(device =>
+            {
+                if (device is null || device.Tag is not { Length: ErofsDeviceSlot.TagSize }
+                    || device.Blocks == 0 || device.Blocks >= 1UL << 48 || device.UniAddr >= 1UL << 48)
+                    throw new InvalidDataException("Invalid EROFS source device descriptor.");
+                return new ErofsSourceDevice(device.Tag.ToArray(), device.Blocks, device.UniAddr);
+            }).ToArray();
+        }
 
         if (parameters.Codecs.Count > 0)
         {
@@ -182,7 +215,9 @@ internal static class ErofsRebuildMetadata
                     inode.CompactIndexes,
                     inode.InlineData,
                     inode.LogicalClusterSize,
-                    inode.Path);
+                    inode.Path,
+                    inode.SourceExtentClusterSize,
+                    inode.SourceExtentRecordSize);
                 inodes[inode.Nid] = record;
                 // Newer documents carry the image-absolute path; it survives file additions and
                 // removals (which shift nids), so the builder can bind per-inode strategies in

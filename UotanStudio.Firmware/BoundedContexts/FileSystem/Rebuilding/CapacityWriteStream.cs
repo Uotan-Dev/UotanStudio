@@ -21,13 +21,25 @@ internal sealed class CapacityWriteStream : Stream
         Validate(output.Position);
     }
 
-    public override bool CanRead => false;
+    public override bool CanRead => _output.CanRead;
     public override bool CanSeek => true;
     public override bool CanWrite => true;
     public override long Length => _output.Length;
     public override long Position { get => _output.Position; set { Validate(value); _output.Position = value; } }
     public override void Flush() { _token.ThrowIfCancellationRequested(); _output.Flush(); }
-    public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+
+    public override int Read(Span<byte> buffer)
+    {
+        _token.ThrowIfCancellationRequested();
+        Validate(Position);
+        var remaining = _capacity - Position;
+        if (remaining == 0)
+        {
+            return 0;
+        }
+        return _output.Read(buffer[..(int)Math.Min(buffer.Length, remaining)]);
+    }
 
     public override long Seek(long offset, SeekOrigin origin)
     {

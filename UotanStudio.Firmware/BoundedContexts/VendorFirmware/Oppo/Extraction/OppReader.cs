@@ -290,6 +290,14 @@ public sealed partial class OppReader
         cancellationToken.ThrowIfCancellationRequested();
         var overwrite = options?.Overwrite ?? false;
         var keyId = options?.KeyId;
+        var selected = options?.SelectedEntries is { } names
+            ? new HashSet<string>(names, StringComparer.OrdinalIgnoreCase)
+            : null;
+        if (selected is not null && selected.Except(archive.Entries.Select(entry => entry.Name),
+                StringComparer.OrdinalIgnoreCase).Any())
+        {
+            throw new InvalidOppFormatException("Selected Oppo entry does not exist.");
+        }
 
         if (!Directory.Exists(outputDir))
         {
@@ -299,13 +307,13 @@ public sealed partial class OppReader
 
         if (archive.Metadata.Format == OppFormat.Ozip)
         {
-            return ExtractOzipCore(stream, archive, outputDir, overwrite, keyId, progress, cancellationToken);
+            return ExtractOzipCore(stream, archive, outputDir, overwrite, keyId, selected, progress, cancellationToken);
         }
 
 
         return archive.Metadata.IsZipWrapped
-            ? ExtractZipWrappedCore(stream, archive, outputDir, overwrite, keyId, progress, cancellationToken)
-            : ExtractEntriesCore(stream, archive, outputDir, overwrite, keyId, progress, cancellationToken);
+            ? ExtractZipWrappedCore(stream, archive, outputDir, overwrite, keyId, selected, progress, cancellationToken)
+            : ExtractEntriesCore(stream, archive, outputDir, overwrite, keyId, selected, progress, cancellationToken);
     }
 
     private OppExtractResult ExtractZipWrappedCore(
@@ -314,6 +322,7 @@ public sealed partial class OppReader
         string outputDir,
         bool overwrite,
         string? keyId,
+        HashSet<string>? selected,
         IProgress<OppExtractProgress>? progress, CancellationToken cancellationToken)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"UotanStudio.Oppo.Ofp.{Guid.NewGuid():N}");
@@ -342,7 +351,7 @@ public sealed partial class OppReader
                 DefaultBufferSize,
                 FileOptions.SequentialScan);
 
-            return ExtractEntriesCore(innerStream, archive, outputDir, overwrite, keyId, progress, cancellationToken);
+            return ExtractEntriesCore(innerStream, archive, outputDir, overwrite, keyId, selected, progress, cancellationToken);
         }
         finally
         {
@@ -363,6 +372,7 @@ public sealed partial class OppReader
         string outputDir,
         bool overwrite,
         string? keyId,
+        HashSet<string>? selected,
         IProgress<OppExtractProgress>? progress, CancellationToken cancellationToken)
     {
         var entries = archive.Entries;
@@ -372,6 +382,7 @@ public sealed partial class OppReader
 
         foreach (var entry in entries)
         {
+            if (selected is not null && !selected.Contains(entry.Name)) continue;
             progress?.Report(new OppExtractProgress(totalEntries, completedEntries, entry.Name));
             cancellationToken.ThrowIfCancellationRequested();
 

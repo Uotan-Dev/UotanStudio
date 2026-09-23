@@ -1,6 +1,7 @@
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Extraction;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Models;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Packing;
+using System.Globalization;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip;
@@ -46,11 +47,42 @@ public sealed class RockchipFormatHandler : IFormatHandler
     {
         try
         {
-            var entries = RockchipExtractor.List(filePath);
-            var summary = $"Rockchip RKAF/RKFW: {entries.Count} entries";
+            cancellationToken.ThrowIfCancellationRequested();
+            using var stream = File.OpenRead(filePath);
+            Span<byte> magic = stackalloc byte[4];
+            stream.ReadExactly(magic);
+            var isRkfw = magic.SequenceEqual("RKFW"u8);
+            var (header, entries) = isRkfw
+                ? RockchipExtractor.PreviewRkfw(filePath)
+                : (null, RockchipExtractor.List(filePath));
+            cancellationToken.ThrowIfCancellationRequested();
+            var metadata = new Dictionary<string, string>
+            {
+                ["Container"] = isRkfw ? "RKFW" : "RKAF",
+                ["FileCount"] = entries.Count.ToString(CultureInfo.InvariantCulture),
+                ["ChecksumStatus"] = isRkfw ? "NotVerified" : "Verified"
+            };
+            if (header is not null)
+            {
+                metadata["RkfwVersion"] = $"{header.Version >> 24}.{(header.Version >> 16) & 0xff}.{header.Version & 0xffff}";
+                metadata["MergeVersion"] = $"0x{header.MergeVersion:X8}";
+                metadata["ChipId"] = $"0x{header.Chip:X8}";
+                metadata["LoaderOffset"] = header.BootOffset.ToString(CultureInfo.InvariantCulture);
+                metadata["LoaderSize"] = header.BootSize.ToString(CultureInfo.InvariantCulture);
+                metadata["ImageOffset"] = header.ImageOffset.ToString(CultureInfo.InvariantCulture);
+                metadata["ImageSize"] = header.ImageSize.ToString(CultureInfo.InvariantCulture);
+                var time = header.ReleaseTime;
+                var year = time[0] | time[1] << 8;
+                if (year is >= 1 and <= 9999 && time[2] is >= 1 and <= 12 &&
+                    time[3] >= 1 && time[3] <= DateTime.DaysInMonth(year, time[2]) &&
+                    time[4] < 24 && time[5] < 60 && time[6] < 60)
+                    metadata["ReleaseTime"] = $"{year:D4}-{time[2]:D2}-{time[3]:D2} {time[4]:D2}:{time[5]:D2}:{time[6]:D2}";
+            }
+            var summary = $"Rockchip {(isRkfw ? "RKFW" : "RKAF")}: {entries.Count} entries";
             return Task.FromResult(FirmwareOpResult.Ok(summary,
                 entries: [.. entries.Select(static e => e.Name)],
-                metadata: new Dictionary<string, string> { ["FileCount"] = entries.Count.ToString() }));
+                metadata: metadata,
+                components: [.. entries.Select(static e => FirmwareComponent.Of(e.Name, e.Size))]));
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)

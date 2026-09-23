@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
@@ -16,6 +17,7 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Extraction;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 using UotanStudio.Firmware.SharedKernel;
@@ -25,12 +27,37 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 
 /// <summary>Retains source semantics and resolves edited host files into filesystem builders with original or inherited Linux attributes.</summary>
-public static class FileSystemPreservation
+public static partial class FileSystemPreservation
 {
     private const string FolderName = ".filesystem";
     private const int MaximumEntries = 100000;
     private const long MaximumManifestBytes = 32 * 1024 * 1024;
     private static readonly AsyncLocal<Dictionary<string, string>?> CapturedPaths = new();
+    private static readonly AsyncLocal<IReadOnlyList<string>?> FrozenErofsDevices = new();
+
+    /// <summary>Opens the frozen EROFS device set for the current preservation operation.</summary>
+    public static ErofsParser OpenErofsParser(Stream source, CancellationToken token = default,
+        bool requireCompleteMetadata = false)
+    {
+        if (FrozenErofsDevices.Value is not { } paths)
+            return new ErofsParser(source, int.MaxValue, long.MaxValue, token)
+            { RequireCompleteMetadata = requireCompleteMetadata };
+        var streams = new Stream[paths.Count + 1];
+        streams[0] = source;
+        try
+        {
+            for (var i = 0; i < paths.Count; i++)
+                streams[i + 1] = File.OpenRead(paths[i]);
+            return new ErofsParser(streams, int.MaxValue, long.MaxValue, token)
+            { RequireCompleteMetadata = requireCompleteMetadata };
+        }
+        catch
+        {
+            for (var i = 1; i < streams.Length; i++)
+                streams[i]?.Dispose();
+            throw;
+        }
+    }
     private static readonly AsyncLocal<IProgress<FileSystemByteProgress>?> ActiveProgress = new();
 
     internal static void RecordPaths(Dictionary<string, string> paths)
@@ -58,6 +85,7 @@ public static class FileSystemPreservation
     {
         var context = RepackMetadataContext.Unspecified.Capture();
         var previousProgress = ActiveProgress.Value;
+        var previousDevices = FrozenErofsDevices.Value;
         ActiveProgress.Value = options?.FileSystemProgress;
         CapturedPaths.Value = new(StringComparer.Ordinal);
         var temporary = Path.Combine(Path.GetTempPath(), "uotan-filesystem-" + Guid.NewGuid().ToString("N"));
@@ -68,14 +96,50 @@ public static class FileSystemPreservation
             var before = new FileInfo(sourcePath);
             var sourceLength = before.Length;
             var sourceTime = before.LastWriteTimeUtc;
-            await using (var input = File.OpenRead(sourcePath))
-            await using (var output = new FileStream(frozen, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true))
+            var external = options?.ErofsExtraDevicePaths;
+            if (external is { Count: > 0 } && handler.FormatName != "EROFS")
+                throw new ArgumentException("External device images are supported only for EROFS.");
+            if (external is { Count: > ushort.MaxValue })
+                throw new InvalidDataException("EROFS external device count exceeds the on-disk limit.");
+            var originals = new List<string> { Path.GetFullPath(sourcePath) };
+            var frozenDevices = new List<string>();
+            if (external is not null)
             {
-                var bytes = new ExtractionByteCounter(input.Length, FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.Preparing), cancellationToken);
-                using var counted = bytes.Wrap(output);
-                await input.CopyToAsync(counted, 65536, cancellationToken).ConfigureAwait(false);
-                bytes.Complete();
+                foreach (var path in external)
+                {
+                    if (string.IsNullOrWhiteSpace(path))
+                        throw new InvalidDataException("EROFS external device path is empty.");
+                    originals.Add(Path.GetFullPath(path));
+                }
             }
+            if (originals.Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+                .Count() != originals.Count)
+                throw new InvalidDataException("EROFS device images must be distinct.");
+            var total = originals.Aggregate(0L, (sum, path) => checked(sum + new FileInfo(path).Length));
+            var bytes = new ExtractionByteCounter(total,
+                FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.Preparing), cancellationToken);
+            for (var i = 0; i < originals.Count; i++)
+            {
+                var original = originals[i];
+                var target = i == 0 ? frozen : Path.Combine(temporary, $"device-{i}.img");
+                var info = new FileInfo(original);
+                var length = info.Length;
+                var time = info.LastWriteTimeUtc;
+                await using (var input = File.OpenRead(original))
+                await using (var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true))
+                {
+                    using var counted = bytes.Wrap(output);
+                    await StreamCopy.CopyExactlyAsync(input, counted, length, cancellationToken).ConfigureAwait(false);
+                    if (input.Length != length)
+                        throw new IOException("EROFS device changed during snapshot preparation.");
+                }
+                info.Refresh();
+                if (info.Length != length || info.LastWriteTimeUtc != time)
+                    throw new IOException("EROFS device changed during snapshot preparation.");
+                if (i != 0) frozenDevices.Add(target);
+            }
+            bytes.Complete();
+            FrozenErofsDevices.Value = external is null ? null : frozenDevices;
             var after = new FileInfo(sourcePath);
             if (after.Length != sourceLength || after.LastWriteTimeUtc != sourceTime)
                 throw new IOException("Source image changed while preparing its private snapshot.");
@@ -101,6 +165,7 @@ public static class FileSystemPreservation
         finally
         {
             ActiveProgress.Value = previousProgress;
+            FrozenErofsDevices.Value = previousDevices;
             if (Directory.Exists(temporary)) Directory.Delete(temporary, true);
         }
     }
@@ -114,7 +179,22 @@ public static class FileSystemPreservation
         try
         {
             var rebuild = BuildRebuildParameters(source, metadata.FormatName);
-            var document = FileSystemMetadataOverrides.BuildDocument(metadataDirectory, metadata.SourceFileName, rebuild);
+            var parsedEntries = ReadEntries(source, metadata.FormatName);
+            ValidateInodeFlags(parsedEntries, rebuild?.InnerFormat ?? metadata.FormatName);
+            var document = new FilesystemMetadataDocument
+            {
+                Partition = RepackMetadata.DetectPartitionName(metadata.SourceFileName),
+                Rebuild = rebuild,
+                PartitionInfo = metadata.Configuration["superblock"] is JsonObject superblock
+                    ? superblock.ToDictionary(pair => pair.Key, pair => pair.Value?.ToString() ?? string.Empty,
+                        StringComparer.Ordinal)
+                    : new(StringComparer.Ordinal),
+                FsConfig = parsedEntries.ToDictionary(entry => FileSystemEditPlan.Normalize(entry.Path),
+                    entry => new FsConfigEntry(entry.Uid, entry.Gid, (ushort)(entry.Mode & 0xFFF)), StringComparer.Ordinal),
+                FileContexts = parsedEntries.Where(entry => entry.Xattrs?.ContainsKey("security.selinux") == true)
+                    .ToDictionary(entry => FileSystemEditPlan.Normalize(entry.Path),
+                        entry => Encoding.UTF8.GetString(entry.Xattrs!["security.selinux"]).TrimEnd('\0'), StringComparer.Ordinal)
+            };
             var metadataPath = FileExtraction.ResolvePath(directory, "metadata.json");
             await using (var output = new FileStream(metadataPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
@@ -126,17 +206,26 @@ public static class FileSystemPreservation
                     cancellationToken).ConfigureAwait(false);
             }
             metadata.FileSystemPreservationId = id;
+            var imageBytes = new ExtractionByteCounter(new FileInfo(source).Length,
+                FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.VerifyingImage), cancellationToken);
+            var sourceHash = HashFile(source, cancellationToken, imageBytes.Add);
+            imageBytes.Complete();
             var manifest = new FileSystemPreservationManifest
             {
+                Version = 2,
                 Format = metadata.FormatName,
+                SourceLength = new FileInfo(source).Length,
+                SourceHash = sourceHash,
                 ConfigurationHash = HashConfiguration(metadata),
                 ConfigurationJson = JsonSerializer.Serialize(metadata, RepackJsonContext.Default.RepackMetadata),
                 ImagePaths = CapturedPaths.Value is { } paths ? new(paths, StringComparer.Ordinal) : [],
-                ParsedEntries = ReadEntries(source, metadata.FormatName),
+                ParsedEntries = parsedEntries,
                 Projection = Scan(extraction, metadataDirectory, metadata.SourceFileName, cancellationToken,
                     ActiveProgress.Value is null ? null : FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.VerifyingFiles)),
-                Sidecars = ReadSidecars(metadataDirectory, metadata.SourceFileName, id, cancellationToken)
+                Sidecars = ReadSidecars(metadataDirectory, metadata.SourceFileName, id, cancellationToken, includeReferenceFiles: false)
             };
+            VerifyCapturedContents(source, manifest, cancellationToken);
+            await CaptureObjectsAsync(extraction, directory, manifest, cancellationToken).ConfigureAwait(false);
             var path = Path.Combine(directory, "manifest.json");
             await using (var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
@@ -186,14 +275,19 @@ public static class FileSystemPreservation
         {
             Format = "EXT4",
             BlockSize = checked((int)parser.BlockSize),
+            InodeSize = parser.Superblock.InodeSize,
+            Ext4Encoding = (parser.Superblock.FeatureIncompat & 0x20000) != 0 ? parser.Superblock.Encoding : null,
+            Ext4EncodingFlags = parser.Superblock.EncodingFlags,
             Uuid = parser.SourceUuid,
-            VolumeName = parser.SourceVolumeName
+            VolumeName = parser.SourceVolumeName,
+            SourceLength = source.Length,
+            SourceFilesystemBytes = parser.PartitionSize
         };
     }
 
     private static RebuildParameters ReadErofsRebuild(Stream source)
     {
-        using var parser = new ErofsParser(source);
+        using var parser = OpenErofsParser(source, requireCompleteMetadata: true);
         var options = parser.ReadRebuildOptions();
         return new RebuildParameters
         {
@@ -210,13 +304,18 @@ public static class FileSystemPreservation
     private static RebuildParameters ReadF2fsRebuild(Stream source)
     {
         using var parser = new F2fsParser(source);
+        var algorithms = parser.ReadCompressionAlgorithms();
         return new RebuildParameters
         {
             Format = "F2FS",
             BlockSize = checked((int)parser.BlockSize),
             SegmentSize = parser.SegmentSize,
             Uuid = parser.SourceUuid,
-            VolumeName = parser.SourceVolumeName
+            VolumeName = parser.SourceVolumeName,
+            SourceLength = source.Length,
+            SourceFilesystemBytes = checked((long)parser.Superblock.BlockCount * parser.BlockSize),
+            F2fsCompressionEnabled = algorithms.Count > 0,
+            F2fsCompressionAlgorithm = algorithms.Count == 1 ? algorithms.Single().ToString() : null
         };
     }
 
@@ -231,12 +330,20 @@ public static class FileSystemPreservation
         long? maximumOutputBytes = null,
         IReadOnlyList<FileSystemAttributeEdit>? attributeEdits = null,
         IReadOnlyList<FileSystemXattrEdit>? xattrEdits = null)
+        => TryRestoreCore(inputDirectory, outputPath, format, cancellationToken, rebuildReport,
+            maximumOutputBytes, attributeEdits, xattrEdits);
+
+    private static bool TryRestoreCore(string inputDirectory, string outputPath, string format,
+        CancellationToken cancellationToken, Action<IReadOnlyDictionary<string, string>>? rebuildReport,
+        long? maximumOutputBytes, IReadOnlyList<FileSystemAttributeEdit>? attributeEdits,
+        IReadOnlyList<FileSystemXattrEdit>? xattrEdits, string? snapshotDirectory = null)
     {
         if (maximumOutputBytes is <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(maximumOutputBytes));
         }
-        var metadata = RepackMetadata.Read(inputDirectory);
+        var metadata = snapshotDirectory is null ? RepackMetadata.Read(inputDirectory)
+            : RepackMetadata.Read(snapshotDirectory, RepackMetadataContext.LocalDirectory);
         if (metadata is null) return false;
         if (metadata.FormatName != format) throw new InvalidDataException("Filesystem metadata format does not match the requested image format.");
         if (format == "Android Sparse Image (simg)" && metadata.Configuration.Count == 0
@@ -245,7 +352,7 @@ public static class FileSystemPreservation
             return false;
         if (metadata.FileSystemPreservationId is not { Length: 32 } id || !Guid.TryParseExact(id, "N", out _))
             throw new InvalidDataException("Filesystem preservation data is missing. Re-extract the source image before rebuilding it.");
-        var metadataDirectory = Path.GetDirectoryName(RepackMetadata.ResolveActualMetadataPath(inputDirectory))!;
+        var metadataDirectory = snapshotDirectory ?? Path.GetDirectoryName(RepackMetadata.ResolveActualMetadataPath(inputDirectory))!;
         var directory = FileExtraction.ResolvePath(metadataDirectory, FolderName + "/" + id);
         var manifestPath = FileExtraction.ResolvePath(directory, "manifest.json");
         if (new FileInfo(manifestPath).Length > MaximumManifestBytes) throw new InvalidDataException("Filesystem preservation manifest exceeds its size limit.");
@@ -258,13 +365,29 @@ public static class FileSystemPreservation
             manifest = JsonSerializer.Deserialize(file, FileSystemPreservationJsonContext.Default.FileSystemPreservationManifest)
                 ?? throw new InvalidDataException("Invalid filesystem preservation manifest.");
         }
-        if (manifest.Version != 1 || manifest.Format != format
+        if (manifest.Version is not (1 or 2) || manifest.Format != format
             || manifest.Projection is null || manifest.Sidecars is null || manifest.Projection.Count > MaximumEntries)
             throw new InvalidDataException("Unsupported filesystem preservation manifest.");
         ValidateConfiguration(metadata, manifest);
-        if (!Same(ReadSidecars(metadataDirectory, metadata.SourceFileName, id, cancellationToken), manifest.Sidecars))
+        var packingOptions = new Dictionary<string, string>(metadata.PackingOptions, StringComparer.Ordinal);
+        if (RepackMetadata.PackingOverrides is { } overrides)
+        {
+            foreach (var (key, value) in overrides)
+            {
+                packingOptions[key] = value;
+            }
+        }
+        if (!Same(ReadSidecars(metadataDirectory, metadata.SourceFileName, id, cancellationToken,
+                    includeReferenceFiles: manifest.Version == 1),
+                manifest.Version == 1 ? manifest.Sidecars : StructuredSidecars(manifest.Sidecars)))
             throw new InvalidDataException("Filesystem configuration changed. The current writer cannot guarantee preservation of every source feature after this change.");
         var projection = Scan(inputDirectory, metadataDirectory, metadata.SourceFileName, cancellationToken);
+        if (snapshotDirectory is not null)
+        {
+            ValidateSnapshotProjection(manifest, projection);
+            // Host permissions can change across platforms; original inode permissions remain authoritative.
+            manifest.Projection = projection;
+        }
         var fullOutput = Path.GetFullPath(outputPath);
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         foreach (var protectedRoot in new[] { inputDirectory, metadataDirectory })
@@ -273,10 +396,41 @@ public static class FileSystemPreservation
             if (fullOutput.Equals(root, comparison) || fullOutput.StartsWith(root + Path.DirectorySeparatorChar, comparison))
                 throw new IOException("Rebuilt output must be outside the extracted tree and its preservation data.");
         }
-        var tables = FileSystemMetadataOverrides.LoadTables(metadataDirectory, metadata.SourceFileName, id);
+        var tables = FileSystemMetadataOverrides.LoadTables(metadataDirectory, metadata.SourceFileName, id,
+            requireStructured: manifest.Version >= 2);
+        if (manifest.Version >= 2)
+        {
+            ValidateInodeFlags(manifest.ParsedEntries, tables.Rebuild?.InnerFormat ?? format);
+        }
         var plan = new FileSystemEditPlan(inputDirectory, manifest, projection, RepackMetadata.DetectPartitionName(metadata.SourceFileName));
+        if ((format == "F2FS" || tables.Rebuild?.InnerFormat == "F2FS")
+            && RepackMetadata.PackingOverrides is { } explicitOptions
+            && explicitOptions.TryGetValue("EnableCompression", out var enabled))
+        {
+            var algorithm = ParseF2fsCompressionAlgorithm(packingOptions, tables.Rebuild);
+            foreach (var entry in plan.Entries.Values.Where(entry => (entry.Mode & 0xF000) == 0x8000))
+            {
+                if (entry.Metadata is not { } inodeMetadata)
+                {
+                    continue;
+                }
+                entry.Metadata = inodeMetadata with
+                {
+                    F2fsCompression = IsTrue(enabled)
+                        ? new F2fsInodeCompression(algorithm switch
+                        {
+                            CompressionAlgorithm.Lzo => 0,
+                            CompressionAlgorithm.Lz4 => 1,
+                            CompressionAlgorithm.Zstd => 2,
+                            _ => throw new InvalidDataException("Unsupported F2FS compression algorithm.")
+                        }, 4, checked((ushort)(IntegerOption(packingOptions, "CompressionLevel", 0) << 8)))
+                        : null
+                };
+            }
+        }
         if (xattrEdits is not null) { plan.ApplyUserXattrs(xattrEdits, cancellationToken); }
-        var effectiveFsConfig = new Dictionary<string, FsConfigEntry>(tables.FsConfig, StringComparer.Ordinal);
+        var effectiveFsConfig = manifest.Version >= 2 ? new Dictionary<string, FsConfigEntry>(StringComparer.Ordinal)
+            : new Dictionary<string, FsConfigEntry>(tables.FsConfig, StringComparer.Ordinal);
         if (attributeEdits is not null)
         {
             foreach (var (path, attributes) in plan.ApplyAttributes(attributeEdits, cancellationToken))
@@ -289,13 +443,22 @@ public static class FileSystemPreservation
         {
             using var bounded = maximumOutputBytes is { } capacity
                 ? new CapacityWriteStream(output, capacity, cancellationToken) : null;
-            BuildEdited(inputDirectory, (Stream?)bounded ?? output, format, effectiveFsConfig, tables.FileContexts, tables.Rebuild,
-                metadata.PackingOptions, cancellationToken);
+            BuildEdited(inputDirectory, (Stream?)bounded ?? output, format, effectiveFsConfig,
+                manifest.Version >= 2 ? new Dictionary<string, string>(StringComparer.Ordinal) : tables.FileContexts, tables.Rebuild,
+                packingOptions, output, Path.GetDirectoryName(fullOutput)!, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            var current = RepackMetadata.Read(inputDirectory);
+            output.Flush(flushToDisk: true);
+            if (manifest.Version >= 2)
+            {
+                VerifyRebuilt(output, plan, cancellationToken);
+            }
+            var current = snapshotDirectory is null ? RepackMetadata.Read(inputDirectory)
+                : RepackMetadata.Read(snapshotDirectory, RepackMetadataContext.LocalDirectory);
             if (current is null || HashConfiguration(current) != HashConfiguration(metadata)
                 || current.FileSystemPreservationHash != metadata.FileSystemPreservationHash
-                || !Same(ReadSidecars(metadataDirectory, metadata.SourceFileName, id, cancellationToken), manifest.Sidecars)
+                || !Same(ReadSidecars(metadataDirectory, metadata.SourceFileName, id, cancellationToken,
+                            includeReferenceFiles: manifest.Version == 1),
+                        manifest.Version == 1 ? manifest.Sidecars : StructuredSidecars(manifest.Sidecars))
                 || !Same(Scan(inputDirectory, metadataDirectory, metadata.SourceFileName, cancellationToken), projection))
                 throw new IOException("Filesystem content or attributes changed during rebuilding.");
         }, overwrite: true);
@@ -340,18 +503,39 @@ public static class FileSystemPreservation
 
     private static void BuildEdited(string inputDirectory, Stream output, string format,
         IReadOnlyDictionary<string, FsConfigEntry> fsConfig, IReadOnlyDictionary<string, string> fileContexts,
-        RebuildParameters? rebuild, Dictionary<string, string> options, CancellationToken token)
+        RebuildParameters? rebuild, IReadOnlyDictionary<string, string> options, FileStream publicationOutput,
+        string temporaryDirectory, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
+        if (format != "Android Sparse Image (simg)"
+            && options.TryGetValue("OutputSparseContainer", out var outerSparse)
+            && IsTrue(outerSparse))
+        {
+            var nestedOptions = new Dictionary<string, string>(options, StringComparer.Ordinal)
+            {
+                ["OutputSparseContainer"] = "0"
+            };
+            var temporary = Path.Combine(temporaryDirectory, ".uotan-f2fs-raw-" + Guid.NewGuid().ToString("N") + ".tmp");
+            using var raw = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.DeleteOnClose);
+            BuildEdited(inputDirectory, raw, format, fsConfig, fileContexts, rebuild, nestedOptions, publicationOutput,
+                temporaryDirectory, token);
+            raw.Flush(flushToDisk: true);
+            raw.Position = 0;
+            SparseImageConverter.ConvertRawToSparseValidated(raw, output, 4096, raw.Length, token, publicationOutput);
+            return;
+        }
         if (format == "Android Sparse Image (simg)")
         {
             if (rebuild is null || rebuild.InnerFormat is not string inner || rebuild.SparseBlockSize is not int sparseBlock)
                 throw new InvalidDataException("Sparse image rebuild parameters are missing. Re-extract the source image before rebuilding it.");
-            var temporary = Path.Combine(Path.GetTempPath(), "uotan-edited-raw-" + Guid.NewGuid().ToString("N"));
+            var temporary = Path.Combine(temporaryDirectory, ".uotan-edited-raw-" + Guid.NewGuid().ToString("N") + ".tmp");
             using var raw = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.DeleteOnClose);
-            BuildEdited(inputDirectory, raw, inner, fsConfig, fileContexts, rebuild, options, token);
+            BuildEdited(inputDirectory, raw, inner, fsConfig, fileContexts, rebuild, options, publicationOutput,
+                temporaryDirectory, token);
+            raw.Flush(flushToDisk: true);
             raw.Position = 0;
-            SparseImageConverter.ConvertRawToSparse(raw, output, (uint)sparseBlock, raw.Length);
+            SparseImageConverter.ConvertRawToSparseValidated(raw, output, (uint)sparseBlock, raw.Length, token,
+                publicationOutput);
             return;
         }
         switch (format)
@@ -361,12 +545,24 @@ public static class FileSystemPreservation
                     var rebuildBlock = rebuild?.BlockSize ?? 4096;
                     if ((rebuildBlock & (rebuildBlock - 1)) != 0 || rebuildBlock is < 1024 or > 65536)
                         throw new InvalidDataException("Invalid EXT4 rebuild block size.");
+                    var capacityPolicy = ParseExt4CapacityPolicy(options);
+                    var blockSharingMode = ParseExt4BlockSharingMode(options);
                     var ext4Options = new Ext4Options
                     {
                         BlockSize = rebuildBlock,
                         InodeSize = rebuild?.InodeSize ?? 256,
+                        CasefoldEncoding = rebuild?.Ext4Encoding,
+                        CasefoldEncodingFlags = rebuild?.Ext4EncodingFlags ?? 0,
                         Uuid = rebuild?.Uuid,
-                        VolumeName = options.GetValueOrDefault("VolumeName", rebuild?.VolumeName ?? "UOTANSTUDIO")
+                        VolumeName = options.GetValueOrDefault("VolumeName", rebuild?.VolumeName ?? "UOTANSTUDIO"),
+                        EnableSparse = IsTrue(options.GetValueOrDefault("EnableSparse")),
+                        TargetSizeBytes = ParseTargetSize(options),
+                        CapacityMode = capacityPolicy == Ext4PreservedCapacityPolicy.Minimize
+                            ? Ext4CapacityMode.Minimize
+                            : Ext4CapacityMode.Default,
+                        ReadOnly = IsTrue(options.GetValueOrDefault("ReadOnly")),
+                        BlockSharingMode = blockSharingMode,
+                        CancellationToken = token,
                     };
                     ext4Options.FsConfig = fsConfig;
                     ext4Options.FileContexts = fileContexts;
@@ -403,7 +599,13 @@ public static class FileSystemPreservation
                         BlockSize = rebuild?.BlockSize ?? 4096,
                         SegmentSize = rebuild?.SegmentSize ?? 2L * 1024 * 1024,
                         Uuid = rebuild?.Uuid is { Length: 16 } uuid ? new Guid(uuid) : null,
-                        VolumeName = options.GetValueOrDefault("VolumeName", rebuild?.VolumeName ?? "f2fs")
+                        VolumeName = options.GetValueOrDefault("VolumeName", rebuild?.VolumeName ?? "f2fs"),
+                        EnableCompression = options.TryGetValue("EnableCompression", out var compression)
+                            ? IsTrue(compression)
+                            : rebuild?.F2fsCompressionEnabled ?? false,
+                        CompressionAlgorithm = ParseF2fsCompressionAlgorithm(options, rebuild),
+                        CompressionLevel = IntegerOption(options, "CompressionLevel", 0),
+                        CancellationToken = token,
                     };
                     f2fsOptions.FsConfig = fsConfig;
                     f2fsOptions.FileContexts = fileContexts;
@@ -413,6 +615,81 @@ public static class FileSystemPreservation
             default: throw new InvalidDataException("Editing this filesystem container is not supported.");
         }
     }
+
+    private static long? ParseTargetSize(IReadOnlyDictionary<string, string> options)
+    {
+        if (!string.Equals(options.GetValueOrDefault("CapacityPolicy"), "Explicit", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var value = options.GetValueOrDefault("TargetSizeBytes");
+        return string.IsNullOrEmpty(value)
+            ? throw new InvalidDataException("EXT4 explicit capacity requires a target size in bytes.")
+            : long.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static Ext4PreservedCapacityPolicy ParseExt4CapacityPolicy(IReadOnlyDictionary<string, string> options)
+    {
+        var value = options.GetValueOrDefault("CapacityPolicy", "Inherit");
+        return Enum.TryParse<Ext4PreservedCapacityPolicy>(value, ignoreCase: true, out var policy)
+            && Enum.IsDefined(policy)
+                ? policy
+                : throw new InvalidDataException($"Unsupported EXT4 capacity policy '{value}'.");
+    }
+
+    private static Ext4BlockSharingMode ParseExt4BlockSharingMode(IReadOnlyDictionary<string, string> options)
+    {
+        if (!options.TryGetValue("BlockSharingMode", out var value))
+        {
+            return Ext4BlockSharingMode.Independent;
+        }
+
+        return Enum.TryParse<Ext4BlockSharingMode>(value, ignoreCase: true, out var mode)
+            && Enum.IsDefined(mode)
+                ? mode
+                : throw new InvalidDataException($"Unsupported EXT4 block sharing mode '{value}'.");
+    }
+
+    private enum Ext4PreservedCapacityPolicy
+    {
+        Inherit,
+        Explicit,
+        Minimize,
+    }
+
+    private static CompressionAlgorithm ParseF2fsCompressionAlgorithm(
+        IReadOnlyDictionary<string, string> options,
+        RebuildParameters? rebuild)
+    {
+        var value = options.TryGetValue("CompressionAlgorithm", out var selected)
+            ? selected
+            : rebuild?.F2fsCompressionAlgorithm;
+        if (value is null)
+        {
+            if (rebuild?.F2fsCompressionEnabled == true
+                && FileSystemEditPlan.Current?.Entries.Values.Any(entry => entry.Metadata?.F2fsCompression is not null) != true)
+            {
+                throw new NotSupportedException(
+                    "The source F2FS image uses multiple compression algorithms; edited rebuild requires an explicit algorithm override.");
+            }
+
+            return CompressionAlgorithm.Lz4;
+        }
+
+        return Enum.TryParse<CompressionAlgorithm>(value, ignoreCase: true, out var algorithm)
+            && Enum.IsDefined(algorithm)
+            ? algorithm
+            : throw new InvalidDataException($"Unsupported F2FS compression algorithm '{value}'.");
+    }
+
+    private static int IntegerOption(IReadOnlyDictionary<string, string> options, string key, int fallback)
+        => options.TryGetValue(key, out var value)
+            ? int.Parse(value, System.Globalization.CultureInfo.InvariantCulture)
+            : fallback;
+
+    private static bool IsTrue(string? value)
+        => value is "1" || bool.TryParse(value, out var enabled) && enabled;
 
     private static string DetectFilesystem(Stream stream)
     {
@@ -488,14 +765,21 @@ public static class FileSystemPreservation
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json.ToJsonString())));
     }
 
-    private static Dictionary<string, string> ReadSidecars(string directory, string source, string preservationId, CancellationToken token)
+    private static Dictionary<string, string> StructuredSidecars(Dictionary<string, string> sidecars)
+        => sidecars.Where(pair => pair.Key == "metadata.json").ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+
+    private static Dictionary<string, string> ReadSidecars(string directory, string source, string preservationId, CancellationToken token,
+        bool includeReferenceFiles = true)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var suffix in new[] { "_fs_config", "_file_contexts", "_info" })
+        if (includeReferenceFiles)
         {
-            var name = RepackMetadata.DetectPartitionName(source) + suffix;
-            var path = FileExtraction.ResolvePath(directory, name);
-            if (File.Exists(path)) result.Add(name, HashFile(path, token));
+            foreach (var suffix in new[] { "_fs_config", "_file_contexts", "_info" })
+            {
+                var name = RepackMetadata.DetectPartitionName(source) + suffix;
+                var path = FileExtraction.ResolvePath(directory, name);
+                if (File.Exists(path)) result.Add(name, HashFile(path, token));
+            }
         }
         var metadata = FileExtraction.ResolvePath(directory, FolderName + "/" + preservationId + "/metadata.json");
         if (File.Exists(metadata)) result.Add("metadata.json", HashFile(metadata, token));
@@ -596,27 +880,35 @@ public static class FileSystemPreservation
             return parser.ListEntriesWithRoot().Select(e => new PreservedInodeEntry
             {
                 Path = e.Path,
+                Size = e.Size,
                 Inode = e.Inode,
                 Flags = e.Flags,
                 DeviceId = e.DeviceId,
                 Mode = e.Mode,
                 Uid = e.Uid,
                 Gid = e.Gid,
+                Metadata = e.Metadata,
                 SymlinkTarget = (e.Mode & 0xF000) == 0xA000 ? ReadSymlink(output => parser.ReadFile(e.Path, output)) : null,
                 Xattrs = e.Xattrs?.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal)
             }).ToList();
         }
         if (format == "EROFS")
         {
-            using var parser = new ErofsParser(source);
+            using var parser = OpenErofsParser(source, requireCompleteMetadata: true);
             return parser.EnumerateEntries().Select(e => new PreservedInodeEntry
             {
                 Path = e.Path,
+                Size = e.Size,
                 Inode = e.Nid,
                 DeviceId = e.DeviceId,
                 Mode = e.Mode,
                 Uid = e.Uid,
                 Gid = e.Gid,
+                Metadata = new FileSystemInodeMetadata
+                {
+                    ModificationTime = new(checked((long)e.MTime), e.MTimeNanoseconds),
+                    LinkCount = checked((uint)e.LinkCount)
+                },
                 SymlinkTarget = (e.Mode & 0xF000) == 0xA000 ? ReadSymlink(output => parser.ReadFile(e.Path, output)) : null,
                 Xattrs = e.Xattrs?.GroupBy(x => x.Name, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Value, StringComparer.Ordinal)
             }).ToList();
@@ -627,12 +919,14 @@ public static class FileSystemPreservation
             return parser.ListEntriesWithRoot().Select(e => new PreservedInodeEntry
             {
                 Path = e.Path,
+                Size = e.Size,
                 Inode = e.Inode,
                 Flags = e.Flags,
                 DeviceId = e.DeviceId,
                 Mode = e.Mode,
                 Uid = e.Uid,
                 Gid = e.Gid,
+                Metadata = e.Metadata,
                 SymlinkTarget = (e.Mode & 0xF000) == 0xA000 ? ReadSymlink(output => parser.ReadFile(e.Path, output)) : null,
                 Xattrs = e.Xattrs?.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal)
             }).ToList();
@@ -644,6 +938,7 @@ public static class FileSystemPreservation
 internal sealed class PreservedInodeEntry
 {
     public string Path { get; set; } = "";
+    public long Size { get; set; }
     public ulong Inode { get; set; }
     public uint Flags { get; set; }
     public uint DeviceId { get; set; }
@@ -652,6 +947,7 @@ internal sealed class PreservedInodeEntry
     public uint Gid { get; set; }
     public string? SymlinkTarget { get; set; }
     public Dictionary<string, byte[]>? Xattrs { get; set; }
+    public FileSystemInodeMetadata? Metadata { get; set; }
 }
 
 internal sealed class FileSystemPreservationManifest
@@ -666,7 +962,10 @@ internal sealed class FileSystemPreservationManifest
     public Dictionary<string, string> Sidecars { get; set; } = [];
     public Dictionary<string, string> ImagePaths { get; set; } = [];
     public List<PreservedInodeEntry> ParsedEntries { get; set; } = [];
+    public Dictionary<string, PreservedContentObject> ContentObjects { get; set; } = new(StringComparer.Ordinal);
 }
+
+internal sealed record PreservedContentObject(string Hash, long Length);
 
 [JsonSerializable(typeof(FileSystemPreservationManifest))]
 internal partial class FileSystemPreservationJsonContext : JsonSerializerContext;

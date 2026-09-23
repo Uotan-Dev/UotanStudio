@@ -25,7 +25,33 @@ public static class SparseReader
     /// <para>从流惰性加载 SparseFile；调用方保留所有权，并须保持流打开直到 SparseFile 被释放。</para>
     /// </summary>
     public static SparseFile FromStream(Stream stream, bool validateCrc = false, bool verbose = false)
+        => FromStream(stream, validateCrc, verbose, 1048576, CancellationToken.None);
+
+    /// <summary>Loads sparse metadata with a bounded chunk count and cancellable checksum processing.</summary>
+    /// <param name="stream">The caller-owned image stream.</param>
+    /// <param name="validateCrc">Whether to verify stored image and chunk checksums.</param>
+    /// <param name="verbose">Reserved diagnostic option.</param>
+    /// <param name="maximumChunks">Maximum accepted chunk count, including checksum chunks.</param>
+    /// <param name="cancellationToken">Cancellation token checked during parsing and checksum processing.</param>
+    /// <returns>The lazy image model; the source must remain open while reading it.</returns>
+    public static SparseFile FromStream(Stream stream, bool validateCrc, bool verbose, int maximumChunks, CancellationToken cancellationToken)
+        => FromStream(stream, validateCrc, verbose, maximumChunks, cancellationToken, long.MaxValue);
+
+    /// <summary>Rejects an oversized logical image before reading chunks or computing expanded checksums.</summary>
+    /// <param name="stream">The caller-owned image stream.</param>
+    /// <param name="validateCrc">Whether to verify stored checksums.</param>
+    /// <param name="verbose">Reserved diagnostic option.</param>
+    /// <param name="maximumChunks">Maximum accepted chunk count.</param>
+    /// <param name="cancellationToken">Cancellation for parsing and checksum processing.</param>
+    /// <param name="maximumExpandedLength">Nonnegative upper bound on declared logical bytes.</param>
+    /// <returns>The lazy image model retaining references to the caller-owned stream.</returns>
+    public static SparseFile FromStream(Stream stream, bool validateCrc, bool verbose, int maximumChunks,
+        CancellationToken cancellationToken, long maximumExpandedLength)
     {
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumChunks);
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumExpandedLength);
+        cancellationToken.ThrowIfCancellationRequested();
         var sparseFile = new SparseFile();
 
         Span<byte> headerData = stackalloc byte[SparseFormat.SparseHeaderSize];
@@ -37,9 +63,20 @@ public static class SparseReader
             throw new InvalidDataException("Invalid sparse header");
         }
 
+        if (sparseFile.Header.TotalChunks > maximumChunks
+            || (ulong)sparseFile.Header.TotalBlocks * sparseFile.Header.BlockSize > (ulong)maximumExpandedLength)
+        {
+            throw new InvalidDataException("Sparse image exceeds the supported chunk count or logical length.");
+        }
+
         if (sparseFile.Header.FileHeaderSize > SparseFormat.SparseHeaderSize)
         {
-            SkipExtendedHeader(stream, sparseFile.Header.FileHeaderSize - SparseFormat.SparseHeaderSize);
+            SkipExtendedHeader(stream, sparseFile.Header.FileHeaderSize - SparseFormat.SparseHeaderSize, cancellationToken);
+        }
+
+        if (stream.CanSeek && sparseFile.Header.TotalChunks > (stream.Length - stream.Position) / sparseFile.Header.ChunkHeaderSize)
+        {
+            throw new InvalidDataException("Sparse chunk headers exceed the remaining image length.");
         }
 
         Crc32? crc = validateCrc ? new Crc32() : null;
@@ -51,12 +88,13 @@ public static class SparseReader
 
             for (uint i = 0; i < sparseFile.Header.TotalChunks; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 stream.ReadExactly(chunkHeaderData);
                 var chunkHeader = ChunkHeader.FromBytes(chunkHeaderData);
 
                 if (sparseFile.Header.ChunkHeaderSize > SparseFormat.ChunkHeaderSize)
                 {
-                    SkipExtendedHeader(stream, sparseFile.Header.ChunkHeaderSize - SparseFormat.ChunkHeaderSize);
+                    SkipExtendedHeader(stream, sparseFile.Header.ChunkHeaderSize - SparseFormat.ChunkHeaderSize, cancellationToken);
                 }
 
                 var chunk = new SparseChunk(chunkHeader) { StartBlock = currentBlock };
@@ -71,7 +109,9 @@ public static class SparseReader
                 if (chunkHeader.ChunkType == (ushort)ChunkType.Crc32
                     ? chunkHeader.ChunkSize != 0
                     : chunkHeader.ChunkSize > sparseFile.Header.TotalBlocks - currentBlock)
+                {
                     throw new InvalidDataException($"Chunk {i} exceeds the declared sparse block count.");
+                }
 
                 switch ((ChunkType)chunkHeader.ChunkType)
                 {
@@ -87,7 +127,7 @@ public static class SparseReader
                             var rawOffset = stream.Position;
                             if (crc is not null)
                             {
-                                AppendStream(crc, stream, dataSize);
+                                AppendStream(crc, stream, dataSize, cancellationToken);
                             }
                             else
                             {
@@ -104,7 +144,7 @@ public static class SparseReader
                             {
                                 using (var temp = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                                 {
-                                    CopyRawExactly(stream, temp, crc, dataSize);
+                                    CopyRawExactly(stream, temp, crc, dataSize, cancellationToken);
                                 }
                                 chunk.DataProvider = new TemporaryFileDataProvider(tempPath, dataSize);
                             }
@@ -123,7 +163,7 @@ public static class SparseReader
                         }
                         stream.ReadExactly(buffer4);
                         chunk.FillValue = BinaryPrimitives.ReadUInt32LittleEndian(buffer4);
-                        AppendRepeated(crc, chunk.FillValue, expectedRawSize);
+                        AppendRepeated(crc, chunk.FillValue, expectedRawSize, cancellationToken);
                         break;
 
                     case ChunkType.DontCare:
@@ -131,7 +171,7 @@ public static class SparseReader
                         {
                             throw new InvalidDataException($"Data size ({dataSize}) for DONT_CARE chunk {i} must be 0");
                         }
-                        AppendZeros(crc, expectedRawSize);
+                        AppendZeros(crc, expectedRawSize, cancellationToken);
                         break;
 
                     case ChunkType.Crc32:
@@ -162,12 +202,16 @@ public static class SparseReader
                 }
             }
             if (currentBlock != sparseFile.Header.TotalBlocks)
+            {
                 throw new InvalidDataException("Sparse chunks do not cover the declared total block count.");
+            }
             if (crc is not null && sparseFile.Header.ImageChecksum != 0 &&
                 crc.GetCurrentHashAsUInt32() != sparseFile.Header.ImageChecksum)
+            {
                 throw new InvalidDataException("Sparse header image checksum does not match the expanded data.");
+            }
         }
-        catch (Exception ex) when (ex is not InvalidDataException and not NotSupportedException)
+        catch (Exception ex) when (ex is not InvalidDataException and not NotSupportedException and not OperationCanceledException)
         {
             sparseFile.Dispose();
             throw new InvalidDataException("Failed to parse sparse image", ex);
@@ -296,43 +340,33 @@ public static class SparseReader
         chunks.Insert(index, chunk);
     }
 
-    /// <summary>
-    /// Shared fill buffer for CRC computation, prebuilt once per process.
-    /// <para>CRC 计算共享的填充缓冲，进程内仅构建一次。</para>
-    /// </summary>
-    private static readonly byte[] CrcFillBuffer = CreateCrcFillBuffer();
-
-    private static byte[] CreateCrcFillBuffer()
-    {
-        var buf = new byte[64 * 1024];
-        for (var i = 0; i < buf.Length; i += 4)
-        {
-            BinaryPrimitives.WriteUInt32LittleEndian(buf.AsSpan(i), 0x01000000); // 占位，AppendRepeated 时重写
-        }
-        return buf;
-    }
-
-    private static void AppendRepeated(Crc32? crc, uint fillValue, long totalBytes)
+    private static void AppendRepeated(Crc32? crc, uint fillValue, long totalBytes, CancellationToken cancellationToken)
     {
         if (crc is null)
         {
             return;
         }
 
-        Span<byte> buf = CrcFillBuffer;
-        for (var i = 0; i < buf.Length; i += 4)
+        var buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+        try
         {
-            BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], fillValue);
+            var buf = buffer.AsSpan(0, 64 * 1024);
+            SparseFill.Fill(buf, fillValue);
+            while (totalBytes > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var size = (int)Math.Min(buf.Length, totalBytes);
+                crc.Append(buf[..size]);
+                totalBytes -= size;
+            }
         }
-        while (totalBytes > 0)
+        finally
         {
-            var size = (int)Math.Min(buf.Length, totalBytes);
-            crc.Append(buf[..size]);
-            totalBytes -= size;
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 
-    private static void AppendZeros(Crc32? crc, long totalBytes)
+    private static void AppendZeros(Crc32? crc, long totalBytes, CancellationToken cancellationToken)
     {
         if (crc is null)
         {
@@ -344,6 +378,7 @@ public static class SparseReader
         var remaining = totalBytes;
         while (remaining > 0)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var n = (int)Math.Min(buf.Length, remaining);
             crc.Append(buf[..n]);
             remaining -= n;
@@ -354,7 +389,7 @@ public static class SparseReader
     /// Incrementally appends count bytes read from stream to the CRC using a pooled buffer.
     /// <para>使用池化缓冲从流中读取指定字节数并增量追加到 CRC。</para>
     /// </summary>
-    private static void CopyRawExactly(Stream source, Stream destination, Crc32? crc, long count)
+    private static void CopyRawExactly(Stream source, Stream destination, Crc32? crc, long count, CancellationToken cancellationToken)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(1024 * 1024);
         try
@@ -362,6 +397,7 @@ public static class SparseReader
             var remaining = count;
             while (remaining > 0)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var read = source.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
                 if (read == 0)
                 {
@@ -378,7 +414,7 @@ public static class SparseReader
         }
     }
 
-    private static void AppendStream(Crc32 crc, Stream stream, long count)
+    private static void AppendStream(Crc32 crc, Stream stream, long count, CancellationToken cancellationToken)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(1024 * 1024);
         try
@@ -386,6 +422,7 @@ public static class SparseReader
             var remaining = count;
             while (remaining > 0)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var toRead = (int)Math.Min(buffer.Length, remaining);
                 var read = stream.Read(buffer, 0, toRead);
                 if (read == 0)
@@ -416,17 +453,17 @@ public static class SparseReader
     /// Discards count bytes from a non-seekable stream using a pooled buffer.
     /// <para>使用池化缓冲从不可寻址流中丢弃指定字节数。</para>
     /// </summary>
-    private static void SkipExtendedHeader(Stream stream, long count)
+    private static void SkipExtendedHeader(Stream stream, long count, CancellationToken cancellationToken)
     {
         if (stream.CanSeek)
         {
             SeekPastRangeExactly(stream, count);
             return;
         }
-        SkipStream(stream, count);
+        SkipStream(stream, count, cancellationToken);
     }
 
-    private static void SkipStream(Stream stream, long count)
+    private static void SkipStream(Stream stream, long count, CancellationToken cancellationToken)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(1024 * 1024);
         try
@@ -434,6 +471,7 @@ public static class SparseReader
             var remaining = count;
             while (remaining > 0)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var toRead = (int)Math.Min(buffer.Length, remaining);
                 var read = stream.Read(buffer, 0, toRead);
                 if (read == 0)

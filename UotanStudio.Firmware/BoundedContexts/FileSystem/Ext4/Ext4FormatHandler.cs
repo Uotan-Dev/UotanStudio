@@ -158,10 +158,12 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider
     {
         try
         {
-            if (!RepackMetadata.HasPackingOverrides
-                && Directory.Exists(inputPath)
+            if (Directory.Exists(inputPath)
+                && RepackMetadata.Read(inputPath)?.FormatName == FormatName
                 && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
+            {
                 return Task.FromResult(FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes."));
+            }
             cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(outputPath))
             {
@@ -180,6 +182,20 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider
             }
 
             var options = FileSystemPackingOptions.OptionsFor(inputPath, FormatName);
+            if (RepackMetadata.HasPackingOverrides
+                && RepackMetadata.Read(inputPath)?.FormatName == FormatName)
+            {
+                return Task.FromResult(FirmwareOpResult.Fail(
+                    "Explicit EXT4 overrides for a preserved extraction are not supported yet; refusing a fresh rebuild that could discard source metadata."));
+            }
+            var capacityPolicy = ParseCapacityPolicy(options);
+            var targetSize = options.TryGetValue("TargetSizeBytes", out var targetValue) && targetValue.Length > 0
+                ? long.Parse(targetValue, System.Globalization.CultureInfo.InvariantCulture)
+                : (long?)null;
+            if (capacityPolicy == Ext4PackingCapacityPolicy.Explicit && targetSize is null)
+            {
+                return Task.FromResult(FirmwareOpResult.Fail("EXT4 explicit capacity requires a target size in bytes."));
+            }
             var progressSink = progress is null ? null : FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
             Ext4Builder.Build(inputPath, outputPath, new Ext4Options
             {
@@ -187,7 +203,12 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider
                 FsConfigPath = FileSystemPackingOptions.NullIfEmpty(options, "FsConfigPath"),
                 FileContextsPath = FileSystemPackingOptions.NullIfEmpty(options, "FileContextsPath"),
                 EnableSparse = IsTrue(options, "EnableSparse"),
-                Ext4Compress = IsTrue(options, "Ext4Compress"),
+                TargetSizeBytes = capacityPolicy == Ext4PackingCapacityPolicy.Explicit ? targetSize : null,
+                CapacityMode = capacityPolicy == Ext4PackingCapacityPolicy.Minimize
+                    ? Ext4CapacityMode.Minimize
+                    : Ext4CapacityMode.Default,
+                ReadOnly = IsTrue(options, "ReadOnly"),
+                BlockSharingMode = ParseBlockSharingMode(options),
             }, progressSink);
             return Task.FromResult(FirmwareOpResult.Ok(
                 $"Packed EXT4 image '{inputPath}' -> '{outputPath}' ({new FileInfo(outputPath).Length} bytes).",
@@ -207,4 +228,33 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider
     /// <para>解析布尔打包选项，缺失值视为 <c>false</c>。</para></summary>
     private static bool IsTrue(IReadOnlyDictionary<string, string> options, string key)
         => options.TryGetValue(key, out var value) && value is "1" or "true" or "True";
+
+    private static Ext4PackingCapacityPolicy ParseCapacityPolicy(IReadOnlyDictionary<string, string> options)
+    {
+        var value = options.GetValueOrDefault("CapacityPolicy", "Inherit");
+        return Enum.TryParse<Ext4PackingCapacityPolicy>(value, ignoreCase: true, out var policy)
+            && Enum.IsDefined(policy)
+                ? policy
+                : throw new InvalidDataException($"Unsupported EXT4 capacity policy '{value}'.");
+    }
+
+    private static Ext4BlockSharingMode ParseBlockSharingMode(IReadOnlyDictionary<string, string> options)
+    {
+        if (!options.TryGetValue("BlockSharingMode", out var value))
+        {
+            return Ext4BlockSharingMode.Independent;
+        }
+
+        return Enum.TryParse<Ext4BlockSharingMode>(value, ignoreCase: true, out var mode)
+            && Enum.IsDefined(mode)
+                ? mode
+                : throw new InvalidDataException($"Unsupported EXT4 block sharing mode '{value}'.");
+    }
+
+    private enum Ext4PackingCapacityPolicy
+    {
+        Inherit,
+        Explicit,
+        Minimize,
+    }
 }

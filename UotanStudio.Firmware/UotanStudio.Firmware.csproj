@@ -26,6 +26,7 @@
     <PackageReference Include="ZstdSharp.Port" />
     <PackageReference Include="BouncyCastle.Cryptography" />
     <PackageReference Include="SharpZipLib" />
+    <PackageReference Include="YamlDotNet" />
   </ItemGroup>
 
 </Project>

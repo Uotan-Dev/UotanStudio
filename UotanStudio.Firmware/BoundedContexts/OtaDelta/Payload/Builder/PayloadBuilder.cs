@@ -190,8 +190,9 @@ public sealed partial class PayloadBuilder : IDisposable
     }
 
     /// <summary>
-    /// Adds a partition using None, BZip2, or Xz; Android defines no Brotli or Zstd REPLACE operation.
-    /// <para>使用 None、BZip2 或 Xz 添加分区；Android 未定义 Brotli 或 Zstd REPLACE 操作。</para>
+    /// Adds a partition using the standard None, BZip2, or Xz operations. Zstd operation 14 is a
+    /// read-only extension compatibility feature and is not emitted by this builder.
+    /// <para>使用标准 None、BZip2 或 Xz 操作添加分区。Zstd 操作 14 仅作为扩展兼容读取能力，本构建器不生成。</para>
     /// </summary>
     public PayloadBuilder AddPartitionCompressed(string partitionName, string imagePath, CompressionType compressionType)
     {
@@ -218,7 +219,7 @@ public sealed partial class PayloadBuilder : IDisposable
             CompressionType.Brotli => throw new ArgumentException("Android payload has no Brotli REPLACE operation.", nameof(compressionType)),
             CompressionType.BZip2 => InstallOperation.Types.Type.ReplaceBz,
             CompressionType.Xz => InstallOperation.Types.Type.ReplaceXz,
-            CompressionType.Zstd => throw new ArgumentException("Android payload has no defined Zstd REPLACE operation.", nameof(compressionType)),
+            CompressionType.Zstd => throw new ArgumentException("Zstd REPLACE operation 14 is supported for extension reading only; this builder does not emit it.", nameof(compressionType)),
             _ => throw new ArgumentOutOfRangeException(nameof(compressionType), $"Compression type {compressionType} is not supported.")
         };
 

@@ -250,8 +250,8 @@ public sealed partial class Ext4Builder
     {
         if ((node.IsSymlink && node.Size < 60) || node.IsInlineData) return;
 
-        using var input = !node.IsDirectory && !node.IsSymlink ? File.OpenRead(node.FullPath) : null;
-        var target = node.IsSymlink ? Encoding.UTF8.GetBytes(node.SymlinkTarget ?? string.Empty) : null;
+        using var input = !node.IsDirectory && !node.IsSymlink && node.AttributeValue is null ? File.OpenRead(node.FullPath) : null;
+        var target = node.AttributeValue ?? (node.IsSymlink ? Encoding.UTF8.GetBytes(node.SymlinkTarget ?? string.Empty) : null);
         var buffer = new byte[blockSize];
         foreach (var extent in node.Extents)
         {

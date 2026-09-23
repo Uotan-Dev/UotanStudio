@@ -36,7 +36,7 @@ internal static class FileSystemPackingOptions
                     }
                 }
             }
-            else
+            else if (metadata.FileSystemPreservationId is null)
             {
                 var infoPath = RepackMetadata.DiscoverMetadataFile(directory, "_info", metadata.SourceFileName);
                 if (infoPath is not null)
@@ -51,11 +51,11 @@ internal static class FileSystemPackingOptions
                 }
             }
 
-            if (!options.ContainsKey("FsConfigPath"))
+            if (metadata.FileSystemPreservationId is null && !options.ContainsKey("FsConfigPath"))
             {
                 options["FsConfigPath"] = RepackMetadata.DiscoverMetadataFile(directory, "_fs_config", metadata.SourceFileName) ?? string.Empty;
             }
-            if (!options.ContainsKey("FileContextsPath"))
+            if (metadata.FileSystemPreservationId is null && !options.ContainsKey("FileContextsPath"))
             {
                 options["FileContextsPath"] = RepackMetadata.DiscoverMetadataFile(directory, "_file_contexts", metadata.SourceFileName) ?? string.Empty;
             }

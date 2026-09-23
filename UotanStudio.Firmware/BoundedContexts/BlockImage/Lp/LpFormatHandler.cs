@@ -124,6 +124,16 @@ public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider
         => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
+    /// <summary>Extracts selected image entries without creating directory repack metadata.</summary>
+    public Task<FirmwareOpResult> ExtractSelectedAsync(string filePath, string outputDirectory,
+        IReadOnlyCollection<string> partitions, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(partitions);
+        if (partitions.Count == 0) throw new ArgumentException("Select at least one partition.", nameof(partitions));
+        return UnpackCoreAsync(filePath, outputDirectory,
+            new UnpackOptions { SelectedEntries = partitions, Overwrite = false }, cancellationToken);
+    }
+
     private async Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
@@ -131,6 +141,7 @@ public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider
             cancellationToken.ThrowIfCancellationRequested();
             options ??= new UnpackOptions();
             ArgumentOutOfRangeException.ThrowIfNegative(options.MaximumOutputBytes);
+            var selected = options.CreateSelectedEntrySet();
             await using var image = MetadataReader.OpenImage(filePath);
             var metadata = MetadataReader.ReadFromImageStream(image);
             var targets = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
@@ -141,6 +152,7 @@ public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider
                 var name = partition.NameString;
                 if (string.IsNullOrWhiteSpace(name) || name.IndexOfAny(['/', '\\']) >= 0)
                     throw new InvalidDataException("Invalid LP partition name.");
+                if (selected is not null && !selected.Contains(name)) continue;
                 var target = FileExtraction.ResolvePath(outputDirectory, name + ".img");
                 if (!targets.Add(target)) throw new InvalidDataException("Duplicate LP partition output path.");
                 if (string.Equals(target, Path.GetFullPath(filePath), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
@@ -161,6 +173,9 @@ public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider
                 }
                 plans.Add((target, length, extents));
             }
+            if (selected is not null && selected.Except(plans.Select(plan => Path.GetFileNameWithoutExtension(plan.Path)),
+                    StringComparer.OrdinalIgnoreCase).Any())
+                throw new InvalidDataException("Selected LP partition does not exist in the image.");
 
             var written = 0;
             var readGate = new object();

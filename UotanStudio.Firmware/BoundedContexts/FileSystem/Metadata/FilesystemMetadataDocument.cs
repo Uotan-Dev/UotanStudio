@@ -43,12 +43,20 @@ internal sealed class RebuildParameters
     public int? SparseBlockSize { get; set; }
     /// <summary>Gets the inode size in bytes (EXT4).<para>获取 inode 大小（字节，EXT4）。</para></summary>
     public int? InodeSize { get; set; }
+    /// <summary>Gets the EXT4 casefold filename encoding ID, when enabled in the source.</summary>
+    public ushort? Ext4Encoding { get; set; }
+    /// <summary>Gets the EXT4 casefold encoding flags.</summary>
+    public ushort Ext4EncodingFlags { get; set; }
     /// <summary>Gets the raw filesystem UUID bytes (serialized as base64).<para>获取原始文件系统 UUID 字节（以 base64 序列化）。</para></summary>
     public byte[]? Uuid { get; set; }
     /// <summary>Gets the volume name.<para>获取卷名。</para></summary>
     public string? VolumeName { get; set; }
     /// <summary>Gets the segment size in bytes (F2FS).<para>获取段大小（字节，F2FS）。</para></summary>
     public long? SegmentSize { get; set; }
+
+    public bool? F2fsCompressionEnabled { get; set; }
+
+    public string? F2fsCompressionAlgorithm { get; set; }
     /// <summary>Gets the original image length in bytes, when known.<para>获取原始镜像字节长度（已知时）。</para></summary>
     public long? SourceLength { get; set; }
     /// <summary>Gets the source filesystem's own byte size (block count times block size), when known.
@@ -92,12 +100,18 @@ internal sealed class ErofsRebuildParameters
     public bool Metabox { get; set; }
     /// <summary>Gets the number of extra devices declared by the source.<para>获取源声明的额外设备数量。</para></summary>
     public int ExtraDeviceCount { get; set; }
+    /// <summary>Records the source device table; replayed file data is placed on the primary image.</summary>
+    public List<ErofsRebuildDevice> SourceDevices { get; set; } = [];
     /// <summary>Gets whether the superblock checksum feature is written.<para>获取是否写出超级块校验和特性。</para></summary>
     public bool SuperblockChecksum { get; set; } = true;
     /// <summary>Gets whether the COMPAT_MTIME feature is declared.<para>获取是否声明 COMPAT_MTIME 特性。</para></summary>
     public bool MtimeFeature { get; set; }
     /// <summary>Gets whether the COMPAT_XATTRFILTER feature is declared.<para>获取是否声明 COMPAT_XATTRFILTER 特性。</para></summary>
     public bool XattrFilterFeature { get; set; }
+    /// <summary>Records whether the source placed shared xattrs in the metabox; the writer may use inline xattrs.</summary>
+    public bool SourceSharedEaInMetabox { get; set; }
+    /// <summary>Records whether the source metabox container was compressed; output geometry may differ.</summary>
+    public bool SourceMetaboxCompressed { get; set; }
     /// <summary>Gets the superblock epoch in seconds.<para>获取超级块 epoch（秒）。</para></summary>
     public ulong? BuildTime { get; set; }
     /// <summary>Gets the superblock fixed nanosecond component.<para>获取超级块固定纳秒分量。</para></summary>
@@ -146,6 +160,13 @@ internal sealed class ErofsRebuildCodec
     public int CompressionLevel { get; set; } = 1;
 }
 
+internal sealed class ErofsRebuildDevice
+{
+    public byte[] Tag { get; set; } = [];
+    public ulong Blocks { get; set; }
+    public ulong UniAddr { get; set; }
+}
+
 /// <summary>The source storage strategy of one EROFS inode.<para>一个 EROFS inode 的源存储策略。</para></summary>
 internal sealed class ErofsRebuildInode
 {
@@ -171,6 +192,10 @@ internal sealed class ErofsRebuildInode
     public bool InlineData { get; set; }
     /// <summary>Gets the logical cluster size in bytes.<para>获取逻辑簇大小（字节）。</para></summary>
     public int LogicalClusterSize { get; set; }
+    /// <summary>Gets the original extent cluster size when rebuild uses a different geometry.</summary>
+    public int? SourceExtentClusterSize { get; set; }
+    /// <summary>Gets the original extent record width in bytes.</summary>
+    public int? SourceExtentRecordSize { get; set; }
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]

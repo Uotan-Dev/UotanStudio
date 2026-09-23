@@ -40,6 +40,10 @@ internal sealed class Ext4Superblock
 
     public uint FeatureRoCompat { get; private init; }
 
+    public ushort Encoding { get; private init; }
+
+    public ushort EncodingFlags { get; private init; }
+
     public ushort DescSize { get; private init; }
 
     public byte DefHashVersion { get; private init; }
@@ -97,6 +101,8 @@ internal sealed class Ext4Superblock
             FeatureCompat = BinaryPrimitives.ReadUInt32LittleEndian(span[92..96]),
             FeatureIncompat = BinaryPrimitives.ReadUInt32LittleEndian(span[96..100]),
             FeatureRoCompat = BinaryPrimitives.ReadUInt32LittleEndian(span[100..104]),
+            Encoding = span.Length >= 0x280 ? BinaryPrimitives.ReadUInt16LittleEndian(span[0x27C..]) : (ushort)0,
+            EncodingFlags = span.Length >= 0x280 ? BinaryPrimitives.ReadUInt16LittleEndian(span[0x27E..]) : (ushort)0,
             Uuid = span[104..120].ToArray(),
             VolumeName = System.Text.Encoding.UTF8.GetString(span[120..136]).TrimEnd('\0'),
             DefHashVersion = span[252],

@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Models;
 
@@ -40,6 +41,8 @@ internal sealed record Ext4Inode
     public uint Mtime { get; init; }
 
     public uint Ctime { get; init; }
+
+    public FileSystemInodeMetadata Metadata { get; init; } = new();
 
     public ulong FileAcl { get; init; }
 
@@ -111,9 +114,40 @@ internal sealed record Ext4Inode
             LinksCount = BinaryPrimitives.ReadUInt16LittleEndian(data[26..28]),
             Mtime = BinaryPrimitives.ReadUInt32LittleEndian(data[16..20]),
             Ctime = BinaryPrimitives.ReadUInt32LittleEndian(data[12..16]),
+            Metadata = ReadMetadata(data[..inodeSize]),
             InlineData = inlineData,
             FileAcl = ReadFileAcl(data, inodeSize),
         };
+    }
+
+    private static FileSystemInodeMetadata ReadMetadata(ReadOnlySpan<byte> data)
+    {
+        var extra = data.Length > 128 ? BinaryPrimitives.ReadUInt16LittleEndian(data[128..]) : 0;
+        if (extra > data.Length - 128)
+        {
+            throw new InvalidDataException("EXT4 extra inode fields exceed the inode size.");
+        }
+        var end = 128 + extra;
+        var metadata = new FileSystemInodeMetadata
+        {
+            AccessTime = ReadTimestamp(data, 8, 140, end),
+            ChangeTime = ReadTimestamp(data, 12, 132, end),
+            ModificationTime = ReadTimestamp(data, 16, 136, end),
+            BirthTime = end >= 148 ? ReadTimestamp(data, 144, 148, end) : null,
+            Generation = BinaryPrimitives.ReadUInt32LittleEndian(data[100..]),
+            ProjectId = end >= 160 ? BinaryPrimitives.ReadUInt32LittleEndian(data[156..]) : null,
+            Version = BinaryPrimitives.ReadUInt32LittleEndian(data[36..])
+                | (end >= 156 ? (ulong)BinaryPrimitives.ReadUInt32LittleEndian(data[152..]) << 32 : 0),
+            LinkCount = BinaryPrimitives.ReadUInt16LittleEndian(data[26..])
+        };
+        metadata.Validate();
+        return metadata;
+    }
+
+    private static FileSystemTimestamp ReadTimestamp(ReadOnlySpan<byte> data, int offset, int extraOffset, int end)
+    {
+        var extra = end >= extraOffset + 4 ? BinaryPrimitives.ReadUInt32LittleEndian(data[extraOffset..]) : 0u;
+        return new FileSystemTimestamp(BinaryPrimitives.ReadInt32LittleEndian(data[offset..]) + ((long)(extra & 3) << 32), extra >> 2);
     }
 
     private static ReadOnlySpan<byte> FindInlineDataValue(ReadOnlySpan<byte> inode)

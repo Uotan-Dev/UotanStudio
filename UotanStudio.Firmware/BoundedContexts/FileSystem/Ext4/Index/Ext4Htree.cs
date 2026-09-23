@@ -233,7 +233,8 @@ internal static class Ext4Htree
         int blockSize,
         uint[] hashSeed,
         bool enableMetadataCsum = false,
-        byte[]? uuid = null)
+        byte[]? uuid = null,
+        uint generation = 0)
     {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentNullException.ThrowIfNull(hashSeed);
@@ -253,12 +254,12 @@ internal static class Ext4Htree
             return byHash != 0 ? byHash : string.CompareOrdinal(x.Name, y.Name);
         });
 
-        var (leafBlocks, leafFirstHashes, leafLastHashes) = PackLeafBlocks(hashed, blockSize, enableMetadataCsum, directoryInode, uuid);
+        var (leafBlocks, leafFirstHashes, leafLastHashes) = PackLeafBlocks(hashed, blockSize, enableMetadataCsum, directoryInode, uuid, generation);
         if (leafBlocks.Count == 0)
         {
 
 
-            return new HtreePlan(BuildDxRootBlock(blockSize, directoryInode, parentInode, 0, 1, 0, [], enableMetadataCsum, uuid), [], [], 0);
+            return new HtreePlan(BuildDxRootBlock(blockSize, directoryInode, parentInode, 0, 1, 0, [], enableMetadataCsum, uuid, generation), [], [], 0);
         }
 
         var rootLimit = (blockSize - DotEntrySize - DotEntrySize - DxRootInfoSize - csumOverhead) / DxEntrySize;
@@ -271,7 +272,7 @@ internal static class Ext4Htree
 
 
             var children = BuildChildEntryList(leafFirstHashes, leafLastHashes, 0, leafBlocks.Count, leafBlockBase: 1);
-            rootBlock = BuildDxRootBlock(blockSize, directoryInode, parentInode, children.Count, rootLimit, 0, children, enableMetadataCsum, uuid);
+            rootBlock = BuildDxRootBlock(blockSize, directoryInode, parentInode, children.Count, rootLimit, 0, children, enableMetadataCsum, uuid, generation);
             indexBlocks = [];
         }
         else
@@ -292,7 +293,7 @@ internal static class Ext4Htree
                 var firstLeaf = n * nodeLimit;
                 var nodeLeafCount = Math.Min(nodeLimit, leafCount - firstLeaf);
                 var nodeChildren = BuildChildEntryList(leafFirstHashes, leafLastHashes, firstLeaf, nodeLeafCount, leafBlockBase: 1);
-                nodeBlocks.Add(BuildDxNodeBlock(blockSize, nodeChildren.Count, nodeLimit, nodeChildren, directoryInode, enableMetadataCsum, uuid));
+                nodeBlocks.Add(BuildDxNodeBlock(blockSize, nodeChildren.Count, nodeLimit, nodeChildren, directoryInode, enableMetadataCsum, uuid, generation));
 
                 var nodeBlock = (uint)(leafCount + 1 + n);
                 if (n == 0)
@@ -311,7 +312,7 @@ internal static class Ext4Htree
                 }
             }
 
-            rootBlock = BuildDxRootBlock(blockSize, directoryInode, parentInode, rootChildren.Count, rootLimit, 1, rootChildren, enableMetadataCsum, uuid);
+            rootBlock = BuildDxRootBlock(blockSize, directoryInode, parentInode, rootChildren.Count, rootLimit, 1, rootChildren, enableMetadataCsum, uuid, generation);
             indexBlocks = nodeBlocks;
         }
 
@@ -327,7 +328,8 @@ internal static class Ext4Htree
         int blockSize,
         bool enableMetadataCsum = false,
         uint directoryInode = 0,
-        byte[]? uuid = null)
+        byte[]? uuid = null,
+        uint generation = 0)
     {
         var blocks = new List<byte[]>();
         var firstHashes = new List<uint>();
@@ -354,7 +356,7 @@ internal static class Ext4Htree
             WriteU16(block, lastEntryOffset + 4, (ushort)(endCap - lastEntryOffset));
             if (enableMetadataCsum)
             {
-                WriteDirentTail(block, endCap, directoryInode, uuid);
+                WriteDirentTail(block, endCap, directoryInode, uuid, generation);
             }
 
             blocks.Add(block);
@@ -437,7 +439,8 @@ internal static class Ext4Htree
         int indirectLevels,
         List<(uint Hash, uint Block)> children,
         bool enableMetadataCsum = false,
-        byte[]? uuid = null)
+        byte[]? uuid = null,
+        uint generation = 0)
     {
         var block = new byte[blockSize];
 
@@ -466,7 +469,7 @@ internal static class Ext4Htree
 
         if (enableMetadataCsum)
         {
-            WriteDxTail(block, DxRootCountOffset, count, limit, directoryInode, uuid);
+            WriteDxTail(block, DxRootCountOffset, count, limit, directoryInode, uuid, generation);
         }
 
         return block;
@@ -483,7 +486,8 @@ internal static class Ext4Htree
         List<(uint Hash, uint Block)> children,
         uint directoryInode = 0,
         bool enableMetadataCsum = false,
-        byte[]? uuid = null)
+        byte[]? uuid = null,
+        uint generation = 0)
     {
         var block = new byte[blockSize];
         WriteU32(block, 0, 0);
@@ -495,7 +499,7 @@ internal static class Ext4Htree
         if (enableMetadataCsum)
         {
 
-            WriteDxTail(block, DxNodeCountOffset, count, limit, directoryInode, uuid);
+            WriteDxTail(block, DxNodeCountOffset, count, limit, directoryInode, uuid, generation);
         }
 
         return block;
@@ -528,7 +532,7 @@ internal static class Ext4Htree
     /// Writes the 12-byte struct ext2_dir_entry_tail at the end of a directory leaf block and computes the dirent checksum matching e2fsprogs ext2fs_dirent_csum: seed = crc32c(~0, uuid), then the LE32 inode number, LE32 i_generation and the block bytes from its start up to (excluding) the tail.
     /// <para>在目录叶块尾部写入 struct ext2_dir_entry_tail（12 字节）并计算 dirent 校验和。</para>
     /// </summary>
-    private static void WriteDirentTail(byte[] block, int endCap, uint directoryInode, byte[]? uuid)
+    private static void WriteDirentTail(byte[] block, int endCap, uint directoryInode, byte[]? uuid, uint generation)
     {
         WriteU32(block, endCap, 0);
         WriteU16(block, endCap + 4, DirentTailSize);
@@ -539,7 +543,7 @@ internal static class Ext4Htree
         Span<byte> le = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(le, directoryInode);
         crc = HtreeCrc32c(le, crc);
-        BinaryPrimitives.WriteUInt32LittleEndian(le, 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(le, generation);
         crc = HtreeCrc32c(le, crc);
         crc = HtreeCrc32c(block.AsSpan(0, endCap), crc);
         WriteU32(block, endCap + 8, crc);
@@ -553,7 +557,7 @@ internal static class Ext4Htree
     /// Writes dx_tail and computes checksum matching e2fsprogs 1.47.4 ext2fs_dx_csum. dx_tail is at countOffset + limit * DxEntrySize.
     /// <para>写入 dx_tail 结构并计算校验和。</para>
     /// </summary>
-    private static void WriteDxTail(byte[] block, int countOffset, int count, int limit, uint directoryInode, byte[]? uuid)
+    private static void WriteDxTail(byte[] block, int countOffset, int count, int limit, uint directoryInode, byte[]? uuid, uint generation)
     {
 
         var tailOffset = countOffset + limit * DxEntrySize;
@@ -569,7 +573,7 @@ internal static class Ext4Htree
         crc = HtreeCrc32c(le4, crc);
 
 
-        le4.Clear();
+        BinaryPrimitives.WriteUInt32LittleEndian(le4, generation);
         crc = HtreeCrc32c(le4, crc);
 
 

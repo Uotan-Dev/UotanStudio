@@ -164,37 +164,33 @@ internal static class ErofsXattr
         => ibodyLength <= 0 ? (ushort)0 : checked((ushort)(ibodyLength / SharedIdUnitSize - 2));
 
     /// <summary>
-    /// Parses the long xattr name prefix table located in the metadata area pointed to by superblock.xattr_prefix_start, holding XattrPrefixCount entries of {__u8 base_index; char infix[]} (infix NUL-terminated), i.e. the kernel's struct erofs_xattr_long_prefix. base_index is the short-prefix index and infix is the part of the prefix between the short prefix and the name.
+    /// Parses four-byte-aligned records containing an LE16 length followed by base_index and infix bytes.
     /// <para>解析长 xattr 名称前缀表。</para>
     /// </summary>
     public static List<(byte BaseIndex, string Infix)> ParsePrefixTable(
         ReadOnlySpan<byte> tableBytes, int prefixCount)
     {
+        if (prefixCount is < 0 or > 128)
+        {
+            throw new InvalidDataException("EROFS xattr prefix count exceeds its seven-bit index.");
+        }
         var result = new List<(byte BaseIndex, string Infix)>(Math.Max(0, prefixCount));
         var position = 0;
         for (var i = 0; i < prefixCount; i++)
         {
-            if (position >= tableBytes.Length)
-                break;
-
-            var baseIndex = tableBytes[position];
-            var infixStart = position + 1;
-            var end = -1;
-            for (var j = infixStart; j < tableBytes.Length; j++)
+            if (position > tableBytes.Length - 2)
             {
-                if (tableBytes[j] == 0)
-                {
-                    end = j;
-                    break;
-                }
+                throw new InvalidDataException("Truncated EROFS xattr prefix record.");
             }
-
-            if (end < 0)
-                end = tableBytes.Length;
-
-            var infix = Encoding.UTF8.GetString(tableBytes.Slice(infixStart, end - infixStart));
+            var length = BinaryPrimitives.ReadUInt16LittleEndian(tableBytes[position..]);
+            if (length is < 1 or > 256 || length > tableBytes.Length - position - 2)
+            {
+                throw new InvalidDataException("Invalid EROFS xattr prefix record length.");
+            }
+            var baseIndex = tableBytes[position + 2];
+            var infix = Extraction.PortableExtractionPaths.NameEncoding.GetString(tableBytes.Slice(position + 3, length - 1));
             result.Add((baseIndex, infix));
-            position = end + 1;
+            position = (position + 2 + length + 3) & ~3;
         }
 
         return result;
@@ -250,7 +246,7 @@ internal static class ErofsXattr
         ReadOnlySpan<byte> rawName,
         IReadOnlyList<(byte BaseIndex, string Infix)>? prefixTable)
     {
-        var name = Encoding.UTF8.GetString(rawName);
+        var name = Extraction.PortableExtractionPaths.NameEncoding.GetString(rawName);
 
         if ((nameIndex & LongPrefixFlag) != 0)
         {
@@ -263,10 +259,11 @@ internal static class ErofsXattr
                 return infix + name;
             }
 
-            return name;
+            throw new InvalidDataException("EROFS xattr refers to an unknown long prefix.");
         }
 
-        return TryGetDefaultPrefix(nameIndex, out var prefix) ? prefix + name : name;
+        return TryGetDefaultPrefix(nameIndex, out var prefix)
+            ? prefix + name : throw new InvalidDataException("EROFS xattr refers to an unknown namespace.");
     }
 
     /// <summary>
@@ -344,8 +341,11 @@ internal static class ErofsXattr
         var position = entriesStart;
         while (position + EntryHeaderSize <= ibodySize)
         {
-            if (!TryReadEntry(ibody, position, prefixTable, out var entry, out var entrySize))
-                break;
+            if (!TryReadEntry(ibody, position, prefixTable, out var entry, out var entrySize)
+                || entrySize > ibodySize - position)
+            {
+                throw new InvalidDataException("Truncated EROFS inline extended attribute.");
+            }
             result.Add(entry);
             position += entrySize;
         }

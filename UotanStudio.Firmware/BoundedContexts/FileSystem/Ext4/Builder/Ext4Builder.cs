@@ -23,8 +23,9 @@ public sealed partial class Ext4Builder
     private const int DefaultJournalBlocks = 1024;
 
     private const uint FeatureCompatHasJournal = 0x0004;
+    private const uint FeatureRoCompatSharedBlocks = 0x4000;
 
-    private const ushort Ext4ExtraIsize = 28;
+    private const ushort Ext4ExtraIsize = 32;
 
     private const ushort Ext4InodeChecksumHiExtraEnd = 4;
     private const ushort ExtentMagic = 0xF30A;
@@ -89,7 +90,15 @@ public sealed partial class Ext4Builder
         public List<(long LogicalStart, long Count)> Runs { get; } = [];
         public List<byte[]> DirectoryBlocks { get; set; } = [];
         public Dictionary<string, byte[]>? Xattrs { get; set; }
+        public FileSystemInodeMetadata? SourceMetadata { get; set; }
+        public byte[]? ExternalXattrs { get; set; }
+        public long XattrBlock { get; set; }
+        public byte[]? AttributeValue { get; set; }
+        public long AttributeValueBlocks { get; set; }
+        public List<long>? SharedBlockIds { get; set; }
     }
+
+    private readonly record struct BlockAllocationResult(bool Success, long JournalStart, bool SharedBlocks);
 
     /// <summary>
     /// Builds an ext4 image from sourceDirectory and returns it as a byte array.
@@ -176,7 +185,10 @@ public sealed partial class Ext4Builder
 
         var stagingExclusions = excludedFiles.Append(Path.GetFullPath(temporaryPath)).ToArray();
         var plannedRoot = BuildTree(Path.GetFullPath(sourceDirectory), stagingExclusions);
-        if (output.CanSeek && SupportsResizeWithoutMutation(output))
+        var canResize = output.CanSeek && SupportsResizeWithoutMutation(output);
+        var requiresStaging = effective.CapacityMode == Ext4CapacityMode.Minimize
+            || effective.BlockSharingMode == Ext4BlockSharingMode.ShareDuplicateData;
+        if (canResize && !requiresStaging)
         {
             BuildCore(sourceDirectory, output, effective, output.Position, freshDestination: false, excludedFiles: stagingExclusions, plannedRoot);
             return;
@@ -189,7 +201,11 @@ public sealed partial class Ext4Builder
             {
                 BuildCore(sourceDirectory, staging, effective, 0, freshDestination: true, excludedFiles: stagingExclusions, plannedRoot);
                 staging.Position = 0;
-                staging.CopyTo(output);
+                StreamCopy.CopyExactly(staging, output, staging.Length, effective.CancellationToken);
+                if (canResize)
+                {
+                    output.SetLength(output.Position);
+                }
             }
         }
         finally
@@ -221,6 +237,25 @@ public sealed partial class Ext4Builder
     {
         FileSystemPreservation.RejectLossyDirectoryRebuild(sourceDirectory);
         options ??= new Ext4Options();
+        if (!Enum.IsDefined(options.CapacityMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), $"Unsupported EXT4 capacity mode '{options.CapacityMode}'.");
+        }
+        if (!Enum.IsDefined(options.BlockSharingMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), $"Unsupported EXT4 block sharing mode '{options.BlockSharingMode}'.");
+        }
+        if (options.CasefoldEncoding is not null and not 1
+            || options.CasefoldEncoding is null && options.CasefoldEncodingFlags != 0)
+        {
+            throw new NotSupportedException("EXT4 casefold requires a supported UTF-8 encoding ID.");
+        }
+        if (FileSystemEditPlan.Current is { } plan
+            && plan.Entries.Values.Any(entry => (entry.Flags & 0x40000000) != 0)
+            && options.CasefoldEncoding is null)
+        {
+            throw new InvalidDataException("EXT4 casefold directory requires its source encoding.");
+        }
         var blockSize = options.BlockSize;
         var inodeSize = options.InodeSize;
         if (blockSize < 4096 || !IsPowerOfTwo(blockSize))
@@ -237,6 +272,16 @@ public sealed partial class Ext4Builder
             && (targetSize <= 0 || targetSize % blockSize != 0))
         {
             throw new ArgumentOutOfRangeException(nameof(options), "EXT4 target size must be positive and block aligned.");
+        }
+
+        if (options.CapacityMode == Ext4CapacityMode.Minimize && options.TargetSizeBytes is not null)
+        {
+            throw new InvalidOperationException("EXT4 minimum capacity and an explicit target size are mutually exclusive.");
+        }
+
+        if (options.BlockSharingMode == Ext4BlockSharingMode.ShareDuplicateData && !options.ReadOnly)
+        {
+            throw new InvalidOperationException("EXT4 duplicate block sharing requires an explicitly read-only filesystem.");
         }
 
         if (!Directory.Exists(sourceDirectory))
@@ -266,7 +311,9 @@ public sealed partial class Ext4Builder
             {
                 node.Uid = entry.Uid;
                 node.Gid = entry.Gid;
-                node.Mode = (ushort)((node.IsDirectory ? 0x4000 : node.IsSymlink ? 0xA000 : 0x8000) | (entry.Mode & 0x0FFF));
+                var type = (node.Mode & 0xF000) is var sourceType && sourceType != 0
+                    ? sourceType : node.IsDirectory ? 0x4000 : node.IsSymlink ? 0xA000 : 0x8000;
+                node.Mode = (ushort)(type | (entry.Mode & 0x0FFF));
             }
 
             if (contexts.Count > 0 && FileSystemMetadataOverrides.TryGetLabel(contexts, relative, out var label))
@@ -292,6 +339,7 @@ public sealed partial class Ext4Builder
         var nodes = new List<Node>();
         var maxInode = AssignInodes(root, nodes);
         ApplyMetadataOverrides(root, nodes, options);
+        maxInode = PlanXattrs(nodes, inodeSize, blockSize, maxInode, uuid);
         foreach (var node in nodes)
         {
             node.Runs.Clear();
@@ -300,6 +348,13 @@ public sealed partial class Ext4Builder
 
         PlanDirectoryBlocks(nodes, blockSize, uuid, enableMetadataCsum);
         PlanDataBlocks(nodes, blockSize, options.EnableSparse);
+        using var sharedPlan = options.BlockSharingMode == Ext4BlockSharingMode.ShareDuplicateData
+            ? SharedBlockPlan.Create(nodes, blockSize, options)
+            : null;
+        if (sharedPlan is not null)
+        {
+            options.SharedBlockPlanCompleted?.Invoke();
+        }
         PlanLeafBlocks(nodes, blockSize);
 
 
@@ -311,9 +366,13 @@ public sealed partial class Ext4Builder
         var metaPerGroup = 2L + inodeTableBlocks;
 
 
-        var totalDataBlocks = nodes.Sum(static n => n.DataBlockCount)
+        var totalDataBlocks = (sharedPlan is null
+                ? nodes.Sum(static n => n.DataBlockCount)
+                : nodes.Where(static n => !IsBlockSharingCandidate(n)).Sum(static n => n.DataBlockCount)
+                    + sharedPlan.UniqueBlockCount)
             + nodes.Sum(static n => (long)n.LeafBlocks.Length)
-            + nodes.Sum(static n => (long)n.IndexBlocks.Length);
+            + nodes.Sum(static n => (long)n.IndexBlocks.Length)
+            + nodes.Count(static n => n.ExternalXattrs is not null);
 
         // The JBD2 journal has a hard minimum of 1024 blocks (e2fsck rejects smaller
         // journals as corrupt), so it stays at the fixed default; the size reduction
@@ -344,11 +403,6 @@ public sealed partial class Ext4Builder
             : (long?)null;
         if (requestedBlocks is { } fixedBlocks)
         {
-            if (fixedBlocks < minimumGroupBlocks)
-            {
-                throw new InvalidOperationException(
-                    $"Requested EXT4 capacity {options.TargetSizeBytes} bytes is too small for the filesystem content.");
-            }
             blocksPerGroup = checked((int)Math.Min(maxBlockGroupBlocks, ((fixedBlocks + 7) / 8) * 8));
         }
 
@@ -465,7 +519,14 @@ public sealed partial class Ext4Builder
             usedBlocks++;
         }
 
-        if (!AllocateDataBlocksMultiGroup(nodes, groups, blocksPerGroup, blockSize, journalBlocks, out var journalStart))
+        var allocation = options.BlockSharingMode == Ext4BlockSharingMode.ShareDuplicateData
+            ? AllocateSharedDataBlocksMultiGroup(nodes, groups, blocksPerGroup, blockSize, journalBlocks,
+                sharedPlan!, options.CancellationToken)
+            : AllocateDataBlocksMultiGroup(nodes, groups, blocksPerGroup, blockSize, journalBlocks, out var independentJournalStart)
+                ? new BlockAllocationResult(true, independentJournalStart, false)
+                : new BlockAllocationResult(false, independentJournalStart, false);
+        var journalStart = allocation.JournalStart;
+        if (!allocation.Success)
         {
             // Group boundaries can add extent-tree blocks after the initial layout estimate.
             if (requestedBlocks is not null)
@@ -477,6 +538,17 @@ public sealed partial class Ext4Builder
             return;
         }
         usedBlocks = groups.Sum(group => group.FirstDataBlock - (long)group.GroupIndex * blocksPerGroup + group.UsedBlocks);
+        if (options.CapacityMode == Ext4CapacityMode.Minimize)
+        {
+            totalBlocks = groups.Max(static group => group.FirstDataBlock + group.UsedBlocks);
+            var lastGroup = groups[^1];
+            var lastGroupStart = (long)lastGroup.GroupIndex * blocksPerGroup;
+            lastGroup.BlocksInGroup = totalBlocks - lastGroupStart;
+            if (lastGroup.BlocksInGroup <= 0)
+            {
+                throw new InvalidOperationException("EXT4 minimum-capacity planning produced an empty final block group.");
+            }
+        }
         if (includeJournal)
         {
 
@@ -488,7 +560,8 @@ public sealed partial class Ext4Builder
         var finalSize = checked(totalBlocks * blockSize);
         var requiredEnd = checked(baseOffset + finalSize);
         var oldLength = output.Length;
-        if (freshDestination || requiredEnd > oldLength)
+        if (freshDestination || requiredEnd > oldLength
+            || options.CapacityMode == Ext4CapacityMode.Minimize && requiredEnd < oldLength)
         {
             output.SetLength(requiredEnd);
         }
@@ -533,7 +606,16 @@ public sealed partial class Ext4Builder
         WriteSuperblock(superblock, blockSize, inodeSize, (uint)inodesPerGroup, totalBlocks, usedBlocks,
             (int)Math.Max(0, totalInodes - totalFreeInodes), uuid, blocksPerGroup, options.EnableMetadataCsum,
             includeJournal ? JournalInodeNumber : 0u, includeJournal, reservedGdtBlocks, journalIBlock, journalSize, options.VolumeName,
-            options.ReadOnly);
+            options.ReadOnly, allocation.SharedBlocks, options.CasefoldEncoding, options.CasefoldEncodingFlags);
+        if (nodes.Any(static node => node.AttributeValue is not null))
+        {
+            WriteU32(superblock, 0x60, BinaryPrimitives.ReadUInt32LittleEndian(superblock.AsSpan(0x60)) | 0x400u);
+        }
+        if (nodes.Any(static node => node.SourceMetadata?.ProjectId is > 0))
+        {
+            WriteU32(superblock, 0x64, BinaryPrimitives.ReadUInt32LittleEndian(superblock.AsSpan(0x64)) | 0x2000u);
+        }
+        WriteU32(superblock, 0x3FC, ComputeCrc32(superblock.AsSpan(0, 0x3FC), uint.MaxValue));
         WriteAt(output, baseOffset, 1024, superblock, superblock.Length);
 
         foreach (var bg in BackupSuperblockGroups(groupCount))
@@ -583,9 +665,18 @@ public sealed partial class Ext4Builder
         }
 
 
+        if (sharedPlan is not null)
+        {
+            sharedPlan.ValidateSources(nodes);
+            sharedPlan.WriteUniqueBlocks(output, baseOffset);
+        }
+
         foreach (var node in nodes)
         {
-            WriteNodeData(output, baseOffset, node, blockSize);
+            if (sharedPlan is null || !IsBlockSharingCandidate(node))
+            {
+                WriteNodeData(output, baseOffset, node, blockSize);
+            }
         }
 
         output.Position = checked(baseOffset + finalSize);
@@ -636,6 +727,15 @@ public sealed partial class Ext4Builder
         foreach (var node in nodes)
         {
             node.Extents.Clear();
+            if (node.ExternalXattrs is not null)
+            {
+                if (!EnsureSpace())
+                {
+                    return false;
+                }
+                node.XattrBlock = cursor++;
+                groups[groupIndex].UsedBlocks++;
+            }
             foreach (var run in node.Runs)
             {
                 var logical = run.LogicalStart;
@@ -782,6 +882,7 @@ public sealed partial class Ext4Builder
         node.Uid = entry.Uid;
         node.Gid = entry.Gid;
         node.Xattrs = entry.Xattrs;
+        node.SourceMetadata = entry.Metadata;
         node.IsSymlink = (entry.Mode & 0xF000) == 0xA000;
         if (node.IsSymlink)
         {
@@ -789,7 +890,7 @@ public sealed partial class Ext4Builder
             node.Size = Encoding.UTF8.GetByteCount(node.SymlinkTarget);
         }
         node.OriginalInode = entry.Inode;
-        node.SemanticFlags = entry.Flags & 0x100F8u;
+        node.SemanticFlags = entry.Flags & FileSystemEditPlan.Ext4SemanticFlagMask;
         if ((entry.Mode & 0xF000) == 0x8000)
         {
             node.FullPath = plan.ContentSource(node.FullPath);
@@ -920,7 +1021,7 @@ public sealed partial class Ext4Builder
 
 
             var linearBlocks = BuildDirectoryBlocks(node, blockSize, uuid, enableMetadataCsum);
-            if (linearBlocks.Count == 1)
+            if (linearBlocks.Count == 1 || (node.SemanticFlags & 0x40000000) != 0)
             {
                 node.DirectoryBlocks = linearBlocks;
                 node.Size = (long)linearBlocks.Count * blockSize;
@@ -945,7 +1046,7 @@ public sealed partial class Ext4Builder
                 blockSize,
                 hashSeed,
                 enableMetadataCsum,
-                uuid);
+                uuid, node.SourceMetadata?.Generation ?? 0);
 
             var blocks = new List<byte[]>(1 + plan.LeafBlocks.Count + plan.IndexBlocks.Count) { plan.RootBlock };
             blocks.AddRange(plan.LeafBlocks);
@@ -978,7 +1079,7 @@ public sealed partial class Ext4Builder
         }
 
 
-        var filesToScan = nodes.Where(n => enableSparse && !n.IsSymlink && !n.IsInlineData && !n.IsDirectory && n.Size > 0).ToList();
+        var filesToScan = nodes.Where(n => enableSparse && n.AttributeValue is null && !n.IsSymlink && !n.IsInlineData && !n.IsDirectory && n.Size > 0).ToList();
         if (filesToScan.Count > 0)
         {
             Parallel.ForEach(filesToScan, node =>
@@ -1063,7 +1164,7 @@ public sealed partial class Ext4Builder
             var naturalLength = (8 + nameBytes.Length + 3) & ~3;
             if (lastEntryOffset >= 0 && offset + naturalLength > endCap)
             {
-                CloseDirectoryBlock(blocks, ref block, blockSize, tailSize, endCap, lastEntryOffset, dir.Inode, uuid);
+                CloseDirectoryBlock(blocks, ref block, blockSize, tailSize, endCap, lastEntryOffset, dir.Inode, uuid, dir.SourceMetadata?.Generation ?? 0);
                 offset = 0;
                 lastEntryOffset = -1;
             }
@@ -1081,7 +1182,7 @@ public sealed partial class Ext4Builder
 
         if (lastEntryOffset >= 0)
         {
-            CloseDirectoryBlock(blocks, ref block, blockSize, tailSize, endCap, lastEntryOffset, dir.Inode, uuid);
+            CloseDirectoryBlock(blocks, ref block, blockSize, tailSize, endCap, lastEntryOffset, dir.Inode, uuid, dir.SourceMetadata?.Generation ?? 0);
         }
 
         return blocks;
@@ -1093,12 +1194,12 @@ public sealed partial class Ext4Builder
     /// </summary>
     private static void CloseDirectoryBlock(
         List<byte[]> blocks, ref byte[] block, int blockSize, int tailSize, int endCap,
-        int lastEntryOffset, uint dirInode, byte[] uuid)
+        int lastEntryOffset, uint dirInode, byte[] uuid, uint generation)
     {
         WriteU16(block, lastEntryOffset + 4, (ushort)(endCap - lastEntryOffset));
         if (tailSize > 0)
         {
-            WriteDirectoryTail(block, endCap, dirInode, uuid);
+            WriteDirectoryTail(block, endCap, dirInode, uuid, generation);
         }
 
         blocks.Add(block);
@@ -1109,7 +1210,7 @@ public sealed partial class Ext4Builder
     /// Writes the directory block tail with its CRC32c checksum.
     /// <para>写入目录块尾部结构及其 CRC32c 校验和。</para>
     /// </summary>
-    private static void WriteDirectoryTail(byte[] block, int endCap, uint dirInode, byte[] uuid)
+    private static void WriteDirectoryTail(byte[] block, int endCap, uint dirInode, byte[] uuid, uint generation)
     {
         WriteU32(block, endCap, 0);
         WriteU16(block, endCap + 4, 12);
@@ -1120,7 +1221,7 @@ public sealed partial class Ext4Builder
         Span<byte> le = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(le, dirInode);
         crc = ComputeCrc32Continue(crc, le);
-        BinaryPrimitives.WriteUInt32LittleEndian(le, 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(le, generation);
         crc = ComputeCrc32Continue(crc, le);
         crc = ComputeCrc32Continue(crc, block.AsSpan(0, endCap));
         WriteU32(block, endCap + 8, crc);
@@ -1131,7 +1232,8 @@ public sealed partial class Ext4Builder
 
     private static void WriteSuperblock(
         Span<byte> block, int blockSize, int inodeSize, uint inodesPerGroup, long totalBlocks, long usedBlocks, int usedInodes, byte[] uuid, int blocksPerGroup, bool enableMetadataCsum, uint journalInum, bool hasJournal,
-        int reservedGdtBlocks, ReadOnlySpan<byte> journalIBlock, long journalSize, string volumeName, bool readOnly)
+        int reservedGdtBlocks, ReadOnlySpan<byte> journalIBlock, long journalSize, string volumeName, bool readOnly,
+        bool sharedBlocks, ushort? casefoldEncoding, ushort casefoldEncodingFlags)
     {
         block.Clear();
         var totalInodes = inodesPerGroup * ((totalBlocks + blocksPerGroup - 1) / blocksPerGroup);
@@ -1171,8 +1273,9 @@ public sealed partial class Ext4Builder
 
 
         WriteU32(block, 0x5C, 0x0038u | (hasJournal ? FeatureCompatHasJournal : 0u));
-        WriteU32(block, 0x60, 0x02C2);
-        WriteU32(block, 0x64, 0x006Bu | (enableMetadataCsum ? 0x0400u : 0u) | (readOnly ? 0x1000u : 0u));
+        WriteU32(block, 0x60, 0x02C2u | (casefoldEncoding is not null ? 0x20000u : 0u));
+        WriteU32(block, 0x64, 0x006Bu | (enableMetadataCsum ? 0x0400u : 0u)
+            | (readOnly ? 0x1000u : 0u) | (sharedBlocks ? FeatureRoCompatSharedBlocks : 0u));
         Encoding.UTF8.GetBytes(volumeName, block[0x78..0x88]);
         uuid.AsSpan().CopyTo(block[0x68..0x78]);
 
@@ -1205,6 +1308,11 @@ public sealed partial class Ext4Builder
         if (enableMetadataCsum)
         {
             block[0x175] = 1;
+        }
+        if (casefoldEncoding is { } encoding)
+        {
+            WriteU16(block, 0x27C, encoding);
+            WriteU16(block, 0x27E, casefoldEncodingFlags);
         }
 
 

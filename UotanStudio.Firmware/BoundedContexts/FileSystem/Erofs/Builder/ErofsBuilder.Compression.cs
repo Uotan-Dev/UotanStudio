@@ -508,10 +508,10 @@ public sealed partial class ErofsBuilder
     }
 
     /// <summary>
-    /// Whether a node qualifies as a METABOX container record: a regular file (not a directory / symlink / device / synthetic node) stored as pure whole-block flat data (no inline tail), without compression / fragments / xattrs, whose size fits 32 bits (compact inode).
-    /// <para>判断节点是否可作为 METABOX 容器驻留记录：普通文件（非目录/符号链接/设备/合成节点）、 存储为纯全块 flat（无内联尾部）、无压缩/碎片/xattr，且尺寸 ≤ 32 位（compact inode）。</para>
+    /// Whether an uncompressed regular inode and its inline payload fit within one METABOX block.
+    /// <para>仅将 inode、扩展属性和内联数据整体能放入单个 METABOX 块的普通文件作为驻留记录。</para>
     /// </summary>
-    private static bool IsMetaboxEligible(BuildNode node)
+    private static bool IsMetaboxEligible(BuildNode node, int blockSize)
         => !node.IsDirectory
            && !node.IsSymlink
            && !node.IsDevice
@@ -519,12 +519,11 @@ public sealed partial class ErofsBuilder
            && node.Size <= uint.MaxValue
            && node.Pclusters is null
            && !node.IsFragment
-           && node.XattrIbody.Length == 0
-           && GetInodeHeaderSize(node) == ErofsInode.CompactSize;
+           && GetInodeRecordSize(node, blockSize) <= blockSize;
 
     /// <summary>
-    /// Writes the metabox inode's container data area: each resident file's 32-byte compact inode record is streamed to its slot (the metabox inode's i_u points at this data area and its i_size is slotCount × 32).
-    /// <para>写出 metabox inode 的容器数据区：把每个容器驻留文件的 32 字节 compact inode 记录写到其 槽位（metabox inode 的 i_u 指向该数据区，i_size = 槽数 × 32）。</para>
+    /// Writes each variable-sized METABOX inode record with its inline xattrs and tail data.
+    /// <para>按分配的变长槽位写入 inode、扩展属性与内联尾部数据。</para>
     /// </summary>
     private static void WriteMetaboxContainer(Stream output, BuildNode metaboxNode, int blockSize, ulong now, List<BuildNode> residents, bool legacyCompatibility)
     {
@@ -534,7 +533,16 @@ public sealed partial class ErofsBuilder
             var inode = BuildInode(resident, blockSize, now, legacyCompatibility);
             var buffer = new byte[inode.OnDiskSize];
             inode.WriteTo(buffer);
-            WriteAt(output, baseOffset + resident.MetaboxSlot * ErofsSuperblock.CompactInodeSize, buffer, buffer.Length);
+            var slotOffset = checked(baseOffset + resident.MetaboxSlot * ErofsSuperblock.CompactInodeSize);
+            WriteAt(output, slotOffset, buffer, buffer.Length);
+            if (resident.XattrIbody.Length > 0)
+            {
+                WriteAt(output, slotOffset + inode.OnDiskSize, resident.XattrIbody, resident.XattrIbody.Length);
+            }
+            if (resident.InlineData.Length > 0)
+            {
+                WriteAt(output, slotOffset + inode.InlineDataOffset, resident.InlineData, resident.InlineData.Length);
+            }
         }
     }
 

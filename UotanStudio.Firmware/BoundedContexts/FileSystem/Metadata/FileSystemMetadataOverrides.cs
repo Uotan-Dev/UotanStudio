@@ -218,11 +218,16 @@ public static class FileSystemMetadataOverrides
         IReadOnlyDictionary<string, FsConfigEntry> FsConfig,
         IReadOnlyDictionary<string, string> FileContexts,
         IReadOnlyDictionary<string, string> PartitionInfo,
-        RebuildParameters? Rebuild) LoadTables(string metadataDirectory, string sourceFileName, string? preservationId)
+        RebuildParameters? Rebuild) LoadTables(string metadataDirectory, string sourceFileName, string? preservationId,
+            bool requireStructured = false)
     {
         var document = TryLoadDocument(metadataDirectory, sourceFileName, preservationId);
         if (document is null)
         {
+            if (requireStructured)
+            {
+                throw new InvalidDataException("Filesystem structured rebuild metadata is missing or invalid.");
+            }
             var partition = RepackMetadata.DetectPartitionName(sourceFileName);
             var prefix = FileSystemMetadataGenerator.GetMetadataFileName(partition, "");
             return (

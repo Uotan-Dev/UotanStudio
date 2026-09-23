@@ -580,6 +580,13 @@ public sealed partial class ErofsBuilder
                 var entry = editPlan.Get(node.FullPath);
                 node.OriginalInode = entry.Inode;
                 node.SourceInode = options.SourceInodes?.GetValueOrDefault(entry.Inode);
+                if (entry.Metadata?.ModificationTime is { } time)
+                {
+                    node.SourceInode = node.SourceInode is { } sourceInode
+                        ? sourceInode with { Mtime = checked((ulong)time.Seconds), MtimeNanoseconds = time.Nanoseconds }
+                        : new ErofsSourceInode(checked((ulong)time.Seconds), time.Nanoseconds, true,
+                            options.Compress, options.Algorithm, options.UseCompactedIndexes, false, blockSize, entry.Path);
+                }
                 if ((entry.Mode & 0xF000) == 0x8000) { node.FullPath = editPlan.ContentSource(node.FullPath); node.Size = new FileInfo(node.FullPath).Length; }
                 node.Name = UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemEditPlan.Name(entry.Path);
                 node.Uid = entry.Uid;
@@ -802,19 +809,27 @@ public sealed partial class ErofsBuilder
         BuildNode? metaboxNode = null;
         if (options.Metabox)
         {
-            metaboxResident = ordered.Where(IsMetaboxEligible).ToList();
+            metaboxResident = ordered.Where(node => IsMetaboxEligible(node, blockSize)).ToList();
             if (metaboxResident.Count > 0)
             {
+                var metaboxLength = 0L;
                 foreach (var resident in metaboxResident)
                 {
+                    var recordSize = GetInodeRecordSize(resident, blockSize);
+                    if (metaboxLength % blockSize + recordSize > blockSize)
+                    {
+                        metaboxLength = AlignUp(metaboxLength, blockSize);
+                    }
+                    resident.MetaboxSlot = metaboxLength / ErofsSuperblock.CompactInodeSize;
                     resident.IsMetaboxResident = true;
+                    metaboxLength = checked(metaboxLength + AlignUp(recordSize, ErofsSuperblock.CompactInodeSize));
                 }
 
                 metaboxNode = new BuildNode
                 {
                     IsMetaboxContainer = true,
-                    Size = (long)metaboxResident.Count * ErofsSuperblock.CompactInodeSize,
-                    FlatBlocks = CeilDiv((long)metaboxResident.Count * ErofsSuperblock.CompactInodeSize, blockSize),
+                    Size = metaboxLength,
+                    FlatBlocks = CeilDiv(metaboxLength, blockSize),
                 };
                 ordered.Add(metaboxNode);
             }
@@ -824,12 +839,10 @@ public sealed partial class ErofsBuilder
         var metaOff = inodeTableStart;
         if (metaboxResident is not null)
         {
-            for (var i = 0; i < metaboxResident.Count; i++)
+            foreach (var resident in metaboxResident)
             {
-                var resident = metaboxResident[i];
-                resident.MetaboxSlot = i;
                 resident.MetaOffset = -1;
-                resident.Nid = NidMetaboxFlag | (ulong)(uint)i;
+                resident.Nid = NidMetaboxFlag | checked((uint)resident.MetaboxSlot);
             }
         }
 

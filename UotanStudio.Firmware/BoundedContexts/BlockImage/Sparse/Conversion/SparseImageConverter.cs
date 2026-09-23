@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.DataProviders;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
+using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
@@ -102,6 +103,46 @@ public static class SparseImageConverter
     }
 
     /// <summary>
+    /// Converts a raw image and atomically publishes a structurally validated Android Sparse image.
+    /// The publication temporary file is created beside the destination.
+    /// </summary>
+    public static void ConvertRawToSparseAtomic(
+        string inputFile,
+        string outputFile,
+        uint blockSize = 4096,
+        CancellationToken cancellationToken = default)
+        => ConvertRawToSparseAtomic(
+            inputFile,
+            outputFile,
+            blockSize,
+            static (input, output, size, length, token) => ConvertRawToSparseCancellable(input, output, size, length, token),
+            cancellationToken);
+
+    internal static void ConvertRawToSparseAtomic(
+        string inputFile,
+        string outputFile,
+        uint blockSize,
+        Action<Stream, Stream, uint, long, CancellationToken> converter,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(inputFile);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputFile);
+        ArgumentNullException.ThrowIfNull(converter);
+        cancellationToken.ThrowIfCancellationRequested();
+        var inputPath = Path.GetFullPath(inputFile);
+        var sourceLength = new FileInfo(inputPath).Length;
+        FileExtraction.WriteAtomic(outputFile, output =>
+        {
+            using var input = new FileStream(inputPath, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan);
+            converter(input, output, blockSize, sourceLength, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            output.Flush(flushToDisk: true);
+            ValidateSparseOutput(output, sourceLength, blockSize);
+            cancellationToken.ThrowIfCancellationRequested();
+        });
+    }
+
+    /// <summary>
     /// Converts a raw image stream to a sparse image stream.
     /// <para>将原始镜像流转换为稀疏镜像流。</para>
     /// </summary>
@@ -115,7 +156,16 @@ public static class SparseImageConverter
     /// a positive multiple of 4, which would make the bootloader misparse the sparse stream.
     /// 当 <paramref name="blockSize"/> 不是 4 的正整数倍时抛出，此时 bootloader 会错解析稀疏流。</exception>
     public static void ConvertRawToSparse(Stream input, Stream output, uint blockSize = 4096, long? length = null)
+        => ConvertRawToSparseCancellable(input, output, blockSize, length, CancellationToken.None);
+
+    private static void ConvertRawToSparseCancellable(
+        Stream input,
+        Stream output,
+        uint blockSize,
+        long? length,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (blockSize == 0 || blockSize % 4 != 0)
         {
             throw new ArgumentOutOfRangeException(nameof(blockSize),
@@ -132,7 +182,7 @@ public static class SparseImageConverter
             {
                 sparseFile.AddRawChunk(new StreamDataProvider(input, input.Position, totalLength), totalBlocks);
             }
-            sparseFile.WriteToStream(output, sparse: true);
+            sparseFile.WriteToStream(new CancellationWriteStream(output, cancellationToken), sparse: true);
             return;
         }
 
@@ -171,6 +221,7 @@ public static class SparseImageConverter
 
             for (var block = 0U; block < totalBlocks; block++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var thisBlockBytes = (int)Math.Min(blockSize, totalLength - (long)block * blockSize);
                 input.ReadExactly(buffer, 0, thisBlockBytes);
                 if (thisBlockBytes < (int)blockSize)
@@ -208,11 +259,76 @@ public static class SparseImageConverter
             }
             Flush();
 
-            sparseFile.WriteToStream(output, sparse: true);
+            sparseFile.WriteToStream(new CancellationWriteStream(output, cancellationToken), sparse: true);
+            cancellationToken.ThrowIfCancellationRequested();
         }
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    internal static void ConvertRawToSparseValidated(
+        Stream input,
+        Stream output,
+        uint blockSize,
+        long length,
+        CancellationToken cancellationToken,
+        Stream? validationOutput = null)
+    {
+        ConvertRawToSparseCancellable(input, output, blockSize, length, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        output.Flush();
+        var readableOutput = validationOutput ?? output;
+        if (readableOutput is FileStream fileOutput)
+        {
+            fileOutput.Flush(flushToDisk: true);
+        }
+        else
+        {
+            readableOutput.Flush();
+        }
+        ValidateSparseOutput(readableOutput, length, blockSize);
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private static void ValidateSparseOutput(Stream output, long sourceLength, uint blockSize)
+    {
+        if (!output.CanSeek || !output.CanRead)
+        {
+            throw new InvalidOperationException("Sparse publication validation requires a readable, seekable output stream.");
+        }
+
+        var end = output.Length;
+        output.Position = 0;
+        using var sparse = SparseReader.FromStream(output);
+        var expectedBlocks = checked((ulong)((sourceLength + blockSize - 1) / blockSize));
+        if (sparse.Header.BlockSize != blockSize || sparse.Header.TotalBlocks != expectedBlocks || output.Position != end)
+        {
+            throw new InvalidDataException("Converted sparse image does not match the raw image length or contains trailing data.");
+        }
+    }
+
+    private sealed class CancellationWriteStream(Stream inner, CancellationToken cancellationToken) : Stream
+    {
+        public override bool CanRead => false;
+        public override bool CanSeek => inner.CanSeek;
+        public override bool CanWrite => inner.CanWrite;
+        public override long Length => inner.Length;
+        public override long Position { get => inner.Position; set => inner.Position = value; }
+        public override void Flush() { cancellationToken.ThrowIfCancellationRequested(); inner.Flush(); }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
+        public override void SetLength(long value) { cancellationToken.ThrowIfCancellationRequested(); inner.SetLength(value); }
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            inner.Write(buffer, offset, count);
+        }
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            inner.Write(buffer);
         }
     }
 

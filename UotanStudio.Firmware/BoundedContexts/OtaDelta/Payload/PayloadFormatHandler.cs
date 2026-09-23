@@ -130,7 +130,9 @@ public sealed class PayloadFormatHandler : IFormatHandler, IRepackMetadataProvid
                         var percent = 5.0 + (processed * 95.0) / total;
                         options.Progress.Report(Math.Clamp(percent, 5.0, 100.0), "Extracting payload partitions...");
                     });
-                await PayloadParser.ExtractAsync(filePath, null, outputDirectory, cancellationToken, byteProgress: byteProgressAdapter).ConfigureAwait(false);
+                await PayloadParser.ExtractAsync(filePath, null, outputDirectory, cancellationToken,
+                    byteProgress: byteProgressAdapter,
+                    maximumPartitionBytes: options?.MaximumOutputBytes ?? Payload.Extraction.PayloadExtractor.DefaultMaximumPartitionBytes).ConfigureAwait(false);
                 options?.Progress?.Report(100, "Extraction complete.");
 
                 return FirmwareOpResult.Ok(

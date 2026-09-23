@@ -67,6 +67,9 @@ public sealed class ErofsOptions
     internal Dictionary<ErofsCompressionAlgorithm, ErofsOptions>? SourceCompressionOptions { get; set; }
     internal bool SourceMtimeFeature { get; set; }
     internal bool SourceXattrFilterFeature { get; set; }
+    internal bool SourceSharedEaInMetabox { get; set; }
+    internal bool SourceMetaboxCompressed { get; set; }
+    internal IReadOnlyList<ErofsSourceDevice>? SourceDeviceTable { get; set; }
     internal byte[]? SourceVolumeNameBytes { get; set; }
     internal CancellationToken CancellationToken { get; set; }
     internal bool OptimizeCompression { get; set; }
@@ -272,7 +275,7 @@ public sealed class ErofsOptions
 
 internal sealed record ErofsSourceInode(ulong Mtime, uint MtimeNanoseconds, bool Extended,
     bool Compressed, ErofsCompressionAlgorithm Algorithm, bool CompactIndexes, bool InlineData, int LogicalClusterSize,
-    string? Path = null);
+    string? Path = null, int? SourceExtentClusterSize = null, int? SourceExtentRecordSize = null);
 
 /// <summary>
 /// Declares one extra device for the EROFS device table: a NUL-safe tag and the device size in bytes
@@ -281,3 +284,5 @@ internal sealed record ErofsSourceInode(ulong Mtime, uint MtimeNanoseconds, bool
 /// 设备表记录该 tag 以及由 <paramref name="SizeBytes"/> 推导出的块数。</para>
 /// </summary>
 public sealed record ErofsDeviceSpec(string Tag, long SizeBytes);
+
+internal sealed record ErofsSourceDevice(byte[] Tag, ulong Blocks, ulong UniAddr);

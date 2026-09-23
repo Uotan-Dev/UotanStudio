@@ -6,16 +6,22 @@ public sealed partial class ErofsParser
     private sealed class IndexReadWindow
     {
         private readonly ErofsParser _parser;
+        private readonly ulong _nid;
         private readonly long _start;
         private readonly long _length;
         private readonly byte[] _buffer;
         private long _offset = -1;
         private int _count;
 
-        internal IndexReadWindow(ErofsParser parser, long start, long length)
+        internal IndexReadWindow(ErofsParser parser, ulong nid, long start, long length)
         {
-            parser.CheckRange(start, length, "Compressed index");
+            if (start < 0 || length < 0 || start > parser.InodeMetadataLength(nid)
+                || length > parser.InodeMetadataLength(nid) - start)
+            {
+                throw new InvalidDataException("Compressed index exceeds the inode metadata stream.");
+            }
             _parser = parser;
+            _nid = nid;
             _start = start;
             _length = length;
             _buffer = new byte[(int)Math.Min(65536, length)];
@@ -29,10 +35,18 @@ public sealed partial class ErofsParser
             {
                 _offset = offset;
                 _count = (int)Math.Min(_buffer.Length, _length - offset);
-                lock (_parser._streamLock)
+                if (_parser.IsMetaboxInode(_nid))
                 {
-                    _parser._stream.Position = checked(_parser._baseOffset + _start + offset);
-                    _parser._stream.ReadExactly(_buffer, 0, _count);
+                    _parser.ReadMetaboxBytes(_start + offset, _count, "Compressed index")
+                        .CopyTo(_buffer, 0);
+                }
+                else
+                {
+                    lock (_parser._streamLock)
+                    {
+                        _parser._stream.Position = checked(_parser._baseOffset + _start + offset);
+                        _parser._stream.ReadExactly(_buffer, 0, _count);
+                    }
                 }
             }
             relative = checked((int)(offset - _offset));

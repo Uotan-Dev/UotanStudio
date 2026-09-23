@@ -5,7 +5,11 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
 
-public sealed record F2fsFileEntry(string Path, long Size, uint Inode, F2fsParser.F2fsEntryKind Kind, string? SymlinkTarget = null, uint Uid = 0, uint Gid = 0, ushort Mode = 0, IReadOnlyDictionary<string, byte[]>? Xattrs = null, uint DeviceId = 0, uint Flags = 0);
+public sealed record F2fsFileEntry(string Path, long Size, uint Inode, F2fsParser.F2fsEntryKind Kind, string? SymlinkTarget = null, uint Uid = 0, uint Gid = 0, ushort Mode = 0, IReadOnlyDictionary<string, byte[]>? Xattrs = null, uint DeviceId = 0, uint Flags = 0)
+{
+    /// <summary>Gets source timestamps, inode identity and per-file compression attributes.</summary>
+    public Metadata.FileSystemInodeMetadata? Metadata { get; init; }
+}
 
 public sealed class F2fsParser : IDisposable
 {
@@ -233,7 +237,24 @@ public sealed class F2fsParser : IDisposable
     {
         var entries = ListFiles();
         var root = ReadInode(_superblock.RootIno);
-        return [new(".", (long)root.Size, _superblock.RootIno, F2fsEntryKind.Directory, Uid: root.Uid, Gid: root.Gid, Mode: root.Mode, Xattrs: ReadXattrs(_superblock.RootIno, root), Flags: root.Flags), .. entries];
+        return [new F2fsFileEntry(".", (long)root.Size, _superblock.RootIno, F2fsEntryKind.Directory, Uid: root.Uid, Gid: root.Gid, Mode: root.Mode, Xattrs: ReadXattrs(_superblock.RootIno, root), Flags: root.Flags) { Metadata = root.Metadata }, .. entries];
+    }
+
+    /// <summary>Reads the compression algorithms actually referenced by compressed file inodes.</summary>
+    internal IReadOnlySet<CompressionAlgorithm> ReadCompressionAlgorithms()
+    {
+        var algorithms = new HashSet<CompressionAlgorithm>();
+        foreach (var entry in ListFiles())
+        {
+            if ((entry.Flags & F2fsInode.ComprFlag) == 0)
+            {
+                continue;
+            }
+
+            algorithms.Add(MapCompressAlgorithm(ReadInode(entry.Inode).CompressAlgorithm));
+        }
+
+        return algorithms;
     }
 
     /// <summary>
@@ -373,7 +394,7 @@ public sealed class F2fsParser : IDisposable
             var childPath = prefix.Length == 0 ? entry.Name : prefix + "/" + entry.Name;
             var kind = ClassifyKind(entry.FileType, childInode);
             var symlinkTarget = kind == F2fsEntryKind.Symlink ? ReadSymlinkTarget(entry.Ino, childInode) : null;
-            _entries[childPath] = new F2fsFileEntry(childPath, (long)childInode.Size, entry.Ino, kind, symlinkTarget, childInode.Uid, childInode.Gid, childInode.Mode, ReadXattrs(entry.Ino, childInode), childInode.Addr[childInode.ExtraIsizeWords] != 0 ? childInode.Addr[childInode.ExtraIsizeWords] : childInode.Addr[childInode.ExtraIsizeWords + 1], childInode.Flags);
+            _entries[childPath] = new F2fsFileEntry(childPath, (long)childInode.Size, entry.Ino, kind, symlinkTarget, childInode.Uid, childInode.Gid, childInode.Mode, ReadXattrs(entry.Ino, childInode), childInode.Addr[childInode.ExtraIsizeWords] != 0 ? childInode.Addr[childInode.ExtraIsizeWords] : childInode.Addr[childInode.ExtraIsizeWords + 1], childInode.Flags) { Metadata = childInode.Metadata };
             if (kind == F2fsEntryKind.Directory)
             {
                 WalkDirectory(entry.Ino, childPath, visited);

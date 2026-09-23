@@ -74,9 +74,17 @@ public sealed partial class ErofsParser
         var tailLength = length - flatLength;
         if (tailLength > 0)
         {
-            var tailStart = _superblock.GetInodeOffset(nid) + inode.InlineDataOffset;
-            CheckRange(tailStart, tailLength, "Tailpacked inline data");
-            CopyFromSource(output, tailStart, tailLength);
+            if (_hasMetabox && (nid & NidMetaboxFlag) != 0)
+            {
+                var tailStart = checked(MetaboxOffset(nid) + inode.InlineDataOffset);
+                output.Write(ReadMetaboxBytes(tailStart, checked((int)tailLength), "Tailpacked inline data"));
+            }
+            else
+            {
+                var tailStart = checked(_superblock.GetInodeOffset(nid) + inode.InlineDataOffset);
+                CheckRange(tailStart, tailLength, "Tailpacked inline data");
+                CopyFromSource(output, tailStart, tailLength);
+            }
         }
     }
 
@@ -115,7 +123,7 @@ public sealed partial class ErofsParser
         var chunkCount = (length - 1) / chunkSize + 1;
         var usesIndexes = inode.UsesChunkIndexes;
         var indexSize = usesIndexes ? 8 : 4;
-        var indexTableOffset = checked((_superblock.GetInodeOffset(nid) + inode.InlineDataOffset + indexSize - 1) & ~(long)(indexSize - 1));
+        var indexTableOffset = checked((InodeOffset(nid) + inode.InlineDataOffset + indexSize - 1) & ~(long)(indexSize - 1));
         var indexBytes = usesIndexes
             ? checked(chunkCount * 8L)
             : checked(chunkCount * 4L);
@@ -125,7 +133,7 @@ public sealed partial class ErofsParser
                 $"Chunk index table size {indexBytes} exceeds the limit of {MaxMetadataComponentSize} bytes.");
         }
 
-        var index = ReadBytes(indexTableOffset, checked((int)indexBytes), "Chunk index table");
+        var index = ReadInodeMetadata(nid, indexTableOffset, checked((int)indexBytes), "Chunk index table");
         var remaining = length;
         for (var i = 0; i < chunkCount && remaining > 0; i++)
         {
@@ -208,11 +216,11 @@ public sealed partial class ErofsParser
     private void WriteCompressedData(ulong nid, ErofsInode inode, Stream output,
         CompressionObserver? observer = null, CancellationToken cancellationToken = default)
     {
-        var inodeLoc = _superblock.GetInodeOffset(nid);
+        var inodeLoc = InodeOffset(nid);
 
 
         var headerOffset = AlignUp(inodeLoc + inode.OnDiskSize + inode.XattrTotalSize, 8);
-        var headerBytes = ReadBytes(headerOffset, ZErofsMapHeader.Size, "compressed map header");
+        var headerBytes = ReadInodeMetadata(nid, headerOffset, ZErofsMapHeader.Size, "compressed map header");
         var header = ZErofsMapHeader.FromBytes(headerBytes);
 
 
@@ -265,7 +273,8 @@ public sealed partial class ErofsParser
         var indexLength = inode.DataLayout == ErofsInode.DataLayoutCompactIndexes
             ? checked((long)totalIdx * 4 + 64)
             : checked((long)totalIdx * ZErofsLclusterIndex.Size + FullIndexStartPad);
-        var cachedIndex = new IndexReadWindow(this, indexBase, Math.Min(indexLength, _imageSize - indexBase));
+        var cachedIndex = new IndexReadWindow(this, nid, indexBase,
+            Math.Min(indexLength, InodeMetadataLength(nid) - indexBase));
 
         var compressed = ArrayPool<byte>.Shared.Rent(_blockSize * 2);
         var decoded = ArrayPool<byte>.Shared.Rent(Math.Max(lclusterSize, _blockSize));
@@ -362,11 +371,18 @@ public sealed partial class ErofsParser
                 {
 
 
-                    var dataStart = isTailPacked ? CompressedIndexEnd(inode, headerOffset, totalIdx, lclusterBits) : checked(lc.Pblk * _blockSize);
+                    var dataStart = isTailPacked ? CompressedIndexEnd(nid, inode, headerOffset, totalIdx, lclusterBits) : checked(lc.Pblk * _blockSize);
                     if (!interlaced)
                     {
-                        CheckRange(dataStart, llen, "Plain lcluster data");
-                        CopyFromSource(output, dataStart, llen);
+                        if (isTailPacked && IsMetaboxInode(nid))
+                        {
+                            output.Write(ReadMetaboxBytes(dataStart, checked((int)llen), "Plain lcluster data"));
+                        }
+                        else
+                        {
+                            CheckRange(dataStart, llen, "Plain lcluster data");
+                            CopyFromSource(output, dataStart, llen);
+                        }
                         lcn = nextLcn;
                         continue;
                     }
@@ -379,8 +395,9 @@ public sealed partial class ErofsParser
                     }
 
                     var skip = (int)(mLa & (_blockSize - 1));
-                    CheckRange(dataStart, _blockSize, "Interlaced plain lcluster block");
-                    var rawBlock = ReadBytes(dataStart, _blockSize, "Interlaced plain lcluster block");
+                    var rawBlock = isTailPacked && IsMetaboxInode(nid)
+                        ? ReadMetaboxBytes(dataStart, _blockSize, "Interlaced plain lcluster block")
+                        : ReadBytes(dataStart, _blockSize, "Interlaced plain lcluster block");
                     var rightpart = Math.Min(_blockSize - skip, (int)llen);
                     output.Write(rawBlock, skip, rightpart);
                     if (llen > rightpart)
@@ -429,8 +446,7 @@ public sealed partial class ErofsParser
                     throw new InvalidDataException("Invalid compressed pcluster for nid {nid}.");
                 }
 
-                var pblkStart = isTailPacked ? CompressedIndexEnd(inode, headerOffset, totalIdx, lclusterBits) : checked(lc.Pblk * _blockSize);
-                CheckRange(pblkStart, compressedByteLen, "Compressed pcluster data");
+                var pblkStart = isTailPacked ? CompressedIndexEnd(nid, inode, headerOffset, totalIdx, lclusterBits) : checked(lc.Pblk * _blockSize);
                 if (compressedByteLen > compressed.Length)
                 {
                     ArrayPool<byte>.Shared.Return(compressed);
@@ -443,10 +459,19 @@ public sealed partial class ErofsParser
                     decoded = ArrayPool<byte>.Shared.Rent((int)llen);
                 }
 
-                lock (_streamLock)
+                if (isTailPacked && IsMetaboxInode(nid))
                 {
-                    _stream.Position = checked(_baseOffset + pblkStart);
-                    _stream.ReadExactly(compressed, 0, compressedByteLen);
+                    ReadMetaboxBytes(pblkStart, compressedByteLen, "Compressed pcluster data")
+                        .CopyTo(compressed, 0);
+                }
+                else
+                {
+                    CheckRange(pblkStart, compressedByteLen, "Compressed pcluster data");
+                    lock (_streamLock)
+                    {
+                        _stream.Position = checked(_baseOffset + pblkStart);
+                        _stream.ReadExactly(compressed, 0, compressedByteLen);
+                    }
                 }
 
 
@@ -639,8 +664,8 @@ public sealed partial class ErofsParser
 
     private List<(long Lcn, byte Type, int ClusterOfs, long Pblk, uint Delta0, uint Delta1)> IndexRows(ulong nid, ErofsInode inode)
     {
-        var headerOffset = AlignUp(_superblock.GetInodeOffset(nid) + inode.OnDiskSize + inode.XattrTotalSize, 8);
-        var header = ZErofsMapHeader.FromBytes(ReadBytes(headerOffset, ZErofsMapHeader.Size, "compressed map header"));
+        var headerOffset = AlignUp(InodeOffset(nid) + inode.OnDiskSize + inode.XattrTotalSize, 8);
+        var header = ZErofsMapHeader.FromBytes(ReadInodeMetadata(nid, headerOffset, ZErofsMapHeader.Size, "compressed map header"));
         var lclusterBits = _superblock.BlockSizeBits + (header.ClusterBits & ZErofsMapHeader.LclusterBitsMask);
         var totalIdx = ErofsCompression.PclusterCount(inode.Size, 1 << lclusterBits);
         var rows = new List<(long, byte, int, long, uint, uint)>(totalIdx);
@@ -667,13 +692,21 @@ public sealed partial class ErofsParser
         // extent 总数位于头部联合体：h_extents_lo（字节 0-3）+ h_extents_hi（字节 6-7）。
         var extentCount = (ulong)(BinaryPrimitives.ReadUInt32LittleEndian(headerBytes)
             | ((ulong)header.ExtentsHi << 32));
-        if (extentCount == 0)
-        {
-            return;
-        }
-
         var recSize = 4 << ((header.Advise >> ZErofsMapHeader.ExtRecSizeBit) & ZErofsMapHeader.ExtRecSizeMask);
         var extentsBase = checked((long)AlignUp(headerOffset + ZErofsMapHeader.Size, recSize));
+        if (recSize is 4 or 8)
+        {
+            WriteShortExtentsData(nid, inode, header, extentsBase, recSize, output, cancellationToken);
+            return;
+        }
+        if (extentCount == 0)
+        {
+            if (inode.Size == 0)
+            {
+                return;
+            }
+            throw new InvalidDataException($"EROFS extent count is zero for nonempty inode {nid}.");
+        }
         // A record holds at least plen + pstart_lo; anything shorter cannot address data.
         // 记录至少容纳 plen + pstart_lo；更短的记录无法寻址数据。
         if (recSize < 8)
@@ -688,31 +721,35 @@ public sealed partial class ErofsParser
         }
 
         var logicalOffset = 0L;
-        var physicalOffset = -1L;
         for (var i = 0; i < (long)extentCount; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var recordOffset = checked(extentsBase + i * recSize);
-            var record = ReadBytes(recordOffset, recSize, $"extent record {i}");
+            var record = ReadInodeMetadata(nid, recordOffset, recSize, $"extent record {i}");
             var plenRaw = BinaryPrimitives.ReadUInt32LittleEndian(record);
-            var logicalStart = (long)BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(12));
-            if (recSize > 20)
-            {
-                logicalStart |= (long)BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(16)) << 32;
-            }
+            var logicalStart = checked((long)(BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(12))
+                | (recSize > 16 ? (ulong)BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(16)) << 32 : 0)));
 
             // Records are sorted by logical start; the previous record's logical end is the
             // logical length of this extent (fs/erofs/zmap.c: m_llen = lend - m_la).
             // 记录按逻辑偏移排序；前一条记录的逻辑终点即本 extent 的逻辑长度。
-            if (logicalStart < logicalOffset)
+            if (logicalStart != logicalOffset)
             {
                 throw new InvalidDataException($"EROFS extent {i} of nid {nid} is not sorted.");
             }
 
-            var logicalLength = logicalStart - logicalOffset;
+            var logicalEnd = i + 1 < (long)extentCount
+                ? ReadExtentLogicalStart(nid, checked(recordOffset + recSize), recSize)
+                : checked((long)inode.Size);
+            if (logicalEnd <= logicalStart || logicalEnd > (long)inode.Size)
+            {
+                throw new InvalidDataException($"EROFS extent {i} of nid {nid} has an invalid logical range.");
+            }
+            var logicalLength = logicalEnd - logicalStart;
             var physicalLength = plenRaw & ZErofsMapHeader.ExtentPlenMask;
             var fmt = plenRaw >> ZErofsMapHeader.ExtentPlenFmtBit;
-            var isPartial = (plenRaw & ZErofsMapHeader.ExtentPlenPartial) != 0;
+            var physicalOffset = checked((long)(BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(4))
+                | (ulong)BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(8)) << 32));
             if (fmt > (uint)ErofsAlgorithm.Zstd + 1)
             {
                 throw new InvalidDataException($"EROFS extent {i} of nid {nid} uses unknown algorithm {fmt - 1}.");
@@ -720,45 +757,113 @@ public sealed partial class ErofsParser
 
             // Fragment tail extent: data lives in the packed inode, addressed by (plen, pstart).
             // fragment 尾部 extent：数据在 packed inode 中，以 (plen, pstart) 寻址。
-            if (isPartial && physicalLength == 0)
+            if (i == (long)extentCount - 1
+                && (header.Advise & ZErofsMapHeader.AdviseFragmentPcluster) != 0)
+            {
+                WritePackedData(((ulong)physicalOffset << 32) | plenRaw, logicalLength, output);
+            }
+            else if (physicalLength == 0)
             {
                 WriteZeroes(output, logicalLength);
-                logicalOffset = logicalStart;
-                continue;
             }
-
-            if (fmt == 0)
+            else if (fmt == 0)
             {
                 // fmt == 0: plain/interlaced extent — the pstart is a byte address into the image.
                 // fmt == 0：未压缩 extent —— pstart 为镜像内的字节地址。
-                WritePlainExtent(nid, inode, record, recSize, logicalOffset, logicalLength, physicalOffset, output, cancellationToken);
+                WritePlainExtent(nid, inode, record, recSize, logicalStart, logicalLength, physicalOffset, output, cancellationToken);
             }
             else
             {
-                WriteCompressedExtent(nid, inode, record, recSize, logicalOffset, logicalLength,
-                    (ErofsAlgorithm)(fmt - 1), output, cancellationToken);
+                WriteCompressedExtent(nid, inode, record, recSize, logicalStart, logicalLength,
+                    (ErofsAlgorithm)(fmt - 1), output, cancellationToken, physicalOffset);
             }
 
-            // Advance the physical cursor for records that do not carry an absolute pstart
-            // (recsz 4: pstart_lo is absent, so extents are packed consecutively).
-            // 对不带绝对 pstart 的记录（recsz 4 无 pstart_lo）推进物理游标，extent 连续存放。
-            if (recSize > 4)
-            {
-                var pstart = BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(4));
-                if (recSize > 8)
-                {
-                    pstart |= (uint)(BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(8)) << 0);
-                }
-
-                physicalOffset = checked((long)pstart * (recSize > 12 ? 1 : 1));
-            }
-
-            logicalOffset = logicalStart;
+            logicalOffset = logicalEnd;
         }
 
-        if (logicalOffset < (long)inode.Size)
+        if (logicalOffset != (long)inode.Size)
         {
-            WriteZeroes(output, (long)inode.Size - logicalOffset);
+            throw new InvalidDataException($"EROFS extents of nid {nid} do not cover the file.");
+        }
+    }
+
+    private long ReadExtentLogicalStart(ulong nid, long offset, int recordSize)
+    {
+        var record = ReadInodeMetadata(nid, offset, recordSize, "extent logical start");
+        return checked((long)(BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(12))
+            | (recordSize > 16 ? (ulong)BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(16)) << 32 : 0)));
+    }
+
+    private void WriteShortExtentsData(ulong nid, ErofsInode inode, ZErofsMapHeader header,
+        long indexStart, int recordSize, Stream output, CancellationToken cancellationToken)
+    {
+        if (inode.Size == 0)
+        {
+            return;
+        }
+        var clusterBits = _superblock.BlockSizeBits + (header.ClusterBits & ZErofsMapHeader.LclusterBitsMask);
+        if (clusterBits > 23)
+        {
+            throw new InvalidDataException($"EROFS extent cluster size shift {clusterBits} exceeds the supported limit.");
+        }
+        var clusterSize = 1L << clusterBits;
+        if (clusterSize > ErofsCompression.MaxPclusterDecompressedSize)
+        {
+            throw new InvalidDataException("EROFS short extent exceeds the decompression budget.");
+        }
+        var count = checked(((long)inode.Size - 1) / clusterSize + 1);
+        if (count > 1 << 24)
+        {
+            throw new InvalidDataException("EROFS short extent count exceeds the supported limit.");
+        }
+        var physical = recordSize == 4
+            ? checked((long)BinaryPrimitives.ReadUInt64LittleEndian(
+                ReadInodeMetadata(nid, indexStart, 8, "short extent initial physical address")))
+            : 0L;
+        var indexBase = checked(indexStart + (recordSize == 4 ? 8 : 0));
+        for (var i = 0L; i < count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var logicalLength = Math.Min(clusterSize, (long)inode.Size - i * clusterSize);
+            var record = ReadInodeMetadata(nid, checked(indexBase + i * recordSize), recordSize, "short extent record");
+            if (recordSize == 8)
+            {
+                physical = BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(4));
+            }
+            var plenRaw = BinaryPrimitives.ReadUInt32LittleEndian(record);
+            var physicalLength = plenRaw & ZErofsMapHeader.ExtentPlenMask;
+            var format = plenRaw >> ZErofsMapHeader.ExtentPlenFmtBit;
+            if (i == count - 1 && (header.Advise & ZErofsMapHeader.AdviseFragmentPcluster) != 0)
+            {
+                var fragmentOffset = checked((ulong)physical << 32) | plenRaw;
+                WritePackedData(fragmentOffset, logicalLength, output);
+            }
+            else if (physicalLength == 0)
+            {
+                WriteZeroes(output, logicalLength);
+            }
+            else if (format == 0)
+            {
+                if (physicalLength < logicalLength)
+                {
+                    throw new InvalidDataException("EROFS plain short extent is smaller than its logical cluster.");
+                }
+                CheckRange(physical, logicalLength, "Plain short extent");
+                CopyFromSource(output, physical, logicalLength);
+            }
+            else
+            {
+                if (format > (uint)ErofsAlgorithm.Zstd + 1)
+                {
+                    throw new InvalidDataException($"Unknown EROFS short extent compression algorithm {format - 1}.");
+                }
+                WriteCompressedExtent(nid, inode, record, recordSize, i * clusterSize, logicalLength,
+                    (ErofsAlgorithm)(format - 1), output, cancellationToken, physical);
+            }
+            if (recordSize == 4)
+            {
+                physical = checked(physical + physicalLength);
+            }
         }
     }
 
@@ -769,13 +874,14 @@ public sealed partial class ErofsParser
         {
             return;
         }
-
+        if ((BinaryPrimitives.ReadUInt32LittleEndian(record) & ZErofsMapHeader.ExtentPlenMask) < logicalLength)
+        {
+            throw new InvalidDataException("EROFS plain extent is smaller than its logical range.");
+        }
         long source;
         if (recSize > 8)
         {
-            var pstartLo = BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(4));
-            var pstartHi = recSize > 12 ? BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(8)) : 0;
-            source = checked((long)(pstartLo | (pstartHi << 0)));
+            source = physicalOffset;
         }
         else
         {
@@ -787,19 +893,28 @@ public sealed partial class ErofsParser
     }
 
     private void WriteCompressedExtent(ulong nid, ErofsInode inode, byte[] record, int recSize,
-        long logicalOffset, long logicalLength, ErofsAlgorithm algorithm, Stream output, CancellationToken cancellationToken)
+        long logicalOffset, long logicalLength, ErofsAlgorithm algorithm, Stream output, CancellationToken cancellationToken,
+        long? physicalOverride = null)
     {
         if (logicalLength <= 0)
         {
             return;
         }
+        if (logicalLength > ErofsCompression.MaxPclusterDecompressedSize)
+        {
+            throw new InvalidDataException("EROFS compressed extent exceeds the decompression budget.");
+        }
 
         long pstart;
-        if (recSize > 8)
+        if (physicalOverride is { } address)
+        {
+            pstart = address;
+        }
+        else if (recSize > 8)
         {
             var pstartLo = BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(4));
             var pstartHi = recSize > 12 ? BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(8)) : 0;
-            pstart = checked((long)pstartLo);
+            pstart = checked((long)(pstartLo | (ulong)pstartHi << 32));
         }
         else
         {
@@ -827,8 +942,21 @@ public sealed partial class ErofsParser
             int decodedLength;
             try
             {
+                var inputMargin = 0;
+                if (algorithm == ErofsAlgorithm.Lz4
+                    && (_superblock.FeatureIncompat & ErofsSuperblock.IncompatLz4_0Padding) != 0)
+                {
+                    while (inputMargin < compressedLength && compressed[inputMargin] == 0)
+                    {
+                        inputMargin++;
+                    }
+                }
+                if (inputMargin == compressedLength)
+                {
+                    throw new InvalidDataException("EROFS compressed extent is entirely zero-padded.");
+                }
                 decodedLength = ErofsCompression.AlgorithmDecompress(
-                    algorithm, compressed, 0, compressedLength, decoded, 0, (int)logicalLength);
+                    algorithm, compressed, inputMargin, compressedLength - inputMargin, decoded, 0, (int)logicalLength);
             }
             catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or ArgumentException)
             {
@@ -839,7 +967,8 @@ public sealed partial class ErofsParser
             if (decodedLength != (int)logicalLength)
             {
                 throw new InvalidDataException(
-                    $"Extent of nid {nid} decoded to {decodedLength} bytes, expected {logicalLength}.");
+                    $"Extent of nid {nid} decoded to {decodedLength} bytes, expected {logicalLength}; " +
+                    $"algorithm={algorithm}, physical={pstart}, encoded={compressedLength}, prefix={Convert.ToHexString(compressed.AsSpan(0, Math.Min(16, compressedLength)))}.");
             }
 
             output.Write(decoded, 0, (int)logicalLength);
@@ -925,9 +1054,16 @@ public sealed partial class ErofsParser
         if (packed.DataLayout == ErofsInode.DataLayoutInline)
         {
 
-            var start = checked(_superblock.GetInodeOffset(packedNid) + packed.InlineDataOffset + (long)fragmentOff);
-            CheckRange(start, length, "Packed fragment data");
-            CopyFromSource(output, start, length);
+            var start = checked(InodeOffset(packedNid) + packed.InlineDataOffset + (long)fragmentOff);
+            if (IsMetaboxInode(packedNid))
+            {
+                output.Write(ReadMetaboxBytes(start, checked((int)length), "Packed fragment data"));
+            }
+            else
+            {
+                CheckRange(start, length, "Packed fragment data");
+                CopyFromSource(output, start, length);
+            }
             return;
         }
 
@@ -940,11 +1076,11 @@ public sealed partial class ErofsParser
         WritePackedRange((long)fragmentOff, length, packedSize, packed, packedNid, inlineStartIsFlat: true, output);
     }
 
-    private long CompressedIndexEnd(ErofsInode inode, long headerOffset, int count, int clusterBits)
+    private long CompressedIndexEnd(ulong nid, ErofsInode inode, long headerOffset, int count, int clusterBits)
     {
         if (inode.DataLayout == ErofsInode.DataLayoutCompressed)
             return checked(headerOffset + ZErofsMapHeader.Size + FullIndexStartPad + (long)count * 8);
-        var header = ZErofsMapHeader.FromBytes(ReadBytes(headerOffset, ZErofsMapHeader.Size, "inline index header"));
+        var header = ZErofsMapHeader.FromBytes(ReadInodeMetadata(nid, headerOffset, ZErofsMapHeader.Size, "inline index header"));
         var start = headerOffset + ZErofsMapHeader.Size;
         var initial = (int)(((32 - start % 32) / 4) & 7);
         var compact = header.HasCompacted2B && initial < count ? (count - initial) / 16 * 16 : 0;
@@ -1033,7 +1169,7 @@ public sealed partial class ErofsParser
 
 
         var inlineOffset = packed.InlineDataOffset;
-        var inlineStart = _superblock.GetInodeOffset(packedNid) + inlineOffset;
+        var inlineStart = InodeOffset(packedNid) + inlineOffset;
         if (!inlineStartIsFlat)
         {
 
@@ -1055,7 +1191,14 @@ public sealed partial class ErofsParser
             }
         }
 
-        CheckRange(inlineStart, remaining, "Packed fragment data");
-        CopyFromSource(output, inlineStart, remaining);
+        if (IsMetaboxInode(packedNid))
+        {
+            output.Write(ReadMetaboxBytes(inlineStart, checked((int)remaining), "Packed fragment data"));
+        }
+        else
+        {
+            CheckRange(inlineStart, remaining, "Packed fragment data");
+            CopyFromSource(output, inlineStart, remaining);
+        }
     }
 }

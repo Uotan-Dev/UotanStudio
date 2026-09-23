@@ -8,15 +8,25 @@ public sealed class SparseReadStream : Stream
     private readonly object _lock = new();
     private long _position;
     private bool _disposed;
+    private readonly bool _requireExactRawData;
 
     /// <summary>
     /// Initializes a new SparseReadStream over the given sparse file.
     /// <para>在给定稀疏文件之上初始化新的 SparseReadStream。</para>
     /// </summary>
     public SparseReadStream(SparseFile sparseFile)
+        : this(sparseFile, false)
+    {
+    }
+
+    /// <summary>Creates a logical reader with optional rejection of truncated RAW backing data.</summary>
+    /// <param name="sparseFile">The owned sparse image model.</param>
+    /// <param name="requireExactRawData">Reject missing RAW bytes instead of padding partial blocks with zeros.</param>
+    public SparseReadStream(SparseFile sparseFile, bool requireExactRawData)
     {
         ArgumentNullException.ThrowIfNull(sparseFile);
         _sparseFile = sparseFile;
+        _requireExactRawData = requireExactRawData;
     }
 
     public override bool CanRead => true;
@@ -221,7 +231,7 @@ public sealed class SparseReadStream : Stream
     /// Fills destination from a single chunk, starting at the chunk-relative offset chunkLocal.
     /// <para>从单个数据块填充 destination，从块内相对偏移 chunkLocal 开始。</para>
     /// </summary>
-    private static void FillChunk(SparseChunk chunk, long chunkLocal, Span<byte> destination)
+    private void FillChunk(SparseChunk chunk, long chunkLocal, Span<byte> destination)
     {
         switch ((ChunkType)chunk.Header.ChunkType)
         {
@@ -233,6 +243,11 @@ public sealed class SparseReadStream : Stream
                         var read = chunk.DataProvider.Read(chunkLocal + filled, destination[filled..]);
                         if (read <= 0)
                         {
+                            if (_requireExactRawData)
+                            {
+                                throw new EndOfStreamException("Sparse RAW backing data ended before the declared range.");
+                            }
+
                             break;
                         }
                         filled += read;

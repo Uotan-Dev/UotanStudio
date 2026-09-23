@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Models;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 
@@ -15,7 +16,11 @@ public sealed class Ext4Parser : IDisposable
         Symlink,
     }
 
-    public sealed record Ext4FileEntry(string Path, long Size, uint Inode, Ext4EntryKind Kind, string? SymlinkTarget = null, IReadOnlyDictionary<string, byte[]>? Xattrs = null, uint Uid = 0, uint Gid = 0, ushort Mode = 0, uint DeviceId = 0, uint Flags = 0);
+    public sealed record Ext4FileEntry(string Path, long Size, uint Inode, Ext4EntryKind Kind, string? SymlinkTarget = null, IReadOnlyDictionary<string, byte[]>? Xattrs = null, uint Uid = 0, uint Gid = 0, ushort Mode = 0, uint DeviceId = 0, uint Flags = 0)
+    {
+        /// <summary>Gets the source timestamps and inode identity attributes.</summary>
+        public FileSystemInodeMetadata? Metadata { get; init; }
+    }
 
     private const int SuperblockReadLength = 1024 + 1024;
     private const uint RootInodeNumber = 2;
@@ -37,10 +42,11 @@ public sealed class Ext4Parser : IDisposable
         "system.posix_acl_access",
         "system.posix_acl_default",
         "trusted.",
-        "",
+        "lustre.",
         "security.",
         "system.",
         "system.richacl",
+        "encryption.",
     ];
 
     private readonly Stream _stream;
@@ -182,12 +188,16 @@ public sealed class Ext4Parser : IDisposable
 
         const uint supportedIncompat = 0x0001 | 0x0002 | 0x0004
             | 0x0040 | 0x0080 | 0x0200 | 0x0400
-            | 0x2000 | 0x4000 | 0x8000 | 0x10000;
+            | 0x2000 | 0x4000 | 0x8000 | 0x10000 | 0x20000;
 
         var unsupportedIncompat = _superblock.FeatureIncompat & ~supportedIncompat;
         if (unsupportedIncompat != 0)
         {
             throw new InvalidDataException($"ext4 image has unsupported incompatible features: 0x{unsupportedIncompat:X8}.");
+        }
+        if ((_superblock.FeatureIncompat & 0x20000) != 0 && _superblock.Encoding != 1)
+        {
+            throw new NotSupportedException($"Unsupported EXT4 casefold encoding id {_superblock.Encoding}.");
         }
 
         _inodeSize = _superblock.InodeSize == 0 ? 256 : _superblock.InodeSize;
@@ -263,7 +273,7 @@ public sealed class Ext4Parser : IDisposable
         var entries = ListFiles();
         var root = ReadInode(RootInodeNumber);
         var xattrs = MergeXattrs(ParseInlineXattrs(_inodeBuffer, _inodeSize), ReadExternalXattrBlock(root));
-        return [new(".", root.Size, RootInodeNumber, Ext4EntryKind.Directory, Xattrs: xattrs, Uid: root.Uid, Gid: root.Gid, Mode: root.Mode, Flags: root.Flags), .. entries];
+        return [new Ext4FileEntry(".", root.Size, RootInodeNumber, Ext4EntryKind.Directory, Xattrs: xattrs, Uid: root.Uid, Gid: root.Gid, Mode: root.Mode, Flags: root.Flags) { Metadata = root.Metadata }, .. entries];
     }
 
     /// <summary>
@@ -462,7 +472,7 @@ public sealed class Ext4Parser : IDisposable
                 var kind = ClassifyKind(entry.FileType, child);
                 var symlinkTarget = kind == Ext4EntryKind.Symlink ? ReadSymlinkTarget(child) : null;
 
-                _entries[childPath] = new Ext4FileEntry(childPath, child.Size, entry.Inode, kind, symlinkTarget, childXattrs, child.Uid, child.Gid, child.Mode, child.BlockPointers[0] != 0 ? child.BlockPointers[0] : child.BlockPointers[1], child.Flags);
+                _entries[childPath] = new Ext4FileEntry(childPath, child.Size, entry.Inode, kind, symlinkTarget, childXattrs, child.Uid, child.Gid, child.Mode, child.BlockPointers[0] != 0 ? child.BlockPointers[0] : child.BlockPointers[1], child.Flags) { Metadata = child.Metadata };
                 if (kind == Ext4EntryKind.Directory)
                 {
                     WalkDirectory(entry.Inode, childPath, visitedDirectories, depth + 1);
@@ -487,7 +497,7 @@ public sealed class Ext4Parser : IDisposable
     /// Parses inline extended attributes (xattrs) from an inode's extra space.
     /// <para>从 inode 的额外空间解析内联扩展属性（xattr）。</para>
     /// </summary>
-    private static Dictionary<string, byte[]>? ParseInlineXattrs(byte[] inodeRaw, int inodeSize)
+    private Dictionary<string, byte[]>? ParseInlineXattrs(byte[] inodeRaw, int inodeSize)
     {
 
 
@@ -509,40 +519,8 @@ public sealed class Ext4Parser : IDisposable
             return null;
         }
 
-        var result = new Dictionary<string, byte[]>(StringComparer.Ordinal);
-
-
-        var pos = xattrStart + 4;
-        while (pos + 16 <= inodeSize)
-        {
-            var nameLen = inodeRaw[pos];
-            if (BinaryPrimitives.ReadUInt32LittleEndian(inodeRaw.AsSpan(pos)) == 0)
-            {
-                break;
-            }
-
-            var valueOffs = BinaryPrimitives.ReadUInt16LittleEndian(inodeRaw.AsSpan(pos + 2, 2));
-            var valueInode = BinaryPrimitives.ReadUInt32LittleEndian(inodeRaw.AsSpan(pos + 4, 4));
-            var valueSize = BinaryPrimitives.ReadUInt32LittleEndian(inodeRaw.AsSpan(pos + 8, 4));
-            var nameStart = pos + 16;
-            var nameEnd = nameStart + nameLen;
-            if (nameEnd > inodeSize)
-            {
-                break;
-            }
-
-            var name = ResolveXattrName(inodeRaw[pos + 1], Encoding.UTF8.GetString(inodeRaw, nameStart, nameLen));
-            var absValueOffset = xattrStart + 4 + valueOffs;
-            if (valueInode == 0 && absValueOffset <= inodeSize && valueSize <= inodeSize - absValueOffset)
-            {
-                result[name] = inodeRaw.AsSpan(absValueOffset, (int)valueSize).ToArray();
-            }
-
-
-            pos += (16 + nameLen + 3) & ~3;
-        }
-
-        return result.Count > 0 ? result : null;
+        // EA inode reads reuse _inodeBuffer, so finish parsing a stable copy of the owner first.
+        return ReadXattrEntries(inodeRaw.AsSpan(0, inodeSize).ToArray(), xattrStart + 4, xattrStart + 4);
     }
 
     /// <summary>
@@ -571,7 +549,10 @@ public sealed class Ext4Parser : IDisposable
         {
             foreach (var kv in external)
             {
-                merged[kv.Key] = kv.Value;
+                if (!merged.TryAdd(kv.Key, kv.Value))
+                {
+                    throw new InvalidDataException($"Duplicate EXT4 xattr: {kv.Key}");
+                }
             }
         }
 
@@ -596,62 +577,79 @@ public sealed class Ext4Parser : IDisposable
         var magic = BinaryPrimitives.ReadUInt32LittleEndian(block.AsSpan(0, 4));
         if (magic != Ext4XattrMagic)
         {
-            return null;
+            throw new InvalidDataException("Invalid EXT4 external xattr magic.");
         }
-
-
-        var hasCsum = (_superblock.FeatureRoCompat & FeatureRoCompatMetadataCsum) != 0;
-        var valueRegionEnd = hasCsum ? block.Length - 4 : block.Length;
-
-
-        var eaInodeEnabled = (_superblock.FeatureIncompat & FeatureIncompatEaInode) != 0;
-        var result = new Dictionary<string, byte[]>(StringComparer.Ordinal);
-        var pos = 4;
-        while (pos + 12 <= block.Length)
+        if (BinaryPrimitives.ReadUInt32LittleEndian(block.AsSpan(8)) != 1
+            || BinaryPrimitives.ReadUInt32LittleEndian(block.AsSpan(4)) == 0)
         {
-            var nameLen = block[pos];
-            if (nameLen == 0)
-            {
-                break;
-            }
-
-            var nameIndex = block[pos + 1];
-            var valueOffs = BinaryPrimitives.ReadUInt16LittleEndian(block.AsSpan(pos + 2, 2));
-            var valueSize = BinaryPrimitives.ReadUInt32LittleEndian(block.AsSpan(pos + 4, 4));
-            var nameStart = pos + 12;
-            var nameEnd = nameStart + nameLen;
-            if (nameEnd > block.Length)
-            {
-                break;
-            }
-
-            var suffix = Encoding.UTF8.GetString(block, nameStart, nameLen);
-            var fullName = ResolveXattrName(nameIndex, suffix);
-
-
-            byte[]? value = null;
-            if (eaInodeEnabled && valueSize > (uint)block.Length)
-            {
-
-
-                value = ReadEaInodeValue(valueOffs);
-            }
-            else if (valueOffs != 0 && valueOffs < valueRegionEnd
-                     && valueOffs + (int)valueSize <= valueRegionEnd)
-            {
-                value = block.AsSpan(valueOffs, (int)valueSize).ToArray();
-            }
-
-            if (value is not null && fullName.Length > 0)
-            {
-                result[fullName] = value;
-            }
-
-
-            pos += (12 + nameLen + 3) & ~3;
+            throw new InvalidDataException("Invalid EXT4 external xattr block header.");
         }
+        return ReadXattrEntries(block, 32, 0);
+    }
 
-        return result.Count > 0 ? result : null;
+    private Dictionary<string, byte[]>? ReadXattrEntries(byte[] bytes, int first, int valueBase)
+    {
+        var result = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        var position = first;
+        var firstValue = bytes.Length;
+        while (position <= bytes.Length - 4)
+        {
+            _readCancellation.ThrowIfCancellationRequested();
+            if (BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(position)) == 0)
+            {
+                if (position + 4 > firstValue)
+                {
+                    throw new InvalidDataException("EXT4 xattr entries overlap their values.");
+                }
+                return result.Count == 0 ? null : result;
+            }
+            if (position > bytes.Length - 16)
+            {
+                throw new InvalidDataException("Truncated EXT4 xattr entry.");
+            }
+            var nameLength = bytes[position];
+            var entryLength = (16 + nameLength + 3) & ~3;
+            if (entryLength > bytes.Length - position)
+            {
+                throw new InvalidDataException("Truncated EXT4 xattr name.");
+            }
+            var name = ResolveXattrName(bytes[position + 1], Encoding.UTF8.GetString(bytes, position + 16, nameLength));
+            var offset = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(position + 2));
+            var inode = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(position + 4));
+            var size = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(position + 8));
+            if (size > MaxXattrValueSize)
+            {
+                throw new InvalidDataException("EXT4 xattr value exceeds the supported 64 KiB limit.");
+            }
+            byte[] value;
+            if (inode != 0)
+            {
+                if ((_superblock.FeatureIncompat & FeatureIncompatEaInode) == 0 || offset != 0)
+                {
+                    throw new InvalidDataException("Invalid EXT4 EA inode reference.");
+                }
+                value = ReadEaInodeValue(inode, size);
+            }
+            else
+            {
+                var absolute = valueBase + offset;
+                if (size != 0 && (absolute < first || absolute > bytes.Length || size > bytes.Length - absolute))
+                {
+                    throw new InvalidDataException("EXT4 xattr value exceeds its container.");
+                }
+                if (size != 0)
+                {
+                    firstValue = Math.Min(firstValue, absolute);
+                }
+                value = size == 0 ? [] : bytes.AsSpan(absolute, (int)size).ToArray();
+            }
+            if (!result.TryAdd(name, value))
+            {
+                throw new InvalidDataException($"Duplicate EXT4 xattr: {name}");
+            }
+            position += entryLength;
+        }
+        throw new InvalidDataException("Missing EXT4 xattr entry terminator.");
     }
 
     /// <summary>
@@ -673,22 +671,27 @@ public sealed class Ext4Parser : IDisposable
             return prefix + suffix;
         }
 
-        return suffix;
+        throw new NotSupportedException($"Unknown EXT4 xattr namespace index {nameIndex}.");
     }
 
     /// <summary>
     /// Reads the value data from a dedicated ea_inode when a large xattr value is stored in its own inode.
     /// <para>当大型 xattr 值存于其自身 inode 时，从专用 ea_inode 读取值数据。</para>
     /// </summary>
-    private byte[]? ReadEaInodeValue(uint eaInodeNumber)
+    private byte[] ReadEaInodeValue(uint eaInodeNumber, uint expectedSize)
     {
         if (eaInodeNumber == 0)
         {
-            return null;
+            throw new InvalidDataException("Invalid EXT4 EA inode number.");
         }
 
         var eaInode = ReadInode(eaInodeNumber);
-        var size = (int)Math.Min(eaInode.Size, MaxXattrValueSize);
+        if (eaInode.Size != expectedSize || eaInode.Size > MaxXattrValueSize
+            || (eaInode.Flags & 0x0020_0000) == 0)
+        {
+            throw new InvalidDataException("Invalid EXT4 EA inode size or flags.");
+        }
+        var size = checked((int)eaInode.Size);
         if (size <= 0)
         {
             return [];

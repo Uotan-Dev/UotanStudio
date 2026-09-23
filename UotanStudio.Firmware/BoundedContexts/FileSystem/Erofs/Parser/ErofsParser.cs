@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Checksums;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 
@@ -17,6 +18,8 @@ public sealed record ErofsFileEntry(
     public uint Uid { get; init; }
 
     public uint Gid { get; init; }
+
+    public ulong LinkCount { get; init; }
 
     public ulong MTime { get; init; }
 
@@ -118,21 +121,15 @@ public sealed partial class ErofsParser : IDisposable
     public static ErofsParser OpenFlatDevice(Stream stream) => new(stream) { _flatDevice = true };
 
     public ErofsParser(IReadOnlyList<Stream> deviceStreams)
-        : this(ValidateDeviceStreams(deviceStreams)[0], ownsStream: false)
+        : this(deviceStreams, int.MaxValue, long.MaxValue, default)
     {
-        if (deviceStreams.Count < 2) return;
-        var streams = ValidateDeviceStreams(deviceStreams);
-        if (_deviceStreams is not null)
-        {
-            for (var i = 1; i < streams.Length && i < _deviceStreams.Length; i++)
-                _deviceStreams[i] = streams[i];
-        }
-        else
-        {
-            _deviceStreams = new Stream[streams.Length];
-            for (var i = 0; i < streams.Length; i++)
-                _deviceStreams[i] = streams[i];
-        }
+    }
+
+    public ErofsParser(IReadOnlyList<Stream> deviceStreams, int maximumEntries,
+        long maximumPathCharacters, CancellationToken cancellationToken)
+        : this(ValidateDeviceStreams(deviceStreams)[0], ownsStream: false,
+            maximumEntries, maximumPathCharacters, cancellationToken, deviceStreams)
+    {
     }
 
     private static Stream[] ValidateDeviceStreams(IReadOnlyList<Stream> deviceStreams)
@@ -147,7 +144,8 @@ public sealed partial class ErofsParser : IDisposable
     }
 
     private ErofsParser(Stream stream, bool ownsStream, int maximumEntries = int.MaxValue,
-        long maximumPathCharacters = long.MaxValue, CancellationToken cancellationToken = default)
+        long maximumPathCharacters = long.MaxValue, CancellationToken cancellationToken = default,
+        IReadOnlyList<Stream>? deviceStreams = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumEntries);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumPathCharacters);
@@ -256,12 +254,8 @@ public sealed partial class ErofsParser : IDisposable
             _hasMetabox = _superblock.HasMetabox;
             _blockSize = _superblock.BlockSize;
 
-
-            if (_hasMetabox && _superblock.MetaBoxNid != 0)
-            {
-                _metaboxData = ReadMetaboxData(_superblock.MetaBoxNid);
-            }
-
+            if (deviceStreams is not null && deviceStreams.Count != _superblock.ExtraDevices + 1)
+                throw new InvalidDataException("EROFS device stream count differs from the device table.");
 
             if (_superblock.HasDeviceTable && _superblock.ExtraDevices > 0)
             {
@@ -277,7 +271,14 @@ public sealed partial class ErofsParser : IDisposable
                     var slotOffset = devTableOffset + (long)i * ErofsDeviceSlot.Size;
                     var slotData = ReadBytes(slotOffset, ErofsDeviceSlot.Size, $"Device slot {i + 1}");
                     _deviceSlots[i + 1] = ErofsDeviceSlot.FromBytes(slotData);
+                    if (deviceStreams is not null)
+                        _deviceStreams[i + 1] = deviceStreams[i + 1];
                 }
+            }
+
+            if (_hasMetabox && _superblock.MetaBoxNid != 0)
+            {
+                _metaboxData = ReadMetaboxData(_superblock.MetaBoxNid);
             }
         }
         catch
@@ -520,6 +521,15 @@ public sealed partial class ErofsParser : IDisposable
                     CopyFromSource(buffer, start, dataSize);
                     break;
                 }
+            case ErofsInode.DataLayoutCompressed:
+            case ErofsInode.DataLayoutCompactIndexes:
+                {
+                    using var bounded = new CountingWriteStream(buffer, dataSize, leaveOpen: true, _readCancellation);
+                    WriteCompressedData(metaboxNid, inode, bounded, cancellationToken: _readCancellation);
+                    if (bounded.BytesWritten != dataSize)
+                        throw new InvalidDataException("METABOX decompressed length differs from its inode size.");
+                    break;
+                }
             default:
                 throw new InvalidDataException($"Unsupported METABOX inode data layout {inode.DataLayout}.");
         }
@@ -662,8 +672,10 @@ public sealed partial class ErofsParser : IDisposable
         _readCancellation.ThrowIfCancellationRequested();
         if (!visitedDirectories.Add(nid))
         {
-
-
+            if (RequireCompleteMetadata)
+            {
+                throw new InvalidDataException("EROFS directory aliases or cycles cannot be captured losslessly.");
+            }
             return;
         }
 
@@ -678,6 +690,7 @@ public sealed partial class ErofsParser : IDisposable
             Mode = inode.Mode,
             Uid = inode.Uid,
             Gid = inode.Gid,
+            LinkCount = inode.Nlink,
             MTime = inode.CTime,
             MTimeNanoseconds = inode.CTimeNsec,
             Xattrs = ReadXattrs(nid, inode)
@@ -723,6 +736,7 @@ public sealed partial class ErofsParser : IDisposable
                     DeviceId = fileInode.U,
                     Uid = fileInode.Uid,
                     Gid = fileInode.Gid,
+                    LinkCount = fileInode.Nlink,
                     MTime = fileInode.CTime,
                     MTimeNanoseconds = fileInode.CTimeNsec,
                 };
@@ -736,20 +750,11 @@ public sealed partial class ErofsParser : IDisposable
                         WriteFileData(entry.Nid, fileInode, buffer);
                         fileEntry = fileEntry with { SymlinkTarget = ReadSymlinkTarget(buffer) };
                     }
-                    catch (Exception ex) when (ex is InvalidDataException or FormatException)
+                    catch (Exception ex) when (!RequireCompleteMetadata && ex is InvalidDataException or FormatException)
                     {
                         fileEntry = fileEntry with { SymlinkTarget = null };
                     }
                 }
-                else if (fileInode.IsCharacterDevice || fileInode.IsBlockDevice ||
-                         fileInode.IsFifo || fileInode.IsSocket)
-                {
-
-
-                    result.Add(fileEntry);
-                    continue;
-                }
-
                 var xattrs = ReadXattrs(entry.Nid, fileInode);
                 if (xattrs is { Count: > 0 })
                 {
@@ -776,6 +781,8 @@ public sealed partial class ErofsParser : IDisposable
     /// Reads the inode's xattr list: parses the inline xattr ibody (including shared xattr id resolution).
     /// <para>读取 inode 的 xattr 列表：解析 inline xattr ibody（含共享 xattr id 引用解析）。</para>
     /// </summary>
+    internal bool RequireCompleteMetadata { get; init; }
+
     private List<ErofsXattrEntry> ReadXattrs(ulong nid, ErofsInode inode)
     {
         var result = new List<ErofsXattrEntry>();
@@ -788,13 +795,11 @@ public sealed partial class ErofsParser : IDisposable
         {
 
 
-            var ibodyOffset = _superblock.GetInodeOffset(nid) + inode.OnDiskSize;
-            if (ibodyOffset < 0 || ibodyOffset > _imageSize - ErofsXattr.HeaderSize)
-            {
-                return result;
-            }
-
-            var ibody = ReadBytes(ibodyOffset, inode.XattrTotalSize, "xattr ibody");
+            var metaboxResident = _hasMetabox && (nid & NidMetaboxFlag) != 0;
+            var ibodyOffset = checked((metaboxResident ? MetaboxOffset(nid) : _superblock.GetInodeOffset(nid)) + inode.OnDiskSize);
+            var ibody = metaboxResident
+                ? ReadMetaboxBytes(ibodyOffset, inode.XattrTotalSize, "xattr ibody")
+                : ReadBytes(ibodyOffset, inode.XattrTotalSize, "xattr ibody");
             var prefixTable = LoadXattrPrefixTable();
             var entries = ErofsXattr.ParseInline(ibody, inode.XattrICount, prefixTable);
             result.AddRange(entries);
@@ -806,7 +811,13 @@ public sealed partial class ErofsParser : IDisposable
 
 
                 var sharedStart = _superblock.XattrBlkAddr * _blockSize;
-                var sharedLength = Math.Min(_imageSize - sharedStart, MaxMetadataComponentSize);
+                var sharedInMetabox = (_superblock.FeatureCompat & ErofsSuperblock.CompatSharedEaInMetabox) != 0;
+                var sharedLength = Math.Min((sharedInMetabox ? _metaboxData?.Length ?? 0 : _imageSize) - sharedStart,
+                    MaxMetadataComponentSize);
+                if (sharedLength <= 0)
+                {
+                    throw new InvalidDataException("EROFS shared xattr area exceeds the image.");
+                }
                 if (sharedLength > 0)
                 {
                     foreach (var id in sharedIds)
@@ -815,28 +826,44 @@ public sealed partial class ErofsParser : IDisposable
                         // 共享 ID 是以四字节为单位的偏移，不是块号。
                         var relativeOffset = ErofsXattr.GetSharedXattrByteOffset(id);
                         if (relativeOffset > sharedLength - ErofsXattr.EntryHeaderSize)
-                            continue;
+                        {
+                            throw new InvalidDataException("EROFS shared xattr offset exceeds the image.");
+                        }
                         var entryOffset = checked(sharedStart + relativeOffset);
-                        var header = ReadBytes(entryOffset, ErofsXattr.EntryHeaderSize, "shared xattr header");
+                        var header = sharedInMetabox
+                            ? ReadMetaboxBytes(entryOffset, ErofsXattr.EntryHeaderSize, "shared xattr header")
+                            : ReadBytes(entryOffset, ErofsXattr.EntryHeaderSize, "shared xattr header");
                         var size = ErofsXattr.EntryHeaderSize + header[0] +
                             BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(2));
                         if (size > sharedLength - relativeOffset)
-                            continue;
-                        var entryBytes = ReadBytes(entryOffset, size, "shared xattr entry");
+                        {
+                            throw new InvalidDataException("EROFS shared xattr value exceeds the image.");
+                        }
+                        var entryBytes = sharedInMetabox
+                            ? ReadMetaboxBytes(entryOffset, size, "shared xattr entry")
+                            : ReadBytes(entryOffset, size, "shared xattr entry");
                         if (ErofsXattr.TryReadEntry(entryBytes, 0, prefixTable, out var sharedEntry, out _))
                         {
                             result.Add(sharedEntry);
+                        }
+                        else
+                        {
+                            throw new InvalidDataException("Invalid EROFS shared xattr.");
                         }
                     }
                 }
             }
         }
-        catch (Exception ex) when (ex is InvalidDataException or FormatException)
+        catch (Exception ex) when (!RequireCompleteMetadata && ex is InvalidDataException or FormatException)
         {
 
 
         }
 
+        if (RequireCompleteMetadata && result.GroupBy(entry => entry.Name, StringComparer.Ordinal).Any(group => group.Count() > 1))
+        {
+            throw new InvalidDataException("Duplicate EROFS extended attribute.");
+        }
         return result;
     }
 
@@ -870,13 +897,37 @@ public sealed partial class ErofsParser : IDisposable
         }
 
         var tableOffset = ErofsXattr.GetPrefixTableByteOffset(_superblock.XattrPrefixStart);
-        if (tableOffset < 0 || tableOffset > _imageSize)
+        var maximumLength = checked(_superblock.XattrPrefixCount * 260);
+        byte[] table;
+        var plain = (_superblock.FeatureCompat & 0x10) != 0;
+        if (!plain && _superblock.HasMetabox)
         {
-            return null;
+            if (_metaboxData is null || tableOffset > _metaboxData.Length)
+            {
+                throw new InvalidDataException("EROFS xattr prefixes exceed metabox metadata.");
+            }
+            table = _metaboxData.AsSpan((int)tableOffset, (int)Math.Min(maximumLength, _metaboxData.Length - tableOffset)).ToArray();
         }
-
-        var tableLength = Math.Min(_imageSize - tableOffset, MaxMetadataComponentSize);
-        var table = ReadBytes(tableOffset, checked((int)tableLength), "xattr prefix table");
+        else if (!plain && _superblock.PackedNid != 0)
+        {
+            var packed = ReadInode(_superblock.PackedNid);
+            if ((ulong)tableOffset > packed.Size)
+            {
+                throw new InvalidDataException("EROFS xattr prefixes exceed the packed inode.");
+            }
+            var length = (int)Math.Min((ulong)maximumLength, packed.Size - (ulong)tableOffset);
+            using var buffer = new MemoryStream(length);
+            WritePackedData((ulong)tableOffset, length, buffer);
+            table = buffer.ToArray();
+        }
+        else
+        {
+            if (tableOffset < 0 || tableOffset > _imageSize)
+            {
+                throw new InvalidDataException("EROFS xattr prefix table exceeds the image.");
+            }
+            table = ReadBytes(tableOffset, (int)Math.Min(_imageSize - tableOffset, maximumLength), "xattr prefix table");
+        }
         return ErofsXattr.ParsePrefixTable(table, _superblock.XattrPrefixCount);
     }
 
@@ -904,13 +955,18 @@ public sealed partial class ErofsParser : IDisposable
                     $"Inode nid 0x{nid:X16} references the METABOX data stream, but no METABOX data was cached.");
 
             var slotIndex = nid & ~NidMetaboxFlag;
-            var slotOffset = checked((long)slotIndex * ErofsSuperblock.CompactInodeSize);
-            if (slotOffset < 0 || slotOffset + ErofsSuperblock.CompactInodeSize > _metaboxData.Length)
+            var slotOffset = MetaboxOffset(nid);
+            if (slotOffset < 0 || slotOffset > _metaboxData.Length - 2)
                 throw new InvalidDataException(
                     $"METABOX slot index {slotIndex} (offset {slotOffset}) is out of range (metabox data size {_metaboxData.Length}).");
 
+            var metaboxAdvise = BinaryPrimitives.ReadUInt16LittleEndian(_metaboxData.AsSpan((int)slotOffset, 2));
+            var metaboxInodeSize = (metaboxAdvise & ErofsInode.FlagExtended) != 0
+                ? ErofsInode.ExtendedSize : ErofsInode.CompactSize;
+            if (slotOffset > _metaboxData.Length - metaboxInodeSize)
+                throw new InvalidDataException($"METABOX inode nid 0x{nid:X16} exceeds its data stream.");
             return ResolveTimestamp(ErofsInode.FromBytes(
-                _metaboxData.AsSpan((int)slotOffset, ErofsSuperblock.CompactInodeSize)));
+                _metaboxData.AsSpan((int)slotOffset, metaboxInodeSize)));
         }
 
         var offset = _superblock.GetInodeOffset(nid);
@@ -929,6 +985,31 @@ public sealed partial class ErofsParser : IDisposable
         }
 
         return ResolveTimestamp(ErofsInode.FromBytes(data.AsSpan(0, inodeSize)));
+    }
+
+    private long MetaboxOffset(ulong nid)
+        => checked((long)(nid & ~NidMetaboxFlag) * ErofsSuperblock.CompactInodeSize);
+
+    private bool IsMetaboxInode(ulong nid) => _hasMetabox && (nid & NidMetaboxFlag) != 0;
+
+    private long InodeOffset(ulong nid)
+        => IsMetaboxInode(nid) ? MetaboxOffset(nid) : _superblock.GetInodeOffset(nid);
+
+    private long InodeMetadataLength(ulong nid)
+        => IsMetaboxInode(nid) ? _metaboxData?.LongLength ?? 0 : _imageSize;
+
+    private byte[] ReadInodeMetadata(ulong nid, long offset, int length, string what)
+        => IsMetaboxInode(nid) ? ReadMetaboxBytes(offset, length, what) : ReadBytes(offset, length, what);
+
+    private byte[] ReadMetaboxBytes(long offset, int length, string what)
+    {
+        _readCancellation.ThrowIfCancellationRequested();
+        if (_metaboxData is null || offset < 0 || length < 0
+            || offset > _metaboxData.Length || length > _metaboxData.Length - offset)
+        {
+            throw new InvalidDataException($"{what} exceeds the METABOX data stream.");
+        }
+        return _metaboxData.AsSpan((int)offset, length).ToArray();
     }
 
     private int DirectoryBlockSize => _superblock.DirBlkBits == 0 ? _blockSize : 1 << _superblock.DirBlkBits;
@@ -961,9 +1042,14 @@ public sealed partial class ErofsParser : IDisposable
         for (var done = 0L; done < length; done += dirBlockSize)
         {
             var blockLength = (int)Math.Min(dirBlockSize, length - done);
-            var offset = done < flatLength ? checked(flatStart + done)
-                : checked(_superblock.GetInodeOffset(nid) + inode.InlineDataOffset + done - flatLength);
-            var block = ReadBytes(offset, blockLength, "Directory data");
+            var inline = done >= flatLength;
+            var offset = inline
+                ? checked(((_hasMetabox && (nid & NidMetaboxFlag) != 0)
+                    ? MetaboxOffset(nid) : _superblock.GetInodeOffset(nid)) + inode.InlineDataOffset + done - flatLength)
+                : checked(flatStart + done);
+            var block = inline && _hasMetabox && (nid & NidMetaboxFlag) != 0
+                ? ReadMetaboxBytes(offset, blockLength, "Directory data")
+                : ReadBytes(offset, blockLength, "Directory data");
             foreach (var entry in ParseDirectoryData(block, dirBlockSize, blockLength))
             {
                 _readCancellation.ThrowIfCancellationRequested();

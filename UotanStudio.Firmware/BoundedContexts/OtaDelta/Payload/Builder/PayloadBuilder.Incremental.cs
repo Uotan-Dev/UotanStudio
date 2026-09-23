@@ -74,7 +74,7 @@ public sealed partial class PayloadBuilder
             CompressionType.BZip2 => InstallOperation.Types.Type.ReplaceBz,
             CompressionType.Xz => InstallOperation.Types.Type.ReplaceXz,
             CompressionType.Brotli => throw new ArgumentException("Android payload has no Brotli REPLACE operation.", nameof(compression)),
-            CompressionType.Zstd => throw new ArgumentException("Android payload has no defined Zstd REPLACE operation.", nameof(compression)),
+            CompressionType.Zstd => throw new ArgumentException("Zstd REPLACE operation 14 is supported for extension reading only; this builder does not emit it.", nameof(compression)),
             _ => throw new ArgumentOutOfRangeException(nameof(compression), $"Compression type {compression} is not supported.")
         };
 
