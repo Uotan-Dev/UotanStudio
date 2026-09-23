@@ -85,7 +85,7 @@ public partial class App : Application
             // + 预构建主窗口）完成后关闭，由 SplashWindow 过渡到主窗口。
             var splash = new MainSplashWindow
             {
-                DataContext = new SplashViewModel(string.Empty)
+                DataContext = new SplashViewModel(LanguageService.Instance.GetString("Splash_Initializing"))
             };
             desktop.MainWindow = splash;
             splash.Show();
@@ -123,10 +123,13 @@ public partial class App : Application
     /// <param name="splash">The splash view model receiving status updates. <para>接收状态更新的启动窗视图模型。</para></param>
     private async Task RunStartupSequenceAsync(MainSplashWindow splashWindow, SplashViewModel splash)
     {
+        splash.StatusText = LanguageService.Instance.GetString("Splash_Settings");
         // 1) 后台读取持久化设置（文件 I/O 不应阻塞 UI 线程）。
         var settings = await Task.Run(() => SettingsPersistenceService.Instance.LoadSettings()).ConfigureAwait(true);
+        global::UotanStudio.Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
         global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers = settings.FirmwareParallelism;
 
+        splash.StatusText = LanguageService.Instance.GetString("Splash_ApplyingSettings");
         // 按持久化设置启动内嵌 MCP 服务器（失败只记录日志，不阻断启动）。
         // Start the embedded MCP server per the persisted settings (failures only log, never block startup).
         McpExposureService.Instance.Apply(settings.McpExposeEnabled, settings.McpExposePort);
@@ -148,6 +151,7 @@ public partial class App : Application
 
         var devices = await scanTask.ConfigureAwait(true);
 
+        splash.StatusText = LanguageService.Instance.GetString("Splash_Preparing");
         // 4) 扫描完成、启动窗仍可见时，在 UI 线程预构建主窗口（含全部子视图与 ViewModel，
         //    把构造开销藏到启动窗显示期，消除过渡到主窗体时的卡顿）。
         //    DataContext 由 MainWindow 构造函数自行设置，这里无需再赋值。
@@ -164,16 +168,22 @@ public partial class App : Application
         // Apply startup file-association inputs: open a solution / import files (failures only log, never block startup).
         if (StartupFiles.Length > 0)
         {
+            splash.StatusText = LanguageService.Instance.GetString("Splash_OpeningFiles");
             await ApplyStartupFilesAsync(splashWindow, StartupFiles).ConfigureAwait(true);
         }
 
-        splash.StatusText = string.Format(
-            LanguageService.Instance.GetString("Splash_FoundDevices"), devices.Count);
         LogService.Instance.Write(LogLevel.Info, "App",
             $"Startup sequence: initial USB scan found {devices.Count} device(s).");
 
+        if (splashWindow.PreparedMainWindow is not null)
+        {
+            splash.StatusText = LanguageService.Instance.GetString("Splash_Ready");
+            splash.IsInitializing = false;
+        }
         await minShowTask.ConfigureAwait(true);
-        splash.StatusText = LanguageService.Instance.GetString("Splash_Preparing");
+        // Let the completed bar render before the main window's first layout occupies the UI thread.
+        if (!splash.IsInitializing)
+            await Task.Delay(32).ConfigureAwait(true);
     }
 
     /// <summary>Releases application-wide monitoring only after desktop shutdown has been accepted.</summary>

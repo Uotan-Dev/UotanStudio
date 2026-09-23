@@ -310,7 +310,7 @@ public partial class NewProjectWindow : Window
 
     private Task ShowPickerErrorAsync(Exception exception) => IsVisible
         ? DialogService.ShowAsync(this, LanguageService.Instance.GetString("NewProject_PickerFailed"),
-            exception.Message, Ursa.Controls.MessageBoxIcon.Error)
+            global::UotanStudio.Services.UserError.Describe(exception), Ursa.Controls.MessageBoxIcon.Error)
         : Task.CompletedTask;
 
     private async void OnGetRomClick(object? sender, RoutedEventArgs e)
@@ -645,9 +645,9 @@ public partial class NewProjectWindow : Window
             CancelButton.IsEnabled = true;
             CancelButton.Content = "取消";
             ResetProgressStats();
-            ReportProgress(ex.Message, 0);
+            ReportProgress(global::UotanStudio.Services.UserError.Describe(ex), 0);
             await DialogService.ShowAsync(this, LanguageService.Instance.GetString("NewProject_CreateFailed"),
-                ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+                global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
         finally
         {

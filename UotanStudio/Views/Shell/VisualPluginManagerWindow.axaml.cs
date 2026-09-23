@@ -106,7 +106,7 @@ public partial class VisualPluginManagerWindow : Window
     }
 
     private void ShowFailure(Exception exception) => ShowResult(
-        string.Format(LanguageService.Instance.GetString("Plugin_OperationFailed"), exception.Message),
+        string.Format(LanguageService.Instance.GetString("Plugin_OperationFailed"), global::UotanStudio.Services.UserError.Describe(exception)),
         NotificationType.Error, true);
 
     private void ShowResult(string textOrResourceKey, NotificationType type, bool localized = false)

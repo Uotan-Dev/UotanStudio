@@ -33,8 +33,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// Currently active bottom main panel; gates availability of node-editor-related View menu commands (minimap/zoom).
     /// </summary>
     /// <remarks>
-    /// <para>由 <c>MainView</c> 通过 <see cref="ActiveTabChangedMessage"/> 在面板切换时更新；初始为 <see cref="ActiveTab.Workspace"/>（与 MainView 默认 SelectedIndex=3 对应）。</para>
-    /// Updated by <c>MainView</c> via <see cref="ActiveTabChangedMessage"/> on tab switch; defaults to <see cref="ActiveTab.Workspace"/> (matching MainView default SelectedIndex=3).
+    /// <para>由 <c>MainView</c> 通过 <see cref="ActiveTabChangedMessage"/> 在面板切换时更新；初始为 <see cref="ActiveTab.Workspace"/>（与 MainView 启动时选中的工作区页对应）。</para>
+    /// Updated by <c>MainView</c> via <see cref="ActiveTabChangedMessage"/> on tab switch; defaults to <see cref="ActiveTab.Workspace"/> (matching the workspace page MainView selects on startup).
     /// </remarks>
     private ActiveTab _currentTab = ActiveTab.Workspace;
 
@@ -462,7 +462,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString(
-                isDirectory ? "Dialog_NewFolderFailed" : "Dialog_NewFileFailed"), ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+                isDirectory ? "Dialog_NewFolderFailed" : "Dialog_NewFileFailed"), global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -483,7 +483,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_OpenFailed"),
-                ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+                global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -513,7 +513,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_OpenFailed"),
-                ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+                global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -871,7 +871,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Export", ex.Message);
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Export"), ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Export"), global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -1442,7 +1442,9 @@ public enum ActiveTab
     /// <summary><para>设置面板。</para>Settings panel.</summary>
     Settings,
     /// <summary><para>ROM 交付配置面板。</para>ROM delivery configuration panel.</summary>
-    Delivery
+    Delivery,
+    /// <summary><para>烧录面板。</para>Flash panel.</summary>
+    Flash
 }
 
 /// <summary>

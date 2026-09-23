@@ -331,7 +331,7 @@ internal partial class ImageViewModel : Tool
             foreach (var file in Directory.EnumerateFiles(imagesDir))
             {
                 var format = ImageInputService.DetectFormat(file);
-                if (format == "unknown" || (!outputMode && format == "raw"))
+                if (format == "unknown")
                 {
                     continue;
                 }

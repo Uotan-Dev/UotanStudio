@@ -204,7 +204,7 @@ public partial class ManifestEditorViewModel : Document, ICommandSaveableDocumen
             }
             catch (Exception ex)
             {
-                CompileError = $"Failed to parse AXML: {ex.Message}";
+                CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_ParseFailed", "AXML");
                 Nodes.Clear();
                 Source = string.Empty;
                 return;
@@ -270,7 +270,7 @@ public partial class ManifestEditorViewModel : Document, ICommandSaveableDocumen
                 }
                 catch (Exception ex)
                 {
-                    CompileError = $"Failed to recompile XML: {ex.Message}";
+                    CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_RebuildFailed", "XML");
                     return;
                 }
 
@@ -298,7 +298,7 @@ public partial class ManifestEditorViewModel : Document, ICommandSaveableDocumen
         }
         catch (Exception ex)
         {
-            CompileError = $"Failed to rebuild AXML: {ex.Message}";
+            CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_RebuildFailed", "AXML");
         }
         finally
         {

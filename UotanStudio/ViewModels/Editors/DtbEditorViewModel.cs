@@ -202,7 +202,7 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
         }
         catch (Exception ex)
         {
-            CompileError = $"Failed to parse DTB: {ex.Message}";
+            CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_ParseFailed", "DTB");
             return;
         }
 
@@ -268,7 +268,7 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
 
         if (IsDtboContainer)
         {
-            CompileError = "DTBO containers are read-only in the DTB editor; edit an extracted overlay instead.";
+            CompileError = global::UotanStudio.Services.LanguageService.Instance.GetString("UserError_DtboReadOnly");
             return;
         }
 
@@ -276,7 +276,7 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
         var result = DtsFormat.Parse(source);
         CompileError = result.IsSuccess
             ? string.Empty
-            : string.Join("\n", result.Errors.Select(e => $"[L{e.Line}:C{e.Column}] {e.Severity}: {e.Message}"));
+            : global::UotanStudio.Services.UserError.WithDetails(string.Join("\n", result.Errors.Select(e => $"[L{e.Line}:C{e.Column}] {e.Severity}: {e.Message}")), "UserError_ParseFailed", "DTS");
 
         if (!result.IsSuccess || result.Tree is null)
         {

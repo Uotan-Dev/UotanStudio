@@ -48,10 +48,12 @@ internal partial class ImageViewModel
         IsOperating = true;
         StatusText = LanguageService.Instance.GetString("NewProject_Copying");
         var generation = _progressGeneration;
+        var copiedPaths = new List<string>();
+        var imported = new List<ImageEntryViewModel>();
+        var committed = false;
         try
         {
             var imagesDir = context.EnsureImagesDirectory();
-            var imported = new List<ImageEntryViewModel>();
 
             // 预先汇总所有待复制文件的总字节数，用于跨文件加权进度；totalBytes=0 时不上报。
             // Pre-compute total bytes of all files to copy for weighted cross-file progress;
@@ -89,6 +91,7 @@ internal partial class ImageViewModel
                 }));
                 // 文件复制完成后累计已完成字节数，供后续文件加权计算。
                 // Accumulate completed bytes once this file finishes copying.
+                copiedPaths.Add(destination);
                 completedBytes += fileSize;
                 ReportByteStatistics(completedBytes, totalBytes);
                 progress?.Report(totalBytes > 0 ? completedBytes * 100.0 / totalBytes : 100);
@@ -102,12 +105,6 @@ internal partial class ImageViewModel
                 }
 
                 var format = await Task.Run(() => ImageInputService.DetectFormat(destination));
-                if (format is "raw")
-                {
-                    File.Delete(destination);
-                    continue;
-                }
-
                 imported.Add(new ImageEntryViewModel
                 {
                     DisplayName = Path.GetFileName(destination),
@@ -120,6 +117,7 @@ internal partial class ImageViewModel
             if (imported.Count == 0)
             {
                 StatusText = LanguageService.Instance.GetString("ImageView_NoSelection");
+                committed = true;
                 return;
             }
 
@@ -163,14 +161,29 @@ internal partial class ImageViewModel
                         Images.Add(entry);
                     }
                 });
+            committed = true;
         }
         catch (Exception ex)
         {
-            StatusText = ex.Message;
+            StatusText = global::UotanStudio.Services.UserError.Describe(ex);
             LogService.Instance.Write(LogLevel.Error, "Images", $"Import failed: {ex.Message}  导入失败：{ex.Message}");
             if (progress is not null || byteProgress is not null) throw;
         }
-        finally { IsOperating = false; }
+        finally
+        {
+            if (!committed)
+            {
+                foreach (var entry in imported)
+                {
+                    Images.Remove(entry);
+                }
+                foreach (var path in copiedPaths)
+                {
+                    File.Delete(path);
+                }
+            }
+            IsOperating = false;
+        }
     }
 
     /// <summary>
@@ -196,6 +209,9 @@ internal partial class ImageViewModel
         IsOperating = true;
         StatusText = LanguageService.Instance.GetString("NewProject_Copying");
         var generation = _progressGeneration;
+        string? copiedPath = null;
+        ImageEntryViewModel? addedEntry = null;
+        var committed = false;
         try
         {
             var imagesDir = context.EnsureImagesDirectory();
@@ -210,6 +226,7 @@ internal partial class ImageViewModel
                 progress?.Report(percent);
                 byteProgress?.Report(((long)(totalBytes * percent / 100), totalBytes));
             })).ConfigureAwait(true);
+            copiedPath = destination;
             ReportByteStatistics(totalBytes, totalBytes);
             progress?.Report(100);
             byteProgress?.Report((totalBytes, totalBytes));
@@ -229,6 +246,7 @@ internal partial class ImageViewModel
                 Format = formatLabel
             };
             Images.Add(entry);
+            addedEntry = entry;
             var history = CreateOutputOperation(HistoryOperationKind.ImportImages,
                 $"Import {entry.DisplayName}", [destination]);
             if (history is not null)
@@ -248,14 +266,29 @@ internal partial class ImageViewModel
                     if (history is not null) RedoOutput(history);
                     if (!Images.Contains(entry)) Images.Add(entry);
                 });
+            committed = true;
             return entry;
         }
         catch (Exception ex)
         {
-            StatusText = ex.Message;
+            StatusText = global::UotanStudio.Services.UserError.Describe(ex);
             throw;
         }
-        finally { IsOperating = false; }
+        finally
+        {
+            if (!committed)
+            {
+                if (addedEntry is not null)
+                {
+                    Images.Remove(addedEntry);
+                }
+                if (copiedPath is not null)
+                {
+                    File.Delete(copiedPath);
+                }
+            }
+            IsOperating = false;
+        }
     }
 
     /// <summary>
@@ -330,7 +363,7 @@ internal partial class ImageViewModel
         }
         catch (Exception ex)
         {
-            StatusText = ex.Message;
+            StatusText = global::UotanStudio.Services.UserError.Describe(ex);
             LogService.Instance.Write(LogLevel.Error, "Images", $"Export failed: {ex.Message}  导出失败：{ex.Message}");
         }
         finally { IsOperating = false; }

@@ -225,7 +225,7 @@ public partial class FirmwareInfoViewModel : Document
             source.Token.ThrowIfCancellationRequested();
             if (!result.Success)
             {
-                ErrorMessage = result.Summary;
+                ErrorMessage = UserError.WithDetails(result.Summary, "UserError_LoadFailed");
                 HasError = true;
                 return;
             }
@@ -275,7 +275,7 @@ public partial class FirmwareInfoViewModel : Document
             {
                 return;
             }
-            ErrorMessage = ex.Message;
+            ErrorMessage = global::UotanStudio.Services.UserError.Describe(ex);
             HasError = true;
             LogService.Instance.Write(LogLevel.Error, "FirmwareInfo",
                 $"Failed to read firmware metadata for '{path}': {ex.Message}");

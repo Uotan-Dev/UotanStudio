@@ -16,7 +16,7 @@ internal partial class TerminalViewModel : Tool, IDisposable
     private readonly int _number;
     private readonly Action<TerminalViewModel> _newTerminal;
     private readonly Action<TerminalViewModel> _closeTerminal;
-    public IReadOnlyList<TerminalProfile> Profiles { get; } = TerminalShellService.GetProfiles();
+    public IReadOnlyList<TerminalProfile> Profiles { get; }
     [ObservableProperty] private TerminalProfile? _selectedProfile;
     [ObservableProperty] private TerminalSessionViewModel? _session;
     [ObservableProperty] private string? _errorMessage;
@@ -27,8 +27,12 @@ internal partial class TerminalViewModel : Tool, IDisposable
         _number = number;
         _newTerminal = newTerminal;
         _closeTerminal = closeTerminal;
-        SelectedProfile = Profiles.FirstOrDefault(candidate => string.Equals(candidate.Executable, profile?.Executable,
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) ?? Profiles.FirstOrDefault();
+        var standard = TerminalShellService.GetProfiles();
+        Profiles = profile is { Name: "Device shell" } ? [profile, .. standard] : standard;
+        SelectedProfile = profile is { Name: "Device shell" } ? profile
+            : Profiles.FirstOrDefault(candidate => string.Equals(candidate.Executable, profile?.Executable,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                ?? Profiles.FirstOrDefault();
         Id = $"Terminal.{number}";
         CanClose = true;
         OnLanguageChanged(this, EventArgs.Empty);
@@ -135,7 +139,7 @@ internal partial class TerminalSessionViewModel(TerminalProfile profile, string 
         {
             if (!_disposed)
             {
-                _failure = ex.Message;
+                _failure = global::UotanStudio.Services.UserError.Describe(ex);
                 LogService.Instance.Write(LogLevel.Error, "Terminal", ex.Message);
             }
         }

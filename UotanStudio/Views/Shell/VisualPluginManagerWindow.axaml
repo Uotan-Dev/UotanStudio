@@ -76,7 +76,7 @@
                                         <TextBlock Text="{DynamicResource Plugin_Enabled}" FontSize="11"
                                                    IsVisible="{Binding IsEnabled}" />
                                     </StackPanel>
-                                    <TextBlock Text="{Binding ErrorText}" FontSize="11" TextWrapping="Wrap"
+                                    <TextBlock Text="{Binding DisplayErrorText}" FontSize="11" TextWrapping="Wrap"
                                                Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
                                                IsVisible="{Binding !!ErrorText}" />
                                 </StackPanel>
@@ -113,7 +113,7 @@
                         <TextBlock Grid.Row="4" Text="{DynamicResource Plugin_Capabilities}" Opacity="0.65" />
                         <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedPlugin.Capabilities}" TextWrapping="Wrap" />
                         <TextBlock Grid.Row="5" Text="{DynamicResource Plugin_Diagnostics}" Opacity="0.65" />
-                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SelectedPlugin.ErrorText}"
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SelectedPlugin.DisplayErrorText}"
                                    TextWrapping="Wrap" Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}" />
                     </Grid>
                     <WrapPanel ItemSpacing="8" LineSpacing="8">

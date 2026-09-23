@@ -97,7 +97,7 @@ public partial class KeyManagerWindow : Window
                 string.Format(language.GetString("Keys_DeleteConfirm"), key.Name), language.GetString("Menu_Delete")))
                 await model.DeleteKeyAsync(key);
         }
-        catch (Exception ex) { model.Status = ex.Message; }
+        catch (Exception ex) { model.Status = global::UotanStudio.Services.UserError.Describe(ex); }
         finally { _confirmingDeletion = false; }
     }
 

@@ -33,6 +33,11 @@ public partial class SettingsView : UserControl
         base.OnAttachedToVisualTree(e);
         WeakReferenceMessenger.Default.Register<SettingsView, SettingsSaveCompletedMessage>(this,
             static (view, message) => Dispatcher.UIThread.Post(() => view.ShowSaveResult(message)));
+
+        if (DataContext is ViewModels.Shell.SettingsViewModel viewModel)
+        {
+            viewModel.RefreshCommunicationStatusCommand.Execute(null);
+        }
     }
 
     /// <inheritdoc />

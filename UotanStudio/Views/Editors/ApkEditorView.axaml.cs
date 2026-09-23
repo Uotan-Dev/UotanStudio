@@ -74,7 +74,7 @@ public partial class ApkEditorView : UserControl
         catch (Exception ex)
         {
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Apk_Extract"),
-                ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+                global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -115,7 +115,7 @@ public partial class ApkEditorView : UserControl
         catch (Exception ex)
         {
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Apk_Install"),
-                ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+                global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 

@@ -4,6 +4,7 @@
 
     <!-- 选项卡 -->
     <x:String x:Key="Tab_Workspace">工作区</x:String>
+    <x:String x:Key="Tab_Flash">烧录</x:String>
     <x:String x:Key="Tab_Delivery">交付</x:String>
     <x:String x:Key="Delivery_DirectOutput">打包为ZIP</x:String>
     <x:String x:Key="Delivery_ZipArchiveName">压缩包名称</x:String>
@@ -123,6 +124,58 @@
     <x:String x:Key="ScreenMirror_Stopped">投屏已停止</x:String>
     <x:String x:Key="ScreenMirror_Failed">投屏失败：</x:String>
 
+    <!-- 烧录页面 -->
+    <x:String x:Key="Flash_Package">刷机包</x:String>
+    <x:String x:Key="Flash_PackagePlaceholder">选择刷机包、镜像目录，或粘贴 Payload 链接</x:String>
+    <x:String x:Key="Flash_ChooseFile">选择文件</x:String>
+    <x:String x:Key="Flash_ChooseFolder">选择文件夹</x:String>
+    <x:String x:Key="Flash_SelectAll">全选</x:String>
+    <x:String x:Key="Flash_Selected">已选</x:String>
+    <x:String x:Key="Flash_SearchPlaceholder">搜索分区</x:String>
+    <x:String x:Key="Flash_Select">选择</x:String>
+    <x:String x:Key="Flash_Partition">分区</x:String>
+    <x:String x:Key="Flash_Command">命令</x:String>
+    <x:String x:Key="Flash_Size">大小</x:String>
+    <x:String x:Key="Flash_File">文件</x:String>
+    <x:String x:Key="Flash_NoPartitions">尚未加载分区列表</x:String>
+    <x:String x:Key="Flash_NoPartitionsHint">选择刷机包后，可刷写分区会显示在这里。</x:String>
+    <x:String x:Key="Flash_Basic">基本操作</x:String>
+    <x:String x:Key="Flash_ReadInfo">读取设备信息</x:String>
+    <x:String x:Key="Flash_ShowAllPartitions">Fastbootd 显示全部分区</x:String>
+    <x:String x:Key="Flash_FlashSelected">刷写选中分区</x:String>
+    <x:String x:Key="Flash_EraseSelected">擦除选中分区</x:String>
+    <x:String x:Key="Flash_DisableVbmeta">禁用 vbmeta 校验</x:String>
+    <x:String x:Key="Flash_DeleteCow">删除COW分区</x:String>
+    <x:String x:Key="Flash_UseAdb">使用ADB</x:String>
+    <x:String x:Key="Flash_ModeMismatch">所选设备模式或权限不支持此刷机包及操作。</x:String>
+    <x:String x:Key="Flash_FlashEdlBundle">刷写完整 EDL 包</x:String>
+    <x:String x:Key="Flash_AddRoot">添加 Root</x:String>
+    <x:String x:Key="Flash_EraseData">清除所有数据</x:String>
+    <x:String x:Key="Flash_RebootAfter">刷写后重启设备</x:String>
+    <x:String x:Key="Flash_Image">镜像操作</x:String>
+    <x:String x:Key="Flash_ExtractSelected">提取选中镜像</x:String>
+    <x:String x:Key="Flash_BuildWiredPackage">一键生成线刷包</x:String>
+    <x:String x:Key="Flash_Log">日志</x:String>
+    <x:String x:Key="Flash_ClearLog">清空</x:String>
+    <x:String x:Key="Flash_LogPlaceholder">刷写日志输出</x:String>
+    <x:String x:Key="Flash_RefreshDevices">刷新设备</x:String>
+    <x:String x:Key="Flash_FolderOnly">请选择刷机包、镜像目录或 HTTP(S) Payload 链接。</x:String>
+    <x:String x:Key="Flash_ImagesLoaded">个镜像已加载</x:String>
+    <x:String x:Key="Flash_DeviceChanged">所选设备已变化，请刷新并重新确认。</x:String>
+    <x:String x:Key="Flash_FileMissing">镜像文件不存在。</x:String>
+    <x:String x:Key="Flash_PackageChanged">刷机包路径已更改，请先加载后再刷写。</x:String>
+    <x:String x:Key="Flash_ProductMismatch">设备机型与刷机清单不匹配，未写入任何数据。</x:String>
+    <x:String x:Key="Flash_PartitionsLoaded">个设备分区已加载</x:String>
+    <x:String x:Key="Flash_SwitchSlot">切换活动槽位</x:String>
+    <x:String x:Key="Flash_ActiveSlot">活动槽位</x:String>
+    <x:String x:Key="Flash_Cancel">取消操作</x:String>
+    <x:String x:Key="Flash_Decompressing">正在解压镜像</x:String>
+    <x:String x:Key="Flash_RequiresFastbootd">此刷机包要求设备处于 Fastbootd 模式。</x:String>
+    <x:String x:Key="Flash_RebootConflict">所选脚本步骤已包含重启，请关闭刷写后操作或取消选择该步骤。</x:String>
+    <x:String x:Key="Flash_VbmetaMissing">请选中 vbmeta 分区及镜像以禁用校验。</x:String>
+    <x:String x:Key="Flash_ChooseRootPackage">选择 Magisk 或 KernelSU 安装包</x:String>
+    <x:String x:Key="Flash_RootBootMissing">请仅选择一个 boot 或 init_boot 镜像用于 Root 修补。</x:String>
+
     <!-- 视图定位器 -->
     <x:String x:Key="ViewLocator_NotFound">未找到: </x:String>
 
@@ -141,6 +194,13 @@
     <x:String x:Key="ImageView_Refresh">刷新</x:String>
     <x:String x:Key="ImageView_ExtractSelected">分解选中文件</x:String>
     <x:String x:Key="ImageView_SynthesizeImg">合成IMG</x:String>
+    <x:String x:Key="ImageView_Ext4Minimize">缩容 EXT4 副本</x:String>
+    <x:String x:Key="ImageView_Ext4RepairMinimize">修复并缩容 EXT4 副本</x:String>
+    <x:String x:Key="Image_Ext4MinimizeConfirm">检查并缩容此 EXT4 镜像的副本？源镜像不会更改。</x:String>
+    <x:String x:Key="Image_Ext4RepairWarning">修复可能改变文件系统元数据和内容。确定修复并缩容单独的副本？源镜像不会更改。</x:String>
+    <x:String x:Key="Image_Ext4Maintaining">正在检查 EXT4 镜像...</x:String>
+    <x:String x:Key="Image_Ext4Maintained">EXT4 镜像已保存：{0}</x:String>
+    <x:String x:Key="Image_Ext4MaintenanceFailed">EXT4 镜像维护失败</x:String>
     <x:String x:Key="ImageView_SynthesizeBr">合成BR</x:String>
     <x:String x:Key="ImageView_DeleteSelected">删除选中文件</x:String>
     <x:String x:Key="ImageView_SynthesizeSuper">合成SUPER</x:String>
@@ -192,6 +252,10 @@
     <x:String x:Key="ImageView_SuperHint">由项目内 raw/sparse 镜像合成 super 镜像</x:String>
     <x:String x:Key="ImageView_DatHint">生成 .new.dat 与 .transfer.list（Android v4）</x:String>
     <x:String x:Key="ImageView_NoSelection">未选中镜像</x:String>
+    <x:String x:Key="Image_ErofsSelectDevice">选择 EROFS 第 {0} 个设备镜像（共 {1} 个）</x:String>
+    <x:String x:Key="Image_ErofsDeviceMustBeLocal">请选择本地 EROFS 设备镜像。</x:String>
+    <x:String x:Key="Image_ErofsDuplicateDevice">请为每个 EROFS 设备选择不同的镜像。</x:String>
+    <x:String x:Key="Image_ErofsDevicePickerUnavailable">无法为此 EROFS 镜像选择设备文件。</x:String>
     <x:String x:Key="ImageView_NoProject">尚未打开工程</x:String>
     <x:String x:Key="ImageView_OperationDone">操作完成</x:String>
     <x:String x:Key="ImageView_SelectHint">将此镜像加入批量操作</x:String>
@@ -222,7 +286,11 @@
     <!-- Splash window -->
     <x:String x:Key="Splash_Subtitle">固件工具箱 · Firmware Toolbox</x:String>
     <x:String x:Key="Splash_Initializing">正在初始化...</x:String>
-    <x:String x:Key="Splash_Scanning">正在扫描 USB 设备...</x:String>
+    <x:String x:Key="Splash_Settings">正在读取设置...</x:String>
+    <x:String x:Key="Splash_ApplyingSettings">正在应用主题、语言和服务设置...</x:String>
+    <x:String x:Key="Splash_OpeningFiles">正在打开启动文件...</x:String>
+    <x:String x:Key="Splash_Ready">初始化完成</x:String>
+    <x:String x:Key="Splash_Scanning">正在发现 USB、ADB 和 HDC 设备...</x:String>
     <x:String x:Key="Splash_FoundDevices">发现 {0} 台设备</x:String>
     <x:String x:Key="Splash_Preparing">正在准备主界面...</x:String>
 
@@ -432,6 +500,17 @@
     <x:String x:Key="FirmwareField_PartitionSize">文件系统容量（字节）</x:String>
     <x:String x:Key="FirmwareField_InodeCount">inode 数量</x:String>
     <x:String x:Key="FirmwareField_FileCount">文件数量</x:String>
+    <x:String x:Key="FirmwareField_Container">容器类型</x:String>
+    <x:String x:Key="FirmwareField_RkfwVersion">固件版本</x:String>
+    <x:String x:Key="FirmwareField_MergeVersion">合并工具版本代码</x:String>
+    <x:String x:Key="FirmwareField_ChipId">芯片标识（原始值）</x:String>
+    <x:String x:Key="FirmwareField_ReleaseTime">发布时间（UTC）</x:String>
+    <x:String x:Key="FirmwareField_LoaderOffset">加载器偏移（字节）</x:String>
+    <x:String x:Key="FirmwareField_LoaderSize">加载器大小（字节）</x:String>
+    <x:String x:Key="FirmwareField_ImageOffset">内嵌镜像偏移（字节）</x:String>
+    <x:String x:Key="FirmwareField_ChecksumStatus">校验状态</x:String>
+    <x:String x:Key="FirmwareField_NotVerified">元数据预览未校验</x:String>
+    <x:String x:Key="FirmwareField_Verified">已校验</x:String>
     <x:String x:Key="FirmwareField_DirectoryCount">目录数量</x:String>
     <x:String x:Key="FirmwareField_RootNid">根节点 NID</x:String>
     <x:String x:Key="FirmwareField_VolumeName">卷标</x:String>
@@ -608,4 +687,40 @@
     <x:String x:Key="Explorer_OpenAsAuto">自动识别</x:String>
     <x:String x:Key="Explorer_OpenAsElf">ELF 二进制信息</x:String>
     <x:String x:Key="Explorer_OpenAsPartition">分区表</x:String>
+    <x:String x:Key="UserError_OperationFailed">操作未完成。请查看错误详情。</x:String>
+    <x:String x:Key="UserError_Details">错误详情（原始信息）：</x:String>
+    <x:String x:Key="UserError_Cancelled">操作已取消。</x:String>
+    <x:String x:Key="UserError_Timeout">操作超时。请检查设备或网络连接后重试。</x:String>
+    <x:String x:Key="UserError_NotFound">找不到所需的文件或目录。请检查路径。</x:String>
+    <x:String x:Key="UserError_AccessDenied">没有执行此操作的权限。请检查文件或设备的访问权限。</x:String>
+    <x:String x:Key="UserError_ConnectionRefused">连接被拒绝。请检查目标服务是否正在运行。</x:String>
+    <x:String x:Key="UserError_ConnectionFailed">无法完成连接。请检查设备、服务或网络状态。</x:String>
+    <x:String x:Key="UserError_InvalidData">无法读取或解析输入数据。数据可能不完整，或格式不受支持。</x:String>
+    <x:String x:Key="UserError_Cryptography">加密、解密或签名操作失败。请检查密钥和输入数据。</x:String>
+    <x:String x:Key="UserError_NotSupported">当前环境或输入不支持此操作。</x:String>
+    <x:String x:Key="UserError_InvalidInput">输入参数无效。请检查填写的内容或所选文件。</x:String>
+    <x:String x:Key="UserError_Io">读写操作失败。请检查路径、存储空间及设备连接。</x:String>
+    <x:String x:Key="UserError_ParseFailed">解析 {0} 失败。</x:String>
+    <x:String x:Key="UserError_RebuildFailed">重新构建 {0} 失败。</x:String>
+    <x:String x:Key="UserError_AnalyzeFailed">分析 {0} 失败。</x:String>
+    <x:String x:Key="UserError_LoadFailed">加载失败。</x:String>
+    <x:String x:Key="UserError_SaveFailed">保存失败。</x:String>
+    <x:String x:Key="UserError_SavePartitionFailed">保存分区表失败。</x:String>
+    <x:String x:Key="UserError_RunFailed">执行失败。</x:String>
+    <x:String x:Key="UserError_SuperFailed">合成 super 镜像失败。</x:String>
+    <x:String x:Key="UserError_FlashFailed">刷入选中的镜像失败。</x:String>
+    <x:String x:Key="UserError_PathNotFound">找不到文件：{0}</x:String>
+    <x:String x:Key="UserError_DtboReadOnly">DTB 编辑器仅支持浏览 DTBO 容器。请先提取 overlay，再进行编辑。</x:String>
+    <x:String x:Key="UserError_DexMissing">容器内没有 classes*.dex 条目。</x:String>
+    <x:String x:Key="UserError_DexMergedReadOnly">合并视图仅供浏览。请选择具体 DEX 条目后再保存。</x:String>
+    <x:String x:Key="UserError_DexNotSelected">未选择 DEX 条目，无法写回。</x:String>
+    <x:String x:Key="UserError_PartitionUnrecognized">无法识别分区表。需要 LP super 元数据、GPT、MBR、Amlogic 或 Rockchip parameter 文件（CMDLINE: mtdparts=...）。</x:String>
+    <x:String x:Key="UserError_PartitionInvalidEdit">分区编辑无效。请检查分区参数。</x:String>
+    <x:String x:Key="UserError_Failed">失败</x:String>
+    <x:String x:Key="UserError_SigningFailed">签名失败。</x:String>
+    <x:String x:Key="UserError_PartitionNameRequired">分区名称不能为空。</x:String>
+    <x:String x:Key="UserError_PartitionNameLong">分区名称过长（最多 36 个字符）：{0}</x:String>
+    <x:String x:Key="UserError_PartitionStartInvalid">分区起始值无效：{0}</x:String>
+    <x:String x:Key="UserError_PartitionSizeInvalid">分区大小值无效：{0}</x:String>
+    <x:String x:Key="UserError_PluginUnavailable">插件不可用。请检查兼容性和所需依赖。</x:String>
 </ResourceDictionary>

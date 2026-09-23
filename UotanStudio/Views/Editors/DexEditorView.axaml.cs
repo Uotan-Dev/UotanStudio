@@ -74,7 +74,7 @@ public partial class DexEditorView : UserControl
         }
         catch (Exception ex)
         {
-            vm.CompileError = ex.Message;
+            vm.CompileError = global::UotanStudio.Services.UserError.Describe(ex);
         }
     }
 }

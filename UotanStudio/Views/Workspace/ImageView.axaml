@@ -109,6 +109,16 @@
                                             <avalonia:MaterialIcon Kind="PackageDown" Width="16" Height="16" />
                                         </MenuItem.Icon>
                                     </MenuItem>
+                                    <MenuItem Classes="ext4-action" Header="{DynamicResource ImageView_Ext4Minimize}" Click="OnExt4MinimizeMenuClick">
+                                        <MenuItem.Icon>
+                                            <avalonia:MaterialIcon Kind="ArrowCollapseVertical" Width="16" Height="16" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Classes="ext4-action" Header="{DynamicResource ImageView_Ext4RepairMinimize}" Click="OnExt4RepairMinimizeMenuClick">
+                                        <MenuItem.Icon>
+                                            <avalonia:MaterialIcon Kind="Wrench" Width="16" Height="16" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
                                     <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeImg}" Click="OnSynthesizeImgMenuClick">
                                         <MenuItem.Icon>
                                             <avalonia:MaterialIcon Kind="ImagePlus" Width="16" Height="16" />

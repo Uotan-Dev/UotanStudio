@@ -36,6 +36,10 @@
                        HorizontalAlignment="Center"
                        TextWrapping="Wrap" TextAlignment="Center"
                        Margin="0,8" />
+            <TextBlock Text="{DynamicResource About_FontNotice}"
+                       FontSize="11" Opacity="0.7"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap" TextAlignment="Center" />
         </StackPanel>
 
         <!-- 开源项目：点击“开源项目”按钮后向下展开 -->

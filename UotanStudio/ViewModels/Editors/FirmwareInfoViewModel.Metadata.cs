@@ -52,7 +52,7 @@ public partial class FirmwareInfoViewModel
             {
                 "HashtreeDisabled" or "VerificationDisabled" or "PartialUpdate" => FieldLabel(rawValue),
                 "Type" when rawValue == "Hash" => FieldLabel("PartitionHash"),
-                "VerificationStatus" or "Type" => FieldLabel(rawValue),
+                "VerificationStatus" or "Type" or "ChecksumStatus" => FieldLabel(rawValue),
                 _ => rawValue.Length == 0 ? FieldLabel("Empty") : rawValue
             };
             var row = new PropertyRow(FieldLabel(fieldKey), value);

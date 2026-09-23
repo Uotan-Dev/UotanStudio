@@ -55,7 +55,7 @@ public sealed partial class PluginToolViewModel : Tool, IDisposable
         }
         catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException)
         {
-            Status = string.Format(LanguageService.Instance.GetString("Plugin_OperationFailed"), ex.Message);
+            Status = string.Format(LanguageService.Instance.GetString("Plugin_OperationFailed"), global::UotanStudio.Services.UserError.Describe(ex));
         }
     }
 

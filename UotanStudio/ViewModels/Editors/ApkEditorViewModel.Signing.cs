@@ -52,8 +52,8 @@ public partial class ApkEditorViewModel
                 FilePath ?? string.Empty, SigningOutputPath, SigningKeyPath, SigningCertificatePath,
                 SigningKeyPassword, SigningCertificatePassword, SigningV1, SigningV2, SigningV3,
                 cancellationToken);
-            SigningStatus = result.Summary;
-            SigningStateDisplay = result.Summary;
+            SigningStatus = result.Success ? result.Summary : global::UotanStudio.Services.UserError.WithDetails(result.Summary, "UserError_SigningFailed");
+            SigningStateDisplay = SigningStatus;
         }
         catch (OperationCanceledException)
         {

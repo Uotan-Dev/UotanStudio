@@ -19,4 +19,8 @@ public partial class SplashViewModel(string initialStatus) : ViewModelBase
     /// </summary>
     [ObservableProperty]
     private string _statusText = initialStatus;
+
+    /// <summary>Whether startup work is still in progress.</summary>
+    [ObservableProperty]
+    private bool _isInitializing = true;
 }

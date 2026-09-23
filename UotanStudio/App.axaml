@@ -35,6 +35,9 @@
         <semi:UrsaSemiTheme />
         <semi:SemiPopupAnimations />
         <semi:DockSemiTheme />
+        <Style Selector="Control">
+            <Setter Property="TextElement.FontFamily" Value="avares://UotanStudio/Assets/Fonts#MiSans" />
+        </Style>
         <Style Selector="dock|DocumentControl">
             <Setter Property="ModifiedTemplate">
                 <DataTemplate>

@@ -227,7 +227,7 @@ public partial class KeyManagerViewModel : ViewModelBase
         RenameText = value?.Name ?? "";
         PublicKey = "";
         try { if (value is not null) PublicKey = _library.PublicText(value); }
-        catch (Exception ex) { Status = ex.Message; }
+        catch (Exception ex) { Status = global::UotanStudio.Services.UserError.Describe(ex); }
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(HasCertificate));
         OnPropertyChanged(nameof(SelectedPath));
@@ -441,7 +441,7 @@ public partial class KeyManagerViewModel : ViewModelBase
         IsBusy = true;
         Status = "";
         try { await action(); }
-        catch (Exception ex) { Status = ex.Message; }
+        catch (Exception ex) { Status = global::UotanStudio.Services.UserError.Describe(ex); }
         finally { IsBusy = false; }
     }
 }

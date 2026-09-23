@@ -67,6 +67,15 @@
     <x:String x:Key="Dock_EROFSAlgorithmHint">lz4 packs faster; lz4hc spends more time searching for a smaller image (EROFS records the same LZ4 codec either way). lzma, deflate and zstd choose a different on-disk codec. The compression level only affects the searching encoders.</x:String>
     <x:String x:Key="Dock_EROFSCompLevel">EROFS Level</x:String>
     <x:String x:Key="Dock_EROFSCompLevelHint">Higher values search harder for a smaller image: it drives the lz4hc search depth and the fast lz4 density/speed trade-off.</x:String>
+    <x:String x:Key="Dock_F2FSCompression">F2FS Compression</x:String>
+    <x:String x:Key="Dock_F2FSAlgorithm">F2FS Codec</x:String>
+    <x:String x:Key="Dock_F2FSCompLevel">F2FS Level</x:String>
+    <x:String x:Key="Dock_F2FSAndroidProfile">Android F2FS</x:String>
+    <x:String x:Key="Dock_F2FSAndroidProfileEnabled">Native profile</x:String>
+    <x:String x:Key="Dock_F2FSAndroidProfileHint">Uses mkfs.f2fs and sload.f2fs for read-only, project quota and extra attributes. Requires native tools or a WSL distribution.</x:String>
+    <x:String x:Key="Dock_F2FSAndroidCapacity">Image capacity (bytes)</x:String>
+    <x:String x:Key="Dock_F2FSAndroidCapacityHint">At least 64 MiB, aligned to 2 MiB. Choose the target partition capacity explicitly.</x:String>
+    <x:String x:Key="Dock_F2FSWslDistribution">WSL distribution</x:String>
     <x:String x:Key="Dock_SUPERSize">SUPER Size</x:String>
     <x:String x:Key="Dock_SUPERName">SUPER Cluster</x:String>
     <x:String x:Key="Dock_SUPERFormat">SUPER Format</x:String>

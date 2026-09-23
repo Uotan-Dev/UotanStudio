@@ -59,6 +59,28 @@
                     </Grid>
                 </StackPanel>
 
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{DynamicResource Settings_DeviceCommunication}" FontWeight="SemiBold" FontSize="16" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4">
+                        <TextBlock Text="{DynamicResource Settings_UsbBackend}" VerticalAlignment="Center" />
+                        <ComboBox Grid.Column="1" SelectedIndex="{Binding DeviceUsbBackendIndex, Mode=TwoWay}" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="{DynamicResource Settings_UsbAuto}" />
+                            <ComboBoxItem Content="{DynamicResource Settings_UsbNative}" />
+                            <ComboBoxItem Content="{DynamicResource Settings_UsbLibusb}" />
+                        </ComboBox>
+                        <TextBlock Grid.Row="1" Text="{DynamicResource Settings_AdbServer}" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding AdbServerStatus}" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="2" Text="{DynamicResource Settings_HdcServer}" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HdcServerStatus}" Margin="0,8,0,0" />
+                    </Grid>
+                    <WrapPanel Orientation="Horizontal">
+                        <Button Content="{DynamicResource Settings_StopAdbServer}" Command="{Binding StopAdbServerCommand}" Margin="0,0,8,8" />
+                        <Button Content="{DynamicResource Settings_StopHdcServer}" Command="{Binding StopHdcServerCommand}" Margin="0,0,8,8" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding ServerActionStatus}" TextWrapping="Wrap" />
+                </StackPanel>
+
                 <!-- Section 3: General -->
                 <StackPanel Spacing="8">
                     <TextBlock Text="{DynamicResource Settings_General}" FontWeight="SemiBold" FontSize="16" />

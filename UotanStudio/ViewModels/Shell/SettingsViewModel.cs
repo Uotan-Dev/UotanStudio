@@ -19,6 +19,105 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
     private AppSettings _appSettings;
 
+    /// <summary>Persisted USB mode; existing sessions retain their backend until restart.</summary>
+    public int DeviceUsbBackendIndex
+    {
+        get => (int)_appSettings.DeviceCommunication.UsbBackend;
+        set
+        {
+            if (value is < 0 or > 2 || DeviceUsbBackendIndex == value)
+            {
+                return;
+            }
+            _appSettings.DeviceCommunication = _appSettings.DeviceCommunication with
+            {
+                UsbBackend = (global::UotanStudio.Comm.Transports.Usb.Abstractions.UsbApiKind)value
+            };
+            OnPropertyChanged();
+            DebouncedSaveSettings();
+        }
+    }
+
+    private bool _stoppingServer;
+    private string _serverActionKey = "Settings_ServerActionNone";
+    private string? _serverActionError;
+
+    /// <summary>Localized result of the explicit server stop action.</summary>
+    public string ServerActionStatus => _serverActionKey == "Settings_ServerActionNone" ? string.Empty : _serverActionError is null
+        ? LanguageService.Instance.GetString(_serverActionKey)
+        : string.Format(LanguageService.Instance.GetString(_serverActionKey), _serverActionError);
+
+    private bool CanStopServer() => !_stoppingServer;
+
+    [RelayCommand(CanExecute = nameof(CanStopServer))]
+    private Task StopAdbServerAsync(CancellationToken cancellationToken)
+        => StopServerAsync(Services.Devices.DeviceMonitorService.Instance.StopAdbServerAsync, cancellationToken);
+
+    [RelayCommand(CanExecute = nameof(CanStopServer))]
+    private Task StopHdcServerAsync(CancellationToken cancellationToken)
+        => StopServerAsync(Services.Devices.DeviceMonitorService.Instance.StopHdcServerAsync, cancellationToken);
+
+    private async Task StopServerAsync(Func<CancellationToken, Task> stop, CancellationToken cancellationToken)
+    {
+        _stoppingServer = true;
+        StopAdbServerCommand.NotifyCanExecuteChanged();
+        StopHdcServerCommand.NotifyCanExecuteChanged();
+        _serverActionKey = "Settings_ServerStopping";
+        _serverActionError = null;
+        OnPropertyChanged(nameof(ServerActionStatus));
+        try
+        {
+            await stop(cancellationToken);
+            _serverActionKey = "Settings_ServerStopped";
+        }
+        catch (Exception ex)
+        {
+            _serverActionKey = "Settings_ServerStopFailed";
+            _serverActionError = global::UotanStudio.Services.UserError.Describe(ex);
+        }
+        finally
+        {
+            await RefreshCommunicationStatusAsync(CancellationToken.None);
+            _stoppingServer = false;
+            StopAdbServerCommand.NotifyCanExecuteChanged();
+            StopHdcServerCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(ServerActionStatus));
+        }
+    }
+
+    private string _adbServerStatusKey = "Settings_ServerUnchecked";
+    private string _hdcServerStatusKey = "Settings_ServerUnchecked";
+
+    /// <summary>Localized result of the latest ADB endpoint probe.</summary>
+    public string AdbServerStatus => LanguageService.Instance.GetString(_adbServerStatusKey);
+
+    /// <summary>Localized result of the latest HDC endpoint probe.</summary>
+    public string HdcServerStatus => LanguageService.Instance.GetString(_hdcServerStatusKey);
+
+    [RelayCommand]
+    private async Task RefreshCommunicationStatusAsync(CancellationToken cancellationToken)
+    {
+        var adb = ProbeServerStatusAsync(global::UotanStudio.Comm.DeviceCommunicationConfiguration.ProbeAdbServerAsync, cancellationToken);
+        var hdc = ProbeServerStatusAsync(global::UotanStudio.Comm.DeviceCommunicationConfiguration.ProbeHdcServerAsync, cancellationToken);
+        await Task.WhenAll(adb, hdc);
+        _adbServerStatusKey = await adb;
+        _hdcServerStatusKey = await hdc;
+        OnPropertyChanged(nameof(AdbServerStatus));
+        OnPropertyChanged(nameof(HdcServerStatus));
+    }
+
+    private static async Task<string> ProbeServerStatusAsync(Func<CancellationToken, Task<bool>> probe, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await probe(cancellationToken) ? "Settings_ServerListening" : "Settings_ServerAbsent";
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return "Settings_ServerUnknown";
+        }
+    }
+
     /// <summary>Maximum concurrent firmware workers, applied to newly started operations.</summary>
     public int FirmwareParallelism
     {
@@ -397,6 +496,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(LanguagePreviewText));
+        OnPropertyChanged(nameof(ServerActionStatus));
+        OnPropertyChanged(nameof(AdbServerStatus));
+        OnPropertyChanged(nameof(HdcServerStatus));
     }
 
     /// <summary>

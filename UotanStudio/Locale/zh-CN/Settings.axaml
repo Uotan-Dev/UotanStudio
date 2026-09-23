@@ -77,4 +77,20 @@
     <x:String x:Key="Settings_AIToggleKey">显示 / 隐藏 API 密钥</x:String>
     <x:String x:Key="Settings_AIModels">模型</x:String>
     <x:String x:Key="Settings_AIFetchModels">获取模型列表</x:String>
+    <x:String x:Key="Settings_DeviceCommunication">设备通信</x:String>
+    <x:String x:Key="Settings_UsbBackend">USB 通信后端</x:String>
+    <x:String x:Key="Settings_UsbAuto">自动（平台默认）</x:String>
+    <x:String x:Key="Settings_UsbNative">强制平台原生</x:String>
+    <x:String x:Key="Settings_UsbLibusb">强制 libusb</x:String>
+    <x:String x:Key="Settings_AdbServer">ADB server</x:String>
+    <x:String x:Key="Settings_HdcServer">HDC server</x:String>
+    <x:String x:Key="Settings_ServerUnchecked">尚未检查</x:String>
+    <x:String x:Key="Settings_ServerListening">端口正在监听</x:String>
+    <x:String x:Key="Settings_ServerAbsent">未运行（连接被拒绝）</x:String>
+    <x:String x:Key="Settings_ServerUnknown">无法确认（连接错误或超时）</x:String>
+    <x:String x:Key="Settings_StopAdbServer">停止 ADB server</x:String>
+    <x:String x:Key="Settings_StopHdcServer">停止 HDC server</x:String>
+    <x:String x:Key="Settings_ServerStopping">正在停止 server…</x:String>
+    <x:String x:Key="Settings_ServerStopped">已确认 server 停止，设备列表已请求刷新。</x:String>
+    <x:String x:Key="Settings_ServerStopFailed">停止 server 失败：{0}</x:String>
 </ResourceDictionary>

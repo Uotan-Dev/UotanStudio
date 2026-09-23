@@ -46,6 +46,7 @@
     <x:String x:Key="Device_Vendor">Vendor</x:String>
     <x:String x:Key="Device_Brand">Brand</x:String>
     <x:String x:Key="Device_Codename">Codename</x:String>
+    <x:String x:Key="Device_SuAccess">SU access</x:String>
     <x:String x:Key="Device_SdkVersion">Android SDK</x:String>
     <x:String x:Key="Device_CpuAbi">CPU ABI</x:String>
     <x:String x:Key="Device_CpuCode">SoC Platform</x:String>

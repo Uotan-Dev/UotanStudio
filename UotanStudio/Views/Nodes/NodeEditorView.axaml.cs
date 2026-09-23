@@ -813,7 +813,7 @@ public partial class NodeEditorView : UserControl
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException or InvalidOperationException)
         {
-            vm.ExecutionStatus = string.Format(Services.LanguageService.Instance.GetString("Node_OperationFailed"), ex.Message);
+            vm.ExecutionStatus = string.Format(Services.LanguageService.Instance.GetString("Node_OperationFailed"), global::UotanStudio.Services.UserError.Describe(ex));
         }
     }
 
@@ -854,7 +854,7 @@ public partial class NodeEditorView : UserControl
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
         {
-            vm.ExecutionStatus = string.Format(Services.LanguageService.Instance.GetString("Node_OperationFailed"), ex.Message);
+            vm.ExecutionStatus = string.Format(Services.LanguageService.Instance.GetString("Node_OperationFailed"), global::UotanStudio.Services.UserError.Describe(ex));
         }
     }
 

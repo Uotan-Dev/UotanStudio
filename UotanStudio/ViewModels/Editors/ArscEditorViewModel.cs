@@ -172,7 +172,7 @@ public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearc
             }
             catch (Exception ex)
             {
-                CompileError = $"Failed to parse ARSC: {ex.Message}";
+                CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_ParseFailed", "ARSC");
                 Nodes.Clear();
                 Details.Clear();
                 return;
@@ -339,7 +339,7 @@ public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearc
         }
         catch (Exception ex)
         {
-            CompileError = $"Failed to rebuild ARSC: {ex.Message}";
+            CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_RebuildFailed", "ARSC");
         }
     }
 

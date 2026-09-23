@@ -55,7 +55,7 @@ public partial class ApkSigningWindow : Window
         }
         catch (Exception ex)
         {
-            vm.SigningStatus = ex.Message;
+            vm.SigningStatus = global::UotanStudio.Services.UserError.Describe(ex);
         }
     }
 
@@ -77,7 +77,7 @@ public partial class ApkSigningWindow : Window
         }
         catch (Exception ex)
         {
-            vm.SigningStatus = ex.Message;
+            vm.SigningStatus = global::UotanStudio.Services.UserError.Describe(ex);
         }
     }
 
@@ -98,7 +98,7 @@ public partial class ApkSigningWindow : Window
         }
         catch (Exception ex)
         {
-            vm.SigningStatus = ex.Message;
+            vm.SigningStatus = global::UotanStudio.Services.UserError.Describe(ex);
         }
     }
 

@@ -553,6 +553,8 @@ public sealed class VisualPluginRegistration
         ? "Windows / Linux / macOS"
         : string.Join(", ", Package.Manifest.Platforms);
     public string ErrorText => string.Join(Environment.NewLine, Errors);
+    /// <summary>Localized compatibility explanation for the plugin manager, retaining raw validation details.</summary>
+    public string DisplayErrorText => IsAvailable ? string.Empty : UserError.WithDetails(ErrorText, "UserError_PluginUnavailable");
 }
 
 internal sealed class VisualPluginManagerState

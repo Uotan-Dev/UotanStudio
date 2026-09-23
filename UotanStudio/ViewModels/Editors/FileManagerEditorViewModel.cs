@@ -319,7 +319,7 @@ public partial class FileManagerEditorViewModel : Document
         catch (Exception ex)
         {
             if (ct.IsCancellationRequested) return;
-            ErrorMessage = ex.Message;
+            ErrorMessage = global::UotanStudio.Services.UserError.Describe(ex);
             HasError = true;
             LogService.Instance.Write(LogLevel.Error, "FileManager",
                 $"Failed to load filesystem image '{path}': {ex.Message}");
@@ -452,7 +452,7 @@ public partial class FileManagerEditorViewModel : Document
         catch (Exception ex)
         {
             if (!ReferenceEquals(session, _session)) return;
-            ErrorMessage = ex.Message;
+            ErrorMessage = global::UotanStudio.Services.UserError.Describe(ex);
             HasError = true;
             LogService.Instance.Write(LogLevel.Error, "FileManager",
                 $"Failed to extract from '{sourcePath}': {ex.Message}");

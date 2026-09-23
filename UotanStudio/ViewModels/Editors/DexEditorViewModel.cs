@@ -309,7 +309,7 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
             }
             catch (Exception ex)
             {
-                CompileError = $"Failed to parse DEX: {ex.Message}";
+                CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_ParseFailed", "DEX");
                 Source = string.Empty;
                 return;
             }
@@ -413,7 +413,7 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
             var target = dexEntries.FirstOrDefault(n => n == entryName) ?? dexEntries.FirstOrDefault();
             if (target is null)
             {
-                CompileError = "容器内没有 classes*.dex 条目。/ The container has no classes*.dex entry.";
+                CompileError = global::UotanStudio.Services.LanguageService.Instance.GetString("UserError_DexMissing");
                 return;
             }
 
@@ -431,7 +431,7 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
                 }
                 catch (Exception ex)
                 {
-                    CompileError = $"Failed to parse {target}: {ex.Message}";
+                    CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_ParseFailed", target);
                     Source = string.Empty;
                     return;
                 }
@@ -488,7 +488,7 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
     {
         if (IsContainer && IsMergeView)
         {
-            CompileError = "合并视图为只读浏览，请先选择具体 DEX 条目再保存。/ The merged view is read-only; select a DEX entry to save.";
+            CompileError = global::UotanStudio.Services.LanguageService.Instance.GetString("UserError_DexMergedReadOnly");
             return;
         }
         if (_dex is null || string.IsNullOrWhiteSpace(FilePath))
@@ -512,7 +512,7 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
             {
                 if (string.IsNullOrEmpty(SelectedEntry))
                 {
-                    CompileError = "未选择 DEX 条目，无法写回。/ No DEX entry selected for write-back.";
+                    CompileError = global::UotanStudio.Services.LanguageService.Instance.GetString("UserError_DexNotSelected");
                     return;
                 }
                 await Task.Run(() => JarDexContainer.WriteBack(FilePath, SelectedEntry, outBytes), default).ConfigureAwait(true);
@@ -532,7 +532,7 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
         }
         catch (Exception ex)
         {
-            CompileError = $"Failed to rebuild DEX: {ex.Message}";
+            CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_RebuildFailed", "DEX");
         }
     }
 
@@ -553,7 +553,7 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
         }
         catch (Exception ex)
         {
-            SignStatus = ex.Message;
+            SignStatus = global::UotanStudio.Services.UserError.Describe(ex);
         }
     }
 
@@ -581,7 +581,7 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
             var result = await Task.Run(
                 () => DexService.Instance.SignJarAsync(FilePath, output, keyPath, certPath),
                 default).ConfigureAwait(true);
-            SignStatus = result.Success ? output : result.Summary;
+            SignStatus = result.Success ? output : global::UotanStudio.Services.UserError.WithDetails(result.Summary, "UserError_SigningFailed");
             if (result.Success)
             {
                 LogService.Instance.Write(LogLevel.Info, "DexEditor", $"Signed JAR written to {output}");
@@ -589,7 +589,7 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
         }
         catch (Exception ex)
         {
-            SignStatus = ex.Message;
+            SignStatus = global::UotanStudio.Services.UserError.Describe(ex);
         }
     }
 

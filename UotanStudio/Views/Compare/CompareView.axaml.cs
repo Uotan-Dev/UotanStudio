@@ -176,7 +176,7 @@ public partial class CompareView : UserControl
         LogService.Instance.Write(LogLevel.Error, "Compare", e.Exception.ToString());
         if (DataContext is CompareViewModel vm)
         {
-            vm.ReportError(e.Exception.Message);
+            vm.ReportError(global::UotanStudio.Services.UserError.Describe(e.Exception));
         }
     }
 
@@ -1396,7 +1396,7 @@ public partial class CompareView : UserControl
     private void ReportEditorFailure(CompareViewModel vm, Exception ex)
     {
         LogService.Instance.Write(LogLevel.Error, "Compare", ex.ToString());
-        vm.ReportError(ex.Message);
+        vm.ReportError(global::UotanStudio.Services.UserError.Describe(ex));
     }
 
     /// <summary>取编辑器光标所在槽号（无光标时为 0）。 Returns the editor's caret slot (0 when there is no caret).</summary>
@@ -1660,7 +1660,7 @@ public partial class CompareView : UserControl
         }
         catch (Exception ex)
         {
-            vm.ReportError(ex.Message);
+            vm.ReportError(global::UotanStudio.Services.UserError.Describe(ex));
             LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
         }
     }
@@ -2480,7 +2480,7 @@ public partial class CompareView : UserControl
         LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
         if (DataContext is CompareViewModel vm)
         {
-            vm.ReportError(ex.Message);
+            vm.ReportError(global::UotanStudio.Services.UserError.Describe(ex));
         }
     }
 

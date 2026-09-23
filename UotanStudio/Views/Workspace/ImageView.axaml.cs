@@ -179,6 +179,8 @@ public partial class ImageView : UserControl
         foreach (var item in menu.Items.OfType<Control>())
         {
             if (item.Classes.Contains("unpack-action")) item.IsVisible = vm.IsUnpackMode;
+            else if (item.Classes.Contains("ext4-action"))
+                item.IsVisible = !vm.IsPackMode && targetImage is { IsDirectory: false, Format: "ext4" or "sparse" };
             else if (item.Classes.Contains("pack-action")) item.IsVisible = vm.IsPackMode;
             else if (item.Classes.Contains("flash-action")) item.IsVisible = !vm.IsPackMode;
             else if (item.Classes.Contains("boot-action"))
@@ -232,6 +234,36 @@ public partial class ImageView : UserControl
         if (SelectMenuImage(sender) is { IsDirectory: false } image && DataContext is ImageViewModel vm)
         {
             if (vm.ExtractSelectedCommand.CanExecute(image)) vm.ExtractSelectedCommand.Execute(image);
+        }
+    }
+
+    private async void OnExt4MinimizeMenuClick(object? sender, RoutedEventArgs e)
+        => await MaintainExt4Async(sender, repair: false);
+
+    private async void OnExt4RepairMinimizeMenuClick(object? sender, RoutedEventArgs e)
+        => await MaintainExt4Async(sender, repair: true);
+
+    private async Task MaintainExt4Async(object? sender, bool repair)
+    {
+        if (SelectMenuImage(sender) is not { IsDirectory: false } image
+            || DataContext is not ImageViewModel { IsOperating: false } vm
+            || TopLevel.GetTopLevel(this) is not Window owner)
+            return;
+
+        var language = LanguageService.Instance;
+        var confirmed = await DialogService.ConfirmAsync(owner,
+            language.GetString(repair ? "ImageView_Ext4RepairMinimize" : "ImageView_Ext4Minimize"),
+            language.GetString(repair ? "Image_Ext4RepairWarning" : "Image_Ext4MinimizeConfirm"),
+            language.GetString("ImageView_Ext4Minimize"));
+        if (!confirmed) return;
+        try
+        {
+            await vm.MinimizeExistingExt4Async(image, repair);
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowAsync(owner, language.GetString("Image_Ext4MaintenanceFailed"),
+                UserError.Describe(ex), MessageBoxIcon.Error);
         }
     }
 

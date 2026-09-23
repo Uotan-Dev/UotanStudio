@@ -53,6 +53,15 @@
     <x:String x:Key="Dock_EROFSAlgorithmHint">lz4 打包更快；lz4hc 用更多打包时间换取更小镜像（两者写盘的编解码器都是 LZ4）。lzma、deflate 与 zstd 会选用不同的磁盘编解码器。压缩等级只作用于带搜索的编码器。</x:String>
     <x:String x:Key="Dock_EROFSCompLevel">EROFS压缩等级</x:String>
     <x:String x:Key="Dock_EROFSCompLevelHint">等级越高压缩越密：对 lz4hc 是搜索深度，对快速 lz4 是密度与速度的权衡。</x:String>
+    <x:String x:Key="Dock_F2FSCompression">F2FS 压缩</x:String>
+    <x:String x:Key="Dock_F2FSAlgorithm">F2FS 算法</x:String>
+    <x:String x:Key="Dock_F2FSCompLevel">F2FS 压缩等级</x:String>
+    <x:String x:Key="Dock_F2FSAndroidProfile">Android F2FS</x:String>
+    <x:String x:Key="Dock_F2FSAndroidProfileEnabled">原生配置</x:String>
+    <x:String x:Key="Dock_F2FSAndroidProfileHint">通过 mkfs.f2fs 和 sload.f2fs 生成只读、项目配额和扩展属性；需要原生工具或 WSL 发行版。</x:String>
+    <x:String x:Key="Dock_F2FSAndroidCapacity">镜像容量（字节）</x:String>
+    <x:String x:Key="Dock_F2FSAndroidCapacityHint">至少 64 MiB，且须按 2 MiB 对齐。请明确指定目标分区容量。</x:String>
+    <x:String x:Key="Dock_F2FSWslDistribution">WSL 发行版</x:String>
     <x:String x:Key="Dock_SUPERSize">SUPER大小</x:String>
     <x:String x:Key="Dock_SUPERName">SUPER簇名</x:String>
     <x:String x:Key="Dock_SUPERFormat">SUPER格式</x:String>

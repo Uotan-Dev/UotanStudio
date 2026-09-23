@@ -67,7 +67,7 @@ public sealed partial class CompareViewModel
         catch (Exception ex)
         {
             HasError = true;
-            ErrorMessage = ex.Message;
+            ErrorMessage = global::UotanStudio.Services.UserError.Describe(ex);
             LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
         }
         finally
@@ -276,7 +276,7 @@ public sealed partial class CompareViewModel
         catch (Exception ex)
         {
             HasError = true;
-            ErrorMessage = ex.Message;
+            ErrorMessage = global::UotanStudio.Services.UserError.Describe(ex);
             LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
         }
     }

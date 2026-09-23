@@ -217,7 +217,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 {
                     if (!FileOpenMode.IsRockchipParameter(path))
                     {
-                        CompileError = "Not a recognized partition table: expected LP super metadata, GPT, MBR, Amlogic or a Rockchip parameter file (CMDLINE: mtdparts=...).";
+                        CompileError = global::UotanStudio.Services.LanguageService.Instance.GetString("UserError_PartitionUnrecognized");
                         return;
                     }
 
@@ -233,7 +233,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
 
                     if (rockchip is null)
                     {
-                        CompileError = "Not a recognized partition table: expected LP super metadata, GPT, MBR, Amlogic or a Rockchip parameter file (CMDLINE: mtdparts=...). 无法识别的分区表：需要 LP super 元数据、GPT、MBR、Amlogic 或 Rockchip parameter 文件。";
+                        CompileError = global::UotanStudio.Services.LanguageService.Instance.GetString("UserError_PartitionUnrecognized");
                         return;
                     }
 
@@ -276,7 +276,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
         {
             if (!item.TryApply(out var error))
             {
-                CompileError = error ?? "Invalid partition edit. 分区编辑无效。";
+                CompileError = error ?? LanguageService.Instance.GetString("UserError_PartitionInvalidEdit");
                 return;
             }
         }
@@ -311,7 +311,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
         }
         catch (Exception ex)
         {
-            CompileError = $"Failed to save partition table: {ex.Message} 保存分区表失败。";
+            CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_SavePartitionFailed");
         }
         finally { IsBusy = false; }
     }
@@ -875,22 +875,22 @@ public partial class PartitionItemViewModel : ObservableObject
         error = null;
         if (string.IsNullOrWhiteSpace(Name))
         {
-            error = "Partition name must not be empty. 分区名称不能为空。";
+            error = LanguageService.Instance.GetString("UserError_PartitionNameRequired");
             return false;
         }
         if (Name.Length > 36)
         {
-            error = $"Partition name too long (max 36 bytes): '{Name}'. 分区名称过长。";
+            error = LanguageService.Instance.GetString("UserError_PartitionNameLong", Name);
             return false;
         }
         if (!PartitionTableFormat.TryParseSectors(Start, out var start))
         {
-            error = $"Invalid start value: '{Start}'. 起始值无效。";
+            error = LanguageService.Instance.GetString("UserError_PartitionStartInvalid", Start);
             return false;
         }
         if (!PartitionTableFormat.TryParseSectors(Size, out var size))
         {
-            error = $"Invalid size value: '{Size}'. 大小值无效。";
+            error = LanguageService.Instance.GetString("UserError_PartitionSizeInvalid", Size);
             return false;
         }
 

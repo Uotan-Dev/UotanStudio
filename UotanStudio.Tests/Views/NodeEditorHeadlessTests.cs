@@ -30,6 +30,50 @@ public sealed class HeadlessTestApp : Application
 [Collection("Node editor UI")]
 public sealed class NodeEditorHeadlessTests(NodeEditorUiFixture fixture)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateConnection_SameNode_RejectsWithoutChangingHistory(bool reverse)
+    {
+        Task dispatchTask;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatchTask = fixture.Session.Dispatch(() =>
+            {
+                using var editor = new NodeEditorViewModel();
+                var node = new FlowNodeViewModel("Test", NodeCategory.Output);
+                var input = new NodeConnectorViewModel { PortType = NodePortType.Path };
+                var output = new NodeConnectorViewModel { PortType = NodePortType.Path };
+                node.Input.Add(input);
+                node.Output.Add(output);
+                editor.Nodes.Add(node);
+
+                editor.PendingConnection.StartCommand.Execute(reverse ? input : output);
+                editor.PendingConnection.FinishCommand.Execute(reverse ? output : input);
+
+                Assert.Empty(editor.Connections);
+                Assert.False(editor.CanUndo);
+                Assert.Null(editor.PendingConnection.Source);
+
+                var other = new FlowNodeViewModel("Test", NodeCategory.Output);
+                var otherInput = new NodeConnectorViewModel { PortType = NodePortType.Path };
+                other.Input.Add(otherInput);
+                editor.Nodes.Add(other);
+                editor.CreateConnection(reverse ? otherInput : output, reverse ? output : otherInput);
+
+                var connection = Assert.Single(editor.Connections);
+                Assert.Same(output, connection.Source);
+                Assert.Same(otherInput, connection.Target);
+                editor.Undo();
+                Assert.Empty(editor.Connections);
+                Assert.False(editor.CanUndo);
+                editor.Redo();
+                Assert.Same(connection, Assert.Single(editor.Connections));
+            }, TestContext.Current.CancellationToken);
+        }
+        await dispatchTask.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+    }
+
     [Fact]
     public async Task NodeEditor_ConnectionClickAndDelete_RemovesOnlyConnectionAndSupportsUndoRedo()
     {

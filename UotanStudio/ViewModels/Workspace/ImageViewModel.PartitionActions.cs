@@ -160,7 +160,7 @@ internal partial class ImageViewModel
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Images", $"Delete unpacked directory failed: {ex.Message}");
-            await DialogService.ShowAsync(owner, language.GetString("Dialog_DeleteFailed"), ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+            await DialogService.ShowAsync(owner, language.GetString("Dialog_DeleteFailed"), global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -217,7 +217,7 @@ internal partial class ImageViewModel
             if (!result.Success)
             {
                 LogService.Instance.Write(LogLevel.Error, "Images", result.Summary);
-                StatusText = $"Synthesize super failed  合成 super 失败";
+                StatusText = global::UotanStudio.Services.LanguageService.Instance.GetString("UserError_SuperFailed");
                 ProgressPercent = 0;
                 return;
             }
@@ -238,7 +238,7 @@ internal partial class ImageViewModel
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Images", $"Synthesize super failed: {ex.Message}  合成 super 失败：{ex.Message}");
-            StatusText = $"Synthesize super failed: {ex.Message}  合成 super 失败：{ex.Message}";
+            StatusText = global::UotanStudio.Services.UserError.Describe(ex, "UserError_SuperFailed");
             ProgressPercent = 0;
         }
     }
@@ -328,7 +328,7 @@ internal partial class ImageViewModel
         catch (Exception ex)
         {
             ProgressPercent = 0;
-            StatusText = $"Flash selected failed: {ex.Message}  选中文件刷入失败：{ex.Message}";
+            StatusText = global::UotanStudio.Services.UserError.Describe(ex, "UserError_FlashFailed");
             LogService.Instance.Write(LogLevel.Error, "Images", $"Flash selected failed: {ex.Message}  选中文件刷入失败：{ex.Message}");
         }
     }

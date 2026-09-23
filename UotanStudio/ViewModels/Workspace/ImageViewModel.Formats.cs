@@ -46,11 +46,12 @@ internal partial class ImageViewModel
     /// copying the raw byte stream. Header probing and unpack-directory semantics
     /// (<see cref="ImageOperationPaths"/>) are unchanged.
     /// </summary>
-    private static async Task<FirmwareOpResult> ExtractRawAsync(string sourcePath, string outputDir, string name, IProgress<(int processed, int total)>? progress = null, IProgress<UotanStudio.Firmware.SharedKernel.FileSystemByteProgress>? byteProgress = null)
+    private static async Task<FirmwareOpResult> ExtractRawAsync(string sourcePath, string outputDir, string name, IProgress<(int processed, int total)>? progress = null, IProgress<UotanStudio.Firmware.SharedKernel.FileSystemByteProgress>? byteProgress = null, IReadOnlyList<string>? erofsExtraDevicePaths = null, CancellationToken cancellationToken = default)
     {
         var layout = ImageInputService.ProbeFilesystemHeader(sourcePath);
         if (layout is RawImageLayout.Ext4 or RawImageLayout.Erofs or RawImageLayout.F2fs)
-            return await FirmwareService.Instance.UnpackFileSystemImageAsync(sourcePath, outputDir, progress, byteProgress: byteProgress);
+            return await FirmwareService.Instance.UnpackFileSystemImageAsync(sourcePath, outputDir, progress,
+                cancellationToken, byteProgress, erofsExtraDevicePaths);
         return await ConvertToRawAsync(sourcePath, outputDir, name);
     }
 

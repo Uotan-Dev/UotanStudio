@@ -252,7 +252,7 @@ public partial class ApkEditorViewModel : Document
         }
         catch (Exception ex)
         {
-            CompileError = $"Failed to analyze APK: {ex.Message}";
+            CompileError = global::UotanStudio.Services.UserError.Describe(ex, "UserError_AnalyzeFailed", "APK");
             PackageName = string.Empty;
             ApplicationName = string.Empty;
             VersionName = string.Empty;

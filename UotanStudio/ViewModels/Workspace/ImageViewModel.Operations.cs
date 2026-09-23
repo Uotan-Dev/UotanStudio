@@ -1,5 +1,7 @@
+using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
@@ -55,7 +57,7 @@ internal partial class ImageViewModel
         {
             LogService.Instance.Write(LogLevel.Error, "Explorer", ex.Message);
             if (TopLevelExtensions.GetTopLevel() is Avalonia.Controls.Window owner)
-                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dock_ImagesView"), ex.Message,
+                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dock_ImagesView"), global::UotanStudio.Services.UserError.Describe(ex),
                     Ursa.Controls.MessageBoxIcon.Error);
         }
     }
@@ -208,13 +210,22 @@ internal partial class ImageViewModel
             return (false, true, targetDirectory);
         }
 
+        IReadOnlyList<string>? erofsDevices = null;
+        if (entry.Format is "ext4" or "erofs" or "f2fs" or "raw"
+            && ImageInputService.ProbeFilesystemHeader(paths.Source) == RawImageLayout.Erofs)
+        {
+            erofsDevices = await SelectErofsDevicesAsync(paths.Source, cancellationToken);
+            if (erofsDevices is null) return (false, true, targetDirectory);
+        }
+
         var byteProgress = CreateFileSystemProgress(entry.DisplayName);
 
         var result = await ExtractionDirectory.ReplaceAsync(targetDirectory, async () => entry.Format switch
         {
             "boot" => await Task.Run(() => _firmware.UnpackBootAsync(paths.Source, targetDirectory), cancellationToken),
             "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(paths.Source, targetDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken), cancellationToken),
-            "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(paths.Source, targetDirectory, paths.Name, byteProgress: byteProgress),
+            "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(paths.Source, targetDirectory, paths.Name,
+                byteProgress: byteProgress, erofsExtraDevicePaths: erofsDevices, cancellationToken: cancellationToken),
             _ => await Task.Run(async () =>
             {
                 var options = new UotanStudio.Firmware.SharedKernel.UnpackOptions { FileSystemProgress = byteProgress };
@@ -225,6 +236,38 @@ internal partial class ImageViewModel
         });
         LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Images", result.Summary);
         return (result.Success, false, targetDirectory);
+    }
+
+    private static async Task<IReadOnlyList<string>?> SelectErofsDevicesAsync(string imagePath, CancellationToken cancellationToken)
+    {
+        var count = ErofsFormatHandler.ReadExtraDeviceCount(imagePath);
+        if (count == 0) return [];
+        var topLevel = TopLevelExtensions.GetTopLevel()
+            ?? throw new InvalidOperationException(LanguageService.Instance.GetString("Image_ErofsDevicePickerUnavailable"));
+        var language = LanguageService.Instance;
+        var paths = new List<string>(count);
+        var seen = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+        {
+            Path.GetFullPath(imagePath)
+        };
+        for (var id = 1; id <= count; id++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = string.Format(language.GetString("Image_ErofsSelectDevice"), id, count),
+                AllowMultiple = false,
+                FileTypeFilter = [FilePickerFileTypes.All]
+            });
+            if (files.Count == 0) return null;
+            using var file = files[0];
+            var path = file.TryGetLocalPath()
+                ?? throw new IOException(language.GetString("Image_ErofsDeviceMustBeLocal"));
+            if (!seen.Add(Path.GetFullPath(path)))
+                throw new InvalidDataException(language.GetString("Image_ErofsDuplicateDevice"));
+            paths.Add(path);
+        }
+        return paths;
     }
 
     /// <summary>

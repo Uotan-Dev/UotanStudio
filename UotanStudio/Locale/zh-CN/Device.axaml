@@ -46,6 +46,7 @@
     <x:String x:Key="Device_Vendor">厂商</x:String>
     <x:String x:Key="Device_Brand">品牌</x:String>
     <x:String x:Key="Device_Codename">型号代号</x:String>
+    <x:String x:Key="Device_SuAccess">SU 权限</x:String>
     <x:String x:Key="Device_SdkVersion">Android SDK</x:String>
     <x:String x:Key="Device_CpuAbi">CPU ABI</x:String>
     <x:String x:Key="Device_CpuCode">SoC 平台</x:String>

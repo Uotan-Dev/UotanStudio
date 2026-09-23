@@ -1021,6 +1021,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         {
             (source, target) = (target, source);
         }
+        if (Nodes.Any(node => node.Output.Contains(source) && node.Input.Contains(target)))
+        {
+            return;
+        }
         // 检查是否已存在相同连接
         if (Connections.Any(c => c.Source == source && c.Target == target)) return;
         // 端口类型兼容性校验：不兼容则拒绝连接并记录警告
@@ -1179,7 +1183,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
                 Services.Execution.ExecutionStatus.Succeeded => LanguageService.Instance.GetString(preview ? "Node_Patch_PreviewFinished" : "Node_Patch_RunFinished"),
                 Services.Execution.ExecutionStatus.PartiallySucceeded => LanguageService.Instance.GetString("Node_Patch_RunPartial", result.FailedNodes.Count),
                 Services.Execution.ExecutionStatus.Cancelled => LanguageService.Instance.GetString("Node_Patch_RunCancelled"),
-                Services.Execution.ExecutionStatus.Failed => result.ErrorMessage ?? LanguageService.Instance.GetString("Node_Patch_RunFailed"),
+                Services.Execution.ExecutionStatus.Failed => UserError.WithDetails(result.ErrorMessage, "Node_Patch_RunFailed"),
                 _ => LanguageService.Instance.GetString("Node_StatusReady")
             };
             AppendExecutionLog(ExecutionStatus);
@@ -1187,7 +1191,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             _log.Write(LogLevel.Error, "NodeEditor", $"Run failed: {ex.Message}");
-            ExecutionStatus = $"Run failed: {ex.Message}";
+            ExecutionStatus = global::UotanStudio.Services.UserError.Describe(ex, "UserError_RunFailed");
             AppendExecutionLog(ExecutionStatus);
         }
         finally

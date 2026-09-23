@@ -201,7 +201,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
             // 加载失败时把原因留给页面顶部错误条，避免只留下一片空编辑器（打开失败的调用方只记日志）。
             // Surface load failures in the page's top error banner instead of leaving an empty editor
             // behind (the open path only logs the exception).
-            CompileError = ex.Message;
+            CompileError = global::UotanStudio.Services.UserError.Describe(ex);
             RawBytes = null;
             Text = string.Empty;
             IsBinary = false;
@@ -528,14 +528,14 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
             }
             else
             {
-                AddAnalysis("Error", result.Summary);
+                AddAnalysis(LanguageService.Instance.GetString("UserError_Failed"), UserError.WithDetails(result.Summary));
             }
 
             NotifyAnalysisComplete(path);
         }
         catch (Exception ex)
         {
-            AddAnalysis("Error", ex.Message);
+            AddAnalysis(LanguageService.Instance.GetString("UserError_Failed"), UserError.Describe(ex));
             NotifyAnalysisComplete(path);
         }
     }

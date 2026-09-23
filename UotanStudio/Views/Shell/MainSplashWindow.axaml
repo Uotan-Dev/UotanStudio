@@ -16,7 +16,8 @@
             <TextBlock Text="{Binding StatusText}"
                        FontSize="12" Opacity="0.7"
                        HorizontalAlignment="Center" />
-            <ProgressBar IsIndeterminate="True" Height="4" MinWidth="320" />
+            <ProgressBar IsIndeterminate="{Binding IsInitializing}" Value="100"
+                         Maximum="100" Height="4" MinWidth="320" />
         </StackPanel>
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
             <Image Source="/Assets/UotanToolbox.png" Width="72" Height="72" />

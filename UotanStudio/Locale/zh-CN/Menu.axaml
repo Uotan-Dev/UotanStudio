@@ -115,6 +115,7 @@
     <x:String x:Key="About_Version">版本</x:String>
     <x:String x:Key="About_Title">关于 UotanStudio</x:String>
     <x:String x:Key="About_Description">集固件解打包、开发板烧录与可视化编程于一体的一站式工具箱。</x:String>
+    <x:String x:Key="About_FontNotice">界面使用 MiSans 字体，字体版权归 Xiaomi Inc. 所有。</x:String>
     <x:String x:Key="About_Close">关闭</x:String>
     <x:String x:Key="About_OpenSource">开源项目</x:String>
     <x:String x:Key="About_OpenRepository">仓库</x:String>
