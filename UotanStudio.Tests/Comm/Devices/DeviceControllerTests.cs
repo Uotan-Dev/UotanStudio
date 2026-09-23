@@ -22,12 +22,12 @@ public sealed class DeviceControllerTests
             Assert.Equal(Second, lease.Endpoint);
             Assert.Same(opener.LastTransport, lease.Transport);
             Assert.Equal(Second, opener.LastEndpoint);
-            await Assert.ThrowsAsync<InvalidOperationException>(() => controller.OpenAsync(snapshot, Second.Id));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => controller.OpenAsync(snapshot, Second.Id, TestContext.Current.CancellationToken));
         }
 
         Assert.True(opener.LastTransport!.Disposed);
         await using var reopened = await controller.OpenAsync(snapshot, Second.Id, TestContext.Current.CancellationToken);
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => controller.OpenAsync(snapshot, new DeviceEndpointId("adb", "usb", "serial-b")));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => controller.OpenAsync(snapshot, new DeviceEndpointId("adb", "usb", "serial-b"), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public sealed class DeviceControllerTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => opening);
         Assert.True(transport.Disposed);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => controller.OpenAsync(snapshot, First.Id));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => controller.OpenAsync(snapshot, First.Id, TestContext.Current.CancellationToken));
     }
 
     [Fact]

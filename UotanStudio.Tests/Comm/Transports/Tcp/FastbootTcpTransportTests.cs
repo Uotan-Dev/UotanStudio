@@ -33,7 +33,7 @@ public class FastbootTcpTransportTests
             await stream.WriteAsync(prefix.AsMemory(0, 3));
             await stream.WriteAsync(prefix.AsMemory(3));
             await stream.WriteAsync("hello"u8.ToArray());
-        });
+        }, TestContext.Current.CancellationToken);
 
         using (var transport = new FastbootTcpTransport("127.0.0.1", port))
         {

@@ -13,6 +13,8 @@ public sealed record DeviceEndpoint
     public string? Route { get; init; }
     public string? State { get; init; }
     public string? Serial { get; init; }
+    /// <summary>Server-reported target transport (for example USB or TCP), not an opening route.</summary>
+    public string? TargetTransport { get; init; }
 
     public DeviceEndpointId Id => new(Source, Transport, Address);
 }

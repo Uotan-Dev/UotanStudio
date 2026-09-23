@@ -29,7 +29,7 @@ public class FastbootUdpTransportTests
             var read = await peer.ReceiveAsync(TestContext.Current.CancellationToken);
             Assert.Equal((ushort)9, BinaryPrimitives.ReadUInt16BigEndian(read.Buffer.AsSpan(2)));
             await Reply(3, 0, 9, "OKAY"u8.ToArray(), read.RemoteEndPoint);
-        });
+        }, TestContext.Current.CancellationToken);
 
         using (var transport = new FastbootUdpTransport("127.0.0.1", port))
         {

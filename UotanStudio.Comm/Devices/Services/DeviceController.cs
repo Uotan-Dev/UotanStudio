@@ -60,7 +60,7 @@ public sealed class DeviceController
             cancellationToken.ThrowIfCancellationRequested();
             if (generation == _requestedGeneration)
             {
-                _snapshot = new DeviceSnapshot(generation, endpoints.MoveToImmutable());
+                _snapshot = new DeviceSnapshot(generation, endpoints.ToImmutable());
             }
 
             return _snapshot;

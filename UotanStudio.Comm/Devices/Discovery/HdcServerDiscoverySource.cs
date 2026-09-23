@@ -30,7 +30,8 @@ public sealed class HdcServerDiscoverySource(string host = "127.0.0.1", int? por
             DisplayName = target.Name,
             Protocol = "hdc",
             Route = "server",
-            State = target.State
+            State = target.State,
+            TargetTransport = target.Transport
         }).ToArray();
     }
 }
