@@ -70,10 +70,10 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>擦除单个分区（仅 fastboot 协议）：经 <see cref="FastbootFactory"/> 打开会话并执行
+    /// <para>擦除单个分区（仅 fastboot 协议）：经 <see cref="DeviceMonitorService"/> 打开会话并执行
     /// <c>erase &lt;partition&gt;</c>。非 fastboot 设备返回失败结果。</para>
     /// Erases a single partition (fastboot protocol only): opens a session via
-    /// <see cref="FastbootFactory"/> and executes <c>erase &lt;partition&gt;</c>. Non-fastboot
+    /// <see cref="DeviceMonitorService"/> and executes <c>erase &lt;partition&gt;</c>. Non-fastboot
     /// devices yield a failure result.
     /// </summary>
     /// <param name="device"><para>目标设备。</para>The target device.</param>
@@ -98,26 +98,8 @@ public sealed class FlashService : IFlashService
             }
 
             Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-            return await Task.Run(() =>
+            return await Task.Run(() => DeviceMonitorService.Instance.RunFastboot(device.Device, session =>
             {
-                var usb = DeviceMonitorService.Instance.OpenUsbSession(device.Device);
-                if (usb is null)
-                {
-                    throw new InvalidOperationException("No USB transport available for the fastboot device. 无法获取 fastboot 设备的 USB 传输。");
-                }
-
-                var factory = new FastbootFactory();
-                if (!factory.TryCreate(usb, out var protocolSession) || protocolSession is not FastbootSession fastboot)
-                {
-                    throw new InvalidOperationException("The device does not expose a fastboot interface. 设备未暴露 fastboot 接口。");
-                }
-
-                using var session = fastboot;
-                if (!session.IsConnected)
-                {
-                    throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。");
-                }
-
                 ct.ThrowIfCancellationRequested();
                 Report(progress, partition, 30, $"Erasing {partition}... 正在擦除分区...");
                 var response = session.ErasePartition(partition);
@@ -128,7 +110,7 @@ public sealed class FlashService : IFlashService
                     Success = true,
                     Summary = $"Erased partition '{partition}' via fastboot."
                 };
-            }).ConfigureAwait(false);
+            }, ct)).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -166,26 +148,8 @@ public sealed class FlashService : IFlashService
             }
 
             Report(progress, null, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-            return await Task.Run(() =>
+            return await Task.Run(() => DeviceMonitorService.Instance.RunFastboot(device.Device, session =>
             {
-                var usb = DeviceMonitorService.Instance.OpenUsbSession(device.Device);
-                if (usb is null)
-                {
-                    throw new InvalidOperationException("No USB transport available for the fastboot device. 无法获取 fastboot 设备的 USB 传输。");
-                }
-
-                var factory = new FastbootFactory();
-                if (!factory.TryCreate(usb, out var protocolSession) || protocolSession is not FastbootSession fastboot)
-                {
-                    throw new InvalidOperationException("The device does not expose a fastboot interface. 设备未暴露 fastboot 接口。");
-                }
-
-                using var session = fastboot;
-                if (!session.IsConnected)
-                {
-                    throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。");
-                }
-
                 var partitions = EnumeratePartitions(session);
                 if (partitions.Count == 0)
                 {
@@ -210,7 +174,7 @@ public sealed class FlashService : IFlashService
                     Success = true,
                     Summary = $"Erased {erased} partitions via fastboot."
                 };
-            }).ConfigureAwait(false);
+            }, ct)).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -252,25 +216,19 @@ public sealed class FlashService : IFlashService
             }
 
             Report(progress, "sideload", 0, "Opening ADB session... 正在打开 ADB 会话...");
-            var session = DeviceMonitorService.Instance.OpenAdbSession(device.Device)
-                ?? throw new InvalidOperationException("No ADB session available for the selected device. 无法为所选设备建立 ADB 会话。");
-            using var adb = session;
-            adb.Connect();
-            if (!adb.IsConnected)
+            return await DeviceMonitorService.Instance.RunAdbAsync(device.Device, async adb =>
             {
-                throw new InvalidOperationException("ADB session is not connected. ADB 会话未连接。");
-            }
-
-            Report(progress, "sideload", 5, "Rebooting into sideload mode... 正在重启进入 sideload 模式...");
-            RebootToSideload(adb);
-            await WaitForSideloadReconnectAsync(adb, ct).ConfigureAwait(false);
-            await Task.Run(() => PushSideloadFile(adb, otaPackagePath, progress, ct), ct).ConfigureAwait(false);
-            Report(progress, "sideload", 100, "Sideload complete. OTA 侧载完成。");
-            return new FlashResult
-            {
-                Success = true,
-                Summary = $"Sideloaded {Path.GetFileName(otaPackagePath)} via ADB."
-            };
+                Report(progress, "sideload", 5, "Rebooting into sideload mode... 正在重启进入 sideload 模式...");
+                RebootToSideload(adb);
+                await WaitForSideloadReconnectAsync(adb, ct).ConfigureAwait(false);
+                await Task.Run(() => PushSideloadFile(adb, otaPackagePath, progress, ct), ct).ConfigureAwait(false);
+                Report(progress, "sideload", 100, "Sideload complete. OTA 侧载完成。");
+                return new FlashResult
+                {
+                    Success = true,
+                    Summary = $"Sideloaded {Path.GetFileName(otaPackagePath)} via ADB."
+                };
+            }, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -308,8 +266,8 @@ public sealed class FlashService : IFlashService
 
             if (device.Protocol == DeviceProtocolKind.Hdc)
             {
-                var value = await Services.Devices.HdcDeviceService.FromSettings()
-                    .GetPropertyAsync(device.Device, propertyName, ct).ConfigureAwait(false);
+                var value = await DeviceMonitorService.Instance
+                    .HdcPropertyAsync(device.Device, propertyName, ct).ConfigureAwait(false);
                 return new FlashResult { Success = true, Summary = $"{propertyName}={value}" };
             }
 
@@ -318,15 +276,8 @@ public sealed class FlashService : IFlashService
                 if (device.Protocol == DeviceProtocolKind.Fastboot)
                 {
                     Report(null, "fastboot", 0, $"Querying fastboot variable '{propertyName}'... 正在查询 fastboot 变量...");
-                    var fbSession = DeviceMonitorService.Instance.OpenFastbootSession(device.Device)
-                        ?? throw new InvalidOperationException("No fastboot session available for the selected device. 无法为所选设备建立 fastboot 会话。");
-                    using var fastboot = fbSession;
-                    if (!fastboot.IsConnected)
-                    {
-                        throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。");
-                    }
-
-                    var fbValue = fastboot.GetVariable(propertyName, useCache: false);
+                    var fbValue = DeviceMonitorService.Instance.RunFastboot(device.Device,
+                        fastboot => fastboot.GetVariable(propertyName, useCache: false), ct);
                     Report(null, "fastboot", 100, $"Variable '{propertyName}' = '{fbValue}'. 变量查询完成。");
                     return new FlashResult { Success = true, Summary = $"{propertyName}={fbValue}" };
                 }
@@ -334,16 +285,8 @@ public sealed class FlashService : IFlashService
                 if (device.Protocol == DeviceProtocolKind.Adb)
                 {
                     Report(null, "adb", 0, $"Querying property '{propertyName}'... 正在查询系统属性...");
-                    var adbSession = DeviceMonitorService.Instance.OpenAdbSession(device.Device)
-                        ?? throw new InvalidOperationException("No ADB session available for the selected device. 无法为所选设备建立 ADB 会话。");
-                    using var adb = adbSession;
-                    adb.Connect();
-                    if (!adb.IsConnected)
-                    {
-                        throw new InvalidOperationException("ADB session is not connected. ADB 会话未连接。");
-                    }
-
-                    var value = adb.CreateDeviceServices().GetProp(propertyName);
+                    var value = DeviceMonitorService.Instance.RunAdb(device.Device,
+                        adb => adb.CreateDeviceServices().GetProp(propertyName), ct);
                     Report(null, "adb", 100, $"Property '{propertyName}' = '{value}'. 属性查询完成。");
                     return new FlashResult { Success = true, Summary = $"{propertyName}={value}" };
                 }
@@ -397,9 +340,9 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// <para>Fastboot 路径：经 <see cref="FastbootFactory"/> 打开会话并执行
+    /// <para>Fastboot 路径：经 <see cref="DeviceMonitorService"/> 打开会话并执行
     /// <c>flash &lt;partition&gt; &lt;image&gt;</c>，逐块上报进度。</para>
-    /// Fastboot path: opens a session via <see cref="FastbootFactory"/> and executes
+    /// Fastboot path: opens a session via <see cref="DeviceMonitorService"/> and executes
     /// <c>flash &lt;partition&gt; &lt;image&gt;</c>, reporting progress per chunk.
     /// </summary>
     private static async Task<FlashResult> FlashFastbootAsync(
@@ -409,26 +352,8 @@ public sealed class FlashService : IFlashService
         var stateDir = ProjectContextService.Instance.Core.FindSubProject(imagePath)?.StateDirectory
             ?? ProjectContextService.Instance.StateDirectory;
         Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-        return await Task.Run(() =>
+        return await Task.Run(() => DeviceMonitorService.Instance.RunFastboot(device.Device, session =>
         {
-            var usb = DeviceMonitorService.Instance.OpenUsbSession(device.Device);
-            if (usb is null)
-            {
-                throw new InvalidOperationException("No USB transport available for the fastboot device. 无法获取 fastboot 设备的 USB 传输。");
-            }
-
-            var factory = new FastbootFactory();
-            if (!factory.TryCreate(usb, out var protocolSession) || protocolSession is not FastbootSession fastboot)
-            {
-                throw new InvalidOperationException("The device does not expose a fastboot interface. 设备未暴露 fastboot 接口。");
-            }
-
-            using var session = fastboot;
-            if (!session.IsConnected)
-            {
-                throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。");
-            }
-
             TryBackupBeforeFlash(session, partition, progress, ct, stateDir);
 
             // fastbootd 会拒绝大于当前逻辑分区的镜像（FAIL EOVERFLOW "Value too large for defined
@@ -439,7 +364,7 @@ public sealed class FlashService : IFlashService
             var summary = FlashImageChunked(session, target, imagePath, progress, ct);
             Report(progress, target, 100, "Flash complete. 刷写完成。");
             return new FlashResult { Success = true, Summary = summary };
-        }).ConfigureAwait(false);
+        }, ct)).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -702,10 +627,8 @@ public sealed class FlashService : IFlashService
             return new FlashResult { Success = false, Summary = $"Partition '{partition}' not found in rawprogram. 分区 '{partition}' 未在 rawprogram 中匹配到。" };
         }
 
-        var session = DeviceMonitorService.Instance.OpenEdlSession(device.Device)
-            ?? throw new InvalidOperationException("No EDL session available for the selected device. 无法为所选设备建立 EDL 会话。");
-        using var edl = session;
-        return await Default.FlashEdlPartitionAsync(edl, target, imageDir, progress, ct).ConfigureAwait(false);
+        return await DeviceMonitorService.Instance.RunEdlAsync(device.Device,
+            edl => Default.FlashEdlPartitionAsync(edl, target, imageDir, progress, ct), ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -723,9 +646,20 @@ public sealed class FlashService : IFlashService
     public async Task<FlashResult> FlashEdlPartitionAsync(
         EdlSession session, RawProgramEntry entry, string imageDir,
         IProgress<FlashProgress>? progress, CancellationToken ct)
+        => await FlashEdlPartitionAsync(session, entry, imageDir, null, progress, ct).ConfigureAwait(false);
+
+    /// <summary>Uploads a package-supplied Firehose programmer before programming a manifest entry.</summary>
+    public async Task<FlashResult> FlashEdlPartitionAsync(
+        EdlSession session, RawProgramEntry entry, string imageDir, string? programmerPath,
+        IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(session);
-        await session.EnsureInitializedAsync(cancellationToken: ct).ConfigureAwait(false);
+        if (programmerPath is not null && !File.Exists(programmerPath))
+        {
+            throw new FileNotFoundException("Firehose programmer is missing.", programmerPath);
+        }
+        using var programmer = programmerPath is null ? null : File.OpenRead(programmerPath);
+        await session.EnsureInitializedAsync(programmer, ct).ConfigureAwait(false);
         var firehose = session.Firehose
             ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
         return await FlashEdlPartitionAsync(firehose, entry, imageDir, progress, ct).ConfigureAwait(false);
@@ -766,21 +700,48 @@ public sealed class FlashService : IFlashService
             throw new FileNotFoundException($"Image file not found for EDL partition '{displayName}': {sourceFile} 镜像文件不存在。", sourceFile);
         }
 
-        if (entry.SectorSizeInBytes > 0)
+        var sectorSize = firehose.Configuration.SectorSize;
+        if (sectorSize <= 0 || sectorSize > 65536)
         {
-            firehose.Configuration.SectorSize = entry.SectorSizeInBytes;
+            throw new InvalidOperationException("Single-partition flashing requires a configured sector size.");
         }
 
-        var sectorSize = firehose.Configuration.SectorSize > 0 ? firehose.Configuration.SectorSize : 4096;
-        var startSector = ParseStartSectorValue(entry.StartSector);
+        ArgumentOutOfRangeException.ThrowIfNegative(entry.SectorSizeInBytes);
+        ArgumentOutOfRangeException.ThrowIfNegative(entry.NumPartitionSectors);
+        if (entry.SectorSizeInBytes > 0 && entry.SectorSizeInBytes != sectorSize)
+        {
+            throw new InvalidDataException("The manifest sector size differs from the configured sector size.");
+        }
+
+        var startSector = entry.StartSector;
 
         Report(progress, displayName, 30, $"Sending program for {displayName}... 正在发送 program 命令...");
         using var stream = File.OpenRead(sourceFile);
         if (entry.IsSparse || IsAndroidSparseImage(stream))
         {
+            if (entry.FileSectorOffset != 0)
+            {
+                throw new InvalidOperationException("Sparse program entries cannot use a raw source-sector offset.");
+            }
+
             stream.Position = 0;
+            var geometry = await firehose.GetStorageGeometryAsync(entry.PhysicalPartitionNumber, ct).ConfigureAwait(false);
+            if (geometry.SectorSize != sectorSize)
+            {
+                throw new InvalidDataException("The device sector size differs from the configured sector size.");
+            }
+
+            var resolvedStart = geometry.ResolveRange(startSector, 1);
+            var maximumSectors = geometry.SectorCount - resolvedStart;
+            if (entry.NumPartitionSectors > 0)
+            {
+                geometry.ResolveRange(startSector, entry.NumPartitionSectors);
+                maximumSectors = entry.NumPartitionSectors;
+            }
+
             var response = await firehose.ProgramSparseAsync(
-                stream, startSector, entry.Filename, entry.PhysicalPartitionNumber, ct).ConfigureAwait(false);
+                stream, startSector, entry.Filename, entry.PhysicalPartitionNumber,
+                maximumSectors, ct).ConfigureAwait(false);
             if (!response.IsAck)
             {
                 throw new InvalidOperationException($"EDL sparse program failed for '{displayName}'. Response: {response.RawValue}");
@@ -788,11 +749,13 @@ public sealed class FlashService : IFlashService
         }
         else
         {
-            if (entry.FileSectorOffset > 0)
+            var sourceOffset = checked(entry.FileSectorOffset * sectorSize);
+            if (sourceOffset < 0 || sourceOffset >= stream.Length)
             {
-                stream.Position = Math.Min(entry.FileSectorOffset * sectorSize, stream.Length);
+                throw new InvalidOperationException("The source-sector offset is outside the image.");
             }
 
+            stream.Position = sourceOffset;
             var lengthFromOffset = stream.Length - stream.Position;
             var numSectors = entry.NumPartitionSectors > 0
                 ? entry.NumPartitionSectors
@@ -802,6 +765,18 @@ public sealed class FlashService : IFlashService
                 throw new InvalidOperationException($"Image for '{displayName}' is empty; nothing to program. 镜像为空。");
             }
 
+            if (checked(numSectors * sectorSize) > lengthFromOffset)
+            {
+                throw new InvalidDataException("The image is shorter than the requested whole-sector range.");
+            }
+
+            var geometry = await firehose.GetStorageGeometryAsync(entry.PhysicalPartitionNumber, ct).ConfigureAwait(false);
+            if (geometry.SectorSize != sectorSize)
+            {
+                throw new InvalidDataException("The device sector size differs from the configured sector size.");
+            }
+
+            geometry.ResolveRange(startSector, numSectors);
             var response = await firehose.ProgramAsync(
                 stream, startSector, numSectors, entry.Filename, entry.PhysicalPartitionNumber, ct).ConfigureAwait(false);
             if (!response.IsAck)
@@ -890,48 +865,47 @@ public sealed class FlashService : IFlashService
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         Report(progress, partition, 0, "Opening RKDL session... 正在打开 RKDL 会话...");
-        var session = DeviceMonitorService.Instance.OpenRkdlSession(device.Device)
-            ?? throw new InvalidOperationException("No RKDL session available for the selected device. 无法为所选设备建立 RKDL 会话。");
-        using var rkdl = session;
-
-        var imageDir = Path.GetDirectoryName(Path.GetFullPath(imagePath)) ?? string.Empty;
-        if (rkdl.IsMaskromMode)
+        return await DeviceMonitorService.Instance.RunRkdlAsync(device.Device, async rkdl =>
         {
-            var loader = ResolveLoaderPath(loaderPath, imageDir);
-            if (loader is null)
+            var imageDir = Path.GetDirectoryName(Path.GetFullPath(imagePath)) ?? string.Empty;
+            if (rkdl.IsMaskromMode)
             {
-                throw new InvalidOperationException(
-                    "The device is in maskrom mode; a Rockchip loader (MiniLoaderAll*.bin / *loader*.bin) is required to enter loader mode. 设备处于 MaskROM 模式，需要 loader 才能进入 loader 模式。");
+                var loader = ResolveLoaderPath(loaderPath, imageDir);
+                if (loader is null)
+                {
+                    throw new InvalidOperationException(
+                        "The device is in maskrom mode; a Rockchip loader (MiniLoaderAll*.bin / *loader*.bin) is required to enter loader mode. 设备处于 MaskROM 模式，需要 loader 才能进入 loader 模式。");
+                }
+
+                Report(progress, partition, 5, $"Downloading loader {Path.GetFileName(loader)}... 正在下载 loader...");
+                var loaderBytes = await File.ReadAllBytesAsync(loader, ct).ConfigureAwait(false);
+                await rkdl.DownloadBootLoaderAsync(loaderBytes, ct).ConfigureAwait(false);
             }
 
-            Report(progress, partition, 5, $"Downloading loader {Path.GetFileName(loader)}... 正在下载 loader...");
-            var loaderBytes = await File.ReadAllBytesAsync(loader, ct).ConfigureAwait(false);
-            await rkdl.DownloadBootLoaderAsync(loaderBytes, ct).ConfigureAwait(false);
-        }
+            var parameterPath = FindParameterFile(imageDir);
+            if (parameterPath is null)
+            {
+                throw new InvalidOperationException(
+                    "No Rockchip parameter file (parameter / parameter.txt) found in the image directory; RKDL flashing requires the partition table. 镜像目录中未找到 Rockchip parameter 分区表。");
+            }
 
-        var parameterPath = FindParameterFile(imageDir);
-        if (parameterPath is null)
-        {
-            throw new InvalidOperationException(
-                "No Rockchip parameter file (parameter / parameter.txt) found in the image directory; RKDL flashing requires the partition table. 镜像目录中未找到 Rockchip parameter 分区表。");
-        }
+            var partitions = RockchipParameterParser.Parse(parameterPath);
+            var imageName = Path.GetFileName(imagePath);
+            var imageNameWithoutExt = Path.GetFileNameWithoutExtension(imageName);
+            var target = partitions.FirstOrDefault(p =>
+                string.Equals(p.Name, partition, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p.Name, imageName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p.Name, imageNameWithoutExt, StringComparison.OrdinalIgnoreCase));
+            if (target is null)
+            {
+                var available = string.Join(", ", partitions.Select(p => p.Name));
+                throw new InvalidOperationException(
+                    $"Partition '{partition}' not found in the Rockchip partition table. Available: {available} 分区不在 Rockchip 分区表中。");
+            }
 
-        var partitions = RockchipParameterParser.Parse(parameterPath);
-        var imageName = Path.GetFileName(imagePath);
-        var imageNameWithoutExt = Path.GetFileNameWithoutExtension(imageName);
-        var target = partitions.FirstOrDefault(p =>
-            string.Equals(p.Name, partition, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(p.Name, imageName, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(p.Name, imageNameWithoutExt, StringComparison.OrdinalIgnoreCase));
-        if (target is null)
-        {
-            var available = string.Join(", ", partitions.Select(p => p.Name));
-            throw new InvalidOperationException(
-                $"Partition '{partition}' not found in the Rockchip partition table. Available: {available} 分区不在 Rockchip 分区表中。");
-        }
-
-        Report(progress, partition, 15, $"Writing {Path.GetFileName(imagePath)} to {target.Name} (LBA 0x{target.OffsetSectors:X})... 正在写入分区...");
-        return await Task.Run(() => FlashRkdlPartition(rkdl, target, imagePath, progress, ct), ct).ConfigureAwait(false);
+            Report(progress, partition, 15, $"Writing {Path.GetFileName(imagePath)} to {target.Name} (LBA 0x{target.OffsetSectors:X})... 正在写入分区...");
+            return await Task.Run(() => FlashRkdlPartition(rkdl, target, imagePath, progress, ct), ct).ConfigureAwait(false);
+        }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -984,33 +958,27 @@ public sealed class FlashService : IFlashService
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         Report(progress, partition, 0, "Opening ADB session... 正在打开 ADB 会话...");
-        var session = DeviceMonitorService.Instance.OpenAdbSession(device.Device)
-            ?? throw new InvalidOperationException("No ADB session available for the selected device. 无法为所选设备建立 ADB 会话。");
-        using var adb = session;
-        adb.Connect();
-        if (!adb.IsConnected)
+        return await DeviceMonitorService.Instance.RunAdbAsync(device.Device, async adb =>
         {
-            throw new InvalidOperationException("ADB session is not connected. ADB 会话未连接。");
-        }
+            if (IsSideloadTarget(partition, imagePath))
+            {
+                Report(progress, partition, 5, "Rebooting into sideload mode... 正在重启进入 sideload 模式...");
+                RebootToSideload(adb);
+                await WaitForSideloadReconnectAsync(adb, ct).ConfigureAwait(false);
+                await Task.Run(() => PushSideloadFile(adb, imagePath, progress, ct), ct).ConfigureAwait(false);
+            }
+            else
+            {
+                await Task.Run(() => InstallOnline(adb, imagePath, progress, ct), ct).ConfigureAwait(false);
+            }
 
-        if (IsSideloadTarget(partition, imagePath))
-        {
-            Report(progress, partition, 5, "Rebooting into sideload mode... 正在重启进入 sideload 模式...");
-            RebootToSideload(adb);
-            await WaitForSideloadReconnectAsync(adb, ct).ConfigureAwait(false);
-            await Task.Run(() => PushSideloadFile(adb, imagePath, progress, ct), ct).ConfigureAwait(false);
-        }
-        else
-        {
-            await Task.Run(() => InstallOnline(adb, imagePath, progress, ct), ct).ConfigureAwait(false);
-        }
-
-        Report(progress, partition, 100, "ADB flash complete. ADB 刷写完成。");
-        return new FlashResult
-        {
-            Success = true,
-            Summary = $"Flashed {Path.GetFileName(imagePath)} via ADB."
-        };
+            Report(progress, partition, 100, "ADB flash complete. ADB 刷写完成。");
+            return new FlashResult
+            {
+                Success = true,
+                Summary = $"Flashed {Path.GetFileName(imagePath)} via ADB."
+            };
+        }, ct).ConfigureAwait(false);
     }
 
     /// <summary>

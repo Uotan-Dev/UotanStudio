@@ -125,22 +125,8 @@ public static class BackupService
         IProgress<BackupProgress>? progress, CancellationToken ct)
     {
         Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-        var usb = DeviceMonitorService.Instance.OpenUsbSession(device.Device);
-        if (usb is null)
-        {
-            throw new InvalidOperationException("No USB transport available for the fastboot device. 无法获取 fastboot 设备的 USB 传输。");
-        }
-
-        var factory = new FastbootFactory();
-        if (!factory.TryCreate(usb, out var protocolSession) || protocolSession is not FastbootSession fastboot)
-        {
-            throw new InvalidOperationException("The device does not expose a fastboot interface. 设备未暴露 fastboot 接口。");
-        }
-
-        using var session = fastboot;
-        return !session.IsConnected
-            ? throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。")
-            : BackupFastbootPartition(session, partition, outPath, progress, ct);
+        return DeviceMonitorService.Instance.RunFastboot(device.Device,
+            session => BackupFastbootPartition(session, partition, outPath, progress, ct), ct);
     }
 
     /// <summary>
@@ -194,22 +180,8 @@ public static class BackupService
         IProgress<BackupProgress>? progress, CancellationToken ct)
     {
         Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-        var usb = DeviceMonitorService.Instance.OpenUsbSession(device.Device);
-        if (usb is null)
-        {
-            throw new InvalidOperationException("No USB transport available for the fastboot device. 无法获取 fastboot 设备的 USB 传输。");
-        }
-
-        var factory = new FastbootFactory();
-        if (!factory.TryCreate(usb, out var protocolSession) || protocolSession is not FastbootSession fastboot)
-        {
-            throw new InvalidOperationException("The device does not expose a fastboot interface. 设备未暴露 fastboot 接口。");
-        }
-
-        using var session = fastboot;
-        return !session.IsConnected
-            ? throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。")
-            : RestoreFastbootPartition(session, partition, imagePath, progress, ct);
+        return DeviceMonitorService.Instance.RunFastboot(device.Device,
+            session => RestoreFastbootPartition(session, partition, imagePath, progress, ct), ct);
     }
 
     /// <summary>
@@ -271,10 +243,9 @@ public static class BackupService
         }
 
         var (startSector, sectorCount) = ResolveEdlPartitionGeometry(rawProgramPath, partition);
-        var session = DeviceMonitorService.Instance.OpenEdlSession(device.Device)
-            ?? throw new InvalidOperationException("No EDL session available for the selected device. 无法为所选设备建立 EDL 会话。");
-        using var edl = session;
-        return await BackupEdlPartitionAsync(edl, partition, startSector, sectorCount, outPath, progress, ct).ConfigureAwait(false);
+        return await DeviceMonitorService.Instance.RunEdlAsync(device.Device,
+            session => BackupEdlPartitionAsync(session, partition, startSector, sectorCount, outPath, progress, ct),
+            ct).ConfigureAwait(false);
     }
 
     /// <summary>

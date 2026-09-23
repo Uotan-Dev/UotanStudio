@@ -1,0 +1,240 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:icons="using:Material.Icons.Avalonia"
+             xmlns:vm="using:UotanStudio.ViewModels.Shell"
+             mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="820"
+             x:Class="UotanStudio.Views.Shell.FlashView"
+             x:DataType="vm:FlashViewModel"
+             Background="{DynamicResource PageBackground}">
+    <Design.DataContext>
+        <vm:FlashViewModel />
+    </Design.DataContext>
+    <UserControl.Styles>
+        <Style Selector="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="CheckBox">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="MinHeight" Value="24" />
+        </Style>
+        <Style Selector="Button">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="12,0" />
+        </Style>
+        <Style Selector="TextBox">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <!-- 日志框是多行只读控件，需要覆盖主题给出的单行高度并让文本顶端对齐。 -->
+        <!-- The log box is a multi-line read-only control, so it overrides the themed single-line height. -->
+        <Style Selector="TextBox#LogBox">
+            <Setter Property="VerticalContentAlignment" Value="Top" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="Height" Value="NaN" />
+        </Style>
+        <Style Selector="Button.pane-action">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="DataGridColumnHeader">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="6,0" />
+        </Style>
+    </UserControl.Styles>
+
+    <!-- 三份内容在同一网格中换位：宽屏为「日志 | 分区 | 操作」，窄屏把日志移到分区列表下方；
+         窗口高度不足时由外层 ScrollViewer 提供整页纵向滚动。 -->
+    <!-- One grid, three panes: wide screens use "log | partitions | actions", narrow screens move the log below the
+         list. The outer ScrollViewer scrolls the whole page when the window is shorter than the content. -->
+    <ScrollViewer Name="PageScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                 AllowAutoHide="True">
+        <Grid Name="FlashLayout" Margin="12">
+            <Border Name="PackageBar" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="5"
+                    Padding="12,10" CornerRadius="8" BorderThickness="1"
+                    Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}">
+                <Grid Name="PackageBarGrid" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10"
+                      SizeChanged="OnPackageBarSizeChanged">
+                    <TextBlock Text="{DynamicResource Flash_Package}" VerticalAlignment="Center" />
+                    <TextBox Grid.Column="1" Name="PackagePathBox"
+                             Height="32" VerticalContentAlignment="Center"
+                             LostFocus="OnPackagePathLostFocus"
+                             PlaceholderText="{DynamicResource Flash_PackagePlaceholder}"
+                             Text="{Binding PackagePath, Mode=TwoWay}"
+                             AutomationProperties.Name="{DynamicResource Flash_Package}" />
+                    <StackPanel Grid.Column="2" Name="PackageButtonRow" Orientation="Horizontal" Spacing="8">
+                        <Button Name="ChooseFileButton" MinWidth="92" Click="OnChooseFileClick"
+                                Content="{DynamicResource Flash_ChooseFile}" />
+                        <Button Name="ChooseFolderButton" MinWidth="100" Click="OnChooseFolderClick"
+                                Content="{DynamicResource Flash_ChooseFolder}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Name="LogPane" Grid.Row="2" Grid.Column="0"
+                    CornerRadius="8" BorderThickness="1"
+                    Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}">
+                <Grid RowDefinitions="Auto,*">
+                    <Grid Margin="12,8,8,4" ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{DynamicResource Flash_Log}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Name="ClearLogButton" Classes="Small" Padding="8,0" MinWidth="0"
+                                Click="OnClearLogClick" Content="{DynamicResource Flash_ClearLog}"
+                                AutomationProperties.Name="{DynamicResource Flash_ClearLog}" />
+                    </Grid>
+                    <TextBox Grid.Row="1" Name="LogBox" Margin="12,0,12,12" Padding="8"
+                             IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
+                             Text="{Binding LogText, Mode=OneWay}"
+                             PlaceholderText="{DynamicResource Flash_LogPlaceholder}"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             AutomationProperties.Name="{DynamicResource Flash_Log}" />
+                </Grid>
+            </Border>
+
+            <Border Name="PartitionPane" Grid.Row="2" Grid.Column="2"
+                    CornerRadius="8" BorderThickness="1"
+                    Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}">
+                <Grid RowDefinitions="Auto,Auto,*">
+                    <Grid Margin="12,8,8,4" ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="10">
+                        <CheckBox Name="SelectAllBox" VerticalAlignment="Center"
+                                  Content="{DynamicResource Flash_SelectAll}"
+                                  IsChecked="{Binding IsSelectAllChecked, Mode=TwoWay}" />
+                        <TextBlock Grid.Column="1" Text="{DynamicResource Flash_Selected}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2" MinWidth="20" Text="{Binding SelectedCount}" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="4" Name="PartitionSearchBox" Width="220" MinWidth="120"
+                                 Height="32" VerticalContentAlignment="Center"
+                                 PlaceholderText="{DynamicResource Flash_SearchPlaceholder}"
+                                 Text="{Binding SearchText, Mode=TwoWay}"
+                                 AutomationProperties.Name="{DynamicResource Flash_SearchPlaceholder}" />
+                    </Grid>
+                    <Grid Grid.Row="2" Margin="12,0,12,12">
+                        <DataGrid Name="PartitionGrid" ItemsSource="{Binding VisiblePartitions}"
+                                  AutoGenerateColumns="False" CanUserResizeColumns="True" CanUserSortColumns="False"
+                                  CanUserReorderColumns="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                  IsReadOnly="False" SelectionMode="Single" RowHeight="30"
+                                  Background="Transparent" BorderThickness="0">
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Width="Auto" MinWidth="56" IsReadOnly="True">
+                                    <DataGridTemplateColumn.Header>
+                                        <TextBlock Text="{DynamicResource Flash_Select}" />
+                                    </DataGridTemplateColumn.Header>
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="vm:FlashPartitionEntry">
+                                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                      IsEnabled="{Binding CanSelect}"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      MinWidth="0" Padding="0"
+                                                      AutomationProperties.Name="{Binding Name}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Width="Auto" MinWidth="96" IsReadOnly="True"
+                                                    Header="{DynamicResource Flash_Partition}"
+                                                    Binding="{Binding Name}" />
+                                <DataGridTextColumn Width="Auto" MinWidth="80" IsReadOnly="True"
+                                                    Header="{DynamicResource Flash_Command}"
+                                                    Binding="{Binding Command}" />
+                                <DataGridTextColumn Width="Auto" MinWidth="80" IsReadOnly="True"
+                                                    Header="{DynamicResource Flash_Size}"
+                                                    Binding="{Binding Size}" />
+                                <DataGridTemplateColumn Width="*" MinWidth="120" IsReadOnly="True">
+                                    <DataGridTemplateColumn.Header>
+                                        <TextBlock Text="{DynamicResource Flash_File}" />
+                                    </DataGridTemplateColumn.Header>
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="vm:FlashPartitionEntry">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Text="{Binding FileName}" ToolTip.Tip="{Binding FilePath}"
+                                                           Margin="6,0" VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <Button Grid.Column="1" Padding="4,0" MinWidth="30"
+                                                        Click="OnChoosePartitionImageClick"
+                                                        ToolTip.Tip="{DynamicResource Flash_ChooseFile}">
+                                                    <icons:MaterialIcon Kind="FolderOpenOutline" Width="16" Height="16" />
+                                                </Button>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <!-- 空态覆盖在列表上：没有分区时提示先加载刷机包，而不是显示空表头。 -->
+                        <!-- Empty state overlays the grid so an unloaded package shows guidance instead of bare headers. -->
+                        <StackPanel IsVisible="{Binding !HasVisiblePartitions}" IsHitTestVisible="False"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6" MaxWidth="320">
+                            <icons:MaterialIcon Kind="FormatListBulleted" Width="28" Height="28"
+                                                HorizontalAlignment="Center" Opacity="0.5" />
+                            <TextBlock Text="{DynamicResource Flash_NoPartitions}" HorizontalAlignment="Center" />
+                            <TextBlock Text="{DynamicResource Flash_NoPartitionsHint}" HorizontalAlignment="Center"
+                                       FontSize="12" Opacity="0.7" TextAlignment="Center" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Border Name="ActionPane" Grid.Row="2" Grid.Column="4"
+                    CornerRadius="8" BorderThickness="1"
+                    Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                              AllowAutoHide="True">
+                    <StackPanel Margin="12" Spacing="10">
+                        <TextBlock Text="{DynamicResource Flash_Basic}" FontWeight="SemiBold" />
+                        <StackPanel Spacing="8">
+                            <Button Name="ReadInfoButton" Classes="pane-action"
+                                    Click="OnReadInfoClick"
+                                    Content="{DynamicResource Flash_ReadInfo}" />
+                            <CheckBox Name="ShowAllPartitionsBox" Content="{DynamicResource Flash_ShowAllPartitions}" />
+                            <Button Name="FlashSelectedButton" Classes="pane-action"
+                                    Click="OnFlashSelectedClick"
+                                    Content="{DynamicResource Flash_FlashSelected}" />
+                            <Button Name="FlashEdlBundleButton" Classes="pane-action" IsVisible="False"
+                                    Click="OnFlashEdlBundleClick"
+                                    Content="{DynamicResource Flash_FlashEdlBundle}" />
+                            <Button Name="EraseSelectedButton" Classes="pane-action"
+                                    Click="OnEraseSelectedClick"
+                                    Content="{DynamicResource Flash_EraseSelected}" />
+                            <Button Name="SwitchSlotButton" Classes="pane-action"
+                                    Click="OnSwitchSlotClick"
+                                    Content="{DynamicResource Flash_SwitchSlot}" />
+                            <Button Name="CancelFlashButton" Classes="pane-action" IsEnabled="False"
+                                    Click="OnCancelFlashClick"
+                                    Content="{DynamicResource Flash_Cancel}" />
+                        </StackPanel>
+                        <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
+                        <!-- 复选框按两列三行排布：列宽由网格统一决定，同一列的勾选框上下对齐。 -->
+                        <!-- Check boxes form two columns by three rows; the grid fixes the column widths so boxes in
+                             the same column line up instead of being centred per line. -->
+                        <Grid Name="FlashOptionGrid" RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,Auto"
+                              RowSpacing="6" ColumnSpacing="12" HorizontalAlignment="Left">
+                            <CheckBox Name="DisableVbmetaBox" Content="{DynamicResource Flash_DisableVbmeta}"
+                                      HorizontalAlignment="Left" />
+                            <CheckBox Grid.Column="1" Name="DeleteCowBox" Content="{DynamicResource Flash_DeleteCow}"
+                                      HorizontalAlignment="Left" />
+                            <CheckBox Grid.Row="1" Name="UseAdbBox" IsEnabled="False" Content="{DynamicResource Flash_UseAdb}"
+                                      HorizontalAlignment="Left" />
+                            <CheckBox Grid.Row="1" Grid.Column="1" Name="AddRootBox" IsEnabled="False"
+                                      Content="{DynamicResource Flash_AddRoot}" HorizontalAlignment="Left" />
+                            <CheckBox Grid.Row="2" Name="EraseDataBox" Content="{DynamicResource Flash_EraseData}"
+                                      HorizontalAlignment="Left" />
+                            <CheckBox Grid.Row="2" Grid.Column="1" Name="RebootAfterBox"
+                                      Content="{DynamicResource Flash_RebootAfter}" HorizontalAlignment="Left" />
+                        </Grid>
+                        <Button Name="ChooseRootPackageButton" Classes="pane-action"
+                                Click="OnChooseRootPackageClick"
+                                Content="{DynamicResource Flash_ChooseRootPackage}" />
+                        <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
+                        <TextBlock Text="{DynamicResource Flash_Image}" FontWeight="SemiBold" />
+                        <StackPanel Spacing="8">
+                            <Button Name="ExtractSelectedButton" Classes="pane-action" IsEnabled="False"
+                                    Click="OnExtractSelectedClick"
+                                    Content="{DynamicResource Flash_ExtractSelected}" />
+                            <Button Name="BuildWiredPackageButton" Classes="pane-action" IsEnabled="False"
+                                    Click="OnBuildWiredPackageClick"
+                                    Content="{DynamicResource Flash_BuildWiredPackage}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </ScrollViewer>
+</UserControl>
