@@ -1,4 +1,3 @@
-using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Backend;
 
@@ -27,8 +26,7 @@ internal static class UsbProviderProjection
         UsbDeviceFilter? filter,
         Action<UsbDeviceInfo>? ensureDirect = null)
     {
-        ensureDirect ??= info => DebugBridgeRoute.RequireDirectUsb(info.InterfaceClass, info.InterfaceSubClass,
-            info.InterfaceProtocol, info.SerialNumber);
+        ensureDirect ??= UsbAccessPolicy.RequireDirect;
         var sessions = new List<IUsbDeviceSession>(devices.Count);
         for (var index = 0; index < devices.Count; index++)
         {

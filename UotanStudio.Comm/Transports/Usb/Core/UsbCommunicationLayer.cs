@@ -21,6 +21,11 @@ namespace UotanStudio.Comm.Transports.Usb.Core;
 /// <param name="configuration">Optional isolated configuration; otherwise uses the process configuration.</param>
 public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, DeviceCommunicationConfiguration? configuration = null)
 {
+    static UsbCommunicationLayer()
+    {
+        UsbAccessPolicy.Configure(Protocols.Common.DebugBridgeRoute.RequireDirectUsb);
+    }
+
     private readonly UsbApiRegistry _registry = registry ?? UsbApiRegistry.CreateDefault();
 
     private DeviceCommunicationConfiguration Configuration => configuration ?? DeviceCommunicationConfiguration.Current;

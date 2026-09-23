@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using UotanStudio.Comm.Diagnostics;
-using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Comm.Transports.Usb.Core;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 
@@ -522,7 +522,7 @@ internal static class WinUSBFinder
         (var vid, var pid) = TryParseVidPid(path);
         var metadata = CreateMetadataOnlyDevice(path, vid ?? 0, pid ?? 0);
         if (options?.MetadataOnly == true) return metadata;
-        DebugBridgeRoute.RequireDirectUsb(metadata.InterfaceClass, metadata.InterfaceSubClass, metadata.InterfaceProtocol, serial);
+        UsbAccessPolicy.RequireDirect(metadata.InterfaceClass, metadata.InterfaceSubClass, metadata.InterfaceProtocol, serial);
 
 
         var hDevice = Win32API.SimpleCreateHandle(path);
@@ -584,7 +584,7 @@ internal static class WinUSBFinder
         (var vid, var pid) = TryParseVidPid(path);
         var metadata = CreateMetadataOnlyDevice(path, vid ?? 0, pid ?? 0);
         if (options?.MetadataOnly == true) return metadata;
-        DebugBridgeRoute.RequireDirectUsb(metadata.InterfaceClass, metadata.InterfaceSubClass, metadata.InterfaceProtocol, serial);
+        UsbAccessPolicy.RequireDirect(metadata.InterfaceClass, metadata.InterfaceSubClass, metadata.InterfaceProtocol, serial);
 
         var dev = new WinUSBDevice
         {

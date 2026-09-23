@@ -1,6 +1,5 @@
-using System.Buffers.Binary;
 using System.Net.Sockets;
-using System.Text;
+using UotanStudio.Comm.Protocols.Fastboot.Transport;
 using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Transports.Tcp;
@@ -17,12 +16,10 @@ public sealed class FastbootTcpTransport : ICommTransport
     private const int HandshakeTimeoutMs = 30000;
 
     private readonly SemaphoreSlim _ioLock = new(1, 1);
-    private readonly byte[] _readLenBuffer = new byte[8];
-    private readonly byte[] _writeLenBuffer = new byte[8];
+    private readonly FastbootTcpFrames _frames = new();
 
     private TcpClient _client = new();
     private NetworkStream? _stream;
-    private ulong _messageBytesLeft;
     private bool _disposed;
 
     /// <summary>
@@ -114,7 +111,7 @@ public sealed class FastbootTcpTransport : ICommTransport
             _client.Dispose();
             _stream = null;
             _client = new TcpClient();
-            _messageBytesLeft = 0;
+            _frames.Reset();
         }
         finally
         {
@@ -159,26 +156,7 @@ public sealed class FastbootTcpTransport : ICommTransport
             stream.ReadTimeout = timeoutMs;
             try
             {
-                if (_messageBytesLeft == 0)
-                {
-                    if (ReadFully(stream, _readLenBuffer, 0, 8) != 8)
-                    {
-                        throw new IOException("Failed to read Message length from the fastboot TCP stream.");
-                    }
-
-                    var frameLength = BinaryPrimitives.ReadUInt64BigEndian(_readLenBuffer);
-                    if (frameLength > uint.MaxValue)
-                    {
-                        throw new IOException($"Invalid TCP frame length: {frameLength} (exceeds uint.MaxValue).");
-                    }
-
-                    _messageBytesLeft = frameLength;
-                }
-
-                var toRead = (int)Math.Min((ulong)length, _messageBytesLeft);
-                var actuallyRead = ReadFully(stream, buffer, offset, toRead);
-                _messageBytesLeft -= (ulong)actuallyRead;
-                return actuallyRead;
+                return _frames.Read(stream, buffer, offset, length);
             }
             finally
             {
@@ -219,26 +197,7 @@ public sealed class FastbootTcpTransport : ICommTransport
         try
         {
             var stream = GetConnectedStream();
-            if (_messageBytesLeft == 0)
-            {
-                if (await ReadFullyAsync(stream, _readLenBuffer, 0, 8, timeoutCts.Token).ConfigureAwait(false) != 8)
-                {
-                    throw new IOException("Failed to read Message length from the fastboot TCP stream.");
-                }
-
-                var frameLength = BinaryPrimitives.ReadUInt64BigEndian(_readLenBuffer);
-                if (frameLength > uint.MaxValue)
-                {
-                    throw new IOException($"Invalid TCP frame length: {frameLength} (exceeds uint.MaxValue).");
-                }
-
-                _messageBytesLeft = frameLength;
-            }
-
-            var toRead = (int)Math.Min((ulong)length, _messageBytesLeft);
-            var actuallyRead = await ReadFullyAsync(stream, buffer, offset, toRead, timeoutCts.Token).ConfigureAwait(false);
-            _messageBytesLeft -= (ulong)actuallyRead;
-            return actuallyRead;
+            return await _frames.ReadAsync(stream, buffer, offset, length, timeoutCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -272,11 +231,7 @@ public sealed class FastbootTcpTransport : ICommTransport
             stream.WriteTimeout = timeoutMs;
             try
             {
-                BinaryPrimitives.WriteUInt64BigEndian(_writeLenBuffer, (ulong)length);
-                stream.Write(_writeLenBuffer, 0, 8);
-                stream.Write(data, offset, length);
-                stream.Flush();
-                return length;
+                return _frames.Write(stream, data, offset, length);
             }
             finally
             {
@@ -312,10 +267,7 @@ public sealed class FastbootTcpTransport : ICommTransport
         try
         {
             var stream = GetConnectedStream();
-            BinaryPrimitives.WriteUInt64BigEndian(_writeLenBuffer, (ulong)length);
-            await stream.WriteAsync(_writeLenBuffer.AsMemory(0, 8), timeoutCts.Token).ConfigureAwait(false);
-            await stream.WriteAsync(data.AsMemory(offset, length), timeoutCts.Token).ConfigureAwait(false);
-            return length;
+            return await _frames.WriteAsync(stream, data, offset, length, timeoutCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -376,26 +328,7 @@ public sealed class FastbootTcpTransport : ICommTransport
             stream.ReadTimeout = DefaultIoTimeoutMs;
             stream.WriteTimeout = DefaultIoTimeoutMs;
 
-            var handshake = Encoding.ASCII.GetBytes("FB01");
-            stream.Write(handshake, 0, handshake.Length);
-
-            var response = new byte[4];
-            if (ReadFully(stream, response, 0, 4) != 4)
-            {
-                throw new IOException("Fastboot TCP handshake failed: unexpected response or timeout.");
-            }
-
-            var responseText = Encoding.ASCII.GetString(response);
-            if (!responseText.StartsWith("FB", StringComparison.Ordinal))
-            {
-                throw new IOException("Fastboot TCP handshake failed: unrecognized initialization Message.");
-            }
-
-            var versionStr = responseText.Substring(2, 2);
-            if (!int.TryParse(versionStr, out var version) || version < 1)
-            {
-                throw new IOException($"Fastboot TCP handshake failed: unknown TCP protocol version {versionStr} (host version 01).");
-            }
+            FastbootTcpFrames.Handshake(stream);
         }
         catch
         {
@@ -429,37 +362,4 @@ public sealed class FastbootTcpTransport : ICommTransport
         }
     }
 
-    private static int ReadFully(NetworkStream stream, byte[] buffer, int offset, int length)
-    {
-        var totalRead = 0;
-        while (totalRead < length)
-        {
-            var read = stream.Read(buffer, offset + totalRead, length - totalRead);
-            if (read <= 0)
-            {
-                break;
-            }
-
-            totalRead += read;
-        }
-
-        return totalRead;
-    }
-
-    private static async Task<int> ReadFullyAsync(NetworkStream stream, byte[] buffer, int offset, int length, CancellationToken cancellationToken)
-    {
-        var totalRead = 0;
-        while (totalRead < length)
-        {
-            var read = await stream.ReadAsync(buffer.AsMemory(offset + totalRead, length - totalRead), cancellationToken).ConfigureAwait(false);
-            if (read <= 0)
-            {
-                break;
-            }
-
-            totalRead += read;
-        }
-
-        return totalRead;
-    }
 }
