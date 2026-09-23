@@ -15,6 +15,13 @@ public sealed record DeviceEndpoint
     public string? Serial { get; init; }
     /// <summary>Server-reported target transport (for example USB or TCP), not an opening route.</summary>
     public string? TargetTransport { get; init; }
+    public UsbEndpointDetails? Usb { get; init; }
+    /// <summary>A defensive copy for host projection; mutations never alter the snapshot.</summary>
+    public UotanStudio.Comm.Transports.Usb.Abstractions.UsbDeviceInfo? UsbInfo
+    {
+        get => field is null ? null : UsbInfoCopy.Copy(field);
+        init => field = value is null ? null : UsbInfoCopy.Copy(value);
+    }
 
     public DeviceEndpointId Id => new(Source, Transport, Address);
 }

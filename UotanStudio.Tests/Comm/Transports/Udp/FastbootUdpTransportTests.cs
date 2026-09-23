@@ -18,6 +18,12 @@ public class FastbootUdpTransportTests
         {
             var query = await peer.ReceiveAsync(TestContext.Current.CancellationToken);
             Assert.Equal((byte)1, query.Buffer[0]);
+            using (var unrelated = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)))
+            {
+                var forged = new byte[] { 1, 0, 0, 0, 0, 99 };
+                await unrelated.SendAsync(forged, query.RemoteEndPoint, TestContext.Current.CancellationToken);
+            }
+            await Task.Delay(25, TestContext.Current.CancellationToken);
             await Reply(1, 0, 0, [0, 7], query.RemoteEndPoint);
             var init = await peer.ReceiveAsync(TestContext.Current.CancellationToken);
             Assert.Equal((byte)2, init.Buffer[0]);

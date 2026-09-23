@@ -3,8 +3,8 @@ using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Hdc;
-using UotanStudio.Comm.Transports.Usb.Abstractions;
 using System.Text;
+using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Devices.Services;
 
@@ -20,17 +20,20 @@ public sealed class CommDeviceTransportOpener(
         ArgumentNullException.ThrowIfNull(endpoint);
         cancellationToken.ThrowIfCancellationRequested();
         if (endpoint.Source == UsbDiscoverySource.SourceName && endpoint.Route == "direct-usb" &&
-            Enum.TryParse<UsbApiKind>(endpoint.Transport, out var backend) && backend != UsbApiKind.Auto &&
-            endpoint.Address.Split('|', 9) is { Length: 9 } parts &&
-            parts[1] == endpoint.Transport && !string.IsNullOrWhiteSpace(parts[8]))
+            endpoint.Usb is { } usb && usb.Backend != UsbApiKind.Auto &&
+            endpoint.Transport == usb.Backend.ToString() &&
+            UsbDeviceIdentity.TryParseKeyFilter(endpoint.Address) is { } filter &&
+            !string.IsNullOrWhiteSpace(filter.DevicePathEquals) &&
+            string.Equals(filter.DevicePathEquals, usb.Path, StringComparison.OrdinalIgnoreCase) &&
+            filter.VendorId == usb.VendorId && filter.ProductId == usb.ProductId &&
+            filter.InterfaceClass == usb.InterfaceClass &&
+            filter.InterfaceSubClass == usb.InterfaceSubClass &&
+            filter.InterfaceProtocol == usb.InterfaceProtocol)
         {
-            byte? cls = byte.TryParse(parts[4], System.Globalization.NumberStyles.HexNumber, null, out var c) ? c : null;
-            byte? sub = byte.TryParse(parts[5], System.Globalization.NumberStyles.HexNumber, null, out var s) ? s : null;
-            byte? protocol = byte.TryParse(parts[6], System.Globalization.NumberStyles.HexNumber, null, out var p) ? p : null;
-            DebugBridgeRoute.RequireDirectUsb(cls, sub, protocol, endpoint.Serial);
-            var session = kit.OpenUsbDeviceSessionByKey(endpoint.Address, backend)
+            DebugBridgeRoute.RequireDirectUsb(usb.InterfaceClass, usb.InterfaceSubClass, usb.InterfaceProtocol, endpoint.Serial);
+            var session = kit.OpenUsbDeviceSessionByKey(endpoint.Address, usb.Backend)
                 ?? throw new IOException("Exact USB endpoint is unavailable.");
-            if (session.DeviceInfo.SourceApiKind != backend ||
+            if (session.DeviceInfo.SourceApiKind != usb.Backend ||
                 !UsbDeviceIdentity.MatchesOpenedKey(endpoint.Address, session.DeviceInfo.DeviceKey))
             {
                 session.Dispose();

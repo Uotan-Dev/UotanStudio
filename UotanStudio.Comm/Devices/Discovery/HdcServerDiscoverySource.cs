@@ -21,6 +21,7 @@ public sealed class HdcServerDiscoverySource(string host = "127.0.0.1", int? por
         using var client = new HdcServerClient(host, _port);
         var output = await client.ExecuteAsync(string.Empty, "list targets -v",
             cancellationToken: cancellationToken).ConfigureAwait(false);
+        // Matches HdcServerClient.ListTargetDetails without its synchronous wrapper.
         return HdcTargetInfo.Parse(Encoding.UTF8.GetString(output)).Select(target => new DeviceEndpoint
         {
             Source = Name,

@@ -49,12 +49,14 @@ public sealed partial class DeviceMonitorService
     private IReadOnlyList<DetectedDevice> ScanCore()
     {
         var devices = new List<DetectedDevice>();
-        var usbInfos = _comm.EnumerateUsbDevices();
-        // Server identities are authoritative; never join unrelated enumeration orders.
-        var adbClient = AdbServerClient;
-        var adbDevices = adbClient?.GetDevices().ToList();
-        using var hdcServer = ProbeHdcServer();
-        var hdcTargets = hdcServer?.ListTargetDetails();
+        var endpoints = _controller.RefreshAsync().GetAwaiter().GetResult().Endpoints;
+        var usbInfos = endpoints.Where(endpoint => endpoint.UsbInfo is not null)
+            .Select(endpoint => endpoint.UsbInfo!).ToArray();
+        // The server's serial/connect key is authoritative; USB association requires unique identity evidence.
+        var adbDevices = endpoints.Where(endpoint => endpoint.Protocol == "adb" &&
+            endpoint.Route == "server").ToArray();
+        var hdcTargets = endpoints.Where(endpoint => endpoint.Protocol == "hdc" &&
+            endpoint.Route == "server").ToArray();
         foreach (var info in usbInfos)
         {
             var protocol = Classify(info);
@@ -64,15 +66,15 @@ public sealed partial class DeviceMonitorService
             }
 
             var physicalId = PhysicalUsbId(info, info.SerialNumber);
-            if (protocol == DeviceProtocolKind.Adb && adbDevices is not null &&
+            if (protocol == DeviceProtocolKind.Adb &&
                 (adbDevices.Any(target =>
                     string.Equals(target.Serial, info.SerialNumber, StringComparison.Ordinal) ||
                     physicalId is not null && string.Equals(physicalId,
-                        FindServerUsbIdentity(usbInfos, target.Serial, DeviceProtocolKind.Adb),
+                        FindServerUsbIdentity(usbInfos, target.Address, DeviceProtocolKind.Adb),
                         StringComparison.Ordinal)) ||
-                    string.IsNullOrWhiteSpace(info.SerialNumber) && adbDevices.Count != 0))
+                    string.IsNullOrWhiteSpace(info.SerialNumber) && adbDevices.Length != 0))
                 continue;
-            if (protocol == DeviceProtocolKind.Hdc && hdcServer is not null)
+            if (protocol == DeviceProtocolKind.Hdc && (hdcTargets.Length != 0 || DebugBridgeRoute.UseHdcServer()))
                 continue;
             if (protocol == DeviceProtocolKind.Hdc && HdcDirectSessionPool.FindOwnedDevice(info.DevicePath) is { } owned)
             {
@@ -107,52 +109,43 @@ public sealed partial class DeviceMonitorService
         // hdc server 通道（系统内存在 hdc server 时，作为 client 列举其管理的全部目标，
         // 与 adb server 网络设备合并方式一致）。USB 直连枚举命中同一物理设备时以
         // The host server owns HDC target identity and physical transport metadata.
-        if (hdcTargets is not null)
+        foreach (var target in hdcTargets)
         {
-            foreach (var target in hdcTargets)
+            if (target.TargetTransport is not ("USB" or "TCP")) continue;
+            devices.Add(new DetectedDevice
             {
-                if (!IsSupportedHdcTarget(target)) continue;
-                devices.Add(new DetectedDevice
+                Key = "hdc:" + target.Address,
+                Serial = target.Address,
+                PhysicalId = target.TargetTransport == "USB"
+                    ? FindServerUsbIdentity(usbInfos, target.Address, DeviceProtocolKind.Hdc) : null,
+                Protocol = DeviceProtocolKind.Hdc,
+                Transport = target.TargetTransport switch
                 {
-                    Key = "hdc:" + target.ConnectKey,
-                    Serial = target.ConnectKey,
-                    PhysicalId = target.Transport == "USB"
-                        ? FindServerUsbIdentity(usbInfos, target.ConnectKey, DeviceProtocolKind.Hdc) : null,
-                    Protocol = DeviceProtocolKind.Hdc,
-                    Transport = target.Transport switch
-                    {
-                        "USB" => DeviceTransportKind.Usb,
-                        "TCP" => DeviceTransportKind.Tcp,
-                        "UART" => DeviceTransportKind.Serial,
-                        _ => DeviceTransportKind.Unknown,
-                    },
-                    State = target.State.Equals("Connected", StringComparison.OrdinalIgnoreCase) ? "device"
-                        : target.State.Equals("Unauthorized", StringComparison.OrdinalIgnoreCase) ? "unauthorized" : "offline",
-                });
-            }
+                    "USB" => DeviceTransportKind.Usb,
+                    "TCP" => DeviceTransportKind.Tcp,
+                    _ => DeviceTransportKind.Unknown,
+                },
+                State = target.State?.Equals("Connected", StringComparison.OrdinalIgnoreCase) == true ? "device"
+                    : target.State?.Equals("Unauthorized", StringComparison.OrdinalIgnoreCase) == true
+                        ? "unauthorized" : "offline",
+            });
         }
 
-        if (adbDevices is not null)
+        foreach (var target in adbDevices)
         {
-            foreach (var d in adbDevices)
+            devices.Add(new DetectedDevice
             {
-                devices.Add(new DetectedDevice
-                {
-                    Key = "adb:" + d.Serial,
-                    Serial = d.Serial,
-                    PhysicalId = !d.Serial.Contains(':')
-                        ? FindServerUsbIdentity(usbInfos, d.Serial, DeviceProtocolKind.Adb) : null,
-                    Protocol = DeviceProtocolKind.Adb,
-                    Transport = d.Serial.Contains(':') ? DeviceTransportKind.Tcp : DeviceTransportKind.Usb,
-                    State = d.State.ToString().ToLowerInvariant(),
-                });
+                Key = "adb:" + target.Address,
+                Serial = target.Address,
+                PhysicalId = !target.Address.Contains(':')
+                    ? FindServerUsbIdentity(usbInfos, target.Address, DeviceProtocolKind.Adb) : null,
+                Protocol = DeviceProtocolKind.Adb,
+                Transport = target.Address.Contains(':') ? DeviceTransportKind.Tcp : DeviceTransportKind.Usb,
+                State = target.State?.ToLowerInvariant() ?? "offline",
+            });
 
-                // 网络设备来自 adb server 通道（非 USB 直连），明确记录以便用户区分。
-                // Network devices come from the adb server channel (not direct USB); log them
-                // explicitly so the transport is obvious.
-                LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
-                    $"adb server channel device: {d.Serial}");
-            }
+            LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
+                $"adb server channel device: {target.Address}");
         }
 
         return CoalesceSameEndpoint(devices);

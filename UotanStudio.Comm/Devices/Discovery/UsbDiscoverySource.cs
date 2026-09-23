@@ -29,12 +29,10 @@ public sealed class UsbDiscoverySource(ICommKit kit, UsbApiKind backend) : IDevi
                 DisplayName = device.SerialNumber,
                 Serial = device.SerialNumber,
                 Route = "direct-usb",
-                Protocol = (device.InterfaceClass, device.InterfaceSubClass, device.InterfaceProtocol) switch
-                {
-                    (0xff, 0x42, 1) => "adb",
-                    (0xff, 0x50, 1) => "hdc",
-                    _ => null
-                }
+                Protocol = UsbProtocolClassifier.Classify(device),
+                UsbInfo = device,
+                Usb = new(device.SourceApiKind, device.DevicePath, device.VendorId, device.ProductId,
+                    device.InterfaceClass, device.InterfaceSubClass, device.InterfaceProtocol)
             };
         }).ToArray();
     }

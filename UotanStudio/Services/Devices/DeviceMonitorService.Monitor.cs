@@ -103,7 +103,16 @@ public sealed partial class DeviceMonitorService
     /// </summary>
     public event EventHandler? DevicesChanged;
 
-    private DeviceMonitorService() { }
+    private DeviceMonitorService()
+    {
+        _controller = new UotanStudio.Comm.Devices.Services.DeviceController(
+            [
+                new UotanStudio.Comm.Devices.Discovery.UsbDiscoverySource(_comm, UotanStudio.Comm.Transports.Usb.Abstractions.UsbApiKind.Auto),
+                new UotanStudio.Comm.Devices.Discovery.AdbServerDiscoverySource(),
+                new UotanStudio.Comm.Devices.Discovery.HdcServerDiscoverySource()
+            ],
+            new UotanStudio.Comm.Devices.Services.CommDeviceTransportOpener(_comm));
+    }
 
     /// <summary>
     /// <para>启动服务：立即执行一次全量扫描，并开始监听 USB 热插拔与 adb server 设备变更。

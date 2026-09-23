@@ -115,7 +115,7 @@ internal sealed class FastbootUdpPackets(IPEndPoint endpoint, int maxAttempts)
                     {
                         IPEndPoint from = new(IPAddress.Any, 0);
                         var response = client.Receive(ref from);
-                        if (response.Length < HeaderSize ||
+                        if (!from.Equals(endpoint) || response.Length < HeaderSize ||
                             BinaryPrimitives.ReadUInt16BigEndian(response.AsSpan(2, 2)) != sequence ||
                             (response[0] != (byte)id && response[0] != (byte)PacketId.Error))
                         {
@@ -147,6 +147,11 @@ internal sealed class FastbootUdpPackets(IPEndPoint endpoint, int maxAttempts)
                             }
                             else if (collected is not null)
                             {
+                                if (collected.Count > HostMaxPacketSize - payloadLength)
+                                {
+                                    throw new IOException("UDP protocol error: handshake response exceeds the packet limit.");
+                                }
+
                                 for (var i = HeaderSize; i < response.Length; i++)
                                 {
                                     collected.Add(response[i]);

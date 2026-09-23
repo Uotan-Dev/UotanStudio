@@ -2,6 +2,7 @@ using AdvancedSharpAdbClient;
 using AdvancedSharpAdbClient.Models;
 using AdvancedSharpAdbClient.Receivers;
 using UotanStudio.Comm;
+using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Common;
@@ -99,6 +100,7 @@ public sealed partial class DeviceMonitorService : IDisposable
     public static DeviceMonitorService Instance { get; } = new();
 
     private readonly CommKit _comm = CommKit.Default;
+    private readonly DeviceController _controller;
     private static HdcDeviceService HdcOperations => HdcDeviceService.FromSettings();
 
 }
