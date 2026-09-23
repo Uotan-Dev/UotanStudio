@@ -13,23 +13,20 @@ namespace UotanStudio.Mcp.Tools;
 /// <summary>Owns device access when MCP runs without the desktop host.</summary>
 internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
 {
-    private readonly ICommKit _comm;
     private readonly DeviceController _controller;
     private readonly Func<bool> _hdcServerAvailable;
 
     public HeadlessDeviceManagerGateway()
     {
-        _comm = new CommKit();
+        var comm = new CommKit();
         _controller = new DeviceController(
-            [new UsbDiscoverySource(_comm, UsbApiKind.Auto), new AdbServerDiscoverySource(), new HdcServerDiscoverySource()],
-            new CommDeviceTransportOpener(_comm));
+            [new UsbDiscoverySource(comm, UsbApiKind.Auto), new AdbServerDiscoverySource(), new HdcServerDiscoverySource()],
+            new CommDeviceTransportOpener(comm));
         _hdcServerAvailable = () => DebugBridgeRoute.UseHdcServer();
     }
 
-    internal HeadlessDeviceManagerGateway(ICommKit comm, DeviceController controller,
-        Func<bool> hdcServerAvailable)
+    internal HeadlessDeviceManagerGateway(DeviceController controller, Func<bool> hdcServerAvailable)
     {
-        _comm = comm;
         _controller = controller;
         _hdcServerAvailable = hdcServerAvailable;
     }
@@ -42,11 +39,9 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
     public IReadOnlyList<UsbDeviceInfo> ListUsbDevices()
     {
         var snapshot = Refresh();
-        var eligible = snapshot.Endpoints.Where(endpoint => IsRoutableUsb(snapshot, endpoint))
-            .Select(endpoint => endpoint.Id).ToHashSet();
-        return _comm.EnumerateUsbDevices().Where(info =>
-            eligible.Contains(new DeviceEndpointId(UsbDiscoverySource.SourceName,
-                info.SourceApiKind.ToString(), info.DeviceKey))).ToArray();
+        return snapshot.Endpoints.Where(endpoint => IsRoutableUsb(snapshot, endpoint))
+            .Select(endpoint => endpoint.UsbInfo ??
+                throw new InvalidDataException("USB endpoint has no inventory details.")).ToArray();
     }
 
     public IReadOnlyList<(string Serial, string State)> ListAdbTargets()
