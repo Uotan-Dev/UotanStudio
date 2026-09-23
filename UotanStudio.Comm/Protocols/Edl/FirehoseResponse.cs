@@ -8,6 +8,9 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// </summary>
 public class FirehoseResponse
 {
+    /// <summary>Gets validated geometry from the logs associated with a getstorageinfo response, if reported.</summary>
+    public FirehoseStorageGeometry? StorageGeometry { get; internal set; }
+
     /// <summary>Gets or sets whether the response is an ACK. 是否为 ACK。</summary>
     public bool IsAck { get; set; }
 
@@ -80,8 +83,7 @@ public static class FirehoseResponseParser
 
         try
         {
-            var doc = new XmlDocument();
-            doc.LoadXml(xml);
+            var doc = LoadDocument(xml);
 
             var dataNode = doc.SelectSingleNode("data") ?? throw new FirehoseException("No <data> element in response.");
             var responseNode = dataNode.SelectSingleNode("response");
@@ -139,13 +141,12 @@ public static class FirehoseResponseParser
 
         try
         {
-            var doc = new XmlDocument();
-            doc.LoadXml(xml);
+            var doc = LoadDocument(xml);
 
             var dataNode = doc.SelectSingleNode("data");
             if (dataNode == null)
             {
-                return block;
+                throw new FirehoseException("No <data> element in response.");
             }
 
             foreach (XmlNode node in dataNode.ChildNodes)
@@ -165,15 +166,35 @@ public static class FirehoseResponseParser
                 }
                 else if (string.Equals(node.Name, "response", StringComparison.OrdinalIgnoreCase))
                 {
+                    if (block.Response is not null)
+                    {
+                        throw new FirehoseException("Multiple responses in one Firehose document are ambiguous.");
+                    }
+
                     block.Response = ParseResponseNode(node, xml);
                 }
             }
         }
-        catch (XmlException)
+        catch (XmlException ex)
         {
+            throw new FirehoseException("Malformed Firehose response XML.", ex);
         }
 
         return block;
+    }
+
+    private static XmlDocument LoadDocument(string xml)
+    {
+        using var text = new StringReader(xml);
+        using var reader = XmlReader.Create(text, new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = 64 * 1024
+        });
+        var document = new XmlDocument { XmlResolver = null };
+        document.Load(reader);
+        return document;
     }
 
     /// <summary>

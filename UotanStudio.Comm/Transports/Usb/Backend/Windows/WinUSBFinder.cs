@@ -394,7 +394,8 @@ internal static class WinUSBFinder
                 var cbSize = IntPtr.Size == 8 ? 8 : 6;
                 var pathOffset = 4;
                 Marshal.WriteInt32(detailBuffer, cbSize);
-                if (Win32API.SetupDiGetDeviceInterfaceDetailW(devInfo, ref interfaceData, detailBuffer, detailSize, out _, IntPtr.Zero))
+                var node = new Win32API.SpDevInfoData { CbSize = (uint)Marshal.SizeOf<Win32API.SpDevInfoData>() };
+                if (Win32API.SetupDiGetDeviceInterfaceDetailW(devInfo, ref interfaceData, detailBuffer, detailSize, out _, ref node))
                 {
                     var path = Marshal.PtrToStringUni(new IntPtr(detailBuffer.ToInt64() + pathOffset)) ?? "";
                     var lowerPath = path.ToLower();
@@ -410,18 +411,24 @@ internal static class WinUSBFinder
                         filter?.InterfaceProtocol is byte protocol && identity.InterfaceProtocol != protocol)
                         continue;
                     var isGoogleWinUsb = lowerPath.Contains(PreferWinUsbVidPid);
+                    var instanceId = GetDeviceInstanceId(devInfo, ref node);
+                    var separator = instanceId.LastIndexOf('\\');
+                    var candidate = separator >= 0 ? instanceId[(separator + 1)..] : null;
+                    var serial = candidate is not null && !candidate.Contains('&') ? candidate : null;
 
                     UsbDevice? device = null;
                     if (isGoogleWinUsb)
                     {
                         UsbTrace.Log($"Prefers WinUSB for Google device: {path}");
-                        device = TryOpenWinUSB(path, options);
+                        device = TryOpenWinUSB(path, options, serial);
                     }
 
-                    device ??= ProbeDevice(path, options);
+                    device ??= ProbeDevice(path, options, serial);
 
                     if (device != null)
                     {
+                        device.DeviceInstanceId = instanceId;
+                        device.ContainerId = ReadContainerId(device.DeviceInstanceId);
                         var key = BuildDeviceKey(device);
                         if (uniqueKeys.Add(key))
                         {
@@ -446,6 +453,22 @@ internal static class WinUSBFinder
         }
 
         UsbTrace.Log($"WinUSBFinder: EnumerateInterfacesCore done, lastErr={Marshal.GetLastWin32Error()}, devices={devices.Count}");
+    }
+
+    private static Guid? ReadContainerId(string instanceId)
+    {
+        if (!OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(instanceId)) return null;
+        try
+        {
+            using var node = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Enum\" + instanceId);
+            return node?.GetValue("ContainerID") is string value &&
+                Guid.TryParse(value, out var id) && id != Guid.Empty ? id : null;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+        {
+            return null;
+        }
     }
 
     private static bool PathMatchesFilter(string path, UsbDeviceFilter? filter)
@@ -494,12 +517,12 @@ internal static class WinUSBFinder
         return (vid, pid);
     }
 
-    private static UsbDevice? ProbeDevice(string path, UsbSessionOptions? options)
+    private static UsbDevice? ProbeDevice(string path, UsbSessionOptions? options, string? serial)
     {
         (var vid, var pid) = TryParseVidPid(path);
         var metadata = CreateMetadataOnlyDevice(path, vid ?? 0, pid ?? 0);
         if (options?.MetadataOnly == true) return metadata;
-        DebugBridgeRoute.RequireDirectUsb(metadata.InterfaceClass, metadata.InterfaceSubClass, metadata.InterfaceProtocol);
+        DebugBridgeRoute.RequireDirectUsb(metadata.InterfaceClass, metadata.InterfaceSubClass, metadata.InterfaceProtocol, serial);
 
 
         var hDevice = Win32API.SimpleCreateHandle(path);
@@ -556,12 +579,12 @@ internal static class WinUSBFinder
         return winDev;
     }
 
-    private static UsbDevice? TryOpenWinUSB(string path, UsbSessionOptions? options)
+    private static UsbDevice? TryOpenWinUSB(string path, UsbSessionOptions? options, string? serial)
     {
         (var vid, var pid) = TryParseVidPid(path);
         var metadata = CreateMetadataOnlyDevice(path, vid ?? 0, pid ?? 0);
         if (options?.MetadataOnly == true) return metadata;
-        DebugBridgeRoute.RequireDirectUsb(metadata.InterfaceClass, metadata.InterfaceSubClass, metadata.InterfaceProtocol);
+        DebugBridgeRoute.RequireDirectUsb(metadata.InterfaceClass, metadata.InterfaceSubClass, metadata.InterfaceProtocol, serial);
 
         var dev = new WinUSBDevice
         {

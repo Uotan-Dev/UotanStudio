@@ -193,6 +193,23 @@ public sealed class HdcConnection : IDisposable
         }
         if (!authenticated) throw new UnauthorizedAccessException("HDC authorization did not complete.");
 
+        var closeDeadline = Environment.TickCount64 + 10000;
+        while (true)
+        {
+            if (Environment.TickCount64 >= closeDeadline)
+                throw new TimeoutException("HDC authentication channel did not close.");
+            HdcMessage response;
+            try { response = ReadMessage(); }
+            catch (TimeoutException) { continue; }
+            if (response.ChannelId == 0 && response.Command == HdcCommand.Echo) continue;
+            if (response.ChannelId != 0 || response.Command != HdcCommand.ChannelClose ||
+                response.Payload is not { Length: 1 } close)
+                throw new InvalidDataException("Expected HDC authentication channel closure.");
+            if (close[0] > 0)
+                Send(HdcMessaging.BuildCommand(HdcCommand.ChannelClose, 0, [(byte)(close[0] - 1)]));
+            break;
+        }
+
         _connected = true;
         _peerReady.Set();
 

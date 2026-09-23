@@ -26,6 +26,12 @@ public sealed class ScriptedCommTransport : ICommTransport
     /// <summary>Gets all bytes written through this transport, in order. 所有写入字节。</summary>
     public List<byte[]> Writes { get; } = [];
 
+    /// <summary>Gets the number of transport reads, including empty reads.</summary>
+    public int ReadCount { get; private set; }
+
+    /// <summary>Gets the number of disposal calls, independently of the simulated connection state.</summary>
+    public int DisposeCount { get; private set; }
+
     /// <summary>Gets whether the transport reports connected. 是否报告已连接。</summary>
     public bool IsConnected => _connected;
 
@@ -34,6 +40,9 @@ public sealed class ScriptedCommTransport : ICommTransport
     /// responses. <para>每次写入时调用的可选钩子；返回的字节数组会被入队为设备响应。</para>
     /// </summary>
     public Func<byte[], IEnumerable<byte[]>>? OnWrite { get; set; }
+
+    /// <summary>Optional hook for simulating local disconnect failures before changing connection state.</summary>
+    public Action? OnDisconnect { get; set; }
 
     /// <summary>Enqueues a device response. 入队一条设备响应。</summary>
     public void Enqueue(byte[] data)
@@ -57,7 +66,11 @@ public sealed class ScriptedCommTransport : ICommTransport
     public void Connect() => _connected = true;
 
     /// <inheritdoc />
-    public void Disconnect() => _connected = false;
+    public void Disconnect()
+    {
+        OnDisconnect?.Invoke();
+        _connected = false;
+    }
 
     /// <inheritdoc />
     public void Reset() { }
@@ -90,6 +103,7 @@ public sealed class ScriptedCommTransport : ICommTransport
     {
         lock (_lock)
         {
+            ReadCount++;
             byte[]? chunk;
             if (_headRemainder is not null)
             {
@@ -129,6 +143,7 @@ public sealed class ScriptedCommTransport : ICommTransport
     {
         lock (_lock)
         {
+            DisposeCount++;
             _reads.Clear();
             _headRemainder = null;
         }

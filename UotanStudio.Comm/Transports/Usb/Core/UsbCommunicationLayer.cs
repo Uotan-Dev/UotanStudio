@@ -18,9 +18,12 @@ namespace UotanStudio.Comm.Transports.Usb.Core;
 /// <para>初始化新的通信层。</para>
 /// </remarks>
 /// <param name="registry">Optional registry to use. <para>可选注册表实例。</para></param>
-public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
+/// <param name="configuration">Optional isolated configuration; otherwise uses the process configuration.</param>
+public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, DeviceCommunicationConfiguration? configuration = null)
 {
     private readonly UsbApiRegistry _registry = registry ?? UsbApiRegistry.CreateDefault();
+
+    private DeviceCommunicationConfiguration Configuration => configuration ?? DeviceCommunicationConfiguration.Current;
 
     /// <summary>
     /// Configures the absolute path to the native libusb runtime for the libusb
@@ -554,6 +557,10 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     {
         if (apiKind == UsbApiKind.Auto)
         {
+            apiKind = Configuration.UsbBackend;
+        }
+        if (apiKind == UsbApiKind.Auto)
+        {
             var preferredName = PreferredAutoApiName();
             return preferredName is not null &&
                 _registry.TryCreate(preferredName, out var preferred) &&
@@ -589,8 +596,12 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     /// （Windows → winusb 原生；Linux/macOS → libusb）。未知平台保持
     /// <see cref="UsbApiKind.Auto"/>，落入轮询监视器。</para>
     /// </summary>
-    private static UsbApiKind PreferredAutoApiKind()
+    private UsbApiKind PreferredAutoApiKind()
     {
+        if (Configuration.UsbBackend != UsbApiKind.Auto)
+        {
+            return Configuration.UsbBackend;
+        }
         return RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? UsbApiKind.Native
             : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
@@ -605,7 +616,7 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     /// <para>返回 <see cref="UsbApiKind.Auto"/> 在当前平台上解析到的默认后端名称
     /// （Windows → winusb 原生；Linux/macOS → libusb）。</para>
     /// </summary>
-    private static string? PreferredAutoApiName() => PreferredAutoApiKind() switch
+    private string? PreferredAutoApiName() => PreferredAutoApiKind() switch
     {
         UsbApiKind.Native => NativeUsbApiProvider.ApiNameConst,
         UsbApiKind.LibUsbDotNet => LibUsbApiProvider.ApiNameConst,

@@ -24,7 +24,7 @@ public static class RawProgramParser
 
         try
         {
-            var doc = XDocument.Load(filePath);
+            var doc = FlashBundleXml.Load(filePath);
             return ParseDocument(doc);
         }
         catch (EdlException)
@@ -53,7 +53,7 @@ public static class RawProgramParser
 
         try
         {
-            var doc = XDocument.Load(stream);
+            var doc = FlashBundleXml.Load(stream);
             return ParseDocument(doc);
         }
         catch (EdlException)
@@ -100,8 +100,7 @@ public static class RawProgramParser
             {
                 if (!string.IsNullOrEmpty(entry.Filename))
                 {
-                    var sourcePath = Path.Combine(firmwareDirectory, entry.Filename);
-                    entry.SourceFile = File.Exists(sourcePath) ? sourcePath : entry.Filename;
+                    entry.SourceFile = FlashBundlePath.ResolveImage(firmwareDirectory, entry.Filename);
                 }
 
                 allEntries.Add(entry);

@@ -24,7 +24,7 @@ public static class UfsProvisionParser
 
         try
         {
-            var doc = XDocument.Load(filePath);
+            var doc = FlashBundleXml.Load(filePath);
             return ParseDocument(doc);
         }
         catch (EdlException)
@@ -53,7 +53,7 @@ public static class UfsProvisionParser
 
         try
         {
-            var doc = XDocument.Load(stream);
+            var doc = FlashBundleXml.Load(stream);
             return ParseDocument(doc);
         }
         catch (EdlException)
@@ -105,15 +105,15 @@ public static class UfsProvisionParser
     {
         return new UfsProvisionCommon
         {
-            BNumberLU = (int?)element.Attribute("BNumberLU") ?? 0,
-            BBootEnable = (int?)element.Attribute("BBootEnable") ?? 0,
-            BDescrAccessEn = (int?)element.Attribute("BDescrAccessEn") ?? 0,
-            BInitPowerMode = (int?)element.Attribute("BInitPowerMode") ?? 0,
-            BHighPriorityLUN = (int?)element.Attribute("BHighPriorityLUN") ?? 0,
-            BSecureRemovalType = (int?)element.Attribute("BSecureRemovalType") ?? 0,
-            BInitActiveICCLevel = (int?)element.Attribute("BInitActiveICCLevel") ?? 0,
-            WPeriodicRTCUpdate = (int?)element.Attribute("WPeriodicRTCUpdate") ?? 0,
-            BConfigDescrLock = (int?)element.Attribute("BConfigDescrLock") ?? 0,
+            BNumberLU = (int?)Attribute(element, "bNumberLU", "BNumberLU") ?? 0,
+            BBootEnable = (int?)Attribute(element, "bBootEnable", "BBootEnable") ?? 0,
+            BDescrAccessEn = (int?)Attribute(element, "bDescrAccessEn", "BDescrAccessEn") ?? 0,
+            BInitPowerMode = (int?)Attribute(element, "bInitPowerMode", "BInitPowerMode") ?? 0,
+            BHighPriorityLUN = (int?)Attribute(element, "bHighPriorityLUN", "BHighPriorityLUN") ?? 0,
+            BSecureRemovalType = (int?)Attribute(element, "bSecureRemovalType", "BSecureRemovalType") ?? 0,
+            BInitActiveICCLevel = (int?)Attribute(element, "bInitActiveICCLevel", "BInitActiveICCLevel") ?? 0,
+            WPeriodicRTCUpdate = (int?)Attribute(element, "wPeriodicRTCUpdate", "WPeriodicRTCUpdate") ?? 0,
+            BConfigDescrLock = (int?)Attribute(element, "bConfigDescrLock", "BConfigDescrLock") ?? 0,
             Slot = (int?)element.Attribute("slot") ?? 0
         };
     }
@@ -123,15 +123,15 @@ public static class UfsProvisionParser
         return new UfsProvisionBody
         {
             LUNum = (int?)element.Attribute("LUNum") ?? 0,
-            BLUEnable = (int?)element.Attribute("BLUEnable") ?? 0,
-            BBootLUNID = (int?)element.Attribute("BBootLUNID") ?? 0,
+            BLUEnable = (int?)Attribute(element, "bLUEnable", "BLUEnable") ?? 0,
+            BBootLUNID = (int?)Attribute(element, "bBootLunID", "BBootLUNID") ?? 0,
             SizeInKb = (long?)element.Attribute("size_in_kb") ?? 0,
-            BDataReliability = (int?)element.Attribute("BDataReliability") ?? 0,
-            BLUWriteProtect = (int?)element.Attribute("BLUWriteProtect") ?? 0,
-            BMemoryType = (int?)element.Attribute("BMemoryType") ?? 0,
-            BLogicalBlockSize = (int?)element.Attribute("BLogicalBlockSize") ?? 0,
-            BProvisioningType = (int?)element.Attribute("BProvisioningType") ?? 0,
-            WContextCapacities = (int?)element.Attribute("WContextCapacities") ?? 0,
+            BDataReliability = (int?)Attribute(element, "bDataReliability", "BDataReliability") ?? 0,
+            BLUWriteProtect = (int?)Attribute(element, "bLUWriteProtect", "BLUWriteProtect") ?? 0,
+            BMemoryType = (int?)Attribute(element, "bMemoryType", "BMemoryType") ?? 0,
+            BLogicalBlockSize = (int?)Attribute(element, "bLogicalBlockSize", "BLogicalBlockSize") ?? 0,
+            BProvisioningType = (int?)Attribute(element, "bProvisioningType", "BProvisioningType") ?? 0,
+            WContextCapacities = (int?)Attribute(element, "wContextCapabilities", "WContextCapacities") ?? 0,
             Desc = (string?)element.Attribute("desc") ?? string.Empty,
             Slot = (int?)element.Attribute("slot") ?? 0
         };
@@ -141,9 +141,20 @@ public static class UfsProvisionParser
     {
         return new UfsProvisionEpilogue
         {
-            LUNumToGrow = (int?)element.Attribute("LUNumToGrow") ?? 0,
+            LUNumToGrow = (int?)Attribute(element, "LUNtoGrow", "LUNumToGrow") ?? 0,
             Commit = (int?)element.Attribute("commit") ?? 0,
             Slot = (int?)element.Attribute("slot") ?? 0
         };
+    }
+
+    private static XAttribute? Attribute(XElement element, string name, string legacy)
+    {
+        var canonical = element.Attribute(name);
+        var alias = element.Attribute(legacy);
+        if (canonical is not null && alias is not null)
+        {
+            throw new InvalidDataException($"UFS field '{name}' has both canonical and legacy attributes.");
+        }
+        return canonical ?? alias;
     }
 }

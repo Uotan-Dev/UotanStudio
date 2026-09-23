@@ -89,7 +89,8 @@ public sealed class HdcAuthenticationTests
             verifier.ImportSubjectPublicKeyInfo(Convert.FromBase64String(auth.PublicKeyToBase64()), out _);
             signed = verifier.VerifyData(token, Convert.FromBase64String(Encoding.ASCII.GetString(handshake.Buffer)),
                 HashAlgorithmName.SHA512, RSASignaturePadding.Pss);
-            return [Reply(4, Tlv("daemonauthstatus", "DAEMON_AUTH"))];
+            return [Reply(4, Tlv("daemonauthstatus", "DAEMON_AUTH")),
+                HdcDaemonCodec.Encode(new(HdcCommand.ChannelClose, 0, 0, [1]))];
         };
         using var connection = new HdcConnection(transport, auth);
         if (denied)

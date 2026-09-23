@@ -11,6 +11,7 @@ public sealed class AdbStream : IDisposable
     private readonly Queue<byte[]> _incoming = new();
     private readonly ManualResetEventSlim _dataAvailable = new(false);
     private readonly ManualResetEventSlim _ready = new(false);
+    private readonly AutoResetEvent _writePermit = new(false);
     private bool _closed;
     private readonly Stream? _serverStream;
     private readonly byte[]? _serverReadBuffer;
@@ -43,7 +44,16 @@ public sealed class AdbStream : IDisposable
     /// <para>设置远端 ID 并触发就绪信号。</para>
     /// </summary>
     /// <param name="remoteId">The remote stream identifier. 远端流标识。</param>
-    internal void SetRemoteId(uint remoteId) { RemoteId = remoteId; _ready.Set(); }
+    internal void SetRemoteId(uint remoteId)
+    {
+        lock (_lock)
+        {
+            if (_closed || _disposed) return;
+            RemoteId = remoteId;
+            _writePermit.Set();
+        }
+        _ready.Set();
+    }
 
     /// <summary>
     /// Blocks until the stream is ready (OKAY received).
@@ -109,7 +119,7 @@ public sealed class AdbStream : IDisposable
     /// Marks the stream as closed and releases waiting threads.
     /// <para>将流标记为已关闭并释放等待线程。</para>
     /// </summary>
-    internal void MarkClosed() { _serverStream?.Dispose(); lock (_lock) { _closed = true; } _ready.Set(); _dataAvailable.Set(); }
+    internal void MarkClosed() { _serverStream?.Dispose(); lock (_lock) { _closed = true; if (!_disposed) _writePermit.Set(); } _ready.Set(); _dataAvailable.Set(); }
 
     /// <summary>
     /// Marks the stream as faulted, stores the exception, and releases waiting threads.
@@ -126,6 +136,7 @@ public sealed class AdbStream : IDisposable
         }
         _ready.Set();
         _dataAvailable.Set();
+        lock (_lock) { if (!_disposed) _writePermit.Set(); }
     }
 
     /// <summary>
@@ -150,7 +161,19 @@ public sealed class AdbStream : IDisposable
             lock (_writeLock) _serverStream.Write(data);
             return;
         }
-        _connection.WriteToStream(this, data);
+        lock (_writeLock)
+        {
+            var maxPayload = _connection.PeerMaxPayload;
+            if (maxPayload == 0) throw new IOException("ADB peer did not advertise a valid maximum payload.");
+            var chunkSize = (int)Math.Min(maxPayload, AdbConstants.MaxPayload);
+            for (var offset = 0; offset < data.Length; offset += chunkSize)
+            {
+                if (!_writePermit.WaitOne(10000)) throw new TimeoutException("ADB peer did not acknowledge the previous write.");
+                if (IsClosed) throw new IOException("ADB stream closed while writing.", Fault);
+                var count = Math.Min(chunkSize, data.Length - offset);
+                _connection.WriteToStream(this, data.AsSpan(offset, count).ToArray());
+            }
+        }
     }
 
     /// <summary>
@@ -214,11 +237,26 @@ public sealed class AdbStream : IDisposable
         _serverStream?.Dispose();
         if (shouldNotify || _serverStream is not null) { try { _connection.CloseStream(this); } catch { } }
         _dataAvailable.Set();
+        lock (_lock) { if (!_disposed) _writePermit.Set(); }
     }
 
     /// <summary>
     /// Releases all resources used by the stream.
     /// <para>释放流使用的所有资源。</para>
     /// </summary>
-    public void Dispose() { if (_disposed) return; _disposed = true; Close(); if (_serverStream is null) _dataAvailable.Dispose(); GC.SuppressFinalize(this); }
+    public void Dispose()
+    {
+        if (_disposed) return;
+        Close();
+        lock (_writeLock)
+        {
+            lock (_lock)
+            {
+                _disposed = true;
+                _writePermit.Dispose();
+            }
+        }
+        if (_serverStream is null) _dataAvailable.Dispose();
+        GC.SuppressFinalize(this);
+    }
 }

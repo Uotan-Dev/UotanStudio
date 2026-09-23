@@ -70,7 +70,7 @@ public class ReadBackComparisonTests
         byte[] payload = new byte[1024];
         payload.AsSpan().Fill(0x41);
         transport.OnWrite = bytes => Encoding.UTF8.GetString(bytes).Contains("<read ", StringComparison.Ordinal)
-            ? [Encoding.UTF8.GetBytes(ack), payload, Encoding.UTF8.GetBytes(ack)]
+            ? [Encoding.UTF8.GetBytes("<data><response value=\"ACK\" rawmode=\"true\"/></data>"), payload, Encoding.UTF8.GetBytes(ack)]
             : [Encoding.UTF8.GetBytes("<?xml version=\"1.0\"?><data><response value=\"NAK\"/></data>")];
         var protocol = new FirehoseProtocol(transport, new FirehoseConfiguration { SectorSize = 512, AutoDetectSectorSize = false, ResponseTimeoutSeconds = 1 }, timeoutMs: 100);
         byte[] original = (byte[])payload.Clone();

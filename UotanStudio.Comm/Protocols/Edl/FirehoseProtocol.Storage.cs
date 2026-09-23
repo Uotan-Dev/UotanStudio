@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>
@@ -8,6 +6,11 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// </summary>
 public sealed partial class FirehoseProtocol
 {
+    private volatile FirehosePowerStatus _powerStatus;
+
+    /// <summary>Gets the evidence observed for the most recent power command, without claiming a successful boot.</summary>
+    public FirehosePowerStatus LastPowerStatus => _powerStatus;
+
     /// <summary>
     /// Sends a &lt;nop value="ping"/&gt; health probe to the programmer.
     /// <para>向 programmer 发送 &lt;nop value="ping"/&gt; 健康探测。</para>
@@ -16,16 +19,14 @@ public sealed partial class FirehoseProtocol
     /// <returns>The Firehose response. Firehose 响应。</returns>
     public async Task<FirehoseResponse> NopAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
         return await SendCommandAndWaitResponseAsync(FirehoseXmlBuilder.BuildNop(), cancellationToken);
     }
 
     /// <summary>
     /// Resets the device (reboot into the system). A best-effort
-    /// &lt;setbootablestoragedrive&gt; (UFS→1, eMMC→0) is sent before the reset, and the reset
-    /// is verified by reading target logs until the device disappears.
-    /// <para>复位设备（重启进入系统）。复位前尽力发送 &lt;setbootablestoragedrive&gt;（UFS→1，
-    /// eMMC→0），并通过读取目标日志直到设备消失来验证复位生效。</para>
+    /// &lt;setbootablestoragedrive&gt; (UFS→1, eMMC→0) is sent before the reset.
+    /// A NAK of that preparation is tolerated, but an uncertain response stops the sequence.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
     /// <returns>The Firehose response. Firehose 响应。</returns>
@@ -51,108 +52,91 @@ public sealed partial class FirehoseProtocol
         => PowerAsync(RebootOption.ResetToEdl, cancellationToken);
 
     /// <summary>
-    /// Sends a &lt;power&gt; command and verifies that the reset took effect.
-    /// <para>发送 &lt;power&gt; 命令并验证复位是否生效。</para>
+    /// Sends a &lt;power&gt; command and returns only its actual ACK or NAK.
+    /// An ACK retires the session even if transport disconnection cannot be observed.
+    /// Missing, malformed or raw-mode responses fail with an uncertain outcome; they are
+    /// never converted to a successful acknowledgement.
     /// </summary>
     /// <param name="option">The reboot option. 复位选项。</param>
     /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
     /// <returns>The Firehose response. Firehose 响应。</returns>
     public async Task<FirehoseResponse> PowerAsync(RebootOption option, CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        if (!Enum.IsDefined(option))
+        {
+            throw new ArgumentOutOfRangeException(nameof(option));
+        }
+
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(Configuration.PowerResponseTimeoutMs);
+        ArgumentOutOfRangeException.ThrowIfNegative(Configuration.PowerResetVerifyTimeoutMs);
 
         if (option == RebootOption.Reset)
         {
-            try
+            var bootableValue = Configuration.StorageType == FirehoseStorageType.Ufs ? 1 : 0;
+            var preparation = await SetBootableStorageDriveCoreAsync(bootableValue, cancellationToken);
+            if (preparation.IsRawMode || (!preparation.IsAck && !preparation.IsNak))
             {
-                var bootableValue = Configuration.StorageType == FirehoseStorageType.Ufs ? 1 : 0;
-                await SetBootableStorageDriveAsync(bootableValue, cancellationToken);
+                _faulted = true;
+                throw new FirehoseException("Invalid response to boot-drive preparation; reset was not sent.");
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+
+            if (preparation.IsNak)
             {
-                Log($"setbootablestoragedrive best-effort failed ({ex.Message}); continuing with reset.");
+                Log("Target rejected boot-drive preparation; continuing with the requested reset.");
             }
         }
 
         var xml = FirehoseXmlBuilder.BuildPower(option);
-        await WriteDataAsync(Encoding.UTF8.GetBytes(xml), GetZlpTimeoutMs(), cancellationToken);
-
+        cancellationToken.ThrowIfCancellationRequested();
+        _powerStatus = FirehosePowerStatus.AwaitingResponse;
         FirehoseResponse response;
         try
         {
-            response = await ReceiveResponseAsync(cancellationToken, EdlConstants.PowerResponseTimeoutMs);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            Log($"No response after power command ({ex.Message}); assuming device reset.");
-            response = new FirehoseResponse { IsAck = true, RawValue = "ACK (device reset)" };
-        }
-
-        var verifyBudgetMs = Configuration.PowerResetVerifyTimeoutMs;
-        if (verifyBudgetMs > 0)
-        {
-            var deadline = Environment.TickCount64 + verifyBudgetMs;
-            var resetConfirmed = false;
-            var sawResetSignal = false;
-            var readBuffer = new byte[EdlConstants.ResponseReadChunkBytes];
-            while (Environment.TickCount64 < deadline)
+            response = await SendCommandAndWaitResponseAsync(xml, cancellationToken, Configuration.PowerResponseTimeoutMs).ConfigureAwait(false);
+            if (response.IsRawMode || (!response.IsAck && !response.IsNak))
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                try
-                {
-                    var chunk = await ReadChunkAsync(readBuffer.Length, 500, cancellationToken);
-                    if (chunk.Length == 0)
-                    {
-                        if (sawResetSignal)
-                        {
-                            Log("Device stopped responding after reset logs; reset confirmed.");
-                            resetConfirmed = true;
-                            break;
-                        }
-                        continue;
-                    }
-
-                    var text = Encoding.UTF8.GetString(chunk).Trim();
-                    if (text.Length == 0)
-                    {
-                        continue;
-                    }
-
-                    var logs = FirehoseResponseParser.ParseDataBlock(text).Logs;
-                    if (logs.Count == 0)
-                    {
-                        logs.Add(text);
-                    }
-
-                    foreach (var logValue in logs)
-                    {
-                        if (logValue.Length > 0)
-                        {
-                            Log($"TARGET: {logValue}");
-                        }
-                    }
-
-                    if (text.Contains("Will issue reset", StringComparison.OrdinalIgnoreCase) ||
-                        text.Contains("bsp_target_reset", StringComparison.OrdinalIgnoreCase))
-                    {
-                        sawResetSignal = true;
-                    }
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    Log($"Device disconnected after power command ({ex.Message}); reset confirmed.");
-                    resetConfirmed = true;
-                    break;
-                }
+                throw new FirehoseException("Power returned neither a normal-mode ACK nor a normal-mode NAK.");
             }
+        }
+        catch
+        {
+            _powerStatus = FirehosePowerStatus.Unknown;
+            _faulted = true;
+            throw;
+        }
 
-            if (!resetConfirmed)
+        if (response.IsNak)
+        {
+            _powerStatus = FirehosePowerStatus.Rejected;
+            return response;
+        }
+
+        _powerStatus = FirehosePowerStatus.Acknowledged;
+        _faulted = true;
+        // Acknowledgement ends the protocol session. Observe only transport state: empty
+        // reads, reset log text and XML parse errors cannot establish a disconnection.
+        var start = Environment.TickCount64;
+        var budget = Configuration.PowerResetVerifyTimeoutMs;
+        while (_transport.IsConnected && Environment.TickCount64 - start < budget)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            cancellationToken.ThrowIfCancellationRequested();
+            var remaining = budget - (Environment.TickCount64 - start);
+            if (remaining > 0)
             {
-                Log("WARNING: Device still responds after <power>; reset did not take effect. " +
-                    "The device may stay in Firehose mode — power-cycle it manually.");
+                await Task.Delay((int)Math.Min(25, remaining), cancellationToken).ConfigureAwait(false);
             }
         }
 
+        if (!_transport.IsConnected)
+        {
+            _powerStatus = FirehosePowerStatus.AcknowledgedAndDisconnected;
+        }
+
+        Log(_powerStatus == FirehosePowerStatus.AcknowledgedAndDisconnected
+            ? "Power acknowledged and transport disconnected; successful boot is unverified."
+            : "Power acknowledged; transport disconnection and successful boot are unverified.");
         return response;
     }
 
@@ -164,6 +148,12 @@ public sealed partial class FirehoseProtocol
     /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
     /// <returns>The Firehose response. Firehose 响应。</returns>
     public async Task<FirehoseResponse> SetBootableStorageDriveAsync(int value, CancellationToken cancellationToken = default)
+    {
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        return await SetBootableStorageDriveCoreAsync(value, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<FirehoseResponse> SetBootableStorageDriveCoreAsync(int value, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
         var xml = FirehoseXmlBuilder.BuildSetBootableStorageDrive(value);
@@ -181,9 +171,50 @@ public sealed partial class FirehoseProtocol
     /// <returns>The Firehose response. Firehose 响应。</returns>
     public async Task<FirehoseResponse> GetStorageInfoAsync(int physicalPartitionNumber = 0, CancellationToken cancellationToken = default)
     {
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        return await GetStorageInfoCoreAsync(physicalPartitionNumber, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<FirehoseResponse> GetStorageInfoCoreAsync(int physicalPartitionNumber, CancellationToken cancellationToken)
+    {
         ThrowIfDisposed();
+        ArgumentOutOfRangeException.ThrowIfNegative(physicalPartitionNumber);
+        var report = new FirehoseStorageReport();
         var xml = FirehoseXmlBuilder.BuildGetStorageInfo(physicalPartitionNumber);
-        return await SendCommandAndWaitResponseAsync(xml, cancellationToken);
+        var response = await SendCommandAndWaitResponseAsync(xml, cancellationToken, logObserver: report.Observe).ConfigureAwait(false);
+        if (response.IsRawMode)
+        {
+            _faulted = true;
+            throw new FirehoseException("Storage query unexpectedly entered raw mode.");
+        }
+        if (response.IsAck)
+        {
+            response.StorageGeometry = report.Parse(physicalPartitionNumber);
+        }
+        return response;
+    }
+
+    /// <summary>Queries validated physical capacity; missing or rejected geometry is never replaced with a default.</summary>
+    /// <param name="physicalPartitionNumber">The physical region or LUN to query.</param>
+    /// <param name="cancellationToken">The operation cancellation token.</param>
+    /// <returns>The target-reported geometry associated with this query.</returns>
+    public async Task<FirehoseStorageGeometry> GetStorageGeometryAsync(int physicalPartitionNumber = 0,
+        CancellationToken cancellationToken = default)
+    {
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        return await GetStorageGeometryOwnedAsync(physicalPartitionNumber, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Queries geometry while the caller holds the operation lease.</summary>
+    internal async Task<FirehoseStorageGeometry> GetStorageGeometryOwnedAsync(int physicalPartitionNumber,
+        CancellationToken cancellationToken)
+    {
+        var response = await GetStorageInfoCoreAsync(physicalPartitionNumber, cancellationToken).ConfigureAwait(false);
+        if (!response.IsAck || response.StorageGeometry is null)
+        {
+            throw new FirehoseException("The target did not acknowledge usable storage geometry for the requested partition.");
+        }
+        return response.StorageGeometry;
     }
 
     /// <summary>
@@ -195,7 +226,7 @@ public sealed partial class FirehoseProtocol
     /// <returns>The Firehose response. Firehose 响应。</returns>
     public async Task<FirehoseResponse> SetActivePartitionAsync(string slot, CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrEmpty(slot))
         {
             throw new ArgumentException("Slot cannot be null or empty.", nameof(slot));

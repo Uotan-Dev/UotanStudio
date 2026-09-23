@@ -153,13 +153,13 @@ public class FlashBundleOrchestratorTests
         Assert.Equal(1, result.ProgramEntriesProcessed);
 
         // [0] nop probe, [1] configure, [2] program XML, [3] payload.
-        Assert.Equal(4, transport.Writes.Count);
-        var programXml = Encoding.UTF8.GetString(transport.Writes[2]);
+        Assert.Equal(5, transport.Writes.Count);
+        var programXml = Encoding.UTF8.GetString(transport.Writes[3]);
         Assert.Contains("<program", programXml, StringComparison.Ordinal);
         Assert.Contains("filename=\"boot.img\"", programXml, StringComparison.Ordinal);
         Assert.Contains("start_sector=\"32768\"", programXml, StringComparison.Ordinal);
         Assert.Contains("num_partition_sectors=\"4\"", programXml, StringComparison.Ordinal);
-        Assert.Equal(bootImage, transport.Writes[3]);
+        Assert.Equal(bootImage, transport.Writes[4]);
 
         // The configure handshake precedes the program command.
         // configure 握手先于 program 命令。
@@ -189,10 +189,10 @@ public class FlashBundleOrchestratorTests
         Assert.Equal(4096 * 4 + 4096 * 8, result.TotalBytesWritten);
 
         // [2] boot program XML, [3] boot payload, [4] system program XML, [5] system payload.
-        Assert.Contains("filename=\"boot.img\"", Encoding.UTF8.GetString(transport.Writes[2]), StringComparison.Ordinal);
-        Assert.Equal(bootImage, transport.Writes[3]);
-        Assert.Contains("filename=\"system.img\"", Encoding.UTF8.GetString(transport.Writes[4]), StringComparison.Ordinal);
-        Assert.Equal(systemImage, transport.Writes[5]);
+        Assert.Contains("filename=\"boot.img\"", Encoding.UTF8.GetString(transport.Writes[3]), StringComparison.Ordinal);
+        Assert.Equal(bootImage, transport.Writes[4]);
+        Assert.Contains("filename=\"system.img\"", Encoding.UTF8.GetString(transport.Writes[5]), StringComparison.Ordinal);
+        Assert.Equal(systemImage, transport.Writes[6]);
     }
 
     [Fact]
@@ -217,8 +217,8 @@ public class FlashBundleOrchestratorTests
         Assert.Equal(1, result.EraseEntriesProcessed);
 
         // [0] nop probe, [1] configure, [2] erase XML.
-        Assert.Contains("<erase", Encoding.UTF8.GetString(transport.Writes[2]), StringComparison.Ordinal);
-        Assert.Contains("physical_partition_number=\"1\"", Encoding.UTF8.GetString(transport.Writes[2]), StringComparison.Ordinal);
+        Assert.Contains("<erase", Encoding.UTF8.GetString(transport.Writes[3]), StringComparison.Ordinal);
+        Assert.Contains("physical_partition_number=\"1\"", Encoding.UTF8.GetString(transport.Writes[3]), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -245,10 +245,10 @@ public class FlashBundleOrchestratorTests
         Assert.Equal(1, result.ProgramEntriesProcessed);
         Assert.Equal(1, result.PatchEntriesProcessed);
 
-        // [2] program XML, [3] payload, [4] patch XML.
-        Assert.Contains("filename=\"boot.img\"", Encoding.UTF8.GetString(transport.Writes[2]), StringComparison.Ordinal);
-        Assert.Contains("<patch", Encoding.UTF8.GetString(transport.Writes[4]), StringComparison.Ordinal);
-        Assert.Contains("value=\"deadbeef\"", Encoding.UTF8.GetString(transport.Writes[4]), StringComparison.Ordinal);
+        // [2] geometry, [3] program XML, [4] payload, [5] patch XML.
+        Assert.Contains("filename=\"boot.img\"", Encoding.UTF8.GetString(transport.Writes[3]), StringComparison.Ordinal);
+        Assert.Contains("<patch", Encoding.UTF8.GetString(transport.Writes[5]), StringComparison.Ordinal);
+        Assert.Contains("value=\"deadbeef\"", Encoding.UTF8.GetString(transport.Writes[5]), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -273,9 +273,7 @@ public class FlashBundleOrchestratorTests
         Assert.True(result.IsSuccess, string.Join("; ", result.Errors));
         Assert.Equal(2, result.ProgramEntriesSkipped);
 
-        // Only the session-init writes (nop probe + configure) happened.
-        // 仅发生会话初始化的写入（nop 探测 + configure）。
-        Assert.Equal(2, transport.Writes.Count);
+        Assert.Empty(transport.Writes);
         var allWrites = string.Concat(transport.Writes.Select(w => Encoding.UTF8.GetString(w)));
         Assert.DoesNotContain("<program", allWrites, StringComparison.Ordinal);
     }
@@ -322,10 +320,10 @@ public class FlashBundleOrchestratorTests
         Assert.False(result.IsSuccess);
         Assert.Single(result.Errors);
         Assert.Equal(0, result.ProgramEntriesProcessed);
-        Assert.Equal(1, result.ProgramEntriesSkipped);
+        Assert.Equal(0, result.ProgramEntriesSkipped);
         // The program never reached the device (image file missing).
         // 镜像文件缺失，program 从未发送到设备。
-        Assert.Equal(2, transport.Writes.Count);
+        Assert.Empty(transport.Writes);
     }
 
     [Fact]
@@ -345,6 +343,100 @@ public class FlashBundleOrchestratorTests
     }
 
     // ============== helpers ==============
+
+    [Fact]
+    public async Task FlashBundleAsync_FirstProgramRejected_DoesNotContinueOrPatch()
+    {
+        using var dir = new TempDirectory();
+        var rawPath = dir.Write("rawprogram0.xml", TwoPartitionRawProgram);
+        var patchPath = dir.Write("patch0.xml",
+            "<data><patch filename=\"DISK\" start_sector=\"0\" byte_offset=\"0\" value=\"0\" size_in_bytes=\"4\"/></data>");
+        dir.WriteBytes("boot.img", new byte[4096 * 4]);
+        dir.WriteBytes("system.img", new byte[4096 * 8]);
+        var transport = CreateBundleTransport(0);
+        var respond = transport.OnWrite!;
+        transport.OnWrite = bytes => Encoding.UTF8.GetString(bytes).Contains("<program ", StringComparison.Ordinal)
+            ? [Encoding.UTF8.GetBytes("<data><response value=\"NAK\"/></data>")]
+            : respond(bytes);
+        using var session = CreateSession(transport);
+
+        var result = await new FlashBundleOrchestrator(session).FlashBundleAsync(
+            rawPath, patchPath, dir.Path, null, TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Single(result.Errors);
+        Assert.Equal(0, result.ProgramEntriesProcessed);
+        Assert.Equal(4, transport.Writes.Count);
+        Assert.Contains("boot.img", Encoding.UTF8.GetString(transport.Writes[^1]), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FlashBundleAsync_MissingLaterImage_RejectsBeforeAnyDeviceIo()
+    {
+        using var dir = new TempDirectory();
+        var rawPath = dir.Write("rawprogram0.xml", TwoPartitionRawProgram);
+        dir.WriteBytes("boot.img", new byte[4096 * 4]);
+        using var transport = CreateBundleTransport(1);
+        using var session = CreateSession(transport);
+
+        var result = await new FlashBundleOrchestrator(session).FlashBundleAsync(
+            rawPath, null, dir.Path, null, TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task FlashBundleAsync_Cancelled_PropagatesWithoutDeviceIo()
+    {
+        using var transport = CreateBundleTransport(0);
+        using var session = CreateSession(transport);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new FlashBundleOrchestrator(session).FlashBundleAsync(new FlashBundleOptions(), null, cancellation.Token));
+
+        Assert.Empty(transport.Writes);
+    }
+
+    [Theory]
+    [InlineData("../outside.img")]
+    [InlineData("images/../../outside.img")]
+    [InlineData("C:/outside.img")]
+    [InlineData("/outside.img")]
+    [InlineData("boot.img:stream")]
+    public void ParseAll_ImagePathEscapesFirmwareRoot_Rejects(string filename)
+    {
+        using var dir = new TempDirectory();
+        var rawPath = dir.Write("rawprogram0.xml", SinglePartitionRawProgram(filename, 4));
+
+        Assert.Throws<EdlException>(() => RawProgramParser.ParseAll([rawPath], dir.Path));
+    }
+
+    [Theory]
+    [InlineData(-1L)]
+    [InlineData(1L)]
+    [InlineData(2L)]
+    [InlineData(long.MaxValue)]
+    public async Task FlashBundleAsync_InvalidSourceOffset_FailsWithoutProgramCommand(long offset)
+    {
+        using var dir = new TempDirectory();
+        dir.WriteBytes("boot.img", new byte[4096]);
+        var rawPath = dir.Write("rawprogram0.xml", $"""
+            <data><program filename="boot.img" start_sector="0" num_partition_sectors="1"
+              SECTOR_SIZE_IN_BYTES="4096" file_sector_offset="{offset}"/></data>
+            """);
+        using var transport = CreateBundleTransport(0);
+        using var session = CreateSession(transport);
+
+        var result = await new FlashBundleOrchestrator(session).FlashBundleAsync(
+            rawPath, null, dir.Path, null, TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Single(result.Errors);
+        Assert.DoesNotContain(transport.Writes, bytes => Encoding.UTF8.GetString(bytes).Contains("<program ", StringComparison.Ordinal));
+    }
 
     private static string SinglePartitionRawProgram(string filename, int sectors)
         => $$"""
@@ -379,6 +471,12 @@ public class FlashBundleOrchestratorTests
             OnWrite = bytes =>
             {
                 var text = Encoding.UTF8.GetString(bytes);
+                if (text.Contains("<getstorageinfo", StringComparison.Ordinal))
+                {
+                    return [Encoding.UTF8.GetBytes("""
+                        <data><log value='{"storage_info":{"block_size":4096,"total_blocks":1048576}}'/><response value="ACK"/></data>
+                        """)];
+                }
                 // A running Firehose programmer answers the probe <nop> with logs + ACK.
                 // 运行中的 Firehose programmer 以日志 + ACK 应答探测 <nop>。
                 if (text.Contains("<nop", StringComparison.Ordinal))
@@ -400,7 +498,9 @@ public class FlashBundleOrchestratorTests
                     || text.Contains("<patch", StringComparison.Ordinal)))
                 {
                     acksRemaining--;
-                    return [Encoding.UTF8.GetBytes(AckXml)];
+                    return text.Contains("<program", StringComparison.Ordinal)
+                        ? [Encoding.UTF8.GetBytes("<data><response value=\"ACK\" rawmode=\"true\"/></data>"), Encoding.UTF8.GetBytes(AckXml)]
+                        : [Encoding.UTF8.GetBytes(AckXml)];
                 }
 
                 return [];

@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>
@@ -20,8 +18,14 @@ public sealed partial class FirehoseProtocol
     /// <returns>A tuple containing the response and data. 包含响应和数据的元组。</returns>
     public async Task<(FirehoseResponse Response, byte[] Data)> ReadAsync(long startSector, long numSectors, string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default)
     {
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        if (ValidateStorageRange(startSector, numSectors, physicalPartition) > 16 * 1024 * 1024)
+        {
+            throw new ArgumentOutOfRangeException(nameof(numSectors), "Use ReadToStreamAsync for reads exceeding 16 MiB.");
+        }
+
         using var ms = new MemoryStream();
-        var response = await ReadToStreamAsync(ms, startSector, numSectors, filename, physicalPartition, cancellationToken);
+        var response = await ReadToStreamCoreAsync(ms, startSector, numSectors, filename, physicalPartition, cancellationToken);
         return (response, ms.ToArray());
     }
 
@@ -39,29 +43,39 @@ public sealed partial class FirehoseProtocol
     /// <returns>The command response (raw payload excluded). 命令响应（不含原始数据）。</returns>
     public async Task<FirehoseResponse> ReadToStreamAsync(Stream destination, long startSector, long numSectors, string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default)
     {
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        return await ReadToStreamCoreAsync(destination, startSector, numSectors, filename, physicalPartition, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<FirehoseResponse> ReadToStreamCoreAsync(Stream destination, long startSector, long numSectors,
+        string filename, int physicalPartition, CancellationToken cancellationToken, IProgress<long>? progress = null)
+    {
         ThrowIfDisposed();
         if (destination == null)
         {
             throw new ArgumentNullException(nameof(destination));
         }
 
-        var xml = FirehoseXmlBuilder.BuildRead(Configuration.SectorSize, numSectors, filename, physicalPartition, startSector, slot: EffectiveSlot);
-
-        var response = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
-        if (response.IsRawMode)
+        if (!destination.CanWrite)
         {
-            Log("Device entered raw mode for read, receiving raw data...");
+            throw new ArgumentException("The destination must be writable.", nameof(destination));
         }
 
-        if (!response.IsAck)
+        var totalBytes = ValidateStorageRange(startSector, numSectors, physicalPartition);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
         {
-            Log($"Read command returned {response.RawValue} for {filename}.");
-            return response;
+            var xml = FirehoseXmlBuilder.BuildRead(Configuration.SectorSize, numSectors, filename, physicalPartition, startSector, slot: EffectiveSlot);
+            var response = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
+            RequireRawMode(response, EdlErrorCode.ReadFailed);
+            await ReadRawPayloadToStreamAsync(destination, totalBytes, cancellationToken, progress);
+            return await ReceiveTransferCompletionAsync(EdlErrorCode.ReadFailed, cancellationToken);
         }
-
-        var totalBytes = numSectors * Configuration.SectorSize;
-        await ReadRawPayloadToStreamAsync(destination, totalBytes, cancellationToken);
-        return response;
+        catch
+        {
+            _faulted = true;
+            throw;
+        }
     }
 
     /// <summary>
@@ -74,21 +88,30 @@ public sealed partial class FirehoseProtocol
     /// <returns>A tuple containing the response and the read data. 包含响应与读取数据的元组。</returns>
     public async Task<(FirehoseResponse Response, byte[] Data)> PeekAsync(long sizeInBytes, long address, CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        ArgumentOutOfRangeException.ThrowIfNegative(address);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeInBytes);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(sizeInBytes, 16 * 1024 * 1024);
+        _ = checked(address + sizeInBytes);
         var addressStr = $"0x{address:X}";
         var xml = FirehoseXmlBuilder.BuildPeek(sizeInBytes, addressStr);
         Log($"Sent <peek> address={addressStr}, size={sizeInBytes}");
 
-        var response = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
-        if (!response.IsAck)
+        cancellationToken.ThrowIfCancellationRequested();
+        try
         {
-            throw new EdlException(EdlErrorCode.PeekFailed,
-                $"Peek failed at address {addressStr}. Response: {response.RawValue}");
+            var response = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
+            RequireRawMode(response, EdlErrorCode.PeekFailed);
+            using var ms = new MemoryStream();
+            await ReadRawPayloadToStreamAsync(ms, sizeInBytes, cancellationToken);
+            var completion = await ReceiveTransferCompletionAsync(EdlErrorCode.PeekFailed, cancellationToken);
+            return (completion, ms.ToArray());
         }
-
-        using var ms = new MemoryStream();
-        await ReadRawPayloadToStreamAsync(ms, sizeInBytes, cancellationToken);
-        return (response, ms.ToArray());
+        catch
+        {
+            _faulted = true;
+            throw;
+        }
     }
 
     /// <summary>
@@ -102,7 +125,7 @@ public sealed partial class FirehoseProtocol
     /// <returns>The Firehose response. Firehose 响应。</returns>
     public async Task<FirehoseResponse> PokeAsync(long sizeInBytes, long address, byte[] value, CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
         if (value == null)
         {
             throw new ArgumentNullException(nameof(value));
@@ -135,7 +158,7 @@ public sealed partial class FirehoseProtocol
     /// <returns>The Firehose response. Firehose 响应。</returns>
     public async Task<FirehoseResponse> PokeDwordAsync(long address, uint value, CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
         var addressStr = $"0x{address:X}";
         var valueStr = $"0x{value:X8}";
         var xml = FirehoseXmlBuilder.BuildPokeDword(addressStr, valueStr);
@@ -159,7 +182,7 @@ public sealed partial class FirehoseProtocol
     /// <returns>The Firehose response. Firehose 响应。</returns>
     public async Task<FirehoseResponse> MemcpyAsync(long dstOffset, long srcOffset, long size, CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
         var dstStr = $"0x{dstOffset:X}";
         var srcStr = $"0x{srcOffset:X}";
         var xml = FirehoseXmlBuilder.BuildMemcpy(dstStr, srcStr, size);
@@ -173,35 +196,22 @@ public sealed partial class FirehoseProtocol
     }
 
     /// <summary>
-    /// Streams the specified number of raw payload bytes into the destination stream, stripping
-    /// embedded XML log blocks that some programmers emit inside the raw stream, then consumes
-    /// the trailing &lt;response value="ACK"/&gt; block.
-    /// <para>将指定字节数的原始数据流式写入目标流，剥离部分 programmer 在原始流中嵌入的
-    /// XML 日志块，随后消费收尾的 &lt;response value="ACK"/&gt; 块。</para>
+    /// Streams exactly the declared raw bytes. XML-looking payload is still partition data.
     /// </summary>
     /// <param name="destination">The destination stream. 目标流。</param>
     /// <param name="totalBytes">The number of raw bytes to read. 待读取的原始字节数。</param>
     /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
     /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
-    private async Task ReadRawPayloadToStreamAsync(Stream destination, long totalBytes, CancellationToken cancellationToken)
+    /// <param name="progress">Optional cumulative raw bytes; not evidence of final completion.</param>
+    private async Task ReadRawPayloadToStreamAsync(Stream destination, long totalBytes, CancellationToken cancellationToken,
+        IProgress<long>? progress = null)
     {
         long bytesRead = 0;
-        var pendingXml = new List<byte>(EdlConstants.ResponseReadChunkBytes);
-
-        var totalBudgetMs = ((long)Configuration.ResponseTimeoutSeconds * 1000) + (totalBytes / 1024);
-        var start = Environment.TickCount64;
-
         var rawBuffer = new byte[EdlConstants.RawReadChunkBytes];
 
         while (bytesRead < totalBytes)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if ((Environment.TickCount64 - start) > totalBudgetMs)
-            {
-                throw new EdlException(EdlErrorCode.ReadFailed,
-                    $"Raw payload read exceeded total budget ({totalBudgetMs} ms) after {bytesRead}/{totalBytes} bytes.");
-            }
-
             byte[] chunkBuffer;
             int chunkLength;
             if (_rxBufferBytes > 0)
@@ -214,7 +224,7 @@ public sealed partial class FirehoseProtocol
             {
                 var toRead = (int)Math.Min(EdlConstants.RawReadChunkBytes, totalBytes - bytesRead);
                 var n = await _transport.ReadAsync(rawBuffer, 0, toRead, _cmdTimeoutMs, cancellationToken).ConfigureAwait(false);
-                if (n == 0)
+                if (n <= 0 || n > toRead)
                 {
                     throw new EdlException(EdlErrorCode.ReadPortTimeout,
                         $"Raw payload read timed out after {bytesRead}/{totalBytes} bytes.");
@@ -224,77 +234,15 @@ public sealed partial class FirehoseProtocol
                 chunkLength = n;
             }
 
-            var remaining = StripEmbeddedXmlLogs(chunkBuffer, chunkLength, pendingXml);
-            if (remaining.Length > 0)
-            {
-                await destination.WriteAsync(remaining, 0, remaining.Length, cancellationToken);
-                bytesRead += remaining.Length;
-            }
+            await destination.WriteAsync(chunkBuffer.AsMemory(0, chunkLength), cancellationToken);
+            bytesRead += chunkLength;
 
             if (chunkBuffer == _rxBuffer)
             {
                 ShiftRxBufferLeft(chunkLength);
             }
+            progress?.Report(bytesRead);
         }
 
-        await DrainTrailingResponseXmlAsync(cancellationToken);
-    }
-
-    /// <summary>
-    /// Strips embedded XML log blocks from a raw-data chunk. The accumulation buffer stitches
-    /// a possibly incomplete XML prefix across chunk boundaries; once the prefix is confirmed
-    /// not to be XML, everything is returned as raw data.
-    /// <para>从原始数据块中剥离嵌入式 XML 日志块。累积缓冲跨块拼接可能不完整的 XML 前缀；
-    /// 一旦确认前缀不是 XML，全部作为原始数据返回。</para>
-    /// </summary>
-    /// <param name="chunk">The raw chunk buffer. 原始数据缓冲。</param>
-    /// <param name="chunkLength">The valid byte count in the buffer. 缓冲中的有效字节数。</param>
-    /// <param name="pendingXml">The cross-chunk XML accumulation buffer. 跨块 XML 累积缓冲。</param>
-    /// <returns>The remaining raw bytes. 剥离后的有效原始字节。</returns>
-    private byte[] StripEmbeddedXmlLogs(byte[] chunk, int chunkLength, List<byte> pendingXml)
-    {
-        if (pendingXml.Count == 0 && !LooksLikeXmlHeader(chunk, chunkLength))
-        {
-            return chunk.AsSpan(0, chunkLength).ToArray();
-        }
-
-        pendingXml.AddRange(chunk.AsSpan(0, chunkLength).ToArray());
-
-        while (pendingXml.Count >= 5 &&
-               pendingXml[0] == (byte)'<' && pendingXml[1] == (byte)'?' &&
-               pendingXml[2] == (byte)'x' && pendingXml[3] == (byte)'m' && pendingXml[4] == (byte)'l')
-        {
-            var text = Encoding.UTF8.GetString([.. pendingXml]);
-            var xmlSize = FindCompleteXml(text);
-            if (xmlSize <= 0)
-            {
-                return [];
-            }
-
-            var completeXml = text[..xmlSize];
-            Log($"Skipping embedded XML block in raw data ({xmlSize} bytes).");
-            try
-            {
-                var block = FirehoseResponseParser.ParseDataBlock(completeXml);
-                foreach (var logValue in block.Logs)
-                {
-                    OnTargetLog(logValue);
-                }
-            }
-            catch (Exception ex)
-            {
-                Log($"Failed to parse embedded XML block in raw data: {ex.Message}");
-            }
-            pendingXml.RemoveRange(0, xmlSize);
-        }
-
-        if (pendingXml.Count == 0)
-        {
-            return [];
-        }
-
-        var result = pendingXml.ToArray();
-        pendingXml.Clear();
-        return result;
     }
 }

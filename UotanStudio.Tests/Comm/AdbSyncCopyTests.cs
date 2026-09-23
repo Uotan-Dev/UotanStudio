@@ -7,6 +7,81 @@ namespace UotanStudio.Tests.Comm;
 
 public sealed class AdbSyncCopyTests
 {
+    [Fact]
+    public void DirectStream_WriteBeyondPeerLimit_SplitsWithoutChangingBytes()
+    {
+        var data = new byte[145];
+        new Random(17).NextBytes(data);
+        using var transport = new FakeAdbDeviceTransport { PeerMaxPayload = 64 };
+        using var adb = new AdbSession(transport, AdbAuthentication.CreateNew());
+        adb.Connect();
+        using var stream = adb.OpenStream("shell:cat");
+
+        stream.Write(data);
+
+        Assert.Equal([64, 64, 17], transport.WrtePayloads.Select(packet => packet.Length));
+        Assert.Equal(data, transport.WrtePayloads.SelectMany(packet => packet).ToArray());
+    }
+
+    [Fact]
+    public async Task DirectStream_DelayedOkay_WaitsBeforeNextWrite()
+    {
+        var firstWrite = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var transport = new FakeAdbDeviceTransport
+        {
+            PeerMaxPayload = 64,
+            AutoAcknowledgeWrites = false,
+            OnWrte = _ => firstWrite.TrySetResult()
+        };
+        using var adb = new AdbSession(transport, AdbAuthentication.CreateNew());
+        adb.Connect();
+        using var stream = adb.OpenStream("shell:cat");
+        var writing = Task.Run(() => stream.Write(new byte[65]), TestContext.Current.CancellationToken);
+
+        await firstWrite.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.False(writing.IsCompleted);
+        Assert.Single(transport.WrtePayloads);
+        transport.Enqueue(AdbMessaging.Serialize(new AdbMessage(AdbCommand.Okay, 1, stream.LocalId)));
+        await writing.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.Equal([64, 1], transport.WrtePayloads.Select(packet => packet.Length));
+    }
+
+    [Fact]
+    public async Task DirectStream_ClosedWhileWaitingForOkay_UnblocksWriter()
+    {
+        var firstWrite = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var transport = new FakeAdbDeviceTransport
+        {
+            PeerMaxPayload = 64,
+            AutoAcknowledgeWrites = false,
+            OnWrte = _ => firstWrite.TrySetResult()
+        };
+        using var adb = new AdbSession(transport, AdbAuthentication.CreateNew());
+        adb.Connect();
+        var stream = adb.OpenStream("shell:cat");
+        var writing = Task.Run(() => stream.Write(new byte[65]), TestContext.Current.CancellationToken);
+
+        await firstWrite.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        stream.Dispose();
+
+        await Assert.ThrowsAsync<IOException>(() => writing.WaitAsync(
+            TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        Assert.Single(transport.WrtePayloads);
+    }
+
+    [Fact]
+    public async Task DirectStream_PeerCloseReply_DoesNotRepeatClose()
+    {
+        using var transport = new FakeAdbDeviceTransport();
+        using var adb = new AdbSession(transport, AdbAuthentication.CreateNew());
+        adb.Connect();
+        using var stream = adb.OpenStream("reboot:now");
+
+        Assert.Null(stream.Read(5000));
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.Equal(1, transport.CloseCount);
+    }
+
     [Theory]
     [InlineData(0, 17)]
     [InlineData(131079, 65536)]

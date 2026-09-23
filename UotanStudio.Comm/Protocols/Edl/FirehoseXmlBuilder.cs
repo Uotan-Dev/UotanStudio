@@ -87,6 +87,12 @@ public static class FirehoseXmlBuilder
     public static string BuildProgram(long sectorSizeInBytes, long numPartitionSectors,
         string filename, int physicalPartitionNumber, long startSector,
         string? label = null, int? slot = null)
+        => BuildProgram(sectorSizeInBytes, numPartitionSectors, filename, physicalPartitionNumber,
+            new FirehoseSectorAddress(startSector, false), label, slot);
+
+    internal static string BuildProgram(long sectorSizeInBytes, long numPartitionSectors,
+        string filename, int physicalPartitionNumber, FirehoseSectorAddress startSector,
+        string? label = null, int? slot = null)
     {
         var sb = new StringBuilder();
         sb.Append(EdlConstants.XmlHeader);
@@ -234,6 +240,11 @@ public static class FirehoseXmlBuilder
     /// <returns>The erase XML string. 擦除 XML 字符串。</returns>
     public static string BuildErase(long sectorSizeInBytes, long numPartitionSectors,
         int physicalPartitionNumber, long startSector, int? slot = null)
+        => BuildErase(sectorSizeInBytes, numPartitionSectors, physicalPartitionNumber,
+            new FirehoseSectorAddress(startSector, false), slot);
+
+    internal static string BuildErase(long sectorSizeInBytes, long numPartitionSectors,
+        int physicalPartitionNumber, FirehoseSectorAddress startSector, int? slot = null)
     {
         var sb = new StringBuilder();
         sb.Append(EdlConstants.XmlHeader);
@@ -298,10 +309,7 @@ public static class FirehoseXmlBuilder
     }
 
     /// <summary>
-    /// Builds the &lt;patch&gt; XML command. Returns an empty string for filename="DISK"
-    /// (the patch applies to no physical partition and must be skipped).
-    /// <para>构建 &lt;patch&gt; XML 命令。filename="DISK" 时返回空字符串（该补丁不针对任何
-    /// 物理分区，必须跳过）。</para>
+    /// Builds the &lt;patch&gt; XML command, including patches targeting physical storage via DISK.
     /// </summary>
     /// <param name="sectorSizeInBytes">The sector size in bytes. 扇区大小（字节）。</param>
     /// <param name="filename">The target filename. 目标文件名。</param>
@@ -311,16 +319,17 @@ public static class FirehoseXmlBuilder
     /// <param name="value">The value to patch (hex string). 待写入的值（十六进制字符串）。</param>
     /// <param name="sizeInBytes">The size in bytes. 大小（字节）。</param>
     /// <param name="slot">Optional slot number. 可选槽位编号。</param>
-    /// <returns>The patch XML string, or empty when the patch targets DISK. patch XML 字符串；目标为 DISK 时为空。</returns>
+    /// <returns>The patch XML string.</returns>
     public static string BuildPatch(long sectorSizeInBytes, string filename,
         int physicalPartitionNumber, long startSector,
         long byteOffset, string value, long sizeInBytes, int? slot = null)
-    {
-        if (string.Equals(filename, "DISK", StringComparison.OrdinalIgnoreCase))
-        {
-            return string.Empty;
-        }
+        => BuildPatch(sectorSizeInBytes, filename, physicalPartitionNumber,
+            new FirehoseSectorAddress(startSector, false), byteOffset, value, sizeInBytes, slot);
 
+    internal static string BuildPatch(long sectorSizeInBytes, string filename,
+        int physicalPartitionNumber, FirehoseSectorAddress startSector,
+        long byteOffset, string value, long sizeInBytes, int? slot = null)
+    {
         var sb = new StringBuilder();
         sb.Append(EdlConstants.XmlHeader);
         sb.Append(EdlConstants.DataOpen);
@@ -527,17 +536,17 @@ public static class FirehoseXmlBuilder
         sb.Append(EdlConstants.XmlHeader);
         sb.Append(EdlConstants.DataOpen);
         sb.Append("<ufs");
-        sb.Append($" BNumberLU=\"{ufs.BNumberLU}\"");
-        sb.Append($" BBootEnable=\"{ufs.BBootEnable}\"");
-        sb.Append($" BDescrAccessEn=\"{ufs.BDescrAccessEn}\"");
-        sb.Append($" BInitPowerMode=\"{ufs.BInitPowerMode}\"");
-        sb.Append($" BHighPriorityLUN=\"{ufs.BHighPriorityLUN}\"");
-        sb.Append($" BSecureRemovalType=\"{ufs.BSecureRemovalType}\"");
-        sb.Append($" BInitActiveICCLevel=\"{ufs.BInitActiveICCLevel}\"");
-        sb.Append($" WPeriodicRTCUpdate=\"{ufs.WPeriodicRTCUpdate}\"");
+        sb.Append($" bNumberLU=\"{ufs.BNumberLU}\"");
+        sb.Append($" bBootEnable=\"{ufs.BBootEnable}\"");
+        sb.Append($" bDescrAccessEn=\"{ufs.BDescrAccessEn}\"");
+        sb.Append($" bInitPowerMode=\"{ufs.BInitPowerMode}\"");
+        sb.Append($" bHighPriorityLUN=\"{ufs.BHighPriorityLUN}\"");
+        sb.Append($" bSecureRemovalType=\"{ufs.BSecureRemovalType}\"");
+        sb.Append($" bInitActiveICCLevel=\"{ufs.BInitActiveICCLevel}\"");
+        sb.Append($" wPeriodicRTCUpdate=\"{ufs.WPeriodicRTCUpdate}\"");
         if (ufs.BConfigDescrLock != 0)
         {
-            sb.Append($" BConfigDescrLock=\"{ufs.BConfigDescrLock}\"");
+            sb.Append($" bConfigDescrLock=\"{ufs.BConfigDescrLock}\"");
         }
 
         if (slot.HasValue && slot.Value != 0)
@@ -564,14 +573,14 @@ public static class FirehoseXmlBuilder
         sb.Append(EdlConstants.DataOpen);
         sb.Append("<ufs");
         sb.Append($" LUNum=\"{ufs.LUNum}\"");
-        sb.Append($" BLUEnable=\"{ufs.BLUEnable}\"");
-        sb.Append($" BBootLUNID=\"{ufs.BBootLUNID}\"");
+        sb.Append($" bLUEnable=\"{ufs.BLUEnable}\"");
+        sb.Append($" bBootLunID=\"{ufs.BBootLUNID}\"");
         sb.Append($" size_in_kb=\"{ufs.SizeInKb}\"");
-        sb.Append($" BDataReliability=\"{ufs.BDataReliability}\"");
-        sb.Append($" BLUWriteProtect=\"{ufs.BLUWriteProtect}\"");
-        sb.Append($" BMemoryType=\"{ufs.BMemoryType}\"");
-        sb.Append($" BLogicalBlockSize=\"{ufs.BLogicalBlockSize}\"");
-        sb.Append($" BProvisioningType=\"{ufs.BProvisioningType}\"");
+        sb.Append($" bDataReliability=\"{ufs.BDataReliability}\"");
+        sb.Append($" bLUWriteProtect=\"{ufs.BLUWriteProtect}\"");
+        sb.Append($" bMemoryType=\"{ufs.BMemoryType}\"");
+        sb.Append($" bLogicalBlockSize=\"{ufs.BLogicalBlockSize}\"");
+        sb.Append($" bProvisioningType=\"{ufs.BProvisioningType}\"");
         // Attribute key mirrors qdl firehose.c "wContextCapabilities" (plural -Capabilities).
         // 属性键对齐 qdl firehose.c 的 "wContextCapabilities"（复数 -Capabilities）。
         sb.Append($" wContextCapabilities=\"{ufs.WContextCapacities}\"");

@@ -33,7 +33,14 @@ public sealed class SerialTransport(
     private readonly int _dataBits = dataBits;
     private readonly StopBits _stopBits = stopBits;
     private readonly Handshake _handshake = handshake;
-    private bool _disposed;
+    private volatile bool _disposed;
+    private readonly object _lifecycleGate = new();
+    private readonly Func<SerialPort> _portFactory = static () => new SerialPort();
+
+    internal SerialTransport(string portName, Func<SerialPort> portFactory) : this(portName)
+    {
+        _portFactory = portFactory ?? throw new ArgumentNullException(nameof(portFactory));
+    }
 
     /// <summary>
     /// Enumerates the serial ports currently available on the system.
@@ -46,7 +53,7 @@ public sealed class SerialTransport(
     /// Gets a value indicating whether the serial port is open.
     /// <para>获取串口是否已打开。</para>
     /// </summary>
-    public bool IsConnected => _port != null && _port.IsOpen;
+    public bool IsConnected => _port is { IsOpen: true };
 
     /// <summary>
     /// Gets or sets the default timeout in milliseconds used when a caller omits one.
@@ -65,7 +72,7 @@ public sealed class SerialTransport(
     /// <see cref="SetBaudRate"/>).
     /// <para>获取当前生效的波特率（调用 <see cref="SetBaudRate"/> 后可能与构造时配置不同）。</para>
     /// </summary>
-    public int BaudRate => _port != null && _port.IsOpen ? _port.BaudRate : _baudRate;
+    public int BaudRate => _port is { IsOpen: true } port ? port.BaudRate : _baudRate;
 
     /// <summary>
     /// Opens the serial port. No-op if already open.
@@ -76,47 +83,58 @@ public sealed class SerialTransport(
     /// <exception cref="ArgumentException">The port configuration is invalid. <para>端口配置无效。</para></exception>
     public void Connect()
     {
-        ThrowIfDisposed();
+        lock (_lifecycleGate)
+        {
+            ThrowIfDisposed();
+            if (_port is { IsOpen: true })
+            {
+                return;
+            }
+            DisposePortOwned();
+            var port = _portFactory();
+            try
+            {
+                // Configure inside the ownership boundary: property setters can throw before Open.
+                port.PortName = PortName;
+                port.BaudRate = _baudRate;
+                port.Parity = _parity;
+                port.DataBits = _dataBits;
+                port.StopBits = _stopBits;
+                port.Handshake = _handshake;
+                port.ReadTimeout = DefaultTimeoutMs;
+                port.WriteTimeout = DefaultTimeoutMs;
+                try
+                {
+                    port.ReadBufferSize = 1048576;
+                    port.WriteBufferSize = 1048576;
+                }
+                catch (PlatformNotSupportedException)
+                {
+                }
 
-        if (_port != null && _port.IsOpen)
-        {
-            return;
+                port.Open();
+                _port = port;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw new InvalidOperationException($"Serial port {PortName} is in use.", ex);
+            }
+            catch (IOException ex)
+            {
+                throw new IOException($"Failed to open serial port {PortName}.", ex);
+            }
+            catch (ArgumentException ex)
+            {
+                throw new ArgumentException($"Invalid serial port configuration: {PortName}.", ex);
+            }
+            finally
+            {
+                if (!ReferenceEquals(_port, port))
+                {
+                    port.Dispose();
+                }
+            }
         }
-
-        var port = new SerialPort(PortName, _baudRate, _parity, _dataBits, _stopBits)
-        {
-            Handshake = _handshake,
-            ReadTimeout = DefaultTimeoutMs,
-            WriteTimeout = DefaultTimeoutMs,
-        };
-
-        try
-        {
-            port.ReadBufferSize = 1048576;
-            port.WriteBufferSize = 1048576;
-        }
-        catch (PlatformNotSupportedException)
-        {
-        }
-
-        try
-        {
-            port.Open();
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            throw new InvalidOperationException($"Serial port {PortName} is in use.", ex);
-        }
-        catch (IOException ex)
-        {
-            throw new IOException($"Failed to open serial port {PortName}.", ex);
-        }
-        catch (ArgumentException ex)
-        {
-            throw new ArgumentException($"Invalid serial port configuration: {PortName}.", ex);
-        }
-
-        _port = port;
     }
 
     /// <summary>
@@ -128,8 +146,9 @@ public sealed class SerialTransport(
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
 
-        if (_port != null && _port.IsOpen)
+        if (IsConnected)
         {
             return;
         }
@@ -143,18 +162,24 @@ public sealed class SerialTransport(
     /// </summary>
     public void Disconnect()
     {
-        if (_port != null && _port.IsOpen)
+        lock (_lifecycleGate)
         {
-            try
-            {
-                _port.Close();
-            }
-            catch
-            {
-            }
+            DisposePortOwned();
         }
+    }
 
+    private void DisposePortOwned()
+    {
+        var port = _port;
         _port = null;
+        try
+        {
+            port?.Dispose();
+        }
+        catch
+        {
+            // Preserve best-effort disconnect behavior after detaching the old instance.
+        }
     }
 
     /// <summary>
@@ -163,11 +188,11 @@ public sealed class SerialTransport(
     /// </summary>
     public void Reset()
     {
-        EnsureConnected();
+        var port = EnsureConnected();
         try
         {
-            _port!.DiscardInBuffer();
-            _port.DiscardOutBuffer();
+            port.DiscardInBuffer();
+            port.DiscardOutBuffer();
         }
         catch
         {
@@ -182,20 +207,28 @@ public sealed class SerialTransport(
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="baudRate"/> is not positive. <para>波特率非正。</para></exception>
     public void SetBaudRate(int baudRate)
     {
-        EnsureConnected();
+        lock (_lifecycleGate)
+        {
+            SetBaudRateOwned(baudRate);
+        }
+    }
+
+    private void SetBaudRateOwned(int baudRate)
+    {
+        var port = EnsureConnected();
         if (baudRate <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(baudRate), "Baud rate must be positive.");
         }
 
-        if (_port!.BaudRate == baudRate)
+        if (port.BaudRate == baudRate)
         {
             return;
         }
 
         try
         {
-            _port.BaudRate = baudRate;
+            port.BaudRate = baudRate;
             _baudRate = baudRate;
         }
         catch (ArgumentOutOfRangeException ex)
@@ -227,16 +260,21 @@ public sealed class SerialTransport(
     /// <exception cref="TimeoutException">No data arrived within the timeout. <para>超时时间内无数据到达。</para></exception>
     public int Read(byte[] buffer, int offset, int length, int timeoutMs)
     {
-        EnsureConnected();
+        var port = EnsureConnected();
+        return ReadPort(port, buffer, offset, length, timeoutMs);
+    }
+
+    private static int ReadPort(SerialPort port, byte[] buffer, int offset, int length, int timeoutMs)
+    {
         if (length <= 0)
         {
             return 0;
         }
 
-        _port!.ReadTimeout = timeoutMs;
+        port.ReadTimeout = timeoutMs;
         try
         {
-            var n = _port.Read(buffer, offset, length);
+            var n = port.Read(buffer, offset, length);
             return n > 0 ? n : 0;
         }
         catch (TimeoutException)
@@ -265,8 +303,8 @@ public sealed class SerialTransport(
     /// <returns>A task that resolves to the number of bytes read. <para>返回实际读取字节数的任务。</para></returns>
     public async Task<int> ReadAsync(byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
     {
-        EnsureConnected();
-        return length <= 0 ? 0 : await Task.Run(() => Read(buffer, offset, length, timeoutMs), cancellationToken).ConfigureAwait(false);
+        var port = EnsureConnected();
+        return length <= 0 ? 0 : await Task.Run(() => ReadPort(port, buffer, offset, length, timeoutMs), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -281,16 +319,21 @@ public sealed class SerialTransport(
     /// <exception cref="TimeoutException">The write did not complete within the timeout. <para>写入未在超时时间内完成。</para></exception>
     public long Write(byte[] data, int offset, int length, int timeoutMs)
     {
-        EnsureConnected();
+        var port = EnsureConnected();
+        return WritePort(port, data, offset, length, timeoutMs);
+    }
+
+    private static long WritePort(SerialPort port, byte[] data, int offset, int length, int timeoutMs)
+    {
         if (length <= 0)
         {
             return 0;
         }
 
-        _port!.WriteTimeout = timeoutMs;
+        port.WriteTimeout = timeoutMs;
         try
         {
-            _port.Write(data, offset, length);
+            port.Write(data, offset, length);
             return length;
         }
         catch (TimeoutException)
@@ -319,8 +362,8 @@ public sealed class SerialTransport(
     /// <returns>A task that resolves to the number of bytes written. <para>返回实际写入字节数的任务。</para></returns>
     public async Task<long> WriteAsync(byte[] data, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
     {
-        EnsureConnected();
-        return length <= 0 ? 0 : await Task.Run(() => Write(data, offset, length, timeoutMs), cancellationToken).ConfigureAwait(false);
+        var port = EnsureConnected();
+        return length <= 0 ? 0 : await Task.Run(() => WritePort(port, data, offset, length, timeoutMs), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -332,8 +375,8 @@ public sealed class SerialTransport(
     /// <returns>A stream over the serial port. <para>串口上的流。</para></returns>
     public Stream GetStream()
     {
-        EnsureConnected();
-        var stream = _port!.BaseStream;
+        var port = EnsureConnected();
+        var stream = port.BaseStream;
         stream.ReadTimeout = DefaultTimeoutMs;
         stream.WriteTimeout = DefaultTimeoutMs;
         return stream;
@@ -345,22 +388,26 @@ public sealed class SerialTransport(
     /// </summary>
     public void Dispose()
     {
-        if (_disposed)
+        lock (_lifecycleGate)
         {
-            return;
+            if (_disposed)
+            {
+                return;
+            }
+            _disposed = true;
+            DisposePortOwned();
         }
-
-        _disposed = true;
-        Disconnect();
     }
 
-    private void EnsureConnected()
+    private SerialPort EnsureConnected()
     {
         ThrowIfDisposed();
-        if (_port == null || !_port.IsOpen)
+        var port = _port;
+        if (port is not { IsOpen: true })
         {
             throw new InvalidOperationException("Serial port is not connected.");
         }
+        return port;
     }
 
     private void ThrowIfDisposed()

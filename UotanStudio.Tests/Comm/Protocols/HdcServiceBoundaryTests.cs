@@ -59,7 +59,8 @@ public sealed class HdcServiceBoundaryTests
         {
             var message = HdcDaemonCodec.Decode(packet);
             if (message.Command == HdcCommand.Handshake)
-                return [Reply(message, HdcCommand.Handshake, HdcDaemonCodec.Handshake(4, 0, "", [], "test"))];
+                return [Reply(message, HdcCommand.Handshake, HdcDaemonCodec.Handshake(4, 0, "", [], "test")),
+                    Reply(message, HdcCommand.ChannelClose, [1])];
             if (message.Command == HdcCommand.JdwpList)
             {
                 // Run without a task-start token: a starved thread pool must not cancel the task

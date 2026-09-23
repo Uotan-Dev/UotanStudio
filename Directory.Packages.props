@@ -57,6 +57,7 @@
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <!-- LZOP container parsing / zlib inflate helpers -->
     <PackageVersion Include="SharpZipLib" Version="1.4.2" />
+    <PackageVersion Include="YamlDotNet" Version="16.3.0" />
     <!-- Text diffing (line-level diff for the compare services) -->
     <PackageVersion Include="DiffPlex" Version="1.9.0" />
     <!-- Official Model Context Protocol C# SDK for the embedded MCP server -->

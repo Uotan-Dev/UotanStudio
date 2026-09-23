@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
-using System.Globalization;
 
 namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 
@@ -110,7 +109,7 @@ public sealed class FlashBundleProgress(FlashBundlePhase phase, string message, 
 /// <para>初始化 <see cref="FlashBundleOrchestrator"/> 类的新实例。</para>
 /// </remarks>
 /// <param name="session">The EDL session used for all device operations. 用于所有设备操作的 EDL 会话。</param>
-public sealed class FlashBundleOrchestrator(EdlSession session)
+public sealed partial class FlashBundleOrchestrator(EdlSession session)
 {
     private readonly EdlSession _session = session ?? throw new ArgumentNullException(nameof(session));
 
@@ -147,57 +146,93 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
 
     /// <summary>
     /// Runs a flash bundle from the specified options.
+    /// Options and selection collections are captured before progress callbacks or awaits.
+    /// Callers must not mutate collections during that initial synchronous capture.
+    /// Device phases hold one Firehose operation lease. Progress and log callbacks must not
+    /// synchronously wait for another operation on the same session.
     /// <para>根据指定选项运行刷写包。</para>
     /// </summary>
     /// <param name="options">The flash bundle options. 刷写包选项。</param>
     /// <param name="progress">Optional progress reporter. 可选的进度报告器。</param>
     /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
     /// <returns>The flash bundle result. 刷写包结果。</returns>
-    public async Task<FlashBundleResult> FlashBundleAsync(
+    public Task<FlashBundleResult> FlashBundleAsync(
         FlashBundleOptions options,
         IProgress<FlashBundleProgress>? progress,
         CancellationToken cancellationToken = default)
+        => RunBundleAsync(options, progress, false, cancellationToken);
+
+    /// <summary>
+    /// Validates sources and device ranges without program, erase, patch, wipe or provisioning.
+    /// Session initialization and storage queries are allowed and require caller authorization.
+    /// This observation does not retain a prepared plan; execution must validate again.
+    /// </summary>
+    /// <param name="options">Selected bundle inputs and policy, captured at entry.</param>
+    /// <param name="cancellationToken">Cancellation for preflight and device queries.</param>
+    /// <returns>The validation result; processed storage-operation counts remain zero.</returns>
+    public Task<FlashBundleResult> PreflightDeviceAsync(FlashBundleOptions options,
+        CancellationToken cancellationToken = default)
+        => RunBundleAsync(options, null, true, cancellationToken);
+
+    private async Task<FlashBundleResult> RunBundleAsync(FlashBundleOptions options,
+        IProgress<FlashBundleProgress>? progress, bool devicePreflight, CancellationToken cancellationToken,
+        PreparedBundle? prepared = null, bool operationOwned = false)
     {
         if (options == null)
         {
             throw new ArgumentNullException(nameof(options));
         }
 
+        options = options.Snapshot();
+        if (devicePreflight)
+        {
+            options.DryRun = true;
+        }
         var stopwatch = Stopwatch.StartNew();
         var result = new FlashBundleResult();
 
         try
         {
-            ValidateOptions(options);
-
-            RaiseProgress(progress, FlashBundlePhase.Parsing, "Parsing rawprogram XML... 解析 rawprogram XML...", 0, 0);
-            var rawProgramEntries = RawProgramParser.Parse(options.RawProgramPath);
-            ResolveSourceFiles(rawProgramEntries, options.ImageDirectory);
-            var filteredPrograms = FilterProgramEntries(rawProgramEntries, options);
-
-            List<PatchEntry>? filteredPatches = null;
-            if (!options.SkipPatch && !string.IsNullOrEmpty(options.PatchPath))
+            cancellationToken.ThrowIfCancellationRequested();
+            using var ownedPreparation = prepared is null ? PrepareBundle(options, progress, cancellationToken) : null;
+            var input = prepared ?? ownedPreparation!;
+            var filteredPrograms = input.Programs;
+            var filteredPatches = input.Patches;
+            var ufsProvision = input.Ufs;
+            var sources = input.Sources;
+            var hasSectorCommands = (!options.SkipProgram && filteredPrograms.Count > 0)
+                || filteredPatches is { Count: > 0 };
+            var preflightSectorSize = FlashBundlePreflight.SelectSectorSize(filteredPrograms, filteredPatches,
+                options, RequireFirehose().Configuration.SectorSize);
+            List<FlashBundlePreflight.StorageRange>? storageRanges = null;
+            if (preflightSectorSize > 0)
             {
-                RaiseProgress(progress, FlashBundlePhase.Parsing, "Parsing patch XML... 解析 patch XML...", 0, 0);
-                var patchEntries = PatchParser.Parse(options.PatchPath);
-                filteredPatches = FilterPatchEntries(patchEntries, options);
+                storageRanges = FlashBundlePreflight.Validate(filteredPrograms, filteredPatches, options, preflightSectorSize, cancellationToken, sources);
             }
 
-            UfsProvisionFile? ufsProvision = null;
-            if (!options.SkipUfsProvision)
+            if (options.DryRun && !devicePreflight)
             {
-                var ufsPath = ResolveUfsProvisionPath(options);
-                if (ufsPath != null)
+                if (hasSectorCommands && preflightSectorSize == 0)
                 {
-                    RaiseProgress(progress, FlashBundlePhase.Parsing, "Parsing UFS provisioning XML... 解析 UFS 配置 XML...", 0, 0);
-                    ufsProvision = UfsProvisionParser.Parse(ufsPath);
+                    throw new EdlException(EdlErrorCode.InvalidParameter,
+                        "Offline preflight requires a sector size in the manifest, configuration or explicit override.");
                 }
-            }
 
-            RaiseProgress(progress, FlashBundlePhase.Parsing, "Initializing EDL session... 初始化 EDL 会话...", 0, 0);
-            await _session.EnsureInitializedAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+                result.ProgramEntriesSkipped = filteredPrograms.Count;
+                result.PatchEntriesSkipped = filteredPatches?.Count ?? 0;
+                result.IsSuccess = true;
+                RaiseProgress(progress, FlashBundlePhase.Completed, "Offline bundle inspection completed.", 1, 1);
+                return result;
+            }
 
             var firehose = RequireFirehose();
+            using var operation = operationOwned ? null : await firehose.EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+            if (ufsProvision is not null && ufsProvision.Slot.GetValueOrDefault() != (options.Slot ?? firehose.Configuration.Slot))
+            {
+                throw new InvalidDataException("The selected UFS slot changed while the bundle waited for the device.");
+            }
+            RaiseProgress(progress, FlashBundlePhase.Parsing, "Initializing EDL session... 初始化 EDL 会话...", 0, 0);
+            await _session.InitializeOwnedAsync(null, cancellationToken).ConfigureAwait(false);
             if (options.Slot.HasValue)
             {
                 firehose.Configuration.Slot = options.Slot.Value;
@@ -208,7 +243,27 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
                 firehose.Configuration.SectorSize = options.OverrideSectorSize.Value;
             }
 
-            var sectorSize = firehose.Configuration.SectorSize > 0 ? firehose.Configuration.SectorSize : 4096;
+            var sectorSize = FlashBundlePreflight.SelectSectorSize(filteredPrograms, filteredPatches, options, firehose.Configuration.SectorSize);
+            if (hasSectorCommands && sectorSize == 0)
+            {
+                throw new EdlException(EdlErrorCode.InvalidParameter, "Cannot determine the sector size for bundle preflight.");
+            }
+
+            if (sectorSize != preflightSectorSize)
+            {
+                storageRanges = FlashBundlePreflight.Validate(filteredPrograms, filteredPatches, options, sectorSize, cancellationToken, sources);
+            }
+
+            firehose.Configuration.SectorSize = sectorSize;
+            await FlashBundlePreflight.ValidateDeviceRangesOwnedAsync(firehose, storageRanges ?? [], sectorSize, cancellationToken).ConfigureAwait(false);
+            sources?.ValidateLengths(cancellationToken);
+            if (devicePreflight)
+            {
+                result.ProgramEntriesSkipped = filteredPrograms.Count;
+                result.PatchEntriesSkipped = filteredPatches?.Count ?? 0;
+                result.IsSuccess = true;
+                return result;
+            }
             var touchedPartitions = new HashSet<int>();
 
             // ---- Program / Erase phase ---------------------------------------------
@@ -234,8 +289,8 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
                         {
                             if (!options.DryRun)
                             {
-                                var response = await _session.ErasePartitionAsync(
-                                    ParseStartSector(entry.StartSector),
+                                var response = await firehose.EraseOwnedAsync(
+                                    FirehoseSectorAddress.Parse(entry.StartSector),
                                     entry.NumPartitionSectors,
                                     entry.PhysicalPartitionNumber,
                                     cancellationToken).ConfigureAwait(false);
@@ -250,10 +305,12 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
 
                             result.EraseEntriesProcessed++;
                         }
-                        catch (Exception ex)
+                        catch (Exception ex) when (ex is not OperationCanceledException)
                         {
                             result.Errors.Add($"Erase failed for '{displayName}': {ex.Message} 擦除失败。");
                             result.ProgramEntriesSkipped++;
+                            RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, i, total);
+                            return result;
                         }
 
                         continue;
@@ -268,15 +325,18 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
                             continue;
                         }
 
-                        var bytesWritten = await FlashProgramEntryAsync(entry, sectorSize, cancellationToken).ConfigureAwait(false);
+                        var source = sources?.Get(entry) ?? throw new InvalidOperationException("The bundle source was not retained.");
+                        await FlashProgramEntryAsync(entry, source, sectorSize,
+                            bytes => result.TotalBytesWritten = checked(result.TotalBytesWritten + bytes), cancellationToken).ConfigureAwait(false);
                         result.ProgramEntriesProcessed++;
-                        result.TotalBytesWritten += bytesWritten;
                         touchedPartitions.Add(entry.PhysicalPartitionNumber);
                     }
-                    catch (Exception ex)
+                    catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         result.Errors.Add($"Program failed for '{displayName}': {ex.Message} 编程失败。");
                         result.ProgramEntriesSkipped++;
+                        RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, i, total);
+                        return result;
                     }
                 }
             }
@@ -300,10 +360,10 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
                     {
                         if (!options.DryRun)
                         {
-                            var response = await firehose.PatchAsync(
+                            var response = await firehose.PatchOwnedAsync(
                                 entry.Filename,
                                 entry.PhysicalPartitionNumber,
-                                ParseStartSector(entry.StartSector),
+                                entry.StartSector,
                                 entry.ByteOffset,
                                 entry.Value,
                                 entry.SizeInBytes,
@@ -317,10 +377,12 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
 
                         result.PatchEntriesProcessed++;
                     }
-                    catch (Exception ex)
+                    catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         result.Errors.Add($"Patch failed for '{displayName}': {ex.Message} 修补失败。");
                         result.PatchEntriesSkipped++;
+                        RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, i, total);
+                        return result;
                     }
                 }
             }
@@ -342,8 +404,8 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
                     {
                         if (!options.DryRun)
                         {
-                            var response = await firehose.WipeAsync(
-                                0, options.WipeFirstSectors, partition, cancellationToken: cancellationToken).ConfigureAwait(false);
+                            var response = await firehose.WipeOwnedAsync(
+                                0, options.WipeFirstSectors, partition, "Zeros16KB.bin", cancellationToken).ConfigureAwait(false);
                             if (!response.IsAck)
                             {
                                 throw new EdlException(EdlErrorCode.ProgramFailed,
@@ -352,10 +414,13 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
                         }
 
                         result.WipeEntriesProcessed++;
+                        result.TotalBytesWritten = checked(result.TotalBytesWritten + checked(options.WipeFirstSectors * sectorSize));
                     }
-                    catch (Exception ex)
+                    catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         result.Errors.Add($"Wipe failed for partition {partition}: {ex.Message} 擦写失败。");
+                        RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, i, targets.Length);
+                        return result;
                     }
                 }
             }
@@ -368,16 +433,7 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
                 {
                     if (!options.DryRun)
                     {
-                        var common = ufsProvision.Common is null
-                            ? new UfsCommon()
-                            : MapUfsCommon(ufsProvision.Common);
-                        var bodies = ufsProvision.Bodies.Select(MapUfsBody).ToList();
-                        var epilogue = ufsProvision.Epilogue is null
-                            ? new UfsEpilogue()
-                            : MapUfsEpilogue(ufsProvision.Epilogue);
-                        var commit = options.UfsCommit ?? ((ufsProvision.Epilogue?.Commit ?? 0) != 0);
-
-                        var response = await firehose.ProvisionUfsAsync(common, bodies, epilogue, commit, cancellationToken).ConfigureAwait(false);
+                        var response = await firehose.ProvisionUfsOwnedAsync(ufsProvision, cancellationToken).ConfigureAwait(false);
                         if (!response.IsAck)
                         {
                             throw new EdlException(EdlErrorCode.UfsProvisioningFailed,
@@ -387,16 +443,18 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
 
                     result.UfsProvisioned = true;
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     result.Errors.Add($"UFS provisioning failed: {ex.Message} UFS 配置失败。");
+                    RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, 0, 1);
+                    return result;
                 }
             }
 
             RaiseProgress(progress, FlashBundlePhase.Completed, "Flash bundle completed. 刷写包已完成。", 1, 1);
             result.IsSuccess = result.Errors.Count == 0;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             result.IsSuccess = false;
             result.Errors.Add($"Fatal error: {ex} 致命错误。");
@@ -446,8 +504,7 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
         {
             if (string.IsNullOrEmpty(entry.SourceFile) && !string.IsNullOrEmpty(entry.Filename))
             {
-                var candidate = Path.Combine(imageDirectory, entry.Filename);
-                entry.SourceFile = File.Exists(candidate) ? candidate : entry.Filename;
+                entry.SourceFile = FlashBundlePath.ResolveImage(imageDirectory, entry.Filename);
             }
         }
     }
@@ -500,17 +557,49 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
             return !File.Exists(path) ? throw new EdlException(EdlErrorCode.FileIO, $"UFS provision file not found: {path} UFS 配置文件不存在。") : path;
         }
 
-        return string.IsNullOrEmpty(options.ImageDirectory) || !Directory.Exists(options.ImageDirectory)
-            ? null
-            : Directory.EnumerateFiles(options.ImageDirectory, "*.xml", SearchOption.TopDirectoryOnly)
+        if (string.IsNullOrEmpty(options.ImageDirectory) || !Directory.Exists(options.ImageDirectory))
+        {
+            return null;
+        }
+        var candidates = Directory.EnumerateFiles(options.ImageDirectory, "*.xml", SearchOption.TopDirectoryOnly)
             .Where(f =>
             {
                 var name = Path.GetFileNameWithoutExtension(f);
                 return name.Contains("ufs", StringComparison.OrdinalIgnoreCase)
                     && name.Contains("provision", StringComparison.OrdinalIgnoreCase);
             })
-            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault();
+            .Take(2)
+            .ToArray();
+        if (candidates.Length > 1)
+        {
+            throw new InvalidDataException("Multiple UFS provisioning documents were found; select UfsProvisionPath explicitly.");
+        }
+        return candidates.Length == 0 ? null : candidates[0];
+    }
+
+    private UfsProvisionPlan PrepareUfs(UfsProvisionFile document, FlashBundleOptions options)
+    {
+        var entries = document.Entries;
+        if (entries.Count is < 3 or > 258 || entries[0] is not UfsProvisionCommon common
+            || entries[^1] is not UfsProvisionEpilogue epilogue
+            || entries.Skip(1).SkipLast(1).Any(entry => entry is not UfsProvisionBody))
+        {
+            throw new InvalidDataException("UFS provisioning requires one common entry, one or more bodies, then one epilogue.");
+        }
+        if (epilogue.Commit is not (0 or 1))
+        {
+            throw new InvalidDataException("UFS commit must be zero or one.");
+        }
+        var slot = options.Slot ?? RequireFirehose().Configuration.Slot;
+        foreach (var entry in entries)
+        {
+            if (entry.Slot < 0 || (entry.Slot != 0 && entry.Slot != slot))
+            {
+                throw new InvalidDataException("A UFS entry slot disagrees with the selected bundle slot.");
+            }
+        }
+        return UfsProvisionPlan.Prepare(MapUfsCommon(common), document.Bodies.Select(MapUfsBody).ToArray(),
+            MapUfsEpilogue(epilogue), options.UfsCommit ?? epilogue.Commit == 1, slot);
     }
 
     private static UfsCommon MapUfsCommon(UfsProvisionCommon source) => new()
@@ -546,8 +635,8 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
         LUNumToGrow = source.LUNumToGrow
     };
 
-    private async Task<long> FlashProgramEntryAsync(
-        RawProgramEntry entry, long sectorSize, CancellationToken cancellationToken)
+    private async Task FlashProgramEntryAsync(
+        RawProgramEntry entry, Stream stream, long sectorSize, Action<long> rangeCompleted, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(entry.SourceFile))
         {
@@ -555,48 +644,35 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
                 $"No source file for program entry '{entry.Label ?? entry.Filename}'. program 条目缺少源文件。");
         }
 
-        if (!File.Exists(entry.SourceFile))
-        {
-            throw new EdlException(EdlErrorCode.FileIO, $"Image file not found: {entry.SourceFile} 镜像文件不存在。");
-        }
+        var startSector = FirehoseSectorAddress.Parse(entry.StartSector);
 
-        var fileInfo = new FileInfo(entry.SourceFile);
-        var startSector = ParseStartSector(entry.StartSector);
-
-        using var stream = new FileStream(entry.SourceFile, FileMode.Open, FileAccess.Read, FileShare.Read);
+        stream.Position = 0;
         if (entry.IsSparse || IsAndroidSparse(stream))
         {
             stream.Position = 0;
-            long totalSectors;
-            try
+            if (entry.FileSectorOffset != 0)
             {
-                totalSectors = AndroidSparseImage.CountDataSectors(stream, sectorSize);
-            }
-            finally
-            {
-                stream.Position = 0;
+                throw new EdlException(EdlErrorCode.InvalidParameter, "Sparse program entries cannot use a raw source-sector offset.");
             }
 
-            if (totalSectors <= 0)
+            var response = await RequireFirehose().ProgramSparseOwnedAsync(
+                stream, startSector, entry.Filename, entry.PhysicalPartitionNumber,
+                entry.NumPartitionSectors > 0 ? entry.NumPartitionSectors : null, cancellationToken, rangeCompleted).ConfigureAwait(false);
+            if (!response.IsAck)
             {
-                throw new EdlException(EdlErrorCode.InvalidParameter,
-                    $"Sparse image contains no data chunks: {entry.SourceFile} 稀疏镜像不含数据块。");
+                throw new EdlException(EdlErrorCode.ProgramFailed,
+                    $"Sparse flash failed for '{entry.Label ?? entry.Filename}'. Response: {response.RawValue} 稀疏刷写失败。");
             }
-
-            using var rawStream = new AndroidSparseImage.SparseRawStream(stream);
-            var response = await _session.FlashPartitionAsync(
-                rawStream, startSector, totalSectors, entry.Filename, entry.PhysicalPartitionNumber, cancellationToken).ConfigureAwait(false);
-            return !response.IsAck
-                ? throw new EdlException(EdlErrorCode.ProgramFailed,
-                    $"Sparse flash failed for '{entry.Label ?? entry.Filename}'. Response: {response.RawValue} 稀疏刷写失败。")
-                : fileInfo.Length;
+            return;
         }
 
-        if (entry.FileSectorOffset > 0)
+        var sourceOffset = checked(entry.FileSectorOffset * sectorSize);
+        if (sourceOffset < 0 || sourceOffset >= stream.Length)
         {
-            stream.Position = Math.Min(entry.FileSectorOffset * sectorSize, stream.Length);
+            throw new EdlException(EdlErrorCode.InvalidParameter, "The source-sector offset is outside the image.");
         }
 
+        stream.Position = sourceOffset;
         var lengthFromOffset = stream.Length - stream.Position;
         var numSectors = entry.NumPartitionSectors > 0
             ? entry.NumPartitionSectors
@@ -604,15 +680,17 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
 
         if (numSectors <= 0)
         {
-            return 0;
+            return;
         }
 
-        var responseRaw = await _session.FlashPartitionAsync(
+        var responseRaw = await RequireFirehose().ProgramCoreAsync(
             stream, startSector, numSectors, entry.Filename, entry.PhysicalPartitionNumber, cancellationToken).ConfigureAwait(false);
-        return !responseRaw.IsAck
-            ? throw new EdlException(EdlErrorCode.ProgramFailed,
-                $"Flash failed for '{entry.Label ?? entry.Filename}'. Response: {responseRaw.RawValue} 刷写失败。")
-            : fileInfo.Length;
+        if (!responseRaw.IsAck)
+        {
+            throw new EdlException(EdlErrorCode.ProgramFailed,
+                $"Flash failed for '{entry.Label ?? entry.Filename}'. Response: {responseRaw.RawValue} 刷写失败。");
+        }
+        rangeCompleted(checked(numSectors * sectorSize));
     }
 
     private static bool IsAndroidSparse(Stream stream)
@@ -621,22 +699,13 @@ public sealed class FlashBundleOrchestrator(EdlSession session)
         try
         {
             Span<byte> magic = stackalloc byte[4];
-            return stream.Read(magic) == 4 && BinaryPrimitives.ReadUInt32LittleEndian(magic) == AndroidSparseImage.Magic;
+            return stream.Read(magic) == 4 && BinaryPrimitives.ReadUInt32LittleEndian(magic)
+                == UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.SparseFormat.SparseHeaderMagic;
         }
         finally
         {
             stream.Position = position;
         }
-    }
-
-    private static long ParseStartSector(string value)
-    {
-        return long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dec)
-            ? dec
-            : value.StartsWith("0x", StringComparison.OrdinalIgnoreCase) &&
-            long.TryParse(value[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hex)
-            ? hex
-            : throw new EdlException(EdlErrorCode.InvalidParameter, $"Invalid start_sector value: '{value}' start_sector 值无效。");
     }
 
     private static void RaiseProgress(

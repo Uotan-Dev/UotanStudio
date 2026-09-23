@@ -8,6 +8,39 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// <summary>Bounded ADB smart-socket service access through an already running local adb server.</summary>
 public sealed class AdbServerServices(string serial, string host = "127.0.0.1", int port = 5037)
 {
+    /// <summary>Lists server-managed targets without selecting a device transport.</summary>
+    public IReadOnlyList<(string Serial, string State)> ListTargets()
+    {
+        using var client = new TcpClient { NoDelay = true };
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        client.ConnectAsync(host, port, timeout.Token).AsTask().GetAwaiter().GetResult();
+        using var stream = client.GetStream();
+        stream.ReadTimeout = 10000;
+        stream.WriteTimeout = 10000;
+        Request(stream, "host:devices-l");
+        Span<byte> lengthBytes = stackalloc byte[4];
+        stream.ReadExactly(lengthBytes);
+        if (!int.TryParse(Encoding.ASCII.GetString(lengthBytes), NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture, out var length) || length is < 0 or > 1048576)
+            throw new IOException("Invalid ADB device list length.");
+        var bytes = new byte[length];
+        stream.ReadExactly(bytes);
+        var targets = new List<(string Serial, string State)>();
+        foreach (var line in Encoding.UTF8.GetString(bytes).Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var fields = line.AsSpan().Trim();
+            var serialLength = fields.IndexOfAny(' ', '\t');
+            if (serialLength <= 0) continue;
+            var serial = fields[..serialLength].ToString();
+            fields = fields[serialLength..].TrimStart();
+            var stateLength = fields.IndexOfAny(' ', '\t');
+            var state = (stateLength < 0 ? fields : fields[..stateLength]).ToString();
+            if (state.Length != 0)
+                targets.Add((serial, state));
+        }
+        return targets;
+    }
+
     /// <summary>Opens an owned byte stream to a service on the explicitly selected device.</summary>
     public Stream Open(string service)
     {

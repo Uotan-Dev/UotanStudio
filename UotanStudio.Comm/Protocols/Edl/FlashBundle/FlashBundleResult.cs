@@ -62,8 +62,10 @@ public sealed class FlashBundleResult
     public List<string> Errors { get; set; } = [];
 
     /// <summary>
-    /// Gets or sets the total number of bytes written to the device.
-    /// <para>获取或设置写入设备的总字节数。</para>
+    /// Gets or sets program payload bytes with a final device ACK, including completed sparse
+    /// extents of a later-failed entry and successful wipes. Excludes sparse holes, metadata,
+    /// erase/patch commands and unacknowledged transfers. This is not readback verification;
+    /// an interrupted transfer may have changed additional device bytes.
     /// </summary>
     public long TotalBytesWritten { get; set; }
 

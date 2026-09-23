@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Net;
 using System.Net.Sockets;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
@@ -19,6 +20,40 @@ namespace UotanStudio.Comm.Protocols.Common;
 public static class DebugBridgeRoute
 {
     private const int PositiveTtlMs = 2000;
+    private static readonly Lock StateLock = new();
+    private static readonly Dictionary<string, bool> ReportedStates = new(StringComparer.Ordinal);
+
+    /// <summary>Reports initial endpoint state and subsequent transitions for host logging; never writes to the console.</summary>
+    public static event Action<string, int, bool>? ServerAvailabilityChanged;
+
+    private static void ReportState(string host, int port, string key, bool listening)
+    {
+        var handler = ServerAvailabilityChanged;
+        if (handler is null)
+        {
+            return;
+        }
+        lock (StateLock)
+        {
+            if (ReportedStates.TryGetValue(key, out var previous) && previous == listening)
+            {
+                return;
+            }
+            if (ReportedStates.Count >= 256)
+            {
+                ReportedStates.Clear();
+            }
+            ReportedStates[key] = listening;
+        }
+        try
+        {
+            handler(host, port, listening);
+        }
+        catch
+        {
+            // Diagnostic subscribers must not change transport ownership decisions.
+        }
+    }
 
     private sealed record ProbeResult(bool Listening, long TimestampTicks);
 
@@ -36,26 +71,60 @@ public static class DebugBridgeRoute
     /// <para>Present results go through a 2-second TTL cache; refusals and other errors probe for real every time.</para>
     /// </remarks>
     public static bool IsListening(string host, int port)
+        => IsListeningAsync(host, port).GetAwaiter().GetResult();
+
+    /// <summary>Asynchronously probes endpoint ownership without treating timeout or protocol failure as absence.</summary>
+    public static async Task<bool> IsListeningAsync(string host, int port, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var key = string.Concat(host, ":", port.ToString(CultureInfo.InvariantCulture));
         if (PositiveCache.TryGetValue(key, out var cached))
         {
             if (Environment.TickCount64 - cached.TimestampTicks < PositiveTtlMs)
             {
+                ReportState(host, port, key, cached.Listening);
                 return cached.Listening;
             }
             PositiveCache.TryRemove(key, out _);
         }
 
-        using var client = new TcpClient();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-        try
+        // SocketAsyncEventArgs exposes refusal as a result rather than a thrown exception,
+        // avoiding debugger first-chance noise during ordinary server discovery.
+        using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+        using var args = new SocketAsyncEventArgs
         {
-            client.ConnectAsync(host, port, timeout.Token).AsTask().GetAwaiter().GetResult();
-            PositiveCache[key] = new ProbeResult(true, Environment.TickCount64);
-            return true;
+            RemoteEndPoint = IPAddress.TryParse(host, out var address)
+                ? new IPEndPoint(address, port) : new DnsEndPoint(host, port)
+        };
+        var completion = new TaskCompletionSource<SocketError>(TaskCreationOptions.RunContinuationsAsynchronously);
+        args.Completed += (_, result) => completion.TrySetResult(result.SocketError);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(3));
+        using var cancellation = timeout.Token.Register(() => Socket.CancelConnectAsync(args));
+        timeout.Token.ThrowIfCancellationRequested();
+        if (!socket.ConnectAsync(args))
+        {
+            completion.TrySetResult(args.SocketError);
         }
-        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.ConnectionRefused) { return false; }
+        // Cancellation can precede submission; cancel again after submission to close that race.
+        if (timeout.IsCancellationRequested)
+        {
+            Socket.CancelConnectAsync(args);
+        }
+        var error = await completion.Task.ConfigureAwait(false);
+        timeout.Token.ThrowIfCancellationRequested();
+        if (error == SocketError.ConnectionRefused)
+        {
+            ReportState(host, port, key, false);
+            return false;
+        }
+        if (error != SocketError.Success)
+        {
+            throw new SocketException((int)error);
+        }
+        PositiveCache[key] = new ProbeResult(true, Environment.TickCount64);
+        ReportState(host, port, key, true);
+        return true;
     }
 
     /// <summary>
@@ -87,25 +156,44 @@ public static class DebugBridgeRoute
         return result;
     }
 
+    /// <summary>Discards endpoint probe results after an explicit server lifecycle operation.</summary>
+    public static void InvalidateProbe(string host, int port)
+    {
+        var key = string.Concat(host, ":", port.ToString(CultureInfo.InvariantCulture));
+        PositiveCache.TryRemove(key, out _);
+        _scopeCache?.TryRemove(key, out _);
+    }
+
     /// <summary>Chooses a server even when the requested target is missing or unauthorized; those errors must not open USB.</summary>
-    public static bool UseAdbServer() => Probe("127.0.0.1", 5037);
+    public static bool UseAdbServer() => Probe(DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort);
 
     /// <summary>Checks the configured HDC endpoint on every new operation.</summary>
     public static bool UseHdcServer(string host = "127.0.0.1", int? port = null)
         => Probe(host, port ?? HdcServerClient.DefaultServerPort);
 
-    /// <summary>Rejects raw debug USB access while a server owns the protocol.</summary>
-    public static void RequireDirectUsb(byte? interfaceClass, byte? subclass, byte? protocol)
+    /// <summary>Checks ADB ownership by exact serial; unknown identities remain protected when targets exist.</summary>
+    public static bool AdbServerOwns(string? serial, string host = "127.0.0.1", int port = 5037)
+    {
+        if (!Probe(host, port)) return false;
+        var targets = new AdbServerServices(string.Empty, host, port).ListTargets();
+        return string.IsNullOrWhiteSpace(serial)
+            ? targets.Count != 0
+            : targets.Any(target => string.Equals(target.Serial, serial, StringComparison.Ordinal));
+    }
+
+    /// <summary>Rejects raw debug USB access when the selected interface belongs to a server target.</summary>
+    public static void RequireDirectUsb(byte? interfaceClass, byte? subclass, byte? protocol,
+        string? serial = null)
     {
         if (interfaceClass != 0xff || protocol != 1) return;
-        bool present = subclass switch { 0x42 => UseAdbServer(), 0x50 => UseHdcServer(), _ => false };
+        bool present = subclass switch { 0x42 => AdbServerOwns(serial), 0x50 => UseHdcServer(), _ => false };
         if (present) throw new IOException("A debug bridge server is running; use its target service instead of opening USB.");
     }
 
-    /// <summary>Creates a routed ADB session; the direct factory is invoked only when the server is absent.</summary>
+    /// <summary>Routes exact server targets through smart sockets and other USB identities through the direct factory.</summary>
     public static AdbSession? OpenAdb(string serial, Func<AdbSession?> openDirect,
         string host = "127.0.0.1", int port = 5037)
-        => Probe(host, port) ? new AdbSession(new AdbServerServices(serial, host, port)) : openDirect();
+        => AdbServerOwns(serial, host, port) ? new AdbSession(new AdbServerServices(serial, host, port)) : openDirect();
 
     /// <summary>Creates a routed HDC session without relying on a discovery key prefix.</summary>
     public static HdcSession OpenHdc(string serial, Func<HdcSession> openDirect,

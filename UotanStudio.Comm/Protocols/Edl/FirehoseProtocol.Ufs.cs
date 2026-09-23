@@ -19,54 +19,43 @@ public sealed partial class FirehoseProtocol
     /// <returns>The epilogue Firehose response. 结语的 Firehose 响应。</returns>
     public async Task<FirehoseResponse> ProvisionUfsAsync(UfsCommon common, IReadOnlyList<UfsBody> bodies, UfsEpilogue epilogue, bool commit = false, CancellationToken cancellationToken = default)
     {
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        return await ProvisionUfsOwnedAsync(common, bodies, epilogue, commit, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Provisions UFS while the caller holds the operation lease.</summary>
+    internal Task<FirehoseResponse> ProvisionUfsOwnedAsync(UfsCommon common, IReadOnlyList<UfsBody> bodies,
+        UfsEpilogue epilogue, bool commit, CancellationToken cancellationToken)
+    {
         ThrowIfDisposed();
-        if (common == null)
-        {
-            throw new ArgumentNullException(nameof(common));
-        }
+        cancellationToken.ThrowIfCancellationRequested();
+        var plan = UfsProvisionPlan.Prepare(common, bodies, epilogue, commit, EffectiveSlot);
+        return ProvisionUfsOwnedAsync(plan, cancellationToken);
+    }
 
-        if (bodies == null)
+    /// <summary>Sends a preflighted immutable command snapshot while the caller owns the operation lease.</summary>
+    internal async Task<FirehoseResponse> ProvisionUfsOwnedAsync(UfsProvisionPlan plan, CancellationToken cancellationToken)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(plan);
+        FirehoseResponse? last = null;
+        for (var index = 0; index < plan.Commands.Count; index++)
         {
-            throw new ArgumentNullException(nameof(bodies));
-        }
-
-        if (epilogue == null)
-        {
-            throw new ArgumentNullException(nameof(epilogue));
-        }
-
-        Log("Starting UFS provisioning...");
-        var slot = EffectiveSlot;
-
-        Log("Sending UFS common configuration...");
-        var commonResponse = await SendCommandAndWaitResponseAsync(FirehoseXmlBuilder.BuildUfsCommon(common, slot), cancellationToken);
-        if (!commonResponse.IsAck)
-        {
-            throw new EdlException(EdlErrorCode.UfsProvisioningFailed,
-                $"UFS common configuration failed: {commonResponse.RawValue}");
-        }
-
-        foreach (var body in bodies)
-        {
-            Log($"Sending UFS body for LUN {body.LUNum}...");
-            var bodyResponse = await SendCommandAndWaitResponseAsync(FirehoseXmlBuilder.BuildUfsBody(body, slot), cancellationToken);
-            if (!bodyResponse.IsAck)
+            cancellationToken.ThrowIfCancellationRequested();
+            Log($"Sending UFS provisioning command {index + 1}/{plan.Commands.Count}.");
+            last = await SendCommandAndWaitResponseAsync(plan.Commands[index], cancellationToken).ConfigureAwait(false);
+            if (last.IsRawMode)
+            {
+                _faulted = true;
+                throw new EdlException(EdlErrorCode.UfsProvisioningFailed, "UFS provisioning unexpectedly entered raw mode.");
+            }
+            if (!last.IsAck)
             {
                 throw new EdlException(EdlErrorCode.UfsProvisioningFailed,
-                    $"UFS body LUN {body.LUNum} failed: {bodyResponse.RawValue}");
+                    $"UFS provisioning command {index + 1} failed: {last.RawValue}");
             }
         }
-
-        Log("Sending UFS epilogue...");
-        var epilogueResponse = await SendCommandAndWaitResponseAsync(FirehoseXmlBuilder.BuildUfsEpilogue(epilogue, commit, slot), cancellationToken);
-        if (!epilogueResponse.IsAck)
-        {
-            throw new EdlException(EdlErrorCode.UfsProvisioningFailed,
-                $"UFS epilogue failed: {epilogueResponse.RawValue}");
-        }
-
-        Log("UFS provisioning succeeded.");
-        return epilogueResponse;
+        return last ?? throw new InvalidOperationException("The UFS plan contains no commands.");
     }
 
     /// <summary>
@@ -79,7 +68,7 @@ public sealed partial class FirehoseProtocol
     /// <returns>The Firehose response. Firehose 响应。</returns>
     public async Task<FirehoseResponse> UfsResetAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
         Log("Sending <ufs> reset (commit=0)");
         return await SendCommandAndWaitResponseAsync(FirehoseXmlBuilder.BuildUfsReset(EffectiveSlot), cancellationToken);
     }

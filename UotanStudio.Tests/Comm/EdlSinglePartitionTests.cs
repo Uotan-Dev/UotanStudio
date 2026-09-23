@@ -99,6 +99,8 @@ public class EdlSinglePartitionTests
         Assert.NotNull(boot);
 
         var transport = new FakeCommTransport();
+        transport.Enqueue(StorageReply(4096, 1048576));
+        transport.Enqueue("<data><response value=\"ACK\" rawmode=\"true\"/></data>");
         transport.Enqueue(AckXml);
         var firehose = new FirehoseProtocol(transport, new FirehoseConfiguration
         {
@@ -118,7 +120,7 @@ public class EdlSinglePartitionTests
         Assert.DoesNotContain("recovery.img", allWrites, StringComparison.Ordinal);
 
         // The raw payload written after the program XML is exactly the boot image bytes.
-        Assert.Equal(bootImage, transport.Writes[1]);
+        Assert.Equal(bootImage, transport.Writes[2]);
     }
 
     [Fact]
@@ -140,6 +142,136 @@ public class EdlSinglePartitionTests
 
         Assert.False(result.Success);
         Assert.Contains("rawprogram", result.Summary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData(-1L)]
+    [InlineData(1L)]
+    [InlineData(2L)]
+    [InlineData(long.MaxValue)]
+    public async Task FlashEdlPartitionAsync_InvalidSourceOffset_RejectsBeforeWriting(long offset)
+    {
+        using var dir = new TempDirectory();
+        dir.WriteBytes("boot.img", new byte[512]);
+        using var transport = new ScriptedCommTransport();
+        using var firehose = new FirehoseProtocol(transport, new FirehoseConfiguration { SectorSize = 512 });
+        var entry = new RawProgramEntry
+        {
+            Filename = "boot.img",
+            StartSector = "0",
+            FileSectorOffset = offset,
+            NumPartitionSectors = 1
+        };
+
+        if (offset == long.MaxValue)
+        {
+            await Assert.ThrowsAsync<OverflowException>(() => FlashService.Default.FlashEdlPartitionAsync(
+                firehose, entry, dir.Path, null, TestContext.Current.CancellationToken));
+        }
+        else
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => FlashService.Default.FlashEdlPartitionAsync(
+                firehose, entry, dir.Path, null, TestContext.Current.CancellationToken));
+        }
+
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public async Task FlashEdlPartitionAsync_ValidOffsetAndDiskRelativeTarget_WritesSelectedSourceRange()
+    {
+        using var dir = new TempDirectory();
+        var expected = Enumerable.Repeat((byte)0x42, 512).ToArray();
+        dir.WriteBytes("boot.img", [.. new byte[512], .. expected]);
+        using var transport = new ScriptedCommTransport();
+        transport.OnWrite = _ => [Encoding.UTF8.GetBytes(transport.Writes.Count switch
+        {
+            1 => StorageReply(512, 1024),
+            2 => "<data><response value='ACK' rawmode='true'/></data>",
+            _ => AckXml
+        })];
+        using var firehose = new FirehoseProtocol(transport, new FirehoseConfiguration { SectorSize = 512 });
+        var entry = new RawProgramEntry
+        {
+            Filename = "boot.img",
+            StartSector = "NUM_DISK_SECTORS-1.",
+            FileSectorOffset = 1,
+            NumPartitionSectors = 1
+        };
+
+        var result = await FlashService.Default.FlashEdlPartitionAsync(
+            firehose, entry, dir.Path, null, TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success);
+        Assert.Contains("start_sector=\"NUM_DISK_SECTORS-1.\"", Encoding.UTF8.GetString(transport.Writes[1]), StringComparison.Ordinal);
+        Assert.Equal(expected, transport.Writes[2]);
+        Assert.Equal(3, transport.Writes.Count);
+    }
+
+    [Theory]
+    [InlineData(512, 1)]
+    [InlineData(4096, 1024)]
+    public async Task FlashEdlPartitionAsync_IncompatibleGeometry_RejectsBeforeProgram(int blockSize, int blocks)
+    {
+        using var dir = new TempDirectory();
+        dir.WriteBytes("boot.img", new byte[1024]);
+        using var transport = new ScriptedCommTransport();
+        transport.OnWrite = _ => [Encoding.UTF8.GetBytes(StorageReply(blockSize, blocks))];
+        using var firehose = new FirehoseProtocol(transport, new FirehoseConfiguration { SectorSize = 512 });
+        var entry = new RawProgramEntry { Filename = "boot.img", StartSector = "0", NumPartitionSectors = 2 };
+
+        await Assert.ThrowsAnyAsync<Exception>(() => FlashService.Default.FlashEdlPartitionAsync(
+            firehose, entry, dir.Path, null, TestContext.Current.CancellationToken));
+
+        Assert.Single(transport.Writes);
+        Assert.Contains("<getstorageinfo", Encoding.UTF8.GetString(transport.Writes[0]), StringComparison.Ordinal);
+        Assert.Equal(512, firehose.Configuration.SectorSize);
+    }
+
+    [Fact]
+    public async Task FlashEdlPartitionAsync_ConflictingManifest_RejectsWithoutChangingConfiguration()
+    {
+        using var dir = new TempDirectory();
+        dir.WriteBytes("boot.img", new byte[4096]);
+        using var transport = new ScriptedCommTransport();
+        using var firehose = new FirehoseProtocol(transport, new FirehoseConfiguration { SectorSize = 512 });
+        var entry = new RawProgramEntry
+        {
+            Filename = "boot.img",
+            StartSector = "0",
+            NumPartitionSectors = 1,
+            SectorSizeInBytes = 4096
+        };
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => FlashService.Default.FlashEdlPartitionAsync(
+            firehose, entry, dir.Path, null, TestContext.Current.CancellationToken));
+
+        Assert.Empty(transport.Writes);
+        Assert.Equal(512, firehose.Configuration.SectorSize);
+    }
+
+    private static string StorageReply(int blockSize, int blocks) =>
+        $$$"""<data><log value='{"storage_info":{"block_size":{{{blockSize}}},"total_blocks":{{{blocks}}}}}'/><response value="ACK" rawmode="false"/></data>""";
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("NUM_DISK_SECTORS-1.")]
+    public async Task FlashEdlPartitionAsync_SparseExceedsDeviceCapacity_RejectsBeforeProgram(string start)
+    {
+        using var dir = new TempDirectory();
+        // Two logical sectors in one DONT_CARE chunk; the target has only one sector.
+        dir.WriteBytes("boot.img", Convert.FromHexString(
+            "3AFF26ED010000001C000C0000020000020000000100000000000000C3CA0000020000000C000000"));
+        using var transport = new ScriptedCommTransport();
+        transport.OnWrite = _ => [Encoding.UTF8.GetBytes(StorageReply(512, 1))];
+        using var firehose = new FirehoseProtocol(transport, new FirehoseConfiguration { SectorSize = 512 });
+        var entry = new RawProgramEntry { Filename = "boot.img", StartSector = start };
+
+        await Assert.ThrowsAnyAsync<Exception>(() => FlashService.Default.FlashEdlPartitionAsync(
+            firehose, entry, dir.Path, null, TestContext.Current.CancellationToken));
+
+        Assert.Single(transport.Writes);
+        Assert.Contains("<getstorageinfo", Encoding.UTF8.GetString(transport.Writes[0]), StringComparison.Ordinal);
     }
 
     private static int CountOccurrences(string haystack, string needle)

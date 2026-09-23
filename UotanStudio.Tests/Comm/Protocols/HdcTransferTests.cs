@@ -203,8 +203,10 @@ public sealed class HdcTransferTests
             if (message.Command is HdcCommand.AppCheck or HdcCommand.FileCheck or HdcCommand.ForwardCheck)
                 Assert.Contains(message.ChannelId, slaveTasks);
             if (message.Command == HdcCommand.ChannelClose) slaveTasks.Remove(message.ChannelId);
+            if (message.Command == HdcCommand.ChannelClose && message.ChannelId == 0) return [];
             return message.Command == HdcCommand.Handshake
-                ? [HdcDaemonCodec.Encode(new(HdcCommand.Handshake, 0, 0, HdcDaemonCodec.Handshake(4, 0, "", [], "test")))]
+                ? [HdcDaemonCodec.Encode(new(HdcCommand.Handshake, 0, 0, HdcDaemonCodec.Handshake(4, 0, "", [], "test"))),
+                    HdcDaemonCodec.Encode(new(HdcCommand.ChannelClose, 0, 0, [1]))]
                 : handler(message);
         };
         var session = new HdcSession(transport, HdcTestKeys.CreateAuthentication());

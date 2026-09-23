@@ -120,7 +120,8 @@ public sealed class AdbSession : IProtocolSession
     {
         ThrowIfDisposed();
         Connection.Connect();
-        Connection.WaitForPeer(10000);
+        if (!Connection.WaitForPeer(10000))
+            throw new TimeoutException("ADB peer did not complete the connection handshake.");
     }
 
     /// <summary>
@@ -132,7 +133,8 @@ public sealed class AdbSession : IProtocolSession
     {
         ThrowIfDisposed();
         await Connection.ConnectAsync(cancellationToken).ConfigureAwait(false);
-        Connection.WaitForPeer(10000);
+        if (!await Task.Run(() => Connection.WaitForPeer(10000, cancellationToken), cancellationToken).ConfigureAwait(false))
+            throw new TimeoutException("ADB peer did not complete the connection handshake.");
     }
 
     /// <summary>

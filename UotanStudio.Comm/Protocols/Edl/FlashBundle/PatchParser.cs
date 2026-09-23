@@ -24,7 +24,7 @@ public static class PatchParser
 
         try
         {
-            var doc = XDocument.Load(filePath);
+            var doc = FlashBundleXml.Load(filePath);
             return ParseDocument(doc);
         }
         catch (EdlException)
@@ -53,7 +53,7 @@ public static class PatchParser
 
         try
         {
-            var doc = XDocument.Load(stream);
+            var doc = FlashBundleXml.Load(stream);
             return ParseDocument(doc);
         }
         catch (EdlException)

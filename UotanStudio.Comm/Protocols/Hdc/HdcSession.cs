@@ -11,6 +11,7 @@ public sealed class HdcSession : IProtocolSession
 {
     private bool _disposed;
     private bool _isLease;
+    private Action? _releaseLease;
     private readonly HdcServerClient? _server;
     private readonly string? _connectKey;
     private readonly HdcConnection? _connection;
@@ -22,14 +23,19 @@ public sealed class HdcSession : IProtocolSession
         _connectKey = connectKey;
     }
 
-    private HdcSession(HdcConnection connection) { _connection = connection; _isLease = true; }
+    private HdcSession(HdcConnection connection, Action? releaseLease)
+    {
+        _connection = connection;
+        _isLease = true;
+        _releaseLease = releaseLease;
+    }
 
     /// <summary>Creates a non-owning view of an authenticated direct connection. The owner must outlive its leases.</summary>
-    public HdcSession CreateLease()
+    public HdcSession CreateLease(Action? releaseLease = null)
     {
         ThrowIfDisposed();
         if (!IsConnected || _connection is null) throw new InvalidOperationException("An authenticated direct connection is required.");
-        return new HdcSession(_connection);
+        return new HdcSession(_connection, releaseLease);
     }
 
     /// <summary>
@@ -207,5 +213,6 @@ public sealed class HdcSession : IProtocolSession
         _disposed = true;
         if (!_isLease) _connection?.Dispose();
         _server?.Dispose();
+        Interlocked.Exchange(ref _releaseLease, null)?.Invoke();
     }
 }

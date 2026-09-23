@@ -15,7 +15,7 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// <param name="firehoseConfig">Optional Firehose configuration. 可选的 Firehose 配置。</param>
 public sealed class EdlSession(ICommTransport transport, FirehoseConfiguration? firehoseConfig = null) : IProtocolSession
 {
-    private bool _disposed;
+    private volatile bool _disposed;
 
     /// <summary>
     /// Gets the protocol name.
@@ -33,7 +33,7 @@ public sealed class EdlSession(ICommTransport transport, FirehoseConfiguration? 
     /// Gets whether the session is connected and ready.
     /// <para>获取会话是否已连接并就绪。</para>
     /// </summary>
-    public bool IsConnected => !_disposed;
+    public bool IsConnected => !_disposed && Transport.IsConnected && Firehose?.RequiresReconnect != true;
 
     /// <summary>
     /// Gets whether Firehose has been configured.
@@ -62,6 +62,8 @@ public sealed class EdlSession(ICommTransport transport, FirehoseConfiguration? 
     /// <summary>
     /// Performs Sahara handshake (if needed) and Firehose configure.
     /// <para>执行 Sahara 握手（如需要）和 Firehose 配置。</para>
+    /// Concurrent callers share the completed initialization. An initialized session is not
+    /// handshaken again; an uncertain failed initialization requires a new session.
     /// </summary>
     /// <param name="programmerImage">Optional programmer image stream. 可选的编程器镜像流。</param>
     /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
@@ -69,12 +71,32 @@ public sealed class EdlSession(ICommTransport transport, FirehoseConfiguration? 
     public async Task InitializeAsync(Stream? programmerImage = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
+        using var operation = await Firehose!.EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        await InitializeOwnedAsync(programmerImage, cancellationToken).ConfigureAwait(false);
+    }
 
-        Sahara = new SaharaProtocol(Transport);
-        await Sahara.HandshakeAsync(programmerImage, cancellationToken: cancellationToken);
+    /// <summary>Initializes while the caller holds this session's Firehose operation lease.</summary>
+    internal async Task InitializeOwnedAsync(Stream? programmerImage, CancellationToken cancellationToken)
+    {
+        ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
+        if (IsConfigured)
+        {
+            return;
+        }
 
-        await Firehose!.ConfigureAsync(cancellationToken: cancellationToken);
-        IsConfigured = true;
+        try
+        {
+            Sahara = new SaharaProtocol(Transport);
+            await Sahara.HandshakeAsync(programmerImage, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await Firehose!.ConfigureCoreAsync(30, cancellationToken).ConfigureAwait(false);
+            IsConfigured = true;
+        }
+        catch
+        {
+            Firehose!.Invalidate();
+            throw;
+        }
     }
 
     /// <summary>
@@ -86,6 +108,8 @@ public sealed class EdlSession(ICommTransport transport, FirehoseConfiguration? 
     /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
     public async Task EnsureInitializedAsync(Stream? programmerImage = null, CancellationToken cancellationToken = default)
     {
+        ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
         if (!IsConfigured)
         {
             await InitializeAsync(programmerImage, cancellationToken);
@@ -165,6 +189,11 @@ public sealed class EdlSession(ICommTransport transport, FirehoseConfiguration? 
         if (_disposed)
         {
             throw new ObjectDisposedException(nameof(EdlSession));
+        }
+
+        if (Firehose?.RequiresReconnect == true)
+        {
+            throw new EdlException(EdlErrorCode.ConnectionLost, "The EDL session requires reconnection.");
         }
     }
 

@@ -188,12 +188,13 @@ public class FirehoseConfiguration
     public int ConfigureMaxConsecutiveTimeouts { get; set; } = 3;
 
     /// <summary>
-    /// Gets or sets the budget (ms) for verifying that a power reset actually took effect by
-    /// reading target logs until the device disappears (0 = disabled).
-    /// <para>获取或设置通过读取目标日志直到设备消失来验证电源复位是否生效的预算（毫秒）
-    /// （0 = 禁用）。</para>
+    /// Gets or sets the budget in milliseconds for observing transport disconnection after
+    /// a power ACK (0 disables observation). Disconnection does not prove successful boot.
     /// </summary>
     public int PowerResetVerifyTimeoutMs { get; set; } = EdlConstants.PowerResetVerifyTimeoutMs;
+
+    /// <summary>Gets or sets the timeout in milliseconds for the power command's actual response.</summary>
+    public int PowerResponseTimeoutMs { get; set; } = EdlConstants.PowerResponseTimeoutMs;
 
     /// <summary>
     /// Gets or sets an explicit write (ZLP) timeout in milliseconds (0 = per-storage default).
@@ -226,6 +227,9 @@ public class FirehoseConfiguration
 /// Implements the Firehose protocol: configure, program, erase, read, memory, power and UFS
 /// provisioning operations.
 /// <para>实现 Firehose 协议：配置、编程、擦除、读取、内存、电源与 UFS provisioning 操作。</para>
+/// Operations on one instance are serialized through their final response. Do not modify
+/// the configuration, share the transport with another protocol instance, or synchronously
+/// wait for another operation from a log callback while an operation is in progress.
 /// </summary>
 /// <remarks>
 /// Initializes a new instance of the <see cref="FirehoseProtocol"/> class.
@@ -234,13 +238,18 @@ public class FirehoseConfiguration
 /// <param name="transport">The device transport. 设备传输。</param>
 /// <param name="config">Optional Firehose configuration. 可选的 Firehose 配置。</param>
 /// <param name="timeoutMs">Optional per-read command timeout in milliseconds. 可选的单次读取命令超时（毫秒）。</param>
-public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseConfiguration? config = null, int? timeoutMs = null)
+public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseConfiguration? config = null, int? timeoutMs = null) : IDisposable
 {
     private readonly ICommTransport _transport = transport ?? throw new ArgumentNullException(nameof(transport));
     private readonly int _cmdTimeoutMs = timeoutMs ?? EdlConstants.DefaultCommandTimeoutMs;
     private readonly byte[] _rxBuffer = new byte[4 * 1024];
+    private readonly SemaphoreSlim _operationGate = new(1, 1);
     private int _rxBufferBytes;
-    private bool _disposed;
+    private volatile bool _disposed;
+    private volatile bool _faulted;
+
+    /// <summary>Gets whether an uncertain transfer or acknowledged power command requires a new device session.</summary>
+    public bool RequiresReconnect => _faulted;
 
     /// <summary>
     /// Gets the current configuration.
@@ -270,10 +279,14 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <exception cref="EdlException">Thrown when configure fails or the device disconnects. 配置失败或设备断开时抛出。</exception>
     public async Task<FirehoseResponse> ConfigureAsync(int maxRetries = 30, CancellationToken cancellationToken = default)
     {
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        return await ConfigureCoreAsync(maxRetries, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Configures an already-owned transport; the caller must hold the operation lease.</summary>
+    internal async Task<FirehoseResponse> ConfigureCoreAsync(int maxRetries, CancellationToken cancellationToken)
+    {
         ThrowIfDisposed();
-
-        var maxConsecutiveTimeouts = Configuration.ConfigureMaxConsecutiveTimeouts;
-
         for (var attempt = 0; attempt < maxRetries; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -298,20 +311,14 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             }
             catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.TransportTimeout or EdlErrorCode.ReadPortTimeout)
             {
-                if (maxConsecutiveTimeouts > 0 && attempt + 1 >= maxConsecutiveTimeouts)
-                {
-                    throw new EdlException(EdlErrorCode.ConnectionLost,
-                        $"Configure timed out {attempt + 1} consecutive times; device disconnected.");
-                }
-
-                continue;
+                throw new EdlException(EdlErrorCode.ConnectionLost,
+                    "Configure timed out; reconnect rather than reusing a potentially delayed acknowledgement.", ex);
             }
 
             if (response.IsRawMode)
             {
-                Log("Device entered raw mode after configure. Draining pending data...");
-                await DrainPendingDataAsync(cancellationToken);
-                continue;
+                _faulted = true;
+                throw new EdlException(EdlErrorCode.ConfigureFailed, "Configure unexpectedly entered raw mode.");
             }
 
             if (!response.IsAck)
@@ -328,11 +335,12 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                     }
                     catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.TransportTimeout or EdlErrorCode.ReadPortTimeout)
                     {
-                        continue;
+                        throw new EdlException(EdlErrorCode.ConnectionLost, "Configure renegotiation timed out; reconnect.", ex);
                     }
 
-                    if (!response.IsAck)
+                    if (!response.IsAck || response.IsRawMode)
                     {
+                        _faulted = response.IsRawMode;
                         throw new EdlException(EdlErrorCode.ConfigureFailed,
                             $"Firehose configure failed. Response: {response.RawValue}");
                     }
@@ -370,7 +378,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
             if (Configuration.AutoDetectSectorSize && Configuration.SectorSize == 0)
             {
-                await AutoDetectSectorSizeAsync(cancellationToken);
+                await AutoDetectSectorSizeCoreAsync(cancellationToken);
             }
             else if (Configuration.SectorSize == 0)
             {
@@ -394,6 +402,12 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
     public async Task AutoDetectSectorSizeAsync(CancellationToken cancellationToken = default)
     {
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        await AutoDetectSectorSizeCoreAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task AutoDetectSectorSizeCoreAsync(CancellationToken cancellationToken)
+    {
         ThrowIfDisposed();
         if (Configuration.StorageType == FirehoseStorageType.Nand)
         {
@@ -403,8 +417,8 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         long sectorSize = 0;
         try
         {
-            var storageInfo = await GetStorageInfoAsync(0, cancellationToken);
-            if (storageInfo.IsAck && storageInfo.GetInt64("sector_size") is long detected && detected > 0)
+            var storageInfo = await GetStorageInfoCoreAsync(0, cancellationToken);
+            if (storageInfo.IsAck && (storageInfo.StorageGeometry?.SectorSize ?? storageInfo.GetInt64("sector_size")) is long detected && detected > 0)
             {
                 sectorSize = detected;
                 Log($"Sector size from getstorageinfo: {sectorSize}");
@@ -414,7 +428,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                 Log($"getstorageinfo returned no usable sector size (IsAck={storageInfo.IsAck}); using default.");
             }
         }
-        catch (EdlException ex)
+        catch (EdlException ex) when (!RequiresReconnect)
         {
             Log($"getstorageinfo failed ({ex.Message}); using default sector size.");
         }
@@ -440,12 +454,24 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
     /// <param name="responseTimeoutMs">Optional response timeout in milliseconds. 可选的响应超时（毫秒）。</param>
     /// <param name="writeTimeoutMs">Optional write timeout in milliseconds. 可选的写入超时（毫秒）。</param>
+    /// <param name="logObserver">Optional bounded collector for logs belonging to this command.</param>
     /// <returns>The Firehose response. Firehose 响应。</returns>
-    private async Task<FirehoseResponse> SendCommandAndWaitResponseAsync(string xml, CancellationToken cancellationToken, int? responseTimeoutMs = null, int? writeTimeoutMs = null)
+    private async Task<FirehoseResponse> SendCommandAndWaitResponseAsync(string xml, CancellationToken cancellationToken,
+        int? responseTimeoutMs = null, int? writeTimeoutMs = null, Action<string>? logObserver = null)
     {
-        var xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
-        await WriteDataAsync(xmlBytes, writeTimeoutMs ?? GetZlpTimeoutMs(), cancellationToken);
-        return await ReceiveResponseAsync(cancellationToken, responseTimeoutMs);
+        ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
+            await WriteDataAsync(xmlBytes, writeTimeoutMs ?? GetZlpTimeoutMs(), cancellationToken);
+            return await ReceiveResponseAsync(cancellationToken, responseTimeoutMs, logObserver);
+        }
+        catch
+        {
+            _faulted = true;
+            throw;
+        }
     }
 
     /// <summary>
@@ -485,12 +511,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     }
 
     /// <summary>
-    /// Gets the effective maximum payload size from the target (at least 4096 bytes).
-    /// <para>获取来自目标的有效最大负载大小（至少 4096 字节）。</para>
-    /// </summary>
-    private int EffectiveMaxPayloadFromTarget => (int)Math.Max(Configuration.MaxPayloadSizeFromTarget, 4096);
-
-    /// <summary>
     /// Gets the effective slot number emitted on program/read/erase commands.
     /// <para>获取 program/read/erase 命令输出的有效槽位编号。</para>
     /// </summary>
@@ -506,38 +526,13 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
     private async Task WriteDataAsync(byte[] data, int timeoutMs, CancellationToken cancellationToken)
     {
+        ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
         var w = await _transport.WriteAsync(data, 0, data.Length, timeoutMs, cancellationToken);
         if (w != data.Length)
         {
             throw new EdlException(EdlErrorCode.WritePortTimeout);
         }
-    }
-
-    /// <summary>
-    /// Reads up to <paramref name="length"/> bytes, returning only the bytes actually received.
-    /// <para>读取最多 <paramref name="length"/> 个字节，仅返回实际收到的字节。</para>
-    /// </summary>
-    /// <param name="length">The maximum number of bytes to read. 最多读取的字节数。</param>
-    /// <param name="timeoutMs">The read timeout in milliseconds. 读取超时（毫秒）。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The bytes actually read. 实际读取的字节。</returns>
-    private async Task<byte[]> ReadChunkAsync(int length, int timeoutMs, CancellationToken cancellationToken)
-    {
-        var buffer = new byte[length];
-        var n = await _transport.ReadAsync(buffer, 0, length, timeoutMs, cancellationToken).ConfigureAwait(false);
-        if (n == 0)
-        {
-            return [];
-        }
-
-        if (n == length)
-        {
-            return buffer;
-        }
-
-        var result = new byte[n];
-        Array.Copy(buffer, result, n);
-        return result;
     }
 
     /// <summary>
@@ -569,11 +564,81 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         {
             throw new ObjectDisposedException(nameof(FirehoseProtocol));
         }
+
+        if (_faulted)
+        {
+            throw new EdlException(EdlErrorCode.ConnectionLost,
+                "The Firehose session is no longer reusable. Close and reconnect the transport before continuing.");
+        }
+    }
+
+    /// <summary>Reserves the transport, including the Sahara-to-Firehose initialization transition.</summary>
+    internal async ValueTask<OperationLease> EnterOperationAsync(CancellationToken cancellationToken)
+    {
+        ThrowIfDisposed();
+        await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // The previous owner may have faulted or been disposed while this call waited.
+            ThrowIfDisposed();
+            cancellationToken.ThrowIfCancellationRequested();
+            return new OperationLease(_operationGate);
+        }
+        catch
+        {
+            _operationGate.Release();
+            throw;
+        }
+    }
+
+    /// <summary>Marks an uncertain initialization as unusable until the transport is reconnected.</summary>
+    internal void Invalidate() => _faulted = true;
+
+    /// <summary>Releases one transport transaction without disposing a gate still used by waiters.</summary>
+    internal sealed class OperationLease(SemaphoreSlim gate) : IDisposable
+    {
+        private SemaphoreSlim? _gate = gate;
+
+        public void Dispose() => Interlocked.Exchange(ref _gate, null)?.Release();
+    }
+
+    private long ValidateStorageRange(long startSector, long numSectors, int physicalPartition)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(startSector);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(numSectors);
+        ArgumentOutOfRangeException.ThrowIfNegative(physicalPartition);
+        if (Configuration.SectorSize is <= 0 or > 65536)
+        {
+            throw new EdlException(EdlErrorCode.InvalidParameter, "A sector size between 1 and 65536 bytes is required.");
+        }
+
+        _ = checked(startSector + numSectors);
+        return checked(numSectors * Configuration.SectorSize);
+    }
+
+    private int GetProgramPayloadSize()
+    {
+        if (Configuration.MaxPayloadSizeToTarget < Configuration.SectorSize)
+        {
+            throw new EdlException(EdlErrorCode.InvalidParameter, "The negotiated payload cannot hold one sector.");
+        }
+
+        var bounded = Math.Min(Configuration.MaxPayloadSizeToTarget, 1024 * 1024);
+        return checked((int)(bounded - (bounded % Configuration.SectorSize)));
+    }
+
+    private static void RequireRawMode(FirehoseResponse response, EdlErrorCode errorCode)
+    {
+        if (!response.IsAck || !response.IsRawMode)
+        {
+            throw new EdlException(errorCode, "The target did not acknowledge entry into raw mode.");
+        }
     }
 
     /// <summary>
     /// Disposes the protocol.
     /// <para>释放协议。</para>
     /// </summary>
+    // Do not dispose the semaphore while active owners or queued callers may still use it.
     public void Dispose() => _disposed = true;
 }

@@ -7,6 +7,16 @@ namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 /// </summary>
 public sealed class FlashBundleOptions
 {
+    /// <summary>Captures operation policy before callbacks or asynchronous device work.</summary>
+    internal FlashBundleOptions Snapshot()
+    {
+        var snapshot = (FlashBundleOptions)MemberwiseClone();
+        snapshot.Labels = Labels is null ? null : [.. Labels];
+        snapshot.NotLabels = NotLabels is null ? null : [.. NotLabels];
+        snapshot.WipePhysicalPartitions = WipePhysicalPartitions is null ? null : [.. WipePhysicalPartitions];
+        return snapshot;
+    }
+
     /// <summary>
     /// Gets or sets the rawprogram XML file path (e.g. rawprogram0.xml).
     /// <para>获取或设置 rawprogram XML 文件路径（如 rawprogram0.xml）。</para>
@@ -85,9 +95,9 @@ public sealed class FlashBundleOptions
     public bool SkipUfsProvision { get; set; }
 
     /// <summary>
-    /// Gets or sets whether the bundle runs in dry-run mode (parse and report only, no device
-    /// writes).
-    /// <para>获取或设置是否以 dry-run 模式运行（仅解析与报告，不向设备写入）。</para>
+    /// Gets or sets whether the bundle runs offline source/command preflight without device
+    /// communication. Sector-based operations require a manifest, configured or overridden
+    /// sector size; device capacity and authorization cannot be verified offline.
     /// </summary>
     public bool DryRun { get; set; }
 

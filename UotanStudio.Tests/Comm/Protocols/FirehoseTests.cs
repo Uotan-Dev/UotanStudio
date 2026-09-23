@@ -13,6 +13,7 @@ namespace UotanStudio.Tests.Comm.Protocols;
 /// </summary>
 public class FirehoseTests
 {
+    private const string RawAckXml = "<data><response value=\"ACK\" rawmode=\"true\"/></data>";
     private const string AckXml = """
         <?xml version="1.0" encoding="UTF-8" ?>
         <data>
@@ -115,10 +116,10 @@ public class FirehoseTests
     }
 
     [Fact]
-    public void BuildPatch_ReturnsEmptyForDiskTarget()
+    public void BuildPatch_DiskTarget_EmitsPhysicalStoragePatch()
     {
-        Assert.Empty(FirehoseXmlBuilder.BuildPatch(512, "DISK", 0, 0, 0, "00", 1));
-        Assert.Empty(FirehoseXmlBuilder.BuildPatch(512, "disk", 0, 0, 0, "00", 1));
+        Assert.Contains("filename=\"DISK\"", FirehoseXmlBuilder.BuildPatch(512, "DISK", 0, 0, 0, "00", 1), StringComparison.Ordinal);
+        Assert.Contains("filename=\"disk\"", FirehoseXmlBuilder.BuildPatch(512, "disk", 0, 0, 0, "00", 1), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -340,9 +341,10 @@ public class FirehoseTests
     }
 
     [Fact]
-    public async Task ProgramAsync_WritesXmlThenPayloadThenReadsAck()
+    public async Task ProgramAsync_RawModeAcknowledged_WritesPayloadThenReadsCompletion()
     {
         var transport = new ScriptedCommTransport();
+        transport.Enqueue(RawAckXml);
         transport.Enqueue(AckXml);
 
         var protocol = CreateProtocol(transport);
@@ -380,6 +382,8 @@ public class FirehoseTests
         var exception = await Assert.ThrowsAsync<EdlException>(
             () => protocol.ProgramAsync(stream, 0, 1, "boot.img", 0, TestContext.Current.CancellationToken));
         Assert.Equal(EdlErrorCode.ProgramFailed, exception.ErrorCode);
+        Assert.Single(transport.Writes);
+        Assert.Equal(0, stream.Position);
     }
 
     [Fact]
@@ -399,22 +403,24 @@ public class FirehoseTests
     }
 
     [Fact]
-    public async Task PatchAsync_DiskTargetIsSkippedWithoutWriting()
+    public async Task PatchAsync_DiskTarget_SendsPatchAndReceivesAcknowledgement()
     {
         var transport = new ScriptedCommTransport();
+        transport.Enqueue(AckXml);
         var protocol = CreateProtocol(transport);
 
         var response = await protocol.PatchAsync("DISK", 0, 0, 0, "00", 1, TestContext.Current.CancellationToken);
 
         Assert.True(response.IsAck);
-        Assert.Equal("SKIPPED", response.RawValue);
-        Assert.Empty(transport.Writes);
+        Assert.Equal("ACK", response.RawValue);
+        Assert.Contains("filename=\"DISK\"", Encoding.UTF8.GetString(Assert.Single(transport.Writes)), StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task WipeAsync_WritesZerosPayload()
     {
         var transport = new ScriptedCommTransport();
+        transport.Enqueue(RawAckXml);
         transport.Enqueue(AckXml);
 
         var protocol = CreateProtocol(transport);
@@ -491,6 +497,7 @@ public class FirehoseTests
     public async Task ProgramSparseAsync_ExpandsRawChunkAndProgramsSectors()
     {
         var transport = new ScriptedCommTransport();
+        transport.Enqueue(RawAckXml);
         transport.Enqueue(AckXml);
 
         var protocol = CreateProtocol(transport);

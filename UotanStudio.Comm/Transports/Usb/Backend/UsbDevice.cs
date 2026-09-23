@@ -29,6 +29,12 @@ internal abstract class UsbDevice : IDisposable
     /// </summary>
     public string? SerialNumber { get; set; }
 
+    /// <summary>OS-provided identity shared by interfaces of one physical device, when available.</summary>
+    public Guid? ContainerId { get; set; }
+
+    /// <summary>OS device-instance identity for this USB interface, when available.</summary>
+    public string? DeviceInstanceId { get; set; }
+
     /// <summary>
     /// Gets or sets the USB vendor identifier.
     /// <para>获取或设置 USB 厂商标识。</para>

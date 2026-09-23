@@ -270,6 +270,16 @@ public sealed class FakeAdbDeviceTransport : FakeCommTransport
     /// <summary>Gets the raw payloads of every WRTE the client sent (sync packets included). 客户端发送的 WRTE 负载。</summary>
     public List<byte[]> WrtePayloads { get; } = [];
 
+    public uint PeerMaxPayload { get; init; } = AdbConstants.MaxPayload;
+
+    public bool AutoAcknowledgeWrites { get; init; } = true;
+
+    public Action<byte[]>? OnWrte { get; init; }
+
+    private int _closeCount;
+
+    public int CloseCount => Volatile.Read(ref _closeCount);
+
     /// <summary>Initializes a new ADB device simulator. 初始化 ADB 设备模拟器。</summary>
     public FakeAdbDeviceTransport()
     {
@@ -314,7 +324,7 @@ public sealed class FakeAdbDeviceTransport : FakeCommTransport
                 // Complete the handshake immediately (no AUTH challenge).
                 // 立即完成握手（不发起 AUTH 质询）。
                 yield return AdbMessaging.Serialize(new AdbMessage(
-                    AdbCommand.Cnxn, AdbConstants.ProtocolVersion, AdbConstants.MaxPayload,
+                    AdbCommand.Cnxn, AdbConstants.ProtocolVersion, PeerMaxPayload,
                     Encoding.UTF8.GetBytes("device::fake\0")));
                 break;
 
@@ -338,8 +348,10 @@ public sealed class FakeAdbDeviceTransport : FakeCommTransport
             case AdbCommand.Wrte:
                 {
                     WrtePayloads.Add(payload);
+                    OnWrte?.Invoke(payload);
                     // Acknowledge with OKAY (arg0 = device local id, arg1 = client local id).
-                    yield return AdbMessaging.Serialize(new AdbMessage(AdbCommand.Okay, 1, arg0));
+                    if (AutoAcknowledgeWrites)
+                        yield return AdbMessaging.Serialize(new AdbMessage(AdbCommand.Okay, 1, arg0));
                     // After the sync DONE packet, answer with the sync-level OKAY carried in a
                     // device WRTE (arg0 = device local id, arg1 = client local id) so
                     // AdbSyncClient.ExpectResponse completes.
@@ -356,6 +368,7 @@ public sealed class FakeAdbDeviceTransport : FakeCommTransport
                 }
 
             case AdbCommand.Clse:
+                Interlocked.Increment(ref _closeCount);
                 yield return AdbMessaging.Serialize(new AdbMessage(AdbCommand.Clse, arg1, arg0));
                 break;
 

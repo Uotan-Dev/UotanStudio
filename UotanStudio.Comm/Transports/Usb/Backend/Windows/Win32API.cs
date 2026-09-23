@@ -177,6 +177,14 @@ internal static partial class Win32API
 
     [LibraryImport("setupapi.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetupDiGetDeviceInterfaceDetailW(IntPtr deviceInfoSet, ref SpDeviceInterfaceData deviceInterfaceData,
+                                                               IntPtr deviceInterfaceDetailData,
+                                                               uint detailSize,
+                                                               out uint requiredSize,
+                                                               ref SpDevInfoData deviceInfoData);
+
+    [LibraryImport("setupapi.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetupDiDestroyDeviceInfoList(IntPtr deviceInfoSet);
 
     public static IntPtr SimpleCreateHandle(string filePath, bool overlapped = false)

@@ -36,6 +36,7 @@ public sealed class HdcDaemonTests
     public void Session_WaitsForAuthOk_ExecutesWithoutChannelHandshake_ReceivesRawEcho()
     {
         using var transport = new FakeCommTransport();
+        var authenticationClosed = false;
         transport.OnWrite = packet =>
         {
             var message = HdcDaemonCodec.Decode(packet);
@@ -44,10 +45,17 @@ public sealed class HdcDaemonTests
                 var hello = HdcDaemonCodec.ReadHandshake(message.Payload!);
                 Assert.Equal((byte)0, hello.State);
                 return [HdcDaemonCodec.Encode(new(HdcCommand.Handshake, 0, 0,
-                    HdcDaemonCodec.Handshake(4, hello.SessionId, "", [], "test")))];
+                    HdcDaemonCodec.Handshake(4, hello.SessionId, "", [], "test"))),
+                    HdcDaemonCodec.Encode(new(HdcCommand.ChannelClose, 0, 0, [1]))];
+            }
+            if (message.Command == HdcCommand.ChannelClose && message.ChannelId == 0)
+            {
+                Assert.Equal([0], message.Payload);
+                authenticationClosed = true;
             }
             if (message.Command == HdcCommand.UnityExecute)
             {
+                Assert.True(authenticationClosed);
                 Assert.Equal("id", message.PayloadAsString());
                 return [Convert.FromHexString("48570000010008000000020801100A180020096F6B"),
                     Convert.FromHexString("4857000001000800000001080110021800200900")];
@@ -56,6 +64,7 @@ public sealed class HdcDaemonTests
         };
         using var session = new HdcSession(transport, HdcTestKeys.CreateAuthentication());
         session.Connect();
+        Assert.True(authenticationClosed);
         var result = session.ExecuteCommand("id", 2000);
         Assert.Equal("ok", Encoding.UTF8.GetString(result.Stdout));
         Assert.Equal(-1, result.ExitCode);

@@ -139,8 +139,9 @@ public sealed class AdbConnection : IDisposable
             }
             return;
         }
-        if (_transport is UsbDeviceTransport)
-            UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.RequireDirectUsb(0xff, 0x42, 1);
+        if (_transport is UsbDeviceTransport usbTransport)
+            UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.RequireDirectUsb(0xff, 0x42, 1,
+                usbTransport.Session.DeviceInfo.SerialNumber);
         try
         {
             Send(AdbMessaging.BuildConnect());
@@ -211,7 +212,9 @@ public sealed class AdbConnection : IDisposable
     /// </summary>
     /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
     /// <returns><c>true</c> if the peer responded; otherwise, <c>false</c>. 对端是否响应。</returns>
-    public bool WaitForPeer(int timeoutMs = 10000) => _peerReady.Wait(timeoutMs);
+    /// <param name="cancellationToken">Cancels the handshake wait.</param>
+    public bool WaitForPeer(int timeoutMs = 10000, CancellationToken cancellationToken = default)
+        => _peerReady.Wait(timeoutMs, cancellationToken);
 
     /// <summary>
     /// Writes data to the specified stream.
@@ -439,8 +442,11 @@ public sealed class AdbConnection : IDisposable
             }
         }
 
-        stream?.MarkClosed();
-        Send(AdbMessaging.BuildClose(message.Arg1, message.Arg0));
+        if (stream is not null)
+        {
+            stream.MarkClosed();
+            Send(AdbMessaging.BuildClose(message.Arg1, message.Arg0));
+        }
     }
 
     /// <summary>

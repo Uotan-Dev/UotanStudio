@@ -108,6 +108,42 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
         while (await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false) is { } payload)
             onOutput(payload);
     }
+
+    /// <summary>Relays a target-bound interactive shell through the host channel.</summary>
+    public async Task RunInteractiveShellAsync(string connectKey, Stream input, Stream output,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(output);
+        using var client = await OpenAsync(connectKey, cancellationToken).ConfigureAwait(false);
+        var stream = client.GetStream();
+        await WriteFrameAsync(stream, "shell\0"u8.ToArray(), cancellationToken).ConfigureAwait(false);
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var writer = Task.Run(async () =>
+        {
+            var buffer = new byte[4096];
+            try
+            {
+                while (await input.ReadAsync(buffer, lifetime.Token).ConfigureAwait(false) is var count && count > 0)
+                    await WriteFrameAsync(stream, buffer[..count], lifetime.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+            catch (IOException) when (lifetime.IsCancellationRequested) { }
+        }, lifetime.Token);
+        try
+        {
+            while (await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false) is { } payload)
+            {
+                await output.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
+                await output.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            await lifetime.CancelAsync().ConfigureAwait(false);
+            await writer.ConfigureAwait(false);
+        }
+    }
     /// <summary>Captures bounded output within a total deadline. 在总时限内有界捕获输出。</summary>
     public async Task<byte[]> ExecuteAsync(string connectKey, string command, int timeoutMs = 30000,
         CancellationToken cancellationToken = default)

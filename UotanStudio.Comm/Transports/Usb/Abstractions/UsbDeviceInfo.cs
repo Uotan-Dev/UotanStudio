@@ -42,6 +42,12 @@ public sealed class UsbDeviceInfo
     /// </summary>
     public string? SerialNumber { get; set; }
 
+    /// <summary>OS-provided physical container identity, when available.</summary>
+    public Guid? ContainerId { get; set; }
+
+    /// <summary>OS device-instance identity for this USB interface, when available.</summary>
+    public string? DeviceInstanceId { get; set; }
+
     /// <summary>
     /// Gets or sets the vendor identifier.
     /// <para>获取或设置厂商 ID。</para>
