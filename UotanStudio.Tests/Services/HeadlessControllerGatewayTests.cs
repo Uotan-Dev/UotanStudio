@@ -66,16 +66,29 @@ public sealed class HeadlessControllerGatewayTests
         Assert.Equal(0, opener.Calls);
     }
 
+    [Fact]
+    public void RunAdbService_UnsupportedOpenedTransport_ReleasesLease()
+    {
+        var opener = new RecordingOpener { ReturnTransport = true };
+        var gateway = new HeadlessDeviceManagerGateway(new UotanStudio.Comm.CommKit(),
+            new DeviceController([new Source("adb-server@127.0.0.1:5037", [Server])], opener),
+            () => true, () => false);
+
+        Assert.Throws<InvalidOperationException>(() => gateway.RunAdbService("serial", "shell:id", _ => true));
+        Assert.True(opener.Transport.Disposed);
+        Assert.Equal(1, opener.Calls);
+    }
+
     private static HeadlessDeviceManagerGateway Gateway(DeviceEndpoint[] endpoints, RecordingOpener opener, bool serverAvailable)
         => new(new UotanStudio.Comm.CommKit(),
-            new DeviceController([new Source(endpoints)], opener), () => serverAvailable, () => false);
+            new DeviceController([new Source("usb", endpoints)], opener), () => serverAvailable, () => false);
 
     private static DeviceSnapshot Snapshot(params DeviceEndpoint[] endpoints)
         => new(1, ImmutableArray.Create(endpoints));
 
-    private sealed class Source(DeviceEndpoint[] endpoints) : IDeviceDiscoverySource
+    private sealed class Source(string name, DeviceEndpoint[] endpoints) : IDeviceDiscoverySource
     {
-        public string Name => "usb";
+        public string Name => name;
         public Task<IReadOnlyList<DeviceEndpoint>> DiscoverAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<DeviceEndpoint>>(endpoints);
     }
@@ -83,10 +96,27 @@ public sealed class HeadlessControllerGatewayTests
     private sealed class RecordingOpener : IDeviceTransportOpener
     {
         public int Calls { get; private set; }
+        public bool ReturnTransport { get; init; }
+        public DisposableTransport Transport { get; } = new();
         public Task<IAsyncDisposable> OpenAsync(DeviceEndpoint endpoint, CancellationToken cancellationToken)
         {
             Calls++;
+            if (ReturnTransport)
+            {
+                return Task.FromResult<IAsyncDisposable>(Transport);
+            }
+
             throw new InvalidOperationException("No endpoint should be opened.");
+        }
+    }
+
+    private sealed class DisposableTransport : IAsyncDisposable
+    {
+        public bool Disposed { get; private set; }
+        public ValueTask DisposeAsync()
+        {
+            Disposed = true;
+            return ValueTask.CompletedTask;
         }
     }
 }

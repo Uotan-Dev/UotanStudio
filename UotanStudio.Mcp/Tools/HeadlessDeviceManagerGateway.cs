@@ -106,6 +106,7 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
         {
             if (lease.Transport is OwnedDeviceTransport<AdbSession> server)
             {
+                server.Value.Connect();
                 return operation(server.Value);
             }
 
