@@ -49,7 +49,7 @@ public partial class DeliveryView
             if (_deliveryCancellation is null) await SaveDeliveryAsync(true);
         };
         Composition.OutputRequested += async (_, _) => await RunDeliveryAsync();
-        Composition.OperationFailed += async (_, error) => await ShowDeliveryMessageAsync(error.Message, true);
+        Composition.OperationFailed += async (_, error) => await ShowDeliveryMessageAsync(global::UotanStudio.Services.UserError.Describe(error), true);
         Composition.Model.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(Composition.Model.Status)) ToolTip.SetTip(Composition, Composition.Model.Status);
@@ -107,7 +107,7 @@ public partial class DeliveryView
             QueueDeliveryChange();
             await SaveDeliveryAsync(false);
         }
-        catch (Exception ex) { await ShowDeliveryMessageAsync(ex.Message, true); }
+        catch (Exception ex) { await ShowDeliveryMessageAsync(global::UotanStudio.Services.UserError.Describe(ex), true); }
         finally { _generatingScripts = false; }
     }
 
@@ -173,7 +173,7 @@ public partial class DeliveryView
             finally { File.Delete(temporary); }
             if (root == _deliveryRoot && PackPayloadBox.IsChecked == true) DynamicPartitionsFileBox.Text = path;
         }
-        catch (Exception ex) { await ShowDeliveryMessageAsync(ex.Message, true); }
+        catch (Exception ex) { await ShowDeliveryMessageAsync(global::UotanStudio.Services.UserError.Describe(ex), true); }
         finally { _generatingDynamicPartitions = false; }
     }
 
@@ -250,7 +250,7 @@ public partial class DeliveryView
                             Composition.Model.Status = LanguageService.Instance.GetString("Delivery_EditedScriptsNeedReview");
                 }
             }
-            catch (Exception ex) { Composition.Model.Status = ex.Message; }
+            catch (Exception ex) { Composition.Model.Status = global::UotanStudio.Services.UserError.Describe(ex); }
             finally
             {
                 _deliverySaveTimer.Stop();
@@ -286,7 +286,7 @@ public partial class DeliveryView
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Delivery", ex.Message);
-            if (report) await ShowDeliveryMessageAsync(ex.Message, true);
+            if (report) await ShowDeliveryMessageAsync(global::UotanStudio.Services.UserError.Describe(ex), true);
         }
     }
 
@@ -329,7 +329,7 @@ public partial class DeliveryView
             ImageSelection.RestoreAssignedSources(Composition.Model.Container.Concat(Composition.Model.Output)
                 .Where(i => i.FilePath is not null).Select(i => i.FilePath!), GetReadOnlyDeliverySources());
         }
-        catch (Exception ex) { await ShowDeliveryMessageAsync(ex.Message, true); }
+        catch (Exception ex) { await ShowDeliveryMessageAsync(global::UotanStudio.Services.UserError.Describe(ex), true); }
         finally { _restoringDelivery = false; _deliveryRefreshGate.Release(); }
         QueueDeliveryChange();
     }
@@ -466,7 +466,7 @@ public partial class DeliveryView
         catch (Exception ex)
         {
             acceptingProgress = false;
-            await ShowDeliveryMessageAsync(ex.Message, true);
+            await ShowDeliveryMessageAsync(global::UotanStudio.Services.UserError.Describe(ex), true);
         }
         finally
         {

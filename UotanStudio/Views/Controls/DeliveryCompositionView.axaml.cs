@@ -153,7 +153,7 @@ public partial class DeliveryCompositionView : UserControl
     {
         if (!_packImages || !_outputToDirectory || _compositionConfirmed) return;
         try { Model.Confirm(ReadPlan()); }
-        catch (Exception ex) { Model.Status = ex.Message; OperationFailed?.Invoke(this, ex); }
+        catch (Exception ex) { Model.Status = global::UotanStudio.Services.UserError.Describe(ex); OperationFailed?.Invoke(this, ex); }
         UpdateInteractionState();
     }
 

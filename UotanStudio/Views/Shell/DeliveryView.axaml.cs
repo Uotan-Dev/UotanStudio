@@ -346,7 +346,7 @@ public partial class DeliveryView : UserControl
                 foreach (var row in Composition.Model.Container) row.IncludeInSuper = members.Contains(row.PartitionName);
             }
         }
-        catch (Exception ex) { UseProjectSuperSettingsBox.IsChecked = false; _ = ShowDeliveryMessageAsync(ex.Message, true); return; }
+        catch (Exception ex) { UseProjectSuperSettingsBox.IsChecked = false; _ = ShowDeliveryMessageAsync(global::UotanStudio.Services.UserError.Describe(ex), true); return; }
         _appliedSourceSettings = identity;
         SuperVabBox.IsChecked = settings.DeviceType == "VAB";
         SuperAbBox.IsChecked = settings.DeviceType == "AB";
@@ -414,7 +414,7 @@ public partial class DeliveryView : UserControl
         {
             if (_attached && owner is Window window)
                 await DialogService.ShowAsync(window, LanguageService.Instance.GetString("NewProject_PickerFailed"),
-                    ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+                    global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
         finally
         {
@@ -460,7 +460,7 @@ public partial class DeliveryView : UserControl
         {
             if (_attached && owner is Window window)
                 await DialogService.ShowAsync(window, LanguageService.Instance.GetString("NewProject_PickerFailed"),
-                    ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+                    global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
         finally
         {

@@ -146,7 +146,7 @@ public partial class PackImageSelectionView : UserControl
         {
             if (_attached && !token.IsCancellationRequested)
             {
-                LoadError.Text = LanguageService.Instance.GetString("Delivery_LoadFailed") + " " + ex.Message;
+                LoadError.Text = LanguageService.Instance.GetString("Delivery_LoadFailed") + " " + global::UotanStudio.Services.UserError.Describe(ex);
                 LoadError.IsVisible = true;
             }
         }
@@ -303,7 +303,7 @@ public partial class PackImageSelectionView : UserControl
         catch (Exception ex)
         {
             if (_attached && owner is Window window)
-                await DialogService.ShowAsync(window, LanguageService.Instance.GetString("NewProject_PickerFailed"), ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+                await DialogService.ShowAsync(window, LanguageService.Instance.GetString("NewProject_PickerFailed"), global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
         finally { _picking = false; UpdateActions(); }
     }

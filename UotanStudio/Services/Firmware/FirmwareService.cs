@@ -974,15 +974,18 @@ public sealed class FirmwareService
     /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
     /// <param name="progress">Optional progress reporter as (processed file count, total file count). <para>可选进度回调，值为 (已处理文件数, 文件总数)。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="byteProgress">Optional filesystem byte-progress reporter.</param>
+    /// <param name="erofsExtraDevicePaths">EROFS device images in device-table order, when required.</param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> UnpackFileSystemImageAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default, IProgress<FileSystemByteProgress>? byteProgress = null)
+    public async Task<FirmwareOpResult> UnpackFileSystemImageAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default, IProgress<FileSystemByteProgress>? byteProgress = null, IReadOnlyList<string>? erofsExtraDevicePaths = null)
     {
         using var scope = RepackMetadata.UseContext(CaptureOperationContext(outputDirectory));
         FirmwareFormatRegistry.RegisterAll();
         var handler = FormatDetector.Detect(imagePath);
         if (handler is not (Ext4FormatHandler or ErofsFormatHandler or F2fsFormatHandler))
             return FirmwareOpResult.Fail("Unrecognized filesystem image.");
-        var result = await FileSystemPreservation.UnpackAsync(handler, imagePath, outputDirectory, new UnpackOptions { FileSystemProgress = byteProgress }, cancellationToken,
+        var result = await FileSystemPreservation.UnpackAsync(handler, imagePath, outputDirectory,
+            new UnpackOptions { FileSystemProgress = byteProgress, ErofsExtraDevicePaths = erofsExtraDevicePaths }, cancellationToken,
             async frozen =>
             {
                 var extracted = await UnpackFileSystemImageCoreAsync(frozen, outputDirectory, progress, cancellationToken, byteProgress).ConfigureAwait(false);
@@ -1026,7 +1029,8 @@ public sealed class FirmwareService
                 if (header.Length >= 1028
                     && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xE0F5E1E2)
                 {
-                    using var parser = new ErofsParser(imagePath);
+                    using var input = File.OpenRead(imagePath);
+                    using var parser = FileSystemPreservation.OpenErofsParser(input, cancellationToken);
                     parser.ExtractToDirectory(outputDirectory, progress: progress, byteProgress: FileSystemByteProgress.ForStage(byteProgress, FileSystemWorkStage.Extracting), cancellationToken: cancellationToken);
                     var files = parser.EnumerateFiles();
                     return new FirmwareOpResult

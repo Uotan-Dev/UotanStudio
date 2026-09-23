@@ -35,6 +35,8 @@ public sealed class PayloadOtaZipTests : IDisposable
             Txt = false,
             ContainerConfirmed = true,
             OutputDirectory = Path.Combine(_root, "output"),
+            // A/B OTA must not consume the DAT-only Edify updater setting.
+            Package = new() { RecoveryUpdaterPath = Path.Combine(_root, "not-an-ab-updater") },
             Container = [new() { SourcePath = source, FileName = "boot.img", Partition = "boot" }],
             Files = organize ? [new() { Generated = true, FileName = "ota.zip", Partition = "payload" }] : []
         };
@@ -54,7 +56,10 @@ public sealed class PayloadOtaZipTests : IDisposable
         Assert.DoesNotContain(paths, p => Path.GetFileName(p) is "payload.bin" or "payload_properties.txt" or "recovery.zip");
         var zipPath = Path.Combine(plan.OutputDirectory, "ota.zip");
         using var zip = ZipFile.OpenRead(zipPath);
-        Assert.Equal(new[] { "payload.bin", "payload_properties.txt", "META-INF/com/android/metadata", "META-INF/com/google/android/update-binary" }, zip.Entries.Select(e => e.FullName));
+        Assert.Equal(new[] { "payload.bin", "payload_properties.txt", "META-INF/com/android/metadata" }, zip.Entries.Select(e => e.FullName));
+        // TWRP selects its A/B update_engine flow from payload.bin. Including a device-specific
+        // update-binary would make it take the conventional updater path instead.
+        Assert.Null(zip.GetEntry(DeliveryRecoveryUpdater.EntryPath));
         using var reader = new StreamReader(zip.GetEntry("META-INF/com/android/metadata")!.Open());
         var metadata = (await reader.ReadToEndAsync(TestContext.Current.CancellationToken))
             .Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Split('=', 2)).ToDictionary(p => p[0], p => p[1]);

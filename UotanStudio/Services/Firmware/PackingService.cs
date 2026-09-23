@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
@@ -5,8 +6,10 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Services.Firmware;
@@ -33,6 +36,7 @@ internal static class PackingService
 
         try
         {
+            var hasExplicitSettings = settings is not null;
             using var metadataScope = RepackMetadata.UseContext(
                 UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(sourceDirectory));
             var metadata = RepackMetadata.Read(sourceDirectory);
@@ -40,7 +44,6 @@ internal static class PackingService
             // Filesystem image rebuilds report real byte progress; other metadata-dispatch branches
             // fall back to a stage-based estimate over the source directory size.
             var imageProgress = FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
-            settings ??= ProjectSettingViewModel.Instance;
             if (metadata is not null)
             {
                 if (!metadata.CanPackDirectory) return (false, metadata.PackingNotes);
@@ -48,7 +51,8 @@ internal static class PackingService
                 // Let the packing-settings panel override the unpacked metadata for filesystem images.
                 var estimated = EstimateSourceBytes(sourceDirectory);
                 imageProgress.Report((0, estimated));
-                var focused = settings is not null && metadata.FormatName is "EXT4" or "EROFS" or "F2FS";
+                var focused = hasExplicitSettings
+                    && metadata.FormatName is "EXT4" or "EROFS" or "F2FS" or "Android Sparse Image (simg)";
                 if (focused)
                 {
                     // 仅当用户真正切换了文件系统格式（EROFS ↔ EXT4）时申请打包覆盖走全新目录打包；
@@ -59,7 +63,11 @@ internal static class PackingService
                     // format we reuse the preserved-metadata rebuild to restore
                     // SELinux/capability/hardlink/symlink exactly instead of downgrading the output.
                     var targetFormat = settings!.TypeEXT4 ? "EXT4" : settings.TypeF2FS ? "F2FS" : "EROFS";
-                    if (targetFormat == metadata.FormatName)
+                    if (targetFormat == metadata.FormatName
+                        && !(targetFormat == "F2FS" && settings.HasF2fsCompressionOverride)
+                        && !(targetFormat == "F2FS" && settings.HasF2fsAndroidProfileOverride)
+                        && !(targetFormat == "EXT4" && settings.HasExt4PolicyOverride)
+                        && !settings.HasImageFormatOverride)
                     {
                         var preserved = RegisteredFirmwareFormats.PackDirectoryAsync(metadata.FormatName, sourceDirectory, outputPath, progress: progress)
                             .GetAwaiter().GetResult();
@@ -80,6 +88,7 @@ internal static class PackingService
                 return (result.Success, result.Summary);
             }
 
+            settings ??= ProjectSettingViewModel.Instance;
             if (settings is null)
             {
                 return (false, "Packing settings not available  打包设置不可用");
@@ -127,11 +136,21 @@ internal static class PackingService
             "EXT4" => new Dictionary<string, string>
             {
                 ["EnableSparse"] = settings.FormatSPARSE ? "1" : "0",
-                ["Ext4Compress"] = settings.EXT4Compress ? "1" : "0",
+                ["CapacityPolicy"] = settings.Ext4CapacityPolicy.ToString(),
+                ["TargetSizeBytes"] = settings.Ext4TargetSizeBytes?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "",
+                ["ReadOnly"] = settings.EXT4RO ? "1" : "0",
+                ["BlockSharingMode"] = settings.Ext4BlockSharingMode.ToString(),
             },
             "F2FS" => new Dictionary<string, string>
             {
-                ["EnableSparse"] = settings.FormatSPARSE ? "1" : "0",
+                ["EnableSparse"] = "1",
+                ["OutputSparseContainer"] = settings.FormatSPARSE ? "1" : "0",
+                ["EnableCompression"] = settings.F2fsCompressionEnabled ? "1" : "0",
+                ["CompressionAlgorithm"] = settings.SelectedF2fsCompressionAlgorithm,
+                ["CompressionLevel"] = settings.F2fsCompressionLevel.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["AndroidNativeProfile"] = settings.F2fsAndroidNativeProfile ? "1" : "0",
+                ["AndroidImageSizeBytes"] = settings.F2fsAndroidImageSizeBytes?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "",
+                ["NativeWslDistribution"] = settings.F2fsNativeWslDistribution,
             },
             _ => new Dictionary<string, string>
             {
@@ -148,10 +167,22 @@ internal static class PackingService
         System.Diagnostics.Stopwatch sw,
         IProgress<(long Processed, long Total)>? progress)
     {
+        if (settings.Ext4CapacityPolicy == Ext4CapacityPolicy.Explicit && settings.Ext4TargetSizeBytes is null)
+        {
+            throw new InvalidDataException("EXT4 explicit capacity requires a target size in bytes.");
+        }
+
         var options = new Ext4Options
         {
-            Ext4Compress = settings.EXT4Compress,
             EnableSparse = settings.FormatSPARSE,
+            TargetSizeBytes = settings.Ext4CapacityPolicy == Ext4CapacityPolicy.Explicit
+                ? settings.Ext4TargetSizeBytes
+                : null,
+            CapacityMode = settings.Ext4CapacityPolicy == Ext4CapacityPolicy.Minimize
+                ? Ext4CapacityMode.Minimize
+                : Ext4CapacityMode.Default,
+            ReadOnly = settings.EXT4RO,
+            BlockSharingMode = settings.Ext4BlockSharingMode,
         };
 
         LogService.Instance.Write(LogLevel.Info, "Packing",
@@ -222,10 +253,35 @@ internal static class PackingService
         System.Diagnostics.Stopwatch sw,
         IProgress<(long Processed, long Total)>? progress)
     {
-        F2fsBuilder.Build(sourceDirectory, outputPath, new F2fsOptions
+        var fullOutputPath = Path.GetFullPath(outputPath);
+        var rawOutput = settings.FormatSPARSE
+            ? Path.Combine(Path.GetDirectoryName(fullOutputPath)!, "." + Path.GetFileName(fullOutputPath) + "." + Guid.NewGuid().ToString("N") + ".raw.tmp")
+            : fullOutputPath;
+        Directory.CreateDirectory(Path.GetDirectoryName(fullOutputPath)!);
+        try
         {
-            EnableSparse = settings.FormatSPARSE,
-        });
+            F2fsBuilder.Build(sourceDirectory, rawOutput, new F2fsOptions
+            {
+                EnableSparse = true,
+                EnableCompression = settings.F2fsCompressionEnabled,
+                CompressionAlgorithm = ParseF2fsCompressionAlgorithm(settings.SelectedF2fsCompressionAlgorithm),
+                CompressionLevel = settings.F2fsCompressionLevel,
+                AndroidNativeProfile = settings.F2fsAndroidNativeProfile,
+                AndroidImageSizeBytes = settings.F2fsAndroidImageSizeBytes,
+                NativeWslDistribution = settings.F2fsNativeWslDistribution,
+            });
+            if (settings.FormatSPARSE)
+            {
+                SparseImageConverter.ConvertRawToSparseAtomic(rawOutput, fullOutputPath);
+            }
+        }
+        finally
+        {
+            if (settings.FormatSPARSE)
+            {
+                File.Delete(rawOutput);
+            }
+        }
         var size = new FileInfo(outputPath).Length;
         progress?.Report((size, size));
         sw.Stop();
@@ -234,4 +290,10 @@ internal static class PackingService
         LogService.Instance.Write(LogLevel.Info, "Packing", summary);
         return (true, summary);
     }
+
+    private static CompressionAlgorithm ParseF2fsCompressionAlgorithm(string value)
+        => Enum.TryParse<CompressionAlgorithm>(value, ignoreCase: true, out var algorithm)
+            && Enum.IsDefined(algorithm)
+            ? algorithm
+            : throw new InvalidDataException($"Unsupported F2FS compression algorithm '{value}'.");
 }

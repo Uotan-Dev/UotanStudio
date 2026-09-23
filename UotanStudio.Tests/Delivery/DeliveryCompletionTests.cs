@@ -151,6 +151,7 @@ public sealed partial class DeliveryCompletionTests : IDisposable
         using (var zip = ZipFile.OpenRead(path))
         {
             Assert.NotNull(zip.GetEntry("payload.bin")); Assert.NotNull(zip.GetEntry("payload_properties.txt"));
+            Assert.Null(zip.GetEntry(DeliveryRecoveryUpdater.EntryPath));
             using var text = new StreamReader(zip.GetEntry("META-INF/com/android/metadata")!.Open());
             Assert.Contains("ota-type=AB\npre-device=test_device", await text.ReadToEndAsync(Token));
         }
