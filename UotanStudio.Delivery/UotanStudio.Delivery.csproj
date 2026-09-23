@@ -11,6 +11,5 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\update-binary-arm64" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="Assets\update-binary-ab-arm64" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

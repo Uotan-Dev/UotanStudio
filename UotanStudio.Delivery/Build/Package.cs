@@ -28,7 +28,7 @@ internal sealed record DeliveryPackageOptions
     public string Incremental { get; init; } = "";
     /// <summary><para>OTA 元数据 <c>post-sdk-level</c> 值。</para>OTA metadata <c>post-sdk-level</c> value.</summary>
     public uint SdkLevel { get; init; }
-    /// <summary><para>原 ROM 的 Edify 更新器路径；为空时沿所选 DAT 文件发现 META-INF。</para>Path of the original ROM's Edify updater; empty discovers META-INF alongside the selected DAT files.</summary>
+    /// <summary><para>原 ROM 的 Edify 更新器路径；仅用于 Recovery DAT 包，为空时沿所选 DAT 文件发现 META-INF。</para>Path of the original ROM's Edify updater for Recovery DAT packages only; empty discovers META-INF alongside the selected DAT files.</summary>
     public string RecoveryUpdaterPath { get; init; } = "";
 }
 
@@ -86,10 +86,6 @@ internal static partial class DeliveryPackageBuilder
                 writer.Write("payload.bin", new FileInfo(Path.Combine(images, "payload.bin")));
                 writer.Write("payload_properties.txt", new FileInfo(Path.Combine(images, "payload_properties.txt")));
                 writer.Write("META-INF/com/android/metadata", new MemoryStream(Encoding.UTF8.GetBytes(text)));
-                var updater = plan.Package.RecoveryUpdaterPath.Length > 0
-                    ? DeliveryRecoveryUpdater.Validate(plan.Package.RecoveryUpdaterPath)
-                    : DeliveryRecoveryUpdater.EmbeddedOtaUpdater();
-                writer.Write(DeliveryRecoveryUpdater.EntryPath, new FileInfo(updater));
                 if (plan.Package.CertificatePath.Length > 0)
                 {
                     using var cert = LoadCertificate(plan.Package.CertificatePath);

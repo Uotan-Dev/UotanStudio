@@ -8,7 +8,7 @@ namespace UotanStudio.Services.Delivery;
 internal static class DeliveryRecoveryUpdater
 {
     internal const string ScriptPath = "META-INF/com/google/android/updater-script";
-    /// <summary><para>A/B OTA 包内原生更新器的标准成员路径。</para>Standard member path of the native updater inside an A/B OTA package.</summary>
+    /// <summary><para>传统 Recovery 包内原生更新器的标准成员路径。</para>Standard member path of the native updater inside a traditional Recovery package.</summary>
     internal const string EntryPath = "META-INF/com/google/android/update-binary";
 
     /// <summary>
@@ -41,10 +41,6 @@ internal static class DeliveryRecoveryUpdater
         var path = MaterializeAsset("update-binary-arm64", "delivery-updater");
         return Validate(path);
     }
-
-    /// <summary><para>解开内嵌的 A/B OTA 原生更新器（ginkgo 上游构建）；用于 ota.zip 的执行入口。</para>
-    /// Extracts the embedded A/B OTA native updater (ginkgo upstream build) used as ota.zip's entry point.</summary>
-    internal static string EmbeddedOtaUpdater() => MaterializeAsset("update-binary-ab-arm64", "delivery-ota-updater");
 
     private static string MaterializeAsset(string name, string cacheDirectory)
     {
