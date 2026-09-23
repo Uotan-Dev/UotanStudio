@@ -2,6 +2,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
 using UotanStudio.Messages;
 using UotanStudio.Services.Projects;
 
@@ -43,6 +45,24 @@ internal partial class ProjectSettingViewModel : Tool
     [ObservableProperty]
     private int eROFSComGrade = 8, bRComGrade = 3;
     [ObservableProperty]
+    private bool f2fsCompressionEnabled;
+    [ObservableProperty]
+    private string selectedF2fsCompressionAlgorithm = nameof(CompressionAlgorithm.Lz4);
+    [ObservableProperty]
+    private int f2fsCompressionLevel;
+    [ObservableProperty]
+    private bool f2fsAndroidNativeProfile;
+    [ObservableProperty]
+    private long? f2fsAndroidImageSizeBytes;
+    [ObservableProperty]
+    private string f2fsNativeWslDistribution = "";
+    [ObservableProperty]
+    private Ext4CapacityPolicy ext4CapacityPolicy = Ext4CapacityPolicy.Inherit;
+    [ObservableProperty]
+    private long? ext4TargetSizeBytes;
+    [ObservableProperty]
+    private Ext4BlockSharingMode ext4BlockSharingMode;
+    [ObservableProperty]
     private string projectName = "", sUPERSize = "9126805504", sUPERName = "qti_dynamic_partitions", uTCTime = "1230768000", dATSeg = "15";
 
     /// <summary>
@@ -50,6 +70,21 @@ internal partial class ProjectSettingViewModel : Tool
     /// Picker choices for the EROFS codec combo, in display order.
     /// </summary>
     public IReadOnlyList<string> ErofsAlgorithmOptions => ErofsAlgorithmSelectors.Ordered;
+
+    /// <summary>Compression algorithms supported by the managed F2FS builder.</summary>
+    public IReadOnlyList<string> F2fsCompressionAlgorithmOptions { get; } = Enum.GetNames<CompressionAlgorithm>();
+
+    /// <summary>Whether the F2FS compression values are an explicit user override.</summary>
+    internal bool HasF2fsCompressionOverride { get; private set; }
+    internal bool HasF2fsAndroidProfileOverride { get; private set; }
+
+    /// <summary>Whether EXT4 policy values should override preserved source parameters.</summary>
+    internal bool HasExt4PolicyOverride { get; private set; }
+
+    /// <summary>Whether RAW/Android Sparse output was explicitly selected.</summary>
+    internal bool HasImageFormatOverride { get; private set; }
+
+    private bool _applyingDto;
 
     /// <summary>
     /// <para>创建打包设置面板视图模型并注册单例实例；订阅工程上下文变更消息以在子项目切换时自动加载设置。</para>
@@ -100,9 +135,22 @@ internal partial class ProjectSettingViewModel : Tool
         ImageFormat = FormatSPARSE ? "SPARSE" : "RAW",
         Ext4ReadWrite = EXT4RW,
         SizeAuto = SizeAuto,
-        Ext4Compress = EXT4Compress,
+        Ext4Compress = HasExt4PolicyOverride
+            ? Ext4CapacityPolicy == global::UotanStudio.Services.Projects.Ext4CapacityPolicy.Minimize
+            : null,
+        Ext4CapacityPolicy = HasExt4PolicyOverride ? Ext4CapacityPolicy : null,
+        Ext4TargetSizeBytes = HasExt4PolicyOverride ? Ext4TargetSizeBytes : null,
+        Ext4ReadOnly = HasExt4PolicyOverride ? EXT4RO : null,
+        Ext4BlockSharingMode = HasExt4PolicyOverride ? Ext4BlockSharingMode.ToString() : null,
+        SparseOutput = HasImageFormatOverride ? FormatSPARSE : null,
         ErofsAlgorithm = SelectedErofsAlgorithm,
         ErofsCompLevel = EROFSComGrade,
+        F2fsCompressionEnabled = HasF2fsCompressionOverride ? F2fsCompressionEnabled : null,
+        F2fsCompressionAlgorithm = HasF2fsCompressionOverride ? SelectedF2fsCompressionAlgorithm : null,
+        F2fsCompressionLevel = HasF2fsCompressionOverride ? F2fsCompressionLevel : null,
+        F2fsAndroidNativeProfile = HasF2fsAndroidProfileOverride ? F2fsAndroidNativeProfile : null,
+        F2fsAndroidImageSizeBytes = HasF2fsAndroidProfileOverride ? F2fsAndroidImageSizeBytes : null,
+        F2fsNativeWslDistribution = HasF2fsAndroidProfileOverride ? F2fsNativeWslDistribution : null,
         BrCompLevel = BRComGrade,
         SuperSize = SUPERSize,
         SuperName = SUPERName,
@@ -127,9 +175,24 @@ internal partial class ProjectSettingViewModel : Tool
             return;
         }
 
+        if (dto.Ext4CapacityPolicy is { } ext4Policy && !Enum.IsDefined(ext4Policy))
+        {
+            throw new InvalidDataException($"Unsupported EXT4 capacity policy '{ext4Policy}'.");
+        }
+
+        var blockSharingMode = global::UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Ext4BlockSharingMode.Independent;
+        if (dto.Ext4BlockSharingMode is { } blockSharingValue
+            && (!Enum.TryParse(blockSharingValue, ignoreCase: true, out blockSharingMode)
+                || !Enum.IsDefined(blockSharingMode)))
+        {
+            throw new InvalidDataException($"Unsupported EXT4 block sharing mode '{blockSharingValue}'.");
+        }
+
+        _applyingDto = true;
         var isExt4 = string.Equals(dto.ImageType, "EXT4", StringComparison.OrdinalIgnoreCase);
         var isF2fs = string.Equals(dto.ImageType, "F2FS", StringComparison.OrdinalIgnoreCase);
-        var isSparse = string.Equals(dto.ImageFormat, "SPARSE", StringComparison.OrdinalIgnoreCase);
+        var isSparse = dto.SparseOutput
+            ?? string.Equals(dto.ImageFormat, "SPARSE", StringComparison.OrdinalIgnoreCase);
         var isSuperSparse = string.Equals(dto.SuperFormat, "SPARSE", StringComparison.OrdinalIgnoreCase);
 
         TypeEXT4 = isExt4;
@@ -137,12 +200,29 @@ internal partial class ProjectSettingViewModel : Tool
         TypeF2FS = isF2fs;
         FormatRAW = !isSparse;
         FormatSPARSE = isSparse;
+        HasImageFormatOverride = dto.SparseOutput.HasValue
+            || string.Equals(dto.ImageFormat, "SPARSE", StringComparison.OrdinalIgnoreCase);
         EXT4RO = !dto.Ext4ReadWrite;
         EXT4RW = dto.Ext4ReadWrite;
         SizeAuto = dto.SizeAuto;
         SizeOri = !dto.SizeAuto;
-        EXT4NoCompress = !dto.Ext4Compress;
-        EXT4Compress = dto.Ext4Compress;
+        EXT4NoCompress = dto.Ext4Compress != true;
+        EXT4Compress = dto.Ext4Compress == true;
+        Ext4CapacityPolicy = dto.Ext4CapacityPolicy ?? (dto.Ext4Compress == true
+            ? global::UotanStudio.Services.Projects.Ext4CapacityPolicy.Minimize
+            : global::UotanStudio.Services.Projects.Ext4CapacityPolicy.Inherit);
+        Ext4TargetSizeBytes = dto.Ext4TargetSizeBytes;
+        Ext4BlockSharingMode = blockSharingMode;
+        HasExt4PolicyOverride = dto.Ext4CapacityPolicy.HasValue
+            || dto.Ext4TargetSizeBytes.HasValue
+            || dto.Ext4ReadOnly.HasValue
+            || dto.Ext4BlockSharingMode is not null
+            || dto.Ext4Compress.HasValue;
+        if (dto.Ext4ReadOnly.HasValue)
+        {
+            EXT4RO = dto.Ext4ReadOnly.Value;
+            EXT4RW = !dto.Ext4ReadOnly.Value;
+        }
         // Legacy projects stored only "lz4"/"lz4hc"; those tokens stay valid picker choices, and the
         // historical HC default is retained for an empty value.
         // 旧工程仅存 "lz4"/"lz4hc"；这些令牌仍是有效的下拉选项，空值沿用历史上的 HC 默认。
@@ -150,6 +230,18 @@ internal partial class ProjectSettingViewModel : Tool
             ? ErofsAlgorithmSelectors.Lz4HighCompression
             : ErofsAlgorithmSelectors.Normalize(dto.ErofsAlgorithm);
         EROFSComGrade = dto.ErofsCompLevel;
+        F2fsCompressionEnabled = dto.F2fsCompressionEnabled ?? false;
+        SelectedF2fsCompressionAlgorithm = NormalizeF2fsCompressionAlgorithm(dto.F2fsCompressionAlgorithm);
+        F2fsCompressionLevel = dto.F2fsCompressionLevel ?? 0;
+        F2fsAndroidNativeProfile = dto.F2fsAndroidNativeProfile ?? false;
+        F2fsAndroidImageSizeBytes = dto.F2fsAndroidImageSizeBytes;
+        F2fsNativeWslDistribution = dto.F2fsNativeWslDistribution ?? "";
+        HasF2fsAndroidProfileOverride = dto.F2fsAndroidNativeProfile.HasValue
+            || dto.F2fsAndroidImageSizeBytes.HasValue
+            || dto.F2fsNativeWslDistribution is not null;
+        HasF2fsCompressionOverride = dto.F2fsCompressionEnabled.HasValue
+            || dto.F2fsCompressionAlgorithm is not null
+            || dto.F2fsCompressionLevel.HasValue;
         BRComGrade = dto.BrCompLevel;
         SUPERSize = dto.SuperSize;
         SUPERName = dto.SuperName;
@@ -157,7 +249,86 @@ internal partial class ProjectSettingViewModel : Tool
         SUPERSPARSE = isSuperSparse;
         UTCTime = dto.UtcTime;
         DATSeg = dto.DatSegments;
+        _applyingDto = false;
     }
+
+    partial void OnF2fsCompressionEnabledChanged(bool value) => MarkF2fsCompressionOverride();
+
+    partial void OnSelectedF2fsCompressionAlgorithmChanged(string value) => MarkF2fsCompressionOverride();
+
+    partial void OnF2fsCompressionLevelChanged(int value) => MarkF2fsCompressionOverride();
+
+    partial void OnF2fsAndroidNativeProfileChanged(bool value) => MarkF2fsAndroidProfileOverride();
+
+    partial void OnF2fsAndroidImageSizeBytesChanged(long? value) => MarkF2fsAndroidProfileOverride();
+
+    partial void OnF2fsNativeWslDistributionChanged(string value) => MarkF2fsAndroidProfileOverride();
+
+    private void MarkF2fsAndroidProfileOverride()
+    {
+        if (!_applyingDto)
+        {
+            HasF2fsAndroidProfileOverride = true;
+        }
+    }
+
+    partial void OnExt4CapacityPolicyChanged(Ext4CapacityPolicy value) => MarkExt4PolicyOverride();
+
+    partial void OnExt4TargetSizeBytesChanged(long? value) => MarkExt4PolicyOverride();
+
+    partial void OnExt4BlockSharingModeChanged(Ext4BlockSharingMode value) => MarkExt4PolicyOverride();
+
+    partial void OnEXT4CompressChanged(bool value)
+    {
+        if (_applyingDto)
+        {
+            return;
+        }
+
+        Ext4CapacityPolicy = value
+            ? global::UotanStudio.Services.Projects.Ext4CapacityPolicy.Minimize
+            : global::UotanStudio.Services.Projects.Ext4CapacityPolicy.Inherit;
+        MarkExt4PolicyOverride();
+    }
+
+    partial void OnEXT4ROChanged(bool value) => MarkExt4PolicyOverride();
+
+    partial void OnEXT4RWChanged(bool value) => MarkExt4PolicyOverride();
+
+    partial void OnFormatSPARSEChanged(bool value) => MarkImageFormatOverride();
+
+    partial void OnFormatRAWChanged(bool value) => MarkImageFormatOverride();
+
+    private void MarkF2fsCompressionOverride()
+    {
+        if (!_applyingDto)
+        {
+            HasF2fsCompressionOverride = true;
+        }
+    }
+
+    private void MarkExt4PolicyOverride()
+    {
+        if (!_applyingDto)
+        {
+            HasExt4PolicyOverride = true;
+        }
+    }
+
+    private void MarkImageFormatOverride()
+    {
+        if (!_applyingDto)
+        {
+            HasImageFormatOverride = true;
+        }
+    }
+
+    private static string NormalizeF2fsCompressionAlgorithm(string? value)
+        => value is not null
+            && Enum.TryParse<CompressionAlgorithm>(value, ignoreCase: true, out var algorithm)
+            && Enum.IsDefined(algorithm)
+                ? algorithm.ToString()
+                : value ?? nameof(CompressionAlgorithm.Lz4);
 
     /// <summary>
     /// <para>根据源镜像格式自动推断打包类型：ext4 → EXT4，erofs → EROFS，其余不变。

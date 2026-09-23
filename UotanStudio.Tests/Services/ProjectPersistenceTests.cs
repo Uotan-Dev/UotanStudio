@@ -49,7 +49,14 @@ public sealed class SolutionPersistenceTests
             [
                 new ImageEntryDto { RelativePath = "images/boot.img", SizeBytes = 123, Format = "boot" }
             ],
-            Settings = new ProjectSettingsDto { ImageType = "EXT4", SuperSize = "4096" }
+            Settings = new ProjectSettingsDto
+            {
+                ImageType = "F2FS",
+                SuperSize = "4096",
+                F2fsCompressionEnabled = true,
+                F2fsCompressionAlgorithm = "Zstd",
+                F2fsCompressionLevel = 3
+            }
         };
 
         var ok = await SolutionPersistenceService.SaveFirmwareProjectAsync(path, firmware, TestContext.Current.CancellationToken);
@@ -65,8 +72,11 @@ public sealed class SolutionPersistenceTests
         Assert.Equal("boot", image.Format);
 
         Assert.NotNull(loaded.Settings);
-        Assert.Equal("EXT4", loaded.Settings.ImageType);
+        Assert.Equal("F2FS", loaded.Settings.ImageType);
         Assert.Equal("4096", loaded.Settings.SuperSize);
+        Assert.True(loaded.Settings.F2fsCompressionEnabled);
+        Assert.Equal("Zstd", loaded.Settings.F2fsCompressionAlgorithm);
+        Assert.Equal(3, loaded.Settings.F2fsCompressionLevel);
     }
 
     [Fact]

@@ -32,6 +32,49 @@
                                     MinLabelWidth="75" MaxLabelWidth="180"
                                     ColumnSpacing="5">
             <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
+                       Text="{DynamicResource Dock_F2FSCompression}" />
+            <CheckBox FontSize="13" IsChecked="{Binding F2fsCompressionEnabled}"
+                      Content="{DynamicResource Dock_Compress}" />
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,10,5,0" MinLabelWidth="90" MaxLabelWidth="180" ColumnSpacing="5">
+            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
+                       Text="{DynamicResource Dock_F2FSAndroidProfile}" />
+            <CheckBox IsChecked="{Binding F2fsAndroidNativeProfile}"
+                      ToolTip.Tip="{DynamicResource Dock_F2FSAndroidProfileHint}"
+                      Content="{DynamicResource Dock_F2FSAndroidProfileEnabled}" />
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,10,5,0" MinLabelWidth="90" MaxLabelWidth="180" ColumnSpacing="5">
+            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
+                       Text="{DynamicResource Dock_F2FSAndroidCapacity}" />
+            <TextBox MinWidth="155" MaxWidth="240" Text="{Binding F2fsAndroidImageSizeBytes}"
+                     ToolTip.Tip="{DynamicResource Dock_F2FSAndroidCapacityHint}" />
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,10,5,0" MinLabelWidth="90" MaxLabelWidth="180" ColumnSpacing="5">
+            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
+                       Text="{DynamicResource Dock_F2FSWslDistribution}" />
+            <TextBox MinWidth="155" MaxWidth="240" Text="{Binding F2fsNativeWslDistribution}" />
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,10,5,0"
+                                    MinLabelWidth="90" MaxLabelWidth="90"
+                                    ColumnSpacing="5">
+            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
+                       Text="{DynamicResource Dock_F2FSAlgorithm}" />
+            <ComboBox MinWidth="155" MaxWidth="240" HorizontalAlignment="Stretch" Padding="5"
+                      ItemsSource="{Binding F2fsCompressionAlgorithmOptions}"
+                      SelectedItem="{Binding SelectedF2fsCompressionAlgorithm}" />
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,10,5,0"
+                                    MinLabelWidth="90" MaxLabelWidth="90"
+                                    ColumnSpacing="5">
+            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
+                       Text="{DynamicResource Dock_F2FSCompLevel}" />
+            <ComboBox MinWidth="155" MaxWidth="240" HorizontalAlignment="Stretch" Padding="5"
+                      ItemsSource="0123456789" SelectedIndex="{Binding F2fsCompressionLevel}" />
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,15,5,0"
+                                    MinLabelWidth="75" MaxLabelWidth="180"
+                                    ColumnSpacing="5">
+            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
                        Text="{DynamicResource Dock_ImageFormat}" />
             <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
                         HorizontalAlignment="Left">

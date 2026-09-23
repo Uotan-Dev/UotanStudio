@@ -1,5 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Core;
+using UotanStudio.Services.Devices;
+using UotanStudio.Services.Terminal;
 
 namespace UotanStudio.Services.Workspace;
 
@@ -73,6 +75,31 @@ public sealed partial class WorkspacePanelService : ObservableObject
     }
 
     internal void RefreshTerminalVisibility() => TerminalVisible = _terminals?.IsVisible == true;
+
+    internal void OpenDeviceShell(DetectedDevice device)
+    {
+        var profile = CreateDeviceShellProfile(device);
+        (_terminals ?? throw new InvalidOperationException("The terminal dock is unavailable."))
+            .CreateTerminal(profile);
+    }
+
+    internal static TerminalProfile CreateDeviceShellProfile(DetectedDevice device)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        var app = Environment.ProcessPath
+            ?? throw new InvalidOperationException("The current application executable is unavailable.");
+        var assembly = Path.Combine(AppContext.BaseDirectory, "UotanStudio.Desktop.dll");
+        var runtimeRoot = Directory.GetParent(System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory())
+            ?.Parent?.Parent?.FullName;
+        var dotnet = runtimeRoot is null ? null : Path.Combine(runtimeRoot,
+            OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        var useDotnet = File.Exists(assembly) && dotnet is not null && File.Exists(dotnet);
+        var executable = useDotnet ? dotnet! : app;
+        var arguments = useDotnet
+            ? new[] { assembly, "--managed-device-shell", device.Protocol.ToString(), device.Serial }
+            : new[] { "--managed-device-shell", device.Protocol.ToString(), device.Serial };
+        return new TerminalProfile("Device shell", executable, arguments);
+    }
 
     internal void RestoreVisibility(IReadOnlyDictionary<string, bool> panels)
     {

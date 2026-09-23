@@ -1,4 +1,5 @@
 using UotanStudio.Services.Projects;
+using UotanStudio.ViewModels.Workspace;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
@@ -15,6 +16,24 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     {
         Directory.CreateDirectory(_root);
         _projects = new(_workspace);
+    }
+
+    [Fact]
+    public async Task ImportAsync_RawImage_CopiesAndKeepsProjectImage()
+    {
+        var source = Path.Combine(_root, "source.img");
+        await File.WriteAllBytesAsync(source, [1, 2, 3, 4], TestContext.Current.CancellationToken);
+        await _projects.CreateNewSolutionAsync(Path.Combine(_root, "sample.uotan"), TestContext.Current.CancellationToken);
+        var images = ImageViewModel.EnsureInstance();
+        images.Images.Clear();
+
+        await images.ImportAsync([source], cancellationToken: TestContext.Current.CancellationToken);
+
+        var entry = Assert.Single(images.Images);
+        Assert.Equal("raw", entry.Format);
+        var destination = ProjectContextService.Instance.ResolvePath(entry.RelativePath)!;
+        Assert.Equal(Path.Combine(ProjectContextService.Instance.EnsureImagesDirectory(), "source.img"), destination);
+        Assert.Equal(new byte[] { 1, 2, 3, 4 }, await File.ReadAllBytesAsync(destination, TestContext.Current.CancellationToken));
     }
 
     [Fact]

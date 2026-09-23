@@ -181,7 +181,7 @@ public partial class WorkspaceView
             if (!cancellationToken.IsCancellationRequested)
             {
                 _searchMatches.Clear();
-                DocumentSearchPanel.SetStatus(ex.Message, false);
+                DocumentSearchPanel.SetStatus(global::UotanStudio.Services.UserError.Describe(ex), false);
             }
         }
         finally { if (!cancellationToken.IsCancellationRequested) _searchBusy = false; }
@@ -286,8 +286,8 @@ public partial class WorkspaceView
         {
             _searchMatches.Clear();
             _searchMatchIndex = -1;
-            _searchOperationStatus = ex.Message;
-            DocumentSearchPanel.SetStatus(ex.Message, false);
+            _searchOperationStatus = global::UotanStudio.Services.UserError.Describe(ex);
+            DocumentSearchPanel.SetStatus(global::UotanStudio.Services.UserError.Describe(ex), false);
         }
         finally
         {

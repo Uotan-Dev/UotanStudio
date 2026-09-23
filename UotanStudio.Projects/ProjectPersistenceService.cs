@@ -1,5 +1,13 @@
 namespace UotanStudio.Services.Projects;
 
+/// <summary>Controls how an EXT4 output capacity is selected.</summary>
+public enum Ext4CapacityPolicy
+{
+    Inherit,
+    Explicit,
+    Minimize,
+}
+
 /// <summary>
 /// Image entry data transfer object, carrying the image's project-relative path and metadata.
 /// <para>镜像条目数据传输对象，承载镜像在项目内的相对路径与元信息。</para>
@@ -59,7 +67,22 @@ public sealed class ProjectSettingsDto
     /// Whether EXT4 is compressed.
     /// <para>EXT4 是否压缩。</para>
     /// </summary>
-    public bool Ext4Compress { get; set; } = true;
+    public bool? Ext4Compress { get; set; }
+
+    /// <summary>Explicit EXT4 capacity policy. Missing values are migrated from <see cref="Ext4Compress"/>.</summary>
+    public Ext4CapacityPolicy? Ext4CapacityPolicy { get; set; }
+
+    /// <summary>Exact EXT4 capacity when <see cref="Ext4CapacityPolicy"/> is <see cref="Services.Projects.Ext4CapacityPolicy.Explicit"/>.</summary>
+    public long? Ext4TargetSizeBytes { get; set; }
+
+    /// <summary>Explicit EXT4 readonly selection. Missing values use the legacy read-write field.</summary>
+    public bool? Ext4ReadOnly { get; set; }
+
+    /// <summary>EXT4 data block sharing mode.</summary>
+    public string? Ext4BlockSharingMode { get; set; }
+
+    /// <summary>Explicit Android Sparse container output selection.</summary>
+    public bool? SparseOutput { get; set; }
 
     /// <summary>
     /// EROFS compression algorithm: "lz4", "lz4hc", "lzma", "deflate" or "zstd". The default is the
@@ -75,6 +98,27 @@ public sealed class ProjectSettingsDto
     /// <para>EROFS 压缩等级。</para>
     /// </summary>
     public int ErofsCompLevel { get; set; } = 8;
+
+    /// <summary>
+    /// Explicit F2FS compression selection. A missing value inherits source metadata when rebuilding,
+    /// or the format default for a new directory.
+    /// </summary>
+    public bool? F2fsCompressionEnabled { get; set; }
+
+    /// <summary>Explicit F2FS compression algorithm ("Lz4", "Zstd" or "Lzo").</summary>
+    public string? F2fsCompressionAlgorithm { get; set; }
+
+    /// <summary>Explicit F2FS compression level.</summary>
+    public int? F2fsCompressionLevel { get; set; }
+
+    /// <summary>Opt-in native Android F2FS profile (ro, project_quota, extra_attr).</summary>
+    public bool? F2fsAndroidNativeProfile { get; set; }
+
+    /// <summary>Fixed raw-image capacity in bytes for the native Android profile.</summary>
+    public long? F2fsAndroidImageSizeBytes { get; set; }
+
+    /// <summary>WSL distribution containing f2fs-tools on Windows.</summary>
+    public string? F2fsNativeWslDistribution { get; set; }
 
     /// <summary>
     /// SUPER partition size (string).

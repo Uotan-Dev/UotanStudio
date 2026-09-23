@@ -191,7 +191,7 @@ public partial class ProjectExplorerView : UserControl
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Explorer", ex.Message);
-            await DialogService.ShowAsync(owner, language.GetString("Image_ConvertTitle"), ex.Message,
+            await DialogService.ShowAsync(owner, language.GetString("Image_ConvertTitle"), global::UotanStudio.Services.UserError.Describe(ex),
                 Ursa.Controls.MessageBoxIcon.Error);
         }
     }
@@ -287,7 +287,7 @@ public partial class ProjectExplorerView : UserControl
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Explorer", $"Rename failed: {ex.Message}");
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_RenameFailed"), ex.Message, MessageBoxIcon.Error);
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_RenameFailed"), global::UotanStudio.Services.UserError.Describe(ex), MessageBoxIcon.Error);
         }
     }
 
@@ -334,7 +334,7 @@ public partial class ProjectExplorerView : UserControl
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Explorer", $"Delete failed: {ex.Message}");
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_DeleteFailed"), ex.Message, MessageBoxIcon.Error);
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_DeleteFailed"), global::UotanStudio.Services.UserError.Describe(ex), MessageBoxIcon.Error);
         }
     }
 
@@ -391,7 +391,7 @@ public partial class ProjectExplorerView : UserControl
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Explorer", ex.Message);
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Paste"), ex.Message, MessageBoxIcon.Error);
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Paste"), global::UotanStudio.Services.UserError.Describe(ex), MessageBoxIcon.Error);
         }
     }
 

@@ -37,7 +37,7 @@ internal static class ExplorerItemCreationService
             LogService.Instance.Write(LogLevel.Error, "Explorer", $"Create item failed: {ex.Message}");
             await DialogService.ShowAsync(owner,
                 language.GetString(isDirectory ? "Dialog_NewFolderFailed" : "Dialog_NewFileFailed"),
-                ex.Message, MessageBoxIcon.Error);
+                UserError.Describe(ex), MessageBoxIcon.Error);
             return null;
         }
     }
