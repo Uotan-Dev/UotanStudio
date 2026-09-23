@@ -3,6 +3,7 @@ using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
+using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Services.Devices;
@@ -79,10 +80,24 @@ public sealed partial class DeviceMonitorService
     {
         ArgumentNullException.ThrowIfNull(operation);
         cancellationToken.ThrowIfCancellationRequested();
-        using var session = OpenFastbootSession(device)
-            ?? throw new InvalidOperationException("Cannot open the selected Fastboot device.");
-        cancellationToken.ThrowIfCancellationRequested();
-        return operation(session);
+        if (device.Protocol != DeviceProtocolKind.Fastboot)
+            throw new ArgumentException("A Fastboot target is required.", nameof(device));
+        var lease = LeaseEndpoint(device, cancellationToken: cancellationToken);
+        try
+        {
+            var usb = RequireUsb(lease);
+            if (!new FastbootFactory().TryCreate(usb, out var protocol) || protocol is not FastbootSession session)
+                throw new IOException("The selected device does not expose Fastboot.");
+            using (session)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return operation(session);
+            }
+        }
+        finally
+        {
+            CloseLease(lease);
+        }
     }
 
     internal void RunFastboot(DetectedDevice device, Action<FastbootSession> operation,
@@ -101,10 +116,19 @@ public sealed partial class DeviceMonitorService
     {
         ArgumentNullException.ThrowIfNull(operation);
         cancellationToken.ThrowIfCancellationRequested();
-        using var session = OpenEdlSession(device)
-            ?? throw new InvalidOperationException("Cannot open the selected EDL device.");
-        cancellationToken.ThrowIfCancellationRequested();
-        return await operation(session).ConfigureAwait(false);
+        if (device.Protocol != DeviceProtocolKind.Edl)
+            throw new ArgumentException("An EDL target is required.", nameof(device));
+        var lease = LeaseEndpoint(device, cancellationToken: cancellationToken);
+        try
+        {
+            using var session = new EdlSession(new UotanStudio.Comm.Transports.Abstractions.UsbDeviceTransport(RequireUsb(lease)));
+            cancellationToken.ThrowIfCancellationRequested();
+            return await operation(session).ConfigureAwait(false);
+        }
+        finally
+        {
+            CloseLease(lease);
+        }
     }
 
     internal TResult RunAdb<TResult>(DetectedDevice device, Func<AdbSession, TResult> operation,
@@ -112,13 +136,22 @@ public sealed partial class DeviceMonitorService
     {
         ArgumentNullException.ThrowIfNull(operation);
         cancellationToken.ThrowIfCancellationRequested();
-        using var session = OpenAdbSession(device)
-            ?? throw new InvalidOperationException("Cannot open the selected ADB device.");
-        session.Connect();
-        if (!session.IsConnected)
-            throw new InvalidOperationException("ADB session is not connected.");
-        cancellationToken.ThrowIfCancellationRequested();
-        return operation(session);
+        var (lease, session) = LeaseAdb(device, cancellationToken);
+        try
+        {
+            using (session)
+            {
+                session.Connect();
+                if (!session.IsConnected)
+                    throw new InvalidOperationException("ADB session is not connected.");
+                cancellationToken.ThrowIfCancellationRequested();
+                return operation(session);
+            }
+        }
+        finally
+        {
+            CloseLease(lease);
+        }
     }
 
     internal async Task<TResult> RunAdbAsync<TResult>(DetectedDevice device,
@@ -126,13 +159,22 @@ public sealed partial class DeviceMonitorService
     {
         ArgumentNullException.ThrowIfNull(operation);
         cancellationToken.ThrowIfCancellationRequested();
-        using var session = OpenAdbSession(device)
-            ?? throw new InvalidOperationException("Cannot open the selected ADB device.");
-        session.Connect();
-        if (!session.IsConnected)
-            throw new InvalidOperationException("ADB session is not connected.");
-        cancellationToken.ThrowIfCancellationRequested();
-        return await operation(session).ConfigureAwait(false);
+        var (lease, session) = LeaseAdb(device, cancellationToken);
+        try
+        {
+            using (session)
+            {
+                session.Connect();
+                if (!session.IsConnected)
+                    throw new InvalidOperationException("ADB session is not connected.");
+                cancellationToken.ThrowIfCancellationRequested();
+                return await operation(session).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            CloseLease(lease);
+        }
     }
 
     internal async Task<TResult> RunRkdlAsync<TResult>(DetectedDevice device,
@@ -140,9 +182,18 @@ public sealed partial class DeviceMonitorService
     {
         ArgumentNullException.ThrowIfNull(operation);
         cancellationToken.ThrowIfCancellationRequested();
-        using var session = OpenRkdlSession(device)
-            ?? throw new InvalidOperationException("Cannot open the selected RKDL device.");
-        cancellationToken.ThrowIfCancellationRequested();
-        return await operation(session).ConfigureAwait(false);
+        if (device.Protocol != DeviceProtocolKind.Rkdl)
+            throw new ArgumentException("An RKDL target is required.", nameof(device));
+        var lease = LeaseEndpoint(device, cancellationToken: cancellationToken);
+        try
+        {
+            using var session = new RkdlSession(new UotanStudio.Comm.Transports.Abstractions.UsbDeviceTransport(RequireUsb(lease)));
+            cancellationToken.ThrowIfCancellationRequested();
+            return await operation(session).ConfigureAwait(false);
+        }
+        finally
+        {
+            CloseLease(lease);
+        }
     }
 }
