@@ -15,7 +15,6 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
 {
     private readonly ICommKit _comm;
     private readonly DeviceController _controller;
-    private readonly Func<bool> _adbServerAvailable;
     private readonly Func<bool> _hdcServerAvailable;
 
     public HeadlessDeviceManagerGateway()
@@ -24,16 +23,14 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
         _controller = new DeviceController(
             [new UsbDiscoverySource(_comm, UsbApiKind.Auto), new AdbServerDiscoverySource(), new HdcServerDiscoverySource()],
             new CommDeviceTransportOpener(_comm));
-        _adbServerAvailable = DebugBridgeRoute.UseAdbServer;
         _hdcServerAvailable = () => DebugBridgeRoute.UseHdcServer();
     }
 
     internal HeadlessDeviceManagerGateway(ICommKit comm, DeviceController controller,
-        Func<bool> adbServerAvailable, Func<bool> hdcServerAvailable)
+        Func<bool> hdcServerAvailable)
     {
         _comm = comm;
         _controller = controller;
-        _adbServerAvailable = adbServerAvailable;
         _hdcServerAvailable = hdcServerAvailable;
     }
 
@@ -45,7 +42,7 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
     public IReadOnlyList<UsbDeviceInfo> ListUsbDevices()
     {
         var snapshot = Refresh();
-        var eligible = snapshot.Endpoints.Where(endpoint => IsRoutableUsb(endpoint))
+        var eligible = snapshot.Endpoints.Where(endpoint => IsRoutableUsb(snapshot, endpoint))
             .Select(endpoint => endpoint.Id).ToHashSet();
         return _comm.EnumerateUsbDevices().Where(info =>
             eligible.Contains(new DeviceEndpointId(UsbDiscoverySource.SourceName,
@@ -56,7 +53,7 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
     {
         var snapshot = Refresh();
         return snapshot.Endpoints.Where(endpoint => endpoint.Protocol == "adb" &&
-                (endpoint.Route == "server" || IsRoutableUsb(endpoint)))
+                (endpoint.Route == "server" || IsRoutableUsb(snapshot, endpoint)))
             .Select(endpoint =>
             {
                 var identity = endpoint.Serial ?? endpoint.Address;
@@ -100,7 +97,7 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serial);
         var snapshot = Refresh();
-        var endpoint = SelectAdb(snapshot, serial, _adbServerAvailable());
+        var endpoint = SelectAdb(snapshot, serial);
         var lease = Complete(_controller.OpenAsync(snapshot, endpoint.Id));
         try
         {
@@ -134,7 +131,7 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
     {
         ArgumentNullException.ThrowIfNull(operation);
         var snapshot = Refresh();
-        var targets = snapshot.Endpoints.Where(endpoint => endpoint.Protocol == "fastboot" && IsRoutableUsb(endpoint))
+        var targets = snapshot.Endpoints.Where(endpoint => endpoint.Protocol == "fastboot" && IsRoutableUsb(snapshot, endpoint))
             .Take(2).ToArray();
         if (targets.Length != 1)
         {
@@ -161,18 +158,37 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
         }
     }
 
-    private bool IsRoutableUsb(DeviceEndpoint endpoint)
+    internal bool IsRoutableUsb(DeviceSnapshot snapshot, DeviceEndpoint endpoint)
         => endpoint.Source == UsbDiscoverySource.SourceName && endpoint.Route == "direct-usb" &&
-            !(endpoint.Protocol == "adb" && _adbServerAvailable()) &&
+            !(endpoint.Protocol == "adb" && ServerOwns(snapshot, endpoint.Serial)) &&
             !(endpoint.Protocol == "hdc" && _hdcServerAvailable());
 
-    internal static DeviceEndpoint SelectAdb(DeviceSnapshot snapshot, string serial, bool serverAvailable)
+    private static bool ServerOwns(DeviceSnapshot snapshot, string? serial)
+        => snapshot.Endpoints.Any(endpoint => endpoint.Protocol == "adb" && endpoint.Route == "server" &&
+            (string.IsNullOrWhiteSpace(serial) ||
+                string.Equals(endpoint.Serial ?? endpoint.Address, serial, StringComparison.Ordinal)));
+
+    internal static DeviceEndpoint SelectAdb(DeviceSnapshot snapshot, string serial)
     {
+        var serverMatches = snapshot.Endpoints.Where(endpoint => endpoint.Protocol == "adb" &&
+            endpoint.Route == "server" &&
+            string.Equals(endpoint.Serial ?? endpoint.Address, serial, StringComparison.Ordinal))
+            .Take(2).ToArray();
+        if (serverMatches.Length > 1)
+        {
+            throw new IOException("ADB server target is ambiguous.");
+        }
+
+        if (serverMatches.Length == 1)
+        {
+            return serverMatches[0];
+        }
+
         var matches = snapshot.Endpoints.Where(endpoint => endpoint.Protocol == "adb" &&
-            (serverAvailable ? endpoint.Route == "server" : endpoint.Source == UsbDiscoverySource.SourceName &&
-                endpoint.Route == "direct-usb") &&
+            endpoint.Source == UsbDiscoverySource.SourceName && endpoint.Route == "direct-usb" &&
+            !ServerOwns(snapshot, endpoint.Serial) &&
             (string.Equals(endpoint.Serial ?? endpoint.Address, serial, StringComparison.Ordinal) ||
-                (!serverAvailable && string.Equals(endpoint.Address, serial, StringComparison.Ordinal))))
+                string.Equals(endpoint.Address, serial, StringComparison.Ordinal)))
             .Take(2).ToArray();
         if (matches.Length != 1)
         {
