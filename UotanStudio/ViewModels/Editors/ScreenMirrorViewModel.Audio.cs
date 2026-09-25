@@ -1,6 +1,6 @@
-using UotanStudio.Comm.Protocols.Scrcpy;
 using UotanStudio.Media.Audio;
 using UotanStudio.Services;
+using UotanStudio.Services.Mirroring;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -8,7 +8,7 @@ public partial class ScreenMirrorViewModel
 {
     private string _audioBackend = string.Empty;
     internal string AudioBackend => _audioBackend;
-    private void AudioLoop(Services.Devices.ManagedMirrorSession client, CancellationToken token)
+    private void AudioLoop(Services.Mirroring.ManagedMirrorSession client, CancellationToken token)
     {
         IAudioDecoder? decoder = null;
         IAudioSink? sink = null;

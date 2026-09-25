@@ -8,9 +8,9 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Comm.Protocols.Adb;
-using UotanStudio.Comm.Protocols.Scrcpy;
 using UotanStudio.Media.Audio;
 using UotanStudio.Media.Decoding;
+using UotanStudio.Services.Mirroring;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -35,7 +35,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// </remarks>
 public partial class ScreenMirrorViewModel : Document
 {
-    private Services.Devices.ManagedMirrorSession? _client;
+    private Services.Mirroring.ManagedMirrorSession? _client;
     private int _starting;
     private readonly object _frameLock = new();
     private Views.Editors.ScreenMirrorPixelBuffer? _pendingFrame;
@@ -85,7 +85,7 @@ public partial class ScreenMirrorViewModel : Document
     internal string DecoderBackend => _decoderBackend;
     internal ScrcpyServerOptions? StreamOptions => _streamOptions;
     internal ScrcpyVideoMetadata? StreamMetadata => _client?.VideoMetadata;
-    internal Comm.Protocols.Scrcpy.ScrcpyAudioMetadata? StreamMetadataAudio => _client?.AudioMetadata;
+    internal Services.Mirroring.ScrcpyAudioMetadata? StreamMetadataAudio => _client?.AudioMetadata;
     internal bool IsStopped => _disposed;
     internal bool AudioDisabledByServer => _client?.AudioDisabledByServer == true;
 
@@ -114,14 +114,14 @@ public partial class ScreenMirrorViewModel : Document
         {
             try
             {
-                var device = UotanStudio.Services.Devices.DeviceMonitorService.Instance.Scan()
+                var device = App.DeviceMonitor.Scan()
                     .SingleOrDefault(candidate => candidate.Serial == serial &&
                         candidate.Protocol == Services.Devices.DeviceProtocolKind.Adb)
                     ?? throw new InvalidOperationException($"Device {serial} is not connected. 设备 {serial} 未连接。");
                 var options = CreateOptionsFromSettings();
                 _streamOptions = options;
                 StatusText = GetLocalizedString("ScreenMirror_Installing");
-                var mirror = Services.Devices.DeviceMonitorService.Instance.StartMirror(
+                var mirror = App.DeviceMonitor.StartMirror(
                     device, ResolveServerJarPath(), options);
                 if (_disposed)
                 {
@@ -129,6 +129,14 @@ public partial class ScreenMirrorViewModel : Document
                     return;
                 }
                 _client = mirror;
+                if (_disposed)
+                {
+                    // 页面在部署期间关闭时，Cleanup 可能已在本赋值前完成清理；这里兜底释放
+                    // 刚建立的会话，避免设备端 scrcpy 服务与 shell 流随页面关闭而泄漏。
+                    _client = null;
+                    mirror.Dispose();
+                    return;
+                }
                 StatusText = GetLocalizedString("ScreenMirror_Connecting");
                 BeginStreaming();
             }
@@ -331,7 +339,7 @@ public partial class ScreenMirrorViewModel : Document
             + $"未找到 scrcpy 服务端 jar。请将 scrcpy-server {ScrcpyConstants.ServerVersion} 放置到 Assets/scrcpy-server.jar。");
     }
 
-    private void DecodeLoop(Services.Devices.ManagedMirrorSession client, CancellationToken token)
+    private void DecodeLoop(Services.Mirroring.ManagedMirrorSession client, CancellationToken token)
     {
         try
         {

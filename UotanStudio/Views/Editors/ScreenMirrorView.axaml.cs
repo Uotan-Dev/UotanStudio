@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
-using UotanStudio.Comm.Protocols.Scrcpy;
+using UotanStudio.Services.Mirroring;
 using UotanStudio.ViewModels.Editors;
 
 namespace UotanStudio.Views.Editors;

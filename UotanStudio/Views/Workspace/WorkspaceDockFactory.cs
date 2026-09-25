@@ -461,5 +461,17 @@ public class WorkspaceDockFactory : Factory
                 // 清理失败不影响关闭流程
             }
         }
+        else if (dockable is UotanStudio.ViewModels.Editors.ScreenMirrorViewModel screenMirror)
+        {
+            try
+            {
+                // 投屏文档持有设备端 scrcpy 会话与长驻 shell 流，不清理会让服务端进程随 shell 挂起残留。
+                screenMirror.Cleanup();
+            }
+            catch
+            {
+                // 清理失败不影响关闭流程
+            }
+        }
     }
 }

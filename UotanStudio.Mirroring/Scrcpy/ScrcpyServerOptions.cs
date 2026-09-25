@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace UotanStudio.Comm.Protocols.Scrcpy;
+namespace UotanStudio.Services.Mirroring;
 
 /// <summary>
 /// Parameters passed to the scrcpy server process.

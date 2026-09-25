@@ -1,7 +1,7 @@
-using UotanStudio.Comm.Protocols.Scrcpy;
+using UotanStudio.Services.Mirroring;
 using Xunit;
 
-namespace UotanStudio.Tests.Comm.Protocols;
+namespace UotanStudio.Tests.Mirroring;
 
 public class ScrcpyAudioMetadataTests
 {

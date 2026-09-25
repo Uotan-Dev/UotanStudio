@@ -19,6 +19,7 @@
     <ProjectReference Include="..\UotanStudio.Delivery\UotanStudio.Delivery.csproj" />
     <!-- Comm library under test (AVB verification wiring / protocol tests) -->
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
+    <ProjectReference Include="..\UotanStudio.Mirroring\UotanStudio.Mirroring.csproj" />
     <ProjectReference Include="..\UotanStudio.Mcp\UotanStudio.Mcp.csproj" />
     <!-- Media library under test (platform video decoder abstraction / NV12 conversion) -->
     <ProjectReference Include="..\UotanStudio.Media\UotanStudio.Media.csproj" />

@@ -1,11 +1,17 @@
 using System.Text;
+using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Adb;
-using UotanStudio.Comm.Protocols.Scrcpy;
+using UotanStudio.Services.Mirroring;
 
-namespace UotanStudio.Services.Devices;
+namespace UotanStudio.Services.Mirroring;
 
-/// <summary>Owns the ADB and scrcpy transports while presentation consumes decoded packets.</summary>
-public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, AdbSession? adbSession) : IDisposable
+/// <summary>Owns the ADB and scrcpy transports while presentation consumes decoded packets.
+/// Server log lines are forwarded to the optional <c>logSink</c> so this layer stays decoupled
+/// from any host logging service. <para>持有 ADB 与 scrcpy 传输直至呈现层消费解码包。
+/// server 日志行转发给可选的 <c>logSink</c>，使本层与宿主日志服务解耦。</para></summary>
+public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdbDeviceSession? adbSession,
+    DeviceLease? lease = null, Action<string>? logSink = null) : IDisposable
 {
     private readonly StringBuilder _output = new();
     private int _disposed;
@@ -63,7 +69,8 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, AdbS
                 try { count = shell.Read(buffer, 0, buffer.Length); }
                 catch (TimeoutException) { continue; }
                 catch (IOException ex) when (ex.InnerException is System.Net.Sockets.SocketException
-                    { SocketErrorCode: System.Net.Sockets.SocketError.TimedOut }) { continue; }
+                { SocketErrorCode: System.Net.Sockets.SocketError.TimedOut })
+                { continue; }
                 if (count == 0) break;
                 var text = Encoding.UTF8.GetString(buffer, 0, count);
                 lock (_output)
@@ -71,7 +78,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, AdbS
                     _output.Append(text);
                     if (_output.Length > 4096) _output.Remove(0, _output.Length - 4096);
                 }
-                LogService.Instance.Write(LogLevel.Debug, "ScreenMirror", text);
+                logSink?.Invoke(text);
             }
         }
         catch (Exception) { /* Closing the session interrupts the shell reader. */ }
@@ -80,8 +87,28 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, AdbS
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-        client.Dispose();
-        shell.Dispose();
-        adbSession?.Dispose();
+        try
+        {
+            client.Dispose();
+        }
+        finally
+        {
+            try
+            {
+                shell.Dispose();
+            }
+            finally
+            {
+                try
+                {
+                    adbSession?.Dispose();
+                }
+                finally
+                {
+                    if (lease is not null)
+                        lease.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                }
+            }
+        }
     }
 }

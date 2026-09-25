@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace UotanStudio.Comm.Protocols.Scrcpy;
+namespace UotanStudio.Services.Mirroring;
 
 /// <summary>
 /// Encodes scrcpy control messages (client → device direction).

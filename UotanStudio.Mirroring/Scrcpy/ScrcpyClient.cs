@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Protocols.Adb;
 
-namespace UotanStudio.Comm.Protocols.Scrcpy;
+namespace UotanStudio.Services.Mirroring;
 
 /// <summary>
 /// Decoded video stream metadata announced by the server on the first socket.
@@ -58,7 +58,7 @@ public sealed record ScrcpyVideoFrame(long Pts, byte[] Data)
 /// <param name="Type">Device message type. 设备消息类型。</param>
 /// <param name="Clipboard">Clipboard text for <see cref="ScrcpyConstants.DeviceTypeClipboard"/>. 剪贴板消息的文本。</param>
 /// <param name="AckSequence">Acknowledged sequence for ACK_CLIPBOARD. ACK_CLIPBOARD 确认的序号。</param>
-public sealed record ScrcpyDeviceMessage(byte Type, string? Clipboard = null, ulong AckSequence = 0);
+internal sealed record ScrcpyDeviceMessage(byte Type, string? Clipboard = null, ulong AckSequence = 0);
 
 /// <summary>
 /// Audio stream metadata announced by the server on the audio socket.
@@ -154,10 +154,10 @@ public sealed class ScrcpyClient : IDisposable
     /// <summary>初始化客户端；服务端启动后调用 <see cref="Connect"/>。</summary>
     /// <param name="session">An established ADB session. 已建立的 ADB 会话。</param>
     /// <param name="options">The options the server was started with. 服务端启动时使用的选项。</param>
-    public ScrcpyClient(AdbSession session, ScrcpyServerOptions options)
+    public ScrcpyClient(UotanStudio.Comm.Contracts.IAdbDeviceSession session, ScrcpyServerOptions options)
     {
         ArgumentNullException.ThrowIfNull(session);
-        _open = service => new AdbServiceStream(session.Connection.OpenStream(service));
+        _open = service => session.OpenServiceStream(service);
         _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
@@ -377,7 +377,7 @@ public sealed class ScrcpyClient : IDisposable
     /// </summary>
     /// <param name="timeoutMs">Per-read timeout in milliseconds. 单次读取超时（毫秒）。</param>
     /// <returns>The message, or <see langword="null"/> when none arrived. 消息；未到达时为 <see langword="null"/>。</returns>
-    public ScrcpyDeviceMessage? TryReadDeviceMessage(int timeoutMs = 0)
+    internal ScrcpyDeviceMessage? TryReadDeviceMessage(int timeoutMs = 0)
     {
         var stream = _controlStream;
         if (stream is null)

@@ -1,4 +1,4 @@
-using UotanStudio.Comm.Protocols.Common;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Services.Devices;
 using Xunit;
 
@@ -7,7 +7,7 @@ namespace UotanStudio.Tests.Media;
 public sealed class ScreenMirrorTransportTests
 {
     [Fact]
-    public void OpenAdbSession_NetworkTargetWithoutServer_DoesNotOpenUsb()
+    public void OpenAdbLease_NetworkTargetWithoutServer_DoesNotOpenUsb()
     {
         if (DebugBridgeRoute.UseAdbServer())
             Assert.Skip("An ADB server is running; the absent-server route cannot be tested.");
@@ -19,6 +19,6 @@ public sealed class ScreenMirrorTransportTests
             Protocol = DeviceProtocolKind.Adb,
             Transport = DeviceTransportKind.Tcp
         };
-        Assert.Throws<IOException>(() => DeviceMonitorService.Instance.OpenAdbSession(target));
+        Assert.Throws<IOException>(() => UotanStudio.App.DeviceMonitor.OpenAdbLease(target));
     }
 }

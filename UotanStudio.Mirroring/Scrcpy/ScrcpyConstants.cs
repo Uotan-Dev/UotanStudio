@@ -1,4 +1,4 @@
-namespace UotanStudio.Comm.Protocols.Scrcpy;
+namespace UotanStudio.Services.Mirroring;
 
 /// <summary>
 /// scrcpy wire-protocol constants for the locked server version.

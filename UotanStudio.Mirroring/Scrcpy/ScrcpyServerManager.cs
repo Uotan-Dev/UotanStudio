@@ -1,7 +1,8 @@
 using System.Text;
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Adb;
 
-namespace UotanStudio.Comm.Protocols.Scrcpy;
+namespace UotanStudio.Services.Mirroring;
 
 /// <summary>
 /// Deploys and launches the scrcpy server on a device over the self-hosted
@@ -29,7 +30,7 @@ public static class ScrcpyServerManager
     /// </summary>
     /// <param name="session">An established ADB session. 已建立的 ADB 会话。</param>
     /// <param name="localJarPath">Path of the bundled <c>scrcpy-server</c> jar. 随附 <c>scrcpy-server</c> jar 的本地路径。</param>
-    public static void PushServer(AdbSession session, string localJarPath)
+    public static void PushServer(IAdbDeviceSession session, string localJarPath)
     {
         if (session is null)
         {
@@ -55,7 +56,7 @@ public static class ScrcpyServerManager
     /// The shell stream carrying the server log; keep it open while mirroring.
     /// 承载服务端日志的 shell 流；投屏期间保持打开。
     /// </returns>
-    public static AdbStream StartServer(AdbSession session, ScrcpyServerOptions options)
+    public static IAdbStream StartServer(IAdbDeviceSession session, ScrcpyServerOptions options)
     {
         if (session is null)
         {
@@ -64,7 +65,7 @@ public static class ScrcpyServerManager
 
         ArgumentNullException.ThrowIfNull(options);
 
-        return session.Connection.OpenStream("shell:" + options.BuildShellCommand());
+        return session.OpenStream("shell:" + options.BuildShellCommand());
     }
 
     /// <summary>
@@ -72,14 +73,14 @@ public static class ScrcpyServerManager
     /// <para>强制退出设备上正在运行的 scrcpy 服务端进程。</para>
     /// </summary>
     /// <param name="session">An established ADB session. 已建立的 ADB 会话。</param>
-    public static void StopServer(AdbSession session)
+    public static void StopServer(IAdbDeviceSession session)
     {
         if (session is null)
         {
             throw new ArgumentNullException(nameof(session));
         }
 
-        using var stream = session.Connection.OpenStream("shell:pkill -f " + ScrcpyConstants.ServerMainClass);
+        using var stream = session.OpenStream("shell:pkill -f " + ScrcpyConstants.ServerMainClass);
         while (stream.Read(3000) is not null)
         {
         }
@@ -91,7 +92,7 @@ public static class ScrcpyServerManager
     /// </summary>
     /// <param name="shellStream">The stream returned by <see cref="StartServer"/>. <see cref="StartServer"/> 返回的流。</param>
     /// <returns>Log text read so far. 当前读到的日志文本。</returns>
-    public static string DrainLog(AdbStream shellStream)
+    public static string DrainLog(IAdbStream shellStream)
     {
         var sb = new StringBuilder();
         byte[]? chunk;

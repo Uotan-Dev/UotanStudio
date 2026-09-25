@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\UotanStudio.Projects\UotanStudio.Projects.csproj" />
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
+    <ProjectReference Include="..\UotanStudio.Mirroring\UotanStudio.Mirroring.csproj" />
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
     <ProjectReference Include="..\UotanStudio.Delivery\UotanStudio.Delivery.csproj" />
     <ProjectReference Include="..\UotanStudio.Mcp\UotanStudio.Mcp.csproj" />
@@ -52,7 +53,6 @@
     <PackageReference Include="Semi.Avalonia.DataGrid" />
     <PackageReference Include="Semi.Avalonia.Dock" />
     <PackageReference Include="NodifyM.Avalonia" />
-    <PackageReference Include="AdvancedSharpAdbClient" />
     <PackageReference Include="DiffPlex" />
     <PackageReference Include="SharpCompress" />
     <PackageReference Include="System.IO.Hashing" />

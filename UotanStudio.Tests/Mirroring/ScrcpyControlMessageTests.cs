@@ -1,9 +1,9 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Comm.Protocols.Scrcpy;
+using UotanStudio.Services.Mirroring;
 using Xunit;
 
-namespace UotanStudio.Tests.Comm.Protocols;
+namespace UotanStudio.Tests.Mirroring;
 
 /// <summary>
 /// scrcpy 2.7 control message wire-format conformance: byte layouts are
