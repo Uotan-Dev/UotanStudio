@@ -12,10 +12,15 @@
    x:Class="UotanStudio.Views.Shell.MainWindow"
    x:DataType="vm:MainViewModel"
    Icon="/Assets/UotanToolbox.png"
-   Title=""
+   Title="{OnPlatform Default={Binding WindowTitle}, macOS=''}"
    MinWidth="720"
    ExtendClientAreaToDecorationsHint="True"
    ExtendClientAreaTitleBarHeightHint="32">
+	<Window.Styles>
+		<Style Selector="WindowDrawnDecorations /template/ TextBlock">
+			<Setter Property="IsVisible" Value="False" />
+		</Style>
+	</Window.Styles>
 	<Window.Resources>
 		<ControlTheme x:Key="DeviceSelectorItemTheme" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
 			<Setter Property="Header" Value="{Binding DisplayName, x:DataType=devices:DeviceInfo}" />
