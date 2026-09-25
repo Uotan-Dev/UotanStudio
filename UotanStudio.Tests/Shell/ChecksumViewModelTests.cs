@@ -79,8 +79,6 @@ public sealed class ChecksumViewModelTests
         var viewModel = new ChecksumViewModel { FilePath = path };
         await viewModel.VerifyAsync();
 
-        // 「粘贴并校验」对大小写不敏感；文件切换后粘贴内容随结果一起清空。
-        // The paste comparison is case-insensitive; switching files clears the pasted text with the rows.
         viewModel.PastedText = "900150983CD24FB0D6963F7D28E17F72".ToUpperInvariant();
 
         Assert.Equal(ChecksumMatchResult.Correct, viewModel.MatchResult);

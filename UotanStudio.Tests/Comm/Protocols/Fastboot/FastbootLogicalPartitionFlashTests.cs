@@ -31,8 +31,8 @@ public class FastbootLogicalPartitionFlashTests
     public void PrepareFlashTarget_ResizesLogicalPartition_ToImageSize()
     {
         var transport = new FakeCommTransport();
-        transport.Enqueue("OKAYyes");   // getvar:is-logical:product_a
-        transport.Enqueue("OKAY");      // resize-logical-partition:product_a:16384
+        transport.Enqueue("OKAYyes");
+        transport.Enqueue("OKAY");
 
         using var session = NewSession(transport);
         var target = FlashService.PrepareFlashTarget(session, "product_a", 16384, progress: null);
@@ -47,10 +47,10 @@ public class FastbootLogicalPartitionFlashTests
     public void PrepareFlashTarget_ResolvesActiveSlot_ThenResizesSlottedPartition()
     {
         var transport = new FakeCommTransport();
-        transport.Enqueue("OKAYyes");        // getvar:has-slot:product
-        transport.Enqueue("OKAYa");          // getvar:current-slot
-        transport.Enqueue("OKAYyes");        // getvar:is-logical:product_a
-        transport.Enqueue("OKAY");           // resize-logical-partition:product_a:8192
+        transport.Enqueue("OKAYyes");
+        transport.Enqueue("OKAYa");
+        transport.Enqueue("OKAYyes");
+        transport.Enqueue("OKAY");
 
         using var session = NewSession(transport);
         var target = FlashService.PrepareFlashTarget(session, "product", 8192, progress: null);
@@ -70,7 +70,7 @@ public class FastbootLogicalPartitionFlashTests
     public void PrepareFlashTarget_SkipsResize_ForPhysicalPartition()
     {
         var transport = new FakeCommTransport();
-        transport.Enqueue("OKAYno");         // getvar:is-logical:boot_a
+        transport.Enqueue("OKAYno");
 
         using var session = NewSession(transport);
         var target = FlashService.PrepareFlashTarget(session, "boot_a", 4096, progress: null);
@@ -83,11 +83,8 @@ public class FastbootLogicalPartitionFlashTests
     [Fact]
     public void PrepareFlashTarget_SkipsResize_WhenDeviceRejectsIsLogical()
     {
-        // Bootloader fastboot (pre-fastbootd) fails is-logical: nothing to resize, and the
-        // partition must still be flashed as-is instead of failing the whole operation.
-        // 旧式 bootloader fastboot 的 is-logical 会 FAIL：无分区可调整，仍按原样返回以便继续刷写。
         var transport = new FakeCommTransport();
-        transport.Enqueue("FAILno such partition");  // getvar:is-logical:vendor_dlkm_a
+        transport.Enqueue("FAILno such partition");
 
         using var session = NewSession(transport);
         var target = FlashService.PrepareFlashTarget(session, "vendor_dlkm_a", 4096, progress: null);
@@ -100,12 +97,9 @@ public class FastbootLogicalPartitionFlashTests
     [Fact]
     public void PrepareFlashTarget_ContinuesFlash_WhenResizeFails()
     {
-        // AOSP fastboot ignores a failed resize and still attempts the flash: a partition that is
-        // already large enough remains writable.
-        // AOSP fastboot 忽略调整失败并继续刷写：分区已足够大时仍可写入。
         var transport = new FakeCommTransport();
-        transport.Enqueue("OKAYyes");                              // getvar:is-logical:system_ext_a
-        transport.Enqueue("FAILNot enough space to resize partition"); // resize-logical-partition
+        transport.Enqueue("OKAYyes");
+        transport.Enqueue("FAILNot enough space to resize partition");
 
         using var session = NewSession(transport);
         var target = FlashService.PrepareFlashTarget(session, "system_ext_a", 4096, progress: null);
@@ -118,7 +112,7 @@ public class FastbootLogicalPartitionFlashTests
     public void PrepareFlashTarget_SkipsResize_WhenImageSizeUnknown()
     {
         var transport = new FakeCommTransport();
-        transport.Enqueue("OKAYyes");        // getvar:is-logical:mi_ext_a
+        transport.Enqueue("OKAYyes");
 
         using var session = NewSession(transport);
         var target = FlashService.PrepareFlashTarget(session, "mi_ext_a", imageSize: 0, progress: null);
@@ -134,8 +128,6 @@ public class FastbootLogicalPartitionFlashTests
         using var dir = new TempDirectory();
         var imagePath = Path.Combine(dir.Path, "product_a.img");
 
-        // 4 logical blocks, but only one RAW block on disk: the device validates the expanded size.
-        // 逻辑上 4 个块，磁盘上只有 1 个 RAW 块：设备校验的是展开尺寸。
         using (var sparse = new SparseFile(BlockSize, BlockSize * 4))
         {
             sparse.AddRawChunk(new byte[BlockSize]);
@@ -174,12 +166,12 @@ public class FastbootLogicalPartitionFlashTests
         var imagePath = dir.WriteBytes("product_a.img", new byte[0x2000]);
 
         var transport = new FakeCommTransport();
-        transport.Enqueue("OKAYyes");                       // getvar:is-logical:product_a
-        transport.Enqueue("OKAY");                          // resize-logical-partition:product_a:8192
-        transport.Enqueue("OKAY");                          // getvar:max-download-size (empty -> fallback)
-        transport.Enqueue("DATA00002000");                  // download:00002000
-        transport.Enqueue("OKAY");                          // payload accepted
-        transport.Enqueue("OKAY");                          // flash:product_a
+        transport.Enqueue("OKAYyes");
+        transport.Enqueue("OKAY");
+        transport.Enqueue("OKAY");
+        transport.Enqueue("DATA00002000");
+        transport.Enqueue("OKAY");
+        transport.Enqueue("OKAY");
 
         using var session = NewSession(transport);
         var target = FlashService.PrepareFlashTarget(
@@ -191,8 +183,6 @@ public class FastbootLogicalPartitionFlashTests
                 TestContext.Current.CancellationToken, resolveSlot: false).ThrowIfFailed();
         }
 
-        // The binary download payload is filtered out so only protocol commands remain.
-        // 过滤掉下载的二进制负载，只保留协议命令。
         var commands = Commands(transport)
             .Where(c => c.StartsWith("getvar:", StringComparison.Ordinal)
                         || c.StartsWith("resize-logical-partition:", StringComparison.Ordinal)

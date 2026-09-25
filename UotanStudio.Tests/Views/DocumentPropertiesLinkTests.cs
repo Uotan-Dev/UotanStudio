@@ -159,8 +159,9 @@ public sealed class DocumentPropertiesLinkTests(NodeEditorUiFixture fixture)
         await RunAsync(() =>
         {
             var model = new ProjectExplorerViewModel();
-            var target = new ExplorerNode(Path.Combine(Path.GetTempPath(), "context.elf"), false);
-            var other = new ExplorerNode(Path.Combine(Path.GetTempPath(), "selected.bin"), false);
+            var workspace = Path.Combine(Path.GetTempPath(), "uotan-docprops-" + Guid.NewGuid().ToString("N"));
+            var target = new ExplorerNode(Path.Combine(workspace, "context.elf"), false);
+            var other = new ExplorerNode(Path.Combine(workspace, "selected.bin"), false);
             model.TreeViewContent.Add(target);
             model.TreeViewContent.Add(other);
             var view = new ProjectExplorerView { DataContext = model };
@@ -195,7 +196,6 @@ public sealed class DocumentPropertiesLinkTests(NodeEditorUiFixture fixture)
             {
                 WeakReferenceMessenger.Default.UnregisterAll(recipient);
                 window.Close();
-                // The window keeps the model alive; dispose it so the global project-context subscription cannot outlive the test.
                 model.Dispose();
             }
             return Task.CompletedTask;

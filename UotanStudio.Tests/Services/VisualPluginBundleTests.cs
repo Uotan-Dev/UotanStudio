@@ -43,7 +43,6 @@ public sealed class VisualPluginBundleTests
         {
             Assert.Equal(3, archive.Entries.Count);
         }
-        // A loaded embedded resource can be republished without its original authoring sources.
         var republished = Path.Combine(temp.Path, "republished.uotanplugin");
         await VisualPluginBundle.SaveAsync(republished, loaded, token);
         var reloaded = VisualPluginBundle.Load(republished);

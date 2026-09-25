@@ -24,8 +24,6 @@ public sealed class UsbSessionCancellationTests
         {
             await device.Entered.Task.WaitAsync(deadline.Token);
             using var cancel = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token);
-            // Reset acquires the read gate (and, for control, the write gate) synchronously
-            // before returning an incomplete task waiting on the occupied direction.
             var reset = session.ResetAsync(cancel.Token);
             Assert.False(reset.IsCompleted);
             await cancel.CancelAsync();
@@ -41,7 +39,6 @@ public sealed class UsbSessionCancellationTests
         {
             device.Release.TrySetResult();
             await blocker;
-            // A regression must fail on the bounded second reset, not hang test teardown.
             if (recovered) session.Dispose();
             else device.Dispose();
         }

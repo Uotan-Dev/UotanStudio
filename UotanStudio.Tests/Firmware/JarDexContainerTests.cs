@@ -28,7 +28,7 @@ public class JarDexContainerTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_root, recursive: true); } catch { /* best effort 尽力清理 */ }
+        try { Directory.Delete(_root, recursive: true); } catch { }
     }
 
     [Fact]
@@ -72,11 +72,7 @@ public class JarDexContainerTests : IDisposable
         modified.Strings.Add("modified-marker");
         JarDexContainer.WriteBack(jar, "classes.dex", modified.ToArray(), TestContext.Current.CancellationToken);
 
-        // 目标条目已更新且仍是合法 DEX；其余条目字节保持不变。
-        // The target entry is updated and still a valid DEX; other entries keep their bytes.
         Assert.Equal(original, JarDexContainer.LoadEntry(jar, "classes2.dex", TestContext.Current.CancellationToken));
-        // 原始 7 个字符串 + 新增标记 = 8。
-        // 7 original strings + the new marker = 8.
         var rebuilt = DexFile.Load(JarDexContainer.LoadEntry(jar, "classes.dex", TestContext.Current.CancellationToken));
         Assert.Equal(8, rebuilt.Strings.Count);
     }
@@ -120,10 +116,6 @@ public class JarDexContainerTests : IDisposable
     [Fact]
     public void OversizedEntry_IsRejected()
     {
-        // ZipArchiveEntry.Length 只读：写一个小条目后补丁中央目录的未压缩大小字段，
-        // 伪造超出上限的条目长度，验证读取前的前置拒绝。
-        // ZipArchiveEntry.Length is read-only: patch the central directory's uncompressed-size
-        // field to fake an over-cap entry and verify the pre-read rejection.
         var jar = Path.Combine(_root, "oversize.jar");
         using (var stream = new FileStream(jar, FileMode.CreateNew))
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
@@ -140,8 +132,6 @@ public class JarDexContainerTests : IDisposable
     private static void PatchCentralDirectoryUncompressedSize(string jar, string entryName, long size)
     {
         var bytes = File.ReadAllBytes(jar);
-        // 从文件尾查找 EOCD（0x06054b50）。
-        // Locate the EOCD (0x06054b50) from the end of the file.
         var eocd = -1;
         for (var i = bytes.Length - 22; i >= 0; i--)
         {
@@ -190,9 +180,6 @@ public class JarDexContainerTests : IDisposable
         var outDir = Path.Combine(_root, "smali");
         var disasm = await service.DisassembleDexAsync(jar, outDir, ct: TestContext.Current.CancellationToken);
         Assert.True(disasm.Success, disasm.Summary);
-        // 输出文件名取自容器文件名去扩展名，断言目录内产出了 .smali 文件。
-        // The output file name comes from the container file name without the extension;
-        // assert a .smali file was produced in the directory.
         Assert.True(File.Exists(disasm.Entries[0]), disasm.Entries[0]);
         Assert.EndsWith(".smali", disasm.Entries[0], StringComparison.OrdinalIgnoreCase);
 
@@ -220,8 +207,6 @@ public class JarDexContainerTests : IDisposable
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
         Assert.Contains(archive.Entries, e => e.FullName == "META-INF/MANIFEST.MF");
         Assert.Contains(archive.Entries, e => e.FullName.EndsWith(".SF", StringComparison.OrdinalIgnoreCase));
-        // 原 DEX 条目在签名输出中保持完好。
-        // The original DEX entry survives intact in the signed output.
         var dexEntry = archive.Entries.First(e => e.FullName == "classes.dex");
         using var dexStream = dexEntry.Open();
         using var memory = new MemoryStream();

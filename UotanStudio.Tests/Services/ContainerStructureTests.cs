@@ -99,8 +99,6 @@ public sealed class ContainerStructureTests
         Assert.Empty(Directory.GetFiles(output));
     }
 
-    // ============== IsDirectoryEmptyOrMissing ==============
-
     [Fact]
     public void IsDirectoryEmptyOrMissing_MissingOrEmpty_True()
     {
@@ -119,8 +117,6 @@ public sealed class ContainerStructureTests
         Assert.False(NewProjectDirectoryHelper.IsDirectoryEmptyOrMissing(null));
     }
 
-    // ============== GetNextDefaultName ==============
-
     [Fact]
     public void GetNextDefaultName_SkipsExistingDirectoriesAndReservedNames()
     {
@@ -128,16 +124,10 @@ public sealed class ContainerStructureTests
         Directory.CreateDirectory(Path.Combine(temp.Path, "NewProject1"));
         Assert.Equal("NewProject2", NewProjectDirectoryHelper.GetNextDefaultName(temp.Path));
         Assert.Equal("NewProject3", NewProjectDirectoryHelper.GetNextDefaultName(temp.Path, ["NewProject2"]));
-        // 空目录且无占用：返回第一个名称。
-        // Fresh directory with no reservations: the first name is returned.
         Assert.Equal("NewProject1", NewProjectDirectoryHelper.GetNextDefaultName(Path.Combine(temp.Path, "fresh")));
-        // 空目录但名称被显式占用：跳到下一个。
-        // Fresh directory but the name is explicitly reserved: skip to the next one.
         Assert.Equal("NewProject2", NewProjectDirectoryHelper.GetNextDefaultName(
             Path.Combine(temp.Path, "fresh2"), ["NewProject1"]));
     }
-
-    // ============== Analyze: super ==============
 
     [Fact]
     public void Analyze_SuperImage_ListsLogicalPartitions()
@@ -160,8 +150,6 @@ public sealed class ContainerStructureTests
         Assert.Equal(0x100000, structure.Entries[1].SizeBytes);
         Assert.All(structure.Entries, entry => Assert.False(entry.FromPayload));
     }
-
-    // ============== Analyze: payload ==============
 
     [Fact]
     public async Task Analyze_Payload_ListsManifestPartitions()
@@ -196,8 +184,6 @@ public sealed class ContainerStructureTests
     [Fact]
     public async Task Capture_ZipPayload_ReadsOtaBuildIdentity()
     {
-        // ZIP 包裹的 payload 来源应读出 OTA 元数据构建身份；原始 payload.bin 没有该信息时保持为空。
-        // A ZIP-wrapped payload source reads the OTA build identity; a raw payload.bin without it stays empty.
         using var temp = new TempDirectory();
         var source = temp.WriteBytes("boot.img", new byte[4096]);
         var payload = Path.Combine(temp.Path, "payload.bin");
@@ -225,10 +211,6 @@ public sealed class ContainerStructureTests
     [Fact]
     public void LegacySourceSettings_MissingOptionalStrings_DeserializeToEmpty()
     {
-        // 旧 source-*.json 没有后加的 DeviceName/BuildFingerprint/Incremental；读取后必须为空字符串而不是 null，
-        // 否则交付面板回填时会空引用。
-        // Legacy source-*.json lacks the later DeviceName/BuildFingerprint/Incremental fields; reading must yield
-        // empty strings rather than null, or the delivery panel backfill throws.
         using var temp = new TempDirectory();
         var path = SourceContainerMetadataService.GetPath(temp.Path, "super");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -243,8 +225,6 @@ public sealed class ContainerStructureTests
         Assert.Equal("RAW", settings.Storage);
         Assert.Equal("Unknown", settings.DeviceType);
     }
-
-    // ============== Analyze: zip ==============
 
     [Fact]
     public void Analyze_ZipWithoutPayload_EnumeratesImageMembersOnly()
@@ -329,8 +309,6 @@ public sealed class ContainerStructureTests
         Assert.Empty(structure.Entries);
     }
 
-    // ============== Extract: super ==============
-
     [Fact]
     public async Task Extract_SuperSelection_WritesSelectedPartitionsOnly()
     {
@@ -342,9 +320,6 @@ public sealed class ContainerStructureTests
             new SuperBuildPartition("vendor", "default", 0x100000)
         ], 16 * 1024 * 1024, 64 * 1024, 2, 4096);
         File.WriteAllBytes(path, image);
-        // 构建器数据区全零；按 LP extent 向分区数据区回填随机内容以验证提取正确。
-        // The builder leaves data areas zeroed; fill each partition's extents with random content
-        // via LP metadata so the extracted bytes can be verified.
         var metadata = MetadataReader.ReadFromImageFile(path);
         var bytes = File.ReadAllBytes(path);
         var expected = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
@@ -378,8 +353,6 @@ public sealed class ContainerStructureTests
         Assert.False(File.Exists(Path.Combine(temp.Path, "system.img")));
     }
 
-    // ============== Extract: payload ==============
-
     [Fact]
     public async Task Extract_PayloadSelection_ExtractsSelectedPartitions()
     {
@@ -398,8 +371,6 @@ public sealed class ContainerStructureTests
         Assert.Equal("boot.img", Path.GetFileName(outputPath));
         Assert.Equal(content, File.ReadAllBytes(outputPath));
     }
-
-    // ============== Extract: zip ==============
 
     [Fact]
     public async Task Extract_ZipMembers_WritesEntryContentWithOriginalName()
@@ -443,8 +414,6 @@ public sealed class ContainerStructureTests
         Assert.Equal("boot.img", Path.GetFileName(outputPath));
         Assert.Equal(File.ReadAllBytes(source), File.ReadAllBytes(outputPath));
     }
-
-    // ============== Extract: validation ==============
 
     [Fact]
     public async Task Extract_EmptySelectionOrMissingFile_ReturnsEmpty()

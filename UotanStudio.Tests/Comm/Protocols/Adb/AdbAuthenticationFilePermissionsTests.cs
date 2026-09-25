@@ -15,7 +15,6 @@ namespace UotanStudio.Tests.Comm.Protocols.Adb;
 /// </summary>
 public class AdbAuthenticationFilePermissionsTests
 {
-    // Mask for the permission bits (excluding type/sticky).
     private const UnixFileMode PermissionMask =
         UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
         | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
@@ -37,7 +36,6 @@ public class AdbAuthenticationFilePermissionsTests
             Assert.True(File.Exists(keyPath), "Private key file should exist");
             Assert.True(File.Exists(keyPath + ".pub"), "Public key file should exist");
 
-            // Re-loading should yield the same key (no regeneration).
             var auth2 = AdbAuthentication.LoadOrCreate(keyPath);
             try
             {
@@ -79,12 +77,10 @@ public class AdbAuthenticationFilePermissionsTests
         using var tempDir = new TempDirectory();
         var keyPath = Path.Combine(tempDir.Path, "adbkey");
 
-        // Create initial key.
         var first = AdbAuthentication.LoadOrCreate(keyPath);
         first.Dispose();
         var originalBytes = File.ReadAllBytes(keyPath);
 
-        // Re-load should succeed and preserve content.
         var second = AdbAuthentication.LoadOrCreate(keyPath);
         second.Dispose();
         var reloadedBytes = File.ReadAllBytes(keyPath);
@@ -92,16 +88,12 @@ public class AdbAuthenticationFilePermissionsTests
         Assert.Equal(originalBytes, reloadedBytes);
     }
 
-    // ---- Unix-only permission checks ----
-    // These run only on Linux where UnixFileMode is meaningful.
-    // On Windows they are skipped via the runtime check.
-
     [Fact]
     public void Unix_NewPrivateKey_HasMode0600()
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            return; // Skipped: Unix file permission verification requires Linux.
+            return;
         }
 
         using var tempDir = new TempDirectory();
@@ -114,7 +106,6 @@ public class AdbAuthenticationFilePermissionsTests
         var info = new FileInfo(keyPath);
         var mode = info.UnixFileMode;
 
-        // 0600 = UserRead | UserWrite; group/other bits must be clear.
         Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, mode & PermissionMask);
         Assert.Equal(UnixFileMode.None, mode & GroupOtherMask);
     }
@@ -124,7 +115,7 @@ public class AdbAuthenticationFilePermissionsTests
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            return; // Skipped: Unix file permission verification requires Linux.
+            return;
         }
 
         using var tempDir = new TempDirectory();

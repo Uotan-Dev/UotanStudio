@@ -156,7 +156,6 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
 
         await _projects.SaveAsAsync(target, cancellationToken: TestContext.Current.CancellationToken);
 
-        // The source firmware stays byte-identical; the published copy carries the staged image.
         Assert.Equal(originalProject, File.ReadAllBytes(originalProjectPath));
         Assert.True(File.Exists(originalImage));
         Assert.Equal(new byte[] { 4, 5, 6 }, await File.ReadAllBytesAsync(Path.Combine(context.EnsureImagesDirectory(), "boot.img"), TestContext.Current.CancellationToken));
@@ -222,8 +221,6 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         Directory.CreateDirectory(destination);
         var marker = Path.Combine(destination, "keep.txt");
         File.WriteAllText(marker, "untouched");
-        // A directory at the solution filename fails the final publication step.
-        // A directory at the node filename fails node publication before the solution file is written.
         if (commitFailure) Directory.CreateDirectory(target);
         else Directory.CreateDirectory(Path.Combine(destination, "original", "copy.uotannode"));
 
@@ -246,7 +243,6 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         var source = Path.Combine(_root, "original.uotan");
         await _projects.CreateNewSolutionAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         var context = _projects.Context;
-        // The destination directory sits inside a source sub-project folder.
         var target = Path.Combine(context.RootDirectory!, "original", "nested.uotan");
         await Assert.ThrowsAsync<IOException>(() => _projects.SaveAsAsync(target, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(source, _projects.CurrentProjectPath);
@@ -332,7 +328,6 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
     {
         var source = Path.Combine(_root, "sample.uotan");
         await _projects.CreateNewSolutionAsync(source, cancellationToken: TestContext.Current.CancellationToken);
-        // A nested scaffold inside the sub-project folder is copied but never registered as its own sub-project.
         var inner = Path.Combine(_root, "sample", "inner", "inner.uotanfw");
         Directory.CreateDirectory(Path.GetDirectoryName(inner)!);
         File.WriteAllBytes(inner, [9, 9, 9]);
@@ -427,7 +422,6 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         await _projects.CreateNewSolutionAsync(solution, cancellationToken: TestContext.Current.CancellationToken);
         var context = _projects.Context;
 
-        // The root is the solution's own directory, the sub-project is an independent direct child.
         Assert.Equal(_root, context.RootDirectory);
         Assert.Equal("flat", context.SolutionName);
         Assert.Single(context.SubProjects);
@@ -447,9 +441,6 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         await _projects.CreateNewSolutionAsync(solution, cancellationToken: TestContext.Current.CancellationToken);
         var sub = Assert.Single(_projects.Context.SubProjects);
 
-        // 交付输出目录是子项目内的独立 delivery/ 同级文件夹，与源镜像 images/ 及通用工作区 output/ 平级。
-        // The delivery output directory is an independent sibling delivery/ folder beside the source images/ and
-        // the general workspace output/ folder, so packaging never targets the source image's own directory.
         Assert.Equal(Path.Combine(sub.RootPath!, "delivery"), sub.DeliveryDirectory);
         Assert.NotEqual(sub.OutputDir, sub.DeliveryDirectory);
         Assert.Equal(sub.RootPath, Path.GetDirectoryName(sub.DeliveryDirectory));
@@ -466,8 +457,6 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         await _projects.AddSubProjectAsync(Path.Combine(context.RootDirectory!, "second", "second.uotanfw"), cancellationToken: TestContext.Current.CancellationToken);
         await _projects.AddSubProjectAsync(Path.Combine(context.RootDirectory!, "third", "third.uotanfw"), cancellationToken: TestContext.Current.CancellationToken);
 
-        // The solution root is the solution's own directory; every sub-project is an independent direct child,
-        // laid out side by side like NewProject1/NewProject2/NewProject3 — never nested inside another one.
         Assert.Equal(_root, context.RootDirectory);
         Assert.Equal(3, context.SubProjects.Count);
         foreach (var name in new[] { "sample", "second", "third" })
@@ -480,10 +469,8 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
             Assert.True(Directory.Exists(Path.Combine(sub.RootPath!, "output")));
         }
 
-        // The single node project is owned by the solution-named sub-project folder.
         Assert.Equal(Path.Combine(_root, "sample"), Path.GetDirectoryName(context.NodeProjectPath));
 
-        // Reopen and confirm the flat sibling layout survives persistence.
         context.CloseProject();
         Assert.True(await _projects.OpenProjectFromPathAsync(solution, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(_root, _projects.Context.RootDirectory);
@@ -516,7 +503,6 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
 
         await _projects.AddSubProjectAsync(Path.Combine(context.RootDirectory!, "second", "second.uotanfw"), cancellationToken: TestContext.Current.CancellationToken);
 
-        // A scaffold nested under another sub-project must not register as an independent sub-project.
         Assert.DoesNotContain(context.SubProjects, sp => sp.Name == "deep");
         Assert.Contains(context.SubProjects, sp => sp.Name == "second");
     }

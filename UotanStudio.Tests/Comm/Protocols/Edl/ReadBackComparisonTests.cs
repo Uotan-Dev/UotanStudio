@@ -81,7 +81,7 @@ public class ReadBackComparisonTests
         else
             await protocol.VerifyProgramAsync(source, 0, 2, cancellationToken: TestContext.Current.CancellationToken);
         var next = await protocol.EraseAsync(0, 1, cancellationToken: TestContext.Current.CancellationToken);
-        Assert.False(next.IsAck); // A leftover verification ACK must not become the next command's result.
+        Assert.False(next.IsAck);
     }
 
     private sealed class ShortReadStream(byte[] data) : MemoryStream(data)

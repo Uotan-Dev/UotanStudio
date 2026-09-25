@@ -25,7 +25,7 @@ public sealed class ProjectBoundaryOptimizationTests : IDisposable
         data.Images.Add(new() { RelativePath = "new.img" });
         data.Workflow.Nodes.Add(new() { TypeKey = "Unknown" });
         File.Delete(solution);
-        Directory.CreateDirectory(solution); // Publication fails after firmware and node files were published.
+        Directory.CreateDirectory(solution);
         await Assert.ThrowsAsync<IOException>(() => session.SaveAsync(cancellationToken: Token));
         Assert.Equal(originalFirmware, await File.ReadAllBytesAsync(firmware, Token));
         Assert.Equal(originalNode, await File.ReadAllBytesAsync(node, Token));
@@ -91,8 +91,6 @@ public sealed class ProjectBoundaryOptimizationTests : IDisposable
     [Fact]
     public async Task SubProjectAddAndRemove_ReloadSolutionForSubscribers()
     {
-        // 新增与删除子项目都必须完整重载解决方案；切换子项目只算增量变更。
-        // Adding and removing a sub-project must reload the solution in full; switching is incremental.
         var session = new ProjectSession();
         await session.CreateNewSolutionAsync(Path.Combine(_root, "sample.uotan"), Token);
         var reloads = 0;
@@ -237,15 +235,12 @@ public sealed class ProjectBoundaryOptimizationTests : IDisposable
     {
         var context = new ProjectContext();
         context.OpenSolution(Path.Combine(_root, "original.uotan"));
-        // Under the flat model the data root is the solution's own directory, so a stray file where the old
-        // ChangeExtension data directory used to live cannot block an open; it is simply not a sub-project.
         File.WriteAllText(Path.Combine(_root, "blocked"), "file instead of directory");
 
         context.OpenSolution(Path.Combine(_root, "blocked.uotan"));
 
         Assert.Equal("blocked", context.SolutionName);
         Assert.Equal(_root, context.RootDirectory);
-        // The stray sibling file is never promoted to a sub-project; nothing wrote a *.uotanfw, so none are found.
         Assert.Empty(context.SubProjects);
     }
 

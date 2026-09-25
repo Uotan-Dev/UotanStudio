@@ -61,8 +61,6 @@ public sealed class McpClientServiceTests
         Assert.Contains("'old'", oldEx.Message, StringComparison.Ordinal);
         Assert.Contains("disabled", newEx.Message, StringComparison.Ordinal);
 
-        // 恢复空配置，避免污染其他测试共享的单例。
-        // Restore the empty config to keep the shared singleton clean for other tests.
         await McpClientService.Instance.SetServersAsync([]);
     }
 }

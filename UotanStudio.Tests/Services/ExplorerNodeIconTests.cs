@@ -24,8 +24,6 @@ public sealed class ExplorerNodeIconTests
     }
 
     [Theory]
-    // 有空心版的类型一律取空心图标。
-    // Types that have an outline variant always use it.
     [InlineData("dtbo.dtbo", MaterialIconKind.FileTreeOutline)]
     [InlineData("classes.dex", MaterialIconKind.FileCodeOutline)]
     [InlineData("framework.jar", MaterialIconKind.FileCodeOutline)]
@@ -47,9 +45,6 @@ public sealed class ExplorerNodeIconTests
     [InlineData("slides.pptx", MaterialIconKind.FilePowerpointOutline)]
     [InlineData("device.log", MaterialIconKind.TextBoxMultipleOutline)]
     [InlineData("notes.txt", MaterialIconKind.FileDocumentOutline)]
-    // Material 图标集没有对应的空心图形：保留实心图标并用家族配色区分。
-    // The Material set has no outline glyph for these families: the filled icon stays and the family
-    // colour carries the distinction.
     [InlineData("super.img", MaterialIconKind.Harddisk)]
     [InlineData("untrusted.ko", MaterialIconKind.Chip)]
     [InlineData("app-debug.apk", MaterialIconKind.Android)]
@@ -94,8 +89,6 @@ public sealed class ExplorerNodeIconTests
     [Fact]
     public void IconKind_ForTransferList_UsesOutlineBlockTransferGlyph()
     {
-        // 卡刷配对清单按文件名后缀识别，不能只凭 .list 扩展名判定。
-        // The flashable companion list is recognized by file-name suffix, not by the bare .list extension.
         var transferList = Node("system.transfer.list");
 
         Assert.Equal(MaterialIconKind.FileArrowUpDownOutline, transferList.IconKind);

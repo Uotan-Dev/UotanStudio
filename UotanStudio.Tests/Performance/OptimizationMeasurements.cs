@@ -60,7 +60,6 @@ public sealed class OptimizationMeasurements(NodeEditorUiFixture fixture, ITestO
 
         await fixture.Session.Dispatch(() =>
         {
-            // Reflection is confined to this baseline harness so the unmodified private method can be measured.
             var flush = typeof(WorkspaceLogViewModel).GetMethod("FlushPending", BindingFlags.Instance | BindingFlags.NonPublic)!;
             using var model = new WorkspaceLogViewModel();
             model.Clear();

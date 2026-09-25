@@ -67,8 +67,6 @@ public sealed class HdcRealDeviceSuite
             candidate.Protocol == "hdc" && candidate.Address == Serial);
         Assert.NotNull(target);
         Assert.Equal("server", target!.Route);
-        // Full server takeover: with the hdc server listening, no direct-usb hdc endpoint may
-        // appear in the same snapshot.
         Assert.DoesNotContain(snapshot.Endpoints, candidate =>
             candidate.Route == "direct-usb" && candidate.Protocol == "hdc");
     }
@@ -82,7 +80,6 @@ public sealed class HdcRealDeviceSuite
         {
             var result = session.ExecuteCommand("echo hdc-suite-ok");
             Assert.Contains("hdc-suite-ok", System.Text.Encoding.UTF8.GetString(result.Stdout));
-            // OHOS does not carry shell exit codes over the host channel; -1 means unavailable.
             Assert.True(result.ExitCode is 0 or -1, $"Unexpected exit code {result.ExitCode}.");
         }
         finally
@@ -173,7 +170,6 @@ public sealed class HdcRealDeviceSuite
         {
         }
 
-        // The reboot drops the server target; wait for it to reappear.
         var watcher = DeviceControllerFactory.CreateDefault();
         var deadline = Environment.TickCount64 + (int)TimeSpan.FromMinutes(3).TotalMilliseconds;
         while (Environment.TickCount64 < deadline)
@@ -187,13 +183,12 @@ public sealed class HdcRealDeviceSuite
                     return;
                 }
             }
-            catch { /* transient server/list errors during boot */ }
+            catch { }
         }
 
         Assert.Fail("The HDC target did not return within the timeout after reboot.");
     }
 }
-
 
 /// <summary>
 /// Environment-mutating HDC scenarios (server kill/restart, device reboot). Must not run in
@@ -228,7 +223,6 @@ public sealed class HdcDirectChannelSuite
         var controller = DeviceControllerFactory.CreateDefault();
         try
         {
-            // Stop the hdc server so the direct-usb endpoint is no longer suppressed.
             var killer = new UotanStudio.Comm.Protocols.Hdc.HdcServerClient();
             await killer.KillAsync();
             var directEndpoint = await WaitForEndpointAsync(controller, route: "direct-usb");
@@ -267,14 +261,13 @@ public sealed class HdcDirectChannelSuite
         }
         finally
         {
-            // Restore the hdc server so later suites and the host keep working.
             try
             {
                 var restore = System.Diagnostics.Process.Start(
                     new System.Diagnostics.ProcessStartInfo("hdc", "list targets") { CreateNoWindow = true });
                 restore?.WaitForExit(10000);
             }
-            catch { /* best-effort restoration */ }
+            catch { }
         }
     }
 

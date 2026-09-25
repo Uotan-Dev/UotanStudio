@@ -153,7 +153,6 @@ public sealed class CompositeBoundaryTests
         var second = NodeTypeRegistry.Create("Data.Value.Constant")!;
         first.Location = new Avalonia.Point(20, 30);
         second.Location = new Avalonia.Point(320, 150);
-        // Constant nodes have a real reconstructable identity; expose their outputs across the boundary.
         var target = Node("target");
         var edges = new List<NodeConnectionViewModel> { new(first.Output[0], target.Input[0]) };
         var plan = CompositeGraphService.CreateEncapsulation("Pair", "tests.pair", [source, first, second, target],

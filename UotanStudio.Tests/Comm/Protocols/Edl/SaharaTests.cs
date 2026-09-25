@@ -32,7 +32,6 @@ public class SaharaTests
         Assert.Equal(EdlConstants.DefaultMaxPacketLength, sahara.MaxPacketLength);
         Assert.False(sahara.FirehoseAlreadyRunning);
 
-        // [0] HELLO_RESPONSE, [1] DONE.
         var helloResponse = ParseHeader(transport.Writes[0]);
         Assert.Equal(SaharaCommand.HelloResponse, helloResponse.Command);
         Assert.Equal((uint)Marshal.SizeOf<SaharaHelloResponsePacket>(), helloResponse.Length);
@@ -65,7 +64,6 @@ public class SaharaTests
 
         Assert.Equal(SaharaMode.ImageTxPending, mode);
 
-        // Writes: [0] HELLO_RESPONSE, [1] image payload, [2] DONE.
         Assert.Equal(3, transport.Writes.Count);
         Assert.Equal(image, transport.Writes[1]);
         Assert.Equal(SaharaCommand.Done, ParseHeader(transport.Writes[2]).Command);
@@ -91,10 +89,6 @@ public class SaharaTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SaharaMode.ImageTxPending, mode);
-        // 128KB 镜像大于 64KB 传输缓冲，被拆为两次写入：
-        // [0] HELLO_RESPONSE, [1..2] 分块 payload, [3] DONE。
-        // A 128KB image exceeds the 64KB transfer buffer, so it is written in two chunks:
-        // [0] HELLO_RESPONSE, [1..2] chunked payload, [3] DONE.
         Assert.Equal(4, transport.Writes.Count);
         var payload = transport.Writes[1].Concat(transport.Writes[2]).ToArray();
         Assert.Equal(image, payload);
@@ -159,7 +153,7 @@ public class SaharaTests
     {
         var transport = new ScriptedCommTransport();
         EnqueueHello(transport);
-        EnqueueEndOfImage(transport, status: 1); // device rejected the image
+        EnqueueEndOfImage(transport, status: 1);
 
         var sahara = new SaharaProtocol(transport);
         var exception = await Assert.ThrowsAsync<SaharaException>(
@@ -203,8 +197,6 @@ public class SaharaTests
             OnWrite = bytes =>
             {
                 var text = Encoding.UTF8.GetString(bytes);
-                // When the probe <nop> is sent, answer like a running Firehose programmer.
-                // 当探测 <nop> 发出时，模拟运行中的 Firehose programmer 应答。
                 return text.Contains("<nop", StringComparison.Ordinal)
                     ? [Encoding.UTF8.GetBytes("""<data><log value="booted"/></data><data><response value="ACK"/></data>""")]
                     : [];
@@ -216,8 +208,6 @@ public class SaharaTests
 
         Assert.Equal(SaharaMode.ImageTxComplete, mode);
         Assert.True(sahara.FirehoseAlreadyRunning);
-        // The probe nop XML was written, then no further handshake packets.
-        // 写入了探测 nop XML，此后无更多握手包。
         Assert.Single(transport.Writes);
         Assert.Contains("<nop value=\"ping\"", Encoding.UTF8.GetString(transport.Writes[0]), StringComparison.Ordinal);
     }
@@ -225,7 +215,7 @@ public class SaharaTests
     [Fact]
     public async Task HandshakeAsync_FirstReadTimeout_NoFirehose_Rethrows()
     {
-        var transport = new ScriptedCommTransport(); // empty: no HELLO, no nop response
+        var transport = new ScriptedCommTransport();
 
         var sahara = new SaharaProtocol(transport);
         var exception = await Assert.ThrowsAsync<EdlException>(
@@ -236,8 +226,6 @@ public class SaharaTests
     [Fact]
     public void HelloPacket_Layout_MatchesSpec()
     {
-        // The HELLO packet is 48 bytes: header + version fields + 6 reserved uints.
-        // HELLO 包为 48 字节：包头 + 版本字段 + 6 个保留 uint。
         Assert.Equal(48, Marshal.SizeOf<SaharaHelloPacket>());
         Assert.Equal(8, Marshal.SizeOf<SaharaPacketHeader>());
         Assert.Equal(20, Marshal.SizeOf<SaharaReadDataPacket>());
@@ -245,8 +233,6 @@ public class SaharaTests
         Assert.Equal(16, Marshal.SizeOf<SaharaEndOfImagePacket>());
         Assert.Equal(12, Marshal.SizeOf<SaharaDoneResponsePacket>());
     }
-
-    // ============== scripted device helpers ==============
 
     private static IReadOnlyDictionary<uint, Stream> ImagesWithFirehose(int size = 4096)
         => new Dictionary<uint, Stream> { [(uint)SaharaImageId.Firehose] = new MemoryStream(new byte[size]) };

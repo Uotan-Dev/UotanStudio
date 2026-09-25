@@ -49,9 +49,6 @@ public sealed class DeliveryWiringTests : IDisposable
         var scripts = DeliveryScriptGenerator.Generate(plan);
         Assert.Contains("ensure_mode yes; flash 'system'", scripts["FlashLinux.sh"]);
         Assert.Contains("call :ensure_mode yes", scripts["FlashWindows.bat"]);
-        // 镜像归属不随交付计划持久化：动态属性只影响当前会话的脚本选择，重开后由作者重新选择。
-        // Image membership is not persisted with the plan: the dynamic attribute only drives the current
-        // session's scripts and the author re-selects after reopen.
         var state = DeliveryPlanStore.CaptureElement(_root, plan);
         Assert.Empty(DeliveryPlanStore.LoadFromState(state, _root)!.Files);
         row.PartitionName = "boot";

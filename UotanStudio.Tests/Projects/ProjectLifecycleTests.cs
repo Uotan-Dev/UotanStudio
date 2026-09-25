@@ -35,7 +35,7 @@ public sealed class ProjectLifecycleTests : IDisposable
         Assert.Equal("Vendor.Unknown", Assert.Single(data.Workflow.Nodes).TypeKey);
         Assert.Equal(7, data.Settings.ErofsCompLevel);
         Assert.Equal("record", Assert.Single(first.History.CaptureSnapshot()).Description);
-        Assert.False(first.History.CanUndo); // A data-only reopen must not invent executable undo actions.
+        Assert.False(first.History.CanUndo);
         var output = Path.Combine(first.Context.RootDirectory!, "export.zip");
         await first.ExportAsync(output, Token);
         using var archive = ZipFile.OpenRead(output);

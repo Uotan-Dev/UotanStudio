@@ -298,7 +298,6 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
     public async Task ProjectAutoSave_SavesInactiveTextAndNodeInputs_PreservesOtherSubprojects()
     {
         var solutionPath = Path.Combine(_root, "test.uotan");
-        // ProjectContext resolves subproject paths relative to the solution's containing directory.
         var root = _root;
         var firstProject = Path.Combine(root, "first", "first.uotanfw");
         var secondProject = Path.Combine(root, "second", "second.uotanfw");

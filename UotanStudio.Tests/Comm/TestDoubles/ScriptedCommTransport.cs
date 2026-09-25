@@ -16,10 +16,6 @@ public sealed class ScriptedCommTransport : ICommTransport
 {
     private readonly object _lock = new();
     private readonly Queue<byte[]> _reads = new();
-    // 上次部分消费后遗留的块剩余部分：作为字节流延续保持在"队首"，下一次读取优先消费，
-    // 不能 Enqueue 到队尾（否则会与后续独立入队的包错位）。
-    // Remainder of a partially-consumed chunk: it continues the byte stream and must be consumed
-    // next, NOT re-queued at the tail (that would interleave it with later independent packets).
     private byte[]? _headRemainder;
     private bool _connected = true;
 

@@ -72,8 +72,6 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
         var solution = Path.Combine(_root, "sol.uotan");
         File.WriteAllText(Path.Combine(_root, "top.uotanfw"), "{}");
         File.WriteAllText(Path.Combine(_root, "device", "device.uotanfw"), "{}");
-        // 保留目录内的 fw 文件不构成子项目（如备份/镜像工作目录）。
-        // A fw file inside a reserved directory does not form a sub-project.
         File.WriteAllText(Path.Combine(_root, ".uotan", "ghost.uotanfw"), "{}");
 
         var context = new ProjectContext();

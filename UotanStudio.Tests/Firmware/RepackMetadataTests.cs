@@ -47,17 +47,12 @@ public sealed class RepackMetadataTests : IDisposable
         var metadata = Assert.IsType<RepackMetadata>(RepackMetadata.Read(Extracted));
         Assert.True(metadata.CanPackDirectory);
 
-        // Restore always rebuilds from the extracted tree and metadata; no original image byte copy
-        // is retained, so the result is content-equivalent rather than byte-identical to the source.
-        // 还原一律从解包目录与元数据重建；不再保留原镜像字节副本，因此结果与源内容一致而非字节一致。
         var baseline = await RegisteredFirmwareFormats.PackDirectoryAsync(metadata.FormatName, Extracted, Output, Cancellation);
         Assert.True(baseline.Success, baseline.Summary);
         var baselineInfo = await handler.ReadMetadataAsync(Output, Cancellation);
         Assert.True(baselineInfo.Success, baselineInfo.Summary);
         Assert.Contains(ReadImagePaths(Output, format), path => path.EndsWith("hello.txt", StringComparison.Ordinal));
 
-        // A packing-option override must also rebuild and flow into the builder output.
-        // 打包选项覆盖同样触发重建，并进入构建输出。
         IReadOnlyDictionary<string, string> overrides = format == "EXT4"
             ? new Dictionary<string, string> { ["EnableSparse"] = "1" }
             : new Dictionary<string, string> { ["ErofsAlgorithm"] = "lz4hc", ["ErofsCompressionLevel"] = "9" };
@@ -286,9 +281,6 @@ public sealed class RepackMetadataTests : IDisposable
         Assert.Equal("ordinary payload file", File.ReadAllText(payload));
         Assert.NotNull(RepackMetadata.Read(Extracted));
         Assert.True((await new ErofsFormatHandler().PackAsync(Extracted, Output, Cancellation)).Success);
-        // Without a retained original image the rebuild is content-equivalent, not byte-identical;
-        // the reserved-named payload must still survive the round trip.
-        // 未保留源镜像时重建为内容等价而非字节一致；保留名冲突的负载仍必须无损往返。
         using var parser = new ErofsParser(Output);
         var found = parser.EnumerateFiles().Any(entry
             => System.Text.Encoding.UTF8.GetString(parser.ReadFileBytes(entry.Path)) == "ordinary payload file");

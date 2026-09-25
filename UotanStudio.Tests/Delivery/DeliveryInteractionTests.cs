@@ -29,8 +29,6 @@ public sealed class DeliveryInteractionTests : IDisposable
         Assert.Single(vm.Output);
         Assert.Equal("boot", vm.Output[0].PartitionName);
 
-        // Rows moved into the container must also disappear on deselection.
-        // 进入容器的行在取消勾选后同样要被移除。
         vm.SetMode(true, super: true);
         Assert.True(vm.EditingContainer);
         var system = Input("system");
@@ -56,8 +54,6 @@ public sealed class DeliveryInteractionTests : IDisposable
         Assert.All(rows, r => Assert.True(r.IsOptional));
         Assert.Equal(1, rows.Count(r => r.IsDefault));
 
-        // Same name and partition stays mandatory.
-        // 同名同分区保持必选。
         vm.SelectSources([system]);
         Assert.Contains(vm.Output, i => i.PartitionName == "system" && !i.IsOptional);
     }
@@ -78,9 +74,6 @@ public sealed class DeliveryInteractionTests : IDisposable
     [Fact]
     public void ResetPlanMaterializesAutoZeroCompanions()
     {
-        // Restoring a persisted plan can assign the same AutoZero value already held, which never fires
-        // OnAutoZeroChanged; Reset must still materialize the VAB B-slot companions.
-        // 还原持久化计划时 AutoZero 值可能与当前值相同而不触发属性变化；Reset 仍须物化 VAB B 槽伴随条目。
         var vm = new DeliveryViewModel();
         var plan = new DeliveryPlan
         {
@@ -99,7 +92,6 @@ public sealed class DeliveryInteractionTests : IDisposable
     [Fact]
     public void AOnlyKeepsOriginalPartitionName()
     {
-        // The view disables AutoZero for A-only devices before passing options to the builder.
         var partitions = DeliverySuperBuilder.ExpandPartitions([Input("wind")], new() { AutoZero = false, DeviceType = "AOnly" });
         Assert.Equal("wind", Assert.Single(partitions).Partition);
     }
@@ -122,8 +114,6 @@ public sealed class DeliveryInteractionTests : IDisposable
     [Fact]
     public void EmptyBSourcePassesValidationOnlyWithAutoZero()
     {
-        // VAB unpacking produces 0-byte B-slot images; with AutoZero they are legitimate zero-size partitions.
-        // VAB 解包产生 0 字节 B 槽镜像；勾选自动零分区时它们是合法的零大小分区。
         var empty = Input("my_bigball_b", 0);
         var plan = new DeliveryPlan
         {
@@ -164,8 +154,6 @@ public sealed class DeliveryInteractionTests : IDisposable
         Assert.Equal(empty.SourcePath, row.FilePath);
         Assert.True(row.IsAutoZero);
         Assert.Equal(2, vm.Container.Count);
-        // Deselecting the empty image falls back to a generated read-only zero-size entry.
-        // 取消勾选空镜像后回退为自动生成的只读零大小条目。
         vm.SelectSources([big]);
         var generated = Assert.Single(vm.Container, i => i.PartitionName == "my_bigball_b");
         Assert.Null(generated.FilePath);
@@ -198,8 +186,6 @@ public sealed class DeliveryInteractionTests : IDisposable
         var row = Assert.Single(vm.Container, i => i.PartitionName == "odm");
         Assert.Equal(odm.SourcePath, row.FilePath);
         Assert.Single(vm.Container, i => i.PartitionName == "odm_a");
-        // The pre-existing odm_a still yields its single odm_b; no duplicate companion is added.
-        // 既有的 odm_a 仍生成唯一的 odm_b；不会追加重复的伴随条目。
         Assert.Single(vm.Container, i => i.PartitionName == "odm_b");
         Assert.Equal(3, vm.Container.Count);
     }
@@ -213,8 +199,6 @@ public sealed class DeliveryInteractionTests : IDisposable
         vm.SetMode(true, super: superPacked);
         var odm = Input("odm");
         vm.SelectSources([odm]);
-        // Non-container mode keeps the row in Output; either way it is never renamed and never gains a companion.
-        // 非容器模式下该行留在 Output；无论哪种情况都不改名、不生成伴随条目。
         var target = vm.EditingContainer ? vm.Container : vm.Output;
         var row = Assert.Single(target, i => i.PartitionName == "odm");
         Assert.Equal(odm.SourcePath, row.FilePath);
@@ -230,12 +214,8 @@ public sealed class DeliveryInteractionTests : IDisposable
         var empty = Input("my_bigball_b", 0);
         vm.SelectSources([big, empty]);
         Assert.Contains(vm.Container, i => i.PartitionName == "my_bigball_a");
-        // Toggling auto-zero clears the whole composition list per the new interaction contract.
-        // 按新交互约定，切换自动零分区开关会清空整个编排列表。
         vm.AutoZero = false;
         Assert.Empty(vm.Container);
-        // Toggling back on keeps the list empty; rows must be re-selected from the source list.
-        // 重新打开后列表保持为空，需从源列表重新勾选。
         vm.AutoZero = true;
         Assert.Empty(vm.Container);
     }
@@ -248,19 +228,13 @@ public sealed class DeliveryInteractionTests : IDisposable
         var first = Input("boot");
         var second = Input("vendor");
         vm.SelectSources([first, second]);
-        // Duplicate name rolls back to the previous value and reports a status hint.
-        // 重名编辑回退到原值并给出状态提示。
         var vendorRow = Assert.Single(vm.Container, i => i.PartitionName == "vendor");
         vendorRow.PartitionName = "boot";
         Assert.Equal("vendor", vendorRow.PartitionName);
         Assert.Equal("Delivery_InvalidPartition", vm.Status);
-        // Invalid characters roll back as well.
-        // 非法字符同样回退。
         vendorRow.PartitionName = "bad name!";
         Assert.Equal("vendor", vendorRow.PartitionName);
         Assert.Equal("Delivery_InvalidPartition", vm.Status);
-        // A valid unique edit sticks and clears nothing.
-        // 合法且唯一的编辑正常生效。
         vendorRow.PartitionName = "vendor_b";
         Assert.Equal("vendor_b", vendorRow.PartitionName);
         Assert.Equal(2, vm.Container.Count);

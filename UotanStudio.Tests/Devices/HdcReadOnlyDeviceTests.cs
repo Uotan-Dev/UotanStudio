@@ -97,7 +97,6 @@ public sealed class HdcReadOnlyDeviceTests
         Assert.Equal("中文 test", await service.ShellAsync(device, "printf '中文 test'", ct));
         Assert.Equal("first\nlast", await service.ShellAsync(device, "printf 'first\\n'; sleep 1; printf last", ct));
         await Assert.ThrowsAsync<IOException>(() => service.ShellAsync(device, "exit 7", ct));
-        // HDC shell does not carry an exit code: raw session clients report unknown (-1).
         using (var session = client.CreateSession(key))
         {
             await session.ConnectAsync(ct);
@@ -115,7 +114,6 @@ public sealed class HdcReadOnlyDeviceTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.ExecuteStreamingAsync(
             key, "shell hilog -v year", bytes => received += bytes.Length, duration.Token));
         Assert.True(received > 0);
-        // Verify cancellation did not damage a subsequent target channel.
         Assert.Equal("alive", await service.ShellAsync(device, "echo alive", ct));
     }
 
@@ -136,7 +134,6 @@ public sealed class HdcReadOnlyDeviceTests
             State = "device"
         };
         var service = new HdcDeviceService();
-        // A regular, public system file; local destination deliberately includes spaces.
         const string remote = "/system/bin/toybox";
         var expected = (await service.ShellAsync(device, "sha256sum " + remote, ct)).Split(' ')[0];
         var folder = Path.Combine(Path.GetTempPath(), "uotan hdc " + Guid.NewGuid().ToString("N"));

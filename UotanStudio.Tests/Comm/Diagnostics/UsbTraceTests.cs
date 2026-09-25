@@ -123,8 +123,6 @@ public class UsbTraceTests
     [Fact]
     public void EmitTransfer_NullEvent_IsNoOp()
     {
-        // Should not throw even though it would dereference the event.
-        // 即使事件为 null 也不应抛出。
         UsbTrace.EmitTransfer(null!);
     }
 
@@ -135,8 +133,6 @@ public class UsbTraceTests
         UsbTrace.TransferObserved += ThrowingHandler;
         try
         {
-            // The exception must not escape EmitTransfer (it is logged instead).
-            // 异常不得逃出 EmitTransfer（内部记录日志）。
             UsbTrace.EmitTransfer(new UsbTransferEvent { Operation = UsbTransferOperation.Enumerate });
         }
         finally

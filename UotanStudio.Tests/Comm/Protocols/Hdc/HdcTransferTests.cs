@@ -25,7 +25,6 @@ public sealed class HdcTransferTests
     [Fact]
     public void Lz4_DecodesIndependentLiteralBlock_AndBoundsExpandedSize()
     {
-        // Raw LZ4 literal-only block, not generated with our encoder.
         var packet = new byte[68];
         Convert.FromHexString("0800100118042003").CopyTo(packet, 0);
         new byte[] { 0x30, 0x61, 0x62, 0x63 }.CopyTo(packet, 64);

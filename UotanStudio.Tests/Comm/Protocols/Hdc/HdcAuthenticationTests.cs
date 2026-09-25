@@ -56,7 +56,6 @@ public sealed class HdcAuthenticationTests
         var signature = auth.SignToken(token);
         var decoded = BigInteger.ModPow(new BigInteger(signature, true, true),
             new BigInteger(key.Exponent!, true, true), new BigInteger(key.Modulus!, true, true)).ToByteArray(true, true);
-        // BigInteger omits the leading zero from 00 01 FF..FF 00 token.
         Assert.Equal(383, decoded.Length);
         Assert.Equal(1, decoded[0]);
         Assert.All(decoded[1..^(token.Length + 1)], value => Assert.Equal(255, value));

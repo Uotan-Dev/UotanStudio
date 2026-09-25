@@ -17,7 +17,7 @@ public sealed class F2fsNativeInteroperabilityTests(ITestOutputHelper output)
     [Fact]
     public async Task Build_CompressedRawAndSparseDecodedImages_PassNativeDryRunCheckWhenAvailable()
     {
-        if (!OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") != "1")
         {
             Assert.Skip("This interoperability check currently targets the configured Alpine WSL environment.");
         }

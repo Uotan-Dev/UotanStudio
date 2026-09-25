@@ -108,8 +108,6 @@ public sealed class KeyLibraryTests : IDisposable
         using var rsa = RSA.Create(2048);
         var path = Path.Combine(_root, "input.pem");
         File.WriteAllText(path, rsa.ExportEncryptedPkcs8PrivateKeyPem("password", new PbeParameters(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 10000)));
-        // The loader normalizes invalid material and wrong passwords to InvalidDataException.
-        // 加载器把无效材料与错误密码统一归一化为 InvalidDataException。
         Assert.Throws<InvalidDataException>(() => Library.Import("bad", ManagedKeyKind.Payload, path, "wrong"));
         Assert.Empty(Library.List());
         var key = Library.Import("imported", ManagedKeyKind.Payload, path, "password");

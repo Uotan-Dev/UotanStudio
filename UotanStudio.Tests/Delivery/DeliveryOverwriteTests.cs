@@ -93,7 +93,6 @@ public sealed class DeliveryOverwriteTests : IDisposable
     [Fact]
     public void EstimateExportDemandExcludesDeviceSizeWhenEmptyOnly()
     {
-        // 仅生成Super_Empty：不构建完整 super，磁盘需求不再计入设备大小。
         var plan = new DeliveryPlan
         {
             OutputDirectory = Path.Combine(_root, "out"),

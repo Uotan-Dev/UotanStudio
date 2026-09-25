@@ -10,8 +10,6 @@ public class GpuDecodedVideoFrameTests
     [Fact]
     public void GpuFrame_InheritsDecodedVideoFrame_AndSkipsNv12Validation()
     {
-        // BGRA layout: 4 bytes per pixel; length may be smaller than the NV12
-        // requirement, so the base validation must be skipped for this shape.
         int width = 4, height = 2;
         byte[] buffer = new byte[width * height * 4];
         using var frame = new GpuDecodedVideoFrame(buffer, buffer.Length, width, height, width * 4, 1234L);
@@ -38,14 +36,12 @@ public class GpuDecodedVideoFrameTests
         var frame = new GpuDecodedVideoFrame(new byte[64], 64, 4, 4, 16, 0);
         frame.Dispose();
         Assert.Throws<ObjectDisposedException>(() => frame.Buffer);
-        // Double dispose is safe. 二次释放安全。
         frame.Dispose();
     }
 
     [Fact]
     public void DecodedVideoFrame_BaseValidation_StillRejectsShortNv12()
     {
-        // NV12 for 16x16 requires 16*16*3/2 bytes; a short buffer must fail.
         Assert.Throws<ArgumentException>(() =>
             new DecodedVideoFrame(new byte[100], 100, 16, 16, 16, 0));
     }

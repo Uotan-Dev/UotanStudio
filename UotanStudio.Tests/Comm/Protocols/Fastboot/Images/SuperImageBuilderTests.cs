@@ -28,8 +28,6 @@ public class SuperImageBuilderTests
         uint blockSize = 4096)
         => Builder.Build(partitions, deviceSize, metadataMaxSize, metadataSlotCount, blockSize);
 
-    // ============== LpGeometry ==============
-
     [Fact]
     public void LpGeometry_TooShortOrBadMagic_ReturnsNull()
     {
@@ -60,18 +58,12 @@ public class SuperImageBuilderTests
     public void LpGeometry_ChecksumCorruption_IsDetected()
     {
         var image = BuildImage([new SuperBuildPartition("system", "default", 0x20000)]);
-        // Corrupt one byte inside the 32-byte checksum field (struct layout: magic(4) +
-        // struct_size(4) + checksum(32) ...), keeping struct_size == 52 so the checksum
-        // is actually recomputed and found inconsistent.
-        // Firmware 布局下 geometry 在 offset 4096，破坏该处的校验和字段。
         image[SuperImageBuilder.GeometryBlockSize + 10] ^= 0xFF;
 
         var geometry = LpGeometry.TryParse(image, SuperImageBuilder.GeometryBlockSize);
         Assert.NotNull(geometry);
         Assert.False(geometry.IsChecksumValid);
     }
-
-    // ============== Build validation ==============
 
     [Fact]
     public void Build_ZeroDeviceSize_Throws()
@@ -138,13 +130,9 @@ public class SuperImageBuilderTests
     [Fact]
     public void Build_DeviceTooSmall_Throws()
     {
-        // 1 MiB of partitions on a 256 KiB device cannot fit metadata + data.
-        // 256 KiB 设备无法容纳 1 MiB 分区数据 + 元数据。
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             BuildImage([new SuperBuildPartition("system", "default", 0x100000)], deviceSize: 256 * 1024));
     }
-
-    // ============== Metadata read-back ==============
 
     [Fact]
     public void ReadMetadata_InvalidInputs_ReturnNull()
@@ -166,8 +154,6 @@ public class SuperImageBuilderTests
     public void ReadMetadata_CorruptedPrimaryMetadata_UsesBackup()
     {
         var image = BuildImage([new SuperBuildPartition("system", "default", 0x10000)]);
-        // Zero the LP metadata header magic (0x414C5030) at the start of slot 0.
-        // Firmware 布局下 metadata 区域起始偏移 = LP_PARTITION_RESERVED_BYTES + 2 * GeometryBlockSize = 12288。
         var metadataOffset = 4096 + 2 * SuperImageBuilder.GeometryBlockSize;
         Array.Clear(image, metadataOffset, 4);
 
@@ -229,8 +215,6 @@ public class SuperImageBuilderTests
         Assert.Empty(metadata.Extents);
     }
 
-    // ============== IsSuperImage / GetLogicalPartitions ==============
-
     [Fact]
     public void IsSuperImage_RejectsGarbage()
     {
@@ -243,7 +227,6 @@ public class SuperImageBuilderTests
     public void IsSuperImage_RecognizesBackupGeometryOnly()
     {
         var image = BuildImage([new SuperBuildPartition("system", "default", 0x10000)]);
-        // Primary geometry is at 4096; the backup is at 8192 after the reserved block.
         Array.Clear(image, 4096, SuperImageBuilder.GeometryBlockSize);
 
         Assert.True(Builder.IsSuperImage(image));

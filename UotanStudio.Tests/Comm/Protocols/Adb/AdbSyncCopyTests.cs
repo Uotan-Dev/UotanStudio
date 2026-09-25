@@ -79,7 +79,6 @@ public sealed class AdbSyncCopyTests
 
         Assert.Null(stream.Read(5000));
         await Task.Delay(100, TestContext.Current.CancellationToken);
-        // AOSP closes locally on a peer CLSE and does not echo CLSE back.
         Assert.Equal(0, transport.CloseCount);
     }
 

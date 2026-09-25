@@ -24,8 +24,6 @@ public sealed class ImageInputServiceTests
         return (service, warnings);
     }
 
-    // ---- 格式探测：扩展名优先。 Format probing: extensions first. ----
-
     [Theory]
     [InlineData(".cpio", "cpio")]
     [InlineData(".ofp", "oppo")]
@@ -45,8 +43,6 @@ public sealed class ImageInputServiceTests
         Assert.Equal(expected, ImageInputService.DetectFormat(file));
     }
 
-    // ---- 格式探测：魔数判定。 Format probing: magic-based detection. ----
-
     [Theory]
     [InlineData("system.new.dat", "dat")]
     [InlineData("system.new.dat.br", "brotli")]
@@ -61,8 +57,6 @@ public sealed class ImageInputServiceTests
     public void DetectFormat_AndroidSparseMagic_ReturnsSparse()
     {
         using var temp = new TempDirectory();
-        // Android sparse 魔数 0xED26FF3A（小端字节序 3A FF 26 ED）。
-        // Android sparse magic 0xED26FF3A (little-endian bytes 3A FF 26 ED).
         var file = temp.WriteBytes("sparse.img", [0x3A, 0xFF, 0x26, 0xED, 1, 0]);
 
         Assert.Equal("sparse", ImageInputService.DetectFormat(file));
@@ -93,7 +87,7 @@ public sealed class ImageInputServiceTests
     {
         using var temp = new TempDirectory();
         var header = new byte[1082];
-        header[1080] = 0x53; // 0xEF53 little-endian → 53 EF
+        header[1080] = 0x53;
         header[1081] = 0xEF;
         var file = temp.WriteBytes("system.raw", header);
 
@@ -105,7 +99,6 @@ public sealed class ImageInputServiceTests
     {
         using var temp = new TempDirectory();
         var header = new byte[1028];
-        // 0xE0F5E1E2 little-endian → E2 E1 F5 E0
         header[1024] = 0xE2;
         header[1025] = 0xE1;
         header[1026] = 0xF5;
@@ -120,7 +113,6 @@ public sealed class ImageInputServiceTests
     {
         using var temp = new TempDirectory();
         var header = new byte[1028];
-        // 0xF2F52010 little-endian → 10 20 F5 F2
         header[1024] = 0x10;
         header[1025] = 0x20;
         header[1026] = 0xF5;
@@ -129,8 +121,6 @@ public sealed class ImageInputServiceTests
 
         Assert.Equal("f2fs", ImageInputService.DetectFormat(file));
     }
-
-    // ---- 格式探测：未知输入与回退。 Format probing: unknown inputs and fallbacks. ----
 
     [Fact]
     public void DetectFormat_UnrecognizedHeaderWithoutKnownExtension_ReturnsUnknown()
@@ -163,9 +153,6 @@ public sealed class ImageInputServiceTests
     public void DetectFormat_ShortFile_TruncatedHeaderStillDetectsMagic()
     {
         using var temp = new TempDirectory();
-        // 只有 2 字节的小文件：不足 1082 字节头部，但也不命中任何魔数；.img 扩展名回退 raw。
-        // A 2-byte small file: below the 1082-byte header, matching no magic; the .img
-        // extension falls back to raw.
         var file = temp.WriteBytes("tiny.img", [0x3A, 0xFF]);
 
         Assert.Equal("raw", ImageInputService.DetectFormat(file));
@@ -175,15 +162,11 @@ public sealed class ImageInputServiceTests
     public void DetectFormat_HeaderReadFailure_FallsBackToExtension()
     {
         using var temp = new TempDirectory();
-        // 指向目录的“文件”路径使 ReadHeader 抛出 IOException → 回退扩展名推断 raw。
-        // A "file" path pointing at a directory makes ReadHeader throw → falls back to "raw".
         var dir = System.IO.Path.Combine(temp.Path, "sub.img");
         Directory.CreateDirectory(dir);
 
         Assert.Equal("raw", ImageInputService.DetectFormat(dir));
     }
-
-    // ---- 布局探测。 Layout probing. ----
 
     [Fact]
     public void ProbeFilesystemHeader_FsMagics_MapToLayout()
@@ -209,8 +192,6 @@ public sealed class ImageInputServiceTests
         Assert.Null(ImageInputService.ProbeFilesystemHeader(file));
     }
 
-    // ---- 源路径解析。 Source path resolution. ----
-
     [Fact]
     public void ResolveSourcePath_ExistingFile_ReturnsAbsolutePath()
     {
@@ -230,9 +211,6 @@ public sealed class ImageInputServiceTests
         var result = service.ResolveSourcePath("missing.img", isDirectory: false, operation: "extract");
 
         Assert.Null(result);
-        // 警告文案与原 LogService.Warn 输出保持一致（含中英双语，中止提示使用「导入/提取中止」措辞）。
-        // The warning text matches the previous LogService.Warn output (bilingual; the abort text
-        // keeps the existing wording).
         var warning = Assert.Single(warnings);
         Assert.Contains("extract aborted: path not found: missing.img", warning);
         Assert.Contains("中止：找不到路径：missing.img", warning);
@@ -261,8 +239,6 @@ public sealed class ImageInputServiceTests
         Assert.Equal(dir, service.ResolveSourcePath(dir, isDirectory: true, operation: "img"));
         Assert.Empty(warnings);
 
-        // 文件路径按目录条目校验 → 不存在 → null。
-        // A file path validated as a directory entry → missing → null.
         var file = temp.WriteBytes("boot.img", [1]);
         Assert.Null(service.ResolveSourcePath(file, isDirectory: true, operation: "img"));
         Assert.Single(warnings);

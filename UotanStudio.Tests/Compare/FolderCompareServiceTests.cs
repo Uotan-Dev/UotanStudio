@@ -32,8 +32,6 @@ public sealed class FolderCompareServiceTests
 
             var result = await FolderCompareService.Instance.CompareAsync(left, right, TestContext.Current.CancellationToken);
 
-            // 四个文件条目：equal / different / left-only / right-only 各一。
-            // Four file entries: one each of equal / different / left-only / right-only.
             Assert.Equal(4, result.Items.Count);
             Assert.Equal(1, result.EqualCount);
             Assert.Equal(1, result.DifferentCount);
@@ -48,8 +46,6 @@ public sealed class FolderCompareServiceTests
             Assert.False(diff.IsDirectory);
             Assert.Equal(FolderItemStatus.Different, diff.Status);
 
-            // 孤儿条目：缺失侧尺寸为 -1。
-            // Orphan entries report -1 for the missing side.
             var leftOnly = Assert.Single(result.Items, static i => i.RelativePath == "left_only.txt");
             Assert.Equal(FolderItemStatus.LeftOnly, leftOnly.Status);
             Assert.True(leftOnly.LeftSize > 0);
@@ -84,8 +80,6 @@ public sealed class FolderCompareServiceTests
 
             var result = await FolderCompareService.Instance.CompareAsync(left, right, TestContext.Current.CancellationToken);
 
-            // 子目录条目本身按目录报告，其内部文件用 '/' 拼接的相对路径分类。
-            // The subdirectory entry is reported as a directory; files inside use '/' joined paths.
             Assert.Equal(3, result.Items.Count);
 
             var subDir = Assert.Single(result.Items, static i => i.RelativePath == "sub");
@@ -116,8 +110,6 @@ public sealed class FolderCompareServiceTests
             Directory.CreateDirectory(left);
             Directory.CreateDirectory(right);
 
-            // 等长（各 4 字节）但内容不同，不能只靠尺寸判定。
-            // Same length (4 bytes each) but different content — size alone must not classify as equal.
             File.WriteAllText(Path.Combine(left, "payload.bin"), "AAAA");
             File.WriteAllText(Path.Combine(right, "payload.bin"), "ABAA");
 
@@ -150,8 +142,6 @@ public sealed class FolderCompareServiceTests
 
             var result = await FolderCompareService.Instance.CompareAsync(left, right, TestContext.Current.CancellationToken);
 
-            // 两个空目录：无任何可比较条目。
-            // Two empty directories: nothing to compare.
             Assert.Empty(result.Items);
             Assert.Equal(0, result.EqualCount);
             Assert.Equal(0, result.DifferentCount);
@@ -180,8 +170,6 @@ public sealed class FolderCompareServiceTests
 
             await FolderCompareService.Instance.CopyAsync(source, target, "sub/nested.txt", TestContext.Current.CancellationToken);
 
-            // 目标侧缺失的 sub 目录应由 CopyAsync 自动创建。
-            // The missing sub directory on the target side must be created by CopyAsync.
             var copied = Path.Combine(target, "sub", "nested.txt");
             Assert.True(File.Exists(copied));
             Assert.Equal(payload, File.ReadAllText(copied));
@@ -224,8 +212,6 @@ public sealed class FolderCompareServiceTests
             Directory.CreateDirectory(left);
             Directory.CreateDirectory(right);
 
-            // 已取消的令牌：比较必须立即以取消异常失败。
-            // A pre-cancelled token: the comparison must fail fast with a cancellation exception.
             await Assert.ThrowsAnyAsync<OperationCanceledException>(
                 () => FolderCompareService.Instance.CompareAsync(left, right, new CancellationToken(canceled: true)));
         }

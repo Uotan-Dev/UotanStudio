@@ -23,7 +23,7 @@ public class ApkKeystoreAndCertificateTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_root, recursive: true); } catch { /* best effort 尽力清理 */ }
+        try { Directory.Delete(_root, recursive: true); } catch { }
     }
 
     [Fact]
@@ -44,9 +44,6 @@ public class ApkKeystoreAndCertificateTests : IDisposable
         Assert.Single(entry.Certificates);
         Assert.Equal(certificate.RawData, entry.Certificates[0]);
 
-        // The protected key recovers back to the original PKCS#8 through the KeyProtector path:
-        // wrong password must fail, correct password must match the certificate's public key.
-        // 受保护私钥经 KeyProtector 恢复出原始 PKCS#8：错误密码必须失败，正确密码必须与证书公钥一致。
         Assert.Throws<InvalidDataException>(() => JksKeyStoreReader.Read(data, "wrong"));
         var protectedKey = JksKeyStoreReader.Read(data, "store-pass")[0].ProtectedPrivateKey!;
         Assert.Throws<InvalidDataException>(() => JksKeyStoreReader.Unprotect(protectedKey, "wrong"));
@@ -92,18 +89,12 @@ public class ApkKeystoreAndCertificateTests : IDisposable
         Assert.Equal(["release-key.jks", "release-key.p12", "release-key.pem", "release-key.pk8"],
             bundle.ExportedFiles.Select(Path.GetFileName).Order().ToArray());
 
-        // JKS integrity + alias.
-        // JKS 完整性与别名。
         var entries = JksKeyStoreReader.Read(File.ReadAllBytes(Path.Combine(output, "release-key.jks")), "store-pass");
         Assert.Equal("release-key", Assert.Single(entries).Alias);
 
-        // PKCS12 carries the private key matching the library entry.
-        // PKCS12 含私钥且与库条目公钥一致。
         using var pfx = X509CertificateLoader.LoadPkcs12FromFile(
             Path.Combine(output, "release-key.p12"), "store-pass", X509KeyStorageFlags.EphemeralKeySet);
         Assert.True(pfx.HasPrivateKey);
-        // Compare SPKI of the library entry's public key file against the PFX certificate.
-        // 用库条目公钥文件的 SPKI 与 PFX 证书比对。
         var libraryPublic = RSA.Create();
         try
         {
@@ -112,8 +103,6 @@ public class ApkKeystoreAndCertificateTests : IDisposable
         }
         finally { libraryPublic.Dispose(); }
 
-        // PEM pair loads through the real APK signer consumer.
-        // PEM 对经真实 APK 签名消费方加载。
         using var material = ApkSignerKeyMaterial.Load(
             Path.Combine(output, "release-key.pk8"), null, Path.Combine(output, "release-key.pem"), null);
         Assert.Equal(pfx.PublicKey.ExportSubjectPublicKeyInfo(), material.Key.ExportSubjectPublicKeyInfo());

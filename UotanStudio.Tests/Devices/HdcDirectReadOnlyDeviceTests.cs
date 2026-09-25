@@ -57,8 +57,6 @@ public sealed class HdcDirectReadOnlyDeviceTests
             Assert.True(receivedFile.Length > 0);
         }
 
-        // Disposal released the claimed interface, so a fresh direct session can be opened again.
-        // 释放后已认领接口可再次打开一条全新直连会话。
         var reopened = HdcDirectConnection.Open(device);
         using var reopenedLease = reopened.Lease;
         Assert.True(reopened.Session.IsConnected);
@@ -122,6 +120,5 @@ public sealed class HdcDirectReadOnlyDeviceTests
     }
 }
 
-// Native enumeration emits global UsbTrace events; keep it outside tests replacing trace callbacks.
 [CollectionDefinition("HDC direct hardware", DisableParallelization = true)]
 public sealed class HdcDirectHardwareCollection;

@@ -297,7 +297,6 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
         {
             dispatch = fixture.Session.Dispatch(() =>
             {
-                // Loading directly must succeed; LanguageService otherwise falls back after duplicate-key errors.
                 Assert.Equal("Check format precondition", new global::UotanStudio.Locale.EnUs.Node()["Node_Validation_Format_Check"]);
                 Assert.Equal("检查格式条件", new global::UotanStudio.Locale.ZhCn.Node()["Node_Validation_Format_Check"]);
                 using var editor = new NodeEditorViewModel();

@@ -35,7 +35,6 @@ public sealed class PayloadOtaZipTests : IDisposable
             Txt = false,
             ContainerConfirmed = true,
             OutputDirectory = Path.Combine(_root, "output"),
-            // A/B OTA must not consume the DAT-only Edify updater setting.
             Package = new() { RecoveryUpdaterPath = Path.Combine(_root, "not-an-ab-updater") },
             Container = [new() { SourcePath = source, FileName = "boot.img", Partition = "boot" }],
             Files = organize ? [new() { Generated = true, FileName = "ota.zip", Partition = "payload" }] : []
@@ -57,14 +56,12 @@ public sealed class PayloadOtaZipTests : IDisposable
         var zipPath = Path.Combine(plan.OutputDirectory, "ota.zip");
         using var zip = ZipFile.OpenRead(zipPath);
         Assert.Equal(new[] { "payload.bin", "payload_properties.txt", "META-INF/com/android/metadata" }, zip.Entries.Select(e => e.FullName));
-        // TWRP selects its A/B update_engine flow from payload.bin. Including a device-specific
-        // update-binary would make it take the conventional updater path instead.
         Assert.Null(zip.GetEntry(DeliveryRecoveryUpdater.EntryPath));
         using var reader = new StreamReader(zip.GetEntry("META-INF/com/android/metadata")!.Open());
         var metadata = (await reader.ReadToEndAsync(TestContext.Current.CancellationToken))
             .Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Split('=', 2)).ToDictionary(p => p[0], p => p[1]);
         Assert.Equal("AB", metadata["ota-type"]);
-        Assert.False(metadata.ContainsKey("post-build")); // Never invent a target build identity.
+        Assert.False(metadata.ContainsKey("post-build"));
         var bytes = File.ReadAllBytes(zipPath);
         var ranges = new Dictionary<string, (long Offset, long Size)>();
         var position = 0;
@@ -108,15 +105,10 @@ public sealed class PayloadOtaZipTests : IDisposable
         };
         var state = DeliveryPlanStore.CaptureElement(_root, plan);
         var restored = DeliveryPlanStore.LoadFromState(state, _root)!;
-        // 交付面板的镜像列表不随解决方案持久化，旧方案里的条目一律丢弃；仅打包模式与确认状态保留。
-        // The delivery panel's image lists are never persisted: legacy entries are dropped, while the pack mode
-        // and confirmation state survive.
         Assert.Empty(restored.Files);
         Assert.Empty(restored.Container);
         Assert.True(restored.PackPayload);
         Assert.True(restored.ContainerConfirmed);
-        // 会话内仍按计划生成 ota.zip 行并保留容器归属。
-        // In-session the plan still materializes the ota.zip row and keeps container membership.
         var model = new DeliveryViewModel();
         model.Reset(plan);
         Assert.Equal("ota.zip", Assert.Single(model.Output).FileName);

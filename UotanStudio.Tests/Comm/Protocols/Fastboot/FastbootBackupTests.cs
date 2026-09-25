@@ -15,7 +15,7 @@ namespace UotanStudio.Tests.Comm.Protocols.Fastboot;
 /// </summary>
 public class FastbootBackupTests
 {
-    private const long PartitionSize = 0x20000; // 128 KiB
+    private const long PartitionSize = 0x20000;
 
     [Fact]
     public void BackupFastbootPartition_WritesExactDevicePayload()
@@ -24,10 +24,10 @@ public class FastbootBackupTests
         Random.Shared.NextBytes(partitionBytes);
 
         var transport = new FakeCommTransport();
-        transport.Enqueue("OKAY0x00020000");        // getvar:partition-size:boot (128 KiB)
-        transport.Enqueue("OKAYno");                // getvar:has-slot:boot
-        transport.Enqueue("OKAY");                  // getvar:max-fetch-size (empty -> -1)
-        transport.Enqueue("DATA00020000");          // fetch:boot:0:20000 -> DATA 0x20000 bytes
+        transport.Enqueue("OKAY0x00020000");
+        transport.Enqueue("OKAYno");
+        transport.Enqueue("OKAY");
+        transport.Enqueue("DATA00020000");
         transport.Enqueue(partitionBytes);
         transport.Enqueue("OKAY");
 
@@ -65,12 +65,11 @@ public class FastbootBackupTests
         Random.Shared.NextBytes(imageBytes);
 
         var transport = new FakeCommTransport();
-        // DownloadData: max-download-size query, download command -> DATA, trailing OKAY.
-        transport.Enqueue("OKAY");                    // getvar:max-download-size (empty -> fallback)
-        transport.Enqueue($"DATA{imageBytes.Length:x8}"); // download:00004000
-        transport.Enqueue("OKAY");                    // payload accepted
-        transport.Enqueue("OKAYno");                  // getvar:has-slot:boot -> no (no A/B slot)
-        transport.Enqueue("OKAY");                    // flash:boot
+        transport.Enqueue("OKAY");
+        transport.Enqueue($"DATA{imageBytes.Length:x8}");
+        transport.Enqueue("OKAY");
+        transport.Enqueue("OKAYno");
+        transport.Enqueue("OKAY");
 
         var session = new FastbootSession(transport);
         using var dir = new TempDirectory();
@@ -98,12 +97,12 @@ public class FastbootBackupTests
         Random.Shared.NextBytes(imageBytes);
 
         var transport = new FakeCommTransport();
-        transport.Enqueue("OKAY");                       // getvar:max-download-size (empty -> fallback)
-        transport.Enqueue($"DATA{imageBytes.Length:x8}"); // download:00001000
-        transport.Enqueue("OKAY");                       // payload accepted
-        transport.Enqueue("OKAYyes");                    // getvar:has-slot:boot -> yes
-        transport.Enqueue("OKAYa");                      // getvar:current-slot -> a
-        transport.Enqueue("OKAY");                       // flash:boot_a
+        transport.Enqueue("OKAY");
+        transport.Enqueue($"DATA{imageBytes.Length:x8}");
+        transport.Enqueue("OKAY");
+        transport.Enqueue("OKAYyes");
+        transport.Enqueue("OKAYa");
+        transport.Enqueue("OKAY");
 
         using var session = new FastbootSession(transport);
         using var ms = new MemoryStream(imageBytes);
@@ -123,10 +122,10 @@ public class FastbootBackupTests
         Random.Shared.NextBytes(imageBytes);
 
         var transport = new FakeCommTransport();
-        transport.Enqueue("OKAY");                       // getvar:max-download-size
-        transport.Enqueue($"DATA{imageBytes.Length:x8}"); // download:00001000
-        transport.Enqueue("OKAY");                       // payload accepted
-        transport.Enqueue("OKAY");                       // flash:boot_a (no re-suffix)
+        transport.Enqueue("OKAY");
+        transport.Enqueue($"DATA{imageBytes.Length:x8}");
+        transport.Enqueue("OKAY");
+        transport.Enqueue("OKAY");
 
         using var session = new FastbootSession(transport);
         using var ms = new MemoryStream(imageBytes);
@@ -135,7 +134,6 @@ public class FastbootBackupTests
         var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
         Assert.Contains("flash:boot_a", commands);
         Assert.DoesNotContain(commands, c => c == "flash:boot_a_a");
-        // An explicit slot is authoritative: upstream fastboot never queries has-slot for it.
         Assert.DoesNotContain(commands, c => c.StartsWith("getvar:has-slot:", StringComparison.Ordinal));
     }
 
@@ -146,10 +144,10 @@ public class FastbootBackupTests
         Random.Shared.NextBytes(imageBytes);
 
         var transport = new FakeCommTransport();
-        transport.Enqueue("OKAY");                       // getvar:max-download-size
-        transport.Enqueue($"DATA{imageBytes.Length:x8}"); // download:00001000
-        transport.Enqueue("OKAY");                       // payload accepted
-        transport.Enqueue("OKAY");                       // flash:system_ext_a
+        transport.Enqueue("OKAY");
+        transport.Enqueue($"DATA{imageBytes.Length:x8}");
+        transport.Enqueue("OKAY");
+        transport.Enqueue("OKAY");
 
         using var session = new FastbootSession(transport);
         using var ms = new MemoryStream(imageBytes);
@@ -169,10 +167,10 @@ public class FastbootBackupTests
         Random.Shared.NextBytes(imageBytes);
 
         var transport = new FakeCommTransport();
-        transport.Enqueue("OKAY");                       // getvar:max-download-size
-        transport.Enqueue($"DATA{imageBytes.Length:x8}"); // download:00001000
-        transport.Enqueue("OKAY");                       // payload accepted
-        transport.Enqueue("OKAY");                       // flash:boot
+        transport.Enqueue("OKAY");
+        transport.Enqueue($"DATA{imageBytes.Length:x8}");
+        transport.Enqueue("OKAY");
+        transport.Enqueue("OKAY");
 
         using var session = new FastbootSession(transport);
         using var ms = new MemoryStream(imageBytes);
@@ -218,7 +216,6 @@ public class FastbootBackupTests
             Assert.Equal(partitions[i].GroupName, metadata.Partitions[i].GroupName);
         }
 
-        // Every partition maps to exactly one linear extent inside the image data area.
         Assert.Equal(partitions.Length, metadata.Extents.Count);
         var firstLogicalSector = Assert.Single(metadata.BlockDevices).FirstLogicalSector;
         Assert.True(firstLogicalSector > 0);
@@ -233,7 +230,6 @@ public class FastbootBackupTests
             Assert.InRange(dataEnd, 1, image.Length);
         }
 
-        // Backup copies: every metadata slot reads back identically.
         for (uint slot = 0; slot < metadataSlotCount; slot++)
         {
             var slotMetadata = builder.ReadMetadata(image, (int)slot);

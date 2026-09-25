@@ -135,7 +135,6 @@ public class Nv12ToBgraConverterTests
 
         Nv12ToBgraConverter.Convert(nv12, width, height, stride, destination);
 
-        // 全图与参考实现逐像素比对（含最后一行/最后一列边界）。
         for (var row = 0; row < height; row++)
         {
             for (var col = 0; col < width; col++)
@@ -158,7 +157,6 @@ public class Nv12ToBgraConverterTests
     [Fact]
     public void Convert_PureColors_ProduceExpectedBgra()
     {
-        // 纯白（Y=235, U=V=128）与纯黑（Y=16, U=V=128）的 BT.601 有限范围结果。
         const int width = 2;
         const int height = 2;
         var nv12 = new byte[width * height * 3 / 2];
@@ -205,8 +203,6 @@ public class Nv12ToBgraConverterTests
 
         Nv12ToBgraConverter.Convert(nv12, width, height, stride, destination);
 
-        // 饱和色度（U=16/V=240）应精确钳位到参考值：B=29 / G=208 / R=255。
-        // Saturated chroma (U=16/V=240) must clamp exactly to the reference values.
         var (b, g, r, a) = ExpectedPixel(y: 235, u: 16, v: 240);
         for (var i = 0; i < width * height; i++)
         {

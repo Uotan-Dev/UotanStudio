@@ -68,10 +68,10 @@ public sealed class FlashSuperEmptyServiceTests
             transport.Enqueue("OKAY" + deviceSize);
         if (expectedWrite)
         {
-            transport.Enqueue("OKAY"); // getvar:max-download-size
+            transport.Enqueue("OKAY");
             transport.Enqueue($"DATA{prepared.MetadataImage.Length:x8}");
-            transport.Enqueue("OKAY"); // download payload
-            transport.Enqueue("OKAY"); // update-super
+            transport.Enqueue("OKAY");
+            transport.Enqueue("OKAY");
         }
 
         using var session = new FastbootSession(transport, timeoutMs: 3000);

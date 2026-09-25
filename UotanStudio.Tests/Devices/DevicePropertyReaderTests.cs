@@ -92,7 +92,6 @@ public sealed class DevicePropertyReaderTests
         Assert.Equal((-1, "--"), DevicePropertyReader.ParseMem("permission denied"));
         Assert.Equal((-1, "--"), DevicePropertyReader.ParseDisk("permission denied"));
         Assert.Equal("--", DevicePropertyReader.FormatUptime("--", _ => throw new InvalidOperationException()));
-        // The existing panel treats unavailable MemAvailable as zero usage; keep that policy here.
         Assert.Equal(0, DevicePropertyReader.ParseMem("MemTotal: 1000000 kB").Level);
     }
 }

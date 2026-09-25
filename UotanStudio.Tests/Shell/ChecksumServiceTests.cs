@@ -19,8 +19,6 @@ public sealed class ChecksumServiceTests
 
         var result = await ChecksumService.ComputeAsync(path, All, TestContext.Current.CancellationToken);
 
-        // RFC 1326 / FIPS 180-4 / IEEE 802.3 参考向量。
-        // Reference vectors from RFC 1326, FIPS 180-4 and IEEE 802.3.
         Assert.Equal("900150983cd24fb0d6963f7d28e17f72", result.Md5);
         Assert.Equal("a9993e364706816aba3e25717850c26c9cd0d89d", result.Sha1);
         Assert.Equal("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", result.Sha256);
@@ -60,12 +58,8 @@ public sealed class ChecksumServiceTests
     public async Task ComputeAsync_MultiMegabyteFile_HandlesChunkedReads()
     {
         using var directory = new TempDirectory();
-        // 3 字节对齐 + 跨越多个 1MB 缓冲块，验证分块读取与整读结果一致。
-        // 3-byte payload repeated across several 1MB buffer chunks; chunked reads must match a whole read.
         var payload = Encoding.ASCII.GetBytes("abc");
         var data = new byte[3 * 1024 * 1024 + 1];
-        // 逐个字节填充，避免最后一个不完整块（3 字节对齐多出 1 字节）溢出 Span。
-        // Fill byte-by-byte so the trailing partial chunk (1 byte past the 3-byte alignment) does not overflow.
         for (var i = 0; i < data.Length; i++)
         {
             data[i] = payload[i % payload.Length];
@@ -73,9 +67,6 @@ public sealed class ChecksumServiceTests
 
         var path = directory.WriteBytes("large.bin", data);
         var expected = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(data)).ToLowerInvariant();
-        // CRC32 同样由 data 自算（与 SHA256 一致），保证「分块读取 == 整读」的一致性断言与数据同源。
-        // The CRC32 is likewise computed from data (like the SHA256) so the chunked-vs-whole assertion
-        // stays consistent with the actual payload.
         var crc = new Crc32();
         crc.Append(data);
         var expectedCrc = BinaryPrimitives.ReadUInt32LittleEndian(crc.GetCurrentHash()).ToString("x8");

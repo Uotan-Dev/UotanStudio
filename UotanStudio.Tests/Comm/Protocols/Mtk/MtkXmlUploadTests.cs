@@ -32,7 +32,6 @@ public partial class MtkSessionTests
         Assert.Equal("0x400000", command.Element("arg")!.Element("at_address")!.Value);
         Assert.Equal("0x400000", command.Element("arg")!.Element("jmp_address")!.Value);
         Assert.Equal("MEM://0x0:0x515", command.Element("arg")!.Element("source_file")!.Value);
-        // Decode envelopes independently, including fragmented stream writes.
         var wire = writes.SelectMany(value => value).ToArray();
         var payloads = new List<byte[]>();
         for (var offset = 0; offset < wire.Length;)

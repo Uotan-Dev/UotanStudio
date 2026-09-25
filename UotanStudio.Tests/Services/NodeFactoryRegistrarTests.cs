@@ -11,6 +11,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Services;
 
+[Collection("Log pipeline")]
 public sealed class NodeFactoryRegistrarTests
 {
     [Fact]

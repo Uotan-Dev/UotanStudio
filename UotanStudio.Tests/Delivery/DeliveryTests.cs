@@ -159,8 +159,6 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public void PayloadConfirmValidatesContainerAndPublishesGeneratedOta()
     {
-        // Payload 确认前先校验容器：真实临时镜像 + 唯一分区名 + 默认 Payload 选项 → 确认成功并生成 ota.zip 行。
-        // Confirm validates the container first: a real temporary image, a unique partition and default Payload options succeed.
         var model = new DeliveryViewModel();
         model.SetMode(true, false, true);
         var path = Path.Combine(_root, "boot_a.img");
@@ -183,8 +181,6 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public void PayloadConfirmRejectsDuplicatePartitionNames()
     {
-        // 分区重名时 Confirm 抛 InvalidDataException：不确认、不生成 ota.zip 行。
-        // Duplicate partition names throw InvalidDataException: no confirmation and no generated ota.zip row.
         var model = new DeliveryViewModel();
         model.SetMode(true, false, true);
         model.SelectSources([Input("boot_a"), Input("boot_a_copy") with { Partition = "boot_a" }]);
@@ -197,8 +193,6 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public void PayloadModeDoesNotMaterializeZeroPartitionsButSuperModeDoes()
     {
-        // Payload 模式下自动零分区不物化 _b 行；对照组 Super 模式仍物化 system_b。
-        // Payload mode never materializes auto zero rows; the Super-mode control still adds system_b.
         var payloadModel = new DeliveryViewModel();
         payloadModel.SetMode(true, false, true);
         payloadModel.AutoZero = true;
@@ -215,8 +209,6 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public void SuperConfirmRejectsPartitionsThatExceedDeviceSize()
     {
-        // 分区镜像变大超过 Super 大小时，Confirm 立即给出需要的字节数与最小 Super 大小，不生成容器条目。
-        // Grown partitions that exceed the Super size fail at confirmation with required bytes and the minimum size.
         var model = new DeliveryViewModel();
         model.SetMode(true, true, false);
         model.SelectSources([Input("system_a"), Input("vendor_a")]);
@@ -351,8 +343,6 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public async Task BuildSuperAcceptsEmptyBSlotImageWithAutoZero()
     {
-        // The empty B-slot image selected from the source list is matched by file name and becomes a zero-size partition.
-        // 勾选的空 B 槽镜像按文件名匹配并作为零大小分区参与打包。
         var a = Input("my_bigball_a");
         var b = Input("my_bigball_b", 0);
         var output = Path.Combine(_root, "super.img");
@@ -406,9 +396,6 @@ public sealed class DeliveryTests : IDisposable
         };
         var state = DeliveryPlanStore.CaptureElement(_root, plan);
         var restored = Assert.IsType<DeliveryPlan>(DeliveryPlanStore.LoadFromState(state, _root));
-        // 交付面板的镜像列表不随解决方案持久化：重开后从空开始，避免展示过期或不属于当前工程的镜像。
-        // The delivery panel's image lists are never persisted: a reopen starts empty so stale or foreign images
-        // are never shown.
         Assert.Empty(restored.Files);
         Assert.Empty(restored.Container);
         Assert.Equal("manual edits\n", restored.Scripts["flash.txt"]);
@@ -432,8 +419,6 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public void LoadFromState_ToleratesLegacyPlanMissingRecoveryUpdaterPath()
     {
-        // 旧版本保存的方案没有 RecoveryUpdaterPath；缺省时 STJ 会置为 null（而非 ""），不得判为无效计划。
-        // Legacy plans predate RecoveryUpdaterPath; STJ leaves the absent property null rather than "", which must not invalidate the plan.
         var plan = new DeliveryPlan { OutputDirectory = _root, Files = [Input()], Container = [] };
         var captured = DeliveryPlanStore.CaptureElement(_root, plan);
         var root = System.Text.Json.Nodes.JsonNode.Parse(captured.GetRawText())!;
@@ -518,17 +503,8 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public async Task SparseSuperRepackFileStaysWellBelowDeviceSize()
     {
-        // 原厂 super 多为 SPARSE：设备尺寸大、分区数据少，元数据区、分区间与尾部全为零。
-        // 重打包若把整个设备当作单个 RAW chunk 写出，super.img 会膨胀到约等于完整 DeviceSize，
-        // 超过原始稀疏 super 而无法刷入。本用例锁定：合成 SPARSE super 的文件必须与真实非零
-        // 数据成正比，而不是与设备尺寸成正比。
-        // OEM supers are usually SPARSE: a large device carrying little partition data, with the
-        // metadata, inter-partition and trailing regions all zero. If the repack emitted the whole
-        // device as a single RAW chunk, super.img would balloon to ~the full DeviceSize, exceed the
-        // original sparse super and become unflashable. This test pins the invariant: a repacked
-        // SPARSE super's file must scale with real non-zero data, not with the device size.
-        var file = Input("system", 256 * 1024);                 // 256 KiB of partition data
-        const ulong deviceSize = 64UL * 1024 * 1024;            // 64 MiB device, ~63 MiB of zeros
+        var file = Input("system", 256 * 1024);
+        const ulong deviceSize = 64UL * 1024 * 1024;
         var options = new DeliverySuperOptions { DeviceSize = deviceSize, Sparse = true, BlockSize = 4096 };
         var output = Path.Combine(_root, "sparse-super.img");
         await DeliverySuperBuilder.BuildAsync([file], options, output, token: TestContext.Current.CancellationToken);
@@ -537,7 +513,6 @@ public sealed class DeliveryTests : IDisposable
         Assert.True(length < (long)deviceSize / 4,
             $"Sparse super output {length} bytes should be well under the {deviceSize}-byte device.");
 
-        // The logical size is preserved exactly: the sparse total covers the full device.
         using var sparse = SparseReader.FromImageFile(output);
         Assert.Equal(deviceSize, (ulong)sparse.Header.TotalBlocks * sparse.Header.BlockSize);
     }
@@ -545,7 +520,6 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public async Task EmptySuperGeneratesOnlySuperEmptyImage()
     {
-        // 仅生成Super_Empty：Empty=true 时只产出 super_empty.img，不再生成完整 super。
         var file = Input("system");
         var options = new DeliverySuperOptions { DeviceSize = 8 * 1024 * 1024, Empty = true };
         var output = Path.Combine(_root, "empty-out");
@@ -567,7 +541,6 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public void EmptySuperExcludesZstdCompression()
     {
-        // 仅生成Super_Empty 与压缩为ZST 互斥：组合在确认前被校验拒绝。
         var plan = new DeliveryPlan
         {
             OrganizeDirectory = false,
@@ -582,9 +555,6 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public void SuperZstdLevelRaisesDefaultAndRejectsInvalidValues()
     {
-        // 重打包原包镜像时默认使用高 Zstd 等级，避免 super.zst 超过原始 super；0 或越界回退默认。
-        // Repacking the original package defaults to a high Zstd level so super.zst stays within the original
-        // Super size; 0 or out-of-range values fall back to the default.
         var defaults = new DeliverySuperOptions();
         Assert.Equal(DeliverySuperOptions.DefaultZstdLevel, defaults.ZstdLevel);
         Assert.Equal(DeliverySuperOptions.DefaultZstdLevel, DeliverySuperOptions.ResolveZstdLevel(defaults with { ZstdLevel = 0 }));
@@ -694,12 +664,8 @@ public sealed class DeliveryTests : IDisposable
         Assert.Contains("是否开始刷写？[y/N]：", scripts["FlashLinux.sh"]);
         Assert.Contains("已完成。", scripts["FlashLinux.sh"]);
         Assert.Contains("缺少镜像：boot.img", scripts["FlashLinux.sh"]);
-        // 本地化缺失时回退英文（资源缺失时 GetString 返回完整键名，T 亦回退英文）。
-        // A missing localized key falls back to English (GetString returns the full key name, which T treats as missing).
         Assert.Contains("Invalid choice.", scripts["FlashLinux.sh"]);
         Assert.Contains("请选择 init_boot", scripts["FlashWindows.bat"]);
-        // 未提供 localize 时保持英文。
-        // Without a localizer the scripts stay English.
         var english = DeliveryScriptGenerator.Generate(plan);
         Assert.Contains("Choose init_boot", english["FlashLinux.sh"]);
         Assert.Contains("Completed.", english["FlashWindows.bat"]);
@@ -729,8 +695,6 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public void TxtManifestExcludesCompressedImages()
     {
-        // TXT 线刷（旧工具箱）无法解压 zstd：super.zst 不得作为 super 分区写入 flash.txt 或其变体。
-        // The TXT flasher cannot decompress zstd, so super.zst must not be listed as the super partition.
         var plan = new DeliveryPlan
         {
             Files = [Input() with { Optional = true, Default = true }, Input("super") with { FileName = "super.zst", Partition = "super" },
@@ -741,8 +705,6 @@ public sealed class DeliveryTests : IDisposable
         var scripts = DeliveryScriptGenerator.Generate(plan);
         Assert.Equal("boot images/boot.img\r\n", scripts["flash.txt"]);
         Assert.DoesNotContain("super.zst", scripts["flash.txt"]);
-        // 变体同样排除压缩镜像：flash-boot_ksu.txt 只含 boot 备选。
-        // Variants exclude compressed images too: flash-boot_ksu.txt only carries the boot alternative.
         Assert.Equal("boot images/boot_ksu.img\r\n", scripts["flash-boot_ksu.txt"]);
         Assert.DoesNotContain("super.zst", scripts["flash-boot_ksu.txt"]);
     }

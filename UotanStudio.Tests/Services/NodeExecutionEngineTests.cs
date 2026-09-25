@@ -52,8 +52,6 @@ public sealed class NodeExecutionEngineTests
         public void SetMinimumLevel(LogLevel level) { }
     }
 
-    // ---- P0-1: NodeExecutionEngine ----
-
     [Fact]
     public async Task Engine_FlowsUpstreamOutputIntoTargetInput()
     {
@@ -144,8 +142,6 @@ public sealed class NodeExecutionEngineTests
         var result = await runTask;
         Assert.Equal(ExecutionStatus.Cancelled, result.Status);
     }
-
-    // ---- P0-1b: Engine real flow control ----
 
     /// <summary>
     /// <para>构造带 Flow 端口的测试节点。</para>
@@ -474,12 +470,6 @@ public sealed class NodeExecutionEngineTests
 
         Task Track(INodeExecutionContext _)
         {
-            // Rendezvous: both branches must be running before either may proceed. This
-            // deterministically proves the engine dispatched the two branches concurrently,
-            // regardless of thread-pool load (a purely timing-based sleep can miss the overlap
-            // when the suite runs in parallel).
-            // 会合点：两条分支必须都已开始执行才能继续。这确定性地证明引擎并发分发了
-            // 两条分支（纯时序的 Sleep 在测试套件并行运行时可能错过重叠窗口）。
             if (Interlocked.Increment(ref started) == 2)
             {
                 bothStarted.Set();
@@ -496,7 +486,7 @@ public sealed class NodeExecutionEngineTests
                 peak = Math.Max(peak, current);
             }
 
-            Thread.Sleep(20); // widen the overlap window; the rendezvous already guarantees concurrency
+            Thread.Sleep(20);
             lock (gate)
             {
                 insideParallel--;

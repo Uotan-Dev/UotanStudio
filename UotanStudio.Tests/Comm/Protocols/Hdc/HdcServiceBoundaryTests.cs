@@ -63,9 +63,6 @@ public sealed class HdcServiceBoundaryTests
                     Reply(message, HdcCommand.ChannelClose, [1])];
             if (message.Command == HdcCommand.JdwpList)
             {
-                // Run without a task-start token: a starved thread pool must not cancel the task
-                // before its delegate runs, or the awaited producer would surface TaskCanceledException.
-                // 不传任务启动令牌：线程池饥饿时不得在委托执行前取消任务，否则 await producer 会抛出 TaskCanceledException。
                 producer = Task.Run(async () =>
                 {
                     try

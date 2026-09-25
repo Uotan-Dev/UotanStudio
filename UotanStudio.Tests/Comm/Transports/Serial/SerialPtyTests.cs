@@ -67,7 +67,6 @@ public class SerialPtyTests
 
         var error = await Assert.ThrowsAnyAsync<Exception>(() => transport.ReadAsync(buffer, 0, 1, 200, cancellation.Token));
 
-        // SerialTransport awaits the timed native call; cancellation need not interrupt it.
         Assert.True(error is OperationCanceledException or TimeoutException);
         buffer[0] = 0xA5;
         await pty.WriteAsync([0x42]);

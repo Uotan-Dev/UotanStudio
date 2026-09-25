@@ -9,6 +9,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Devices;
 
+[Collection("Log pipeline")]
 public class DebugBridgeProbeLoggingTests
 {
     [Fact]

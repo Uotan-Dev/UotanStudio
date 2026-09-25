@@ -66,7 +66,6 @@ public partial class MtkSessionTests
         EnqueueIdentity(transport);
         using var session = new MtkSession(transport);
         await session.InitializeAsync(TestContext.Current.CancellationToken);
-        // Address 0x00200000, length 8, signature length 2. XOR16 of these bytes is 0x0800.
         transport.Enqueue([0xD7, 0, 0x20, 0, 0, 0, 0, 0, 8, 0, 0, 0, 2, 0, 0]);
         transport.Enqueue([8, 0, 0, 0]);
         using var image = new FragmentedSource([1, 2, 3, 4, 5, 6, 7, 8]);
@@ -130,7 +129,6 @@ public partial class MtkSessionTests
         EnqueueIdentity(transport);
         using var session = new MtkSession(transport);
         await session.InitializeAsync(TestContext.Current.CancellationToken);
-        // 0x00020000 bytes, all zero, hence checksum zero.
         transport.Enqueue([0xD7, 0, 0x20, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0]);
         transport.Enqueue([0, 0, 0, 0]);
         using var image = new FragmentedSource(new byte[0x20000]);

@@ -364,7 +364,7 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
     [Fact]
     public async Task ReplaySnapshot_NativeErofsLongAndSharedXattrs_PreservesValues()
     {
-        if (!OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") != "1")
         {
             Assert.Skip("Requires the configured Alpine WSL erofs-utils tools.");
         }
@@ -415,7 +415,7 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
     [Fact]
     public async Task ReplaySnapshot_NativeErofsMetabox_SurvivesSourceDeletionAndLoopMount()
     {
-        if (!OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") != "1")
         {
             Assert.Skip("Requires Alpine WSL erofs-utils and a metabox-capable kernel.");
         }
@@ -536,7 +536,7 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
     [Fact]
     public async Task ReplaySnapshot_NativeErofsCompressedMetabox_PreservesAttributesAfterSourceDeletion()
     {
-        if (!OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") != "1")
         {
             Assert.Skip("Requires Alpine WSL erofs-utils and a metabox-capable kernel.");
         }
@@ -637,7 +637,7 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
     [Fact]
     public async Task ReplaySnapshot_SharedEaInMetabox_KernelReadsSourceAndReplayedAttributes()
     {
-        if (!OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") != "1")
         {
             Assert.Skip("Requires Alpine WSL erofs-utils and a metabox-capable kernel.");
         }
@@ -864,7 +864,7 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
     [Fact]
     public async Task ReplaySnapshot_NativeErofsExternalBlob_SurvivesDeletionOfBothDeviceImages()
     {
-        if (!OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") != "1")
             Assert.Skip("Requires Alpine WSL erofs-utils.");
         var available = await Wsl("sh", "-c", "command -v mkfs.erofs && command -v fsck.erofs");
         if (available.ExitCode != 0)
@@ -982,7 +982,7 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
     [Fact]
     public async Task ReplaySnapshot_NativeExt4ExternalAndEaInodeAttributes_SurviveSourceDeletion()
     {
-        if (!OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") != "1")
         {
             Assert.Skip("Requires the configured Alpine WSL e2fsprogs tools.");
         }
@@ -1001,7 +1001,6 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
         var make = await Wsl("mkfs.ext4", "-F", "-b", "4096", "-I", "256", "-O", "ea_inode",
             "-d", WslPath(source), WslPath(image), "16384");
         Assert.True(make.ExitCode == 0, make.Output);
-        // debugfs ea_set -f reads at most one filesystem block; the argument form accepts larger values.
         var set = await Wsl("debugfs", "-w", "-R", $"ea_set /data user.large {largeText}", WslPath(image));
         Assert.True(set.ExitCode == 0, set.Output);
         var smallValue = new string('x', 1200);
@@ -1040,7 +1039,7 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
     [Fact]
     public async Task ReplaySnapshot_NativeExt4Casefold_PreservesEncodingAndDirectorySemantics()
     {
-        if (!OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") != "1")
             Assert.Skip("Requires Alpine WSL e2fsprogs.");
         var available = await Wsl("sh", "-c", "command -v mkfs.ext4 && command -v debugfs && command -v e2fsck");
         if (available.ExitCode != 0)
@@ -1091,7 +1090,7 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
     [Fact]
     public async Task ReplaySnapshot_NativeF2fsMountedSource_PreservesInodeAttributesAndContent()
     {
-        if (!OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") != "1")
         {
             Assert.Skip("Requires Alpine WSL with loop mounting and F2FS security xattrs.");
         }

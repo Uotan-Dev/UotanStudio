@@ -63,8 +63,6 @@ public sealed class OperationHistoryTests
             History.Record($"op{index}", () => log.Add($"u{index}"), () => log.Add($"r{index}"));
         }
 
-        // 最旧的 5 条被裁剪，撤销栈顶应为最后一次记录。
-        // The 5 oldest entries are trimmed; the undo peek should be the last recorded op.
         Assert.Equal($"op{OperationHistoryService.Capacity + 4}", History.NextUndoDescription);
 
         var undone = 0;

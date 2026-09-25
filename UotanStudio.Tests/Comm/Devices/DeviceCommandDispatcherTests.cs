@@ -115,7 +115,6 @@ public class DeviceCommandDispatcherTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => queued.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
-        // Disposal cancels everything: the running command observes cancellation through its token.
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => running.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         await Assert.ThrowsAsync<ObjectDisposedException>(async () => await dispatcher.EnqueueAsync("late", _ => Task.FromResult(0)));

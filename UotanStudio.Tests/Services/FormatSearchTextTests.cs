@@ -145,8 +145,6 @@ public class FormatSearchTextTests
         Assert.Equal(AXmlValueType.IntDec, versionCode.ValueType);
         Assert.Equal(2u, versionCode.ValueData);
 
-        // 编辑字符串值：其余强类型属性的字节语义必须保留。
-        // Edit a string value: the byte semantics of the other typed attributes must survive.
         var edited = xml.Replace("com.example.app", "com.example.renamed", StringComparison.Ordinal);
         var recompiled = AXmlTextFormat.Parse(edited, reference);
 
@@ -155,8 +153,6 @@ public class FormatSearchTextTests
         Assert.Equal("com.example.renamed", package.FormatValue(recompiled.StringPool));
         Assert.Equal(2u, recompiled.Root.Attributes.First(a => a.Name == "versionCode").ValueData);
 
-        // 重编译后的字节仍可被 AXML 解析器读取。
-        // The recompiled bytes remain readable by the AXML parser.
         var bytes = AXmlWriter.Write(recompiled);
         var reparsed = AXmlParser.Parse(bytes);
         Assert.Equal("com.example.renamed",

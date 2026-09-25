@@ -50,7 +50,6 @@ public sealed class MbrDetectionTests
     public void ResolveMode_FatBootRecord_DoesNotOpenPartitionEditor(bool fat32, int sectorBytes)
     {
         var header = CreateFatBootRecord(fat32, sectorBytes);
-        // A plausible entry in the boot-code area must not override the valid FAT BPB.
         WritePartition(header, 0x83, 1, 64);
         var path = Path.Combine(Path.GetTempPath(), $"uotanstudio-fat-{Guid.NewGuid():N}.img");
         try

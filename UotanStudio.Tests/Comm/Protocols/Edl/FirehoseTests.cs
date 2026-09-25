@@ -21,8 +21,6 @@ public class FirehoseTests
         </data>
         """;
 
-    // ============== FirehoseXmlBuilder ==============
-
     [Fact]
     public void BuildConfigure_EmitsAllNegotiatedAttributes()
     {
@@ -192,8 +190,6 @@ public class FirehoseTests
         Assert.Contains("<memcpy dst_offset=\"0x100\" src_offset=\"0x200\" size=\"8\" />", FirehoseXmlBuilder.BuildMemcpy("0x100", "0x200", 8), StringComparison.Ordinal);
     }
 
-    // ============== FirehoseResponseParser ==============
-
     [Fact]
     public void FirehoseResponseParser_ParsesAck()
     {
@@ -282,8 +278,6 @@ public class FirehoseTests
         Assert.Throws<FirehoseException>(() => FirehoseResponseParser.Parse("<data><response value=\"ACK\""));
     }
 
-    // ============== FirehoseProtocol command flows ==============
-
     private static FirehoseProtocol CreateProtocol(ScriptedCommTransport transport, FirehoseConfiguration? config = null)
         => new(transport, config ?? new FirehoseConfiguration
         {
@@ -318,8 +312,6 @@ public class FirehoseTests
     public async Task ConfigureAsync_RenegotiatesOnNakWithSupportedPayloadSize()
     {
         var transport = new ScriptedCommTransport();
-        // First configure is NAK'd and tells us the supported payload size.
-        // 首个 configure 被 NAK 并告知支持的负载大小。
         transport.Enqueue("""
             <?xml version="1.0" encoding="UTF-8" ?>
             <data>
@@ -334,8 +326,6 @@ public class FirehoseTests
         Assert.True(response.IsAck);
         Assert.Equal(8192L, protocol.Configuration.MaxPayloadSizeToTarget);
         Assert.Equal(2, transport.Writes.Count);
-        // The corrected payload size is present in the retried configure.
-        // 重试的 configure 中包含修正后的负载大小。
         var retried = Encoding.UTF8.GetString(transport.Writes[1]);
         Assert.Contains("MaxPayloadSizeToTargetInBytes=\"8192\"", retried, StringComparison.Ordinal);
     }
@@ -430,7 +420,6 @@ public class FirehoseTests
         Assert.Equal(2, transport.Writes.Count);
         var wipeXml = Encoding.UTF8.GetString(transport.Writes[0]);
         Assert.Contains("filename=\"Zeros16KB.bin\"", wipeXml, StringComparison.Ordinal);
-        // 8 sectors x 4096 bytes = 32768 zero bytes.
         Assert.Equal(32768, transport.Writes[1].Length);
         Assert.All(transport.Writes[1], b => Assert.Equal(0, b));
     }
@@ -462,8 +451,6 @@ public class FirehoseTests
     public async Task AutoDetectSectorSize_FallsBackToStorageTypeDefault()
     {
         var transport = new ScriptedCommTransport();
-        // getstorageinfo returns an ACK without a usable sector_size.
-        // getstorageinfo 返回无可用 sector_size 的 ACK。
         transport.Enqueue(AckXml);
 
         var protocol = new FirehoseProtocol(transport, new FirehoseConfiguration
@@ -473,8 +460,6 @@ public class FirehoseTests
         });
         await protocol.AutoDetectSectorSizeAsync(TestContext.Current.CancellationToken);
 
-        // UFS falls back to the large sector size (4096).
-        // UFS 回退到较大扇区大小（4096）。
         Assert.Equal(4096L, protocol.Configuration.SectorSize);
     }
 
@@ -515,8 +500,6 @@ public class FirehoseTests
         var response = await protocol.ProgramSparseAsync(stream, 0x100, "sparse.img", 0, TestContext.Current.CancellationToken);
 
         Assert.True(response.IsAck);
-        // XML write + raw chunk payload write.
-        // XML 写入 + raw 块负载写入。
         Assert.Equal(2, transport.Writes.Count);
         var programXml = Encoding.UTF8.GetString(transport.Writes[0]);
         Assert.Contains("filename=\"sparse.img\"", programXml, StringComparison.Ordinal);
@@ -548,19 +531,19 @@ public class FirehoseTests
 
         using var ms = new MemoryStream();
         using var writer = new BinaryWriter(ms);
-        writer.Write(magic);                                  // 0
-        writer.Write((ushort)1);                              // major
-        writer.Write((ushort)0);                              // minor
-        writer.Write((ushort)28);                             // file header size
-        writer.Write(chunkHeaderSize);                        // chunk header size
-        writer.Write((uint)blockSize);                        // block size
-        writer.Write(outBlocks);                              // total blocks
-        writer.Write(1u);                                     // total chunks
-        writer.Write(0u);                                     // crc32 (unused)
-        writer.Write(chunkTypeRaw);                           // chunk type
-        writer.Write((ushort)0);                              // reserved
-        writer.Write(outBlocks);                              // chunk blocks
-        writer.Write((uint)(chunkHeaderSize + chunkData.Length)); // total size
+        writer.Write(magic);
+        writer.Write((ushort)1);
+        writer.Write((ushort)0);
+        writer.Write((ushort)28);
+        writer.Write(chunkHeaderSize);
+        writer.Write((uint)blockSize);
+        writer.Write(outBlocks);
+        writer.Write(1u);
+        writer.Write(0u);
+        writer.Write(chunkTypeRaw);
+        writer.Write((ushort)0);
+        writer.Write(outBlocks);
+        writer.Write((uint)(chunkHeaderSize + chunkData.Length));
         writer.Write(chunkData);
         writer.Flush();
         return ms.ToArray();

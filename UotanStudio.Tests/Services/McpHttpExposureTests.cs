@@ -48,7 +48,6 @@ public sealed class McpHttpExposureTests
             Assert.True(formats.IsError is not true, formatsText);
             Assert.Contains("format handler(s) registered", formatsText, StringComparison.Ordinal);
 
-            // 暴露路径使用不受限沙箱：固定根目录之外的绝对路径也应解析成功。
             var detected = await client.CallToolAsync(
                 "detect_format",
                 new Dictionary<string, object?> { ["path"] = file },

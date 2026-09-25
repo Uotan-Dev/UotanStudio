@@ -462,8 +462,6 @@ public partial class MtkSessionTests
     [Fact]
     public void XmlStorageInfo_Version10WithoutStorage_ReportsNoStorageDevice()
     {
-        // Upstream cmd_get_hw_info: a 1.0 document without an emmc/ufs section means the
-        // device reported no storage; parsing must fail clearly, not guess a geometry.
         var document = XmlHardwareDocument(false);
         document.SetElementValue("version", "1.0");
         document.Element("emmc")?.Remove();

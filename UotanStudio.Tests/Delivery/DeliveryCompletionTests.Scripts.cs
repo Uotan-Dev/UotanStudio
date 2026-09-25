@@ -10,7 +10,6 @@ namespace UotanStudio.Tests.Delivery;
 
 public sealed partial class DeliveryCompletionTests
 {
-    // Header-only fixture exercises packaging/validation, never executable updater behavior.
     private string WriteUpdaterFixture(string? path = null)
     {
         path ??= Path.Combine(_root, "update-binary");
@@ -121,7 +120,6 @@ public sealed partial class DeliveryCompletionTests
         Assert.Equal(path, DeliveryRecoveryUpdater.Resolve(plan));
         File.WriteAllText(path, "#!/sbin/sh\n" + new string('#', 64));
         Assert.Throws<InvalidDataException>(() => DeliveryRecoveryUpdater.Resolve(plan));
-        // Preview remains available without a native updater; publishing requires it.
         Assert.Contains("block_image_update", DeliveryScriptGenerator.Generate(plan)["updater-script"]);
     }
 
@@ -211,7 +209,10 @@ public sealed partial class DeliveryCompletionTests
     [Fact]
     public async Task BatchBannerPrintsLiteralSpecialCharactersWithoutExecutingThem()
     {
-        if (!OperatingSystem.IsWindows()) return;
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Batch banner execution requires cmd.exe on Windows.");
+        }
         var lines = new[] { "作者", "100% & \"quotes\" ! ^ | < > ( )", "\"& echo INJECTED > injected.txt &\"", "%PATH%", "", "O'Brien $() `text` \\path" };
         var script = Path.Combine(_root, "banner.bat");
         await File.WriteAllTextAsync(script, "@echo off\r\nsetlocal DisableDelayedExpansion\r\nchcp 65001 >nul\r\n"

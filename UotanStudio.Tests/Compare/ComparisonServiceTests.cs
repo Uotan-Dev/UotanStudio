@@ -133,7 +133,7 @@ public sealed class ComparisonServiceTests : IDisposable
         var old = new MetadataHandler(_ =>
         {
             entered.SetResult();
-            return release.Task; // Simulate a handler that finishes despite cancellation.
+            return release.Task;
         });
         var current = new MetadataHandler(_ => Task.FromResult(FirmwareOpResult.Ok("current")));
         var service = Create(path => path == "old" ? old : current);

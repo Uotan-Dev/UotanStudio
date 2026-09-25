@@ -54,8 +54,6 @@ public class SuperFlashHelperTests
         return result;
     }
 
-    // ============== simple command sequences ==============
-
     [Fact]
     public void UpdateSuperMetadata_IssuesDownloadThenUpdateSuper()
     {
@@ -63,10 +61,10 @@ public class SuperFlashHelperTests
         var metadataPath = dir.WriteBytes("metadata.img", new byte[4096]);
 
         var transport = new ScriptedCommTransport();
-        transport.Enqueue("OKAY");                  // getvar:max-download-size
-        transport.Enqueue("DATA00001000");          // download:00001000
-        transport.Enqueue("OKAY");                  // payload accepted
-        transport.Enqueue("OKAY");                  // update-super:super
+        transport.Enqueue("OKAY");
+        transport.Enqueue("DATA00001000");
+        transport.Enqueue("OKAY");
+        transport.Enqueue("OKAY");
 
         using var session = NewSession(transport);
         var helper = new SuperFlashHelper(session);
@@ -77,8 +75,6 @@ public class SuperFlashHelperTests
         Assert.Equal("getvar:max-download-size", Text(transport.Writes[0]));
         Assert.Equal("download:00001000", Text(transport.Writes[1]));
         Assert.Equal("update-super:super", Text(transport.Writes[3]));
-        // The metadata payload bytes are the file contents, streamed verbatim.
-        // 元数据负载字节即文件内容，原样流式传输。
         Assert.Equal(new byte[4096], transport.Writes[2]);
     }
 
@@ -126,8 +122,6 @@ public class SuperFlashHelperTests
         Assert.Equal("wipe-super:super", Text(transport.Writes[3]));
     }
 
-    // ============== FlashSuper ==============
-
     [Fact]
     public void FlashSuper_AppliesMetadataThenFlashesEachPartition()
     {
@@ -140,19 +134,16 @@ public class SuperFlashHelperTests
         var systemExtent = metadata.Extents[0];
         var vendorExtent = metadata.Extents[1];
 
-        // device responses for: getvar, metadata download, update-super,
-        // then per partition: download, flash.
-        // 设备响应：getvar、元数据下载、update-super，随后每分区 download + flash。
-        transport.Enqueue("OKAY");                                      // getvar:max-download-size
-        transport.Enqueue($"DATA{metadataImageLength:x8}");             // download metadata
         transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");                                      // update-super:super
+        transport.Enqueue($"DATA{metadataImageLength:x8}");
+        transport.Enqueue("OKAY");
+        transport.Enqueue("OKAY");
         transport.Enqueue($"DATA{systemExtent.NumSectors * SuperImageBuilder.LpSectorSize:x8}");
         transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");                                      // flash:system
+        transport.Enqueue("OKAY");
         transport.Enqueue($"DATA{vendorExtent.NumSectors * SuperImageBuilder.LpSectorSize:x8}");
         transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");                                      // flash:vendor
+        transport.Enqueue("OKAY");
 
         using var session = NewSession(transport);
         var helper = new SuperFlashHelper(session);
@@ -161,7 +152,6 @@ public class SuperFlashHelperTests
         Assert.Equal(10, transport.Writes.Count);
         Assert.Equal("getvar:max-download-size", Text(transport.Writes[0]));
         Assert.Equal($"download:{metadataImageLength:x8}", Text(transport.Writes[1]));
-        // fastbootd ReadFromImageBlob expects one geometry at 0 and one metadata at 4096.
         var metadataPayload = transport.Writes[2];
         Assert.Equal(image[4096..8192], metadataPayload[..4096]);
         Assert.Equal(image.AsSpan(12288, (int)metadata.MetadataSize).ToArray(), metadataPayload[4096..]);
@@ -195,13 +185,13 @@ public class SuperFlashHelperTests
         transport.Enqueue("OKAY");
         transport.Enqueue($"DATA{metadataImageLength:x8}");
         transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");                          // update-super:super:wipe
+        transport.Enqueue("OKAY");
         transport.Enqueue($"DATA{systemSize:x8}");
         transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");                          // flash:system
-        transport.Enqueue($"DATA{vendorSize:x8}");          // vendor 分区同样需要 download + flash 响应
         transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");                          // flash:vendor
+        transport.Enqueue($"DATA{vendorSize:x8}");
+        transport.Enqueue("OKAY");
+        transport.Enqueue("OKAY");
 
         using var session = NewSession(transport);
         new SuperFlashHelper(session).FlashSuper(superPath, wipe: true, cancellationToken: TestContext.Current.CancellationToken);
@@ -250,8 +240,6 @@ public class SuperFlashHelperTests
             cancellationToken: TestContext.Current.CancellationToken));
         Assert.Empty(transport.Writes);
     }
-
-    // ============== delegation helpers ==============
 
     [Fact]
     public void IsSuperImageAndReadLogicalPartitions_DelegateToBuilder()

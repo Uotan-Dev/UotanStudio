@@ -104,8 +104,6 @@ public sealed partial class DeliveryCompletionTests : IDisposable
     [Fact]
     public async Task OversizedPartitionsReportRequiredBytesAndMinimumSize()
     {
-        // 断言失败发生在构建器分配 extent 前，且带具体短缺数值与最小 Super 大小，而不是裸 ArgumentException。
-        // Assert the failure happens before any extent allocation and names the shortage and minimum Super size.
         var files = new[] { Image("system_a"), Image("vendor_a") };
         var options = new DeliverySuperOptions { DeviceSize = 409_600 };
         var path = Path.Combine(_root, "too-small.img");
@@ -232,9 +230,6 @@ public sealed partial class DeliveryCompletionTests : IDisposable
         Assert.NotNull(zip.GetEntry("images/system.transfer.list"));
         Assert.NotNull(zip.GetEntry("images/system.new.dat.br"));
         Assert.NotNull(zip.GetEntry("images/system.patch.dat"));
-        // DAT 包把原包的原生 ELF 更新器原样放进标准 update-binary 位置，脚本只保留 Edify updater-script。
-        // The DAT package publishes the original ROM's native ELF updater verbatim at the standard
-        // update-binary path; the only generated script is the Edify updater-script.
         var fixture = File.ReadAllBytes(plan.Package.RecoveryUpdaterPath);
         using (var updater = zip.GetEntry(DeliveryRecoveryUpdater.EntryPath)!.Open())
         using (var actual = new MemoryStream())
@@ -271,8 +266,6 @@ public sealed partial class DeliveryCompletionTests : IDisposable
 
         var scripts = DeliveryScriptGenerator.Generate(plan);
 
-        // DAT 卡刷只生成 Edify updater-script；update-binary 是原包的原生 ELF，不进入脚本生成器。
-        // DAT flashing only emits the Edify updater-script; update-binary is the original native ELF.
         Assert.Contains("updater-script", scripts.Keys);
         Assert.DoesNotContain("update-binary", scripts.Keys);
         Assert.DoesNotContain("Recovery.sh", scripts.Keys);
@@ -421,8 +414,6 @@ public sealed partial class DeliveryCompletionTests : IDisposable
         Assert.True(restored.AskWipe); Assert.True(restored.Reboot); Assert.Equal("b", restored.Slot);
         Assert.Equal(plan.LocalZstd["Linux"], restored.LocalZstd["Linux"]); Assert.True(restored.Super.Zstd);
         Assert.Equal(plan.Package, restored.Package);
-        // 镜像归属不持久化：恢复后列表为空，脚本按当前选择重新生成。
-        // Image membership is not persisted: the restored lists are empty and scripts regenerate from the current selection.
         Assert.Empty(restored.Files);
         Assert.Empty(restored.Container);
         var scripts = DeliveryScriptGenerator.Generate(restored with { Files = plan.Files });

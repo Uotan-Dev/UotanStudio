@@ -46,10 +46,6 @@ public class ScrcpyControlMessageTests
     [Fact]
     public void InjectTouchEvent_Matches32ByteWireLayout()
     {
-        // Layout per scrcpy 2.7: type(1)@0 action(1)@1 pointerId(8)@2 position(12)@10
-        // pressure(2)@22 actionButton(4)@24 buttons(4)@28.
-        // 按 scrcpy 2.7 布局：type(1)@0 action(1)@1 pointerId(8)@2 position(12)@10
-        // pressure(2)@22 actionButton(4)@24 buttons(4)@28。
         var msg = ScrcpyControlMessageWriter.InjectTouchEvent(
             ScrcpyConstants.ActionDown, ScrcpyConstants.PointerIdMouse,
             x: 100, y: 200, width: 1080, height: 2400,
@@ -58,11 +54,7 @@ public class ScrcpyControlMessageTests
         Assert.Equal(32, msg.Length);
         Assert.Equal(ScrcpyConstants.ControlTypeInjectTouchEvent, msg[0]);
         Assert.Equal(ScrcpyConstants.ActionDown, msg[1]);
-        // pointerId -2 as two's complement u64.
-        // pointerId -2 的二进制补码 u64。
         Assert.Equal(unchecked((ulong)ScrcpyConstants.PointerIdMouse), BinaryPrimitives.ReadUInt64BigEndian(msg.AsSpan(2)));
-        // Position: raw video pixel coordinates + frame size.
-        // 位置：原始视频像素坐标 + 帧尺寸。
         Assert.Equal(100u, BinaryPrimitives.ReadUInt32BigEndian(msg.AsSpan(10)));
         Assert.Equal(200u, BinaryPrimitives.ReadUInt32BigEndian(msg.AsSpan(14)));
         Assert.Equal(1080, BinaryPrimitives.ReadUInt16BigEndian(msg.AsSpan(18)));
@@ -82,8 +74,6 @@ public class ScrcpyControlMessageTests
     [Fact]
     public void InjectScrollEvent_Matches21ByteWireLayout()
     {
-        // Layout per scrcpy 2.7: position(12)@1 hScroll(i16)@13 vScroll(i16)@15 buttons(4)@17.
-        // 按 scrcpy 2.7 布局：position(12)@1 hScroll(i16)@13 vScroll(i16)@15 buttons(4)@17。
         var msg = ScrcpyControlMessageWriter.InjectScrollEvent(
             x: 10, y: 20, width: 1080, height: 2400,
             hScroll: 0f, vScroll: -1f, buttons: 0);
@@ -94,8 +84,6 @@ public class ScrcpyControlMessageTests
         Assert.Equal(20u, BinaryPrimitives.ReadUInt32BigEndian(msg.AsSpan(5)));
         Assert.Equal(1080, BinaryPrimitives.ReadUInt16BigEndian(msg.AsSpan(9)));
         Assert.Equal(2400, BinaryPrimitives.ReadUInt16BigEndian(msg.AsSpan(11)));
-        // -1 tick = -0x7FFF i16 fixed point (vScroll at offset 15).
-        // -1 刻度 = -0x7FFF 的 i16 定点数（vScroll 位于偏移 15）。
         Assert.Equal(0, BinaryPrimitives.ReadInt16BigEndian(msg.AsSpan(13)));
         Assert.Equal(unchecked((short)-32767), BinaryPrimitives.ReadInt16BigEndian(msg.AsSpan(15)));
         Assert.Equal(0u, BinaryPrimitives.ReadUInt32BigEndian(msg.AsSpan(17)));

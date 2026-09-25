@@ -51,10 +51,8 @@ public class RkdlFlashTests
             "mtdparts=rk29xxnand:64@0x4000(test32k),0x00001000@1048576(testdec):gpt");
 
         Assert.Equal(2, partitions.Count);
-        // 64 sectors = 32 KB.
         Assert.Equal(64, partitions[0].SizeSectors);
         Assert.Equal(0x4000, partitions[0].OffsetSectors);
-        // 1048576 is already expressed in sectors.
         Assert.Equal(0x1000, partitions[1].SizeSectors);
         Assert.Equal(1048576, partitions[1].OffsetSectors);
     }
@@ -83,30 +81,26 @@ public class RkdlFlashTests
         Assert.True(result.Success, result.Summary);
         Assert.True(transport.Writes.Count >= 2);
 
-        // First write is the WRITE_LBA CBW (opcode 0x15) addressed to LBA 0x6000.
         var cbw = transport.Writes[0];
         Assert.Equal(31, cbw.Length);
         Assert.Equal(RkdlFrame.CbwSignature, cbw[..4]);
         Assert.Equal((byte)RkdlCommand.WriteLba, cbw[15]);
-        Assert.Equal(0x00, cbw[17]); // address big-endian
+        Assert.Equal(0x00, cbw[17]);
         Assert.Equal(0x00, cbw[18]);
         Assert.Equal(0x60, cbw[19]);
         Assert.Equal(0x00, cbw[20]);
 
-        // Second write is the raw image payload.
         Assert.Equal(imageBytes, transport.Writes[1]);
     }
 
     private static IEnumerable<byte[]> BuildCswResponse(byte[] data)
     {
-        // A 31-byte CBW starting with "USBC" gets a success CSW echoing its tag.
         if (data.Length == RkdlFrame.CbwLength && data[..4].SequenceEqual(RkdlFrame.CbwSignature))
         {
             var csw = new byte[RkdlFrame.CswLength];
             RkdlFrame.CswSignature.CopyTo(csw, 0);
             var tag = BitConverter.ToUInt32(data, 4);
             BitConverter.GetBytes(tag).CopyTo(csw, 4);
-            // data residue = 0, status = 0 (success).
             yield return csw;
         }
     }

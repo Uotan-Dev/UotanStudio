@@ -117,9 +117,6 @@ public class WorkspaceFileOperationTests
     public void ExtractionCannotReplaceItsOwnInput()
     {
         using var temp = new TempDirectory();
-        // 本地解压语义下目标为源文件同目录的同名子目录；无扩展名的源文件恰好等于目标路径时仍必须拒绝。
-        // With local unpacking the target is a sibling directory named after the source; an
-        // extension-less source file that equals the target path must still be rejected.
         var input = temp.WriteBytes("boot", "keep"u8.ToArray());
         Assert.Throws<IOException>(new ImageOperationPaths(input, false, temp.Path, temp.Path).ValidateExtraction);
         Assert.Equal("keep", File.ReadAllText(input));
@@ -178,8 +175,6 @@ public class WorkspaceFileOperationTests
     [InlineData("br", "boot.new.dat.br")]
     public void PlannedOutputsMatchPublishedNames(string operation, string expected)
     {
-        // 打包前的重名覆盖确认依赖这里的输出清单与实际发布文件保持一致。
-        // The pre-pack overwrite check relies on this list matching the files actually published.
         using var temp = new TempDirectory();
         var output = Path.Combine(temp.Path, "output");
         var planned = ImageOutputService.GetPlannedOutputs(new(Path.Combine(temp.Path, "boot"), true, temp.Path, output), operation);

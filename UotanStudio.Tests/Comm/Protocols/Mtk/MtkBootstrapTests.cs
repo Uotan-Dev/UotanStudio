@@ -35,7 +35,6 @@ public partial class MtkSessionTests
         Assert.Contains(transport.Writes, bytes => bytes.AsSpan().SequenceEqual(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }));
         Assert.Contains(transport.Writes, bytes => bytes.AsSpan().SequenceEqual(Enumerable.Repeat((byte)0x42, 12).ToArray()));
         Assert.DoesNotContain(transport.Writes, bytes => bytes.AsSpan().SequenceEqual(new byte[] { 0xEE, 0xEE, 0xEE, 0xEE }));
-        // Successful startup no longer needs the loader file open.
         using var exclusive = new FileStream(options.LoaderPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
     }
 
@@ -73,8 +72,6 @@ public partial class MtkSessionTests
     [Fact]
     public async Task BootstrapInitializeAsync_V6HeaderedLoader_IsAccepted()
     {
-        // V6 all-in-one containers are supported: the upload wire protocol is
-        // DA-version independent, so only structural validity is enforced.
         using var dir = new TempDirectory();
         var bytes = BootstrapContainer();
         "MTK_DA_v6"u8.CopyTo(bytes.AsSpan(32));
@@ -85,8 +82,6 @@ public partial class MtkSessionTests
         await Assert.ThrowsAnyAsync<Exception>(() =>
             MtkXFlashBootstrap.InitializeAsync(transport, options, TestContext.Current.CancellationToken));
 
-        // The run gets past DA parsing into the BROM handshake (0xA0), proving the V6
-        // header no longer blocks the loader; the scripted exchange simply ends there.
         Assert.Equal(new byte[] { 0xA0 }, transport.Writes.Single());
     }
 

@@ -112,7 +112,6 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
 
         await _projects.SaveAsAsync(target);
 
-        // The source firmware stays byte-identical; the published copy carries the staged image.
         Assert.Equal(originalProject, File.ReadAllBytes(originalProjectPath));
         Assert.True(File.Exists(originalImage));
         Assert.Equal(new byte[] { 4, 5, 6 }, await File.ReadAllBytesAsync(Path.Combine(context.EnsureImagesDirectory(), "boot.img"), TestContext.Current.CancellationToken));
@@ -178,8 +177,6 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
         Directory.CreateDirectory(destination);
         var marker = Path.Combine(destination, "keep.txt");
         File.WriteAllText(marker, "untouched");
-        // A directory at the solution filename fails the final publication step.
-        // A directory at the node filename fails node publication before the solution file is written.
         if (commitFailure) Directory.CreateDirectory(target);
         else Directory.CreateDirectory(Path.Combine(destination, "original", "copy.uotannode"));
 
@@ -201,7 +198,6 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     {
         var source = Path.Combine(_root, "original.uotan");
         await _projects.CreateNewSolutionAsync(source, TestContext.Current.CancellationToken);
-        // The destination directory sits inside a source sub-project folder.
         var target = Path.Combine(ProjectContextService.Instance.RootDirectory!, "original", "nested.uotan");
         await Assert.ThrowsAsync<IOException>(() => _projects.SaveAsAsync(target));
         Assert.Equal(source, _projects.CurrentProjectPath);
@@ -286,7 +282,6 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     {
         var source = Path.Combine(_root, "sample.uotan");
         await _projects.CreateNewSolutionAsync(source, TestContext.Current.CancellationToken);
-        // A nested scaffold inside the sub-project folder is copied but never registered as its own sub-project.
         var inner = Path.Combine(_root, "sample", "inner", "inner.uotanfw");
         Directory.CreateDirectory(Path.GetDirectoryName(inner)!);
         File.WriteAllBytes(inner, [9, 9, 9]);

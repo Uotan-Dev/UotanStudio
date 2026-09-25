@@ -54,8 +54,6 @@ public class McpSandboxTests : IDisposable
     public void Resolve_SiblingRootPrefix_Throws()
     {
         var sandbox = new PathSandbox(_root);
-        // "root2" shares the "root" prefix but is a different directory.
-        // "root2" 与 "root" 共享前缀但属于不同目录。
         var sibling = _root + "2";
         Assert.Throws<UnauthorizedAccessException>(() => sandbox.Resolve(sibling));
     }
@@ -272,8 +270,6 @@ public class McpSandboxTests : IDisposable
     public async Task UnpackRejectsPathsOutsideSandbox()
     {
         var sandbox = new PathSandbox(_root);
-        // The handler resolves before detection, so containment must reject the call outright.
-        // 处理器先做路径解析，包含关系检查必须直接拒绝调用。
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
             () => FirmwareToolHandlers.UnpackAsync(sandbox, @"..\evil.bin", "out", 1024 * 1024));
     }

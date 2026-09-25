@@ -24,9 +24,6 @@ public sealed class CommRealDeviceSuite
 {
     static CommRealDeviceSuite()
     {
-        // UOTAN_TEST_USB_BACKEND=libusb switches every USB path in this suite (discovery,
-        // direct fastboot open, mode-switch wait) to the LibUsbDotNet backend, using the
-        // vendored native runtime from the test output directory.
         if (!string.Equals(Environment.GetEnvironmentVariable("UOTAN_TEST_USB_BACKEND"), "libusb", StringComparison.Ordinal))
         {
             return;
@@ -69,8 +66,6 @@ public sealed class CommRealDeviceSuite
             ?? throw new InvalidOperationException($"Target '{Serial}' is not present in the server snapshot.");
         var session = AdbSession.ForServer(endpoint.Address, UotanStudio.Comm.Routing.DebugBridgeEndpoints.ServerHost,
             UotanStudio.Comm.Routing.DebugBridgeEndpoints.AdbServerPort);
-        // ForServer constructs the façade without connecting; the server-channel session
-        // must be connected before any stream/command call.
         session.Connect();
         return _controller.AdoptSession(endpoint, session);
     }
@@ -83,8 +78,6 @@ public sealed class CommRealDeviceSuite
         var target = snapshot.Endpoints.FirstOrDefault(candidate => candidate.Address == Serial);
         Assert.NotNull(target);
         Assert.Equal("adb", target!.Protocol);
-        // Full server takeover: while the adb server is live its serials are authoritative and
-        // no direct-usb adb endpoint may appear in the same snapshot.
         Assert.DoesNotContain(snapshot.Endpoints, candidate =>
             candidate.Route == "direct-usb" && candidate.Protocol == "adb");
     }
@@ -146,7 +139,7 @@ public sealed class CommRealDeviceSuite
         }
         finally
         {
-            try { session.ExecuteCommand($"rm -f {remote}"); } catch { /* best-effort cleanup */ }
+            try { session.ExecuteCommand($"rm -f {remote}"); } catch { }
             File.Delete(local);
             if (File.Exists(pulled)) File.Delete(pulled);
         }
@@ -177,7 +170,6 @@ public sealed class CommRealDeviceSuite
 
         Assert.NotNull(cached);
         Assert.False(string.IsNullOrWhiteSpace(cached!["model"]));
-        // Second read must be served from the cache without touching the device again.
         Assert.Same(cached, _controller.Properties.Get(Serial));
     }
 
@@ -199,8 +191,6 @@ public sealed class CommRealDeviceSuite
         using var client = new ScrcpyClient(session, options);
         try
         {
-            // The scrcpy server starts asynchronously on the device; mirror the production
-            // ManagedMirrorSession.Connect retry loop (20 x 250 ms) before giving up.
             for (var attempt = 0; ; attempt++)
             {
                 try
@@ -249,9 +239,6 @@ public sealed class CommRealDeviceSuite
             session.ExecuteCommand("reboot bootloader");
         }
 
-        // Wait until a fastboot USB node appears. Vendor-only: interface metadata may not be
-        // observed on every backend, and VID 18D1 is the Google fastboot VID this device uses
-        // in bootloader mode (OPPO 22D9 in adb mode never matches).
         var kit = CommKit.Default;
         var switched = await kit.WaitForModeSwitchAsync(
             removedFilter: null,
@@ -260,9 +247,6 @@ public sealed class CommRealDeviceSuite
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(switched, "The device did not reach fastboot mode within the timeout.");
 
-        // Serial consistency: the fastboot-reported serialno must match the server serial.
-        // Right after the mode switch the WinUSB interface may still be re-binding, so the
-        // discovery+open stage retries for a bounded window instead of racing the OS.
         var chainDeadline = Environment.TickCount64 + 60000;
         while (true)
         {
@@ -286,11 +270,9 @@ public sealed class CommRealDeviceSuite
                             $"fastboot serialno '{serial}' does not match the server serial '{Serial}'.");
                     }
 
-                    // Read-only queries; A/B devices report a slot, A-only devices fail softly.
                     _ = fastboot.GetVariable("current-slot");
                     _ = fastboot.GetVariable("max-download-size");
                     _ = fastboot.GetVariable("battery-soc-ok");
-                    // Reboot back to system inside the same lease and wait for the adb target.
                     fastboot.Reboot();
                 }
 
@@ -315,7 +297,7 @@ public sealed class CommRealDeviceSuite
                     return;
                 }
             }
-            catch { /* transient server/list errors during boot */ }
+            catch { }
         }
 
         Assert.Fail("The device did not return to adb within the timeout after fastboot reboot.");

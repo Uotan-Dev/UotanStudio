@@ -28,8 +28,6 @@ public sealed class FavoriteNodeIconTests(NodeEditorUiFixture fixture)
                 try
                 {
                     window.UpdateLayout();
-                    // The same item instance is realized in the expanded Favorites/Recent shortcut category and in
-                    // its own category, so every matching favorite button must follow the item's favorite state.
                     var buttons = view.GetVisualDescendants().OfType<Button>()
                         .Where(candidate => ReferenceEquals(candidate.DataContext, item)
                             && candidate.Command == item.ToggleFavoriteCommand).ToArray();

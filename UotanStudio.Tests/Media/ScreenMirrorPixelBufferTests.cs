@@ -11,7 +11,6 @@ public sealed class ScreenMirrorPixelBufferTests
     [Fact]
     public void BorrowedReadback_DisposalInvalidatesFrameWithoutReturningSessionArray()
     {
-        // Exact-size arrays need not fit a shared-pool bucket (24 bytes here).
         byte[] pixels = new byte[24];
         var frame = new GpuDecodedVideoFrame(pixels, 24, 3, 2, 12, 0)
         { ReturnBufferToPool = false };

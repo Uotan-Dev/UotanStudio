@@ -16,7 +16,6 @@ namespace UotanStudio.Tests.Comm.Transports.Usb;
 /// </summary>
 public class UsbApiRegistryTests
 {
-    // ============== UsbApiRegistry ==============
 
     private sealed class FakeProvider(string name, UsbApiKind kind = UsbApiKind.Custom) : IUsbApiProvider
     {
@@ -116,8 +115,6 @@ public class UsbApiRegistryTests
         Assert.True(registry.TryCreate("libusb", out _));
         Assert.True(registry.TryCreate("harmony", out _));
     }
-
-    // ============== UsbDeviceFilter ==============
 
     private static UsbDeviceInfo Device(
         ushort vid = 0x1234,
@@ -227,8 +224,6 @@ public class UsbApiRegistryTests
         Assert.False(filter.Matches(Device(interfaces: [Interface(0, 0x82)])));
     }
 
-    // ============== UsbDeviceIdentity ==============
-
     [Fact]
     public void Identity_BuildKey_IncludesAllSegments()
     {
@@ -258,15 +253,8 @@ public class UsbApiRegistryTests
         Assert.Equal(
             UsbDeviceIdentity.BuildPhysicalKey(native),
             UsbDeviceIdentity.BuildPhysicalKey(libusb));
-        // 物理键基于 VID/PID/接口类+子类/序列号；接口协议号被有意排除，使同一接口上的
-        // 协议变化由监视器上报为元数据变化（Changed）而非移除+新增。
-        // The physical key is based on VID/PID/interface class+subclass/serial; the interface
-        // PROTOCOL is deliberately excluded so a protocol change on the same interface is reported
-        // by the monitor as a metadata change (Changed) instead of a remove+add.
         Assert.Equal("1234|5678|FF|42|ABC", UsbDeviceIdentity.BuildPhysicalKey(native));
 
-        // A different serial must produce a different physical key.
-        // 序列号不同必须产生不同的物理键。
         Assert.NotEqual(
             UsbDeviceIdentity.BuildPhysicalKey(Device(serial: "ABC", ifClass: 0xFF, ifSub: 0x42, ifProtocol: 0x01)),
             UsbDeviceIdentity.BuildPhysicalKey(Device(serial: "XYZ", ifClass: 0xFF, ifSub: 0x42, ifProtocol: 0x01)));
@@ -298,8 +286,6 @@ public class UsbApiRegistryTests
     {
         Assert.Null(UsbDeviceIdentity.TryParseKeyFilter(key));
     }
-
-    // ============== UsbDeviceMonitor pure logic ==============
 
     [Fact]
     public void Monitor_BuildMap_DeduplicatesAcrossBackends()

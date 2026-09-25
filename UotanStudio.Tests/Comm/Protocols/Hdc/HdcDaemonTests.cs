@@ -11,8 +11,6 @@ public sealed class HdcDaemonTests
     [Fact]
     public void DevicePacket_MatchesIndependentProtobufWireFixture()
     {
-        // session.h: HW,reserve[2],version,BE16 metadata length,BE32 data length.
-        // serial_struct.h: 08 channel,10 command(varint 1001),18 checksum,20 vcode.
         var expected = Convert.FromHexString("4857000001000900000002080110E907180020096964");
         Assert.Equal(expected, HdcDaemonCodec.Encode(new(HdcCommand.UnityExecute, 1, 99, "id"u8.ToArray())));
         var message = HdcDaemonCodec.Decode(expected);

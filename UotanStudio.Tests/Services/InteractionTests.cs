@@ -16,14 +16,8 @@ public sealed class InteractionTests
     [InlineData("conditional-form.json")]
     public async Task ExecuteAsync_ExampleComposite_LoadsAndReturnsMockedSubmittedValues(string name)
     {
-        var root = new DirectoryInfo(AppContext.BaseDirectory);
-        while (root is not null && !File.Exists(Path.Combine(root.FullName, "UotanStudio.slnx")))
-        {
-            root = root.Parent;
-        }
-        Assert.NotNull(root);
         NodeFactoryRegistrar.RegisterAll();
-        var package = await VisualPluginFile.LoadAsync(Path.Combine(root.FullName, "docs", "nodes", "examples", name), TestContext.Current.CancellationToken);
+        var package = await VisualPluginFile.LoadAsync(Path.Combine(AppContext.BaseDirectory, "TestData", "Nodes", "Examples", name), TestContext.Current.CancellationToken);
         var composite = new CompositeNodeViewModel(package);
         var values = name == "input-text.json"
             ? new Dictionary<string, InteractionValue> { ["value"] = new() { Text = "test input" } }

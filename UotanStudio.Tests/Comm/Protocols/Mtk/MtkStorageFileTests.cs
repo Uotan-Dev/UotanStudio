@@ -111,7 +111,6 @@ public partial class MtkSessionTests
         Assert.Equal(1031, expected.Position);
         Assert.True(expected.CanRead);
         Assert.Equal(MtkSessionState.XFlashStorageReady, session.State);
-        // A second exchange proves that mismatch handling consumed the first completion.
         EnqueueStorageRead(transport, new byte[512]);
         using var output = new MemoryStream();
         await session.ReadXFlashStorageAsync(8, 0, 512, output, cancellationToken: TestContext.Current.CancellationToken);

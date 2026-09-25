@@ -35,8 +35,6 @@ public class FlashBundleOrchestratorTests
         <data><log value="booted"/></data><data><response value="ACK"/></data>
         """;
 
-    // ============== RawProgramParser / PatchParser ==============
-
     [Fact]
     public void RawProgramParser_ParsesHexAndDecimalStartSectors()
     {
@@ -68,8 +66,6 @@ public class FlashBundleOrchestratorTests
         Assert.Equal(100, boot.LastSector);
         Assert.Equal(2, boot.Slot);
 
-        // Missing optional attributes must default gracefully.
-        // 缺失的可选属性必须优雅地使用默认值。
         var system = entries[1];
         Assert.Equal("system.img", system.Filename);
         Assert.Equal("4096", system.StartSector);
@@ -108,8 +104,6 @@ public class FlashBundleOrchestratorTests
         Assert.Equal(0x20, ParseStartSector(entries[0].StartSector));
         Assert.Equal(4, entries[0].ByteOffset);
         Assert.Equal(new byte[] { 0xDE, 0xAD, 0xBE, 0xEF }, entries[0].GetDecodedValue());
-        // Odd-length hex is left-padded with a zero nibble.
-        // 奇数长度十六进制以 0 半字节左补齐。
         Assert.Equal(new byte[] { 0x00, 0xFF }, entries[1].GetDecodedValue());
     }
 
@@ -119,8 +113,6 @@ public class FlashBundleOrchestratorTests
         Assert.Throws<EdlException>(() => new PatchEntry { Value = "zz" }.GetDecodedValue());
         Assert.Throws<EdlException>(() => new PatchEntry { Value = "" }.GetDecodedValue());
     }
-
-    // ============== FlashBundleOrchestrator ==============
 
     private const string TwoPartitionRawProgram = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -152,7 +144,6 @@ public class FlashBundleOrchestratorTests
         Assert.True(result.IsSuccess, string.Join("; ", result.Errors));
         Assert.Equal(1, result.ProgramEntriesProcessed);
 
-        // [0] nop probe, [1] configure, [2] program XML, [3] payload.
         Assert.Equal(5, transport.Writes.Count);
         var programXml = Encoding.UTF8.GetString(transport.Writes[3]);
         Assert.Contains("<program", programXml, StringComparison.Ordinal);
@@ -161,8 +152,6 @@ public class FlashBundleOrchestratorTests
         Assert.Contains("num_partition_sectors=\"4\"", programXml, StringComparison.Ordinal);
         Assert.Equal(bootImage, transport.Writes[4]);
 
-        // The configure handshake precedes the program command.
-        // configure 握手先于 program 命令。
         Assert.Contains("<configure", Encoding.UTF8.GetString(transport.Writes[1]), StringComparison.Ordinal);
     }
 
@@ -188,7 +177,6 @@ public class FlashBundleOrchestratorTests
         Assert.Equal(2, result.ProgramEntriesProcessed);
         Assert.Equal(4096 * 4 + 4096 * 8, result.TotalBytesWritten);
 
-        // [2] boot program XML, [3] boot payload, [4] system program XML, [5] system payload.
         Assert.Contains("filename=\"boot.img\"", Encoding.UTF8.GetString(transport.Writes[3]), StringComparison.Ordinal);
         Assert.Equal(bootImage, transport.Writes[4]);
         Assert.Contains("filename=\"system.img\"", Encoding.UTF8.GetString(transport.Writes[5]), StringComparison.Ordinal);
@@ -216,7 +204,6 @@ public class FlashBundleOrchestratorTests
         Assert.True(result.IsSuccess, string.Join("; ", result.Errors));
         Assert.Equal(1, result.EraseEntriesProcessed);
 
-        // [0] nop probe, [1] configure, [2] erase XML.
         Assert.Contains("<erase", Encoding.UTF8.GetString(transport.Writes[3]), StringComparison.Ordinal);
         Assert.Contains("physical_partition_number=\"1\"", Encoding.UTF8.GetString(transport.Writes[3]), StringComparison.Ordinal);
     }
@@ -235,7 +222,7 @@ public class FlashBundleOrchestratorTests
             """);
         dir.WriteBytes("boot.img", new byte[4096 * 4]);
 
-        var transport = CreateBundleTransport(commandAckCount: 2); // program ACK + patch ACK
+        var transport = CreateBundleTransport(commandAckCount: 2);
         using var session = CreateSession(transport);
         var orchestrator = new FlashBundleOrchestrator(session);
 
@@ -245,7 +232,6 @@ public class FlashBundleOrchestratorTests
         Assert.Equal(1, result.ProgramEntriesProcessed);
         Assert.Equal(1, result.PatchEntriesProcessed);
 
-        // [2] geometry, [3] program XML, [4] payload, [5] patch XML.
         Assert.Contains("filename=\"boot.img\"", Encoding.UTF8.GetString(transport.Writes[3]), StringComparison.Ordinal);
         Assert.Contains("<patch", Encoding.UTF8.GetString(transport.Writes[5]), StringComparison.Ordinal);
         Assert.Contains("value=\"deadbeef\"", Encoding.UTF8.GetString(transport.Writes[5]), StringComparison.Ordinal);
@@ -321,8 +307,6 @@ public class FlashBundleOrchestratorTests
         Assert.Single(result.Errors);
         Assert.Equal(0, result.ProgramEntriesProcessed);
         Assert.Equal(0, result.ProgramEntriesSkipped);
-        // The program never reached the device (image file missing).
-        // 镜像文件缺失，program 从未发送到设备。
         Assert.Empty(transport.Writes);
     }
 
@@ -341,8 +325,6 @@ public class FlashBundleOrchestratorTests
         Assert.False(result.IsSuccess);
         Assert.Contains(result.Errors, e => e.Contains("rawprogram", StringComparison.OrdinalIgnoreCase));
     }
-
-    // ============== helpers ==============
 
     [Fact]
     public async Task FlashBundleAsync_FirstProgramRejected_DoesNotContinueOrPatch()
@@ -457,14 +439,6 @@ public class FlashBundleOrchestratorTests
 
     private static ScriptedCommTransport CreateBundleTransport(int commandAckCount)
     {
-        // 响应由写入序列驱动（而非预入队）：Sahara 被动 HELLO 探测在队列为空时立即超时，
-        // 随后 <nop> 探测 / <configure> 握手 / 各命令按写入内容获得对应应答，避免预入队
-        // 响应被被动探测提前消费导致后续命令空等满 120s 响应超时。
-        // Responses are driven by the write sequence (not pre-enqueued): the passive Sahara HELLO
-        // probe times out immediately on an empty queue, then the <nop> probe / <configure>
-        // handshake / each command receive the matching reply by write content, so pre-enqueued
-        // responses are never consumed by the passive probe and later commands do not idle for the
-        // full 120s response timeout.
         var acksRemaining = commandAckCount;
         var transport = new ScriptedCommTransport
         {
@@ -477,22 +451,16 @@ public class FlashBundleOrchestratorTests
                         <data><log value='{"storage_info":{"block_size":4096,"total_blocks":1048576}}'/><response value="ACK"/></data>
                         """)];
                 }
-                // A running Firehose programmer answers the probe <nop> with logs + ACK.
-                // 运行中的 Firehose programmer 以日志 + ACK 应答探测 <nop>。
                 if (text.Contains("<nop", StringComparison.Ordinal))
                 {
                     return [Encoding.UTF8.GetBytes(NopResponseXml)];
                 }
 
-                // The configure handshake is answered with the payload-negotiating ACK.
-                // configure 握手以携带负载协商的 ACK 应答。
                 if (text.Contains("<configure", StringComparison.Ordinal))
                 {
                     return [Encoding.UTF8.GetBytes(ConfigureAckXml)];
                 }
 
-                // program/erase/patch 命令以普通 ACK 应答，数量受 commandAckCount 限制。
-                // Commands (program/erase/patch) are answered with a plain ACK, bounded by commandAckCount.
                 if (acksRemaining > 0 && (text.Contains("<program", StringComparison.Ordinal)
                     || text.Contains("<erase", StringComparison.Ordinal)
                     || text.Contains("<patch", StringComparison.Ordinal)))
@@ -511,8 +479,6 @@ public class FlashBundleOrchestratorTests
 
     private static long ParseStartSector(string value)
     {
-        // NumberStyles.HexNumber 不接受 "0x" 前缀，先剥除再按十六进制解析。
-        // NumberStyles.HexNumber rejects the "0x" prefix; strip it before hex parsing.
         var hexText = value.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? value[2..] : value;
         return long.TryParse(hexText, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var hex)
             ? hex

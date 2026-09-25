@@ -105,7 +105,6 @@ public sealed class ProgressMeterTests
 
         Assert.Equal(3, meter.Processed);
         Assert.Equal(10, meter.Total);
-        // 样本不足（<2）时速度与 ETA 均为「—」。
         Assert.Null(meter.BytesPerSecond);
         Assert.Equal("3|10|—|—", meter.FormatStats("{0}|{1}|{2}|{3}"));
     }
@@ -116,7 +115,6 @@ public sealed class ProgressMeterTests
         var clock = new ManualClock();
         var meter = new ProgressMeter(clock);
         meter.Report(0, 1000);
-        // 越过 0.25s 最小样本间隔，使窗口首尾可估算速度。
         clock.Advance(0.3);
         meter.Report(500, 1000);
 
@@ -156,13 +154,11 @@ public sealed class ProgressMeterTests
         meter.Report(500, 1000);
         Assert.NotNull(meter.BytesPerSecond);
 
-        // processed 回退视为新阶段：清空样本，速度恢复为 null 直至积累新样本。
         meter.Report(100, 1000);
         Assert.Equal(100, meter.Processed);
         Assert.Null(meter.BytesPerSecond);
         Assert.True(meter.EstimatedRemaining is null);
 
-        // 新阶段继续喂样本后速度重新起算。
         clock.Advance(0.3);
         meter.Report(600, 1000);
         var speed = meter.BytesPerSecond;

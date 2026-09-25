@@ -13,7 +13,6 @@ public class EdlSessionConcurrencyTests
     public async Task InitializeAsync_ConcurrentCallers_ConfigureOnceBeforeOtherCommands()
     {
         using var transport = new ScriptedCommTransport();
-        // Sahara's first probe consumes a 48-byte packet and recognizes an existing programmer.
         transport.Enqueue("<?xml version='1.0'?><data></data>".PadRight(48));
         using var session = CreateSession(transport);
         var configured = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

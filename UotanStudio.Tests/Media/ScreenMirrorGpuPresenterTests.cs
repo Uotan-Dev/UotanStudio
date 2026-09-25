@@ -23,7 +23,7 @@ public sealed class ScreenMirrorGpuPresenterTests
         var image = new ScreenMirrorGpuPresenter.VideoImage(frame, matrix, range, 1, () => { });
         try
         {
-            frame.Buffer.AsSpan().Fill(0); // The decoder may reuse its array immediately after the callback.
+            frame.Buffer.AsSpan().Fill(0);
             frame.Dispose();
             var info = new SKImageInfo(5, 3, SKColorType.Bgra8888, SKAlphaType.Opaque);
             using var surface = SKSurface.Create(info);
@@ -53,7 +53,7 @@ public sealed class ScreenMirrorGpuPresenterTests
         Assert.True(source.Publish(frame, VideoColorMatrix.Auto, VideoColorRange.Auto));
         Assert.Equal(2, source.LiveFrames);
         source.Dispose();
-        Assert.Equal(1, source.LiveFrames); // A compositor operation can outlive the view model.
+        Assert.Equal(1, source.LiveFrames);
         Assert.False(source.Publish(frame, VideoColorMatrix.Auto, VideoColorRange.Auto));
         second.Dispose(); second.Dispose();
         Assert.Equal(0, source.LiveFrames);

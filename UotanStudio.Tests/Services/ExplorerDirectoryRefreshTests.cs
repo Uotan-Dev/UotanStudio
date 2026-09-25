@@ -47,9 +47,6 @@ public sealed class ExplorerDirectoryRefreshTests
         var notifications = 0;
         root.Children.CollectionChanged += (_, _) => notifications++;
         File.WriteAllText(path, "changed");
-        // 项目配置文件（.uotan 系扩展名）仍被资源管理器过滤，新增不应触发通知。
-        // Project config files (.uotan-family extensions) are still filtered by the
-        // explorer; adding one must not raise a notification.
         File.WriteAllText(Path.Combine(temp.Path, "session.uotan"), "{}");
 
         root.RefreshDescendants();

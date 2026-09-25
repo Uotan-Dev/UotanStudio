@@ -28,7 +28,6 @@ public sealed class MtkRsaSlaTests
         Assert.Equal(keyBits / 8, response.Length);
         var rawSignature = response.Chunk(2).SelectMany(pair => pair.Reverse()).ToArray();
         var publicKey = key.ExportParameters(false);
-        // Independent public RSA operation: do not use the production encoding engine to verify itself.
         var recovered = BigInteger.ModPow(
             new BigInteger(rawSignature, isUnsigned: true, isBigEndian: true),
             new BigInteger(publicKey.Exponent!, isUnsigned: true, isBigEndian: true),

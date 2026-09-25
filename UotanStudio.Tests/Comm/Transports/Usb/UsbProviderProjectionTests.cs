@@ -113,8 +113,6 @@ public class UsbProviderProjectionTests
         Assert.Equal((byte?)0x01, info.InterfaceProtocol);
         Assert.False(string.IsNullOrEmpty(info.DeviceKey));
 
-        // ToInfos disposes every backend device after projection.
-        // ToInfos 投影后释放每个后端设备。
         Assert.Equal(1, matching.DisposeCount);
         Assert.Equal(1, nonMatching.DisposeCount);
     }
@@ -147,12 +145,8 @@ public class UsbProviderProjectionTests
         Assert.Equal("usb:1-1", session.DeviceInfo.DevicePath);
         Assert.Equal((byte?)0xFF, session.DeviceInfo.InterfaceClass);
 
-        // The matching device is owned by the live session (not disposed).
-        // 匹配设备归活动会话所有（未被释放）。
         Assert.Equal(0, matching.DisposeCount);
 
-        // The filter-mismatch session and the failed-open device are both disposed.
-        // 过滤不匹配的会话与打开失败的设备都被释放。
         Assert.Equal(1, filterMismatch.DisposeCount);
         Assert.Equal(1, openFailure.DisposeCount);
 
@@ -195,11 +189,6 @@ public class UsbProviderProjectionTests
     [Fact]
     public void UnlabelledDevice_MultipleInterfaceGuids_CollapseToOnePhysicalIdentity()
     {
-        // A Windows fastboot node without a serial can register the same physical
-        // interface under several interface-class GUIDs; only the trailing
-        // "#{guid}" suffix differs and must not split the device into duplicates.
-        // <para>无序列号的 Windows fastboot 节点可把同一物理接口注册到多个接口类 GUID；
-        // 仅末尾 “#{guid}” 后缀不同，不应因此把设备分割为重复条目。</para>
         var viaClassGuid = new UsbDeviceInfo
         {
             DevicePath = @"\\?\usb#vid_18d1&pid_d00d#6b24c48f#{a5dcbf10-6530-11d2-901f-00c04fb951ed}",
@@ -220,7 +209,6 @@ public class UsbProviderProjectionTests
         };
         Assert.Equal(UsbDeviceIdentity.BuildPhysicalKey(viaClassGuid), UsbDeviceIdentity.BuildPhysicalKey(viaLegacyGuid));
 
-        // Distinct interfaces of one composite device keep separate identities.
         var adbInterface = new UsbDeviceInfo
         {
             DevicePath = @"\\?\usb#vid_18d1&pid_d00d&mi_02#6b24c48f#{a5dcbf10-6530-11d2-901f-00c04fb951ed}",

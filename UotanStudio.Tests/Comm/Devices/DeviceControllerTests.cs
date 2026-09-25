@@ -120,7 +120,6 @@ public sealed class DeviceControllerTests
         }
 
         Assert.Same(endpoint, removed);
-        // The reservation is released, so the endpoint can be leased again.
         await using var reopened = await controller.OpenAsync(snapshot, endpoint.Id, TestContext.Current.CancellationToken);
     }
 
@@ -156,7 +155,6 @@ public sealed class DeviceControllerTests
 
         Assert.Same(endpoint, changed);
         Assert.Null(removed);
-        // A mode switch keeps the cached static properties of the physical device.
         Assert.Equal("pixel", controller.Properties.Get(endpoint.Address)!["model"]);
     }
 

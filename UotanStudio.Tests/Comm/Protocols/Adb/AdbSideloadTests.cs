@@ -42,16 +42,13 @@ public class AdbSideloadTests
 
         Assert.Contains("sync:", transport.OpenedServices);
 
-        // SEND targets the sideload package node.
         var send = transport.WrtePayloads.First(p => Encoding.ASCII.GetString(p, 0, 4) == SyncIds.Send);
         var sendTarget = Encoding.UTF8.GetString(send, 8, send.Length - 8);
         Assert.StartsWith("/sideload/package.zip", sendTarget, StringComparison.Ordinal);
 
-        // Data chunks and the terminating DONE are streamed.
         Assert.Contains(transport.WrtePayloads, p => Encoding.ASCII.GetString(p, 0, 4) == SyncIds.Data);
         Assert.Contains(transport.WrtePayloads, p => Encoding.ASCII.GetString(p, 0, 4) == SyncIds.Done);
 
-        // The assembled payload equals the OTA bytes.
         var payload = new MemoryStream();
         foreach (var p in transport.WrtePayloads.Where(p => Encoding.ASCII.GetString(p, 0, 4) == SyncIds.Data))
         {

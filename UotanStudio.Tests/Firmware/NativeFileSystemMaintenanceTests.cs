@@ -200,6 +200,10 @@ public sealed class NativeFileSystemMaintenanceTests
 
     private static async Task<NativeFileSystemTools> AvailableToolsAsync(string name)
     {
+        if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") != "1")
+        {
+            Assert.Skip("Set UOTAN_NATIVE_TOOLS=1 on Windows with Alpine WSL to run native mkfs/e2fsck maintenance checks.");
+        }
         var tools = new NativeFileSystemTools(OperatingSystem.IsWindows() ? "Alpine" : null);
         try
         {

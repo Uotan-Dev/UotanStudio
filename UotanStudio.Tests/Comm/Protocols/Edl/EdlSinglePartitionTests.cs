@@ -62,22 +62,18 @@ public class EdlSinglePartitionTests
         var rawPath = dir.Write("rawprogram0.xml", RawProgramXml);
         var entries = RawProgramParser.Parse(rawPath);
 
-        // Match by label.
         var byLabel = FlashService.FindEdlTarget(entries, "boot", null);
         Assert.NotNull(byLabel);
         Assert.Equal("boot", byLabel!.Label);
 
-        // Match by filename.
         var byFilename = FlashService.FindEdlTarget(entries, "recovery.img", null);
         Assert.NotNull(byFilename);
         Assert.Equal("recovery", byFilename!.Label);
 
-        // Match by the selected image path.
         var byImagePath = FlashService.FindEdlTarget(entries, "whatever", "/firmware/system.img");
         Assert.NotNull(byImagePath);
         Assert.Equal("system", byImagePath!.Label);
 
-        // Unknown partition never matches.
         Assert.Null(FlashService.FindEdlTarget(entries, "vendor", null));
     }
 
@@ -89,8 +85,6 @@ public class EdlSinglePartitionTests
         var bootImage = new byte[4096 * 4];
         Random.Shared.NextBytes(bootImage);
         dir.WriteBytes("boot.img", bootImage);
-        // Images referenced by other entries do not need to exist for the single-flash path,
-        // but keep the bundle realistic.
         dir.WriteBytes("system.img", new byte[4096 * 8]);
         dir.WriteBytes("recovery.img", new byte[4096 * 4]);
 
@@ -112,14 +106,12 @@ public class EdlSinglePartitionTests
 
         Assert.True(result.Success, result.Summary);
 
-        // Exactly one <program> command, targeting boot.img only.
         var allWrites = string.Concat(transport.Writes.Select(w => Encoding.UTF8.GetString(w)));
         Assert.Equal(1, CountOccurrences(allWrites, "<program"));
         Assert.Contains("boot.img", allWrites, StringComparison.Ordinal);
         Assert.DoesNotContain("system.img", allWrites, StringComparison.Ordinal);
         Assert.DoesNotContain("recovery.img", allWrites, StringComparison.Ordinal);
 
-        // The raw payload written after the program XML is exactly the boot image bytes.
         Assert.Equal(bootImage, transport.Writes[2]);
     }
 
@@ -259,7 +251,6 @@ public class EdlSinglePartitionTests
     public async Task FlashEdlPartitionAsync_SparseExceedsDeviceCapacity_RejectsBeforeProgram(string start)
     {
         using var dir = new TempDirectory();
-        // Two logical sectors in one DONT_CARE chunk; the target has only one sector.
         dir.WriteBytes("boot.img", Convert.FromHexString(
             "3AFF26ED010000001C000C0000020000020000000100000000000000C3CA0000020000000C000000"));
         using var transport = new ScriptedCommTransport();
