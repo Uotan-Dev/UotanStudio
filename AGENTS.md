@@ -12,7 +12,8 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 - `UotanStudio.Mirroring`（命名空间 `UotanStudio.Services.Mirroring`）是独立投屏服务层，承载 scrcpy 等投屏协议与会话管理，仅引用 `UotanStudio.Comm`；`UotanStudio.Media` 保持零 Comm 依赖，经解码工厂消费帧数据。scrcpy 不属于 Comm 协议层。
 - `UotanStudio.Media` 负责音视频解码、投屏呈现和平台媒体后端。
 - `UotanStudio.Projects` 负责项目文件、解决方案快照和项目生命周期模型。
-- `UotanStudio.Tests` 使用 xUnit v3 和 Microsoft.Testing.Platform，覆盖各库、宿主服务和交付流程。
+- `UotanStudio.Firmware.Tests` 使用 xUnit v3 和 Microsoft.Testing.Platform，覆盖 `UotanStudio.Firmware` 库的格式、文件系统和 Payload 测试。
+- `UotanStudio.Tests` 使用 xUnit v3 和 Microsoft.Testing.Platform，覆盖宿主服务、Comm、Delivery、Mirroring、Media、Projects 和界面流程；其中固件宿主服务测试仍保留在本项目。两个测试项目是两个独立可执行测试宿主，`dotnet test --solution` 会依次运行两者。
 
 交付子项目可以引用 `UotanStudio.Firmware` 和必要的第三方库，但不得反向引用宿主 UI、项目服务或 `KeyLibraryService`。签名依赖通过 `IDeliverySigningKeyProvider` 注入；桌面宿主只负责适配、权限、资源和界面策略。
 
@@ -36,7 +37,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
   ```
 
 - Bat、Linux/macOS shell 和卡刷脚本必须使用同一份文件编排结果。脚本中的机型代号、作者信息和生成元数据来自交付计划，不能在各脚本模板中重复硬编码。
-- 生成 ZST 时，工具服务按目标平台准备固定版本的 zstd 并校验 SHA-256。Windows、Linux、macOS 的工具名称和架构选择遵循现有实现；不再下载或生成 riscv64 二进制。
+- 生成 ZST 时，工具服务按目标平台准备固定版本的 zstd 并校验 SHA-256。Windows、Linux、macOS 的工具名称和架构选择遵循现有实现；riscv64 二进制不在支持与下载范围内。
 - `TXT` 是清单格式，不得把压缩镜像直接作为可刷写镜像列出。压缩镜像必须由相应脚本先解压到临时路径，再交给 fastboot。
 - 输出发布使用临时目录、校验和原子替换。失败时保留既有输出，不能先删除用户已有文件。
 - ZIP 内部路径使用 `/`，镜像通常位于 `images/`，平台工具位于对应平台目录，具体成员以 `DeliveryOutputService` 和相关测试为准。
@@ -65,7 +66,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 - `UotanStudio.Desktop` 保持应用入口；不要在共享 `UotanStudio` 项目重新引入 `App.axaml.cs` 式桌面入口。
 - 交付页面保留现有控件和布局语义。需要新增行为时先复用 `DeliveryViewModel`、`DeliveryCompositionView` 和 `DeliveryView.Operations.cs`，不要在 View 层维护第二套镜像归属、确认状态或输出集合。
 - 新建项目、打开、关闭和另存为必须经过项目操作门。保存失败时保留源上下文和原目标内容；另存为成功后再切换项目根目录。
-- 解决方案快照中的交付计划和面板可见性通过 `SolutionSnapshot.State` 保存。解决方案根目录不再创建旧式 `.uotan/delivery.json`；子项目自己的 `.uotan/` 目录语义保持不变。
+- 解决方案快照中的交付计划和面板可见性通过 `SolutionSnapshot.State` 保存。解决方案根目录不存放 `delivery.json` 之类的交付配置文件；子项目自己的 `.uotan/` 目录语义保持不变。
 - 编辑器明确选择“按文本打开”时必须保持文本模式，即使文件包含 NUL 或使用二进制扩展名。自动探测不能覆盖用户的显式模式。
 - UI 可见文本经资源字典本地化，不能在界面中拼接中英文。已生成脚本文本只在生成时确定语言，切换界面语言不得偷偷改写已有脚本。
 - 文件管理器、交付列表和脚本生成器对 `.dat`、`.new.dat`、`.patch.dat`、`.br` 和 `.transfer.list` 的识别应复用现有格式注册和校验，不要复制后缀判断。
@@ -92,22 +93,36 @@ dotnet format UotanStudio.slnx style --no-restore --verify-no-changes
 
 测试项目是可执行的 xUnit v3 测试宿主。异步测试使用 `async Task`、`await` 和 `TestContext.Current.CancellationToken`；测试方法中禁止 `.Result`、`.Wait()` 和 `.GetAwaiter().GetResult()`。同步等待只能留在明确的同步基础设施边界，并且不得因此让 xUnit analyzer 报警。
 
-测试命令使用 `global.json` 选择的 Microsoft.Testing.Platform。项目级和解决方案级入口分别使用 `--project` 与 `--solution`；定向测试优先使用 xUnit v3 原生过滤参数，并用 `--minimum-expected-tests 1` 防止过滤条件失效时把“零测试”误报为成功：
+测试命令使用 `global.json` 选择的 Microsoft.Testing.Platform。项目级和解决方案级入口分别使用 `--project` 与 `--solution`；固件库测试位于 `UotanStudio.Firmware.Tests`，其余测试位于 `UotanStudio.Tests`；定向测试优先使用 xUnit v3 原生过滤参数，并用 `--minimum-expected-tests 1` 防止过滤条件失效时把“零测试”误报为成功：
 
 ```text
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Shell.ChecksumServiceTests --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-method UotanStudio.Tests.Shell.ChecksumServiceTests.ComputeAsync_KnownVectors_ProducesStandardDigests --minimum-expected-tests 1
+dotnet test --project UotanStudio.Firmware.Tests/UotanStudio.Firmware.Tests.csproj --no-build --filter-class UotanStudio.Tests.Firmware.ErofsTests --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter "FullyQualifiedName~ChecksumServiceTests" --minimum-expected-tests 1
 dotnet test --solution UotanStudio.slnx --no-restore
 ```
 
 `--filter-class`、`--filter-method`、`--filter-namespace` 和 `--filter-trait` 属于 xUnit v3 原生简单过滤器；同一命令不得把它们与 `--filter` 或 `--filter-query` 混用。传统 `--filter` 仅为现有 VSTest 过滤表达式和 CI 脚本保留。过滤后返回零测试时先检查选择器，不得归类为测试代码失败。
 
-测试名称使用 `Method_Scenario_ExpectedBehavior`，遵循 Arrange/Act/Assert，优先验证真实格式互操作性、失败回滚、取消和边界，而不是只验证内部对象往返。跨平台、WSL、QEMU、真实设备和真实语料测试缺少环境时应明确跳过并写出原因。
+测试名称使用 `Method_Scenario_ExpectedBehavior`，遵循 Arrange/Act/Assert，优先验证真实格式互操作性、失败回滚、取消和边界，而不是只验证内部对象往返。跨平台、WSL、QEMU、真实设备和真实语料测试缺少环境时应明确跳过并写出原因。原生工具互操作测试（mkfs/e2fsck/fsck.erofs/fsck.f2fs 与环回挂载）默认跳过，仅 `UOTAN_NATIVE_TOOLS=1` 显式开启；TB 级稀疏源的大数据构建测试仅 `UOTAN_LARGE_DATA=1` 显式开启；两类门控的跳过原因必须写出对应变量名。
+
+测试项目（`UotanStudio.Tests`、`UotanStudio.Firmware.Tests`）不使用行间 `//` 或 `/* */` 注释。跳过原因必须来自代码里的 `Skip = "…"` 文案，测试夹具的意图写在测试名称与断言中，不写在注释里。
 
 测试项目中保留的 `CS0618` 抑制只用于覆盖旧的整镜像内存型构建 API；生产代码必须使用文件路径或流式重载。不要用项目级 `NoWarn` 隐藏新的生产警告，也不要用它掩盖可修复的空引用、裁剪或异步问题。
 
 裁剪兼容性优先修复真实调用链。避免在生产路径使用 `StackFrame.GetMethod()` 等需要保留反射元数据的 API；若确需使用，必须明确标注和验证裁剪边界，不能为了安静构建而全局禁用 IL2026。
+
+## 公开 API 文档
+
+`UotanStudio.Comm`、`UotanStudio.Firmware`、`UotanStudio.Firmware.MagicGen`、`UotanStudio.Delivery`、`UotanStudio.Media`、`UotanStudio.Mirroring`、`UotanStudio.Projects`、`UotanStudio.Mcp`、`UotanStudio.Desktop` 的 csproj 显式设置 `GenerateDocumentationFile`，根 `.editorconfig` 把 `CS1591` 设为 `warning`；`UotanStudio`、`UotanStudio.Tests` 和 `UotanStudio.Firmware.Tests` 各自的 `.editorconfig` 把它设为 `none`。
+
+- 上述项目的公共类型与成员都要有中英双语 XML 注释：`<summary>` 内英文整句在前，中文整句写在同一 `<summary>` 的 `<para>` 中。
+- 参数写在 `<param>`，方法返回值写在 `<returns>`，属性和索引器的取值写在 `<value>`（属性不用 `<returns>`）。`<param>` 名称必须与签名逐一对应。
+- `<exception>` 只写已由代码路径或测试证实会抛出的异常；`<example>` 只用于非平凡的入口点，代码块放在 `<example>` 内并标注 `language`。
+- `<see cref>` 必须能单独解析；同名成员存在多个重载或类型与属性重名时，写明具体重载或在中文段落用文字描述，避免 `CS0419`。
+- 这些项目不使用行间 `//` 注释，说明性内容一律进入 XML 注释。vendored 源文件保留头部来源与许可证说明以及配套 `.LICENSE` 文件，其余注释不保留。
+- 代码注释和仓库文档只描述当前状态，不描述历史、草稿或演进。
 
 ## Git 和工作区纪律
 
