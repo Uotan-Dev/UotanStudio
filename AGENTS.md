@@ -8,7 +8,8 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 - `UotanStudio` 是 Avalonia 宿主，包含界面、ViewModel、项目会话、设置、密钥库适配和应用服务。
 - `UotanStudio.Delivery` 是独立交付子项目，命名空间为 `UotanStudio.Services.Delivery`。它负责交付计划校验、Super/Payload/Recovery 构建、DAT/BR 兼容、脚本、ZIP 输出、工具准备和输出校验。
 - `UotanStudio.Firmware` 负责固件格式、文件系统、Payload、压缩、设备树、启动镜像和签名等底层能力。
-- `UotanStudio.Comm` 负责 ADB、HDC、Fastboot、USB/TCP 和 scrcpy 通信。
+- `UotanStudio.Comm` 负责 ADB、HDC、Fastboot、USB/TCP/UDP 与 EDL/MTK/RKDL 设备通信。整个项目的设备读写（USB、TCP、UDP、串口、adb/HDC server 协议）必须由 Comm 持有；宿主不得自行打开套接字、串口或 USB 句柄，只能消费 `DeviceController`/`DeviceLease`、`Contracts` 门面与 Comm 公开的协议客户端类。
+- `UotanStudio.Mirroring`（命名空间 `UotanStudio.Services.Mirroring`）是独立投屏服务层，承载 scrcpy 等投屏协议与会话管理，仅引用 `UotanStudio.Comm`；`UotanStudio.Media` 保持零 Comm 依赖，经解码工厂消费帧数据。scrcpy 不属于 Comm 协议层。
 - `UotanStudio.Media` 负责音视频解码、投屏呈现和平台媒体后端。
 - `UotanStudio.Projects` 负责项目文件、解决方案快照和项目生命周期模型。
 - `UotanStudio.Tests` 使用 xUnit v3 和 Microsoft.Testing.Platform，覆盖各库、宿主服务和交付流程。
