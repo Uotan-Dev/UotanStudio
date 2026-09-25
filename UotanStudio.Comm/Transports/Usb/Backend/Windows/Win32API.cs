@@ -50,7 +50,7 @@ internal static partial class Win32API
     public static partial bool ReadFile(IntPtr hFile, IntPtr buffer, uint sizeToRead, out uint bytesRead, IntPtr overlapped);
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct SpDeviceInterfaceData
+    internal struct SpDeviceInterfaceData
     {
         public uint CbSize;
         public Guid InterfaceClassGuid;
@@ -59,7 +59,7 @@ internal static partial class Win32API
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct SpDevInfoData
+    internal struct SpDevInfoData
     {
         public uint CbSize;
         public Guid ClassGuid;
@@ -96,7 +96,7 @@ internal static partial class Win32API
                                                           out uint requiredSize);
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct USBDeviceDescriptor
+    internal struct USBDeviceDescriptor
     {
         public byte BLength;
         public byte BDescriptorType;
@@ -115,7 +115,7 @@ internal static partial class Win32API
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct USBDeviceConfigDescriptor
+    internal struct USBDeviceConfigDescriptor
     {
         public byte BLength;
         public byte BDescriptorType;
@@ -128,7 +128,7 @@ internal static partial class Win32API
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct USBDeviceInterfaceDescriptor
+    internal struct USBDeviceInterfaceDescriptor
     {
         public byte BLength;
         public byte BDescriptorType;
@@ -205,7 +205,7 @@ internal static partial class Win32API
     /// <para>用于原生异步（重叠）I/O 的 OVERLAPPED 结构。</para>
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    public struct OVERLAPPED
+    internal struct OVERLAPPED
     {
         public IntPtr Internal;
         public IntPtr InternalHigh;
@@ -232,7 +232,7 @@ internal static partial class Win32API
     public delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    public struct WNDCLASSW
+    internal struct WNDCLASSW
     {
         public uint Style;
         public IntPtr LpfnWndProc;
@@ -247,7 +247,7 @@ internal static partial class Win32API
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct DEV_BROADCAST_DEVICEINTERFACE_W
+    internal struct DEV_BROADCAST_DEVICEINTERFACE_W
     {
         public uint Dbcc_size;
         public uint Dbcc_devicetype;
@@ -257,7 +257,7 @@ internal static partial class Win32API
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct MSG
+    internal struct MSG
     {
         public IntPtr Hwnd;
         public uint Message;

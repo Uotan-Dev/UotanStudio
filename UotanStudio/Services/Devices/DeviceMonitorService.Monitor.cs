@@ -1,18 +1,15 @@
-using AdvancedSharpAdbClient;
-using AdvancedSharpAdbClient.Models;
-using AdvancedSharpAdbClient.Receivers;
 using UotanStudio.Comm;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Bootrom;
-using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Hdc;
-using UotanStudio.Comm.Protocols.Scrcpy;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Flash;
+using UotanStudio.Services.Mirroring;
 
 
 namespace UotanStudio.Services.Devices;
@@ -20,7 +17,6 @@ namespace UotanStudio.Services.Devices;
 public sealed partial class DeviceMonitorService
 {
     private IDisposable? _usbMonitor;
-    private DeviceMonitor? _adbMonitor;
     private Timer? _debounce;
     private CancellationTokenSource? _debugBridgeMonitorLifetime;
 
@@ -63,12 +59,9 @@ public sealed partial class DeviceMonitorService
             {
                 return "absent";
             }
-            var server = new AdbClient();
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(3));
-            var devices = await server.GetDevicesAsync(timeout.Token).ConfigureAwait(false);
-            return "listening:" + string.Join("\n", devices.OrderBy(d => d.Serial, StringComparer.Ordinal)
-                .Select(d => $"{d.Serial}:{d.State}"));
+            var targets = ListAdbServerTargets();
+            return "listening:" + string.Join("\n", targets.OrderBy(t => t.Serial, StringComparer.Ordinal)
+                .Select(t => $"{t.Serial}:{t.State}"));
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
@@ -105,13 +98,7 @@ public sealed partial class DeviceMonitorService
 
     private DeviceMonitorService()
     {
-        _controller = new UotanStudio.Comm.Devices.Services.DeviceController(
-            [
-                new UotanStudio.Comm.Devices.Discovery.UsbDiscoverySource(_comm, UotanStudio.Comm.Transports.Usb.Abstractions.UsbApiKind.Auto),
-                new UotanStudio.Comm.Devices.Discovery.AdbServerDiscoverySource(),
-                new UotanStudio.Comm.Devices.Discovery.HdcServerDiscoverySource()
-            ],
-            new UotanStudio.Comm.Devices.Services.CommDeviceTransportOpener(_comm));
+        _controller = UotanStudio.Comm.Devices.Services.DeviceControllerFactory.CreateDefault();
     }
 
     /// <summary>
@@ -144,7 +131,7 @@ public sealed partial class DeviceMonitorService
         // elsewhere). Only changes of ADB/Fastboot/EDL/RKDL-relevant devices trigger a
         // rescan: irrelevant devices such as webcams (e.g. 0C45:6362) that churn on the
         // bus / re-enumerate interfaces must not repeatedly trigger full scans.
-        _usbMonitor = _comm.MonitorUsbDevices(changes =>
+        _usbMonitor = _controller.WatchUsb(changes =>
         {
             LogDeviceChanges(changes);
             if (changes.Any(static c => IsRelevantDevice(c.Device)))
@@ -153,35 +140,9 @@ public sealed partial class DeviceMonitorService
             }
         }, onError: _ => { });
 
-        // adb server 设备变更监视（server 未运行时静默跳过，不拉起外部进程）。
-        try
-        {
-            var client = ProbeAdbServer(); // 探测 5037 端口是否可达（短缓存）
-            if (client is null)
-            {
-                LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Official adb server not running; USB-direct sources only.");
-                return;
-            }
-            var monitor = new DeviceMonitor(new AdbSocket(client.EndPoint));
-            monitor.DeviceChanged += (_, _) =>
-            {
-                // adb server 通道的设备变更（连接/断开/状态切换）明确写入全局日志，
-                // 与 USB 热插拔日志区分来源，便于排查设备发现链路。
-                // Log adb-server channel device changes (connect/disconnect/state) explicitly
-                // so they are distinguishable from USB hotplug events when tracing discovery.
-                LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
-                    "adb server channel device change detected; rescanning device list.");
-                ScheduleChange();
-            };
-            monitor.Start();
-            _adbMonitor = monitor;
-            LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Official adb server detected; network devices will be merged.");
-        }
-        catch
-        {
-            // 官方 adb server 未运行：网络设备源不可用，USB 直连不受影响。
-            LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Official adb server not running; USB-direct sources only.");
-        }
+        // Server device changes are detected by the periodic bridge-target poll started above;
+        // no push monitor or external process is launched here.
+        // server 设备变更由上文启动的周期性桥接目标轮询检测；此处不创建推送监视器，也不拉起外部进程。
     }
 
     /// <summary>
@@ -252,14 +213,11 @@ public sealed partial class DeviceMonitorService
         {
             _usbMonitor?.Dispose();
             _usbMonitor = null;
-            _adbMonitor?.Dispose();
-            _adbMonitor = null;
             _debounce?.Dispose();
             _debounce = null;
             _debugBridgeMonitorLifetime?.Cancel();
             _debugBridgeMonitorLifetime?.Dispose();
             _debugBridgeMonitorLifetime = null;
-            HdcDirectSessionPool.Clear();
             _started = false;
         }
     }

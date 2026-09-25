@@ -8,15 +8,38 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 /// </summary>
 internal static class UsbDeviceIdentity
 {
-    /// <summary>Matches a discovery key after opening enriches an initially unavailable serial.</summary>
+    /// <summary>
+    /// Matches a discovery key against the key of an opened session. The serial segment may
+    /// differ in casing (Windows registry/device-instance casing vs the USB descriptor casing
+    /// of the same serial — verified on real hardware) and a discovery key with an absent
+    /// serial is allowed to match an opened session that enriched it; every other segment,
+    /// including the exact device path, must be identical.
+    /// <para>匹配发现键与已打开会话的键。序列号段允许大小写差异（Windows 注册表大小写与
+    /// USB 描述符大小写不同——真机验证），且发现时缺序列号、打开后被补全的键允许匹配；
+    /// 其余各段（含精确设备路径）必须完全一致。</para>
+    /// </summary>
     internal static bool MatchesOpenedKey(string requested, string opened)
     {
         if (string.Equals(requested, opened, StringComparison.Ordinal)) return true;
         var before = requested.Split('|', 9);
         var after = opened.Split('|', 9);
-        return before.Length == 9 && after.Length == 9 && before[7].Length == 0 &&
-            before[8].Length != 0 && before[8] == after[8] &&
-            before.AsSpan(0, 7).SequenceEqual(after.AsSpan(0, 7));
+        if (before.Length != 9 || after.Length != 9) return false;
+        for (var i = 0; i < 9; i++)
+        {
+            if (i == 7)
+            {
+                var serialMatches = before[7].Length == 0
+                    ? after[7].Length != 0 && before[8].Length != 0
+                    : string.Equals(before[7], after[7], StringComparison.OrdinalIgnoreCase);
+                if (!serialMatches) return false;
+            }
+            else if (!string.Equals(before[i], after[i], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

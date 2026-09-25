@@ -15,7 +15,7 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// IMtkBootRomSlaResponder implementation. No credentials, key search or fallback are included.
 /// Private operations are synchronous; cancellation is checked before and after them.
 /// </remarks>
-public sealed class MtkBootRomRsaSlaResponder : IMtkBootRomSlaResponder
+internal sealed class MtkBootRomRsaSlaResponder : IMtkBootRomSlaResponder
 {
     private readonly RSA _key;
     private readonly MtkDeviceInfo _device;

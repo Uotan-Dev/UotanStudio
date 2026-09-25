@@ -1,7 +1,7 @@
-using AdvancedSharpAdbClient;
 using UotanStudio.Comm;
-using UotanStudio.Comm.Protocols.Common;
+using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
+using UotanStudio.Comm.Routing;
 
 namespace UotanStudio.Services.Devices;
 
@@ -9,22 +9,23 @@ namespace UotanStudio.Services.Devices;
 internal static class DebugBridgeServerControl
 {
     /// <summary>Stops ADB through its host protocol without starting an executable.</summary>
-    public static Task StopAdbAsync(CancellationToken cancellationToken = default)
-        => StopAsync(DeviceCommunicationConfiguration.AdbServerPort,
-            token => new AdbClient().KillAdbAsync(token), cancellationToken);
+    public static Task StopAdbAsync(DeviceMonitorService monitor, CancellationToken cancellationToken = default)
+        => StopAsync(monitor, DeviceCommunicationConfiguration.AdbServerPort,
+            token => AdbServerServices.KillAsync(DeviceCommunicationConfiguration.ServerHost,
+                DeviceCommunicationConfiguration.AdbServerPort, token), cancellationToken);
 
-    /// <summary>Stops HDC through the official client resolved from PATH or DevEco.</summary>
-    public static Task StopHdcAsync(CancellationToken cancellationToken = default)
+    /// <summary>Stops HDC through its host channel protocol; the hdc executable is never started.</summary>
+    public static Task StopHdcAsync(DeviceMonitorService monitor, CancellationToken cancellationToken = default)
     {
         var port = HdcServerClient.DefaultServerPort;
-        return StopAsync(port, async token =>
+        return StopAsync(monitor, port, async token =>
         {
-            await HdcCommandClient.RunAsync(HdcDeviceService.ResolveExecutable(),
-                ["-s", $"{DeviceCommunicationConfiguration.ServerHost}:{port}", "kill"], token, 10000).ConfigureAwait(false);
+            using var server = new HdcServerClient(DeviceCommunicationConfiguration.ServerHost, port);
+            await server.KillAsync(10000, token).ConfigureAwait(false);
         }, cancellationToken);
     }
 
-    private static async Task StopAsync(int port, Func<CancellationToken, Task> stop, CancellationToken ct)
+    private static async Task StopAsync(DeviceMonitorService monitor, int port, Func<CancellationToken, Task> stop, CancellationToken ct)
     {
         async Task<bool> Probe(CancellationToken token)
         {
@@ -38,7 +39,7 @@ internal static class DebugBridgeServerControl
         finally
         {
             DebugBridgeRoute.InvalidateProbe(DeviceCommunicationConfiguration.ServerHost, port);
-            await DeviceMonitorService.Instance.ForceRefreshAsync().ConfigureAwait(false);
+            await monitor.ForceRefreshAsync().ConfigureAwait(false);
         }
     }
 

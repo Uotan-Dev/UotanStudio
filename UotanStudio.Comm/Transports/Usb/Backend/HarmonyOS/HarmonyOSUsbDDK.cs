@@ -46,7 +46,7 @@ internal static partial class HarmonyOSUsbDDK
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct UsbControlRequestSetup
+    internal struct UsbControlRequestSetup
     {
         public byte BmRequestType;
         public byte BRequest;
@@ -56,7 +56,7 @@ internal static partial class HarmonyOSUsbDDK
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct UsbDeviceDescriptor
+    internal struct UsbDeviceDescriptor
     {
         public byte BLength;
         public byte BDescriptorType;
@@ -75,7 +75,7 @@ internal static partial class HarmonyOSUsbDDK
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct UsbConfigDescriptor
+    internal struct UsbConfigDescriptor
     {
         public byte BLength;
         public byte BDescriptorType;
@@ -88,7 +88,7 @@ internal static partial class HarmonyOSUsbDDK
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct UsbInterfaceDescriptor
+    internal struct UsbInterfaceDescriptor
     {
         public byte BLength;
         public byte BDescriptorType;
@@ -102,7 +102,7 @@ internal static partial class HarmonyOSUsbDDK
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct UsbEndpointDescriptor
+    internal struct UsbEndpointDescriptor
     {
         public byte BLength;
         public byte BDescriptorType;
@@ -113,7 +113,7 @@ internal static partial class HarmonyOSUsbDDK
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct UsbDdkConfigDescriptor
+    internal struct UsbDdkConfigDescriptor
     {
         public UsbConfigDescriptor ConfigDescriptor;
         public IntPtr Iface;
@@ -123,7 +123,7 @@ internal static partial class HarmonyOSUsbDDK
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct UsbDdkInterface
+    internal struct UsbDdkInterface
     {
         public IntPtr Altsetting;
         public byte NumAltsetting;
@@ -132,7 +132,7 @@ internal static partial class HarmonyOSUsbDDK
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct UsbDdkInterfaceDescriptor
+    internal struct UsbDdkInterfaceDescriptor
     {
         public UsbInterfaceDescriptor InterfaceDescriptor;
         public IntPtr Endpoint;
@@ -142,7 +142,7 @@ internal static partial class HarmonyOSUsbDDK
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct UsbRequestPipe
+    internal struct UsbRequestPipe
     {
         public ulong InterfaceHandle;
         public byte EndpointAddress;
@@ -150,7 +150,7 @@ internal static partial class HarmonyOSUsbDDK
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct UsbDeviceMemMap
+    internal struct UsbDeviceMemMap
     {
         public ulong DeviceId;
         public IntPtr Buffer;

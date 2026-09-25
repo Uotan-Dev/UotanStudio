@@ -63,7 +63,7 @@ public class FirehoseResponse
 /// Parses Firehose XML responses from the target device.
 /// <para>解析来自目标设备的 Firehose XML 响应。</para>
 /// </summary>
-public static class FirehoseResponseParser
+internal static class FirehoseResponseParser
 {
     /// <summary>
     /// Parses a complete <c>&lt;data&gt;</c> XML block into a <see cref="FirehoseResponse"/>.
@@ -212,8 +212,11 @@ public static class FirehoseResponseParser
         var rawModeAttr = responseNode.Attributes?["rawmode"];
 
         response.RawValue = valueAttr?.Value;
-        response.IsAck = string.Equals(valueAttr?.Value, "ACK", StringComparison.OrdinalIgnoreCase);
-        response.IsNak = string.Equals(valueAttr?.Value, "NAK", StringComparison.OrdinalIgnoreCase);
+        // Some programmers answer with "true"/"false" instead of ACK/NAK (bkerler/edl).
+        response.IsAck = string.Equals(valueAttr?.Value, "ACK", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(valueAttr?.Value, "true", StringComparison.OrdinalIgnoreCase);
+        response.IsNak = string.Equals(valueAttr?.Value, "NAK", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(valueAttr?.Value, "false", StringComparison.OrdinalIgnoreCase);
         response.IsRawMode = string.Equals(rawModeAttr?.Value, "true", StringComparison.OrdinalIgnoreCase);
 
         if (responseNode.Attributes != null)
@@ -234,7 +237,7 @@ public static class FirehoseResponseParser
 /// <para>一个完整 <c>&lt;data&gt;</c> 块的解析结果：零个或多个 log 节点，以及可选的
 /// response 节点。</para>
 /// </summary>
-public sealed class FirehoseDataBlock
+internal sealed class FirehoseDataBlock
 {
     /// <summary>
     /// Gets the log messages extracted from this block.

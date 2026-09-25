@@ -6,7 +6,7 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 /// Describes the observable capability profile of a USB backend.
 /// <para>描述 USB 后端可观察到的能力轮廓。</para>
 /// </summary>
-public sealed class UsbApiCapabilities
+internal sealed class UsbApiCapabilities
 {
     /// <summary>
     /// Gets or sets the public API name.
@@ -104,7 +104,7 @@ public sealed class UsbApiCapabilities
 /// Describes the capability of a single native backend within a multi-backend provider.
 /// <para>描述多后端提供器内部单个原生后端的能力。</para>
 /// </summary>
-public sealed class UsbBackendCapability
+internal sealed class UsbBackendCapability
 {
     /// <summary>
     /// Gets or sets the backend tag (matches <see cref="UsbTransferEvent.Backend"/>).
@@ -131,7 +131,7 @@ public sealed class UsbBackendCapability
 /// Provides an explicit capability description for a USB API provider.
 /// <para>为 USB API 提供器提供显式能力描述。</para>
 /// </summary>
-public interface IUsbApiCapabilityProvider
+internal interface IUsbApiCapabilityProvider
 {
     /// <summary>
     /// Gets the capability profile.

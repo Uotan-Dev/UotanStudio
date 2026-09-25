@@ -12,7 +12,7 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// <para>工厂针对标准 ADB USB 接口（类 0xFF、子类 0x42、协议 0x01），
 /// 并在提供时按 VID/PID 匹配。</para>
 /// </summary>
-public sealed class AdbFactory : IProtocolFactory
+internal sealed class AdbFactory : IProtocolFactory
 {
     private readonly ushort? _vendorId;
     private readonly ushort? _productId;

@@ -10,7 +10,7 @@ internal static partial class WinUSBAPI
         out uint transferred, [MarshalAs(UnmanagedType.Bool)] bool wait);
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct WinUSBPipeInfo
+    internal struct WinUSBPipeInfo
     {
         public WinUSBPipeType PipeType;
         public byte PipeID;
@@ -19,7 +19,7 @@ internal static partial class WinUSBAPI
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct WINUSB_SETUP_PACKET
+    internal struct WINUSB_SETUP_PACKET
     {
         public byte RequestType;
         public byte Request;
@@ -28,7 +28,7 @@ internal static partial class WinUSBAPI
         public ushort Length;
     }
 
-    public enum WinUSBPipeType
+    internal enum WinUSBPipeType
     {
         UsbdPipeTypeControl,
         UsbdPipeTypeIsochronous,

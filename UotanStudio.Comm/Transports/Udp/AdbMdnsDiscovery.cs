@@ -12,7 +12,7 @@ namespace UotanStudio.Comm.Transports.Udp;
 /// <c>Makaretu.Dns.Multicast</c>（纯托管 .NET 组播 DNS）实现，不依赖外部 adb
 /// 二进制、adb server 或代理，对应官方 `adb mdns services` 的行为。</para>
 /// </summary>
-public static class AdbMdnsDiscovery
+internal static class AdbMdnsDiscovery
 {
     /// <summary>
     /// mDNS IPv4 multicast group address.

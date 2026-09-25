@@ -1,7 +1,10 @@
+using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
+using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Adb;
-using UotanStudio.Comm.Protocols.Common;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Devices;
 using UotanStudio.Tests.Comm.TestDoubles;
@@ -78,9 +81,9 @@ public class DebugBridgeServerControlTests
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         var reply = ServeTargetsAsync(listener, "unauthorized-serial\tunauthorized\n");
-        using var session = DebugBridgeRoute.OpenAdb("unauthorized-serial", () =>
+        using var session = DebugBridgeSessionOpener.OpenAdb("unauthorized-serial", () =>
             throw new InvalidOperationException("Direct USB must not be opened."), "127.0.0.1", port);
-        Assert.True(session!.Connection.UsesServer);
+        Assert.True(session!.UsesServer);
         await reply;
     }
 
@@ -92,7 +95,7 @@ public class DebugBridgeServerControlTests
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         var reply = ServeTargetsAsync(listener, "server-owned               device product:fixture transport_id:1\n");
         var invoked = false;
-        Assert.Null(DebugBridgeRoute.OpenAdb("other-device", () =>
+        Assert.Null(DebugBridgeSessionOpener.OpenAdb("other-device", () =>
         {
             invoked = true;
             return null;
@@ -108,7 +111,7 @@ public class DebugBridgeServerControlTests
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         var reply = ServeTargetsAsync(listener, "server-owned\tdevice\n");
-        Assert.False(DebugBridgeRoute.AdbServerOwns("other-device", "127.0.0.1", port));
+        Assert.False(DebugBridgeSessionOpener.AdbServerOwns("other-device", "127.0.0.1", port));
         await reply;
     }
 
@@ -119,7 +122,7 @@ public class DebugBridgeServerControlTests
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         var reply = ServeTargetsAsync(listener, "server-owned\toffline\n");
-        Assert.True(DebugBridgeRoute.AdbServerOwns(null, "127.0.0.1", port));
+        Assert.True(DebugBridgeSessionOpener.AdbServerOwns(null, "127.0.0.1", port));
         await reply;
     }
 
@@ -142,19 +145,34 @@ public class DebugBridgeServerControlTests
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
         var invoked = false;
-        Assert.Null(DebugBridgeRoute.OpenAdb("serial", () => { invoked = true; return null; }, "127.0.0.1", port));
+        Assert.Null(DebugBridgeSessionOpener.OpenAdb("serial", () => { invoked = true; return null; }, "127.0.0.1", port));
         Assert.True(invoked);
     }
 
     [Fact]
-    public void OpenHdc_ServerPresent_DoesNotAcquireDirectSession()
+    public async Task OpenHdc_ServerPresent_DoesNotAcquireDirectSession()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        using var session = DebugBridgeRoute.OpenHdc("missing-or-unauthorized", () =>
+        var listing = ServeHdcTargetsAsync(listener, "server-owned");
+        using var session = DebugBridgeSessionOpener.OpenHdc("server-owned", () =>
             throw new InvalidOperationException("Direct USB must not be opened."), "127.0.0.1", port);
         Assert.NotNull(session);
+        await listing;
+    }
+
+    [Fact]
+    public async Task OpenHdc_ServerPresentWithoutTarget_FallsBackToDirectFactory()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var listing = ServeHdcTargetsAsync(listener, "other-device");
+        var directFailure = new IOException("Direct factory invoked");
+        Assert.Same(directFailure, Assert.Throws<IOException>(() => DebugBridgeSessionOpener.OpenHdc("serial",
+            () => throw directFailure, "127.0.0.1", port)));
+        await listing;
     }
 
     [Fact]
@@ -165,7 +183,7 @@ public class DebugBridgeServerControlTests
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
         var directFailure = new IOException("Direct factory invoked");
-        Assert.Same(directFailure, Assert.Throws<IOException>(() => DebugBridgeRoute.OpenHdc("serial",
+        Assert.Same(directFailure, Assert.Throws<IOException>(() => DebugBridgeSessionOpener.OpenHdc("serial",
             () => throw directFailure, "127.0.0.1", port)));
     }
 
@@ -177,7 +195,7 @@ public class DebugBridgeServerControlTests
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         var listing = ServeTargetsAsync(listener, "unauthorized-serial\tunauthorized\n");
-        using var session = DebugBridgeRoute.OpenAdb("unauthorized-serial", () =>
+        using var session = DebugBridgeSessionOpener.OpenAdb("unauthorized-serial", () =>
             throw new InvalidOperationException("Direct USB must not be opened."), "127.0.0.1", port);
         await listing;
         var fakeServer = Task.Run(async () =>
@@ -211,6 +229,37 @@ public class DebugBridgeServerControlTests
         var bytes = System.Text.Encoding.UTF8.GetBytes(listing);
         await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes($"OKAY{bytes.Length:X4}"), ct);
         await stream.WriteAsync(bytes, ct);
+    }
+
+    private static async Task ServeHdcTargetsAsync(TcpListener listener, string listing)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var probe = await listener.AcceptTcpClientAsync(ct);
+        using var request = await listener.AcceptTcpClientAsync(ct);
+        var stream = request.GetStream();
+        var banner = new byte[44];
+        Encoding.ASCII.GetBytes("OHOS HDC", banner);
+        await WriteFrameAsync(stream, banner, ct);
+        Assert.Equal(44, (await ReadFrameAsync(stream, ct)).Length);
+        Assert.Equal("list targets", Encoding.UTF8.GetString(await ReadFrameAsync(stream, ct)).TrimEnd('\0'));
+        await WriteFrameAsync(stream, Encoding.UTF8.GetBytes(listing), ct);
+    }
+
+    private static async Task WriteFrameAsync(NetworkStream stream, byte[] payload, CancellationToken ct)
+    {
+        var header = new byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(header, payload.Length);
+        await stream.WriteAsync(header, ct);
+        await stream.WriteAsync(payload, ct);
+    }
+
+    private static async Task<byte[]> ReadFrameAsync(NetworkStream stream, CancellationToken ct)
+    {
+        var header = new byte[4];
+        await stream.ReadExactlyAsync(header, ct);
+        var payload = new byte[BinaryPrimitives.ReadInt32BigEndian(header)];
+        await stream.ReadExactlyAsync(payload, ct);
+        return payload;
     }
 
     [Fact]

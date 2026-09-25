@@ -4,7 +4,7 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// EDL (Emergency Download Mode) protocol constants.
 /// <para>EDL（紧急下载模式）协议常量。</para>
 /// </summary>
-public static class EdlConstants
+internal static class EdlConstants
 {
     // Sahara protocol version
     /// <summary>
@@ -332,7 +332,7 @@ public static class EdlConstants
 /// Sahara protocol command codes.
 /// <para>Sahara 协议命令码。</para>
 /// </summary>
-public enum SaharaCommand : uint
+internal enum SaharaCommand : uint
 {
     /// <summary>
     /// HELLO command.
@@ -539,7 +539,7 @@ public enum SaharaImageId : uint
 /// EDL error codes.
 /// <para>EDL 错误码。</para>
 /// </summary>
-public enum EdlErrorCode
+internal enum EdlErrorCode
 {
     /// <summary>
     /// Operation completed successfully.

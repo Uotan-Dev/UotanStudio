@@ -4,7 +4,7 @@ using K4os.Compression.LZ4;
 namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>Upstream transfer.h / serial_struct.h file and app metadata codecs.</summary>
-public static class HdcTransferCodec
+internal static class HdcTransferCodec
 {
     /// <summary>Encodes a transfer configuration without reflection.</summary>
     public static byte[] EncodeConfig(TransferConfig config)

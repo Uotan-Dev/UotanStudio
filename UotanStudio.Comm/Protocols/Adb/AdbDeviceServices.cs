@@ -1,4 +1,5 @@
 using System.Text;
+using UotanStudio.Comm.Contracts;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
@@ -11,7 +12,7 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// <para>初始化新的设备服务客户端。</para>
 /// </remarks>
 /// <param name="connection">An established ADB connection. 已建立的 ADB 连接。</param>
-public sealed class AdbDeviceServices(AdbConnection connection)
+internal sealed class AdbDeviceServices(AdbConnection connection) : IAdbDeviceServices
 {
     private readonly AdbConnection _connection = connection ?? throw new ArgumentNullException(nameof(connection));
 

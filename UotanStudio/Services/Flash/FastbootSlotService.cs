@@ -16,7 +16,7 @@ public static class FastbootSlotService
         return Task.Run(() =>
         {
             ct.ThrowIfCancellationRequested();
-            return DeviceMonitorService.Instance.RunFastboot(device, session =>
+            return App.DeviceMonitor.RunFastboot(device, session =>
             {
                 var slot = session.GetVariable("current-slot", useCache: false).Trim();
                 var other = slot switch

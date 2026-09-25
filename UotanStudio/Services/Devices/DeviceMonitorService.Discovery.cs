@@ -1,18 +1,15 @@
-using AdvancedSharpAdbClient;
-using AdvancedSharpAdbClient.Models;
-using AdvancedSharpAdbClient.Receivers;
 using UotanStudio.Comm;
+using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Bootrom;
-using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Edl;
-using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Hdc;
-using UotanStudio.Comm.Protocols.Scrcpy;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Flash;
+using UotanStudio.Services.Mirroring;
 
 
 namespace UotanStudio.Services.Devices;
@@ -37,7 +34,6 @@ public sealed partial class DeviceMonitorService
         }
 
         var devices = ScanCore();
-        HdcDirectSessionPool.Retain(devices);
         _cachedScan = devices;
         return devices;
     }
@@ -76,11 +72,6 @@ public sealed partial class DeviceMonitorService
                 continue;
             if (protocol == DeviceProtocolKind.Hdc && (hdcTargets.Length != 0 || DebugBridgeRoute.UseHdcServer()))
                 continue;
-            if (protocol == DeviceProtocolKind.Hdc && HdcDirectSessionPool.FindOwnedDevice(info.DevicePath) is { } owned)
-            {
-                if (!devices.Any(d => d.Key == owned.Key)) devices.Add(owned);
-                continue;
-            }
             var serial = info.SerialNumber;
             if (protocol == DeviceProtocolKind.Fastboot && string.IsNullOrWhiteSpace(serial))
                 serial = ReadFastbootSerial(info);
@@ -154,37 +145,24 @@ public sealed partial class DeviceMonitorService
     internal static bool IsSupportedHdcTarget(HdcTargetInfo target)
         => target.Transport is "USB" or "TCP";
 
-    private static string? PhysicalUsbId(ushort vendorId, ushort productId, string? serial)
+    private static string ProtocolToken(DeviceProtocolKind protocol) => protocol switch
     {
-        if (string.IsNullOrWhiteSpace(serial) || serial == "UNKNOWN" ||
-            serial.Length > 128 || serial.Any(char.IsControl))
-            return null;
-        return $"usb:{vendorId:X4}:{productId:X4}:{serial}";
-    }
+        DeviceProtocolKind.Adb => "adb",
+        DeviceProtocolKind.Hdc => "hdc",
+        DeviceProtocolKind.Fastboot => "fastboot",
+        DeviceProtocolKind.Edl => "edl",
+        DeviceProtocolKind.Rkdl => "rkdl",
+        _ => string.Empty
+    };
 
+    // Physical identity binding is owned by Comm's discovery layer; the host only consumes it.
+    // 物理身份绑定由 Comm 的发现层拥有；宿主仅消费其结果。
     internal static string? PhysicalUsbId(UsbDeviceInfo info, string? serial)
-        => info.ContainerId is { } container && container != Guid.Empty
-            ? $"usb-container:{container:N}"
-            : PhysicalUsbId(info.VendorId, info.ProductId, serial);
+        => UotanStudio.Comm.Devices.Discovery.UsbPhysicalIdentity.Of(info, serial);
 
     internal static string? FindServerUsbIdentity(IReadOnlyList<UsbDeviceInfo> infos, string serial,
         DeviceProtocolKind protocol)
-    {
-        var ids = infos.Where(info => Classify(info) == protocol &&
-                (string.Equals(info.SerialNumber, serial, StringComparison.Ordinal) ||
-                    info.ContainerId.HasValue && InstanceIdMatchesSerial(info.DeviceInstanceId, serial)))
-            .Select(info => PhysicalUsbId(info, info.SerialNumber))
-            .Where(id => id is not null).Distinct(StringComparer.Ordinal).Take(2).ToArray();
-        return ids.Length == 1 ? ids[0] : null;
-    }
-
-    private static bool InstanceIdMatchesSerial(string? instanceId, string serial)
-    {
-        if (string.IsNullOrWhiteSpace(instanceId)) return false;
-        var separator = instanceId.LastIndexOf('\\');
-        return separator >= 0 && string.Equals(instanceId[(separator + 1)..], serial,
-            StringComparison.OrdinalIgnoreCase);
-    }
+        => UotanStudio.Comm.Devices.Discovery.UsbPhysicalIdentity.ServerPhysicalId(infos, serial, ProtocolToken(protocol));
 
     internal static IReadOnlyList<IReadOnlyList<DetectedDevice>> GroupPhysicalDevices(
         IEnumerable<DetectedDevice> endpoints)
@@ -218,31 +196,15 @@ public sealed partial class DeviceMonitorService
 
     private string? ReadFastbootSerial(UsbDeviceInfo info)
     {
-        IUsbDeviceSession? usb = null;
-        FastbootSession? session = null;
-        try
-        {
-            usb = _comm.OpenUsbDeviceSessionByKey(info.DeviceKey);
-            if (usb is null || !new FastbootFactory(2000).TryCreate(usb, out var protocolSession) ||
-                protocolSession is not FastbootSession fastboot)
-                return null;
-            session = fastboot;
-            var serial = session.GetVariable("serialno", useCache: false).Trim();
-            return serial.Length is > 0 and <= 128 &&
-                   serial.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.')
-                ? serial : null;
-        }
-        catch (Exception ex)
+        // The getvar/claim mechanism now lives in Comm's discovery layer; the host only consumes the result.
+        // getvar/认领机制已移入 Comm 发现层；宿主仅消费结果。
+        var serial = _controller.ReadFastbootSerial(info);
+        if (serial is null)
         {
             LogService.Instance.Write(LogLevel.Debug, "DeviceMonitor",
-                $"Fastboot serial unavailable for {info.DeviceKey}: {ex.Message}");
-            return null;
+                $"Fastboot serial unavailable for {info.DeviceKey}.");
         }
-        finally
-        {
-            session?.Dispose();
-            if (session is null) usb?.Dispose();
-        }
+        return serial;
     }
 
     /// <summary>
@@ -267,87 +229,22 @@ public sealed partial class DeviceMonitorService
         return matches.FirstOrDefault();
     }
 
-    /// <summary>HDC USB 接口子类（上游 developtools_hdc harmonySubClass = 0x50）。 HDC USB interface subclass (upstream harmonySubClass = 0x50).</summary>
-    private const byte HdcSubClass = 0x50;
-
-    /// <summary>HDC USB 接口协议（上游 harmonyProtocol = 0x01）。 HDC USB interface protocol (upstream harmonyProtocol = 0x01).</summary>
-    private const byte HdcInterfaceProtocol = 0x01;
-
     /// <summary>
-    /// <para>按接口类/VID-PID 将 USB 设备分类到协议类型；不匹配任何协议时返回 <c>null</c>。</para>
-    /// Classifies a USB device into a protocol kind by interface class / VID-PID;
-    /// returns <c>null</c> when nothing matches.
+    /// <para>按接口类/VID-PID 将 USB 设备分类到协议类型；分类事实由 Comm 的
+    /// <c>UsbProtocolClassifier</c> 唯一提供，此处仅做字符串到枚举的映射。</para>
+    /// Classifies a USB device into a protocol kind by interface class / VID-PID; the classification
+    /// facts come solely from Comm's <c>UsbProtocolClassifier</c>; this only maps the string to the enum.
     /// </summary>
     private static DeviceProtocolKind? Classify(UsbDeviceInfo info)
-    {
-        // EDL：高通 9008 族（VID/PID 匹配）。
-        if (info.VendorId == 0x05C6 && info.ProductId is 0x9008 or 0x9006 or 0x900E or 0x901D or 0x9307)
+        => UsbProtocolClassifier.Classify(info) switch
         {
-            return DeviceProtocolKind.Edl;
-        }
-
-        // RKDL：瑞芯微 bootrom/loader。
-        if (info.VendorId == 0x2207 && ((info.ProductId >> 8) != 0 || IsKnownRkdlLoader(info.ProductId)))
-        {
-            return DeviceProtocolKind.Rkdl;
-        }
-
-        // HDC：对齐上游 developtools_hdc IsDebuggableDev（host_usb.cpp）——接口类 0xFF、
-        // 子类 0x50、协议 0x01（两个 bulk 端点）。HDC 无固定 VID/PID，接口三元组为准。
-        // HDC: aligned with upstream developtools_hdc IsDebuggableDev (host_usb.cpp) —
-        // interface class 0xFF, subclass 0x50, protocol 0x01 (two bulk endpoints). HDC has
-        // no fixed VID/PID; the interface triple is authoritative.
-        foreach (var iface in info.Interfaces)
-        {
-            if (iface.Class == HdcConstants.InterfaceClass &&
-                iface.SubClass == HdcSubClass &&
-                iface.Protocol == HdcInterfaceProtocol)
-            {
-                return DeviceProtocolKind.Hdc;
-            }
-        }
-        if (info.InterfaceMetadataObserved &&
-            info.InterfaceClass == HdcConstants.InterfaceClass &&
-            info.InterfaceSubClass == HdcSubClass &&
-            info.InterfaceProtocol == HdcInterfaceProtocol)
-        {
-            return DeviceProtocolKind.Hdc;
-        }
-
-        // ADB / Fastboot：接口类 0xFF/0x42，协议 0x01 / 0x03。
-        foreach (var iface in info.Interfaces)
-        {
-            if (iface.Class == 0xFF && iface.SubClass == 0x42)
-            {
-                if (iface.Protocol == 0x01)
-                {
-                    return DeviceProtocolKind.Adb;
-                }
-
-                if (iface.Protocol == 0x03)
-                {
-                    return DeviceProtocolKind.Fastboot;
-                }
-            }
-        }
-        if (info.InterfaceMetadataObserved &&
-            info.InterfaceClass == 0xFF && info.InterfaceSubClass == 0x42)
-        {
-            if (info.InterfaceProtocol == 0x01)
-            {
-                return DeviceProtocolKind.Adb;
-            }
-
-            if (info.InterfaceProtocol == 0x03)
-            {
-                return DeviceProtocolKind.Fastboot;
-            }
-        }
-        return null;
-    }
-
-    private static bool IsKnownRkdlLoader(ushort productId)
-        => RkdlConstants.KnownLoaderProductIds.Contains(productId);
+            "adb" => DeviceProtocolKind.Adb,
+            "hdc" => DeviceProtocolKind.Hdc,
+            "fastboot" => DeviceProtocolKind.Fastboot,
+            "edl" => DeviceProtocolKind.Edl,
+            "rkdl" => DeviceProtocolKind.Rkdl,
+            _ => null
+        };
 
     private static string RkdlState(UsbDeviceInfo info)
         => RkdlConstants.KnownLoaderProductIds.Contains(info.ProductId) ? "loader" : "maskrom";

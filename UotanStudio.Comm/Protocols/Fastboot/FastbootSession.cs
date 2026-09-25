@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using UotanStudio.Comm.Protocols.Common;
-using UotanStudio.Comm.Protocols.Fastboot.Utils;
+using UotanStudio.Comm.Protocols.Fastboot.Images;
 using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Fastboot;
@@ -45,7 +45,7 @@ public sealed partial class FastbootSession : IProtocolSession
     /// Creates a new fastboot session over the specified transport.
     /// <para>在指定传输上创建新的 fastboot 会话。</para>
     /// </summary>
-    public FastbootSession(ICommTransport transport, int? timeoutMs = null)
+    internal FastbootSession(ICommTransport transport, int? timeoutMs = null)
     {
         Transport = transport ?? throw new ArgumentNullException(nameof(transport));
         var defaultTimeoutMs = Usb?.Session.DefaultTimeoutMs ?? 0;

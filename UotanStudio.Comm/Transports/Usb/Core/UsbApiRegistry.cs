@@ -7,7 +7,7 @@ namespace UotanStudio.Comm.Transports.Usb.Core;
 /// Stores and creates registered USB API providers.
 /// <para>存储并创建已注册的 USB API 提供器。</para>
 /// </summary>
-public sealed class UsbApiRegistry
+internal sealed class UsbApiRegistry
 {
     private readonly Dictionary<string, Func<IUsbApiProvider>> _factories = new(StringComparer.OrdinalIgnoreCase);
 

@@ -1,4 +1,4 @@
-using UotanStudio.Comm.Devices.Contracts;
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using Xunit;

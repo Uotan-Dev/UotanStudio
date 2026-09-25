@@ -8,7 +8,7 @@ using System.Threading.Channels;
 namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>Owns native daemon TCP mappings for one authenticated connection.</summary>
-public sealed class HdcForwardManager(HdcConnection connection) : IDisposable
+public sealed class HdcForwardManager(HdcConnection connection) : IDisposable, UotanStudio.Comm.Contracts.IHdcForwardManager
 {
     private readonly Lock _gate = new();
     private readonly Dictionary<(bool Reverse, string Listen), Mapping> _mappings = [];

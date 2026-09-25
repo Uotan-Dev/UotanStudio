@@ -38,7 +38,9 @@ internal sealed class FastbootUdpPackets(IPEndPoint endpoint, int maxAttempts)
             throw new IOException("Invalid query response from fastboot target.");
         }
 
-        _sequence = BinaryPrimitives.ReadUInt16BigEndian(response.AsSpan(0, 2));
+        // AOSP udp.cpp: the sequence number advances once per completed exchange; the query
+        // response carries (version, packetSize) and never seeds the sequence.
+        _sequence = 1;
         var init = new byte[4];
         BinaryPrimitives.WriteUInt16BigEndian(init.AsSpan(0, 2), 1);
         BinaryPrimitives.WriteUInt16BigEndian(init.AsSpan(2, 2), HostMaxPacketSize);

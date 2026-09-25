@@ -216,7 +216,7 @@ internal static partial class IOKitUsbAPI
 
     // ---- IOUSBFindInterfaceRequest (used by USBDeviceCreateInterfaceIterator) ----
     [StructLayout(LayoutKind.Sequential)]
-    public struct IOUSBFindInterfaceRequest
+    internal struct IOUSBFindInterfaceRequest
     {
         public ushort BInterfaceClass;
         public ushort BInterfaceSubClass;
@@ -363,7 +363,7 @@ internal static partial class IOKitUsbAPI
 
     // ---- Structs ----
     [StructLayout(LayoutKind.Sequential)]
-    public struct IOUSBDeviceRequest
+    internal struct IOUSBDeviceRequest
     {
         public byte BmRequestType;
         public byte BRequest;
@@ -376,7 +376,7 @@ internal static partial class IOKitUsbAPI
 
     // USB descriptor headers (USB 2.0 spec), used to walk the configuration descriptor.
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    public struct UsbConfigurationDescriptor
+    internal struct UsbConfigurationDescriptor
     {
         public byte BLength;
         public byte BDescriptorType;
@@ -389,7 +389,7 @@ internal static partial class IOKitUsbAPI
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    public struct UsbInterfaceDescriptor
+    internal struct UsbInterfaceDescriptor
     {
         public byte BLength;
         public byte BDescriptorType;
@@ -403,7 +403,7 @@ internal static partial class IOKitUsbAPI
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    public struct UsbEndpointDescriptor
+    internal struct UsbEndpointDescriptor
     {
         public byte BLength;
         public byte BDescriptorType;

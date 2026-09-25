@@ -8,7 +8,7 @@ namespace UotanStudio.Services.Mcp;
 /// <summary>Routes embedded MCP device tools through the desktop device manager.</summary>
 public sealed class DesktopDeviceManagerGateway : IDeviceManagerGateway
 {
-    private readonly DeviceMonitorService _monitor = DeviceMonitorService.Instance;
+    private readonly DeviceMonitorService _monitor = App.DeviceMonitor;
 
     public IReadOnlyList<UsbDeviceInfo> ListUsbDevices() => _monitor.ListRoutableUsbDevices();
 

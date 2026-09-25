@@ -4,7 +4,7 @@ namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 /// Represents the type of a UFS provisioning entry.
 /// <para>表示 UFS 配置条目的类型。</para>
 /// </summary>
-public enum UfsProvisionEntryType
+internal enum UfsProvisionEntryType
 {
     /// <summary>
     /// Common UFS provisioning configuration.
@@ -34,7 +34,7 @@ public enum UfsProvisionEntryType
 /// <para>初始化 <see cref="UfsProvisionEntry"/> 类的新实例。</para>
 /// </remarks>
 /// <param name="entryType">The entry type. 条目类型。</param>
-public abstract class UfsProvisionEntry(UfsProvisionEntryType entryType)
+internal abstract class UfsProvisionEntry(UfsProvisionEntryType entryType)
 {
     /// <summary>
     /// Gets the type of this UFS provisioning entry.
@@ -53,7 +53,7 @@ public abstract class UfsProvisionEntry(UfsProvisionEntryType entryType)
 /// Represents a common UFS provisioning entry with device-level configuration.
 /// <para>表示包含设备级配置的通用 UFS 配置条目。</para>
 /// </summary>
-public sealed class UfsProvisionCommon : UfsProvisionEntry
+internal sealed class UfsProvisionCommon : UfsProvisionEntry
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="UfsProvisionCommon"/> class.
@@ -93,7 +93,7 @@ public sealed class UfsProvisionCommon : UfsProvisionEntry
 /// Represents a per-LUN body entry in UFS provisioning.
 /// <para>表示 UFS 配置中每个 LUN 的 body 条目。</para>
 /// </summary>
-public sealed class UfsProvisionBody : UfsProvisionEntry
+internal sealed class UfsProvisionBody : UfsProvisionEntry
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="UfsProvisionBody"/> class.
@@ -139,7 +139,7 @@ public sealed class UfsProvisionBody : UfsProvisionEntry
 /// Represents the epilogue entry in UFS provisioning.
 /// <para>表示 UFS 配置中的 epilogue 条目。</para>
 /// </summary>
-public sealed class UfsProvisionEpilogue : UfsProvisionEntry
+internal sealed class UfsProvisionEpilogue : UfsProvisionEntry
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="UfsProvisionEpilogue"/> class.
@@ -159,7 +159,7 @@ public sealed class UfsProvisionEpilogue : UfsProvisionEntry
 /// list of common, body, and epilogue entries.
 /// <para>表示 UFS 配置 XML 文件的完整内容，包含有序的 common、body 和 epilogue 条目列表。</para>
 /// </summary>
-public sealed class UfsProvisionFile
+internal sealed class UfsProvisionFile
 {
     /// <summary>
     /// Gets the ordered list of UFS provisioning entries.

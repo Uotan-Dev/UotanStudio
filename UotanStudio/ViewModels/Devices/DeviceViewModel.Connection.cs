@@ -49,18 +49,18 @@ public partial class DeviceViewModel
     }
 
     private static bool TryAdb(DeviceInfo device)
-        => DeviceMonitorService.Instance.ProbeAdb(device.Device);
+        => App.DeviceMonitor.ProbeAdb(device.Device);
 
     private static bool TryFastboot(DeviceInfo device)
     {
-        var (ready, product) = DeviceMonitorService.Instance.ProbeFastboot(device.Device);
+        var (ready, product) = App.DeviceMonitor.ProbeFastboot(device.Device);
         if (ready && !string.IsNullOrEmpty(product)) device.Model = product;
         return ready;
     }
 
     private static bool TryRkdl(DeviceInfo device)
     {
-        return DeviceMonitorService.Instance.ProbeRkdl(device.Device);
+        return App.DeviceMonitor.ProbeRkdl(device.Device);
     }
 
     /// <summary>
@@ -82,12 +82,12 @@ public partial class DeviceViewModel
         {
             if (device.Protocol == DeviceProtocolKind.Hdc)
             {
-                await DeviceMonitorService.Instance.HdcDisconnectAsync(device.Device).ConfigureAwait(true);
-                await DeviceMonitorService.Instance.ForceRefreshAsync().ConfigureAwait(true);
+                await App.DeviceMonitor.HdcDisconnectAsync(device.Device).ConfigureAwait(true);
+                await App.DeviceMonitor.ForceRefreshAsync().ConfigureAwait(true);
             }
             else if (device.Transport == "Network")
             {
-                await DeviceMonitorService.Instance.DisconnectAdbAsync(device.Device).ConfigureAwait(true);
+                await App.DeviceMonitor.DisconnectAdbAsync(device.Device).ConfigureAwait(true);
             }
             device.State = "offline";
             StatusText = $"{LanguageService.Instance.GetString("Device_Disconnect")} {device.Serial} OK";
@@ -147,7 +147,7 @@ public partial class DeviceViewModel
         StatusText = $"{LanguageService.Instance.GetString("Device_Reboot")} {device.Serial} -> {mode}...";
         try
         {
-            var ok = await DeviceMonitorService.Instance.RebootAsync(device.Device, mode).ConfigureAwait(true);
+            var ok = await App.DeviceMonitor.RebootAsync(device.Device, mode).ConfigureAwait(true);
             StatusText = ok
                 ? $"{LanguageService.Instance.GetString("Device_Reboot")} {device.Serial} -> {mode} OK"
                 : $"{LanguageService.Instance.GetString("Device_Reboot")} {device.Serial} -> {mode} FAIL";

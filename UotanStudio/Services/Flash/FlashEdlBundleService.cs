@@ -15,7 +15,7 @@ internal static class FlashEdlBundleService
             throw new InvalidOperationException("An EDL device and Firehose programmer are required.");
         }
         var options = InspectFolder(folder, false, ct);
-        await DeviceMonitorService.Instance.RunEdlAsync(device, async session =>
+        await App.DeviceMonitor.RunEdlAsync(device, async session =>
         {
             await InspectAllAsync(session, options, ct).ConfigureAwait(false);
             using var programmer = File.OpenRead(programmerPath);

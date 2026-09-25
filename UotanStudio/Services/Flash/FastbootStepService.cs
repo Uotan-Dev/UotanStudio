@@ -16,7 +16,7 @@ public static class FastbootStepService
         return Task.Run(() =>
         {
             ct.ThrowIfCancellationRequested();
-            return DeviceMonitorService.Instance.RunFastboot(device, session =>
+            return App.DeviceMonitor.RunFastboot(device, session =>
             {
                 if (session.GetVariable("is-userspace", useCache: false) != "yes")
                 {
@@ -58,7 +58,7 @@ public static class FastbootStepService
         return Task.Run(() =>
         {
             ct.ThrowIfCancellationRequested();
-            DeviceMonitorService.Instance.RunFastboot(device, session =>
+            App.DeviceMonitor.RunFastboot(device, session =>
             {
                 switch (step.Command)
                 {

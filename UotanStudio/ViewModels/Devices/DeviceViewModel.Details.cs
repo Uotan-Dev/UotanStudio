@@ -26,11 +26,11 @@ public partial class DeviceViewModel
 
     /// <summary>
     /// <para>拉取 ADB 设备扩展信息（getprop / 系统级 / 电池 / 内存 / 存储）。官方 adb server 会枚举
-    /// USB 与网络设备，因此无论传输类型都优先经 AdvancedSharpAdbClient 通过 adb server 执行 shell；
+    /// USB 与网络设备，因此无论传输类型都优先经 Comm 的 adb server 服务执行 shell；
     /// 仅在 server 连接被拒绝时使用统一会话入口解析 USB 直连。</para>
     /// Retrieves extended ADB device info (getprop / system-level / battery / memory / storage).
     /// The official adb server enumerates both USB and network devices, so regardless of transport
-    /// the shell runs via AdvancedSharpAdbClient against the adb server first; only when the server
+    /// the shell runs via Comm's adb server service first; only when the server
     /// connection is refused does the shared session route resolve direct USB.
     /// </summary>
     private async Task EnrichAdbInfoAsync(DeviceInfo device)
@@ -67,17 +67,17 @@ public partial class DeviceViewModel
     }
 
     /// <summary>
-    /// <para>经 AdvancedSharpAdbClient 通过官方 adb server（127.0.0.1:5037）按序列号匹配设备并拉取属性；
+    /// <para>经 Comm 的 adb server 服务通过官方 adb server（127.0.0.1:5037）按序列号匹配设备并拉取属性；
     /// 仅 server 连接被拒绝时返回 null；缺失目标必须报错。</para>
-    /// Queries device properties via AdvancedSharpAdbClient against the official adb server
+    /// Queries device properties via Comm's adb server service against the official adb server
     /// (127.0.0.1:5037), matching the device by serial; returns null only when the server connection is refused.
     /// </summary>
     private static Dictionary<string, string>? QueryViaAdbServer(DeviceInfo device)
     {
-        var monitor = DeviceMonitorService.Instance;
+        var monitor = App.DeviceMonitor;
         if (!monitor.HasAdbServer ||
             !device.Device.Key.StartsWith("adb:", StringComparison.Ordinal) &&
-            !UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.AdbServerOwns(device.Device.Serial))
+            !UotanStudio.Comm.Devices.Services.DebugBridgeSessionOpener.AdbServerOwns(device.Device.Serial))
         {
             return null;
         }
@@ -97,19 +97,23 @@ public partial class DeviceViewModel
     }
 
     /// <summary>
-    /// <para>通过 UotanStudio.Comm 原生 USB ADB 会话拉取设备属性；会话不可用或未连接时返回 null。</para>
-    /// Queries device properties via a UotanStudio.Comm native USB ADB session; returns null when
-    /// the session is unavailable or not connected.
+    /// <para>通过 UotanStudio.Comm 原生 USB ADB 会话拉取设备属性；这是尽力而为的查询：
+    /// 端点被 logcat 捕获租用（already leased）、设备正处于重枚举窗口（端点暂不可用）或
+    /// 会话超时都按"暂无信息"处理并返回 null，不向调用方抛错。</para>
+    /// Queries device properties via a UotanStudio.Comm native USB ADB session; this is a
+    /// best-effort query: the endpoint being leased by a logcat capture (already leased), a
+    /// re-enumeration window (endpoint temporarily unavailable) or a session timeout all mean
+    /// "no info right now" and return null instead of throwing to the caller.
     /// </summary>
     private static Dictionary<string, string>? QueryViaAdbSession(DeviceInfo device)
     {
         try
         {
-            return DeviceMonitorService.Instance.RunAdb(device.Device,
+            return App.DeviceMonitor.RunAdb(device.Device,
                 session => DevicePropertyReader.ReadAdbProperties(
                     cmd => RunShell(session, cmd), LanguageService.Instance.GetString));
         }
-        catch (InvalidOperationException)
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or TimeoutException)
         {
             return null;
         }
@@ -126,7 +130,7 @@ public partial class DeviceViewModel
         try
         {
             info = await Task.Run(() =>
-                DeviceMonitorService.Instance.RunFastboot(endpoint, session =>
+                App.DeviceMonitor.RunFastboot(endpoint, session =>
                 {
                     try
                     {
@@ -168,7 +172,7 @@ public partial class DeviceViewModel
     /// <para>执行一条 ADB shell 命令并返回去除空白行与首尾裁剪后的文本。</para>
     /// Runs an ADB shell command and returns the whitespace-collapsed trimmed output.
     /// </summary>
-    private static string RunShell(AdbSession session, string command)
+    private static string RunShell(UotanStudio.Comm.Contracts.IAdbDeviceSession session, string command)
         => System.Text.Encoding.UTF8.GetString(session.ExecuteCommand(command).Stdout);
 
     /// <summary>

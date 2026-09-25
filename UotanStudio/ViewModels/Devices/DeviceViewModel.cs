@@ -187,8 +187,8 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(HasNoDevices));
             OnPropertyChanged(nameof(ShowSelectPlaceholder));
         };
-        DeviceMonitorService.Instance.DevicesChanged += OnDevicesChanged;
-        DeviceMonitorService.Instance.Start();
+        App.DeviceMonitor.DevicesChanged += OnDevicesChanged;
+        App.DeviceMonitor.Start();
         _ = RefreshDevicesAsync();
         WeakReferenceMessenger.Default.Register<BackupProgressMessage>(this, OnBackupProgress);
     }
@@ -238,7 +238,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         try
         {
             var scanned = await Task.Run(() =>
-                DeviceMonitorService.GroupPhysicalDevices(DeviceMonitorService.Instance.Scan())).ConfigureAwait(true);
+                DeviceMonitorService.GroupPhysicalDevices(App.DeviceMonitor.Scan())).ConfigureAwait(true);
 
             // 差量更新：列表无变化直接跳过，有变化时按键保留/替换/插入/移除，
             // 避免 ObservableCollection 整表 Reset 造成选中丢失与界面闪烁。
@@ -331,7 +331,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task ForceRefreshAsync()
     {
-        await DeviceMonitorService.Instance.ForceRefreshAsync().ConfigureAwait(true);
+        await App.DeviceMonitor.ForceRefreshAsync().ConfigureAwait(true);
         await RefreshDevicesAsync().ConfigureAwait(true);
     }
 
@@ -341,7 +341,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void Dispose()
     {
-        DeviceMonitorService.Instance.DevicesChanged -= OnDevicesChanged;
+        App.DeviceMonitor.DevicesChanged -= OnDevicesChanged;
         WeakReferenceMessenger.Default.Unregister<BackupProgressMessage>(this);
         GC.SuppressFinalize(this);
     }

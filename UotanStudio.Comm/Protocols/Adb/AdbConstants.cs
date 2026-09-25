@@ -4,7 +4,7 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// ADB protocol constants aligned with AOSP (adb/protocol.h, adb.h).
 /// <para>与 AOSP 对齐的 ADB 协议常量。</para>
 /// </summary>
-public static class AdbConstants
+internal static class AdbConstants
 {
     /// <summary>
     /// Protocol version supported by this client (A_VERSION, 1.0.1).
@@ -55,7 +55,7 @@ public static class AdbConstants
 /// ADB wire command identifiers (AOSP, byte-swapped for little-endian wire order).
 /// <para>ADB 线命令标识符（AOSP，按小端线序字节交换）。</para>
 /// </summary>
-public enum AdbCommand : uint
+internal enum AdbCommand : uint
 {
     /// <summary>
     /// Authentication (TOKEN / SIGNATURE / RSAPUBLICKEY).
@@ -98,7 +98,7 @@ public enum AdbCommand : uint
 /// ADB authentication subtypes carried in the Arg0 field of AUTH messages.
 /// <para>ADB 认证子类型，承载于 AUTH 消息的 Arg0 字段。</para>
 /// </summary>
-public enum AdbAuthType : uint
+internal enum AdbAuthType : uint
 {
     /// <summary>
     /// Token challenge.
@@ -121,7 +121,7 @@ public enum AdbAuthType : uint
 /// Shell v2 protocol frame kinds (AOSP shell_v2_protocol.h).
 /// <para>Shell v2 协议帧类型。</para>
 /// </summary>
-public enum ShellFrameKind : byte
+internal enum ShellFrameKind : byte
 {
     /// <summary>
     /// STDIN data.
@@ -159,7 +159,7 @@ public enum ShellFrameKind : byte
 /// Sync wire command identifiers (AOSP sync.h / SYNC.TXT).
 /// <para>Sync 线命令标识符。</para>
 /// </summary>
-public static class SyncIds
+internal static class SyncIds
 {
     /// <summary>Stat a remote file. 查询远端文件状态。</summary>
     public const string Stat = "STAT";

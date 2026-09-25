@@ -59,7 +59,7 @@ public static class FlashSuperEmptyService
         return Task.Run(() =>
         {
             ct.ThrowIfCancellationRequested();
-            DeviceMonitorService.Instance.RunFastboot(device, session =>
+            App.DeviceMonitor.RunFastboot(device, session =>
             {
                 if (session.GetVariable("is-userspace", useCache: false) == "yes")
                     Apply(session, prepared, ct);

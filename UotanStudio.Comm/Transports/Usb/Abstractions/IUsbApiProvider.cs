@@ -8,7 +8,7 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 /// <para>实现类支撑特定 USB API（WinUSB、libusb、原生、HarmonyOS），
 /// 通过单一契约暴露仅元数据发现与会话打开能力。</para>
 /// </summary>
-public interface IUsbApiProvider
+internal interface IUsbApiProvider
 {
     /// <summary>
     /// Gets the public API name.

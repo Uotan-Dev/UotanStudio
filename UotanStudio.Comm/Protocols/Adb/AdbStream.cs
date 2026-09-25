@@ -1,10 +1,12 @@
+using UotanStudio.Comm.Contracts;
+
 namespace UotanStudio.Comm.Protocols.Adb;
 
 /// <summary>
 /// A single ADB service stream implementing the OPEN / OKAY / WRTE / CLSE state machine.
 /// <para>单条 ADB 服务流，实现 OPEN / OKAY / WRTE / CLSE 状态机。</para>
 /// </summary>
-public sealed class AdbStream : IDisposable
+internal sealed class AdbStream : IAdbStream
 {
     private readonly AdbConnection _connection;
     private readonly Lock _lock = new();

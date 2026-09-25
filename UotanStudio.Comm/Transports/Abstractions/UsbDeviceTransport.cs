@@ -1,4 +1,4 @@
-using UotanStudio.Comm.Extensions;
+using UotanStudio.Comm.Transports.Usb;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Transports.Abstractions;
@@ -16,7 +16,7 @@ namespace UotanStudio.Comm.Transports.Abstractions;
 /// <para>在指定会话上初始化新的 <see cref="UsbDeviceTransport"/>。</para>
 /// </remarks>
 /// <param name="session">The opened USB device session. <para>已打开的 USB 设备会话。</para></param>
-public sealed class UsbDeviceTransport(IUsbDeviceSession session) : ICommTransport
+internal sealed class UsbDeviceTransport(IUsbDeviceSession session) : ICommTransport
 {
     /// <summary>
     /// Gets the underlying USB device session, exposed for protocol layers that need

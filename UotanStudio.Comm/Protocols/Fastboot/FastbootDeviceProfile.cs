@@ -4,7 +4,7 @@ namespace UotanStudio.Comm.Protocols.Fastboot;
 /// Specifies how USB fastboot devices are matched during factory probing.
 /// <para>指定工厂探测时 USB fastboot 设备的匹配方式。</para>
 /// </summary>
-public enum FastbootMatchMode
+internal enum FastbootMatchMode
 {
     /// <summary>
     /// Only match devices exposing the standard fastboot interface
@@ -40,7 +40,7 @@ public enum FastbootMatchMode
 /// Initializes a new fastboot device profile.
 /// <para>初始化一个新的 fastboot 设备档案。</para>
 /// </remarks>
-public sealed class FastbootDeviceProfile(ushort vendorId, ushort productId, string name)
+internal sealed class FastbootDeviceProfile(ushort vendorId, ushort productId, string name)
 {
     /// <summary>
     /// Gets the USB vendor id (VID).
@@ -74,7 +74,7 @@ public sealed class FastbootDeviceProfile(ushort vendorId, ushort productId, str
 /// <para>供 <see cref="FastbootMatchMode.InterfaceOrKnownVidPid"/> 用作发现兜底的
 /// 内置已知 fastboot 设备档案。</para>
 /// </summary>
-public static class FastbootDeviceProfiles
+internal static class FastbootDeviceProfiles
 {
     /// <summary>
     /// Gets the built-in known fastboot device profiles. Every entry pins an exact

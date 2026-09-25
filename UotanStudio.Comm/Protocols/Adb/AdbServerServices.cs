@@ -49,6 +49,107 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         catch { stream.Dispose(); throw; }
     }
 
+    /// <summary>Runs a device shell command to completion and returns its interleaved stdout/stderr text.</summary>
+    public async Task<string> RunShellAsync(string command, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+        using var stream = await OpenServiceAsync("shell:" + command, cancellationToken).ConfigureAwait(false);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        var text = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        return text.Replace("\r\n", "\n").TrimEnd('\n');
+    }
+
+    /// <summary>
+    /// Streams device shell output line by line; <paramref name="onLine"/> returning <c>false</c> stops early.
+    /// <para>逐行流式读取设备 shell 输出；<paramref name="onLine"/> 返回 <c>false</c> 时提前停止。</para>
+    /// </summary>
+    public async Task StreamShellAsync(string command, Func<string, bool> onLine, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+        ArgumentNullException.ThrowIfNull(onLine);
+        using var stream = await OpenServiceAsync("shell:" + command, cancellationToken).ConfigureAwait(false);
+        var buffer = new byte[8192];
+        var pending = string.Empty;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            int count;
+            try { count = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false); }
+            catch (IOException) when (cancellationToken.IsCancellationRequested) { break; }
+            if (count <= 0) break;
+            pending += Encoding.UTF8.GetString(buffer, 0, count);
+            int newline;
+            while ((newline = pending.IndexOf('\n')) >= 0)
+            {
+                var line = pending[..newline].TrimEnd('\r');
+                if (!onLine(line)) return;
+                pending = pending[(newline + 1)..];
+            }
+        }
+
+        if (pending.Length > 0) onLine(pending);
+    }
+
+    /// <summary>Stops a local adb server over its control socket. Only a listening endpoint is contacted.</summary>
+    public static async Task KillAsync(string host, int port, CancellationToken cancellationToken = default)
+    {
+        using var stream = await OpenHostStreamAsync(host, port, cancellationToken).ConfigureAwait(false);
+        await RequestAsync(stream, "host:kill", cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Disconnects one network target from the local adb server.</summary>
+    public static async Task DisconnectAsync(string serial, string host, int port, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serial);
+        using var stream = await OpenHostStreamAsync(host, port, cancellationToken).ConfigureAwait(false);
+        await RequestAsync(stream, "host:disconnect:" + serial, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<Stream> OpenServiceAsync(string service, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serial);
+        var stream = await OpenHostStreamAsync(host, port, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await RequestAsync(stream, "host:transport:" + serial, cancellationToken).ConfigureAwait(false);
+            await RequestAsync(stream, service, cancellationToken).ConfigureAwait(false);
+            return stream;
+        }
+        catch { stream.Dispose(); throw; }
+    }
+
+    private static async Task<Stream> OpenHostStreamAsync(string host, int port, CancellationToken cancellationToken)
+    {
+        var client = new TcpClient { NoDelay = true };
+        try
+        {
+            await client.ConnectAsync(host, port, cancellationToken).ConfigureAwait(false);
+            var stream = client.GetStream();
+            stream.ReadTimeout = 10000;
+            stream.WriteTimeout = 10000;
+            return stream;
+        }
+        catch { client.Dispose(); throw; }
+    }
+
+    private static async Task RequestAsync(Stream stream, string request, CancellationToken cancellationToken)
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes(request);
+        if (bytes.Length > 65535) throw new ArgumentOutOfRangeException(nameof(request));
+        var header = Encoding.ASCII.GetBytes(bytes.Length.ToString("X4", CultureInfo.InvariantCulture));
+        await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
+        await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+        byte[] status = new byte[4];
+        await stream.ReadExactlyAsync(status, cancellationToken).ConfigureAwait(false);
+        if (status.AsSpan().SequenceEqual("OKAY"u8)) return;
+        if (!status.AsSpan().SequenceEqual("FAIL"u8)) throw new IOException("Invalid ADB server status.");
+        await stream.ReadExactlyAsync(status, cancellationToken).ConfigureAwait(false);
+        int length = int.Parse(Encoding.ASCII.GetString(status), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+        byte[] message = new byte[length];
+        await stream.ReadExactlyAsync(message, cancellationToken).ConfigureAwait(false);
+        throw new IOException("ADB server: " + Encoding.UTF8.GetString(message));
+    }
+
     /// <summary>Checks the selected target without opening a device service.</summary>
     public void ValidateTarget()
     {
@@ -116,7 +217,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
 }
 
 /// <summary>Preserves unread bytes when adapting ADB packet chunks to a byte-oriented stream.</summary>
-public sealed class AdbServiceStream(AdbStream stream) : Stream
+internal sealed class AdbServiceStream(UotanStudio.Comm.Contracts.IAdbStream stream) : Stream
 {
     private bool _disposed;
     private byte[]? _pending;

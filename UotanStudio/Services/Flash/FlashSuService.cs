@@ -15,7 +15,7 @@ public static class FlashSuService
         {
             return await Task.Run(() =>
             {
-                return DeviceMonitorService.Instance.RunAdb(device, adb =>
+                return App.DeviceMonitor.RunAdb(device, adb =>
                 {
                     var result = adb.ExecuteCommand("su -c id");
                     return result.ExitCode == 0 &&
@@ -38,7 +38,7 @@ public static class FlashSuService
             throw new InvalidOperationException("ADB root flashing requires an online device and a valid partition.");
         if (!File.Exists(path) || new FileInfo(path).Length == 0)
             throw new FileNotFoundException("Image is missing or empty.", path);
-        return await Task.Run(() => DeviceMonitorService.Instance.RunAdb(device, adb =>
+        return await Task.Run(() => App.DeviceMonitor.RunAdb(device, adb =>
         {
             var root = adb.ExecuteCommand("su -c id");
             if (root.ExitCode != 0 || !Encoding.UTF8.GetString(root.Stdout).Contains("uid=0(", StringComparison.Ordinal))

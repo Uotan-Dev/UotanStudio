@@ -1,11 +1,9 @@
-using UotanStudio.Comm;
-using UotanStudio.Comm.Devices.Contracts;
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Adb;
-using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Fastboot;
-using UotanStudio.Comm.Transports.Abstractions;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Mcp.Tools;
@@ -18,10 +16,7 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
 
     public HeadlessDeviceManagerGateway()
     {
-        var comm = new CommKit();
-        _controller = new DeviceController(
-            [new UsbDiscoverySource(comm, UsbApiKind.Auto), new AdbServerDiscoverySource(), new HdcServerDiscoverySource()],
-            new CommDeviceTransportOpener(comm));
+        _controller = DeviceControllerFactory.CreateDefault();
         _hdcServerAvailable = () => DebugBridgeRoute.UseHdcServer();
     }
 
@@ -73,7 +68,7 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
         ArgumentNullException.ThrowIfNull(operation);
         return RunAdb(serial, session =>
         {
-            using var stream = new AdbServiceStream(session.OpenStream(service));
+            using var stream = session.OpenServiceStream(service);
             return operation(stream);
         });
     }
@@ -88,30 +83,23 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
         });
     }
 
-    private TResult RunAdb<TResult>(string serial, Func<AdbSession, TResult> operation)
+    private TResult RunAdb<TResult>(string serial, Func<UotanStudio.Comm.Contracts.IAdbDeviceSession, TResult> operation)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serial);
         var snapshot = Refresh();
         var endpoint = SelectAdb(snapshot, serial);
-        var lease = Complete(_controller.OpenAsync(snapshot, endpoint.Id));
+        var lease = Complete(_controller.OpenAsync(snapshot, endpoint.Id, DeviceSessionKind.Adb));
         try
         {
-            if (lease.Transport is OwnedDeviceTransport<AdbSession> server)
+            if (!lease.TryGetSession<UotanStudio.Comm.Contracts.IAdbDeviceSession>(out var session))
             {
-                server.Value.Connect();
-                return operation(server.Value);
+                throw new InvalidOperationException("ADB endpoint has no supported session.");
             }
 
-            if (lease.Transport is not OwnedDeviceTransport<IUsbDeviceSession> usb)
-            {
-                throw new InvalidOperationException("ADB endpoint has no supported transport.");
-            }
-
-            using var session = new AdbSession(new UsbDeviceTransport(usb.Value));
             session.Connect();
             if (!session.IsConnected)
             {
-                throw new IOException("ADB USB authentication did not complete.");
+                throw new IOException("ADB authentication did not complete.");
             }
 
             return operation(session);
@@ -133,19 +121,15 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
             throw new InvalidOperationException("Exactly one Fastboot device must be connected.");
         }
 
-        var lease = Complete(_controller.OpenAsync(snapshot, targets[0].Id));
+        var lease = Complete(_controller.OpenAsync(snapshot, targets[0].Id, DeviceSessionKind.Fastboot));
         try
         {
-            if (lease.Transport is not OwnedDeviceTransport<IUsbDeviceSession> usb ||
-                !new FastbootFactory().TryCreate(usb.Value, out var protocol) || protocol is not FastbootSession session)
+            if (!lease.TryGetSession<FastbootSession>(out var session))
             {
                 throw new InvalidOperationException("The selected device does not expose Fastboot.");
             }
 
-            using (session)
-            {
-                return operation(session);
-            }
+            return operation(session);
         }
         finally
         {

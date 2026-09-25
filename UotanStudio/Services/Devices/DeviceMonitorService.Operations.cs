@@ -1,18 +1,17 @@
-using AdvancedSharpAdbClient;
-using AdvancedSharpAdbClient.Models;
-using AdvancedSharpAdbClient.Receivers;
 using UotanStudio.Comm;
+using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Devices;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Bootrom;
-using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Hdc;
-using UotanStudio.Comm.Protocols.Scrcpy;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Flash;
+using UotanStudio.Services.Mirroring;
 
 
 namespace UotanStudio.Services.Devices;
@@ -83,14 +82,20 @@ public sealed partial class DeviceMonitorService
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(options);
-        var session = OpenAdbSession(device)
-            ?? throw new InvalidOperationException($"ADB session unavailable: {device.Serial}.");
-        if (session.Connection.UsesServer)
+        var (lease, session) = LeaseAdb(device, CancellationToken.None);
+        if (session.UsesServer)
         {
-            using (session)
+            try
             {
-                var mirror = StartAdbServerMirror(device, jarPath, options);
-                return new ManagedMirrorSession(mirror.Client, mirror.Shell, null);
+                using (session)
+                {
+                    var mirror = StartAdbServerMirror(device, jarPath, options);
+                    return new ManagedMirrorSession(mirror.Client, mirror.Shell, null);
+                }
+            }
+            finally
+            {
+                CloseLease(lease);
             }
         }
 
@@ -99,11 +104,12 @@ public sealed partial class DeviceMonitorService
         {
             session.Connect();
             var mirror = StartAdbUsbMirror(session, jarPath, options);
-            return new ManagedMirrorSession(mirror.Client, mirror.Shell, session);
+            return new ManagedMirrorSession(mirror.Client, mirror.Shell, session, lease);
         }
         catch
         {
             session.Dispose();
+            CloseLease(lease);
             throw;
         }
     }
@@ -122,22 +128,22 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>Deploys and opens a native USB mirror stream on a manager-created session.</summary>
-    private static (ScrcpyClient Client, Stream Shell) StartAdbUsbMirror(AdbSession session, string jarPath,
+    private static (ScrcpyClient Client, Stream Shell) StartAdbUsbMirror(IAdbDeviceSession session, string jarPath,
         ScrcpyServerOptions options)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(options);
-        if (session.Connection.UsesServer)
+        if (session.UsesServer)
             throw new ArgumentException("A native USB ADB session is required.", nameof(session));
         ScrcpyServerManager.PushServer(session, jarPath);
-        var shell = new AdbServiceStream(ScrcpyServerManager.StartServer(session, options));
+        var shell = ScrcpyServerManager.StartServer(session, options).AsServiceStream();
         try { return (new ScrcpyClient(session, options), shell); }
         catch { shell.Dispose(); throw; }
     }
 
     /// <summary>Opens an external shell after verifying the selected server target.</summary>
     public void OpenInteractiveShell(DetectedDevice device)
-        => DeviceShellService.OpenInteractiveShell(device);
+        => DeviceShellService.OpenInteractiveShell(this, device);
 
     /// <summary>Relays a selected ADB or HDC shell to the embedded terminal process.</summary>
     public async Task RunInteractiveShellAsync(DetectedDevice device, Stream input, Stream output,
@@ -146,14 +152,13 @@ public sealed partial class DeviceMonitorService
         ArgumentNullException.ThrowIfNull(device);
         if (device.Protocol == DeviceProtocolKind.Adb)
         {
-            using var session = OpenAdbSession(device)
-                ?? throw new IOException("The selected ADB target is unavailable.");
-            await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
-            using var shell = new AdbServiceStream(session.OpenStream("shell:"))
+            await RunAdbAsync(device, async session =>
             {
-                ReadTimeout = 1000
-            };
-            await RelayShellAsync(shell, input, output, cancellationToken).ConfigureAwait(false);
+                using var shell = session.OpenServiceStream("shell:");
+                shell.ReadTimeout = 1000;
+                await RelayShellAsync(shell, input, output, cancellationToken).ConfigureAwait(false);
+                return true;
+            }, cancellationToken).ConfigureAwait(false);
             return;
         }
         if (device.Protocol == DeviceProtocolKind.Hdc)
@@ -203,21 +208,21 @@ public sealed partial class DeviceMonitorService
 
     /// <summary>Stops the selected host server and refreshes the managed device list.</summary>
     public Task StopAdbServerAsync(CancellationToken cancellationToken = default)
-        => DebugBridgeServerControl.StopAdbAsync(cancellationToken);
+        => DebugBridgeServerControl.StopAdbAsync(this, cancellationToken);
 
     /// <summary>Stops the selected host server and refreshes the managed device list.</summary>
     public Task StopHdcServerAsync(CancellationToken cancellationToken = default)
-        => DebugBridgeServerControl.StopHdcAsync(cancellationToken);
+        => DebugBridgeServerControl.StopHdcAsync(this, cancellationToken);
 
     /// <summary>Disconnects only the selected network ADB target.</summary>
     public Task DisconnectAdbAsync(DetectedDevice device)
     {
         if (device.Protocol != DeviceProtocolKind.Adb || device.Transport != DeviceTransportKind.Tcp)
             throw new ArgumentException("A network ADB target is required.", nameof(device));
-        var client = AdbServerClient;
-        if (client is null) return Task.CompletedTask;
-        _ = RequireAdbServerTarget(client, device.Serial);
-        return client.DisconnectAsync(device.Serial);
+        if (!DebugBridgeRoute.UseAdbServer()) return Task.CompletedTask;
+        EnsureAdbServerTarget(device.Serial);
+        return AdbServerServices.DisconnectAsync(device.Serial,
+            DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort);
     }
     /// <summary>Reboots through the routed debug bridge session or the Fastboot transport.</summary>
     public async Task<bool> RebootAsync(DetectedDevice device, string mode, CancellationToken cancellationToken = default)
@@ -255,34 +260,40 @@ public sealed partial class DeviceMonitorService
 
         if (device.Protocol == DeviceProtocolKind.Fastboot)
         {
-            using var session = OpenFastbootSession(device);
-            if (session is null)
-            {
-                return false;
-            }
-
-            session.Reboot(fastbootTarget);
+            RunFastboot(device, session => session.Reboot(fastbootTarget));
             return true;
+        }
+
+        // 设备即将重启：活动 logcat 捕获持有端点租约，必须先停止并等待其释放，
+        // 否则重启会话会与捕获冲突（Endpoint is already leased）。
+        // The device is about to reboot: an active logcat capture holds the endpoint lease,
+        // so stop it and await release first or the reboot session conflicts with the capture.
+        if (device.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc)
+        {
+            await StopLogcatStreamingAsync(device).ConfigureAwait(false);
         }
 
         // Resolve ownership before sending a reboot; never retry on another transport.
         if (device.Protocol == DeviceProtocolKind.Adb)
         {
-            using var session = OpenAdbSession(device);
-            if (session is null) return false;
-            await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
-            session.CreateDeviceServices().Reboot(adbTarget);
+            RunAdb(device, session =>
+            {
+                session.CreateDeviceServices().Reboot(adbTarget);
+                return true;
+            }, cancellationToken);
             return true;
         }
 
         if (device.Protocol == DeviceProtocolKind.Hdc)
         {
-            using var hdc = OpenHdcSession(device);
-            if (hdc is null)
+            var opened = OpenHdcLease(device);
+            if (opened is null)
             {
                 return false;
             }
 
+            using var hdcLease = opened.Value.Lease;
+            var hdc = opened.Value.Session;
             try
             {
                 hdc.Connect();
@@ -304,21 +315,24 @@ public sealed partial class DeviceMonitorService
     /// </summary>
     public async Task<string> GetAdbStateAsync(string serial, CancellationToken cancellationToken = default)
     {
-        var client = AdbServerClient;
-        var data = client?.GetDevices().FirstOrDefault(d => string.Equals(d.Serial, serial, StringComparison.Ordinal));
-        if (data is not null) return data.State.ToString().ToLowerInvariant();
+        if (DebugBridgeRoute.UseAdbServer())
+        {
+            var match = ListAdbServerTargets()
+                .FirstOrDefault(target => string.Equals(target.Serial, serial, StringComparison.Ordinal));
+            if (match.Serial is not null) return match.State.ToLowerInvariant();
+        }
         var targets = Scan().Where(d => d.Protocol == DeviceProtocolKind.Adb &&
             string.Equals(d.Serial, serial, StringComparison.Ordinal)).Take(2).ToArray();
         if (targets.Length != 1 || targets[0].Key.StartsWith("adb:", StringComparison.Ordinal))
             return "unknown";
         var target = targets[0];
-        using var session = OpenAdbSession(target);
-        if (session is null)
+        try
         {
-            return "unknown";
+            return await RunAdbAsync(target,
+                session => Task.FromResult(session.IsConnected ? "device" : "unknown"),
+                cancellationToken).ConfigureAwait(false);
         }
-        await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
-        return session.Connection.IsConnected ? "device" : "unknown";
+        catch { return "unknown"; }
     }
 
     /// <summary>

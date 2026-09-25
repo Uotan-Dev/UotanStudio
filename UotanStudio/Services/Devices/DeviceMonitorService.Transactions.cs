@@ -1,9 +1,10 @@
+using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Bootrom;
-using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
-using UotanStudio.Comm.Devices.Services;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Services.Devices;
@@ -11,20 +12,26 @@ namespace UotanStudio.Services.Devices;
 public sealed partial class DeviceMonitorService
 {
     /// <summary>Provides the USB inventory to an embedded MCP host.</summary>
-    public IReadOnlyList<UsbDeviceInfo> ListUsbDevices() => _comm.EnumerateUsbDevices();
+    public IReadOnlyList<UsbDeviceInfo> ListUsbDevices() => _controller.EnumerateUsb();
 
     /// <summary>Excludes only USB debug interfaces owned by a running bridge server.</summary>
     public IReadOnlyList<UsbDeviceInfo> ListRoutableUsbDevices()
     {
-        var infos = ListUsbDevices();
+        var snapshot = _controller.RefreshAsync().GetAwaiter().GetResult();
         var hdcServer = DebugBridgeRoute.UseHdcServer();
-        return infos.Where(info => Classify(info) switch
-        {
-            DeviceProtocolKind.Adb => !DebugBridgeRoute.AdbServerOwns(info.SerialNumber),
-            DeviceProtocolKind.Hdc => !hdcServer,
-            _ => true
-        }).ToArray();
+        return snapshot.Endpoints.Where(endpoint =>
+            endpoint.Source == UotanStudio.Comm.Devices.Discovery.UsbDiscoverySource.SourceName &&
+            endpoint.Route == "direct-usb" && endpoint.UsbInfo is not null &&
+            !(endpoint.Protocol == "adb" && ServerOwnsAdb(snapshot, endpoint.UsbInfo.SerialNumber)) &&
+            !(endpoint.Protocol == "hdc" && hdcServer))
+            .Select(endpoint => endpoint.UsbInfo!)
+            .ToArray();
     }
+
+    private static bool ServerOwnsAdb(DeviceSnapshot snapshot, string? serial) =>
+        snapshot.Endpoints.Any(endpoint => endpoint.Protocol == "adb" && endpoint.Route == "server" &&
+            (string.IsNullOrWhiteSpace(serial) ||
+                string.Equals(endpoint.Serial ?? endpoint.Address, serial, StringComparison.Ordinal)));
 
     /// <summary>Lists the routed server and direct USB targets.</summary>
     public IReadOnlyList<(string Serial, string State)> ListAdbTargets()
@@ -40,7 +47,7 @@ public sealed partial class DeviceMonitorService
         ArgumentNullException.ThrowIfNull(operation);
         return RunAdb(RequireUniqueAdbTarget(serial), session =>
         {
-            using var stream = new AdbServiceStream(session.OpenStream(service));
+            using var stream = session.OpenServiceStream(service);
             return operation(stream);
         });
     }
@@ -82,17 +89,13 @@ public sealed partial class DeviceMonitorService
         cancellationToken.ThrowIfCancellationRequested();
         if (device.Protocol != DeviceProtocolKind.Fastboot)
             throw new ArgumentException("A Fastboot target is required.", nameof(device));
-        var lease = LeaseEndpoint(device, cancellationToken: cancellationToken);
+        var lease = LeaseEndpoint(device, sessionKind: DeviceSessionKind.Fastboot, cancellationToken: cancellationToken);
         try
         {
-            var usb = RequireUsb(lease);
-            if (!new FastbootFactory().TryCreate(usb, out var protocol) || protocol is not FastbootSession session)
+            if (!lease.TryGetSession<FastbootSession>(out var session))
                 throw new IOException("The selected device does not expose Fastboot.");
-            using (session)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                return operation(session);
-            }
+            cancellationToken.ThrowIfCancellationRequested();
+            return operation(session);
         }
         finally
         {
@@ -118,10 +121,11 @@ public sealed partial class DeviceMonitorService
         cancellationToken.ThrowIfCancellationRequested();
         if (device.Protocol != DeviceProtocolKind.Edl)
             throw new ArgumentException("An EDL target is required.", nameof(device));
-        var lease = LeaseEndpoint(device, cancellationToken: cancellationToken);
+        var lease = LeaseEndpoint(device, sessionKind: DeviceSessionKind.Edl, cancellationToken: cancellationToken);
         try
         {
-            using var session = new EdlSession(new UotanStudio.Comm.Transports.Abstractions.UsbDeviceTransport(RequireUsb(lease)));
+            if (!lease.TryGetSession<EdlSession>(out var session))
+                throw new IOException("The selected device does not expose an EDL session.");
             cancellationToken.ThrowIfCancellationRequested();
             return await operation(session).ConfigureAwait(false);
         }
@@ -131,7 +135,7 @@ public sealed partial class DeviceMonitorService
         }
     }
 
-    internal TResult RunAdb<TResult>(DetectedDevice device, Func<AdbSession, TResult> operation,
+    internal TResult RunAdb<TResult>(DetectedDevice device, Func<IAdbDeviceSession, TResult> operation,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -155,7 +159,7 @@ public sealed partial class DeviceMonitorService
     }
 
     internal async Task<TResult> RunAdbAsync<TResult>(DetectedDevice device,
-        Func<AdbSession, Task<TResult>> operation, CancellationToken cancellationToken = default)
+        Func<IAdbDeviceSession, Task<TResult>> operation, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
         cancellationToken.ThrowIfCancellationRequested();
@@ -184,10 +188,11 @@ public sealed partial class DeviceMonitorService
         cancellationToken.ThrowIfCancellationRequested();
         if (device.Protocol != DeviceProtocolKind.Rkdl)
             throw new ArgumentException("An RKDL target is required.", nameof(device));
-        var lease = LeaseEndpoint(device, cancellationToken: cancellationToken);
+        var lease = LeaseEndpoint(device, sessionKind: DeviceSessionKind.Bootrom, cancellationToken: cancellationToken);
         try
         {
-            using var session = new RkdlSession(new UotanStudio.Comm.Transports.Abstractions.UsbDeviceTransport(RequireUsb(lease)));
+            if (!lease.TryGetSession<RkdlSession>(out var session))
+                throw new IOException("The selected device does not expose an RKDL session.");
             cancellationToken.ThrowIfCancellationRequested();
             return await operation(session).ConfigureAwait(false);
         }

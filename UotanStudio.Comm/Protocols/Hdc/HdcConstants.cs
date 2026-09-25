@@ -271,7 +271,7 @@ public enum HdcCommand : ushort
 /// HDC connection transport types.
 /// <para>HDC 连接传输类型。</para>
 /// </summary>
-public enum HdcConnType : byte
+internal enum HdcConnType : byte
 {
     /// <summary>USB transport. USB 传输。</summary>
     Usb = 0,
@@ -289,7 +289,7 @@ public enum HdcConnType : byte
 /// HDC connection status flags.
 /// <para>HDC 连接状态标志。</para>
 /// </summary>
-public enum HdcConnStatus : byte
+internal enum HdcConnStatus : byte
 {
     /// <summary>Status unknown. 状态未知。</summary>
     Unknown = 0,
@@ -307,7 +307,7 @@ public enum HdcConnStatus : byte
 /// USB option byte values for HDC USB framing.
 /// <para>HDC USB 帧的选项字节值。</para>
 /// </summary>
-public enum HdcUsbOption : byte
+internal enum HdcUsbOption : byte
 {
     /// <summary>Full header follows. 后续为完整头部。</summary>
     Header = 1,
@@ -319,7 +319,7 @@ public enum HdcUsbOption : byte
 /// HDC message severity levels.
 /// <para>HDC 消息严重性级别。</para>
 /// </summary>
-public enum HdcMessageLevel : byte
+internal enum HdcMessageLevel : byte
 {
     /// <summary>Failure. 失败。</summary>
     Fail = 0,

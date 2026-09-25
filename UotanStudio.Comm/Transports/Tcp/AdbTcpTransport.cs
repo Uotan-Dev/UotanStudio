@@ -9,7 +9,7 @@ namespace UotanStudio.Comm.Transports.Tcp;
 /// <para>基于 TCP 连接的 ADB 传输（adb connect host:port），封装与 adbd 的直接
 /// <see cref="TcpClient"/> 连接，支持精确读取与全量写入。</para>
 /// </summary>
-public sealed class AdbTcpTransport : ICommTransport
+internal sealed class AdbTcpTransport : ICommTransport
 {
     private const int DefaultReadTimeoutMs = 60_000;
 

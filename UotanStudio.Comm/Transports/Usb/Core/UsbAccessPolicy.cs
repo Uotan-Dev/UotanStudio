@@ -13,7 +13,7 @@ internal static class UsbAccessPolicy
     internal static void RequireDirect(UsbDeviceInfo info)
         => RequireDirect(info.InterfaceClass, info.InterfaceSubClass, info.InterfaceProtocol, info.SerialNumber);
 
-    internal static void RequireDirect(byte? interfaceClass, byte? subclass, byte? protocol, string? serial)
+    internal static void RequireDirect(byte? interfaceClass, byte? subclass, byte? protocol, string? serial = null)
     {
         if (Volatile.Read(ref _check) is { } check)
         {

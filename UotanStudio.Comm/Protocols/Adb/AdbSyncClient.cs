@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Comm.Contracts;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
@@ -37,7 +38,7 @@ public readonly struct SyncEntry(uint mode, uint size, uint time, string name)
 /// Initializes a new sync client.
 /// <para>初始化新的 sync 客户端。</para>
 /// </remarks>
-public sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = AdbSyncClient.DefaultMaxChunk) : IDisposable
+internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = AdbSyncClient.DefaultMaxChunk) : IAdbSyncClient
 {
     private const int V1HeaderSize = 8;      // id(4) + length(4)
     private const uint DefaultMaxChunk = 64 * 1024;
@@ -79,8 +80,12 @@ public sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = AdbS
 
         if (id == SyncIds.Fail)
         {
-            ReadExact(stream, (int)ReadUInt32(stream));
-            return null;
+            // AOSP file_sync_service always reports the failure text; hiding it behind null
+            // masked the real cause. Errors here are fatal like LIST/RECV.
+            var errLength = ReadUInt32(stream);
+            var err = ReadExact(stream, (int)errLength);
+            throw new InvalidDataException(
+                $"sync STAT failed for '{remotePath}': {Encoding.UTF8.GetString(err)}");
         }
 
         if (id != SyncIds.Stat)
@@ -119,7 +124,8 @@ public sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = AdbS
 
             if (id == SyncIds.Done)
             {
-                ReadExact(stream, 16);
+                // AOSP do_list sends ID_DONE and nothing else; reading a trailing body would
+                // block forever. The DONE marker terminates LIST.
                 break;
             }
 

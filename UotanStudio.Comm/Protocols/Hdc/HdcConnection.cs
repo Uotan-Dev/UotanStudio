@@ -104,7 +104,7 @@ public sealed class HdcConnection : IDisposable
     public void Connect()
     {
         if (_transport is UsbDeviceTransport)
-            UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.RequireDirectUsb(0xff, 0x50, 1);
+            UotanStudio.Comm.Transports.Usb.Core.UsbAccessPolicy.RequireDirect(0xff, 0x50, 1);
         lock (_streamsLock)
         {
             if (_disposed)
@@ -135,6 +135,10 @@ public sealed class HdcConnection : IDisposable
         }
 
         // session.h auth states: NONE=0, SIGNATURE=2, PUBLICKEY=3, OK=4.
+        // The authtype TLV and "Ver: 3.2.0f" banner snapshot the official host handshake
+        // (upstream host sends Base::GetVersion() and TlvAppend(TAG_AUTHTYPE, ...)); the
+        // daemon parses them tolerantly, and the exact wire strings need a real device to
+        // re-verify before any change.
         Send(new HdcMessage(HdcCommand.Handshake, 0, _sessionId,
             HdcDaemonCodec.Handshake(0, _sessionId, string.Empty, System.Text.Encoding.ASCII.GetBytes("authtype        1               1"), "Ver: 3.2.0f")));
         var authenticated = false;
@@ -205,6 +209,9 @@ public sealed class HdcConnection : IDisposable
             if (response.ChannelId != 0 || response.Command != HdcCommand.ChannelClose ||
                 response.Payload is not { Length: 1 } close)
                 throw new InvalidDataException("Expected HDC authentication channel closure.");
+            // Reverse-engineered close countdown: the daemon sends N and expects N-1 echoes
+            // until zero; verify against upstream session.cpp CMD_KERNEL_CHANNEL_CLOSE
+            // handling on a real device before changing.
             if (close[0] > 0)
                 Send(HdcMessaging.BuildCommand(HdcCommand.ChannelClose, 0, [(byte)(close[0] - 1)]));
             break;

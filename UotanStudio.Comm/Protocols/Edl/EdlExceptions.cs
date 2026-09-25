@@ -4,7 +4,7 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// Exception thrown when an EDL protocol operation fails.
 /// <para>EDL 协议操作失败时抛出的异常。</para>
 /// </summary>
-public class EdlException : Exception
+internal class EdlException : Exception
 {
     /// <summary>
     /// Gets the error code.
@@ -90,7 +90,7 @@ public class EdlException : Exception
 /// Exception thrown when a Sahara protocol operation fails.
 /// <para>Sahara 协议操作失败时抛出的异常。</para>
 /// </summary>
-public class SaharaException : EdlException
+internal class SaharaException : EdlException
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="SaharaException"/> class.
@@ -112,7 +112,7 @@ public class SaharaException : EdlException
 /// Exception thrown when a Firehose protocol operation fails.
 /// <para>Firehose 协议操作失败时抛出的异常。</para>
 /// </summary>
-public class FirehoseException : EdlException
+internal class FirehoseException : EdlException
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="FirehoseException"/> class.

@@ -53,16 +53,26 @@ public sealed partial class MtkSession
                 {
                     throw new MtkProtocolException("Storage data arrived in a non-protocol frame.");
                 }
-                if (frame.Payload.Length is 2 or 4)
+                if (frame.Payload.Length == 4)
                 {
-                    var status = frame.Payload.Length == 2
-                        ? BinaryPrimitives.ReadUInt16LittleEndian(frame.Payload)
-                        : BinaryPrimitives.ReadUInt32LittleEndian(frame.Payload);
-                    throw new MtkProtocolException("Storage read ended before the requested data was received.", status);
+                    // mtkclient readflash: a 4-byte status frame of zero means "no data this
+                    // round, keep waiting"; nonzero aborts. Other short frames are invalid.
+                    var status = BinaryPrimitives.ReadUInt32LittleEndian(frame.Payload);
+                    if (status == 0)
+                    {
+                        continue;
+                    }
+
+                    throw new MtkProtocolException("Storage read failed with a device status frame.", status);
                 }
-                if (frame.Payload.Length == 0 || frame.Payload.Length > storage.ReadPacketLength
-                    || frame.Payload.Length > length - transferred || frame.Payload.Length % storage.BlockSize != 0)
+                if (frame.Payload.Length is 2 or 0)
                 {
+                    throw new MtkProtocolException("Storage read ended before the requested data was received.");
+                }
+                if (frame.Payload.Length > storage.ReadPacketLength || frame.Payload.Length > length - transferred)
+                {
+                    // The upstream agent is free to send any length up to the negotiated read
+                    // packet size; a block-multiple requirement would reject legal frames.
                     throw new MtkProtocolException("The storage data frame violates the requested range or negotiated packet size.");
                 }
                 await destination.WriteAsync(frame.Payload, cancellationToken).ConfigureAwait(false);

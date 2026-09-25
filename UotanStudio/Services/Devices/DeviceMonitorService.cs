@@ -1,19 +1,16 @@
-using AdvancedSharpAdbClient;
-using AdvancedSharpAdbClient.Models;
-using AdvancedSharpAdbClient.Receivers;
 using UotanStudio.Comm;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Bootrom;
-using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Hdc;
-using UotanStudio.Comm.Protocols.Scrcpy;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Flash;
+using UotanStudio.Services.Mirroring;
 
 namespace UotanStudio.Services.Devices;
 
@@ -84,22 +81,24 @@ public sealed class DetectedDevice
 
 /// <summary>
 /// <para>设备监视服务：启动时全量扫描 USB 设备，随后响应 USB 热插拔与 adb server 设备变更，
-/// 并提供手动强制刷新。设备枚举与协议会话完全基于 UotanStudio.Comm；与 Google 官方
-/// adb server 的交互（网络设备、状态查询、重启）通过 AdvancedSharpAdbClient 完成。</para>
+/// 并提供手动强制刷新。设备枚举与协议会话完全基于 UotanStudio.Comm；与官方 adb server 的
+/// 交互（网络设备、状态查询、重启、shell）经 Comm 的 <c>AdbServerServices</c> 完成。</para>
 /// Device monitor service: performs a full USB scan on startup, then reacts to USB
 /// hotplug events and adb-server device changes, plus a manual force-refresh. Enumeration
-/// and protocol sessions go through UotanStudio.Comm; interaction with the official Google
-/// adb server (network devices, state queries, reboots) uses AdvancedSharpAdbClient.
+/// and protocol sessions go through UotanStudio.Comm; interaction with the official adb
+/// server (network devices, state queries, reboots, shell) uses Comm's AdbServerServices.
 /// </summary>
 public sealed partial class DeviceMonitorService : IDisposable
 {
     /// <summary>
-    /// <para>单例实例。</para>
-    /// Singleton instance.
+    /// <para>创建一个由调用方持有的独立设备监视实例。桌面 GUI 由组合根（<c>App</c>）拥有唯一的
+    /// 监视实例；无头/CLI 等独立进程路径各自 <c>Create()</c> 一个，不再依赖类型级全局单例。</para>
+    /// Creates a caller-owned monitor instance. The desktop GUI keeps the single instance owned by the
+    /// composition root (<c>App</c>); headless/CLI processes each <c>Create()</c> their own, so the type
+    /// no longer exposes a global service-locator singleton.
     /// </summary>
-    public static DeviceMonitorService Instance { get; } = new();
+    public static DeviceMonitorService Create() => new();
 
-    private readonly CommKit _comm = CommKit.Default;
     private readonly DeviceController _controller;
     private static HdcDeviceService HdcOperations => HdcDeviceService.FromSettings();
 

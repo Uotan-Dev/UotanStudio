@@ -1,94 +1,165 @@
-using AdvancedSharpAdbClient;
-using AdvancedSharpAdbClient.Models;
-using AdvancedSharpAdbClient.Receivers;
 using UotanStudio.Comm;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Bootrom;
-using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Hdc;
-using UotanStudio.Comm.Protocols.Scrcpy;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Flash;
+using UotanStudio.Services.Mirroring;
 
 
 namespace UotanStudio.Services.Devices;
 
 public sealed partial class DeviceMonitorService
 {
-    public async Task StartLogcatStreamingAsync(DetectedDevice device, Action<AdbLogcatEntry> onEntry, CancellationToken cancellationToken)
+    // 活动 logcat 捕获登记：设备级操作（如重启）需要端点租约时，先停止捕获并等待其释放。
+    // Active logcat captures: device-level operations that need the endpoint lease stop them first.
+    private sealed class LogStreamRegistration(CancellationTokenSource linked)
     {
-        if (device.Protocol == DeviceProtocolKind.Hdc)
+        public CancellationTokenSource Linked { get; } = linked;
+        public Task? Task { get; set; }
+    }
+
+    private readonly Lock _logStreamLock = new();
+    private readonly Dictionary<string, LogStreamRegistration> _activeLogStreams = new(StringComparer.Ordinal);
+
+    public Task StartLogcatStreamingAsync(DetectedDevice device, Action<AdbLogcatEntry> onEntry, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var registration = new LogStreamRegistration(linked);
+        lock (_logStreamLock)
         {
-            var decoder = new AdbLogcatLineDecoder(line => onEntry(AdbLogcatEntry.Parse(line)));
-            try
-            {
-                if (UseHdcServerFor(device))
-                {
-                    using var hdc = new HdcServerClient();
-                    await hdc.ExecuteStreamingAsync(device.Serial, "shell hilog -v year",
-                        bytes => decoder.Feed(bytes), cancellationToken).ConfigureAwait(false);
-                }
-                else
-                    await Task.Run(() =>
-                    {
-                        using var session = HdcDirectSessionPool.Acquire(device);
-                        session.CreateShellClient("hilog -v year").ExecuteStreaming(bytes => decoder.Feed(bytes), null, cancellationToken);
-                    }, cancellationToken).ConfigureAwait(false);
-            }
-            finally { if (!cancellationToken.IsCancellationRequested) decoder.Feed([], flush: true); }
-            return;
+            _activeLogStreams[device.Key] = registration;
         }
-        if (device.Protocol != DeviceProtocolKind.Adb)
-            throw new ArgumentException("Logcat requires an ADB device.", nameof(device));
-        cancellationToken.ThrowIfCancellationRequested();
-        var client = AdbServerClient;
-        var serverDevice = ResolveAdbServerTarget(client, device);
-        if (client is not null && serverDevice is not null)
+        var run = RunLogcatStreamingCoreAsync(device, onEntry, registration, cancellationToken);
+        registration.Task = run;
+        return run;
+    }
+
+    /// <summary>
+    /// <para>停止该设备的活动 logcat 捕获并等待其端点租约释放。外部停止对捕获发起方
+    /// （日志页）表现为正常结束，不产生取消错误；调用方自身的取消仍按取消传播。</para>
+    /// Stops the active logcat capture for the device and awaits its endpoint-lease release.
+    /// An external stop completes the capture normally for its owner (the log page) instead of
+    /// surfacing a cancellation error; cancellation by the owner's own token still propagates.
+    /// </summary>
+    internal async Task StopLogcatStreamingAsync(DetectedDevice device)
+    {
+        LogStreamRegistration? registration;
+        lock (_logStreamLock)
         {
-            var reader = new AdbLogcatReader(async (command, onLine, token) =>
-            {
-                var receiver = new AdvancedSharpAdbClient.Receivers.FunctionOutputReceiver(line =>
-                {
-                    if (token.IsCancellationRequested) return false;
-                    onLine(line);
-                    return true;
-                });
-                await client.ExecuteRemoteCommandAsync(command, serverDevice, receiver,
-                    System.Text.Encoding.UTF8, token).ConfigureAwait(false);
-            });
-            await reader.RunAsync(onEntry, cancellationToken).ConfigureAwait(false);
+            _activeLogStreams.TryGetValue(device.Key, out registration);
+        }
+        if (registration is null)
+        {
             return;
         }
 
-        using var session = OpenAdbSession(device)
-            ?? throw new InvalidOperationException("Unable to open an ADB session for the device.");
-        await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
-        var directReader = new AdbLogcatReader(async (command, onLine, token) =>
+        registration.Linked.Cancel();
+        if (registration.Task is { } run)
         {
-            var stdout = new AdbLogcatLineDecoder(onLine);
-            var stderr = new AdbLogcatLineDecoder(onLine);
-            try
+            try { await run.ConfigureAwait(false); }
+            catch { /* The owner already renders stream errors; stopping only guarantees release. */ }
+        }
+    }
+
+    private async Task RunLogcatStreamingCoreAsync(DetectedDevice device, Action<AdbLogcatEntry> onEntry,
+        LogStreamRegistration registration, CancellationToken callerToken)
+    {
+        var cancellationToken = registration.Linked.Token;
+        try
+        {
+            if (device.Protocol == DeviceProtocolKind.Hdc)
             {
-                var shell = session.CreateShellClient(command);
-                var exitCode = await Task.Run(() => shell.ExecuteStreaming(
-                    buffer => stdout.Feed(buffer), buffer => stderr.Feed(buffer), token), token).ConfigureAwait(false);
-                token.ThrowIfCancellationRequested();
-                if (exitCode != 0) throw new InvalidOperationException($"ADB shell exited with code {exitCode}.");
-            }
-            finally
-            {
-                if (!token.IsCancellationRequested)
+                var decoder = new AdbLogcatLineDecoder(line => onEntry(AdbLogcatEntry.Parse(line)));
+                try
                 {
-                    stdout.Feed([], flush: true);
-                    stderr.Feed([], flush: true);
+                    if (UseHdcServerFor(device))
+                    {
+                        using var hdc = new HdcServerClient();
+                        await hdc.ExecuteStreamingAsync(device.Serial, "shell hilog -v year",
+                            bytes => decoder.Feed(bytes), cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                        await Task.Run(() =>
+                        {
+                            var opened = HdcDirectConnection.Open(device);
+                            using var lease = opened.Lease;
+                            opened.Session.CreateShellClient("hilog -v year").ExecuteStreaming(bytes => decoder.Feed(bytes), null, cancellationToken);
+                        }, cancellationToken).ConfigureAwait(false);
+                }
+                finally { if (!cancellationToken.IsCancellationRequested) decoder.Feed([], flush: true); }
+                return;
+            }
+            if (device.Protocol != DeviceProtocolKind.Adb)
+                throw new ArgumentException("Logcat requires an ADB device.", nameof(device));
+            cancellationToken.ThrowIfCancellationRequested();
+            if (AdbServerManages(device))
+            {
+                var services = new AdbServerServices(device.Serial,
+                    DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort);
+                var reader = new AdbLogcatReader((command, onLine, token) =>
+                    services.StreamShellAsync(command, line =>
+                    {
+                        if (token.IsCancellationRequested) return false;
+                        onLine(line);
+                        return true;
+                    }, token));
+                await reader.RunAsync(onEntry, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            var opened = OpenAdbLease(device)
+                ?? throw new InvalidOperationException("Unable to open an ADB session for the device.");
+            using var adbLease = opened.Lease;
+            var session = opened.Session;
+            await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
+            var directReader = new AdbLogcatReader(async (command, onLine, token) =>
+            {
+                var stdout = new AdbLogcatLineDecoder(onLine);
+                var stderr = new AdbLogcatLineDecoder(onLine);
+                try
+                {
+                    var shell = session.CreateShellClient(command);
+                    var exitCode = await Task.Run(() => shell.ExecuteStreaming(
+                        buffer => stdout.Feed(buffer), buffer => stderr.Feed(buffer), token), token).ConfigureAwait(false);
+                    token.ThrowIfCancellationRequested();
+                    if (exitCode != 0) throw new InvalidOperationException($"ADB shell exited with code {exitCode}.");
+                }
+                finally
+                {
+                    if (!token.IsCancellationRequested)
+                    {
+                        stdout.Feed([], flush: true);
+                        stderr.Feed([], flush: true);
+                    }
+                }
+            });
+            await directReader.RunAsync(onEntry, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!callerToken.IsCancellationRequested)
+        {
+            // 设备级操作请求的停止：捕获方视为正常结束，租约已在 using 中释放。
+            // A device-level operation requested the stop: the owner sees a normal completion
+            // and the lease is already released by the using scope.
+        }
+        finally
+        {
+            lock (_logStreamLock)
+            {
+                if (_activeLogStreams.TryGetValue(device.Key, out var current) &&
+                    ReferenceEquals(current, registration))
+                {
+                    _activeLogStreams.Remove(device.Key);
                 }
             }
-        });
-        await directReader.RunAsync(onEntry, cancellationToken).ConfigureAwait(false);
+            registration.Linked.Dispose();
+        }
     }
 
     /// <summary>
@@ -122,24 +193,24 @@ public sealed partial class DeviceMonitorService
         try
         {
             token.ThrowIfCancellationRequested();
-            var client = AdbServerClient;
-            var serverDevice = ResolveAdbServerTarget(client, device);
             var exitCode = 0;
-            if (client is not null && serverDevice is not null)
+            if (AdbServerManages(device))
             {
-                var receiver = new AdvancedSharpAdbClient.Receivers.FunctionOutputReceiver(line =>
+                var services = new AdbServerServices(device.Serial,
+                    DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort);
+                await services.StreamShellAsync(command, line =>
                 {
                     if (token.IsCancellationRequested) return false;
                     OnLine(line);
                     return true;
-                });
-                await client.ExecuteRemoteCommandAsync(command, serverDevice, receiver,
-                    System.Text.Encoding.UTF8, token).ConfigureAwait(false);
+                }, token).ConfigureAwait(false);
             }
             else
             {
-                using var session = OpenAdbSession(device)
+                var opened = OpenAdbLease(device)
                     ?? throw new InvalidOperationException("Unable to open an ADB session for the device.");
+                using var adbLease = opened.Lease;
+                var session = opened.Session;
                 await session.ConnectAsync(token).ConfigureAwait(false);
                 var stdout = new AdbLogcatLineDecoder(OnLine);
                 var stderr = new AdbLogcatLineDecoder(OnLine);

@@ -125,7 +125,7 @@ public static class BackupService
         IProgress<BackupProgress>? progress, CancellationToken ct)
     {
         Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-        return DeviceMonitorService.Instance.RunFastboot(device.Device,
+        return App.DeviceMonitor.RunFastboot(device.Device,
             session => BackupFastbootPartition(session, partition, outPath, progress, ct), ct);
     }
 
@@ -180,7 +180,7 @@ public static class BackupService
         IProgress<BackupProgress>? progress, CancellationToken ct)
     {
         Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-        return DeviceMonitorService.Instance.RunFastboot(device.Device,
+        return App.DeviceMonitor.RunFastboot(device.Device,
             session => RestoreFastbootPartition(session, partition, imagePath, progress, ct), ct);
     }
 
@@ -243,7 +243,7 @@ public static class BackupService
         }
 
         var (startSector, sectorCount) = ResolveEdlPartitionGeometry(rawProgramPath, partition);
-        return await DeviceMonitorService.Instance.RunEdlAsync(device.Device,
+        return await App.DeviceMonitor.RunEdlAsync(device.Device,
             session => BackupEdlPartitionAsync(session, partition, startSector, sectorCount, outPath, progress, ct),
             ct).ConfigureAwait(false);
     }

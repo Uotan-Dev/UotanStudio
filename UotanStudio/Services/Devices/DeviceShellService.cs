@@ -17,10 +17,9 @@ internal static class DeviceShellService
             throw new IOException("The selected target is not ready on the debug bridge server.");
     }
 
-    internal static void OpenInteractiveShell(DetectedDevice device)
+    internal static void OpenInteractiveShell(DeviceMonitorService monitor, DetectedDevice device)
     {
         ArgumentNullException.ThrowIfNull(device);
-        var monitor = DeviceMonitorService.Instance;
         if (device.Protocol == DeviceProtocolKind.Adb)
         {
             if (!IsAdbReadyState(device.State) || !monitor.ProbeAdb(device))

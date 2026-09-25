@@ -11,7 +11,7 @@ namespace UotanStudio.Comm.Transports.Usb.Core;
 /// <para>初始化新的会话集合。</para>
 /// </remarks>
 /// <param name="sessions">The sessions to wrap. <para>需要封装的会话集合。</para></param>
-public sealed class UsbSessionCollection(IReadOnlyList<IUsbDeviceSession> sessions) : IDisposable
+internal sealed class UsbSessionCollection(IReadOnlyList<IUsbDeviceSession> sessions) : IDisposable
 {
 
     /// <summary>

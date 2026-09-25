@@ -1,7 +1,7 @@
 using System.Text;
-using UotanStudio.Comm.Devices.Contracts;
-using UotanStudio.Comm.Protocols.Common;
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Hdc;
+using UotanStudio.Comm.Routing;
 
 namespace UotanStudio.Comm.Devices.Discovery;
 

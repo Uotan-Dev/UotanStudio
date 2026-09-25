@@ -60,10 +60,9 @@ public static partial class MtkXFlashBootstrap
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.TransferTimeoutMs);
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.HandshakeTimeoutMs);
             using var loader = MtkDaFile.Open(options.LoaderPath, options.DirectoryLayout, cancellationToken);
-            if (loader.Metadata.HeaderIndicatesV6)
-            {
-                throw new NotSupportedException("The selected loader declares V6; it cannot be started through this XFlash path.");
-            }
+            // V6 all-in-one containers are supported: the region directory drives the upload and
+            // the BROM/XFlash wire protocol is DA-version independent (mtkclient uploads V6 DAs
+            // through the same 0xD7 flow). The V6 marker stays available via HeaderIndicatesV6.
             if (options.StageOneRegionIndex == options.StageTwoRegionIndex)
             {
                 throw new ArgumentException("DA1 and DA2 must be explicitly selected distinct regions.", nameof(options));

@@ -34,7 +34,6 @@
     <PackageVersion Include="Semi.Avalonia.Dock" Version="12.0.0.2" />
     <PackageVersion Include="NodifyM.Avalonia" Version="12.0.0" />
     <!-- Device communication packages -->
-    <PackageVersion Include="AdvancedSharpAdbClient" Version="3.6.16" />
     <PackageVersion Include="LibUsbDotNet" Version="3.0.224" />
     <PackageVersion Include="Makaretu.Dns.Multicast" Version="0.27.0" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />

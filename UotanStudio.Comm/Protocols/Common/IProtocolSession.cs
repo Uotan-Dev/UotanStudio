@@ -10,7 +10,7 @@ namespace UotanStudio.Comm.Protocols.Common;
 /// <para>协议会话包装 <see cref="ICommTransport"/>（USB、串口、TCP/UDP 等），
 /// 实现特定设备协议（fastboot、EDL、bootrom 等）。</para>
 /// </summary>
-public interface IProtocolSession : IDisposable
+internal interface IProtocolSession : IDisposable
 {
     /// <summary>
     /// Gets the protocol name.

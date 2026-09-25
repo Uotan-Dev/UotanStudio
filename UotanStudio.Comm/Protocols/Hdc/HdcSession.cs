@@ -1,13 +1,15 @@
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Transports.Abstractions;
+using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>
-/// Represents an HDC protocol session over a device transport.
-/// <para>表示基于设备传输的 HDC 协议会话。</para>
+/// Represents an HDC protocol session over a device transport or server channel.
+/// <para>表示基于设备传输或 server 通道的 HDC 协议会话。</para>
 /// </summary>
-public sealed class HdcSession : IProtocolSession
+public sealed class HdcSession : IProtocolSession, IHdcDeviceSession
 {
     private bool _disposed;
     private bool _isLease;
@@ -36,6 +38,18 @@ public sealed class HdcSession : IProtocolSession
         ThrowIfDisposed();
         if (!IsConnected || _connection is null) throw new InvalidOperationException("An authenticated direct connection is required.");
         return new HdcSession(_connection, releaseLease);
+    }
+
+    /// <summary>
+    /// <para>为已打开的直连 USB 设备会话构造一个由调用方持有的 Hdc 会话；封装传输包装与构造，使宿主无需直接命名
+    /// <c>UsbDeviceTransport</c> 或 <see cref="HdcSession"/> 构造子。</para>
+    /// Constructs a caller-owned HDC session over an already-opened direct USB device session, so hosts need
+    /// not name <c>UsbDeviceTransport</c> or the <see cref="HdcSession"/> constructor directly.
+    /// </summary>
+    internal static HdcSession ForDirectUsb(IUsbDeviceSession usb)
+    {
+        ArgumentNullException.ThrowIfNull(usb);
+        return new HdcSession(new UsbDeviceTransport(usb));
     }
 
     /// <summary>
@@ -160,7 +174,7 @@ public sealed class HdcSession : IProtocolSession
     /// </summary>
     /// <param name="command">The command to execute. 要执行的命令。</param>
     /// <returns>An HDC shell client. HDC shell 客户端。</returns>
-    public HdcShellClient CreateShellClient(string command)
+    public IHdcShellClient CreateShellClient(string command)
     {
         ThrowIfDisposed();
         return _server is null ? new HdcShellClient(Connection, command) : new HdcShellClient(_server, _connectKey!, command);
@@ -171,11 +185,39 @@ public sealed class HdcSession : IProtocolSession
     /// <para>创建一次性设备服务（reboot、getprop 等）客户端。</para>
     /// </summary>
     /// <returns>An HDC device services client. HDC 设备服务客户端。</returns>
-    public HdcDeviceServices CreateDeviceServices()
+    public IHdcDeviceServices CreateDeviceServices()
     {
         ThrowIfDisposed();
         return _server is null ? new HdcDeviceServices(Connection) : new HdcDeviceServices(_server, _connectKey!);
     }
+
+    /// <summary>
+    /// Creates a sync (file transfer) client over the direct connection.
+    /// <para>在直连通道上创建 sync（文件传输）客户端。</para>
+    /// </summary>
+    /// <returns>An HDC sync client. HDC sync 客户端。</returns>
+    public IHdcSyncClient CreateSyncClient()
+    {
+        ThrowIfDisposed();
+        return new HdcSyncClient(Connection);
+    }
+
+    /// <summary>
+    /// Creates an app install/uninstall client over the direct connection.
+    /// <para>在直连通道上创建应用安装/卸载客户端。</para>
+    /// </summary>
+    /// <returns>An HDC app client. HDC 应用客户端。</returns>
+    public IHdcAppClient CreateAppClient()
+    {
+        ThrowIfDisposed();
+        return new HdcAppClient(Connection);
+    }
+
+    /// <summary>
+    /// Gets the port-forwarding manager over the direct connection.
+    /// <para>获取直连通道上的端口转发管理器。</para>
+    /// </summary>
+    public IHdcForwardManager Forwards => Connection.Forwards;
 
     /// <summary>
     /// Executes a shell command and returns the result.

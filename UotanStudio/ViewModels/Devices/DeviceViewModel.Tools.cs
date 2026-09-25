@@ -74,7 +74,7 @@ public partial class DeviceViewModel
 
         try
         {
-            DeviceMonitorService.Instance.OpenInteractiveShell(device.Device);
+            App.DeviceMonitor.OpenInteractiveShell(device.Device);
             StatusText = $"{LanguageService.Instance.GetString("Device_OpenAdbShell")} {device.Serial} OK";
             LogService.Instance.Write(LogLevel.Info, "DeviceManager", $"Open {device.Mode} shell for {device.Serial}.");
         }
@@ -106,7 +106,7 @@ public partial class DeviceViewModel
             var sb = new StringBuilder();
             await Task.Run(() =>
             {
-                DeviceMonitorService.Instance.RunFastboot(device.Device, fb =>
+                App.DeviceMonitor.RunFastboot(device.Device, fb =>
                 {
                     foreach (var name in new[] { "product", "version-bootloader", "variant", "secure", "unlocked", "current-slot", "is-userspace", "partition-type:boot", "partition-size:boot" })
                     {

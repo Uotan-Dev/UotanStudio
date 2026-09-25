@@ -9,7 +9,7 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// <para>从 USB 设备会话创建 <see cref="EdlSession"/> 实例的工厂。</para>
 /// Defaults to Qualcomm 05C6:9008. Other identities require an explicit device profile.
 /// </summary>
-public sealed class EdlFactory : IProtocolFactory
+internal sealed class EdlFactory : IProtocolFactory
 {
     private readonly ushort? _vendorId;
     private readonly ushort? _productId;

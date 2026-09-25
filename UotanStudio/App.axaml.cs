@@ -25,6 +25,17 @@ public partial class App : Application
     /// <summary>Existing files passed by desktop file associations, opened after window creation.</summary>
     public static string[] StartupFiles { get; set; } = [];
 
+    /// <summary>
+    /// <para>桌面进程唯一的设备监视组合实例，由应用组合根拥有并经由
+    /// <see cref="DesktopApplicationServices"/> 在退出时释放；界面与设备服务读取此实例，
+    /// 不再依赖 <c>DeviceMonitorService</c> 类型级全局单例。</para>
+    /// The single composition-root-owned device monitor for the desktop process, released on exit via
+    /// <see cref="DesktopApplicationServices"/>; UI and device services read this instance instead of a
+    /// type-level global singleton on <c>DeviceMonitorService</c>.
+    /// </summary>
+    internal static UotanStudio.Services.Devices.DeviceMonitorService DeviceMonitor { get; } =
+        UotanStudio.Services.Devices.DeviceMonitorService.Create();
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -54,6 +65,10 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // 设备路由由 Comm 层自动探测 adb/HDC server 存活状态决定：server 在则走 server 转发，
+        // 不在则走 USB/TCP 直写；组合根不再做任何直写强制。
+        // Device routing is decided by Comm's automatic server probing: a running adb/HDC server
+        // receives the traffic, otherwise direct USB/TCP is used; the composition root forces nothing.
         // 将 Comm 层 USB 诊断桥接到统一日志服务。
         UsbLogBridge.Install();
         // 挂接首次机会异常记录器：捕获调试器输出窗中「引发的异常」（Socket/取消/超时）到全局日志。
@@ -73,6 +88,10 @@ public partial class App : Application
         // 仅初始化语言包注册表（纯内存操作，快速）；持久化设置的读取与主题/语言 XAML
         // 加载推迟到启动序列中执行，使启动窗能立刻显示，避免首帧出现前的同步阻塞。
         LanguageService.Instance.Initialize();
+        // 启动窗的 Splash_* 状态文本在持久化语言应用之前就要 GetString，必须先按系统
+        // 语言合并 Locale 字典；字典是编译 XAML 的直接实例化，开销极小，持久化语言
+        // 随后由启动序列中的 ApplyLanguage 按槽位替换。
+        LanguageService.Instance.InitializeFromSystemLanguage();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -129,15 +148,16 @@ public partial class App : Application
         global::UotanStudio.Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
         global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers = settings.FirmwareParallelism;
 
+        // 2) 先应用持久化主题与语言（须在主窗口创建前完成，使主窗口拿到正确的语言/主题；
+        //    此时启动窗已显示，DynamicResource 会自动刷新启动窗文案），随后的状态文本
+        //    即可用持久化语言解析。
+        ApplyTheme(settings.ThemeMode);
+        ApplyLanguage(settings.CultureName);
+
         splash.StatusText = LanguageService.Instance.GetString("Splash_ApplyingSettings");
         // 按持久化设置启动内嵌 MCP 服务器（失败只记录日志，不阻断启动）。
         // Start the embedded MCP server per the persisted settings (failures only log, never block startup).
         McpExposureService.Instance.Apply(settings.McpExposeEnabled, settings.McpExposePort);
-
-        // 2) 应用持久化主题与语言（须在主窗口创建前完成，使主窗口拿到正确的语言/主题；
-        //    此时启动窗已显示，DynamicResource 会自动刷新启动窗文案）。
-        ApplyTheme(settings.ThemeMode);
-        ApplyLanguage(settings.CultureName);
 
         splash.StatusText = LanguageService.Instance.GetString("Splash_Scanning");
         LogService.Instance.Write(LogLevel.Info, "App", "Startup sequence: initial USB scan starting.");

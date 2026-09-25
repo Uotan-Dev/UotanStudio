@@ -112,9 +112,16 @@ public sealed class MtkXmlStorageInfo
             throw new InvalidDataException("Expected an XML DA hardware-info document.");
         }
         var fields = ReadFields(root);
-        if (RequiredScalar(fields, "version") != "1.2")
+        // Upstream cmd_get_hw_info may report version 1.0 (with no storage section) on
+        // devices without eMMC/UFS; only 1.2 documents carry the extended geometry fields.
+        var version = RequiredScalar(fields, "version");
+        if (version is not ("1.0" or "1.2"))
         {
             throw new MtkProtocolException("Unsupported XML hardware-info version.");
+        }
+        if (version == "1.0" && !fields.ContainsKey("storage"))
+        {
+            throw new MtkProtocolException("The XML hardware-info reports no storage device.");
         }
         var kind = RequiredScalar(fields, "storage") switch
         {

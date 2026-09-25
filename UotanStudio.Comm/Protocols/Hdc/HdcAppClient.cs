@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>Native daemon app transfer and bundle-manager completion messages.</summary>
-public sealed class HdcAppClient(HdcConnection connection)
+public sealed class HdcAppClient(HdcConnection connection) : UotanStudio.Comm.Contracts.IHdcAppClient
 {
     /// <summary>Transfers and installs one HAP/HSP/APP package using AppCheck/Begin/Data/Finish.</summary>
     public string Install(string path, CancellationToken cancellationToken = default)

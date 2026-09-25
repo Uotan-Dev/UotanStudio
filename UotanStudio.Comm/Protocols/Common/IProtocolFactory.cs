@@ -8,7 +8,7 @@ namespace UotanStudio.Comm.Protocols.Common;
 /// <para>实现类将传输会话与协议预期的设备标识（VID/PID、接口类等）进行匹配，
 /// 生成可直接使用的协议会话。</para>
 /// </summary>
-public interface IProtocolFactory
+internal interface IProtocolFactory
 {
     /// <summary>
     /// Gets the protocol name.

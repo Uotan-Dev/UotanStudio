@@ -7,7 +7,7 @@ internal static partial class LinuxUsbAPI
     public const string Libc = "libc";
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct Usbdevfs_bulktransfer
+    internal struct Usbdevfs_bulktransfer
     {
         public uint Ep;
         public uint Len;
@@ -16,7 +16,7 @@ internal static partial class LinuxUsbAPI
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct Usbdevfs_ctrltransfer
+    internal struct Usbdevfs_ctrltransfer
     {
         public byte BRequestType;
         public byte BRequest;
@@ -62,7 +62,7 @@ internal static partial class LinuxUsbAPI
     public static partial int ioctl(int Fd, UIntPtr request, ref Usbdevfs_ctrltransfer arg);
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct Usbdevfs_urb
+    internal struct Usbdevfs_urb
     {
         public byte Type;
         public byte Endpoint;
@@ -79,7 +79,7 @@ internal static partial class LinuxUsbAPI
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct PollFd
+    internal struct PollFd
     {
         public int Fd;
         public short Events;
@@ -132,7 +132,7 @@ internal static partial class LinuxUsbAPI
     public static partial IntPtr readdir(IntPtr dirp);
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct Dirent64
+    internal struct Dirent64
     {
         public ulong D_ino;
         public long D_off;

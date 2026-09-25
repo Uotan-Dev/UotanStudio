@@ -1,6 +1,6 @@
+using UotanStudio.Comm.Protocols.Fastboot.Transport;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Tcp;
-using UotanStudio.Comm.Transports.Udp;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Core;
 
@@ -13,7 +13,7 @@ namespace UotanStudio.Comm;
 /// code against this interface to remain testable and swappable.
 /// <para>实现类同时提供 USB 传输层与专用协议层；消费者针对该接口编码，以保持可测试性与可替换性。</para>
 /// </summary>
-public interface ICommKit
+internal interface ICommKit
 {
     /// <summary>
     /// Gets the names of the registered USB APIs.

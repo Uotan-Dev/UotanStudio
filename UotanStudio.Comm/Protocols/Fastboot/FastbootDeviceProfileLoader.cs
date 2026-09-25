@@ -8,7 +8,7 @@ namespace UotanStudio.Comm.Protocols.Fastboot;
 /// 使用轻量、AOT 安全的解析器，保证库在 NativeAOT 与裁剪下兼容
 /// （不依赖基于反射的 System.Text.Json）。</para>
 /// </summary>
-public static class FastbootDeviceProfileLoader
+internal static class FastbootDeviceProfileLoader
 {
     /// <summary>
     /// Loads device profiles from the specified JSON file. Entries without a vendor id or

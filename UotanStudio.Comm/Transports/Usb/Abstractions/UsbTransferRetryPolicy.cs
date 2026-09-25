@@ -11,7 +11,7 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 /// <para>可在启动时设置 <see cref="UsbTransferPolicies.DefaultRetryPolicy"/> 调整整个进程的
 /// 重试行为。</para>
 /// </summary>
-public sealed class UsbTransferRetryPolicy
+internal sealed class UsbTransferRetryPolicy
 {
     /// <summary>
     /// Gets the default retry policy (5 retries, 500 ms apart).

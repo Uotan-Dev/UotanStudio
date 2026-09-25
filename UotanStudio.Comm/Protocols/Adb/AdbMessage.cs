@@ -12,7 +12,7 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// <param name="arg0">The first argument. 第一个参数。</param>
 /// <param name="arg1">The second argument. 第二个参数。</param>
 /// <param name="payload">The optional payload bytes. 可选的负载字节。</param>
-public sealed class AdbMessage(AdbCommand command, uint arg0, uint arg1, byte[]? payload = null)
+internal sealed class AdbMessage(AdbCommand command, uint arg0, uint arg1, byte[]? payload = null)
 {
     /// <summary>
     /// Gets the command identifier.
@@ -50,7 +50,7 @@ public sealed class AdbMessage(AdbCommand command, uint arg0, uint arg1, byte[]?
 /// Serializes and deserializes ADB wire messages (24-byte header + payload).
 /// <para>序列化与反序列化 ADB 线上消息（24 字节头部 + 负载）。</para>
 /// </summary>
-public static class AdbMessaging
+internal static class AdbMessaging
 {
     /// <summary>
     /// Computes the ADB CRC (32-bit additive checksum of payload bytes).

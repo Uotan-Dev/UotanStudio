@@ -18,13 +18,15 @@ internal sealed class MtkXmlChannel(ICommTransport transport, int timeoutMs)
     internal Task AcknowledgeAsync(CancellationToken cancellationToken)
     {
         RequireReady(cancellationToken);
-        return _frames.SendAsync(1, "OK\0\0"u8.ToArray(), cancellationToken);
+        // mtkclient xsend appends exactly one NUL; a second NUL changes the declared length
+        // and strict DA parsers would read the extra byte as payload.
+        return _frames.SendAsync(1, "OK\0"u8.ToArray(), cancellationToken);
     }
 
     internal Task AcknowledgeValueAsync(ulong value, CancellationToken cancellationToken)
     {
         RequireReady(cancellationToken);
-        return _frames.SendAsync(1, Utf8.GetBytes($"OK@0x{value:x}\0\0"), cancellationToken);
+        return _frames.SendAsync(1, Utf8.GetBytes($"OK@0x{value:x}\0"), cancellationToken);
     }
 
     internal Task SendStreamAsync(Stream source, int length, CancellationToken cancellationToken)

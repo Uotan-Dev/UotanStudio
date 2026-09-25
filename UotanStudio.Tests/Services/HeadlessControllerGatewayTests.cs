@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using UotanStudio.Comm.Devices.Contracts;
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -12,14 +12,22 @@ public sealed class HeadlessControllerGatewayTests
 {
     private static readonly DeviceEndpoint Server = new()
     {
-        Source = "adb-server@127.0.0.1:5037", Transport = "adb-server", Address = "serial",
-        Serial = "serial", Protocol = "adb", Route = "server"
+        Source = "adb-server@127.0.0.1:5037",
+        Transport = "adb-server",
+        Address = "serial",
+        Serial = "serial",
+        Protocol = "adb",
+        Route = "server"
     };
 
     private static readonly DeviceEndpoint Usb = new()
     {
-        Source = "usb", Transport = "Native", Address = "exact-key",
-        Serial = "serial", Protocol = "adb", Route = "direct-usb",
+        Source = "usb",
+        Transport = "Native",
+        Address = "exact-key",
+        Serial = "serial",
+        Protocol = "adb",
+        Route = "direct-usb",
         UsbInfo = new UsbDeviceInfo { SourceApiKind = UsbApiKind.Native, DeviceKey = "exact-key", SerialNumber = "serial" }
     };
 
@@ -143,7 +151,8 @@ public sealed class HeadlessControllerGatewayTests
     private static DeviceEndpoint OtherUsb()
         => Usb with
         {
-            Serial = "other", Address = "other-key",
+            Serial = "other",
+            Address = "other-key",
             UsbInfo = new UsbDeviceInfo { SourceApiKind = UsbApiKind.Native, DeviceKey = "other-key", SerialNumber = "other" }
         };
 

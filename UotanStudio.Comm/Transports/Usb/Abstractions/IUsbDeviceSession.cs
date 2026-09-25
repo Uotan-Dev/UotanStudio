@@ -10,7 +10,7 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 /// <para>暴露原生异步 I/O 的后端（WinUSB 重叠 I/O、Linux usbfs URB、libusb 传输）实现异步方法时
 /// 不会阻塞线程池线程；无原生异步路径的后端回退到在线程池上执行同步调用。</para>
 /// </summary>
-public interface IUsbDeviceSession : IDisposable
+internal interface IUsbDeviceSession : IDisposable
 {
     /// <summary>
     /// Gets the default timeout used by this session, if the caller omits one.
@@ -134,9 +134,9 @@ public interface IUsbDeviceSession : IDisposable
     /// Writes bytes to the device starting at the specified offset, with an operation timeout.
     /// <para>在指定超时时间内从指定偏移量开始向设备写入字节数据。</para>
     /// This overload avoids copying a sub-range out of a large buffer (e.g. streaming a
-    /// firmware image in chunks), which the <see cref="T:UotanStudio.Comm.Extensions.UsbStream"/> adapter relies on.
+    /// firmware image in chunks), which the <see cref="T:UotanStudio.Comm.Transports.Usb.UsbStream"/> adapter relies on.
     /// <para>此重载避免从大缓冲区复制子范围（例如分块流式传输固件镜像），
-    /// <see cref="T:UotanStudio.Comm.Extensions.UsbStream"/> 适配器依赖该能力。</para>
+    /// <see cref="T:UotanStudio.Comm.Transports.Usb.UsbStream"/> 适配器依赖该能力。</para>
     /// </summary>
     /// <param name="data">The data to write. <para>待写入数据。</para></param>
     /// <param name="offset">The offset into <paramref name="data"/> at which to start. <para><paramref name="data"/> 中的起始偏移量。</para></param>

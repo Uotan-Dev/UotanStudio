@@ -1,5 +1,7 @@
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Transports.Abstractions;
+using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
@@ -7,7 +9,7 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// Represents an ADB protocol session over a device transport.
 /// <para>表示基于设备传输的 ADB 协议会话。</para>
 /// </summary>
-public sealed class AdbSession : IProtocolSession
+internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
 {
     private bool _disposed;
 
@@ -17,6 +19,23 @@ public sealed class AdbSession : IProtocolSession
         ArgumentNullException.ThrowIfNull(server);
         Connection = new AdbConnection(server);
     }
+
+    /// <summary>
+    /// Creates a session bound to a freshly opened direct-USB device, encapsulating the native transport wrapper.
+    /// <para>基于新打开的 USB 直连设备创建会话，封装原生传输包装。</para>
+    /// </summary>
+    internal static AdbSession ForDirectUsb(IUsbDeviceSession usb)
+    {
+        ArgumentNullException.ThrowIfNull(usb);
+        return new AdbSession(new UsbDeviceTransport(usb));
+    }
+
+    /// <summary>
+    /// Creates a session routed through the adb server target identified by <paramref name="serial"/>.
+    /// <para>基于 adb server 中由 <paramref name="serial"/> 标识的目标创建会话。</para>
+    /// </summary>
+    public static AdbSession ForServer(string serial, string host, int port)
+        => new(new AdbServerServices(serial, host, port));
 
 
     /// <summary>
@@ -41,13 +60,19 @@ public sealed class AdbSession : IProtocolSession
     /// Gets the ADB connection.
     /// <para>获取 ADB 连接。</para>
     /// </summary>
-    public AdbConnection Connection { get; }
+    internal AdbConnection Connection { get; }
 
     /// <summary>
     /// Gets the peer protocol version.
     /// <para>获取对端协议版本。</para>
     /// </summary>
     public uint PeerVersion => Connection.PeerVersion;
+
+    /// <summary>
+    /// Gets whether this session is mediated by a local adb server rather than raw USB.
+    /// <para>获取本会话是否经本机 adb server 交互，而非原生 USB 直连。</para>
+    /// </summary>
+    public bool UsesServer => Connection.UsesServer;
 
     /// <summary>
     /// Gets the peer max payload size.
@@ -143,11 +168,19 @@ public sealed class AdbSession : IProtocolSession
     /// </summary>
     /// <param name="service">The service destination string. 服务目标字符串。</param>
     /// <returns>An ADB stream. ADB 流。</returns>
-    public AdbStream OpenStream(string service)
+    public IAdbStream OpenStream(string service)
     {
         ThrowIfDisposed();
         return Connection.OpenStream(service);
     }
+
+    /// <summary>
+    /// Opens a byte-oriented stream to a service.
+    /// <para>打开面向字节的服務流。</para>
+    /// </summary>
+    /// <param name="service">The service destination string. 服务目标字符串。</param>
+    /// <returns>A byte stream. 字节流。</returns>
+    public Stream OpenServiceStream(string service) => new AdbServiceStream(Connection.OpenStream(service));
 
     /// <summary>
     /// Creates a shell client for the given command.
@@ -157,7 +190,7 @@ public sealed class AdbSession : IProtocolSession
     /// <param name="term">Terminal type, or null for default. 终端类型，null 表示默认。</param>
     /// <param name="pty">Whether to use a pseudo-terminal. 是否使用伪终端。</param>
     /// <returns>A shell client. Shell 客户端。</returns>
-    public AdbShellClient CreateShellClient(string command, string? term = null, bool pty = false)
+    public IAdbShellClient CreateShellClient(string command, string? term = null, bool pty = false)
     {
         ThrowIfDisposed();
         return new AdbShellClient(Connection, command, term, pty);
@@ -169,7 +202,7 @@ public sealed class AdbSession : IProtocolSession
     /// </summary>
     /// <param name="maxChunk">Maximum chunk size in bytes. 最大块大小（字节）。</param>
     /// <returns>A sync client. Sync 客户端。</returns>
-    public AdbSyncClient CreateSyncClient(uint maxChunk = 64 * 1024)
+    public IAdbSyncClient CreateSyncClient(uint maxChunk = 64 * 1024)
     {
         ThrowIfDisposed();
         return new AdbSyncClient(Connection, maxChunk);
@@ -180,7 +213,7 @@ public sealed class AdbSession : IProtocolSession
     /// <para>创建一次性设备服务（reboot、remount、getprop）客户端。</para>
     /// </summary>
     /// <returns>A device services client. 设备服务客户端。</returns>
-    public AdbDeviceServices CreateDeviceServices()
+    public IAdbDeviceServices CreateDeviceServices()
     {
         ThrowIfDisposed();
         return new AdbDeviceServices(Connection);

@@ -3,12 +3,15 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Devices.Discovery;
 
-internal static class UsbProtocolClassifier
+public static class UsbProtocolClassifier
 {
-    internal static string? Classify(UsbDeviceInfo device)
+    public static string? Classify(UsbDeviceInfo device)
     {
         if (device.VendorId == 0x05C6 && device.ProductId is 0x9008 or 0x9006 or 0x900E or 0x901D or 0x9307)
             return "edl";
+        // MediaTek boot chain over USB (mtkclient): BROM 0E8D:0003, preloader/DA 0E8D:2000|2001.
+        if (device.VendorId == 0x0E8D && device.ProductId is 0x0003 or 0x2000 or 0x2001)
+            return "mtk";
         if (device.VendorId == RkdlConstants.RockchipVid &&
             ((device.ProductId >> 8) != 0 || RkdlConstants.KnownLoaderProductIds.Contains(device.ProductId)))
             return "rkdl";

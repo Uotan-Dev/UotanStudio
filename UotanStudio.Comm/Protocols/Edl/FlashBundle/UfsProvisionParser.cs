@@ -6,7 +6,7 @@ namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 /// Parses UFS provisioning XML files containing common, body, and epilogue entries.
 /// <para>解析包含 common、body 和 epilogue 条目的 UFS 配置 XML 文件。</para>
 /// </summary>
-public static class UfsProvisionParser
+internal static class UfsProvisionParser
 {
     /// <summary>
     /// Parses a UFS provisioning XML file from the specified file path.

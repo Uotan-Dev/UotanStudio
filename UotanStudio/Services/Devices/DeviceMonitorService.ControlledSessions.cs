@@ -1,8 +1,7 @@
-using UotanStudio.Comm.Devices.Contracts;
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
-using UotanStudio.Comm.Protocols.Adb;
-using UotanStudio.Comm.Protocols.Common;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
@@ -12,7 +11,7 @@ public sealed partial class DeviceMonitorService
 {
     // Synchronous protocol transactions use this boundary to acquire an async controller lease.
     private DeviceLease LeaseEndpoint(DetectedDevice device, bool useAdbServer = false,
-        CancellationToken cancellationToken = default)
+        DeviceSessionKind? sessionKind = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(device);
         cancellationToken.ThrowIfCancellationRequested();
@@ -61,44 +60,33 @@ public sealed partial class DeviceMonitorService
             throw new IOException("The selected endpoint no longer exposes the requested protocol.");
         }
 
-        return _controller.OpenAsync(snapshot, selected.Id, cancellationToken).GetAwaiter().GetResult();
+        return sessionKind is { } kind
+            ? _controller.OpenAsync(snapshot, selected.Id, kind, cancellationToken).GetAwaiter().GetResult()
+            : _controller.OpenAsync(snapshot, selected.Id, cancellationToken).GetAwaiter().GetResult();
     }
 
-    private static IUsbDeviceSession RequireUsb(DeviceLease lease)
-        => lease.Transport is OwnedDeviceTransport<IUsbDeviceSession> usb
-            ? usb.Value : throw new IOException("The selected endpoint is not a direct USB session.");
-
-    private (DeviceLease Lease, AdbSession Session) LeaseAdb(DetectedDevice device,
+    private (DeviceLease Lease, IAdbDeviceSession Session) LeaseAdb(DetectedDevice device,
         CancellationToken cancellationToken)
     {
         if (device.Protocol != DeviceProtocolKind.Adb)
         {
-            throw new ArgumentException("An ADB target is required.", nameof(device));
+            throw new InvalidOperationException("Cannot open the selected ADB device.");
         }
 
-        var serverOwns = DebugBridgeRoute.AdbServerOwns(device.Serial);
+        var serverOwns = DebugBridgeSessionOpener.AdbServerOwns(device.Serial);
         if (device.Key.StartsWith("adb:", StringComparison.Ordinal) && !serverOwns)
         {
             throw new IOException("The selected ADB server target is unavailable.");
         }
 
-        var lease = LeaseEndpoint(device, serverOwns, cancellationToken);
-        try
-        {
-            var session = lease.Transport switch
-            {
-                OwnedDeviceTransport<AdbSession> server => server.Value,
-                OwnedDeviceTransport<IUsbDeviceSession> usb =>
-                    new AdbSession(new UsbDeviceTransport(usb.Value)),
-                _ => throw new IOException("The selected ADB endpoint has no supported session.")
-            };
-            return (lease, session);
-        }
-        catch
+        var lease = LeaseEndpoint(device, serverOwns, DeviceSessionKind.Adb, cancellationToken);
+        if (!lease.TryGetSession<IAdbDeviceSession>(out var session))
         {
             CloseLease(lease);
-            throw;
+            throw new IOException("The selected ADB endpoint has no supported session.");
         }
+
+        return (lease, session);
     }
 
     private static void CloseLease(DeviceLease lease)

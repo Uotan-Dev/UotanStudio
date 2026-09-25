@@ -13,7 +13,7 @@ namespace UotanStudio.Comm.Transports.Udp;
 /// <param name="port">The service TCP port. 服务 TCP 端口。</param>
 /// <param name="addresses">The resolved IP addresses. 解析出的 IP 地址。</param>
 /// <param name="properties">The TXT-record properties. TXT 记录属性。</param>
-public sealed class MdnsDevice(
+internal sealed class MdnsDevice(
     string instance,
     string? hostName,
     int port,

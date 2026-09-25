@@ -21,8 +21,10 @@ public sealed partial class MtkSession
 
     /// <summary>Advertises implemented callbacks and requests hardware initialization under one operation lease.</summary>
     /// <remarks>
-    /// Only progress-report handling is currently advertised. File transfer/filesystem
-    /// callbacks are not claimed, and an unexpected request faults the session.
+    /// Only progress-report handling is advertised by default. When
+    /// <see cref="MtkSession.HostFileStore"/> is attached, the file transfer and filesystem
+    /// size callbacks are also declared and device-initiated requests are served through it;
+    /// otherwise an unexpected request faults the session.
     /// Both complete command exchanges must succeed before advancing. This is the agent's
     /// acknowledgement, not a storage readiness or hardware interoperability guarantee.
     /// </remarks>
@@ -47,9 +49,14 @@ public sealed partial class MtkSession
             MtkSessionState.XmlStageTwoHardwareInitialized, cancellationToken, timeoutMs);
     }
 
-    private static XElement[] XmlHardwareCommands() =>
+    private XElement[] XmlHardwareCommands() =>
     [
-        XmlHostCapabilities(download: false),
+        // Capabilities are advertised only for callbacks the host can actually service;
+        // without a host file store the session stays fail-closed.
+        XmlHostCapabilities(
+            download: HostFileStore is not null,
+            upload: HostFileStore is not null,
+            fileSize: HostFileStore is not null),
         new("da", new XElement("version", "1.0"), new XElement("command", "CMD:NOTIFY-INIT-HW"))
     ];
 

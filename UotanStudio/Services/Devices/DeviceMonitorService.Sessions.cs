@@ -1,18 +1,13 @@
-using AdvancedSharpAdbClient;
-using AdvancedSharpAdbClient.Models;
-using AdvancedSharpAdbClient.Receivers;
 using UotanStudio.Comm;
+using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Adb;
-using UotanStudio.Comm.Protocols.Bootrom;
-using UotanStudio.Comm.Protocols.Common;
-using UotanStudio.Comm.Protocols.Edl;
-using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Hdc;
-using UotanStudio.Comm.Protocols.Scrcpy;
-using UotanStudio.Comm.Transports.Abstractions;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Flash;
+using UotanStudio.Services.Mirroring;
 
 
 namespace UotanStudio.Services.Devices;
@@ -20,23 +15,28 @@ namespace UotanStudio.Services.Devices;
 public sealed partial class DeviceMonitorService
 {
     /// <summary>
-    /// <para>为设备打开 USB 设备会话（按键重开，支持模式切换后 VID/PID 变化）。</para>
-    /// Opens the USB device session for the device (reopen by key, tolerating VID/PID
-    /// changes across mode switches).
+    /// <para>校验设备可被直连 USB 打开（server 权威守卫 + 唯一物理关联），返回用于打开稳定按键；
+    /// 不可直连时返回 <c>null</c>。会话封装由控制器完成，宿主不再取得原始 USB 会话句柄。</para>
+    /// Validates that the device may be opened over direct USB (server-authority guard + unique physical
+    /// association) and returns the stable key to open it with, or <c>null</c> when not directly openable.
+    /// The controller wraps the session; the host never receives a raw USB session handle.
     /// </summary>
-    public IUsbDeviceSession? OpenUsbSession(DetectedDevice device)
+    public string? ResolveDirectUsbOpenKey(DetectedDevice device)
     {
         ArgumentNullException.ThrowIfNull(device);
         if (device.Protocol == DeviceProtocolKind.Adb &&
             (device.Key.StartsWith("adb:", StringComparison.Ordinal) ||
-                DebugBridgeRoute.AdbServerOwns(device.Serial)))
+                DebugBridgeSessionOpener.AdbServerOwns(device.Serial)))
             throw new IOException("ADB server owns this target; direct USB access is prohibited.");
         if (device.Protocol == DeviceProtocolKind.Hdc && DebugBridgeRoute.UseHdcServer())
             throw new IOException("HDC server owns this protocol; direct USB access is prohibited.");
         var direct = ResolveDirectUsbDevice(device);
-        return direct.Transport == DeviceTransportKind.Usb
-            ? _comm.OpenUsbDeviceSessionByKey(direct.Key) : null;
+        return direct.Transport == DeviceTransportKind.Usb ? direct.Key : null;
     }
+
+    /// <summary>Opens a lease for the exact stable physical key via the controller; null when the key cannot open.</summary>
+    internal DeviceLease? OpenLeaseByKey(string deviceKey, DeviceSessionKind kind)
+        => _controller.OpenLeaseByKeyAsync(deviceKey, kind).GetAwaiter().GetResult();
 
     internal static DetectedDevice ResolveDirectUsbDevice(DetectedDevice device)
     {
@@ -45,7 +45,7 @@ public sealed partial class DeviceMonitorService
         {
             return device;
         }
-        var matches = CommKit.Default.EnumerateUsbDevices()
+        var matches = App.DeviceMonitor.ListUsbDevices()
             .Where(info => Classify(info) == device.Protocol &&
                 string.Equals(info.SerialNumber, device.Serial, StringComparison.Ordinal)).ToArray();
         var match = RequireUniqueUsbIdentity(matches);
@@ -70,54 +70,64 @@ public sealed partial class DeviceMonitorService
         return matches[0];
     }
 
-    /// <summary>Opens a server service session when a server exists, otherwise the exact USB device.</summary>
-    public AdbSession? OpenAdbSession(DetectedDevice device)
+    /// <summary>
+    /// <para>为设备打开 ADB 会话租约：server 目标与被 server 拥有的序列号改经 server 会话服务（绝不直写 USB），
+    /// 直连目标按稳定键租约化 USB；server 不存在且 USB 无法打开时返回 <c>null</c>。调用方持有租约并负责释放。</para>
+    /// Opens an ADB session lease for the device: server targets and server-owned serials are served through
+    /// the server (never raw USB), direct targets lease the exact USB key; returns <c>null</c> when no server
+    /// exists and the USB device cannot be opened. Callers own the lease and must dispose it.
+    /// </summary>
+    public (DeviceLease Lease, IAdbDeviceSession Session)? OpenAdbLease(DetectedDevice device)
     {
         if (device.Protocol != DeviceProtocolKind.Adb) return null;
         if (device.Key.StartsWith("adb:", StringComparison.Ordinal))
         {
             if (!DebugBridgeRoute.UseAdbServer())
                 throw new IOException("The selected ADB server target is unavailable. Refresh and select the USB target for direct access.");
-            return new AdbSession(new AdbServerServices(device.Serial,
-                DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort));
+            return OpenServerAdbLease(device.Serial);
         }
         if (device.Transport == DeviceTransportKind.Tcp && !DebugBridgeRoute.UseAdbServer())
             throw new IOException("A network ADB target requires the ADB server.");
-        return DebugBridgeRoute.OpenAdb(device.Serial, () =>
+        if (DebugBridgeSessionOpener.AdbServerOwns(device.Serial))
         {
-            var usb = OpenUsbSession(device);
-            if (usb is null) return null; // server 不存在且 USB 设备无法打开时视为不可用，而非抛异常
-            try { return new AdbSession(new UsbDeviceTransport(usb)); }
-            catch { usb.Dispose(); throw; }
-        });
+            return OpenServerAdbLease(device.Serial);
+        }
+
+        var key = ResolveDirectUsbOpenKey(device);
+        // server 不存在且 USB 设备无法打开时视为不可用（返回 null），而非抛异常。
+        if (key is null) return null;
+        var lease = _controller.OpenLeaseByKeyAsync(key, DeviceSessionKind.Adb).GetAwaiter().GetResult();
+        if (lease is null) return null;
+        if (!lease.TryGetSession<IAdbDeviceSession>(out var session))
+        {
+            CloseLease(lease);
+            throw new IOException("The selected USB endpoint does not expose an ADB session.");
+        }
+        return (lease, session);
+    }
+
+    private (DeviceLease Lease, IAdbDeviceSession Session) OpenServerAdbLease(string serial)
+    {
+        var session = _controller.OpenServerAdbSession(serial,
+            DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort);
+        var endpoint = new DeviceEndpoint
+        {
+            Source = $"adb-server@{DeviceCommunicationConfiguration.ServerHost}:{DeviceCommunicationConfiguration.AdbServerPort}",
+            Transport = "adb-server",
+            Address = serial,
+            DisplayName = serial,
+            Serial = serial,
+            Route = "server",
+            Protocol = "adb"
+        };
+        return (_controller.AdoptSession(endpoint, session), session);
     }
 
     /// <summary>
-    /// <para>为设备打开 Fastboot 协议会话。</para>
-    /// Opens a Fastboot protocol session for the device.
+    /// <para>判断 HDC 目标是否应经本机 hdc server 交互；非 USB 目标无 server 时拒绝。</para>
+    /// Decides whether an HDC target must go through the local hdc server; non-USB targets are
+    /// rejected when no server is present.
     /// </summary>
-    public FastbootSession? OpenFastbootSession(DetectedDevice device)
-    {
-        if (device.Protocol != DeviceProtocolKind.Fastboot)
-            throw new ArgumentException("A Fastboot target is required.", nameof(device));
-
-        var usb = OpenUsbSession(device);
-        if (usb is null) return null;
-        var factory = new FastbootFactory();
-        if (!factory.TryCreate(usb, out var protocolSession) || protocolSession is not FastbootSession session)
-        {
-            usb.Dispose();
-            throw new InvalidOperationException("The device does not expose a fastboot interface.");
-        }
-
-        if (!session.IsConnected)
-        {
-            session.Dispose();
-            throw new InvalidOperationException("Fastboot session is not connected.");
-        }
-        return session;
-    }
-
     internal static bool UseHdcServerFor(DetectedDevice device, string host = DeviceCommunicationConfiguration.ServerHost, int? port = null)
     {
         if (device.Protocol != DeviceProtocolKind.Hdc || string.IsNullOrWhiteSpace(device.Serial))
@@ -129,50 +139,35 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>为设备打开 EDL 协议会话。</para>
-    /// Opens an EDL protocol session for the device.
+    /// <para>为设备打开 HDC 会话租约：server 在时经 server 会话服务，不在时按稳定键直连 USB；
+    /// 非 HDC 协议返回 <c>null</c>。调用方持有租约并负责释放。</para>
+    /// Opens an HDC session lease for the device: through the server when one is running, otherwise
+    /// the exact USB key; returns <c>null</c> for non-HDC devices. Callers own the lease and must dispose it.
     /// </summary>
-    public EdlSession? OpenEdlSession(DetectedDevice device)
-    {
-        if (device.Protocol != DeviceProtocolKind.Edl)
-            throw new ArgumentException("An EDL target is required.", nameof(device));
-        var usb = OpenUsbSession(device);
-        return usb is null ? null : new EdlSession(new UsbDeviceTransport(usb));
-    }
-
-    /// <summary>
-    /// <para>为设备打开 RKDL 协议会话。</para>
-    /// Opens an RKDL protocol session for the device.
-    /// </summary>
-    public RkdlSession? OpenRkdlSession(DetectedDevice device)
-    {
-        if (device.Protocol != DeviceProtocolKind.Rkdl)
-            throw new ArgumentException("An RKDL target is required.", nameof(device));
-        var usb = OpenUsbSession(device);
-        return usb is null ? null : new RkdlSession(new UsbDeviceTransport(usb));
-    }
-
-    /// <summary>
-    /// <para>为设备打开 HDC 协议会话：系统内存在 hdc server 时作为 client 经 server 交互
-    /// （与 ADB server 模式一致），否则回退 USB 直连通信。</para>
-    /// Opens an HDC protocol session for the device: when a local hdc server is present the
-    /// toolbox talks to the device as a server client (mirroring the ADB server mode),
-    /// otherwise it falls back to direct USB communication.
-    /// </summary>
-    public HdcSession? OpenHdcSession(DetectedDevice device)
+    public (DeviceLease Lease, HdcSession Session)? OpenHdcLease(DetectedDevice device)
     {
         if (device.Protocol != DeviceProtocolKind.Hdc) return null;
         _ = UseHdcServerFor(device);
-        // A host channel is required even for USB targets managed by the official server.
-        // Do not feed host frames into the legacy direct-device session transport.
-        return DebugBridgeRoute.OpenHdc(device.Serial, () => HdcDirectSessionPool.Acquire(device));
-    }
+        if (DebugBridgeRoute.UseHdcServer())
+        {
+            var port = HdcServerClient.DefaultServerPort;
+            using var server = new HdcServerClient(DeviceCommunicationConfiguration.ServerHost, port);
+            var session = server.CreateSession(device.Serial);
+            var endpoint = new DeviceEndpoint
+            {
+                Source = $"hdc-server@{DeviceCommunicationConfiguration.ServerHost}:{port}",
+                Transport = "hdc-server",
+                Address = device.Serial,
+                DisplayName = device.Serial,
+                Serial = device.Serial,
+                Route = "server",
+                Protocol = "hdc"
+            };
+            return (_controller.AdoptSession(endpoint, session), session);
+        }
 
-    /// <summary>
-    /// <para>获取与 Google 官方 adb server 交互的客户端；server 未运行时返回 <c>null</c>。</para>
-    /// Gets a client for the official Google adb server, or <c>null</c> when it is not running.
-    /// </summary>
-    private AdbClient? AdbServerClient => ProbeAdbServer();
+        return HdcDirectConnection.Open(device);
+    }
 
     /// <summary>Executes a shell command against the exact selected ADB server target.</summary>
     public string ExecuteAdbServerShell(DetectedDevice device, string command)
@@ -180,77 +175,76 @@ public sealed partial class DeviceMonitorService
         if (device.Protocol != DeviceProtocolKind.Adb)
             throw new ArgumentException("An ADB target is required.", nameof(device));
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
-        var client = AdbServerClient ?? throw new IOException("The ADB server is unavailable.");
-        var target = RequireAdbServerTarget(client, device.Serial);
-        var receiver = new ConsoleOutputReceiver();
-        client.ExecuteRemoteCommand(command, target, receiver);
-        return receiver.ToString() ?? string.Empty;
+        if (!DebugBridgeRoute.UseAdbServer())
+            throw new IOException("The ADB server is unavailable.");
+        EnsureAdbServerTarget(device.Serial);
+        return new AdbServerServices(device.Serial,
+            DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort)
+            .RunShellAsync(command).GetAwaiter().GetResult();
     }
 
-    /// <summary>Checks whether the ADB server can manage the selected target.</summary>
-    public bool HasAdbServer => AdbServerClient is not null;
+    /// <summary>Checks whether an official adb server is running and reachable.</summary>
+    public bool HasAdbServer => DebugBridgeRoute.UseAdbServer();
 
     /// <summary>Requires the exact server-owned ADB target without opening a direct USB session.</summary>
     public void RequireAdbServerDevice(DetectedDevice device)
     {
         if (device.Protocol != DeviceProtocolKind.Adb)
             throw new ArgumentException("An ADB target is required.", nameof(device));
-        var client = AdbServerClient ?? throw new IOException("The ADB server is unavailable.");
-        _ = RequireAdbServerTarget(client, device.Serial);
+        if (!DebugBridgeRoute.UseAdbServer())
+            throw new IOException("The ADB server is unavailable.");
+        EnsureAdbServerTarget(device.Serial);
     }
 
-    /// <summary>Probes the selected ADB target, releasing the session after the check.</summary>
+    /// <summary>Probes the selected ADB target through the controller lease; server errors never grant direct USB access.</summary>
     public bool ProbeAdb(DetectedDevice device)
     {
-        try
-        {
-            using var session = OpenAdbSession(device);
-            if (session is null) return false;
-            session.Connect();
-            return session.Connection.IsConnected;
-        }
+        try { return RunAdb(device, session => session.IsConnected); }
         catch { return false; }
     }
 
     /// <summary>Probes the selected Fastboot target and reads its product variable.</summary>
     public (bool Ready, string? Product) ProbeFastboot(DetectedDevice device)
     {
-        using var session = OpenFastbootSession(device);
-        if (session is null) return (false, null);
-        try { return (true, session.GetVariable("product", useCache: false)); }
+        try { return (true, RunFastboot(device, session => session.GetVariable("product", useCache: false))); }
         catch { return (false, null); }
     }
 
     /// <summary>Checks whether the selected RKDL target is responsive.</summary>
     public bool ProbeRkdl(DetectedDevice device)
     {
-        using var session = OpenRkdlSession(device);
-        if (session is null) return false;
-        try { return session.IsRockchipDevice() && session.TestDeviceReady(); }
+        try
+        {
+            return RunRkdlAsync(device, session =>
+                Task.FromResult(session.IsRockchipDevice() && session.TestDeviceReady())).GetAwaiter().GetResult();
+        }
         catch { return false; }
     }
 
-    /// <summary>Probes on demand; server errors never grant direct USB access.</summary>
-    private AdbClient? ProbeAdbServer()
+    /// <summary>Lists the targets managed by the running adb server, or an empty list when it is absent.</summary>
+    internal static IReadOnlyList<(string Serial, string State)> ListAdbServerTargets() =>
+        new AdbServerServices(string.Empty, DeviceCommunicationConfiguration.ServerHost,
+            DeviceCommunicationConfiguration.AdbServerPort).ListTargets();
+
+    private static void EnsureAdbServerTarget(string serial)
     {
-        if (!DebugBridgeRoute.UseAdbServer()) return null;
-        var client = new AdbClient();
-        _ = client.GetAdbVersion();
-        return client;
+        if (!ListAdbServerTargets().Any(target => string.Equals(target.Serial, serial, StringComparison.Ordinal)))
+            throw new IOException("The ADB server does not contain the selected target. Direct USB fallback is prohibited while the server is running.");
     }
 
-    internal static DeviceData RequireAdbServerTarget(AdbClient client, string serial)
-        => client.GetDevices().FirstOrDefault(d => string.Equals(d.Serial, serial, StringComparison.Ordinal))
-            ?? throw new IOException("The ADB server does not contain the selected target. Direct USB fallback is prohibited while the server is running.");
-
-    private static DeviceData? ResolveAdbServerTarget(AdbClient? client, DetectedDevice device)
+    /// <summary>Reports whether the running server manages the device, for routing server versus direct-USB work.</summary>
+    private static bool AdbServerManages(DetectedDevice device)
     {
-        if (client is null) return null;
-        var target = client.GetDevices().FirstOrDefault(d =>
-            string.Equals(d.Serial, device.Serial, StringComparison.Ordinal));
-        if (target is null && device.Key.StartsWith("adb:", StringComparison.Ordinal))
+        if (!DebugBridgeRoute.UseAdbServer())
+        {
+            return false;
+        }
+
+        var present = ListAdbServerTargets().Any(target =>
+            string.Equals(target.Serial, device.Serial, StringComparison.Ordinal));
+        if (!present && device.Key.StartsWith("adb:", StringComparison.Ordinal))
             throw new IOException("The selected ADB server target is no longer present.");
-        return target;
+        return present;
     }
 
     /// <summary>Checks the current HDC server and propagates handshake errors.</summary>

@@ -4,7 +4,7 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 /// <para>当 USB 设备句柄已关闭或无效时抛出的异常。</para>
 /// Thrown when a USB device handle is closed or invalid.
 /// </summary>
-public sealed class UsbDeviceHandleClosedException : InvalidOperationException
+internal sealed class UsbDeviceHandleClosedException : InvalidOperationException
 {
     /// <summary>
     /// <para>使用指定错误消息初始化异常。</para>
@@ -39,7 +39,7 @@ public sealed class UsbDeviceHandleClosedException : InvalidOperationException
 /// <para>当 USB 传输操作失败时抛出的异常。</para>
 /// Thrown when a USB transfer operation fails.
 /// </summary>
-public sealed class UsbTransferException : IOException
+internal sealed class UsbTransferException : IOException
 {
     /// <summary>
     /// <para>获取或设置后端名称。</para>
@@ -103,7 +103,7 @@ public sealed class UsbTransferException : IOException
 /// <para>当 USB 设备打开失败时抛出的异常。</para>
 /// Thrown when a USB device fails to open.
 /// </summary>
-public sealed class UsbDeviceOpenException : InvalidOperationException
+internal sealed class UsbDeviceOpenException : InvalidOperationException
 {
     /// <summary>
     /// <para>获取或设置设备路径。</para>
@@ -160,7 +160,7 @@ public sealed class UsbDeviceOpenException : InvalidOperationException
 /// Upper-layer protocols (adb/fastboot/EDL etc.) can catch this exception to trigger
 /// re-enumeration / reconnect logic; it is distinct from ordinary I/O errors.
 /// </summary>
-public sealed class UsbDeviceDisconnectedException : IOException
+internal sealed class UsbDeviceDisconnectedException : IOException
 {
     /// <summary>
     /// <para>获取或设置后端名称。</para>

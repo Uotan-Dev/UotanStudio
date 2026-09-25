@@ -4,7 +4,7 @@ namespace UotanStudio.Comm.Diagnostics;
 /// Ignores USB diagnostic log messages.
 /// <para>忽略 USB 诊断日志消息。</para>
 /// </summary>
-public sealed class NullUsbLogger : IUsbLogger
+internal sealed class NullUsbLogger : IUsbLogger
 {
     /// <summary>
     /// Gets the shared instance.

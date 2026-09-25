@@ -1,4 +1,5 @@
 ﻿using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
 
@@ -15,19 +16,11 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     public string ServerHost { get; } = host;
     /// <summary>Server port. 服务端端口。</summary>
     public int ServerPort { get; } = port ?? DefaultServerPort;
-    /// <summary>Upstream OHOS_HDC_SERVER_PORT override, otherwise 8710.
-    /// <para>遵循上游 OHOS_HDC_SERVER_PORT 环境变量，否则使用 8710。</para></summary>
-    public static int DefaultServerPort
-    {
-        get
-        {
-            var value = Environment.GetEnvironmentVariable("OHOS_HDC_SERVER_PORT");
-            if (string.IsNullOrEmpty(value)) return 8710;
-            if (value.Any(c => !char.IsAsciiDigit(c)) || !int.TryParse(value, out var result) || result is < 1 or > 65535)
-                throw new InvalidOperationException("OHOS_HDC_SERVER_PORT must be a decimal port in [1, 65535].");
-            return result;
-        }
-    }
+    /// <summary>Upstream OHOS_HDC_SERVER_PORT override, otherwise 8710; the single definition
+    /// lives in <c>Routing.DebugBridgeEndpoints</c>.
+    /// <para>遵循上游 OHOS_HDC_SERVER_PORT 环境变量，否则使用 8710；唯一定义在
+    /// <c>Routing.DebugBridgeEndpoints</c>。</para></summary>
+    public static int DefaultServerPort => Routing.DebugBridgeEndpoints.HdcServerPort;
     /// <summary>Maximum frame allocation. 单帧分配上限。</summary>
     public const int MaximumFrameBytes = 4 * 1024 * 1024;
     /// <summary>Maximum captured output. 捕获输出上限。</summary>
@@ -181,6 +174,58 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     public IReadOnlyList<HdcTargetInfo> ListTargetDetails(int timeoutMs = 10000)
         => HdcTargetInfo.Parse(Encoding.UTF8.GetString(ExecuteOnDevice(string.Empty, "list targets -v", timeoutMs)));
 
+    /// <summary>
+    /// <para>停止本机 hdc server。上游 <c>hdc kill</c> 不走主机通道协议：客户端读取
+    /// server 写入的 pid 文件（<c>.HDCServer.pid</c> / 旧版 <c>.hdc.pid</c>）后直接终止该
+    /// 进程（client.cpp KillServer + base.cpp ProgramMutex）。真机验证表明 server 会忽略
+    /// 线上 kill 命令，因此这里对齐上游语义。找不到 pid 文件或进程已退出时视为无 server。</para>
+    /// Stops the local hdc server the way upstream does: the client reads the server's pid
+    /// file (<c>.HDCServer.pid</c> / legacy <c>.hdc.pid</c>) and terminates that process,
+    /// because the server ignores any wire-level kill command (verified against a real 3.0.0e
+    /// server). A missing pid file or an already-exited process means no server is running.
+    /// </summary>
+    /// <returns><c>true</c> when a running server was terminated; <c>false</c> when none was found.
+    /// <para>成功终止运行中的 server 返回 <c>true</c>；未发现 server 返回 <c>false</c>。</para></returns>
+    public Task<bool> KillAsync(int timeoutMs = 10000, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        foreach (var fileName in new[] { ".HDCServer.pid", ".hdc.pid" })
+        {
+            var path = Path.Combine(Path.GetTempPath(), fileName);
+            int pid;
+            try
+            {
+                // The running server keeps the pid file open; a shared read is required.
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete);
+                using var reader = new StreamReader(stream);
+                if (!int.TryParse(reader.ReadToEnd().Trim(), out pid) || pid <= 0)
+                {
+                    continue;
+                }
+            }
+            catch (IOException)
+            {
+                continue;
+            }
+
+            try
+            {
+                var server = Process.GetProcessById(pid);
+                server.Kill(entireProcessTree: true);
+                server.WaitForExit(timeoutMs);
+                return Task.FromResult(true);
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or SystemException
+                && ex is not OperationCanceledException)
+            {
+                // Stale pid file pointing at an exited or foreign process; try the next name.
+            }
+        }
+
+        return Task.FromResult(false);
+    }
+
     /// <summary>Rejects explicit server failures. 拒绝服务端明确失败响应。</summary>
     public static void ThrowOnFailure(string output)
     {
@@ -194,10 +239,6 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
         ArgumentException.ThrowIfNullOrWhiteSpace(connectKey);
         return new HdcSession(new HdcServerClient(ServerHost, ServerPort), connectKey);
     }
-    /// <summary>Starts the official server. 启动官方服务端。</summary>
-    public void StartServer() => HdcCommandClient.RunAsync("hdc", ["-s", $"{ServerHost}:{ServerPort}", "start"]).GetAwaiter().GetResult();
-    /// <summary>Stops the official server. 停止官方服务端。</summary>
-    public void KillServer() => HdcCommandClient.RunAsync("hdc", ["-s", $"{ServerHost}:{ServerPort}", "kill"]).GetAwaiter().GetResult();
     /// <summary>Prevents further requests. 禁止后续请求。</summary>
     public void Dispose() => _disposed = true;
 }

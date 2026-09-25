@@ -1,5 +1,5 @@
 using UotanStudio.Comm.Diagnostics;
-using UotanStudio.Comm.Protocols.Common;
+using UotanStudio.Comm.Routing;
 
 namespace UotanStudio.Services.Devices;
 

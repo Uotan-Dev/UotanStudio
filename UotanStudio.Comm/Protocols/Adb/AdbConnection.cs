@@ -7,7 +7,7 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// message dispatch loop, and stream multiplexing.
 /// <para>基于设备传输的 ADB 连接：CNXN 握手、认证、消息分发循环、流复用。</para>
 /// </summary>
-public sealed class AdbConnection : IDisposable
+internal sealed class AdbConnection : IDisposable
 {
     // Ordered auth identities; AUTH tokens are answered with each key in turn
     // (AOSP NextKey semantics, see the constructor docs and HandleAuth).
@@ -140,7 +140,7 @@ public sealed class AdbConnection : IDisposable
             return;
         }
         if (_transport is UsbDeviceTransport usbTransport)
-            UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.RequireDirectUsb(0xff, 0x42, 1,
+            UotanStudio.Comm.Transports.Usb.Core.UsbAccessPolicy.RequireDirect(0xff, 0x42, 1,
                 usbTransport.Session.DeviceInfo.SerialNumber);
         try
         {
@@ -287,10 +287,7 @@ public sealed class AdbConnection : IDisposable
         if (payloadLength > 0)
         {
             payload = ReadExact((int)payloadLength, 5000);
-            if (payloadCrc != 0)
-            {
-                AdbMessaging.VerifyCrc(payload, payloadCrc);
-            }
+            AdbMessaging.VerifyCrc(payload, payloadCrc);
         }
 
         return new AdbMessage(command, arg0, arg1, payload);
@@ -347,7 +344,9 @@ public sealed class AdbConnection : IDisposable
                 }
                 else
                 {
-                    var publicKey = _authentications[0].BuildPublicKeyPayload();
+                    // NextKey semantics: after every signature candidate was rejected, announce
+                    // the last attempted key's public payload so the device can offer it.
+                    var publicKey = _authentications[^1].BuildPublicKeyPayload();
                     Send(AdbMessaging.BuildAuth(AdbAuthType.RsaPublicKey, publicKey));
                 }
                 break;
@@ -406,7 +405,16 @@ public sealed class AdbConnection : IDisposable
         {
             _streams.TryGetValue(message.Arg1, out stream);
         }
-        stream?.SetRemoteId(message.Arg0);
+
+        if (stream is null)
+        {
+            // Unknown local id: converge like AOSP by closing the peer's stream instead of
+            // silently dropping, which could leave the peer waiting.
+            Send(AdbMessaging.BuildClose(message.Arg1, message.Arg0));
+            return;
+        }
+
+        stream.SetRemoteId(message.Arg0);
     }
 
     /// <summary>
@@ -422,6 +430,11 @@ public sealed class AdbConnection : IDisposable
             {
                 stream.EnqueueData(message.Payload ?? []);
                 Send(AdbMessaging.BuildOkay(message.Arg1, message.Arg0));
+            }
+            else
+            {
+                // Unknown local id: AOSP replies CLSE so the peer tears the stream down.
+                Send(AdbMessaging.BuildClose(message.Arg1, message.Arg0));
             }
         }
     }
@@ -444,8 +457,8 @@ public sealed class AdbConnection : IDisposable
 
         if (stream is not null)
         {
+            // AOSP only closes locally on a peer CLSE; echoing CLSE back is surplus traffic.
             stream.MarkClosed();
-            Send(AdbMessaging.BuildClose(message.Arg1, message.Arg0));
         }
     }
 

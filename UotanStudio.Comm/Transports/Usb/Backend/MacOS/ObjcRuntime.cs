@@ -145,7 +145,7 @@ internal static partial class ObjcRuntime
     /// sendControlRequest / sendDeviceRequest。</para>
     /// </summary>
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    public readonly struct UsbHostDeviceRequest
+    internal readonly struct UsbHostDeviceRequest
     {
         /// <summary>bmRequestType — direction/type/recipient byte. <para>bmRequestType。</para></summary>
         public readonly byte BmRequestType;

@@ -1,4 +1,5 @@
 using System.Text;
+using UotanStudio.Comm.Contracts;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
@@ -12,7 +13,7 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// </remarks>
 /// <param name="kind">The frame kind. 帧类型。</param>
 /// <param name="payload">The frame payload. 帧负载。</param>
-public readonly struct ShellFrame(ShellFrameKind kind, byte[] payload)
+internal readonly struct ShellFrame(ShellFrameKind kind, byte[] payload)
 {
     /// <summary>
     /// Gets the frame kind.
@@ -72,13 +73,13 @@ public readonly struct ShellResult(byte[] stdout, byte[] stderr, int exitCode)
 /// <param name="command">The command to execute. 要执行的命令。</param>
 /// <param name="term">Terminal type, or null for default. 终端类型，null 表示默认。</param>
 /// <param name="pty">Whether to use a pseudo-terminal. 是否使用伪终端。</param>
-public sealed class AdbShellClient(AdbConnection connection, string command, string? term = null, bool pty = false)
+internal sealed class AdbShellClient(AdbConnection connection, string command, string? term = null, bool pty = false) : IAdbShellClient
 {
     private const int FrameHeaderSize = 5; // kind(1) + length(4)
     private const int MaxFramePayloadSize = 16 * 1024 * 1024;
 
     /// <summary>Incremental shell-v2 frame parser used across ADB WRTE chunk boundaries.</summary>
-    public sealed class FrameParser
+    internal sealed class FrameParser
     {
         private byte[] _buffer = [];
         private int _start;
@@ -292,6 +293,7 @@ public sealed class AdbShellClient(AdbConnection connection, string command, str
     /// </summary>
     /// <param name="payload">The frame payload. 帧负载。</param>
     /// <returns>The exit code, or null if the payload is empty. 退出码，负载为空时返回 null。</returns>
-    private static int? ReadExitCode(byte[] payload) => payload is { Length: >= 4 } ? BitConverter.ToInt32(payload, 0) : payload is { Length: >= 1 } ? payload[0] : null;
+    /// <remarks>AOSP shell_v2_protocol sends the exit code as a single byte.</remarks>
+    private static int? ReadExitCode(byte[] payload) => payload is { Length: >= 1 } ? payload[0] : null;
 
 }

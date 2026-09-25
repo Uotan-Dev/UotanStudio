@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using UotanStudio.Comm.Protocols.Common;
-using UotanStudio.Comm.Protocols.Fastboot.Utils;
+using UotanStudio.Comm.Protocols.Fastboot.Images;
 using UotanStudio.Comm.Transports.Abstractions;
 
 
@@ -11,6 +11,9 @@ namespace UotanStudio.Comm.Protocols.Fastboot;
 
 public sealed partial class FastbootSession
 {
+    /// <summary>Upper bound on accumulated INFO lines; a flood beyond this fails the command.</summary>
+    private const int MaxInfoLines = 10000;
+
     /// <summary>
     /// Sends a raw command string to the device (UTF-8 encoded, max 4096 bytes).
     /// <para>向设备发送原始命令字符串（UTF-8 编码，最大 4096 字节）。</para>
@@ -37,12 +40,11 @@ public sealed partial class FastbootSession
     /// Loops over the accumulated pending buffer, recognizing OKAY/FAIL/INFO/TEXT/DATA
     /// prefixes at each frame boundary. INFO lines and TEXT content are accumulated on the
     /// returned response; the call only returns when a terminal OKAY/FAIL/DATA frame (or an
-    /// unrecoverable unknown prefix) is reached. The timeout deadline is reset on each
-    /// INFO/TEXT frame so long-running commands with periodic progress output do not abort.
+    /// unrecoverable unknown prefix) is reached. The timeout deadline is fixed from the
+    /// command start, matching upstream fastboot.
     /// <para>循环扫描累积的待解析缓冲区，在每个帧边界识别 OKAY/FAIL/INFO/TEXT/DATA 前缀。
     /// INFO 行与 TEXT 内容累积到返回的响应对象上；仅在到达终止 OKAY/FAIL/DATA 帧
-    /// （或出现不可恢复的未知前缀）时返回。每收到一个 INFO/TEXT 帧会重置超时截止时间，
-    /// 使周期性输出进度的长时间命令不会中途超时。</para>
+    /// （或出现不可恢复的未知前缀）时返回。超时截止时间自命令开始固定不变，与上游一致。</para>
     /// </summary>
     public FastbootResponse ReceiveResponse(int? timeoutMs = null)
     {
@@ -88,22 +90,9 @@ public sealed partial class FastbootSession
 
                     if (!IsKnownPrefixAt(pending, pendingOffset))
                     {
-                        var nextPrefix = -1;
-                        for (var i = pendingOffset + 1; i <= pending.Length - 4; i++)
-                        {
-                            if (IsKnownPrefixAt(pending, i))
-                            {
-                                nextPrefix = i;
-                                break;
-                            }
-                        }
-
-                        if (nextPrefix > pendingOffset)
-                        {
-                            pendingOffset = nextPrefix;
-                            continue;
-                        }
-
+                        // Frame-boundary parsing like upstream fastboot: anything that is not a
+                        // known status at the boundary is garbage; scanning ahead would risk
+                        // re-syncing into the middle of a DATA payload.
                         var junk = pending[pendingOffset..];
                         response.State = FastbootResponseState.Unknown;
                         response.Info = "device sent unknown status code: " + junk;
@@ -127,6 +116,16 @@ public sealed partial class FastbootSession
 
                     if (isInfo || isText)
                     {
+                        // A fixed deadline from command start (upstream behavior): a device
+                        // flooding INFO frames cannot extend the wait indefinitely.
+                        if (isInfo && response.InfoLines.Count >= MaxInfoLines)
+                        {
+                            response.State = FastbootResponseState.Fail;
+                            response.Info = "device sent too many INFO frames";
+                            response.Text = textBuffer?.ToString() ?? string.Empty;
+                            return response;
+                        }
+
                         var contentStart = pendingOffset + 4;
                         var endIdx = FindInfoTextEnd(pending, contentStart);
                         if (endIdx < 0)
@@ -152,7 +151,6 @@ public sealed partial class FastbootSession
                             next++;
                         }
                         pendingOffset = next;
-                        startTimestamp = Stopwatch.GetTimestamp();
                         continue;
                     }
 

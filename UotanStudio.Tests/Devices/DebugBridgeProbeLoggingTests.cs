@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.ExceptionServices;
-using UotanStudio.Comm.Protocols.Common;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using Xunit;

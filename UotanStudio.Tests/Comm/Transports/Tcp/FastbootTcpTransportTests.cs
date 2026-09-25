@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using UotanStudio.Comm.Transports.Tcp;
+using UotanStudio.Comm.Protocols.Fastboot.Transport;
 using Xunit;
 
 namespace UotanStudio.Tests.Comm.Transports.Tcp;

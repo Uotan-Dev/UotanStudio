@@ -121,24 +121,39 @@ public sealed partial class MtkSession
         }
     }
 
-    private static async Task SendXmlControlCommandOwnedAsync(MtkXmlChannel channel, XElement command, CancellationToken token)
+    private async Task SendXmlControlCommandOwnedAsync(MtkXmlChannel channel, XElement command, CancellationToken token)
     {
         await channel.SendCommandAsync(command, token).ConfigureAwait(false);
-        if (await channel.ReceiveTextAsync(token).ConfigureAwait(false) != "OK")
+        for (var serviced = 0; ; serviced++)
         {
+            var reply = await channel.ReceiveTextAsync(token).ConfigureAwait(false);
+            if (reply == "OK")
+            {
+                break;
+            }
+
+            // A device-initiated file request may replace the expected OK; only an XML command
+            // frame can be one, so any other reply keeps the original rejection error.
+            if (serviced < 16 && reply.Contains("<command", StringComparison.Ordinal) &&
+                await TryServiceXmlFileRequestOwnedAsync(channel, MtkXmlMessage.Parse(reply), token).ConfigureAwait(false))
+            {
+                continue;
+            }
+
             throw new MtkProtocolException("The XML DA did not accept the control command.");
         }
+
         await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
     }
 
-    private static async Task CompleteXmlCommandOwnedAsync(MtkXmlChannel channel, CancellationToken token)
+    private async Task CompleteXmlCommandOwnedAsync(MtkXmlChannel channel, CancellationToken token)
     {
         var end = await ReceiveXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
         await AcknowledgeXmlEndOwnedAsync(channel, end, token).ConfigureAwait(false);
         await AcknowledgeXmlStartOwnedAsync(channel, token).ConfigureAwait(false);
     }
 
-    private static async Task AcknowledgeXmlEndOwnedAsync(MtkXmlChannel channel, MtkXmlMessage end, CancellationToken token)
+    private async Task AcknowledgeXmlEndOwnedAsync(MtkXmlChannel channel, MtkXmlMessage end, CancellationToken token)
     {
         RequireXmlCommand(end, "CMD:END");
         if (end.Result != "OK")
@@ -148,48 +163,73 @@ public sealed partial class MtkSession
         await channel.AcknowledgeAsync(token).ConfigureAwait(false);
     }
 
-    private static async Task AcknowledgeXmlStartOwnedAsync(MtkXmlChannel channel, CancellationToken token)
+    private async Task AcknowledgeXmlStartOwnedAsync(MtkXmlChannel channel, CancellationToken token)
     {
-        var start = MtkXmlMessage.Parse(await channel.ReceiveTextAsync(token).ConfigureAwait(false));
+        var start = await ReceiveServicedXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
         RequireXmlCommand(start, "CMD:START");
         await channel.AcknowledgeAsync(token).ConfigureAwait(false);
     }
 
-    private static async Task<MtkXmlMessage> ReceiveXmlCommandOwnedAsync(MtkXmlChannel channel, CancellationToken token)
+    private Task<MtkXmlMessage> ReceiveXmlCommandOwnedAsync(MtkXmlChannel channel, CancellationToken token)
+        => ReceiveServicedXmlCommandOwnedAsync(channel, token, expectFileRequests: false);
+
+    /// <summary>Receives the next non-progress command, servicing device-initiated file requests
+    /// when the host file store is attached (bounded, like the progress-report budget).
+    /// 接收下一条非进度命令；在附加主机文件存储时服务设备发起的文件请求（与进度报告一样有界）。</summary>
+    private async Task<MtkXmlMessage> ReceiveServicedXmlCommandOwnedAsync(MtkXmlChannel channel, CancellationToken token,
+        bool expectFileRequests = true)
     {
-        for (var reports = 0; reports <= 16; reports++)
+        var reports = 0;
+        var serviced = 0;
+        while (true)
         {
             var message = MtkXmlMessage.Parse(await channel.ReceiveTextAsync(token).ConfigureAwait(false));
-            if (message.Command != "CMD:PROGRESS-REPORT")
+            if (message.Command == "CMD:PROGRESS-REPORT")
             {
-                return message;
-            }
-            if (reports == 16)
-            {
-                throw new MtkProtocolException("Too many XML DA progress reports.");
-            }
-            await channel.AcknowledgeAsync(token).ConfigureAwait(false);
-            var completed = false;
-            for (var packet = 0; packet < 256; packet++)
-            {
-                var text = await channel.ReceiveTextAsync(token).ConfigureAwait(false);
-                if (text.StartsWith("ERR!", StringComparison.Ordinal))
+                if (++reports > 16)
                 {
-                    throw new MtkProtocolException("The XML DA progress phase failed.");
+                    throw new MtkProtocolException("Too many XML DA progress reports.");
                 }
+
                 await channel.AcknowledgeAsync(token).ConfigureAwait(false);
-                if (text == "OK!EOT")
+                var completed = false;
+                for (var packet = 0; packet < 256; packet++)
                 {
-                    completed = true;
-                    break;
+                    var text = await channel.ReceiveTextAsync(token).ConfigureAwait(false);
+                    if (text.StartsWith("ERR!", StringComparison.Ordinal))
+                    {
+                        throw new MtkProtocolException("The XML DA progress phase failed.");
+                    }
+                    await channel.AcknowledgeAsync(token).ConfigureAwait(false);
+                    if (text == "OK!EOT")
+                    {
+                        completed = true;
+                        break;
+                    }
+                }
+                if (!completed)
+                {
+                    throw new MtkProtocolException("The XML DA progress phase exceeded its packet limit.");
+                }
+
+                continue;
+            }
+
+            if (expectFileRequests && IsXmlFileRequest(message))
+            {
+                if (++serviced > 16)
+                {
+                    throw new MtkProtocolException("Too many XML DA device-initiated file requests.");
+                }
+
+                if (await TryServiceXmlFileRequestOwnedAsync(channel, message, token).ConfigureAwait(false))
+                {
+                    continue;
                 }
             }
-            if (!completed)
-            {
-                throw new MtkProtocolException("The XML DA progress phase exceeded its packet limit.");
-            }
+
+            return message;
         }
-        throw new MtkProtocolException("An XML DA terminal command was not received.");
     }
 
     private static void RequireXmlCommand(MtkXmlMessage message, string command)

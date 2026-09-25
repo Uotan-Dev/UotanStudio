@@ -7,15 +7,21 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// Represents an EDL (Emergency Download Mode) protocol session combining Sahara and Firehose protocols.
 /// <para>表示 EDL（紧急下载模式）协议会话，组合 Sahara 和 Firehose 协议。</para>
 /// </summary>
-/// <remarks>
-/// Creates a new EDL session over the specified device transport.
-/// <para>在指定设备传输上创建新的 EDL 会话。</para>
-/// </remarks>
-/// <param name="transport">The device transport. 设备传输。</param>
-/// <param name="firehoseConfig">Optional Firehose configuration. 可选的 Firehose 配置。</param>
-public sealed class EdlSession(ICommTransport transport, FirehoseConfiguration? firehoseConfig = null) : IProtocolSession
+public sealed class EdlSession : IProtocolSession
 {
     private volatile bool _disposed;
+
+    /// <summary>
+    /// Creates a new EDL session over the specified device transport.
+    /// <para>在指定设备传输上创建新的 EDL 会话。</para>
+    /// </summary>
+    /// <param name="transport">The device transport. 设备传输。</param>
+    /// <param name="firehoseConfig">Optional Firehose configuration. 可选的 Firehose 配置。</param>
+    internal EdlSession(ICommTransport transport, FirehoseConfiguration? firehoseConfig = null)
+    {
+        Transport = transport ?? throw new ArgumentNullException(nameof(transport));
+        Firehose = new FirehoseProtocol(transport, firehoseConfig);
+    }
 
     /// <summary>
     /// Gets the protocol name.
@@ -27,7 +33,7 @@ public sealed class EdlSession(ICommTransport transport, FirehoseConfiguration? 
     /// Gets the underlying transport session.
     /// <para>获取底层传输会话。</para>
     /// </summary>
-    public ICommTransport Transport { get; } = transport ?? throw new ArgumentNullException(nameof(transport));
+    public ICommTransport Transport { get; }
 
     /// <summary>
     /// Gets whether the session is connected and ready.
@@ -51,7 +57,7 @@ public sealed class EdlSession(ICommTransport transport, FirehoseConfiguration? 
     /// Gets the Firehose protocol instance.
     /// <para>获取 Firehose 协议实例。</para>
     /// </summary>
-    public FirehoseProtocol? Firehose { get; } = new FirehoseProtocol(transport, firehoseConfig);
+    public FirehoseProtocol? Firehose { get; }
 
     /// <summary>
     /// Gets the negotiated maximum packet length from Sahara.

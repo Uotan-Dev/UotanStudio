@@ -7,7 +7,7 @@ namespace UotanStudio.Comm.Protocols.Bootrom;
 /// One entry of an RKBOOT loader image (STRUCT_RKBOOT_ENTRY, see rkdeveloptool RKBoot.h).
 /// <para>RKBOOT loader 镜像中的一个条目（STRUCT_RKBOOT_ENTRY，见 rkdeveloptool 的 RKBoot.h）。</para>
 /// </summary>
-public sealed class RkBootEntry
+internal sealed class RkBootEntry
 {
     /// <summary>
     /// Gets the entry type (ENUM_RKBOOTENTRY). <para>获取条目类型（ENUM_RKBOOTENTRY）。</para>
@@ -49,7 +49,7 @@ public sealed class RkBootEntry
 /// （标签 "BOOT"/0x544F4F42 或 "LDR "/0x2052444C），指向三个条目表（471、472 与 loader），
 /// 整个文件由存储在末尾 4 字节的 Rockchip CRC-32（多项式 0x04C10DB7）校验。</para>
 /// </summary>
-public sealed class RkBootImage
+internal sealed class RkBootImage
 {
     /// <summary>
     /// Gets the 471 (first-stage) entries, in download order.
@@ -75,14 +75,16 @@ public sealed class RkBootImage
     public string Tag { get; private set; } = string.Empty;
 
     /// <summary>
-    /// Gets the loader version. <para>获取 loader 版本。</para>
+    /// Gets the loader version (rk_boot_header.uiVersion, a packed u32).
+    /// <para>获取 loader 版本（rk_boot_header.uiVersion，u32）。</para>
     /// </summary>
-    public byte Version { get; private set; }
+    public uint Version { get; private set; }
 
     /// <summary>
-    /// Gets the loader merge version. <para>获取 loader 合并版本。</para>
+    /// Gets the loader merge version (rk_boot_header.mergerVersion, a packed u32).
+    /// <para>获取 loader 合并版本（rk_boot_header.mergerVersion，u32）。</para>
     /// </summary>
-    public byte MergeVersion { get; private set; }
+    public uint MergeVersion { get; private set; }
 
     /// <summary>
     /// Gets the supported chip mask (emSupportChip). <para>获取支持的芯片掩码（emSupportChip）。</para>
@@ -147,21 +149,25 @@ public sealed class RkBootImage
         var image = new RkBootImage
         {
             Tag = Encoding.ASCII.GetString(buffer, 0, 4),
-            Version = buffer[6],
-            MergeVersion = buffer[7],
-            SupportChip = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(16)),
-            Rc4Enabled = buffer[41] != 0,
+            // Packed rk_boot_header layout (boot_merger.h): tag@0 u32, size@4 u16,
+            // version@6 u32, mergerVersion@10 u32, releaseTime@14 (7-byte rk_time),
+            // chipType@21 u32, then the three {num u8, offset u32, entrySize u8} tables,
+            // signFlag@43 and rc4Flag@44.
+            Version = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(6)),
+            MergeVersion = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(10)),
+            SupportChip = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(21)),
+            Rc4Enabled = buffer[44] != 0,
         };
 
-        var count471 = buffer[20];
-        var offset471 = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(21));
-        var size471 = BinaryPrimitives.ReadUInt16LittleEndian(buffer.AsSpan(25));
-        var count472 = buffer[27];
-        var offset472 = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(28));
-        var size472 = BinaryPrimitives.ReadUInt16LittleEndian(buffer.AsSpan(32));
-        var loaderCount = buffer[34];
-        var loaderOffset = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(35));
-        var loaderSize = BinaryPrimitives.ReadUInt16LittleEndian(buffer.AsSpan(39));
+        var count471 = buffer[25];
+        var offset471 = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(26));
+        var size471 = buffer[30];
+        var count472 = buffer[31];
+        var offset472 = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(32));
+        var size472 = buffer[36];
+        var loaderCount = buffer[37];
+        var loaderOffset = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(38));
+        var loaderSize = buffer[42];
 
         image.Entries471 = ParseEntries(buffer, offset471, size471, count471);
         image.Entries472 = ParseEntries(buffer, offset472, size472, count472);

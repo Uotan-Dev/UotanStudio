@@ -4,7 +4,7 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>HDC device commands, using native OpenHarmony semantics.
 /// <para>使用 OpenHarmony 原生命令语义的 HDC 设备服务。</para></summary>
-public sealed class HdcDeviceServices
+public sealed class HdcDeviceServices : UotanStudio.Comm.Contracts.IHdcDeviceServices
 {
     private readonly HdcConnection? _connection;
     private readonly HdcServerClient? _server;
@@ -48,9 +48,35 @@ public sealed class HdcDeviceServices
         "recovery" => "-recovery",
         _ => throw new NotSupportedException($"Unsupported HDC reboot mode: {mode}")
     };
+    /// <summary>Maps supported UI reboot modes to the device-shell reboot argument.
+    /// <para>将界面支持的重启模式映射为设备 shell 的 reboot 参数。</para></summary>
+    public static string RebootShellArgument(string? mode) => mode switch
+    {
+        null or "" or "system" => "reboot",
+        "bootloader" => "reboot bootloader",
+        "recovery" => "reboot recovery",
+        _ => throw new NotSupportedException($"Unsupported HDC reboot mode: {mode}")
+    };
+
     /// <summary>Reboots to system, bootloader or recovery. 重启至系统、bootloader 或 recovery。</summary>
+    /// <remarks>
+    /// Server routes execute the device-shell <c>reboot</c>: "target boot" is a Unity binary
+    /// command (CMD_UNITY_REBOOT) the server's text router does not carry, so a literal string
+    /// there fails with "Device not founded" (verified against a real 3.0.0e server). Direct
+    /// routes keep the native Unity channel.
+    /// <para>server 路由改走设备 shell 的 <c>reboot</c>："target boot" 是 Unity 二进制命令
+    /// （CMD_UNITY_REBOOT），server 文本路由不承载，直接发字符串会报
+    /// "Device not founded"（真机 3.0.0e 验证）。直连路由保留原生 Unity 通道。</para>
+    /// </remarks>
     public void Reboot(string? mode = null)
     {
+        if (_server is not null)
+        {
+            // The server text router carries device commands as "shell <command>".
+            ExecuteService("shell " + RebootShellArgument(mode), HdcCommand.UnityReboot, "", 10000);
+            return;
+        }
+
         var argument = RebootArgument(mode);
         ExecuteService("target boot" + (argument.Length == 0 ? "" : " " + argument), HdcCommand.UnityReboot, argument, 10000);
     }

@@ -29,7 +29,7 @@ public sealed class UsbDiscoverySourceTests
             }
         ];
 
-        var endpoints = await new UsbDiscoverySource(kit, UsbApiKind.Native)
+        var endpoints = await new UsbDiscoverySource(kit, UsbApiKind.Native, serverProbeOverride: _ => false)
             .DiscoverAsync(TestContext.Current.CancellationToken);
 
         var endpoint = Assert.Single(endpoints);
@@ -70,7 +70,7 @@ public sealed class UsbDiscoverySourceTests
                 InterfaceMetadataObserved = observed
             }
         ];
-        var endpoint = Assert.Single(await new UsbDiscoverySource(kit, UsbApiKind.Native)
+        var endpoint = Assert.Single(await new UsbDiscoverySource(kit, UsbApiKind.Native, serverProbeOverride: _ => false)
             .DiscoverAsync(TestContext.Current.CancellationToken));
         Assert.Equal(expected, endpoint.Protocol);
     }

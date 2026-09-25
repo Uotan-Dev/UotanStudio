@@ -1,9 +1,9 @@
 using System.IO.Ports;
-using UotanStudio.Comm.Protocols.Common;
-using UotanStudio.Comm.Protocols.Scrcpy;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Devices;
+using UotanStudio.Services.Mirroring;
 using UotanStudio.ViewModels.Devices;
 using Xunit;
 
@@ -14,7 +14,7 @@ public sealed class DeviceManagerRoutingTests
     [Theory]
     [InlineData(DeviceProtocolKind.Adb)]
     [InlineData(DeviceProtocolKind.Hdc)]
-    public void OpenUsbSession_ServerPresent_RejectsStaleDirectTarget(DeviceProtocolKind protocol)
+    public void ResolveDirectUsbOpenKey_ServerPresent_RejectsStaleDirectTarget(DeviceProtocolKind protocol)
     {
         if (protocol == DeviceProtocolKind.Adb && !DebugBridgeRoute.UseAdbServer() ||
             protocol == DeviceProtocolKind.Hdc && !DebugBridgeRoute.UseHdcServer())
@@ -27,11 +27,11 @@ public sealed class DeviceManagerRoutingTests
             Protocol = protocol,
             Transport = DeviceTransportKind.Usb
         };
-        Assert.Throws<IOException>(() => DeviceMonitorService.Instance.OpenUsbSession(device));
+        Assert.Throws<IOException>(() => UotanStudio.App.DeviceMonitor.ResolveDirectUsbOpenKey(device));
     }
 
     [Fact]
-    public void OpenAdbSession_ServerOriginTarget_NeverFallsBackToUsb()
+    public void OpenAdbLease_ServerOriginTarget_NeverFallsBackToUsb()
     {
         var device = new DetectedDevice
         {
@@ -41,15 +41,16 @@ public sealed class DeviceManagerRoutingTests
             Transport = DeviceTransportKind.Usb
         };
 
-        Assert.Throws<IOException>(() => DeviceMonitorService.Instance.OpenUsbSession(device));
+        Assert.Throws<IOException>(() => UotanStudio.App.DeviceMonitor.ResolveDirectUsbOpenKey(device));
         if (DebugBridgeRoute.UseAdbServer())
         {
-            using var session = DeviceMonitorService.Instance.OpenAdbSession(device);
-            Assert.NotNull(session);
+            var opened = UotanStudio.App.DeviceMonitor.OpenAdbLease(device);
+            Assert.NotNull(opened);
+            opened.Value.Lease.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
         else
         {
-            Assert.Throws<IOException>(() => DeviceMonitorService.Instance.OpenAdbSession(device));
+            Assert.Throws<IOException>(() => UotanStudio.App.DeviceMonitor.OpenAdbLease(device));
         }
     }
 
@@ -65,7 +66,7 @@ public sealed class DeviceManagerRoutingTests
             State = "device"
         };
 
-        Assert.False(DeviceMonitorService.Instance.ProbeAdb(device));
+        Assert.False(UotanStudio.App.DeviceMonitor.ProbeAdb(device));
     }
 
     [Fact]
@@ -79,7 +80,7 @@ public sealed class DeviceManagerRoutingTests
             Transport = DeviceTransportKind.Usb
         };
 
-        await Assert.ThrowsAsync<ArgumentException>(() => DeviceMonitorService.Instance.DisconnectAdbAsync(device));
+        await Assert.ThrowsAsync<ArgumentException>(() => UotanStudio.App.DeviceMonitor.DisconnectAdbAsync(device));
     }
 
     [Fact]
@@ -93,7 +94,7 @@ public sealed class DeviceManagerRoutingTests
             Transport = DeviceTransportKind.Usb
         };
 
-        await Assert.ThrowsAsync<ArgumentException>(() => DeviceMonitorService.Instance.HdcShellAsync(
+        await Assert.ThrowsAsync<ArgumentException>(() => UotanStudio.App.DeviceMonitor.HdcShellAsync(
             device, "echo test", TestContext.Current.CancellationToken));
     }
 
@@ -123,11 +124,11 @@ public sealed class DeviceManagerRoutingTests
         };
 
         Assert.Throws<InvalidOperationException>(() =>
-            DeviceMonitorService.Instance.StartMirror(device, "missing.jar", new ScrcpyServerOptions()));
+            UotanStudio.App.DeviceMonitor.StartMirror(device, "missing.jar", new ScrcpyServerOptions()));
     }
 
     [Fact]
-    public void OpenProtocolSession_MismatchedUsbTarget_RejectsBeforeUsbOpen()
+    public async Task OpenProtocolSession_MismatchedUsbTarget_RejectsBeforeUsbOpen()
     {
         var device = new DetectedDevice
         {
@@ -137,8 +138,10 @@ public sealed class DeviceManagerRoutingTests
             Transport = DeviceTransportKind.Usb
         };
 
-        Assert.Throws<ArgumentException>(() => DeviceMonitorService.Instance.OpenEdlSession(device));
-        Assert.Throws<ArgumentException>(() => DeviceMonitorService.Instance.OpenRkdlSession(device));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            UotanStudio.App.DeviceMonitor.RunEdlAsync(device, _ => Task.FromResult(true), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            UotanStudio.App.DeviceMonitor.RunRkdlAsync(device, _ => Task.FromResult(true), TestContext.Current.CancellationToken));
     }
 
     [Fact]

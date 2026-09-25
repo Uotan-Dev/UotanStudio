@@ -112,7 +112,7 @@ public static class RkdlConstants
 /// TEST_UNIT_READY sub codes (used in CBWCB.ucReserved, see rkdeveloptool RKComm.h).
 /// <para>TEST_UNIT_READY 子码（存于 CBWCB.ucReserved，见 rkdeveloptool 的 RKComm.h）。</para>
 /// </summary>
-public static class RkdlTestUnitSubCode
+internal static class RkdlTestUnitSubCode
 {
     /// <summary>Erase the system disk. <para>擦除系统盘。</para></summary>
     public const byte EraseSystem = 0xFE;
@@ -128,7 +128,7 @@ public static class RkdlTestUnitSubCode
 /// READ_LBA/WRITE_LBA access method sub codes (RWMETHOD, see rkdeveloptool RKComm.h).
 /// <para>READ_LBA/WRITE_LBA 访问方式子码（RWMETHOD，见 rkdeveloptool 的 RKComm.h）。</para>
 /// </summary>
-public static class RkdlRwMethod
+internal static class RkdlRwMethod
 {
     /// <summary>Address by partition image offset. <para>按分区镜像偏移寻址。</para></summary>
     public const byte Image = 0;
@@ -141,7 +141,7 @@ public static class RkdlRwMethod
 /// Rockchip rockusb operation codes (USB_OPERATION_CODE, see rkdeveloptool RKComm.h).
 /// <para>Rockchip rockusb 操作码（USB_OPERATION_CODE，见 rkdeveloptool RKComm.h）。</para>
 /// </summary>
-public enum RkdlCommand : byte
+internal enum RkdlCommand : byte
 {
     /// <summary>
     /// Test Unit Ready: 0.
@@ -286,7 +286,7 @@ public enum RkdlCommand : byte
 /// RKDL chip info structure.
 /// <para>RKDL 芯片信息结构。</para>
 /// </summary>
-public class RkChipInfo
+internal class RkChipInfo
 {
     /// <summary>
     /// Gets or sets the chip ID.
@@ -349,7 +349,7 @@ public class RkChipInfo
 /// RKDL flash info structure.
 /// <para>RKDL 闪存信息结构。</para>
 /// </summary>
-public class RkFlashInfo
+internal class RkFlashInfo
 {
     /// <summary>
     /// Gets or sets the total flash size in bytes.
@@ -374,7 +374,7 @@ public class RkFlashInfo
 /// RKDL error codes.
 /// <para>RKDL 错误码。</para>
 /// </summary>
-public enum RkdlError
+internal enum RkdlError
 {
     /// <summary>
     /// Operation completed successfully.
@@ -453,7 +453,7 @@ public enum RkdlError
 /// Exception thrown when an RKDL operation fails.
 /// <para>RKDL 操作失败时抛出的异常。</para>
 /// </summary>
-public class RkdlException : Exception
+internal class RkdlException : Exception
 {
     /// <summary>
     /// Gets the RKDL error code.

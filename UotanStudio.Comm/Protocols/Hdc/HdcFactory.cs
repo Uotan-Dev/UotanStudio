@@ -9,7 +9,7 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 /// <para>从 USB 设备会话创建 <see cref="HdcSession"/> 实例的工厂。</para>
 /// Matches the upstream FF/50/01 interface and its bound bulk endpoint pair.
 /// </summary>
-public sealed class HdcFactory : IProtocolFactory
+internal sealed class HdcFactory : IProtocolFactory
 {
     private readonly ushort? _vendorId;
     private readonly ushort? _productId;

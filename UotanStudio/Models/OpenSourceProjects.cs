@@ -136,17 +136,6 @@ public static class OpenSourceProjects
         },
         new OpenSourceProject
         {
-            Name = "AdvancedSharpAdbClient",
-            Description = "ADB 协议客户端库（与 adb server 交互、设备状态监测）",
-            RepositoryUrl = "https://github.com/SharpAdb/AdvancedSharpAdbClient",
-            LicenseName = "Apache-2.0",
-            LicenseUrl = "https://github.com/SharpAdb/AdvancedSharpAdbClient/blob/main/LICENSE",
-            AuthorName = "SharpAdb",
-            AuthorGitHubUrl = "https://github.com/SharpAdb",
-            AuthorAvatarUrl = "https://github.com/SharpAdb.png"
-        },
-        new OpenSourceProject
-        {
             Name = "LibUsbDotNet",
             Description = ".NET USB 访问库（WinUSB/LibUsb 后端，USB 设备通信）",
             RepositoryUrl = "https://github.com/LibUsbDotNet/LibUsbDotNet",

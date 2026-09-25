@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using UotanStudio.Comm.Transports.Udp;
+using UotanStudio.Comm.Protocols.Fastboot.Transport;
 using Xunit;
 
 namespace UotanStudio.Tests.Comm.Transports.Udp;
@@ -27,14 +27,14 @@ public class FastbootUdpTransportTests
             await Reply(1, 0, 0, [0, 7], query.RemoteEndPoint);
             var init = await peer.ReceiveAsync(TestContext.Current.CancellationToken);
             Assert.Equal((byte)2, init.Buffer[0]);
-            Assert.Equal((ushort)7, BinaryPrimitives.ReadUInt16BigEndian(init.Buffer.AsSpan(2)));
-            await Reply(2, 0, 7, [0, 1, 2, 0], init.RemoteEndPoint);
+            Assert.Equal((ushort)1, BinaryPrimitives.ReadUInt16BigEndian(init.Buffer.AsSpan(2)));
+            await Reply(2, 0, 1, [0, 1, 2, 0], init.RemoteEndPoint);
             var write = await peer.ReceiveAsync(TestContext.Current.CancellationToken);
             Assert.Equal("abc", Encoding.ASCII.GetString(write.Buffer.AsSpan(4)));
-            await Reply(3, 0, 8, [], write.RemoteEndPoint);
+            await Reply(3, 0, 2, [], write.RemoteEndPoint);
             var read = await peer.ReceiveAsync(TestContext.Current.CancellationToken);
-            Assert.Equal((ushort)9, BinaryPrimitives.ReadUInt16BigEndian(read.Buffer.AsSpan(2)));
-            await Reply(3, 0, 9, "OKAY"u8.ToArray(), read.RemoteEndPoint);
+            Assert.Equal((ushort)3, BinaryPrimitives.ReadUInt16BigEndian(read.Buffer.AsSpan(2)));
+            await Reply(3, 0, 3, "OKAY"u8.ToArray(), read.RemoteEndPoint);
         }, TestContext.Current.CancellationToken);
 
         using (var transport = new FastbootUdpTransport("127.0.0.1", port))

@@ -51,11 +51,11 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
     [RelayCommand(CanExecute = nameof(CanStopServer))]
     private Task StopAdbServerAsync(CancellationToken cancellationToken)
-        => StopServerAsync(Services.Devices.DeviceMonitorService.Instance.StopAdbServerAsync, cancellationToken);
+        => StopServerAsync(App.DeviceMonitor.StopAdbServerAsync, cancellationToken);
 
     [RelayCommand(CanExecute = nameof(CanStopServer))]
     private Task StopHdcServerAsync(CancellationToken cancellationToken)
-        => StopServerAsync(Services.Devices.DeviceMonitorService.Instance.StopHdcServerAsync, cancellationToken);
+        => StopServerAsync(App.DeviceMonitor.StopHdcServerAsync, cancellationToken);
 
     private async Task StopServerAsync(Func<CancellationToken, Task> stop, CancellationToken cancellationToken)
     {

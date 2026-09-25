@@ -8,7 +8,7 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 /// <para>所有属性均可空；全空的实例保持后端内置行为（WinUSB 60 秒默认超时、
 /// RAW_IO 关闭、无数据读阻塞）。</para>
 /// </summary>
-public sealed class UsbSessionOptions
+internal sealed class UsbSessionOptions
 {
     internal bool MetadataOnly { get; init; }
 

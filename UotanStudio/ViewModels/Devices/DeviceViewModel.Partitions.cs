@@ -363,7 +363,7 @@ public partial class DeviceViewModel
             var entry = FlashService.FindEdlTarget(entries, partitionName, imagePath: null)
                 ?? throw new InvalidOperationException(
                     $"Partition '{partitionName}' not found in rawprogram: {rawProgramPath}. 分区 '{partitionName}' 未在 rawprogram 中匹配到。");
-            var result = await DeviceMonitorService.Instance.RunEdlAsync(device.Device,
+            var result = await App.DeviceMonitor.RunEdlAsync(device.Device,
                 session => BackupService.RestoreEdlPartitionAsync(
                     session, entry, imageDir, progress, CancellationToken.None)).ConfigureAwait(true);
             StatusText = result.Success

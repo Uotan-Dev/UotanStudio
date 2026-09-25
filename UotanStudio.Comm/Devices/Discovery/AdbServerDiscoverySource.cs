@@ -1,6 +1,6 @@
-using UotanStudio.Comm.Devices.Contracts;
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Adb;
-using UotanStudio.Comm.Protocols.Common;
+using UotanStudio.Comm.Routing;
 
 namespace UotanStudio.Comm.Devices.Discovery;
 

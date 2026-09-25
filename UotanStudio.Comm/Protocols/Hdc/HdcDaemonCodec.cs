@@ -4,7 +4,7 @@ using System.Text;
 namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>Device-side framing and SerialStruct protobuf encoding, distinct from host channels.</summary>
-public static class HdcDaemonCodec
+internal static class HdcDaemonCodec
 {
     /// <summary>Maximum accepted serialized metadata length.</summary>
     public const int MaximumMetadataSize = 1024;
@@ -18,6 +18,7 @@ public static class HdcDaemonCodec
         Number(metadata, 1, message.ChannelId);
         Number(metadata, 2, (uint)message.Command);
         Number(metadata, 3, 0); // Upstream disables the optional additive checksum by default.
+        // session.h: const uint8_t HdcSessionBase::payloadProtectStaticVcode = 0x09.
         Number(metadata, 4, 9);
         var packet = new byte[checked(11 + (int)metadata.Length + payload.Length)];
         packet[0] = (byte)'H'; packet[1] = (byte)'W'; packet[4] = 1;

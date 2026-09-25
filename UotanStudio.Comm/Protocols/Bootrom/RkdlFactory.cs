@@ -8,7 +8,7 @@ namespace UotanStudio.Comm.Protocols.Bootrom;
 /// Factory for creating <see cref="RkdlSession"/> instances from USB device sessions.
 /// <para>从 USB 设备会话创建 <see cref="RkdlSession"/> 实例的工厂。</para>
 /// </summary>
-public sealed class RkdlFactory : IProtocolFactory
+internal sealed class RkdlFactory : IProtocolFactory
 {
     /// <summary>Gets the protocol name. 获取协议名称。</summary>
     public string ProtocolName => "rkdl";

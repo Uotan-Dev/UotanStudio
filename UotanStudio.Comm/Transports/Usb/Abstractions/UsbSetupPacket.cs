@@ -4,7 +4,7 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 /// Describes a USB control transfer setup packet.
 /// <para>描述 USB 控制传输的 setup 包。</para>
 /// </summary>
-public struct UsbSetupPacket
+internal struct UsbSetupPacket
 {
     /// <summary>
     /// Gets or sets the request type byte.

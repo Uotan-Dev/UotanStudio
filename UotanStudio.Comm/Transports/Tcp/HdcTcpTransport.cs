@@ -9,7 +9,7 @@ namespace UotanStudio.Comm.Transports.Tcp;
 /// <para>基于 TCP 连接的 HDC 传输（HDC server 客户端模式），封装与 HDC server 的直接
 /// <see cref="TcpClient"/> 连接，支持精确读取与全量写入。</para>
 /// </summary>
-public sealed class HdcTcpTransport : ICommTransport
+internal sealed class HdcTcpTransport : ICommTransport
 {
     private const int DefaultReadTimeoutMs = 60_000;
 

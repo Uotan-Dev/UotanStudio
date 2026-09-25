@@ -12,7 +12,7 @@ namespace UotanStudio.Comm.Protocols.Bootrom;
 /// <para>CBW 为 31 字节、CSW 为 13 字节。CBW 头部字段（签名、标签、传输长度）为小端序，
 /// 而 CBWCB 中的地址/长度字段为大端序，与参考 C 实现（<c>#pragma pack(1)</c>）一致。</para>
 /// </summary>
-public static class RkdlFrame
+internal static class RkdlFrame
 {
     /// <summary>
     /// CBW signature bytes "USBC" (dwCBWSignature = 0x43425355, little-endian storage order).
@@ -67,7 +67,7 @@ public static class RkdlFrame
 /// DEVICE_RESET sub codes (RESET_SUBCODE, see rkdeveloptool RKComm.h).
 /// <para>DEVICE_RESET 子码（RESET_SUBCODE，见 rkdeveloptool RKComm.h）。</para>
 /// </summary>
-public static class RkdlResetSubCode
+internal static class RkdlResetSubCode
 {
     /// <summary>No sub code. <para>无子码。</para></summary>
     public const byte None = 0;
@@ -98,7 +98,7 @@ public static class RkdlResetSubCode
 /// <param name="subCode">Value stored in CBWCB.ucReserved (sub code). <para>存入 CBWCB.ucReserved 的值（子码）。</para></param>
 /// <param name="address">LBA address (stored big-endian in the CBWCB). <para>LBA 地址（CBWCB 中按大端序存储）。</para></param>
 /// <param name="sectorLength">Sector count (stored big-endian in the CBWCB). <para>扇区数（CBWCB 中按大端序存储）。</para></param>
-public sealed class RkdlCbw(RkdlCommand operationCode, byte flags, uint transferLength, byte cbwcbLength,
+internal sealed class RkdlCbw(RkdlCommand operationCode, byte flags, uint transferLength, byte cbwcbLength,
     byte subCode = 0, uint address = 0, ushort sectorLength = 0)
 {
 
@@ -197,7 +197,7 @@ public sealed class RkdlCbw(RkdlCommand operationCode, byte flags, uint transfer
 /// Command Status Wrapper (CSW) for the Rockchip rockusb protocol.
 /// <para>Rockchip rockusb 协议的命令状态包装（CSW）。</para>
 /// </summary>
-public sealed class RkdlCsw
+internal sealed class RkdlCsw
 {
     private RkdlCsw(uint tag, uint dataResidue, byte status)
     {
@@ -269,7 +269,7 @@ public sealed class RkdlCsw
 /// CRC-32 for the GPT header checksums).
 /// <para>RKDL 协议使用的 CRC 辅助方法（loader 下载的 CRC-16/CCITT 与 GPT 头校验的 CRC-32）。</para>
 /// </summary>
-public static class RkdlCrc
+internal static class RkdlCrc
 {
     /// <summary>
     /// Computes CRC-16/CCITT (poly 0x1021, init 0xFFFF, MSB-first, no final XOR) over the data.
@@ -313,7 +313,7 @@ public static class RkdlCrc
 /// <para>写入主/备份 GPT 表时使用的 GPT 布局辅助方法（见 rkdeveloptool gpt.h
 /// 与 main.cpp 的 prepare_gpt_backup / update_gpt_disksize）。</para>
 /// </summary>
-public static class RkdlGpt
+internal static class RkdlGpt
 {
     /// <summary>Sectors of the primary GPT table (protective MBR + header + 128 entries). <para>主 GPT 表扇区数（保护 MBR + 头 + 128 个条目）。</para></summary>
     public const int PrimarySectors = 34;

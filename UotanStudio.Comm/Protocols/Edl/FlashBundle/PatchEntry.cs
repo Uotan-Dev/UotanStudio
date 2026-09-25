@@ -6,7 +6,7 @@ namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 /// Represents a single patch entry parsed from a patch XML file.
 /// <para>表示从 patch XML 文件解析的单个 patch 条目。</para>
 /// </summary>
-public sealed class PatchEntry
+internal sealed class PatchEntry
 {
     /// <summary>
     /// Gets or sets the sector size in bytes for this patch entry.

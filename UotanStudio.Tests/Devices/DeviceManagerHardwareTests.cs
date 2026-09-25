@@ -1,8 +1,8 @@
-using UotanStudio.Comm.Protocols.Scrcpy;
 using UotanStudio.Mcp.Tools;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Mcp;
+using UotanStudio.Services.Mirroring;
 using Xunit;
 
 namespace UotanStudio.Tests.Devices;
@@ -30,9 +30,9 @@ public sealed class DeviceManagerHardwareTests
         var identity = Environment.GetEnvironmentVariable("UOTAN_TEST_HDC_USB_ID");
         if (string.IsNullOrWhiteSpace(identity))
             Assert.Skip("Set UOTAN_TEST_HDC_USB_ID to the VID:PID of a present HDC USB interface.");
-        if (!UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.UseHdcServer())
+        if (!UotanStudio.Comm.Routing.DebugBridgeRoute.UseHdcServer())
             Assert.Skip("The HDC server must be running for this routing check.");
-        var monitor = DeviceMonitorService.Instance;
+        var monitor = UotanStudio.App.DeviceMonitor;
         Assert.Contains(monitor.ListUsbDevices(), info =>
             $"{info.VendorId:X4}:{info.ProductId:X4}" == identity);
         Assert.DoesNotContain(monitor.Scan(), device =>
@@ -47,13 +47,13 @@ public sealed class DeviceManagerHardwareTests
         var hdcId = Environment.GetEnvironmentVariable("UOTAN_TEST_HDC_USB_ID");
         if (string.IsNullOrWhiteSpace(adbId) || string.IsNullOrWhiteSpace(hdcId))
             Assert.Skip("Set UOTAN_TEST_ADB_USB_ID and UOTAN_TEST_HDC_USB_ID to present USB interfaces.");
-        if (!UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.UseAdbServer() ||
-            !UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.UseHdcServer())
+        if (!UotanStudio.Comm.Routing.DebugBridgeRoute.UseAdbServer() ||
+            !UotanStudio.Comm.Routing.DebugBridgeRoute.UseHdcServer())
             Assert.Skip("Both debug bridge servers must be running.");
 
         static string Identity(UotanStudio.Comm.Transports.Usb.Abstractions.UsbDeviceInfo info)
             => $"{info.VendorId:X4}:{info.ProductId:X4}";
-        var raw = DeviceMonitorService.Instance.ListUsbDevices();
+        var raw = UotanStudio.App.DeviceMonitor.ListUsbDevices();
         Assert.Contains(raw, info => Identity(info) == adbId);
         Assert.Contains(raw, info => Identity(info) == hdcId);
         foreach (var gateway in new IDeviceManagerGateway[]
@@ -76,7 +76,7 @@ public sealed class DeviceManagerHardwareTests
         var hasHdcId = Guid.TryParse(hdcContainer, out var hdcId);
         if (!hasAdbId || !hasHdcId)
             Assert.Skip("Set UOTAN_TEST_ADB_CONTAINER and UOTAN_TEST_HDC_CONTAINER to current PnP ContainerIDs.");
-        var infos = DeviceMonitorService.Instance.ListUsbDevices();
+        var infos = UotanStudio.App.DeviceMonitor.ListUsbDevices();
         Assert.Equal(adbId, Assert.Single(infos, info =>
             info.VendorId == 0x22D9 && info.ProductId == 0x2769).ContainerId);
         Assert.Equal(hdcId, Assert.Single(infos, info =>
@@ -89,10 +89,10 @@ public sealed class DeviceManagerHardwareTests
         var identity = Environment.GetEnvironmentVariable("UOTAN_TEST_ADB_USB_ID");
         if (string.IsNullOrWhiteSpace(identity))
             Assert.Skip("Set UOTAN_TEST_ADB_USB_ID to the VID:PID of a present ADB interface with the server stopped.");
-        if (UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.UseAdbServer())
+        if (UotanStudio.Comm.Routing.DebugBridgeRoute.UseAdbServer())
             Assert.Skip("Stop the ADB server before running the direct USB check.");
 
-        var monitor = DeviceMonitorService.Instance;
+        var monitor = UotanStudio.App.DeviceMonitor;
         var device = Assert.Single(monitor.Scan(), candidate =>
             candidate.Protocol == DeviceProtocolKind.Adb &&
             $"{candidate.VendorId:X4}:{candidate.ProductId:X4}" == identity);
@@ -104,7 +104,7 @@ public sealed class DeviceManagerHardwareTests
             using var sync = session.CreateSyncClient();
             var file = sync.Stat("/system/build.prop");
             var directory = sync.List("/system");
-            var api = ((UotanStudio.Comm.Transports.Abstractions.UsbDeviceTransport)session.Transport)
+            var api = ((UotanStudio.Comm.Transports.Abstractions.UsbDeviceTransport)((UotanStudio.Comm.Protocols.Adb.AdbSession)session).Transport)
                 .Session.DeviceInfo.SourceApiKind;
             return (shell, file, directory, api);
         },
@@ -122,7 +122,7 @@ public sealed class DeviceManagerHardwareTests
         var identity = Environment.GetEnvironmentVariable("UOTAN_TEST_ADB_USB_ID");
         if (string.IsNullOrWhiteSpace(identity))
             Assert.Skip("Set UOTAN_TEST_ADB_USB_ID to a connected ADB USB interface.");
-        if (UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.UseAdbServer())
+        if (UotanStudio.Comm.Routing.DebugBridgeRoute.UseAdbServer())
             Assert.Skip("Stop the ADB server before testing direct libusb ownership.");
         var nativeLibrary = Path.Combine(AppContext.BaseDirectory, "libusb-1.0.dll");
         if (!File.Exists(nativeLibrary))
@@ -156,9 +156,9 @@ public sealed class DeviceManagerHardwareTests
         var identity = Environment.GetEnvironmentVariable("UOTAN_TEST_ADB_USB_ID");
         if (string.IsNullOrWhiteSpace(identity))
             Assert.Skip("Set UOTAN_TEST_ADB_USB_ID to a connected ADB USB interface.");
-        if (UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.UseAdbServer())
+        if (UotanStudio.Comm.Routing.DebugBridgeRoute.UseAdbServer())
             Assert.Skip("Stop the ADB server before testing the direct shell v2 stream.");
-        var monitor = DeviceMonitorService.Instance;
+        var monitor = UotanStudio.App.DeviceMonitor;
         var device = Assert.Single(monitor.Scan(), candidate =>
             candidate.Protocol == DeviceProtocolKind.Adb &&
             $"{candidate.VendorId:X4}:{candidate.ProductId:X4}" == identity);
@@ -183,10 +183,10 @@ public sealed class DeviceManagerHardwareTests
             Assert.Skip("Set UOTAN_TEST_ADB_USB_ID to an attached ADB interface for read-only validation.");
         if (string.IsNullOrWhiteSpace(serverSerial))
             Assert.Skip("Set UOTAN_TEST_ADB_SERVER_TARGET to a different target managed by the server.");
-        if (!UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.UseAdbServer())
+        if (!UotanStudio.Comm.Routing.DebugBridgeRoute.UseAdbServer())
             Assert.Skip("An ADB server must be running for this mixed-route check.");
 
-        var monitor = DeviceMonitorService.Instance;
+        var monitor = UotanStudio.App.DeviceMonitor;
         var usbInfos = monitor.ListUsbDevices();
         var selectedUsb = Assert.Single(usbInfos, info =>
             $"{info.VendorId:X4}:{info.ProductId:X4}" == identity &&
@@ -208,14 +208,14 @@ public sealed class DeviceManagerHardwareTests
         var token = TestContext.Current.CancellationToken;
         var direct = Task.Run(() => monitor.RunAdb(device, session =>
         {
-            Assert.False(session.Connection.UsesServer);
+            Assert.False(session.UsesServer);
             var result = session.ExecuteCommand("getprop ro.product.model");
             Assert.Equal(0, result.ExitCode);
             return System.Text.Encoding.UTF8.GetString(result.Stdout);
         }, token), token);
         var server = Task.Run(() => monitor.RunAdb(serverDevice, session =>
         {
-            Assert.True(session.Connection.UsesServer);
+            Assert.True(session.UsesServer);
             var result = session.ExecuteCommand("getprop ro.product.model");
             Assert.Equal(0, result.ExitCode);
             return System.Text.Encoding.UTF8.GetString(result.Stdout);
@@ -230,7 +230,7 @@ public sealed class DeviceManagerHardwareTests
         var identity = Environment.GetEnvironmentVariable("UOTAN_TEST_ADB_USB_ID");
         if (string.IsNullOrWhiteSpace(identity))
             Assert.Skip("Set UOTAN_TEST_ADB_USB_ID to the VID:PID of a present ADB interface with the server stopped.");
-        if (UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.UseAdbServer())
+        if (UotanStudio.Comm.Routing.DebugBridgeRoute.UseAdbServer())
             Assert.Skip("Stop the ADB server before running the direct USB check.");
 
         var gateway = new DesktopDeviceManagerGateway();
@@ -249,7 +249,7 @@ public sealed class DeviceManagerHardwareTests
         var identity = Environment.GetEnvironmentVariable("UOTAN_TEST_ADB_USB_ID");
         if (string.IsNullOrWhiteSpace(identity))
             Assert.Skip("Set UOTAN_TEST_ADB_USB_ID to the VID:PID of a present ADB interface with the server stopped.");
-        if (UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.UseAdbServer())
+        if (UotanStudio.Comm.Routing.DebugBridgeRoute.UseAdbServer())
             Assert.Skip("Stop the ADB server before running the direct USB check.");
 
         var gateway = new HeadlessDeviceManagerGateway();
@@ -268,10 +268,10 @@ public sealed class DeviceManagerHardwareTests
         var identity = Environment.GetEnvironmentVariable("UOTAN_TEST_HDC_USB_ID");
         if (string.IsNullOrWhiteSpace(identity))
             Assert.Skip("Set UOTAN_TEST_HDC_USB_ID to the VID:PID of a present HDC interface with the server stopped.");
-        if (UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.UseHdcServer())
+        if (UotanStudio.Comm.Routing.DebugBridgeRoute.UseHdcServer())
             Assert.Skip("Stop the HDC server before running the direct USB check.");
 
-        var monitor = DeviceMonitorService.Instance;
+        var monitor = UotanStudio.App.DeviceMonitor;
         var device = Assert.Single(monitor.Scan(), candidate =>
             candidate.Protocol == DeviceProtocolKind.Hdc &&
             $"{candidate.VendorId:X4}:{candidate.ProductId:X4}" == identity);
@@ -285,7 +285,7 @@ public sealed class DeviceManagerHardwareTests
         var serial = Environment.GetEnvironmentVariable("UOTAN_TEST_FASTBOOT_SERIAL");
         if (string.IsNullOrWhiteSpace(serial))
             Assert.Skip("Set UOTAN_TEST_FASTBOOT_SERIAL to a currently connected Fastboot target.");
-        var monitor = DeviceMonitorService.Instance;
+        var monitor = UotanStudio.App.DeviceMonitor;
         var device = Assert.Single(monitor.Scan(), target =>
             target.Protocol == DeviceProtocolKind.Fastboot && target.Serial == serial);
         var reportedSerial = monitor.RunFastboot(device, session => session.GetVariable("serialno", useCache: false),
@@ -306,11 +306,11 @@ public sealed class DeviceManagerHardwareTests
         var serial = Environment.GetEnvironmentVariable("UOTAN_TEST_ADB_TARGET");
         if (string.IsNullOrWhiteSpace(serial))
             Assert.Skip("Set UOTAN_TEST_ADB_TARGET to a currently connected ADB target.");
-        var monitor = DeviceMonitorService.Instance;
+        var monitor = UotanStudio.App.DeviceMonitor;
         var device = Assert.Single(monitor.Scan(), target =>
             target.Protocol == DeviceProtocolKind.Adb && target.Serial == serial);
 
-        Assert.Equal("online", await monitor.GetAdbStateAsync(serial, TestContext.Current.CancellationToken));
+        Assert.Equal("device", await monitor.GetAdbStateAsync(serial, TestContext.Current.CancellationToken));
         Assert.True(monitor.ProbeAdb(device));
         Assert.False(string.IsNullOrWhiteSpace(monitor.ExecuteAdbServerShell(device, "getprop ro.product.model")));
         var (stat, entries) = monitor.RunAdb(device, session =>
@@ -320,7 +320,7 @@ public sealed class DeviceManagerHardwareTests
         }, TestContext.Current.CancellationToken);
         Assert.NotNull(stat);
         Assert.Contains(entries, entry => entry.Name == "build.prop");
-        Assert.True(UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.UseAdbServer());
+        Assert.True(UotanStudio.Comm.Routing.DebugBridgeRoute.UseAdbServer());
         Assert.Contains(new UotanStudio.Comm.Protocols.Adb.AdbServerServices(string.Empty).ListTargets(),
             target => target.Serial == serial);
         foreach (var gateway in new IDeviceManagerGateway[]
@@ -341,14 +341,33 @@ public sealed class DeviceManagerHardwareTests
     }
 
     [Fact]
+    public void AdbTarget_UsbIdentity_RequiresUniquePhysicalAssociation()
+    {
+        var serial = Environment.GetEnvironmentVariable("UOTAN_TEST_ADB_TARGET");
+        var identity = Environment.GetEnvironmentVariable("UOTAN_TEST_ADB_USB_ID");
+        if (string.IsNullOrWhiteSpace(serial) || string.IsNullOrWhiteSpace(identity))
+            Assert.Skip("Set UOTAN_TEST_ADB_TARGET and UOTAN_TEST_ADB_USB_ID for physical identity validation.");
+
+        var infos = UotanStudio.App.DeviceMonitor.ListUsbDevices();
+        var usb = Assert.Single(infos, info =>
+            $"{info.VendorId:X4}:{info.ProductId:X4}" == identity &&
+            info.InterfaceClass == 0xFF && info.InterfaceSubClass == 0x42 && info.InterfaceProtocol == 0x01);
+        var associated = DeviceMonitorService.FindServerUsbIdentity(infos, serial, DeviceProtocolKind.Adb);
+        Assert.True(associated is not null,
+            $"No unique ADB-to-USB identity: USB serial={usb.SerialNumber ?? "<missing>"}, " +
+            $"instance={usb.DeviceInstanceId ?? "<missing>"}, container={usb.ContainerId?.ToString() ?? "<missing>"}.");
+        Assert.Equal(DeviceMonitorService.PhysicalUsbId(usb, usb.SerialNumber), associated);
+    }
+
+    [Fact]
     public void AdbTarget_ServerOwnsUsb_DirectOpenIsRejected()
     {
         var serial = Environment.GetEnvironmentVariable("UOTAN_TEST_ADB_TARGET");
         var identity = Environment.GetEnvironmentVariable("UOTAN_TEST_ADB_USB_ID");
         if (string.IsNullOrWhiteSpace(serial) || string.IsNullOrWhiteSpace(identity))
             Assert.Skip("Set UOTAN_TEST_ADB_TARGET and UOTAN_TEST_ADB_USB_ID to the same server-managed device.");
-        var monitor = DeviceMonitorService.Instance;
-        Assert.True(UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.AdbServerOwns(serial));
+        var monitor = UotanStudio.App.DeviceMonitor;
+        Assert.True(UotanStudio.Comm.Devices.Services.DebugBridgeSessionOpener.AdbServerOwns(serial));
         var info = Assert.Single(monitor.ListUsbDevices(), usb =>
             $"{usb.VendorId:X4}:{usb.ProductId:X4}" == identity &&
             usb.InterfaceClass == 0xFF && usb.InterfaceSubClass == 0x42 && usb.InterfaceProtocol == 0x01);
@@ -360,7 +379,7 @@ public sealed class DeviceManagerHardwareTests
             Transport = DeviceTransportKind.Usb
         };
 
-        Assert.Throws<IOException>(() => monitor.OpenUsbSession(direct));
+        Assert.Throws<IOException>(() => monitor.ResolveDirectUsbOpenKey(direct));
     }
 
     [Fact]
@@ -370,10 +389,10 @@ public sealed class DeviceManagerHardwareTests
         if (string.IsNullOrWhiteSpace(serial))
             Assert.Skip("Set UOTAN_TEST_ADB_TARGET to a connected ADB target for read-only shell validation.");
         var identity = Environment.GetEnvironmentVariable("UOTAN_TEST_ADB_USB_ID");
-        var server = UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.UseAdbServer();
+        var server = UotanStudio.Comm.Routing.DebugBridgeRoute.UseAdbServer();
         if (!server && string.IsNullOrWhiteSpace(identity))
             Assert.Skip("Set UOTAN_TEST_ADB_USB_ID to the direct USB interface when the server is absent.");
-        var device = Assert.Single(DeviceMonitorService.Instance.Scan(), target =>
+        var device = Assert.Single(UotanStudio.App.DeviceMonitor.Scan(), target =>
             target.Protocol == DeviceProtocolKind.Adb &&
             (server ? target.Serial == serial :
                 $"{target.VendorId:X4}:{target.ProductId:X4}" == identity));
@@ -382,7 +401,7 @@ public sealed class DeviceManagerHardwareTests
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
 
-        await DeviceMonitorService.Instance.RunInteractiveShellAsync(device, input, output, timeout.Token);
+        await UotanStudio.App.DeviceMonitor.RunInteractiveShellAsync(device, input, output, timeout.Token);
 
         Assert.Contains("UOTAN_READONLY", System.Text.Encoding.UTF8.GetString(output.ToArray()));
     }
@@ -394,10 +413,10 @@ public sealed class DeviceManagerHardwareTests
         var identity = Environment.GetEnvironmentVariable("UOTAN_TEST_ADB_USB_ID");
         if (string.IsNullOrWhiteSpace(serial))
             Assert.Skip("Set UOTAN_TEST_ADB_TARGET to a connected ADB target for read-only log validation.");
-        var server = UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.UseAdbServer();
+        var server = UotanStudio.Comm.Routing.DebugBridgeRoute.UseAdbServer();
         if (!server && string.IsNullOrWhiteSpace(identity))
             Assert.Skip("Set UOTAN_TEST_ADB_USB_ID for direct USB log validation.");
-        var device = Assert.Single(DeviceMonitorService.Instance.Scan(), target =>
+        var device = Assert.Single(UotanStudio.App.DeviceMonitor.Scan(), target =>
             target.Protocol == DeviceProtocolKind.Adb &&
             (server ? target.Serial == serial :
                 $"{target.VendorId:X4}:{target.ProductId:X4}" == identity));
@@ -406,7 +425,7 @@ public sealed class DeviceManagerHardwareTests
         var count = 0;
         try
         {
-            await DeviceMonitorService.Instance.StartLogcatStreamingAsync(device,
+            await UotanStudio.App.DeviceMonitor.StartLogcatStreamingAsync(device,
                 _ =>
                 {
                     if (Interlocked.Increment(ref count) >= 3) cancellation.Cancel();
@@ -424,7 +443,7 @@ public sealed class DeviceManagerHardwareTests
         var serial = Environment.GetEnvironmentVariable("UOTAN_TEST_HDC_TARGET");
         if (string.IsNullOrWhiteSpace(serial))
             Assert.Skip("Set UOTAN_TEST_HDC_TARGET to a currently connected HDC target.");
-        var monitor = DeviceMonitorService.Instance;
+        var monitor = UotanStudio.App.DeviceMonitor;
         var device = Assert.Single(monitor.Scan(), target =>
             target.Protocol == DeviceProtocolKind.Hdc && target.Serial == serial);
         var ct = TestContext.Current.CancellationToken;
@@ -440,7 +459,7 @@ public sealed class DeviceManagerHardwareTests
         var jar = Environment.GetEnvironmentVariable("UOTAN_TEST_SCRCPY_JAR");
         if (string.IsNullOrWhiteSpace(serial) || string.IsNullOrWhiteSpace(jar))
             Assert.Skip("Set UOTAN_TEST_SCRCPY_TARGET and UOTAN_TEST_SCRCPY_JAR to opt in to temporary server deployment.");
-        var monitor = DeviceMonitorService.Instance;
+        var monitor = UotanStudio.App.DeviceMonitor;
         var device = Assert.Single(monitor.Scan(), target =>
             target.Protocol == DeviceProtocolKind.Adb && target.Serial == serial);
         Assert.True(File.Exists(jar));

@@ -18,51 +18,50 @@ public sealed class HdcDirectReadOnlyDeviceTests
         var serial = Environment.GetEnvironmentVariable("UOTAN_TEST_HDC_USB_SERIAL");
         if (string.IsNullOrWhiteSpace(serial))
             Assert.Skip("Set UOTAN_TEST_HDC_USB_SERIAL for direct USB read-only validation; the server must be stopped.");
-        HdcDirectSessionPool.Clear();
-        var device = Assert.Single(DeviceMonitorService.Instance.Scan(), candidate =>
+        var device = Assert.Single(UotanStudio.App.DeviceMonitor.Scan(), candidate =>
             candidate.Protocol == DeviceProtocolKind.Hdc && candidate.Transport == DeviceTransportKind.Usb &&
             candidate.Key.Contains(serial, StringComparison.OrdinalIgnoreCase));
 
-        try
-        {
-            using var session = HdcDirectSessionPool.Acquire(device);
-            Assert.Equal("first", Encoding.UTF8.GetString(session.ExecuteCommand("printf first", 10000).Stdout));
-        }
-        finally { HdcDirectSessionPool.Retain([]); }
+        var opened = HdcDirectConnection.Open(device);
+        using var lease = opened.Lease;
+        Assert.Equal("first", Encoding.UTF8.GetString(opened.Session.ExecuteCommand("printf first", 10000).Stdout));
     }
 
     [Fact]
-    public async Task DirectUsb_RefreshDuringActiveLease_DefersConnectionDisposal()
+    public async Task DirectUsb_ActiveSessionStaysUsableThenReleasesInterfaceOnDispose()
     {
         var serial = Environment.GetEnvironmentVariable("UOTAN_TEST_HDC_USB_SERIAL");
         if (string.IsNullOrWhiteSpace(serial))
             Assert.Skip("Set UOTAN_TEST_HDC_USB_SERIAL for direct USB read-only validation; the server must be stopped.");
-        var device = Assert.Single(DeviceMonitorService.Instance.Scan(), candidate =>
+        var device = Assert.Single(UotanStudio.App.DeviceMonitor.Scan(), candidate =>
             candidate.Protocol == DeviceProtocolKind.Hdc && candidate.Transport == DeviceTransportKind.Usb &&
             candidate.Key.Contains(serial, StringComparison.OrdinalIgnoreCase));
 
         var ct = TestContext.Current.CancellationToken;
-        using (var lease = HdcDirectSessionPool.Acquire(device))
+        var opened = HdcDirectConnection.Open(device);
+        using var lease = opened.Lease;
+        var session = opened.Session;
         {
             using var logging = CancellationTokenSource.CreateLinkedTokenSource(ct);
             logging.CancelAfter(TimeSpan.FromSeconds(3));
             long received = 0;
-            var logs = Task.Run(() => lease.CreateShellClient("hilog -v year").ExecuteStreaming(
+            var logs = Task.Run(() => session.CreateShellClient("hilog -v year").ExecuteStreaming(
                 bytes => Interlocked.Add(ref received, bytes.Length), null, logging.Token), ct);
             await Task.Delay(250, ct);
-            HdcDirectSessionPool.Retain([]);
-            Assert.True(lease.IsConnected);
+            Assert.True(session.IsConnected);
             await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await logs);
             Assert.True(received > 0);
-            using var transfer = new HdcSyncClient(lease.Connection);
+            using var transfer = new HdcSyncClient(session.Connection);
             using var receivedFile = new MemoryStream();
             transfer.RecvStream("/system/bin/toybox", receivedFile, ct);
             Assert.True(receivedFile.Length > 0);
-            Assert.Throws<IOException>(() => HdcDirectSessionPool.Acquire(device));
         }
 
-        using var reopened = HdcDirectSessionPool.Acquire(device);
-        Assert.True(reopened.IsConnected);
+        // Disposal released the claimed interface, so a fresh direct session can be opened again.
+        // 释放后已认领接口可再次打开一条全新直连会话。
+        var reopened = HdcDirectConnection.Open(device);
+        using var reopenedLease = reopened.Lease;
+        Assert.True(reopened.Session.IsConnected);
     }
 
     [Fact]

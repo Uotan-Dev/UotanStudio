@@ -15,7 +15,7 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// <param name="sectorOffset">The sector offset for this entry. 此条目的扇区偏移。</param>
 /// <param name="digest">The SHA256 digest of the data block. 数据块的 SHA256 摘要。</param>
 /// <param name="signature">Optional signature of the digest. 摘要的可选签名。</param>
-public sealed class DigestEntry(long sectorOffset, byte[] digest, byte[]? signature = null)
+internal sealed class DigestEntry(long sectorOffset, byte[] digest, byte[]? signature = null)
 {
 
     /// <summary>
@@ -43,7 +43,7 @@ public sealed class DigestEntry(long sectorOffset, byte[] digest, byte[]? signat
 /// <para>用于验证镜像编程（VIP）的摘要表：SHA256 摘要条目列表，支持可选的链式（链段的累积
 /// 摘要）与签名。</para>
 /// </summary>
-public sealed class DigestTable
+internal sealed class DigestTable
 {
     /// <summary>
     /// Gets the list of digest entries in this table.

@@ -1,15 +1,15 @@
-using UotanStudio.Comm.Devices.Contracts;
+using System.Text;
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Protocols.Adb;
-using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Hdc;
-using System.Text;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Devices.Services;
 
 /// <summary>Opens exactly the discovered USB key or server target; never changes routes.</summary>
-public sealed class CommDeviceTransportOpener(
+internal sealed class CommDeviceTransportOpener(
     ICommKit kit, string adbHost = "127.0.0.1", int adbPort = 5037,
     string hdcHost = "127.0.0.1", int? hdcPort = null) : IDeviceTransportOpener
 {
@@ -30,7 +30,7 @@ public sealed class CommDeviceTransportOpener(
             filter.InterfaceSubClass == usb.InterfaceSubClass &&
             filter.InterfaceProtocol == usb.InterfaceProtocol)
         {
-            DebugBridgeRoute.RequireDirectUsb(usb.InterfaceClass, usb.InterfaceSubClass, usb.InterfaceProtocol, endpoint.Serial);
+            DebugBridgeSessionOpener.RequireDirectUsb(usb.InterfaceClass, usb.InterfaceSubClass, usb.InterfaceProtocol, endpoint.Serial);
             var session = kit.OpenUsbDeviceSessionByKey(endpoint.Address, usb.Backend)
                 ?? throw new IOException("Exact USB endpoint is unavailable.");
             if (session.DeviceInfo.SourceApiKind != usb.Backend ||
@@ -57,7 +57,7 @@ public sealed class CommDeviceTransportOpener(
                 cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             return new OwnedDeviceTransport<AdbSession>(
-                new AdbSession(new AdbServerServices(endpoint.Address, adbHost, adbPort)));
+                AdbSession.ForServer(endpoint.Address, adbHost, adbPort));
         }
 
         if (endpoint.Source == $"hdc-server@{hdcHost}:{_hdcPort}" &&

@@ -238,7 +238,7 @@ internal partial class ImageViewModel : Tool
         // DevicesChanged 在后台线程触发；命令的 CanExecuteChanged 会触达 UI 控件，必须回到 UI 线程再刷新。
         // DevicesChanged fires on a background thread; the command's CanExecuteChanged reaches UI controls,
         // so the refresh must be marshalled back to the UI thread.
-        DeviceMonitorService.Instance.DevicesChanged += (_, _) => RefreshFlashSelectedEnablement();
+        App.DeviceMonitor.DevicesChanged += (_, _) => RefreshFlashSelectedEnablement();
     }
 
     /// <summary>

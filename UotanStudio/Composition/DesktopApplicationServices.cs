@@ -23,7 +23,7 @@ internal sealed class DesktopApplicationServices : IDisposable
     /// Compatibility entry: forwards to the explicit constructor using the application-wide
     /// singleton monitor and the default device-panel accessor.
     /// </summary>
-    internal DesktopApplicationServices() : this(DeviceMonitorService.Instance) { }
+    internal DesktopApplicationServices() : this(App.DeviceMonitor) { }
 
     /// <summary>
     /// <para>显式装配：接收桌面设备监视服务（应用级作用域，不由窗口拥有）。设备面板在释放时经

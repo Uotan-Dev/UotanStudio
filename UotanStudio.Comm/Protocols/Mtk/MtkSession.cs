@@ -24,7 +24,7 @@ public sealed partial class MtkSession : IProtocolSession
     /// <param name="transport">An open transport for one explicitly selected device.</param>
     /// <param name="timeoutMs">The time budget for each command field or data transfer.</param>
     /// <param name="handshakeTimeoutMs">The short per-byte handshake budget for transient preloader ports.</param>
-    public MtkSession(ICommTransport transport, int timeoutMs = 5000, int handshakeTimeoutMs = 100)
+    internal MtkSession(ICommTransport transport, int timeoutMs = 5000, int handshakeTimeoutMs = 100)
     {
         ArgumentNullException.ThrowIfNull(transport);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(timeoutMs);
@@ -74,6 +74,37 @@ public sealed partial class MtkSession : IProtocolSession
         }
     }
 
+    /// <summary>
+    /// Opens a session over an already-opened USB bulk session (BROM PID 0E8D:0003 or
+    /// preloader/DA 0E8D:2000|2001). The BROM/XFlash command set is identical over USB
+    /// (mtkclient uses the same byte protocol on the bulk endpoints); the command interface
+    /// (port A) must be selected by the caller, not the logging port.
+    /// <para>在已打开的 USB 批量端点会话上打开会话（BROM PID 0E8D:0003 或
+    /// preloader/DA 0E8D:2000|2001）。BROM/XFlash 命令集在 USB 上与串口一致（mtkclient
+    /// 在 bulk 端点使用同一字节协议）；调用方须选定命令接口（port A）而非日志接口。</para>
+    /// </summary>
+    /// <param name="session">An opened USB device session bound to the command interface.
+    /// 已打开并绑定命令接口的 USB 设备会话。</param>
+    /// <param name="cancellationToken">The operation cancellation token. 取消令牌。</param>
+    /// <returns>An initialized bootloader session which owns the USB transport.
+    /// 拥有 USB 传输的已初始化 bootloader 会话。</returns>
+    internal static async Task<MtkSession> OpenUsbAsync(UotanStudio.Comm.Transports.Usb.Abstractions.IUsbDeviceSession session,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        var usbSession = new MtkSession(new UsbDeviceTransport(session));
+        try
+        {
+            await usbSession.InitializeAsync(cancellationToken).ConfigureAwait(false);
+            return usbSession;
+        }
+        catch
+        {
+            usbSession.Dispose();
+            throw;
+        }
+    }
+
     /// <summary>Performs the complemented-byte handshake and reads hardware identity and security flags.</summary>
     /// <param name="cancellationToken">The operation cancellation token.</param>
     /// <returns>The queried identity. No watchdog, memory write, authentication bypass, or reset is performed.</returns>
@@ -100,7 +131,8 @@ public sealed partial class MtkSession : IProtocolSession
                 var hardware = await ReadAsync(4, _timeoutMs, cancellationToken).ConfigureAwait(false);
                 await EchoAsync([0xFC], cancellationToken).ConfigureAwait(false);
                 var versions = await ReadAsync(8, _timeoutMs, cancellationToken).ConfigureAwait(false);
-                CheckStatus(BinaryPrimitives.ReadUInt16BigEndian(versions.AsSpan(6)), "hardware version query");
+                // mtkclient get_hw_sw_ver unpacks ">HHHH" without a status check; the fourth
+                // u16 is undefined, so validating it here would fail benign chip reports.
                 await EchoAsync([0xD8], cancellationToken).ConfigureAwait(false);
                 var configuration = await ReadAsync(6, _timeoutMs, cancellationToken).ConfigureAwait(false);
                 CheckStatus(BinaryPrimitives.ReadUInt16BigEndian(configuration.AsSpan(4)), "target configuration query");

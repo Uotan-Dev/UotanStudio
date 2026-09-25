@@ -4,7 +4,7 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
-    private static async Task<string> ReceiveXmlDocumentOwnedAsync(MtkXmlChannel channel, string destination,
+    private async Task<string> ReceiveXmlDocumentOwnedAsync(MtkXmlChannel channel, string destination,
         int maximumLength, CancellationToken token)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumLength);

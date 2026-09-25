@@ -6,7 +6,7 @@ namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 /// Parses patch XML files containing patch entries for EDL flashing.
 /// <para>解析包含 EDL 刷写 patch 条目的 patch XML 文件。</para>
 /// </summary>
-public static class PatchParser
+internal static class PatchParser
 {
     /// <summary>
     /// Parses a patch XML file from the specified file path.

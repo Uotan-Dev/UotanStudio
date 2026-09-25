@@ -4,7 +4,7 @@ using System.Text;
 namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>Upstream packed USBHead: UB, option, BE32 session ID and BE32 block length.</summary>
-public readonly struct HdcUsbHead
+internal readonly struct HdcUsbHead
 {
     /// <summary>USB flag byte 0 ('U'). USB 标识字节 0（'U'）。</summary>
     public byte Flag0 { get; init; }
@@ -79,7 +79,7 @@ public sealed record HdcMessage(
 }
 
 /// <summary>Device message helpers. Host-channel framing belongs to HdcServerClient.</summary>
-public static class HdcMessaging
+internal static class HdcMessaging
 {
     /// <summary>Serializes an upstream daemon packet; session identity is carried by USBHead.</summary>
     public static byte[] Serialize(HdcMessage message, uint sessionId) => HdcDaemonCodec.Encode(message);

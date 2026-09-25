@@ -1,5 +1,6 @@
 using System.Text;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
@@ -98,7 +99,7 @@ public sealed class FlashService : IFlashService
             }
 
             Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-            return await Task.Run(() => DeviceMonitorService.Instance.RunFastboot(device.Device, session =>
+            return await Task.Run(() => App.DeviceMonitor.RunFastboot(device.Device, session =>
             {
                 ct.ThrowIfCancellationRequested();
                 Report(progress, partition, 30, $"Erasing {partition}... 正在擦除分区...");
@@ -148,7 +149,7 @@ public sealed class FlashService : IFlashService
             }
 
             Report(progress, null, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-            return await Task.Run(() => DeviceMonitorService.Instance.RunFastboot(device.Device, session =>
+            return await Task.Run(() => App.DeviceMonitor.RunFastboot(device.Device, session =>
             {
                 var partitions = EnumeratePartitions(session);
                 if (partitions.Count == 0)
@@ -216,7 +217,7 @@ public sealed class FlashService : IFlashService
             }
 
             Report(progress, "sideload", 0, "Opening ADB session... 正在打开 ADB 会话...");
-            return await DeviceMonitorService.Instance.RunAdbAsync(device.Device, async adb =>
+            return await App.DeviceMonitor.RunAdbAsync(device.Device, async adb =>
             {
                 Report(progress, "sideload", 5, "Rebooting into sideload mode... 正在重启进入 sideload 模式...");
                 RebootToSideload(adb);
@@ -243,10 +244,10 @@ public sealed class FlashService : IFlashService
 
     /// <summary>
     /// <para>查询设备属性：fastboot 走 <c>getvar &lt;name&gt;</c>（<see cref="FastbootSession.GetVariable"/>），
-    /// ADB 走 <c>getprop &lt;name&gt;</c>（<see cref="AdbSession.CreateDeviceServices"/> 的 GetProp），
+    /// ADB 走 <c>getprop &lt;name&gt;</c>（<see cref="IAdbDeviceSession.CreateDeviceServices"/> 的 GetProp），
     /// 结果以 <c>name=value</c> 形式放入 <see cref="FlashResult.Summary"/>。</para>
     /// Queries a device property: <c>getvar &lt;name&gt;</c> (<see cref="FastbootSession.GetVariable"/>)
-    /// on fastboot, <c>getprop &lt;name&gt;</c> (GetProp on <see cref="AdbSession.CreateDeviceServices"/>)
+    /// on fastboot, <c>getprop &lt;name&gt;</c> (GetProp on <see cref="IAdbDeviceSession.CreateDeviceServices"/>)
     /// on ADB; the value is placed into <see cref="FlashResult.Summary"/> as <c>name=value</c>.
     /// </summary>
     /// <param name="device"><para>目标设备。</para>The target device.</param>
@@ -266,7 +267,7 @@ public sealed class FlashService : IFlashService
 
             if (device.Protocol == DeviceProtocolKind.Hdc)
             {
-                var value = await DeviceMonitorService.Instance
+                var value = await App.DeviceMonitor
                     .HdcPropertyAsync(device.Device, propertyName, ct).ConfigureAwait(false);
                 return new FlashResult { Success = true, Summary = $"{propertyName}={value}" };
             }
@@ -276,7 +277,7 @@ public sealed class FlashService : IFlashService
                 if (device.Protocol == DeviceProtocolKind.Fastboot)
                 {
                     Report(null, "fastboot", 0, $"Querying fastboot variable '{propertyName}'... 正在查询 fastboot 变量...");
-                    var fbValue = DeviceMonitorService.Instance.RunFastboot(device.Device,
+                    var fbValue = App.DeviceMonitor.RunFastboot(device.Device,
                         fastboot => fastboot.GetVariable(propertyName, useCache: false), ct);
                     Report(null, "fastboot", 100, $"Variable '{propertyName}' = '{fbValue}'. 变量查询完成。");
                     return new FlashResult { Success = true, Summary = $"{propertyName}={fbValue}" };
@@ -285,7 +286,7 @@ public sealed class FlashService : IFlashService
                 if (device.Protocol == DeviceProtocolKind.Adb)
                 {
                     Report(null, "adb", 0, $"Querying property '{propertyName}'... 正在查询系统属性...");
-                    var value = DeviceMonitorService.Instance.RunAdb(device.Device,
+                    var value = App.DeviceMonitor.RunAdb(device.Device,
                         adb => adb.CreateDeviceServices().GetProp(propertyName), ct);
                     Report(null, "adb", 100, $"Property '{propertyName}' = '{value}'. 属性查询完成。");
                     return new FlashResult { Success = true, Summary = $"{propertyName}={value}" };
@@ -352,7 +353,7 @@ public sealed class FlashService : IFlashService
         var stateDir = ProjectContextService.Instance.Core.FindSubProject(imagePath)?.StateDirectory
             ?? ProjectContextService.Instance.StateDirectory;
         Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-        return await Task.Run(() => DeviceMonitorService.Instance.RunFastboot(device.Device, session =>
+        return await Task.Run(() => App.DeviceMonitor.RunFastboot(device.Device, session =>
         {
             TryBackupBeforeFlash(session, partition, progress, ct, stateDir);
 
@@ -627,7 +628,7 @@ public sealed class FlashService : IFlashService
             return new FlashResult { Success = false, Summary = $"Partition '{partition}' not found in rawprogram. 分区 '{partition}' 未在 rawprogram 中匹配到。" };
         }
 
-        return await DeviceMonitorService.Instance.RunEdlAsync(device.Device,
+        return await App.DeviceMonitor.RunEdlAsync(device.Device,
             edl => Default.FlashEdlPartitionAsync(edl, target, imageDir, progress, ct), ct).ConfigureAwait(false);
     }
 
@@ -865,7 +866,7 @@ public sealed class FlashService : IFlashService
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         Report(progress, partition, 0, "Opening RKDL session... 正在打开 RKDL 会话...");
-        return await DeviceMonitorService.Instance.RunRkdlAsync(device.Device, async rkdl =>
+        return await App.DeviceMonitor.RunRkdlAsync(device.Device, async rkdl =>
         {
             var imageDir = Path.GetDirectoryName(Path.GetFullPath(imagePath)) ?? string.Empty;
             if (rkdl.IsMaskromMode)
@@ -958,7 +959,7 @@ public sealed class FlashService : IFlashService
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         Report(progress, partition, 0, "Opening ADB session... 正在打开 ADB 会话...");
-        return await DeviceMonitorService.Instance.RunAdbAsync(device.Device, async adb =>
+        return await App.DeviceMonitor.RunAdbAsync(device.Device, async adb =>
         {
             if (IsSideloadTarget(partition, imagePath))
             {
@@ -996,7 +997,7 @@ public sealed class FlashService : IFlashService
     /// (<c>reboot:sideload</c>).
     /// </summary>
     /// <param name="session"><para>已连接的 ADB 会话。</para>A connected ADB session.</param>
-    public static void RebootToSideload(AdbSession session)
+    public static void RebootToSideload(IAdbDeviceSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
         session.CreateDeviceServices().Reboot("sideload");
@@ -1010,7 +1011,7 @@ public sealed class FlashService : IFlashService
     /// <param name="imagePath"><para>OTA 镜像路径。</para>The OTA image path.</param>
     /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
     /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    public static void PushSideloadFile(AdbSession session, string imagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
+    public static void PushSideloadFile(IAdbDeviceSession session, string imagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(session);
         if (!File.Exists(imagePath))
@@ -1037,7 +1038,7 @@ public sealed class FlashService : IFlashService
     /// <param name="imagePath"><para>待安装镜像路径。</para>The image path to install.</param>
     /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
     /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    public static void InstallOnline(AdbSession session, string imagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
+    public static void InstallOnline(IAdbDeviceSession session, string imagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(session);
         ct.ThrowIfCancellationRequested();
@@ -1072,7 +1073,7 @@ public sealed class FlashService : IFlashService
     /// <para>等待设备在 sideload 模式下重新出现并重新连接（最多约 30 秒）。</para>
     /// Waits for the device to reappear in sideload mode and reconnect (up to ~30 s).
     /// </summary>
-    private static async Task WaitForSideloadReconnectAsync(AdbSession session, CancellationToken ct)
+    private static async Task WaitForSideloadReconnectAsync(IAdbDeviceSession session, CancellationToken ct)
     {
         for (var attempt = 0; attempt < 30; attempt++)
         {
@@ -1080,7 +1081,7 @@ public sealed class FlashService : IFlashService
             try
             {
                 await session.ConnectAsync(ct).ConfigureAwait(false);
-                if (session.IsConnected && (session.Connection.UsesServer || session.Connection.PeerVersion > 0))
+                if (session.IsConnected && (session.UsesServer || session.PeerVersion > 0))
                 {
                     return;
                 }

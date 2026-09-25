@@ -23,7 +23,7 @@ public static class FastbootPartitionReader
         return Task.Run<IReadOnlyList<(string Name, long Size)>>(() =>
         {
             ct.ThrowIfCancellationRequested();
-            return DeviceMonitorService.Instance.RunFastboot(device, session =>
+            return App.DeviceMonitor.RunFastboot(device, session =>
             {
                 var variables = session.GetAllVariables();
                 ct.ThrowIfCancellationRequested();

@@ -797,7 +797,7 @@ public partial class FlashView : UserControl
         finally { _confirming = false; }
         if (!confirmed || SelectedDevice is not DetectedDevice current ||
             current.Key != device.Key || _model.PackagePath != _loadedPath ||
-            DeviceMonitorService.Instance.Scan().All(found =>
+            App.DeviceMonitor.Scan().All(found =>
                 found.Key != device.Key || found.Protocol != DeviceProtocolKind.Edl)) return;
         _busy = true;
         using var cancellation = new CancellationTokenSource();
@@ -808,7 +808,7 @@ public partial class FlashView : UserControl
         PackagePathBox.IsEnabled = false;
         try
         {
-            await DeviceMonitorService.Instance.FlashEdlBundleAsync(device, _loadedPath, _edlProgrammer, cancellation.Token);
+            await App.DeviceMonitor.FlashEdlBundleAsync(device, _loadedPath, _edlProgrammer, cancellation.Token);
             AppendLog(LanguageService.Instance.GetString("Flash_FlashEdlBundle") + ": OK");
         }
         catch (Exception ex) { AppendLog(ex.Message); }
@@ -837,7 +837,7 @@ public partial class FlashView : UserControl
         finally { _confirming = false; }
         if (!confirmed) return;
         if (SelectedDevice is not DetectedDevice current || current.Key != device.Key ||
-            DeviceMonitorService.Instance.Scan().All(found => found.Key != device.Key ||
+            App.DeviceMonitor.Scan().All(found => found.Key != device.Key ||
                 found.Protocol != DeviceProtocolKind.Fastboot))
         {
             AppendLog(language.GetString("Flash_DeviceChanged"));
@@ -941,7 +941,7 @@ public partial class FlashView : UserControl
             return;
         }
         if (SelectedDevice is not DetectedDevice current || current.Key != device.Key ||
-            DeviceMonitorService.Instance.Scan().All(found => found.Key != device.Key || found.Protocol != device.Protocol))
+            App.DeviceMonitor.Scan().All(found => found.Key != device.Key || found.Protocol != device.Protocol))
         {
             AppendLog(language.GetString("Flash_DeviceChanged"));
             return;
@@ -972,7 +972,7 @@ public partial class FlashView : UserControl
                 }
                 if (device.Protocol == DeviceProtocolKind.Edl)
                 {
-                    await DeviceMonitorService.Instance.RunEdlAsync(device, async edl =>
+                    await App.DeviceMonitor.RunEdlAsync(device, async edl =>
                     {
                         foreach (var row in selected)
                         {

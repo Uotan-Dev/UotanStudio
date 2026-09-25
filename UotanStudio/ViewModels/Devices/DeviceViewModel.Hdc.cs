@@ -10,13 +10,13 @@ public partial class DeviceViewModel
     private static bool TryHdc(DeviceInfo device)
     {
         // Do not route HDC devices into ADB or claim a host-only handshake proves device reachability.
-        return DeviceMonitorService.Instance.HdcShellAsync(device.Device, "echo __UOTAN_HDC_READY__")
+        return App.DeviceMonitor.HdcShellAsync(device.Device, "echo __UOTAN_HDC_READY__")
             .GetAwaiter().GetResult().Trim() == "__UOTAN_HDC_READY__";
     }
 
     private async Task EnrichHdcInfoAsync(DeviceInfo device)
     {
-        var monitor = DeviceMonitorService.Instance;
+        var monitor = App.DeviceMonitor;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         async Task<string> Parameter(string name)
         {
@@ -71,7 +71,7 @@ public partial class DeviceViewModel
         if (device?.IsHdc != true || owner is null) return;
         var language = LanguageService.Instance;
         var title = language.GetString("Device_Hdc" + operation);
-        var monitor = DeviceMonitorService.Instance;
+        var monitor = App.DeviceMonitor;
         try
         {
             string result;

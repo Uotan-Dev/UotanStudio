@@ -1,0 +1,101 @@
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using UotanStudio.Comm.Transports.Usb.Abstractions;
+using static UotanStudio.Comm.Transports.Usb.Backend.Windows.Win32API;
+using static UotanStudio.Comm.Transports.Usb.Backend.Windows.WinUSBAPI;
+
+namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
+
+internal partial class WinUSBDevice
+{
+    public override int ControlTransfer(UsbSetupPacket setupPacket, byte[]? buffer, int offset, int length, int timeoutMs)
+    {
+        if (_winUsbHandle.IsInvalid)
+        {
+            throw new UsbDeviceHandleClosedException("Device handle is closed.");
+        }
+
+        if (buffer == null)
+        {
+            ArgumentOutOfRangeException.ThrowIfNotEqual(length, 0);
+        }
+        else
+        {
+            ValidateBufferRange(buffer, offset, length);
+        }
+
+        var transferPacket = new WINUSB_SETUP_PACKET
+        {
+            RequestType = setupPacket.RequestType,
+            Request = setupPacket.Request,
+            Value = setupPacket.Value,
+            Index = setupPacket.Index,
+            Length = (ushort)Math.Max(0, length)
+        };
+
+        byte[]? transferBuffer = null;
+        var isInDirection = (setupPacket.RequestType & 0x80) != 0;
+
+        if (length > 0)
+        {
+            if (buffer != null && offset == 0 && length == buffer.Length)
+            {
+                transferBuffer = buffer;
+            }
+            else
+            {
+                transferBuffer = new byte[length];
+                if (!isInDirection && buffer != null)
+                {
+                    Buffer.BlockCopy(buffer, offset, transferBuffer, 0, length);
+                }
+            }
+        }
+
+        if (!WinUsb_ControlTransfer(_winUsbHandle.DangerousGetHandle(), transferPacket, transferBuffer, (uint)length, out var bytesTransferred, IntPtr.Zero))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+
+        if (isInDirection && buffer != null && transferBuffer != null && transferBuffer != buffer)
+        {
+            Buffer.BlockCopy(transferBuffer, 0, buffer, offset, (int)bytesTransferred);
+        }
+
+        return (int)bytesTransferred;
+    }
+
+    public override int GetSerialNumber()
+    {
+        uint bytes_get;
+        uint descriptorSize = 64;
+        const uint maxDescriptorSize = 4096;
+        var ptr = Marshal.AllocHGlobal((int)descriptorSize);
+        while (!WinUsb_GetDescriptor(_winUsbHandle.DangerousGetHandle(), USB_STRING_DESCRIPTOR_TYPE,
+            _usbDeviceDescriptor.ISerialNumber, 0x0409,
+            ptr, descriptorSize, out bytes_get))
+        {
+            if ((uint)Marshal.GetLastWin32Error() != ERROR_INSUFFICIENT_BUFFER)
+            {
+                return Marshal.GetLastWin32Error();
+            }
+
+            descriptorSize *= 2;
+            if (descriptorSize > maxDescriptorSize)
+            {
+                Marshal.FreeHGlobal(ptr);
+                return -1;
+            }
+            Marshal.FreeHGlobal(ptr);
+            ptr = Marshal.AllocHGlobal((int)descriptorSize);
+        }
+        if (bytes_get <= 2)
+        {
+            Marshal.FreeHGlobal(ptr);
+            return -1;
+        }
+        SerialNumber = Marshal.PtrToStringUni(ptr + 2, (int)(bytes_get - 2) / 2)?.TrimEnd('\0');
+        Marshal.FreeHGlobal(ptr);
+        return 0;
+    }
+}

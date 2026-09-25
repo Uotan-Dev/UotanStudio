@@ -1,6 +1,6 @@
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Services.Flash;
-using UotanStudio.Tests.Comm.Protocols;
+using UotanStudio.Tests.Comm.Protocols.Mtk;
 using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.Tests.Firmware;
 using Xunit;

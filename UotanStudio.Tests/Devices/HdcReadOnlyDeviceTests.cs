@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Comm.Protocols.Hdc;
@@ -10,6 +11,40 @@ namespace UotanStudio.Tests.Devices;
 /// <summary>Opt-in checks that never mutate the device. 显式启用、不会修改设备的检查。</summary>
 public sealed class HdcReadOnlyDeviceTests
 {
+    /// <summary>
+    /// Runs the official hdc tool for cross-validation only; the process runner lives in the test
+    /// project because the library itself must never launch hdc executables.
+    /// <para>仅用于交叉验证而运行官方 hdc 工具；进程执行器放在测试项目内，库本身不允许启动 hdc 可执行文件。</para>
+    /// </summary>
+    private static async Task<string> RunOfficialHdcAsync(string executable, IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        var info = new ProcessStartInfo(executable)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+        foreach (var argument in arguments)
+        {
+            if (argument.Contains('\0')) throw new ArgumentException("HDC argument contains NUL.", nameof(arguments));
+            info.ArgumentList.Add(argument);
+        }
+        using var process = Process.Start(info) ?? throw new InvalidOperationException("The official hdc tool could not be started.");
+        using var registration = cancellationToken.Register(() =>
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+        });
+        var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        return await stdout.ConfigureAwait(false) + await stderr.ConfigureAwait(false);
+    }
+
     [Fact]
     public async Task RunningServer_ManagedHostChannelMatchesOfficialTargetList()
     {
@@ -20,7 +55,7 @@ public sealed class HdcReadOnlyDeviceTests
         var ct = TestContext.Current.CancellationToken;
         using var client = new HdcServerClient();
         var managed = await Task.Run(() => client.ListTargetDetails(), ct);
-        var official = HdcTargetInfo.Parse(await HdcCommandClient.RunAsync(
+        var official = HdcTargetInfo.Parse(await RunOfficialHdcAsync(
             executable, ["-s", $"{client.ServerHost}:{client.ServerPort}", "list", "targets", "-v"], ct));
         Assert.Equal(official, managed);
         Assert.All(managed.Where(target => target.Transport == "UART"),
@@ -40,7 +75,7 @@ public sealed class HdcReadOnlyDeviceTests
         Assert.Contains(key, targets);
         var details = await Task.Run(() => client.ListTargetDetails(), ct);
         var target = Assert.Single(details, target => target.ConnectKey == key);
-        var officialDetails = await HdcCommandClient.RunAsync(executable, ["list", "targets", "-v"], ct);
+        var officialDetails = await RunOfficialHdcAsync(executable, ["list", "targets", "-v"], ct);
         Assert.Contains(target, HdcTargetInfo.Parse(officialDetails));
         var device = new DetectedDevice
         {
@@ -53,7 +88,7 @@ public sealed class HdcReadOnlyDeviceTests
         var service = new HdcDeviceService();
         foreach (var property in new[] { "const.product.model", "const.ohos.fullname", "const.ohos.apiversion" })
         {
-            var official = await HdcCommandClient.RunAsync(executable, ["-t", key, "shell", "param", "get", property], ct);
+            var official = await RunOfficialHdcAsync(executable, ["-t", key, "shell", "param", "get", property], ct);
             var managed = await service.GetPropertyAsync(device, property, ct);
             Assert.NotEmpty(managed.Trim());
             Assert.Equal(official.Trim(), managed.Trim());

@@ -1,5 +1,4 @@
-using UotanStudio.Comm.Protocols.Common;
-using UotanStudio.Comm.Protocols.Hdc;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm;
@@ -24,11 +23,11 @@ public sealed record DeviceCommunicationConfiguration
             ? value : UsbApiKind.Auto;
     }
 
-    /// <summary>Local ADB server host.</summary>
-    public const string ServerHost = "127.0.0.1";
+    /// <summary>Local ADB server host; the single definition lives in <see cref="Routing.DebugBridgeEndpoints"/>.</summary>
+    public const string ServerHost = DebugBridgeEndpoints.ServerHost;
 
-    /// <summary>Local ADB server port.</summary>
-    public const int AdbServerPort = 5037;
+    /// <summary>Local ADB server port; the single definition lives in <see cref="Routing.DebugBridgeEndpoints"/>.</summary>
+    public const int AdbServerPort = DebugBridgeEndpoints.AdbServerPort;
 
     /// <summary>Checks ADB endpoint ownership; only connection refusal means absent.</summary>
     public static Task<bool> ProbeAdbServerAsync(CancellationToken cancellationToken = default)
@@ -36,5 +35,5 @@ public sealed record DeviceCommunicationConfiguration
 
     /// <summary>Checks HDC endpoint ownership using the HDC environment/default port.</summary>
     public static Task<bool> ProbeHdcServerAsync(CancellationToken cancellationToken = default)
-        => DebugBridgeRoute.IsListeningAsync(ServerHost, HdcServerClient.DefaultServerPort, cancellationToken);
+        => DebugBridgeRoute.IsListeningAsync(ServerHost, DebugBridgeEndpoints.HdcServerPort, cancellationToken);
 }

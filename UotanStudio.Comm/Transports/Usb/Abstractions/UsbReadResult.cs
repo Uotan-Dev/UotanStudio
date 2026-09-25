@@ -18,7 +18,7 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 /// <param name="count">The number of bytes read. <para>读取的字节数。</para></param>
 /// <param name="isTimeout">Whether the operation timed out. <para>操作是否超时。</para></param>
 /// <param name="isShortPacket">Whether the transfer ended as a short packet. <para>传输是否以短包结束。</para></param>
-public readonly struct UsbReadResult(int count, bool isTimeout, bool isShortPacket)
+internal readonly struct UsbReadResult(int count, bool isTimeout, bool isShortPacket)
 {
     /// <summary>
     /// Gets the number of bytes actually read.

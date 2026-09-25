@@ -20,7 +20,7 @@ namespace UotanStudio.Comm.Protocols.Fastboot;
 /// <see cref="KnownDeviceProfiles"/> 中列出的设备（如接口描述符非标准的老款
 /// Amazon Kindle bootloader）。</para>
 /// </summary>
-public sealed class FastbootFactory : IProtocolFactory
+internal sealed class FastbootFactory : IProtocolFactory
 {
     private readonly ushort? _vendorId;
     private readonly ushort? _productId;

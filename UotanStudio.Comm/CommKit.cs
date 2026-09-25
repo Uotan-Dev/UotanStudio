@@ -11,9 +11,17 @@ namespace UotanStudio.Comm;
 /// instantiate <see cref="CommKit"/> for a configurable, testable facade.
 /// <para>使用静态成员可通过默认 USB 通信层快速访问，或实例化 <see cref="CommKit"/> 获得可配置、可测试的门面。</para>
 /// </summary>
-public sealed class CommKit : ICommKit
+internal sealed class CommKit : ICommKit
 {
     private readonly UsbCommunicationLayer _usb;
+
+    static CommKit()
+    {
+        // 组合根在门面构造时向 USB 打开门注册 server 归属守卫；未注册时后端对调试接口 fail-closed。
+        // The composition root registers the server-ownership guard for USB opens when the facade
+        // is constructed; without it the backend fails closed on debug interfaces.
+        UsbAccessPolicy.Configure(Devices.Services.DebugBridgeSessionOpener.RequireDirectUsb);
+    }
 
     /// <summary>
     /// Gets the default facade instance backed by the default USB communication layer.
@@ -227,8 +235,8 @@ public sealed class CommKit : ICommKit
     public Transports.Tcp.AdbTcpTransport CreateAdbTcpTransport(string host, int port = 5555, int connectTimeoutMs = 5000) => new(host, port, connectTimeoutMs);
 
     /// <inheritdoc/>
-    public Transports.Tcp.FastbootTcpTransport CreateFastbootTcpTransport(string host, int port = 5554, int connectTimeoutMs = 30000) => new(host, port, connectTimeoutMs);
+    public Protocols.Fastboot.Transport.FastbootTcpTransport CreateFastbootTcpTransport(string host, int port = 5554, int connectTimeoutMs = 30000) => new(host, port, connectTimeoutMs);
 
     /// <inheritdoc/>
-    public Transports.Udp.FastbootUdpTransport CreateFastbootUdpTransport(string host, int port = 5554, int timeoutMs = 1000, int maxTransmissionAttempts = 10) => new(host, port, timeoutMs, maxTransmissionAttempts);
+    public Protocols.Fastboot.Transport.FastbootUdpTransport CreateFastbootUdpTransport(string host, int port = 5554, int timeoutMs = 1000, int maxTransmissionAttempts = 10) => new(host, port, timeoutMs, maxTransmissionAttempts);
 }

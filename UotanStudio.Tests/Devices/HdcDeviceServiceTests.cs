@@ -29,24 +29,4 @@ public sealed class HdcDeviceServiceTests
         await Assert.ThrowsAsync<ArgumentException>(() => service.UninstallAsync(device, "-h;anything", TestContext.Current.CancellationToken));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.ForwardAsync(device, 0, 80, ct: TestContext.Current.CancellationToken));
     }
-
-    [Fact]
-    public async Task ProcessRunner_DrainsBothPipesAndRejectsFailureWithZeroExitCode()
-    {
-        if (!OperatingSystem.IsWindows()) Assert.Skip("Uses the system Windows PowerShell as a fake HDC process.");
-        var ct = TestContext.Current.CancellationToken;
-        var output = await HdcCommandClient.RunAsync("powershell.exe",
-            ["-NoProfile", "-NonInteractive", "-Command", "[Console]::Out.Write('x' * 20000); [Console]::Error.Write('y' * 20000)"], ct, 10000);
-        Assert.Equal(40000, output.Length);
-        await Assert.ThrowsAsync<IOException>(() => HdcCommandClient.RunAsync("powershell.exe",
-            ["-NoProfile", "-NonInteractive", "-Command", "[Console]::Out.Write('[Fail]denied'); exit 0"], ct, 10000));
-    }
-
-    [Fact]
-    public async Task ProcessRunner_TimeoutTerminatesChildInsteadOfReturningSuccess()
-    {
-        if (!OperatingSystem.IsWindows()) Assert.Skip("Uses the system Windows PowerShell as a fake HDC process.");
-        await Assert.ThrowsAsync<TimeoutException>(() => HdcCommandClient.RunAsync("powershell.exe",
-            ["-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 30"], TestContext.Current.CancellationToken, 500));
-    }
 }

@@ -12,25 +12,6 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
     /// <summary>Creates a service for the configured HDC host channel.</summary>
     public static HdcDeviceService FromSettings() => new();
 
-    /// <summary>Locates HDC in PATH or the standard DevEco installation.
-    /// <para>从 PATH 或 DevEco 标准安装位置自动查找 HDC。</para></summary>
-    public static string ResolveExecutable()
-    {
-        var name = OperatingSystem.IsWindows() ? "hdc.exe" : "hdc";
-        foreach (var directory in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator))
-        {
-            if (!string.IsNullOrWhiteSpace(directory) && File.Exists(Path.Combine(directory, name)))
-                return Path.Combine(directory, name);
-        }
-        if (OperatingSystem.IsWindows())
-        {
-            var bundled = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                "Huawei", "DevEco Studio", "sdk", "default", "openharmony", "toolchains", name);
-            if (File.Exists(bundled)) return bundled;
-        }
-        return name;
-    }
-
     private static void ValidateDevice(DetectedDevice device)
     {
         if (device.Protocol != DeviceProtocolKind.Hdc || string.IsNullOrWhiteSpace(device.Serial))
@@ -52,11 +33,12 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
             text = await Task.Run(() =>
             {
                 ct.ThrowIfCancellationRequested();
-                using var session = HdcDirectSessionPool.Acquire(device);
+                var opened = HdcDirectConnection.Open(device);
+                using var lease = opened.Lease;
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeout.CancelAfter(TimeSpan.FromSeconds(30));
                 using var output = new MemoryStream();
-                session.CreateShellClient(wrapped[6..]).ExecuteStreaming(bytes =>
+                opened.Session.CreateShellClient(wrapped[6..]).ExecuteStreaming(bytes =>
                 {
                     if (output.Length + bytes.Length > HdcServerClient.MaximumOutputBytes)
                         throw new InvalidDataException("HDC shell output limit exceeded.");
@@ -98,8 +80,9 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
         {
             ValidateDevice(device);
             ct.ThrowIfCancellationRequested();
-            using var session = HdcDirectSessionPool.Acquire(device);
-            return operation(session);
+            var opened = HdcDirectConnection.Open(device);
+            using var lease = opened.Lease;
+            return operation(opened.Session);
         }, ct);
 
     /// <summary>Executes an official task with the exact selected target. 对固定目标执行官方任务。</summary>

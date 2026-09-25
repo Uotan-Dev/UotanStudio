@@ -19,13 +19,8 @@ namespace UotanStudio.Comm.Transports.Usb.Core;
 /// </remarks>
 /// <param name="registry">Optional registry to use. <para>可选注册表实例。</para></param>
 /// <param name="configuration">Optional isolated configuration; otherwise uses the process configuration.</param>
-public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, DeviceCommunicationConfiguration? configuration = null)
+internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, DeviceCommunicationConfiguration? configuration = null)
 {
-    static UsbCommunicationLayer()
-    {
-        UsbAccessPolicy.Configure(Protocols.Common.DebugBridgeRoute.RequireDirectUsb);
-    }
-
     private readonly UsbApiRegistry _registry = registry ?? UsbApiRegistry.CreateDefault();
 
     private DeviceCommunicationConfiguration Configuration => configuration ?? DeviceCommunicationConfiguration.Current;
@@ -258,6 +253,21 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Devic
             }
         }
 
+        if (apiKind == UsbApiKind.Native && RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            try
+            {
+                return new UdevHotplugMonitor(Enumerator, onChanged, onError);
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex);
+                UsbTrace.Log($"UdevHotplugMonitor creation failed: {ex.GetType().Name}: {ex.Message} - falling back to polling monitor.");
+            }
+        }
+
+        // macOS native has no event monitor yet; the polling fallback covers it (libusb
+        // hotplug remains available when libusb is explicitly selected).
         return new UsbDeviceMonitor(Enumerator, onChanged, onError, interval, fireInitialSnapshot, cancellationToken);
     }
 
@@ -595,11 +605,12 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Devic
 
     /// <summary>
     /// Returns the default backend that <see cref="UsbApiKind.Auto"/> resolves to on the
-    /// current platform (Windows → winusb native; Linux/macOS → libusb). Unknown platforms
-    /// keep <see cref="UsbApiKind.Auto"/>, which selects the polling monitor.
-    /// <para>返回 <see cref="UsbApiKind.Auto"/> 在当前平台上解析到的默认后端
-    /// （Windows → winusb 原生；Linux/macOS → libusb）。未知平台保持
-    /// <see cref="UsbApiKind.Auto"/>，落入轮询监视器。</para>
+    /// current platform. Every supported desktop platform prefers its native backend
+    /// (Windows → winusb, Linux → usbfs, macOS → IOKit/IOUSBHost); libusb is an explicit
+    /// opt-in fallback via <see cref="DeviceCommunicationConfiguration.UsbBackend"/>.
+    /// <para>返回 <see cref="UsbApiKind.Auto"/> 在当前平台解析到的默认后端。所有受支持桌面
+    /// 平台均默认原生后端（Windows → winusb、Linux → usbfs、macOS → IOKit/IOUSBHost）；
+    /// libusb 仅作为经 <see cref="DeviceCommunicationConfiguration.UsbBackend"/> 显式选择的回退。</para>
     /// </summary>
     private UsbApiKind PreferredAutoApiKind()
     {
@@ -607,19 +618,18 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Devic
         {
             return Configuration.UsbBackend;
         }
-        return RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? UsbApiKind.Native
-            : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
+        return RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ||
+            RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
             RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-            ? UsbApiKind.LibUsbDotNet
+            ? UsbApiKind.Native
             : UsbApiKind.Auto;
     }
 
     /// <summary>
-    /// Returns the default backend name that <see cref="UsbApiKind.Auto"/> resolves to
-    /// on the current platform (Windows → winusb native; Linux/macOS → libusb).
+    /// Returns the default backend name that <see cref="UsbApiKind.Auto"/> resolves to on the
+    /// current platform (Windows/Linux/macOS → native; see <see cref="PreferredAutoApiKind"/>).
     /// <para>返回 <see cref="UsbApiKind.Auto"/> 在当前平台上解析到的默认后端名称
-    /// （Windows → winusb 原生；Linux/macOS → libusb）。</para>
+    /// （Windows/Linux/macOS 均为原生；见 <see cref="PreferredAutoApiKind"/>）。</para>
     /// </summary>
     private string? PreferredAutoApiName() => PreferredAutoApiKind() switch
     {

@@ -125,7 +125,7 @@ public class FastbootResponse
 /// </remarks>
 /// <param name="state">The response state. 响应状态。</param>
 /// <param name="message">The error message. 错误消息。</param>
-public class FastbootException(FastbootResponseState state, string message) : Exception($"fastboot {state}: {message}")
+internal class FastbootException(FastbootResponseState state, string message) : Exception($"fastboot {state}: {message}")
 {
     /// <summary>
     /// Gets the response state.

@@ -45,7 +45,7 @@ public readonly struct ShellResult(byte[] stdout, byte[] stderr, int exitCode)
 /// Initializes a new shell client for the given command.
 /// <para>为给定命令初始化新的 shell 客户端。</para>
 /// </remarks>
-public sealed class HdcShellClient
+public sealed class HdcShellClient : UotanStudio.Comm.Contracts.IHdcShellClient
 {
     private readonly HdcConnection? _connection;
     private readonly HdcServerClient? _server;

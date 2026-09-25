@@ -50,7 +50,7 @@ public sealed class TransferConfig
 }
 
 /// <summary>Native HDC file transfer using command envelopes, protobuf metadata and 64-byte data prefixes.</summary>
-public sealed class HdcSyncClient(HdcConnection connection) : IDisposable
+public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, UotanStudio.Comm.Contracts.IHdcSyncClient
 {
     private bool _disposed;
     /// <summary>Progress in transferred bytes.</summary>
