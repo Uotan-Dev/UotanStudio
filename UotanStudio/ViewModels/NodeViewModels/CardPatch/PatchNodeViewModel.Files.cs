@@ -86,12 +86,6 @@ public sealed partial class PatchNodeViewModel
                 node.AddOutput("Relative Paths", NodePortType.Any);
                 node.AddOutput("Count", NodePortType.Number);
                 break;
-            case "Workspace.Text.Read":
-                node.AddInput("Relative Path", NodePortType.Text, string.Empty);
-                node.AddOutput("Text", NodePortType.Text);
-                node.AddOutput("Encoding", NodePortType.Text);
-                node.AddOutput("Hash", NodePortType.Text);
-                break;
             case "Workspace.Text.Stage":
                 node.AddInput("Relative Path", NodePortType.Text, string.Empty);
                 node.AddInput("Text", NodePortType.Text, string.Empty, multiline: true);
@@ -99,8 +93,7 @@ public sealed partial class PatchNodeViewModel
                 node.AddInput("Operation", NodePortType.Text, "Replace", choices: Enum.GetNames<PatchFileMode>());
                 break;
             case "Workspace.File.Import":
-            case "Workspace.File.Copy":
-                node.AddInput("Source", node.TypeKey == "Workspace.File.Import" ? NodePortType.Path : NodePortType.Text, string.Empty);
+                node.AddInput("Source", NodePortType.Path, string.Empty);
                 node.AddInput("Relative Path", NodePortType.Text, string.Empty);
                 node.AddInput("Operation", NodePortType.Text, "Add", choices: Enum.GetNames<PatchFileMode>());
                 node.AddInput("Expected Hash", NodePortType.Text, string.Empty);
@@ -218,20 +211,12 @@ public sealed partial class PatchNodeViewModel
                 WriteOutput("Relative Path", relative.Length == 1 ? relative[0] : null);
                 WriteOutput("Count", files.Count);
                 break;
-            case "Workspace.Text.Read":
-                var document = await run.ReadTextAsync(workspace.Resolve(Text("Relative Path")), token).ConfigureAwait(false);
-                WriteOutput("Text", document.Text);
-                WriteOutput("Encoding", document.Encoding);
-                WriteOutput("Hash", document.Sha256);
-                break;
             case "Workspace.Text.Stage":
                 await run.StageTextAsync(workspace.Resolve(Text("Relative Path")), Text("Text"), Text("Encoding"),
                     Operation<PatchFileMode>(), token).ConfigureAwait(false);
                 break;
             case "Workspace.File.Import":
-            case "Workspace.File.Copy":
-                var source = TypeKey == "Workspace.File.Copy" ? workspace.Resolve(Text("Source")) : Text("Source");
-                await run.StageCopyAsync(source, workspace.Resolve(Text("Relative Path")), Operation<PatchFileMode>(),
+                await run.StageCopyAsync(Text("Source"), workspace.Resolve(Text("Relative Path")), Operation<PatchFileMode>(),
                     Text("Expected Hash"), token).ConfigureAwait(false);
                 break;
             case "Workspace.File.Delete":

@@ -28,15 +28,18 @@ public sealed class FavoriteNodeIconTests(NodeEditorUiFixture fixture)
                 try
                 {
                     window.UpdateLayout();
-                    var button = view.GetVisualDescendants().OfType<Button>()
-                        .Single(candidate => ReferenceEquals(candidate.DataContext, item)
-                            && candidate.Command == item.ToggleFavoriteCommand);
-                    Assert.DoesNotContain("favorite", button.Classes);
+                    // The same item instance is realized in the expanded Favorites/Recent shortcut category and in
+                    // its own category, so every matching favorite button must follow the item's favorite state.
+                    var buttons = view.GetVisualDescendants().OfType<Button>()
+                        .Where(candidate => ReferenceEquals(candidate.DataContext, item)
+                            && candidate.Command == item.ToggleFavoriteCommand).ToArray();
+                    Assert.NotEmpty(buttons);
+                    Assert.All(buttons, button => Assert.DoesNotContain("favorite", button.Classes));
 
                     item.IsFavorite = true;
                     Dispatcher.UIThread.RunJobs();
 
-                    Assert.Contains("favorite", button.Classes);
+                    Assert.All(buttons, button => Assert.Contains("favorite", button.Classes));
                 }
                 finally
                 {

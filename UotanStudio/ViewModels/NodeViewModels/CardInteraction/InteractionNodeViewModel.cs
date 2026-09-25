@@ -65,7 +65,7 @@ public sealed class InteractionNodeViewModel : FlowNodeViewModel
         "UI.Field.File", "UI.Field.Directory", "UI.Field.SavePath",
         "UI.Layout.Row", "UI.Layout.Column", "UI.Layout.Group", "UI.Layout.Pages",
         "UI.Condition.Equals", "UI.Form.Create", "UI.Dialog.Show", "UI.Result.Read",
-        "UI.Dialog.Message", "UI.Dialog.Confirm", "UI.Notification.Show", "UI.Progress.Open", "UI.Progress.Update", "UI.Progress.Close"
+        "UI.Dialog.Confirm", "UI.Notification.Show", "UI.Progress.Open", "UI.Progress.Update", "UI.Progress.Close"
     ];
 
     private InteractionNodeViewModel(string typeKey) : base(typeKey, NodeCategory.Output)
@@ -170,7 +170,6 @@ public sealed class InteractionNodeViewModel : FlowNodeViewModel
                     node.Out("Form", NodePortType.UiForm);
                     break;
                 case "UI.Dialog.Show":
-                case "UI.Dialog.Message":
                 case "UI.Dialog.Confirm":
                     node.In("Flow", NodePortType.Flow);
                     if (typeKey == "UI.Dialog.Show")
@@ -306,7 +305,6 @@ public sealed class InteractionNodeViewModel : FlowNodeViewModel
                 WriteOutput("Form", form);
                 break;
             case "UI.Dialog.Show":
-            case "UI.Dialog.Message":
             case "UI.Dialog.Confirm":
                 var dialogForm = TypeKey == "UI.Dialog.Show" ? Require<InteractionForm>("Form") : new InteractionForm
                 {

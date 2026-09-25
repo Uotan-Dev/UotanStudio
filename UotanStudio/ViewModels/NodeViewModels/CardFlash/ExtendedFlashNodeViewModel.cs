@@ -28,12 +28,6 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的 bootloader 刷写节点。</para>
-    /// Creates a default flash-bootloader node.
-    /// </summary>
-    public static FlashNodeViewModel CreateFlashBootloaderNode() => FlashNodeViewModel.CreateFlashPreset("bootloader");
-
-    /// <summary>
     /// <para>创建默认的全部擦除节点，擦除设备上的所有分区。</para>
     /// Creates a default erase-all node that wipes every partition on the device.
     /// </summary>
@@ -65,13 +59,6 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
         node.Output.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
         return node;
     }
-
-    /// <summary>
-    /// <para>创建默认的固件覆盖节点，使用外部镜像覆盖指定分区（默认 <c>super</c>，可覆盖）。</para>
-    /// Creates a default firmware-overwrite node that overwrites a partition with an external image
-    /// (defaults to <c>super</c>, overridable).
-    /// </summary>
-    public static FlashNodeViewModel CreateOverwriteFirmwareNode() => FlashNodeViewModel.CreateFlashPreset("super");
 
     /// <summary>
     /// <para>按节点类型键（TypeKey）分发对应的扩展烧录逻辑：Device.Partition.Flash 刷写 bootloader 分区、

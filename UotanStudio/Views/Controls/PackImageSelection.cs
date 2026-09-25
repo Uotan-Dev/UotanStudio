@@ -43,6 +43,8 @@ internal sealed partial class PackImageGroup : ObservableObject, IDisposable
     public bool IsExternal { get; }
     /// <summary><para>是否为交付生成镜像分组。</para>Whether this group holds delivery-generated outputs.</summary>
     public bool IsDeliveryOutputs { get; init; }
+    /// <summary><para>是否为节点工作流产物分组。</para>Whether this group holds node-workflow published artifacts.</summary>
+    public bool IsNodeOutputs { get; init; }
     internal IReadOnlySet<string>? DynamicPartitions { get; init; }
     public ObservableCollection<PackImageEntry> Images { get; } = [];
     public bool HasImages => Images.Count > 0;

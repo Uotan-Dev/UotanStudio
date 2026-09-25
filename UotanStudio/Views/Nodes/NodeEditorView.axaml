@@ -470,7 +470,7 @@
 
                         <StackPanel Margin="8" Spacing="6"
                                     IsVisible="{Binding IsSingleSelection}">
-                            <TextBlock Text="{Binding SelectedNode.LocalizedTitle}"
+                            <TextBlock Text="{Binding SelectedNode.DisplayHeader}"
                                        FontWeight="SemiBold" FontSize="13"
                                        Margin="0,0,0,4" />
                             <Separator Margin="0,4" />
@@ -520,6 +520,17 @@
                                     <Run Text=", " />
                                     <Run Text="{Binding SelectedNode.Location.Y}" />
                                 </TextBlock>
+                            </Grid>
+
+                            <!-- 备注名 -->
+                            <Grid ColumnDefinitions="Auto,*" Margin="0,2,0,0">
+                                <TextBlock Grid.Column="0" Text="{DynamicResource Node_Prop_CustomName}"
+                                           FontSize="11"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Margin="0,0,8,0" />
+                                <TextBox Grid.Column="1" Height="24" FontSize="12"
+                                         Text="{Binding SelectedNode.CustomName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             </Grid>
 
                             <Separator Margin="0,4" />
@@ -673,7 +684,7 @@
                 <!-- 节点模板 -->
                 <nodify:NodifyEditor.ItemTemplate>
                     <DataTemplate DataType="{x:Type nodeVm:FlowNodeViewModel}">
-                                     <nodify:Node Header="{Binding LocalizedTitle}"
+                                     <nodify:Node Header="{Binding DisplayHeader}"
                                           Input="{Binding Input}"
                                           Output="{Binding Output}"
                                           Location="{Binding Location, Mode=TwoWay}"
@@ -760,7 +771,7 @@
                         <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}" />
                     </Border.RenderTransform>
                     <nodify:Node x:DataType="nodeVm:FlowNodeViewModel"
-                                 Header="{Binding LocalizedTitle}"
+                                 Header="{Binding DisplayHeader}"
                                  Input="{Binding Input}"
                                  Output="{Binding Output}">
                         <nodify:Node.InputConnectorTemplate>

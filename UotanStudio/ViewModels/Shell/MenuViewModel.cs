@@ -1268,6 +1268,20 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.ResetZoom));
     }
 
+    /// <summary><para>运行当前节点工作流。仅在节点编辑器面板激活时可用。</para>Run the current node workflow. Only available when the Node Editor panel is active.</summary>
+    [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
+    private void RunWorkflow()
+    {
+        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Run));
+    }
+
+    /// <summary><para>停止正在执行的节点工作流。仅在节点编辑器面板激活时可用。</para>Stop the running node workflow. Only available when the Node Editor panel is active.</summary>
+    [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
+    private void StopWorkflow()
+    {
+        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Stop));
+    }
+
     // ===== 帮助 / Help =====
 
     /// <summary><para>打开在线文档。</para>Open online documentation.</summary>
@@ -1491,7 +1505,11 @@ public enum NodeEditorAction
     /// <summary><para>删除选中。</para>Delete selection.</summary>
     Delete,
     /// <summary><para>全选。</para>Select all.</summary>
-    SelectAll
+    SelectAll,
+    /// <summary><para>运行工作流。</para>Run the workflow.</summary>
+    Run,
+    /// <summary><para>停止工作流。</para>Stop the workflow.</summary>
+    Stop
 }
 
 /// <summary>

@@ -69,7 +69,13 @@ public class DataNodeViewModel : FlowNodeViewModel
             TypeKey = "Validation.Data.Hash"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Algorithm", PortType = NodePortType.Text });
+        node.Input.Add(new NodeConnectorViewModel
+        {
+            Title = "Algorithm",
+            PortType = NodePortType.Text,
+            Choices = new[] { "md5", "sha1", "sha256", "sha384", "sha512" }.Select(value => new NodePortChoice(value)).ToArray(),
+            InitialValue = "sha256"
+        });
         node.Output.Add(new NodeConnectorViewModel { Title = "Hash", PortType = NodePortType.Text });
         return node;
     }
@@ -193,8 +199,9 @@ public class DataNodeViewModel : FlowNodeViewModel
         var hash = ComputeHash(data, algorithm);
         if (hash == null)
         {
-            context.Log.Write(LogLevel.Warn, Title, $"Unsupported algorithm '{algorithm}'.  不支持的算法。");
-            return;
+            // 校验和属于校验语义，未知算法必须显式失败，不能静默当作成功。
+            // A checksum is a validation; an unknown algorithm must fail explicitly rather than pass silently.
+            throw new InvalidDataException($"Unsupported hash algorithm '{algorithm}'.  不支持的哈希算法。");
         }
 
         WriteOutput("Hash", hash);

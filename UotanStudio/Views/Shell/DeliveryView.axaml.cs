@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Delivery;
+using UotanStudio.Services.Execution;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Workspace;
@@ -57,6 +58,8 @@ public partial class DeliveryView : UserControl
         SuperAOnlyBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
         ImageSelection.SelectedImagesChanged += (_, _) => UpdateCompositionImages();
         ImageSelection.LayoutChanged += (_, _) => UpdateImagesLayout();
+        NodeArtifactRegistry.Changed += OnNodeArtifactsChanged;
+        UpdateNodeArtifacts();
         Composition.Changed += (_, _) => UpdateSidebarLock();
         DeliveryContent.SizeChanged += (_, _) => UpdateImagesColumnMinimums();
         foreach (var option in OutputOptions.Children)
@@ -151,6 +154,18 @@ public partial class DeliveryView : UserControl
         }
         SuperSparseBox.IsEnabled = !zipOutput;
         Composition.OutputView.SetTxtScriptBlockedByZstd(PackSuperBox.IsChecked == true && SuperZstdBox.IsChecked == true);
+    }
+
+    private void OnNodeArtifactsChanged(object? sender, EventArgs e)
+    {
+        // 节点执行线程发布产物，需回到 UI 线程再重建镜像分组。
+        // Artifacts are published from workflow threads; rebuild the group on the UI thread.
+        Dispatcher.UIThread.Post(UpdateNodeArtifacts);
+    }
+
+    private void UpdateNodeArtifacts()
+    {
+        ImageSelection.AddNodeArtifacts(NodeArtifactRegistry.PublishedPaths);
     }
 
     private void UpdateCompositionImages()

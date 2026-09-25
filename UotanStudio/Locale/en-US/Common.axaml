@@ -242,6 +242,8 @@
     <x:String x:Key="PackDialog_ExtraImages">Extra images {0}</x:String>
     <x:String x:Key="PackDialog_DeliveryOutputs">Delivery outputs</x:String>
     <x:String x:Key="PackDialog_DeliveryOutputsSource">delivery</x:String>
+    <x:String x:Key="PackDialog_NodeOutputs">Node workflow artifacts</x:String>
+    <x:String x:Key="PackDialog_NodeOutputsSource">node</x:String>
     <x:String x:Key="PackDialog_RemoveGroup">Remove this image list</x:String>
     <x:String x:Key="PackDialog_Previous">Previous sub-projects</x:String>
     <x:String x:Key="PackDialog_Next">Next sub-projects</x:String>

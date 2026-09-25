@@ -54,6 +54,11 @@ public class SuperNodeViewModel : FlowNodeViewModel
         node.Input.Add(new NodeConnectorViewModel { Title = "Device Size", PortType = NodePortType.Number });
         node.Input.Add(new NodeConnectorViewModel { Title = "Group Name", PortType = NodePortType.Text });
         node.Input.Add(new NodeConnectorViewModel { Title = "Partitions", PortType = NodePortType.Text });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Metadata Size", PortType = NodePortType.Number, InitialValue = 65536d });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Slots", PortType = NodePortType.Number, InitialValue = 2d });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Block Size", PortType = NodePortType.Number, InitialValue = 4096d });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Sparse", PortType = NodePortType.Boolean, InitialValue = true });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Virtual AB", PortType = NodePortType.Boolean, InitialValue = false });
         node.Output.Add(new NodeConnectorViewModel { Title = "Result", PortType = NodePortType.Text });
         return node;
     }
@@ -179,7 +184,12 @@ public class SuperNodeViewModel : FlowNodeViewModel
         }
 
         var result = await FirmwareService.Instance
-            .SynthesizeSuperAsync(partitions, outputPath, (ulong)deviceSizeValue, groupName ?? "default", context.CancellationToken)
+            .SynthesizeSuperAsync(partitions, outputPath, (ulong)deviceSizeValue, groupName ?? "default", context.CancellationToken,
+                metadataSize: ToUInt(ReadInput("Metadata Size"), 65536),
+                slots: ToUInt(ReadInput("Slots"), 2),
+                blockSize: ToUInt(ReadInput("Block Size"), 4096),
+                sparse: NodeDataUtil.ToBool(ReadInput("Sparse"), true),
+                virtualAb: NodeDataUtil.ToBool(ReadInput("Virtual AB"), false))
             .ConfigureAwait(false);
         if (!result.Success)
         {
@@ -191,6 +201,12 @@ public class SuperNodeViewModel : FlowNodeViewModel
     }
 
     private static string? PathText(object? value) => Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);
+
+    private static uint ToUInt(object? value, uint fallback)
+    {
+        var number = NodeDataUtil.ToDouble(value, fallback);
+        return number <= 0 ? fallback : Convert.ToUInt32(number, System.Globalization.CultureInfo.InvariantCulture);
+    }
 
     private static string DeriveOutputDir(string sourcePath)
     {

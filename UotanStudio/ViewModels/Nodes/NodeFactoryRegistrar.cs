@@ -51,17 +51,14 @@ public static class NodeFactoryRegistrar
         P("Config.Ini.Query", "Node_Config_Ini_Query", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Config.Ini.Query")),
         P("Config.Ini.Edit", "Node_Config_Ini_Edit", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Config.Ini.Edit")),
         P("Workspace.Directory.Open", "Node_Workspace_Directory_Open", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Workspace.Directory.Open")),
-        P("Workspace.Text.Read", "Node_Workspace_Text_Read", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Workspace.Text.Read")),
         P("Workspace.Text.Stage", "Node_Workspace_Text_Stage", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Workspace.Text.Stage")),
         P("Workspace.File.Import", "Node_Workspace_File_Import", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Workspace.File.Import")),
-        P("Workspace.File.Copy", "Node_Workspace_File_Copy", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Workspace.File.Copy")),
         P("Workspace.File.Delete", "Node_Workspace_File_Delete", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Workspace.File.Delete")),
         P("Workspace.File.Exists", "Node_Workspace_File_Exists", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Workspace.File.Exists")),
         P("Validation.File.Hash", "Node_Validation_File_Hash", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Validation.File.Hash")),
         P("Validation.Hash.Verify", "Node_Validation_Hash_Verify", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Validation.Hash.Verify")),
         P("Validation.Count.Assert", "Node_Validation_Count_Assert", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Validation.Count.Assert")),
         P("Validation.Changes.Verify", "Node_Validation_Changes_Verify", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Validation.Changes.Verify")),
-        P("File.Path.Find", "Node_File_Path_Find", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("File.Path.Find")),
         P("File.Text.Read", "Node_File_Text_Read", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("File.Text.Read")),
         P("Validation.Condition.Evaluate", "Node_Validation_Condition_Evaluate", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Validation.Condition.Evaluate")),
         P("Validation.Boolean.Assert", "Node_Validation_Boolean_Assert", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Validation.Boolean.Assert")),
@@ -118,7 +115,6 @@ public static class NodeFactoryRegistrar
         D("Feedback.Log.Write", "Node_Feedback_Log_Write", NodeToolboxGroup.Output, () => OutputNodeViewModel.CreateLogNode()),
         D("Feedback.Progress.Report", "Node_Feedback_Progress_Report", NodeToolboxGroup.Output, () => OutputNodeViewModel.CreateProgressNode()),
         D("File.Artifact.Publish", "Node_File_Artifact_Publish", NodeToolboxGroup.Output, () => OutputNodeViewModel.CreateSaveNode()),
-        D("Feedback.Console.Write", "Node_Feedback_Console_Write", NodeToolboxGroup.Output, () => ExtendedOutputNodeViewModel.CreateConsoleOutputNode()),
         .. InteractionNodeViewModel.TypeKeys.Select(typeKey => D(typeKey, "Node_" + typeKey.Replace('.', '_'),
             NodeToolboxGroup.Output, () => InteractionNodeViewModel.Create(typeKey)))
     ];
@@ -271,7 +267,7 @@ public static class NodeFactoryRegistrar
     {
         var descriptor = D(typeKey, resourceKey, group, factory);
         var capabilities = descriptor.Capabilities | NodeCapability.PatchOperation | NodeCapability.PatchSafe;
-        if (typeKey is "File.Text.Publish" or "Workspace.Text.Stage" or "Workspace.File.Import" or "Workspace.File.Copy"
+        if (typeKey is "File.Text.Publish" or "Workspace.Text.Stage" or "Workspace.File.Import"
             or "Workspace.File.Delete" or "Workspace.Asset.Stage" or "Binary.Pattern.Replace" or "Image.Text.Stage"
             or "Image.Edit.Apply" or "Image.File.SetAttributes" or "Image.Xattr.Set" or "Image.Xattr.Delete")
         {

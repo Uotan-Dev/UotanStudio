@@ -46,15 +46,6 @@ public class FlashNodeViewModel : FlowNodeViewModel
         return node;
     }
 
-    /// <summary>Creates a partition-flash preset using the same explicit partition input and execution contract.</summary>
-    public static FlashNodeViewModel CreateFlashPreset(string partition)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(partition);
-        var node = CreateFlashNode();
-        node.Input.Single(input => input.Title == "Partition").InitialValue = partition;
-        return node;
-    }
-
     /// <summary>
     /// <para>创建默认的擦除节点。</para>
     /// Creates a default erase node.
@@ -232,7 +223,7 @@ public class FlashNodeViewModel : FlowNodeViewModel
         }
 
         var mode = Text(ReadInput("Mode"));
-        var ok = await DeviceMonitorService.Instance.RebootAsync(
+        var ok = await App.DeviceMonitor.RebootAsync(
             device, mode ?? "now", context.CancellationToken).ConfigureAwait(false);
 
         WriteOutput("Status", ok ? $"rebooted:{mode ?? "now"}" : "reboot-failed");

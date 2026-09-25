@@ -74,6 +74,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
             TypeKey = "Validation.Signature.Verify"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Firmware", PortType = NodePortType.Path });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Public Key", PortType = NodePortType.Path });
         node.Output.Add(new NodeConnectorViewModel { Title = "Valid", PortType = NodePortType.Boolean });
         node.Output.Add(new NodeConnectorViewModel { Title = "Report", PortType = NodePortType.Text });
         return node;
@@ -248,7 +249,10 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         FirmwareOpResult result;
         if (isVbmeta)
         {
-            result = await service.VerifyAvbAsync(path, publicKeyPath: null, context.CancellationToken).ConfigureAwait(false);
+            var publicKey = PathText(ReadInput("Public Key"));
+            result = await service.VerifyAvbAsync(path,
+                publicKeyPath: string.IsNullOrWhiteSpace(publicKey) ? null : publicKey,
+                context.CancellationToken).ConfigureAwait(false);
         }
         else
         {

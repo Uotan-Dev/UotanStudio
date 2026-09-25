@@ -88,7 +88,6 @@
     <x:String x:Key="Node_Feedback_Log_Write">日志输出</x:String>
     <x:String x:Key="Node_Feedback_Progress_Report">进度报告</x:String>
     <x:String x:Key="Node_File_Artifact_Publish">发布文件</x:String>
-    <x:String x:Key="Node_Feedback_Console_Write">控制台输出</x:String>
 
     <!-- 连接器名称 -->
     <x:String x:Key="Node_Conn_Path">路径</x:String>
@@ -194,6 +193,7 @@
     <x:String x:Key="Node_Prop_Status">状态</x:String>
     <x:String x:Key="Node_Prop_Type">类型</x:String>
     <x:String x:Key="Node_Prop_Location">位置</x:String>
+    <x:String x:Key="Node_Prop_CustomName">备注名</x:String>
     <x:String x:Key="Node_Prop_Inputs">输入端口</x:String>
     <x:String x:Key="Node_Prop_Outputs">输出端口</x:String>
 
@@ -209,7 +209,6 @@
 
     <x:String x:Key="Node_Build_Apk_Sign">APK 签名</x:String>
     <x:String x:Key="Node_CatPatch">固件补丁</x:String>
-    <x:String x:Key="Node_File_Path_Find">查找补丁目标</x:String>
     <x:String x:Key="Node_File_Text_Read">读取配置文本</x:String>
     <x:String x:Key="Node_File_Text_Publish">写出新配置文件</x:String>
     <x:String x:Key="Node_Validation_Condition_Evaluate">补丁条件判断</x:String>
@@ -264,10 +263,8 @@
     <x:String x:Key="Node_Conn_OutputPath">输出路径</x:String>
     <x:String x:Key="Node_Conn_Reason">失败原因</x:String>
     <x:String x:Key="Node_Workspace_Directory_Open">打开补丁工作目录</x:String>
-    <x:String x:Key="Node_Workspace_Text_Read">读取待应用配置</x:String>
     <x:String x:Key="Node_Workspace_Text_Stage">暂存配置修改</x:String>
     <x:String x:Key="Node_Workspace_File_Import">添加或替换文件</x:String>
-    <x:String x:Key="Node_Workspace_File_Copy">复制目录内文件</x:String>
     <x:String x:Key="Node_Workspace_File_Delete">删除文件</x:String>
     <x:String x:Key="Node_Workspace_File_Exists">检查待应用文件</x:String>
     <x:String x:Key="Node_Validation_File_Hash">计算文件 SHA-256</x:String>
@@ -627,7 +624,6 @@
     <x:String x:Key="Node_Family_Hash">哈希</x:String>
     <x:String x:Key="Node_Family_Count">数量</x:String>
     <x:String x:Key="Node_Family_Changes">变更</x:String>
-    <x:String x:Key="Node_Family_Path">路径</x:String>
     <x:String x:Key="Node_Family_Condition">条件</x:String>
     <x:String x:Key="Node_Family_Boolean">布尔检查</x:String>
     <x:String x:Key="Node_Family_AndroidProperty">Android 属性</x:String>
@@ -659,7 +655,6 @@
     <x:String x:Key="Node_Family_Progress">进度</x:String>
     <x:String x:Key="Node_Family_Artifact">产物</x:String>
     <x:String x:Key="Node_Family_Notification">通知</x:String>
-    <x:String x:Key="Node_Family_Console">控制台</x:String>
     <x:String x:Key="Node_Family_Content">内容</x:String>
     <x:String x:Key="Node_Family_Field">输入字段</x:String>
     <x:String x:Key="Node_Family_Layout">布局</x:String>
@@ -669,6 +664,17 @@
     <x:String x:Key="Node_AdvancedParameters">显示高级参数</x:String>
     <x:String x:Key="Node_Interaction_UnsupportedHost">此工作流需要支持用户交互的宿主，尚未执行任何操作。</x:String>
     <x:String x:Key="Node_Interaction_RecursiveGraph">工作流包含递归引用或嵌套层级过深的复合节点。</x:String>
+    <x:String x:Key="Node_Destructive_Title">破坏性设备操作确认</x:String>
+    <x:String x:Key="Node_Destructive_Message">本次运行包含以下破坏性设备操作，执行后可能无法恢复。请确认继续。</x:String>
+    <x:String x:Key="Node_Destructive_Confirm">确认执行</x:String>
+    <x:String x:Key="Node_Destructive_Cancel">取消</x:String>
+    <x:String x:Key="Node_Destructive_Rejected">工作流包含破坏性设备操作，未获得用户确认，已拒绝执行。</x:String>
+    <x:String x:Key="Node_Destructive_UnsupportedHost">当前宿主无法进行交互确认，包含破坏性设备操作的工作流不会执行。</x:String>
+    <x:String x:Key="Node_Connection_SameDirection">无法连线：两个端口方向相同。</x:String>
+    <x:String x:Key="Node_Connection_SameNode">无法连线：起点和终点属于同一个节点。</x:String>
+    <x:String x:Key="Node_Connection_Duplicate">无法连线：两个端口之间已存在连线。</x:String>
+    <x:String x:Key="Node_Connection_Incompatible">无法连线：端口类型不兼容。</x:String>
+    <x:String x:Key="Node_Connection_MaxReached">无法连线：该输入端口只允许一条连线。</x:String>
     <x:String x:Key="Node_PortType_UiComponent">界面组件</x:String>
     <x:String x:Key="Node_PortType_UiForm">表单</x:String>
     <x:String x:Key="Node_PortType_Record">记录</x:String>

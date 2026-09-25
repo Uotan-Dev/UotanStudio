@@ -61,6 +61,9 @@ internal static class NodeParameterSchema
             case "Image.Xattr.Delete":
                 Visible(node, "Expected Hex Value", current => Boolean(current, "Check Old Value") && Boolean(current, "Expected Exists"));
                 break;
+            case "Image.Super.Pack":
+                Advanced(node, "Metadata Size", "Slots", "Block Size", "Sparse", "Virtual AB");
+                break;
             case "Network.File.Download":
             case "Network.GitHub.Download":
                 Advanced(node, "Request Headers", "Expected SHA256", "Timeout Seconds");

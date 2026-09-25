@@ -88,7 +88,6 @@
     <x:String x:Key="Node_Feedback_Log_Write">Log Output</x:String>
     <x:String x:Key="Node_Feedback_Progress_Report">Progress Report</x:String>
     <x:String x:Key="Node_File_Artifact_Publish">Publish file</x:String>
-    <x:String x:Key="Node_Feedback_Console_Write">Console Output</x:String>
 
     <!-- Connector Names -->
     <x:String x:Key="Node_Conn_Path">Path</x:String>
@@ -194,6 +193,7 @@
     <x:String x:Key="Node_Prop_Status">Status</x:String>
     <x:String x:Key="Node_Prop_Type">Type</x:String>
     <x:String x:Key="Node_Prop_Location">Location</x:String>
+    <x:String x:Key="Node_Prop_CustomName">Custom name</x:String>
     <x:String x:Key="Node_Prop_Inputs">Inputs</x:String>
     <x:String x:Key="Node_Prop_Outputs">Outputs</x:String>
 
@@ -209,7 +209,6 @@
 
     <x:String x:Key="Node_Build_Apk_Sign">Sign APK</x:String>
     <x:String x:Key="Node_CatPatch">Firmware patches</x:String>
-    <x:String x:Key="Node_File_Path_Find">Find patch targets</x:String>
     <x:String x:Key="Node_File_Text_Read">Read configuration text</x:String>
     <x:String x:Key="Node_File_Text_Publish">Write new configuration file</x:String>
     <x:String x:Key="Node_Validation_Condition_Evaluate">Evaluate patch condition</x:String>
@@ -264,10 +263,8 @@
     <x:String x:Key="Node_Conn_OutputPath">Output path</x:String>
     <x:String x:Key="Node_Conn_Reason">Failure reason</x:String>
     <x:String x:Key="Node_Workspace_Directory_Open">Open patch workspace</x:String>
-    <x:String x:Key="Node_Workspace_Text_Read">Read staged configuration</x:String>
     <x:String x:Key="Node_Workspace_Text_Stage">Stage configuration change</x:String>
     <x:String x:Key="Node_Workspace_File_Import">Add or replace file</x:String>
-    <x:String x:Key="Node_Workspace_File_Copy">Copy workspace file</x:String>
     <x:String x:Key="Node_Workspace_File_Delete">Delete file</x:String>
     <x:String x:Key="Node_Workspace_File_Exists">Check staged file</x:String>
     <x:String x:Key="Node_Validation_File_Hash">Hash file (SHA-256)</x:String>
@@ -627,7 +624,6 @@
     <x:String x:Key="Node_Family_Hash">Hashes</x:String>
     <x:String x:Key="Node_Family_Count">Counts</x:String>
     <x:String x:Key="Node_Family_Changes">Changes</x:String>
-    <x:String x:Key="Node_Family_Path">Paths</x:String>
     <x:String x:Key="Node_Family_Condition">Conditions</x:String>
     <x:String x:Key="Node_Family_Boolean">Boolean checks</x:String>
     <x:String x:Key="Node_Family_AndroidProperty">Android properties</x:String>
@@ -659,7 +655,6 @@
     <x:String x:Key="Node_Family_Progress">Progress</x:String>
     <x:String x:Key="Node_Family_Artifact">Artifacts</x:String>
     <x:String x:Key="Node_Family_Notification">Notifications</x:String>
-    <x:String x:Key="Node_Family_Console">Console</x:String>
     <x:String x:Key="Node_Family_Content">Content</x:String>
     <x:String x:Key="Node_Family_Field">Input fields</x:String>
     <x:String x:Key="Node_Family_Layout">Layouts</x:String>
@@ -669,6 +664,17 @@
     <x:String x:Key="Node_AdvancedParameters">Show advanced parameters</x:String>
     <x:String x:Key="Node_Interaction_UnsupportedHost">This workflow requires an interactive host. No operations were started.</x:String>
     <x:String x:Key="Node_Interaction_RecursiveGraph">The workflow contains a recursive or excessively nested composite graph.</x:String>
+    <x:String x:Key="Node_Destructive_Title">Confirm destructive device operations</x:String>
+    <x:String x:Key="Node_Destructive_Message">This run contains the following destructive device operations and may not be recoverable. Confirm to continue.</x:String>
+    <x:String x:Key="Node_Destructive_Confirm">Run anyway</x:String>
+    <x:String x:Key="Node_Destructive_Cancel">Cancel</x:String>
+    <x:String x:Key="Node_Destructive_Rejected">The workflow contains destructive device operations and was rejected because user confirmation was not given.</x:String>
+    <x:String x:Key="Node_Destructive_UnsupportedHost">The current host cannot ask for interactive consent; workflows with destructive device operations will not run.</x:String>
+    <x:String x:Key="Node_Connection_SameDirection">Cannot connect: both ports have the same direction.</x:String>
+    <x:String x:Key="Node_Connection_SameNode">Cannot connect: source and target belong to the same node.</x:String>
+    <x:String x:Key="Node_Connection_Duplicate">Cannot connect: these ports are already connected.</x:String>
+    <x:String x:Key="Node_Connection_Incompatible">Cannot connect: the port types are incompatible.</x:String>
+    <x:String x:Key="Node_Connection_MaxReached">Cannot connect: this input port allows a single connection only.</x:String>
     <x:String x:Key="Node_PortType_UiComponent">UI component</x:String>
     <x:String x:Key="Node_PortType_UiForm">Form</x:String>
     <x:String x:Key="Node_PortType_Record">Record</x:String>

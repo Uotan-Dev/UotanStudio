@@ -77,12 +77,6 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的 spl/uboot 刷写节点，通过 Device 与 Bootloader 输入执行真实刷写。</para>
-    /// Creates a default spl/uboot flashing node that performs the real flash via the Device and Bootloader inputs.
-    /// </summary>
-    public static FlashNodeViewModel CreateFlashBootNode() => FlashNodeViewModel.CreateFlashPreset("boot");
-
-    /// <summary>
     /// <para>按节点类型键（TypeKey）分发对应的扩展固件逻辑：Build.Ota.CreateDelta 调用差分引擎生成差分包、
     /// Build.Signature.Merge 把签名追加进镜像、Build.Slots.Merge 拼接 A/B 槽位、Device.Partition.Flash
     /// 调用 <see cref="FlashService.FlashImageAsync"/> 把引导加载程序刷写到设备。</para>
@@ -149,8 +143,12 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
 
     private void ExecuteMergeDualSlot(INodeExecutionContext context)
     {
-        var a = NodeDataUtil.ToBytes(ReadInput("Slot A")) ?? [];
-        var b = NodeDataUtil.ToBytes(ReadInput("Slot B")) ?? [];
+        var a = NodeDataUtil.ToBytes(ReadInput("Slot A"));
+        var b = NodeDataUtil.ToBytes(ReadInput("Slot B"));
+        if (a == null || b == null)
+        {
+            throw new InvalidOperationException("Missing Slot A or Slot B input.  缺少槽位镜像。");
+        }
         var merged = new byte[a.Length + b.Length];
         a.CopyTo(merged, 0);
         b.CopyTo(merged, a.Length);

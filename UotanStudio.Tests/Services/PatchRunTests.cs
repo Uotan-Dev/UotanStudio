@@ -241,22 +241,24 @@ public sealed class PatchRunTests : IDisposable
         var import = PatchNodeViewModel.Create("Workspace.File.Import");
         Set(import, "Source", source);
         Set(import, "Relative Path", "temporary.prop");
-        var copy = PatchNodeViewModel.Create("Workspace.File.Copy");
-        Set(copy, "Source", "temporary.prop");
+        var copy = PatchNodeViewModel.Create("Workspace.File.Import");
+        Set(copy, "Source", source);
         Set(copy, "Relative Path", "result.prop");
         var delete = PatchNodeViewModel.Create("Workspace.File.Delete");
         Set(delete, "Relative Path", "temporary.prop");
-        var read = PatchNodeViewModel.Create("Workspace.Text.Read");
-        Set(read, "Relative Path", "result.prop");
+        var find = PatchNodeViewModel.Create("Workspace.File.Find");
+        Set(find, "Pattern", "result.prop");
+        var read = PatchNodeViewModel.Create("File.Text.Read");
         var verify = PatchNodeViewModel.Create("Validation.Changes.Verify");
         Set(verify, "Expected Paths", "result.prop");
         var hash = PatchNodeViewModel.Create("Validation.Hash.Verify");
         Set(hash, "Path", Path.Combine(_root, "result.prop"));
         Set(hash, "Expected Hash", Convert.ToHexString(SHA256.HashData("ro.test=ready\n"u8)));
-        var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([open, import, copy, delete, read, verify, hash],
+        var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([open, import, copy, delete, find, read, verify, hash],
             [Connect(open, "Workspace", import, "Workspace"), Connect(import, "Workspace", copy, "Workspace"),
-             Connect(copy, "Workspace", delete, "Workspace"), Connect(delete, "Workspace", read, "Workspace"),
-             Connect(read, "Workspace", verify, "Workspace"), Connect(verify, "Completed", hash, "Flow")], Token);
+             Connect(copy, "Workspace", delete, "Workspace"), Connect(delete, "Workspace", find, "Workspace"),
+             Connect(find, "Path", read, "Path"), Connect(delete, "Workspace", verify, "Workspace"),
+             Connect(verify, "Completed", hash, "Flow")], Token);
 
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         Assert.Equal(PatchRunOutcome.Applied, result.PatchOutcome);

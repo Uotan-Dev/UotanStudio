@@ -154,8 +154,14 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
 
     private void ExecuteConcat(INodeExecutionContext context)
     {
-        var a = NodeDataUtil.ToBytes(ReadInput("Data A")) ?? [];
-        var b = NodeDataUtil.ToBytes(ReadInput("Data B")) ?? [];
+        // 与 Build.Signature.Merge / Build.Slots.Merge 一致：缺失输入显式失败，不把空段静默并入结果。
+        // Consistent with Build.Signature.Merge / Build.Slots.Merge: missing inputs fail explicitly instead of merging empty segments.
+        var a = NodeDataUtil.ToBytes(ReadInput("Data A"));
+        var b = NodeDataUtil.ToBytes(ReadInput("Data B"));
+        if (a == null || b == null)
+        {
+            throw new InvalidOperationException("Missing Data A or Data B input.  缺少待拼接输入。");
+        }
         var combined = new byte[a.Length + b.Length];
         Buffer.BlockCopy(a, 0, combined, 0, a.Length);
         Buffer.BlockCopy(b, 0, combined, a.Length, b.Length);

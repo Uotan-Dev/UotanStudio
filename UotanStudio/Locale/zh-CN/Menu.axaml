@@ -85,6 +85,8 @@
     <x:String x:Key="Menu_ZoomIn">放大</x:String>
     <x:String x:Key="Menu_ZoomOut">缩小</x:String>
     <x:String x:Key="Menu_ResetZoom">重置缩放</x:String>
+    <x:String x:Key="Menu_RunWorkflow">运行工作流</x:String>
+    <x:String x:Key="Menu_StopWorkflow">停止工作流</x:String>
 
     <!-- 窗口菜单 -->
     <x:String x:Key="Menu_Window">窗口</x:String>

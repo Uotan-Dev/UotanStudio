@@ -195,6 +195,8 @@ public sealed class DocumentPropertiesLinkTests(NodeEditorUiFixture fixture)
             {
                 WeakReferenceMessenger.Default.UnregisterAll(recipient);
                 window.Close();
+                // The window keeps the model alive; dispose it so the global project-context subscription cannot outlive the test.
+                model.Dispose();
             }
             return Task.CompletedTask;
         });

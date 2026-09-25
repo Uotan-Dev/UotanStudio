@@ -376,6 +376,33 @@ public partial class PackImageSelectionView : UserControl
         RenderGroups();
     }
 
+    /// <summary><para>按登记路径整体重建节点工作流产物分组；路径为空时移除该分组。</para>
+    /// Rebuilds the node-outputs group from the recorded paths; removes the group when the list is empty.</summary>
+    internal void AddNodeArtifacts(IEnumerable<string> filePaths)
+    {
+        var previous = _groups.FirstOrDefault(group => group.IsNodeOutputs);
+        if (previous is not null) { _groups.Remove(previous); ReleaseGroup(previous); }
+        var paths = filePaths.Distinct(PathComparer).ToArray();
+        var existing = _groups.SelectMany(group => group.FilePaths).ToHashSet(PathComparer);
+        var added = paths.Where(path => !existing.Contains(path)).ToArray();
+        if (added.Length == 0) { ApplyGroupOptions(); return; }
+        var takenNames = _groups.SelectMany(group => group.Entries).Select(entry => entry.Name).ToHashSet(PathComparer);
+        var label = LanguageService.Instance.GetString("PackDialog_NodeOutputsSource");
+        _groups.Add(ObserveGroup(new PackImageGroup(LanguageService.Instance.GetString("PackDialog_NodeOutputs"),
+            added.Select(path =>
+            {
+                var fileName = Path.GetFileName(path);
+                var entry = new PackImageEntry(path, sourceLabel: takenNames.Contains(fileName) ? label : null);
+                entry.UpdateFileInfo(PackImageFileInfo.Read(path));
+                return entry;
+            }), isExternal: true)
+        { IsNodeOutputs = true }));
+        ApplyGroupOptions();
+        UpdatePageSize();
+        _page = (_groups.Count - 1) / _pageSize;
+        RenderGroups();
+    }
+
     internal PackImageSelection[] GetSelectedImages() => _groups.SelectMany(group =>
         group.Entries.Where(image => image.IsSelected).Select(image => new PackImageSelection(group.Name, image.FilePath)
         { SizeBytes = image.SizeBytes, DynamicPartitions = group.DynamicPartitions })).ToArray();

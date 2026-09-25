@@ -45,6 +45,10 @@ internal static class WorkflowReconstruction
         {
             node.SelectedImage = dto.SelectedImage;
         }
+        if (!string.IsNullOrWhiteSpace(dto.CustomName))
+        {
+            node.CustomName = dto.CustomName;
+        }
         RestoreInstanceId(node, dto, restoreInstanceId);
         return true;
     }
@@ -90,18 +94,15 @@ internal static class WorkflowReconstruction
     };
 
     /// <summary>
-    /// Stable identities are authoritative: a missing endpoint must never bind to another node by name.
+    /// Resolves IDs first, then the first matching title. The canvas falls back on a missing port;
+    /// the CLI preserves an ID-matched node and lets the execution engine handle a missing port.
     /// </summary>
     internal static (FlowNodeViewModel? Node, NodeConnectorViewModel? Port) ResolveEndpoint(
         IEnumerable<FlowNodeViewModel> nodes, IReadOnlyDictionary<string, FlowNodeViewModel> created,
         string? instanceId, string title, bool output, bool fallbackOnMissingPort, string? portId = null)
     {
         FlowNodeViewModel? node = null;
-        if (!string.IsNullOrEmpty(instanceId))
-        {
-            created.TryGetValue(instanceId, out node);
-            return (node, FindPort(node, portId, title, output));
-        }
+        if (!string.IsNullOrEmpty(instanceId)) created.TryGetValue(instanceId, out node);
         var port = FindPort(node, portId, title, output);
         if (node is not null && (!fallbackOnMissingPort || port is not null)) return (node, port);
         foreach (var candidate in nodes)
@@ -115,7 +116,8 @@ internal static class WorkflowReconstruction
         var ports = output ? node.Output : node.Input;
         if (!string.IsNullOrWhiteSpace(portId))
         {
-            return ports.FirstOrDefault(port => string.Equals(port.StableId, portId, StringComparison.Ordinal));
+            var byId = ports.FirstOrDefault(port => string.Equals(port.StableId, portId, StringComparison.Ordinal));
+            if (byId is not null) return byId;
         }
         return ports.FirstOrDefault(port => string.Equals(port.Title, title, StringComparison.Ordinal));
     }

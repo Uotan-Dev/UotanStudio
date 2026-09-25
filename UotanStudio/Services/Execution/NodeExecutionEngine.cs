@@ -131,6 +131,11 @@ public sealed class NodeExecutionEngine
             {
                 return RejectPreflight(nodes, interactionError);
             }
+            var destructiveError = await WorkflowInteractionPreflight.ConfirmDestructiveAsync(nodes, _interactions, token).ConfigureAwait(false);
+            if (destructiveError is not null)
+            {
+                return RejectPreflight(nodes, destructiveError);
+            }
             var patchPolicy = PatchWorkflowPolicy.Inspect(nodes);
             if ((_patches.Preview || patchPolicy.HasPatches) && !patchPolicy.Safe)
             {

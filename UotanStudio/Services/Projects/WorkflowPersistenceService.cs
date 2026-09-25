@@ -27,6 +27,7 @@ public static class WorkflowPersistenceService
                 NodeValueType = n.IsConstantNode ? n.NodeValueType : null,
                 NodeValue = n.IsConstantNode ? n.NodeValue : null,
                 SelectedImage = n.IsProjectImageNode ? n.SelectedImage : null,
+                CustomName = string.IsNullOrWhiteSpace(n.CustomName) ? null : n.CustomName,
                 InputInitialValues = BuildInitialValueMap(n, useStableIds: false),
                 InputInitialValuesByPortId = BuildInitialValueMap(n, useStableIds: true),
                 InputPorts = BuildPortDtos(n.Input),

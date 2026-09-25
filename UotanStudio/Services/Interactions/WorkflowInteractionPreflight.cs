@@ -1,3 +1,4 @@
+using UotanStudio.Projects.Interactions;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
@@ -25,6 +26,102 @@ internal static class WorkflowInteractionPreflight
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// <para>图内存在破坏性设备操作时请求用户显式确认；未获同意或宿主不支持交互时返回拒绝原因，否则返回 <c>null</c>。</para>
+    /// Asks for explicit user consent when the graph contains destructive device operations; returns a rejection
+    /// reason when consent is missing or the host cannot ask, otherwise <c>null</c>.
+    /// </summary>
+    internal static async Task<string?> ConfirmDestructiveAsync(
+        IReadOnlyList<FlowNodeViewModel> nodes, IWorkflowInteractionService host, CancellationToken cancellationToken)
+    {
+        var operations = new SortedSet<string>(StringComparer.Ordinal);
+        var visiting = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var node in nodes)
+        {
+            if (node is CompositeNodeViewModel composite)
+            {
+                CollectDestructive(composite.Package, operations, visiting, 0);
+            }
+            else
+            {
+                CollectDestructive(node.TypeKey, operations, visiting, 0);
+            }
+        }
+        if (operations.Count == 0)
+        {
+            return null;
+        }
+        if (!host.IsSupported)
+        {
+            return LanguageService.Instance.GetString("Node_Destructive_UnsupportedHost");
+        }
+        var request = new InteractionRequest
+        {
+            Form = new InteractionForm
+            {
+                Title = LanguageService.Instance.GetString("Node_Destructive_Title"),
+                SubmitLabel = LanguageService.Instance.GetString("Node_Destructive_Confirm"),
+                CancelLabel = LanguageService.Instance.GetString("Node_Destructive_Cancel"),
+                Content = new InteractionElement
+                {
+                    Id = "message",
+                    Kind = InteractionElementKind.Text,
+                    Label = LanguageService.Instance.GetString("Node_Destructive_Message"),
+                    Description = string.Join(Environment.NewLine, operations.Select(DisplayName))
+                }
+            }
+        };
+        var outcome = (await host.ShowAsync(request, cancellationToken).ConfigureAwait(false)).Outcome;
+        return outcome == InteractionOutcome.Submitted
+            ? null
+            : LanguageService.Instance.GetString("Node_Destructive_Rejected");
+    }
+
+    private static void CollectDestructive(string typeKey, ISet<string> operations, HashSet<string> visiting, int depth)
+    {
+        if (depth >= 32)
+        {
+            return;
+        }
+        if (NodeFactoryRegistrar.TryGetVisualPluginPackage(typeKey, out var package))
+        {
+            CollectDestructive(package, operations, visiting, depth);
+            return;
+        }
+        var descriptor = NodeFactoryRegistrar.Descriptors.FirstOrDefault(candidate => candidate.TypeKey == typeKey);
+        if (descriptor?.Capabilities.HasFlag(NodeCapability.MutatesDevice) == true)
+        {
+            operations.Add(typeKey);
+        }
+    }
+
+    private static void CollectDestructive(VisualPluginPackage package, ISet<string> operations, HashSet<string> visiting, int depth)
+    {
+        if (depth >= 32 || !visiting.Add(package.NodeTypeKey))
+        {
+            return;
+        }
+        try
+        {
+            foreach (var node in package.Graph.Nodes)
+            {
+                CollectDestructive(node.CompositePackage?.NodeTypeKey is { } embedded ? embedded : node.TypeKey,
+                    operations, visiting, depth + 1);
+            }
+        }
+        finally
+        {
+            visiting.Remove(package.NodeTypeKey);
+        }
+    }
+
+    private static string DisplayName(string typeKey)
+    {
+        var key = "Node_" + typeKey.Replace('.', '_');
+        var localized = LanguageService.Instance.GetString(key);
+        return localized == key ? typeKey : localized;
     }
 
     private static string? InspectPackage(VisualPluginPackage package, IWorkflowInteractionService host, HashSet<string> visiting, int depth)

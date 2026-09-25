@@ -37,6 +37,7 @@ public class OutputNodeViewModel : FlowNodeViewModel
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Message", PortType = NodePortType.Text });
         node.Input.Add(new NodeConnectorViewModel { Title = "Level", PortType = NodePortType.Text });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Stdout", PortType = NodePortType.Boolean, InitialValue = false });
         return node;
     }
 
@@ -114,6 +115,12 @@ public class OutputNodeViewModel : FlowNodeViewModel
         var levelText = (Convert.ToString(ReadInput("Level"), CultureInfo.InvariantCulture) ?? "info").Trim().ToLowerInvariant();
         var level = ParseLogLevel(levelText) ?? LogLevel.Info;
         context.Log.Write(level, Title, message);
+        // 吸收原 Feedback.Console.Write 的能力：GUI 宿主下 stdout 通常不可见，因此默认关闭。
+        // Absorbs the former Feedback.Console.Write: stdout is usually invisible in GUI hosts, so it stays opt-in.
+        if (NodeDataUtil.ToBool(ReadInput("Stdout"), false))
+        {
+            System.Console.WriteLine($"[{Title}] {message}");
+        }
     }
 
     private void ExecuteProgress(INodeExecutionContext context)
@@ -137,8 +144,10 @@ public class OutputNodeViewModel : FlowNodeViewModel
             throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Publish_ChooseSource"));
         }
         var length = await NodeArtifactPublisher.PublishAsync(artifact ?? data, path, context.CancellationToken).ConfigureAwait(false);
-        WriteOutput("Path", Path.GetFullPath(path));
-        WriteOutput("Artifact", new FileArtifact(Path.GetFullPath(path)));
+        var fullPath = Path.GetFullPath(path);
+        NodeArtifactRegistry.Record(fullPath);
+        WriteOutput("Path", fullPath);
+        WriteOutput("Artifact", new FileArtifact(fullPath));
         context.Log.Write(LogLevel.Info, Title, $"Saved {length} bytes to '{path}'.");
     }
 

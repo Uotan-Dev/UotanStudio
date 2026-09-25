@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using NodifyM.Avalonia.ViewModelBase;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
@@ -40,8 +41,29 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
         set => SetProperty(ref _title, value);
     }
 
+    private string? _customName;
+
     /// <summary>Gets the localized title used by the node editor.</summary>
     public string LocalizedTitle => LanguageService.Instance.GetString(GetTitleResourceKey());
+
+    /// <summary>
+    /// <para>用户自定义备注名；为空时界面回退到本地化标题。</para>
+    /// User-defined display name; the UI falls back to the localized title when empty.
+    /// </summary>
+    public string CustomName
+    {
+        get => _customName ?? string.Empty;
+        set
+        {
+            if (SetProperty(ref _customName, value))
+            {
+                OnPropertyChanged(nameof(DisplayHeader));
+            }
+        }
+    }
+
+    /// <summary>Canvas and properties header: the custom name when set, otherwise the localized title.</summary>
+    public string DisplayHeader => string.IsNullOrWhiteSpace(CustomName) ? LocalizedTitle : CustomName;
 
     private string GetTitleResourceKey()
     {
@@ -142,9 +164,13 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     public string StatusDisplay => LanguageService.Instance.GetString("Node_Status_" + ExecutionStatus);
 
     private static readonly IBrush IdleBorderBrush = Brushes.Transparent;
-    private static readonly IBrush SuccessBorderBrush = new SolidColorBrush(Colors.Green);
-    private static readonly IBrush FailureBorderBrush = new SolidColorBrush(Colors.Red);
-    private static readonly IBrush MutedBorderBrush = new SolidColorBrush(Colors.Gray);
+    // 共享静态画刷必须不可变：SolidColorBrush 携带创建线程的 Dispatcher 亲和性，非 UI 线程先初始化
+    // 节点 VM 时会让画布渲染在另一线程引用它们并抛 VerifyAccess。
+    // Shared static brushes must be immutable: SolidColorBrush carries the creating thread's dispatcher
+    // affinity, so a non-UI first touch breaks canvas rendering on the session thread.
+    private static readonly IBrush SuccessBorderBrush = new ImmutableSolidColorBrush(Colors.Green);
+    private static readonly IBrush FailureBorderBrush = new ImmutableSolidColorBrush(Colors.Red);
+    private static readonly IBrush MutedBorderBrush = new ImmutableSolidColorBrush(Colors.Gray);
 
     /// <summary>
     /// <para>从当前主题解析强调色画刷（近似 DynamicResource 语义），主题切换后重新求值。</para>

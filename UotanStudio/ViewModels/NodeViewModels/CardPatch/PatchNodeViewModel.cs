@@ -113,14 +113,6 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
             case "Config.Ini.Edit":
                 ConfigureStructuredNode(node);
                 break;
-            case "File.Path.Find":
-                node.AddInput("Root", NodePortType.Path, directory: true);
-                node.AddInput("Pattern", NodePortType.Text, "vendor/etc/*.xml");
-                node.AddInput("Expected Matches", NodePortType.Number, 1d);
-                node.AddOutput("Path", NodePortType.Path);
-                node.AddOutput("Files", NodePortType.Any);
-                node.AddOutput("Count", NodePortType.Number);
-                break;
             case "File.Text.Read":
                 node.AddInput("Path", NodePortType.Path);
                 node.AddOutput("Text", NodePortType.Text);
@@ -262,17 +254,7 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
                 break;
             case "Validation.Applicability.Check":
             case "Flow.Applicability.Gate":
-                var applicability = PatchApplicabilityCheck.Evaluate(Boolean("Compatible"),
-                    Boolean("Original State Matches"), Boolean("Desired State Matches"));
-                WriteOutput("Applicability", applicability.ToString());
-                WriteOutput("Should Apply", applicability == PatchApplicability.Applicable);
-                WriteOutput("Apply", applicability == PatchApplicability.Applicable);
-                WriteOutput("Skip", applicability != PatchApplicability.Applicable);
-                GetRun(context).RecordApplicability(applicability);
-                if (applicability == PatchApplicability.Conflict)
-                {
-                    throw new PatchApplicabilityConflictException(Services.LanguageService.Instance.GetString("Node_Patch_ApplicabilityConflict"));
-                }
+                ExecuteApplicabilityNode(context);
                 break;
             case "Resource.Asset.Open":
             case "Resource.Asset.ReadText":
@@ -284,12 +266,6 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
             case "Config.Ini.Query":
             case "Config.Ini.Edit":
                 ExecuteStructuredNode(token);
-                break;
-            case "File.Path.Find":
-                var files = await GetRun(context).FindAsync(Text("Root"), Text("Pattern"), Count(), token).ConfigureAwait(false);
-                WriteOutput("Files", files);
-                WriteOutput("Path", files.Count == 1 ? files[0] : null);
-                WriteOutput("Count", files.Count);
                 break;
             case "File.Text.Read":
                 var document = await GetRun(context).ReadTextAsync(Text("Path"), token).ConfigureAwait(false);
@@ -346,6 +322,28 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
         }
         token.ThrowIfCancellationRequested();
         WriteOutput("Completed", true);
+    }
+
+    /// <summary>
+    /// <para>Validation.Applicability.Check 与 Flow.Applicability.Gate 共用的适用性判定：求值、记录并把 Conflict 转为异常。
+    /// 两个 TypeKey 的差异只在端口布局（Gate 以 Apply/Skip Flow 输出承载分支）。</para>
+    /// Shared applicability evaluation for Validation.Applicability.Check and Flow.Applicability.Gate: evaluates,
+    /// records, and turns Conflict into an exception. The two TypeKeys differ only in port layout
+    /// (Gate carries the branch via Apply/Skip Flow outputs).
+    /// </summary>
+    private void ExecuteApplicabilityNode(INodeExecutionContext context)
+    {
+        var applicability = PatchApplicabilityCheck.Evaluate(Boolean("Compatible"),
+            Boolean("Original State Matches"), Boolean("Desired State Matches"));
+        WriteOutput("Applicability", applicability.ToString());
+        WriteOutput("Should Apply", applicability == PatchApplicability.Applicable);
+        WriteOutput("Apply", applicability == PatchApplicability.Applicable);
+        WriteOutput("Skip", applicability != PatchApplicability.Applicable);
+        GetRun(context).RecordApplicability(applicability);
+        if (applicability == PatchApplicability.Conflict)
+        {
+            throw new PatchApplicabilityConflictException(Services.LanguageService.Instance.GetString("Node_Patch_ApplicabilityConflict"));
+        }
     }
 
     private async Task<bool> EvaluateConditionAsync(INodeExecutionContext context)

@@ -74,7 +74,7 @@ public class SelectDeviceNodeViewModel : FlowNodeViewModel
     private void ExecuteSelect(INodeExecutionContext context)
     {
         var serial = Text(ReadInput("Serial"));
-        var monitor = DeviceMonitorService.Instance;
+        var monitor = App.DeviceMonitor;
 
         DetectedDevice? device;
         if (!string.IsNullOrWhiteSpace(serial))

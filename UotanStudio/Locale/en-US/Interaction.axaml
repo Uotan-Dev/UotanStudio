@@ -30,7 +30,6 @@
     <x:String x:Key="Node_UI_Form_Create">Create form</x:String>
     <x:String x:Key="Node_UI_Dialog_Show">Show form dialog</x:String>
     <x:String x:Key="Node_UI_Result_Read">Read submitted field</x:String>
-    <x:String x:Key="Node_UI_Dialog_Message">Show message</x:String>
     <x:String x:Key="Node_UI_Dialog_Confirm">Request confirmation</x:String>
     <x:String x:Key="Interaction_Error_Type">The field value has the wrong type.</x:String>
     <x:String x:Key="Node_UI_Notification_Show">Show notification</x:String>

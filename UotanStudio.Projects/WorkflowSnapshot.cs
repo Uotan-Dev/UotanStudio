@@ -119,6 +119,9 @@ public sealed class NodeDto
     /// <summary>Selected project-image relative path, when the node references an image.</summary>
     public string? SelectedImage { get; set; }
 
+    /// <summary>User-defined display name; null keeps the localized node title.</summary>
+    public string? CustomName { get; set; }
+
     /// <summary>
     /// <para>输入端口用户编辑初始值映射（端口标题 → 字符串值）。仅持久化用户显式填写的值。</para>
     /// User-edited initial values of input ports (port title → string value). Only explicitly set values are persisted.

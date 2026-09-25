@@ -114,22 +114,19 @@ public sealed class NodeFactoryRegistrarTests
         }
     }
 
-    [Fact]
-    public void CreateFlashPreset_DifferentTargets_UsesOneExplicitPartitionContract()
+    [Theory]
+    [InlineData("boot")]
+    [InlineData("bootloader")]
+    [InlineData("super")]
+    public void FlashPreset_DifferentTargets_UsesOneExplicitPartitionContract(string partition)
     {
-        var boot = ExtendedFirmwareNodeViewModel.CreateFlashBootNode();
-        var bootloader = ExtendedFlashNodeViewModel.CreateFlashBootloaderNode();
-        var super = ExtendedFlashNodeViewModel.CreateOverwriteFirmwareNode();
+        var descriptor = Assert.Single(NodeFactoryRegistrar.Descriptors, candidate => candidate.TypeKey == "Device.Partition.Flash");
+        var node = descriptor.Factory();
+        node.Input.Single(input => input.PortId == "partition").InitialValue = partition;
 
-        Assert.All(new[] { boot, bootloader, super }, node =>
-        {
-            Assert.Equal("Device.Partition.Flash", node.TypeKey);
-            Assert.Contains(node.Input, input => input.Title == "Image");
-        });
-        Assert.Equal("boot", boot.Input.Single(input => input.Title == "Partition").InitialValue);
-        Assert.Equal("bootloader", bootloader.Input.Single(input => input.Title == "Partition").InitialValue);
-        Assert.Equal("super", super.Input.Single(input => input.Title == "Partition").InitialValue);
-        Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Device.Partition.Flash");
+        Assert.Equal("Device.Partition.Flash", node.TypeKey);
+        Assert.Contains(node.Input, input => input.Title == "Image");
+        Assert.Equal(partition, node.Input.Single(input => input.Title == "Partition").InitialValue);
         Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "File.Artifact.Publish");
     }
 

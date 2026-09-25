@@ -459,6 +459,12 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             case NodeEditorAction.Redo:
                 Redo();
                 break;
+            case NodeEditorAction.Run:
+                _ = RunAsync();
+                break;
+            case NodeEditorAction.Stop:
+                Stop();
+                break;
         }
     }
 
@@ -898,7 +904,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     private static IEnumerable<string> TrackedProperties(object target) => target switch
     {
-        NodeViewModels.FlowNodeViewModel => ["NodeValueType", "NodeValue", "SelectedImage"],
+        NodeViewModels.FlowNodeViewModel => ["NodeValueType", "NodeValue", "SelectedImage", "CustomName"],
         NodeViewModels.NodeConnectorViewModel => ["InitialValue"],
         _ => []
     };
@@ -908,6 +914,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         (NodeViewModels.FlowNodeViewModel node, "NodeValueType") => node.NodeValueType,
         (NodeViewModels.FlowNodeViewModel node, "NodeValue") => node.NodeValue,
         (NodeViewModels.FlowNodeViewModel node, "SelectedImage") => node.SelectedImage,
+        (NodeViewModels.FlowNodeViewModel node, "CustomName") => node.CustomName,
         (NodeViewModels.NodeConnectorViewModel connector, "InitialValue") => connector.InitialValue,
         _ => null
     };
@@ -924,6 +931,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
                 break;
             case (NodeViewModels.FlowNodeViewModel node, "SelectedImage"):
                 node.SelectedImage = value as string ?? string.Empty;
+                break;
+            case (NodeViewModels.FlowNodeViewModel node, "CustomName"):
+                node.CustomName = value as string ?? string.Empty;
                 break;
             case (NodeViewModels.NodeConnectorViewModel connector, "InitialValue"):
                 connector.InitialValue = value;
@@ -1014,7 +1024,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         if (source == target) return;
         if (source.IsInput == target.IsInput)
         {
-            _log.Write(LogLevel.Warn, "NodeEditor", "Connection rejected: connectors have the same direction");
+            RejectConnection("Node_Connection_SameDirection", "Connection rejected: connectors have the same direction");
             return;
         }
         if (source.IsInput)
@@ -1023,17 +1033,38 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         }
         if (Nodes.Any(node => node.Output.Contains(source) && node.Input.Contains(target)))
         {
+            RejectConnection("Node_Connection_SameNode", "Connection rejected: source and target belong to the same node");
             return;
         }
         // 检查是否已存在相同连接
-        if (Connections.Any(c => c.Source == source && c.Target == target)) return;
-        // 端口类型兼容性校验：不兼容则拒绝连接并记录警告
+        if (Connections.Any(c => c.Source == source && c.Target == target))
+        {
+            RejectConnection("Node_Connection_Duplicate", "Connection rejected: duplicate connection");
+            return;
+        }
+        // 端口类型兼容性校验：不兼容则拒绝连接并提示
         if (!NodeDataUtil.CanConnect(source.PortType, target.PortType))
         {
-            _log.Write(LogLevel.Warn, "NodeEditor", $"Connection rejected: type {source.PortType} -> {target.PortType} incompatible");
+            RejectConnection("Node_Connection_Incompatible",
+                $"Connection rejected: type {source.PortType} -> {target.PortType} incompatible");
+            return;
+        }
+        // MaxConnections 为端口声明的连线上限（0 表示不限制），编辑器必须强制执行而不是仅持久化。
+        // MaxConnections is the declared per-port connection limit (0 = unlimited); the editor enforces it rather than only persisting it.
+        if ((target.MaxConnections > 0 && Connections.Count(c => c.Target == target) >= target.MaxConnections)
+            || (source.MaxConnections > 0 && Connections.Count(c => c.Source == source) >= source.MaxConnections))
+        {
+            RejectConnection("Node_Connection_MaxReached", "Connection rejected: port reached its maximum connection count");
             return;
         }
         ExecuteCommand(new NodeViewModels.EditorCommands.AddConnectionCommand(Connections, new NodeViewModels.NodeConnectionViewModel(source, target)));
+    }
+
+    /// <summary>Reports a rejected connection attempt to the execution log so the user sees why nothing happened.</summary>
+    private void RejectConnection(string reasonKey, string detail)
+    {
+        _log.Write(LogLevel.Warn, "NodeEditor", detail);
+        AppendExecutionLog(LanguageService.Instance.GetString(reasonKey));
     }
 
     [RelayCommand]
@@ -1128,6 +1159,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
         IsExecuting = true;
         PatchChanges = [];
+        NodeArtifactRegistry.Reset();
         CompositeExecutions = [];
         CompositeReportTruncated = false;
         _patchOutcome = PatchRunOutcome.None;

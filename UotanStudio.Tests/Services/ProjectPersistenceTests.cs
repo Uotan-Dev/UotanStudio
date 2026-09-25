@@ -86,7 +86,7 @@ public sealed class SolutionPersistenceTests
         var path = Path.Combine(temp.Path, "proj.uotannode");
         var node = new NodeProjectSnapshot
         {
-            FormatVersion = 1,
+            FormatVersion = NodeProjectSnapshot.CurrentFormatVersion,
             ProjectName = "TestProj",
             Nodes =
             [

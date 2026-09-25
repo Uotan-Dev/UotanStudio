@@ -113,7 +113,7 @@ public sealed class InteractionTests
     {
         var presenter = new ResultPresenter(new InteractionResult { Outcome = InteractionOutcome.Cancelled });
         var engine = new NodeExecutionEngine(new TestExecutionContext(presenter));
-        var node = InteractionNodeViewModel.Create("UI.Dialog.Message");
+        var node = InteractionNodeViewModel.Create("UI.Dialog.Confirm");
         var submitted = new BranchProbe();
         var cancelled = new BranchProbe();
         var waiting = false;

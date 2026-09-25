@@ -30,7 +30,6 @@
     <x:String x:Key="Node_UI_Form_Create">创建表单</x:String>
     <x:String x:Key="Node_UI_Dialog_Show">显示表单弹窗</x:String>
     <x:String x:Key="Node_UI_Result_Read">读取提交字段</x:String>
-    <x:String x:Key="Node_UI_Dialog_Message">显示提示</x:String>
     <x:String x:Key="Node_UI_Dialog_Confirm">请求确认</x:String>
     <x:String x:Key="Interaction_Error_Type">字段值类型不正确。</x:String>
     <x:String x:Key="Node_UI_Notification_Show">显示通知</x:String>

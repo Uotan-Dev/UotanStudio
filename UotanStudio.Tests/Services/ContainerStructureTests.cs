@@ -1,5 +1,5 @@
 using System.IO.Compression;
-using UotanStudio.Comm.Protocols.Fastboot.Utils;
+using UotanStudio.Comm.Protocols.Fastboot.Images;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;

@@ -1,4 +1,5 @@
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Material.Icons;
 using UotanStudio.Services.Compare;
@@ -18,16 +19,18 @@ namespace UotanStudio.ViewModels.Compare;
 public sealed class CompareRowViewModel : ObservableObject
 {
     /// <summary>
-    /// <para>仅左侧内容的淡色背景画刷（橙色调，半透明叠加可辨识）。</para>
+    /// <para>仅左侧内容的淡色背景画刷（橙色调，半透明叠加可辨识）。静态共享画刷使用不可变类型以避免线程亲和性。</para>
     /// Tint brush for content that exists on the left only (orange, translucent so the theme shows through).
+    /// Static shared brushes use immutable types to avoid dispatcher thread affinity.
     /// </summary>
-    internal static readonly IBrush LeftOnlyTintBrush = new SolidColorBrush(Color.FromArgb(0x30, 0xE6, 0x7E, 0x22));
+    internal static readonly IBrush LeftOnlyTintBrush = new ImmutableSolidColorBrush(Color.FromArgb(0x30, 0xE6, 0x7E, 0x22));
 
     /// <summary>
-    /// <para>仅右侧内容的淡色背景画刷（蓝色调，半透明叠加可辨识）。</para>
+    /// <para>仅右侧内容的淡色背景画刷（蓝色调，半透明叠加可辨识）。静态共享画刷使用不可变类型以避免线程亲和性。</para>
     /// Tint brush for content that exists on the right only (blue, translucent so the theme shows through).
+    /// Static shared brushes use immutable types to avoid dispatcher thread affinity.
     /// </summary>
-    internal static readonly IBrush RightOnlyTintBrush = new SolidColorBrush(Color.FromArgb(0x30, 0x1E, 0x90, 0xFF));
+    internal static readonly IBrush RightOnlyTintBrush = new ImmutableSolidColorBrush(Color.FromArgb(0x30, 0x1E, 0x90, 0xFF));
 
     private readonly Action<CompareRowViewModel, bool>? _edited;
     private string _leftText;

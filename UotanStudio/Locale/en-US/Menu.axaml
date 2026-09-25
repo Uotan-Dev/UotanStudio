@@ -85,6 +85,8 @@
     <x:String x:Key="Menu_ZoomIn">Zoom In</x:String>
     <x:String x:Key="Menu_ZoomOut">Zoom Out</x:String>
     <x:String x:Key="Menu_ResetZoom">Reset Zoom</x:String>
+    <x:String x:Key="Menu_RunWorkflow">Run Workflow</x:String>
+    <x:String x:Key="Menu_StopWorkflow">Stop Workflow</x:String>
 
     <!-- Window menu -->
     <x:String x:Key="Menu_Window">Window</x:String>
