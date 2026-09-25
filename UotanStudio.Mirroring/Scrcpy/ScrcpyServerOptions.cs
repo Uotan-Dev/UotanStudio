@@ -9,71 +9,134 @@ namespace UotanStudio.Services.Mirroring;
 /// </summary>
 public sealed class ScrcpyServerOptions
 {
-    /// <summary>Gets the random session id shared with the socket name.</summary>
-    /// <summary>获取与 socket 名称共享的随机会话 ID。</summary>
+    /// <summary>Random session identifier shared with the socket name.
+    /// <para>与 socket 名称共享的随机会话 ID。</para></summary>
+    /// <value>
+    /// A 31-bit id from a cryptographic generator, also written into <see cref="SocketName"/> as eight hex digits.
+    /// <para>由加密随机数发生器产生的 31 位 ID，同时以 8 位十六进制写入 <see cref="SocketName"/>。</para>
+    /// </value>
     public uint Scid { get; init; } = GenerateScid();
 
-    /// <summary>Gets the localabstract socket name suffix ("scrcpy_" + hex scid).</summary>
-    /// <summary>获取 localabstract socket 名称（"scrcpy_" + 十六进制 scid）。</summary>
+    /// <summary>The localabstract socket name suffix ("scrcpy_" + hex scid).
+    /// <para>localabstract socket 名称后缀（"scrcpy_" + 十六进制 scid）。</para></summary>
+    /// <value>The name the server creates and every client socket connects to.
+    /// <para>服务端创建、且每个客户端 socket 连接时使用的名称。</para></value>
     public string SocketName => $"scrcpy_{Scid:x8}";
 
-    /// <summary>Gets or sets the max video size (0 = no limit).</summary>
-    /// <summary>获取或设置视频最大尺寸（0 表示不限制）。</summary>
+    /// <summary>The maximum video edge size in pixels.
+    /// <para>视频最长边像素上限。</para></summary>
+    /// <value>0 for no limit; <see cref="BuildArguments"/> rejects values outside 0..16384.
+    /// <para>0 表示不限制；<see cref="BuildArguments"/> 拒绝超出 0..16384 的值。</para></value>
     public int MaxSize { get; init; }
 
-    /// <summary>Gets or sets the video bit rate in bits per second.</summary>
-    /// <summary>获取或设置视频码率（bps）。</summary>
+    /// <summary>The video encoding bit rate in bits per second.
+    /// <para>视频编码码率（bps）。</para></summary>
+    /// <value>Defaults to 8 Mbps; <see cref="BuildArguments"/> rejects values outside 64000..200000000.
+    /// <para>默认 8 Mbps；<see cref="BuildArguments"/> 拒绝超出 64000..200000000 的值。</para></value>
     public int VideoBitRate { get; init; } = 8_000_000;
 
-    /// <summary>Gets or sets the max frame rate (0 = no limit).</summary>
-    /// <summary>获取或设置最大帧率（0 表示不限制）。</summary>
+    /// <summary>The maximum capture frame rate.
+    /// <para>最大采集帧率。</para></summary>
+    /// <value>0 for no limit, default 60; <see cref="BuildArguments"/> rejects values outside 0..240.
+    /// <para>0 表示不限制，默认 60；<see cref="BuildArguments"/> 拒绝超出 0..240 的值。</para></value>
     public int MaxFps { get; init; } = 60;
 
-    /// <summary>Gets or sets the video codec ("h264" or "h265").</summary>
-    /// <summary>获取或设置视频编码格式（"h264" 或 "h265"）。</summary>
+    /// <summary>The video codec name ("h264", "h265" or "av1").
+    /// <para>视频编码名称（"h264"、"h265" 或 "av1"）。</para></summary>
+    /// <value>Defaults to <c>h264</c>; any other value makes <see cref="BuildArguments"/> throw.
+    /// <para>默认 <c>h264</c>；其他取值会使 <see cref="BuildArguments"/> 抛出异常。</para></value>
     public string VideoCodec { get; init; } = "h264";
-    /// <summary>Audio codec (aac/opus/flac/raw). 音频编码格式。</summary>
+
+    /// <summary>Audio codec (aac/opus/flac/raw).
+    /// <para>音频编码格式（aac/opus/flac/raw）。</para></summary>
+    /// <value>Defaults to <c>aac</c>; any other value makes <see cref="BuildArguments"/> throw.
+    /// <para>默认 <c>aac</c>；其他取值会使 <see cref="BuildArguments"/> 抛出异常。</para></value>
     public string AudioCodec { get; init; } = "aac";
-    /// <summary>Explicit Android video encoder name, or empty for automatic selection. 设备端视频编码器名称。</summary>
+
+    /// <summary>Explicit Android video encoder name, or empty for automatic selection.
+    /// <para>显式指定的设备端视频编码器名称，为空则自动选择。</para></summary>
+    /// <value>At most 256 ASCII letters, digits, dots, underscores or hyphens; anything else makes
+    /// <see cref="BuildArguments"/> throw. <para>最多 256 个 ASCII 字母、数字、点、下划线或连字符；
+    /// 其他字符会使 <see cref="BuildArguments"/> 抛出异常。</para></value>
     public string VideoEncoder { get; init; } = string.Empty;
-    /// <summary>Audio encoding bitrate. 音频编码码率。</summary>
+
+    /// <summary>Audio encoding bitrate in bits per second.
+    /// <para>音频编码码率（bps）。</para></summary>
+    /// <value>Defaults to 128000; <see cref="BuildArguments"/> rejects values outside 8000..1000000.
+    /// <para>默认 128000；<see cref="BuildArguments"/> 拒绝超出 8000..1000000 的值。</para></value>
     public int AudioBitRate { get; init; } = 128000;
 
-    /// <summary>Gets or sets whether video capture is enabled.</summary>
-    /// <summary>获取或设置是否启用视频采集。</summary>
+    /// <summary>Whether video capture is enabled.
+    /// <para>是否启用视频采集。</para></summary>
+    /// <value>
+    /// When <see langword="false"/> the server does not encode a video stream; defaults to <see langword="true"/>.
+    /// <para>为 <see langword="false"/> 时服务端不编码视频流；默认 <see langword="true"/>。</para>
+    /// </value>
     public bool Video { get; init; } = true;
 
-    /// <summary>Gets or sets whether audio capture is enabled.</summary>
-    /// <summary>获取或设置是否启用音频采集。</summary>
+    /// <summary>Whether audio capture is enabled.
+    /// <para>是否启用音频采集。</para></summary>
+    /// <value>
+    /// When <see langword="true"/> the client also opens and reads the audio socket; defaults to <see langword="false"/>.
+    /// <para>为 <see langword="true"/> 时客户端还会打开并读取音频 socket；默认 <see langword="false"/>。</para>
+    /// </value>
     public bool Audio { get; init; }
 
-    /// <summary>Gets or sets whether input control is enabled.</summary>
-    /// <summary>获取或设置是否启用输入控制。</summary>
+    /// <summary>Whether input control is enabled.
+    /// <para>是否启用输入控制。</para></summary>
+    /// <value>
+    /// When <see langword="true"/> a control socket is opened for injected events; defaults to <see langword="true"/>.
+    /// <para>为 <see langword="true"/> 时会为注入事件打开控制 socket；默认 <see langword="true"/>。</para>
+    /// </value>
     public bool Control { get; init; } = true;
 
-    /// <summary>Gets or sets the log level ("info", "debug", "warn", "error").</summary>
-    /// <summary>获取或设置日志级别（"info"、"debug"、"warn"、"error"）。</summary>
+    /// <summary>The server log level ("verbose", "debug", "info", "warn", "error").
+    /// <para>服务端日志级别（"verbose"、"debug"、"info"、"warn"、"error"）。</para></summary>
+    /// <value>Defaults to <c>warn</c>; any other value makes <see cref="BuildArguments"/> throw.
+    /// <para>默认 <c>warn</c>；其他取值会使 <see cref="BuildArguments"/> 抛出异常。</para></value>
     public string LogLevel { get; init; } = "warn";
 
-    /// <summary>Gets or sets whether to keep the device awake while mirroring.</summary>
-    /// <summary>获取或设置投屏期间是否保持设备唤醒。</summary>
+    /// <summary>Whether to keep the device awake while mirroring.
+    /// <para>投屏期间是否保持设备唤醒。</para></summary>
+    /// <value>Passed to the server as <c>stay_awake</c>; defaults to <see langword="true"/>.
+    /// <para>以 <c>stay_awake</c> 参数传给服务端；默认 <see langword="true"/>。</para></value>
     public bool StayAwake { get; init; } = true;
 
-    /// <summary>Gets whether the server sends a dummy byte before metadata.</summary>
-    /// <summary>获取服务端是否在元数据前发送哑字节。</summary>
+    /// <summary>Whether the server sends a dummy byte before metadata.
+    /// <para>服务端是否在元数据前发送哑字节。</para></summary>
+    /// <value>When <see langword="true"/> the client consumes and verifies a leading 0x00 byte on the video socket.
+    /// <para>为 <see langword="true"/> 时客户端会在视频 socket 上消费并校验一个前导 0x00 字节。</para></value>
     public bool SendDummyByte { get; init; } = true;
 
-    /// <summary>Gets whether the server sends the 64-byte device name.</summary>
-    /// <summary>获取服务端是否发送 64 字节设备名。</summary>
+    /// <summary>Whether the server sends the 64-byte device name.
+    /// <para>服务端是否发送 64 字节设备名。</para></summary>
+    /// <value>When <see langword="true"/> the client reads and trims the device name during the handshake.
+    /// <para>为 <see langword="true"/> 时客户端会在握手期间读取并裁剪设备名。</para></value>
     public bool SendDeviceMeta { get; init; } = true;
 
-    /// <summary>Gets whether the server sends codec metadata (codec id + size).</summary>
-    /// <summary>获取服务端是否发送编码器元数据（编码器 ID + 尺寸）。</summary>
+    /// <summary>Whether the server sends codec metadata (codec id + size).
+    /// <para>服务端是否发送编码器元数据（编码器 ID + 尺寸）。</para></summary>
+    /// <value>When <see langword="true"/> the client reads the 12-byte video header and the 4-byte audio codec id.
+    /// <para>为 <see langword="true"/> 时客户端会读取 12 字节视频头部与 4 字节音频编码标识。</para></value>
     public bool SendCodecMeta { get; init; } = true;
 
-    /// <summary>Builds the ordered server argument list (args[0] is the version).</summary>
-    /// <summary>构建有序的服务端参数列表（args[0] 为版本号）。</summary>
-    /// <returns>The argument strings. 参数字符串数组。</returns>
+    /// <summary>
+    /// Validates the options and builds the ordered server argument list (args[0] is the version).
+    /// <para>校验选项并构建有序的服务端参数列表（args[0] 为版本号）。</para>
+    /// </summary>
+    /// <returns>The argument strings, in the order the scrcpy server parses them.
+    /// <para>按 scrcpy 服务端解析顺序排列的参数字符串数组。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <see cref="Scid"/> exceeds <see cref="int.MaxValue"/>, or a capture limit
+    /// (<see cref="VideoBitRate"/>, <see cref="AudioBitRate"/>,
+    /// <see cref="MaxFps"/> or <see cref="MaxSize"/>) is out of range.
+    /// <para><see cref="Scid"/> 超过 <see cref="int.MaxValue"/>，或采集上限（<see cref="VideoBitRate"/>、
+    /// <see cref="AudioBitRate"/>、<see cref="MaxFps"/>、<see cref="MaxSize"/>）超出允许范围。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// The codec, encoder name or log level is not one of the supported values.
+    /// <para>编解码器、编码器名称或日志级别不属于支持的取值。</para>
+    /// </exception>
     public string[] BuildArguments()
     {
         if (Scid > int.MaxValue) throw new ArgumentOutOfRangeException(nameof(Scid));
@@ -119,9 +182,19 @@ public sealed class ScrcpyServerOptions
         return BitConverter.ToUInt32(bytes) & 0x7fffffff;
     }
 
-    /// <summary>Builds the full <c>app_process</c> command line for the shell.</summary>
-    /// <summary>构建 shell 执行的完整 <c>app_process</c> 命令行。</summary>
-    /// <returns>The shell command string. shell 命令字符串。</returns>
+    /// <summary>
+    /// Builds the full <c>app_process</c> command line for the shell, appending every validated argument.
+    /// <para>构建 shell 执行的完整 <c>app_process</c> 命令行，逐个追加通过校验的参数。</para>
+    /// </summary>
+    /// <returns>The shell command string. <para>shell 命令字符串。</para></returns>
+    /// <exception cref="ArgumentException">
+    /// An option fails the validation performed by <see cref="BuildArguments"/>.
+    /// <para>某个选项未通过 <see cref="BuildArguments"/> 执行的校验。</para>
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// A numeric limit fails the validation performed by <see cref="BuildArguments"/>.
+    /// <para>某个数值上限未通过 <see cref="BuildArguments"/> 执行的校验。</para>
+    /// </exception>
     public string BuildShellCommand()
     {
         var sb = new StringBuilder();

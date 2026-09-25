@@ -76,7 +76,6 @@ internal static class UsbControlRequestExtensions
     {
         ArgumentNullException.ThrowIfNull(session);
         var payload = BuildLineCodingPayload(baudRate, charFormat, parityType, dataBits);
-        // BmRequestType = 0x21 (host→device, class, interface); BRequest = 0x20 (SET_LINE_CODING).
         _ = session.ControlWrite(0x21, 0x20, 0, interfaceNumber, payload, timeoutMs);
     }
 
@@ -91,7 +90,6 @@ internal static class UsbControlRequestExtensions
     public static byte[] GetLineCoding(this IUsbDeviceSession session, byte interfaceNumber, int timeoutMs)
     {
         ArgumentNullException.ThrowIfNull(session);
-        // BmRequestType = 0xA1 (device→host, class, interface); BRequest = 0x21 (GET_LINE_CODING).
         return session.ControlRead(0xA1, 0x21, 0, interfaceNumber, 7, timeoutMs);
     }
 

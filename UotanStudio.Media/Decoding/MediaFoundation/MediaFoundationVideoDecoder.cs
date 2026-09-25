@@ -6,7 +6,7 @@ namespace UotanStudio.Media.Decoding.MediaFoundation;
 
 /// <summary>
 /// Synchronous Media Foundation decoder with CPU-readable NV12 output.
-/// 同步 Media Foundation 解码器；不声明 D3D 硬件解码或 GPU 零拷贝支持。
+/// <para>同步 Media Foundation 解码器；不声明 D3D 硬件解码或 GPU 零拷贝支持。</para>
 /// </summary>
 /// <remarks>Initialize, Decode, Reset and Dispose must run on the same thread.</remarks>
 [SupportedOSPlatform("windows")]
@@ -22,10 +22,52 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
     private long _sequence;
     private bool _inCallback;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Whether a synchronous media transform is currently configured.
+    /// <para>当前是否已配置同步媒体变换。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> after a successful <see cref="Initialize"/>; <see langword="false"/> before
+    /// initialization, after a failed re-initialization, and after <see cref="Dispose"/>.
+    /// <para>成功执行 <see cref="Initialize"/> 后为 <see langword="true"/>；初始化之前、重新初始化失败之后
+    /// 以及 <see cref="Dispose"/> 之后为 <see langword="false"/>。</para>
+    /// </value>
     public bool IsInitialized => _transform != 0;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Initializes COM and Media Foundation on the calling thread, then activates the first synchronous
+    /// transform that accepts the codec and negotiates NV12 output; the decoded geometry and color metadata
+    /// come from the selected output type. Any previous transform is released first.
+    /// <para>在调用线程上初始化 COM 与 Media Foundation，然后激活第一个接受该编码并协商出 NV12 输出的同步
+    /// 变换；解码后的几何与色彩元数据取自所选输出类型。既有变换会先行释放。</para>
+    /// </summary>
+    /// <param name="codec">Compressed codec of the incoming access units. <para>输入访问单元的压缩编码格式。</para></param>
+    /// <param name="width">
+    /// Expected coded frame width in pixels, from 1 to 16 384; the negotiated output size may differ.
+    /// <para>预期编码帧宽度（像素），1 到 16 384；协商出的输出尺寸可能不同。</para>
+    /// </param>
+    /// <param name="height">
+    /// Expected coded frame height in pixels, from 1 to 16 384.
+    /// <para>预期编码帧高度（像素），1 到 16 384。</para>
+    /// </param>
+    /// <param name="frameCallback">
+    /// Receives every decoded NV12 frame on the calling thread; the frame is disposed once the callback returns,
+    /// so consumers must copy or convert within it.
+    /// <para>在调用线程上接收每个解码出的 NV12 帧；回调返回后帧即被释放，消费方须在其内部完成复制或转换。</para>
+    /// </param>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="frameCallback"/> is <see langword="null"/>.
+    /// <para><paramref name="frameCallback"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The dimensions exceed the supported limits.
+    /// <para>尺寸超出支持上限。</para></exception>
+    /// <exception cref="InvalidOperationException">
+    /// Called from a callback or another thread, or a COM or Media Foundation call failed.
+    /// <para>在回调内或其他线程上调用，或 COM、Media Foundation 调用失败。</para>
+    /// </exception>
+    /// <exception cref="NotSupportedException">
+    /// No synchronous Media Foundation decoder accepts the codec with NV12 output.
+    /// <para>没有以 NV12 输出接受该编码的同步 Media Foundation 解码器。</para>
+    /// </exception>
     public void Initialize(VideoCodecId codec, int width, int height, Action<DecodedVideoFrame> frameCallback)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -37,7 +79,6 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
         if (!_mfOwned)
         {
             int hr = MfInterop.CoInitializeEx(0, 0);
-            // RPC_E_CHANGED_MODE means the caller already owns a different apartment.
             if (hr != unchecked((int)0x80010106)) Check(hr, "CoInitializeEx");
             _comOwned = hr >= 0;
             _ownerThread = Environment.CurrentManagedThreadId;
@@ -99,11 +140,46 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
         finally { MfCom.Release(input); }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Feeds one access unit with a synthesized 60 fps timestamp derived from an internal frame counter.
+    /// <para>输入一个访问单元，时间戳为由内部帧计数器合成的 60 fps 值。</para>
+    /// </summary>
+    /// <param name="accessUnit">
+    /// One complete compressed access unit, 1 byte to 32 MiB.
+    /// <para>单个完整压缩访问单元，1 字节到 32 MiB。</para>
+    /// </param>
+    /// <exception cref="OverflowException">The internal timestamp sequence exceeded the tick range.
+    /// <para>内部时间戳序列超出 tick 范围。</para></exception>
     public void Decode(ReadOnlySpan<byte> accessUnit)
         => Decode(accessUnit, checked(_sequence++ * 166667));
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Feeds one access unit with an explicit timestamp and drains all available NV12 output frames into the
+    /// callback on the calling thread before returning.
+    /// <para>输入一个访问单元并附带显式时间戳，在返回前于调用线程上将全部可用的 NV12 输出帧排空并交付回调。</para>
+    /// </summary>
+    /// <param name="accessUnit">
+    /// One complete compressed access unit, 1 byte to 32 MiB.
+    /// <para>单个完整压缩访问单元，1 字节到 32 MiB。</para>
+    /// </param>
+    /// <param name="timestampTicks">
+    /// Presentation time in 100-nanosecond ticks, stamped onto the input sample.
+    /// <para>呈现时间，以 100 纳刻（tick）为单位，会写入输入样本。</para>
+    /// </param>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The access unit is empty or exceeds 32 MiB.
+    /// <para>访问单元为空或超过 32 MiB。</para></exception>
+    /// <exception cref="InvalidOperationException">
+    /// The decoder is not initialized, called from a callback or another thread, output made no bounded progress,
+    /// or a COM or Media Foundation call failed.
+    /// <para>解码器未初始化、在回调内或其他线程上调用、输出无法在限量内推进，或 COM、Media Foundation 调用失败。</para>
+    /// </exception>
+    /// <exception cref="NotSupportedException">
+    /// The transform's renegotiated output type is not NV12.
+    /// <para>变换重新协商后的输出类型不是 NV12 格式。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">The produced NV12 buffer is truncated.
+    /// <para>产出的 NV12 缓冲区被截断。</para></exception>
     public void Decode(ReadOnlySpan<byte> accessUnit, long timestampTicks)
     {
         CheckReady();
@@ -116,7 +192,7 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
             if (hr == MfInterop.MfENotAccepting)
             {
                 DrainOutput();
-                hr = MfCom.Input(_transform, sample); // Retry the exact same sample; never drop it.
+                hr = MfCom.Input(_transform, sample);
             }
             Check(hr, "ProcessInput");
             DrainOutput();
@@ -124,7 +200,16 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
         finally { MfCom.Release(sample); }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Flushes the transform, restarts the stream, and resets the timestamp sequence. Use after a stream
+    /// discontinuity; the decoder stays initialized.
+    /// <para>刷新变换、重启码流并重置时间戳序列；用于码流不连续之后，解码器保持已初始化状态。</para>
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="InvalidOperationException">
+    /// The decoder is not initialized, called from a callback or another thread, or a Media Foundation message failed.
+    /// <para>解码器未初始化、在回调内或其他线程上调用，或 Media Foundation 消息失败。</para>
+    /// </exception>
     public void Reset()
     {
         CheckReady();
@@ -133,7 +218,24 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
         _sequence = 0;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Signals end of stream, issues the drain command, and emits all buffered frames into the callback.
+    /// Call <see cref="Initialize"/> or <see cref="Reset"/> before feeding a new stream.
+    /// <para>发出码流结束通知并下发 drain 命令，将全部缓存帧输出到回调。输入新码流前须调用
+    /// <see cref="Initialize"/> 或 <see cref="Reset"/>。</para>
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="InvalidOperationException">
+    /// The decoder is not initialized, called from a callback or another thread, output made no bounded progress,
+    /// or a Media Foundation message failed.
+    /// <para>解码器未初始化、在回调内或其他线程上调用、输出无法在限量内推进，或 Media Foundation 消息失败。</para>
+    /// </exception>
+    /// <exception cref="NotSupportedException">
+    /// The transform's output type while draining is not NV12.
+    /// <para>变换在排空期间的输出类型不是 NV12 格式。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">A drained NV12 buffer is truncated.
+    /// <para>排空出的 NV12 缓冲区被截断。</para></exception>
     public void Drain()
     {
         CheckReady();
@@ -142,7 +244,16 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
         DrainOutput();
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Flushes and releases the transform, drops the process-wide Media Foundation startup lease, and
+    /// uninitializes COM on the owning thread. Repeat calls are no-ops.
+    /// <para>刷新并释放变换对象、归还进程级 Media Foundation 启动租约，并在所属线程上反初始化 COM；
+    /// 重复调用无效果。</para>
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Called from inside a frame callback or from a thread other than the owning thread.
+    /// <para>在帧回调内部或所属线程之外的其他线程上调用。</para>
+    /// </exception>
     public void Dispose()
     {
         if (_disposed) return;
@@ -168,7 +279,7 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
             finally { MfCom.Release(attributes); }
         }
         int hr = MfCom.QueryInterface(transform, new Guid("901db4c7-31ce-41a2-85dc-8fa0bf41b8da"), out nint codecApi);
-        if (hr < 0) return; // Third-party synchronous transforms may only expose attributes.
+        if (hr < 0) return;
         try
         {
             Check(MfCom.SetCodecLowLatency(codecApi, new Guid("9c27891a-ed7a-40e1-88e8-b22727a024ee"), codec == VideoCodecId.H264), "enable low latency");

@@ -16,14 +16,30 @@ public static class ApkContentDigest
     /// without mutating the source file.
     /// <para>计算 APK 的完整内容摘要（ZIP 条目加 EOCD）。哈希期间 EOCD 的中央目录偏移字段被替换为签名块偏移，不改动源文件。</para>
     /// </summary>
-    /// <param name="apkStream">Readable, seekable APK stream. 可读可定位的 APK 流。</param>
-    /// <param name="zipContentLength">Length of ZIP entries from offset 0 to the signing block. 从偏移 0 到签名块的 ZIP 条目长度。</param>
-    /// <param name="centralDirectoryReadOffset">Central-directory offset in the input file (where to read from). 输入文件中中央目录的偏移（读取位置）。</param>
-    /// <param name="patchedCentralDirectoryOffset">Central-directory offset written into the EOCD while hashing (signing-block based). 哈希期间写入 EOCD 的中央目录偏移（按签名块位置）。</param>
-    /// <param name="centralDirectoryLength">Central directory length. 中央目录长度。</param>
-    /// <param name="eocd">Raw EOCD bytes. EOCD 原始字节。</param>
-    /// <param name="hashName">Hash algorithm name ("SHA256"/"SHA512"). 哈希算法名称（"SHA256"/"SHA512"）。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <param name="apkStream">Readable, seekable APK stream. <para>可读可定位的 APK 流。</para></param>
+    /// <param name="zipContentLength">Length of ZIP entries from offset 0 to the signing block.
+    /// <para>从偏移 0 到签名块的 ZIP 条目长度。</para></param>
+    /// <param name="centralDirectoryReadOffset">
+    /// Central-directory offset in the input file (where to read from).
+    /// <para>输入文件中中央目录的偏移（读取位置）。</para>
+    /// </param>
+    /// <param name="patchedCentralDirectoryOffset">
+    /// Central-directory offset written into the EOCD while hashing (signing-block based).
+    /// <para>哈希期间写入 EOCD 的中央目录偏移（按签名块位置）。</para>
+    /// </param>
+    /// <param name="centralDirectoryLength">Central directory length. <para>中央目录长度。</para></param>
+    /// <param name="eocd">Raw EOCD bytes. <para>EOCD 原始字节。</para></param>
+    /// <param name="hashName">Hash algorithm name ("SHA256"/"SHA512").
+    /// <para>哈希算法名称（"SHA256"/"SHA512"）。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The top-level content digest over all per-chunk digests; its length equals the hash
+    /// output width (32 bytes for SHA256, 64 for SHA512).
+    /// <para>对所有分块摘要计算得到的顶层内容摘要；长度即哈希输出宽度（SHA256 为 32 字节，SHA512 为 64 字节）。</para></returns>
+    /// <exception cref="InvalidDataException">A length or offset is negative, exceeds <c>uint.MaxValue</c>
+    /// or the stream bounds, or the EOCD is shorter than 22 or longer than 65 557 bytes.
+    /// <para>某个长度或偏移为负、超过 <c>uint.MaxValue</c> 或流边界，或 EOCD 短于 22 字节、长于 65 557 字节。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled before or during chunk hashing.
+    /// <para>在分块哈希开始前或期间令牌被取消。</para></exception>
     public static byte[] ComputeApkDigest(
         Stream apkStream,
         long zipContentLength,

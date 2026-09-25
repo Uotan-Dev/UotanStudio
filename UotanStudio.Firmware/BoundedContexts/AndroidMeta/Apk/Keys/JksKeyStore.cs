@@ -4,6 +4,11 @@ namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys;
 
 /// <summary>One decoded JKS entry: a private-key entry (tag 1) or a trusted-certificate entry (tag 2).</summary>
 /// <para>单个解析出的 JKS 条目：私钥条目（tag 1）或受信证书条目（tag 2）。</para>
+/// <param name="Tag">Raw entry type: 1 for a protected private-key entry, 2 for a trusted-certificate entry; <see cref="JksKeyStoreReader.Read"/> rejects any other value. <para>原始条目类型：1 为受保护私钥条目，2 为受信证书条目；<see cref="JksKeyStoreReader.Read"/> 拒绝其他值。</para></param>
+/// <param name="Alias">Entry alias decoded from Java modified UTF-8. <para>由 Java 修改版 UTF-8 解码出的条目别名。</para></param>
+/// <param name="Creation">Entry timestamp stored as big-endian milliseconds since the Unix epoch. <para>以大端 Unix 毫秒时间戳存储的条目时间。</para></param>
+/// <param name="ProtectedPrivateKey">KeyProtector blob (salt, XOR keystream ciphertext, trailing SHA-1 check) for tag-1 entries; <see langword="null"/> for tag-2 entries. <para>tag-1 条目的 KeyProtector 数据块（盐、XOR 密钥流密文、尾部 SHA-1 校验）；tag-2 条目为 null。</para></param>
+/// <param name="Certificates">DER-encoded certificates, leaf first; a single-element list for tag-2 entries. <para>DER 编码证书，叶子在前；tag-2 条目为单元素列表。</para></param>
 public sealed record JksEntry(int Tag, string Alias, DateTimeOffset Creation, byte[]? ProtectedPrivateKey, IReadOnlyList<byte[]> Certificates);
 
 /// <summary>
@@ -15,6 +20,11 @@ public static class JksKeyStoreReader
 {
     /// <summary>Parses all entries and verifies the trailing integrity digest.</summary>
     /// <para>解析全部条目并校验尾部完整性摘要。</para>
+    /// <param name="data">Complete keystore bytes (for example the output of <see cref="JksKeyStoreWriter.Build"/>); the caller keeps ownership. <para>完整密钥库字节（例如 <see cref="JksKeyStoreWriter.Build"/> 的输出）；所有权归调用方。</para></param>
+    /// <param name="password">Keystore password, converted with the upstream big-endian UTF-16 pairing and keyed into the trailing "Mighty Aphrodite" SHA-1 digest. <para>密钥库密码，按上游大端 UTF-16 双字节编码并参与尾部 "Mighty Aphrodite" SHA-1 keyed 摘要。</para></param>
+    /// <returns>All entries in file order; private-key entries keep the encrypted blob and are not decrypted here. <para>按文件顺序的全部条目；私钥条目保留加密数据块，此处不执行解密。</para></returns>
+    /// <exception cref="InvalidDataException">The magic, version, entry count, a block length or the trailing digest is invalid; a digest mismatch reports a wrong password or a tampered keystore. <para>魔数、版本、条目数、某块长度或尾部摘要非法；摘要不匹配表示密码错误或密钥库被篡改。</para></exception>
+    /// <exception cref="EndOfStreamException">The buffer ends in the middle of a field. <para>缓冲区在字段中间结束。</para></exception>
     public static IReadOnlyList<JksEntry> Read(byte[] data, string password)
     {
         var offset = 0;
@@ -76,6 +86,8 @@ public static class JksKeyStoreReader
     /// <param name="protectedKey">The <see cref="JksEntry.ProtectedPrivateKey"/> blob. <para>JksEntry.ProtectedPrivateKey 数据块。</para></param>
     /// <param name="password">Keystore password used when the entry was written. <para>写入条目时使用的密钥库密码。</para></param>
     /// <returns>The plaintext PKCS#8 DER key. <para>明文 PKCS#8 DER 私钥。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="protectedKey"/> is <see langword="null"/>. <para><paramref name="protectedKey"/> 为 null。</para></exception>
+    /// <exception cref="InvalidDataException">The blob is shorter than salt plus digest, or the trailing SHA-1 check fails (wrong password or tampered entry); the partially recovered key is zeroed before throwing. <para>数据块短于盐加摘要长度，或尾部 SHA-1 校验失败（密码错误或条目被篡改）；抛出前会把已恢复的密钥清零。</para></exception>
     public static byte[] Unprotect(byte[] protectedKey, string password)
     {
         const int saltLength = 20;
@@ -158,8 +170,6 @@ public static class JksKeyStoreReader
         return value;
     }
 
-    // Reads a 16-bit big-endian length used by Java DataInputStream.readUTF modified UTF-8 framing.
-    // 读取 16 位大端长度，即 Java DataInputStream.readUTF 修改版 UTF-8 框架。
     private static int ReadInt16(byte[] data, ref int offset)
     {
         const int size = 2;
@@ -239,6 +249,7 @@ public static class JksKeyStoreWriter
     /// <param name="password">Keystore password (non-empty). <para>密钥库密码（非空）。</para></param>
     /// <param name="creation">Entry creation stamp (defaults to now). <para>条目创建时间（默认当前）。</para></param>
     /// <returns>The complete keystore bytes. <para>完整密钥库字节。</para></returns>
+    /// <exception cref="ArgumentException">The alias is empty or longer than 255 characters (or exceeds 65535 modified UTF-8 bytes), the password is empty, the private key is empty, or the chain is empty or holds a certificate of zero bytes or more than 4 MiB. <para>别名为空或超过 255 个字符（或修改版 UTF-8 超过 65535 字节）、密码为空、私钥为空，或证书链为空、包含 0 字节或超过 4 MiB 的证书。</para></exception>
     public static byte[] Build(string alias, byte[] pkcs8PrivateKey, IReadOnlyList<byte[]> certificateChain, string password, DateTimeOffset? creation = null)
     {
         if (string.IsNullOrEmpty(alias) || alias.Length > 255) throw new ArgumentException("别名须为 1–255 个字符。");

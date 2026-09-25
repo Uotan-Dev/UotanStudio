@@ -33,11 +33,9 @@ internal static class StorageFilePublisher
             }
             catch (IOException)
             {
-                // Cleanup failure must not hide a protocol failure or invalidate successful publication.
             }
             catch (UnauthorizedAccessException)
             {
-                // External filesystem policy can prevent cleanup of this operation's staging file.
             }
         }
     }

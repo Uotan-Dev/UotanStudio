@@ -2,36 +2,78 @@ using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Decompile;
 
+/// <summary>Method signature collected by the whole-DEX index for overload resolution.
+/// <para>由全 DEX 索引收集、用于重载解析的方法签名。</para></summary>
 public sealed class MethodCandidate
 {
+    /// <summary>Human-readable name of the declaring class. <para>声明类的可读名称。</para></summary>
+    /// <value>Defaults to <see cref="string.Empty"/>. <para>默认为 <see cref="string.Empty"/>。</para></value>
     public string Owner { get; init; } = string.Empty;
 
+    /// <summary>Decoded method name. <para>解码后的方法名。</para></summary>
+    /// <value>Defaults to <see cref="string.Empty"/>; <c>&lt;init&gt;</c> marks a constructor.
+    /// <para>默认为 <see cref="string.Empty"/>；<c>&lt;init&gt;</c> 表示构造器。</para></value>
     public string Name { get; init; } = string.Empty;
 
+    /// <summary>Human-readable parameter types in declaration order.
+    /// <para>按声明顺序排列的参数可读类型。</para></summary>
+    /// <value>Empty by default and when the prototype does not resolve.
+    /// <para>默认以及原型无法解析时为空数组。</para></value>
     public string[] Parameters { get; init; } = [];
 
+    /// <summary>Human-readable return type. <para>返回类型的可读形式。</para></summary>
+    /// <value>Defaults to <see cref="string.Empty"/>; <c>?</c> when the prototype does not resolve.
+    /// <para>默认为 <see cref="string.Empty"/>；原型无法解析时为 <c>?</c>。</para></value>
     public string ReturnType { get; init; } = string.Empty;
 
+    /// <summary>Whether the method carries the static access flag. <para>方法是否带有 static 访问标志。</para></summary>
+    /// <value>Static methods are called without a receiver. <para>static 方法调用时没有接收者。</para></value>
     public bool IsStatic { get; init; }
 
+    /// <summary>Whether the method carries the bridge access flag. <para>方法是否带有 bridge 访问标志。</para></summary>
+    /// <value>Bridge methods are skipped by overload selection. <para>重载选择会跳过 bridge 方法。</para></value>
     public bool IsBridge { get; init; }
 
+    /// <summary>Whether the method carries the synthetic access flag. <para>方法是否带有 synthetic 访问标志。</para></summary>
+    /// <value>Synthetic methods are skipped by overload selection. <para>重载选择会跳过 synthetic 方法。</para></value>
     public bool IsSynthetic { get; init; }
 
+    /// <summary>Whether the candidate is an instance constructor. <para>候选是否为实例构造器。</para></summary>
+    /// <value>True when the name equals <c>&lt;init&gt;</c>. <para>名称等于 <c>&lt;init&gt;</c> 时为 true。</para></value>
     public bool IsConstructor { get; init; }
 
+    /// <summary>Whether the method carries the private access flag. <para>方法是否带有 private 访问标志。</para></summary>
+    /// <value>Recorded for display purposes; selection does not filter on it.
+    /// <para>仅供展示；重载选择不过滤该标志。</para></value>
     public bool IsPrivate { get; init; }
 }
 
+/// <summary>Overload-resolution verdict that rewrites a call site with argument casts.
+/// <para>需要为调用点施加实参转型的重载解析结论。</para></summary>
 public sealed class ResolvedCall
 {
+    /// <summary>Most specific candidate chosen for the call.
+    /// <para>为该调用选定的最特定候选。</para></summary>
+    /// <value>Never <see langword="null"/>; defaults to an empty candidate.
+    /// <para>不为 <see langword="null"/>；默认为空候选。</para></value>
     public MethodCandidate Candidate { get; init; } = new();
 
+    /// <summary>Per-argument cast requirements. <para>逐实参的转型要求。</para></summary>
+    /// <value>One entry per call-site parameter; <c>true</c> at index i means argument i is cast to
+    /// <c>Candidate.Parameters[i]</c>. Empty by default.
+    /// <para>每个调用点形参一项；索引 i 为 <c>true</c> 表示第 i 个实参转型为 <c>Candidate.Parameters[i]</c>。默认空数组。</para></value>
     public bool[] NeedsCast { get; init; } = [];
 
+    /// <summary>Whether the resolved signature differs from the call-site signature.
+    /// <para>解析所得签名与调用点签名是否存在差异。</para></summary>
+    /// <value><c>MethodResolver.Resolve</c> returns instances only when this is <see langword="true"/>.
+    /// <para><c>MethodResolver.Resolve</c> 仅在其为 <see langword="true"/> 时返回实例。</para></value>
     public bool Changed { get; init; }
 }
 
+/// <summary>Whole-DEX overload resolver: indexes every declared method and picks the most specific candidate
+/// for a call site from inferred argument types.
+/// <para>全 DEX 重载解析器：索引所有已声明方法，并按推断实参类型为调用点挑选最特定的候选。</para></summary>
 public sealed class MethodResolver
 {
     private readonly DexFile _dex;
@@ -41,6 +83,10 @@ public sealed class MethodResolver
     /// Creates an overload resolver and builds the whole-DEX method index.
     /// <para>创建重载解析器并建立全 DEX 方法索引。</para>
     /// </summary>
+    /// <param name="dex">Dex file whose classes and methods are indexed at construction time.
+    /// <para>构造时即建立类与方法索引的 DEX 文件。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="dex"/> is null.
+    /// <para><paramref name="dex"/> 为 null。</para></exception>
     public MethodResolver(DexFile dex)
     {
         ArgumentNullException.ThrowIfNull(dex);
@@ -52,6 +98,18 @@ public sealed class MethodResolver
     /// Resolves a method call: exact signature match first, then the most specific overload by inferred argument types.
     /// <para>解析一次方法调用：优先精确签名匹配，其次按推断实参类型选择最特定重载。</para>
     /// </summary>
+    /// <param name="target">Method reference operand taken from the call instruction.
+    /// <para>来自调用指令的方法引用操作数。</para></param>
+    /// <param name="inferredArgTypes">Readable type hint per argument; entries may be <see langword="null"/>, and a
+    /// <see langword="null"/> array scores every argument as unknown.
+    /// <para>逐实参的可读类型提示；对应项可为 <see langword="null"/>，整个数组为 <see langword="null"/> 时所有实参按未知处理。</para></param>
+    /// <returns>A rewritten-call verdict when the most specific overload differs from the call-site signature;
+    /// <see langword="null"/> for constructors and class initializers, when no candidate is found, when a non-bridge,
+    /// non-synthetic candidate already matches the call-site signature exactly, or when no argument needs a cast.
+    /// <para>当最特定重载与调用点签名存在差异时返回改写结论；构造器与类初始化器、无候选、已有非 bridge 且非
+    /// synthetic 的精确匹配、或无需任何实参转型时返回 <see langword="null"/>。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="target"/> is null.
+    /// <para><paramref name="target"/> 为 null。</para></exception>
     public ResolvedCall? Resolve(MethodRefOperand target, string?[]? inferredArgTypes)
     {
         ArgumentNullException.ThrowIfNull(target);

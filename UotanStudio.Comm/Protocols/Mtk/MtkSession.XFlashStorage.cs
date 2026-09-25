@@ -2,16 +2,34 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
-    /// <summary>Gets validated storage geometry, or null before discovery completes.</summary>
+    /// <summary>Gets validated storage geometry, or null before discovery completes.
+    /// <para>获取已校验的存储几何信息；发现完成之前为 null。</para></summary>
+    /// <value>The geometry from the latest successful discovery, cleared when the session faults.
+    /// <para>最近一次成功发现得到的几何信息；会话 fault 时被清空。</para></value>
     public MtkXFlashStorageInfo? XFlashStorage { get; private set; }
 
     /// <summary>
     /// Queries an explicitly selected eMMC/UFS family and its packet sizes after DA2 startup.
     /// A zero device type returns null without guessing another storage family.
+    /// <para>在 DA2 启动后查询显式选定的 eMMC/UFS 家族及其包大小。设备类型为 0 时返回
+    /// null，不会猜测其他存储家族。</para>
     /// </summary>
-    /// <param name="kind">The storage family to query.</param>
-    /// <param name="cancellationToken">The operation cancellation token.</param>
-    /// <returns>Validated geometry, or null when the agent explicitly reports no device of this family.</returns>
+    /// <param name="kind">The storage family to query.
+    /// <para>要查询的存储家族。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns>Validated geometry, or null when the agent explicitly reports no device of this family.
+    /// <para>已校验的几何信息；当 agent 明确报告该家族无设备时为 null。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="kind"/> is not a defined storage family.
+    /// <para><paramref name="kind"/> 不是已定义的存储家族。</para></exception>
+    /// <exception cref="InvalidOperationException">DA2 has not started or the XFlash channel is gone.
+    /// <para>DA2 未启动或 XFlash 通道已失效。</para></exception>
+    /// <exception cref="MtkProtocolException">A control reply is malformed or rejected; the session faults.
+    /// <para>控制回复格式错误或被拒绝；会话进入 fault 状态。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
     public async Task<MtkXFlashStorageInfo?> DiscoverXFlashStorageAsync(MtkXFlashStorageKind kind,
         CancellationToken cancellationToken = default)
     {

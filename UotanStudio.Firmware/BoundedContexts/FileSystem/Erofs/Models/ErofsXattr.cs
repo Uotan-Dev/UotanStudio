@@ -3,12 +3,28 @@ using System.Text;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 
+/// <summary>
+/// One resolved EROFS extended attribute: full name, raw value bytes and the on-disk name index.
+/// <para>一条已解析的 EROFS 扩展属性：完整名称、原始值字节与磁盘上的名称索引。</para>
+/// </summary>
 public sealed class ErofsXattrEntry
 {
+    /// <summary>Full attribute name with its short or long prefix resolved (e.g. <c>user.caps</c>).
+    /// <para>解析短/长前缀后的完整属性名（例如 <c>user.caps</c>）。</para></summary>
+    /// <value>Never null; empty only when the decoded entry carried an empty name and no prefix.
+    /// <para>永不为 null；仅当解码出的条目名称为空且无前缀时为空字符串。</para></value>
     public string Name { get; init; } = string.Empty;
 
+    /// <summary>Raw attribute value bytes as stored on disk.
+    /// <para>按磁盘存储原样的属性值字节。</para></summary>
+    /// <value>Empty array for a zero-length value; the bytes are not interpreted.
+    /// <para>零长度值时为空数组；字节内容不做解释。</para></value>
     public byte[] Value { get; init; } = [];
 
+    /// <summary>The on-disk <c>e_name_index</c> byte identifying the name's prefix origin.
+    /// <para>磁盘上的 <c>e_name_index</c> 字节，标识名称前缀的来源。</para></summary>
+    /// <value>Default prefix index (1..7), or a long-prefix index with the <c>0x80</c> flag set.
+    /// <para>默认前缀索引（1..7），或置有 <c>0x80</c> 标志位的长前缀索引。</para></value>
     public byte NameIndex { get; init; }
 }
 

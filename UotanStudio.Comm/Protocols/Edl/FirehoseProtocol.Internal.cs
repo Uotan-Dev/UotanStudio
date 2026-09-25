@@ -2,7 +2,10 @@ using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
-/// <summary>Bounded XML reception with byte-exact carry-over into raw transfers.</summary>
+/// <summary>
+/// Bounded XML reception with byte-exact carry-over into raw transfers.
+/// <para>在大小上限内接收 XML 响应，未消费的字节原样结转到后续原始传输读取。</para>
+/// </summary>
 public sealed partial class FirehoseProtocol
 {
     private const int MaximumResponseBytes = 64 * 1024;
@@ -58,7 +61,6 @@ public sealed partial class FirehoseProtocol
                     continue;
                 }
 
-                // Bytes following the envelope may be partition data, not another XML document.
                 ShiftRxBufferLeft(consumed);
                 var block = FirehoseResponseParser.ParseDataBlock(Encoding.UTF8.GetString(document, 0, length));
                 foreach (var log in block.Logs)

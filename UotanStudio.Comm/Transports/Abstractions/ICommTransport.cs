@@ -11,6 +11,12 @@ public interface ICommTransport : IDisposable
     /// Gets a value indicating whether the transport is currently connected.
     /// <para>获取传输当前是否已连接。</para>
     /// </summary>
+    /// <value>
+    /// <see langword="true"/> while an open handle to the device is held; <see langword="false"/> before
+    /// <see cref="Connect"/> and after <see cref="Disconnect"/> or a transport failure.
+    /// <para>持有设备打开句柄期间为 <see langword="true"/>；在 <see cref="Connect"/> 之前，以及
+    /// <see cref="Disconnect"/> 或传输失败之后为 <see langword="false"/>。</para>
+    /// </value>
     bool IsConnected { get; }
 
     /// <summary>

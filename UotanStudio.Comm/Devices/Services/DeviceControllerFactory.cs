@@ -18,6 +18,8 @@ public static class DeviceControllerFactory
     /// <para>用共享通信套件与标准本机调试桥端点创建默认控制器，使调用方无需直接命名 CommKit。</para>
     /// Creates the default controller over the shared communication kit, so callers need not name <c>CommKit</c>.
     /// </summary>
+    /// <returns>A controller with removal and server-state watches already running.
+    /// <para>已启动移除监视与 server 状态监视的控制器。</para></returns>
     public static DeviceController CreateDefault() => CreateDefault(CommKit.Default);
 
     /// <summary>Creates the default controller over the supplied communication kit and the standard localhost debug-bridge endpoints.</summary>

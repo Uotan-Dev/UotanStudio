@@ -5,6 +5,11 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 
+/// <summary>
+/// EROFS parser part that reads the verified source image back into builder input: per-inode compression and timestamp records, the compression metadata report, and the options an edited rebuild inherits.
+/// <para>EROFS 解析器的组成部分，负责把已校验的源镜像读回为构建器输入：逐 inode 的压缩与时间戳记录、压缩元数据报告，
+/// 以及编辑重建所继承的选项。</para>
+/// </summary>
 public sealed partial class ErofsParser
 {
     internal JsonObject ReadCompressionMetadata()
@@ -13,8 +18,6 @@ public sealed partial class ErofsParser
         foreach (var pair in ReadCompressionOptions())
         {
             var options = pair.Value;
-            // 显式转为 JsonNode 命中非泛型 Add 重载；JsonArray.Add<T>(T) 会用反射
-            // 包装非基元类型，NativeAOT 下抛异常（IL2026/IL3050）。
             algorithms.Add((JsonNode)new JsonObject
             {
                 ["algorithm"] = pair.Key.ToString(),
@@ -38,10 +41,6 @@ public sealed partial class ErofsParser
     {
         var codecs = ReadCompressionOptions();
         var defaultAlgorithm = codecs.Keys.FirstOrDefault();
-        // Directory traversal is cheap; per-inode records need random reads across the image, so
-        // the record decoding is fanned out over FirmwareParallelism (ReadBytes is stream-lock safe).
-        // 目录遍历开销小；逐 inode 记录需要跨镜像随机读，因此把记录解码分发给
-        // FirmwareParallelism 并行执行（ReadBytes 已有流锁保护）。
         var entries = new List<ErofsFileEntry>();
         var seenNids = new HashSet<ulong>();
         foreach (var entry in EnumerateEntries())
@@ -65,10 +64,6 @@ public sealed partial class ErofsParser
             }
             inodes.Add(entry.Nid, record);
         }
-        // Path-indexed projection so plain directory repacks can bind per-inode strategies
-        // without an edit plan (paths are stable across nid shifts).
-        // 按路径索引的投影，让纯目录重打包在没有 editPlan 时也能绑定逐 inode 策略
-        // （路径不随 nid 漂移）。
         var byPath = inodes.Values
             .Where(record => record.Path is { Length: > 0 })
             .GroupBy(record => record.Path!, StringComparer.Ordinal)
@@ -98,16 +93,6 @@ public sealed partial class ErofsParser
         selected.TailPacking = inodes.Values.Any(i => i.InlineData);
         selected.SourceInodes = inodes;
         selected.SourceCompressionOptions = codecs;
-        // A source without the big pcluster / COMPR_CFGS feature used the legacy (pre-5.13) layout.
-        // Carry that forward so the rebuilt superblock does not advertise unsupported features to
-        // older (5.4 / 5.10) kernels, which would refuse to mount the image. A source that carries
-        // post-5.4 incompatible features (fragments / ztailpacking / metabox) genuinely needs them
-        // to preserve its packed data, so those images are rebuilt with the modern layout instead
-        // of being silently stripped.
-        // 源镜像未声明 big pcluster / COMPR_CFGS 说明其采用 legacy（pre-5.13）布局。重建时保留该
-        // 特征，避免重建后的超级块向较旧内核（5.4 / 5.10）声明其不支持的特性而导致挂载失败。
-        // 若源镜像带有 5.4 之后引入的 incompat 特性（fragments / ztailpacking / metabox），其打包
-        // 数据确实依赖这些特性，此时应按现代布局重建，而不是静默裁剪。
         selected.LegacyCompatibility = !_superblock.HasBigPcluster
             && !_superblock.HasZtailpacking
             && !_superblock.HasMetabox
@@ -172,7 +157,6 @@ public sealed partial class ErofsParser
                     {
                         algorithm = (ErofsCompressionAlgorithm)(format - 1);
                     }
-                    // Extent records are preserved separately; the lcluster writer regenerates their geometry.
                     logicalClusterSize = _blockSize;
                 }
                 else
@@ -198,7 +182,6 @@ public sealed partial class ErofsParser
     private Dictionary<ErofsCompressionAlgorithm, ErofsOptions> ReadCompressionOptions()
     {
         var result = new Dictionary<ErofsCompressionAlgorithm, ErofsOptions>();
-        // COMPR_CFGS and BIG_PCLUSTER share bit 1. Without it the superblock union is a distance.
         if (!_superblock.HasBigPcluster)
         {
             result.Add(ErofsCompressionAlgorithm.Lz4, new ErofsOptions
@@ -218,8 +201,6 @@ public sealed partial class ErofsParser
             if ((bitmap & (1 << id)) == 0) continue;
             offset = checked((int)AlignUp(offset, 4));
             var length = BinaryPrimitives.ReadUInt16LittleEndian(ReadBytes(offset, 2, "compression configuration length"));
-            // Exact upstream record sizes: lz4/lzma cfgs are 14 bytes (+2 length), deflate/zstd 6 (+2).
-            // 上游记录的精确长度：lz4/lzma 配置 14 字节（另加 2 字节长度），deflate/zstd 6 字节。
             var expected = id < 2 ? 14 : 6;
             if (length != expected)
                 throw new InvalidDataException($"Invalid EROFS compression configuration length for algorithm {id}: {length} (expected {expected}).");

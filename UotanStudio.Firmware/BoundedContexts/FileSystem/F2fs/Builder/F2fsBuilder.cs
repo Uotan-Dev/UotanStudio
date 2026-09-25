@@ -23,7 +23,6 @@ public sealed partial class F2fsBuilder
     private const uint CrcPolynomial = 0xEDB88320;
     private const int MaxNameBytes = 255;
 
-
     private const uint RsvdSegments = 6;
 
     private const int CpPackTotalBlocks = 6;
@@ -51,6 +50,15 @@ public sealed partial class F2fsBuilder
     /// Builds an F2FS image from sourceDirectory and returns it as a byte array.
     /// <para>从 sourceDirectory 构建 f2fs 镜像并以字节数组返回。</para>
     /// </summary>
+    /// <param name="sourceDirectory">Source directory tree whose files, directories and symlinks are embedded in the image.
+    /// <para>要写入镜像的源目录树，其中的文件、目录与符号链接都会入图。</para></param>
+    /// <param name="options">Layout, sparse and compression options; <see langword="null"/> applies the defaults.
+    /// <para>布局、稀疏与压缩选项；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <returns>The complete F2FS image bytes. <para>完整的 F2FS 镜像字节。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="sourceDirectory"/> is <see langword="null"/>.
+    /// <para><paramref name="sourceDirectory"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidOperationException">The built image is larger than the maximum byte-array length.
+    /// <para>构建出的镜像超过字节数组的最大长度。</para></exception>
     [Obsolete("Loads the entire image into memory. Use Build(sourceDirectory, outputPath) or Build(sourceDirectory, Stream) instead. 整镜像驻留内存；请使用文件路径或流式重载。")]
     public static byte[] Build(string sourceDirectory, F2fsOptions? options = null)
     {
@@ -79,6 +87,22 @@ public sealed partial class F2fsBuilder
     /// Builds an F2FS image from sourceDirectory and atomically writes it to outputPath (a temporary file in the same directory is flushed first, then moved over the destination).
     /// <para>从 sourceDirectory 构建 f2fs 镜像并原子写入 outputPath （先写同目录临时文件，刷新成功后再覆盖目标）。</para>
     /// </summary>
+    /// <param name="sourceDirectory">Source directory tree to embed; the destination and staging files are excluded from the scan.
+    /// <para>要嵌入的源目录树；目标文件与暂存文件会在扫描时排除。</para></param>
+    /// <param name="outputPath">Destination image path; its parent directory is created and an existing file is replaced.
+    /// With <c>AndroidNativeProfile</c> the native tool chain writes this path instead of the staged build.
+    /// <para>目标镜像路径；会自动创建父目录并覆盖已有文件。启用 <c>AndroidNativeProfile</c> 时改由原生工具
+    /// 写入该路径。</para></param>
+    /// <param name="options">Layout, sparse and compression options; <see langword="null"/> applies the defaults.
+    /// <para>布局、稀疏与压缩选项；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="sourceDirectory"/> is blank.
+    /// <para><paramref name="sourceDirectory"/> 为空白字符串。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="outputPath"/> is <see langword="null"/>.
+    /// <para><paramref name="outputPath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="DirectoryNotFoundException">The source directory does not exist.
+    /// <para>源目录不存在。</para></exception>
+    /// <exception cref="OperationCanceledException"><c>options.CancellationToken</c> is cancelled before or during the build.
+    /// <para><c>options.CancellationToken</c> 在构建前或构建中被取消。</para></exception>
     public static void Build(string sourceDirectory, string outputPath, F2fsOptions? options = null)
     {
         FileSystemPreservation.RejectLossyDirectoryRebuild(sourceDirectory);
@@ -126,6 +150,23 @@ public sealed partial class F2fsBuilder
     /// Builds an F2FS image from sourceDirectory starting at the output stream's current position.
     /// <para>从 sourceDirectory 构建 f2fs 镜像并从输出流当前 Position 写入。</para>
     /// </summary>
+    /// <param name="sourceDirectory">Source directory tree to embed; a <see cref="FileStream"/> output and the staging file are excluded from the scan.
+    /// <para>要嵌入的源目录树；输出若为 <see cref="FileStream"/> 以及暂存文件会在扫描时排除。</para></param>
+    /// <param name="output">Writable destination stream; the image is written from the current position, and a
+    /// stream that cannot be resized without mutation receives the image via a temporary staging file.
+    /// <para>可写的目标流；镜像从当前 Position 写入，无法无损改长的流经临时暂存文件转写。</para></param>
+    /// <param name="options">Layout, sparse and compression options; <see langword="null"/> applies the defaults.
+    /// <para>布局、稀疏与压缩选项；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <exception cref="NotSupportedException"><c>options.AndroidNativeProfile</c> is enabled; native builds need a file path.
+    /// <para>启用了 <c>options.AndroidNativeProfile</c>；原生构建要求文件输出路径。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="output"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="output"/> is not writable.
+    /// <para><paramref name="output"/> 不可写。</para></exception>
+    /// <exception cref="DirectoryNotFoundException">The source directory does not exist.
+    /// <para>源目录不存在。</para></exception>
+    /// <exception cref="OperationCanceledException"><c>options.CancellationToken</c> is cancelled before or during the build.
+    /// <para><c>options.CancellationToken</c> 在构建前或构建中被取消。</para></exception>
     public static void Build(string sourceDirectory, Stream output, F2fsOptions? options = null)
     {
         if (options?.AndroidNativeProfile == true)
@@ -206,7 +247,6 @@ public sealed partial class F2fsBuilder
             if (!FileSystemMetadataOverrides.TryGetFsConfig(fsConfig, relative, out var entry)) continue;
             node.Uid = entry.Uid;
             node.Gid = entry.Gid;
-            // fs_config stores permission bits only (mode & 0xFFF); keep the node's type bits.
             node.Mode = (ushort)((node.Mode & 0xF000) | (entry.Mode & 0xFFF));
         }
     }
@@ -234,7 +274,6 @@ public sealed partial class F2fsBuilder
         effective.Validate();
         effective.CancellationToken.ThrowIfCancellationRequested();
         var blockSize = effective.BlockSize;
-
 
         var ordered = CollectPreOrder(root!);
 
@@ -287,7 +326,6 @@ public sealed partial class F2fsBuilder
         var layout = ComputeLayout(ordered, effective);
         effective.CancellationToken.ThrowIfCancellationRequested();
         var plan = AllocateBlocks(ordered, layout);
-
 
         var imageBytes = checked(layout.ImageBlocks * blockSize);
         var requiredEnd = checked(baseOffset + imageBytes);
@@ -441,13 +479,8 @@ public sealed partial class F2fsBuilder
 
         try
         {
-            // F2FS stores inode timestamps as a 64-bit Unix-epoch second plus a
-            // 32-bit nanosecond field.  Compute both from UTC ticks using integer
-            // arithmetic to preserve sub-second precision and avoid the lossy
-            // (long)TotalSeconds cast.  One tick = 100 ns = 1e-7 s, so
-            // nanoseconds = (ticks % 10_000_000) * 100.
-            const long TicksPerSecond = TimeSpan.TicksPerSecond; // 10,000,000
-            const long NanosPerTick = 100;                       // 100 ns per tick
+            const long TicksPerSecond = TimeSpan.TicksPerSecond;
+            const long NanosPerTick = 100;
 
             var writeUtc = File.GetLastWriteTimeUtc(fullPath);
             var createUtc = File.GetCreationTimeUtc(fullPath);
@@ -543,10 +576,8 @@ public sealed partial class F2fsBuilder
             return;
         }
 
-
         if (compress && !node.IsSymlink && (preservedCompression is not null || size > node.ClusterPages * options.BlockSize))
         {
-
 
             if (TryPlanCompressedFileData(node, options))
             {
@@ -558,7 +589,6 @@ public sealed partial class F2fsBuilder
         var dataBlocks = (int)((size + options.BlockSize - 1) / options.BlockSize);
         node.DataBlockCount = dataBlocks;
         node.DataBlockAddrs = CreateBlockAddressTable(dataBlocks);
-
 
         var holes = options.EnableSparse ? DetectHoles(node, dataBlocks, options.BlockSize) : null;
         var allocated = 0;
@@ -577,7 +607,6 @@ public sealed partial class F2fsBuilder
         }
 
         node.AllocatedDataBlockCount = allocated;
-
 
         PlanDnodes(node, dataBlocks);
     }
@@ -618,7 +647,6 @@ public sealed partial class F2fsBuilder
             if (toRead == clusterBytes)
             {
 
-
                 var payload = F2fsCompression.CompressCluster(
                     clusterBuffer.AsSpan(0, clusterBytes),
                     node.CompressedAlgorithm,
@@ -639,7 +667,6 @@ public sealed partial class F2fsBuilder
                     continue;
                 }
 
-
                 for (var i = 0; i < clusterPages; i++)
                 {
                     node.DataBlockAddrs[logical + i] = uint.MaxValue;
@@ -649,7 +676,6 @@ public sealed partial class F2fsBuilder
             }
             else
             {
-
 
                 for (var i = 0; i < clusterBlocks; i++)
                 {
@@ -662,7 +688,6 @@ public sealed partial class F2fsBuilder
 
         if (!anyCompressed && node.SourceMetadata?.F2fsCompression is null)
         {
-
 
             node.DataBlockCount = 0;
             node.DataBlockAddrs = [];
@@ -838,7 +863,6 @@ public sealed partial class F2fsBuilder
             throw new InvalidOperationException($"File name too long (>{MaxNameBytes} bytes): '{node.Name}'.");
         }
 
-
         var blocks = new List<List<F2fsDirectoryEntry>>
         {
             new()
@@ -910,7 +934,6 @@ public sealed partial class F2fsBuilder
         node.DirBlocks = blocks.Select(static b => BuildDirBlock(b)).ToList();
         node.Size = (long)node.DirBlocks.Count * F2fsNode.NodeSize;
 
-
         node.DirDepth = currentDepth + 1;
     }
 
@@ -945,7 +968,6 @@ public sealed partial class F2fsBuilder
 
     private static byte[] BuildDirBlock(List<F2fsDirectoryEntry> entries)
     {
-
 
         var block = new byte[F2fsNode.NodeSize];
         F2fsDirectoryEntry.BuildBlock(block, entries, F2fsNode.NodeSize);
@@ -1016,7 +1038,6 @@ public sealed partial class F2fsBuilder
 
         var nodeSegments = (uint)((nodeBlocks + BlocksPerSeg - 1) / BlocksPerSeg);
 
-
         var dataSegments = 3u + (uint)((Math.Max(0, dataBlocks - CompactDataEntryCap) + BlocksPerSeg - 1) / BlocksPerSeg);
         var mainSegments = nodeSegments + dataSegments + OverprovSlackSegments;
         if (mainSegments == 0)
@@ -1025,7 +1046,6 @@ public sealed partial class F2fsBuilder
         }
 
         var layout = new Layout { MaxNid = maxNid, NodeBlocks = nodeBlocks, DataBlocks = dataBlocks };
-
 
         uint sitSegments;
         uint natSegments;
@@ -1036,7 +1056,6 @@ public sealed partial class F2fsBuilder
         {
             var blocksForSit = (mainSegments + F2fsNode.SitEntryPerBlock - 1) / F2fsNode.SitEntryPerBlock;
             sitSegments = Math.Max(2, 2 * ((blocksForSit + BlocksPerSeg - 1) / BlocksPerSeg));
-
 
             var blocksForNat = (maxNid + 1 + F2fsNode.NatEntryPerBlock - 1) / F2fsNode.NatEntryPerBlock;
             natSegments = Math.Max(2, 2 * ((blocksForNat + BlocksPerSeg - 1) / BlocksPerSeg));
@@ -1098,7 +1117,6 @@ public sealed partial class F2fsBuilder
     {
         var plan = new CursegPlan();
 
-
         var mainBase = 0u;
         var freeSegmentCursor = mainBase + layout.NodeSegments + layout.DataSegments;
         var maxFreeSegment = mainBase + layout.MainSegments;
@@ -1112,7 +1130,6 @@ public sealed partial class F2fsBuilder
 
             return freeSegmentCursor++;
         }
-
 
         for (var t = 0; t < 3; t++)
         {
@@ -1147,7 +1164,6 @@ public sealed partial class F2fsBuilder
             entries[ofsInSeg] = (nid, ofsInNode);
         }
 
-
         foreach (var node in ordered)
         {
             node.InodeBlockAddr = checked((uint)nodeCursor);
@@ -1166,7 +1182,6 @@ public sealed partial class F2fsBuilder
                 }
             }
         }
-
 
         foreach (var node in ordered)
         {
@@ -1197,7 +1212,6 @@ public sealed partial class F2fsBuilder
                     AssignBlock(node.DataBlockAddrs[i], ResolveOwnerNid(node, i, out var ofsInNode), (ushort)ofsInNode);
                 }
 
-
                 if (node.Dnodes.Count == 0
                     && node.AllocatedDataBlockCount == node.DataBlockCount
                     && node.DataBlockCount > 0)
@@ -1206,7 +1220,6 @@ public sealed partial class F2fsBuilder
                 }
             }
         }
-
 
         for (var t = 0; t < 3; t++)
         {
@@ -1221,7 +1234,6 @@ public sealed partial class F2fsBuilder
             }
         }
 
-
         var cursegSegnos = new HashSet<uint>(plan.NodeSegno.Concat(plan.DataSegno));
         for (var s = 0; s < layout.MainSegments; s++)
         {
@@ -1234,14 +1246,12 @@ public sealed partial class F2fsBuilder
                 foreach (var ofs in entries.Keys)
                 {
 
-
                     map[ofs >> 3] |= (byte)(1 << (7 - (ofs & 7)));
                 }
             }
 
             plan.Segments[segno] = (count, map, SegmentTypeOf(segno, mainBase, layout, plan));
         }
-
 
         for (var t = 0; t < 3; t++)
         {
@@ -1263,7 +1273,6 @@ public sealed partial class F2fsBuilder
                 }
             }
         }
-
 
         var validSegments = plan.Segments.Count(kvp => kvp.Value.Count > 0 || cursegSegnos.Contains(kvp.Key));
         plan.FreeSegmentCount = (uint)(plan.Segments.Count - validSegments);
@@ -1333,7 +1342,6 @@ public sealed partial class F2fsBuilder
             };
         }
 
-
         for (var t = 0; t < 3; t++)
         {
             if (segno == plan.NodeSegno[t])
@@ -1353,7 +1361,6 @@ public sealed partial class F2fsBuilder
     private static void CollectNatEntries(List<BuildNode> ordered, Dictionary<uint, (uint Ino, uint Block)> nat)
     {
 
-
         nat[NodeIno] = (NodeIno, 1);
         nat[MetaIno] = (MetaIno, 1);
 
@@ -1370,7 +1377,6 @@ public sealed partial class F2fsBuilder
             }
         }
     }
-
 
     private sealed class BuildNode
     {

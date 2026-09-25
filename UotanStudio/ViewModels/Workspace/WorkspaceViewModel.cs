@@ -680,7 +680,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// <para>从持久化快照恢复一个已打开的文档标签。根据 <see cref="OpenDocumentDto.Kind"/> 分派到对应的打开方法。</para>
-    /// Restores a previously open document tab from a persisted snapshot. Dispatches by
+    /// Restores a document tab recorded in the persisted snapshot. Dispatches by
     /// <see cref="OpenDocumentDto.Kind"/> to the appropriate open method.
     /// </summary>
     /// <param name="dto"><para>文档描述符。</para>The document descriptor.</param>

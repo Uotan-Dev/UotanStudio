@@ -12,9 +12,9 @@ public static class RawProgramParser
     /// Parses a rawprogram XML file from the specified file path.
     /// <para>从指定文件路径解析 rawprogram XML 文件。</para>
     /// </summary>
-    /// <param name="filePath">The path to the rawprogram XML file. rawprogram XML 文件路径。</param>
-    /// <returns>A list of <see cref="RawProgramEntry"/> objects parsed from the file. 从文件中解析的 <see cref="RawProgramEntry"/> 对象列表。</returns>
-    /// <exception cref="EdlException">Thrown when the file cannot be loaded or parsed. 文件无法加载或解析时抛出。</exception>
+    /// <param name="filePath">The path to the rawprogram XML file.<para>rawprogram XML 文件路径。</para></param>
+    /// <returns>A list of <see cref="RawProgramEntry"/> objects parsed from the file. Entries keep the literal <c>filename</c> value; source paths are not resolved.<para>从文件中解析的 <see cref="RawProgramEntry"/> 对象列表。条目保留字面 <c>filename</c> 值；未解析源文件路径。</para></returns>
+    /// <exception cref="EdlException">The path is empty or whitespace, or the file cannot be loaded or parsed.<para>路径为空白字符串，或文件无法加载或解析。</para></exception>
     public static List<RawProgramEntry> Parse(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath))
@@ -41,9 +41,9 @@ public static class RawProgramParser
     /// Parses a rawprogram XML from the specified stream.
     /// <para>从指定流解析 rawprogram XML。</para>
     /// </summary>
-    /// <param name="stream">The stream containing the rawprogram XML data. 包含 rawprogram XML 数据的流。</param>
-    /// <returns>A list of <see cref="RawProgramEntry"/> objects parsed from the stream. 从流中解析的 <see cref="RawProgramEntry"/> 对象列表。</returns>
-    /// <exception cref="EdlException">Thrown when the stream cannot be parsed. 流无法解析时抛出。</exception>
+    /// <param name="stream">A readable stream positioned at the start of the rawprogram XML document. The caller retains ownership.<para>可读、定位到 rawprogram XML 文档起始处的流。所有权由调用方持有。</para></param>
+    /// <returns>A list of <see cref="RawProgramEntry"/> objects parsed from the stream. Entries keep the literal <c>filename</c> value; source paths are not resolved.<para>从流中解析的 <see cref="RawProgramEntry"/> 对象列表。条目保留字面 <c>filename</c> 值；未解析源文件路径。</para></returns>
+    /// <exception cref="EdlException">The stream is <see langword="null"/> or the document cannot be parsed.<para>流为 <see langword="null"/>，或文档无法解析。</para></exception>
     public static List<RawProgramEntry> Parse(Stream stream)
     {
         if (stream == null)
@@ -70,10 +70,11 @@ public static class RawProgramParser
     /// Asynchronously parses a rawprogram XML file from the specified file path.
     /// <para>从指定文件路径异步解析 rawprogram XML 文件。</para>
     /// </summary>
-    /// <param name="filePath">The path to the rawprogram XML file. rawprogram XML 文件路径。</param>
-    /// <param name="cancellationToken">A token to cancel the asynchronous operation. 用于取消异步操作的令牌。</param>
-    /// <returns>A task whose result contains the parsed <see cref="RawProgramEntry"/> objects. 任务结果包含解析出的 <see cref="RawProgramEntry"/> 对象。</returns>
-    /// <exception cref="EdlException">Thrown when the file cannot be loaded or parsed. 文件无法加载或解析时抛出。</exception>
+    /// <param name="filePath">The path to the rawprogram XML file.<para>rawprogram XML 文件路径。</para></param>
+    /// <param name="cancellationToken">A token to cancel the asynchronous operation; only observed while the work item is queued.<para>用于取消异步操作的令牌；仅在工作项排队阶段被观察。</para></param>
+    /// <returns>A task whose result contains the parsed <see cref="RawProgramEntry"/> objects.<para>任务结果包含解析出的 <see cref="RawProgramEntry"/> 对象。</para></returns>
+    /// <exception cref="EdlException">The path is empty or whitespace, or the file cannot be loaded or parsed.<para>路径为空白字符串，或文件无法加载或解析。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled while the work item was still queued.<para>工作项仍在排队时令牌被取消。</para></exception>
     public static async Task<List<RawProgramEntry>> ParseAsync(string filePath, CancellationToken cancellationToken = default) => await Task.Run(() => Parse(filePath), cancellationToken).ConfigureAwait(false);
 
     /// <summary>
@@ -81,10 +82,10 @@ public static class RawProgramParser
     /// directory.
     /// <para>解析多个 rawprogram XML 文件，并根据固件目录解析镜像文件路径。</para>
     /// </summary>
-    /// <param name="filePaths">The list of rawprogram XML file paths to parse. 待解析的 rawprogram XML 文件路径列表。</param>
-    /// <param name="firmwareDirectory">The base directory for resolving image file paths. 用于解析镜像文件路径的基础目录。</param>
-    /// <returns>A combined list of <see cref="RawProgramEntry"/> objects with resolved source file paths. 包含已解析源文件路径的合并 <see cref="RawProgramEntry"/> 对象列表。</returns>
-    /// <exception cref="EdlException">Thrown when any file cannot be loaded or parsed. 任一文件无法加载或解析时抛出。</exception>
+    /// <param name="filePaths">The list of rawprogram XML file paths to parse. Each entry is parsed with <see cref="Parse(string)"/> and its <c>filename</c> is joined against <paramref name="firmwareDirectory"/>.<para>待解析的 rawprogram XML 文件路径列表。每条通过 <see cref="Parse(string)"/> 解析，其 <c>filename</c> 会依据 <paramref name="firmwareDirectory"/> 组合。</para></param>
+    /// <param name="firmwareDirectory">The base directory for resolving image file paths.<para>用于解析镜像文件路径的基础目录。</para></param>
+    /// <returns>A combined list of <see cref="RawProgramEntry"/> objects in the same order as <paramref name="filePaths"/> and, within each file, the same order as the document. Entries with a non-empty <c>filename</c> carry a resolved <see cref="RawProgramEntry.SourceFile"/>.<para>按 <paramref name="filePaths"/> 顺序以及每个文件内文档顺序合并的 <see cref="RawProgramEntry"/> 列表。<c>filename</c> 非空的条目会带有已解析的 <see cref="RawProgramEntry.SourceFile"/>。</para></returns>
+    /// <exception cref="EdlException"><paramref name="filePaths"/> is <see langword="null"/>, or any file cannot be loaded or parsed.<para><paramref name="filePaths"/> 为 <see langword="null"/>，或任一文件无法加载或解析。</para></exception>
     public static List<RawProgramEntry> ParseAll(IEnumerable<string> filePaths, string firmwareDirectory)
     {
         if (filePaths == null)
@@ -115,11 +116,12 @@ public static class RawProgramParser
     /// against the firmware directory.
     /// <para>异步解析多个 rawprogram XML 文件，并根据固件目录解析镜像文件路径。</para>
     /// </summary>
-    /// <param name="filePaths">The list of rawprogram XML file paths to parse. 待解析的 rawprogram XML 文件路径列表。</param>
-    /// <param name="firmwareDirectory">The base directory for resolving image file paths. 用于解析镜像文件路径的基础目录。</param>
-    /// <param name="cancellationToken">A token to cancel the asynchronous operation. 用于取消异步操作的令牌。</param>
-    /// <returns>A task whose result contains a combined list of <see cref="RawProgramEntry"/> objects. 任务结果包含合并的 <see cref="RawProgramEntry"/> 对象列表。</returns>
-    /// <exception cref="EdlException">Thrown when any file cannot be loaded or parsed. 任一文件无法加载或解析时抛出。</exception>
+    /// <param name="filePaths">The list of rawprogram XML file paths to parse.<para>待解析的 rawprogram XML 文件路径列表。</para></param>
+    /// <param name="firmwareDirectory">The base directory for resolving image file paths.<para>用于解析镜像文件路径的基础目录。</para></param>
+    /// <param name="cancellationToken">A token to cancel the asynchronous operation; only observed while the work item is queued.<para>用于取消异步操作的令牌；仅在工作项排队阶段被观察。</para></param>
+    /// <returns>A task whose result contains a combined list of <see cref="RawProgramEntry"/> objects.<para>任务结果包含合并的 <see cref="RawProgramEntry"/> 对象列表。</para></returns>
+    /// <exception cref="EdlException"><paramref name="filePaths"/> is <see langword="null"/>, or any file cannot be loaded or parsed.<para><paramref name="filePaths"/> 为 <see langword="null"/>，或任一文件无法加载或解析。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled while the work item was still queued.<para>工作项仍在排队时令牌被取消。</para></exception>
     public static async Task<List<RawProgramEntry>> ParseAllAsync(
         IEnumerable<string> filePaths, string firmwareDirectory, CancellationToken cancellationToken = default) => await Task.Run(() => ParseAll(filePaths, firmwareDirectory), cancellationToken).ConfigureAwait(false);
 

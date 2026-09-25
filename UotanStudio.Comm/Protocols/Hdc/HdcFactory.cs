@@ -55,7 +55,6 @@ internal sealed class HdcFactory : IProtocolFactory
                 return false;
             }
 
-            // Upstream host_usb.cpp identifies HDC by FF/50/01, not vendor alone.
             var iface = info.Interfaces.FirstOrDefault(i => i.Class == 0xff && i.SubClass == 0x50 && i.Protocol == 1
                 && i.Endpoints.Any(e => e.EndpointAddress == transport.EndpointIn)
                 && i.Endpoints.Any(e => e.EndpointAddress == transport.EndpointOut));

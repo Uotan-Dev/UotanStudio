@@ -17,12 +17,31 @@ public static class FileMagic
     /// <para>识别文件字节，返回类型/MIME/扩展名等信息；未知返回 <c>null</c>。</para>
     /// Identifies the bytes, returning type/MIME/extension info; <c>null</c> when unknown.
     /// </summary>
+    /// <param name="data">Leading bytes of the file to match against the compiled rules.
+    /// <para>参与编译规则匹配的文件头部字节。</para></param>
+    /// <returns>
+    /// The matched descriptor, or <see langword="null"/> when no rule matches.
+    /// <para>匹配到的描述符；无规则命中时为 <see langword="null"/>。</para>
+    /// </returns>
     public static MagicInfo? Identify(ReadOnlySpan<byte> data) => CompiledMagicEngine.Match(data);
 
     /// <summary>
     /// <para>识别文件路径，仅读取头部 <paramref name="probeLength"/> 字节。</para>
     /// Identifies a file path, reading only the first <paramref name="probeLength"/> bytes.
     /// </summary>
+    /// <param name="path">
+    /// Path of the file to probe; blank or missing paths yield no result.
+    /// <para>要探测的文件路径；空白或不存在的返回空。</para>
+    /// </param>
+    /// <param name="probeLength">
+    /// Maximum header bytes to read, clamped to the actual file length.
+    /// <para>读取的最大头部字节数，会被限制到实际文件长度。</para>
+    /// </param>
+    /// <returns>
+    /// The matched descriptor, or <see langword="null"/> when the file is unknown, empty,
+    /// unreadable, or inaccessible.
+    /// <para>匹配到的描述符；文件未知、为空、不可读或无法访问时返回 <see langword="null"/>。</para>
+    /// </returns>
     public static MagicInfo? IdentifyFile(string path, int probeLength = DefaultProbeLength)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
@@ -68,12 +87,22 @@ public static class FileMagic
     /// <para>返回人类可读类型描述（等价旧 <c>ManagedMagic.Detect</c>），未知返回 <c>null</c>。</para>
     /// Returns the human-readable type description (the old <c>ManagedMagic.Detect</c> surface); <c>null</c> when unknown.
     /// </summary>
+    /// <param name="data">Leading bytes of the file to identify. <para>待识别的文件头部字节。</para></param>
+    /// <returns>
+    /// The matched rule's human-readable description, or <see langword="null"/> when nothing matches.
+    /// <para>匹配规则的人类可读描述；无命中时为 <see langword="null"/>。</para>
+    /// </returns>
     public static string? Describe(ReadOnlySpan<byte> data) => Identify(data)?.Description;
 
     /// <summary>
     /// <para>返回 MIME 类型，未知返回 <c>null</c>。</para>
     /// Returns the MIME type; <c>null</c> when unknown.
     /// </summary>
+    /// <param name="data">Leading bytes of the file to identify. <para>待识别的文件头部字节。</para></param>
+    /// <returns>
+    /// The matched rule's MIME type, or <see langword="null"/> when nothing matches or the rule carries none.
+    /// <para>匹配规则的 MIME 类型；无命中或规则未携带 MIME 时返回 <see langword="null"/>。</para>
+    /// </returns>
     public static string? MimeType(ReadOnlySpan<byte> data) => Identify(data)?.MimeType;
 
     /// <summary>
@@ -82,6 +111,12 @@ public static class FileMagic
     /// Fast ELF check (<c>0x7f 'E' 'L' 'F'</c>). Used to scan embedded ELF at byte offsets without
     /// running the full engine per offset.
     /// </summary>
+    /// <param name="data">Bytes starting at the candidate offset. <para>从候选偏移起始的字节。</para></param>
+    /// <returns>
+    /// <see langword="true"/> when at least four bytes are given and they start with
+    /// <c>0x7f 'E' 'L' 'F'</c>; shorter spans return <see langword="false"/>.
+    /// <para>至少给出四个字节且以 <c>0x7f 'E' 'L' 'F'</c> 开头时返回 <see langword="true"/>；长度不足返回 <see langword="false"/>。</para>
+    /// </returns>
     public static bool IsElf(ReadOnlySpan<byte> data) =>
         data.Length >= 4 && data[0] == 0x7f && data[1] == (byte)'E' && data[2] == (byte)'L' && data[3] == (byte)'F';
 }

@@ -78,6 +78,11 @@ public static class JarDexContainer
     /// <para>文件名或完整路径。</para>
     /// A file name or full path.
     /// </param>
+    /// <returns><see langword="true"/> for a <c>.jar</c> or <c>.apk</c> extension, compared without
+    /// case sensitivity; a <see langword="null"/> value or an extension-less name gives
+    /// <see langword="false"/>. <para>扩展名为 <c>.jar</c> 或 <c>.apk</c> 时返回
+    /// <see langword="true"/>（比较忽略大小写）；值为 <see langword="null"/> 或没有扩展名时返回
+    /// <see langword="false"/>。</para></returns>
     public static bool IsContainerPath(string? path)
     {
         var ext = Path.GetExtension(path ?? string.Empty);
@@ -94,7 +99,12 @@ public static class JarDexContainer
     /// <para>容器文件路径。</para>
     /// The container file path.
     /// </param>
-    /// <returns>条目摘要列表。<para>The list of entry summaries.</para></returns>
+    /// <returns>The list of entry summaries. <para>条目摘要列表。</para></returns>
+    /// <exception cref="FileNotFoundException"><paramref name="path"/> does not exist.
+    /// <para><paramref name="path"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException">The container holds more than
+    /// <see cref="MaxEntryCount"/> entries or its central directory cannot be read.
+    /// <para>容器条目数超过 <see cref="MaxEntryCount"/>，或中央目录无法读取。</para></exception>
     public static IReadOnlyList<JarEntryInfo> ListEntries(string path)
     {
         using var stream = OpenRead(path);
@@ -119,7 +129,12 @@ public static class JarDexContainer
     /// <para>容器文件路径。</para>
     /// The container file path.
     /// </param>
-    /// <returns>DEX 条目名列表。<para>The list of DEX entry names.</para></returns>
+    /// <returns>The list of DEX entry names. <para>DEX 条目名列表。</para></returns>
+    /// <exception cref="FileNotFoundException"><paramref name="path"/> does not exist.
+    /// <para><paramref name="path"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException">The container holds more than
+    /// <see cref="MaxEntryCount"/> entries or its central directory cannot be read.
+    /// <para>容器条目数超过 <see cref="MaxEntryCount"/>，或中央目录无法读取。</para></exception>
     public static IReadOnlyList<string> ListDexEntries(string path)
     {
         using var stream = OpenRead(path);
@@ -145,6 +160,11 @@ public static class JarDexContainer
     /// <para>条目名。</para>
     /// The entry name.
     /// </param>
+    /// <returns><see langword="true"/> only for such a name; a <see langword="null"/> value, a name
+    /// containing <c>/</c>, or extra characters between <c>classes</c> and <c>.dex</c> that are not
+    /// ASCII digits give <see langword="false"/>. <para>只有满足上述名称时返回
+    /// <see langword="true"/>；值为 <see langword="null"/>、名称包含 <c>/</c>，或 <c>classes</c> 与
+    /// <c>.dex</c> 之间存在非 ASCII 数字字符时返回 <see langword="false"/>。</para></returns>
     public static bool IsDexEntryName(string? entryName)
     {
         if (entryName is null || entryName.Contains('/'))
@@ -173,6 +193,12 @@ public static class JarDexContainer
     /// <para>条目名。</para>
     /// The entry name.
     /// </param>
+    /// <returns><see langword="true"/> for <c>META-INF/MANIFEST.MF</c> or a <c>META-INF/</c> entry
+    /// whose extension is <c>SF</c>, <c>RSA</c>, <c>DSA</c> or <c>EC</c>; comparison ignores case and
+    /// a <see langword="null"/> value gives <see langword="false"/>.
+    /// <para><c>META-INF/MANIFEST.MF</c>，或扩展名为 <c>SF</c>、<c>RSA</c>、<c>DSA</c>、<c>EC</c>
+    /// 的 <c>META-INF/</c> 条目返回 <see langword="true"/>；比较忽略大小写，值为
+    /// <see langword="null"/> 时返回 <see langword="false"/>。</para></returns>
     public static bool IsSignatureEntry(string? entryName)
     {
         if (entryName is null || !entryName.StartsWith("META-INF/", StringComparison.OrdinalIgnoreCase))
@@ -214,7 +240,17 @@ public static class JarDexContainer
     /// <para>取消令牌。</para>
     /// The cancellation token.
     /// </param>
-    /// <returns>条目字节。<para>The entry bytes.</para></returns>
+    /// <returns>The entry bytes. <para>条目字节。</para></returns>
+    /// <exception cref="FileNotFoundException"><paramref name="path"/> does not exist.
+    /// <para><paramref name="path"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException"><paramref name="entryName"/> is absent, or its
+    /// recorded uncompressed size exceeds <see cref="MaxEntryBytes"/>.
+    /// <para>容器中不存在 <paramref name="entryName"/>，或其记录的非压缩大小超过
+    /// <see cref="MaxEntryBytes"/>。</para></exception>
+    /// <exception cref="EndOfStreamException">The entry produced fewer bytes than its recorded
+    /// size. <para>条目实际读出的字节少于记录的大小。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was
+    /// cancelled mid-read. <para>读取过程中 <paramref name="cancellationToken"/> 被取消。</para></exception>
     public static byte[] LoadEntry(string path, string entryName, CancellationToken cancellationToken = default)
     {
         using var stream = OpenRead(path);
@@ -294,7 +330,7 @@ public static class JarDexContainer
         }
         finally
         {
-            try { File.Delete(temporary); } catch { /* best effort 尽力清理 */ }
+            try { File.Delete(temporary); } catch { }
         }
     }
 
@@ -387,7 +423,7 @@ public static class JarDexContainer
         }
         finally
         {
-            try { File.Delete(temporary); } catch { /* best effort 尽力清理 */ }
+            try { File.Delete(temporary); } catch { }
         }
     }
 
@@ -492,7 +528,7 @@ public static class JarDexContainer
         }
         finally
         {
-            try { File.Delete(temporary); } catch { /* best effort 尽力清理 */ }
+            try { File.Delete(temporary); } catch { }
         }
     }
 }

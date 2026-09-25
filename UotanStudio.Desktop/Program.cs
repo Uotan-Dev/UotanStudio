@@ -18,11 +18,6 @@ sealed class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        // 设备路由由 Comm 层自动探测 adb/HDC server 存活状态决定（server 在则转发，不在则 USB/TCP
-        // 直写），对所有启动模式生效且必须早于任何 DeviceMonitorService/控制器构造；组合根不做直写强制。
-        // Device routing is decided by Comm's automatic server probing (forward through a running
-        // adb/HDC server, otherwise direct USB/TCP) for every launch mode, before any
-        // DeviceMonitorService/controller is constructed; the composition root forces nothing.
 
         if (args is ["--managed-device-shell", var protocolName, var serial])
         {

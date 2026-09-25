@@ -2,12 +2,30 @@ namespace UotanStudio.Services.Projects;
 
 using System.Text.Json;
 
-/// <summary>Coordinates project creation, loading and persistence through a workspace data boundary.</summary>
+/// <summary>
+/// Coordinates project creation, loading and persistence through a workspace data boundary.
+/// <para>通过工作区数据边界协调项目的创建、加载与持久化。</para>
+/// </summary>
 public sealed partial class ProjectSession
 {
     private readonly IProjectWorkspace _workspace;
 
-    /// <summary>Creates a session with an optional host adapter and explicitly owned context/history.</summary>
+    /// <summary>
+    /// Creates a session with an optional host adapter and explicitly owned context/history.
+    /// <para>使用可选的宿主适配器与显式拥有的上下文/历史创建会话。</para>
+    /// </summary>
+    /// <param name="workspace">
+    /// Host data adapter, or <see langword="null"/> to use a default <see cref="ProjectDataWorkspace"/>.
+    /// <para>宿主数据适配器；为 <see langword="null"/> 时使用默认的 <see cref="ProjectDataWorkspace"/>。</para>
+    /// </param>
+    /// <param name="context">
+    /// Project context owned by this session; <see langword="null"/> starts an empty context.
+    /// <para>本会话持有的项目上下文；<see langword="null"/> 表示从空上下文开始。</para>
+    /// </param>
+    /// <param name="history">
+    /// Operation history owned by this session; <see langword="null"/> starts an empty history.
+    /// <para>本会话持有的操作历史；<see langword="null"/> 表示从空历史开始。</para>
+    /// </param>
     public ProjectSession(IProjectWorkspace? workspace = null, ProjectContext? context = null, ProjectHistory? history = null)
     {
         _workspace = workspace ?? new ProjectDataWorkspace();
@@ -20,6 +38,12 @@ public sealed partial class ProjectSession
     /// Host hook: captures the extension state (e.g. delivery plan, panel visibility) before the
     /// solution file is persisted. Returning null means there is no state to store.
     /// </summary>
+    /// <value>
+    /// The host hook invoked before each solution write, or <see langword="null"/> when the host supplies
+    /// none; a hook returning <see langword="null"/> stores no extension state.
+    /// <para>每次写入解决方案文件前调用的宿主钩子；宿主未提供时为 <see langword="null"/>。钩子返回
+    /// <see langword="null"/> 表示不存储扩展状态。</para>
+    /// </value>
     public Func<Dictionary<string, JsonElement>?>? CaptureState { get; set; }
 
     /// <summary>
@@ -27,6 +51,10 @@ public sealed partial class ProjectSession
     /// Extension state carried by the most recently opened/saved solution file; null when no solution
     /// is open or the file contains no state.
     /// </summary>
+    /// <value>
+    /// The extension state dictionary of the open solution, or <see langword="null"/> when none applies.
+    /// <para>已打开解决方案的扩展状态字典；不适用时为 <see langword="null"/>。</para>
+    /// </value>
     public Dictionary<string, JsonElement>? SolutionState { get; private set; }
 
     /// <summary>
@@ -34,6 +62,14 @@ public sealed partial class ProjectSession
     /// Rewrites only the solution file to persist extension state (leaving <c>.uotanfw</c>/<c>.uotannode</c>
     /// untouched); serialized through the existing session operation gate.
     /// </summary>
+    /// <param name="cancellationToken">
+    /// Cancels waiting for the operation gate and the solution rewrite.
+    /// <para>取消等待操作门与解决方案重写。</para>
+    /// </param>
+    /// <returns>
+    /// Completes once the rewrite ran or was skipped; read or write failures are logged, not thrown.
+    /// <para>重写执行或被跳过后完成；读取或写入失败仅记录日志，不抛出异常。</para>
+    /// </returns>
     public async Task PersistSolutionStateAsync(CancellationToken cancellationToken = default)
     {
         await RunOperationAsync(async () =>
@@ -55,19 +91,55 @@ public sealed partial class ProjectSession
 
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     private readonly SemaphoreSlim _changeGate = new(1, 1);
-    /// <summary>Whether a lifecycle or persistence operation owns the session gate.</summary>
+    /// <summary>
+    /// Whether a lifecycle or persistence operation owns the session gate.
+    /// <para>是否有生命周期或持久化操作正持有会话门。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> while an operation holds the gate; <see langword="false"/> when the session
+    /// is idle. <para>操作持有门时为 <see langword="true"/>；会话空闲时为 <see langword="false"/>。</para>
+    /// </value>
     public bool IsBusy => _operationGate.CurrentCount == 0;
-    /// <summary>Host confirmation invoked outside the gate; it may flush existing project operations.</summary>
+    /// <summary>
+    /// Host confirmation invoked outside the gate; it may flush existing project operations.
+    /// <para>在门之外调用的宿主确认；它可以先执行既有工程操作。</para>
+    /// </summary>
+    /// <value>
+    /// The confirmation delegate, or <see langword="null"/> to proceed without asking; returning
+    /// <see langword="false"/> aborts the pending project-changing operation.
+    /// <para>确认委托；为 <see langword="null"/> 时不询问直接进行；返回 <see langword="false"/> 会中止
+    /// 待执行的项目切换操作。</para>
+    /// </value>
     public Func<Task<bool>>? BeforeProjectChangeAsync { get; set; }
 
-    /// <summary>Waits for the current operation without initiating a save.</summary>
+    /// <summary>
+    /// Waits for the current operation without initiating a save.
+    /// <para>等待当前操作完成，但不发起保存。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Cancels the wait. <para>取消等待。</para></param>
+    /// <returns>Completes as soon as the operation gate is free.
+    /// <para>操作门空闲后立即完成。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was cancelled while waiting.
+    /// <para>等待期间令牌被取消。</para></exception>
     public async Task WaitForIdleAsync(CancellationToken cancellationToken = default)
     {
         await _operationGate.WaitAsync(cancellationToken);
         _operationGate.Release();
     }
 
-    /// <summary>Runs a host file operation without allowing Save As, close or autosave to interleave.</summary>
+    /// <summary>
+    /// Runs a host file operation without allowing Save As, close or autosave to interleave.
+    /// <para>运行宿主文件操作，期间不允许另存为、关闭或自动保存插入。</para>
+    /// </summary>
+    /// <param name="operation">The operation to run under the gate. <para>需在门下运行的操作。</para></param>
+    /// <param name="cancellationToken">Cancels the wait for the gate and the start of the operation.
+    /// <para>取消等待门与操作启动。</para></param>
+    /// <returns>Completes when the operation has finished and the gate is released.
+    /// <para>操作结束并释放门后完成。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="operation"/> is <see langword="null"/>.
+    /// <para><paramref name="operation"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled before or during the gate wait.
+    /// <para>令牌在门等待之前或期间被取消。</para></exception>
     public Task ExecuteFileOperationAsync(Func<Task> operation, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -98,7 +170,18 @@ public sealed partial class ProjectSession
         finally { if (changingProject) _changeGate.Release(); }
     }
 
-    /// <summary>Saves host documents and optionally project/page data; overlapping ticks are skipped.</summary>
+    /// <summary>
+    /// Saves host documents and optionally project/page data; overlapping ticks are skipped.
+    /// <para>保存宿主文档，并可选保存工程/页面数据；重叠的定时触发会被跳过。</para>
+    /// </summary>
+    /// <param name="persistProject">When <see langword="false"/>, only host documents are saved and the
+    /// project files are left untouched. <para>为 <see langword="false"/> 时仅保存宿主文档，不改写工程文件。</para></param>
+    /// <param name="persistPageState">Passed to persistence; <see langword="false"/> keeps the stored
+    /// open-document lists instead of capturing the current editors.
+    /// <para>传递给持久化；为 <see langword="false"/> 时保留已存储的打开文档列表，不采集当前编辑器状态。</para></param>
+    /// <param name="cancellationToken">Cancels the persistence writes. <para>取消持久化写入。</para></param>
+    /// <returns>Completes after the save attempt; does nothing when another operation already owns the
+    /// gate. <para>保存尝试后完成；若门已被其他操作占用则什么都不做。</para></returns>
     public async Task AutoSaveAsync(bool persistProject = true, bool persistPageState = true, CancellationToken cancellationToken = default)
     {
         if (!await _operationGate.WaitAsync(0, cancellationToken)) return;
@@ -113,6 +196,10 @@ public sealed partial class ProjectSession
     /// <para>当前工程文件路径，由保存/打开操作填充。</para>
     /// Current project file path, populated by save/open operations.
     /// </summary>
+    /// <value>
+    /// The full path of the open solution file, or <see langword="null"/> when no solution is open.
+    /// <para>已打开解决方案文件的完整路径；未打开解决方案时为 <see langword="null"/>。</para>
+    /// </value>
     public string? CurrentProjectPath { get => Context.CurrentSolutionPath; internal set => Context.SetCompatibilitySolutionPath(value); }
 
     /// <summary>
@@ -120,6 +207,13 @@ public sealed partial class ProjectSession
     /// Creates and persists an empty solution (firmware project + node project + state directory) at the
     /// specified path.
     /// </summary>
+    /// <param name="path">Solution file path to create; missing parent directories are created.
+    /// <para>要创建的解决方案文件路径；缺失的父目录会被创建。</para></param>
+    /// <param name="cancellationToken">Cancels staging before the transaction commits.
+    /// <para>在事务提交前取消暂存。</para></param>
+    /// <returns>Completes after the whole file set has been staged through one transaction, committed,
+    /// and the session context switched to the new solution.
+    /// <para>整套文件经同一事务暂存、提交并切换会话上下文后完成。</para></returns>
     public Task CreateNewSolutionAsync(string path, CancellationToken cancellationToken = default) => RunOperationAsync(() => CreateNewSolutionCoreAsync(path, cancellationToken), true, cancellationToken);
 
     private async Task CreateNewSolutionCoreAsync(string path, CancellationToken cancellationToken)
@@ -188,6 +282,16 @@ public sealed partial class ProjectSession
     /// Opens the solution at the specified path: loads the firmware and node projects, rebuilding the
     /// image list, packing settings, canvas and operation history. Returns whether the open succeeded.
     /// </summary>
+    /// <param name="path">Solution file to open; a missing file aborts without touching session state.
+    /// <para>要打开的解决方案文件；文件缺失时中止且不影响现有会话状态。</para></param>
+    /// <param name="cancellationToken">Cancels the reads performed before any state is swapped in.
+    /// <para>取消状态替换前的各项读取。</para></param>
+    /// <returns><see langword="true"/> when the solution and its projects loaded and the session was
+    /// rebound; <see langword="false"/> when the file is missing or the solution or node project cannot
+    /// be read. <para>解决方案及其项目成功加载并完成会话重绑定时返回 <see langword="true"/>；文件缺失
+    /// 或解决方案/节点项目无法读取时返回 <see langword="false"/>。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was cancelled during the reads, before the
+    /// session state was replaced. <para>令牌在读取阶段被取消，此时会话状态尚未替换。</para></exception>
     public async Task<bool> OpenProjectFromPathAsync(string path, CancellationToken cancellationToken = default)
     {
         var opened = false;
@@ -276,6 +380,15 @@ public sealed partial class ProjectSession
     /// Saves the current project: first tries to save the active document editor, then persists the
     /// project snapshot. Returns false when there is no path so the caller can trigger Save As.
     /// </summary>
+    /// <param name="saveActiveDocument">When <see langword="false"/>, the active editor is not flushed
+    /// before the snapshot is persisted. <para>为 <see langword="false"/> 时，持久化快照前不保存当前活动编辑器。</para></param>
+    /// <param name="cancellationToken">Cancels waiting for the gate and the persistence writes.
+    /// <para>取消等待门与持久化写入。</para></param>
+    /// <returns><see langword="true"/> when the snapshot was written; <see langword="false"/> when no
+    /// project path is set yet. <para>快照写入成功时返回 <see langword="true"/>；尚未设置工程路径时
+    /// 返回 <see langword="false"/>。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was cancelled before or during the gate
+    /// wait. <para>令牌在门等待之前或期间被取消。</para></exception>
     public async Task<bool> SaveAsync(bool saveActiveDocument = true, CancellationToken cancellationToken = default)
     {
         var saved = false;
@@ -293,12 +406,32 @@ public sealed partial class ProjectSession
     /// <para>另存为：准备完整项目副本与快照，发布成功后切换上下文。</para>
     /// Saves a prepared project copy under a new path, switching context only after publication succeeds.
     /// </summary>
+    /// <param name="path">Destination solution file path; a destination identical to the open solution
+    /// performs an in-place save instead of a copy.
+    /// <para>目标解决方案文件路径；与当前打开解决方案相同时执行原地保存而非复制。</para></param>
+    /// <param name="cancellationToken">Cancels the copy and the publication.
+    /// <para>取消复制与发布。</para></param>
+    /// <returns>Completes after the copy has been published and the session root switched to it; the
+    /// source context and files stay intact when publication fails.
+    /// <para>副本发布并切换会话根目录后完成；发布失败时源上下文与文件保持不变。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="path"/> is <see langword="null"/>.
+    /// <para><paramref name="path"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="path"/> resolves to an empty file name,
+    /// <c>.</c>/<c>..</c>, or carries no extension. <para><paramref name="path"/> 解析出的文件名为空、为
+    /// <c>.</c>/<c>..</c>，或缺少扩展名。</para></exception>
+    /// <exception cref="IOException">A source sub-project lies inside the destination directory, or the
+    /// copied tree contains a symbolic link or junction.
+    /// <para>源子项目位于目标目录之内，或被复制的目录树包含符号链接/联接点。</para></exception>
     public Task SaveAsAsync(string path, CancellationToken cancellationToken = default) => RunOperationAsync(() => SaveAsCoreAsync(path, cancellationToken), true, cancellationToken);
 
     /// <summary>
     /// <para>将若干文件导入当前解决方案的镜像清单。</para>
     /// Imports the given files into the current solution's image list.
     /// </summary>
+    /// <param name="paths">Files to import; <see langword="null"/> or an empty array is a no-op.
+    /// <para>要导入的文件；为 <see langword="null"/> 或空数组时不执行任何操作。</para></param>
+    /// <returns>Completes when the workspace has finished importing.
+    /// <para>工作区完成导入后返回。</para></returns>
     public async Task ImportFilesAsync(string[] paths)
     {
         if (paths is null || paths.Length == 0)
@@ -313,6 +446,19 @@ public sealed partial class ProjectSession
     /// <para>向当前解决方案添加新子项目。</para>
     /// Adds a new sub-project to the current solution.
     /// </summary>
+    /// <param name="fwPath">Path of the new <c>.uotanfw</c> file inside a direct child directory of the
+    /// solution root. <para>解决方案根的直接子目录下新 <c>.uotanfw</c> 文件的路径。</para></param>
+    /// <param name="cancellationToken">Cancels staging and the solution rewrite.
+    /// <para>取消暂存与解决方案重写。</para></param>
+    /// <returns>Completes after the reference is registered and the solution is reloaded; does nothing
+    /// when the directory is not a direct child of the root or the name is already taken.
+    /// <para>引用注册并重新加载解决方案后完成；目录不是根的直接子级或名称已存在时不执行任何操作。</para></returns>
+    /// <exception cref="InvalidOperationException">No solution is open.
+    /// <para>尚未打开解决方案。</para></exception>
+    /// <exception cref="IOException">The <c>.uotanfw</c> file already exists; import its directory
+    /// instead. <para>该 <c>.uotanfw</c> 文件已存在，应导入其所在目录。</para></exception>
+    /// <exception cref="InvalidDataException">The current solution file cannot be read or fails
+    /// validation. <para>当前解决方案文件无法读取或未通过校验。</para></exception>
     public Task AddSubProjectAsync(string fwPath, CancellationToken cancellationToken = default)
         => RunOperationAsync(() => AddSubProjectCoreAsync(fwPath, cancellationToken), changingProject: true, cancellationToken: cancellationToken);
 
@@ -363,6 +509,14 @@ public sealed partial class ProjectSession
     /// existing <c>images/</c> and <c>output/</c> directories.
     /// </summary>
     /// <param name="dirPath"><para>要导入的目录绝对路径。</para>Absolute path of the directory to import.</param>
+    /// <param name="cancellationToken">Cancels staging and the solution rewrite.
+    /// <para>取消暂存与解决方案重写。</para></param>
+    /// <returns>Completes after the sub-project is registered and the solution is reloaded; does nothing
+    /// when no solution is open, the directory is missing or not a direct child of the root, or the name
+    /// collides. <para>子项目注册并重新加载解决方案后完成；未打开解决方案、目录缺失、目录不是根的直接
+    /// 子级或名称冲突时不执行任何操作。</para></returns>
+    /// <exception cref="InvalidDataException">The current solution file cannot be read or fails
+    /// validation. <para>当前解决方案文件无法读取或未通过校验。</para></exception>
     public Task ImportSubProjectAsync(string dirPath, CancellationToken cancellationToken = default)
         => RunOperationAsync(() => ImportSubProjectCoreAsync(dirPath, cancellationToken), changingProject: true, cancellationToken: cancellationToken);
 
@@ -447,14 +601,44 @@ public sealed partial class ProjectSession
     /// <para>若当前活动文档具有 SaveCommand 且 IsDirty，则执行保存。</para>
     /// If the active document has a SaveCommand and IsDirty, executes it.
     /// </summary>
+    /// <returns>Completes after the workspace has saved the active document, if applicable.
+    /// <para>工作区完成活动文档保存（如适用）后返回。</para></returns>
     public Task SaveActiveDocumentAsync() => _workspace.SaveActiveDocumentAsync();
 
     /// <summary>
     /// <para>将当前工程完整快照写入指定路径。</para>
     /// Writes the complete project snapshot to the specified path.
     /// </summary>
+    /// <param name="path">Solution file to overwrite; must identify the active solution.
+    /// <para>要覆写的解决方案文件；必须指向当前活动解决方案。</para></param>
+    /// <param name="cancellationToken">Cancels waiting for the gate and the writes.
+    /// <para>取消等待门与写入。</para></param>
+    /// <returns>Completes when the staged file set has been committed.
+    /// <para>暂存的文件集提交完成后返回。</para></returns>
+    /// <exception cref="InvalidOperationException"><paramref name="path"/> does not identify the active
+    /// solution; use <see cref="SaveAsAsync"/> for another path.
+    /// <para><paramref name="path"/> 与当前活动解决方案不一致；请改用 <see cref="SaveAsAsync"/>。</para></exception>
     public Task PersistToAsync(string path, CancellationToken cancellationToken = default) => PersistToAsync(path, persistPageState: true, cancellationToken);
 
+    /// <summary>
+    /// Persists the complete project snapshot to a solution path under the operation gate, optionally
+    /// keeping the stored open-document lists.
+    /// <para>在操作门下将完整工程快照写入解决方案路径，可选保留已存储的打开文档列表。</para>
+    /// </summary>
+    /// <param name="path">Solution file to overwrite; compared against the active solution as full paths,
+    /// case-insensitively on Windows. <para>要覆写的解决方案文件；按完整路径与当前活动解决方案比较，
+    /// Windows 上大小写不敏感。</para></param>
+    /// <param name="persistPageState">
+    /// <see langword="false"/> keeps the stored <c>OpenDocuments</c> and recent-document list instead of
+    /// capturing the current editors. <para>为 <see langword="false"/> 时保留已存储的 <c>OpenDocuments</c>
+    /// 与最近文档列表，不采集当前编辑器状态。</para></param>
+    /// <param name="cancellationToken">Cancels waiting for the gate and the writes.
+    /// <para>取消等待门与写入。</para></param>
+    /// <returns>Completes when the staged file set has been committed.
+    /// <para>暂存的文件集提交完成后返回。</para></returns>
+    /// <exception cref="InvalidOperationException"><paramref name="path"/> does not identify the active
+    /// solution; use <see cref="SaveAsAsync"/> for another path.
+    /// <para><paramref name="path"/> 与当前活动解决方案不一致；请改用 <see cref="SaveAsAsync"/>。</para></exception>
     public Task PersistToAsync(string path, bool persistPageState, CancellationToken cancellationToken = default)
         => RunOperationAsync(() => PersistCoreAsync(path, persistPageState, cancellationToken), cancellationToken: cancellationToken);
 

@@ -8,8 +8,6 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 
 internal static partial class WinUSBFinder
 {
-    // Heuristic: prefer the WinUSB path for Google ADB-Style devices (VID_18D1).
-    // Kept as a named constant so it can be lifted into configuration later.
     private const string PreferWinUsbVidPid = "vid_18d1&pid_d00d";
 
     /// <summary>
@@ -193,11 +191,6 @@ internal static partial class WinUSBFinder
                         continue;
                     var isGoogleWinUsb = lowerPath.Contains(PreferWinUsbVidPid);
                     var instanceId = GetDeviceInstanceId(devInfo, ref node);
-                    // Google adb's Windows backend (AdbWinApi GetSerialNumber) takes the serial
-                    // from the last segment of the PnP instance ID; a location-style suffix
-                    // containing '&' is not a verified serial and is rejected here.
-                    // Google adb 的 Windows 后端（AdbWinApi GetSerialNumber）取 PnP 实例 ID
-                    // 最后一段作为序列号；含 '&' 的位置式后缀不是经验证的序列号，在此拒绝。
                     var separator = instanceId.LastIndexOf('\\');
                     var candidate = separator >= 0 ? instanceId[(separator + 1)..] : null;
                     var serial = candidate is not null && !candidate.Contains('&') ? candidate : null;

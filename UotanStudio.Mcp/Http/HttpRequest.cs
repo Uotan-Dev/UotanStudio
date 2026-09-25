@@ -107,7 +107,6 @@ internal sealed class HttpRequest
                 continue;
             }
 
-            // CRLF CRLF: the preceding bytes must be CR LF CR.
             if (i >= 3 && data[i - 3] == (byte)'\r' && data[i - 2] == (byte)'\n' && data[i - 1] == (byte)'\r')
             {
                 headEnd = i - 1;
@@ -115,7 +114,6 @@ internal sealed class HttpRequest
                 return true;
             }
 
-            // Bare LF LF.
             if (data[i - 1] == (byte)'\n')
             {
                 headEnd = i - 1;
@@ -309,11 +307,9 @@ internal sealed class HttpRequest
                 var chunk = await ReadExactAsync(size, cancellationToken).ConfigureAwait(false);
                 body.Write(chunk);
 
-                // The chunk data is followed by its own CRLF.
                 await ReadLineAsync(8, cancellationToken).ConfigureAwait(false);
             }
 
-            // Optional trailer section, terminated by an empty line.
             while ((await ReadLineAsync(1024, cancellationToken).ConfigureAwait(false)).Length > 0)
             {
             }

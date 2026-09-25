@@ -5,6 +5,11 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 
+/// <summary>
+/// EROFS parser part that copies inode data out of the image: it checks every offset and length against the image size, dispatches on the inline, flat, chunk-based and compressed layouts, and reports kernel pcluster coverage deficits.
+/// <para>EROFS 解析器的组成部分，负责把 inode 数据从镜像中取出：先用镜像大小校验每个偏移与长度，
+/// 再按 inline、flat、chunk-based 与压缩布局分派，并报告内核对 pcluster 的覆盖缺口。</para>
+/// </summary>
 public sealed partial class ErofsParser
 {
     private void CheckRange(long offset, long length, string what)
@@ -25,7 +30,6 @@ public sealed partial class ErofsParser
         if (IsSpecialFile(inode))
         {
 
-
             throw new InvalidDataException(
                 $"Inode nid {nid} is a special file (mode 0x{inode.Mode:X4}) with no data content.");
         }
@@ -33,7 +37,6 @@ public sealed partial class ErofsParser
         switch (inode.DataLayout)
         {
             case ErofsInode.DataLayoutInline:
-
 
                 WriteInlineData(nid, inode, output);
                 break;
@@ -49,7 +52,6 @@ public sealed partial class ErofsParser
                 break;
             default:
 
-
                 throw new InvalidDataException($"Unsupported EROFS data layout {inode.DataLayout} for inode nid {nid}.");
         }
     }
@@ -61,7 +63,6 @@ public sealed partial class ErofsParser
         {
             return;
         }
-
 
         var flatLength = (long)(inode.Size / (ulong)_blockSize * (ulong)_blockSize);
         if (flatLength > 0)
@@ -152,7 +153,6 @@ public sealed partial class ErofsParser
             else
             {
 
-
                 startBlk = BinaryPrimitives.ReadUInt32LittleEndian(index.AsSpan(i * 4, 4));
             }
 
@@ -201,7 +201,6 @@ public sealed partial class ErofsParser
         }
     }
 
-
     private const byte LclusterTypePlain = 0;
     private const byte LclusterTypeHead1 = 1;
     private const byte LclusterTypeNonHead = 2;
@@ -218,11 +217,9 @@ public sealed partial class ErofsParser
     {
         var inodeLoc = InodeOffset(nid);
 
-
         var headerOffset = AlignUp(inodeLoc + inode.OnDiskSize + inode.XattrTotalSize, 8);
         var headerBytes = ReadInodeMetadata(nid, headerOffset, ZErofsMapHeader.Size, "compressed map header");
         var header = ZErofsMapHeader.FromBytes(headerBytes);
-
 
         if (header.IsFragmentInode)
         {
@@ -235,17 +232,12 @@ public sealed partial class ErofsParser
         var advise = header.Advise;
         var algorithmHead1 = header.Algorithm;
 
-        // COMRESSED_FULL with extent metadata (Z_EROFS_ADVISE_EXTENTS): the index area holds
-        // variable-size extent records instead of lcluster indexes (fs/erofs/zmap.c z_erofs_map_blocks_ext).
-        // COMRESSED_FULL 且启用 extent 元数据（Z_EROFS_ADVISE_EXTENTS）：索引区为可变长度 extent
-        // 记录而非 lcluster 索引（fs/erofs/zmap.c z_erofs_map_blocks_ext）。
         if (inode.DataLayout == ErofsInode.DataLayoutCompressed && header.HasExtents)
         {
             if (observer is not null) return;
             WriteExtentsData(nid, inode, header, headerBytes, headerOffset, output, cancellationToken);
             return;
         }
-
 
         var algorithmHead2 = (ErofsAlgorithm)((header.AlgorithmType >> 4) & ZErofsMapHeader.AlgorithmTypeMask);
         var lclusterBits = _superblock.BlockSizeBits + (header.ClusterBits & ZErofsMapHeader.LclusterBitsMask);
@@ -265,7 +257,6 @@ public sealed partial class ErofsParser
         var bigPcluster2 = (advise & ZErofsMapHeader.AdviseBigPcluster2) != 0;
         var tailPacking = (advise & ZErofsMapHeader.AdviseInlinePcluster) != 0;
         var fragmentPcluster = (advise & ZErofsMapHeader.AdviseFragmentPcluster) != 0;
-
 
         var interlaced = (advise & ZErofsMapHeader.AdviseInterlacedPcluster) != 0;
 
@@ -288,11 +279,9 @@ public sealed partial class ErofsParser
                 if (lc.Type == LclusterTypeNonHead)
                 {
 
-
                     lcn++;
                     continue;
                 }
-
 
                 var mLa = lcn * lclusterSize + lc.ClusterOfs;
                 if (mLa >= (long)inode.Size)
@@ -300,7 +289,6 @@ public sealed partial class ErofsParser
                     lcn++;
                     continue;
                 }
-
 
                 var nextLcn = lcn + 1;
                 while (nextLcn < totalIdx)
@@ -326,14 +314,6 @@ public sealed partial class ErofsParser
                     nextMLa = nextLcn * lclusterSize + t2.ClusterOfs;
                 }
 
-                // Pre-big-pcluster kernels (Linux 5.4 / 5.10, fs/erofs/zmap.c) never clamp the
-                // extent end to i_size. A request that lands in the extent's trailing partial
-                // cluster is bounded by that cluster's own index entry (end = (lcn << bits) |
-                // clusterofs), while a request in a fully covered cluster is bounded by the cluster
-                // end, so the largest demanded output is the farther of the two.
-                // pre-big-pcluster 内核（Linux 5.4 / 5.10，fs/erofs/zmap.c）不会把 extent 末端裁剪到
-                // i_size：落在尾部非整簇的请求以该簇自己的索引项为界（end = (lcn << bits) |
-                // clusterofs），落在整簇的请求以簇末端为界，故内核最大期望输出取两者的较大值。
                 var kernelExpectedOutputSize = checked((int)(Math.Max((long)nextLcn << lclusterBits,
                     Math.Min(nextMLa, (long)inode.Size)) - mLa));
 
@@ -349,7 +329,6 @@ public sealed partial class ErofsParser
                     throw new InvalidDataException(
                         $"Pcluster decompressed size {llen} exceeds the limit of {ErofsCompression.MaxPclusterDecompressedSize} bytes.");
                 }
-
 
                 var isLastExtent = nextMLa >= (long)inode.Size;
                 var isTailPacked = tailPacking && isLastExtent;
@@ -370,7 +349,6 @@ public sealed partial class ErofsParser
                 if (lc.Type == LclusterTypePlain)
                 {
 
-
                     var dataStart = isTailPacked ? CompressedIndexEnd(nid, inode, headerOffset, totalIdx, lclusterBits) : checked(lc.Pblk * _blockSize);
                     if (!interlaced)
                     {
@@ -386,7 +364,6 @@ public sealed partial class ErofsParser
                         lcn = nextLcn;
                         continue;
                     }
-
 
                     if (llen > _blockSize || llen < 0)
                     {
@@ -409,7 +386,6 @@ public sealed partial class ErofsParser
                     continue;
                 }
 
-
                 var compressedBlocks = 1;
                 var headType = lc.Type;
                 var head1NotBig = headType == LclusterTypeHead1 && !bigPcluster1;
@@ -418,17 +394,14 @@ public sealed partial class ErofsParser
                 if (!isTailPacked && !head1NotBig && !plainOrHead2NotBig && !atEof && lcn + 1 < totalIdx)
                 {
 
-
                     var next = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn + 1, out _, out _, out _, cachedIndex);
                     if (next.Type != LclusterTypeNonHead)
                     {
-
 
                         compressedBlocks = 1;
                     }
                     else
                     {
-
 
                         if (next.Delta0 != 1 || next.CompressedBlocks == 0)
                         {
@@ -473,7 +446,6 @@ public sealed partial class ErofsParser
                         _stream.ReadExactly(compressed, 0, compressedByteLen);
                     }
                 }
-
 
                 var inputMargin = 0;
                 while (!isTailPacked && inputMargin < compressedByteLen && compressed[inputMargin] == 0)
@@ -688,8 +660,6 @@ public sealed partial class ErofsParser
     private void WriteExtentsData(ulong nid, ErofsInode inode, ZErofsMapHeader header, byte[] headerBytes,
         long headerOffset, Stream output, CancellationToken cancellationToken)
     {
-        // Extent count lives in the header union: h_extents_lo (bytes 0-3) + h_extents_hi (bytes 6-7).
-        // extent 总数位于头部联合体：h_extents_lo（字节 0-3）+ h_extents_hi（字节 6-7）。
         var extentCount = (ulong)(BinaryPrimitives.ReadUInt32LittleEndian(headerBytes)
             | ((ulong)header.ExtentsHi << 32));
         var recSize = 4 << ((header.Advise >> ZErofsMapHeader.ExtRecSizeBit) & ZErofsMapHeader.ExtRecSizeMask);
@@ -707,8 +677,6 @@ public sealed partial class ErofsParser
             }
             throw new InvalidDataException($"EROFS extent count is zero for nonempty inode {nid}.");
         }
-        // A record holds at least plen + pstart_lo; anything shorter cannot address data.
-        // 记录至少容纳 plen + pstart_lo；更短的记录无法寻址数据。
         if (recSize < 8)
         {
             throw new InvalidDataException($"EROFS extent record size {recSize} is too small.");
@@ -730,9 +698,6 @@ public sealed partial class ErofsParser
             var logicalStart = checked((long)(BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(12))
                 | (recSize > 16 ? (ulong)BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(16)) << 32 : 0)));
 
-            // Records are sorted by logical start; the previous record's logical end is the
-            // logical length of this extent (fs/erofs/zmap.c: m_llen = lend - m_la).
-            // 记录按逻辑偏移排序；前一条记录的逻辑终点即本 extent 的逻辑长度。
             if (logicalStart != logicalOffset)
             {
                 throw new InvalidDataException($"EROFS extent {i} of nid {nid} is not sorted.");
@@ -755,8 +720,6 @@ public sealed partial class ErofsParser
                 throw new InvalidDataException($"EROFS extent {i} of nid {nid} uses unknown algorithm {fmt - 1}.");
             }
 
-            // Fragment tail extent: data lives in the packed inode, addressed by (plen, pstart).
-            // fragment 尾部 extent：数据在 packed inode 中，以 (plen, pstart) 寻址。
             if (i == (long)extentCount - 1
                 && (header.Advise & ZErofsMapHeader.AdviseFragmentPcluster) != 0)
             {
@@ -768,8 +731,6 @@ public sealed partial class ErofsParser
             }
             else if (fmt == 0)
             {
-                // fmt == 0: plain/interlaced extent — the pstart is a byte address into the image.
-                // fmt == 0：未压缩 extent —— pstart 为镜像内的字节地址。
                 WritePlainExtent(nid, inode, record, recSize, logicalStart, logicalLength, physicalOffset, output, cancellationToken);
             }
             else
@@ -1026,7 +987,6 @@ public sealed partial class ErofsParser
             return;
         }
 
-
         var packedSize = (long)packed.Size;
         if (fragmentOff >= (ulong)packedSize || length > packedSize - (long)fragmentOff)
         {
@@ -1044,7 +1004,6 @@ public sealed partial class ErofsParser
                         packed.RawBlockAddress == uint.MaxValue;
         if (packed.DataLayout == ErofsInode.DataLayoutInline && !inlineAll)
         {
-
 
             var flatLength = packedSize / _blockSize * _blockSize;
             WritePackedRange((long)fragmentOff, length, flatLength, packed, packedNid, inlineStartIsFlat: false, output);
@@ -1071,7 +1030,6 @@ public sealed partial class ErofsParser
         {
             throw new InvalidDataException($"Unsupported packed inode layout {packed.DataLayout} for nid {packedNid}.");
         }
-
 
         WritePackedRange((long)fragmentOff, length, packedSize, packed, packedNid, inlineStartIsFlat: true, output);
     }
@@ -1167,12 +1125,10 @@ public sealed partial class ErofsParser
             return;
         }
 
-
         var inlineOffset = packed.InlineDataOffset;
         var inlineStart = InodeOffset(packedNid) + inlineOffset;
         if (!inlineStartIsFlat)
         {
-
 
             if (pos < flatLength)
             {
@@ -1183,7 +1139,6 @@ public sealed partial class ErofsParser
         }
         else
         {
-
 
             if (pos >= flatLength)
             {

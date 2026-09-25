@@ -34,10 +34,6 @@ internal sealed class ErofsCompressionEstimate(ErofsOptions options)
         SampleBytes += decoded.Length;
     }
 
-    // LZ4 stores no encoder identity, so the candidates span both block encoders: the fast matcher
-    // ignores the level, while LZ4HC reaches the optimal parse at 10-12.
-    // LZ4 不存编码器身份，因此候选覆盖两种块编码器：快速匹配器忽略级别，LZ4HC 在 10-12 进入最优
-    // 分析级。
     private static (int Level, bool HighCompression)[] Levels(ErofsCompressionAlgorithm algorithm) => algorithm switch
     {
         ErofsCompressionAlgorithm.Lz4 => [(1, false), (1, true), (6, true), (9, true), (12, true)],
@@ -57,6 +53,10 @@ internal sealed class ErofsCompressionEstimate(ErofsOptions options)
     }
 }
 
+/// <summary>
+/// EROFS parser part that samples encoded clusters of the largest compressed inodes and compares them with local encoder candidates, yielding an estimate rather than stored encoder settings.
+/// <para>EROFS 解析器的组成部分，对最大压缩 inode 的编码簇采样并与本地编码候选比较，得到的是估算结果而非文件中保存的编码器设置。</para>
+/// </summary>
 public sealed partial class ErofsParser
 {
     /// <summary>Compares bounded source-cluster samples with local encoder candidates; estimates are not stored encoder settings.</summary>
@@ -85,13 +85,9 @@ public sealed partial class ErofsParser
             }
             catch (InvalidDataException)
             {
-                // A source image may use a codec/window unavailable to the local
-                // decoder. Parameter inheritance remains valid; simply omit its sample.
             }
             catch (NotSupportedException)
             {
-                // Sampling is advisory and must never make a previously readable image
-                // unrebuildable solely because a codec extension is unavailable.
             }
         }
         return estimates.Values.Where(e => e.Samples > 0).OrderBy(e => e.Options.Algorithm).ToList();

@@ -9,6 +9,15 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 
+/// <summary>
+/// Builds raw ext4 filesystem images from a host directory. The layout (block groups, bitmaps, group
+/// descriptors, extent trees, journal and resize inode) is planned entirely from the scanned tree, and
+/// every geometry decision is bounded: a capacity that cannot hold metadata plus content fails instead
+/// of silently truncating.
+/// <para>从主机目录构建 ext4 原始文件系统镜像。布局（块组、位图、块组描述符、extent 树、日志与
+/// resize inode）完全基于扫描得到的目录树规划；所有几何决策均有边界：无法容纳元数据与内容的容量
+/// 会直接失败，而不是静默截断。</para>
+/// </summary>
 public sealed partial class Ext4Builder
 {
     private const ushort ModeRegularFile = 0x81A4;
@@ -104,6 +113,9 @@ public sealed partial class Ext4Builder
     /// Builds an ext4 image from sourceDirectory and returns it as a byte array.
     /// <para>从 sourceDirectory 构建 ext4 镜像并以字节数组返回。</para>
     /// </summary>
+    /// <param name="sourceDirectory">Host directory whose full tree is packed into the image; it must exist. <para>被完整打包进镜像的主机目录；必须存在。</para></param>
+    /// <param name="options">Layout and capacity options; <see langword="null"/> uses <see cref="Ext4Options"/> defaults. Invalid combinations are rejected during validation. <para>布局与容量选项；<see langword="null"/> 时使用 <see cref="Ext4Options"/> 默认值。非法组合会在校验阶段被拒绝。</para></param>
+    /// <returns>The complete filesystem image as a single byte array. <para>以单一字节数组返回的完整文件系统镜像。</para></returns>
     [Obsolete("Builds the entire image in memory. Use Build(sourceDirectory, outputPath) or Build(sourceDirectory, Stream) instead. 整镜像驻留内存；大型输出请使用文件路径或流式重载。")]
     public static byte[] Build(string sourceDirectory, Ext4Options? options = null)
     {
@@ -122,6 +134,9 @@ public sealed partial class Ext4Builder
     /// Builds an ext4 image from sourceDirectory and writes it to outputPath.
     /// <para>从 sourceDirectory 构建 ext4 镜像并写入 outputPath。</para>
     /// </summary>
+    /// <param name="sourceDirectory">Host directory tree packed into the image; it must exist. <para>被打包的主机目录树；必须存在。</para></param>
+    /// <param name="outputPath">Destination image path; written through a temporary file and published by an atomic move that overwrites an existing target. The destination and its staging file are skipped when they lie inside the source tree. <para>目标镜像路径；先写临时文件，再以覆盖式原子移动发布。当目标及其暂存文件位于源目录树内时会被跳过。</para></param>
+    /// <param name="options">Layout and capacity options; <see langword="null"/> uses <see cref="Ext4Options"/> defaults. Invalid combinations are rejected during validation. <para>布局与容量选项；<see langword="null"/> 时使用 <see cref="Ext4Options"/> 默认值。非法组合会在校验阶段被拒绝。</para></param>
     /// <param name="progress"><para>可选写作进度 <c>(已写字节, 源目录估算总字节)</c>；<c>null</c> 表示不报告。</para>Optional write progress <c>(bytes written, estimated source bytes)</c>; <c>null</c> disables reporting.</param>
     public static void Build(string sourceDirectory, string outputPath, Ext4Options? options = null, IProgress<(long Processed, long Total)>? progress = null)
     {
@@ -171,6 +186,9 @@ public sealed partial class Ext4Builder
     /// Builds an ext4 image from sourceDirectory and streams it to output.
     /// <para>从 sourceDirectory 构建 ext4 镜像并流式写入 output。</para>
     /// </summary>
+    /// <param name="sourceDirectory">Host directory tree packed into the image; it must exist. <para>被打包的主机目录树；必须存在。</para></param>
+    /// <param name="output">Writable stream receiving the image at its current position; ownership stays with the caller. A non-writable stream throws <see cref="ArgumentException"/>. <para>在当前位置接收镜像的可写流；所有权仍归调用方。流不可写时抛出 <see cref="ArgumentException"/>。</para></param>
+    /// <param name="options">Layout and capacity options; <see langword="null"/> uses <see cref="Ext4Options"/> defaults. Minimize capacity or duplicate-block sharing is first staged in a temporary file, then copied exactly into the stream. <para>布局与容量选项；<see langword="null"/> 时使用 <see cref="Ext4Options"/> 默认值。容量最小化或相同块共享会先写入临时文件，再精确复制到流中。</para></param>
     public static void Build(string sourceDirectory, Stream output, Ext4Options? options = null)
     {
         ArgumentNullException.ThrowIfNull(output);
@@ -330,10 +348,8 @@ public sealed partial class Ext4Builder
         var blockSize = options.BlockSize;
         var inodeSize = options.InodeSize;
 
-
         var uuid = options.Uuid is { Length: 16 } ? options.Uuid : FixedUuid;
         var enableMetadataCsum = options.EnableMetadataCsum;
-
 
         var root = plannedRoot ?? BuildTree(Path.GetFullPath(sourceDirectory), excludedFiles);
         var nodes = new List<Node>();
@@ -357,14 +373,12 @@ public sealed partial class Ext4Builder
         }
         PlanLeafBlocks(nodes, blockSize);
 
-
         var inodesPerInodeBlock = blockSize / inodeSize;
 
         var inodesPerGroup = (int)RoundUpPowerOfTwo(Math.Max(maxInode, 16));
         var inodeTableBlocks = (inodesPerGroup + inodesPerInodeBlock - 1) / inodesPerInodeBlock;
 
         var metaPerGroup = 2L + inodeTableBlocks;
-
 
         var totalDataBlocks = (sharedPlan is null
                 ? nodes.Sum(static n => n.DataBlockCount)
@@ -374,25 +388,10 @@ public sealed partial class Ext4Builder
             + nodes.Sum(static n => (long)n.IndexBlocks.Length)
             + nodes.Count(static n => n.ExternalXattrs is not null);
 
-        // The JBD2 journal has a hard minimum of 1024 blocks (e2fsck rejects smaller
-        // journals as corrupt), so it stays at the fixed default; the size reduction
-        // below comes from the block group, never from a broken journal.
-        // <para>JBD2 日志有硬性最小 1024 块（更小会被 e2fsck 判为损坏），故保持固定默认值；
-        // 体积缩减来源于块组，绝不能通过破坏日志语义换取。</para>
         var maxBlockGroupBlocks = BlocksPerGroupMultiplier * blockSize;
         var journalBlocks = options.IncludeJournal ? DefaultJournalBlocks : 0;
         var includeJournal = journalBlocks > 0;
 
-        // Give small/sparse filesystems a smaller block group so a single group no
-        // longer pins the output to 8 × blockSize × blockSize (128 MiB for 4 KiB
-        // blocks). Sized as the smallest multiple of 8 blocks (the e2fsprogs validity
-        // bound) that holds the group-zero metadata, the data and the journal; large
-        // images still cap at one block bitmap (8 × blockSize) per group, preserving
-        // the prior layout semantics.
-        // <para>为小型/稀疏文件系统生成更小的块组，使单个块组不再把输出固化在
-        // 8 × blockSize × blockSize（4 KiB 块即为 128 MiB）。块组大小取能容纳组 0 元数据、
-        // 数据与日志的最小的 8 块整倍数（e2fsprogs 的合法性约束）；大镜像仍以单块块位图
-        // （8 × blockSize 块）为上限，保持原有布局语义不变。</para>
         var group0Overhead = 32L + inodeTableBlocks;
         var minimumGroupBlocks = Math.Max(8L, group0Overhead + totalDataBlocks + journalBlocks);
         var blocksPerGroup = (int)Math.Min(maxBlockGroupBlocks,
@@ -405,7 +404,6 @@ public sealed partial class Ext4Builder
         {
             blocksPerGroup = checked((int)Math.Min(maxBlockGroupBlocks, ((fixedBlocks + 7) / 8) * 8));
         }
-
 
         var gdtBlocks = 1L;
         var group0Extra = 1L + gdtBlocks;
@@ -420,16 +418,13 @@ public sealed partial class Ext4Builder
         }
         groupCount = Math.Max(groupCount, requiredInodeGroups);
 
-
         gdtBlocks = Math.Max(1, (long)Math.Ceiling(groupCount * 64.0 / blockSize));
-
 
         var descsPerGdtBlock = blockSize / 64;
         var fsBlocks = requestedBlocks ?? (long)groupCount * blocksPerGroup;
         var maxGrowthBlocks = fsBlocks < ((1L << 32) / 1024) ? fsBlocks * 1024 : 0xFFFF_FFFFL;
         var reservedGroups = (maxGrowthBlocks + blocksPerGroup - 1) / blocksPerGroup;
         var reservedGdtBlocks = (int)Math.Min(blockSize / 4, (reservedGroups + descsPerGdtBlock - 1) / descsPerGdtBlock);
-
 
         var backupGroupCount = BackupSuperblockGroups(groupCount).Count();
         var group0Metadata = 1L + gdtBlocks + reservedGdtBlocks + metaPerGroup;
@@ -463,7 +458,6 @@ public sealed partial class Ext4Builder
         }
         var usedBlocks = totalBlocksNeeded;
 
-
         var groups = new List<GroupInfo>();
         var backupGroups = new HashSet<int>(BackupSuperblockGroups(groupCount));
 
@@ -475,7 +469,6 @@ public sealed partial class Ext4Builder
             if (g == 0)
             {
 
-
                 group.BlockBitmapBlock = groupStart + 1 + gdtBlocks + reservedGdtBlocks;
                 group.InodeBitmapBlock = group.BlockBitmapBlock + 1;
                 group.InodeTableBlock = group.InodeBitmapBlock + 1;
@@ -484,7 +477,6 @@ public sealed partial class Ext4Builder
             else if (backupGroups.Contains(g))
             {
 
-
                 group.BlockBitmapBlock = groupStart + 1 + gdtBlocks + reservedGdtBlocks;
                 group.InodeBitmapBlock = group.BlockBitmapBlock + 1;
                 group.InodeTableBlock = group.InodeBitmapBlock + 1;
@@ -492,7 +484,6 @@ public sealed partial class Ext4Builder
             }
             else
             {
-
 
                 group.BlockBitmapBlock = groupStart;
                 group.InodeBitmapBlock = groupStart + 1;
@@ -507,14 +498,12 @@ public sealed partial class Ext4Builder
             groups.Add(group);
         }
 
-
         long resizeDindirBlock = -1;
         if (reservedGdtBlocks > 0)
         {
             resizeDindirBlock = groups[0].FirstDataBlock;
             groups[0].ExtraUsedBlocks.Add(resizeDindirBlock);
             groups[0].FirstDataBlock++;
-
 
             usedBlocks++;
         }
@@ -528,7 +517,6 @@ public sealed partial class Ext4Builder
         var journalStart = allocation.JournalStart;
         if (!allocation.Success)
         {
-            // Group boundaries can add extent-tree blocks after the initial layout estimate.
             if (requestedBlocks is not null)
             {
                 throw new InvalidOperationException(
@@ -552,10 +540,8 @@ public sealed partial class Ext4Builder
         if (includeJournal)
         {
 
-
             groups[0].UsedInodes++;
         }
-
 
         var finalSize = checked(totalBlocks * blockSize);
         var requiredEnd = checked(baseOffset + finalSize);
@@ -570,7 +556,6 @@ public sealed partial class Ext4Builder
             var overlapLength = Math.Max(0, Math.Min(oldLength, requiredEnd) - baseOffset);
             ZeroRegion(output, baseOffset, overlapLength);
         }
-
 
         var bitmaps = new List<(byte[] Block, byte[] Inode)>(groupCount);
         var gdtBuffer = new byte[checked((int)(gdtBlocks * blockSize))];
@@ -589,10 +574,8 @@ public sealed partial class Ext4Builder
             WriteGroupDescriptor(desc, group, g, uuid, blockBitmap, inodeBitmap, enableMetadataCsum, gdtBlocks, reservedGdtBlocks, inodeTableBlocks, blocksPerGroup, backupGroups);
         }
 
-
         var totalInodes = (long)inodesPerGroup * groupCount;
         var superblock = new byte[1024];
-
 
         Span<byte> journalIBlock = stackalloc byte[60];
         long journalSize = 0;
@@ -625,7 +608,6 @@ public sealed partial class Ext4Builder
             WriteAt(output, baseOffset, (long)bg * blocksPerGroup * blockSize, superblock, superblock.Length);
         }
 
-
         WriteAt(output, baseOffset, blockSize, gdtBuffer, gdtBuffer.Length);
 
         foreach (var bg in BackupSuperblockGroups(groupCount))
@@ -633,14 +615,12 @@ public sealed partial class Ext4Builder
             WriteAt(output, baseOffset, bg * blocksPerGroup * blockSize + blockSize, gdtBuffer, gdtBuffer.Length);
         }
 
-
         if (reservedGdtBlocks > 0)
         {
             WriteResizeInodeMetadata(output, baseOffset, groups, blocksPerGroup, groupCount,
                 gdtBlocks, reservedGdtBlocks, blockSize, inodeSize, inodesPerGroup, uuid,
                 enableMetadataCsum, resizeDindirBlock);
         }
-
 
         for (var g = 0; g < groupCount; g++)
         {
@@ -650,12 +630,10 @@ public sealed partial class Ext4Builder
             WriteAt(output, baseOffset, group.InodeBitmapBlock * blockSize, inodeBitmap, inodeBitmap.Length);
         }
 
-
         foreach (var node in nodes)
         {
             WriteInode(output, baseOffset, node, blockSize, inodeSize, groups, inodesPerGroup, uuid, options.EnableMetadataCsum);
         }
-
 
         if (includeJournal)
         {
@@ -663,7 +641,6 @@ public sealed partial class Ext4Builder
             WriteJournalInode(output, baseOffset, groups, inodesPerGroup, blockSize, inodeSize, uuid,
                 journalStart, journalBlocks, options.EnableMetadataCsum);
         }
-
 
         if (sharedPlan is not null)
         {
@@ -940,7 +917,6 @@ public sealed partial class Ext4Builder
         node.Uid = 0;
         node.Gid = 0;
 
-
         if (!OperatingSystem.IsWindows())
         {
             try
@@ -957,7 +933,6 @@ public sealed partial class Ext4Builder
                     node.Mode = 0x1ED;
                 }
             }
-
 
             try
             {
@@ -1010,7 +985,6 @@ public sealed partial class Ext4Builder
     private static void PlanDirectoryBlocks(List<Node> nodes, int blockSize, byte[] uuid, bool enableMetadataCsum)
     {
 
-
         var hashSeed = new uint[4];
         foreach (var node in nodes)
         {
@@ -1018,7 +992,6 @@ public sealed partial class Ext4Builder
             {
                 continue;
             }
-
 
             var linearBlocks = BuildDirectoryBlocks(node, blockSize, uuid, enableMetadataCsum);
             if (linearBlocks.Count == 1 || (node.SemanticFlags & 0x40000000) != 0)
@@ -1030,11 +1003,9 @@ public sealed partial class Ext4Builder
                 continue;
             }
 
-
             var children = new List<(string Name, uint Inode, byte FileType)>(node.Children.Count);
             foreach (var child in node.Children)
             {
-
 
                 children.Add((child.Name, child.Inode, FileTypeOf(child)));
             }
@@ -1063,7 +1034,6 @@ public sealed partial class Ext4Builder
     private static void PlanDataBlocks(List<Node> nodes, int blockSize, bool enableSparse)
     {
 
-
         foreach (var node in nodes)
         {
             if (node.IsDirectory || (node.IsSymlink && node.Size < 60))
@@ -1073,11 +1043,9 @@ public sealed partial class Ext4Builder
 
             var totalBlocks = (node.Size + blockSize - 1) / blockSize;
 
-
             node.DataBlockCount = totalBlocks;
             node.Runs.Add((0, totalBlocks));
         }
-
 
         var filesToScan = nodes.Where(n => enableSparse && n.AttributeValue is null && !n.IsSymlink && !n.IsInlineData && !n.IsDirectory && n.Size > 0).ToList();
         if (filesToScan.Count > 0)
@@ -1096,7 +1064,6 @@ public sealed partial class Ext4Builder
             }
         }
     }
-
 
     private static void PlanLeafBlocks(List<Node> nodes, int blockSize)
     {
@@ -1137,7 +1104,6 @@ public sealed partial class Ext4Builder
         }
     }
 
-
     private static List<byte[]> BuildDirectoryBlocks(Node dir, int blockSize, byte[] uuid, bool enableMetadataCsum)
     {
         var entries = new List<(string Name, byte Type, uint Inode)>
@@ -1149,7 +1115,6 @@ public sealed partial class Ext4Builder
         {
             entries.Add((child.Name, FileTypeOf(child), child.Inode));
         }
-
 
         var tailSize = enableMetadataCsum ? DirEntryTailSize : 0;
         var endCap = blockSize - tailSize;
@@ -1171,7 +1136,6 @@ public sealed partial class Ext4Builder
 
             WriteU32(block, offset, inode);
             WriteU16(block, offset + 4, (ushort)naturalLength);
-
 
             block[offset + 6] = (byte)nameBytes.Length;
             block[offset + 7] = fileType;
@@ -1240,7 +1204,6 @@ public sealed partial class Ext4Builder
         WriteU32(block, 0x00, (uint)Math.Min(totalInodes, uint.MaxValue));
         WriteU32(block, 0x04, (uint)totalBlocks);
 
-
         var reservedBlocks = totalBlocks / 20;
         WriteU32(block, 0x08, (uint)reservedBlocks);
         WriteU32(block, 0x0C, (uint)(totalBlocks - usedBlocks));
@@ -1261,7 +1224,6 @@ public sealed partial class Ext4Builder
         WriteU16(block, 0x3E, 0);
         WriteU32(block, 0x40, FixedTimestamp);
 
-
         WriteU32(block, 0x44, 0);
         WriteU32(block, 0x48, 0);
         WriteU32(block, 0x4C, 1);
@@ -1271,7 +1233,6 @@ public sealed partial class Ext4Builder
         WriteU16(block, 0x58, (ushort)inodeSize);
         WriteU16(block, 0x5A, 0);
 
-
         WriteU32(block, 0x5C, 0x0038u | (hasJournal ? FeatureCompatHasJournal : 0u));
         WriteU32(block, 0x60, 0x02C2u | (casefoldEncoding is not null ? 0x20000u : 0u));
         WriteU32(block, 0x64, 0x006Bu | (enableMetadataCsum ? 0x0400u : 0u)
@@ -1279,14 +1240,11 @@ public sealed partial class Ext4Builder
         Encoding.UTF8.GetBytes(volumeName, block[0x78..0x88]);
         uuid.AsSpan().CopyTo(block[0x68..0x78]);
 
-
         WriteU16(block, 0xCE, checked((ushort)reservedGdtBlocks));
         if (hasJournal)
         {
 
-
             WriteU32(block, 0xE0, journalInum);
-
 
             journalIBlock.CopyTo(block[0x10C..]);
             WriteU32(block, 0x148, (uint)((ulong)journalSize >> 32));
@@ -1315,8 +1273,6 @@ public sealed partial class Ext4Builder
             WriteU16(block, 0x27E, casefoldEncodingFlags);
         }
 
-
-        // ext2fs_superblock_csum excludes s_checksum itself.
         var crc = ComputeCrc32(block[..0x3FC], 0xFFFF_FFFF);
         WriteU32(block, 0x3FC, crc);
     }
@@ -1373,7 +1329,6 @@ public sealed partial class Ext4Builder
     {
         var apb = blockSize / 4;
 
-
         var dindir = new byte[blockSize];
         for (var i = 0; i < reservedGdtBlocks; i++)
         {
@@ -1382,7 +1337,6 @@ public sealed partial class Ext4Builder
         }
 
         WriteAt(output, baseOffset, dindirBlock * blockSize, dindir, blockSize);
-
 
         var primary = new byte[blockSize];
         for (var j = 0; j < reservedGdtBlocks; j++)
@@ -1405,10 +1359,8 @@ public sealed partial class Ext4Builder
             WriteAt(output, baseOffset, primaryBlock * blockSize, primary, blockSize);
         }
 
-
         var inode = new byte[inodeSize];
         var size = checked((long)blockSize * ((long)apb * apb + apb + 12));
-
 
         var backupEntryCount = 0;
         foreach (var _ in ListBackupGroups(groupCount))
@@ -1456,12 +1408,10 @@ public sealed partial class Ext4Builder
         WriteU32(desc, 4, (uint)group.InodeBitmapBlock);
         WriteU32(desc, 8, (uint)group.InodeTableBlock);
 
-
         var hasBackupMeta = group.GroupIndex == 0 || backupGroups is not null && backupGroups.Contains(group.GroupIndex);
         var freeBlocks = group.BlocksInGroup
             - ((hasBackupMeta ? 1 + gdtBlocks + reservedGdtBlocks : 0) + 2L + inodeTableBlocks)
             - group.UsedBlocks - group.ExtraUsedBlocks.Count;
-
 
         var freeInodes = CountFreeInodes(inodeBitmap, group.InodesInGroup);
         WriteU16(desc, 12, (ushort)freeBlocks);
@@ -1490,23 +1440,14 @@ public sealed partial class Ext4Builder
             return;
         }
 
-
         var seed = ComputeCrc32(uuid, 0xFFFF_FFFF);
         var inodeBitmapCsumLength = Math.Max(1, group.InodesInGroup / 8);
-        // The block bitmap checksum covers only the bits that belong to the
-        // group (blocks_per_group/8 bytes), not the whole bitmap block; the
-        // adaptive small group leaves tail padding bits in the block that must
-        // be excluded from the checksum (mke2fs only ever fills the block).
-        // <para>块位图校验和只覆盖属于该组的位（blocks_per_group/8 字节），而非整块；
-        // 自适应小块组在位图块尾部留有 padding 位，计算校验和时需排除
-        // （mke2fs 因块组恰占满整块而无需如此处理）。</para>
         var blockCsum = ComputeCrc32(blockBitmap.AsSpan(0, Math.Max(1, blocksPerGroup / 8)), seed);
         var inodeCsum = ComputeCrc32(inodeBitmap.AsSpan(0, inodeBitmapCsumLength), seed);
         WriteU16(desc, 24, (ushort)(blockCsum & 0xFFFF));
         WriteU16(desc, 26, (ushort)(inodeCsum & 0xFFFF));
         WriteU16(desc, 56, (ushort)(blockCsum >> 16));
         WriteU16(desc, 58, (ushort)(inodeCsum >> 16));
-
 
         Span<byte> le = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(le, (uint)groupIndex);
@@ -1527,7 +1468,6 @@ public sealed partial class Ext4Builder
     {
         var groupStart = (long)group.GroupIndex * blocksPerGroup;
 
-
         if (group.GroupIndex == 0 || (backupGroups is not null && backupGroups.Contains(group.GroupIndex)))
         {
             MarkBlockUsed(bitmap, 0);
@@ -1537,7 +1477,6 @@ public sealed partial class Ext4Builder
             }
         }
 
-
         MarkBlockUsed(bitmap, group.BlockBitmapBlock - groupStart);
         MarkBlockUsed(bitmap, group.InodeBitmapBlock - groupStart);
         for (var b = 0; b < inodeTableBlocks; b++)
@@ -1545,12 +1484,10 @@ public sealed partial class Ext4Builder
             MarkBlockUsed(bitmap, group.InodeTableBlock - groupStart + b);
         }
 
-
         foreach (var extra in group.ExtraUsedBlocks)
         {
             MarkBlockUsed(bitmap, extra - groupStart);
         }
-
 
         var dataStart = group.FirstDataBlock - groupStart;
         for (var i = 0L; i < group.UsedBlocks; i++)
@@ -1558,16 +1495,6 @@ public sealed partial class Ext4Builder
             MarkBlockUsed(bitmap, dataStart + i);
         }
 
-        // e2fsck pass 5 and the kernel's ext4_validate_block_bitmap require the
-        // padding bits beyond the group's real block count to be set; leaving
-        // them clear is reported as "Padding at end of block bitmap is not set".
-        // Real mke2fs never needs this because it uses a full bitmap block
-        // (blocks_per_group == 8 * blockSize); with a smaller adaptive block
-        // group the tail bits of the bitmap block must be forced to 1.
-        // <para>e2fsck pass 5 与内核 ext4_validate_block_bitmap 要求组真实块数之后的
-        // padding 位被置位，清零会报 "Padding at end of block bitmap is not set"。
-        // 真实 mke2fs 因块组恰占满位图块（blocks_per_group == 8 × blockSize）无需处理；
-        // 采用自适应的小块组时，位图块尾部多余位必须强制置 1。</para>
         for (var bit = group.BlocksInGroup; bit < bitmap.Length * 8L; bit++)
         {
             MarkBlockUsed(bitmap, bit);
@@ -1585,7 +1512,6 @@ public sealed partial class Ext4Builder
     private static void WriteInodeBitmapForGroup(byte[] bitmap, GroupInfo group, int blockSize, int inodeSize, uint journalInode = 0)
     {
 
-
         bitmap.AsSpan().Clear();
 
         var inodesPerGroup = group.InodesInGroup;
@@ -1595,12 +1521,10 @@ public sealed partial class Ext4Builder
             usedLocals.Add((int)((node.Inode - 1) % (uint)inodesPerGroup));
         }
 
-
         if (journalInode > 0 && ((journalInode - 1) / (uint)inodesPerGroup) == (uint)group.GroupIndex)
         {
             usedLocals.Add((int)((journalInode - 1) % (uint)inodesPerGroup));
         }
-
 
         for (var local = 0; local < inodesPerGroup; local++)
         {
@@ -1610,7 +1534,6 @@ public sealed partial class Ext4Builder
                 bitmap[local >> 3] |= (byte)(1 << (local & 7));
             }
         }
-
 
         var inodeTableSlots = ((inodesPerGroup + (blockSize / inodeSize) - 1) / (blockSize / inodeSize)) * (blockSize / inodeSize);
         for (var local = inodeTableSlots; local < bitmap.Length * 8; local++)

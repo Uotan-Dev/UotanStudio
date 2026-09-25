@@ -5,22 +5,50 @@ using System.Text.Json;
 
 namespace UotanStudio.Services.Projects;
 
-/// <summary>Bounded ZIP transport for portable patch graphs and lazily read resources.</summary>
+/// <summary>
+/// Bounded ZIP transport for portable patch graphs and lazily read resources.
+/// <para>用于可移植补丁图与按需读取资源的有界 ZIP 传输容器。</para>
+/// </summary>
 public static class VisualPluginBundle
 {
-    /// <summary>Maximum number of resources in one bundle.</summary>
+    /// <summary>
+    /// Maximum number of resources in one bundle.
+    /// <para>单个包内资源数量的上限。</para>
+    /// </summary>
     public const int MaximumAssetCount = 256;
 
-    /// <summary>Maximum length of one resource (256 MiB).</summary>
+    /// <summary>
+    /// Maximum length of one resource (256 MiB).
+    /// <para>单个资源的最大长度（256 MiB）。</para>
+    /// </summary>
     public const long MaximumAssetSize = 256L * 1024 * 1024;
 
-    /// <summary>Maximum combined resource length (2 GiB).</summary>
+    /// <summary>
+    /// Maximum combined resource length (2 GiB).
+    /// <para>所有资源合计的最大长度（2 GiB）。</para>
+    /// </summary>
     public const long MaximumTotalAssetSize = 2L * 1024 * 1024 * 1024;
 
     private const int MaximumDirectorySize = 1024 * 1024;
     private const string ManifestName = "manifest.json";
 
-    /// <summary>Reads bounded metadata. Resource hashes are checked when resources are consumed.</summary>
+    /// <summary>
+    /// Reads bounded metadata. Resource hashes are checked when resources are consumed.
+    /// <para>读取有界的元数据。资源哈希在消费资源时才校验。</para>
+    /// </summary>
+    /// <param name="path">
+    /// Bundle file to open. Its ZIP central directory is preflighted first under strict bounds (no ZIP64, no multidisk layout, capped entry count and directory size) before the archive is parsed.
+    /// <para>待打开的包文件。先在其 ZIP 中央目录上执行严格边界的预检（不支持 ZIP64 和多盘布局，条目数与目录大小均有上限），然后再解析归档。</para>
+    /// </param>
+    /// <returns>
+    /// Validated package. Every scope, including embedded composite packages, retains the full path of this bundle as its source identity and a shared root snapshot that later reads re-validate against.
+    /// <para>校验通过的包。每个作用域（含内嵌复合包）都会保留本包的完整路径作为来源标识，并持有一份共享的根快照，供后续读取时重新校验。</para>
+    /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// Preflight rejected the archive, the manifest is missing, oversized, truncated or followed by extra bytes, its JSON structure is unsupported, the package fails validation, or the entries do not exactly match the declared resources.
+    /// <para>预检拒绝该归档；清单缺失、超限、被截断或尾部有多余字节；JSON 结构不受支持；包校验失败；或条目与声明的资源不完全一致。</para>
+    /// </exception>
+    /// <exception cref="IOException">The file cannot be opened or read. <para>文件无法打开或读取。</para></exception>
     public static VisualPluginPackage Load(string path)
     {
         using var file = OpenBundle(path);
@@ -58,7 +86,37 @@ public static class VisualPluginBundle
         return package;
     }
 
-    /// <summary>Streams resources into a sibling temporary ZIP and publishes only after all identities match.</summary>
+    /// <summary>
+    /// Streams resources into a sibling temporary ZIP and publishes only after all identities match.
+    /// Resources are stored uncompressed under <c>assets/&lt;sha256&gt;</c> and written once per content
+    /// hash. The destination is replaced by an atomic move only after the archive is flushed to disk;
+    /// any earlier failure leaves the existing file untouched and deletes the temporary.
+    /// <para>把资源流式写入同级临时 ZIP，仅当所有身份校验全部通过后才发布。资源以不压缩形式存于
+    /// <c>assets/&lt;sha256&gt;</c>，同一内容哈希只写一次。归档落盘刷新完成后才通过原子移动替换目标；
+    /// 更早的任何失败都会保留既有文件并删除临时文件。</para>
+    /// </summary>
+    /// <param name="path">
+    /// Destination bundle path; it is resolved to a full path and may be overwritten on success.
+    /// <para>目标包路径；会被解析为完整路径，成功后可能被覆盖。</para>
+    /// </param>
+    /// <param name="package">
+    /// Package to write; it must pass structural validation, its manifest must stay within the size
+    /// limit, and every resource must be readable from its local source or an attached bundle.
+    /// <para>待写入的包；必须通过结构化校验，清单大小不得超限，且每个资源都必须可从其本地源或所附包中读取。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Checked before staging, per resource, and before the final move; cancellation propagates and the destination keeps its previous content.
+    /// <para>在暂存前、每个资源写入时以及最终移动前均会检查；取消会向上传播，目标文件保持原有内容。</para>
+    /// </param>
+    /// <returns>A task that completes once the bundle is published. <para>包发布完成后结束的异步任务。</para></returns>
+    /// <exception cref="InvalidDataException">
+    /// The package fails validation, the manifest exceeds its size limit, or a resource has no source or does not match its declared length or SHA-256.
+    /// <para>包校验失败、清单超出大小限制，或资源没有来源、与其声明的长度或 SHA-256 不符。</para>
+    /// </exception>
+    /// <exception cref="IOException">The temporary or destination file cannot be written or moved.
+    /// <para>临时文件或目标文件无法写入或移动。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
     public static async Task SaveAsync(string path, VisualPluginPackage package,
         CancellationToken cancellationToken = default)
     {
@@ -111,7 +169,41 @@ public static class VisualPluginBundle
         }
     }
 
-    /// <summary>Copies a resource with bounded memory and exact length/hash checks. Callers must stage the destination.</summary>
+    /// <summary>
+    /// Copies a resource with bounded memory and exact length/hash checks. Callers must stage the
+    /// destination. The resource is searched only in the asset list owned directly by
+    /// <paramref name="package"/>; nested composite packages are passed as their own scope. Reads come
+    /// from the trusted local source path when present, otherwise the bundle recorded by <c>Load</c> is
+    /// reopened and re-validated against the retained root snapshot.
+    /// <para>以有界内存和精确的长度/哈希校验复制资源。调用方必须自行暂存目标。资源只在
+    /// <paramref name="package"/> 直接拥有的资源列表中查找；内嵌复合包需以各自的作用域传入。存在受信任
+    /// 的本地源路径时从该路径读取，否则重新打开 <c>Load</c> 记录的包，并按保留的根快照重新校验。</para>
+    /// </summary>
+    /// <param name="package">
+    /// Scope whose own asset list is searched and whose structure is validated before copying.
+    /// <para>复制前先校验其结构、并在其自身资源列表中查找目标的作用域。</para>
+    /// </param>
+    /// <param name="id">
+    /// Resource identifier, matched case-sensitively against the scope's asset ids.
+    /// <para>资源标识符，与作用域的资产 id 进行区分大小写的匹配。</para>
+    /// </param>
+    /// <param name="destination">
+    /// Writable stream owned and kept open by the caller; it is neither closed nor rewound, and a failed
+    /// check can leave partially written content in it.
+    /// <para>由调用方持有并保持打开的可写流；本方法既不关闭也不回退它，校验失败时其中可能残留已部分写入的内容。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels reads and writes; cancellation propagates. <para>取消读取与写入；取消会向上传播。</para>
+    /// </param>
+    /// <returns>A task that completes once the verified bytes are written. <para>校验通过的字节全部写入后结束的异步任务。</para></returns>
+    /// <exception cref="InvalidDataException">
+    /// The package fails validation, the id is unknown, the resource has neither a local source nor a bundle path, the source is truncated or longer than declared, or its SHA-256 does not match (compared case-insensitively).
+    /// <para>包校验失败、id 未知、资源既无本地源也无包路径、来源被截断或长于声明值，或其 SHA-256 不匹配（比较不区分大小写）。</para>
+    /// </exception>
+    /// <exception cref="IOException">The source file or bundle cannot be opened or read.
+    /// <para>源文件或包无法打开或读取。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
     public static async Task CopyAssetAsync(VisualPluginPackage package, string id, Stream destination,
         CancellationToken cancellationToken = default)
     {
@@ -231,8 +323,6 @@ public static class VisualPluginBundle
         }
     }
 
-    // Validate central-directory bounds before ZipArchive allocates an object for every entry.
-    // This format deliberately excludes ZIP64, multidisk archives and self-extracting prefixes.
     private static void Preflight(Stream file)
     {
         if (file.Length < 22 || file.Length > MaximumTotalAssetSize + VisualPluginValidation.MaximumFileSize + MaximumDirectorySize * 2)

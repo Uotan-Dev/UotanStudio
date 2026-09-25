@@ -10,51 +10,73 @@ public sealed class UsbDeviceFilter
     /// Gets or sets the vendor identifier filter.
     /// <para>获取或设置厂商 ID 过滤条件。</para>
     /// </summary>
+    /// <value>The required vendor id, or <see langword="null"/> to accept any vendor.
+    /// <para>要求的厂商 ID；为 <see langword="null"/> 时接受任意厂商。</para></value>
     public ushort? VendorId { get; set; }
 
     /// <summary>
     /// Gets or sets the product identifier filter.
     /// <para>获取或设置产品 ID 过滤条件。</para>
     /// </summary>
+    /// <value>The required product id, or <see langword="null"/> to accept any product.
+    /// <para>要求的产品 ID；为 <see langword="null"/> 时接受任意产品。</para></value>
     public ushort? ProductId { get; set; }
 
     /// <summary>
     /// Gets or sets the serial number filter.
     /// <para>获取或设置序列号过滤条件。</para>
     /// </summary>
+    /// <value>The required serial number compared case-insensitively; <see langword="null"/> or
+    /// whitespace accepts any serial. <para>要求匹配（忽略大小写）的序列号；为 <see langword="null"/>
+    /// 或空白时接受任意序列号。</para></value>
     public string? SerialNumber { get; set; }
 
     /// <summary>
     /// Gets or sets a substring that must appear in the device path.
     /// <para>获取或设置设备路径必须包含的子串。</para>
     /// </summary>
+    /// <value>The substring matched case-insensitively against the device path; <see langword="null"/>
+    /// or whitespace disables the check. <para>对设备路径做忽略大小写包含匹配的子串；为
+    /// <see langword="null"/> 或空白时跳过该检查。</para></value>
     public string? DevicePathContains { get; set; }
 
-    /// <summary>Exact physical path for opening a selected device without opening its peers.</summary>
+    /// <summary>Exact physical path for opening a selected device without opening its peers.
+    /// <para>打开所选设备且不触及同组其它接口的精确物理路径。</para></summary>
+    /// <value>The device path required to match case-insensitively and exactly; <see langword="null"/>
+    /// disables the check. <para>要求精确且忽略大小写匹配的设备路径；为 <see langword="null"/>
+    /// 时跳过该检查。</para></value>
     public string? DevicePathEquals { get; set; }
 
     /// <summary>
     /// Gets or sets the backend family filter.
     /// <para>获取或设置后端类型过滤条件。</para>
     /// </summary>
+    /// <value>The required <see cref="UsbApiKind"/> backend family, or <see langword="null"/> for any.
+    /// <para>要求的 <see cref="UsbApiKind"/> 后端族；为 <see langword="null"/> 时接受任意后端。</para></value>
     public UsbApiKind? SourceApiKind { get; set; }
 
     /// <summary>
     /// Gets or sets the required USB interface class code.
     /// <para>获取或设置要求的 USB 接口类代码。</para>
     /// </summary>
+    /// <value>The interface class code the device must expose, or <see langword="null"/> to skip.
+    /// <para>设备必须暴露的接口类代码；为 <see langword="null"/> 时跳过。</para></value>
     public byte? InterfaceClass { get; set; }
 
     /// <summary>
     /// Gets or sets the required USB interface subclass code.
     /// <para>获取或设置要求的 USB 接口子类代码。</para>
     /// </summary>
+    /// <value>The interface subclass code the device must expose, or <see langword="null"/> to skip.
+    /// <para>设备必须暴露的接口子类代码；为 <see langword="null"/> 时跳过。</para></value>
     public byte? InterfaceSubClass { get; set; }
 
     /// <summary>
     /// Gets or sets the required USB interface protocol code.
     /// <para>获取或设置要求的 USB 接口协议代码。</para>
     /// </summary>
+    /// <value>The interface protocol code the device must expose, or <see langword="null"/> to skip.
+    /// <para>设备必须暴露的接口协议代码；为 <see langword="null"/> 时跳过。</para></value>
     public byte? InterfaceProtocol { get; set; }
 
     /// <summary>
@@ -66,6 +88,8 @@ public sealed class UsbDeviceFilter
     /// <para>可选择接口的后端（Linux/macOS/libusb/HarmonyOS）打开会话时优先使用该接口；
     /// WinUSB 的绑定接口由驱动决定，不匹配的设备会在投影阶段被过滤。</para>
     /// </summary>
+    /// <value>The interface number the device must expose, or <see langword="null"/> to skip the check.
+    /// <para>设备必须暴露的接口编号；为 <see langword="null"/> 时跳过该检查。</para></value>
     public byte? InterfaceNumber { get; set; }
 
     /// <summary>
@@ -77,6 +101,8 @@ public sealed class UsbDeviceFilter
     /// <para>主数据接口仍由 <see cref="InterfaceNumber"/> 指定；本列表涵盖同样需要声明的
     /// 附加接口（例如 CDC-ACM 控制 + 数据接口）。</para>
     /// </summary>
+    /// <value>The interface numbers all of which must be present; <see langword="null"/> or empty
+    /// skips the check. <para>要求全部存在的接口编号列表；为 <see langword="null"/> 或空时跳过该检查。</para></value>
     public IReadOnlyList<byte>? InterfaceNumbers { get; set; }
 
     /// <summary>
@@ -89,12 +115,16 @@ public sealed class UsbDeviceFilter
     /// devices without it are filtered out during projection.
     /// <para>可选择端点的后端优先选择包含该端点的接口；不含该端点的设备会在投影阶段被过滤。</para>
     /// </summary>
+    /// <value>The bulk IN endpoint address some interface must expose, or <see langword="null"/> to skip.
+    /// <para>某接口必须暴露的批量 IN 端点地址；为 <see langword="null"/> 时跳过。</para></value>
     public byte? EndpointAddressIn { get; set; }
 
     /// <summary>
     /// Gets or sets the required bulk OUT endpoint address (bit 7 clear).
     /// <para>获取或设置要求的批量 OUT 端点地址（bit 7 清零）。</para>
     /// </summary>
+    /// <value>The bulk OUT endpoint address some interface must expose, or <see langword="null"/> to skip.
+    /// <para>某接口必须暴露的批量 OUT 端点地址；为 <see langword="null"/> 时跳过。</para></value>
     public byte? EndpointAddressOut { get; set; }
 
     /// <summary>

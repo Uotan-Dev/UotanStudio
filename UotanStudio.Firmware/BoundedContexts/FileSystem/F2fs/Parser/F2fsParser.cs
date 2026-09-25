@@ -5,20 +5,76 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
 
+/// <summary>
+/// One directory-tree entry of a parsed F2FS image, addressed by its image-relative path.
+/// <para>已解析 F2FS 镜像目录树中的一个条目，以镜像内相对路径定位。</para>
+/// </summary>
+/// <param name="Path">Image-relative path with <c>/</c> separators and no leading slash.
+/// <para>镜像内相对路径，以 <c>/</c> 分隔且无前导斜杠。</para></param>
+/// <param name="Size">Logical size in bytes; for directories this is the dentry data size.
+/// <para>逻辑大小（字节）；目录为 dentry 数据大小。</para></param>
+/// <param name="Inode">Inode number (nid) backing this entry.
+/// <para>该条目对应的 inode 号（nid）。</para></param>
+/// <param name="Kind">Entry type: file, directory or symlink.
+/// <para>条目类型：文件、目录或符号链接。</para></param>
+/// <param name="SymlinkTarget">UTF-8-decoded link target for symlinks; <see langword="null"/> for
+/// every other kind.
+/// <para>符号链接的 UTF-8 解码目标；其他类型均为 <see langword="null"/>。</para></param>
+/// <param name="Uid">Owner user identifier recorded by the inode.
+/// <para>inode 记录的所有者用户 ID。</para></param>
+/// <param name="Gid">Owner group identifier recorded by the inode.
+/// <para>inode 记录的所有者组 ID。</para></param>
+/// <param name="Mode">POSIX mode bits (file type and permission) of the source inode.
+/// <para>源 inode 的 POSIX 模式位（文件类型与权限）。</para></param>
+/// <param name="Xattrs">Decoded extended attributes; <see langword="null"/> when the entry carries none.
+/// <para>解码后的扩展属性；条目无属性时为 <see langword="null"/>。</para></param>
+/// <param name="DeviceId">Device number for special nodes, resolved from the inode address fields;
+/// <c>0</c> for regular files.
+/// <para>特殊节点的 dev 号（取自 inode 地址字段）；常规文件为 <c>0</c>。</para></param>
+/// <param name="Flags">Raw F2FS inode flag bits of the source inode.
+/// <para>源 inode 的原始 F2FS 标志位。</para></param>
 public sealed record F2fsFileEntry(string Path, long Size, uint Inode, F2fsParser.F2fsEntryKind Kind, string? SymlinkTarget = null, uint Uid = 0, uint Gid = 0, ushort Mode = 0, IReadOnlyDictionary<string, byte[]>? Xattrs = null, uint DeviceId = 0, uint Flags = 0)
 {
-    /// <summary>Gets source timestamps, inode identity and per-file compression attributes.</summary>
+    /// <summary>Gets source timestamps, inode identity and per-file compression attributes.
+    /// <para>获取源时间戳、inode 标识与按文件的压缩约定。</para></summary>
+    /// <value>The metadata captured while walking the image, or <see langword="null"/> when the
+    /// source inode exposed no preservable attributes.
+    /// <para>遍历镜像时捕获的元数据；源 inode 无可保留属性时为 <see langword="null"/>。</para></value>
     public Metadata.FileSystemInodeMetadata? Metadata { get; init; }
 }
 
+/// <summary>
+/// Read-only parser for raw F2FS images: superblock, checkpoint pack, NAT, inode nodes, dentry
+/// blocks, xattrs and compressed clusters. All block reads are bounds-checked against the image
+/// length, only a 4096-byte block size is accepted, and every offset decoded from the image is
+/// validated before use. The parser owns its underlying stream and releases it on
+/// <see cref="Dispose"/>; concurrent callers are serialized on an internal stream lock.
+/// <para>原始 F2FS 镜像的只读解析器：超级块、checkpoint pack、NAT、inode 节点、dentry 块、xattr
+/// 与压缩簇。所有块读取都按镜像长度做边界检查，仅接受 4096 字节块大小，从镜像解出的每个偏移都会
+/// 先校验再使用。解析器持有底层流并在 <see cref="Dispose"/> 时释放；并发调用由内部流锁串行化。</para>
+/// </summary>
+/// <example>
+/// <code>
+/// using var parser = new F2fsParser(@"C:\images\system.img");
+/// foreach (var entry in parser.ListFiles())
+///     Console.WriteLine($"{entry.Path} {entry.Size}");
+/// </code>
+/// </example>
 public sealed class F2fsParser : IDisposable
 {
+    /// <summary>
+    /// Kind of a directory-tree entry reported by the parser.
+    /// <para>解析器报告的目录树条目类型。</para>
+    /// </summary>
     public enum F2fsEntryKind
     {
+        /// <summary>Regular file (or any non-directory, non-symlink payload). <para>常规文件（或非目录、非符号链接的其他载荷）。</para></summary>
         File,
 
+        /// <summary>Directory holding dentry blocks. <para>持有 dentry 块的目录。</para></summary>
         Directory,
 
+        /// <summary>Symbolic link whose data is the UTF-8 target path. <para>数据为 UTF-8 目标路径的符号链接。</para></summary>
         Symlink,
     }
 
@@ -64,6 +120,13 @@ public sealed class F2fsParser : IDisposable
     /// Opens an f2fs image file for parsing.
     /// <para>打开 f2fs 镜像文件进行解析。</para>
     /// </summary>
+    /// <param name="imagePath">Path to the F2FS image file, opened read-shared.
+    /// <para>F2FS 镜像文件路径，以可共享读取方式打开。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="imagePath"/> is <see langword="null"/>, empty, or whitespace.
+    /// <para><paramref name="imagePath"/> 为 <see langword="null"/>、空字符串或仅含空白。</para></exception>
+    /// <exception cref="FileNotFoundException">The file does not exist. <para>文件不存在。</para></exception>
+    /// <exception cref="InvalidDataException">The file is not a structurally valid F2FS image.
+    /// <para>该文件不是结构有效的 F2FS 镜像。</para></exception>
     public F2fsParser(string imagePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
@@ -83,6 +146,17 @@ public sealed class F2fsParser : IDisposable
     /// Parses an f2fs image from an existing stream (the parser takes ownership and disposes it).
     /// <para>从既有流解析 f2fs 镜像（所有权转移，释放解析器时一并释放流）。</para>
     /// </summary>
+    /// <param name="stream">Readable, seekable image stream; it is read from position 0 and its
+    /// position afterwards is undefined. The parser assumes ownership and disposes it on failure or
+    /// <see cref="Dispose"/>.
+    /// <para>可读、可寻址的镜像流；从位置 0 开始读取，结束后位置不确定。所有权归解析器，初始化失败或
+    /// <see cref="Dispose"/> 时由其释放。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException">The stream cannot be read or cannot seek.
+    /// <para>流不可读或不可寻址。</para></exception>
+    /// <exception cref="InvalidDataException">The stream is not a structurally valid F2FS image.
+    /// <para>该流不是结构有效的 F2FS 镜像。</para></exception>
     public F2fsParser(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -103,6 +177,12 @@ public sealed class F2fsParser : IDisposable
         }
     }
 
+    /// <summary>
+    /// Total byte length of the opened image.
+    /// <para>已打开镜像的总字节长度。</para>
+    /// </summary>
+    /// <value>The stream length captured at initialization; every read is bounds-checked against it.
+    /// <para>初始化时记录的流长度；所有读取都以其为边界。</para></value>
     public long ImageSize => _imageSize;
 
     internal byte[] SourceUuid => _superblock.Uuid;
@@ -114,20 +194,70 @@ public sealed class F2fsParser : IDisposable
     /// <summary>The active checkpoint selected by the parser.</summary>
     internal F2fsCheckpoint Checkpoint => _checkpoint;
 
+    /// <summary>
+    /// Filesystem block size in bytes.
+    /// <para>文件系统块大小（字节）。</para>
+    /// </summary>
+    /// <value>Always <c>4096</c>; initialization fails for any other superblock value.
+    /// <para>恒为 <c>4096</c>；超级块声明其他值时初始化失败。</para></value>
     public long BlockSize => _blockSize;
 
+    /// <summary>
+    /// Segment size in bytes.
+    /// <para>段大小（字节）。</para>
+    /// </summary>
+    /// <value>Block size multiplied by the validated power-of-two blocks-per-segment count.
+    /// <para>块大小乘以已校验为 2 的幂的每段块数。</para></value>
     public long SegmentSize => (long)_blockSize * _blocksPerSeg;
 
+    /// <summary>
+    /// Total block count declared by the superblock.
+    /// <para>超级块声明的总块数。</para>
+    /// </summary>
+    /// <value>The raw i_total_blocks value; the image is verified to contain at least that many blocks.
+    /// <para>原始 i_total_blocks 值；镜像已验证至少包含这么多块。</para></value>
     public ulong BlockCount => _superblock.BlockCount;
 
+    /// <summary>
+    /// Count of valid inodes.
+    /// <para>有效 inode 数量。</para>
+    /// </summary>
+    /// <value>The valid inode counter read from the selected checkpoint.
+    /// <para>从所选 checkpoint 读取的有效 inode 计数。</para></value>
     public uint InodeCount => _checkpoint.ValidInodeCount;
 
+    /// <summary>
+    /// Volume label stored in the superblock.
+    /// <para>超级块中存储的卷标。</para>
+    /// </summary>
+    /// <value>The decoded NUL-trimmed volume name; empty when the superblock carries none.
+    /// <para>解码并去除 NUL 后的卷标；超级块未填写时为空字符串。</para></value>
     public string VolumeName => _superblock.VolumeName;
 
+    /// <summary>
+    /// Inode number of the filesystem root directory.
+    /// <para>根目录的 inode 号。</para>
+    /// </summary>
+    /// <value>The superblock root inode, validated to be above the reserved node range.
+    /// <para>来自超级块的根 inode，已校验高于保留节点区间。</para></value>
     public uint RootIno => _superblock.RootIno;
 
+    /// <summary>
+    /// Number of non-directory entries discovered so far.
+    /// <para>迄今已发现的目录条目外的条目数。</para>
+    /// </summary>
+    /// <value>Files and symlinks in the entry table; <c>0</c> until the first directory walk
+    /// (for example <see cref="ListFiles"/>) populates it.
+    /// <para>条目表中的文件与符号链接；首次目录遍历（例如 <see cref="ListFiles"/>）填充之前为 <c>0</c>。</para></value>
     public int FileCount => _entries.Values.Count(static e => e.Kind != F2fsEntryKind.Directory);
 
+    /// <summary>
+    /// Number of directory entries discovered so far.
+    /// <para>迄今已发现的目录条目数。</para>
+    /// </summary>
+    /// <value>Directories in the entry table, excluding the root inode itself; <c>0</c> before the
+    /// first directory walk.
+    /// <para>条目表中的目录，不含根 inode 本身；首次目录遍历之前为 <c>0</c>。</para></value>
     public int DirectoryCount => _entries.Values.Count(static e => e.Kind == F2fsEntryKind.Directory);
 
     private void Initialize()
@@ -152,7 +282,6 @@ public sealed class F2fsParser : IDisposable
             throw new InvalidDataException($"Invalid f2fs blocks-per-segment {_blocksPerSeg}.");
         }
 
-
         if (_superblock.SegmentCount == 0
             || _superblock.Segment0Blkaddr == 0
             || _superblock.CpBlkaddr < _superblock.Segment0Blkaddr
@@ -164,7 +293,6 @@ public sealed class F2fsParser : IDisposable
         {
             throw new InvalidDataException("F2FS superblock metadata-area layout is inconsistent.");
         }
-
 
         var declaredImageBlocks = checked(_superblock.SegmentCount * _blocksPerSeg + _superblock.Segment0Blkaddr);
         var declaredImageSize = checked(declaredImageBlocks * _blockSize);
@@ -179,7 +307,6 @@ public sealed class F2fsParser : IDisposable
         {
             throw new InvalidDataException("F2FS checkpoint reports an empty filesystem.");
         }
-
 
         ValidateSuperblockChecksum();
     }
@@ -220,6 +347,12 @@ public sealed class F2fsParser : IDisposable
     /// Walks the directory tree from the root inode and returns all entries (files, directories and symlinks) with their relative paths.
     /// <para>从根 inode 遍历目录树，返回所有条目（文件、目录与符号链接）及其相对路径。</para>
     /// </summary>
+    /// <returns>A snapshot list of every walked entry; the root directory itself is not included
+    /// until <see cref="ListEntriesWithRoot"/> is used. Repeated calls return the same cached walk.
+    /// <para>全部已遍历条目的快照列表；不含根目录本身（需根节点请用 <see cref="ListEntriesWithRoot"/>）。重复调用复用同一份遍历缓存。</para></returns>
+    /// <exception cref="InvalidDataException">The directory tree contains a cycle, an out-of-bounds
+    /// block address, or a dentry layout that exceeds the format limits.
+    /// <para>目录树存在环、越界块地址，或 dentry 布局超出格式限制。</para></exception>
     public IReadOnlyList<F2fsFileEntry> ListFiles()
     {
         if (!_walked)
@@ -232,7 +365,13 @@ public sealed class F2fsParser : IDisposable
         return [.. _entries.Values];
     }
 
-    /// <summary>Includes root inode metadata without changing the file-browser listing contract.</summary>
+    /// <summary>Includes root inode metadata without changing the file-browser listing contract.
+    /// <para>附带根 inode 元数据，且不改变文件浏览器列表约定。</para></summary>
+    /// <returns>A list whose first element is the root entry under the path <c>"."</c>, followed by
+    /// all entries from <see cref="ListFiles"/>.
+    /// <para>首个元素为路径 <c>"."</c> 的根条目，其后依次是 <see cref="ListFiles"/> 的全部条目。</para></returns>
+    /// <exception cref="InvalidDataException">The root inode or the directory walk is structurally invalid.
+    /// <para>根 inode 或目录遍历存在结构错误。</para></exception>
     public IReadOnlyList<F2fsFileEntry> ListEntriesWithRoot()
     {
         var entries = ListFiles();
@@ -261,6 +400,23 @@ public sealed class F2fsParser : IDisposable
     /// Writes the full content of the file at path to output, zero-filling sparse holes.
     /// <para>将 path 处文件的完整内容写入 output， 稀疏洞补零；符号链接输出其目标字节。</para>
     /// </summary>
+    /// <param name="path">Image-relative path exactly as reported by <see cref="ListFiles"/>;
+    /// matching is case-sensitive.
+    /// <para>与 <see cref="ListFiles"/> 报告一致的镜像内相对路径；区分大小写。</para></param>
+    /// <param name="output">Writable destination stream; its current position is used and advanced,
+    /// and it is not closed by this call.
+    /// <para>可写目标流；从当前 Position 写入并前移，本调用不关闭该流。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="path"/> is <see langword="null"/> or empty.
+    /// <para><paramref name="path"/> 为 <see langword="null"/> 或空字符串。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="output"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="FileNotFoundException">No entry with that path exists in the image.
+    /// <para>镜像内不存在该路径的条目。</para></exception>
+    /// <exception cref="InvalidOperationException"><paramref name="path"/> names a directory.
+    /// <para><paramref name="path"/> 指向目录。</para></exception>
+    /// <exception cref="InvalidDataException">The file's node chain, compression clusters or block
+    /// addresses are corrupt.
+    /// <para>文件的节点链、压缩簇或块地址已损坏。</para></exception>
     public void ReadFile(string path, Stream output)
     {
         ArgumentNullException.ThrowIfNull(output);
@@ -278,10 +434,43 @@ public sealed class F2fsParser : IDisposable
     /// Extracts the whole filesystem tree into outputDirectory.
     /// <para>将整个文件系统树提取到 outputDirectory。</para>
     /// </summary>
+    /// <param name="outputDirectory">Host directory to receive the tree; created when missing.
+    /// <para>接收目录树的宿主目录；不存在时自动创建。</para></param>
+    /// <param name="overwrite"><see langword="true"/> (default) replaces existing host files;
+    /// <see langword="false"/> skips entries whose host file already exists.
+    /// <para><see langword="true"/>（默认）覆盖已存在的宿主文件；<see langword="false"/> 跳过宿主已存在对应文件的条目。</para></param>
+    /// <param name="progress">Receives (processed, total) entry counts after each entry;
+    /// <see langword="null"/> reports nothing.
+    /// <para>每处理完一个条目上报（已处理数, 总数）；为 <see langword="null"/> 时不上报。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="outputDirectory"/> is <see langword="null"/> or whitespace.
+    /// <para><paramref name="outputDirectory"/> 为 <see langword="null"/> 或仅含空白。</para></exception>
+    /// <exception cref="InvalidDataException">A tree entry is corrupt while being read.
+    /// <para>读取过程中发现树条目损坏。</para></exception>
     public void ExtractToDirectory(string outputDirectory, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
         => ExtractToDirectory(outputDirectory, null, CancellationToken.None, overwrite, progress);
 
-    /// <summary>Extracts with measured output bytes and cancellation, including writes within a large file.</summary>
+    /// <summary>Extracts with measured output bytes and cancellation, including writes within a large file.
+    /// <para>带字节计量与取消的提取，取消可作用于大文件内部的写入。</para></summary>
+    /// <param name="outputDirectory">Host directory to receive the tree; created when missing.
+    /// <para>接收目录树的宿主目录；不存在时自动创建。</para></param>
+    /// <param name="byteProgress">Receives (processed, total) output bytes; symlink targets count as
+    /// their UTF-8 length and non-regular payloads count as zero. <see langword="null"/> reports nothing.
+    /// <para>上报（已处理字节, 总字节）；符号链接目标按 UTF-8 长度计数，非常规数据按零计数。为 <see langword="null"/> 时不上报。</para></param>
+    /// <param name="cancellationToken">Checked before each entry and inside large-file writes;
+    /// partial host files are written atomically so a cancelled entry leaves no truncated output.
+    /// <para>在每个条目之前及大文件写入内部进行检查；宿主文件以原子方式写入，被取消的条目不会留下截断输出。</para></param>
+    /// <param name="overwrite"><see langword="true"/> (default) replaces existing host files;
+    /// <see langword="false"/> skips entries whose host file already exists.
+    /// <para><see langword="true"/>（默认）覆盖已存在的宿主文件；<see langword="false"/> 跳过宿主已存在对应文件的条目。</para></param>
+    /// <param name="progress">Receives (processed, total) entry counts after each entry;
+    /// <see langword="null"/> reports nothing.
+    /// <para>每处理完一个条目上报（已处理数, 总数）；为 <see langword="null"/> 时不上报。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="outputDirectory"/> is <see langword="null"/> or whitespace.
+    /// <para><paramref name="outputDirectory"/> 为 <see langword="null"/> 或仅含空白。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled mid-extraction.
+    /// <para>提取过程中令牌被取消。</para></exception>
+    /// <exception cref="InvalidDataException">A tree entry is corrupt while being read.
+    /// <para>读取过程中发现树条目损坏。</para></exception>
     public void ExtractToDirectory(string outputDirectory, IProgress<(long Processed, long Total)>? byteProgress,
         CancellationToken cancellationToken, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
     {
@@ -317,7 +506,6 @@ public sealed class F2fsParser : IDisposable
 
             if (entry.Kind == F2fsEntryKind.Symlink)
             {
-                // The host file is a portable projection; the inode type and original image remain authoritative.
                 SharedKernel.FileExtraction.WriteAtomic(targetPath,
                     output => { using var counted = bytes.Wrap(output); counted.Write(Encoding.UTF8.GetBytes(entry.SymlinkTarget ?? string.Empty)); }, overwrite);
 
@@ -427,7 +615,6 @@ public sealed class F2fsParser : IDisposable
     {
         if (inode.HasInlineDentry)
         {
-
 
             var inlineData = inode.MaxInlineData;
             var inlineSlots = inlineData * 8 / ((F2fsDirectoryEntry.DirectoryEntrySize + F2fsDirectoryEntry.SlotLength) * 8 + 1);
@@ -579,7 +766,6 @@ public sealed class F2fsParser : IDisposable
             throw new InvalidDataException($"Invalid reserved nid {nid}.");
         }
 
-
         if (!_natJournal.TryGetValue(nid, out var blockAddress))
         {
             var natBlockIndex = nid / F2fsNode.NatEntryPerBlock;
@@ -671,7 +857,6 @@ public sealed class F2fsParser : IDisposable
             return ReadIndirectAddress(inode.Nid[2], level1, level2, logicalBlock);
         }
 
-
         x -= perIndirect;
         if (x < perIndirect)
         {
@@ -685,7 +870,6 @@ public sealed class F2fsParser : IDisposable
             var level2 = (int)(x % perIndirect);
             return ReadDoubleIndirectAddress(inode.Nid[4], level1, level2, logicalBlock, addressesPerNode);
         }
-
 
         return null;
     }
@@ -738,17 +922,14 @@ public sealed class F2fsParser : IDisposable
             doubleIndirectNid,
             $"Double indirect node {doubleIndirectNid} (logical {logicalBlock})");
 
-
         var singleIndirectNid = BinaryPrimitives.ReadUInt32LittleEndian(doubleNode.AsSpan(level1 * 4, 4));
         if (singleIndirectNid == 0)
         {
             return null;
         }
 
-
         var siLevel1 = level2 / addressesPerNode;
         var siLevel2 = level2 % addressesPerNode;
-
 
         return ReadIndirectAddress(singleIndirectNid, siLevel1, siLevel2, logicalBlock);
     }
@@ -774,7 +955,6 @@ public sealed class F2fsParser : IDisposable
             return;
         }
 
-
         var perIndirect = (long)F2fsNode.AddrsPerBlock * F2fsNode.AddrsPerBlock;
         var perDoubleIndirect = perIndirect * F2fsNode.AddrsPerBlock;
         var maxSupportedBlocks = checked(
@@ -795,7 +975,6 @@ public sealed class F2fsParser : IDisposable
     /// </summary>
     private void WriteCompressedFileData(F2fsInode inode, Stream output)
     {
-
 
         var logShift = inode.LogClusterSize + 12;
         if (logShift is < 14 or > 20)
@@ -890,7 +1069,6 @@ public sealed class F2fsParser : IDisposable
             else
             {
 
-
                 var clusterBuffer = new byte[clusterSize];
                 for (var b = 0; b < clusterBlocks; b++)
                 {
@@ -920,7 +1098,6 @@ public sealed class F2fsParser : IDisposable
         {
             1 => CompressionAlgorithm.Lz4,
             2 => CompressionAlgorithm.Zstd,
-
 
             0 or 3 => CompressionAlgorithm.Lzo,
             _ => throw new InvalidDataException(

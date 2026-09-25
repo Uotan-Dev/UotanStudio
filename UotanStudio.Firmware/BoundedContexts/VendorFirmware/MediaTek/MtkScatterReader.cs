@@ -7,13 +7,31 @@ using YamlDotNet.RepresentationModel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
 
-/// <summary>Reads bounded text scatter metadata, supporting flat and storage-grouped layouts.</summary>
+/// <summary>Reads bounded text scatter metadata, supporting flat and storage-grouped layouts.
+/// <para>读取有界文本 scatter 元数据，支持平面布局与按存储分组的布局。</para></summary>
 public static class MtkScatterReader
 {
-    /// <summary>Parses metadata without resolving file paths, choosing a device or authorizing writes.</summary>
-    /// <param name="source">Caller-owned UTF-8 stream, left open and consumed from its current position.</param>
-    /// <param name="cancellationToken">Cancellation for bounded input reading and YAML events.</param>
-    /// <returns>Metadata retaining disabled entries, literal addresses and unknown scalar fields.</returns>
+    /// <summary>Parses metadata without resolving file paths, choosing a device or authorizing writes.
+    /// <para>仅解析元数据，不解析文件路径、不选择设备，也不授权写入。</para></summary>
+    /// <param name="source">Caller-owned UTF-8 stream, left open and consumed from its current position.
+    /// <para>调用方持有的 UTF-8 流，从当前位置读取且调用后保持打开。</para></param>
+    /// <param name="cancellationToken">Cancellation for bounded input reading and YAML events.
+    /// <para>用于取消有界的输入读取与 YAML 事件处理。</para></param>
+    /// <returns>Metadata retaining disabled entries, literal addresses and unknown scalar fields.
+    /// <para>解析结果保留禁用条目、字面地址与未知标量字段。</para></returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="source"/> is <see langword="null"/>.
+    /// <para><paramref name="source"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// Cancellation was requested during reading or parsing.
+    /// <para>读取或解析期间收到了取消请求。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// The text exceeds the size limit or violates the scatter structure, key, count or value
+    /// bounds enforced during parsing.
+    /// <para>文本超出大小上限，或违反解析时强制的 scatter 结构、键、数量与取值边界。</para>
+    /// </exception>
     public static MtkScatterDocument Read(Stream source, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);

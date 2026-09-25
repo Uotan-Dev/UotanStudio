@@ -92,10 +92,10 @@ public sealed partial class DeviceMonitorService : IDisposable
 {
     /// <summary>
     /// <para>创建一个由调用方持有的独立设备监视实例。桌面 GUI 由组合根（<c>App</c>）拥有唯一的
-    /// 监视实例；无头/CLI 等独立进程路径各自 <c>Create()</c> 一个，不再依赖类型级全局单例。</para>
+    /// 监视实例；无头/CLI 等独立进程路径各自 <c>Create()</c> 一个，类型本身不提供全局服务定位单例。</para>
     /// Creates a caller-owned monitor instance. The desktop GUI keeps the single instance owned by the
     /// composition root (<c>App</c>); headless/CLI processes each <c>Create()</c> their own, so the type
-    /// no longer exposes a global service-locator singleton.
+    /// exposes no global service-locator singleton.
     /// </summary>
     public static DeviceMonitorService Create() => new();
 

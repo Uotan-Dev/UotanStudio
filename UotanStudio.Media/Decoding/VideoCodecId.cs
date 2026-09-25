@@ -6,11 +6,20 @@ namespace UotanStudio.Media.Decoding;
 /// </summary>
 public enum VideoCodecId
 {
-    /// <summary>H.264 / MPEG-4 AVC. H.264（MPEG-4 AVC）编码。</summary>
+    /// <summary>
+    /// H.264 / MPEG-4 AVC.
+    /// <para>H.264（MPEG-4 AVC）编码。</para>
+    /// </summary>
     H264 = 1,
 
-    /// <summary>H.265 / HEVC. H.265（HEVC）编码。</summary>
+    /// <summary>
+    /// H.265 / HEVC.
+    /// <para>H.265（HEVC）编码。</para>
+    /// </summary>
     H265 = 2,
-    /// <summary>AV1 low-overhead OBU stream. AV1 低开销 OBU 码流。</summary>
+    /// <summary>
+    /// AV1 low-overhead OBU stream.
+    /// <para>AV1 低开销 OBU 码流。</para>
+    /// </summary>
     Av1 = 3,
 }

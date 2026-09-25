@@ -476,10 +476,6 @@ internal static partial class WinUSBFinder
     /// </summary>
     private static string? PeekSerialNumber(string path)
     {
-        // WinUsb_Initialize issues overlapped internal I/O and fails with ERROR_INVALID_HANDLE
-        // on a non-overlapped handle, so the peek must open with FILE_FLAG_OVERLAPPED.
-        // WinUsb_Initialize 的内部 I/O 依赖重叠句柄，非重叠句柄会以 ERROR_INVALID_HANDLE 失败，
-        // 因此窥视必须以 FILE_FLAG_OVERLAPPED 打开。
         var hUsb = Win32API.SimpleCreateHandle(path, true);
         if (hUsb == Win32API.INVALID_HANDLE_VALUE)
         {

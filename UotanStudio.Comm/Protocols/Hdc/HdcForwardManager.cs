@@ -7,18 +7,34 @@ using System.Threading.Channels;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
-/// <summary>Owns native daemon TCP mappings for one authenticated connection.</summary>
+/// <summary>Owns native daemon TCP mappings for one authenticated connection.<para>为一条已认证连接持有原生守护进程的 TCP 映射。</para></summary>
+/// <param name="connection">The authenticated native HDC connection that carries every mapping's control channel.<para>承载每个映射控制通道的已认证原生 HDC 连接。</para></param>
 public sealed class HdcForwardManager(HdcConnection connection) : IDisposable, UotanStudio.Comm.Contracts.IHdcForwardManager
 {
     private readonly Lock _gate = new();
     private readonly Dictionary<(bool Reverse, string Listen), Mapping> _mappings = [];
     private bool _disposed;
 
-    /// <summary>Creates a loopback TCP mapping, awaiting the upstream endpoint check.</summary>
+    /// <summary>Creates a loopback TCP mapping, awaiting the upstream endpoint check.<para>创建回环 TCP 映射，并等待上游端点校验。</para></summary>
+    /// <param name="localPort">Host loopback port to listen on (1..65535).<para>主机回环监听端口（1..65535）。</para></param>
+    /// <param name="remotePort">Remote device TCP port to map to (1..65535).<para>要映射到的远端设备 TCP 端口（1..65535）。</para></param>
+    /// <param name="reverse"><see langword="true"/> to set up a reverse (device-initiated) mapping; <see langword="false"/> for host-initiated forwarding.<para><see langword="true"/> 建立反向（设备发起）映射；<see langword="false"/> 为主机发起转发。</para></param>
+    /// <param name="cancellationToken">Cancels the synchronous endpoint handshake before the mapping is registered.<para>在映射登记前取消同步的端点握手。</para></param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="localPort"/> is outside 1..65535.<para><paramref name="localPort"/> 不在 1..65535 范围内。</para></exception>
+    /// <exception cref="System.IO.IOException">The listen key already has a different open mapping.<para>该监听键已存在另一个不同的打开映射。</para></exception>
+    /// <exception cref="System.ObjectDisposedException">This manager has been disposed.<para>此管理器已被释放。</para></exception>
     public void Add(int localPort, int remotePort, bool reverse = false, CancellationToken cancellationToken = default)
         => Add(localPort, $"tcp:{remotePort}", reverse, cancellationToken);
 
-    /// <summary>Maps a host TCP port to an upstream TCP, Unix socket, device, JDWP or Ark endpoint.</summary>
+    /// <summary>Maps a host TCP port to an upstream TCP, Unix socket, device, JDWP or Ark endpoint.<para>将主机 TCP 端口映射到上游 TCP、Unix 套接字、设备、JDWP 或 Ark 端点。</para></summary>
+    /// <param name="localPort">Host loopback port to listen on (1..65535).<para>主机回环监听端口（1..65535）。</para></param>
+    /// <param name="remoteEndpoint">Remote endpoint in <c>schema:content</c> form validated against the supported schemas.<para>采用 <c>schema:content</c> 形式、并按受支持模式校验的远端端点。</para></param>
+    /// <param name="reverse"><see langword="true"/> to set up a reverse (device-initiated) mapping; <see langword="false"/> for host-initiated forwarding.<para><see langword="true"/> 建立反向（设备发起）映射；<see langword="false"/> 为主机发起转发。</para></param>
+    /// <param name="cancellationToken">Cancels the synchronous endpoint handshake before the mapping is registered.<para>在映射登记前取消同步的端点握手。</para></param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="localPort"/> is outside 1..65535.<para><paramref name="localPort"/> 不在 1..65535 范围内。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="remoteEndpoint"/> is missing or not a valid supported endpoint.<para><paramref name="remoteEndpoint"/> 缺失或不是有效的受支持端点。</para></exception>
+    /// <exception cref="System.IO.IOException">The listen key already has a different open mapping.<para>该监听键已存在另一个不同的打开映射。</para></exception>
+    /// <exception cref="System.ObjectDisposedException">This manager has been disposed.<para>此管理器已被释放。</para></exception>
     public void Add(int localPort, string remoteEndpoint, bool reverse = false, CancellationToken cancellationToken = default)
     {
         if (localPort is < 1 or > 65535) throw new ArgumentOutOfRangeException(nameof(localPort));
@@ -39,17 +55,24 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable, U
         }
     }
 
-    /// <summary>Lists mappings owned by this connection, excluding closed tasks.</summary>
+    /// <summary>Lists mappings owned by this connection, excluding closed tasks.<para>列出此连接持有的映射，排除已关闭的任务。</para></summary>
+    /// <returns>Newline-joined <c>fport</c>/<c>rport tcp:PORT endpoint</c> lines, empty when no mapping is open.<para>以换行拼接的 <c>fport</c>/<c>rport tcp:PORT endpoint</c> 行；无打开映射时为空串。</para></returns>
     public string List()
     {
         lock (_gate) return string.Join('\n', _mappings.Values.Where(m => !m.IsClosed)
             .Select(m => $"{(m.Reverse ? "rport" : "fport")} tcp:{m.LocalPort} {m.RemoteEndpoint}"));
     }
 
-    /// <summary>Removes a mapping and all its sockets by the listening port.</summary>
+    /// <summary>Removes a mapping and all its sockets by the listening port.<para>按监听端口移除映射及其全部套接字。</para></summary>
+    /// <param name="listenPort">Listening port identifying the mapping to remove.<para>标识待移除映射的监听端口。</para></param>
+    /// <param name="reverse"><see langword="true"/> for a reverse mapping, <see langword="false"/> for forward.<para><see langword="true"/> 为反向映射，<see langword="false"/> 为正向。</para></param>
+    /// <returns><see langword="true"/> when a mapping with that listen key existed; otherwise <see langword="false"/>.<para>存在该监听键的映射时返回 <see langword="true"/>；否则返回 <see langword="false"/>。</para></returns>
     public bool Remove(int listenPort, bool reverse = false) => Remove($"tcp:{listenPort}", reverse);
 
-    /// <summary>Removes a mapping by its exact listening endpoint.</summary>
+    /// <summary>Removes a mapping by its exact listening endpoint.<para>按精确监听端点移除映射。</para></summary>
+    /// <param name="listenEndpoint">Exact listening endpoint key, e.g. <c>tcp:5555</c>.<para>精确监听端点键，例如 <c>tcp:5555</c>。</para></param>
+    /// <param name="reverse"><see langword="true"/> for a reverse mapping, <see langword="false"/> for forward.<para><see langword="true"/> 为反向映射，<see langword="false"/> 为正向。</para></param>
+    /// <returns><see langword="true"/> when a mapping with that listen key existed; otherwise <see langword="false"/>.<para>存在该监听键的映射时返回 <see langword="true"/>；否则返回 <see langword="false"/>。</para></returns>
     public bool Remove(string listenEndpoint, bool reverse = false)
     {
         lock (_gate)
@@ -59,7 +82,7 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable, U
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>Disposes every owned mapping and its sockets, then blocks further operations.<para>释放所有持有的映射及其套接字，并阻止后续操作。</para></summary>
     public void Dispose()
     {
         lock (_gate)
@@ -201,7 +224,7 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable, U
                     }
                 }
             }
-            catch (Exception) { /* A failed mapping closes its sockets without faulting other HDC tasks. */ }
+            catch (Exception) { }
             finally { Dispose(); }
         }
 

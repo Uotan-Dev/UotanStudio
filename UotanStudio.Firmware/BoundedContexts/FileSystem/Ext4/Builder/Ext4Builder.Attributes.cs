@@ -4,6 +4,10 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 
+/// <summary>
+/// Partial declaration implementing inode timestamp/identity writing and external xattr block planning.
+/// <para>实现 inode 时间戳/身份属性写入与外部 xattr 块规划的局部声明。</para>
+/// </summary>
 public sealed partial class Ext4Builder
 {
     private static void WriteSourceMetadata(byte[] inode, FileSystemInodeMetadata? metadata)
@@ -151,7 +155,6 @@ public sealed partial class Ext4Builder
                     hash = (hash << 16) ^ (hash >> 16) ^ ComputeCrc32(pair.Value, ComputeCrc32(uuid, uint.MaxValue));
                 }
                 WriteU32(block, position + 12, hash);
-                // A zero block hash disables sharing; individual entry hashes are still required.
                 position += (16 + pair.Name.Length + 3) & ~3;
             }
             node.ExternalXattrs = block;

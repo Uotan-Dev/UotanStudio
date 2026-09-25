@@ -4,12 +4,6 @@ using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Mcp.Tools;
 
-// Tool result payloads are concrete records so the MCP surface stays NativeAOT-safe:
-// every value crossing ToolResult.Data is serialized through the source-generated
-// context below instead of the reflection resolver.
-// <para>工具结果负载是具体记录类型，以保证 MCP 面的 NativeAOT 兼容性：
-// 经 ToolResult.Data 传出的每个值都走下方 source-gen 上下文，而非反射解析器。</para>
-
 internal sealed record CompressionAlgorithmPayload(
     string Format,
     string Name,

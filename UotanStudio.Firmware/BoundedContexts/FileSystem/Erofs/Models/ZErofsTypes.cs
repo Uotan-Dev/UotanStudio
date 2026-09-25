@@ -17,7 +17,6 @@ internal readonly struct ZErofsMapHeader
 {
     public const int Size = 8;
 
-
     public const ushort AdviseCompacted2B = 0x0001;
 
     public const ushort AdviseExtents = 0x0001;
@@ -32,29 +31,21 @@ internal readonly struct ZErofsMapHeader
 
     public const ushort AdviseFragmentPcluster = 0x0020;
 
-
     public const int ExtRecSizeBit = 1;
 
     public const int ExtRecSizeMask = 0x3;
 
-
-    // z_erofs_extent plen encoding (fs/erofs/erofs_fs.h): low bits hold the encoded length,
-    // bit 27 marks a partially-referenced pcluster, bits 28+ encode (algorithm + 1).
-    // z_erofs_extent 的 plen 编码（fs/erofs/erofs_fs.h）：低位为编码长度，位 27 表示部分引用，
-    // 位 28 起编码（算法号 + 1）。
     public const uint ExtentPlenPartial = 1u << 27;
 
     public const int ExtentPlenFmtBit = 28;
 
     public const uint ExtentPlenMask = (1u << 21) - 1;
 
-
     public const byte LclusterBitsMask = 0x0F;
 
     public const int FragmentInodeBit = 7;
 
     public const byte FragmentInodeMask = 0x80;
-
 
     public const byte AlgorithmTypeMask = 0x0F;
 
@@ -77,7 +68,6 @@ internal readonly struct ZErofsMapHeader
     public ushort ExtentsHi => (ushort)(AlgorithmType | ClusterBits << 8);
 
     public ErofsAlgorithm Algorithm => (ErofsAlgorithm)(AlgorithmType & AlgorithmTypeMask);
-
 
     public bool HasCompacted2B => (Advise & AdviseCompacted2B) != 0;
 
@@ -158,7 +148,6 @@ internal readonly struct ZErofsLclusterIndex
 {
     public const int Size = 8;
 
-
     public const ushort LiPartialRef = 1 << 15;
 
     public const ushort LiHole = 1 << 14;
@@ -166,7 +155,6 @@ internal readonly struct ZErofsLclusterIndex
     public const ushort LiTypeMask = 0x0003;
 
     public const ushort LiD0CblkCnt = 1 << 11;
-
 
     public const ushort LclusterTypePlain = 0;
 

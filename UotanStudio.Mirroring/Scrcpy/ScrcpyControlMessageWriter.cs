@@ -13,7 +13,7 @@ namespace UotanStudio.Services.Mirroring;
 /// followed by fixed-width big-endian fields. Touch/scroll positions are
 /// expressed in <em>video pixel coordinates</em> of the decoded frame together
 /// with the frame size (the server maps them onto the physical display); the
-/// server rejects events whose frame size no longer matches its current video
+/// server rejects events whose frame size differs from its current video
 /// size (e.g. after a rotation).
 /// </para>
 /// <para>
@@ -44,13 +44,17 @@ public static class ScrcpyControlMessageWriter
         BinaryPrimitives.WriteUInt16BigEndian(dest.Slice(10), (ushort)height);
     }
 
-    /// <summary>Builds TYPE_INJECT_KEYCODE (type + action + keycode + repeat + metaState).</summary>
-    /// <summary>构建 TYPE_INJECT_KEYCODE（类型 + action + 键码 + 重复次数 + metaState）。</summary>
-    /// <param name="action"><see cref="ScrcpyConstants.ActionDown"/> / <see cref="ScrcpyConstants.ActionUp"/> 等。动作类型。</param>
-    /// <param name="keyCode">Android keycode (AKEYCODE_*). Android 键码（AKEYCODE_*）。</param>
-    /// <param name="repeat">Key repeat count. 键重复次数。</param>
-    /// <param name="metaState">AMETA_* modifier mask. AMETA_* 修饰键掩码。</param>
-    /// <returns>The encoded message. 编码后的消息。</returns>
+    /// <summary>
+    /// Builds TYPE_INJECT_KEYCODE (type + action + keycode + repeat + metaState), 14 bytes.
+    /// <para>构建 TYPE_INJECT_KEYCODE（类型 + action + 键码 + 重复次数 + metaState），共 14 字节。</para>
+    /// </summary>
+    /// <param name="action">Action type, e.g. <see cref="ScrcpyConstants.ActionDown"/> or
+    /// <see cref="ScrcpyConstants.ActionUp"/>.
+    /// <para>动作类型（如 <see cref="ScrcpyConstants.ActionDown"/> / <see cref="ScrcpyConstants.ActionUp"/>）。</para></param>
+    /// <param name="keyCode">Android keycode (AKEYCODE_*). <para>Android 键码（AKEYCODE_*）。</para></param>
+    /// <param name="repeat">Key repeat count. <para>键重复次数。</para></param>
+    /// <param name="metaState">AMETA_* modifier mask. <para>AMETA_* 修饰键掩码。</para></param>
+    /// <returns>The encoded message. <para>编码后的消息。</para></returns>
     public static byte[] InjectKeyCode(byte action, int keyCode, int repeat, int metaState)
     {
         var msg = new byte[14];
@@ -62,10 +66,17 @@ public static class ScrcpyControlMessageWriter
         return msg;
     }
 
-    /// <summary>Builds TYPE_INJECT_TEXT (type + 4-byte length + UTF-8 bytes).</summary>
-    /// <summary>构建 TYPE_INJECT_TEXT（类型 + 4 字节长度 + UTF-8 字节）。</summary>
-    /// <param name="text">The text to inject (max 300 UTF-8 bytes). 要注入的文本（UTF-8 最多 300 字节）。</param>
-    /// <returns>The encoded message. 编码后的消息。</returns>
+    /// <summary>
+    /// Builds TYPE_INJECT_TEXT (type + 4-byte length + UTF-8 bytes).
+    /// <para>构建 TYPE_INJECT_TEXT（类型 + 4 字节长度 + UTF-8 字节）。</para>
+    /// </summary>
+    /// <param name="text">The text to inject (max 300 UTF-8 bytes).
+    /// <para>要注入的文本（UTF-8 最多 300 字节）。</para></param>
+    /// <returns>The encoded message. <para>编码后的消息。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="text"/> encodes to more than 300 UTF-8 bytes.
+    /// <para><paramref name="text"/> 的 UTF-8 编码超过 300 字节。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="text"/> is <see langword="null"/>.
+    /// <para><paramref name="text"/> 为 <see langword="null"/>。</para></exception>
     public static byte[] InjectText(string text)
     {
         var payload = Encoding.UTF8.GetBytes(text);
@@ -83,18 +94,28 @@ public static class ScrcpyControlMessageWriter
         return msg;
     }
 
-    /// <summary>Builds TYPE_INJECT_TOUCH_EVENT (32 bytes).</summary>
-    /// <summary>构建 TYPE_INJECT_TOUCH_EVENT（32 字节）。</summary>
-    /// <param name="action">Motion action (down/up/move). 动作（按下/抬起/移动）。</param>
-    /// <param name="pointerId">Pointer id as signed 64-bit (<see cref="ScrcpyConstants.PointerIdMouse"/> = -2). 指针 ID（有符号 64 位，鼠标为 -2）。</param>
-    /// <param name="x">X in video pixel coordinates. 视频像素坐标 X。</param>
-    /// <param name="y">Y in video pixel coordinates. 视频像素坐标 Y。</param>
-    /// <param name="width">Decoded frame width. 解码帧宽度。</param>
-    /// <param name="height">Decoded frame height. 解码帧高度。</param>
-    /// <param name="pressure">Fixed-point pressure 0..0xFFFF (0xFFFF = 1.0). 定点压力 0..0xFFFF（0xFFFF = 1.0）。</param>
-    /// <param name="actionButton">Button associated with the action (press/release). 与动作关联的按键（按下/释放）。</param>
-    /// <param name="buttons">Current AMOTION_EVENT_BUTTON_* button state. 当前 AMOTION_EVENT_BUTTON_* 按键状态。</param>
-    /// <returns>The encoded message. 编码后的消息。</returns>
+    /// <summary>
+    /// Builds TYPE_INJECT_TOUCH_EVENT (32 bytes).
+    /// <para>构建 TYPE_INJECT_TOUCH_EVENT（32 字节）。</para>
+    /// </summary>
+    /// <param name="action">Motion action (down/up/move). <para>动作（按下/抬起/移动）。</para></param>
+    /// <param name="pointerId">Pointer id as signed 64-bit (<see cref="ScrcpyConstants.PointerIdMouse"/> = -2).
+    /// <para>指针 ID（有符号 64 位，鼠标为 -2）。</para></param>
+    /// <param name="x">X in video pixel coordinates. <para>视频像素坐标 X。</para></param>
+    /// <param name="y">Y in video pixel coordinates. <para>视频像素坐标 Y。</para></param>
+    /// <param name="width">Decoded frame width. <para>解码帧宽度。</para></param>
+    /// <param name="height">Decoded frame height. <para>解码帧高度。</para></param>
+    /// <param name="pressure">Fixed-point pressure 0..0xFFFF (0xFFFF = 1.0).
+    /// <para>定点压力 0..0xFFFF（0xFFFF = 1.0）。</para></param>
+    /// <param name="actionButton">Button associated with the action (press/release).
+    /// <para>与动作关联的按键（按下/释放）。</para></param>
+    /// <param name="buttons">Current AMOTION_EVENT_BUTTON_* button state.
+    /// <para>当前 AMOTION_EVENT_BUTTON_* 按键状态。</para></param>
+    /// <returns>The encoded message. <para>编码后的消息。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="width"/> or <paramref name="height"/> is not positive, or a coordinate is outside the frame.
+    /// <para><paramref name="width"/> 或 <paramref name="height"/> 不为正，或坐标超出帧范围。</para>
+    /// </exception>
     public static byte[] InjectTouchEvent(
         byte action,
         long pointerId,
@@ -106,17 +127,9 @@ public static class ScrcpyControlMessageWriter
         uint actionButton = 0,
         uint buttons = 0)
     {
-        // Layout per scrcpy 2.7 ControlMessageReader.parseInjectTouchEvent:
-        // type(1)@0 + action(1)@1 + pointerId(8)@2 + position(12)@10 +
-        // pressure(2)@22 + actionButton(4)@24 + buttons(4)@28 = 32.
-        // 按 scrcpy 2.7 ControlMessageReader.parseInjectTouchEvent 的布局：
-        // type(1)@0 + action(1)@1 + pointerId(8)@2 + position(12)@10 +
-        // pressure(2)@22 + actionButton(4)@24 + buttons(4)@28 = 32。
         var msg = new byte[32];
         msg[0] = ScrcpyConstants.ControlTypeInjectTouchEvent;
         msg[1] = action;
-        // pointerId is written as the raw two's-complement u64.
-        // pointerId 按二进制补码 u64 原样写入。
         BinaryPrimitives.WriteUInt64BigEndian(msg.AsSpan(2), unchecked((ulong)pointerId));
         WritePosition(msg.AsSpan(10), x, y, width, height);
         BinaryPrimitives.WriteUInt16BigEndian(msg.AsSpan(22), pressure);
@@ -125,16 +138,24 @@ public static class ScrcpyControlMessageWriter
         return msg;
     }
 
-    /// <summary>Builds TYPE_INJECT_SCROLL_EVENT (21 bytes).</summary>
-    /// <summary>构建 TYPE_INJECT_SCROLL_EVENT（21 字节）。</summary>
-    /// <param name="x">X in video pixel coordinates. 视频像素坐标 X。</param>
-    /// <param name="y">Y in video pixel coordinates. 视频像素坐标 Y。</param>
-    /// <param name="width">Decoded frame width. 解码帧宽度。</param>
-    /// <param name="height">Decoded frame height. 解码帧高度。</param>
-    /// <param name="hScroll">Horizontal scroll in ticks, positive scrolls right. 水平滚动刻度，正数向右。</param>
-    /// <param name="vScroll">Vertical scroll in ticks, positive scrolls up (wire semantics). 垂直滚动刻度，正数向上（线路语义）。</param>
-    /// <param name="buttons">AMOTION_EVENT_BUTTON_* mask. AMOTION_EVENT_BUTTON_* 掩码。</param>
-    /// <returns>The encoded message. 编码后的消息。</returns>
+    /// <summary>
+    /// Builds TYPE_INJECT_SCROLL_EVENT (21 bytes).
+    /// <para>构建 TYPE_INJECT_SCROLL_EVENT（21 字节）。</para>
+    /// </summary>
+    /// <param name="x">X in video pixel coordinates. <para>视频像素坐标 X。</para></param>
+    /// <param name="y">Y in video pixel coordinates. <para>视频像素坐标 Y。</para></param>
+    /// <param name="width">Decoded frame width. <para>解码帧宽度。</para></param>
+    /// <param name="height">Decoded frame height. <para>解码帧高度。</para></param>
+    /// <param name="hScroll">Horizontal scroll in ticks, positive scrolls right.
+    /// <para>水平滚动刻度，正数向右。</para></param>
+    /// <param name="vScroll">Vertical scroll in ticks, positive scrolls up (wire semantics).
+    /// <para>垂直滚动刻度，正数向上（线路语义）。</para></param>
+    /// <param name="buttons">AMOTION_EVENT_BUTTON_* mask. <para>AMOTION_EVENT_BUTTON_* 掩码。</para></param>
+    /// <returns>The encoded message. <para>编码后的消息。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="width"/> or <paramref name="height"/> is not positive, or a coordinate is outside the frame.
+    /// <para><paramref name="width"/> 或 <paramref name="height"/> 不为正，或坐标超出帧范围。</para>
+    /// </exception>
     /// <remarks>
     /// <para>
     /// 滚动量为 i16 定点数（1 刻度 = 0x7FFF，对应服务端 1.0f），布局为
@@ -165,10 +186,12 @@ public static class ScrcpyControlMessageWriter
         return (short)Math.Clamp(scaled, short.MinValue, short.MaxValue);
     }
 
-    /// <summary>Builds TYPE_BACK_OR_SCREEN_ON (2 bytes).</summary>
-    /// <summary>构建 TYPE_BACK_OR_SCREEN_ON（2 字节）。</summary>
-    /// <param name="action">Motion action (down/up). 动作（按下/抬起）。</param>
-    /// <returns>The encoded message. 编码后的消息。</returns>
+    /// <summary>
+    /// Builds TYPE_BACK_OR_SCREEN_ON (2 bytes).
+    /// <para>构建 TYPE_BACK_OR_SCREEN_ON（2 字节）。</para>
+    /// </summary>
+    /// <param name="action">Motion action (down/up). <para>动作（按下/抬起）。</para></param>
+    /// <returns>The encoded message. <para>编码后的消息。</para></returns>
     public static byte[] BackOrScreenOn(byte action)
     {
         var msg = new byte[2];
@@ -177,10 +200,14 @@ public static class ScrcpyControlMessageWriter
         return msg;
     }
 
-    /// <summary>Builds a single-byte control message (panels, display power).</summary>
-    /// <summary>构建单字节控制消息（面板、屏幕电源）。</summary>
-    /// <param name="type">One of the single-byte control types. 单字节负载的控制类型。</param>
-    /// <returns>The encoded message. 编码后的消息。</returns>
+    /// <summary>
+    /// Builds a single-byte control message (panels, display power).
+    /// <para>构建单字节控制消息（面板、屏幕电源）。</para>
+    /// </summary>
+    /// <param name="type">One of the single-byte control types. <para>单字节负载的控制类型。</para></param>
+    /// <returns>The encoded message. <para>编码后的消息。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="type"/> is not one of the single-byte control types.
+    /// <para><paramref name="type"/> 不属于单字节控制消息类型。</para></exception>
     public static byte[] Simple(byte type)
         => type is ScrcpyConstants.ControlTypeExpandNotificationPanel
             or ScrcpyConstants.ControlTypeExpandSettingsPanel
@@ -189,12 +216,21 @@ public static class ScrcpyControlMessageWriter
             ? [type]
             : throw new ArgumentException("Type is not a single-byte control message. 该类型不是单字节控制消息。", nameof(type));
 
-    /// <summary>Builds TYPE_SET_CLIPBOARD (type + sequence id + paste flag + length + text).</summary>
-    /// <summary>构建 TYPE_SET_CLIPBOARD（类型 + 序号 + 粘贴标志 + 长度 + 文本）。</summary>
-    /// <param name="text">Clipboard content (max 300 UTF-8 bytes). 剪贴板内容（UTF-8 最多 300 字节）。</param>
-    /// <param name="paste">Whether to also paste on the focused field. 是否同时粘贴到焦点输入框。</param>
-    /// <param name="sequence">Request sequence echoed by ACK_CLIPBOARD. 由 ACK_CLIPBOARD 回显的请求序号。</param>
-    /// <returns>The encoded message. 编码后的消息。</returns>
+    /// <summary>
+    /// Builds TYPE_SET_CLIPBOARD (type + sequence id + paste flag + length + text).
+    /// <para>构建 TYPE_SET_CLIPBOARD（类型 + 序号 + 粘贴标志 + 长度 + 文本）。</para>
+    /// </summary>
+    /// <param name="text">Clipboard content (max 300 UTF-8 bytes).
+    /// <para>剪贴板内容（UTF-8 最多 300 字节）。</para></param>
+    /// <param name="paste">Whether to also paste on the focused field.
+    /// <para>是否同时粘贴到焦点输入框。</para></param>
+    /// <param name="sequence">Request sequence echoed by ACK_CLIPBOARD.
+    /// <para>由 ACK_CLIPBOARD 回显的请求序号。</para></param>
+    /// <returns>The encoded message. <para>编码后的消息。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="text"/> encodes to more than 300 UTF-8 bytes.
+    /// <para><paramref name="text"/> 的 UTF-8 编码超过 300 字节。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="text"/> is <see langword="null"/>.
+    /// <para><paramref name="text"/> 为 <see langword="null"/>。</para></exception>
     public static byte[] SetClipboard(string text, bool paste, ulong sequence = 0)
     {
         var payload = Encoding.UTF8.GetBytes(text);
@@ -214,10 +250,12 @@ public static class ScrcpyControlMessageWriter
         return msg;
     }
 
-    /// <summary>Builds TYPE_GET_CLIPBOARD (type + copy key).</summary>
-    /// <summary>构建 TYPE_GET_CLIPBOARD（类型 + 复制键）。</summary>
-    /// <param name="copyKey">Copy or cut. 复制或剪切。</param>
-    /// <returns>The encoded message. 编码后的消息。</returns>
+    /// <summary>
+    /// Builds TYPE_GET_CLIPBOARD (type + copy key).
+    /// <para>构建 TYPE_GET_CLIPBOARD（类型 + 复制键）。</para>
+    /// </summary>
+    /// <param name="copyKey">Copy or cut. <para>复制或剪切。</para></param>
+    /// <returns>The encoded message. <para>编码后的消息。</para></returns>
     public static byte[] GetClipboard(byte copyKey = ScrcpyConstants.CopyKeyCopy)
     {
         var msg = new byte[2];

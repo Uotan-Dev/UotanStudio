@@ -44,7 +44,7 @@ internal static unsafe partial class Lz4DestinationCodec
 
     private const int WILDCOPYLENGTH = 8;
     private const int LASTLITERALS = 5;
-    private const int MFLIMIT = 12; // WILDCOPYLENGTH + MINMATCH;
+    private const int MFLIMIT = 12;
 
     private const int MATCH_SAFEGUARD_DISTANCE = 2 * WILDCOPYLENGTH - MINMATCH;
     private const int FASTLOOP_SAFE_DISTANCE = 64;
@@ -121,15 +121,15 @@ internal static unsafe partial class Lz4DestinationCodec
     {
         public fixed uint hashTable[LZ4HC_HASHTABLESIZE];
         public fixed ushort chainTable[LZ4HC_MAXD];
-        public byte* end; /* next block here to continue on current prefix */
-        public byte* @base; /* All index relative to this position */
-        public byte* dictBase; /* alternate @base for extDict */
-        public uint dictLimit; /* below that point, need extDict */
-        public uint lowLimit; /* below that point, no more dict */
-        public uint nextToUpdate; /* index from which to continue dictionary update */
+        public byte* end;
+        public byte* @base;
+        public byte* dictBase;
+        public uint dictLimit;
+        public uint lowLimit;
+        public uint nextToUpdate;
         public short compressionLevel;
-        public bool favorDecSpeed; /* favor decompression speed if this flag set */
-        public bool dirty; /* stream has to be fully reset if this flag is set */
+        public bool favorDecSpeed;
+        public bool dirty;
         public LZ4_streamHC_t* dictCtx;
     }
 
@@ -258,17 +258,15 @@ internal static unsafe partial class Lz4DestinationCodec
     {
         if (ctxPtr->end >= ctxPtr->@base + ctxPtr->dictLimit + 4)
             LZ4HC_Insert(
-                ctxPtr, ctxPtr->end - 3); /* Referencing remaining dictionary content */
+                ctxPtr, ctxPtr->end - 3);
 
-        /* Only one memory segment for extDict, so any previous extDict is lost at this stage */
         ctxPtr->lowLimit = ctxPtr->dictLimit;
         ctxPtr->dictLimit = (uint)(ctxPtr->end - ctxPtr->@base);
         ctxPtr->dictBase = ctxPtr->@base;
         ctxPtr->@base = newBlock - ctxPtr->dictLimit;
         ctxPtr->end = newBlock;
-        ctxPtr->nextToUpdate = ctxPtr->dictLimit; /* match referencing will resume from there */
+        ctxPtr->nextToUpdate = ctxPtr->dictLimit;
 
-        /* cannot reference an extDict and a dictCtx at the same time */
         ctxPtr->dictCtx = null;
     }
 
@@ -325,7 +323,6 @@ internal static unsafe partial class Lz4DestinationCodec
             dictSize = 64 * KB;
         }
 
-        /* need a full initialization, there are bad side-effects when using resetFast() */
         {
             int cLevel = ctxPtr->compressionLevel;
             LZ4_initStreamHC(LZ4_streamHCPtr);
@@ -373,7 +370,7 @@ internal static unsafe partial class Lz4DestinationCodec
         }
 
         {
-            byte* bytePtr = (byte*)(&pattern) + 3; /* works for any endianness */
+            byte* bytePtr = (byte*)(&pattern) + 3;
             while ((ip > iLow))
             {
                 if (ip[-1] != *bytePtr) break;
@@ -407,7 +404,7 @@ internal static unsafe partial class Lz4DestinationCodec
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int LZ4HC_sequencePrice(int litlen, int mlen)
     {
-        int price = 1 + 2; /* token + 16-bit offset */
+        int price = 1 + 2;
         Assert(litlen >= 0);
         Assert(mlen >= MINMATCH);
 
@@ -537,7 +534,6 @@ internal static unsafe partial class Lz4DestinationCodec
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static long MIN(long a, long b) => a < b ? a : b;
 
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static uint LZ4_count(byte* pIn, byte* pMatch, byte* pInLimit)
     {
@@ -565,15 +561,11 @@ internal static unsafe partial class Lz4DestinationCodec
             pMatch += STEPSIZE;
         }
 
-
-
         if (pIn < pInLimit - 3 && Mem.Peek4(pMatch) == Mem.Peek4(pIn))
         {
             pIn += 4;
             pMatch += 4;
         }
-
-
 
         if (pIn < pInLimit - 1 && Mem.Peek2(pMatch) == Mem.Peek2(pIn))
         {

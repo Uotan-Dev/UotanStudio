@@ -3,17 +3,59 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.SharedKernel;
 
-/// <summary>Identifies independently measured phases of filesystem build/extraction work.</summary>
+/// <summary>
+/// Identifies independently measured phases of filesystem build/extraction work.
+/// <para>标识文件系统构建/解压工作中各自独立计量的阶段。</para>
+/// </summary>
 public enum FileSystemWorkStage
 {
-    Preparing, Extracting, Preserving, VerifyingImage, VerifyingFiles, ReadingMetadata,
-    BuildingImage, WritingDat, Compressing,
+    /// <summary>Staging work that runs before image content is read or written. <para>在读取或写入镜像内容之前进行的准备性工作。</para></summary>
+    Preparing,
+
+    /// <summary>Writing extracted file bytes from an image to disk. <para>把镜像中的文件字节解压写出到磁盘。</para></summary>
+    Extracting,
+
+    /// <summary>Carrying existing filesystem content through a rebuild. <para>在重建过程中沿用已有的文件系统内容。</para></summary>
+    Preserving,
+
+    /// <summary>Reading and comparing image-level regions for integrity. <para>读取并比对镜像级区域以校验完整性。</para></summary>
+    VerifyingImage,
+
+    /// <summary>Reading and comparing extracted files for integrity. <para>读取并比对已解压文件以校验完整性。</para></summary>
+    VerifyingFiles,
+
+    /// <summary>Reading filesystem metadata structures. <para>读取文件系统元数据结构。</para></summary>
+    ReadingMetadata,
+
+    /// <summary>Writing a rebuilt filesystem image. <para>写出重建后的文件系统镜像。</para></summary>
+    BuildingImage,
+
+    /// <summary>Writing block-image payload output. <para>写出块镜像载荷输出。</para></summary>
+    WritingDat,
+
+    /// <summary>Compressing finished output. <para>压缩已生成的输出。</para></summary>
+    Compressing,
 }
 
-/// <summary>Reports actual bytes processed and the total for the current phase, not image counts.</summary>
+/// <summary>
+/// Reports actual bytes processed and the total for the current phase, not image counts.
+/// <para>报告当前阶段实际处理的字节数与总量，而非镜像条目数。</para>
+/// </summary>
+/// <param name="Stage">The phase the measurements belong to. <para>该次计量所属的阶段。</para></param>
+/// <param name="Processed">Bytes handled so far in this phase. <para>本阶段已处理的字节数。</para></param>
+/// <param name="Total">Bytes expected for this phase, or <c>0</c> when the size is unknown. <para>本阶段预期的字节数；大小未知时为 <c>0</c>。</para></param>
 public readonly record struct FileSystemByteProgress(FileSystemWorkStage Stage, long Processed, long Total)
 {
-    /// <summary>Tags byte measurements with their current extraction phase.</summary>
+    /// <summary>
+    /// Tags byte measurements with their current extraction phase.
+    /// <para>为字节计量标注其当前解压阶段。</para>
+    /// </summary>
+    /// <param name="progress">The sink receiving staged reports; <see langword="null"/> discards them. <para>接收带阶段标注报告的目标；为 <see langword="null"/> 时丢弃报告。</para></param>
+    /// <param name="stage">The phase attached to every report. <para>附加到每条报告上的阶段。</para></param>
+    /// <returns>
+    /// A progress adapter that forwards raw byte tuples tagged with <paramref name="stage"/>.
+    /// <para>一个进度适配器，把原始字节元组加上 <paramref name="stage"/> 标注后转发。</para>
+    /// </returns>
     public static IProgress<(long Processed, long Total)> ForStage(IProgress<FileSystemByteProgress>? progress, FileSystemWorkStage stage)
         => new FileSystemStageProgress(progress, stage);
 }

@@ -52,8 +52,6 @@ internal static partial class ObjcRuntime
     /// </summary>
     public const string LibObjc = "/usr/lib/libobjc.A.dylib";
 
-    // ---- Class / selector lookup ----
-
     /// <summary>
     /// id objc_getClass(const char *name); returns nil (Zero) when the class is absent.
     /// <para>id objc_getClass(const char *name)；类不存在时返回 nil（Zero）。</para>
@@ -68,19 +66,11 @@ internal static partial class ObjcRuntime
     [LibraryImport(LibObjc)]
     public static partial IntPtr sel_registerName([MarshalAs(UnmanagedType.LPStr)] string name);
 
-    // ---- Manual reference counting for ObjC objects we hold across calls ----
-
     [LibraryImport(LibObjc)]
     public static partial IntPtr objc_retain(IntPtr obj);
 
     [LibraryImport(LibObjc)]
     public static partial void objc_release(IntPtr obj);
-
-    // ---- objc_msgSend overloads ----
-    // Each EntryPoint alias maps one concrete managed signature onto objc_msgSend.
-    // The trailing "SEL" is the second implicit argument in every overload.
-    // <para>每个 EntryPoint 别名将一个具体的托管签名映射到 objc_msgSend。
-    // 每个重载的第二个隐式参数都是 "SEL"。</para>
 
     /// <summary>-(void)method — e.g. destroy, close. <para>-(void)method——如 destroy。</para></summary>
     [LibraryImport(LibObjc, EntryPoint = "objc_msgSend")]

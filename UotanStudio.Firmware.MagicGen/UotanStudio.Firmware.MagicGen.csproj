@@ -7,6 +7,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- 构建期代码生成工具；不进入运行时裁剪/发布路径。 -->
     <!-- Build-time code generator; not part of the runtime publish/trim path. -->
     <IsPackable>false</IsPackable>

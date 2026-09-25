@@ -2,12 +2,36 @@ using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Decompile;
 
+/// <summary>
+/// Recovers structured Java control flow (if, while, do-while, switch) from a DEX method's
+/// control-flow graph.
+/// <para>从 DEX 方法的控制流图还原结构化 Java 控制流（if、while、do-while、switch）。</para>
+/// </summary>
 public static class ControlFlowStructuring
 {
     /// <summary>
     /// Structures the method into a complete statement list.
     /// <para>结构化方法的完整语句列表。</para>
     /// </summary>
+    /// <param name="analysis">Linear register analysis whose per-offset items supply the statements,
+    /// branch conditions and switch values. <para>线性寄存器分析结果，其按偏移索引的条目提供语句、分支条件与
+    /// switch 值。</para></param>
+    /// <param name="cfg">Control-flow graph of the method body.
+    /// <para>方法体的控制流图。</para></param>
+    /// <param name="options">Output settings for the decompilation stages.
+    /// <para>反编译各阶段的输出设置。</para></param>
+    /// <returns>Statements reachable from the graph entry in emission order; an empty list when
+    /// <paramref name="cfg"/> has no entry block. Blocks that cannot be structured are emitted as
+    /// their plain statements plus a raw comment describing the unresolved branch. Each block's
+    /// <see cref="BasicBlock.Visited"/> flag is cleared before traversal, so the result depends only
+    /// on the graph shape.
+    /// <para>按输出顺序返回从图入口可达的语句；<paramref name="cfg"/> 没有入口块时返回空列表。无法结构化的块
+    /// 会输出其普通语句，并附带一条描述未解析分支的原始注释。遍历前会清除每个块的
+    /// <see cref="BasicBlock.Visited"/> 标志，因此结果只取决于图结构。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="analysis"/>,
+    /// <paramref name="cfg"/> or <paramref name="options"/> is <see langword="null"/>.
+    /// <para><paramref name="analysis"/>、<paramref name="cfg"/> 或 <paramref name="options"/> 为
+    /// <see langword="null"/>。</para></exception>
     public static List<JavaStmt> Structure(LinearAnalysis analysis, Cfg cfg, DecompileOptions options)
     {
         ArgumentNullException.ThrowIfNull(analysis);

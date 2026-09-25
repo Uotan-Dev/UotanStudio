@@ -3,6 +3,7 @@
     <RootNamespace>UotanStudio.Services.Delivery</RootNamespace>
     <AssemblyName>UotanStudio.Delivery</AssemblyName>
     <IsAotCompatible>true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

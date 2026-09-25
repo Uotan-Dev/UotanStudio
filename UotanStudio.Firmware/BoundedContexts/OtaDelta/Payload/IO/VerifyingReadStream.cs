@@ -37,9 +37,6 @@ internal sealed class VerifyingReadStream : Stream
     public override bool CanSeek => false;
     public override bool CanWrite => false;
     public override long Length => _input.Length;
-    // XZ asks for Position even on forward-only streams. Report bytes consumed by the
-    // decoder, excluding read-ahead; BufferedStream cannot expose this without seeking.
-    // XZ 在不可定位流上也读取 Position；必须扣除预读量，报告解码器实际消费的位置。
     public override long Position { get => _input.Position - (_bufferEnd - _bufferOffset); set => throw new NotSupportedException(); }
 
     /// <summary>
@@ -77,9 +74,6 @@ internal sealed class VerifyingReadStream : Stream
 
     private bool Refill()
     {
-        // Hash below the buffer: each bounded refill locks/positions the payload stream
-        // and updates SHA-256 once, allowing other operations to decode concurrently.
-        // 哈希位于缓冲下层，每次有界补充仅加锁、定位及更新摘要一次。
         _bufferOffset = 0;
         _bufferEnd = _hashing.Read(_buffer!, 0, BufferSize);
         return _bufferEnd > 0;

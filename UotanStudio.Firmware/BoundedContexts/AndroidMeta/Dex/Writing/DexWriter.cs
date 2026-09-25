@@ -22,7 +22,6 @@ internal static partial class DexWriter
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true);
 
-
         var headerStart = (int)ms.Position;
         w.Write(Encoding.ASCII.GetBytes("dex\n" + version + "\0"));
         w.Write(0u);
@@ -51,8 +50,6 @@ internal static partial class DexWriter
 
         var mapItems = new List<(ushort Type, uint Size, uint Offset)>();
 
-
-        // Reserve every fixed-size ID table before emitting variable-size data.
         var stringIdsOffset = (int)ms.Position;
         var typeIdsOffset = checked(stringIdsOffset + dex.Strings.Count * 4);
         var protoIdsOffset = checked(typeIdsOffset + dex.Types.Count * 4);
@@ -82,7 +79,6 @@ internal static partial class DexWriter
         Align(w, 4);
         mapItems.Add((0x0001, (uint)dex.Strings.Count, (uint)stringIdsOffset));
 
-
         var stringIndex = new Dictionary<string, int>(dex.Strings.Count, StringComparer.Ordinal);
         for (var i = 0; i < dex.Strings.Count; i++)
         {
@@ -102,7 +98,6 @@ internal static partial class DexWriter
         Align(w, 4);
         mapItems.Add((0x0002, (uint)dex.Types.Count, (uint)typeIdsOffset));
         ms.Position = afterStrings;
-
 
         ms.Position = protoIdsOffset;
         for (var i = 0; i < dex.Protos.Count; i++)
@@ -134,7 +129,6 @@ internal static partial class DexWriter
         }
         Align(w, 4);
 
-
         var protoEnd = (int)ms.Position;
         ms.Position = protoIdsOffset;
         for (var i = 0; i < dex.Protos.Count; i++)
@@ -145,7 +139,6 @@ internal static partial class DexWriter
         }
         ms.Position = protoEnd;
         mapItems.Add((0x0003, (uint)dex.Protos.Count, (uint)protoIdsOffset));
-
 
         var afterProtoLists = ms.Position;
         ms.Position = fieldIdsOffset;
@@ -158,7 +151,6 @@ internal static partial class DexWriter
         Align(w, 4);
         mapItems.Add((0x0004, (uint)dex.Fields.Count, (uint)fieldIdsOffset));
 
-
         ms.Position = methodIdsOffset;
         foreach (var method in dex.Methods)
         {
@@ -168,7 +160,6 @@ internal static partial class DexWriter
         }
         Align(w, 4);
         mapItems.Add((0x0005, (uint)dex.Methods.Count, (uint)methodIdsOffset));
-
 
         ms.Position = classDefsOffset;
         var classDataOffsets = new uint[dex.Classes.Count];
@@ -181,7 +172,6 @@ internal static partial class DexWriter
             w.Write(cls.AccessFlags);
             w.Write(cls.SuperclassIndex < 0 ? NoIndex : (uint)cls.SuperclassIndex);
 
-
             WriteOffsetPlaceholder(w);
             w.Write(cls.SourceFileIndex < 0 ? NoIndex : (uint)cls.SourceFileIndex);
             w.Write(0u);
@@ -190,7 +180,6 @@ internal static partial class DexWriter
         }
         Align(w, 4);
         mapItems.Add((0x0006, (uint)dex.Classes.Count, (uint)classDefsOffset));
-
 
         ms.Position = methodHandlesOffset;
         foreach (var handle in dex.MethodHandles)
@@ -205,7 +194,6 @@ internal static partial class DexWriter
         if (dex.MethodHandles.Count > 0) mapItems.Add((8, (uint)dex.MethodHandles.Count, (uint)methodHandlesOffset));
         if (dex.CallSites.Count > 0) mapItems.Add((7, (uint)dex.CallSites.Count, (uint)callSiteIdsOffset));
         ms.Position = afterProtoLists;
-
 
         var interfaceTypeListCount = 0;
         var firstInterfaceTypeList = 0u;
@@ -227,7 +215,6 @@ internal static partial class DexWriter
             }
         }
         Align(w, 4);
-
 
         var codeItemCount = 0;
         var firstCodeItem = 0u;
@@ -252,9 +239,6 @@ internal static partial class DexWriter
                 classDataOffsets[i] = 0;
                 continue;
             }
-
-
-
 
             classDataOffsets[i] = (uint)ms.Position;
             WriteUleb128(w, (uint)cls.StaticFields.Count);
@@ -283,7 +267,6 @@ internal static partial class DexWriter
         }
         Align(w, 4);
 
-
         var debugInfoCount = 0;
         var firstDebugInfo = 0u;
         foreach (var (fieldPos, dbgBytes) in debugPatches)
@@ -298,7 +281,6 @@ internal static partial class DexWriter
             ms.Position = cur;
         }
         Align(w, 4);
-
 
         var allItems = new List<AnnotationItem>();
         var allSets = new List<AnnotationSet>();
@@ -328,7 +310,6 @@ internal static partial class DexWriter
             }
         }
 
-
         var annotationItemOffsets = new Dictionary<AnnotationItem, uint>();
         foreach (var item in allItems)
         {
@@ -337,7 +318,6 @@ internal static partial class DexWriter
             WriteEncodedAnnotation(w, item);
         }
         Align(w, 4);
-
 
         var annotationSetOffsets = new Dictionary<AnnotationSet, uint>();
         foreach (var set in allSets)
@@ -352,7 +332,6 @@ internal static partial class DexWriter
         }
         Align(w, 4);
 
-
         var refListOffsets = new Dictionary<AnnotationSetRefList, uint>();
         foreach (var rl in allRefLists)
         {
@@ -365,7 +344,6 @@ internal static partial class DexWriter
             }
         }
         Align(w, 4);
-
 
         var directoryOffsets = new Dictionary<AnnotationsDirectory, uint>();
         foreach (var dir in allDirs)
@@ -393,7 +371,6 @@ internal static partial class DexWriter
             }
         }
         Align(w, 4);
-
 
         var staticValueOffsets = new uint[dex.Classes.Count];
         var encodedArrayCount = 0;
@@ -448,12 +425,10 @@ internal static partial class DexWriter
 
         var dataEnd = (int)ms.Position;
 
-
         Align(w, 4);
         var mapOffset = (int)ms.Position;
         mapItems.Add((0x0000, 1, 0));
         mapItems.Add((0x1000, 1, (uint)mapOffset));
-
 
         if (stringOffsets.Length > 0) mapItems.Add((0x2002, (uint)stringOffsets.Length, stringOffsets[0]));
         var firstClassData = classDataOffsets.FirstOrDefault(o => o != 0);
@@ -472,7 +447,6 @@ internal static partial class DexWriter
         if (directoryOffsets.Count > 0) mapItems.Add((0x2006, (uint)directoryOffsets.Count, directoryOffsets.Values.Min()));
         if (encodedArrayCount > 0) mapItems.Add((0x2005, (uint)encodedArrayCount, firstEncodedArray));
 
-
         var ordered = mapItems.Where(m => m.Size > 0).OrderBy(m => m.Offset).ToList();
         w.Write((uint)ordered.Count);
         foreach (var (type, size, offset) in ordered)
@@ -484,7 +458,6 @@ internal static partial class DexWriter
         }
 
         var fileSize = (int)ms.Position;
-
 
         void Patch(int pos, uint value)
         {
@@ -505,10 +478,8 @@ internal static partial class DexWriter
 
         var bytes = ms.ToArray();
 
-
         var signature = SHA1.HashData(bytes.AsSpan(32));
         signature.CopyTo(bytes, 12);
-
 
         var checksum = Adler32(bytes.AsSpan(12));
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8), checksum);

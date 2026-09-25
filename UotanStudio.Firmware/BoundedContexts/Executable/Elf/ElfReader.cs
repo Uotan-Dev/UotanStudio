@@ -7,16 +7,26 @@ namespace UotanStudio.Firmware.BoundedContexts.Executable.Elf;
 /// <summary>
 /// Reads ELF32/ELF64 metadata in either byte order using bounded, seekable input.
 /// Layouts and extended numbering follow the System V gABI ELF header, program-header and section-header definitions.
+/// <para>使用有界、可寻址的输入，以任一字节序读取 ELF32/ELF64 元数据。布局与扩展编号遵循 System V gABI
+/// 关于 ELF 头、程序头与节头的定义。</para>
 /// </summary>
 public static class ElfReader
 {
-    // Metadata limits bound both I/O and the objects retained by the information panel.
     private const uint MaxTableEntries = 131072;
     private const int MaxStringTableBytes = 16 * 1024 * 1024;
     private const int MaxNameBytes = 4096;
     private const int MaxTotalNameBytes = 16 * 1024 * 1024;
 
-    /// <summary>Validates the complete fixed header, without reading tables or relying on a filename.</summary>
+    /// <summary>Validates the complete fixed header, without reading tables or relying on a filename.
+    /// <para>校验完整的固定头部，不读取表，也不依赖文件名。</para></summary>
+    /// <param name="data">Leading file bytes; at least 52 are required, and 64 for ELFCLASS64.
+    /// <para>文件起始字节；至少需要 52 字节，ELFCLASS64 需要 64 字节。</para></param>
+    /// <param name="header">The parsed header when the return value is <see langword="true"/>; otherwise <see langword="null"/>.
+    /// <para>返回值为 <see langword="true"/> 时为解析出的头部；否则为 <see langword="null"/>。</para></param>
+    /// <returns><see langword="true"/> when the magic, class, data encoding, version, sizes and table geometry are
+    /// consistent; <see langword="false"/> for any malformed or truncated input without throwing.
+    /// <para>当魔数、位宽、数据编码、版本、大小与表几何信息一致时返回 <see langword="true"/>；任何格式错误或
+    /// 截断的输入都返回 <see langword="false"/> 且不抛出异常。</para></returns>
     public static bool TryReadHeader(ReadOnlySpan<byte> data, [NotNullWhen(true)] out ElfHeader? header)
     {
         header = null;
@@ -54,14 +64,46 @@ public static class ElfReader
         return true;
     }
 
-    /// <summary>Reads a file on a worker thread; cancellation is checked before every metadata read.</summary>
+    /// <summary>Reads a file on a worker thread; cancellation is checked before every metadata read.
+    /// <para>在工作线程上读取文件；每次读取元数据前都会检查取消。</para></summary>
+    /// <param name="path">
+    /// Path opened read-only with shared read access; the handle is closed when the task completes.
+    /// <para>以只读共享读方式打开的路径；任务结束时句柄即关闭。</para>
+    /// </param>
+    /// <param name="cancellationToken">Token checked before each read; a canceled run faults the task with
+    /// <see cref="OperationCanceledException"/>.
+    /// <para>每次读取前检查的令牌；被取消时任务以 <see cref="OperationCanceledException"/> 失败。</para></param>
+    /// <returns>A task producing the validated <see cref="ElfInfo"/> for the file.
+    /// <para>产生该文件已校验 <see cref="ElfInfo"/> 的任务。</para></returns>
+    /// <exception cref="FileNotFoundException"><paramref name="path"/> does not exist.
+    /// <para><paramref name="path"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException">The file is not a valid ELF image. Surfaces as a faulted task.
+    /// <para>文件不是有效的 ELF 镜像；表现为失败任务。</para></exception>
     public static Task<ElfInfo> ReadAsync(string path, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.RandomAccess);
         return Read(stream, cancellationToken);
     }, cancellationToken);
 
-    /// <summary>Reads metadata from the start of a seekable stream, leaving it open and restoring its position.</summary>
+    /// <summary>Reads metadata from the start of a seekable stream, leaving it open and restoring its position.
+    /// <para>从可寻址流的开头读取元数据，不关闭流并恢复其位置。</para></summary>
+    /// <param name="stream">Readable, seekable stream positioned anywhere; all table offsets are resolved
+    /// from file start and the stream is not owned.
+    /// <para>任意位置处的可读、可寻址流；所有表偏移都相对文件开头解析，流所有权不归本方法。</para></param>
+    /// <param name="cancellationToken">Token checked before and after every read.
+    /// <para>每次读取前后都检查的令牌。</para></param>
+    /// <returns>Validated metadata with extended counts resolved; section names are resolved only when the
+    /// file carries a string table.
+    /// <para>已校验的元数据（扩展计数已解析）；仅当文件带有字符串表时才解析节名。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException">The stream cannot be read or cannot seek.
+    /// <para>流不可读或不可寻址。</para></exception>
+    /// <exception cref="InvalidDataException">The header, tables, ranges, alignments or string table are
+    /// malformed, truncated, or exceed the bounded entry and name limits.
+    /// <para>头部、表、范围、对齐或字符串表格式错误、被截断，或超出条目与名称的有界上限。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public static ElfInfo Read(Stream stream, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -150,7 +192,6 @@ public static class ElfReader
                 ReadAt(stream, header.SectionHeaderOffset + (ulong)i * header.SectionHeaderEntrySize,
                     buffer[..header.SectionHeaderEntrySize], length, cancellationToken);
                 var section = ReadSection(buffer, i, header);
-                // SHT_NULL fields can carry extended counts; SHT_NOBITS occupies memory only.
                 if (section.Type != 0)
                 {
                     if (section.Type != 8)

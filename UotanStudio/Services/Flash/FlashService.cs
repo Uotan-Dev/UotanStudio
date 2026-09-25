@@ -371,14 +371,14 @@ public sealed class FlashService : IFlashService
     /// <summary>
     /// <para>解析刷写目标分区（A/B 槽位）并按 AOSP fastboot <c>do_flash</c> 语义准备逻辑分区：
     /// 目标为逻辑分区时先发送 <c>resize-logical-partition:&lt;分区&gt;:&lt;镜像逻辑尺寸&gt;</c>，
-    /// 使 fastbootd 的 <c>flash</c> 不再因镜像大于当前分区而返回 EOVERFLOW
+    /// 使 fastbootd 的 <c>flash</c> 接受大于当前分区的镜像，而非返回 EOVERFLOW
     /// （"Value too large for defined data type"）或越界写入失败。非逻辑分区和设备不支持
     /// <c>is-logical</c> 时不做任何调整。</para>
     /// Resolves the flash target (A/B slot) and prepares a logical partition following AOSP fastboot
     /// <c>do_flash</c>: a logical partition is resized to the image's logical size with
     /// <c>resize-logical-partition:&lt;partition&gt;:&lt;size&gt;</c> beforehand, so fastbootd's
-    /// <c>flash</c> no longer rejects an oversized image with EOVERFLOW
-    /// ("Value too large for defined data type") or fails writing past the mapped range. Physical
+    /// <c>flash</c> accepts an oversized image instead of rejecting it with EOVERFLOW
+    /// ("Value too large for defined data type") or failing past the mapped range. Physical
     /// partitions and devices without <c>is-logical</c> support are left untouched.
     /// </summary>
     /// <param name="session"><para>已连接的 fastboot 会话。</para>A connected fastboot session.</param>

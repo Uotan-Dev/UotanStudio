@@ -4,12 +4,23 @@ using DtTree = UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.DeviceT
 
 namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
 
+/// <summary>
+/// Parses and serializes single-device-tree blobs in the big-endian flattened device tree (FDT/DTB) format.
+/// <para>以大端展平设备树（FDT/DTB）格式解析和序列化单设备树数据块。</para>
+/// </summary>
 public static class DtbFormat
 {
     /// <summary>
     /// Parses a device tree from a byte array in DTB format.
     /// <para>从 DTB 格式的字节数组解析设备树。</para>
     /// </summary>
+    /// <param name="data">Complete DTB image bytes. <para>完整的 DTB 镜像字节。</para></param>
+    /// <returns>The parsed device tree. <para>解析后的设备树。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is null. <para><paramref name="data"/> 为 null。</para></exception>
+    /// <exception cref="InvalidDataException">The magic, declared sizes or structure block are malformed.
+    /// <para>魔数、声明大小或结构块无效。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">A header offset or size points outside the array.
+    /// <para>表头偏移或大小指向数组之外。</para></exception>
     public static DtTree Read(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -20,6 +31,19 @@ public static class DtbFormat
     /// Parses a device tree from a span in DTB format.
     /// <para>从 DTB 格式的字节跨度解析设备树。</para>
     /// </summary>
+    /// <param name="data">Span covering the complete DTB image; trailing bytes beyond total_size are ignored.
+    /// <para>覆盖完整 DTB 镜像的跨度；total_size 之后的尾部字节被忽略。</para></param>
+    /// <returns>The parsed device tree, including memory reservations and the root node tree.
+    /// <para>解析后的设备树，包含内存保留项与根节点树。</para></returns>
+    /// <exception cref="InvalidDataException">The FDT magic is wrong, declared sizes exceed the span, or the
+    /// structure block is malformed. <para>FDT 魔数错误、声明大小超出跨度，或结构块无效。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">A header offset or size points outside the span.
+    /// <para>表头偏移或大小指向跨度之外。</para></exception>
+    /// <example>
+    /// <code>
+    /// var tree = DtbFormat.Read(File.ReadAllBytes("board.dtb"));
+    /// </code>
+    /// </example>
     public static DtTree Read(ReadOnlySpan<byte> data)
     {
         var header = FdtHeader.ReadFrom(data);
@@ -66,6 +90,11 @@ public static class DtbFormat
     /// Serializes a device tree to binary DTB format.
     /// <para>将设备树序列化为二进制 DTB 格式。</para>
     /// </summary>
+    /// <param name="tree">Device tree model to encode; property values keep their stored byte identity.
+    /// <para>要编码的设备树模型；属性值保持其存储的字节原貌。</para></param>
+    /// <returns>A big-endian FDT image: header, reservations block, structure block and strings block.
+    /// <para>大端 FDT 镜像：表头、保留项区、结构区与字符串区。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="tree"/> is null. <para><paramref name="tree"/> 为 null。</para></exception>
     public static byte[] Write(DtTree tree)
     {
         ArgumentNullException.ThrowIfNull(tree);

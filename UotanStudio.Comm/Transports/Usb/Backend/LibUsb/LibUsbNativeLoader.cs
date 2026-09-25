@@ -135,13 +135,6 @@ internal static partial class LibUsbNativeLoader
         NativeLibrary.SetDllImportResolver(typeof(LibUsbNativeLoader).Assembly, ResolveLibrary);
     }
 
-    // Answers our own [DllImport("libusb-1.0")] probes (libusb_init/libusb_exit in
-    // LibUsbFinder, libusb_clear_halt in LibUsbDevice) with the caller-loaded
-    // handle, so PrelinkAll-Style runtime detection succeeds even before dyld's
-    // leaf-name matching kicks in.
-    // <para>用调用者加载的句柄回答我们自身的 [DllImport("libusb-1.0")] 探测
-    // （LibUsbFinder 的 libusb_init/libusb_exit、LibUsbDevice 的 libusb_clear_halt），
-    // 使 PrelinkAll 式运行时检测在 dyld 叶名匹配生效前即成功。</para>
     private static IntPtr ResolveLibrary(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {
         if (libraryName is "libusb-1.0" or "libusb-1.0.dylib" or "libusb-1.0.so" or "libusb-1.0.dll")
@@ -165,7 +158,7 @@ internal static partial class LibUsbNativeLoader
 #endif
 
 #if !NET5_0_OR_GREATER
-    private const int RtlNowLocal = 0x2 | 0x1; // RTLD_NOW | RTLD_LOCAL
+    private const int RtlNowLocal = 0x2 | 0x1;
 
     [LibraryImport("libSystem.dylib", EntryPoint = "dlopen")]
     private static partial IntPtr Dlopen([MarshalAs(UnmanagedType.LPStr)] string path, int mode);

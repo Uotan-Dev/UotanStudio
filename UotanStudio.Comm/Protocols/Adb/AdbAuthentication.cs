@@ -12,7 +12,7 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// </summary>
 public sealed class AdbAuthentication : IDisposable
 {
-    private const int KeyLengthInDwords = 64; // 2048-bit key = 256 bytes
+    private const int KeyLengthInDwords = 64;
 
     private readonly RSA _rsa;
 
@@ -22,6 +22,8 @@ public sealed class AdbAuthentication : IDisposable
     /// <para>获取默认密钥目录（Windows 为 %USERPROFILE%/.android，其他平台为
     /// ~/.android），与 AOSP adb 密钥位置一致。</para>
     /// </summary>
+    /// <value>The composed directory path; the directory itself may not exist yet.
+    /// <para>组合得到的目录路径；该目录本身可能尚不存在。</para></value>
     public static string DefaultKeyDirectory => Path.Combine(GetHomeDirectory(), ".android");
 
     /// <summary>
@@ -30,15 +32,20 @@ public sealed class AdbAuthentication : IDisposable
     /// <para>获取默认私钥文件路径（%USERPROFILE%/.android/adbkey），与 AOSP adb
     /// 密钥位置一致。</para>
     /// </summary>
+    /// <value>The path of the private key file named <c>adbkey</c>; the file may not exist yet.
+    /// <para>名为 <c>adbkey</c> 的私钥文件路径；该文件可能尚不存在。</para></value>
     public static string DefaultKeyFilePath => Path.Combine(DefaultKeyDirectory, "adbkey");
 
     /// <summary>
     /// Initializes authentication with the supplied 2048-bit RSA key.
     /// <para>使用提供的 2048 位 RSA 密钥初始化认证。</para>
     /// </summary>
-    /// <param name="rsa">The RSA key to use. 待使用的 RSA 密钥。</param>
-    /// <exception cref="ArgumentNullException"><paramref name="rsa"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException">The key is not 2048 bits. 密钥不是 2048 位。</exception>
+    /// <param name="rsa">The RSA key to use. <para>待使用的 RSA 密钥。</para></param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="rsa"/> is <c>null</c>.
+    /// <para><paramref name="rsa"/> 为 <c>null</c>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">The key is not 2048 bits. <para>密钥不是 2048 位。</para></exception>
     public AdbAuthentication(RSA rsa)
     {
         _rsa = rsa ?? throw new ArgumentNullException(nameof(rsa));
@@ -52,7 +59,7 @@ public sealed class AdbAuthentication : IDisposable
     /// Creates authentication with a newly generated 2048-bit RSA key.
     /// <para>使用新生成的 2048 位 RSA 密钥创建认证。</para>
     /// </summary>
-    /// <returns>A new <see cref="AdbAuthentication"/> instance. 新的 <see cref="AdbAuthentication"/> 实例。</returns>
+    /// <returns>A new <see cref="AdbAuthentication"/> instance. <para>新的 <see cref="AdbAuthentication"/> 实例。</para></returns>
     public static AdbAuthentication CreateNew()
     {
         var rsa = RSA.Create();
@@ -70,9 +77,9 @@ public sealed class AdbAuthentication : IDisposable
     /// </summary>
     /// <param name="keyPath">
     /// The private key path; defaults to <see cref="DefaultKeyFilePath"/>.
-    /// 私钥路径；默认为 <see cref="DefaultKeyFilePath"/>。
+    /// <para>私钥路径；默认为 <see cref="DefaultKeyFilePath"/>。</para>
     /// </param>
-    /// <returns>The loaded or newly created authentication. 加载或新建的认证实例。</returns>
+    /// <returns>The loaded or newly created authentication. <para>加载或新建的认证实例。</para></returns>
     public static AdbAuthentication LoadOrCreate(string? keyPath = null)
     {
         var path = keyPath ?? DefaultKeyFilePath;
@@ -121,9 +128,9 @@ public sealed class AdbAuthentication : IDisposable
     /// Signs the token with RSA-PKCS1 + SHA1 (ADB signature).
     /// <para>用私钥以 RSA-PKCS1 + SHA1 对令牌签名。</para>
     /// </summary>
-    /// <param name="token">The token to sign. 待签名的令牌。</param>
-    /// <returns>The RSA-SHA1 signature. RSA-SHA1 签名。</returns>
-    /// <exception cref="ArgumentException"><paramref name="token"/> is empty. 令牌为空。</exception>
+    /// <param name="token">The token to sign. <para>待签名的令牌。</para></param>
+    /// <returns>The RSA-SHA1 signature. <para>RSA-SHA1 签名。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="token"/> is empty. <para>令牌为空。</para></exception>
     public byte[] SignToken(byte[] token)
     {
         if (token is null || token.Length == 0)
@@ -142,9 +149,9 @@ public sealed class AdbAuthentication : IDisposable
     /// </summary>
     /// <param name="comment">
     /// Optional comment appended after the key; defaults to "user@host".
-    /// 追加在密钥后的可选注释；默认为 "user@host"。
+    /// <para>追加在密钥后的可选注释；默认为 "user@host"。</para>
     /// </param>
-    /// <returns>The public key payload bytes. 公钥负载字节。</returns>
+    /// <returns>The public key payload bytes. <para>公钥负载字节。</para></returns>
     public byte[] BuildPublicKeyPayload(string? comment = null)
     {
         var publicKey = _rsa.ExportParameters(false);
@@ -167,11 +174,11 @@ public sealed class AdbAuthentication : IDisposable
     /// <para>将 ADB RSAPublicKey 结构序列化为线上缓冲区：
     /// len(4) + n0inv(4) + n(4*len) + rr(4*len) + exponent(4)。</para>
     /// </summary>
-    /// <param name="n0inv">The -1/n[0] inverse used by the ADB crypto routines. ADB 加密例程使用的 -1/n[0] 逆元。</param>
-    /// <param name="n">The modulus split into 32-bit words. 按 32 位字拆分的模数。</param>
-    /// <param name="rr">The r^2 mod n split into 32-bit words. 按 32 位字拆分的 r^2 mod n。</param>
-    /// <param name="exponent">The public exponent. 公钥指数。</param>
-    /// <returns>The serialized RSAPublicKey buffer. 序列化后的 RSAPublicKey 缓冲区。</returns>
+    /// <param name="n0inv">The -1/n[0] inverse used by the ADB crypto routines. <para>ADB 加密例程使用的 -1/n[0] 逆元。</para></param>
+    /// <param name="n">The modulus split into 32-bit words. <para>按 32 位字拆分的模数。</para></param>
+    /// <param name="rr">The r^2 mod n split into 32-bit words. <para>按 32 位字拆分的 r^2 mod n。</para></param>
+    /// <param name="exponent">The public exponent. <para>公钥指数。</para></param>
+    /// <returns>The serialized RSAPublicKey buffer. <para>序列化后的 RSAPublicKey 缓冲区。</para></returns>
     public static byte[] AdbRsaToBuffer(uint n0inv, uint[] n, uint[] rr, int exponent)
     {
         var len = n.Length;
@@ -201,8 +208,8 @@ public sealed class AdbAuthentication : IDisposable
     /// Converts .NET RSA parameters into ADB RSAPublicKey fields (n0inv, n, rr, exponent).
     /// <para>将 .NET RSA 参数转换为 ADB RSAPublicKey 字段（n0inv、n、rr、exponent）。</para>
     /// </summary>
-    /// <param name="parameters">The .NET RSA parameters. .NET RSA 参数。</param>
-    /// <returns>The ADB key fields. ADB 密钥字段。</returns>
+    /// <param name="parameters">The .NET RSA parameters. <para>.NET RSA 参数。</para></param>
+    /// <returns>The ADB key fields. <para>ADB 密钥字段。</para></returns>
     public static (uint n0inv, uint[] n, uint[] rr, int exponent) ConvertRsaToAdb(RSAParameters parameters)
     {
         var modulus = parameters.Modulus ?? throw new ArgumentException("Modulus is missing.", nameof(parameters));

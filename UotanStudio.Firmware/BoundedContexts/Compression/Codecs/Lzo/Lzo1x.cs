@@ -2,18 +2,28 @@ using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.BoundedContexts.Compression.Codecs.Lzo;
 
+/// <summary>
+/// Outcome codes returned by the LZO1X codec.
+/// <para>LZO1X 编解码器返回的结果状态码。</para>
+/// </summary>
 public enum LzoStatus : byte
 {
+    /// <summary>The operation completed successfully. <para>操作成功完成。</para></summary>
     Ok,
 
+    /// <summary>The bitstream ended while input bytes remained unconsumed. <para>位流已结束但仍有输入字节未被消费。</para></summary>
     InputNotConsumed,
 
+    /// <summary>The bitstream demands more input bytes than are available. <para>位流需要的输入字节超出可用范围。</para></summary>
     InputOverrun,
 
+    /// <summary>A decoded run exceeds the output buffer capacity. <para>解码输出超出输出缓冲区容量。</para></summary>
     OutputOverrun,
 
+    /// <summary>A match references a position before the start of the output window. <para>匹配引用了输出窗口起点之前的位置。</para></summary>
     LookbehindOverrun,
 
+    /// <summary>The bitstream is structurally invalid. <para>位流结构无效。</para></summary>
     Error,
 }
 

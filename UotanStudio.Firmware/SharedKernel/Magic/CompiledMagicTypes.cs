@@ -6,31 +6,58 @@ namespace UotanStudio.Firmware.SharedKernel.Magic;
 /// </summary>
 public enum MagicKind : byte
 {
-    /// <summary>无负载（default / use / name 等）。 / No value payload (default / use / name).</summary>
+    /// <summary>
+    /// Rule payload class carrying no value, used by default, use and name-only rules.
+    /// <para>不携带数值的规则负载类别，用于 default、use 与仅名称规则。</para>
+    /// </summary>
     None = 0,
 
-    /// <summary>定长字节串。 / Fixed byte string.</summary>
+    /// <summary>
+    /// Fixed-length byte string compared byte by byte against the rule pattern.
+    /// <para>定长字节串，与规则模式逐字节比对。</para>
+    /// </summary>
     String = 1,
 
-    /// <summary>数值（含宽度/符号/字节序/日期）。 / Numeric (width / signedness / endianness / date).</summary>
+    /// <summary>
+    /// Numeric value whose width, signedness and byte order come from <see cref="MagicNumberType"/>.
+    /// <para>数值负载，其宽度、符号与字节序由 <see cref="MagicNumberType"/> 决定。</para>
+    /// </summary>
     Number = 2,
 
-    /// <summary>正则。 / Regular expression.</summary>
+    /// <summary>
+    /// Regular expression matched against the window from the rule offset to its end.
+    /// <para>正则表达式，从规则偏移起匹配到窗口末尾。</para>
+    /// </summary>
     Regex = 3,
 
-    /// <summary>有界范围搜索串。 / Bounded-range byte-string search.</summary>
+    /// <summary>
+    /// Byte-string search bounded by the rule range, defaulting to 100 bytes; a 0xFF pattern byte matches any byte.
+    /// <para>受规则范围限制的字节串搜索，范围缺省为 100 字节；模式字节 0xFF 匹配任意字节。</para>
+    /// </summary>
     Search = 4,
 
-    /// <summary>长度前缀串。 / Length-prefixed string.</summary>
+    /// <summary>
+    /// Length-prefixed string, where the prefix is read as 1, 2 or 4 bytes and any other size falls back to 1.
+    /// <para>带长度前缀的字符串，前缀按 1、2 或 4 字节读取，其它宽度一律退回 1 字节。</para>
+    /// </summary>
     PString = 5,
 
-    /// <summary>UTF-16LE 定长串。 / UTF-16LE fixed string.</summary>
+    /// <summary>
+    /// Fixed-length UTF-16 little-endian string.
+    /// <para>定长 UTF-16LE 字符串。</para>
+    /// </summary>
     String16Le = 6,
 
-    /// <summary>UTF-16BE 定长串。 / UTF-16BE fixed string.</summary>
+    /// <summary>
+    /// Fixed-length UTF-16 big-endian string.
+    /// <para>定长 UTF-16BE 字符串。</para>
+    /// </summary>
     String16Be = 7,
 
-    /// <summary>GUID（{...} 文本形态）。 / GUID textual form.</summary>
+    /// <summary>
+    /// GUID rule: the source value is textual, while the compiled pattern holds 16 raw bytes and 0xFF wildcards a byte.
+    /// <para>GUID 规则：源值以文本书写，编译后的模式保存 16 个原始字节，其中 0xFF 表示通配。</para>
+    /// </summary>
     Guid = 8,
 }
 
@@ -40,73 +67,100 @@ public enum MagicKind : byte
 /// </summary>
 public enum MagicNumberType : byte
 {
-    /// <summary>1 字节有符号。 / Signed byte.</summary>
+    /// <summary>Signed 1-byte value. <para>1 字节有符号整数。</para></summary>
     Byte = 0,
 
-    /// <summary>1 字节无符号。 / Unsigned byte.</summary>
+    /// <summary>Unsigned 1-byte value. <para>1 字节无符号整数。</para></summary>
     UByte = 1,
 
-    /// <summary>2 字节本机序有符号。 / Native-order signed short.</summary>
+    /// <summary>
+    /// 2-byte signed short written as host order in the rule source; the matcher decodes it little-endian.
+    /// <para>规则源写作本机序的 2 字节有符号短整数；匹配时按小端解码。</para>
+    /// </summary>
     Short = 2,
 
-    /// <summary>2 字节本机序无符号。 / Native-order unsigned short.</summary>
+    /// <summary>
+    /// 2-byte unsigned short written as host order in the rule source; the matcher decodes it little-endian.
+    /// <para>规则源写作本机序的 2 字节无符号短整数；匹配时按小端解码。</para>
+    /// </summary>
     UShort = 3,
 
-    /// <summary>4 字节本机序有符号。 / Native-order signed long.</summary>
+    /// <summary>
+    /// 4-byte signed integer written as host order in the rule source; the matcher decodes it little-endian.
+    /// <para>规则源写作本机序的 4 字节有符号整数；匹配时按小端解码。</para>
+    /// </summary>
     Long = 4,
 
-    /// <summary>4 字节本机序无符号。 / Native-order unsigned long.</summary>
+    /// <summary>
+    /// 4-byte unsigned integer written as host order in the rule source; the matcher decodes it little-endian.
+    /// <para>规则源写作本机序的 4 字节无符号整数；匹配时按小端解码。</para>
+    /// </summary>
     ULong = 5,
 
-    /// <summary>2 字节小端有符号。 / Little-endian signed short.</summary>
+    /// <summary>Signed 2-byte short in little-endian order. <para>小端字节序的 2 字节有符号短整数。</para></summary>
     Leshort = 6,
 
-    /// <summary>2 字节小端无符号。 / Little-endian unsigned short.</summary>
+    /// <summary>Unsigned 2-byte short in little-endian order. <para>小端字节序的 2 字节无符号短整数。</para></summary>
     Uleshort = 7,
 
-    /// <summary>2 字节大端有符号。 / Big-endian signed short.</summary>
+    /// <summary>Signed 2-byte short in big-endian order. <para>大端字节序的 2 字节有符号短整数。</para></summary>
     Beshort = 8,
 
-    /// <summary>2 字节大端无符号。 / Big-endian unsigned short.</summary>
+    /// <summary>Unsigned 2-byte short in big-endian order. <para>大端字节序的 2 字节无符号短整数。</para></summary>
     Ubeshort = 9,
 
-    /// <summary>4 字节小端有符号。 / Little-endian signed long.</summary>
+    /// <summary>Signed 4-byte integer in little-endian order. <para>小端字节序的 4 字节有符号整数。</para></summary>
     Lelong = 10,
 
-    /// <summary>4 字节小端无符号。 / Little-endian unsigned long.</summary>
+    /// <summary>Unsigned 4-byte integer in little-endian order. <para>小端字节序的 4 字节无符号整数。</para></summary>
     Ulelong = 11,
 
-    /// <summary>4 字节大端有符号。 / Big-endian signed long.</summary>
+    /// <summary>Signed 4-byte integer in big-endian order. <para>大端字节序的 4 字节有符号整数。</para></summary>
     Belong = 12,
 
-    /// <summary>4 字节大端无符号。 / Big-endian unsigned long.</summary>
+    /// <summary>Unsigned 4-byte integer in big-endian order. <para>大端字节序的 4 字节无符号整数。</para></summary>
     Ubelong = 13,
 
-    /// <summary>8 字节小端有符号。 / Little-endian signed quad.</summary>
+    /// <summary>Signed 8-byte integer in little-endian order. <para>小端字节序的 8 字节有符号整数。</para></summary>
     Lequad = 14,
 
-    /// <summary>8 字节小端无符号。 / Little-endian unsigned quad.</summary>
+    /// <summary>Unsigned 8-byte integer in little-endian order. <para>小端字节序的 8 字节无符号整数。</para></summary>
     Ulequad = 15,
 
-    /// <summary>8 字节大端有符号。 / Big-endian signed quad.</summary>
+    /// <summary>Signed 8-byte integer in big-endian order. <para>大端字节序的 8 字节有符号整数。</para></summary>
     Bequad = 16,
 
-    /// <summary>8 字节大端无符号。 / Big-endian unsigned quad.</summary>
+    /// <summary>Unsigned 8-byte integer in big-endian order. <para>大端字节序的 8 字节无符号整数。</para></summary>
     Ubequad = 17,
 
-    /// <summary>8 字节本机序有符号。 / Native-order signed quad.</summary>
+    /// <summary>
+    /// 8-byte signed integer written as host order in the rule source; the matcher decodes it little-endian.
+    /// <para>规则源写作本机序的 8 字节有符号整数；匹配时按小端解码。</para>
+    /// </summary>
     Quad = 18,
 
-    /// <summary>8 字节本机序无符号。 / Native-order unsigned quad.</summary>
+    /// <summary>
+    /// 8-byte unsigned integer written as host order in the rule source; the matcher decodes it little-endian.
+    /// <para>规则源写作本机序的 8 字节无符号整数；匹配时按小端解码。</para>
+    /// </summary>
     Uquad = 19,
 
-    /// <summary>4 字节大端日期。 / Big-endian date.</summary>
+    /// <summary>
+    /// Signed 4-byte big-endian value rendered as a date.
+    /// <para>大端字节序的 4 字节有符号值，按日期渲染。</para>
+    /// </summary>
     Bedate = 20,
 
-    /// <summary>4 字节小端日期。 / Little-endian date.</summary>
+    /// <summary>
+    /// Signed 4-byte little-endian value rendered as a date.
+    /// <para>小端字节序的 4 字节有符号值，按日期渲染。</para>
+    /// </summary>
     Ledate = 21,
 
-    /// <summary>4 字节本机序日期。 / Native-order date.</summary>
+    /// <summary>
+    /// Signed 4-byte date written as host order in the rule source; the matcher decodes it little-endian.
+    /// <para>规则源写作本机序的 4 字节日期值；匹配时按小端解码。</para>
+    /// </summary>
     Date = 22,
 }
 
@@ -117,37 +171,55 @@ public enum MagicNumberType : byte
 [System.Flags]
 public enum MagicFlags : uint
 {
-    /// <summary>无。 / None.</summary>
+    /// <summary>No rule flag is set. <para>未设置任何规则标志位。</para></summary>
     None = 0,
 
-    /// <summary>间接偏移（(x.type)）。 / Indirect offset ((x.type)).</summary>
+    /// <summary>
+    /// The offset field names a stored number which, after its optional mask step, becomes the real match offset.
+    /// <para>偏移字段指向一个已存储的数值，该数值在完成可选掩码运算后作为真正的匹配偏移。</para>
+    /// </summary>
     Indirect = 1 << 0,
 
-    /// <summary>默认分支（default）。 / Default branch.</summary>
+    /// <summary>
+    /// Fallback branch of a level: used only after the concrete rules at the same offset fail, never at the top level.
+    /// <para>某层级的兜底分支：仅在同一偏移的具体规则全部失败后才参与求值，顶层不使用。</para>
+    /// </summary>
     Default = 1 << 1,
 
-    /// <summary>偏移相对于父匹配结束位置（&amp;）。 / Offset relative to end of parent match (&amp;).</summary>
+    /// <summary>
+    /// Nested rules count their offset from the end of the parent match (&amp;) instead of from its start.
+    /// <para>嵌套规则的偏移从父匹配的结束位置（&amp;）起算，而非起始位置。</para>
+    /// </summary>
     RelativeToEnd = 1 << 2,
 
-    /// <summary>偏移相对于文件尾。 / Offset measured from end of file.</summary>
+    /// <summary>Offset is added to the file length, measuring from end of file. <para>偏移与文件长度相加，即自文件末尾起算。</para></summary>
     FromEnd = 1 << 3,
 
-    /// <summary>结果取反（value 前置 !）。 / Negate the value test.</summary>
+    /// <summary>A successful value test is treated as a non-match. <para>值测试命中时按未命中处理。</para></summary>
     Negate = 1 << 4,
 
-    /// <summary>无空格拼接（\b 前缀）。 / No space before this fragment.</summary>
+    /// <summary>No space is joined before this description fragment. <para>该描述片段前不拼接空格。</para></summary>
     NoSpace = 1 << 5,
 
-    /// <summary>偏移值本身为相对间接基准的偏移。 / Offset is added to the indirect base.</summary>
+    /// <summary>
+    /// Flag bit defined for parity with the upstream dialect; neither the rule generator nor the matcher tests it.
+    /// <para>为与上游方言对齐而定义的标志位；规则生成与匹配流程均不读取。</para>
+    /// </summary>
     IndirectOffset = 1 << 6,
 
-    /// <summary>命中后停止描述拼接（skip）。 / Consume without emitting (skip).</summary>
+    /// <summary>Match is consumed without emitting description text. <para>命中后仅消耗，不输出描述文本。</para></summary>
     Consume = 1 << 7,
 
-    /// <summary>强制文本（regex/文本类型标记）。 / Force text.</summary>
+    /// <summary>
+    /// Flag bit recording an upstream force-text request; the compiled matcher does not act on it.
+    /// <para>记录上游强制文本意图的标志位；编译后的匹配器不据此改变行为。</para>
+    /// </summary>
     Text = 1 << 8,
 
-    /// <summary>强制二进制（!：encoding=binary）。 / Force binary encoding.</summary>
+    /// <summary>
+    /// Flag bit recording an upstream !:encoding=binary request; the compiled matcher does not act on it.
+    /// <para>记录上游 !:encoding=binary 请求的标志位；编译后的匹配器不据此改变行为。</para>
+    /// </summary>
     Binary = 1 << 9,
 }
 
@@ -158,22 +230,31 @@ public enum MagicFlags : uint
 [System.Flags]
 public enum MagicStringFlags : uint
 {
-    /// <summary>无。 / None.</summary>
+    /// <summary>No string modifier is set. <para>未设置任何字符串修饰位。</para></summary>
     None = 0,
 
-    /// <summary>忽略大小写。 / Case-insensitive.</summary>
+    /// <summary>Matching is case-insensitive within the ASCII A-Z range. <para>在 ASCII A-Z 范围内按大小写不敏感匹配。</para></summary>
     IgnoreCase = 1 << 0,
 
-    /// <summary>空白折叠（/W）。 / Compact whitespace.</summary>
+    /// <summary>
+    /// A whitespace byte in the pattern requires and consumes a whitespace run in the data (/W).
+    /// <para>模式中的空白字节要求并消耗数据中的一段连续空白（/W）。</para>
+    /// </summary>
     CompactWhitespace = 1 << 1,
 
-    /// <summary>可选空白（/w）。 / Optional whitespace.</summary>
+    /// <summary>
+    /// A whitespace byte in the pattern matches zero or more whitespace bytes in the data (/w).
+    /// <para>模式中的空白字节匹配数据里的零个或多个空白（/w）。</para>
+    /// </summary>
     OptionalWhitespace = 1 << 2,
 
-    /// <summary>整词匹配（/f）。 / Full word boundary.</summary>
+    /// <summary>
+    /// The byte following the match must be whitespace or the end of the window (/f).
+    /// <para>匹配之后的下一个字节必须是空白，或已到窗口末尾（/f）。</para>
+    /// </summary>
     FullWord = 1 << 3,
 
-    /// <summary>去除尾部空白（/T）。 / Trim trailing whitespace.</summary>
+    /// <summary>Trailing whitespace is dropped from the decoded value (/T). <para>解码结果尾部空白会被去掉（/T）。</para></summary>
     Trim = 1 << 4,
 }
 
@@ -184,16 +265,25 @@ public enum MagicStringFlags : uint
 [System.Flags]
 public enum MagicRegexFlags : uint
 {
-    /// <summary>无。 / None.</summary>
+    /// <summary>No regex modifier is set. <para>未设置任何正则修饰位。</para></summary>
     None = 0,
 
-    /// <summary>忽略大小写。 / Case-insensitive.</summary>
+    /// <summary>
+    /// Adds <c>RegexOptions.IgnoreCase</c> to the culture-invariant options the pattern is compiled with.
+    /// <para>在模式编译所用的 CultureInvariant 选项之外追加 <c>RegexOptions.IgnoreCase</c>。</para>
+    /// </summary>
     IgnoreCase = 1 << 0,
 
-    /// <summary>单行（. 匹配换行）。 / Dot matches newline.</summary>
+    /// <summary>
+    /// Adds <c>RegexOptions.Singleline</c>, so the dot also matches line breaks.
+    /// <para>追加 <c>RegexOptions.Singleline</c>，使圆点也能匹配换行符。</para>
+    /// </summary>
     SingleLine = 1 << 1,
 
-    /// <summary>多行（^ $ 匹配行边界）。 / Multiline anchors.</summary>
+    /// <summary>
+    /// Adds <c>RegexOptions.Multiline</c>, so the anchors match line boundaries instead of the whole window.
+    /// <para>追加 <c>RegexOptions.Multiline</c>，使定位符匹配行边界而非整个窗口。</para>
+    /// </summary>
     Multiline = 1 << 2,
 }
 
@@ -203,23 +293,29 @@ public enum MagicRegexFlags : uint
 /// </summary>
 public enum MagicMaskOp : byte
 {
-    /// <summary>无。 / None.</summary>
+    /// <summary>Value passes the mask step untouched. <para>数值原样通过掩码步骤。</para></summary>
     None = 0,
-    /// <summary>按位与。 / Bitwise and.</summary>
+    /// <summary>Bitwise and of value and mask. <para>数值与掩码按位与。</para></summary>
     And = 1,
-    /// <summary>按位或。 / Bitwise or.</summary>
+    /// <summary>Bitwise or of value and mask. <para>数值与掩码按位或。</para></summary>
     Or = 2,
-    /// <summary>按位异或。 / Bitwise xor.</summary>
+    /// <summary>Bitwise xor of value and mask. <para>数值与掩码按位异或。</para></summary>
     Xor = 3,
-    /// <summary>加。 / Add.</summary>
+    /// <summary>Mask added to the value. <para>数值加上掩码。</para></summary>
     Add = 4,
-    /// <summary>减。 / Subtract.</summary>
+    /// <summary>Mask subtracted from the value. <para>数值减去掩码。</para></summary>
     Subtract = 5,
-    /// <summary>乘。 / Multiply.</summary>
+    /// <summary>Value multiplied by the mask. <para>数值乘以掩码。</para></summary>
     Multiply = 6,
-    /// <summary>除。 / Divide.</summary>
+    /// <summary>
+    /// Value divided by the mask; a zero mask leaves the value untouched instead of failing.
+    /// <para>数值除以掩码；掩码为 0 时保持数值不变而不报错。</para>
+    /// </summary>
     Divide = 7,
-    /// <summary>取模。 / Modulo.</summary>
+    /// <summary>
+    /// Remainder of the value divided by the mask; a zero mask leaves the value untouched instead of failing.
+    /// <para>数值对掩码取模；掩码为 0 时保持数值不变而不报错。</para>
+    /// </summary>
     Modulo = 8,
 }
 
@@ -229,18 +325,39 @@ public enum MagicMaskOp : byte
 /// </summary>
 public enum MagicRelation : byte
 {
-    /// <summary>等于。 / Equal.</summary>
+    /// <summary>
+    /// Value equals the expected value, comparing only the bits kept by the type width.
+    /// <para>数值与期望值相等；比较范围仅限类型宽度保留的位。</para>
+    /// </summary>
     Equal = 0,
-    /// <summary>不等于。 / Not equal.</summary>
+    /// <summary>
+    /// Value differs from the expected value; fixed byte-string rules never match under this relation.
+    /// <para>数值与期望值不相等；定长字节串规则在该关系下永不命中。</para>
+    /// </summary>
     NotEqual = 1,
-    /// <summary>小于。 / Less than.</summary>
+    /// <summary>
+    /// Value is below the expected value: unsigned types compare as unsigned, signed types after sign extension.
+    /// <para>数值小于期望值：无符号类型按无符号比较，有符号类型先符号扩展再比较。</para>
+    /// </summary>
     LessThan = 2,
-    /// <summary>大于。 / Greater than.</summary>
+    /// <summary>
+    /// Value is above the expected value: unsigned types compare as unsigned, signed types after sign extension.
+    /// <para>数值大于期望值：无符号类型按无符号比较，有符号类型先符号扩展再比较。</para>
+    /// </summary>
     GreaterThan = 3,
-    /// <summary>按位与命中（&amp;）。 / Bit-and match.</summary>
+    /// <summary>
+    /// Every bit set in the expected value is also set in the value, that is (value &amp; expected) == expected.
+    /// <para>期望值中置位的每一位在数值里也必须置位，即 (value &amp; expected) == expected。</para>
+    /// </summary>
     BitAnd = 4,
-    /// <summary>按位异或（^）。 / Bit-xor match.</summary>
+    /// <summary>
+    /// The xor of value and expected equals the expected value, that is (value ^ expected) == expected.
+    /// <para>数值与期望值异或的结果等于期望值，即 (value ^ expected) == expected。</para>
+    /// </summary>
     BitXor = 5,
-    /// <summary>任意（x）。 / Any value.</summary>
+    /// <summary>
+    /// Presence test: matches whenever the payload can be read; text payloads run to the next NUL or line break.
+    /// <para>存在性测试：只要能读出负载即命中；文本负载一直取到下一个 NUL 或换行。</para>
+    /// </summary>
     Any = 6,
 }

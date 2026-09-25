@@ -3,18 +3,12 @@ using System.Runtime.Versioning;
 
 namespace UotanStudio.Media.Decoding.MediaFoundation;
 
-// Source-faithful unmanaged calls replace runtime COM marshalling.
-// Slots below follow the Windows SDK mfobjects.h / mftransform.h ABI.
-// No runtime COM wrappers; NativeAOT uses the same unmanaged ABI.
-
 /// <summary>MediaFoundation interop helpers: functions, GUIDs and error codes.</summary>
 /// <summary>MediaFoundation 互操作辅助：函数、GUID 与错误码。</summary>
 [SupportedOSPlatform("windows")]
 internal static partial class MfInterop
 {
     private const string MfPlat = "mfplat.dll";
-
-    // --- MF version / startup -------------------------------------------------
 
     /// <summary>MF_VERSION for Windows 8+ (0x0002 &lt;&lt; 16 | 0x0070).</summary>
     /// <summary>MF_VERSION（Windows 8+，0x0002 &lt;&lt; 16 | 0x0070）。</summary>
@@ -61,8 +55,6 @@ internal static partial class MfInterop
 
     [LibraryImport("ole32.dll")]
     public static partial void CoUninitialize();
-
-    // --- Well-known GUIDs -----------------------------------------------------
 
     /// <summary>MFMediaType_Video ('vids').</summary>
     /// <summary>MFMediaType_Video（'vids'）。</summary>
@@ -168,8 +160,6 @@ internal static partial class MfInterop
     /// <summary>IID_IMFTransform。</summary>
     public static readonly Guid IidImfTransform = new("bf94c121-5b05-4e6f-8000-ba598961414d");
 
-    // --- Enum flags -----------------------------------------------------------
-
     /// <summary>MFT_ENUM_FLAG_SYNCMFT | LOCALMFT | SORTANDFILTER.</summary>
     /// <summary>MFT_ENUM_FLAG_SYNCMFT | LOCALMFT | SORTANDFILTER。</summary>
     public const uint MftEnumFlags = 0x01 | 0x10 | 0x40;
@@ -206,8 +196,6 @@ internal static partial class MfInterop
     /// <summary>MFT_MESSAGE_COMMAND_DRAIN。</summary>
     public const uint MftMessageCommandDrain = 0x1;
 
-    // --- Error codes ----------------------------------------------------------
-
     public const int SOk = 0;
     public const int SFalse = 1;
     public const int MfETransformNeedMoreInput = unchecked((int)0xC00D6D72);
@@ -217,8 +205,6 @@ internal static partial class MfInterop
     public const int MfENoMoreTypes = unchecked((int)0xC00D36B9);
 }
 
-// Unmanaged layouts and vtable calls follow mfobjects.h / mftransform.h.
-// No runtime COM marshalling: these calls also work in NativeAOT.
 [StructLayout(LayoutKind.Sequential)]
 internal struct MftRegisterTypeInfo(Guid majorType, Guid subtype)
 {
@@ -264,7 +250,6 @@ internal static unsafe class MfCom
     }
     public static int SetCodecLowLatency(nint value, in Guid key, bool useUInt32)
     {
-        // Microsoft's H.264 decoder uniquely requires VT_UI4 for AVLowLatencyMode.
         var variant = useUInt32 ? new MfVariant { Type = 19, UInt32 = 1 }
             : new MfVariant { Type = 11, Boolean = -1 };
         fixed (Guid* k = &key)
@@ -373,8 +358,6 @@ internal static unsafe class MfCom
     public static int SetLength(nint value, uint length) =>
         ((delegate* unmanaged[Stdcall]<nint, uint, int>)Slot(value, 6))(value, length);
 
-    // --- Asynchronous MFT / D3D11 support -------------------------------------
-
     /// <summary>IMFMediaEventGenerator.GetEvent (slot 3).</summary>
     /// <summary>IMFMediaEventGenerator.GetEvent（槽位 3）。</summary>
     public static int GetEvent(nint eventGenerator, uint eventFlags, out nint mediaEvent)
@@ -443,8 +426,6 @@ internal static unsafe class MfCom
     /// <summary>IMFDXGIDeviceManager.ResetDevice（槽位 7）。</summary>
     public static int DxgiResetDevice(nint deviceManager, nint device, uint token) =>
         ((delegate* unmanaged[Stdcall]<nint, nint, uint, int>)Slot(deviceManager, 7))(deviceManager, device, token);
-
-    // --- D3D11 vtable calls ----------------------------------------------------
 
     /// <summary>ID3D11Texture2D.GetDesc (slot 10), including padded texture dimensions.</summary>
     public static D3D11Interop.Texture2DDesc D3DGetTexture2DDesc(nint texture)

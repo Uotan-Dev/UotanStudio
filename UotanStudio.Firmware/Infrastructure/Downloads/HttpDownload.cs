@@ -8,8 +8,16 @@ namespace UotanStudio.Firmware.Infrastructure.Downloads;
 /// A GitHub accelerator mirror; an empty BaseUrl means the origin.</summary>
 public sealed record GitHubMirrorSite
 {
+    /// <summary>Display name of the mirror, used in logs and error text. <para>镜像站显示名称，用于日志与错误文本。</para></summary>
+    /// <value>The mandatory site label. <para>必填的站点名称。</para></value>
     public required string Name { get; init; }
+
+    /// <summary>Prefix the GitHub URL is appended to; an empty value marks the direct-origin entry, which is never rewritten. <para>拼接在 GitHub 地址之前的前缀；为空表示直连源站条目，该条目不做地址改写。</para></summary>
+    /// <value>The mandatory mirror prefix, which may be empty. <para>必填的镜像前缀，允许为空字符串。</para></value>
     public required string BaseUrl { get; init; }
+
+    /// <summary>Whether the mirror takes part in enumeration and speed probing. <para>该镜像是否参与源枚举与测速。</para></summary>
+    /// <value><see langword="true"/> unless the initializer sets otherwise. <para>除非初始化时显式设置，否则为 <see langword="true"/>。</para></value>
     public bool IsEnabled { get; init; } = true;
 }
 
@@ -21,6 +29,7 @@ public sealed record GitHubMirrorSite
 /// </summary>
 public static class HttpDownload
 {
+    /// <summary>Browser User-Agent sent when caller headers do not provide one. <para>调用方标头未提供 User-Agent 时发送的浏览器标识。</para></summary>
     public const string DefaultBrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
     /// <summary><para>镜像站测速的候选列表；源站直连始终参与测速。</para>
     /// Candidate mirrors for speed probing; the origin always participates.</summary>
@@ -71,12 +80,23 @@ public static class HttpDownload
 
     /// <summary><para>判断地址是否为 GitHub 文件（release/blob/raw 下载路径）。</para>
     /// Whether the URL points at a GitHub file (release, blob or raw path).</summary>
+    /// <param name="uri">Absolute URL whose host is compared. <para>用于比对主机名的绝对地址。</para></param>
+    /// <returns>
+    /// <see langword="true"/> for <c>github.com</c>, <c>raw.githubusercontent.com</c> or <c>objects.githubusercontent.com</c>, compared without case sensitivity.
+    /// <para>主机名为 <c>github.com</c>、<c>raw.githubusercontent.com</c> 或 <c>objects.githubusercontent.com</c> 时返回 <see langword="true"/>，比对不区分大小写。</para>
+    /// </returns>
     public static bool IsGitHubUrl(Uri uri) => string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase)
         || string.Equals(uri.Host, "raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase)
         || string.Equals(uri.Host, "objects.githubusercontent.com", StringComparison.OrdinalIgnoreCase);
 
     /// <summary><para>枚举一个地址的全部可用源：源站优先，GitHub 链接追加所有启用镜像。</para>
     /// Enumerates every usable source for a URL: the origin first, then all enabled mirrors for GitHub links.</summary>
+    /// <param name="url">The requested URL. <para>请求的目标地址。</para></param>
+    /// <returns>
+    /// The origin followed by mirror URLs built from enabled sites with a non-empty <see cref="GitHubMirrorSite.BaseUrl"/>;
+    /// non-GitHub URLs yield only the origin. Evaluation is lazy, so the sequence reflects the mirror list as it stands when iterated.
+    /// <para>先返回源站，再按启用且 <see cref="GitHubMirrorSite.BaseUrl"/> 非空的镜像生成镜像地址；非 GitHub 地址只返回源站。枚举为惰性求值。</para>
+    /// </returns>
     public static IEnumerable<Uri> EnumerateSources(Uri url)
     {
         yield return url;
@@ -102,6 +122,16 @@ public static class HttpDownload
     /// 测速失败的源排在最后，测速整体失败时退化为源站优先的固定顺序。</para>
     /// Speed-probes mirrors and the origin by fetching 256 KiB each and returns sources fastest-first;
     /// failed probes sort last, and a wholly failed probe degrades to origin-first order.</summary>
+    /// <param name="url">Requested URL whose sources are ranked. <para>需要排序候选源的请求地址。</para></param>
+    /// <param name="client">Shared HTTP client used for the probe requests. <para>用于测速请求的共享 HTTP 客户端。</para></param>
+    /// <param name="cancellationToken">Cancels probing; an already-cancelled token aborts before any request is sent. <para>取消测速；令牌已取消时不会发出任何请求。</para></param>
+    /// <param name="requestHeaders">Optional newline-separated <c>Name: Value</c> headers applied to each probe. <para>可选的按行分隔 <c>Name: Value</c> 标头，应用于每次测速请求。</para></param>
+    /// <returns>
+    /// Every candidate source ordered by probe latency, sources whose probe failed last; ties keep the enumeration order.
+    /// A single-source URL is returned unprobed, and a probe round where every source failed degrades to origin-first order.
+    /// <para>按测速耗时排序的全部候选源，测速失败的源排在最后，耗时相同则保持枚举顺序。只有单一源时不测速直接返回；所有源均测速失败时退化为源站优先的顺序。</para>
+    /// </returns>
+    /// <exception cref="OperationCanceledException">The probe round was cancelled through <paramref name="cancellationToken"/>. <para>测速过程因 <paramref name="cancellationToken"/> 被取消。</para></exception>
     public static async Task<IReadOnlyList<Uri>> SelectSourcesBySpeedAsync(Uri url, HttpClient client,
         CancellationToken cancellationToken, string? requestHeaders = null)
     {
@@ -153,6 +183,23 @@ public static class HttpDownload
 
     /// <summary><para>下载到目标文件：先按测速选择源，再依次尝试；返回最终使用的源地址。</para>
     /// Downloads to a file: picks sources by speed probe, then tries each in order; returns the source used.</summary>
+    /// <example>
+    /// <code>
+    /// using var client = new HttpClient();
+    /// var used = await HttpDownload.DownloadAsync(client,
+    ///     new Uri("https://github.com/example/project/releases/download/v1/tool.zip"),
+    ///     @"C:\downloads\tool.zip");
+    /// </code>
+    /// </example>
+    /// <param name="client">HTTP client used for probing and the transfer. <para>用于测速与传输的 HTTP 客户端。</para></param>
+    /// <param name="url">Logical URL to download; the reported result may be a mirror derived from it. <para>要下载的逻辑地址；返回的实际源可能是由其推导出的镜像地址。</para></param>
+    /// <param name="destination">Destination file path, replaced atomically by each attempt. <para>目标文件路径；每次尝试都以原子替换方式写入。</para></param>
+    /// <param name="progress">Receives processed/total byte pairs from the winning attempt; reports from failed attempts may already have been emitted. <para>接收成功那次的已处理/总字节数；失败尝试也可能已经上报过进度。</para></param>
+    /// <param name="cancellationToken">Cancels selection and transfer; cancellation propagates instead of falling through to the next source. <para>取消选源与传输；取消会直接向上抛出，不再尝试后续源。</para></param>
+    /// <param name="requestHeaders">Optional newline-separated headers applied to every request. <para>可选的按行分隔标头，应用于所有请求。</para></param>
+    /// <returns>The source that produced the completed file. <para>最终完成下载所使用的源地址。</para></returns>
+    /// <exception cref="IOException">Every candidate source failed; the message lists each source host with its error. <para>所有候选源均失败；消息中按主机列出各源的错误。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled. <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public static async Task<Uri> DownloadAsync(HttpClient client, Uri url, string destination,
         IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default,
         string? requestHeaders = null)
@@ -181,6 +228,19 @@ public static class HttpDownload
 
     /// <summary><para>从单个源下载（支持范围并行的镜像同样走此路径），目标文件以原子替换提交。</para>
     /// Downloads from one source (range-parallel where supported), committing the destination atomically.</summary>
+    /// <param name="client">HTTP client used for probing and the transfer. <para>用于探测与传输的 HTTP 客户端。</para></param>
+    /// <param name="uri">Concrete source URL; no mirror selection happens here. <para>具体源地址；此处不再做镜像选源。</para></param>
+    /// <param name="destination">Destination file path, replaced only after the whole payload has been verified as complete. <para>目标文件路径；仅在整份载荷完整写出后才被替换。</para></param>
+    /// <param name="progress">Receives processed/total byte pairs, where total is <c>0</c> when the server exposes no length. <para>接收已处理/总字节数；服务器未给出长度时总量为 <c>0</c>。</para></param>
+    /// <param name="cancellationToken">Cancels the request and the file writes; the temporary file is deleted before the exception escapes. <para>取消请求与文件写入；异常抛出前会先删除临时文件。</para></param>
+    /// <param name="requestHeaders">Optional newline-separated headers applied to every request. <para>可选的按行分隔标头，应用于所有请求。</para></param>
+    /// <returns>
+    /// A task that completes once the destination file has been replaced by the fully written temporary file.
+    /// <para>在临时文件完整写出并原子替换目标文件后完成的任务。</para>
+    /// </returns>
+    /// <exception cref="HttpRequestException">A response status indicates failure. <para>响应状态表示失败。</para></exception>
+    /// <exception cref="IOException">The destination or temporary file cannot be created or moved. <para>无法创建或移动目标/临时文件。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled. <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public static async Task DownloadSingleAsync(HttpClient client, Uri uri, string destination,
         IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default,
         string? requestHeaders = null)
@@ -296,6 +356,20 @@ public static class HttpDownload
 
     /// <summary><para>构造带浏览器式标头的 GET 请求，避免镜像站的机器人拦截。</para>
     /// Builds a GET with browser-style headers to avoid mirror bot filtering.</summary>
+    /// <param name="uri">Request target; its scheme and authority become the referrer. <para>请求目标；其协议与主机部分将作为 Referer。</para></param>
+    /// <param name="requestHeaders">
+    /// Optional headers, one <c>Name: Value</c> pair per line, at most 16 KiB and 64 entries. A lone line containing <c>/</c>
+    /// is treated as a User-Agent. <c>Range</c> is reserved by the downloader.
+    /// <para>可选标头，每行一个 <c>Name: Value</c>，总量不超过 16 KiB 且最多 64 条。仅一行且包含 <c>/</c> 时按 User-Agent 处理。<c>Range</c> 由下载器保留。</para>
+    /// </param>
+    /// <returns>
+    /// A GET request carrying the parsed headers, defaulted to <see cref="DefaultBrowserUserAgent"/> when no User-Agent was given.
+    /// <para>已带上解析后标头的 GET 请求；未提供 User-Agent 时使用 <see cref="DefaultBrowserUserAgent"/>。</para>
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// A header is malformed, spans lines, exceeds the count or size limits, uses <c>Range</c>, or cannot be applied to a GET request.
+    /// <para>标头格式错误、跨行、超出条数或大小上限、使用 <c>Range</c>，或无法用于 GET 请求。</para>
+    /// </exception>
     public static HttpRequestMessage CreateRequest(Uri uri, string? requestHeaders = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, uri);
@@ -331,7 +405,6 @@ public static class HttpDownload
             var separator = line.IndexOf(':');
             if (separator <= 0)
             {
-                // Existing workflows stored a bare User-Agent on this stable port.
                 if (headers.Count == 0 && line.Contains('/', StringComparison.Ordinal)
                     && !line.Contains('\r', StringComparison.Ordinal))
                 {

@@ -4,16 +4,29 @@ using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz;
 
+/// <summary>Reads and extracts LG DZ/KDZ firmware containers through the shared format-handler contract.
+/// <para>通过共享格式处理器契约读取并提取 LG DZ/KDZ 固件容器。</para></summary>
 public sealed class DzFormatHandler : IFormatHandler
 {
+    /// <summary>The display name reported for this handler.
+    /// <para>此处理器报告的可读格式名。</para></summary>
+    /// <value>The fixed string <c>LG DZ/KDZ Firmware</c>.
+    /// <para>固定字符串 <c>LG DZ/KDZ Firmware</c>。</para></value>
     public string FormatName => "LG DZ/KDZ Firmware";
 
+    /// <summary>The lowercase extensions this handler advertises.
+    /// <para>此处理器声明的小写扩展名列表。</para></summary>
+    /// <value><c>dz</c>, <c>kdz</c> and <c>bin</c>; paths with other extensions can still be accepted when their magic matches.
+    /// <para><c>dz</c>、<c>kdz</c> 与 <c>bin</c>；扩展名不同的路径在魔数匹配时仍可被接受。</para></value>
     public IReadOnlyList<string> FileExtensions => ["dz", "kdz", "bin"];
 
     /// <summary>
     /// Determines whether the file matches this format.
     /// <para>判断文件是否匹配此格式。</para>
     /// </summary>
+    /// <param name="filePath">Path to test; blank or missing paths return <see langword="false"/>. <para>待测试的路径；空白或不存在的路径返回 <see langword="false"/>。</para></param>
+    /// <returns><see langword="true"/> when the extension is <c>dz</c>/<c>kdz</c> or the leading bytes match a DZ or KDZ magic; <see langword="false"/> for anything else, including read errors.
+    /// <para>扩展名为 <c>dz</c>／<c>kdz</c>，或开头字节匹配 DZ/KDZ 魔数时返回 <see langword="true"/>；其余情况（包括读取错误）返回 <see langword="false"/>。</para></returns>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -45,6 +58,11 @@ public sealed class DzFormatHandler : IFormatHandler
     /// Reads the firmware metadata asynchronously.
     /// <para>异步读取固件元数据。</para>
     /// </summary>
+    /// <param name="filePath">The DZ or KDZ file to inspect. <para>要检查的 DZ 或 KDZ 文件。</para></param>
+    /// <param name="cancellationToken">Cancels the read; cancellation is rethrown, never converted to a failure result. <para>取消读取；取消异常会重新抛出，绝不转换为失败结果。</para></param>
+    /// <returns>On success, a summary plus entry names and header metadata (KDZ: header type and partition count; DZ: device and chunk count); on parse errors, a failure result carrying the exception message.
+    /// <para>成功时返回摘要、条目名与头部元数据（KDZ：头部版本与分区数；DZ：设备与块数）；解析出错时返回携带异常信息的失败结果。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is signaled. <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -84,6 +102,13 @@ public sealed class DzFormatHandler : IFormatHandler
     /// Extracts the firmware contents asynchronously.
     /// <para>异步提取固件内容。</para>
     /// </summary>
+    /// <param name="filePath">The DZ or KDZ source file. <para>DZ 或 KDZ 源文件。</para></param>
+    /// <param name="outputDirectory">Directory receiving the extracted files. <para>接收解出文件的目录。</para></param>
+    /// <param name="options">Extraction knobs; <c>null</c> uses defaults, and <c>SelectedEntries</c> filters by exact chunk or partition name. <para>解包选项；为 <c>null</c> 时使用默认值，<c>SelectedEntries</c> 按块或分区的精确名称筛选。</para></param>
+    /// <param name="cancellationToken">Cancels extraction; cancellation is rethrown and the previous outputs stay untouched. <para>取消解包；取消异常会重新抛出，已有输出保持不变。</para></param>
+    /// <returns>Extraction result published together with unified repack metadata on success; a failure result carrying the exception message when extraction or the metadata pre-check fails.
+    /// <para>成功时解包结果会与统一重打包元数据一起发布；解包或元数据预检查失败时返回携带异常信息的失败结果。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is signaled. <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -115,6 +140,11 @@ public sealed class DzFormatHandler : IFormatHandler
     /// Packs the input into firmware asynchronously.
     /// <para>异步将输入打包为固件。</para>
     /// </summary>
+    /// <param name="inputPath">Unused; this handler never produces a DZ or KDZ container. <para>未使用；此处理器不会生成 DZ 或 KDZ 容器。</para></param>
+    /// <param name="outputPath">Unused; no output file is written. <para>未使用；不会写出任何输出文件。</para></param>
+    /// <param name="cancellationToken">Unused; the operation completes immediately. <para>未使用；操作会立即完成。</para></param>
+    /// <returns>A failure result stating that DZ/KDZ packing is not supported; never a success result.
+    /// <para>返回表明不支持 DZ/KDZ 打包的失败结果；绝不会返回成功结果。</para></returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default) => Task.FromResult(FirmwareOpResult.Fail("DZ/KDZ packing is not supported by this handler."));
 
     private static bool IsKdz(string path)

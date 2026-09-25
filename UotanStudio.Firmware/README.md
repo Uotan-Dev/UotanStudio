@@ -27,11 +27,11 @@
 
 依赖方向为：宿主、CLI、MCP 调用应用编排或上下文入口；应用编排调用上下文；上下文使用共享契约和基础能力。`SharedKernel` 不引用 `BoundedContexts`、`Application` 或 `Infrastructure`；上下文不引用 `Application`、`Infrastructure` 或宿主。下载基础设施由需要网络的调用方显式使用。
 
-这些边界位于同一个程序集内，按实际格式职责组织，不统一增加 `Entity`、`Repository`、事件总线或多层转发。现有上下文之间仍有明确的格式组合，例如 Sparse 的文件系统提取与文件系统重建的 Sparse 输出；本次没有把这些依赖拆成独立程序集。
+这些边界位于同一个程序集内，按实际格式职责组织，不统一增加 `Entity`、`Repository`、事件总线或多层转发。现有上下文之间仍有明确的格式组合，例如 Sparse 的文件系统提取与文件系统重建的 Sparse 输出；这类跨上下文依赖保持在同一程序集内。
 
 ## 重打包与文件系统元数据
 
-`SharedKernel/Repacking/RepackMetadata` 负责通用来源信息、元数据路径和操作上下文、解包后的保存顺序及有界原子发布。`IRepackMetadataProvider` 由需要重建信息的格式处理器实现：配置阶段提供该格式的配置、选项和目录打包能力，捕获阶段在 JSON 发布前完成附属数据保存。新增格式通过该契约接入，不在共享层增加具体格式类型判断。未实现契约的处理器仍保存通用来源信息，但不声明目录重建能力。
+`SharedKernel/Repacking/RepackMetadata` 负责通用来源信息、元数据路径和操作上下文、解包后的保存顺序及有界原子发布。`IRepackMetadataProvider` 由需要重建信息的格式处理器实现：配置阶段提供该格式的配置、选项和目录打包能力，捕获阶段在 JSON 发布前完成附属数据保存。新增格式通过该契约接入，不在共享层增加具体格式类型判断。目录重建能力只来自该契约：未实现契约的处理器仍保存通用来源信息，但不声明重建能力，仅 `FormatName` 与内置格式相同的自定义处理器也不会获得对应格式的重建策略。元数据文件名、JSON schema、版本和字段构成当前持久化契约。
 
 | 目录 | 职责 |
 | --- | --- |
@@ -40,13 +40,13 @@
 | `FileSystem/Rebuilding` | 原始参数读取、打包选项合并、编辑计划、内容保存与镜像重建 |
 | `FileSystem/Erofs/Builder` | EROFS 构建器及兼容性默认值 |
 
-`FileSystemRepackMetadata` 统一处理 EXT4、EROFS、F2FS 和包含这些文件系统的 Sparse 输入。Boot 的配置和 AVB 限制由 Boot 处理器提供，DTBO 配置由设备树处理器提供。通用元数据对象不再依赖这些解析器或构建器。
+`FileSystemRepackMetadata` 统一处理 EXT4、EROFS、F2FS 和包含这些文件系统的 Sparse 输入。Boot 的配置和 AVB 限制由 Boot 处理器提供，DTBO 配置由设备树处理器提供。通用元数据对象不依赖这些解析器或构建器。
 
-`FileSystemByteProgress` 保留在共享契约中，因为格式接口的打包重载和 `UnpackOptions` 对所有调用方公开该进度类型。它不负责选择文件系统实现。
+`FileSystemByteProgress` 位于共享契约中，因为格式接口的打包重载和 `UnpackOptions` 对所有调用方公开该进度类型。它不负责选择文件系统实现。
 
 ## 压缩能力入口
 
-`CompressionService` 提供 `Compress`、`Decompress` 的流及字节数组重载，负责选择和调用编码器。`Files/CompressionFile` 拥有 `CompressFile`、`DecompressFile`、`DecompressFileAuto`、`DetectFile` 及原子发布实现，负责文件生命周期和进度。生产调用优先使用流/文件重载；已有字节数组重载保留用于兼容。文件级操作的取消、进度和输出发布策略沿用现有实现。
+`CompressionService` 提供 `Compress`、`Decompress` 的流及字节数组重载，负责选择和调用编码器。`Files/CompressionFile` 拥有 `CompressFile`、`DecompressFile`、`DecompressFileAuto`、`DetectFile` 及原子发布实现，负责文件生命周期、取消、大小上限、进度上报和输出发布。生产调用优先使用流/文件重载；`CompressionService` 的字节数组重载仅用于兼容。
 
 `CompressionFormats` 是格式名称、扩展名和能力的统一来源；`Detection/CompressionDetector` 负责字节数组、字节跨度及流头部识别，不根据文件名猜测魔数。`CompressFormatHandler` 将这些能力接入固件格式处理流程。不要在调用方复制格式列表或头部探测逻辑。
 
@@ -71,8 +71,8 @@ CPIO 和 TAR 是归档格式，描述文件成员及其元数据；它们本身�
 
 - `Browsing/ArchiveBrowser.cs`：统一浏览和选择性提取入口，包括现有第三方归档读取路径及单文件压缩浏览。
 - `Models/`、`Extraction/`、`Writing/`：归档条目、提取策略和写入选项。
-- `Formats/Cpio/`、`Formats/Tar/`：分别实现 CPIO 与 TAR 读写，TAR 不再嵌套在 CPIO 目录下。
-- `CpioArchive.cs`：沿用已有类名及 CPIO/TAR 统一读写行为；`Editing/CpioArchiveEditor.cs` 负责编辑，`CpioFormatHandler.cs` 负责格式接入。
+- `Formats/Cpio/`、`Formats/Tar/`：分别实现 CPIO 与 TAR 读写，两个格式目录彼此独立，TAR 不嵌套在 CPIO 目录下。
+- `CpioArchive.cs`：统一承载 CPIO/TAR 读写行为；`Editing/CpioArchiveEditor.cs` 负责编辑，`CpioFormatHandler.cs` 负责格式接入。
 
 ## 内部职责分类
 
@@ -93,32 +93,14 @@ CPIO 和 TAR 是归档格式，描述文件成员及其元数据；它们本身�
 | DAT | `Models` transfer list 模型、`Serialization` 序列化、`Reader`、`Writer`、`Files` 文件组匹配 |
 | Payload | `Models` 头部及元数据、`Proto` 协议模型、`Parser` 解析、`Builder` 构建、`Extraction` 分区提取、`Operations` 操作执行、`IO` extent/校验流、`Verification` 哈希校验 |
 | OTA 差分 | `Diff/Bsdiff`、`Diff/ImgDiff`、`Diff/PuffDiff`、`Diff/Lz4Diff`、`Diff/Zucchini` 按差分格式分组；`Engines` 负责差分编排 |
-| 厂商容器 | 原有厂商边界内按 `Models`、`Extraction`、`Parsing`、`Packing`、`Crypto` 等实际职责归类；既有 NTPi Reader/Writer 和 OPPO Parsers 等分层保留 |
+| 厂商容器 | 各厂商边界内按 `Models`、`Extraction`、`Parsing`、`Packing`、`Crypto` 等实际职责归类；NTPi 保持 Reader/Writer 分层，OPPO 保持 Parsers 分层 |
 
-Sparse 描述块映射，LP/Super 描述分区布局，二者不拥有目录和 inode，因此统一归 `BlockImage`。Zucchini 是差分协议，归 OTA 差分而非厂商容器。原 BootImage `PayloadTool` 的 OTA 探测和提取方法归 `OtaDelta/Payload/Extraction`。
+Sparse 描述块映射，LP/Super 描述分区布局，二者不拥有目录和 inode，因此统一归 `BlockImage`。Zucchini 是差分协议，归 OTA 差分而非厂商容器。`PayloadTool` 的 OTA 探测与提取方法位于 `OtaDelta/Payload/Extraction`。
 
-NTPi 的 `Compression/Lzma2Compressor` 实际还处理 `NTDECOMP` 头部、长度和填充约束，因此保留在 NTPi 边界。PuffDiff 本次保留原有 `PayloadException` 异常契约；其对 Payload 异常命名空间的依赖仍存在，不能将本次分类理解为已经实现程序集级的完全依赖隔离。
+NTPi 的 `Compression/Lzma2Compressor` 实际还处理 `NTDECOMP` 头部、长度和填充约束，因此归入 NTPi 边界。PuffDiff 使用 `PayloadException` 作为异常契约，对 Payload 异常命名空间的依赖仍然存在；目录分类不代表厂商容器与 OTA 差分之间实现了程序集级依赖隔离。
 
-## 迁移说明
+## 命名空间与调用入口
 
-压缩命名空间由 `UotanStudio.Firmware.CrossCutting.Compress` 改为 `UotanStudio.Firmware.BoundedContexts.Compression`；LZO 块实现移入该上下文的 `Codecs`。归档命名空间去掉原有 `Archive.Cpio` 的多余外层，使用 `UotanStudio.Firmware.BoundedContexts.Archive` 及其子命名空间。
+命名空间由目录决定：压缩上下文为 `UotanStudio.Firmware.BoundedContexts.Compression`（LZO 块实现在其 `Codecs`），归档上下文为 `UotanStudio.Firmware.BoundedContexts.Archive`，Sparse 与 LP 位于 `BoundedContexts.BlockImage`，容器组合与内置处理器注册位于 `Application.Containers` 与 `Application.Formats`，HTTP 下载与 GitHub 镜像选择位于 `Infrastructure.Downloads`，重打包元数据位于 `SharedKernel.Repacking`。
 
-仓库内调用方同步迁移。外部直接引用这些公开类型的源码需要更新命名空间并重新编译；本次未提供旧命名空间转发层。格式枚举值、算法行为及固件序列化格式不因此改变。
-
-原 `FileSystem.Sparse`、`LogicalPartition.Lp` 分别改为 `BlockImage.Sparse`、`BlockImage.Lp`，并按具体职责使用子命名空间。各格式原本堆叠在根命名空间的类型也改用对应职责目录的命名空间。
-
-文件操作调用从 `CompressionService.CompressFile/DecompressFile/DecompressFileAuto/DetectFile` 改为 `CompressionFile` 的同名方法；头部识别调用从 `CompressionFormats.Detect` 或 `CompressionService.Detect` 改为 `CompressionDetector.Detect`。取消、大小限制、进度上报、异常及发布策略保持原调用语义。
-
-共享层整理后的主要命名空间迁移：
-
-| 原位置 | 新位置 |
-| --- | --- |
-| `SharedKernel.FirmwareFormatRegistry` | `Application.Formats.FirmwareFormatRegistry` |
-| `SharedKernel.Containers` | `Application.Containers` |
-| `SharedKernel.RepackMetadata` / `RepackMetadataContext` | `SharedKernel.Repacking` |
-| `SharedKernel.FileSystemMetadataGenerator` / `FileSystemMetadataOverrides` / `FsConfigEntry` | `BoundedContexts.FileSystem.Metadata` |
-| `SharedKernel.FileSystemPreservation` | `BoundedContexts.FileSystem.Rebuilding` |
-| `SharedKernel.ErofsBuildDefaults` | `BoundedContexts.FileSystem.Erofs.Builder` |
-| `SharedKernel.HttpDownload` / `GitHubMirrorSite` | `Infrastructure.Downloads` |
-
-表中命名空间均省略 `UotanStudio.Firmware.` 前缀。仓库内调用同步迁移；外部源码需要更新引用并重新编译。元数据文件名、JSON schema、版本和字段保持原契约，已有项目元数据不需要迁移。只按名称伪装成内置格式的自定义处理器不再获得该格式的重建策略；自定义处理器应显式实现 `IRepackMetadataProvider`。
+文件操作入口是 `CompressionFile.CompressFile`、`DecompressFile`、`DecompressFileAuto`、`DetectFile`；头部识别入口是 `CompressionDetector.Detect`；字节数组与流重载入口是 `CompressionService.Compress`、`Decompress`。程序集不携带其它命名空间的类型转发，外部调用方只能按当前命名空间引用公开类型。

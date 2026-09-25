@@ -21,6 +21,19 @@ public static class FileSystemMetadataGenerator
     /// Generates all three metadata files for an EXT4 extraction.
     /// <para>为 EXT4 解包生成全部三个元数据文件。</para>
     /// </summary>
+    /// <param name="metadataDirectory">Directory the files are written to; created when missing.
+    /// <para>写入目标的目录；不存在时自动创建。</para></param>
+    /// <param name="partitionName">Prefix applied to all three generated file names.
+    /// <para>作为三个生成文件名前缀的分区名。</para></param>
+    /// <param name="parser">Opened EXT4 parser supplying entries (root included), ownership, modes and xattrs.
+    /// <para>已打开的 EXT4 解析器，提供条目（含根目录）、属主、模式与扩展属性。</para></param>
+    /// <param name="superblockConfig">Optional JSON object whose members are written as
+    /// <c>partition.key=value</c> lines; <see langword="null"/> emits only the default
+    /// <c>partition_name</c> line.
+    /// <para>可选 JSON 对象，其成员以 <c>分区.key=value</c> 行写入；为 <see langword="null"/> 时仅输出默认的
+    /// <c>partition_name</c> 行。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="parser"/> is <see langword="null"/>.
+    /// <para><paramref name="parser"/> 为 <see langword="null"/>。</para></exception>
     public static void GenerateForExt4(string metadataDirectory, string partitionName, Ext4Parser parser, JsonObject? superblockConfig = null)
     {
         ArgumentNullException.ThrowIfNull(parser);
@@ -42,6 +55,19 @@ public static class FileSystemMetadataGenerator
     /// Generates all three metadata files for an EROFS extraction.
     /// <para>为 EROFS 解包生成全部三个元数据文件。</para>
     /// </summary>
+    /// <param name="metadataDirectory">Directory the files are written to; created when missing.
+    /// <para>写入目标的目录；不存在时自动创建。</para></param>
+    /// <param name="partitionName">Prefix applied to all three generated file names.
+    /// <para>作为三个生成文件名前缀的分区名。</para></param>
+    /// <param name="parser">Opened EROFS parser supplying the enumerated entries, ownership, modes and xattrs.
+    /// <para>已打开的 EROFS 解析器，提供枚举出的条目、属主、模式与扩展属性。</para></param>
+    /// <param name="superblockConfig">Optional JSON object whose members are written as
+    /// <c>partition.key=value</c> lines; <see langword="null"/> emits only the default
+    /// <c>partition_name</c> line.
+    /// <para>可选 JSON 对象，其成员以 <c>分区.key=value</c> 行写入；为 <see langword="null"/> 时仅输出默认的
+    /// <c>partition_name</c> 行。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="parser"/> is <see langword="null"/>.
+    /// <para><paramref name="parser"/> 为 <see langword="null"/>。</para></exception>
     public static void GenerateForErofs(string metadataDirectory, string partitionName, ErofsParser parser, JsonObject? superblockConfig = null)
     {
         ArgumentNullException.ThrowIfNull(parser);
@@ -61,6 +87,19 @@ public static class FileSystemMetadataGenerator
     /// Generates all three metadata files for an F2FS extraction.
     /// <para>为 F2FS 解包生成全部三个元数据文件。</para>
     /// </summary>
+    /// <param name="metadataDirectory">Directory the files are written to; created when missing.
+    /// <para>写入目标的目录；不存在时自动创建。</para></param>
+    /// <param name="partitionName">Prefix applied to all three generated file names.
+    /// <para>作为三个生成文件名前缀的分区名。</para></param>
+    /// <param name="parser">Opened F2FS parser supplying entries (root included), ownership, modes and xattrs.
+    /// <para>已打开的 F2FS 解析器，提供条目（含根目录）、属主、模式与扩展属性。</para></param>
+    /// <param name="superblockConfig">Optional JSON object whose members are written as
+    /// <c>partition.key=value</c> lines; <see langword="null"/> emits only the default
+    /// <c>partition_name</c> line.
+    /// <para>可选 JSON 对象，其成员以 <c>分区.key=value</c> 行写入；为 <see langword="null"/> 时仅输出默认的
+    /// <c>partition_name</c> 行。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="parser"/> is <see langword="null"/>.
+    /// <para><paramref name="parser"/> 为 <see langword="null"/>。</para></exception>
     public static void GenerateForF2fs(string metadataDirectory, string partitionName, F2fsParser parser, JsonObject? superblockConfig = null)
     {
         ArgumentNullException.ThrowIfNull(parser);
@@ -80,6 +119,17 @@ public static class FileSystemMetadataGenerator
     /// Generates metadata files using the extraction directory on disk (fallback when parser is unavailable).
     /// <para>使用磁盘上的解包目录生成元数据文件（解析器不可用时的回退方案）。</para>
     /// </summary>
+    /// <param name="metadataDirectory">Directory the files are written to; created when missing.
+    /// <para>写入目标的目录；不存在时自动创建。</para></param>
+    /// <param name="partitionName">Prefix applied to all three generated file names.
+    /// <para>作为三个生成文件名前缀的分区名。</para></param>
+    /// <param name="extractionDirectory">Tree enumerated recursively; every path gets uid/gid/mode
+    /// <c>0</c>, which the writer expands to <c>0755</c> for directories and <c>0644</c> for files,
+    /// and the default SELinux label. A missing directory yields only the root entry.
+    /// <para>递归枚举的目录树；每个条目的 uid/gid/mode 记为 <c>0</c>，写入器将其展开为目录 <c>0755</c>、
+    /// 文件 <c>0644</c>，并使用默认 SELinux 标签。目录不存在时仅生成根条目。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="extractionDirectory"/> is <see langword="null"/>.
+    /// <para><paramref name="extractionDirectory"/> 为 <see langword="null"/>。</para></exception>
     public static void GenerateFromDirectory(string metadataDirectory, string partitionName, string extractionDirectory)
     {
         ArgumentNullException.ThrowIfNull(extractionDirectory);
@@ -108,6 +158,13 @@ public static class FileSystemMetadataGenerator
     /// Returns the prefixed filename for a metadata file.
     /// <para>返回带分区名前缀的元数据文件名。</para>
     /// </summary>
+    /// <param name="partitionName">Partition prefix placed before the underscore.
+    /// <para>置于下划线左侧的分区名前缀。</para></param>
+    /// <param name="suffix">Metadata kind, e.g. <c>fs_config</c>, <c>file_contexts</c> or <c>info</c>;
+    /// an empty value yields the bare <c>partition_</c> prefix used for sidecar lookups.
+    /// <para>元数据类别，如 <c>fs_config</c>、<c>file_contexts</c> 或 <c>info</c>；为空时返回用于附属文件
+    /// 查找的 <c>分区_</c> 前缀。</para></param>
+    /// <returns><c>{partitionName}_{suffix}</c>. <para>形如 <c>{分区名}_{后缀}</c> 的文件名。</para></returns>
     public static string GetMetadataFileName(string partitionName, string suffix)
         => $"{partitionName}_{suffix}";
 
@@ -115,6 +172,12 @@ public static class FileSystemMetadataGenerator
     /// Detects the partition name from a source filename (strips extension).
     /// <para>从源文件名检测分区名（去除扩展名）。</para>
     /// </summary>
+    /// <param name="sourceFileName">Path or file name of the source image.
+    /// <para>源镜像的路径或文件名。</para></param>
+    /// <returns>The file name without its extension, with a further trailing <c>.raw</c> stripped
+    /// case-insensitively; <c>"unknown"</c> when nothing is left.
+    /// <para>去除扩展名后的文件名，还会不区分大小写地剥离紧随其后的 <c>.raw</c>；若结果为空则返回
+    /// <c>"unknown"</c>。</para></returns>
     public static string DetectPartitionName(string sourceFileName)
     {
         var name = Path.GetFileNameWithoutExtension(sourceFileName);
@@ -270,7 +333,7 @@ public static class FileSystemMetadataGenerator
         finally
         {
             try { File.Delete(temporary); }
-            catch { /* best-effort cleanup */ }
+            catch { }
         }
     }
 }

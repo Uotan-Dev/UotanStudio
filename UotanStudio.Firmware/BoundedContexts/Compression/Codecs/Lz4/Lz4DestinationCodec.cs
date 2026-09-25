@@ -5,8 +5,6 @@ using System.Runtime.InteropServices;
 
 namespace UotanStudio.Firmware.BoundedContexts.Compression.Codecs.Lz4;
 
-// The destination-size encoder is kept apart from the general compression API because its callers
-// (OTA patches and EROFS layout planning) need its exact consumed-input and encoded-byte behavior.
 internal static unsafe partial class Lz4DestinationCodec
 {
     private const int MaximumBlockBytes = 256 * 1024 * 1024;
@@ -38,10 +36,6 @@ internal static unsafe partial class Lz4DestinationCodec
             {
                 if (algorithm == 1)
                 {
-                    // The fast path maps the caller level onto liblz4's acceleration (higher level =
-                    // denser here), clamped to the >=1 range the matcher requires.
-                    // 快速路径把调用方等级映射为 liblz4 的 acceleration（此处等级越高越密），
-                    // 并钳制到匹配器要求的 >=1 范围。
                     result = LZ4_compress_generic((LZ4_stream_t*)state, input, output, source.Length,
                         &sourceLength, target.Length, limitedOutput_directive.fillOutput,
                         source.Length < LZ4_64Klimit ? tableType_t.byU16 : tableType_t.byU32,

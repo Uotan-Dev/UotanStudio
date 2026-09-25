@@ -5,12 +5,6 @@ namespace UotanStudio.Firmware.BoundedContexts.Compression.Internal.Xz;
 
 internal static class Lzma2Encoder
 {
-    // LZMA2 chunk headers carry the compressed-size field in 16 bits.  The
-    // previous 2 MiB window therefore fell back to an uncompressed chunk for
-    // most real ramdisks (the compressed stream was larger than 64 KiB),
-    // producing .xz files that were almost as large as their input.  Keeping
-    // each independently encoded chunk within the representable range lets
-    // the XZ stream retain compression while preserving bounded memory use.
     private const int UncompressedChunkMax = 1 << 16;
 
     private const byte Lclppb = 0x5D;
@@ -24,7 +18,6 @@ internal static class Lzma2Encoder
     public static byte[] Encode(byte[] data, uint dictionarySize = DefaultDictionarySize, int? maxDegreeOfParallelism = null)
     {
 
-
         var windowStarts = new List<int>();
         for (var pos = 0; pos < data.Length; pos += UncompressedChunkMax)
         {
@@ -37,7 +30,6 @@ internal static class Lzma2Encoder
 
         if (dop > 1)
         {
-
 
             Parallel.For(
                 0, windowCount,
@@ -66,13 +58,11 @@ internal static class Lzma2Encoder
         using var output = new MemoryStream();
         var firstChunk = true;
 
-
         for (var i = 0; i < windowCount; i++)
         {
             var start = windowStarts[i];
             var chunkSize = Math.Min(UncompressedChunkMax, data.Length - start);
             var result = compressed[i];
-
 
             if (result.Length < chunkSize && result.Length <= 0xFFFF)
             {
@@ -96,7 +86,6 @@ internal static class Lzma2Encoder
             }
         }
 
-
         output.WriteByte(0x00);
         return output.ToArray();
     }
@@ -117,7 +106,6 @@ internal static class Lzma2Encoder
         while (true)
         {
 
-
             windows.Clear();
             while (windows.Count < dop)
             {
@@ -136,7 +124,6 @@ internal static class Lzma2Encoder
                 break;
             }
 
-
             var compressed = new byte[windows.Count][];
             if (windows.Count > 1 && dop > 1)
             {
@@ -152,7 +139,6 @@ internal static class Lzma2Encoder
                     compressed[i] = Lzma1Compress(encoders[i] ??= CreateEncoder(dictionarySize), windows[i], 0, windows[i].Length);
                 }
             }
-
 
             for (var i = 0; i < windows.Count; i++)
             {
@@ -179,7 +165,6 @@ internal static class Lzma2Encoder
                 }
             }
         }
-
 
         output.WriteByte(0x00);
         return total;
@@ -217,15 +202,11 @@ internal static class Lzma2Encoder
             [CoderPropID.DictionarySize, CoderPropID.PosStateBits, CoderPropID.LitPosBits, CoderPropID.LitContextBits],
             [(int)dictionarySize, 2, 0, 3]);
 
-        // Retain the original dictionary setting: changing it also changes the SDK's
-        // match-finder hash table, which can change compressed bytes on real firmware.
         return encoder;
     }
 
     private static byte[] Lzma1Compress(Encoder encoder, byte[] data, int start, int count)
     {
-        // SDK Code resets probability/history state and releases streams for every invocation.
-        // Reuse only its scratch arrays within one worker; never share an encoder concurrently.
         using var input = new MemoryStream(data, start, count, writable: false);
         using var output = new MemoryStream();
         encoder.Code(input, output, count, -1, null);

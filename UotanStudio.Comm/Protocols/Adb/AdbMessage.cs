@@ -94,7 +94,7 @@ internal static class AdbMessaging
         bw.Write(message.Arg1);
         bw.Write(payloadLength);
         bw.Write(payloadCrc);
-        bw.Write(command ^ 0xFFFFFFFF); // Magic
+        bw.Write(command ^ 0xFFFFFFFF);
         if (message.Payload is { Length: > 0 })
         {
             bw.Write(message.Payload);
@@ -123,7 +123,7 @@ internal static class AdbMessaging
         bw.Write(message.Arg1);
         bw.Write(payloadLength);
         bw.Write(payloadCrc);
-        bw.Write(command ^ 0xFFFFFFFF); // Magic
+        bw.Write(command ^ 0xFFFFFFFF);
         return header;
     }
 

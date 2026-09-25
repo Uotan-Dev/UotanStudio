@@ -138,7 +138,6 @@ internal sealed class RkBootImage
             throw new RkdlException(RkdlError.InvalidParameter, $"Unknown loader tag 0x{tag:X8} (expected BOOT/LDR).");
         }
 
-        // Whole-file Rockchip CRC-32 (poly 0x04C10DB7) stored in the last four bytes.
         var expected = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(buffer.Length - 4));
         var actual = RockchipCrc32(buffer.AsSpan(0, buffer.Length - 4));
         if (expected != actual)
@@ -149,10 +148,6 @@ internal sealed class RkBootImage
         var image = new RkBootImage
         {
             Tag = Encoding.ASCII.GetString(buffer, 0, 4),
-            // Packed rk_boot_header layout (boot_merger.h): tag@0 u32, size@4 u16,
-            // version@6 u32, mergerVersion@10 u32, releaseTime@14 (7-byte rk_time),
-            // chipType@21 u32, then the three {num u8, offset u32, entrySize u8} tables,
-            // signFlag@43 and rc4Flag@44.
             Version = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(6)),
             MergeVersion = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(10)),
             SupportChip = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(21)),

@@ -289,7 +289,7 @@ public enum LanguagePackChangeType
     Updated,
 
     /// <summary>
-    /// <para>语言包已移除。</para>
+    /// <para>语言包被移除。</para>
     /// Language pack removed.
     /// </summary>
     Removed

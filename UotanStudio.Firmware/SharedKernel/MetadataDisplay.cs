@@ -12,7 +12,6 @@ internal static class MetadataDisplay
     {
         var names = flags.Where(flag => (value & flag.Mask) != 0).Select(flag => flag.Name);
         var text = string.Join(", ", names);
-        // Always preserve the mask, including bits introduced by newer format revisions.
         return text.Length == 0 ? $"0x{value:X8}" : $"0x{value:X8} ({text})";
     }
 

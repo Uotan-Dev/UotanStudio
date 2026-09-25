@@ -24,14 +24,12 @@ public sealed partial class RkdlSession
             throw new RkdlException(RkdlError.InvalidParameter, "GPT image must span at least 34 sectors.");
         }
 
-        // 1. Total sector count from flash info (main.cpp write_gpt).
         var totalSectors = (uint)ReadFlashInfo().SectorCount;
         if (totalSectors <= RkdlGpt.BackupSectors)
         {
             throw new RkdlException(RkdlError.FlashInfoFailed, $"Invalid flash sector count: {totalSectors}.");
         }
 
-        // 2. Split master (34 sectors) and backup (33 sectors).
         var masterLen = RkdlConstants.SectorSize * RkdlGpt.PrimarySectors;
         var master = new byte[masterLen];
         Array.Copy(gptData, master, masterLen);
@@ -47,10 +45,8 @@ public sealed partial class RkdlSession
             backup = RkdlGpt.BuildBackupGpt(master);
         }
 
-        // 3. Update the disk size in both tables (main.cpp update_gpt_disksize).
         RkdlGpt.UpdateDiskSize(master, backup, totalSectors);
 
-        // 4. Write the master GPT at LBA 0 and the backup GPT at the end of the storage.
         using (var masterStream = new MemoryStream(master, writable: false))
         {
             WriteLBA(0, masterStream, master.Length, progress, cancellationToken);
@@ -68,6 +64,26 @@ public sealed partial class RkdlSession
     /// <para>使用 WRITE_LBA（0x15）CBW/CSW 事务，将数据写入指定 LBA 地址（512 字节扇区），
     /// 按 <see cref="RkdlConstants.TransferChunkSize"/> 分块。最后一个不完整扇区补零。</para>
     /// </summary>
+    /// <param name="address">The start LBA; must fit in an unsigned 32-bit value.
+    /// <para>起始 LBA；必须能容纳于无符号 32 位值。</para></param>
+    /// <param name="dataStream">The source stream read sequentially; not disposed by this call.
+    /// <para>被顺序读取的源流；本调用不会释放它。</para></param>
+    /// <param name="length">Total bytes to transfer from the stream; a trailing partial sector is
+    /// zero padded on the wire. <para>需从流中转出的总字节数；尾部不完整扇区在线上补零。</para></param>
+    /// <param name="progress">Optional receiver of cumulative source bytes written.
+    /// <para>可选的累计已写出源字节接收器。</para></param>
+    /// <param name="cancellationToken">Checked before each chunk; the token does not interrupt an
+    /// in-flight synchronous bulk transfer. <para>每个分块前检查；令牌不会打断进行中的同步批量传输。</para></param>
+    /// <returns>The number of source bytes transferred, equal to <paramref name="length"/> on success.
+    /// <para>成功时转出的源字节数，等于 <paramref name="length"/>。</para></returns>
+    /// <exception cref="RkdlException">The address is out of range, a bulk write was short,
+    /// or a CSW reported failure. <para>地址越界、批量写入过短或 CSW 报告失败。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="dataStream"/> is <c>null</c>.
+    /// <para><paramref name="dataStream"/> 为 <c>null</c>。</para></exception>
+    /// <exception cref="EndOfStreamException">The stream ended before <paramref name="length"/> bytes were read.
+    /// <para>流在读满 <paramref name="length"/> 字节前结束。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session was disposed.
+    /// <para>会话已被释放。</para></exception>
     public long WriteLBA(long address, Stream dataStream, long length, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -136,6 +152,27 @@ public sealed partial class RkdlSession
     /// （512 字节扇区），按 <see cref="RkdlConstants.TransferChunkSize"/> 分块。
     /// 输出按完整扇区写入。</para>
     /// </summary>
+    /// <param name="address">The start LBA; must fit in an unsigned 32-bit value.
+    /// <para>起始 LBA；必须能容纳于无符号 32 位值。</para></param>
+    /// <param name="outputStream">The destination stream written sequentially; not disposed by this call.
+    /// <para>被顺序写入的目标流；本调用不会释放它。</para></param>
+    /// <param name="length">Total bytes to read from flash; the final chunk is rounded up to full
+    /// sectors on the wire and trimmed to <paramref name="length"/> in the output.
+    /// <para>需从 flash 读取的总字节数；最后一个分块在线上按完整扇区向上取整，写入输出时裁剪至
+    /// <paramref name="length"/>。</para></param>
+    /// <param name="progress">Optional receiver of cumulative bytes written to the output stream.
+    /// <para>可选的累计写入输出流字节数接收器。</para></param>
+    /// <param name="cancellationToken">Checked before each chunk; the token does not interrupt an
+    /// in-flight synchronous bulk transfer. <para>每个分块前检查；令牌不会打断进行中的同步批量传输。</para></param>
+    /// <returns>The number of bytes written to <paramref name="outputStream"/>, equal to
+    /// <paramref name="length"/> on success. <para>写入 <paramref name="outputStream"/> 的字节数，
+    /// 成功时等于 <paramref name="length"/>。</para></returns>
+    /// <exception cref="RkdlException">The address is out of range, the device signaled EOF early,
+    /// or a CSW reported failure. <para>地址越界、设备提前报告 EOF 或 CSW 报告失败。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="outputStream"/> is <c>null</c>.
+    /// <para><paramref name="outputStream"/> 为 <c>null</c>。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session was disposed.
+    /// <para>会话已被释放。</para></exception>
     public long ReadLBA(long address, Stream outputStream, long length, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -222,10 +259,10 @@ public sealed partial class RkdlSession
         var sendPadPacket = false;
         switch (dataLength % RkdlConstants.LoaderChunkSize)
         {
-            case RkdlConstants.LoaderChunkSize - 1:   // 4095: pad one zero byte
+            case RkdlConstants.LoaderChunkSize - 1:
                 dataLength += 1;
                 break;
-            case RkdlConstants.LoaderChunkSize - 2:   // 4094: send a trailing zero packet
+            case RkdlConstants.LoaderChunkSize - 2:
                 sendPadPacket = true;
                 break;
             default:
@@ -234,11 +271,10 @@ public sealed partial class RkdlSession
 
         var buffer = new byte[dataLength + 2];
         Array.Copy(loaderData, buffer, loaderData.Length);
-        // (padding + CRC bytes are already zeroed by the fresh buffer)
 
         var crc = RkdlCrc.Crc16Ccitt(buffer.AsSpan(0, dataLength));
-        buffer[dataLength] = (byte)(crc >> 8);       // high byte first
-        buffer[dataLength + 1] = (byte)(crc & 0xFF); // low byte second
+        buffer[dataLength] = (byte)(crc >> 8);
+        buffer[dataLength + 1] = (byte)(crc & 0xFF);
         var totalLength = dataLength + 2;
 
         var offset = 0;
@@ -301,9 +337,6 @@ public sealed partial class RkdlSession
         WriteCbw(cbw);
 
         var buffer = new byte[readBufferSize];
-        // Collect across multiple reads like upstream RKU_Read_EX: devices may deliver the
-        // data phase in several bulk packets. A short read ends the data phase, so this never
-        // consumes the following CSW bytes.
         var n = 0;
         while (n < readBufferSize)
         {

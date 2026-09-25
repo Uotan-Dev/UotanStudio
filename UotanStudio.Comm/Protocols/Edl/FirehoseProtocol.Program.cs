@@ -14,25 +14,49 @@ public sealed partial class FirehoseProtocol
     /// Programs (flashes) data to a partition.
     /// <para>将数据编程（刷写）到分区。</para>
     /// </summary>
-    /// <param name="dataStream">The data stream to write. 要写入的数据流。</param>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <param name="numSectors">The number of sectors. 扇区数量。</param>
-    /// <param name="filename">The target filename. 目标文件名。</param>
-    /// <param name="physicalPartition">The physical partition number. 物理分区编号。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The Firehose response. Firehose 响应。</returns>
-    /// <exception cref="EdlException">Thrown when the target NAKs the program. 目标对编程返回 NAK 时抛出。</exception>
+    /// <param name="dataStream">The data stream to write. <para>要写入的数据流。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="numSectors">The number of sectors. <para>扇区数量。</para></param>
+    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
+    /// <param name="physicalPartition">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The Firehose response. <para>Firehose 响应。</para></returns>
+    /// <exception cref="EdlException">Thrown when the target NAKs the program. <para>目标对编程返回 NAK 时抛出。</para></exception>
     public Task<FirehoseResponse> ProgramAsync(Stream dataStream, long startSector, long numSectors, string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default)
         => ProgramSerializedAsync(dataStream, new FirehoseSectorAddress(startSector, false), numSectors, filename, physicalPartition, cancellationToken);
 
-    /// <summary>Programs a constant or disk-relative sector range without buffering the complete image.</summary>
-    /// <param name="dataStream">The stream containing the complete declared range.</param>
-    /// <param name="startSector">A constant or NUM_DISK_SECTORS-minus-offset expression.</param>
-    /// <param name="numSectors">The number of sectors to write.</param>
-    /// <param name="filename">The target filename metadata.</param>
-    /// <param name="physicalPartition">The physical storage region or LUN.</param>
-    /// <param name="cancellationToken">The operation cancellation token.</param>
-    /// <returns>The final target acknowledgement.</returns>
+    /// <summary>
+    /// Programs a constant or disk-relative sector range without buffering the complete image.
+    /// <para>编程常量或磁盘相对地址的扇区范围，不缓冲完整镜像。</para>
+    /// </summary>
+    /// <param name="dataStream">
+    /// The stream containing the complete declared range.
+    /// <para>包含完整声明范围的流。</para>
+    /// </param>
+    /// <param name="startSector">
+    /// A constant or NUM_DISK_SECTORS-minus-offset expression.
+    /// <para>常量，或 NUM_DISK_SECTORS 减去偏移量的表达式。</para>
+    /// </param>
+    /// <param name="numSectors">
+    /// The number of sectors to write.
+    /// <para>待写入的扇区数量。</para>
+    /// </param>
+    /// <param name="filename">
+    /// The target filename metadata.
+    /// <para>随命令发送的目标文件名元数据。</para>
+    /// </param>
+    /// <param name="physicalPartition">
+    /// The physical storage region or LUN.
+    /// <para>物理存储区域或 LUN。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The operation cancellation token.
+    /// <para>操作取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// The final target acknowledgement.
+    /// <para>目标的最终确认响应。</para>
+    /// </returns>
     public Task<FirehoseResponse> ProgramAsync(Stream dataStream, string startSector, long numSectors,
         string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default)
         => ProgramSerializedAsync(dataStream, FirehoseSectorAddress.Parse(startSector), numSectors, filename, physicalPartition, cancellationToken);
@@ -73,7 +97,6 @@ public sealed partial class FirehoseProtocol
         }
         catch
         {
-            // An interrupted raw transfer has no sequence number with which to resume safely.
             _faulted = true;
             throw;
         }
@@ -82,24 +105,50 @@ public sealed partial class FirehoseProtocol
     /// <summary>
     /// Validates an Android sparse image before writing RAW/FILL ranges. DONT_CARE ranges
     /// advance the target address without overwriting the existing storage contents.
+    /// <para>在写入 RAW/FILL 范围前先校验 Android sparse 镜像。DONT_CARE 范围仅推进目标地址，
+    /// 不覆盖存储上的既有内容。</para>
     /// </summary>
-    /// <param name="sparseStream">The sparse image stream (must be seekable). 稀疏镜像流（必须可寻址）。</param>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <param name="filename">The target filename. 目标文件名。</param>
-    /// <param name="physicalPartition">The physical partition number. 物理分区编号。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The Firehose response. Firehose 响应。</returns>
+    /// <param name="sparseStream">The sparse image stream (must be seekable). <para>稀疏镜像流（必须可寻址）。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
+    /// <param name="physicalPartition">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The Firehose response. <para>Firehose 响应。</para></returns>
     public Task<FirehoseResponse> ProgramSparseAsync(Stream sparseStream, long startSector, string filename = "sparse.img", int physicalPartition = 0, CancellationToken cancellationToken = default)
         => ProgramSparseCoreAsync(sparseStream, new FirehoseSectorAddress(startSector, false), filename, physicalPartition, null, cancellationToken);
 
-    /// <summary>Writes sparse data ranges to a constant or disk-relative address, preserving DONT_CARE contents.</summary>
-    /// <param name="sparseStream">The seekable, caller-owned image stream.</param>
-    /// <param name="startSector">The target sector or NUM_DISK_SECTORS-minus-offset expression.</param>
-    /// <param name="filename">The filename metadata sent with each data range.</param>
-    /// <param name="physicalPartition">The physical storage region.</param>
-    /// <param name="maximumSectors">Optional declared partition capacity, including skipped ranges.</param>
-    /// <param name="cancellationToken">The operation cancellation token.</param>
-    /// <returns>The last actual target acknowledgement, or a health-probe response for an all-skipped image.</returns>
+    /// <summary>
+    /// Writes sparse data ranges to a constant or disk-relative address, preserving DONT_CARE contents.
+    /// <para>将 sparse 数据范围写入常量或磁盘相对地址，保留 DONT_CARE 范围内的既有内容。</para>
+    /// </summary>
+    /// <param name="sparseStream">
+    /// The seekable, caller-owned image stream.
+    /// <para>可寻址、由调用方持有的镜像流。</para>
+    /// </param>
+    /// <param name="startSector">
+    /// The target sector or NUM_DISK_SECTORS-minus-offset expression.
+    /// <para>目标扇区常量，或 NUM_DISK_SECTORS 减去偏移量的表达式。</para>
+    /// </param>
+    /// <param name="filename">
+    /// The filename metadata sent with each data range.
+    /// <para>随每个数据范围一同发送的文件名元数据。</para>
+    /// </param>
+    /// <param name="physicalPartition">
+    /// The physical storage region.
+    /// <para>物理存储区域。</para>
+    /// </param>
+    /// <param name="maximumSectors">
+    /// Optional declared partition capacity, including skipped ranges.
+    /// <para>可选的声明分区容量，包含被跳过的范围。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The operation cancellation token.
+    /// <para>操作取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// The last actual target acknowledgement, or a health-probe response for an all-skipped image.
+    /// <para>最后一次真实的目标确认；若镜像全部被跳过，则返回健康探测响应。</para>
+    /// </returns>
     public Task<FirehoseResponse> ProgramSparseAsync(Stream sparseStream, string startSector, string filename = "sparse.img",
         int physicalPartition = 0, long? maximumSectors = null, CancellationToken cancellationToken = default)
         => ProgramSparseCoreAsync(sparseStream, FirehoseSectorAddress.Parse(startSector), filename, physicalPartition, maximumSectors, cancellationToken);
@@ -125,7 +174,6 @@ public sealed partial class FirehoseProtocol
         }
 
         ValidateStorageRange(0, 1, physicalPartition);
-        // Complete structural and checksum preflight before sending the first program command.
         var sectorSize = Configuration.SectorSize;
         using var image = FirehoseSparseLayout.Read(sparseStream, sectorSize, startSector, maximumSectors, cancellationToken);
         using var logical = new SparseReadStream(image, requireExactRawData: true);
@@ -152,17 +200,17 @@ public sealed partial class FirehoseProtocol
     }
 
     /// <summary>
-    /// Verifies a previously programmed partition by reading the data back and comparing it
+    /// Verifies a partition programmed earlier in the same session by reading the data back and comparing it
     /// byte by byte with the source stream.
-    /// <para>通过回读并逐字节比较源流来校验先前编程的分区。</para>
+    /// <para>通过回读数据并与源流逐字节比较，校验同一会话中较早编程的分区。</para>
     /// </summary>
-    /// <param name="dataStream">The original data stream (must be seekable). 原始数据流（必须可寻址）。</param>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <param name="numSectors">The number of sectors. 扇区数量。</param>
-    /// <param name="filename">The target filename. 目标文件名。</param>
-    /// <param name="physicalPartition">The physical partition number. 物理分区编号。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
+    /// <param name="dataStream">The original data stream (must be seekable). <para>原始数据流（必须可寻址）。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="numSectors">The number of sectors. <para>扇区数量。</para></param>
+    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
+    /// <param name="physicalPartition">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A task representing the asynchronous operation. <para>表示异步操作的任务。</para></returns>
     public async Task VerifyProgramAsync(Stream dataStream, long startSector, long numSectors, string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
@@ -195,20 +243,38 @@ public sealed partial class FirehoseProtocol
     /// Erases sectors from a partition using a per-storage erase timeout.
     /// <para>使用按存储类型的擦除超时擦除分区中的扇区。</para>
     /// </summary>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <param name="numSectors">The number of sectors. 扇区数量。</param>
-    /// <param name="physicalPartition">The physical partition number. 物理分区编号。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The Firehose response. Firehose 响应。</returns>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="numSectors">The number of sectors. <para>扇区数量。</para></param>
+    /// <param name="physicalPartition">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The Firehose response. <para>Firehose 响应。</para></returns>
     public Task<FirehoseResponse> EraseAsync(long startSector, long numSectors, int physicalPartition = 0, CancellationToken cancellationToken = default)
         => EraseCoreAsync(new FirehoseSectorAddress(startSector, false), numSectors, physicalPartition, cancellationToken);
 
-    /// <summary>Erases a constant or disk-relative range after validating its expression and length.</summary>
-    /// <param name="startSector">A constant or NUM_DISK_SECTORS-minus-offset expression.</param>
-    /// <param name="numSectors">The number of sectors to erase.</param>
-    /// <param name="physicalPartition">The physical storage region or LUN.</param>
-    /// <param name="cancellationToken">The operation cancellation token.</param>
-    /// <returns>The target erase acknowledgement.</returns>
+    /// <summary>
+    /// Erases a constant or disk-relative range after validating its expression and length.
+    /// <para>在校验表达式与长度后，擦除常量或磁盘相对地址的范围。</para>
+    /// </summary>
+    /// <param name="startSector">
+    /// A constant or NUM_DISK_SECTORS-minus-offset expression.
+    /// <para>常量，或 NUM_DISK_SECTORS 减去偏移量的表达式。</para>
+    /// </param>
+    /// <param name="numSectors">
+    /// The number of sectors to erase.
+    /// <para>待擦除的扇区数量。</para>
+    /// </param>
+    /// <param name="physicalPartition">
+    /// The physical storage region or LUN.
+    /// <para>物理存储区域或 LUN。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The operation cancellation token.
+    /// <para>操作取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// The target erase acknowledgement.
+    /// <para>目标的擦除确认响应。</para>
+    /// </returns>
     public Task<FirehoseResponse> EraseAsync(string startSector, long numSectors, int physicalPartition = 0, CancellationToken cancellationToken = default)
         => EraseCoreAsync(FirehoseSectorAddress.Parse(startSector), numSectors, physicalPartition, cancellationToken);
 
@@ -236,27 +302,54 @@ public sealed partial class FirehoseProtocol
     /// <para>通过 &lt;patch&gt; 向分区应用补丁。目标为 filename="DISK" 的补丁会被跳过（其不
     /// 针对任何物理分区）。</para>
     /// </summary>
-    /// <param name="filename">The target filename. 目标文件名。</param>
-    /// <param name="physicalPartition">The physical partition number. 物理分区编号。</param>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <param name="byteOffset">The byte offset within the sector. 扇区内字节偏移。</param>
-    /// <param name="value">The value to patch (hex string). 待写入的值（十六进制字符串）。</param>
-    /// <param name="sizeInBytes">The size in bytes. 大小（字节）。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The Firehose response. Firehose 响应。</returns>
+    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
+    /// <param name="physicalPartition">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="byteOffset">The byte offset within the sector. <para>扇区内字节偏移。</para></param>
+    /// <param name="value">The value to patch (hex string). <para>待写入的值（十六进制字符串）。</para></param>
+    /// <param name="sizeInBytes">The size in bytes. <para>大小（字节）。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The Firehose response. <para>Firehose 响应。</para></returns>
     public Task<FirehoseResponse> PatchAsync(string filename, int physicalPartition, long startSector, long byteOffset, string value, long sizeInBytes, CancellationToken cancellationToken = default)
         => PatchAsync(filename, physicalPartition, startSector.ToString(System.Globalization.CultureInfo.InvariantCulture),
             byteOffset, value, sizeInBytes, cancellationToken);
 
-    /// <summary>Applies a patch using a constant sector or a bounded NUM_DISK_SECTORS-minus-offset expression.</summary>
-    /// <param name="filename">The patch target, including DISK for physical storage.</param>
-    /// <param name="physicalPartition">The target storage region or LUN.</param>
-    /// <param name="startSector">The constant or disk-relative sector expression.</param>
-    /// <param name="byteOffset">The byte offset within the sector.</param>
-    /// <param name="value">The value expression interpreted by the target programmer.</param>
-    /// <param name="sizeInBytes">The patch width, from one through eight bytes.</param>
-    /// <param name="cancellationToken">The operation cancellation token.</param>
-    /// <returns>The target's actual patch acknowledgement.</returns>
+    /// <summary>
+    /// Applies a patch using a constant sector or a bounded NUM_DISK_SECTORS-minus-offset expression.
+    /// <para>使用常量扇区或有界的 NUM_DISK_SECTORS 减去偏移量表达式应用补丁。</para>
+    /// </summary>
+    /// <param name="filename">
+    /// The patch target, including DISK for physical storage.
+    /// <para>补丁目标；对物理存储整体可使用 DISK。</para>
+    /// </param>
+    /// <param name="physicalPartition">
+    /// The target storage region or LUN.
+    /// <para>目标存储区域或 LUN。</para>
+    /// </param>
+    /// <param name="startSector">
+    /// The constant or disk-relative sector expression.
+    /// <para>常量扇区，或磁盘相对扇区表达式。</para>
+    /// </param>
+    /// <param name="byteOffset">
+    /// The byte offset within the sector.
+    /// <para>扇区内的字节偏移。</para>
+    /// </param>
+    /// <param name="value">
+    /// The value expression interpreted by the target programmer.
+    /// <para>由目标 programmer 解释的值表达式。</para>
+    /// </param>
+    /// <param name="sizeInBytes">
+    /// The patch width, from one through eight bytes.
+    /// <para>补丁宽度，取 1 到 8 字节。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The operation cancellation token.
+    /// <para>操作取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// The target's actual patch acknowledgement.
+    /// <para>目标的实际补丁确认响应。</para>
+    /// </returns>
     public async Task<FirehoseResponse> PatchAsync(string filename, int physicalPartition, string startSector, long byteOffset,
         string value, long sizeInBytes, CancellationToken cancellationToken = default)
     {
@@ -307,12 +400,12 @@ public sealed partial class FirehoseProtocol
     /// --wipefirst).
     /// <para>通过编程零字节擦写分区首部 N 个扇区（对齐 fh_loader --wipefirst）。</para>
     /// </summary>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <param name="numSectors">The number of sectors to wipe. 待擦写扇区数。</param>
-    /// <param name="physicalPartition">The physical partition number. 物理分区编号。</param>
-    /// <param name="zeroFilename">The filename label for the zeros payload. 零字节负载的文件名标签。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The Firehose response. Firehose 响应。</returns>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="numSectors">The number of sectors to wipe. <para>待擦写扇区数。</para></param>
+    /// <param name="physicalPartition">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="zeroFilename">The filename label for the zeros payload. <para>零字节负载的文件名标签。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The Firehose response. <para>Firehose 响应。</para></returns>
     public async Task<FirehoseResponse> WipeAsync(long startSector, long numSectors, int physicalPartition = 0, string zeroFilename = "Zeros16KB.bin", CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);

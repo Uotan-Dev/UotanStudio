@@ -1,5 +1,10 @@
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto.KeyDatabase;
 
+/// <summary>
+/// Built-in key table for Qualcomm-based OFP packages, holding the master credential, user key and
+/// initialization vector triple per firmware generation.
+/// <para>面向高通平台 OFP 包的内置密钥表，按固件代次保存主凭据、用户密钥与初始化向量三元组。</para>
+/// </summary>
 public static class QcKeyDatabase
 {
     private static readonly QcKeyEntry[] KeyEntries =
@@ -47,12 +52,28 @@ public static class QcKeyDatabase
             Description: "OW19W8AP"),
     ];
 
+    /// <summary>
+    /// Every built-in Qualcomm key entry, in declaration order.
+    /// <para>全部内置高通密钥条目，按声明顺序排列。</para>
+    /// </summary>
+    /// <value>
+    /// A read-only list that always holds every built-in entry; the backing array is shared, so
+    /// entries must be treated as immutable.
+    /// <para>只读列表，包含全部内置条目；底层数组为共享实例，因此条目必须视为不可变。</para>
+    /// </value>
     public static IReadOnlyList<QcKeyEntry> Entries => KeyEntries;
 
     /// <summary>
     /// Finds a QC key entry by its key identifier.
     /// <para>根据密钥标识符查找 QC 密钥条目。</para>
     /// </summary>
+    /// <param name="keyId">
+    /// Key identifier such as <c>V1.6.6</c>; matched case-insensitively. A <see langword="null"/> value
+    /// simply yields no match.
+    /// <para>形如 <c>V1.6.6</c> 的密钥标识符；按不区分大小写匹配。传入 <see langword="null"/> 时只会匹配失败。</para>
+    /// </param>
+    /// <returns>The matching entry, or <see langword="null"/> when the identifier is unknown.
+    /// <para>匹配的条目；标识符未知时返回 <see langword="null"/>。</para></returns>
     public static QcKeyEntry? FindByKeyId(string keyId)
     {
         foreach (var entry in KeyEntries)

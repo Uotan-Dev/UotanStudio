@@ -28,8 +28,8 @@ public static class ScrcpyServerManager
     /// Pushes the scrcpy server jar to the device.
     /// <para>将 scrcpy 服务端 jar 推送到设备。</para>
     /// </summary>
-    /// <param name="session">An established ADB session. 已建立的 ADB 会话。</param>
-    /// <param name="localJarPath">Path of the bundled <c>scrcpy-server</c> jar. 随附 <c>scrcpy-server</c> jar 的本地路径。</param>
+    /// <param name="session">An established ADB session. <para>已建立的 ADB 会话。</para></param>
+    /// <param name="localJarPath">Path of the bundled <c>scrcpy-server</c> jar. <para>随附 <c>scrcpy-server</c> jar 的本地路径。</para></param>
     public static void PushServer(IAdbDeviceSession session, string localJarPath)
     {
         if (session is null)
@@ -50,11 +50,11 @@ public static class ScrcpyServerManager
     /// Starts the server process and returns its long-lived shell stream.
     /// <para>启动服务端进程并返回其长驻 shell 流。</para>
     /// </summary>
-    /// <param name="session">An established ADB session. 已建立的 ADB 会话。</param>
-    /// <param name="options">Server launch options. 服务端启动选项。</param>
+    /// <param name="session">An established ADB session. <para>已建立的 ADB 会话。</para></param>
+    /// <param name="options">Server launch options. <para>服务端启动选项。</para></param>
     /// <returns>
     /// The shell stream carrying the server log; keep it open while mirroring.
-    /// 承载服务端日志的 shell 流；投屏期间保持打开。
+    /// <para>承载服务端日志的 shell 流；投屏期间保持打开。</para>
     /// </returns>
     public static IAdbStream StartServer(IAdbDeviceSession session, ScrcpyServerOptions options)
     {
@@ -72,7 +72,7 @@ public static class ScrcpyServerManager
     /// Forces any running scrcpy server process to exit.
     /// <para>强制退出设备上正在运行的 scrcpy 服务端进程。</para>
     /// </summary>
-    /// <param name="session">An established ADB session. 已建立的 ADB 会话。</param>
+    /// <param name="session">An established ADB session. <para>已建立的 ADB 会话。</para></param>
     public static void StopServer(IAdbDeviceSession session)
     {
         if (session is null)
@@ -90,8 +90,8 @@ public static class ScrcpyServerManager
     /// Reads the trailing server log from the shell stream (non-blocking drain).
     /// <para>从 shell 流读取服务端日志尾部（非阻塞排空）。</para>
     /// </summary>
-    /// <param name="shellStream">The stream returned by <see cref="StartServer"/>. <see cref="StartServer"/> 返回的流。</param>
-    /// <returns>Log text read so far. 当前读到的日志文本。</returns>
+    /// <param name="shellStream">The stream returned by <see cref="StartServer"/>. <para><see cref="StartServer"/> 返回的流。</para></param>
+    /// <returns>Log text read so far. <para>当前读到的日志文本。</para></returns>
     public static string DrainLog(IAdbStream shellStream)
     {
         var sb = new StringBuilder();

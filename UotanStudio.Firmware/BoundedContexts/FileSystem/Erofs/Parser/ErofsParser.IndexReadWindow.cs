@@ -1,5 +1,9 @@
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 
+/// <summary>
+/// EROFS parser part that owns the bounded per-file index read window, so repeated compact-index lookups reuse one cached buffer instead of re-reading the image.
+/// <para>EROFS 解析器的组成部分，提供按文件受限的索引读取窗口，使重复的紧凑索引查询复用同一缓存缓冲区，而不是反复读取镜像。</para>
+/// </summary>
 public sealed partial class ErofsParser
 {
     /// <summary>A bounded, per-file index window; only source reads share the parser lock.</summary>

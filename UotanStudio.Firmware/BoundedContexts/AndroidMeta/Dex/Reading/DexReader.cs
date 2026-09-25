@@ -38,11 +38,6 @@ internal static class DexReader
         var header = ReadHeader(data);
         if (header.HeaderSize != 0x70 || header.FileSize != data.Length)
             throw new DexException("DEX header size or file size does not match the input.");
-        // 固件打包流程常在构建后修改 DEX（SHA-1 与 Adler-32 随之过期）；上游 jadx/dexlib 容忍该
-        // 情形，读取侧不因校验和过期拒绝——写回时 DexWriter 总是重算签名与校验和。
-        // Firmware packing frequently modifies DEX files after the build (stale SHA-1 and
-        // Adler-32); upstream jadx/dexlib tolerate this, so the reader does not reject on a
-        // stale checksum — DexWriter always recomputes the signature and checksum on write-back.
         uint checksumA = 1, checksumB = 0;
         foreach (var value in data.AsSpan(12))
         {
@@ -51,8 +46,6 @@ internal static class DexReader
         }
         if ((checksumB << 16 | checksumA) != header.Checksum)
         {
-            // 与 SHA-1 同理：不因过期的 Adler-32 拒绝解析（写回时重算）。
-            // Same as SHA-1: do not reject on a stale Adler-32 (recomputed on write-back).
         }
         ValidateTable(data, header.StringIdsOffset, header.StringIdsSize, 4, "string_ids");
         ValidateTable(data, header.TypeIdsOffset, header.TypeIdsSize, 4, "type_ids");
@@ -238,7 +231,6 @@ internal static class DexReader
         if (BitConverter.IsLittleEndian)
         {
 
-
             var units = MemoryMarshal.Cast<byte, ushort>(listSpan);
             for (var i = 0; i < size; i++) result[i] = units[i];
         }
@@ -402,7 +394,6 @@ internal static class DexReader
         if (BitConverter.IsLittleEndian)
         {
 
-
             raw = MemoryMarshal.Cast<byte, ushort>(insnsSpan).ToArray();
         }
         else
@@ -422,10 +413,8 @@ internal static class DexReader
             RawInsns = raw
         };
 
-
         if (triesSize > 0)
         {
-
 
             var triesOffset = insnsStart + checked((int)insnsSize * 2) + ((insnsSize & 1) != 0 ? 2 : 0);
             EnsureRange(data, triesOffset, checked(triesSize * 8), "code_item tries");
@@ -598,7 +587,6 @@ internal static class DexReader
         for (var i = 0; i < size; i++)
         {
 
-
             var itemOff = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 4 + i * 4));
             var p = (int)itemOff;
             var visibility = data[p++];
@@ -651,7 +639,6 @@ internal static class DexReader
     {
         var header = data[offset++];
 
-
         var arg = header >> 5;
         var type = (EncodedValueType)(header & 0x1f);
 
@@ -669,9 +656,6 @@ internal static class DexReader
                 return EncodedValue.Long(ReadSignedValue(data, ref offset, arg + 1));
             case EncodedValueType.Float:
                 {
-                    // 位重解释不是值转换，直接 unchecked 转换（真实 DEX 中 0x7Fxxxxxx 等位型合法存在）。
-                    // Bit reinterpretation is not a value conversion; the cast is unchecked
-                    // (bit patterns like 0x7Fxxxxxx legitimately occur in real DEX files).
                     var bits = unchecked((uint)ReadUnsignedValue(data, ref offset, arg + 1));
                     return EncodedValue.Float(BitConverter.Int32BitsToSingle(unchecked((int)bits)));
                 }

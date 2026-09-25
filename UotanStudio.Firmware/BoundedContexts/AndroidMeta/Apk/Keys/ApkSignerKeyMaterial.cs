@@ -20,16 +20,27 @@ public sealed class ApkSignerKeyMaterial : IDisposable
         CertificateChain = chain;
     }
 
-    /// <summary>The signing key (RSA or ECDSA).</summary>
-    /// <para>签名密钥（RSA 或 ECDSA）。</para>
+    /// <summary>The signing key (RSA or ECDSA).
+    /// <para>签名密钥（RSA 或 ECDSA）。</para></summary>
+    /// <value>The imported asymmetric key, an <see cref="RSA"/> or <see cref="ECDsa"/> instance
+    /// created during loading; disposed by <see cref="Dispose"/>.
+    /// <para>导入的非对称密钥，为加载期间创建的 <see cref="RSA"/> 或 <see cref="ECDsa"/> 实例；由
+    /// <see cref="Dispose"/> 释放。</para></value>
     public AsymmetricAlgorithm Key { get; }
 
-    /// <summary>The signer certificate (leaf).</summary>
-    /// <para>签名者证书（叶子证书）。</para>
+    /// <summary>The signer certificate (leaf).
+    /// <para>签名者证书（叶子证书）。</para></summary>
+    /// <value>The parsed leaf certificate, identical to the first entry of
+    /// <see cref="CertificateChain"/>; disposed by <see cref="Dispose"/>.
+    /// <para>解析出的叶子证书，与 <see cref="CertificateChain"/> 首项为同一实例；由
+    /// <see cref="Dispose"/> 释放。</para></value>
     public X509Certificate2 Certificate { get; }
 
-    /// <summary>The certificate chain to embed (leaf first).</summary>
-    /// <para>要嵌入的证书链（叶子在前）。</para>
+    /// <summary>The certificate chain to embed (leaf first).
+    /// <para>要嵌入的证书链（叶子在前）。</para></summary>
+    /// <value>A single-element list holding <see cref="Certificate"/>; intermediate certificates are
+    /// not extracted from the input file.
+    /// <para>仅含 <see cref="Certificate"/> 的单元素列表；不会从输入文件中提取中间证书。</para></value>
     public IReadOnlyList<X509Certificate2> CertificateChain { get; }
 
     /// <summary>
@@ -38,10 +49,21 @@ public sealed class ApkSignerKeyMaterial : IDisposable
     /// <para>从用户提供的文件加载自定义密钥材料：私钥（PKCS#8 明文/加密、PKCS#1 或 SEC1，PEM 或 DER）
     /// 与证书（PEM/DER/PFX）。输入全部由用户提供。</para>
     /// </summary>
-    /// <param name="keyPath">Private key file path (.pk8/.key/.pem). 私钥文件路径（.pk8/.key/.pem）。</param>
-    /// <param name="keyPassword">Optional private key password (encrypted PKCS#8). 可选私钥密码（加密 PKCS#8）。</param>
-    /// <param name="certPath">Certificate file path (.pem/.crt/.cer/.der/.pfx/.p12). 证书文件路径。</param>
-    /// <param name="certPassword">Optional certificate (PFX) password. 可选证书（PFX）密码。</param>
+    /// <param name="keyPath">Private key file path (.pk8/.key/.pem).
+    /// <para>私钥文件路径（.pk8/.key/.pem）。</para></param>
+    /// <param name="keyPassword">Optional private key password (encrypted PKCS#8).
+    /// <para>可选私钥密码（加密 PKCS#8）。</para></param>
+    /// <param name="certPath">Certificate file path (.pem/.crt/.cer/.der/.pfx/.p12).
+    /// <para>证书文件路径。</para></param>
+    /// <param name="certPassword">Optional certificate (PFX) password.
+    /// <para>可选证书（PFX）密码。</para></param>
+    /// <returns>Loaded material whose key and certificate Subject Public Key Info were verified to
+    /// be byte-identical; the caller owns the returned instance and must dispose it.
+    /// <para>已加载的密钥材料；其公钥信息与证书逐字节一致的校验已通过；实例由调用方持有并负责释放。</para></returns>
+    /// <exception cref="FileNotFoundException"><paramref name="keyPath"/> or <paramref name="certPath"/> is blank or does not exist. <para><paramref name="keyPath"/> 或 <paramref name="certPath"/> 为空或不存在。</para></exception>
+    /// <exception cref="InvalidDataException">Either input file exceeds 4 MiB. <para>任一输入文件超过 4 MiB。</para></exception>
+    /// <exception cref="CryptographicException">The key cannot be imported with the given password or format, the certificate block is malformed, or the key does not match the certificate. <para>无法按给定密码或格式导入私钥、证书块格式错误，或私钥与证书不匹配。</para></exception>
+    /// <exception cref="FormatException">A PEM key body is not valid Base64. <para>PEM 私钥正文不是有效的 Base64。</para></exception>
     public static ApkSignerKeyMaterial Load(string keyPath, string? keyPassword, string certPath, string? certPassword)
     {
         if (string.IsNullOrWhiteSpace(keyPath) || !File.Exists(keyPath))
@@ -198,7 +220,11 @@ public sealed class ApkSignerKeyMaterial : IDisposable
         return X509CertificateLoader.LoadCertificate(Convert.FromBase64String(base64));
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Releases the created signing key instance and the leaf certificate; because the chain's only
+    /// entry is the same certificate object, it is disposed exactly once.
+    /// <para>释放加载期间创建的签名密钥实例与叶子证书；证书链中唯一条目即同一证书对象，因此只释放一次。</para>
+    /// </summary>
     public void Dispose()
     {
         _disposableKey?.Dispose();

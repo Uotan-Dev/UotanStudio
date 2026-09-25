@@ -8,10 +8,6 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 
 internal static partial class LibUsbFinder
 {
-    // LibUsbDotNet 3.0.224 no longer bundles the native libusb runtime. Creating a
-    // UsbContext when the native library is absent leaves a half-initialized context
-    // whose finalizer NullReferenceExceptions (known upstream issue). Probe for the
-    // runtime first so we never create a context without the native library present.
     [LibraryImport("libusb-1.0")]
     private static partial int libusb_init(out IntPtr context);
 
@@ -355,6 +351,5 @@ internal static partial class LibUsbFinder
             return false;
         }
     }
-
 
 }

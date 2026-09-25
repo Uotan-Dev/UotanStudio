@@ -31,87 +31,42 @@ internal static partial class IOKitUsbAPI
     public const string CoreFoundation = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
     public const string Libc = "libc";
 
-    // ---- Service matching / iteration ----
-    // CFMutableDictionaryRef IOServiceMatching(const char *name);
-    // Returns a +1 reference that IOServiceGetMatchingServices consumes.
     [LibraryImport(IOKit)]
     public static partial IntPtr IOServiceMatching([MarshalAs(UnmanagedType.LPStr)] string name);
 
-    // kern_return_t IOServiceGetMatchingServices(mach_port_t masterPort,
-    //   CFDictionaryRef matching, io_iterator_t *existing);
     [LibraryImport(IOKit)]
     public static partial int IOServiceGetMatchingServices(IntPtr masterPort, IntPtr matching, out IntPtr existing);
 
-    // kern_return_t IOServiceGetMatchingService(mach_port_t masterPort,
-    //   CFDictionaryRef matching);
-    // Consumes the matching dictionary. Returns the first match or 0.
     [LibraryImport(IOKit)]
     public static partial IntPtr IOServiceGetMatchingService(IntPtr masterPort, IntPtr matching);
 
-    // io_object_t IOIteratorNext(io_iterator_t iterator);
-    // io_object_t and io_iterator_t are both mach_port_t (unsigned int, 32-bit).
-    // Using IntPtr (8 bytes on 64-bit) would pass garbage in the high 4 bytes
-    // and the native function would read a wrong iterator value, returning 0.
-    // <para>io_object_t 和 io_iterator_t 均为 mach_port_t（unsigned int，32 位）。
-    // 用 IntPtr（64 位上 8 字节）会在高 4 字节传垃圾，native 函数读到错误迭代器值
-    // 而返回 0。</para>
     [LibraryImport(IOKit)]
     public static partial uint IOIteratorNext(IntPtr iterator);
 
-    // kern_return_t IOObjectRelease(io_object_t object);
     [LibraryImport(IOKit)]
     public static partial int IOObjectRelease(IntPtr obj);
 
-    // kern_return_t IOObjectRetain(io_object_t object);
     [LibraryImport(IOKit)]
     public static partial int IOObjectRetain(IntPtr obj);
 
-    // ---- Registry properties ----
-    // CFTypeRef IORegistryEntryCreateCFProperty(io_registry_entry_t entry,
-    //   CFStringRef key, CFAllocatorRef allocator, IOOptionBits options);
-    // Returns a +1 reference (caller must CFRelease) or NULL.
     [LibraryImport(IOKit)]
     public static partial IntPtr IORegistryEntryCreateCFProperty(IntPtr entry, IntPtr key, IntPtr allocator, uint options);
 
-    // kern_return_t IORegistryEntryCreateCFProperties(io_registry_entry_t entry,
-    //   CFMutableDictionaryRef *properties, CFAllocatorRef allocator, IOOptionBits options);
-    // Fills *properties with a +1 dictionary of all properties.
     [LibraryImport(IOKit)]
     public static partial int IORegistryEntryCreateCFProperties(IntPtr entry, out IntPtr properties, IntPtr allocator, uint options);
 
-    // kern_return_t IORegistryEntryGetLocationInPlane(io_registry_entry_t entry,
-    //   const io_name_t plane, io_name_t location);
     [LibraryImport(IOKit)]
     public static partial int IORegistryEntryGetLocationInPlane(IntPtr entry, [MarshalAs(UnmanagedType.LPStr)] string plane, IntPtr location);
 
-    // kern_return_t IORegistryEntryGetPath(io_registry_entry_t entry,
-    //   const io_name_t plane, io_string_t path);
     [LibraryImport(IOKit)]
     public static partial int IORegistryEntryGetPath(IntPtr entry, [MarshalAs(UnmanagedType.LPStr)] string plane, IntPtr path);
 
-    // kern_return_t IORegistryEntryGetName(io_registry_entry_t entry, io_name_t name);
     [LibraryImport(IOKit)]
     public static partial int IORegistryEntryGetName(IntPtr entry, IntPtr name);
 
-    // uint64_t IORegistryEntryGetRegistryEntryID(io_registry_entry_t entry);
-    // io_registry_entry_t is mach_port_t (unsigned int, 32-bit). Passing IntPtr
-    // (8 bytes on 64-bit) would feed garbage in the high 4 bytes and the native
-    // function would read a wrong entry handle, returning 0.
-    // <para>io_registry_entry_t 为 mach_port_t（unsigned int，32 位）。传 IntPtr
-    // （64 位上 8 字节）会在高 4 字节传垃圾，native 函数读到错误项句柄而返回 0。</para>
     [LibraryImport(IOKit)]
     public static partial ulong IORegistryEntryGetRegistryEntryID(uint entry);
 
-    // ---- Plug-in interface (COM-vtable) ----
-    // kern_return_t IOCreatePlugInInterfaceForService(io_service_t service,
-    //   CFUUIDRef pluginType, CFUUIDRef interfaceType,
-    //   IOCFPlugInInterface ***theInterface, SInt32 *theScore);
-    // Returns a +1 plug-in interface in *theInterface.
-    // The IntPtr form is kept for callers that already hold a CFUUIDRef; the
-    // Guid overload below lets .NET marshal a Guid into a CFUUIDRef directly
-    // (the exact calling shape SharpFastboot's macOS backend uses).
-    // <para>以 Guid 形式调用时，.NET 将 Guid marshal 为 CFUUIDRef（SharpFastboot
-    // 的 macOS 后端使用的正是该调用形）。IntPtr 形保留给已持有 CFUUIDRef 的调用方。</para>
     [LibraryImport(IOKit)]
     public static partial int IOCreatePlugInInterfaceForService(
         IntPtr service,
@@ -128,11 +83,9 @@ internal static partial class IOKitUsbAPI
         out IntPtr theInterface,
         out int theScore);
 
-    // kern_return_t IODestroyPlugInInterface(IOCFPlugInInterface **theInterface);
     [LibraryImport(IOKit)]
     public static partial int IODestroyPlugInInterface(ref IntPtr theInterface);
 
-    // ---- CoreFoundation helpers ----
     [LibraryImport(CoreFoundation)]
     public static partial void CFRelease(IntPtr obj);
 
@@ -145,33 +98,24 @@ internal static partial class IOKitUsbAPI
     [LibraryImport(CoreFoundation)]
     public static partial IntPtr CFArrayGetValueAtIndex(IntPtr array, long index);
 
-    // CFStringRef CFStringCreateWithCString(CFAllocatorRef alloc,
-    //   const char *cStr, CFStringEncoding encoding);
     [LibraryImport(CoreFoundation)]
     public static partial IntPtr CFStringCreateWithCString(IntPtr alloc, [MarshalAs(UnmanagedType.LPStr)] string cStr, int encoding);
 
-    // CFTypeID CFGetTypeID(CFTypeRef cf);
     [LibraryImport(CoreFoundation)]
     public static partial IntPtr CFGetTypeID(IntPtr cf);
 
-    // CFNumberRef CFNumberCreate(CFAllocatorRef alloc, CFNumberType theType, const void *valuePtr);
     [LibraryImport(CoreFoundation)]
     public static partial IntPtr CFNumberCreate(IntPtr alloc, int theType, IntPtr valuePtr);
 
-    // CFPropertyListRef CFPropertyListCreateWithData(CFAllocatorRef alloc,
-    //   CFDataRef data, CFOptionFlags options, CFPropertyListFormat *format, CFErrorRef *error);
     [LibraryImport(CoreFoundation)]
     public static partial IntPtr CFPropertyListCreateWithData(IntPtr alloc, IntPtr data, uint options, out int format, out IntPtr error);
 
-    // void CFShow(CFTypeRef obj); // prints a CF object to stderr for debugging
     [LibraryImport(CoreFoundation)]
     public static partial void CFShow(IntPtr obj);
 
-    // malloc/free for IORegistryEntryCreateCFProperty results
     [LibraryImport(Libc, EntryPoint = "free")]
     public static partial void Free(IntPtr ptr);
 
-    // ---- Constants ----
     public const int KCFStringEncodingUTF8 = 0x08000100;
     public const int KCFStringEncodingMacRoman = 0;
 
@@ -183,23 +127,17 @@ internal static partial class IOKitUsbAPI
     public const int KIOReturnExclusiveAccess = unchecked((int)0xE00002E5);
     public const int KIOReturnError = unchecked((int)0xE0000001);
 
-    // IOOptionBits for IORegistryEntryCreateCFProperty / CreateCFProperties
     public const uint KIORegistryIterateRecursively = 0x00000001;
     public const uint KIORegistryIterateParents = 0x00000002;
 
-    // USB descriptor types
     public const byte USB_DESCRIPTOR_TYPE_CONFIGURATION = 2;
     public const byte USB_DESCRIPTOR_TYPE_INTERFACE = 4;
     public const byte USB_DESCRIPTOR_TYPE_ENDPOINT = 5;
 
-    // The IOUSBDevice service class name used with IOServiceMatching.
     public const string IOUSBDeviceClassName = "IOUSBDevice";
 
-    // The IOService plane name passed to IORegistryEntryGetPath.
     public const string IOServicePlane = "IOService";
 
-    // ---- COM UUIDs (verified in SharpFastboot's macOS backend) ----
-    // <para>COM UUID（已在 SharpFastboot 的 macOS 后端验证）。</para>
     public static readonly Guid KIOUSBDeviceUserClientTypeID = new("9d7d2100-ba54-11d4-8113-0005020c020c");
     public static readonly Guid KIOUSBDeviceInterfaceID = new("5c3a030d-27d1-11d4-9d10-0005020c020c");
     public static readonly Guid KIOCFPlugInInterfaceID = new("c244e858-109c-11d4-91d4-0050e4c6426f");
@@ -208,13 +146,8 @@ internal static partial class IOKitUsbAPI
 
     public const int Ok = 0;
 
-    // IOUSBFindInterfaceRequest b* fields use KIOUSBFindInterfaceDontCare (0xFFFF)
-    // to match any value.
-    // <para>IOUSBFindInterfaceRequest 的 b* 字段用 KIOUSBFindInterfaceDontCare
-    // （0xFFFF）匹配任意值。</para>
     public const ushort KIOUSBFindInterfaceDontCare = 0xFFFF;
 
-    // ---- IOUSBFindInterfaceRequest (used by USBDeviceCreateInterfaceIterator) ----
     [StructLayout(LayoutKind.Sequential)]
     internal struct IOUSBFindInterfaceRequest
     {
@@ -223,11 +156,6 @@ internal static partial class IOKitUsbAPI
         public ushort BInterfaceProtocol;
         public ushort BAlternateSetting;
     }
-
-    // ---- COM-vtable delegates (IOCFPlugInInterface / IOUSBDeviceInterface /
-    // IOUSBInterfaceInterface), verified offsets from SharpFastboot ----
-    // <para>COM-vtable 委托（IOCFPlugInInterface / IOUSBDeviceInterface /
-    // IOUSBInterfaceInterface），已验证偏移取自 SharpFastboot。</para>
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int QueryInterfaceDelegate(IntPtr self, Guid iid, out IntPtr ppv);
@@ -286,32 +214,12 @@ internal static partial class IOKitUsbAPI
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int WritePipeTODelegate(IntPtr self, byte pipeRef, IntPtr data, uint size, uint noDataTimeout, uint completionTimeout);
 
-    // VTable offsets, matching the layout verified on current macOS by the
-    // pre-rewrite backend (and SharpFastboot's macOS implementation). The
-    // plug-in objects obtained from IOCreatePlugInInterfaceForService expose a
-    // vtable whose slot 0 is NOT QueryInterface — the IUnknown methods sit at
-    // offsets 1/3 (there is a leading pseudo-vtable slot), and the device /
-    // interface methods follow at the offsets below. These values were
-    // validated on real macOS hardware (USBDeviceOpen is reached and returns
-    // kIOReturnNoSpace rather than crashing), so they MUST NOT be "normalized"
-    // to a standard IUnknown 0/1/2 layout — doing so dereferences the wrong
-    // slot and SIGSEGVs the process.
-    // <para>vtable 偏移与重写前后端（及 SharpFastboot 的 macOS 实现）在当前 macOS
-    // 上验证过的布局一致。IOCreatePlugInInterfaceForService 得到的插件对象暴露的
-    // vtable 中槽位 0 并非 QueryInterface——IUnknown 方法位于偏移 1/3（前有一个
-    // 伪 vtable 槽），设备/接口方法位于下列偏移。这些值已在真实 macOS 硬件上验证
-    // （USBDeviceOpen 真实到达并返回 kIOReturnNoSpace 而非崩溃），因此绝不能
-    // "规范化"为标准 IUnknown 0/1/2 布局——那样会解引用错误槽位并使进程 SIGSEGV。</para>
-
-    // VTable offsets for IOCFPlugInInterface.
     public const int Offset_Plugin_QueryInterface = 1;
     public const int Offset_Plugin_Release = 3;
 
-    // VTable offsets for common IUnknown (shared by interface & device COM objects).
     public const int Offset_IUnknown_QueryInterface = 1;
     public const int Offset_IUnknown_Release = 3;
 
-    // VTable offsets for IOUSBDeviceInterface.
     public const int Offset_DeviceRequest = 7;
     public const int Offset_USBDeviceOpen = 14;
     public const int Offset_USBDeviceClose = 15;
@@ -323,7 +231,6 @@ internal static partial class IOKitUsbAPI
     public const int Offset_USBDeviceCreateInterfaceIterator = 26;
     public const int Offset_USBDeviceReset = 27;
 
-    // VTable offsets for IOUSBInterfaceInterface (190+).
     public const int Offset_USBInterfaceOpen = 8;
     public const int Offset_USBInterfaceClose = 9;
     public const int Offset_GetNumEndpoints = 17;
@@ -334,20 +241,6 @@ internal static partial class IOKitUsbAPI
     public const int Offset_ReadPipeTO = 28;
     public const int Offset_WritePipeTO = 29;
 
-    // Reads a vtable method pointer at `offset` (0-based slot) and wraps it into
-    // the requested delegate type. The vtable itself is the first pointer pointed
-    // to by `self`; each slot is one IntPtr wide. This double indirection is the
-    // shape validated on macOS by the pre-rewrite backend — do not change it to a
-    // single indirection based on the IOKit C headers alone.
-    // <para>读取 `self` 指向的 vtable 在 `offset`（0 基槽位）处的方法指针并包装为
-    // 请求的委托类型。vtable 本身是 `self` 指向的首个指针；每槽一个 IntPtr 宽。
-    // 此双重解引用是经 macOS 验证的调用形——IOKit C 头文件可能误导为单层解引用，
-    // 但实际需要双重解引用。</para>
-    // The generic GetDelegateForFunctionPointer<T> overload is the NativeAOT-safe form:
-    // every T is a statically declared delegate in this file, so the marshaling stub is
-    // generated at compile time instead of requiring runtime emit (IL3050 for the Type overload).
-    // <para>泛型重载是 NativeAOT 安全形态：所有 T 都是本文件静态声明的委托，
-    // marshal 桩在编译期生成，避免 Type 重载要求的运行时动态代码。</para>
     public static T GetDelegate<T>(IntPtr self, int offset) where T : Delegate
     {
         var vtable = Marshal.ReadIntPtr(self);
@@ -355,13 +248,9 @@ internal static partial class IOKitUsbAPI
         return Marshal.GetDelegateForFunctionPointer<T>(methodPtr);
     }
 
-    // io_service_t IORegistryEntryFromPath(mach_port_t mainPort, const io_string_t path);
-    // Re-opens a device service from its IOService-plane path.
-    // <para>从 IOService 平面路径重开设备服务。</para>
     [LibraryImport(IOKit)]
     public static partial IntPtr IORegistryEntryFromPath(IntPtr masterPort, [MarshalAs(UnmanagedType.LPStr)] string path);
 
-    // ---- Structs ----
     [StructLayout(LayoutKind.Sequential)]
     internal struct IOUSBDeviceRequest
     {
@@ -374,7 +263,6 @@ internal static partial class IOKitUsbAPI
         public uint WLenDone;
     }
 
-    // USB descriptor headers (USB 2.0 spec), used to walk the configuration descriptor.
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     internal struct UsbConfigurationDescriptor
     {

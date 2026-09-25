@@ -39,7 +39,6 @@ internal static class FastbootDeviceProfileLoader
 
         try
         {
-            // Expected shape: { "profiles": [ { "name": "...", "vendorId": "0x18D1", "productId": "0x4EE0" }, ... ] }
             foreach (var entry in ParseObjects(FindArray(json, "profiles")))
             {
                 try

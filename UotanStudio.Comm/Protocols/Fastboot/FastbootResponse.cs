@@ -59,6 +59,13 @@ public class FastbootResponse
     /// Gets or sets the result state.
     /// <para>获取或设置结果状态。</para>
     /// </summary>
+    /// <value>
+    /// The terminal classification produced by <c>FastbootSession.ReceiveResponse</c>: Success,
+    /// Fail, Data, Unknown or Timeout; INFO and TEXT frames are accumulated rather than reported
+    /// as states.
+    /// <para><c>FastbootSession.ReceiveResponse</c> 产生的终止分类：Success、Fail、Data、Unknown
+    /// 或 Timeout；INFO 与 TEXT 帧会被累积而不作为状态报告。</para>
+    /// </value>
     public FastbootResponseState State { get; set; }
 
     /// <summary>
@@ -66,24 +73,40 @@ public class FastbootResponse
     /// OKAY/FAIL payload when no TEXT frames were received.
     /// <para>获取或设置响应文本：累积的 TEXT 帧内容；未收到 TEXT 帧时为终止 OKAY/FAIL 帧的负载。</para>
     /// </summary>
+    /// <value>Accumulated TEXT frame content when TEXT frames were received, otherwise the
+    /// terminal OKAY/FAIL payload or a parser message such as <c>"response timeout"</c>.
+    /// <para>收到 TEXT 帧时为其累积内容；否则为终止 OKAY/FAIL 负载或解析器消息
+    /// （如 <c>"response timeout"</c>）。</para></value>
     public string Text { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the data payload size (from DATA frame).
     /// <para>获取或设置数据负载大小（来自 DATA 帧）。</para>
     /// </summary>
+    /// <value>The receive-buffer size in bytes parsed from the DATA frame hex field, meaningful
+    /// when <see cref="State"/> is <see cref="FastbootResponseState.Data"/>; otherwise 0.
+    /// <para>从 DATA 帧 16 进制字段解析的接收缓冲字节数，当 <see cref="State"/> 为
+    /// <see cref="FastbootResponseState.Data"/> 时有意义；其余情况为 0。</para></value>
     public long DataSize { get; set; }
 
     /// <summary>
     /// Gets or sets the raw data payload.
     /// <para>获取或设置原始数据负载。</para>
     /// </summary>
+    /// <value>Raw payload bytes held alongside the response; the session parser records only the
+    /// announced <see cref="DataSize"/> and leaves this <see langword="null"/>, because DATA
+    /// payload bytes are streamed separately by the transfer helpers.
+    /// <para>与响应一起保存的原始负载字节；会话解析器只记录声明的 <see cref="DataSize"/> 并将
+    /// 此项留为 <see langword="null"/>，DATA 负载字节由传输辅助方法单独流式处理。</para></value>
     public byte[]? Data { get; set; }
 
     /// <summary>
     /// Gets or sets the accumulated INFO lines.
     /// <para>获取或设置累积的 INFO 行。</para>
     /// </summary>
+    /// <value>All INFO frame contents received before the terminal frame; a device sending more
+    /// than 10000 INFO lines turns the response into Fail.
+    /// <para>终止帧之前收到的全部 INFO 内容；设备发送超过 10000 行 INFO 时响应转为 Fail。</para></value>
     public List<string> InfoLines { get; set; } = [];
 
     /// <summary>
@@ -93,19 +116,28 @@ public class FastbootResponse
     /// <para>获取或设置终止状态前缀后的内容（减去尾随 NUL），如 OKAY/FAIL 负载。
     /// INFO 帧内容累积在 <see cref="InfoLines"/> 中。</para>
     /// </summary>
+    /// <value>The terminal OKAY/FAIL payload with a single trailing NUL trimmed, or the parser's
+    /// error description when it synthesizes a Fail or Unknown result; empty on Data and Timeout
+    /// results.
+    /// <para>终止 OKAY/FAIL 负载并去除单个尾随 NUL；解析器合成 Fail 或 Unknown 结果时为错误描述；
+    /// Data 与 Timeout 结果为空。</para></value>
     public string Info { get; set; } = string.Empty;
 
     /// <summary>
     /// Returns <c>true</c> when the response indicates success.
     /// <para>响应指示成功时返回 <c>true</c>。</para>
     /// </summary>
+    /// <value><see langword="true"/> exactly when <see cref="State"/> is
+    /// <see cref="FastbootResponseState.Success"/>.
+    /// <para>当且仅当 <see cref="State"/> 为 <see cref="FastbootResponseState.Success"/> 时为
+    /// <see langword="true"/>。</para></value>
     public bool IsSuccess => State == FastbootResponseState.Success;
 
     /// <summary>
     /// Throws an <see cref="FastbootException"/> if the response indicates a failure or timeout.
     /// <para>如果响应表示失败或超时，则抛出 <see cref="FastbootException"/>。</para>
     /// </summary>
-    /// <exception cref="FastbootException">Thrown on failure or timeout. 失败或超时时抛出。</exception>
+    /// <exception cref="FastbootException">Thrown on failure or timeout. <para>失败或超时时抛出。</para></exception>
     public void ThrowIfFailed()
     {
         if (State is FastbootResponseState.Fail or FastbootResponseState.Timeout)

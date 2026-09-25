@@ -6,10 +6,18 @@ namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
 /// Layout of a ZIP file's End Of Central Directory and central directory sections.
 /// <para>ZIP 中央目录结尾（EOCD）与中央目录区段的布局信息。</para>
 /// </summary>
-/// <param name="EocdOffset">Absolute offset of the EOCD record. EOCD 记录的绝对偏移。</param>
-/// <param name="EocdSize">Total EOCD size including comment. 含注释的 EOCD 总大小。</param>
-/// <param name="CentralDirectoryOffset">Central directory start offset as stored (pre-signing-block). EOCD 中记录的中央目录起始偏移（未含签名块时）。</param>
-/// <param name="CentralDirectorySize">Central directory size in bytes. 中央目录字节大小。</param>
+/// <param name="EocdOffset">
+/// Absolute offset of the EOCD record. <para>EOCD 记录的绝对偏移。</para>
+/// </param>
+/// <param name="EocdSize">
+/// Total EOCD size including comment. <para>含注释的 EOCD 总大小。</para>
+/// </param>
+/// <param name="CentralDirectoryOffset">
+/// Central directory start offset as stored (pre-signing-block). <para>EOCD 中记录的中央目录起始偏移（未含签名块时）。</para>
+/// </param>
+/// <param name="CentralDirectorySize">
+/// Central directory size in bytes. <para>中央目录字节大小。</para>
+/// </param>
 public readonly record struct ApkZipSections(
     long EocdOffset,
     long EocdSize,
@@ -21,8 +29,14 @@ public readonly record struct ApkZipSections(
     /// The stream must be readable and seekable.
     /// <para>在 ZIP/APK 流中定位 EOCD 记录与中央目录区段。流必须可读且可定位。</para>
     /// </summary>
-    /// <exception cref="InvalidDataException">The stream is not a ZIP container or the EOCD is corrupt.</exception>
-    /// <exception cref="InvalidDataException">流不是 ZIP 容器或 EOCD 已损坏。</exception>
+    /// <param name="stream">Readable, seekable container stream; it is repositioned but not closed.
+    /// <para>可读、可定位的容器流；只重定位、不关闭。</para></param>
+    /// <returns>Located sections, validated against the stream length; the EOCD scan only accepts a record
+    /// whose comment extends exactly to the end of the stream. <para>已定位并通过流长度校验的区段；EOCD 扫描仅接受
+    /// 注释恰好延伸到流末尾的记录。</para></returns>
+    /// <exception cref="InvalidDataException">The stream is not seekable or too small, is not a ZIP
+    /// container, uses ZIP64 placeholders, or the EOCD is corrupt.
+    /// <para>流不可定位或过小、不是 ZIP 容器、使用了 ZIP64 占位值，或 EOCD 已损坏。</para></exception>
     public static ApkZipSections Locate(Stream stream)
     {
         if (!stream.CanSeek)
@@ -37,8 +51,6 @@ public readonly record struct ApkZipSections(
             throw new InvalidDataException("File is too small to contain a ZIP EOCD record. 文件过小，无法包含 ZIP EOCD 记录。");
         }
 
-        // Scan the tail window backwards for a consistent EOCD record.
-        // 从尾部窗口向后扫描一致的 EOCD 记录。
         var windowOffset = stream.Length - scanLength;
         stream.Seek(windowOffset, SeekOrigin.Begin);
         var window = new byte[scanLength];
@@ -56,8 +68,6 @@ public readonly record struct ApkZipSections(
             var eocdSize = 22 + commentLength;
             if (candidate + eocdSize != window.Length)
             {
-                // The comment must run to EOF; otherwise this is not the real EOCD.
-                // 注释必须延伸到文件末尾；否则不是真正的 EOCD。
                 continue;
             }
 
@@ -85,6 +95,12 @@ public readonly record struct ApkZipSections(
     /// Validates that the central directory lies inside the file.
     /// <para>校验中央目录位于文件范围内。</para>
     /// </summary>
+    /// <param name="fileLength">Total file length the EOCD must exactly end at.
+    /// <para>EOCD 必须恰好结束的总文件长度。</para></param>
+    /// <exception cref="InvalidDataException">The central directory is negative, overlaps the EOCD, or the
+    /// EOCD does not end exactly at <paramref name="fileLength"/>.
+    /// <para>中央目录偏移或大小为负、与 EOCD 重叠，或 EOCD 未恰好在
+    /// <paramref name="fileLength"/> 处结束。</para></exception>
     public void Validate(long fileLength)
     {
         if (CentralDirectoryOffset < 0 || CentralDirectorySize < 0

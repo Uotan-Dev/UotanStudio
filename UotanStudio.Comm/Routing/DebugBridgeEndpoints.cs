@@ -17,6 +17,13 @@ public static class DebugBridgeEndpoints
 
     /// <summary>Upstream OHOS_HDC_SERVER_PORT override, otherwise 8710.
     /// <para>遵循上游 OHOS_HDC_SERVER_PORT 环境变量，否则使用 8710。</para></summary>
+    /// <value>The HDC server port in [1, 65535]: the parsed <c>OHOS_HDC_SERVER_PORT</c> value when the
+    /// variable is set, otherwise 8710.
+    /// <para>取值范围为 [1, 65535] 的 HDC server 端口：变量已设置时为解析后的
+    /// <c>OHOS_HDC_SERVER_PORT</c> 值，否则为 8710。</para></value>
+    /// <exception cref="InvalidOperationException">The environment variable is set but is not a decimal
+    /// port within [1, 65535].
+    /// <para>环境变量已设置，但既非十进制端口，也不在 [1, 65535] 范围内。</para></exception>
     public static int HdcServerPort
     {
         get

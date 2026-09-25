@@ -26,7 +26,14 @@ public static class DebugBridgeRoute
     private static readonly Lock StateLock = new();
     private static readonly Dictionary<string, bool> ReportedStates = new(StringComparer.Ordinal);
 
-    /// <summary>Reports initial endpoint state and subsequent transitions for host logging; never writes to the console.</summary>
+    /// <summary>
+    /// Reports initial endpoint state and subsequent transitions for host logging; never writes to the console.
+    /// <para>为主机日志报告端点的初始状态及后续状态变化；绝不写入控制台。</para>
+    /// </summary>
+    /// <remarks>The handler runs on the probing thread whenever a cached or freshly probed result differs
+    /// from the last reported state for that endpoint; handler exceptions are swallowed.
+    /// <para>当某个端点的缓存结果或新探测结果与其上次上报状态不一致时，处理程序在探测线程上运行；
+    /// 处理程序抛出的异常会被吞没。</para></remarks>
     public static event Action<string, int, bool>? ServerAvailabilityChanged;
 
     private static void ReportState(string host, int port, string key, bool listening)
@@ -54,7 +61,6 @@ public static class DebugBridgeRoute
         }
         catch
         {
-            // Diagnostic subscribers must not change transport ownership decisions.
         }
     }
 
@@ -68,15 +74,39 @@ public static class DebugBridgeRoute
     [ThreadStatic]
     private static int _scopeDepth;
 
-    /// <summary>Checks an endpoint without caching absence or converting protocol failures into USB permission.</summary>
+    /// <summary>Checks an endpoint without caching absence or converting protocol failures into USB permission.
+    /// <para>检查端点，但不缓存“不存在”结论，也不会把协议失败转换为 USB 权限问题。</para></summary>
     /// <remarks>
     /// <para>存在结果经 2 秒 TTL 缓存；拒绝与其他错误每次都真实探测。</para>
     /// <para>Present results go through a 2-second TTL cache; refusals and other errors probe for real every time.</para>
     /// </remarks>
+    /// <param name="host">Server hostname or literal address; a non-parseable value is resolved as DNS.
+    /// <para>server 主机名或字面地址；无法解析的值将按 DNS 解析。</para></param>
+    /// <param name="port">Server TCP port number. <para>server TCP 端口号。</para></param>
+    /// <returns>
+    /// <see langword="true"/> only when the TCP connect completes successfully; <see langword="false"/>
+    /// only when the connection is refused.
+    /// <para>仅在 TCP 连接成功时返回 <see langword="true"/>；仅在连接被拒绝时返回 <see langword="false"/>。</para></returns>
     public static bool IsListening(string host, int port)
         => IsListeningAsync(host, port).GetAwaiter().GetResult();
 
-    /// <summary>Asynchronously probes endpoint ownership without treating timeout or protocol failure as absence.</summary>
+    /// <summary>Asynchronously probes endpoint ownership without treating timeout or protocol failure as absence.
+    /// <para>异步探测端点归属，不会把超时或协议失败视为“不存在”。</para></summary>
+    /// <param name="host">Server hostname or literal address; a non-parseable value is resolved as DNS.
+    /// <para>server 主机名或字面地址；无法解析的值将按 DNS 解析。</para></param>
+    /// <param name="port">Server TCP port number. <para>server TCP 端口号。</para></param>
+    /// <param name="cancellationToken">Cancels the probe; a 3-second internal deadline also aborts a stalled connect.
+    /// <para>取消本次探测；内部 3 秒截止时间也会中止停滞的连接。</para></param>
+    /// <returns>
+    /// <see langword="true"/> when a server accepts the connection, which is then cached for the TTL;
+    /// <see langword="false"/> only when the connection is refused.
+    /// <para>当 server 接受连接时返回 <see langword="true"/>，并在 TTL 内缓存；仅在连接被拒绝时返回
+    /// <see langword="false"/>。</para></returns>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was signaled or the 3-second deadline elapsed.
+    /// <para><paramref name="cancellationToken"/> 被触发，或 3 秒截止时间已到。</para></exception>
+    /// <exception cref="SocketException">The connect failed with an error other than refusal.
+    /// <para>连接因拒绝以外的错误而失败。</para></exception>
     public static async Task<bool> IsListeningAsync(string host, int port, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -92,8 +122,6 @@ public static class DebugBridgeRoute
             PositiveCache.TryRemove(key, out _);
         }
 
-        // SocketAsyncEventArgs exposes refusal as a result rather than a thrown exception,
-        // avoiding debugger first-chance noise during ordinary server discovery.
         using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
         using var args = new SocketAsyncEventArgs
         {
@@ -110,7 +138,6 @@ public static class DebugBridgeRoute
         {
             completion.TrySetResult(args.SocketError);
         }
-        // Cancellation can precede submission; cancel again after submission to close that race.
         if (timeout.IsCancellationRequested)
         {
             Socket.CancelConnectAsync(args);
@@ -160,7 +187,11 @@ public static class DebugBridgeRoute
         return result;
     }
 
-    /// <summary>Discards endpoint probe results after an explicit server lifecycle operation.</summary>
+    /// <summary>Discards endpoint probe results after an explicit server lifecycle operation.
+    /// <para>在显式的 server 生命周期操作之后丢弃该端点的探测结果。</para></summary>
+    /// <param name="host">Server hostname or literal address exactly as passed to the probe.
+    /// <para>与探测时传入完全一致的主机名或字面地址。</para></param>
+    /// <param name="port">Server TCP port number. <para>server TCP 端口号。</para></param>
     public static void InvalidateProbe(string host, int port)
     {
         var key = string.Concat(host, ":", port.ToString(CultureInfo.InvariantCulture));
@@ -168,10 +199,27 @@ public static class DebugBridgeRoute
         _scopeCache?.TryRemove(key, out _);
     }
 
-    /// <summary>Reports whether the local ADB endpoint currently has a listening server.</summary>
+    /// <summary>Reports whether the local ADB endpoint currently has a listening server.
+    /// <para>报告本机 ADB 端点当前是否有正在监听的 server。</para></summary>
+    /// <returns>
+    /// <see langword="true"/> when a server is listening on <see cref="DebugBridgeEndpoints.ServerHost"/>
+    /// at <see cref="DebugBridgeEndpoints.AdbServerPort"/>; the result may come from the probe scope or TTL cache.
+    /// <para>当 <see cref="DebugBridgeEndpoints.ServerHost"/> 的
+    /// <see cref="DebugBridgeEndpoints.AdbServerPort"/> 端口上有 server 监听时返回 <see langword="true"/>；
+    /// 结果可能来自探测作用域或 TTL 缓存。</para></returns>
     public static bool UseAdbServer() => ProbeEndpoint(DebugBridgeEndpoints.ServerHost, DebugBridgeEndpoints.AdbServerPort);
 
-    /// <summary>Checks the configured HDC endpoint on every new operation.</summary>
+    /// <summary>Checks the configured HDC endpoint on every new operation.
+    /// <para>在每次新操作时检查已配置的 HDC 端点。</para></summary>
+    /// <param name="host">Server host, defaulting to <see cref="DebugBridgeEndpoints.ServerHost"/>.
+    /// <para>server 主机，默认为 <see cref="DebugBridgeEndpoints.ServerHost"/>。</para></param>
+    /// <param name="port">Explicit port number; when null the value of
+    /// <see cref="DebugBridgeEndpoints.HdcServerPort"/> is used.
+    /// <para>显式端口号；为 null 时使用 <see cref="DebugBridgeEndpoints.HdcServerPort"/> 的值。</para></param>
+    /// <returns>
+    /// <see langword="true"/> when a server is listening on the selected HDC endpoint; the result may come
+    /// from the probe scope or TTL cache.
+    /// <para>当所选 HDC 端点上有 server 监听时返回 <see langword="true"/>；结果可能来自探测作用域或 TTL 缓存。</para></returns>
     public static bool UseHdcServer(string host = DebugBridgeEndpoints.ServerHost, int? port = null)
         => ProbeEndpoint(host, port ?? DebugBridgeEndpoints.HdcServerPort);
 

@@ -8,13 +8,19 @@ namespace UotanStudio.Services.Mirroring;
 /// Decoded video stream metadata announced by the server on the first socket.
 /// <para>服务端在首个 socket 上宣告的视频流元数据。</para>
 /// </summary>
-/// <param name="CodecFourCc">Codec four-character code (e.g. 'H264'). 编码四字符码（如 'H264'）。</param>
-/// <param name="Width">Video width in pixels. 视频宽度（像素）。</param>
-/// <param name="Height">Video height in pixels. 视频高度（像素）。</param>
+/// <param name="CodecFourCc">Codec four-character code (e.g. 'H264'). <para>编码四字符码（如 'H264'）。</para></param>
+/// <param name="Width">Video width in pixels. <para>视频宽度（像素）。</para></param>
+/// <param name="Height">Video height in pixels. <para>视频高度（像素）。</para></param>
 public sealed record ScrcpyVideoMetadata(uint CodecFourCc, int Width, int Height)
 {
-    /// <summary>Gets the codec name derived from the four-character code.</summary>
-    /// <summary>获取由四字符码推导的编码名称。</summary>
+    /// <summary>
+    /// Codec name decoded from the big-endian four-character code.
+    /// <para>由大端序四字符码解码得到的编码名称。</para>
+    /// </summary>
+    /// <value>
+    /// The ASCII text of the four-character code, for example <c>H264</c>.
+    /// <para>四字符码的 ASCII 文本，例如 <c>H264</c>。</para>
+    /// </value>
     public string CodecName
     {
         get
@@ -33,19 +39,42 @@ public sealed record ScrcpyVideoMetadata(uint CodecFourCc, int Width, int Height
 /// <param name="Pts">
 /// Presentation timestamp; <see cref="ScrcpyConstants.NoPts"/> marks the codec
 /// config packet.
-/// 显示时间戳；<see cref="ScrcpyConstants.NoPts"/> 表示编码器配置包。
+/// <para>显示时间戳；<see cref="ScrcpyConstants.NoPts"/> 表示编码器配置包。</para>
 /// </param>
-/// <param name="Data">The compressed access-unit bytes. 压缩访问单元字节。</param>
+/// <param name="Data">The compressed access-unit bytes. <para>压缩访问单元字节。</para></param>
 public sealed record ScrcpyVideoFrame(long Pts, byte[] Data)
 {
-    /// <summary>Gets a value indicating whether this packet carries codec config (SPS/PPS).</summary>
-    /// <summary>获取一个值，指示该包是否为编码器配置（SPS/PPS）。</summary>
+    /// <summary>
+    /// Whether the packet's PTS word carries the codec-config flag.
+    /// <para>该包的 PTS 字是否携带编码器配置标志。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> when this packet is a codec configuration packet (SPS/PPS).
+    /// <para>当该包为编码器配置包（SPS/PPS）时为 <see langword="true"/>。</para>
+    /// </value>
     public bool IsCodecConfig => ((ulong)Pts & ScrcpyConstants.PacketFlagConfig) != 0;
 
-    /// <summary>Gets the key-frame flag independently of the presentation timestamp.</summary>
+    /// <summary>
+    /// Whether the key-frame flag is set, independent of the timestamp bits.
+    /// <para>关键帧标志是否置位，与时间戳位无关。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> for a non-config key frame.
+    /// <para>对于非配置的关键帧返回 <see langword="true"/>。</para>
+    /// </value>
     public bool IsKeyFrame => !IsCodecConfig && ((ulong)Pts & ScrcpyConstants.PacketFlagKeyFrame) != 0;
 
-    /// <summary>Gets the media timestamp with config/key-frame flags removed.</summary>
+    /// <summary>
+    /// Media presentation timestamp with the config and key-frame flags masked out.
+    /// <para>已屏蔽配置与关键帧标志的媒体显示时间戳。</para>
+    /// </summary>
+    /// <value>
+    /// The timestamp in microseconds. <para>以微秒计的时间戳。</para>
+    /// </value>
+    /// <exception cref="InvalidOperationException">
+    /// The packet is a codec configuration packet, which has no timestamp.
+    /// <para>该包为编码器配置包，没有时间戳。</para>
+    /// </exception>
     public long PresentationTimestampMicroseconds => !IsCodecConfig
         ? (long)((ulong)Pts & ScrcpyConstants.PacketTimestampMask)
         : throw new InvalidOperationException("Codec configuration has no presentation timestamp.");
@@ -64,11 +93,17 @@ internal sealed record ScrcpyDeviceMessage(byte Type, string? Clipboard = null, 
 /// Audio stream metadata announced by the server on the audio socket.
 /// <para>服务端在音频 socket 上宣告的音频流元数据。</para>
 /// </summary>
-/// <param name="CodecFourCc">Codec four-character code ("opus", "aac", "flac"). 编码四字符码（"opus"、"aac"、"flac"）。</param>
+/// <param name="CodecFourCc">Codec four-character code ("opus", "aac", "flac"). <para>编码四字符码（"opus"、"aac"、"flac"）。</para></param>
 public sealed record ScrcpyAudioMetadata(uint CodecFourCc)
 {
-    /// <summary>Gets the uppercase codec name ("OPUS", "AAC", "FLAC").</summary>
-    /// <summary>获取大写编码名称（"OPUS"、"AAC"、"FLAC"）。</summary>
+    /// <summary>
+    /// Uppercase codec name decoded from the big-endian four-character code.
+    /// <para>由大端序四字符码解码得到的大写编码名称。</para>
+    /// </summary>
+    /// <value>
+    /// The ASCII codec name with trailing NUL and space characters removed and upper-cased, for example <c>OPUS</c>.
+    /// <para>去除末尾 NUL 与空格并转为大写的 ASCII 编码名称，例如 <c>OPUS</c>。</para>
+    /// </value>
     public string CodecName
     {
         get
@@ -86,17 +121,32 @@ public sealed record ScrcpyAudioMetadata(uint CodecFourCc)
 /// </summary>
 /// <param name="Pts">
 /// Presentation timestamp; the config flag marks the codec config packet.
-/// 显示时间戳；配置标志表示编码器配置包。
+/// <para>显示时间戳；配置标志表示编码器配置包。</para>
 /// </param>
-/// <param name="Data">The compressed audio packet bytes. 压缩音频包字节。</param>
+/// <param name="Data">The compressed audio packet bytes. <para>压缩音频包字节。</para></param>
 public sealed record ScrcpyAudioFrame(long Pts, byte[] Data)
 {
-    /// <summary>Gets a value indicating whether this packet carries codec config.</summary>
-    /// <summary>获取一个值，指示该包是否为编码器配置。</summary>
+    /// <summary>
+    /// Whether the packet's PTS word carries the codec-config flag.
+    /// <para>该包的 PTS 字是否携带编码器配置标志。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> when this packet is a codec configuration packet.
+    /// <para>当该包为编码器配置包时返回 <see langword="true"/>。</para>
+    /// </value>
     public bool IsCodecConfig => ((ulong)Pts & ScrcpyConstants.PacketFlagConfig) != 0;
 
-    /// <summary>Gets the media timestamp with flags removed.</summary>
-    /// <summary>获取去除标志后的媒体时间戳。</summary>
+    /// <summary>
+    /// Media presentation timestamp with the flag bits masked out.
+    /// <para>已屏蔽标志位的媒体显示时间戳。</para>
+    /// </summary>
+    /// <value>
+    /// The timestamp in microseconds. <para>以微秒计的时间戳。</para>
+    /// </value>
+    /// <exception cref="InvalidOperationException">
+    /// The packet is a codec configuration packet, which has no timestamp.
+    /// <para>该包为编码器配置包，没有时间戳。</para>
+    /// </exception>
     public long PresentationTimestampMicroseconds => !IsCodecConfig
         ? (long)((ulong)Pts & ScrcpyConstants.PacketTimestampMask)
         : throw new InvalidOperationException("Codec configuration has no presentation timestamp.");
@@ -131,16 +181,13 @@ public sealed record ScrcpyAudioFrame(long Pts, byte[] Data)
 /// </remarks>
 public sealed class ScrcpyClient : IDisposable
 {
-    /// <summary>Upper bound for a single compressed access unit (32 MiB).</summary>
-    /// <summary>单个压缩访问单元的上限（32 MiB）。</summary>
+    /// <summary>Upper bound for a single compressed video access unit, 32 MiB. <para>单个压缩视频访问单元的上限，32 MiB。</para></summary>
     public const int MaxFrameLength = 32 * 1024 * 1024;
 
-    /// <summary>Upper bound for a single compressed audio packet (4 MiB).</summary>
-    /// <summary>单个压缩音频包的上限（4 MiB）。</summary>
+    /// <summary>Upper bound for a single compressed audio packet, 4 MiB. <para>单个压缩音频包的上限，4 MiB。</para></summary>
     public const int MaxAudioFrameLength = 4 * 1024 * 1024;
 
-    /// <summary>Upper bound for device clipboard text (1 MiB).</summary>
-    /// <summary>设备剪贴板文本上限（1 MiB）。</summary>
+    /// <summary>Upper bound for device clipboard text, 1 MiB. <para>设备剪贴板文本上限，1 MiB。</para></summary>
     public const int MaxClipboardLength = 1024 * 1024;
 
     private readonly Func<string, Stream> _open;
@@ -150,10 +197,22 @@ public sealed class ScrcpyClient : IDisposable
     private Stream? _audioStream;
     private Stream? _controlStream;
 
-    /// <summary>Initializes the client; call <see cref="Connect"/> after the server is running.</summary>
-    /// <summary>初始化客户端；服务端启动后调用 <see cref="Connect"/>。</summary>
-    /// <param name="session">An established ADB session. 已建立的 ADB 会话。</param>
-    /// <param name="options">The options the server was started with. 服务端启动时使用的选项。</param>
+    /// <summary>
+    /// Initializes the client over an established device session; call <see cref="Connect"/> once the server is running. The session owns the streams returned by <c>OpenServiceStream</c>.
+    /// <para>通过已建立的设备会话初始化客户端；服务端启动后调用 <see cref="Connect"/>。由 <c>OpenServiceStream</c> 返回的流归该会话所有。</para>
+    /// </summary>
+    /// <param name="session">
+    /// An established ADB session used to open service streams.
+    /// <para>用于打开服务流的已建立 ADB 会话。</para>
+    /// </param>
+    /// <param name="options">
+    /// The options the server was started with; controls which sockets and metadata are read.
+    /// <para>服务端启动时使用的选项；决定读取哪些 socket 与元数据。</para>
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="session"/> or <paramref name="options"/> is <see langword="null"/>.
+    /// <para><paramref name="session"/> 或 <paramref name="options"/> 为 <see langword="null"/>。</para>
+    /// </exception>
     public ScrcpyClient(UotanStudio.Comm.Contracts.IAdbDeviceSession session, ScrcpyServerOptions options)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -161,7 +220,22 @@ public sealed class ScrcpyClient : IDisposable
         _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
-    /// <summary>Creates a client using owned service streams from an existing ADB server.</summary>
+    /// <summary>
+    /// Initializes the client from an existing ADB server, opening each service stream as an owned stream.
+    /// <para>从现有 ADB 服务端初始化客户端，将每个服务流作为自有流打开。</para>
+    /// </summary>
+    /// <param name="server">
+    /// The ADB server services used to open localabstract streams; the client disposes the streams it opens.
+    /// <para>用于打开 localabstract 流的 ADB 服务；客户端负责释放其打开的流。</para>
+    /// </param>
+    /// <param name="options">
+    /// The options the server was started with; controls which sockets and metadata are read.
+    /// <para>服务端启动时使用的选项；决定读取哪些 socket 与元数据。</para>
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="server"/> or <paramref name="options"/> is <see langword="null"/>.
+    /// <para><paramref name="server"/> 或 <paramref name="options"/> 为 <see langword="null"/>。</para>
+    /// </exception>
     public ScrcpyClient(AdbServerServices server, ScrcpyServerOptions options)
     {
         ArgumentNullException.ThrowIfNull(server);
@@ -175,35 +249,62 @@ public sealed class ScrcpyClient : IDisposable
         _options = options;
     }
 
-    /// <summary>Gets the device name announced on the first socket.</summary>
-    /// <summary>获取首个 socket 宣告的设备名。</summary>
+    /// <summary>
+    /// Device name read from the first socket during <see cref="Connect"/>, with trailing NUL characters trimmed.
+    /// <para>在 <see cref="Connect"/> 期间从首个 socket 读取的设备名，已去除尾部 NUL 字符。</para>
+    /// </summary>
+    /// <value>
+    /// The announced device name, or <see cref="string.Empty"/> before a successful connect or when the device name is not sent.
+    /// <para>宣告的设备名；在成功连接之前或未发送设备名时返回 <see cref="string.Empty"/>。</para>
+    /// </value>
     public string DeviceName { get; private set; } = string.Empty;
 
-    /// <summary>Gets the video metadata announced on the first socket.</summary>
-    /// <summary>获取首个 socket 宣告的视频元数据。</summary>
+    /// <summary>
+    /// Video stream metadata read from the first socket during <see cref="Connect"/>.
+    /// <para>在 <see cref="Connect"/> 期间从首个 socket 读取的视频流元数据。</para>
+    /// </summary>
+    /// <value>
+    /// The parsed codec/width/height header, or <see langword="null"/> before <see cref="Connect"/> or when the server does not send codec metadata.
+    /// <para>已解析的编码/宽/高头部；在 <see cref="Connect"/> 之前或服务端未发送编码元数据时返回 <see langword="null"/>。</para>
+    /// </value>
     public ScrcpyVideoMetadata? VideoMetadata { get; private set; }
 
-    /// <summary>Gets the audio codec metadata announced on the audio socket.</summary>
-    /// <summary>获取音频 socket 上宣告的音频编码元数据。</summary>
+    /// <summary>
+    /// Audio codec metadata read from the audio socket during <see cref="Connect"/>.
+    /// <para>在 <see cref="Connect"/> 期间从音频 socket 读取的音频编码元数据。</para>
+    /// </summary>
+    /// <value>
+    /// The four-character codec header, or <see langword="null"/> when audio is not requested, metadata is not sent, or the server disabled audio.
+    /// <para>四字符编码头部；在未请求音频、未发送元数据或服务端已禁用音频时返回 <see langword="null"/>。</para>
+    /// </value>
     public ScrcpyAudioMetadata? AudioMetadata { get; private set; }
 
-    /// <summary>Whether the server explicitly disabled audio (codec header 0 or 1).</summary>
+    /// <summary>
+    /// Whether the server explicitly disabled audio by sending a codec identifier of <c>0</c> or <c>1</c>.
+    /// <para>服务端是否通过发送值为 <c>0</c> 或 <c>1</c> 的编码标识显式禁用音频。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> when audio was disabled by the server; the audio stream is then closed and not read.
+    /// <para>服务端禁用音频时为 <see langword="true"/>；此时音频流已关闭且不会被读取。</para>
+    /// </value>
     public bool AudioDisabledByServer { get; private set; }
 
     /// <summary>
-    /// Gets a value indicating whether the control socket is connected.
+    /// Whether the control socket has been opened and not yet disposed.
+    /// <para>控制 socket 已打开且尚未释放。</para>
     /// </summary>
-    /// <summary>
-    /// 获取一个值，指示控制 socket 是否已连接。
-    /// </summary>
+    /// <value>
+    /// <see langword="true"/> when a control stream is held; otherwise <see langword="false"/>.
+    /// <para>持有控制流时返回 <see langword="true"/>；否则返回 <see langword="false"/>。</para>
+    /// </value>
     public bool IsControlConnected => _controlStream is not null;
 
     /// <summary>
     /// Connects the sockets in server order and reads the stream metadata.
     /// <para>按服务端要求的顺序连接 socket 并读取流元数据。</para>
     /// </summary>
-    /// <param name="timeoutMs">Per-read timeout in milliseconds. 单次读取超时（毫秒）。</param>
-    /// <exception cref="InvalidDataException">Thrown when the handshake fails. 握手失败时抛出。</exception>
+    /// <param name="timeoutMs">Per-read timeout in milliseconds. <para>单次读取超时（毫秒）。</para></param>
+    /// <exception cref="InvalidDataException">Thrown when the handshake fails. <para>握手失败时抛出。</para></exception>
     public void Connect(int timeoutMs = 10000)
     {
         Dispose();
@@ -217,8 +318,6 @@ public sealed class ScrcpyClient : IDisposable
 
     private void ConnectCore(int timeoutMs)
     {
-        // Socket 1: video (dummy byte + device name + codec meta + framed stream).
-        // socket 1：视频（哑字节 + 设备名 + 编码器元数据 + 分帧码流）。
         _videoStream = _open("localabstract:" + _options.SocketName);
 
         if (_options.SendDummyByte)
@@ -230,16 +329,12 @@ public sealed class ScrcpyClient : IDisposable
             }
         }
 
-        // Socket 2: audio (codec id only, no dummy/meta in current version).
-        // socket 2：音频（当前版本仅含编码器 ID，无哑字节/设备元数据）。
         if (_options.Audio)
         {
             _audioStream = _open("localabstract:" + _options.SocketName);
 
         }
 
-        // Socket 3: control.
-        // socket 3：控制。
         if (_options.Control)
         {
             _controlStream = _open("localabstract:" + _options.SocketName);
@@ -283,7 +378,7 @@ public sealed class ScrcpyClient : IDisposable
     /// Reads one framed video packet from the video socket.
     /// <para>从视频 socket 读取一个分帧视频包。</para>
     /// </summary>
-    /// <param name="timeoutMs">Per-read timeout in milliseconds. 单次读取超时（毫秒）。</param>
+    /// <param name="timeoutMs">Per-read timeout in milliseconds. <para>单次读取超时（毫秒）。</para></param>
     /// <returns>The frame, or <see langword="null"/> when no header arrived before timeout.</returns>
     /// <exception cref="EndOfStreamException">The server closed the video stream.</exception>
     public ScrcpyVideoFrame? ReadFrame(int timeoutMs)
@@ -297,7 +392,7 @@ public sealed class ScrcpyClient : IDisposable
         var header = TryReadExact(stream, 12, timeoutMs);
         if (header is null || header.Length != 12)
         {
-            return null; // No header arrived before the read timeout.
+            return null;
         }
 
         var pts = BinaryPrimitives.ReadInt64BigEndian(header);
@@ -319,12 +414,11 @@ public sealed class ScrcpyClient : IDisposable
     /// <remarks>
     /// Audio packets use the same 12-byte header as video (PTS + length).
     /// The payload bound is <see cref="MaxAudioFrameLength"/>; violations throw.
-    /// 音频包与视频共用 12 字节头（PTS + 长度）。负载上限
-    /// <see cref="MaxAudioFrameLength"/>，越界即抛出。
+    /// <para>音频包与视频共用 12 字节头（PTS + 长度）。负载上限 <see cref="MaxAudioFrameLength"/>，越界即抛出。</para>
     /// </remarks>
-    /// <param name="timeoutMs">Per-read timeout in milliseconds. 单次读取超时（毫秒）。</param>
+    /// <param name="timeoutMs">Per-read timeout in milliseconds. <para>单次读取超时（毫秒）。</para></param>
     /// <returns>The frame, or <see langword="null"/> when no header arrived before timeout.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when audio is disabled or not connected. 音频未启用或未连接时抛出。</exception>
+    /// <exception cref="InvalidOperationException">Thrown when audio is disabled or not connected. <para>音频未启用或未连接时抛出。</para></exception>
     /// <exception cref="EndOfStreamException">The server closed the audio stream.</exception>
     public ScrcpyAudioFrame? ReadAudioFrame(int timeoutMs)
     {
@@ -338,7 +432,7 @@ public sealed class ScrcpyClient : IDisposable
         var header = TryReadExact(stream, 12, timeoutMs);
         if (header is null || header.Length != 12)
         {
-            return null; // No header arrived before the read timeout.
+            return null;
         }
 
         var pts = BinaryPrimitives.ReadInt64BigEndian(header);
@@ -357,8 +451,8 @@ public sealed class ScrcpyClient : IDisposable
     /// Sends one control message to the device.
     /// <para>向设备发送一条控制消息。</para>
     /// </summary>
-    /// <param name="message">The encoded message from <see cref="ScrcpyControlMessageWriter"/>. <see cref="ScrcpyControlMessageWriter"/> 编码的消息。</param>
-    /// <exception cref="InvalidOperationException">Thrown when control is disabled. 未启用控制时抛出。</exception>
+    /// <param name="message">The encoded message from <see cref="ScrcpyControlMessageWriter"/>. <para><see cref="ScrcpyControlMessageWriter"/> 编码的消息。</para></param>
+    /// <exception cref="InvalidOperationException">Thrown when control is disabled. <para>未启用控制时抛出。</para></exception>
     public void SendControl(byte[] message)
     {
         var stream = _controlStream;
@@ -418,7 +512,10 @@ public sealed class ScrcpyClient : IDisposable
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Closes any video, audio or control stream the client currently holds; safe to call more than once.
+    /// <para>关闭客户端当前持有的视频、音频或控制流；可安全地多次调用。</para>
+    /// </summary>
     public void Dispose()
     {
         Interlocked.Exchange(ref _videoStream, null)?.Dispose();

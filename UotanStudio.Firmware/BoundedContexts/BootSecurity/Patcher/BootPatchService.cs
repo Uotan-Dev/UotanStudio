@@ -14,13 +14,66 @@ using UotanStudio.Firmware.BoundedContexts.Compression;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher;
 
-/// <summary>Native boot patch workflow that uses the firmware project's parsers and writers.</summary>
+/// <summary>Native boot patch workflow that uses the firmware project's parsers and writers.
+/// <para>使用本固件项目解析器与写入器的原生 boot 补丁流程。</para></summary>
 public sealed class BootPatchService
 {
+    /// <summary>
+    /// Analyzes a root package file and reports its patch kind, architectures and available modules.
+    /// <para>分析 root 包文件，报告其补丁类型、架构与可用模块。</para>
+    /// </summary>
+    /// <param name="packagePath">
+    /// Path to the Magisk, KernelSU or APatch package to inspect.
+    /// <para>待检查的 Magisk、KernelSU 或 APatch 包路径。</para>
+    /// </param>
+    /// <param name="cancellationToken">Cancels the package analysis. <para>取消包的解析过程。</para></param>
+    /// <returns>The detection result for the package.
+    /// <para>该包的检测结果。</para></returns>
     public async Task<BootPatchDetection> DetectAsync(string packagePath, CancellationToken cancellationToken = default)
         => await BootPatchAnalyzer.AnalyzeAsync(packagePath, cancellationToken).ConfigureAwait(false);
 
-    /// <summary>Applies a root package to an Android boot image and atomically publishes a new image.</summary>
+    /// <summary>Applies a root package to an Android boot image and atomically publishes a new image.
+    /// <para>将 root 包应用到 Android boot 镜像，并以原子方式发布新镜像。</para></summary>
+    /// <param name="packagePath">
+    /// Path to the Magisk, KernelSU or APatch package selected by <see cref="DetectAsync"/>.
+    /// <para>由 <see cref="DetectAsync"/> 选定的 Magisk、KernelSU 或 APatch 包路径。</para>
+    /// </param>
+    /// <param name="bootPath">Source boot image; it is read only and never overwritten.
+    /// <para>源 boot 镜像；只读取，不会被覆盖。</para></param>
+    /// <param name="outputPath">
+    /// Destination image path. The result is written to a temporary file first and moved into place only
+    /// after the full image is packed; the temporary file is removed on failure.
+    /// <para>目标镜像路径。结果先写入临时文件，完整镜像打包完成后才移动到位；失败时删除临时文件。</para>
+    /// </param>
+    /// <param name="options">
+    /// Patch options such as architecture, KMI override and verity flags; <see langword="null"/> uses the
+    /// defaults of <c>BootPatchOptions</c>.
+    /// <para>补丁选项（架构、KMI 覆盖、verity 开关等）；为 <see langword="null"/> 时使用 <c>BootPatchOptions</c> 的默认值。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels package reads and the output write; cancellation leaves the existing output file untouched.
+    /// <para>取消包的读取与输出写入；取消时既有输出文件保持不变。</para>
+    /// </param>
+    /// <returns>
+    /// The published output path, the detection narrowed to the architecture actually applied, and the
+    /// ordered list of changes made to the ramdisk and kernel.
+    /// <para>已发布的输出路径、收敛到实际应用架构的检测结果，以及对 ramdisk 与内核所做变更的有序列表。</para>
+    /// </returns>
+    /// <exception cref="InvalidOperationException"><paramref name="bootPath"/> and <paramref name="outputPath"/>
+    /// resolve to the same file. <para><paramref name="bootPath"/> 与 <paramref name="outputPath"/> 解析为同一文件。</para></exception>
+    /// <exception cref="InvalidDataException">The package is unsupported, the APatch SuperKey is invalid,
+    /// the boot image lacks a kernel or a required ramdisk, kernel or ramdisk decompression fails, the
+    /// KernelSU package has no module for the selected KMI, or the image is already Magisk-patched.
+    /// <para>包不受支持、APatch SuperKey 无效、boot 镜像缺少内核或必需的 ramdisk、内核或 ramdisk 解压失败、
+    /// KernelSU 包不含所选 KMI 的模块，或镜像已被 Magisk 打过补丁。</para></exception>
+    /// <exception cref="OperationCanceledException">The token is cancelled during a read or write.
+    /// <para>读取或写入期间令牌被取消。</para></exception>
+    /// <example>
+    /// <code>
+    /// var service = new BootPatchService();
+    /// var result = await service.PatchAsync("Magisk-v28.0.apk", "boot.img", "boot_patched.img");
+    /// </code>
+    /// </example>
     public async Task<BootPatchResult> PatchAsync(string packagePath, string bootPath, string outputPath,
         BootPatchOptions? options = null, CancellationToken cancellationToken = default)
     {

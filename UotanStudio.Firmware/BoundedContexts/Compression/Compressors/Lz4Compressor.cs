@@ -5,6 +5,10 @@ using UotanStudio.Firmware.BoundedContexts.Compression.Internal;
 
 namespace UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
 
+/// <summary>
+/// LZ4 codec covering both on-disk layouts: the standard frame produced by the K4os stream implementation and the legacy block frame made of a magic followed by little-endian 4-byte length prefixed blocks with no frame descriptor, checksum or end marker.
+/// <para>LZ4 编解码器，覆盖两种落盘布局：由 K4os 流实现生成的标准帧，以及传统块帧——魔数后跟小端 4 字节长度前缀的若干块，不含帧描述符、校验和与结束标记。</para>
+/// </summary>
 public static class Lz4Compressor
 {
     private const int BlockChunkSize = 0x10000;
@@ -14,6 +18,19 @@ public static class Lz4Compressor
     /// Standard LZ4 frame compression.
     /// <para>标准 LZ4 帧压缩。</para>
     /// </summary>
+    /// <param name="data">
+    /// Plaintext compressed in one pass.
+    /// <para>一次性压缩的明文字节。</para></param>
+    /// <param name="options">
+    /// Only <see cref="CompressionOptions.Level"/> is read and clamped into the LZ4 0-12 range, 0 (fast) when unset; the other members are ignored and the data is not chunked.
+    /// <para>仅读取 <see cref="CompressionOptions.Level"/> 并夹取到 LZ4 的 0-12 范围，未设置时为 0（快速）；其他成员被忽略，数据也不分块。</para></param>
+    /// <returns>
+    /// A complete LZ4 frame, from the <c>04 22 4D 18</c> magic through the end marker.
+    /// <para>完整的 LZ4 帧，从 <c>04 22 4D 18</c> 魔数直到结束标记。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="CompressionException">The frame encoder failed.
+    /// <para>帧编码器执行失败。</para></exception>
     public static byte[] Compress(byte[] data, CompressionOptions? options = null)
     {
         if (data == null)
@@ -42,6 +59,16 @@ public static class Lz4Compressor
     /// Standard LZ4 frame decompression.
     /// <para>标准 LZ4 帧解压。</para>
     /// </summary>
+    /// <param name="data">
+    /// Complete LZ4 frame, treated as untrusted input; the whole expansion is buffered in memory with no output cap.
+    /// <para>完整的 LZ4 帧，按不可信输入处理；解压结果整体驻留内存且没有上限。</para></param>
+    /// <returns>
+    /// The decoded bytes of the frame.
+    /// <para>该帧解码后的字节。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="CompressionException">The frame magic, descriptor, block data or content checksum is invalid, or the frame is truncated.
+    /// <para>帧魔数、描述符、块数据或内容校验和无效，或帧被截断。</para></exception>
     public static byte[] Decompress(byte[] data)
     {
         if (data == null)
@@ -67,6 +94,19 @@ public static class Lz4Compressor
     /// Streaming standard LZ4 frame compression.
     /// <para>流式标准 LZ4 帧压缩。</para>
     /// </summary>
+    /// <param name="input">
+    /// Readable source copied into the frame encoder in fixed buffers until end of stream; ownership stays with the caller.
+    /// <para>按固定缓冲逐块拷入帧编码器的可读源流，直至流末尾；所有权归调用方。</para></param>
+    /// <param name="output">
+    /// Writable destination left open after the frame end marker is written; the frame starts at its current position.
+    /// <para>写出帧结束标记后保持打开的写入目标；帧数据从其当前位置开始。</para></param>
+    /// <param name="options">
+    /// Only <see cref="CompressionOptions.Level"/> is read and clamped into the LZ4 0-12 range, 0 (fast) when unset.
+    /// <para>仅读取 <see cref="CompressionOptions.Level"/> 并夹取到 LZ4 的 0-12 范围，未设置时为 0（快速）。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="CompressionException">Reading, encoding or writing failed.
+    /// <para>读取、编码或写入失败。</para></exception>
     public static void Compress(Stream input, Stream output, CompressionOptions? options = null)
     {
         if (input == null)
@@ -94,6 +134,16 @@ public static class Lz4Compressor
     /// Streaming standard LZ4 frame decompression.
     /// <para>流式标准 LZ4 帧解压。</para>
     /// </summary>
+    /// <param name="input">
+    /// Readable LZ4 frame consumed block by block; the stream is left open at the offset the frame ended at, so a concatenated payload continues from there.
+    /// <para>逐块读取的可读 LZ4 帧；流保持打开，并停在当前帧结束的位置，串接的数据可从该处继续。</para></param>
+    /// <param name="output">
+    /// Writable destination with no size cap, so an oversized payload is written out in full; it is not closed.
+    /// <para>不设上限的写入目标，因此过大的数据会被完整写出；不会被本调用关闭。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="CompressionException">The frame is malformed, truncated, or writing to <paramref name="output"/> failed.
+    /// <para>帧格式非法、被截断，或写入 <paramref name="output"/> 失败。</para></exception>
     public static void Decompress(Stream input, Stream output)
     {
         if (input == null)
@@ -121,6 +171,21 @@ public static class Lz4Compressor
     /// Streaming standard LZ4 frame decompression with output limit (decompression bomb protection).
     /// <para>流式标准 LZ4 帧解压，带输出上限（防解压炸弹）。</para>
     /// </summary>
+    /// <param name="source">
+    /// Readable LZ4 frame decoded through an 80 KiB pooled buffer; the stream is left open.
+    /// <para>可读的 LZ4 帧，使用 80 KiB 池化缓冲逐块解码；流保持打开。</para></param>
+    /// <param name="destination">
+    /// Writable destination; the cumulative check runs before each write, so bytes beyond the budget never reach it.
+    /// <para>写入目标；每次写入前先检查累计字节数，超出预算的字节不会落入该流。</para></param>
+    /// <param name="maxOutputBytes">
+    /// Inclusive cap on the decoded total; <c>0</c> allows an empty result only.
+    /// <para>解压总量的含上限；<c>0</c> 表示只允许空结果。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="destination"/> is <see langword="null"/>.
+    /// <para><paramref name="source"/> 或 <paramref name="destination"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxOutputBytes"/> is negative.
+    /// <para><paramref name="maxOutputBytes"/> 为负数。</para></exception>
+    /// <exception cref="CompressionException">The decoded size would exceed <paramref name="maxOutputBytes"/>, the frame is malformed, or writing failed.
+    /// <para>解压结果将超过 <paramref name="maxOutputBytes"/>、帧格式非法，或写入失败。</para></exception>
     public static void Decompress(Stream source, Stream destination, long maxOutputBytes)
     {
         if (source == null)
@@ -178,6 +243,19 @@ public static class Lz4Compressor
     /// LZ4 legacy compression (0x02 0x21 0x4C 0x18 magic + 4-byte block length prefixes).
     /// <para>LZ4 传统格式压缩（0x02 0x21 0x4C 0x18 魔数 + 4 字节块长前缀）。</para>
     /// </summary>
+    /// <param name="data">
+    /// Plaintext compressed in one pass; an empty array yields the magic alone.
+    /// <para>一次性压缩的明文字节；空数组只产生魔数。</para></param>
+    /// <param name="options">
+    /// <see cref="CompressionOptions.Level"/> is clamped into the LZ4 0-12 range, 0 (fast) when unset; <see cref="CompressionOptions.MaxDegreeOfParallelism"/> bounds how many 64 KiB blocks the pipeline encodes concurrently and leaves the bytes unchanged.
+    /// <para><see cref="CompressionOptions.Level"/> 夹取到 LZ4 的 0-12 范围，未设置时为 0（快速）；<see cref="CompressionOptions.MaxDegreeOfParallelism"/> 限制流水线并发压缩的 64 KiB 块数量，输出字节保持不变。</para></param>
+    /// <returns>
+    /// The legacy block frame, whose blocks carry no checksum and no end marker.
+    /// <para>传统块帧；其块不带校验和，也没有结束标记。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="CompressionException">The block encoder failed.
+    /// <para>块编码器执行失败。</para></exception>
     public static byte[] CompressLegacy(byte[] data, CompressionOptions? options = null)
     {
         if (data == null)
@@ -205,6 +283,19 @@ public static class Lz4Compressor
     /// Streaming LZ4 legacy compression: reads 64 KiB chunks, compresses and writes them in a bounded-memory pipeline directly to the output stream.
     /// <para>流式 LZ4 传统格式压缩：按 64 KiB 块边读边压（有界内存），直接写入输出流。</para>
     /// </summary>
+    /// <param name="input">
+    /// Readable source drained in 64 KiB blocks until end of stream; ownership stays with the caller.
+    /// <para>按 64 KiB 块读取直至流末尾的可读源流；所有权归调用方。</para></param>
+    /// <param name="output">
+    /// Writable destination receiving the magic and then, per block, a little-endian 4-byte compressed length and the encoded bytes; it is never closed here.
+    /// <para>写入目标：先写魔数，随后每块写入小端 4 字节压缩长度和编码字节；本调用不会关闭该流。</para></param>
+    /// <param name="options">
+    /// <see cref="CompressionOptions.Level"/> is clamped into the LZ4 0-12 range, 0 (fast) when unset; <see cref="CompressionOptions.MaxDegreeOfParallelism"/> above 1 lets that many blocks be read and encoded concurrently, and blocks are still written in input order, byte-identical to the sequential run.
+    /// <para><see cref="CompressionOptions.Level"/> 夹取到 LZ4 的 0-12 范围，未设置时为 0（快速）；<see cref="CompressionOptions.MaxDegreeOfParallelism"/> 大于 1 时允许并发读取并编码相应数量的块，块仍按输入顺序写出，与串行结果逐字节一致。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="CompressionException">Reading, encoding or writing failed.
+    /// <para>读取、编码或写入失败。</para></exception>
     public static void CompressLegacy(Stream input, Stream output, CompressionOptions? options = null)
     {
         if (input == null)
@@ -235,6 +326,16 @@ public static class Lz4Compressor
     /// LZ4 legacy decompression.
     /// <para>LZ4 传统格式解压。</para>
     /// </summary>
+    /// <param name="data">
+    /// Complete legacy payload, treated as untrusted input; the whole expansion is buffered in memory.
+    /// <para>完整的传统格式数据，按不可信输入处理；解压结果整体驻留内存。</para></param>
+    /// <returns>
+    /// The decoded bytes of every block up to the end of the payload.
+    /// <para>直到数据末尾各块解码后的字节。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="CompressionException">The magic is missing or truncated, a block header or body is incomplete, a block length is illegal or beyond the 8 MiB per-block safety cap, or a block fails to decode.
+    /// <para>魔数缺失或被截断、块头或块体不完整、块长度非法或超过 8 MiB 的单块安全上限，或块解码失败。</para></exception>
     public static byte[] DecompressLegacy(byte[] data)
     {
         if (data == null)
@@ -262,6 +363,16 @@ public static class Lz4Compressor
     /// Streaming LZ4 legacy decompression: reads and decodes block by block (bounded memory), writing directly to the output stream.
     /// <para>流式 LZ4 传统格式解压：按块读取并解码（有界内存），直接写入输出流。</para>
     /// </summary>
+    /// <param name="input">
+    /// Readable legacy payload positioned at its magic; blocks are read one at a time, so the caller owns the stream and it is not closed. A length header read as zero bytes ends the payload cleanly, a partially readable header ends it as an error.
+    /// <para>定位在魔数处的可读传统格式数据；逐块读取，流由调用方持有且不会关闭。长度头读到 0 字节表示数据正常结束，只能读到不完整的头则按错误处理。</para></param>
+    /// <param name="output">
+    /// Writable destination fed block by block; decoded bytes are written as soon as each block is valid, so a late failure leaves the earlier blocks in place. There is no cap on the total output, only the 8 MiB per-block bound.
+    /// <para>逐块写入的目标；每块通过校验后立即写出，因此后续块失败时前面的块已保留。总输出没有上限，仅有 8 MiB 的单块上限。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="CompressionException">The magic is missing or truncated, a block header or body is incomplete, a block length is illegal or beyond the 8 MiB per-block safety cap, or a block fails to decode.
+    /// <para>魔数缺失或被截断、块头或块体不完整、块长度非法或超过 8 MiB 的单块安全上限，或块解码失败。</para></exception>
     public static void DecompressLegacy(Stream input, Stream output)
     {
         if (input == null)
@@ -381,6 +492,12 @@ public static class Lz4Compressor
     /// Detects whether the data is a standard LZ4 frame (magic 04 22 4D 18).
     /// <para>检测数据是否为标准 LZ4 帧（魔数 04 22 4D 18）。</para>
     /// </summary>
+    /// <param name="data">
+    /// Leading bytes of a candidate payload.
+    /// <para>候选数据的前若干字节。</para></param>
+    /// <returns>
+    /// <see langword="true"/> when four or more bytes start with the frame magic; the frame descriptor, block data and checksum are not examined, so a positive result is a hint rather than a validation.
+    /// <para>字节数不少于四个且以帧魔数开头时为 <see langword="true"/>；不检查帧描述符、块数据和校验和，因此命中只是提示而非校验通过。</para></returns>
     public static bool IsLz4Format(byte[] data)
     {
         return data is { Length: >= 4 } &&
@@ -391,6 +508,12 @@ public static class Lz4Compressor
     /// Detects whether the data is in LZ4 legacy format (magic 02 21 4C 18).
     /// <para>检测数据是否为 LZ4 传统格式（魔数 02 21 4C 18）。</para>
     /// </summary>
+    /// <param name="data">
+    /// Leading bytes of a candidate payload.
+    /// <para>候选数据的前若干字节。</para></param>
+    /// <returns>
+    /// <see langword="true"/> when four or more bytes start with the legacy magic; block headers beyond the magic are not examined.
+    /// <para>字节数不少于四个且以传统格式魔数开头时为 <see langword="true"/>；魔数之后的块头不做检查。</para></returns>
     public static bool IsLz4LegacyFormat(byte[] data)
     {
         return data is { Length: >= 4 } &&

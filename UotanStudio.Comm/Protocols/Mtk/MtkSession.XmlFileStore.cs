@@ -11,6 +11,8 @@ public sealed partial class MtkSession
     /// <para>可选的主机侧文件回调。必须在 InitializeXmlHardwareAsync
     /// 之前赋值才生效；为 null 时保持 fail-closed——设备发起的文件操作使会话 fault。</para>
     /// </summary>
+    /// <value>The attached host file store, or null while device-initiated file operations fault the session.
+    /// <para>已附加的主机文件存储；为 null 时设备发起的文件操作会使会话 fault。</para></value>
     public IMtkXmlHostFileStore? HostFileStore { get; set; }
 
     private static bool IsXmlFileRequest(MtkXmlMessage message) =>

@@ -32,12 +32,10 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.MacOS;
 /// </remarks>
 internal static partial class UsbHostAPI
 {
-    // ---- ObjC class names (IOUSBHost.framework exports these ObjC classes) ----
     public const string DeviceClassName = "IOUSBHostDevice";
     public const string InterfaceClassName = "IOUSBHostInterface";
     public const string NSMutableDataClassName = "NSMutableData";
 
-    // ---- Selectors (verified against macOS 26 SDK headers) ----
     public const string SelAlloc = "alloc";
     public const string SelInitWithIOService = "initWithIOService:options:queue:error:interestHandler:";
     public const string SelDestroy = "destroy";
@@ -64,14 +62,6 @@ internal static partial class UsbHostAPI
     /// <summary>USB endpoint descriptor bDescriptorType. <para>端点描述符类型。</para></summary>
     public const byte DescriptorTypeEndpoint = 5;
 
-    // ---- Lazy class lookups ----
-
-    // ObjC classes are only registered once their image is loaded. IOUSBHost's main
-    // binary lives in the dyld shared cache and is NOT loaded as a side effect of
-    // IOKit P/Invokes, so objc_getClass returns nil until we explicitly dlopen it.
-    // <para>ObjC 类仅在其镜像加载后才注册。IOUSBHost 主二进制位于 dyld 共享缓存，
-    // 且不会因 IOKit P/Invoke 而附带加载，因此必须先显式 dlopen，
-    // 否则 objc_getClass 返回 nil。</para>
     private static readonly Lazy<bool> FrameworkLoaded = new(
         () => RuntimeInformation.IsOSPlatform(OSPlatform.OSX) &&
               NativeLibrary.TryLoad("/System/Library/Frameworks/IOUSBHost.framework/IOUSBHost", out _),
@@ -120,8 +110,6 @@ internal static partial class UsbHostAPI
 
     /// <summary>Resolves the +1 retained <c>IOUSBHostInterface</c> class pointer.</summary>
     public static IntPtr GetInterfaceClass() => InterfaceClass.Value;
-
-    // ---- Object lifecycle ----
 
     /// <summary>
     /// Creates an IOUSBHostDevice or IOUSBHostInterface user client for an io_service_t.
@@ -185,8 +173,6 @@ internal static partial class UsbHostAPI
         return unchecked((int)code);
     }
 
-    // ---- Device-level control transfer ----
-
     /// <summary>
     /// Synchronous control transfer on the device's default endpoint
     /// (<c>sendDeviceRequest:data:bytesTransferred:completionTimeout:error:</c>).
@@ -227,8 +213,6 @@ internal static partial class UsbHostAPI
             }
         }
     }
-
-    // ---- Interface / pipes ----
 
     /// <summary>
     /// Returns a +1 retained IOUSBHostPipe for an endpoint address, or Zero.
@@ -451,8 +435,6 @@ internal static partial class UsbHostAPI
     public static IntPtr GetConfigurationDescriptor(IntPtr receiver) =>
         ObjcRuntime.MsgSendObject(receiver, ConfigDescriptorSel.Value);
 
-    // ---- NSMutableData helpers ----
-
     /// <summary>Creates an NSMutableData of the given length (+1 retained). <para>创建指定长度的 NSMutableData（+1 持有）。</para></summary>
     public static IntPtr CreateMutableData(int length)
     {
@@ -496,14 +478,9 @@ internal static partial class UsbHostAPI
         }
     }
 
-    // ---- IOKit child enumeration (interfaces under a device service) ----
-
-    // kern_return_t IORegistryEntryGetChildEntry(io_registry_entry_t entry,
-    //   const io_name_t plane, io_iterator_t *child);
     [LibraryImport(IOKit)]
     private static partial int IORegistryEntryGetChildEntry(uint entry, [MarshalAs(UnmanagedType.LPStr)] string plane, out IntPtr child);
 
-    // kern_return_t IORegistryEntryGetName(io_registry_entry_t entry, io_name_t name);
     [LibraryImport(IOKit)]
     private static partial int IORegistryEntryGetName(uint entry, IntPtr name);
 
@@ -515,12 +492,9 @@ internal static partial class UsbHostAPI
     /// 属性存在为准识别（注册表名是产品标签，不是类名）。</para>
     /// </summary>
     /// <returns>Interface child io_service_t values. <para>接口子 io_service_t 列表。</para></returns>
-    // kern_return_t IORegistryEntryCreateIterator(io_registry_entry_t entry,
-    //   const io_name_t plane, uint32_t options, io_iterator_t *iterator);
     [LibraryImport(IOKit)]
     private static partial int IORegistryEntryCreateIterator(uint entry, [MarshalAs(UnmanagedType.LPStr)] string plane, uint options, out IntPtr iterator);
 
-    // CFTypeRef IORegistryEntryCreateCFProperty(...) — reused for property probing.
     [LibraryImport(IOKit)]
     private static partial IntPtr IORegistryEntryCreateCFProperty(uint entry, IntPtr key, IntPtr allocator, uint options);
 

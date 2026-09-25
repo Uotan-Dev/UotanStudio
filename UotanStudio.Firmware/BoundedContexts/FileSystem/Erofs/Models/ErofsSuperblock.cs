@@ -17,14 +17,12 @@ internal sealed class ErofsSuperblock
 
     public const int DeviceSlotSize = 128;
 
-
     public const uint CompatSbChecksum = 0x00000001;
     public const uint CompatMtime = 0x00000002;
     public const uint CompatXattrFilter = 0x00000004;
     public const uint CompatSharedEaInMetabox = 0x00000008;
     public const uint CompatPlainXattrPfx = 0x00000010;
     public const uint CompatIshareXattrs = 0x00000020;
-
 
     public const uint IncompatLz4_0Padding = 0x00000001;
     public const uint IncompatCompressCfgs = 0x00000002;
@@ -40,7 +38,6 @@ internal sealed class ErofsSuperblock
     public const uint IncompatMetabox = 0x00000100;
 
     public const uint AllIncompat = (IncompatMetabox << 1) - 1;
-
 
     private const int OffsetMagic = 0;
     private const int OffsetChecksum = 4;
@@ -128,7 +125,6 @@ internal sealed class ErofsSuperblock
 
     public ulong MetaBoxNid { get; init; }
 
-
     public bool HasCompatChecksum => (FeatureCompat & CompatSbChecksum) != 0;
     public bool HasCompatMtime => (FeatureCompat & CompatMtime) != 0;
     public bool HasCompatXattrFilter => (FeatureCompat & CompatXattrFilter) != 0;
@@ -188,7 +184,6 @@ internal sealed class ErofsSuperblock
         if (data.Length < SuperblockSize)
         {
 
-
             if (data.Length < SuperblockSize - 16)
             {
                 throw new FormatException($"EROFS superblock region too short: {data.Length} bytes.");
@@ -208,7 +203,6 @@ internal sealed class ErofsSuperblock
             FeatureCompat = BinaryPrimitives.ReadUInt32LittleEndian(data[OffsetFeatureCompat..]),
             BlockSizeBits = data[OffsetBlockSizeBits],
             SbExtSlots = data[OffsetSbExtSlots],
-
 
             RootNid = has48Bit
                 ? (ushort)0
@@ -237,7 +231,6 @@ internal sealed class ErofsSuperblock
             IshareXattrPrefixId = data[OffsetIshareXattrPrefixId],
             BuildTime32 = BinaryPrimitives.ReadUInt32LittleEndian(data[OffsetBuildTime32..]),
 
-
             RootNid8b = data.Length >= OffsetRootNid8b + 8
                 ? BinaryPrimitives.ReadUInt64LittleEndian(data[OffsetRootNid8b..])
                 : 0,
@@ -260,12 +253,6 @@ internal sealed class ErofsSuperblock
 
         var core = image.Slice(SuperblockOffset, Math.Min(SuperblockSize, image.Length - SuperblockOffset));
         var preliminary = FromBytes(core);
-        // The full struct is 128 bytes plus a 16-byte extension slot that carries s_metabox_nid
-        // (Linux fs/erofs/erofs_fs.h erofs_super_block, 144 bytes). Without the extension slot the
-        // metabox nid is unavailable, so a truncated parse would silently report nid 0.
-        // 完整结构为 128 字节加一个 16 字节扩展槽，扩展槽承载 s_metabox_nid
-        //（Linux fs/erofs/erofs_fs.h erofs_super_block，共 144 字节）。缺少扩展槽时 metabox nid
-        // 不可用，截断解析会把 nid 静默报为 0。
         var slotSize = SuperblockSize + preliminary.SbExtSlots * ExtSlotSize;
         if (slotSize <= SuperblockSize)
         {
@@ -324,7 +311,6 @@ internal sealed class ErofsSuperblock
         BinaryPrimitives.WriteUInt32LittleEndian(destination[OffsetBuildTime32..], BuildTime32);
         BinaryPrimitives.WriteUInt64LittleEndian(destination[OffsetRootNid8b..], RootNid8b);
         BinaryPrimitives.WriteUInt64LittleEndian(destination[OffsetReserved2..], 0);
-
 
         if (destination.Length >= OffsetMetaBoxNid + 8 && HasMetabox)
         {

@@ -7,8 +7,20 @@ using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.ImgDiff;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
 
+/// <summary>
+/// Writes recovery block-OTA datasets — a <c>.new.dat</c> (optionally <c>.new.dat.br</c>) data file plus a
+/// <c>.transfer.list</c> — from raw partition images, one <see cref="BlockSize"/>-byte block at a time.
+/// <para>从原始分区镜像写出 recovery 块 OTA 数据集——<c>.new.dat</c>（或 <c>.new.dat.br</c>）数据文件与
+/// <c>.transfer.list</c>——每次处理一个 <see cref="BlockSize"/> 字节的数据块。</para>
+/// </summary>
+/// <remarks>
+/// File sizes are read from the input before any output is written, so a missing or unreadable input fails before
+/// existing outputs are replaced. Progress reporting is best effort and runs on the calling thread.
+/// <para>写出前会先读取输入文件大小，因此输入缺失或不可读时不会替换已有输出。进度上报为尽力而为，并在调用线程上执行。</para>
+/// </remarks>
 public static class DatWriter
 {
+    /// <summary>Block size in bytes used for range accounting and for the data file layout. <para>用于范围统计与数据文件布局的块大小（字节）。</para></summary>
     public const int BlockSize = 4096;
 
     private const int StreamBufferSize = 1024 * 1024;
@@ -17,6 +29,24 @@ public static class DatWriter
     /// Writes a raw image as a DAT image pair.
     /// <para>将原始镜像写出为 DAT 镜像对。</para>
     /// </summary>
+    /// <param name="inputImagePath">
+    /// Raw (non-sparse) image to read; the file must exist.
+    /// <para>待读取的原始（非 sparse）镜像；文件必须存在。</para>
+    /// </param>
+    /// <param name="outputDatPath">
+    /// Data file created with every non-zero block, zero padding to the block boundary; replaced when it already
+    /// exists. <para>写出全部非零块（末尾按块边界补零）的数据文件；已存在时被替换。</para>
+    /// </param>
+    /// <param name="outputTransferListPath">
+    /// Version 4 transfer list describing the <c>new</c> and <c>zero</c> ranges; replaced when it already exists.
+    /// <para>描述 <c>new</c> 与 <c>zero</c> 范围的版本 4 传输列表；已存在时被替换。</para>
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// A path is empty or contains only whitespace. <para>路径为空或仅含空白字符。</para>
+    /// </exception>
+    /// <exception cref="FileNotFoundException">
+    /// <paramref name="inputImagePath"/> does not exist. <para><paramref name="inputImagePath"/> 不存在。</para>
+    /// </exception>
     public static void Write(string inputImagePath, string outputDatPath, string outputTransferListPath)
         => Write(inputImagePath, outputDatPath, outputTransferListPath, new DatWriteOptions());
 
@@ -24,7 +54,32 @@ public static class DatWriter
     /// Writes a raw image as a DAT image pair with the given options.
     /// <para>使用给定选项将原始镜像写出为 DAT 镜像对。</para>
     /// </summary>
-    /// <param name="progress">Optional byte progress, fed with (processed bytes read from the raw image, total raw bytes); <c>null</c> to disable reporting. <para>可选的按字节进度回调（读入原始镜像的字节数、原始镜像总字节数）；<c>null</c> 表示不报告。</para></param>
+    /// <param name="inputImagePath">
+    /// Raw (non-sparse) image to read; the file must exist.
+    /// <para>待读取的原始（非 sparse）镜像；文件必须存在。</para>
+    /// </param>
+    /// <param name="outputDatPath">
+    /// Data file created with every non-zero block, zero padding to the block boundary; replaced when it already
+    /// exists. <para>写出全部非零块（末尾按块边界补零）的数据文件；已存在时被替换。</para>
+    /// </param>
+    /// <param name="outputTransferListPath">
+    /// Version 4 transfer list describing the <c>new</c> and <c>zero</c> ranges; replaced when it already exists.
+    /// <para>描述 <c>new</c> 与 <c>zero</c> 范围的版本 4 传输列表；已存在时被替换。</para>
+    /// </param>
+    /// <param name="options">
+    /// Compression and per-command block cap settings; ownership stays with the caller and the object is only read.
+    /// <para>压缩与单条命令块数上限设置；所有权归调用方，本方法只读取。</para>
+    /// </param>
+    /// <param name="progress">
+    /// Optional byte progress, fed with (processed bytes read from the raw image, total raw bytes); <c>null</c> to
+    /// disable reporting. <para>可选的按字节进度回调（读入原始镜像的字节数、原始镜像总字节数）；<c>null</c> 表示不报告。</para>
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// A path is empty or contains only whitespace. <para>路径为空或仅含空白字符。</para>
+    /// </exception>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="options"/> is <see langword="null"/>. <para><paramref name="options"/> 为 <see langword="null"/>。</para>
+    /// </exception>
     public static void Write(string inputImagePath, string outputDatPath, string outputTransferListPath, DatWriteOptions options, IProgress<(long Processed, long Total)>? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputImagePath);
@@ -37,7 +92,6 @@ public static class DatWriter
 
         var newRanges = new List<BlockRange>();
         var zeroRanges = new List<BlockRange>();
-
 
         using (var input = new FileStream(inputImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.SequentialScan))
         using (var output = new FileStream(outputDatPath, FileMode.Create, FileAccess.Write, FileShare.None, StreamBufferSize))
@@ -125,7 +179,34 @@ public static class DatWriter
     /// 区段按位置比较，故移动的块被重新发出而非以 <c>move</c>/<c>stash</c> 引用。若目标无差异非零块（仅归零或完全
     /// 相同），而 recovery 读取器无法从不消费的源预置，则回退为全量 <c>new</c> 镜像。</para>
     /// </summary>
+    /// <param name="sourceImagePath">Base image the updater seeds the target from; the file must exist. <para>updater 用于预置目标的基座镜像；文件必须存在。</para></param>
+    /// <param name="targetImagePath">Desired image compared block by block against the source; the file must exist. <para>与源逐块比较的目标镜像；文件必须存在。</para></param>
+    /// <param name="outputDatPath">
+    /// Data file receiving the non-zero blocks of <c>imgdiff</c> runs; on the full-image fallback it holds every
+    /// non-zero target block. <para>接收 <c>imgdiff</c> 区段非零块的数据文件；走全量回退时包含目标的全部非零块。</para>
+    /// </param>
+    /// <param name="outputPatchDatPath">
+    /// File receiving the concatenated bsdiff bytes referenced by the <c>imgdiff</c> commands; written as an empty
+    /// file on the full-image fallback.
+    /// <para>接收各 <c>imgdiff</c> 命令所引用的 bsdiff 字节拼接结果的文件；走全量回退时写为空文件。</para>
+    /// </param>
+    /// <param name="outputTransferListPath">
+    /// Version 4 transfer list carrying the positional <c>imgdiff</c>, <c>zero</c> and <c>new</c> commands.
+    /// <para>包含位置式 <c>imgdiff</c>、<c>zero</c> 与 <c>new</c> 命令的版本 4 传输列表。</para>
+    /// </param>
+    /// <param name="options">
+    /// Compression and per-command block cap settings applied to the emitted data; ownership stays with the caller.
+    /// <para>应用于所写出数据的压缩与单条命令块数上限设置；所有权归调用方。</para>
+    /// </param>
     /// <param name="progress">Optional byte progress over the target image. <para>可选的按目标镜像字节进度。</para></param>
+    /// <exception cref="ArgumentException">One of the paths is empty or contains only whitespace. <para>某个路径为空或仅含空白字符。</para></exception>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="options"/> is <see langword="null"/>. <para><paramref name="options"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="FileNotFoundException">
+    /// <paramref name="sourceImagePath"/> or <paramref name="targetImagePath"/> does not exist.
+    /// <para><paramref name="sourceImagePath"/> 或 <paramref name="targetImagePath"/> 不存在。</para>
+    /// </exception>
     public static void WriteIncremental(string sourceImagePath, string targetImagePath, string outputDatPath, string outputPatchDatPath,
         string outputTransferListPath, DatWriteOptions options, IProgress<(long Processed, long Total)>? progress = null)
     {
@@ -140,7 +221,6 @@ public static class DatWriter
         var totalBytes = new FileInfo(targetImagePath).Length;
         var totalBlocks = (totalBytes + BlockSize - 1) / BlockSize;
 
-        // Pass one: classify blocks into coalesced positional runs (source is streamed, target seeked).
         var runs = new List<(long Start, long End, bool Imgdiff)>();
         using (var source = new FileStream(sourceImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.RandomAccess))
         using (var target = new FileStream(targetImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.RandomAccess))
@@ -190,8 +270,6 @@ public static class DatWriter
             }
         }
 
-        // Without an imgdiff run there is nothing to make the reader consume (and seed from) the source,
-        // so fall back to a full image that never relies on inheritance.
         if (!runs.Any(run => run.Imgdiff))
         {
             File.WriteAllBytes(outputPatchDatPath, []);

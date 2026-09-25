@@ -133,7 +133,6 @@ internal static class AvbMetadataReader
         }
     }
 
-    // Offsets are relative to the 16-byte generic descriptor header, as in libavb/avbtool.
     private static void ReadDescriptor(Dictionary<string, string> fields, string prefix, ulong tag, ReadOnlySpan<byte> body)
     {
         fields[prefix + ".Tag"] = MetadataDisplay.Number(tag);

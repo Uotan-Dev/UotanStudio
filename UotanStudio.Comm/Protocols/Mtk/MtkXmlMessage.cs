@@ -30,7 +30,6 @@ internal sealed record MtkXmlMessage(string Command, string? Result, IReadOnlyDi
                 }
             }
         }
-        // Scan the immutable string before constructing a tree, so depth is bounded before allocation.
         var root = XDocument.Parse(text).Root;
         if (root?.Name != "host" || root.Nodes().OfType<XText>().Any(node => !string.IsNullOrWhiteSpace(node.Value)))
         {

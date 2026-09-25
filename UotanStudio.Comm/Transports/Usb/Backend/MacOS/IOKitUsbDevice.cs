@@ -38,14 +38,10 @@ internal class IOKitUsbDevice : UsbDevice
 
     private const int PlatformDefaultTimeoutMs = UsbTransferPolicies.DefaultTimeoutMs;
 
-    // COM pointers: plug-in factory, IOUSBDeviceInterface, IOUSBInterfaceInterface.
-    // <para>COM 指针：插件工厂、IOUSBDeviceInterface、IOUSBInterfaceInterface。</para>
     private IntPtr _pluginInterface = IntPtr.Zero;
     private IntPtr _deviceInterface = IntPtr.Zero;
     private IntPtr _interfaceInterface = IntPtr.Zero;
 
-    // Bulk pipe references discovered via GetPipeProperties on the claimed interface.
-    // <para>在声明的接口上经 GetPipeProperties 发现的批量管道引用。</para>
     private byte _bulkIn;
     private byte _bulkOut;
 
@@ -399,18 +395,6 @@ internal class IOKitUsbDevice : UsbDevice
         }
     }
 
-    // Opens one IOUSBInterface service: creates its plug-in, queries the
-    // IOUSBInterfaceInterface COM-vtable, opens the interface, discovers pipe
-    // references via GetPipeProperties, and clears stall on the chosen pipes.
-    // Bulk IN/OUT is preferred; when the interface exposes no bulk pair (e.g.
-    // HID keyboards/digitizers), interrupt IN/OUT is used as a fallback, exactly
-    // like the libusb backend's bulk-then-interrupt selection. Returns true when
-    // a usable interface was claimed.
-    // <para>打开一个 IOUSBInterface 服务：创建其插件、查询 IOUSBInterfaceInterface
-    // COM-vtable、打开接口、经 GetPipeProperties 发现管道引用，并在选定管道上清除
-    // stall。优先使用批量 IN/OUT；当接口无批量对（例如 HID 键盘/数字化仪）时回退到
-    // 中断 IN/OUT，与 libusb 后端的 bulk→interrupt 选择一致。声明到可用接口时
-    // 返回 true。</para>
     private bool TryOpenInterface(IntPtr ifcService)
     {
         var kr = IOKitUsbAPI.IOCreatePlugInInterfaceForService(
@@ -456,26 +440,26 @@ internal class IOKitUsbDevice : UsbDevice
                 {
                     if (getPipeProps(ifcIntf, i, out var direction, out _, out var transferType, out _, out _) == IOKitUsbAPI.Ok)
                     {
-                        if (direction == 1) // kUSBIn
+                        if (direction == 1)
                         {
                             if (transferType == 0x02 && bulkIn == 0)
                             {
-                                bulkIn = i;          // Bulk
+                                bulkIn = i;
                             }
                             else if (transferType == 0x03 && interruptIn == 0)
                             {
-                                interruptIn = i; // Interrupt
+                                interruptIn = i;
                             }
                         }
-                        else if (direction == 0) // kUSBOut
+                        else if (direction == 0)
                         {
                             if (transferType == 0x02 && bulkOut == 0)
                             {
-                                bulkOut = i;          // Bulk
+                                bulkOut = i;
                             }
                             else if (transferType == 0x03 && interruptOut == 0)
                             {
-                                interruptOut = i; // Interrupt
+                                interruptOut = i;
                             }
                         }
                     }

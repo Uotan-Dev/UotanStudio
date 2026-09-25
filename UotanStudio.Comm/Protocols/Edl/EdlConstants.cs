@@ -6,7 +6,6 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// </summary>
 internal static class EdlConstants
 {
-    // Sahara protocol version
     /// <summary>
     /// Sahara protocol version supported by the host.
     /// <para>主机支持的 Sahara 协议版本。</para>
@@ -31,7 +30,6 @@ internal static class EdlConstants
     /// </summary>
     public const uint DefaultMaxPacketLength = 4096;
 
-    // Sahara command codes
     /// <summary>
     /// Sahara HELLO command code.
     /// <para>Sahara HELLO 命令码。</para>
@@ -140,7 +138,6 @@ internal static class EdlConstants
     /// </summary>
     public const uint SaharaCmdReadData64 = 0x12;
 
-    // Common Firehose XML tags
     /// <summary>
     /// Standard XML header for Firehose messages.
     /// <para>Firehose 消息的标准 XML 头。</para>
@@ -159,7 +156,6 @@ internal static class EdlConstants
     /// </summary>
     public const string DataClose = "</data>\n";
 
-    // Default timeouts
     /// <summary>
     /// Default command timeout in milliseconds.
     /// <para>默认命令超时（毫秒）。</para>
@@ -308,7 +304,6 @@ internal static class EdlConstants
     /// </summary>
     public const long DefaultSectorSizeSmall = 512;
 
-    // USB class for EDL devices (Qualcomm HS-USB QDLoader 9008)
     /// <summary>
     /// USB interface class for EDL devices.
     /// <para>EDL 设备的 USB 接口类。</para>

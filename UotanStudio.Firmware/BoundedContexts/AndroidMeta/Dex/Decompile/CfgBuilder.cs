@@ -3,23 +3,65 @@ using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Decompile;
 
+/// <summary>
+/// Basic-block control-flow graph of one DEX method body.
+/// <para>单个 DEX 方法体的基本块控制流图。</para>
+/// </summary>
 public sealed class Cfg
 {
+    /// <summary>Blocks of the method body.
+    /// <para>方法体的全部基本块。</para></summary>
+    /// <value>Ordered by ascending start offset, with the entry block first; empty for a body with no
+    /// instructions. <para>按起始偏移升序排列，入口块在最前；方法体没有指令时为空。</para></value>
     public List<BasicBlock> Blocks { get; } = [];
 
+    /// <summary>Block where execution starts.
+    /// <para>执行起始块。</para></summary>
+    /// <value>The first element of <see cref="Blocks"/>, or <see langword="null"/> when the graph has
+    /// no blocks. <para><see cref="Blocks"/> 的首个元素；图中没有块时为
+    /// <see langword="null"/>。</para></value>
     public BasicBlock? Entry { get; set; }
 
+    /// <summary>Blocks indexed by their first instruction offset.
+    /// <para>按首个指令偏移索引的块。</para></summary>
+    /// <value>Key is the block start offset in bytes within the code item; every entry matches the
+    /// <see cref="BasicBlock.StartOffset"/> of the mapped block.
+    /// <para>键为块在代码项内以字节计算的起始偏移；每项的键都等于所映射块的
+    /// <see cref="BasicBlock.StartOffset"/>。</para></value>
     public Dictionary<int, BasicBlock> ByStartOffset { get; } = [];
 
+    /// <summary>Whether the body carries any block.
+    /// <para>方法体是否包含任何块。</para></summary>
+    /// <value><see langword="true"/> when <see cref="Blocks"/> is not empty.
+    /// <para><see cref="Blocks"/> 非空时为 <see langword="true"/>。</para></value>
     public bool HasInstructions => Blocks.Count > 0;
 }
 
+/// <summary>
+/// Splits decoded DEX instructions into basic blocks and wires their successors.
+/// <para>把解码后的 DEX 指令切分为基本块并连接后继关系。</para>
+/// </summary>
 public static class CfgBuilder
 {
     /// <summary>
     /// Builds a control-flow graph from a code item (decoding instructions on demand).
     /// <para>从代码项构建控制流图（未解码的指令按需解码）。</para>
     /// </summary>
+    /// <param name="code">Code item holding either decoded instructions or raw instruction bytes.
+    /// <para>持有已解码指令或原始指令字节的代码项。</para></param>
+    /// <param name="dex">DEX model used to decode <paramref name="code"/> when its instruction list is
+    /// empty. <para>当 <paramref name="code"/> 的指令列表为空时用于解码的 DEX 模型。</para></param>
+    /// <returns>A graph whose blocks run from offset <c>0</c> to the last instruction, with leaders
+    /// taken from branch targets, switch case targets and the instruction after each terminator. A
+    /// code item with no instructions yields an empty graph whose <see cref="Cfg.Entry"/> is
+    /// <see langword="null"/>. Targets that fall outside a block boundary are left as
+    /// <see langword="null"/> references on the block.
+    /// <para>返回的图中块从偏移 <c>0</c> 一直排列到最后一条指令，leader 取自分支目标、switch 分支目标以及
+    /// 每条终止指令的后继指令。没有指令的代码项产生空图，其 <see cref="Cfg.Entry"/> 为
+    /// <see langword="null"/>。落在块边界之外的目标在块上保留为 <see langword="null"/> 引用。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="code"/> or <paramref name="dex"/> is
+    /// <see langword="null"/>. <para><paramref name="code"/> 或 <paramref name="dex"/> 为
+    /// <see langword="null"/>。</para></exception>
     public static Cfg Build(CodeItem code, DexFile dex)
     {
         ArgumentNullException.ThrowIfNull(code);

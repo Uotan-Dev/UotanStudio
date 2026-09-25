@@ -60,10 +60,14 @@ public sealed class McpHttpServerHost : IAsyncDisposable
 
     /// <summary>Gets a value indicating whether the port is currently served.
     /// <para>获取当前是否正在监听。</para></summary>
+    /// <value><see langword="true"/> between a successful <see cref="Start"/> and the matching <see cref="StopAsync"/> or disposal.
+    /// <para>在 <see cref="Start"/> 成功与对应的 <see cref="StopAsync"/> 或释放之间为 <see langword="true"/>。</para></value>
     public bool IsRunning { get; private set; }
 
     /// <summary>Gets the bound loopback port (resolved value when port 0 was requested).
     /// <para>获取已绑定的回环端口（请求 0 时为系统分配的实际端口）。</para></summary>
+    /// <value>The port clients use in <c>http://127.0.0.1:&lt;port&gt;/</c>; <c>0</c> until the listener is bound.
+    /// <para>客户端在 <c>http://127.0.0.1:&lt;port&gt;/</c> 中使用的端口；监听器绑定前为 <c>0</c>。</para></value>
     public int Port { get; private set; }
 
     /// <summary>
@@ -105,6 +109,8 @@ public sealed class McpHttpServerHost : IAsyncDisposable
     /// Stops serving, releases the port and waits for the session to unwind.
     /// <para>停止服务、释放端口并等待会话收敛。</para>
     /// </summary>
+    /// <returns>A task that completes after the accept and server loops have finished and the server and transport have been disposed; disposal errors are absorbed. A call with no active session completes immediately.
+    /// <para>在接收循环与会话循环结束、服务器与传输均已释放之后完成的任务；释放期间的错误会被吸收。没有活动会话时立即完成。</para></returns>
     public async Task StopAsync()
     {
         Session? session;
@@ -136,7 +142,12 @@ public sealed class McpHttpServerHost : IAsyncDisposable
         session.Cancellation.Dispose();
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Stops the listener if one is active and marks the host unusable for further starts.
+    /// <para>若监听器仍在运行则停止它，并使宿主不能再被启动。</para>
+    /// </summary>
+    /// <returns>A task that completes once the session has unwound; repeat calls return immediately without extra work.
+    /// <para>会话收敛后完成的任务；重复调用会立即返回且不再执行额外工作。</para></returns>
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
@@ -220,7 +231,6 @@ public sealed class McpHttpServerHost : IAsyncDisposable
                 }
                 catch (Exception)
                 {
-                    // Idle timeout, server shutdown or a client that vanished mid-request.
                     return;
                 }
 
@@ -268,7 +278,6 @@ public sealed class McpHttpServerHost : IAsyncDisposable
                 return false;
 
             case "DELETE":
-                // The exposed server keeps a single process-wide session, so termination is a no-op.
                 await IgnoreAsync(HttpResponseWriter.WriteEmptyAsync(stream, 204, "No Content", request.KeepAlive, cancellationToken)).ConfigureAwait(false);
                 return request.KeepAlive;
 
@@ -304,7 +313,6 @@ public sealed class McpHttpServerHost : IAsyncDisposable
 
         if (message is not JsonRpcRequest)
         {
-            // Notifications and client responses carry no reply; acknowledge them per the spec.
             await IgnoreAsync(HttpResponseWriter.WriteEmptyAsync(stream, 202, "Accepted", request.KeepAlive, cancellationToken)).ConfigureAwait(false);
             return request.KeepAlive;
         }
@@ -338,7 +346,6 @@ public sealed class McpHttpServerHost : IAsyncDisposable
         }
         catch (Exception)
         {
-            // Client disconnected or the transport is shutting down.
         }
         finally
         {

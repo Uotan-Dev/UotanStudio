@@ -2,17 +2,55 @@ using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
 
-/// <summary>Bounded metadata-only reader for MTK all-in-one download-agent containers.</summary>
+/// <summary>
+/// Bounded metadata-only reader for MTK all-in-one download-agent containers.
+/// <para>MTK all-in-one 下载代理容器的有界、仅元数据读取器。</para>
+/// </summary>
 public static class MtkDaContainerReader
 {
     /// <summary>
     /// Reads metadata from the beginning of a seekable stream and restores its original position.
     /// Region data and signatures are not read or cryptographically verified.
+    /// <para>从可寻址流的起始位置读取元数据，并恢复其原始位置。不读取区域数据或签名，也不做密码学校验。</para>
     /// </summary>
-    /// <param name="source">The caller-owned readable, seekable container stream.</param>
-    /// <param name="layout">An explicit layout, or unambiguous structural detection.</param>
-    /// <param name="cancellationToken">The operation cancellation token.</param>
-    /// <returns>Validated metadata with at most 4096 entries and ten regions per entry.</returns>
+    /// <param name="source">
+    /// The caller-owned readable, seekable container stream.
+    /// <para>调用方拥有的、可读且可寻址的容器流。</para>
+    /// </param>
+    /// <param name="layout">An explicit layout, or unambiguous structural detection. <para>显式布局，或要求无歧义的结构探测。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token. <para>本次操作的取消令牌。</para></param>
+    /// <returns>
+    /// Validated metadata with at most 4096 entries and ten regions per entry.
+    /// <para>经过校验的元数据；条目至多 4096 个，每个条目至多十个区域。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="source"/> is null.
+    /// <para><paramref name="source"/> 为 null。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="source"/> cannot be read or cannot be seeked.
+    /// <para><paramref name="source"/> 不可读或不可寻址。</para>
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="layout"/> is not a defined value.
+    /// <para><paramref name="layout"/> 不是已定义的值。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// The header is truncated or unrecognized, the entry count is out of range, a directory or
+    /// region fails structural validation, or automatic layout detection is ambiguous or finds no
+    /// passing layout.
+    /// <para>头部被截断或无法识别、条目数量越界、目录或区域未通过结构校验，或自动布局探测存在歧义、无任何布局通过校验。</para>
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// Cancellation was requested before or during directory parsing.
+    /// <para>在目录解析之前或期间已请求取消。</para>
+    /// </exception>
+    /// <example>
+    /// <code>
+    /// await using var file = File.OpenRead(@"C:\images\DA_all_in_one.bin");
+    /// var container = MtkDaContainerReader.Read(file, MtkDaDirectoryLayout.Auto);
+    /// </code>
+    /// </example>
     public static MtkDaContainer Read(Stream source, MtkDaDirectoryLayout layout = MtkDaDirectoryLayout.Auto,
         CancellationToken cancellationToken = default)
     {

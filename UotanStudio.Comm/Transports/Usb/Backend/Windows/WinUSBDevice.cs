@@ -48,8 +48,8 @@ internal partial class WinUSBDevice : UsbDevice
     private USBDeviceDescriptor _usbDeviceDescriptor;
     private USBDeviceConfigDescriptor _usbDeviceConfigDescriptor;
     private USBDeviceInterfaceDescriptor _usbDeviceInterfaceDescriptor;
-    private int _configuredReadPipeTimeoutMs = -1; // accessed via Volatile.Read/Write (S5)
-    private int _configuredWritePipeTimeoutMs = -1; // accessed via Volatile.Read/Write (S5)
+    private int _configuredReadPipeTimeoutMs = -1;
+    private int _configuredWritePipeTimeoutMs = -1;
     public override int CreateHandle()
     {
         int Fail(int error)
@@ -294,7 +294,7 @@ internal partial class WinUSBDevice : UsbDevice
 
             switch (bDescriptorType)
             {
-                case 4: // USB_INTERFACE_DESCRIPTOR_TYPE
+                case 4:
                     if (currentInterface != null)
                     {
                         result.Add(currentInterface);
@@ -311,7 +311,7 @@ internal partial class WinUSBDevice : UsbDevice
                     };
                     break;
 
-                case 5: // USB_ENDPOINT_DESCRIPTOR_TYPE
+                case 5:
                     currentEndpoints?.Add(new UsbEndpointInfo
                     {
                         EndpointAddress = Marshal.ReadByte(buffer, pos + 2),
@@ -334,6 +334,5 @@ internal partial class WinUSBDevice : UsbDevice
 
         return result;
     }
-
 
 }

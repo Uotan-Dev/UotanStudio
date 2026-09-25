@@ -4,12 +4,20 @@ using UotanStudio.Firmware.BoundedContexts.Compression.Codecs.Lzo;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
 
+/// <summary>
+/// Cluster compression codecs selectable for F2FS file data. The numeric values are library
+/// identifiers, not the kernel ids stored in inodes, which are translated separately.
+/// <para>F2FS 文件数据可选的簇压缩编解码器。数值为库内部标识，并非 inode 中存储的内核 ID，两者另行换算。</para>
+/// </summary>
 public enum CompressionAlgorithm : byte
 {
+    /// <summary>LZ4 block codec, the default cluster compression. <para>LZ4 块编解码器，默认的簇压缩算法。</para></summary>
     Lz4 = 0,
 
+    /// <summary>Zstandard block compression. <para>Zstandard 块压缩。</para></summary>
     Zstd = 1,
 
+    /// <summary>LZO-1x compression. <para>LZO-1x 压缩。</para></summary>
     Lzo = 2,
 }
 

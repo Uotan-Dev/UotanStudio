@@ -16,7 +16,6 @@ public sealed partial class ErofsBuilder
 
     private const ulong NidMetaboxFlag = 1UL << 63;
 
-
     [StructLayout(LayoutKind.Sequential)]
     private struct LinuxStat
     {
@@ -49,6 +48,16 @@ public sealed partial class ErofsBuilder
     /// Packs a directory into erofs image bytes.
     /// <para>将目录打包为 erofs 镜像字节。</para>
     /// </summary>
+    /// <param name="directoryPath">Existing directory whose tree becomes the image root.
+    /// <para>作为镜像根目录的现存目录。</para></param>
+    /// <param name="options">Build options; <see langword="null"/> uses validated defaults.
+    /// <para>构建选项；为 <see langword="null"/> 时使用经校验的默认值。</para></param>
+    /// <returns>The complete image as one in-memory byte array.
+    /// <para>完整镜像的内存字节数组。</para></returns>
+    /// <exception cref="DirectoryNotFoundException"><paramref name="directoryPath"/> does not exist.
+    /// <para><paramref name="directoryPath"/> 不存在。</para></exception>
+    /// <exception cref="InvalidOperationException">The built image exceeds the maximum byte-array length.
+    /// <para>构建出的镜像超过字节数组最大长度。</para></exception>
     [Obsolete("Loads the entire image into memory. Use Build(directoryPath, outputPath) instead. 整镜像驻留内存；请使用文件路径重载。")]
     public byte[] Build(string directoryPath, ErofsOptions? options = null)
     {
@@ -76,6 +85,21 @@ public sealed partial class ErofsBuilder
     /// Atomically packs a directory to a path by building and flushing a temporary file in the destination directory before replacing the destination.
     /// <para>将目录原子打包到指定路径。</para>
     /// </summary>
+    /// <param name="directoryPath">Existing directory whose tree becomes the image root; the temporary and
+    /// final output files are excluded from the collected tree.
+    /// <para>作为镜像根目录的现存目录；收集目录树时会排除临时文件与最终输出文件。</para></param>
+    /// <param name="outputPath">Destination image path, replaced only after the temporary file is fully
+    /// written and flushed to disk; an existing file is overwritten.
+    /// <para>目标镜像路径；仅在临时文件完整写入并落盘后才替换目标，已存在的文件会被覆盖。</para></param>
+    /// <param name="options">Build options; <see langword="null"/> uses validated defaults.
+    /// <para>构建选项；为 <see langword="null"/> 时使用经校验的默认值。</para></param>
+    /// <param name="progress">Optional reporter receiving processed and total source bytes; the total is the
+    /// summed file size at start and is at least 1. <para>可选的进度回调，报告已处理与源文件总字节数；总数为开始时
+    /// 的文件大小之和，且至少为 1。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="outputPath"/> is <see langword="null"/>.
+    /// <para><paramref name="outputPath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="DirectoryNotFoundException"><paramref name="directoryPath"/> does not exist.
+    /// <para><paramref name="directoryPath"/> 不存在。</para></exception>
     public void Build(string directoryPath, string outputPath, ErofsOptions? options = null, IProgress<(long Processed, long Total)>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(outputPath);
@@ -125,6 +149,22 @@ public sealed partial class ErofsBuilder
     /// Packs a directory starting at the output stream's current position.
     /// <para>将目录打包为 erofs 镜像并从输出流当前 Position 写入。</para>
     /// </summary>
+    /// <param name="directoryPath">Existing directory whose tree becomes the image root; when the output is
+    /// a <see cref="FileStream"/>, that file is excluded from the collected tree.
+    /// <para>作为镜像根目录的现存目录；当输出为 <see cref="FileStream"/> 时，收集目录树会排除该文件。</para></param>
+    /// <param name="output">Writable stream; a seekable stream supporting length resets is written in place
+    /// from its current position, otherwise the image is staged in a temporary file and copied. The caller
+    /// keeps ownership and must flush or close it.
+    /// <para>可写流；支持改长度的可寻址流从当前位置就地写入，否则先经临时文件中转复制。流的所有权仍归调用方，
+    /// 需自行刷新或关闭。</para></param>
+    /// <param name="options">Build options; <see langword="null"/> uses validated defaults.
+    /// <para>构建选项；为 <see langword="null"/> 时使用经校验的默认值。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="directoryPath"/> is <see langword="null"/>.
+    /// <para><paramref name="directoryPath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="output"/> cannot be written.
+    /// <para><paramref name="output"/> 不可写。</para></exception>
+    /// <exception cref="DirectoryNotFoundException"><paramref name="directoryPath"/> does not exist.
+    /// <para><paramref name="directoryPath"/> 不存在。</para></exception>
     public void Build(string directoryPath, Stream output, ErofsOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(output);
@@ -275,7 +315,6 @@ public sealed partial class ErofsBuilder
         deviceRdev = 0;
         deviceMode = 0;
 
-
         if (!OperatingSystem.IsLinux()) return;
 
         try
@@ -307,7 +346,6 @@ public sealed partial class ErofsBuilder
         var attributes = File.GetAttributes(fullPath);
         var name = isRoot ? string.Empty : Path.GetFileName(fullPath);
 
-
         if ((attributes & FileAttributes.ReparsePoint) != 0)
         {
             string target = string.Empty;
@@ -323,7 +361,6 @@ public sealed partial class ErofsBuilder
             };
         }
 
-
         ReadUnixMetadata(
             fullPath,
             out var uid,
@@ -333,7 +370,6 @@ public sealed partial class ErofsBuilder
             out var isDevice,
             out var deviceRdev,
             out var deviceMode);
-
 
         if (isDevice)
         {
@@ -470,7 +506,6 @@ public sealed partial class ErofsBuilder
 
         public byte[] XattrIbody = [];
 
-
         public bool IsSymlink;
         public string SymlinkTarget = string.Empty;
         public bool IsDevice;
@@ -483,14 +518,12 @@ public sealed partial class ErofsBuilder
         public long Mtime;
         public bool RequiresExtendedTime;
 
-
         public bool IsFragment;
         public long FragmentOffset = -1;
         public byte[]? ContentHash;
         public BuildNode? DedupSource;
         public bool IsPacked;
         public List<PackedFragment>? PackedFragments;
-
 
         public bool IsMetaboxResident;
 
@@ -539,10 +572,8 @@ public sealed partial class ErofsBuilder
         var blockSize = options.BlockSize;
         var now = options.BuildTime ?? (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-
         output.CaptureWindow(ErofsSuperblock.SuperblockOffset,
             blockSize > ErofsSuperblock.SuperblockOffset ? blockSize - ErofsSuperblock.SuperblockOffset : blockSize);
-
 
         var extraDevices = options.ExtraDeviceCount;
         var compressionConfiguration = BuildCompressionConfiguration(options);
@@ -553,7 +584,6 @@ public sealed partial class ErofsBuilder
         if (extraDevices > 0)
         {
 
-
             devtOffset = blockSize;
             var devtSlotCount = extraDevices;
             var devtTableSize = (long)devtSlotCount * ErofsDeviceSlot.Size;
@@ -563,13 +593,11 @@ public sealed partial class ErofsBuilder
         else
         {
 
-
             inodeTableStart = AlignUp(compressionConfigurationOffset + compressionConfiguration.Length,
                 ErofsSuperblock.CompactInodeSize);
             devtOffset = 0;
             devtSlotOff = 0;
         }
-
 
         var ordered = new List<BuildNode>();
         CollectPreOrder(root, ordered);
@@ -602,11 +630,6 @@ public sealed partial class ErofsBuilder
                 node.XattrIbody = entry.Xattrs is { Count: > 0 } ? ErofsXattr.EncodeInline(entry.Xattrs.Select(p => new ErofsXattrEntry { Name = p.Key, Value = p.Value }).ToList()) : [];
             }
         else if (options.SourceInodesByPath is { Count: > 0 } byPath)
-            // Plain directory repacks have no edit plan mapping paths to source nids, so bind the
-            // preserved per-inode strategy by image path. Renamed files fall through to the global
-            // inference below (safe-side: they are treated as new content).
-            // 纯目录重打包没有把路径映射回源 nid 的 editPlan，因此按镜像路径绑定保留的逐 inode
-            // 策略。被重命名的文件回落到下方全局推断（安全侧：按新内容处理）。
             foreach (var node in ordered)
             {
                 if (node.SourceInode is not null) continue;
@@ -619,7 +642,6 @@ public sealed partial class ErofsBuilder
             var timestamp = node.SourceInode?.Mtime ?? (node.Mtime > 0 ? (ulong)node.Mtime : now);
             node.RequiresExtendedTime = timestamp < now || timestamp - now > uint.MaxValue;
         }
-
 
         var hardlinks = new List<(BuildNode Alias, BuildNode Canonical)>();
         var canonicalInodes = new Dictionary<ulong, BuildNode>();
@@ -634,7 +656,6 @@ public sealed partial class ErofsBuilder
         });
         var packedFragments = new List<PackedFragment>();
         long packedEnd = 0;
-
 
         var dedupFlat = new Dictionary<string, BuildNode>();
         var dedupFragments = new Dictionary<string, BuildNode>();
@@ -656,7 +677,6 @@ public sealed partial class ErofsBuilder
             if (node.IsDirectory)
             {
 
-
                 var payloadLength = EstimateDirPayloadLength(node);
                 if (payloadLength <= blockSize)
                 {
@@ -674,7 +694,6 @@ public sealed partial class ErofsBuilder
                 continue;
             }
 
-
             var isDataFile = !node.IsSymlink && !node.IsDevice;
             if (node.IsSymlink)
             {
@@ -686,8 +705,6 @@ public sealed partial class ErofsBuilder
                 continue;
             }
 
-
-
             if (node.SourceInode?.Compressed ?? options.Compress)
             {
                 if (node.Pclusters is not null)
@@ -695,7 +712,6 @@ public sealed partial class ErofsBuilder
                     node.CompressedBlocks = (uint)node.Pclusters.Sum(p => CeilDiv(p.CompressedLength, blockSize));
                     node.ClusterCount = (uint)CeilDiv(node.Size, node.LogicalClusterSize);
                     node.CompactedIndexes = node.SourceInode?.CompactIndexes ?? options.UseCompactedIndexes;
-
 
                     node.BigPcluster = !options.LegacyCompatibility
                         && (node.CompressionOptions!.Algorithm != ErofsCompressionAlgorithm.Lz4
@@ -716,14 +732,12 @@ public sealed partial class ErofsBuilder
             if (isDataFile && options.Fragments && wholeBlocks == 0)
             {
 
-
                 node.IsFragment = true;
                 var hashKey = options.Dedup && node.ContentHash is not null
                     ? Convert.ToHexString(node.ContentHash)
                     : null;
                 if (hashKey is not null && dedupFragments.TryGetValue(hashKey, out var existing))
                 {
-
 
                     node.FragmentOffset = existing.FragmentOffset;
                     continue;
@@ -740,17 +754,10 @@ public sealed partial class ErofsBuilder
                 continue;
             }
 
-
             var remainder = node.Size % blockSize;
-            // The global TailPacking switch only governs trees without a preserved per-inode
-            // profile (fresh builds). When a profile exists but this file has no record (added
-            // after extraction), default to not inlining instead of inheriting the tree-wide flag.
-            // 全局 TailPacking 开关只管理没有保留逐 inode 档案的目录树（全新构建）。档案存在但
-            // 该文件无记录（解包后新增）时，默认不内联，而不是继承整树开关。
             var inlineFallback = options.SourceInodes is { Count: > 0 } ? false : options.TailPacking;
             if (node.SourceInode?.InlineData ?? inlineFallback)
             {
-
 
                 node.FlatBlocks = wholeBlocks;
                 if (remainder > 0)
@@ -770,10 +777,8 @@ public sealed partial class ErofsBuilder
             else
             {
 
-
                 node.FlatBlocks = remainder > 0 ? wholeBlocks + 1 : wholeBlocks;
             }
-
 
             if (isDataFile && options.Dedup && node.ContentHash is not null && node.FlatBlocks > 0)
             {
@@ -790,7 +795,6 @@ public sealed partial class ErofsBuilder
             }
         }
 
-
         BuildNode? packedNode = null;
         if (packedFragments.Count > 0)
         {
@@ -803,7 +807,6 @@ public sealed partial class ErofsBuilder
             };
             ordered.Add(packedNode);
         }
-
 
         List<BuildNode>? metaboxResident = null;
         BuildNode? metaboxNode = null;
@@ -835,7 +838,6 @@ public sealed partial class ErofsBuilder
             }
         }
 
-
         var metaOff = inodeTableStart;
         if (metaboxResident is not null)
         {
@@ -864,7 +866,6 @@ public sealed partial class ErofsBuilder
             metaOff += AlignUp(recordSize, 32);
         }
 
-
         var dataBlock = AlignUp(metaOff, blockSize) / blockSize;
         foreach (var node in ordered)
         {
@@ -887,7 +888,6 @@ public sealed partial class ErofsBuilder
             }
             else if (node.FlatBlocks > 0)
             {
-
 
                 if (node.DedupSource is not null)
                 {
@@ -912,7 +912,6 @@ public sealed partial class ErofsBuilder
             throw new InvalidOperationException($"Root nid {root.Nid} exceeds the 16-bit superblock field.");
         }
 
-
         var finalSize = checked(totalBlocks * blockSize);
         var oldLength = output.Length;
         output.SetLength(finalSize);
@@ -926,29 +925,21 @@ public sealed partial class ErofsBuilder
             ? ErofsSuperblock.IncompatLz4_0Padding | (options.LegacyCompatibility ? 0u : ErofsSuperblock.IncompatBigPcluster)
             : 0;
 
-
         if (extraDevices > 0)
         {
             featureIncompat |= ErofsSuperblock.IncompatDeviceTable;
         }
 
-
         if (packedNode is not null)
         {
             if (options.LegacyCompatibility)
             {
-                // Legacy (Linux 5.4) images cannot carry fragments or metabox data; the
-                // option-level validation keeps these off, so reaching this guard means the
-                // build input itself demands a modern layout.
-                // legacy（Linux 5.4）镜像无法携带 fragments 或 metabox 数据；选项校验已保证这些
-                // 开关关闭，走到这里说明构建输入本身要求现代布局。
                 throw new NotSupportedException(
                     "LegacyCompatibility images cannot contain fragment or metabox packed nodes.");
             }
             featureIncompat |= ErofsSuperblock.IncompatFragments;
         }
         if (options.CompressedTailPacking) featureIncompat |= ErofsSuperblock.IncompatZtailpacking;
-
 
         if (metaboxNode is not null)
         {
@@ -985,16 +976,13 @@ public sealed partial class ErofsBuilder
             VolumeName = options.VolumeName,
             VolumeNameBytes = options.SourceVolumeNameBytes ?? [],
 
-
             DirBlkBits = 0,
         };
-
 
         var superblockBuffer = new byte[metaboxNode is not null
             ? ErofsSuperblock.SuperblockSize + ErofsSuperblock.ExtSlotSize
             : ErofsSuperblock.SuperblockSize];
         superblock.WriteTo(superblockBuffer);
-
 
         WriteAt(output, ErofsSuperblock.SuperblockOffset, superblockBuffer, superblockBuffer.Length);
         if (compressionConfiguration.Length > 0)
@@ -1003,15 +991,11 @@ public sealed partial class ErofsBuilder
                 compressionConfiguration, compressionConfiguration.Length);
         }
 
-
         if (extraDevices > 0)
         {
             var descriptors = options.ExtraDeviceImages
                 ?? throw new NotSupportedException("EROFS multi-device output requires ExtraDeviceImages descriptors.");
             var slotBuffer = new byte[ErofsDeviceSlot.Size];
-            // Device 0 is the implicit main image covering unified blocks [0, totalBlocks); each extra
-            // device's unified address starts where the previous device ends.
-            // 设备 0 是隐式主镜像，覆盖统一块 [0, totalBlocks)；每个额外设备的统一地址从上一个设备结束处开始。
             var uniAddr = (ulong)totalBlocks;
             for (var i = 0; i < extraDevices; i++)
             {
@@ -1026,7 +1010,6 @@ public sealed partial class ErofsBuilder
             }
         }
 
-
         foreach (var node in ordered)
         {
             if (node.IsDirectory)
@@ -1039,7 +1022,6 @@ public sealed partial class ErofsBuilder
             else if (node.IsPacked)
             {
 
-
                 WritePackedData(output, node, blockSize);
             }
             else if (node.Pclusters is not null)
@@ -1049,18 +1031,15 @@ public sealed partial class ErofsBuilder
             else if (node.IsMetaboxContainer)
             {
 
-
                 WriteMetaboxContainer(output, node, blockSize, now, metaboxResident!, options.LegacyCompatibility);
             }
             else if (node.FlatBlockAddr >= 0 && node.FlatBlocks > 0 && node.DedupSource is null)
             {
 
-
                 var copyLen = Math.Min(node.FlatBlocks * blockSize, node.Size);
                 CopyFileRange(output, node, 0, copyLen, node.FlatBlockAddr * blockSize);
             }
         }
-
 
         foreach (var node in ordered)
         {
@@ -1073,7 +1052,6 @@ public sealed partial class ErofsBuilder
             var inodeBuffer = new byte[inode.OnDiskSize];
             inode.WriteTo(inodeBuffer);
             WriteAt(output, node.MetaOffset, inodeBuffer, inodeBuffer.Length);
-
 
             if (node.XattrIbody.Length > 0)
             {
@@ -1093,7 +1071,6 @@ public sealed partial class ErofsBuilder
             else if (node.IsFragment)
             {
 
-
                 WriteFragmentHeader(output, node, inode, options);
             }
             else if (node.Pclusters is not null)
@@ -1103,17 +1080,13 @@ public sealed partial class ErofsBuilder
             else if (node.InlineData.Length > 0)
             {
 
-
                 WriteAt(output, cursor, node.InlineData, node.InlineData.Length);
             }
         }
 
-
         if (options.SuperblockChecksum)
         {
             var crcRegion = output.CapturedWindow ?? throw new InvalidOperationException("Superblock checksum window was not captured.");
-            // Linux fs/erofs/super.c erofs_superblock_csum_verify: crc32c(0x5045B54A) over bytes
-            // [1024 + 8, blockSize), i.e. window[8..], skipping the magic and the checksum field.
             var finalCrc = ComputeCrc32C(crcRegion.AsSpan(8), ErofsCrc32c.SuperblockChecksumSeed);
             Span<byte> crcLe = stackalloc byte[4];
             BinaryPrimitives.WriteUInt32LittleEndian(crcLe, finalCrc);

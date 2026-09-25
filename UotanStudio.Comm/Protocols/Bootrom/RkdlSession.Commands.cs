@@ -18,8 +18,6 @@ public sealed partial class RkdlSession
         {
             ChipId = BinaryPrimitives.ReadUInt32LittleEndian(data),
             Tag = System.Text.Encoding.ASCII.GetString(data, 0, 4),
-            // Upstream RKU_ReadChipInfo only forwards the 16 bytes and CRKDevice decodes the
-            // chip tag; the revision interpretation at offset 4 has no upstream definition.
             Revision = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(4))
         };
     }
@@ -46,6 +44,8 @@ public sealed partial class RkdlSession
     /// Reads the flash ID via a READ_FLASH_ID CBW/CSW transaction (5 bytes).
     /// <para>通过 READ_FLASH_ID CBW/CSW 事务读取闪存 ID（5 字节）。</para>
     /// </summary>
+    /// <returns>The raw data-in bytes returned by the device (at least 5).
+    /// <para>设备返回的原始数据输入字节（至少 5 个）。</para></returns>
     public byte[] ReadFlashId()
         => ReadDataCommand(RkdlCommand.ReadFlashId, 5, RkdlFrame.CbwcbLengthShort, 5, 5);
 
@@ -55,6 +55,8 @@ public sealed partial class RkdlSession
     /// <para>通过 READ_CAPABILITY CBW/CSW 事务读取设备能力位（8 字节，对应 rkdeveloptool
     /// RKU_ReadCapability 的 dwCBWTransferLength = 8）。</para>
     /// </summary>
+    /// <returns>The raw capability bytes returned by the device (at least 8).
+    /// <para>设备返回的原始能力位字节（至少 8 个）。</para></returns>
     public byte[] ReadCapability()
         => ReadDataCommand(RkdlCommand.ReadCapability, 8, RkdlFrame.CbwcbLengthShort, 8, 8);
 
@@ -128,6 +130,10 @@ public sealed partial class RkdlSession
     /// Erases the entire flash via an ERASE_SYSTEMDISK (0x16) CBW/CSW transaction.
     /// <para>通过 ERASE_SYSTEMDISK（0x16）CBW/CSW 事务擦除整个 flash。</para>
     /// </summary>
+    /// <returns>0 when the device acknowledged the erase with a successful CSW.
+    /// <para>设备以成功的 CSW 确认擦除时返回 0。</para></returns>
+    /// <exception cref="RkdlException">The session is disposed, or the CSW reported failure.
+    /// <para>会话已释放，或 CSW 报告失败。</para></exception>
     public int EraseFlash()
     {
         ThrowIfDisposed();
@@ -187,7 +193,6 @@ public sealed partial class RkdlSession
             RkdlFrame.CbwcbLengthShort);
         WriteCbw(cbw);
         var csw = ReadCsw(cbw.Tag, recovery: true);
-        // Residue halves are big-endian on the wire while the CSW field itself is read little-endian.
         var residue = csw.DataResidue;
         progressTotal = BinaryPrimitives.ReverseEndianness((ushort)(residue & 0xFFFF));
         progressCurrent = BinaryPrimitives.ReverseEndianness((ushort)(residue >> 16));

@@ -17,120 +17,84 @@ namespace UotanStudio.Services.Mirroring;
 /// </remarks>
 public static class ScrcpyConstants
 {
-    /// <summary>Server version this client speaks.</summary>
-    /// <summary>本客户端对接的服务端版本。</summary>
+    /// <summary>Server version string this client protocol targets. <para>本客户端协议对接的服务端版本字符串。</para></summary>
     public const string ServerVersion = "2.7";
 
-    /// <summary>Device path the server jar is pushed to.</summary>
-    /// <summary>服务端 jar 推送到设备上的路径。</summary>
+    /// <summary>Absolute device-side path the server jar is pushed to. <para>服务端 jar 推送到的设备端绝对路径。</para></summary>
     public const string ServerDevicePath = "/data/local/tmp/scrcpy-server.jar";
 
-    /// <summary>Main class launched through app_process.</summary>
-    /// <summary>经 app_process 启动的主类。</summary>
+    /// <summary>Java main class launched through <c>app_process</c>. <para>经 <c>app_process</c> 启动的 Java 主类。</para></summary>
     public const string ServerMainClass = "com.genymobile.scrcpy.Server";
 
-    /// <summary>Legacy no-timestamp sentinel; on the wire scrcpy 2.7 uses PacketFlagConfig.</summary>
+    /// <summary>Legacy no-timestamp sentinel; on the wire scrcpy 2.7 marks config packets via <see cref="PacketFlagConfig"/> instead. <para>旧式无时间戳哨兵值；线上协议中 scrcpy 2.7 改用 <see cref="PacketFlagConfig"/> 标记配置包。</para></summary>
     public const ulong NoPts = 0xFFFF_FFFF_FFFF_FFFF;
 
-    /// <summary>scrcpy 2.7 Streamer.PACKET_FLAG_CONFIG.</summary>
+    /// <summary>Stream packet flag identifying a codec configuration packet (bit 63, <c>Streamer.PACKET_FLAG_CONFIG</c>). <para>标识编码器配置包的流数据包标志（第 63 位，<c>Streamer.PACKET_FLAG_CONFIG</c>）。</para></summary>
     public const ulong PacketFlagConfig = 1UL << 63;
 
-    /// <summary>scrcpy 2.7 Streamer.PACKET_FLAG_KEY_FRAME.</summary>
+    /// <summary>Stream packet flag identifying a key frame (bit 62, <c>Streamer.PACKET_FLAG_KEY_FRAME</c>). <para>标识关键帧的流数据包标志（第 62 位，<c>Streamer.PACKET_FLAG_KEY_FRAME</c>）。</para></summary>
     public const ulong PacketFlagKeyFrame = 1UL << 62;
 
-    /// <summary>Presentation timestamp bits, expressed in microseconds.</summary>
+    /// <summary>Bit mask isolating the microsecond presentation timestamp from the flag bits. <para>用于从标志位中分离出微秒显示时间戳的位掩码。</para></summary>
     public const ulong PacketTimestampMask = PacketFlagKeyFrame - 1;
 
-    /// <summary>Device name field length following the dummy byte on the first socket.</summary>
-    /// <summary>首个 socket 上哑字节之后的设备名字段长度。</summary>
+    /// <summary>Byte length of the fixed UTF-8 device-name field sent after the dummy byte on the first socket. <para>首个 socket 上哑字节之后固定 UTF-8 设备名字段的字节长度。</para></summary>
     public const int DeviceNameLength = 64;
 
-    /// <summary>Maximum UTF-8 length for INJECT_TEXT.</summary>
-    /// <summary>INJECT_TEXT 的 UTF-8 最大长度。</summary>
+    /// <summary>Maximum UTF-8 byte length accepted for an <c>INJECT_TEXT</c> message. <para>为 <c>INJECT_TEXT</c> 消息允许的最大 UTF-8 字节长度。</para></summary>
     public const int MaxTextLength = 300;
 
-    // --- Control message types (scrcpy control_msg.h) -------------------------
-    // --- 控制消息类型（scrcpy control_msg.h）-----------------------------------
-
-    /// <summary>Inject a keycode event.</summary>
-    /// <summary>注入按键事件。</summary>
+    /// <summary>Control message type: inject a key-code event. <para>控制消息类型：注入按键事件。</para></summary>
     public const byte ControlTypeInjectKeyCode = 0;
-    /// <summary>Inject a text event.</summary>
-    /// <summary>注入文本事件。</summary>
+    /// <summary>Control message type: inject a text event. <para>控制消息类型：注入文本事件。</para></summary>
     public const byte ControlTypeInjectText = 1;
-    /// <summary>Inject a touch event.</summary>
-    /// <summary>注入触摸事件。</summary>
+    /// <summary>Control message type: inject a touch event. <para>控制消息类型：注入触摸事件。</para></summary>
     public const byte ControlTypeInjectTouchEvent = 2;
-    /// <summary>Inject a scroll event.</summary>
-    /// <summary>注入滚轮事件。</summary>
+    /// <summary>Control message type: inject a scroll event. <para>控制消息类型：注入滚轮事件。</para></summary>
     public const byte ControlTypeInjectScrollEvent = 3;
-    /// <summary>Back button or wake the screen.</summary>
-    /// <summary>返回键或点亮屏幕。</summary>
+    /// <summary>Control message type: back button, or wake the screen when off. <para>控制消息类型：返回键，或在息屏时点亮屏幕。</para></summary>
     public const byte ControlTypeBackOrScreenOn = 4;
-    /// <summary>Expand the notification panel.</summary>
-    /// <summary>展开通知面板。</summary>
+    /// <summary>Control message type: expand the notification panel. <para>控制消息类型：展开通知面板。</para></summary>
     public const byte ControlTypeExpandNotificationPanel = 5;
-    /// <summary>Expand the settings panel.</summary>
-    /// <summary>展开设置面板。</summary>
+    /// <summary>Control message type: expand the settings panel. <para>控制消息类型：展开设置面板。</para></summary>
     public const byte ControlTypeExpandSettingsPanel = 6;
-    /// <summary>Collapse all panels.</summary>
-    /// <summary>收起所有面板。</summary>
+    /// <summary>Control message type: collapse all panels. <para>控制消息类型：收起所有面板。</para></summary>
     public const byte ControlTypeCollapsePanels = 7;
-    /// <summary>Request the device clipboard.</summary>
-    /// <summary>请求设备剪贴板。</summary>
+    /// <summary>Control message type: request the device clipboard. <para>控制消息类型：请求设备剪贴板。</para></summary>
     public const byte ControlTypeGetClipboard = 8;
-    /// <summary>Set the device clipboard.</summary>
-    /// <summary>设置设备剪贴板。</summary>
+    /// <summary>Control message type: set the device clipboard. <para>控制消息类型：设置设备剪贴板。</para></summary>
     public const byte ControlTypeSetClipboard = 9;
-    /// <summary>Turn the display power on or off.</summary>
-    /// <summary>打开或关闭屏幕电源。</summary>
+    /// <summary>Control message type: turn the display power on or off. <para>控制消息类型：打开或关闭屏幕电源。</para></summary>
     public const byte ControlTypeSetDisplayPower = 10;
 
-    // --- Device message types (scrcpy device_msg.h) ----------------------------
-    // --- 设备消息类型（scrcpy device_msg.h）-------------------------------------
-
-    /// <summary>Device clipboard content.</summary>
-    /// <summary>设备剪贴板内容。</summary>
+    /// <summary>Device message type: clipboard content. <para>设备消息类型：剪贴板内容。</para></summary>
     public const byte DeviceTypeClipboard = 0;
-    /// <summary>Acknowledgment of a sequenced clipboard set.</summary>
-    /// <summary>带序号剪贴板写入的确认。</summary>
+    /// <summary>Device message type: acknowledgment of a sequenced clipboard set. <para>设备消息类型：带序号剪贴板写入的确认。</para></summary>
     public const byte DeviceTypeAckClipboard = 1;
 
-    // --- Event actions ----------------------------------------------------------
-
-    /// <summary>MOTION_EVENT ACTION_DOWN.</summary>
-    /// <summary>MOTION_EVENT ACTION_DOWN。</summary>
+    /// <summary>MOTION_EVENT <c>ACTION_DOWN</c> action value. <para>MOTION_EVENT 的 <c>ACTION_DOWN</c> 动作值。</para></summary>
     public const byte ActionDown = 0;
-    /// <summary>MOTION_EVENT ACTION_UP.</summary>
-    /// <summary>MOTION_EVENT ACTION_UP。</summary>
+    /// <summary>MOTION_EVENT <c>ACTION_UP</c> action value. <para>MOTION_EVENT 的 <c>ACTION_UP</c> 动作值。</para></summary>
     public const byte ActionUp = 1;
-    /// <summary>MOTION_EVENT ACTION_MOVE.</summary>
-    /// <summary>MOTION_EVENT ACTION_MOVE。</summary>
+    /// <summary>MOTION_EVENT <c>ACTION_MOVE</c> action value. <para>MOTION_EVENT 的 <c>ACTION_MOVE</c> 动作值。</para></summary>
     public const byte ActionMove = 2;
 
-    /// <summary>Generic-finger pointer id (two's complement i64).</summary>
-    /// <summary>通用手指指针 ID（i64 二进制补码）。</summary>
+    /// <summary>Generic-finger pointer id, sent as a two's-complement 64-bit integer. <para>通用手指指针 ID，以 64 位二进制补码整数发送。</para></summary>
     public const long PointerIdGenericFinger = -1;
 
-    /// <summary>Mouse pointer id (two's complement i64).</summary>
-    /// <summary>鼠标指针 ID（i64 二进制补码）。</summary>
+    /// <summary>Mouse pointer id, sent as a two's-complement 64-bit integer. <para>鼠标指针 ID，以 64 位二进制补码整数发送。</para></summary>
     public const long PointerIdMouse = -2;
 
-    /// <summary>AMOTION_EVENT_BUTTON_PRIMARY (left button).</summary>
-    /// <summary>AMOTION_EVENT_BUTTON_PRIMARY（左键）。</summary>
+    /// <summary>Button mask <c>AMOTION_EVENT_BUTTON_PRIMARY</c> (left button). <para>按键掩码 <c>AMOTION_EVENT_BUTTON_PRIMARY</c>（左键）。</para></summary>
     public const uint ButtonLeft = 1 << 0;
-    /// <summary>AMOTION_EVENT_BUTTON_SECONDARY (right button).</summary>
-    /// <summary>AMOTION_EVENT_BUTTON_SECONDARY（右键）。</summary>
+    /// <summary>Button mask <c>AMOTION_EVENT_BUTTON_SECONDARY</c> (right button). <para>按键掩码 <c>AMOTION_EVENT_BUTTON_SECONDARY</c>（右键）。</para></summary>
     public const uint ButtonRight = 1 << 1;
-    /// <summary>AMOTION_EVENT_BUTTON_TERTIARY (middle button).</summary>
-    /// <summary>AMOTION_EVENT_BUTTON_TERTIARY（中键）。</summary>
+    /// <summary>Button mask <c>AMOTION_EVENT_BUTTON_TERTIARY</c> (middle button). <para>按键掩码 <c>AMOTION_EVENT_BUTTON_TERTIARY</c>（中键）。</para></summary>
     public const uint ButtonMiddle = 1 << 2;
 
-    /// <summary>GET_CLIPBOARD copy key: copy.</summary>
-    /// <summary>GET_CLIPBOARD 复制键：复制。</summary>
+    /// <summary><c>GET_CLIPBOARD</c> copy key requesting a copy. <para>用于 <c>GET_CLIPBOARD</c>、请求复制的复制键。</para></summary>
     public const byte CopyKeyCopy = 0;
 
-    /// <summary>GET_CLIPBOARD copy key: cut.</summary>
-    /// <summary>GET_CLIPBOARD 复制键：剪切。</summary>
+    /// <summary><c>GET_CLIPBOARD</c> copy key requesting a cut. <para>用于 <c>GET_CLIPBOARD</c>、请求剪切的复制键。</para></summary>
     public const byte CopyKeyCut = 1;
 }

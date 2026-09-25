@@ -30,6 +30,10 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
     private readonly Task _worker;
     private int _disposed;
 
+    /// <summary>
+    /// Starts the background worker that drains the queue in FIFO order.
+    /// <para>启动后台工作任务，按 FIFO 顺序消费队列。</para>
+    /// </summary>
     public DeviceCommandDispatcher()
     {
         _worker = Task.Run(RunAsync);
@@ -40,6 +44,24 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
     /// has run. The <paramref name="cancellationToken"/> only cancels this command.
     /// <para>将指令入队并返回携带其结果的任务。<paramref name="cancellationToken"/> 仅取消该指令。</para>
     /// </summary>
+    /// <param name="name">
+    /// Nonempty label identifying the command. <para>标识该指令的非空名称。</para>
+    /// </param>
+    /// <param name="work">
+    /// Command body, invoked once on the worker with a token tied to this command and the dispatcher lifetime.
+    /// <para>指令主体，仅在工作任务上调用一次，接收同时绑定该指令与调度器生命周期的标记。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels only this command, never the queue. <para>仅取消该指令，绝不影响队列。</para>
+    /// </param>
+    /// <returns>A task that completes with the command result, or faults or cancels with it.
+    /// <para>随指令结果完成、或随之失败/取消的任务。</para></returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="name"/> is null, empty, or whitespace. <para><paramref name="name"/> 为 null、空白或仅含空白字符。</para></exception>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="work"/> is null. <para><paramref name="work"/> 为 null。</para></exception>
+    /// <exception cref="ObjectDisposedException">
+    /// The dispatcher has been disposed. <para>调度器已被释放。</para></exception>
     public Task<T> EnqueueAsync<T>(string name, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -55,8 +77,6 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
             {
                 if (token.IsCancellationRequested)
                 {
-                    // Disposal or caller cancellation landed before the command started; skip
-                    // it instead of running work that might ignore its token.
                     completion.TrySetCanceled(token);
                     return;
                 }
@@ -83,7 +103,21 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
         return completion.Task;
     }
 
-    /// <summary>Enqueues a command that returns no value. 入队无返回值的指令。</summary>
+    /// <summary>
+    /// Enqueues a command that returns no value.
+    /// <para>入队无返回值的指令。</para>
+    /// </summary>
+    /// <param name="name">
+    /// Nonempty label identifying the command. <para>标识该指令的非空名称。</para>
+    /// </param>
+    /// <param name="work">
+    /// Command body run on the worker. <para>在工作任务上执行的指令主体。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels only this command, never the queue. <para>仅取消该指令，绝不影响队列。</para>
+    /// </param>
+    /// <returns>A task that completes when the command finishes, faults or is cancelled.
+    /// <para>随指令完成、失败或取消而结束的任务。</para></returns>
     public Task EnqueueAsync(string name, Func<CancellationToken, Task> work, CancellationToken cancellationToken = default)
         => EnqueueAsync<object?>(name, async token => { await work(token).ConfigureAwait(false); return null; }, cancellationToken);
 
@@ -92,6 +126,8 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
     /// command to settle before returning.
     /// <para>停止接收新指令，取消仍在排队的指令，并等待正在执行的指令结束后返回。</para>
     /// </summary>
+    /// <returns>A task that completes once the worker has drained and stopped.
+    /// <para>工作任务消费完队列并停止后完成的任务。</para></returns>
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
@@ -107,7 +143,6 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
         }
         catch
         {
-            // The worker never faults; guard defensively so lease disposal cannot be blocked.
         }
         finally
         {
@@ -125,7 +160,6 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
             }
             catch
             {
-                // Settle logic inside Run completes the caller's task; never let the worker die.
             }
             finally
             {

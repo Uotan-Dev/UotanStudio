@@ -9,6 +9,11 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
 
+/// <summary>
+/// Static entry points for reading, unpacking, packing and repacking DTBO overlay tables with bounded,
+/// streamed blob handling.
+/// <para>以有界流式处理读取、解包、打包和重打包 DTBO overlay 表的静态入口。</para>
+/// </summary>
 public static partial class DtboFormat
 {
     /// <summary>Names the repack configuration file.<para>重打包配置文件名。</para></summary>
@@ -30,6 +35,14 @@ public static partial class DtboFormat
     /// Reads and validates the table without loading blobs; offsets are absolute from stream start.
     /// <para>仅读取并校验条目表，不加载数据块；偏移以流起点为基准。</para>
     /// </summary>
+    /// <param name="input">Readable, seekable DTBO image stream; it is repositioned and left open.
+    /// <para>可读取、可定位的 DTBO 镜像流；会被重新定位并保持打开。</para></param>
+    /// <returns>The validated header and its entries, every blob range proven to sit inside total_size.
+    /// <para>已校验的表头及其条目；每个数据块范围均被证明位于 total_size 之内。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> is null. <para><paramref name="input"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentException">The stream cannot read or cannot seek. <para>流不可读或不可定位。</para></exception>
+    /// <exception cref="InvalidDataException">The header, table geometry or any entry range is malformed, or a
+    /// compression code is unknown. <para>表头、表几何或任一条目范围无效，或压缩编码未知。</para></exception>
     public static (DtboHeader Header, List<DtboEntry> Entries) ReadTable(Stream input)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -68,6 +81,24 @@ public static partial class DtboFormat
     /// Extracts overlays, their configuration and an original image for lossless unchanged repacking.
     /// <para>提取 overlay、配置和原始镜像，支持未修改时无损重打包。</para>
     /// </summary>
+    /// <param name="inputPath">DTBO image file to extract. <para>要提取的 DTBO 镜像文件。</para></param>
+    /// <param name="outputDirectory">Destination directory; files are staged in a temporary folder and moved
+    /// only after the whole extraction succeeds. <para>目标目录；文件先写入临时暂存目录，仅在整体提取成功后移动。</para></param>
+    /// <param name="options">Output-size limit per blob, overwrite policy and progress sink; <see langword="null"/>
+    /// uses defaults. <para>逐数据块输出上限、覆盖策略与进度回调；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <param name="cancellationToken">Cancels decoding and copying; a canceled run publishes nothing into the
+    /// destination. <para>取消解码与复制；被取消的运行不会向目标发布任何文件。</para></param>
+    /// <returns>Absolute paths of every written file: each overlay DTB, the original image and the repack
+    /// manifest. <para>所有已写文件的绝对路径：各 overlay DTB、原始镜像与重打包清单。</para></returns>
+    /// <exception cref="FileNotFoundException">The input image cannot be opened. <para>无法打开输入镜像。</para></exception>
+    /// <exception cref="InvalidDataException">The table is malformed or a blob exceeds the output limit.
+    /// <para>表结构无效，或某数据块超出输出上限。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="UnpackOptions.MaximumOutputBytes"/> is negative.
+    /// <para><see cref="UnpackOptions.MaximumOutputBytes"/> 为负数。</para></exception>
+    /// <exception cref="IOException">Extraction would overwrite the input, an existing output refuses to be
+    /// replaced, or a reserved metadata name collides. <para>提取会覆盖输入、已存在的输出拒绝被替换，或保留的
+    /// 元数据文件名发生冲突。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
     public static IReadOnlyList<string> Unpack(string inputPath, string outputDirectory,
         UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -111,7 +142,6 @@ public static partial class DtboFormat
             }
             RepackMetadata.WriteAsync(new DtFormatHandler(), inputPath, staging, cancellationToken).GetAwaiter().GetResult();
             cancellationToken.ThrowIfCancellationRequested();
-            // Publish the manifest last, after every blob has passed decompression and length checks.
             foreach (var name in names)
                 File.Move(Path.Combine(staging, name), LocalFile(destination, name), options.Overwrite);
             options.Progress?.Report(100, "DTBO overlays and manifest extracted.");
@@ -127,6 +157,20 @@ public static partial class DtboFormat
     /// Rebuilds a manifest directory, preserving metadata and compression; changed authenticated tails are rejected.
     /// <para>从配置目录重建并保留元数据和压缩；修改后拒绝复用认证尾部。</para>
     /// </summary>
+    /// <param name="inputDirectory">Directory produced by an earlier <see cref="Unpack"/> call, including the repack
+    /// manifest. <para>由更早一次 <see cref="Unpack"/> 调用生成的目录，须包含重打包清单。</para></param>
+    /// <param name="outputPath">Destination image, written to a temporary file and published atomically.
+    /// <para>目标镜像，先写临时文件再原子发布。</para></param>
+    /// <param name="cancellationToken">Cancels before or during the rebuild; the existing destination keeps
+    /// its content. <para>在重建开始前或进行中取消；已有目标保持原内容。</para></param>
+    /// <exception cref="InvalidDataException">Metadata or manifest is missing or invalid, an overlay fails DTB
+    /// bounds validation, the header layout change is unsupported, a modified image carries nonzero trailing
+    /// authentication data, or the rebuild exceeds the recorded image size.
+    /// <para>元数据或清单缺失/无效、某个 overlay 未通过 DTB 边界校验、不支持的表头布局变更、被修改的镜像带有
+    /// 非零尾部认证数据，或重建结果超出记录的镜像大小。</para></exception>
+    /// <exception cref="IOException"><paramref name="outputPath"/> would replace one of the manifest inputs.
+    /// <para><paramref name="outputPath"/> 将替换清单的某个输入。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
     public static void PackDirectory(string inputDirectory, string outputPath, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -239,6 +283,16 @@ public static partial class DtboFormat
     /// Validates all overlays and atomically copies an unchanged image, including its padding and authentication data.
     /// <para>校验全部 overlay 后原子重打包未修改镜像，保留填充及认证数据。</para>
     /// </summary>
+    /// <param name="inputPath">Existing DTBO image to validate and copy byte for byte.
+    /// <para>要逐字节校验并复制的现有 DTBO 镜像。</para></param>
+    /// <param name="outputPath">Destination file, published from a temporary file after validation succeeds.
+    /// <para>目标文件，在校验成功后由临时文件发布。</para></param>
+    /// <param name="cancellationToken">Cancels validation or copying; the temporary output is discarded and
+    /// the existing destination is untouched. <para>取消校验或复制；临时输出被丢弃且既有目标不受影响。</para></param>
+    /// <exception cref="FileNotFoundException">The input image cannot be opened. <para>无法打开输入镜像。</para></exception>
+    /// <exception cref="InvalidDataException">The table is malformed or a decoded blob exceeds the 256 MiB
+    /// default budget. <para>表结构无效，或某解码数据块超出 256 MiB 默认预算。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
     public static void Repack(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         AtomicWrite(outputPath, output =>
@@ -295,7 +349,6 @@ public static partial class DtboFormat
                 adler?.Update(new ArraySegment<byte>(buffer, 0, count));
                 length += count;
             });
-        // .NET decompressors can accept EOF before the trailer; validate the trailer explicitly.
         if (compression != CompressionNone)
         {
             var trailerSize = compression == CompressionGzip ? 8 : 4;

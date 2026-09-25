@@ -11,12 +11,22 @@ using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
 
+/// <summary>
+/// Inspects, reads and writes Android block-OTA DAT image pairs (a transfer list plus its companion
+/// new/patch data file, optionally Brotli-compressed).
+/// <para>检查、读取并写入 Android 块 OTA DAT 镜像对（transfer list 及配套的新镜像/补丁数据文件，可选 Brotli 压缩）。</para>
+/// </summary>
 public sealed class DatFormatHandler : IFormatHandler
 {
     private static readonly string[] DataFileSuffixes = DatFileSet.DataSuffixes;
 
+    /// <summary>Display name of the handled format. <para>所处理格式的显示名称。</para></summary>
+    /// <value>The fixed label <c>Android DAT (transfer list)</c>. <para>固定标签 <c>Android DAT (transfer list)</c>。</para></value>
     public string FormatName => "Android DAT (transfer list)";
 
+    /// <summary>Registered file extensions for the format. <para>该格式注册的文件扩展名。</para></summary>
+    /// <value>A single entry <c>list</c>, without a leading dot; full DAT names are matched by content probing.
+    /// <para>仅含 <c>list</c> 一项，不带点号；完整 DAT 名称通过内容探测匹配。</para></value>
     public IReadOnlyList<string> FileExtensions { get; } = ["list"];
 
     /// <summary>
@@ -26,6 +36,10 @@ public sealed class DatFormatHandler : IFormatHandler
     /// <para>判断该处理器能否处理指定文件：transfer list / .list 文件须形如 transfer list（开头的版本/块数行），
     /// 数据文件（.new.dat/.new.dat.br/.patch.dat/.patch.dat.br）须存在同目录配套的 *.transfer.list。</para>
     /// </summary>
+    /// <param name="filePath">Path to probe; blank or non-existent paths are rejected without I/O beyond an existence check.
+    /// <para>待探测路径；空串或不存在的路径仅经存在性检查即被拒绝。</para></param>
+    /// <returns><see langword="true"/> when the file passes its structural or pairing check, <see langword="false"/> otherwise.
+    /// <para>文件通过结构或配对检查时为 <see langword="true"/>，否则为 <see langword="false"/>。</para></returns>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -33,9 +47,6 @@ public sealed class DatFormatHandler : IFormatHandler
             return false;
         }
 
-        // Data files are matched by their compound suffix rather than Path.GetExtension, which returns
-        // only ".br"/".dat" and cannot tell a Brotli DAT from an unrelated .br archive.
-        // 数据文件按复合后缀匹配而非 Path.GetExtension：后者只返回 ".br"/".dat"，无法把 Brotli DAT 与无关 .br 区分开。
         if (DatFileSet.IsDataFile(Path.GetFileName(filePath)))
         {
             return FindTransferList(filePath) is not null;
@@ -48,6 +59,13 @@ public sealed class DatFormatHandler : IFormatHandler
     /// Reads transfer-list metadata without unpacking: format version, command/block totals, block size, and the companion data file's type/size when present.
     /// <para>不解包读取 transfer list 元数据：格式版本、命令/块总数、块大小，以及配套数据文件的类型/大小（若存在）。</para>
     /// </summary>
+    /// <param name="filePath">Transfer-list or companion data file path to inspect.
+    /// <para>待检查的 transfer list 或配套数据文件路径。</para></param>
+    /// <param name="cancellationToken">Cancels the metadata read; cancellation faults the returned task.
+    /// <para>取消元数据读取；取消时返回的任务将以异常结束。</para></param>
+    /// <returns>A result carrying version, command/block totals, block size and companion data-file type/size metadata,
+    /// or a failure when no transfer list resolves or a read error occurs.
+    /// <para>结果携带版本、命令/块总数、块大小及配套数据文件类型/大小元数据；无法解析 transfer list 或读取失败时返回失败结果。</para></returns>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
@@ -58,7 +76,6 @@ public sealed class DatFormatHandler : IFormatHandler
                 var transferListPath = FindTransferList(filePath);
                 if (transferListPath is null)
                 {
-
 
                     var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
                     if (ext is not ("dat" or "br") && LooksLikeTransferList(filePath))
@@ -133,6 +150,17 @@ public sealed class DatFormatHandler : IFormatHandler
     /// <para>由全量 OTA DAT 镜像对重建分区镜像，并以 <c>&lt;词干&gt;.img</c> 写入输出目录。增量 DAT 镜像对
     /// （使用 move/stash/diff/imgdiff 命令）会被拒绝：其需要基座镜像，而只读处理器没有接收基座的通道。</para>
     /// </summary>
+    /// <param name="filePath">Transfer-list or companion data file path identifying the DAT pair.
+    /// <para>标识 DAT 镜像对的 transfer list 或配套数据文件路径。</para></param>
+    /// <param name="outputDirectory">Directory that receives the reconstructed <c>&lt;stem&gt;.img</c>.
+    /// <para>接收重建出的 <c>&lt;词干&gt;.img</c> 的目录。</para></param>
+    /// <param name="options">Optional unpack options; its progress sink receives percentage updates. May be <see langword="null"/>.
+    /// <para>可选解包选项；其进度接收器收到百分比更新。可为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Cancels the reconstruction; cancellation faults the returned task.
+    /// <para>取消重建；取消时返回的任务将以异常结束。</para></param>
+    /// <returns>Success with the output image name and size metadata, or a failure when the pair is incomplete,
+    /// the list does not parse, the pair is incremental, or writing fails.
+    /// <para>成功时返回输出镜像名与大小元数据；镜像对不完整、解析失败、增量对或写入失败时返回失败结果。</para></returns>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -236,6 +264,9 @@ public sealed class DatFormatHandler : IFormatHandler
     /// <para>目录（以源镜像词干命名镜像对）或显式 <c>&lt;词干&gt;.transfer.list</c> 路径（同级数据文件由它推导）。</para>
     /// </param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Success with the written pair file names and total byte count, or a failure when the input,
+    /// derived names or the staged write is rejected.
+    /// <para>成功时返回写出的镜像对文件名与总字节数；输入、派生名称或暂存写入被拒时返回失败结果。</para></returns>
     /// <remarks>
     /// Both files land together or the previous pair stays intact; on failure the staging
     /// directory and backups are removed so a partial write never replaces the user's existing
@@ -246,7 +277,29 @@ public sealed class DatFormatHandler : IFormatHandler
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
         => PackAsync(inputPath, outputPath, (IProgress<FileSystemByteProgress>?)null, cancellationToken);
 
-    /// <inheritdoc cref="PackAsync(string, string, CancellationToken)"/>
+    /// <summary>
+    /// Packs a source image (raw or Android-sparse) into the DAT image pair, reporting byte progress.
+    /// <para>将源镜像（原始或 Android 稀疏）打包为 DAT 镜像对，并上报字节进度。</para>
+    /// </summary>
+    /// <param name="inputPath">Source image path; a sparse image is converted to raw before block-splitting.
+    /// <para>源镜像路径；稀疏镜像会先转为原始镜像再分块。</para></param>
+    /// <param name="outputPath">Either a directory (the pair takes the input image's stem) or an explicit
+    /// <c>&lt;stem&gt;.transfer.list</c> path (the sibling data file is derived from it).
+    /// <para>目录（以源镜像词干命名镜像对）或显式 <c>&lt;词干&gt;.transfer.list</c> 路径（同级数据文件由它推导）。</para></param>
+    /// <param name="progress">Byte progress sink for the DAT writing stage; may be <see langword="null"/>.
+    /// <para>DAT 写入阶段的字节进度接收器；可为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Cancels the pack; after rollback the returned task faults with the cancellation.
+    /// <para>取消打包；回滚后返回的任务以取消异常结束。</para></param>
+    /// <returns>Success with the written pair file names and total byte count, or a failure when the input is
+    /// missing, derived names or directories conflict, or the staged write fails.
+    /// <para>成功时返回写出的镜像对文件名与总字节数；输入缺失、派生名称或目录冲突、暂存写入失败时返回失败结果。</para></returns>
+    /// <remarks>
+    /// Both files land together or the previous pair stays intact; on failure the staging directory and backups
+    /// are removed so a partial write never replaces the user's existing <c>.new.dat</c> / <c>.transfer.list</c>
+    /// with mismatched halves.
+    /// <para>两个文件要么一起落盘，要么保留原有镜像对不变；失败时清理暂存与备份，避免半写状态覆盖用户已有的
+    /// <c>.new.dat</c> / <c>.transfer.list</c> 组合。</para>
+    /// </remarks>
     public Task<FirmwareOpResult> PackAsync(
         string inputPath,
         string outputPath,
@@ -296,11 +349,6 @@ public sealed class DatFormatHandler : IFormatHandler
             Directory.CreateDirectory(directory);
             var staging = Path.Combine(directory, ".uotan-dat-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(staging);
-            // Always stage the plain ".new.dat" name: DatWriter appends ".br" itself when
-            // compressing and then deletes the plain file, so passing ".new.dat.br" here would
-            // produce "<stem>.new.dat.br.br".
-            // 始终以 ".new.dat" 名称暂存：DatWriter 在压缩时自行追加 ".br" 并删除原始文件，
-            // 若此处传 ".new.dat.br" 会产出 "<词干>.new.dat.br.br"。
             var stem = DatFileSet.Stem(Path.GetFileName(transferListPath));
             var stagedList = Path.Combine(staging, Path.GetFileName(transferListPath));
             var stagedDataPlain = Path.Combine(staging, stem + ".new.dat");
@@ -475,7 +523,6 @@ public sealed class DatFormatHandler : IFormatHandler
         catch (IOException)
         {
 
-
         }
         catch (UnauthorizedAccessException)
         {
@@ -536,7 +583,6 @@ public sealed class DatFormatHandler : IFormatHandler
         }
         catch (IOException)
         {
-
 
         }
         catch (UnauthorizedAccessException)

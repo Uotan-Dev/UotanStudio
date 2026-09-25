@@ -72,6 +72,8 @@ public static class OnePlusKeyTable
     /// Number of AES-suitable key entries in the table (currently 1: index 0).
     /// <para>表中适合 AES 的密钥条目数（当前为 1：索引 0）。</para>
     /// </summary>
+    /// <value>Fixed at 1; only <see cref="AesKeyIndex"/> holds an AES key.
+    /// <para>固定为 1；仅 <see cref="AesKeyIndex"/> 存放 AES 密钥。</para></value>
     public static int AesKeyCount => 1;
 
     /// <summary>
@@ -84,8 +86,16 @@ public static class OnePlusKeyTable
     /// Number of MBox data entries in the table (currently 3: indices 1–3).
     /// <para>表中 MBox 数据条目数（当前为 3：索引 1–3）。</para>
     /// </summary>
+    /// <value>Fixed at 3, covering the entries from <see cref="MBoxDataStartIndex"/> to the end
+    /// of the table. <para>固定为 3，覆盖自 <see cref="MBoxDataStartIndex"/> 至表尾的条目。</para></value>
     public static int MBoxDataCount => 3;
 
+    /// <summary>
+    /// Total number of artefacts stored in the table, AES key and MBox data blobs alike.
+    /// <para>表中存储的 artefact 总数，包含 AES 密钥与 MBox 数据 blob。</para>
+    /// </summary>
+    /// <value>The number of table entries; valid absolute indices run from 0 to
+    /// <see cref="KeyCount"/> - 1. <para>表条目数；合法绝对索引范围为 0 到 <see cref="KeyCount"/> - 1。</para></value>
     public static int KeyCount => Keys.Length;
 
     /// <summary>
@@ -94,6 +104,8 @@ public static class OnePlusKeyTable
     /// <para>以只读列表形式返回所有已知的 OPS 解密 artefact。
     /// 注意：并非每条都是 AES 密钥——见类摘要。</para>
     /// </summary>
+    /// <returns>The full table in index order; the elements are the table's own arrays.
+    /// <para>按索引顺序排列的完整表；元素即表自身的数组。</para></returns>
     public static IReadOnlyList<byte[]> GetAllKeys() => Array.AsReadOnly(Keys);
 
     /// <summary>
@@ -104,6 +116,14 @@ public static class OnePlusKeyTable
     /// 注意：需要 AES 密钥的调用方应改用 <see cref="GetAesKey"/>，
     /// 避免将 MBox 数据传给 AES。</para>
     /// </summary>
+    /// <param name="index">Absolute table index between 0 and <see cref="KeyCount"/> - 1.
+    /// <para>0 到 <see cref="KeyCount"/> - 1 之间的绝对表索引。</para></param>
+    /// <returns>The raw artefact bytes (16-byte AES key or 62-byte MBox blob); the array is shared
+    /// with the table, so mutating it affects later reads.
+    /// <para>原始 artefact 字节（16 字节 AES 密钥或 62 字节 MBox blob）；数组与表共享，
+    /// 修改会影响后续读取。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="index"/> is outside the table
+    /// bounds. <para><paramref name="index"/> 超出表的索引范围。</para></exception>
     public static byte[] GetKey(int index)
     {
         return index < 0 || index >= Keys.Length
@@ -115,6 +135,14 @@ public static class OnePlusKeyTable
     /// Gets the descriptive name of the artefact at the specified index.
     /// <para>获取指定索引处 artefact 的描述名称。</para>
     /// </summary>
+    /// <param name="index">Absolute table index used by <see cref="GetKey"/>.
+    /// <para>与 <see cref="GetKey"/> 一致的绝对表索引。</para></param>
+    /// <returns>The artefact name, e.g. <c>MainKey</c> for index 0 or an MBox label naming the
+    /// device codename and build for indices 1–3.
+    /// <para>artefact 名称：索引 0 为 <c>MainKey</c>，索引 1–3 为标明设备代号与构建版本的
+    /// MBox 标签。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="index"/> is outside the name
+    /// table bounds. <para><paramref name="index"/> 超出名称表的索引范围。</para></exception>
     public static string GetKeyName(int index)
     {
         return index < 0 || index >= KeyNames.Length
@@ -126,9 +154,14 @@ public static class OnePlusKeyTable
     /// Returns the AES key at the specified AES-key index (0 .. <see cref="AesKeyCount"/> - 1).
     /// <para>返回指定 AES 密钥索引（0 .. <see cref="AesKeyCount"/> - 1）处的 AES 密钥。</para>
     /// </summary>
+    /// <param name="index">AES-key-relative index; only 0 resolves to the AES entry.
+    /// <para>相对 AES 密钥的索引；仅 0 对应 AES 条目。</para></param>
+    /// <returns>The 16-byte AES key, shared with the table storage.
+    /// <para>16 字节 AES 密钥，与表存储共享。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">The index is outside the table bounds.
+    /// <para>索引超出表的范围。</para></exception>
     /// <exception cref="NotSupportedException">The index refers to an MBox data entry,
-    /// not an AES key.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">The index is outside the table bounds.</exception>
+    /// not an AES key. <para>索引指向 MBox 数据条目而非 AES 密钥。</para></exception>
     public static byte[] GetAesKey(int index)
     {
         if (index < 0 || index >= Keys.Length)
@@ -152,9 +185,13 @@ public static class OnePlusKeyTable
     /// <para>返回指定 MBox 数据索引（0 .. <see cref="MBoxDataCount"/> - 1，
     /// 相对于 <see cref="MBoxDataStartIndex"/>）处的 MBox 数据 blob。</para>
     /// </summary>
-    /// <exception cref="NotSupportedException">The index refers to an AES key entry,
-    /// not MBox data.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">The index is outside the MBox data range.</exception>
+    /// <param name="index">MBox-relative index, mapped to absolute table indices starting at
+    /// <see cref="MBoxDataStartIndex"/>. <para>相对 MBox 的索引，映射为自
+    /// <see cref="MBoxDataStartIndex"/> 起的绝对表索引。</para></param>
+    /// <returns>The 62-byte MBox data blob, shared with the table storage.
+    /// <para>62 字节 MBox 数据 blob，与表存储共享。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">The index is outside the MBox data range.
+    /// <para>索引超出 MBox 数据范围。</para></exception>
     public static byte[] GetMBoxData(int index)
     {
         if (index < 0 || index >= MBoxDataCount)

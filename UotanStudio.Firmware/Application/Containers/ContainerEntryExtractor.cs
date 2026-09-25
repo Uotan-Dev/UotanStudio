@@ -13,6 +13,7 @@ namespace UotanStudio.Firmware.Application.Containers;
 public sealed record ContainerExtractionResult(IReadOnlyList<string> Entries, IReadOnlyList<string> OutputPaths)
 {
     /// <summary><para>空结果（无提取或全部失败）。</para>Empty result (nothing extracted or all failed).</summary>
+    /// <value><para>共享的不可变空实例，两个列表均为空。</para>Shared immutable empty instance with both lists empty.</value>
     public static ContainerExtractionResult Empty { get; } = new([], []);
 }
 
@@ -28,7 +29,8 @@ public sealed record ContainerExtractionResult(IReadOnlyList<string> Entries, IR
 /// </summary>
 public static class ContainerEntryExtractor
 {
-    /// <summary>Default extraction budget: 64 GiB of decompressed output per call.</summary>
+    /// <summary>Default extraction budget: 64 GiB of decompressed output per call.
+    /// <para>默认提取预算：每次调用最多 64 GiB 解压输出。</para></summary>
     public const long DefaultMaximumOutputBytes = 64L * 1024 * 1024 * 1024;
 
     /// <summary>
@@ -121,9 +123,6 @@ public static class ContainerEntryExtractor
                 await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 64 * 1024, FileOptions.Asynchronous))
                 {
 
-                    // 线性 extent 段逐段复制为连续分区镜像；缺失段按规范补零。
-                    // Linear extents are copied segment by segment into a contiguous partition image;
-                    // gaps between extents are zero-filled per the format semantics.
                     ulong sectors = 0;
                     for (var i = 0; i < partition.NumExtents; i++)
                     {
@@ -175,7 +174,6 @@ public static class ContainerEntryExtractor
         IProgress<double>? progress, IProgress<(long Processed, long Total)>? byteProgress = null)
     {
         var outputDir = outputDirectory;
-        // Use one aggregate byte sample for both the bar and the textual statistics.
         await UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser.PayloadParser.ExtractAsync(
             containerPath, [.. partitionNames], outputDir, cancellationToken, byteProgress: new CallbackProgress<(long Processed, long Total)>(sample =>
             {
@@ -184,8 +182,6 @@ public static class ContainerEntryExtractor
             })).ConfigureAwait(false);
         progress?.Report(100);
 
-        // PayloadParser 以 <分区名>.img 命名输出；逐一确认存在后回填结果。
-        // PayloadParser names outputs "<partition>.img"; confirm each exists before reporting.
         var outputNames = new List<string>();
         var outputPaths = new List<string>();
         foreach (var name in partitionNames)
@@ -217,8 +213,6 @@ public static class ContainerEntryExtractor
     {
         if (fromPayloadOnly)
         {
-            // 只勾选了 payload 分区：直接走 ZIP 包裹 payload 的提取路径。
-            // Only payload partitions are selected: extract through the ZIP-wrapped payload path.
             return await ExtractPayloadAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress, byteProgress).ConfigureAwait(false);
         }
 
@@ -251,8 +245,6 @@ public static class ContainerEntryExtractor
                 await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 64 * 1024, FileOptions.Asynchronous))
                 {
                     await using var entryStream = entry.Open();
-                    // 有界复制：以条目声明长度为准，提前 EOF 抛错。
-                    // Bounded copy: the declared entry length is authoritative; early EOF throws.
                     await CopyWithProgressAsync(entryStream, output, entry.Length, copiedBytes, totalBytes, progress, cancellationToken, byteProgress).ConfigureAwait(false);
                     copiedBytes += entry.Length;
                 }
@@ -278,8 +270,6 @@ public static class ContainerEntryExtractor
     {
         var directory = Path.GetDirectoryName(containerPath) ?? ".";
         var safeEntry = SanitizeFileName(entryName);
-        // super/payload 分区名无扩展名，补 .img；ZIP 成员保留原始文件名（可能已带扩展名）。
-        // super/payload partition names have no extension and get .img; ZIP members keep their names.
         if (!Path.HasExtension(safeEntry))
         {
             safeEntry += ".img";

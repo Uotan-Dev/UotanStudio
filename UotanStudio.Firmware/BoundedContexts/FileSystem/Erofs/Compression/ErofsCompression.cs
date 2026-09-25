@@ -10,14 +10,22 @@ using ZstdSharp.Unsafe;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
 
+/// <summary>
+/// EROFS on-disk compression algorithm identifiers recorded in inodes and the superblock algorithm bitmap.
+/// <para>EROFS 磁盘侧压缩算法标识，记录于 inode、超级块算法位图中。</para>
+/// </summary>
 public enum ErofsCompressionAlgorithm
 {
+    /// <summary>LZ4 block format, the codec carried by legacy (pre-5.13) compatibility images. <para>LZ4 块格式，legacy（pre-5.13）兼容镜像所使用的编解码器。</para></summary>
     Lz4 = 0,
 
+    /// <summary>MicroLZMA stream without a size header or EOS marker. <para>不含大小头与 EOS 标记的 MicroLZMA 流。</para></summary>
     Lzma = 1,
 
+    /// <summary>Raw DEFLATE stream (RFC 1951, no zlib header or footer). <para>原始 DEFLATE 流（RFC 1951，无 zlib 头/尾）。</para></summary>
     Deflate = 2,
 
+    /// <summary>Zstandard frame format. <para>Zstandard 帧格式。</para></summary>
     Zstd = 3,
 }
 
@@ -46,7 +54,6 @@ internal static class ErofsCompression
         {
             return 0;
         }
-
 
         var count = (size - 1) / (ulong)clusterSize + 1;
         if (count > int.MaxValue)
@@ -145,9 +152,38 @@ internal static class ErofsCompression
     /// Algorithm-dispatched compression with an explicit LZ4 encoder identity.
     /// <para>按算法分派压缩，并显式指定 LZ4 编码器身份。</para>
     /// </summary>
+    /// <param name="algorithm">EROFS codec branch selected for this call. <para>本次调用选择的 EROFS 编解码分支。</para></param>
+    /// <param name="source">Buffer holding the uncompressed input. <para>存放未压缩输入的缓冲区。</para></param>
+    /// <param name="sourceIndex">Offset in <paramref name="source"/> where the input region starts.
+    /// <para><paramref name="source"/> 中输入区域的起始偏移。</para></param>
+    /// <param name="sourceLength">Number of input bytes read from <paramref name="sourceIndex"/>.
+    /// <para>自 <paramref name="sourceIndex"/> 起读取的输入字节数。</para></param>
+    /// <param name="target">Buffer the compressed bytes are written into. <para>写入压缩字节的缓冲区。</para></param>
+    /// <param name="targetIndex">Offset in <paramref name="target"/> where the output region starts.
+    /// <para><paramref name="target"/> 中输出区域的起始偏移。</para></param>
+    /// <param name="targetLength">Number of bytes reserved for the output inside <paramref name="target"/>.
+    /// <para><paramref name="target"/> 中为输出预留的字节数。</para></param>
+    /// <param name="compressionLevel">Codec level: steers the LZ4 search, selects LZMA algorithm and
+    /// num-fast-bytes, is clamped to 0..9 for DEFLATE and -5..22 for ZSTD.
+    /// <para>编解码级别：影响 LZ4 搜索、决定 LZMA 算法与 num-fast-bytes，DEFLATE 限制到 0..9，ZSTD 限制到 -5..22。</para></param>
     /// <param name="highCompression">Uses the LZ4HC search for LZ4 payloads instead of the fast
     /// single-hash matcher; ignored by the other codecs.
     /// <para>对 LZ4 数据使用 LZ4HC 搜索而非快速单哈希匹配器；其余算法忽略。</para></param>
+    /// <param name="dictSize">MicroLZMA dictionary size in bytes; <c>0</c> derives one from the input
+    /// length, other codecs ignore it. <para>MicroLZMA 字典字节数；<c>0</c> 按输入长度推导，其余算法忽略。</para></param>
+    /// <param name="windowBits">DEFLATE window bits (8..15, <c>0</c> for the default) and ZSTD window
+    /// log; ignored by LZ4 and LZMA. <para>DEFLATE 窗口位数（8..15，<c>0</c> 为默认）与 ZSTD 窗口对数；LZ4 与 LZMA 忽略。</para></param>
+    /// <returns>The number of compressed bytes written to <paramref name="target"/>.
+    /// <para>写入 <paramref name="target"/> 的压缩字节数。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="target"/> is <see langword="null"/>.
+    /// <para><paramref name="source"/> 或 <paramref name="target"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">A region exceeds its buffer, <paramref name="algorithm"/> is
+    /// unknown, or <paramref name="dictSize"/>/<paramref name="windowBits"/> fall outside the codec limits.
+    /// <para>区域超出缓冲区、<paramref name="algorithm"/> 未知，或 <paramref name="dictSize"/>/<paramref name="windowBits"/> 超出编解码上限。</para></exception>
+    /// <exception cref="InvalidOperationException">DEFLATE or ZSTD output exceeds the destination buffer, or the
+    /// LZMA encoder misbehaves. <para>DEFLATE 或 ZSTD 输出超出目标缓冲区，或 LZMA 编码器行为异常。</para></exception>
+    /// <exception cref="InvalidDataException">The LZMA payload does not fit the destination buffer.
+    /// <para>LZMA 压缩数据放不进目标缓冲区。</para></exception>
     public static int AlgorithmCompress(
         ErofsAlgorithm algorithm,
         byte[] source,
@@ -240,7 +276,6 @@ internal static class ErofsCompression
         };
     }
 
-
     /// <summary>
     /// Encodes one LZ4 block with the managed destination-size encoder ported from liblz4 1.9.4.
     /// <para>用移植自 liblz4 1.9.4 的托管限定目标大小编码器输出一个 LZ4 块。</para>
@@ -260,20 +295,6 @@ internal static class ErofsCompression
             return 0;
         }
 
-        // The destination-size mode always fills the target and reports how much input it consumed,
-        // while the layout planners signal "too big, try a shorter pcluster" with a zero result.
-        // Mapping unconsumed input to zero keeps that contract; a full-length consumption means the
-        // whole cluster fitted and the block is a plain LZ4 stream the kernel decoder accepts.
-        // The fast matcher takes "acceleration" as its skip distance and compresses worse as it grows,
-        // while the panel exposes "higher level = denser" for both encoders, so the level is mapped to
-        // acceleration as 10 - level: level 9 keeps the library default (densest fast output) and
-        // level 0 trades density for speed. The HC search still receives the level directly.
-        // 限定目标大小模式总会填满目标缓冲区并报告实际消费的输入长度，而布局规划器用返回 0 表示
-        // "太大，改用更短的 pcluster"。把未消费完输入映射为 0 即保持该契约；消费完整长度说明整簇
-        // 已放入输出，且块是内核解码器可直接使用的标准 LZ4 流。
-        // 快速匹配器把 acceleration 当作跳过距离，取值越大压缩越差，而面板对两种编码器都暴露
-        // "等级越高越密"的语义，因此按 10 - level 映射：等级 9 保持库默认（最快的稠密输出），
-        // 等级 0 用密度换速度。HC 搜索仍直接接收等级。
         var encoded = Lz4DestinationCodec.Encode(
             source.AsSpan(sourceIndex, sourceLength),
             target.AsSpan(targetIndex, targetLength),
@@ -285,7 +306,6 @@ internal static class ErofsCompression
 
     private static int DecompressLz4(byte[] source, int sourceIndex, int sourceLength, byte[] target, int targetIndex, int targetLength)
         => LZ4Codec.Decode(source, sourceIndex, sourceLength, target, targetIndex, targetLength);
-
 
     private static readonly int[] LzmaNumFastBytesByLevel = [32, 64, 128, 128, 256, 384, 512, 768, 1024];
 
@@ -310,7 +330,6 @@ internal static class ErofsCompression
 
         var dictionarySize = ResolveLzmaDictionarySize(sourceLength, dictSize);
 
-
         const int pb = 2;
         const int lp = 0;
         const int lc = 3;
@@ -323,7 +342,6 @@ internal static class ErofsCompression
         using var input = new MemoryStream(source, sourceIndex, sourceLength, writable: false);
         using var output = new BoundedWriteStream(target, targetIndex, targetLength);
         var start = output.Position;
-
 
         output.WriteByte(unchecked((byte)~((pb * 5 + lp) * 9 + lc)));
         using var raw = new MemoryStream();
@@ -368,7 +386,6 @@ internal static class ErofsCompression
             throw new InvalidDataException("LZMA compressed data is empty.");
         }
 
-
         var propertyByte = (byte)~(source[sourceIndex] & 0xFF);
         var dictionarySize = dictSize > 0
             ? dictSize
@@ -385,13 +402,11 @@ internal static class ErofsCompression
         var decoder = new Decoder();
         decoder.SetDecoderProperties(properties);
 
-
         var rebuilt = new byte[sourceLength];
         rebuilt[0] = 0;
         Buffer.BlockCopy(source, sourceIndex + 1, rebuilt, 1, sourceLength - 1);
         using var input = new MemoryStream(rebuilt, writable: false);
         using var output = new BoundedWriteStream(target, targetIndex, targetLength);
-
 
         decoder.Code(input, output, sourceLength, targetLength, null);
         if (output.Position != targetLength)
@@ -416,7 +431,6 @@ internal static class ErofsCompression
             return dictSize;
         }
 
-
         var d = 1 << 12;
         while (d < sourceLength && d < (1 << 23))
         {
@@ -428,7 +442,6 @@ internal static class ErofsCompression
 
     private static int LzmaNumFastBytes(int compressionLevel)
         => Math.Clamp(LzmaNumFastBytesByLevel[Math.Clamp(compressionLevel, 1, 9) - 1], 5, 273);
-
 
     /// <summary>
     /// DEFLATE compression producing a raw DEFLATE stream (no zlib header/footer, RFC 1951, matching the kernel's negative-windowBits deflateInit2 semantics).
@@ -451,8 +464,6 @@ internal static class ErofsCompression
         }
 
         var deflater = new Deflater(Math.Clamp(compressionLevel, 0, 9), noZlibHeaderOrFooter: true);
-        // SharpZipLib's match finder has a fixed 32 KiB window. Literal/Huffman-only
-        // output contains no back references and therefore satisfies smaller source windows.
         if (windowBits is > 0 and < 15) deflater.SetStrategy(DeflateStrategy.HuffmanOnly);
         deflater.SetInput(source, sourceIndex, sourceLength);
         deflater.Finish();
@@ -506,7 +517,6 @@ internal static class ErofsCompression
             if (written >= targetLength)
             {
 
-
                 inflater.Inflate(target, targetIndex, 0);
                 if (inflater.IsFinished)
                 {
@@ -551,7 +561,6 @@ internal static class ErofsCompression
             throw new ArgumentOutOfRangeException(nameof(windowBits), "DEFLATE windows must be between 8 and 15 bits, or zero for the default.");
         }
     }
-
 
     /// <summary>
     /// ZSTD compression (fully-managed ZstdSharp port) producing a standard zstd frame; when windowLog &gt; 0 the frame window log is set accordingly.
@@ -624,7 +633,6 @@ internal static class ErofsCompression
         }
     }
 
-
     /// <summary>
     /// Conservative LZMA alone-stream bound (13-byte header + input + 25% + 128, per liblzma's lzma_stream_buffer_bound).
     /// <para>.lzma 流的保守压缩上界（13 字节头 + 输入 + 25% + 128，参考 liblzma lzma_stream_buffer_bound）。</para>
@@ -651,7 +659,6 @@ internal static class ErofsCompression
 
         return bound;
     }
-
 
     private static void ValidateRange(byte[] buffer, int offset, int length, string paramName)
     {

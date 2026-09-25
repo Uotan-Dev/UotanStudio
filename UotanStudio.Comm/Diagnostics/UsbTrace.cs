@@ -10,6 +10,8 @@ public static class UsbTrace
     /// Gets or sets whether plain text USB logs are enabled.
     /// <para>获取或设置是否启用纯文本 USB 日志。</para>
     /// </summary>
+    /// <value><see langword="true"/> when <see cref="Log(string)"/> and <see cref="LogFormatted(FormattableString)"/> forward messages to <see cref="Logger"/>; initialized from the <c>FIRMWAREKIT_USB_DEBUG=1</c> environment variable.
+    /// <para>为 <see langword="true"/> 时 <see cref="Log(string)"/> 与 <see cref="LogFormatted(FormattableString)"/> 会把消息转发给 <see cref="Logger"/>；初值取自 <c>FIRMWAREKIT_USB_DEBUG=1</c> 环境变量。</para></value>
     public static bool IsEnabled { get; set; } =
         string.Equals(Environment.GetEnvironmentVariable("FIRMWAREKIT_USB_DEBUG"), "1", StringComparison.Ordinal);
 
@@ -17,6 +19,8 @@ public static class UsbTrace
     /// Gets or sets the logger that receives plain text diagnostics.
     /// <para>获取或设置接收纯文本诊断日志的记录器。</para>
     /// </summary>
+    /// <value>The <see cref="IUsbLogger"/> sink used by every logging entry point on this class; the default writes to the console.
+    /// <para>此类所有日志入口使用的 <see cref="IUsbLogger"/> 汇；默认实现写入控制台。</para></value>
     public static IUsbLogger Logger { get; set; } = new ConsoleUsbLogger();
 
     /// <summary>
@@ -32,6 +36,8 @@ public static class UsbTrace
     /// <para>获取是否注册了任何结构化传输订阅者。调用方据此在诊断关闭时完全跳过
     /// <see cref="UsbTransferEvent"/> 的分配（否则热传输路径每次传输都会构造一个）。</para>
     /// </summary>
+    /// <value><see langword="true"/> when at least one handler is attached to <see cref="TransferObserved"/>.
+    /// <para><see cref="TransferObserved"/> 上至少挂接了一个处理程序时为 <see langword="true"/>。</para></value>
     public static bool HasTransferSubscribers => TransferObserved != null;
 
     /// <summary>
@@ -40,6 +46,8 @@ public static class UsbTrace
     /// <para>获取或设置是否将原始 USB 帧捕获到传输事件中（可选开启）。
     /// 通过 <c>FIRMWAREKIT_USB_CAPTURE_FRAMES=1</c> 环境变量启用。</para>
     /// </summary>
+    /// <value><see langword="true"/> when emitters populate <see cref="UsbTransferEvent.SetupPacket"/> and <see cref="UsbTransferEvent.Payload"/>, truncating to <see cref="MaxCaptureBytes"/>; initialized from <c>FIRMWAREKIT_USB_CAPTURE_FRAMES=1</c>.
+    /// <para>为 <see langword="true"/> 时发射方会填充 <see cref="UsbTransferEvent.SetupPacket"/> 与 <see cref="UsbTransferEvent.Payload"/>，并按 <see cref="MaxCaptureBytes"/> 截断；初值取自 <c>FIRMWAREKIT_USB_CAPTURE_FRAMES=1</c>。</para></value>
     public static bool CaptureFrames { get; set; } =
         string.Equals(Environment.GetEnvironmentVariable("FIRMWAREKIT_USB_CAPTURE_FRAMES"), "1", StringComparison.Ordinal);
 

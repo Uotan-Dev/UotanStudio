@@ -10,12 +10,13 @@ public sealed partial class FirehoseProtocol
     /// Reads data from a partition into memory.
     /// <para>从分区读取数据到内存。</para>
     /// </summary>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <param name="numSectors">The number of sectors. 扇区数量。</param>
-    /// <param name="filename">The target filename. 目标文件名。</param>
-    /// <param name="physicalPartition">The physical partition number. 物理分区编号。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>A tuple containing the response and data. 包含响应和数据的元组。</returns>
+    /// <param name="startSector">The starting sector.<para>起始扇区。</para></param>
+    /// <param name="numSectors">The number of sectors.<para>扇区数量。</para></param>
+    /// <param name="filename">The target filename.<para>目标文件名。</para></param>
+    /// <param name="physicalPartition">The physical partition number.<para>物理分区编号。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>A tuple containing the response and data.<para>包含响应和数据的元组。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">The validated byte span exceeds 16 MiB; use <see cref="ReadToStreamAsync"/> instead.<para>校验后的字节跨度超过 16 MiB；请改用 <see cref="ReadToStreamAsync"/>。</para></exception>
     public async Task<(FirehoseResponse Response, byte[] Data)> ReadAsync(long startSector, long numSectors, string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
@@ -34,13 +35,13 @@ public sealed partial class FirehoseProtocol
     /// allocating a full-size in-memory buffer.
     /// <para>将分区原始数据流式写入指定目标流，不整块分配等大小的内存缓冲。</para>
     /// </summary>
-    /// <param name="destination">Destination stream for the raw data. 原始数据写入目标流。</param>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <param name="numSectors">The number of sectors. 扇区数量。</param>
-    /// <param name="filename">The target filename. 目标文件名。</param>
-    /// <param name="physicalPartition">The physical partition number. 物理分区编号。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The command response (raw payload excluded). 命令响应（不含原始数据）。</returns>
+    /// <param name="destination">Destination stream for the raw data. The caller owns the stream and must keep it writable and open for the whole call.<para>原始数据写入目标流。调用方持有该流，必须在整个调用期间保持可写且未关闭。</para></param>
+    /// <param name="startSector">The starting sector.<para>起始扇区。</para></param>
+    /// <param name="numSectors">The number of sectors.<para>扇区数量。</para></param>
+    /// <param name="filename">The target filename.<para>目标文件名。</para></param>
+    /// <param name="physicalPartition">The physical partition number.<para>物理分区编号。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The command response (raw payload excluded).<para>命令响应（不含原始数据）。</para></returns>
     public async Task<FirehoseResponse> ReadToStreamAsync(Stream destination, long startSector, long numSectors, string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
@@ -82,10 +83,16 @@ public sealed partial class FirehoseProtocol
     /// Reads memory from the target device via &lt;peek&gt;.
     /// <para>通过 &lt;peek&gt; 从目标设备读取内存。</para>
     /// </summary>
-    /// <param name="sizeInBytes">The number of bytes to read. 待读取字节数。</param>
-    /// <param name="address">The memory address. 内存地址。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>A tuple containing the response and the read data. 包含响应与读取数据的元组。</returns>
+    /// <param name="sizeInBytes">The number of bytes to read; must be greater than 0 and no larger than 16 MiB.<para>待读取字节数；必须大于 0 且不超过 16 MiB。</para></param>
+    /// <param name="address">The memory address; must be non-negative and the sum with <paramref name="sizeInBytes"/> must not overflow.<para>内存地址；必须非负，且与 <paramref name="sizeInBytes"/> 之和不得溢出。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>A tuple containing the response and the read data.<para>包含响应与读取数据的元组。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="address"/> is negative, <paramref name="sizeInBytes"/> is 0 or negative, or <paramref name="sizeInBytes"/> exceeds 16 MiB.
+    /// <para><paramref name="address"/> 为负、<paramref name="sizeInBytes"/> 为 0 或负数，或 <paramref name="sizeInBytes"/> 超过 16 MiB。</para></exception>
+    /// <exception cref="OverflowException">
+    /// <paramref name="address"/> plus <paramref name="sizeInBytes"/> exceeds <see cref="long.MaxValue"/>.
+    /// <para><paramref name="address"/> 与 <paramref name="sizeInBytes"/> 之和超出 <see cref="long.MaxValue"/>。</para></exception>
     public async Task<(FirehoseResponse Response, byte[] Data)> PeekAsync(long sizeInBytes, long address, CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
@@ -118,11 +125,13 @@ public sealed partial class FirehoseProtocol
     /// Writes memory on the target device via &lt;poke&gt;.
     /// <para>通过 &lt;poke&gt; 向目标设备写入内存。</para>
     /// </summary>
-    /// <param name="sizeInBytes">The number of bytes to write. 待写入字节数。</param>
-    /// <param name="address">The memory address. 内存地址。</param>
-    /// <param name="value">The value bytes. 值字节。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The Firehose response. Firehose 响应。</returns>
+    /// <param name="sizeInBytes">The number of bytes to write; must equal <c>value.Length</c>.<para>待写入字节数；必须等于 <c>value.Length</c>。</para></param>
+    /// <param name="address">The memory address.<para>内存地址。</para></param>
+    /// <param name="value">The bytes to write, encoded by the caller in target byte order.<para>待写入的字节，由调用方按目标字节序编码。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The Firehose response.<para>Firehose 响应。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.<para><paramref name="value"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><c>value.Length</c> does not match <paramref name="sizeInBytes"/>.<para><c>value.Length</c> 与 <paramref name="sizeInBytes"/> 不一致。</para></exception>
     public async Task<FirehoseResponse> PokeAsync(long sizeInBytes, long address, byte[] value, CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
@@ -152,10 +161,10 @@ public sealed partial class FirehoseProtocol
     /// Writes a 32-bit word to the target device via &lt;pokedword&gt;.
     /// <para>通过 &lt;pokedword&gt; 向目标设备写入 32 位字。</para>
     /// </summary>
-    /// <param name="address">The target address. 目标地址。</param>
-    /// <param name="value">The 32-bit value. 32 位值。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The Firehose response. Firehose 响应。</returns>
+    /// <param name="address">The target address.<para>目标地址。</para></param>
+    /// <param name="value">The 32-bit value.<para>32 位值。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The Firehose response.<para>Firehose 响应。</para></returns>
     public async Task<FirehoseResponse> PokeDwordAsync(long address, uint value, CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
@@ -175,11 +184,11 @@ public sealed partial class FirehoseProtocol
     /// Performs a memory copy on the target device via &lt;memcpy&gt;.
     /// <para>通过 &lt;memcpy&gt; 在目标设备执行内存拷贝。</para>
     /// </summary>
-    /// <param name="dstOffset">The destination address. 目标地址。</param>
-    /// <param name="srcOffset">The source address. 源地址。</param>
-    /// <param name="size">The copy size in bytes. 拷贝大小（字节）。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The Firehose response. Firehose 响应。</returns>
+    /// <param name="dstOffset">The destination address.<para>目标地址。</para></param>
+    /// <param name="srcOffset">The source address.<para>源地址。</para></param>
+    /// <param name="size">The copy size in bytes.<para>拷贝大小（字节）。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The Firehose response.<para>Firehose 响应。</para></returns>
     public async Task<FirehoseResponse> MemcpyAsync(long dstOffset, long srcOffset, long size, CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);

@@ -4,12 +4,31 @@ using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Decompile;
 
+/// <summary>
+/// Emits Java-like source text for decompiled DEX classes and methods.
+/// <para>为反编译的 DEX 类与方法输出 Java 风格的源码文本。</para>
+/// </summary>
 public static class JavaCodegen
 {
     /// <summary>
     /// Renders a whole class (header + fields + methods).
     /// <para>渲染整个类（头 + 字段 + 方法）。</para>
     /// </summary>
+    /// <param name="dex">DEX model supplying type, string and field lookups.
+    /// <para>提供类型、字符串与字段查找的 DEX 模型。</para></param>
+    /// <param name="cls">Class definition to render. <para>要渲染的类定义。</para></param>
+    /// <param name="resolver">Optional overload resolver used when rendering method bodies;
+    /// <see langword="null"/> renders calls with raw argument expressions.
+    /// <para>渲染方法体时可选的重载解析器；为 <see langword="null"/> 时调用按原始实参表达式渲染。</para></param>
+    /// <param name="options">Output settings; <see langword="null"/> uses
+    /// <see cref="DecompileOptions.Default"/>. <para>输出设置；为 <see langword="null"/> 时使用
+    /// <see cref="DecompileOptions.Default"/>。</para></param>
+    /// <returns>The class source text: declaration header, then static and instance field
+    /// declarations, then direct and virtual methods.
+    /// <para>类源码文本：声明头部，随后是静态与实例字段声明，最后是直接方法与虚方法。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="dex"/> or <paramref name="cls"/> is
+    /// <see langword="null"/>. <para><paramref name="dex"/> 或 <paramref name="cls"/> 为
+    /// <see langword="null"/>。</para></exception>
     public static string RenderClass(DexFile dex, ClassDefinition cls, MethodResolver? resolver, DecompileOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(dex);
@@ -84,6 +103,23 @@ public static class JavaCodegen
     /// Renders a single method (signature + structured body).
     /// <para>渲染单个方法（签名 + 结构化方法体）。</para>
     /// </summary>
+    /// <param name="dex">DEX model supplying type and string lookups.
+    /// <para>提供类型与字符串查找的 DEX 模型。</para></param>
+    /// <param name="method">Encoded method to render. <para>要渲染的编码方法。</para></param>
+    /// <param name="cls">Declaring class, or <see langword="null"/> when the enclosing type is
+    /// unknown; a <see langword="null"/> value renders a constructor without its short class name.
+    /// <para>声明类；未知所属类型时为 <see langword="null"/>，此时构造函数渲染时不带其短类名。</para></param>
+    /// <param name="resolver">Optional overload resolver; <see langword="null"/> renders calls with
+    /// raw argument expressions. <para>可选的重载解析器；为 <see langword="null"/> 时调用按原始实参表达式渲染。</para></param>
+    /// <param name="options">Output settings; <see langword="null"/> uses
+    /// <see cref="DecompileOptions.Default"/>. <para>输出设置；为 <see langword="null"/> 时使用
+    /// <see cref="DecompileOptions.Default"/>。</para></param>
+    /// <returns>The method text, indented one level. A method without a code item ends as a
+    /// declaration terminated by <c>;</c>; otherwise the signature is followed by a reconstructed body.
+    /// <para>缩进一级的方法文本。没有代码项的方法以 <c>;</c> 结束的声明收尾；否则签名后跟还原出的方法体。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="dex"/> or <paramref name="method"/> is
+    /// <see langword="null"/>. <para><paramref name="dex"/> 或 <paramref name="method"/> 为
+    /// <see langword="null"/>。</para></exception>
     public static string RenderMethod(DexFile dex, EncodedMethod method, ClassDefinition? cls, MethodResolver? resolver, DecompileOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(dex);

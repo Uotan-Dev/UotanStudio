@@ -6,6 +6,14 @@ using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 
+/// <summary>
+/// Format handler that exposes raw EXT4 images to the generic unpack/pack pipeline, bridging
+/// <see cref="Ext4Parser"/> and <see cref="Ext4Builder"/>. Parse and build failures are reported as
+/// failed <see cref="FirmwareOpResult"/> values; only cancellation propagates as an exception.
+/// <para>将 ext4 原始镜像接入通用解包/打包流水线的格式处理器，桥接 <see cref="Ext4Parser"/> 与
+/// <see cref="Ext4Builder"/>。解析与构建失败以失败的 <see cref="FirmwareOpResult"/> 返回；
+/// 仅取消会以异常传播。</para>
+/// </summary>
 public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider
 {
     void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
@@ -15,14 +23,25 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider
         string metadataDirectory, CancellationToken cancellationToken)
         => FileSystemRepackMetadata.CaptureAsync(metadata, sourcePath, outputDirectory, metadataDirectory, cancellationToken);
 
+    /// <summary>The stable format key used by the packing pipeline.
+    /// <para>打包流水线使用的稳定格式键。</para></summary>
+    /// <value>Always <c>"EXT4"</c>; it also identifies preserved repack metadata.
+    /// <para>恒为 <c>"EXT4"</c>；同时用于标识保留的重打包元数据。</para></value>
     public string FormatName => "EXT4";
 
+    /// <summary>Candidate lowercase file-name extensions for this format.
+    /// <para>本格式的候选小写文件名扩展。</para></summary>
+    /// <value><c>"img"</c> and <c>"ext4"</c>; extension matching never replaces the content probing in <see cref="CanHandle"/>.
+    /// <para><c>"img"</c> 与 <c>"ext4"</c>；扩展名匹配不能替代 <see cref="CanHandle"/> 的内容探测。</para></value>
     public IReadOnlyList<string> FileExtensions { get; } = ["img", "ext4"];
 
     /// <summary>
     /// Determines whether the file matches this format.
     /// <para>判断文件是否匹配此格式。</para>
     /// </summary>
+    /// <param name="filePath">Path probed for an EXT4 superblock magic. <para>探测是否存在 EXT4 超级块魔数的路径。</para></param>
+    /// <returns><see langword="true"/> only when the file exists and carries magic <c>0xEF53</c> at offset 1080; blank paths, short files and any read error yield <see langword="false"/>.
+    /// <para>仅当文件存在且偏移 1080 处携带魔数 <c>0xEF53</c> 时返回 <see langword="true"/>；空白路径、过短文件与任何读取错误均返回 <see langword="false"/>。</para></returns>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -59,6 +78,9 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider
     /// Reads the firmware metadata asynchronously.
     /// <para>异步读取固件元数据。</para>
     /// </summary>
+    /// <param name="filePath">Image file opened and parsed for its superblock. <para>为读取超级块而打开并解析的镜像文件。</para></param>
+    /// <param name="cancellationToken">Checked before and after parsing; cancellation propagates as <see cref="OperationCanceledException"/>. <para>在解析前后分别检查；取消以 <see cref="OperationCanceledException"/> 传播。</para></param>
+    /// <returns>A completed task whose result is <c>Ok</c> with a superblock-derived key/value metadata set, or <c>Fail</c> carrying the parse error message. <para>已完成的任务：结果为 <c>Ok</c>（携带由超级块导出的键值元数据）或 <c>Fail</c>（含解析错误信息）。</para></returns>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -109,6 +131,11 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider
     /// Extracts the firmware contents asynchronously.
     /// <para>异步提取固件内容。</para>
     /// </summary>
+    /// <param name="filePath">EXT4 image to extract. <para>待提取的 ext4 镜像。</para></param>
+    /// <param name="outputDirectory">Host directory receiving the tree; a blank value fails the result. <para>接收目录树的主机目录；为空白时结果失败。</para></param>
+    /// <param name="options">Extraction options; <c>Overwrite</c> defaults to <c>true</c> and byte progress routes to the extraction stage. <see langword="null"/> uses defaults. <para>解包选项；<c>Overwrite</c> 默认 <c>true</c>，字节进度归入提取阶段。<see langword="null"/> 使用默认值。</para></param>
+    /// <param name="cancellationToken">Cancels parsing and writes; cancellation propagates. <para>取消解析与写入；取消会向上抛出。</para></param>
+    /// <returns>A completed task: <c>Ok</c> listing every extracted entry path, or <c>Fail</c> with the error message. The source is frozen through the preservation layer before extraction. <para>已完成任务：提取前先经保留层冻结源；结果为 <c>Ok</c>（列出全部提取条目路径）或 <c>Fail</c>（含错误信息）。</para></returns>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, frozen => UnpackCoreAsync(frozen, outputDirectory, options, cancellationToken));
@@ -144,6 +171,10 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider
     /// Packs the input into firmware asynchronously.
     /// <para>异步将输入打包为固件。</para>
     /// </summary>
+    /// <param name="inputPath">Source directory to pack; a preserved extraction is restored instead of rebuilt. <para>待打包的源目录；若为已保留的解包结果则直接恢复而非重建。</para></param>
+    /// <param name="outputPath">Target image path; a blank value fails the result. <para>目标镜像路径；为空白时结果失败。</para></param>
+    /// <param name="cancellationToken">Cancellation propagates as an exception; other failures return <c>Fail</c>. <para>取消以异常传播；其他失败返回 <c>Fail</c>。</para></param>
+    /// <returns>A completed task: <c>Ok</c> listing the written image path, or <c>Fail</c> with the reason; explicit overrides on a preserved extraction are refused as <c>Fail</c>. <para>已完成任务：<c>Ok</c> 列出写出的镜像路径，或 <c>Fail</c> 给出原因；对已保留解包结果使用显式覆盖会按 <c>Fail</c> 拒绝。</para></returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
         => PackCore(inputPath, outputPath, progress: null, cancellationToken);
 
@@ -151,6 +182,11 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider
     /// Packs the input into firmware with byte-level progress.
     /// <para>带字节级进度异步将输入打包为固件。</para>
     /// </summary>
+    /// <param name="inputPath">Source directory to pack; a preserved extraction is restored instead of rebuilt. <para>待打包的源目录；若为已保留的解包结果则直接恢复而非重建。</para></param>
+    /// <param name="outputPath">Target image path; a blank value fails the result. <para>目标镜像路径；为空白时结果失败。</para></param>
+    /// <param name="progress">Byte-level build progress sink; <see langword="null"/> disables reporting. <para>字节级构建进度回调；<see langword="null"/> 表示不报告。</para></param>
+    /// <param name="cancellationToken">Cancellation propagates as an exception; other failures return <c>Fail</c>. <para>取消以异常传播；其他失败返回 <c>Fail</c>。</para></param>
+    /// <returns>A completed task: <c>Ok</c> listing the written image path, or <c>Fail</c> with the reason. <para>已完成任务：<c>Ok</c> 列出写出的镜像路径，或 <c>Fail</c> 给出原因。</para></returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, IProgress<FileSystemByteProgress>? progress, CancellationToken cancellationToken = default)
         => PackCore(inputPath, outputPath, progress, cancellationToken);
 

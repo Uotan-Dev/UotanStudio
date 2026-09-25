@@ -3,7 +3,6 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.PuffDiff;
 
-// Implements Puffin's lossless token representation, preserving DEFLATE metadata and matches.
 internal static class PuffDeflateCodec
 {
     private static readonly int[] Order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];

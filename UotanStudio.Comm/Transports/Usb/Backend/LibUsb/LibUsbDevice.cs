@@ -11,20 +11,11 @@ internal partial class LibUsbDevice : UsbDevice
 {
     private const int PlatformDefaultTimeoutMs = UsbTransferPolicies.DefaultTimeoutMs;
 
-    // Reusable chunk buffers avoid a per-chunk allocation during large transfers. The
-    // read/write gates cover both synchronous and asynchronous native completion.
-    // <para>可复用的分块缓冲避免大传输时每次分块分配；读写缓冲与门闩分离，
-    // 每个方向的门闩覆盖同步和异步原生传输完成，防止在飞缓冲被覆盖。</para>
     private byte[]? _readChunkBuffer;
     private byte[]? _writeChunkBuffer;
     private readonly SemaphoreSlim _readChunkGate = new(1, 1);
     private readonly SemaphoreSlim _writeChunkGate = new(1, 1);
 
-    // P/Invoke to libusb_clear_halt (LibUsbDotNet's NativeMethods is internal).
-    // On Windows winusb this maps to WinUsb_ResetPipe, aborting pending transfers
-    // and resetting the pipe state after a failed read/write. <para>直接 P/Invoke
-    // libusb_clear_halt；Windows winusb 上映射到 WinUsb_ResetPipe，在传输失败后
-    // 中止未决传输并重置管道状态。</para>
     [LibraryImport("libusb-1.0")]
     private static partial int libusb_clear_halt(IntPtr devHandle, byte endpoint);
 
@@ -33,11 +24,6 @@ internal partial class LibUsbDevice : UsbDevice
     private bool _interfaceClaimed;
     private UsbEndpointReader? _reader;
     private UsbEndpointWriter? _writer;
-    // Vid/Pid delegate to the base UsbDevice.VendorId/ProductId so that both the
-    // shorthand used by CreateHandle() and the projection in
-    // UsbDeviceInfoFactory (which reads VendorId/ProductId) see the same values.
-    // <para>Vid/Pid 委托到基类 UsbDevice.VendorId/ProductId，使 CreateHandle() 使用的简写
-    // 与 UsbDeviceInfoFactory 投影读取的 VendorId/ProductId 保持同一份数据。</para>
     public ushort Vid { get => VendorId; set => VendorId = value; }
     public ushort Pid { get => ProductId; set => ProductId = value; }
     public byte BusNumber { get; set; }
@@ -376,9 +362,6 @@ internal partial class LibUsbDevice : UsbDevice
 
     protected override string BackendName => "libusb";
 
-    // A session is open when at least one direction bound successfully; IN-only (HID
-    // interrupt) and OUT-only devices are valid sessions even though bulk I/O in the
-    // missing direction throws NotSupportedException.
     protected override bool IsOpen => _reader != null || _writer != null;
 
     protected override bool IsDisconnectionError(int nativeError)

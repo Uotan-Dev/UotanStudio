@@ -26,6 +26,14 @@ public sealed partial class OppReader
     /// Initializes a new instance of the OppReader class.
     /// <para>初始化 OppReader 类的新实例。</para>
     /// </summary>
+    /// <param name="cryptoProvider">
+    /// Crypto provider used to decrypt encrypted packages; <see langword="null"/> means packages that require decryption beyond the built-in key databases cannot be opened.
+    /// <para>用于解密加密包的加密提供程序；为 <see langword="null"/> 时，超出内置密钥库能力、需要解密的包无法打开。</para>
+    /// </param>
+    /// <param name="logger">
+    /// Logger receiving diagnostic messages; <see langword="null"/> discards all log output.
+    /// <para>接收诊断消息的日志器；为 <see langword="null"/> 时丢弃所有日志输出。</para>
+    /// </param>
     public OppReader(IOppCryptoProvider? cryptoProvider = null, IOppLogger? logger = null)
     {
         _cryptoProvider = cryptoProvider;
@@ -37,6 +45,30 @@ public sealed partial class OppReader
     /// Reads metadata from an Oppo firmware file at the specified path.
     /// <para>从指定文件路径读取 Oppo 固件文件的元信息。</para>
     /// </summary>
+    /// <param name="filePath">
+    /// Path to the Oppo package file; the file is opened for reading, shared for readers, and closed before returning.
+    /// <para>Oppo 包文件路径；文件以只读、允许并发读取的方式打开，并在返回前关闭。</para>
+    /// </param>
+    /// <returns>
+    /// The parsed archive-level metadata.
+    /// <para>解析出的归档级元数据。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="filePath"/> is <see langword="null"/>.
+    /// <para><paramref name="filePath"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="filePath"/> is empty or consists only of white-space characters.
+    /// <para><paramref name="filePath"/> 为空或仅包含空白字符。</para>
+    /// </exception>
+    /// <exception cref="FileNotFoundException">
+    /// The file does not exist.
+    /// <para>文件不存在。</para>
+    /// </exception>
+    /// <exception cref="OppException">
+    /// The package is unreadable, unrecognized or cannot be decrypted; concrete failures surface as subclasses such as <see cref="InvalidOppFormatException"/>, <see cref="UnsupportedOppVersionException"/> or <see cref="UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Exceptions.OppDecryptionException"/>.
+    /// <para>包不可读、无法识别或无法解密；具体失败以 <see cref="InvalidOppFormatException"/>、<see cref="UnsupportedOppVersionException"/> 或 <see cref="UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Exceptions.OppDecryptionException"/> 等子类抛出。</para>
+    /// </exception>
     public OppMetadata ReadMetadata(string filePath)
     {
         Guard.ThrowIfNullOrWhiteSpace(filePath);
@@ -56,6 +88,38 @@ public sealed partial class OppReader
     /// Asynchronously reads metadata from an Oppo firmware file at the specified path.
     /// <para>异步从指定文件路径读取 Oppo 固件文件的元信息。</para>
     /// </summary>
+    /// <param name="filePath">
+    /// Path to the Oppo package file; the file is opened for asynchronous reading, shared for readers, and closed before the returned task completes.
+    /// <para>Oppo 包文件路径；文件以异步只读、允许并发读取的方式打开，并在返回的任务完成前关闭。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Token observed when the metadata read starts; the parsing that follows runs synchronously once the stream is open.
+    /// <para>在元信息读取开始时观察的令牌；后续的解析在流打开后同步执行。</para>
+    /// </param>
+    /// <returns>
+    /// A task whose result is the parsed archive-level metadata.
+    /// <para>结果为解析出的归档级元数据的任务。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="filePath"/> is <see langword="null"/>.
+    /// <para><paramref name="filePath"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="filePath"/> is empty or consists only of white-space characters.
+    /// <para><paramref name="filePath"/> 为空或仅包含空白字符。</para>
+    /// </exception>
+    /// <exception cref="FileNotFoundException">
+    /// The file does not exist.
+    /// <para>文件不存在。</para>
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// The token was cancelled at the start of the read.
+    /// <para>令牌在读取开始时已被取消。</para>
+    /// </exception>
+    /// <exception cref="OppException">
+    /// The package is unreadable, unrecognized or cannot be decrypted.
+    /// <para>包不可读、无法识别或无法解密。</para>
+    /// </exception>
     public async ValueTask<OppMetadata> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         Guard.ThrowIfNullOrWhiteSpace(filePath);
@@ -75,6 +139,22 @@ public sealed partial class OppReader
     /// Reads metadata from a stream containing an Oppo firmware file.
     /// <para>从流中读取 Oppo 固件文件的元信息。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable, seekable stream holding the whole package; it stays open and ownership remains with the caller. A ZIP-wrapped OFP is decrypted to a temporary directory that is removed before returning.
+    /// <para>包含完整固件包、可读且可寻址的流；流保持打开，所有权归调用方。ZIP 包裹的 OFP 会先解密到临时目录，并在返回前删除该目录。</para>
+    /// </param>
+    /// <returns>
+    /// The parsed archive-level metadata; for a ZIP-wrapped OFP the reported file size is the outer wrapper size.
+    /// <para>解析出的归档级元数据；对 ZIP 包裹的 OFP，报告的文件大小为外层包裹文件的大小。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="stream"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="OppException">
+    /// The package is unreadable, unrecognized or cannot be decrypted.
+    /// <para>包不可读、无法识别或无法解密。</para>
+    /// </exception>
     public OppMetadata ReadMetadataFromStream(Stream stream)
     {
         Guard.ThrowIfNull(stream);
@@ -97,6 +177,30 @@ public sealed partial class OppReader
     /// Asynchronously reads metadata from a stream containing an Oppo firmware file.
     /// <para>异步从流中读取 Oppo 固件文件的元信息。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable, seekable stream holding the whole package; it stays open and ownership remains with the caller.
+    /// <para>包含完整固件包、可读且可寻址的流；流保持打开，所有权归调用方。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Token checked once before parsing starts; the metadata parse itself runs synchronously.
+    /// <para>在解析开始前检查一次的令牌；元数据解析本身同步执行。</para>
+    /// </param>
+    /// <returns>
+    /// A completed task carrying the parsed archive-level metadata.
+    /// <para>携带解析出的归档级元数据的已完成任务。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="stream"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// The token was already cancelled.
+    /// <para>令牌已被取消。</para>
+    /// </exception>
+    /// <exception cref="OppException">
+    /// The package is unreadable, unrecognized or cannot be decrypted.
+    /// <para>包不可读、无法识别或无法解密。</para>
+    /// </exception>
     public ValueTask<OppMetadata> ReadMetadataFromStreamAsync(Stream stream, CancellationToken cancellationToken = default)
     {
         Guard.ThrowIfNull(stream);
@@ -111,6 +215,30 @@ public sealed partial class OppReader
     /// Fully parses an Oppo firmware archive at the specified path.
     /// <para>完整解析指定文件路径的 Oppo 固件归档。</para>
     /// </summary>
+    /// <param name="filePath">
+    /// Path to the Oppo package file; the file is opened for reading, shared for readers, and closed before returning.
+    /// <para>Oppo 包文件路径；文件以只读、允许并发读取的方式打开，并在返回前关闭。</para>
+    /// </param>
+    /// <returns>
+    /// The archive with its metadata and all parsed entries.
+    /// <para>包含元数据与全部已解析条目的归档。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="filePath"/> is <see langword="null"/>.
+    /// <para><paramref name="filePath"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="filePath"/> is empty or consists only of white-space characters.
+    /// <para><paramref name="filePath"/> 为空或仅包含空白字符。</para>
+    /// </exception>
+    /// <exception cref="FileNotFoundException">
+    /// The file does not exist.
+    /// <para>文件不存在。</para>
+    /// </exception>
+    /// <exception cref="OppException">
+    /// The package is unreadable, unrecognized or cannot be decrypted.
+    /// <para>包不可读、无法识别或无法解密。</para>
+    /// </exception>
     public OppArchive Parse(string filePath)
     {
         Guard.ThrowIfNullOrWhiteSpace(filePath);
@@ -130,6 +258,38 @@ public sealed partial class OppReader
     /// Asynchronously fully parses an Oppo firmware archive at the specified path.
     /// <para>异步完整解析指定文件路径的 Oppo 固件归档。</para>
     /// </summary>
+    /// <param name="filePath">
+    /// Path to the Oppo package file; the file is opened for asynchronous reading, shared for readers, and closed before the returned task completes.
+    /// <para>Oppo 包文件路径；文件以异步只读、允许并发读取的方式打开，并在返回的任务完成前关闭。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Token observed when parsing starts; the parse that follows runs synchronously once the stream is open.
+    /// <para>在解析开始时观察的令牌；后续的解析在流打开后同步执行。</para>
+    /// </param>
+    /// <returns>
+    /// A task whose result is the archive with its metadata and all parsed entries.
+    /// <para>结果为包含元数据与全部已解析条目的归档的任务。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="filePath"/> is <see langword="null"/>.
+    /// <para><paramref name="filePath"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="filePath"/> is empty or consists only of white-space characters.
+    /// <para><paramref name="filePath"/> 为空或仅包含空白字符。</para>
+    /// </exception>
+    /// <exception cref="FileNotFoundException">
+    /// The file does not exist.
+    /// <para>文件不存在。</para>
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// The token was cancelled at the start of the parse.
+    /// <para>令牌在解析开始时已被取消。</para>
+    /// </exception>
+    /// <exception cref="OppException">
+    /// The package is unreadable, unrecognized or cannot be decrypted.
+    /// <para>包不可读、无法识别或无法解密。</para>
+    /// </exception>
     public async Task<OppArchive> ParseAsync(string filePath, CancellationToken cancellationToken = default)
     {
         Guard.ThrowIfNullOrWhiteSpace(filePath);
@@ -149,6 +309,22 @@ public sealed partial class OppReader
     /// Fully parses an Oppo firmware archive from a stream.
     /// <para>从流中完整解析 Oppo 固件归档。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable, seekable stream holding the whole package; it stays open and ownership remains with the caller. A ZIP-wrapped OFP is decrypted to a temporary directory that is removed before returning.
+    /// <para>包含完整固件包、可读且可寻址的流；流保持打开，所有权归调用方。ZIP 包裹的 OFP 会先解密到临时目录，并在返回前删除该目录。</para>
+    /// </param>
+    /// <returns>
+    /// The archive with its metadata and all parsed entries.
+    /// <para>包含元数据与全部已解析条目的归档。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="stream"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="OppException">
+    /// The package is unreadable, unrecognized or cannot be decrypted.
+    /// <para>包不可读、无法识别或无法解密。</para>
+    /// </exception>
     public OppArchive ParseFromStream(Stream stream)
     {
         Guard.ThrowIfNull(stream);
@@ -174,6 +350,30 @@ public sealed partial class OppReader
     /// Asynchronously fully parses an Oppo firmware archive from a stream.
     /// <para>异步从流中完整解析 Oppo 固件归档。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable, seekable stream holding the whole package; it stays open and ownership remains with the caller.
+    /// <para>包含完整固件包、可读且可寻址的流；流保持打开，所有权归调用方。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Token checked once before parsing starts; the parse itself runs synchronously.
+    /// <para>在解析开始前检查一次的令牌；解析本身同步执行。</para>
+    /// </param>
+    /// <returns>
+    /// A completed task carrying the archive with its metadata and all parsed entries.
+    /// <para>携带包含元数据与全部已解析条目的归档的已完成任务。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="stream"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// The token was already cancelled.
+    /// <para>令牌已被取消。</para>
+    /// </exception>
+    /// <exception cref="OppException">
+    /// The package is unreadable, unrecognized or cannot be decrypted.
+    /// <para>包不可读、无法识别或无法解密。</para>
+    /// </exception>
     public Task<OppArchive> ParseFromStreamAsync(Stream stream, CancellationToken cancellationToken = default)
     {
         Guard.ThrowIfNull(stream);
@@ -187,6 +387,48 @@ public sealed partial class OppReader
     /// Extracts an Oppo firmware archive at the specified path to an output directory.
     /// <para>将指定文件路径的 Oppo 固件归档提取到输出目录。</para>
     /// </summary>
+    /// <param name="filePath">
+    /// Path to the Oppo package file; the file is opened for reading, shared for readers, and closed before returning.
+    /// <para>Oppo 包文件路径；文件以只读、允许并发读取的方式打开，并在返回前关闭。</para>
+    /// </param>
+    /// <param name="outputDir">
+    /// Destination directory; it is created when missing. Each entry is written to a temporary file and moved into place only after its declared length is reproduced exactly.
+    /// <para>目标目录；不存在时会被创建。每个条目先写入临时文件，只有实际长度与声明完全一致后才移动到最终位置。</para>
+    /// </param>
+    /// <param name="options">
+    /// Extraction options (overwrite, key selection, entry selection); <see langword="null"/> uses defaults, i.e. no overwrite, metadata/auto-detected keys, and all entries.
+    /// <para>提取选项（覆盖、密钥选择、条目选择）；为 <see langword="null"/> 时使用默认值：不覆盖、按元数据或自动检测取密钥、提取全部条目。</para>
+    /// </param>
+    /// <param name="progress">
+    /// Receives an <see cref="OppExtractProgress"/> snapshot before and after each considered entry; <see langword="null"/> reports nothing.
+    /// <para>在每个被考虑的条目前后收到 <see cref="OppExtractProgress"/> 快照；为 <see langword="null"/> 时不上报。</para>
+    /// </param>
+    /// <returns>
+    /// A summary with the number of files written, the output directory, and the key identifier actually used.
+    /// <para>包含写入文件数、输出目录以及实际使用的密钥标识的摘要。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="filePath"/> or <paramref name="outputDir"/> is <see langword="null"/>.
+    /// <para><paramref name="filePath"/> 或 <paramref name="outputDir"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="filePath"/> or <paramref name="outputDir"/> is empty or consists only of white-space characters.
+    /// <para><paramref name="filePath"/> 或 <paramref name="outputDir"/> 为空或仅包含空白字符。</para>
+    /// </exception>
+    /// <exception cref="FileNotFoundException">
+    /// The package file does not exist.
+    /// <para>固件包文件不存在。</para>
+    /// </exception>
+    /// <exception cref="OppException">
+    /// The package is unreadable, unrecognized or cannot be decrypted, <paramref name="options"/> selects an entry name that the archive does not contain, or an extracted entry does not match its declared length.
+    /// <para>包不可读、无法识别或无法解密；<paramref name="options"/> 选择了归档中不存在的条目名；或提取出的条目与声明长度不符。</para>
+    /// </exception>
+    /// <example>
+    /// <code>
+    /// var reader = new OppReader();
+    /// var result = reader.Extract("Package.ofp", "out", new OppExtractOptions { Overwrite = true });
+    /// </code>
+    /// </example>
     public OppExtractResult Extract(
         string filePath,
         string outputDir,
@@ -211,6 +453,50 @@ public sealed partial class OppReader
     /// Asynchronously extracts an Oppo firmware archive at the specified path to an output directory.
     /// <para>异步将指定文件路径的 Oppo 固件归档提取到输出目录。</para>
     /// </summary>
+    /// <param name="filePath">
+    /// Path to the Oppo package file; the file is opened for asynchronous reading, shared for readers, and closed before the returned task completes.
+    /// <para>Oppo 包文件路径；文件以异步只读、允许并发读取的方式打开，并在返回的任务完成前关闭。</para>
+    /// </param>
+    /// <param name="outputDir">
+    /// Destination directory; it is created when missing and each entry is published atomically after its declared length is reproduced exactly.
+    /// <para>目标目录；不存在时会被创建，每个条目在长度校验完全一致后原子发布。</para>
+    /// </param>
+    /// <param name="options">
+    /// Extraction options; <see langword="null"/> uses defaults (no overwrite, metadata/auto-detected keys, all entries).
+    /// <para>提取选项；为 <see langword="null"/> 时使用默认值（不覆盖、按元数据或自动检测取密钥、提取全部条目）。</para>
+    /// </param>
+    /// <param name="progress">
+    /// Receives an <see cref="OppExtractProgress"/> snapshot before and after each considered entry; <see langword="null"/> reports nothing.
+    /// <para>在每个被考虑的条目前后收到 <see cref="OppExtractProgress"/> 快照；为 <see langword="null"/> 时不上报。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Token checked before parsing and again around every entry write; cancelling stops the run with the files already published left in place.
+    /// <para>在解析前以及每个条目写入前后都会检查的令牌；取消会中止运行，但已发布完成的文件保留在原处。</para>
+    /// </param>
+    /// <returns>
+    /// A task whose result summarizes the files written, the output directory, and the key identifier used.
+    /// <para>结果为写入文件数、输出目录与实际使用密钥标识摘要的任务。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="filePath"/> or <paramref name="outputDir"/> is <see langword="null"/>.
+    /// <para><paramref name="filePath"/> 或 <paramref name="outputDir"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="filePath"/> or <paramref name="outputDir"/> is empty or consists only of white-space characters.
+    /// <para><paramref name="filePath"/> 或 <paramref name="outputDir"/> 为空或仅包含空白字符。</para>
+    /// </exception>
+    /// <exception cref="FileNotFoundException">
+    /// The package file does not exist.
+    /// <para>固件包文件不存在。</para>
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// The token was cancelled.
+    /// <para>令牌被取消。</para>
+    /// </exception>
+    /// <exception cref="OppException">
+    /// The package is unreadable, unrecognized or cannot be decrypted, <paramref name="options"/> selects an unknown entry name, or an extracted entry does not match its declared length.
+    /// <para>包不可读、无法识别或无法解密；<paramref name="options"/> 选择了不存在的条目名；或提取出的条目与声明长度不符。</para>
+    /// </exception>
     public async Task<OppExtractResult> ExtractAsync(
         string filePath,
         string outputDir,
@@ -236,6 +522,38 @@ public sealed partial class OppReader
     /// Extracts an Oppo firmware archive from a stream to an output directory.
     /// <para>从流中提取 Oppo 固件归档到输出目录。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable, seekable stream holding the whole package; it stays open, the reader manages its position, and ownership remains with the caller.
+    /// <para>包含完整固件包、可读且可寻址的流；流保持打开，读取位置由本方法自行管理，所有权归调用方。</para>
+    /// </param>
+    /// <param name="outputDir">
+    /// Destination directory; it is created when missing and each entry is published atomically after its declared length is reproduced exactly.
+    /// <para>目标目录；不存在时会被创建，每个条目在长度校验完全一致后原子发布。</para>
+    /// </param>
+    /// <param name="options">
+    /// Extraction options; <see langword="null"/> uses defaults (no overwrite, metadata/auto-detected keys, all entries).
+    /// <para>提取选项；为 <see langword="null"/> 时使用默认值（不覆盖、按元数据或自动检测取密钥、提取全部条目）。</para>
+    /// </param>
+    /// <param name="progress">
+    /// Receives an <see cref="OppExtractProgress"/> snapshot before and after each considered entry; <see langword="null"/> reports nothing.
+    /// <para>在每个被考虑的条目前后收到 <see cref="OppExtractProgress"/> 快照；为 <see langword="null"/> 时不上报。</para>
+    /// </param>
+    /// <returns>
+    /// A summary with the number of files written, the output directory, and the key identifier used.
+    /// <para>包含写入文件数、输出目录与实际使用密钥标识的摘要。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="stream"/> or <paramref name="outputDir"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 或 <paramref name="outputDir"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="outputDir"/> is empty or consists only of white-space characters.
+    /// <para><paramref name="outputDir"/> 为空或仅包含空白字符。</para>
+    /// </exception>
+    /// <exception cref="OppException">
+    /// The package is unreadable, unrecognized or cannot be decrypted, <paramref name="options"/> selects an unknown entry name, or an extracted entry does not match its declared length.
+    /// <para>包不可读、无法识别或无法解密；<paramref name="options"/> 选择了不存在的条目名；或提取出的条目与声明长度不符。</para>
+    /// </exception>
     public OppExtractResult ExtractFromStream(
         Stream stream,
         string outputDir,
@@ -253,6 +571,46 @@ public sealed partial class OppReader
     /// Asynchronously extracts an Oppo firmware archive from a stream to an output directory.
     /// <para>异步从流中提取 Oppo 固件归档到输出目录。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable, seekable stream holding the whole package; it stays open, the reader manages its position, and ownership remains with the caller.
+    /// <para>包含完整固件包、可读且可寻址的流；流保持打开，读取位置由本方法自行管理，所有权归调用方。</para>
+    /// </param>
+    /// <param name="outputDir">
+    /// Destination directory; it is created when missing and each entry is published atomically after its declared length is reproduced exactly.
+    /// <para>目标目录；不存在时会被创建，每个条目在长度校验完全一致后原子发布。</para>
+    /// </param>
+    /// <param name="options">
+    /// Extraction options; <see langword="null"/> uses defaults (no overwrite, metadata/auto-detected keys, all entries).
+    /// <para>提取选项；为 <see langword="null"/> 时使用默认值（不覆盖、按元数据或自动检测取密钥、提取全部条目）。</para>
+    /// </param>
+    /// <param name="progress">
+    /// Receives an <see cref="OppExtractProgress"/> snapshot before and after each considered entry; <see langword="null"/> reports nothing.
+    /// <para>在每个被考虑的条目前后收到 <see cref="OppExtractProgress"/> 快照；为 <see langword="null"/> 时不上报。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Token checked before parsing and again around every entry write; cancelling stops the run with the files already published left in place.
+    /// <para>在解析前以及每个条目写入前后都会检查的令牌；取消会中止运行，但已发布完成的文件保留在原处。</para>
+    /// </param>
+    /// <returns>
+    /// A completed task carrying the summary of files written, the output directory, and the key identifier used.
+    /// <para>携带写入文件数、输出目录与实际使用密钥标识摘要的已完成任务。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="stream"/> or <paramref name="outputDir"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 或 <paramref name="outputDir"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="outputDir"/> is empty or consists only of white-space characters.
+    /// <para><paramref name="outputDir"/> 为空或仅包含空白字符。</para>
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// The token was cancelled.
+    /// <para>令牌被取消。</para>
+    /// </exception>
+    /// <exception cref="OppException">
+    /// The package is unreadable, unrecognized or cannot be decrypted, <paramref name="options"/> selects an unknown entry name, or an extracted entry does not match its declared length.
+    /// <para>包不可读、无法识别或无法解密；<paramref name="options"/> 选择了不存在的条目名；或提取出的条目与声明长度不符。</para>
+    /// </exception>
     public Task<OppExtractResult> ExtractFromStreamAsync(
         Stream stream,
         string outputDir,

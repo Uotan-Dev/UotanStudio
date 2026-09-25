@@ -32,13 +32,16 @@ public sealed partial class FastbootSession : IProtocolSession
     /// </summary>
     private UsbDeviceTransport? Usb => Transport as UsbDeviceTransport;
 
-    /// <summary>Gets the protocol name. 获取协议名称。</summary>
+    /// <summary>Protocol identifier reported to the host layer. <para>上报给宿主层的协议标识符。</para></summary>
+    /// <value>Always the literal <c>fastboot</c>. <para>始终为字面量 <c>fastboot</c>。</para></value>
     public string ProtocolName => "fastboot";
 
-    /// <summary>Gets the underlying transport. 获取底层传输。</summary>
+    /// <summary>Transport carrying every fastboot command, response and payload exchange. <para>承载所有 fastboot 命令、响应与负载交换的传输。</para></summary>
+    /// <value>The transport supplied at construction; the session disposes it together with itself. <para>构造时传入的传输；会话释放时会一并处置它。</para></value>
     public ICommTransport Transport { get; }
 
-    /// <summary>Gets a value indicating whether the session is currently connected. 获取会话是否已连接。</summary>
+    /// <summary>Connection liveness reported to the host layer. <para>上报给宿主层的连接活性。</para></summary>
+    /// <value><see langword="true"/> only while the session is not disposed and the underlying transport still reports a live connection. <para>仅在会话未释放且底层传输仍报告连接存活时为 <see langword="true"/>。</para></value>
     public bool IsConnected => !_disposed && Transport.IsConnected;
 
     /// <summary>
@@ -56,6 +59,10 @@ public sealed partial class FastbootSession : IProtocolSession
     /// Sends a raw fastboot command and returns the parsed response.
     /// <para>发送原始 fastboot 命令并返回解析后的响应。</para>
     /// </summary>
+    /// <param name="command">Raw command text as sent on the wire (e.g. <c>getvar:product</c>); no validation or framing is added. <para>线上原样发送的命令文本（如 <c>getvar:product</c>）；不追加校验或成帧。</para></param>
+    /// <returns>The parsed terminal response; INFO frames encountered while waiting are consumed into its status lines. <para>解析后的终态响应；等待期间遇到的 INFO 帧会被消费进其状态行。</para></returns>
+    /// <exception cref="ArgumentException">The encoded command exceeds the fastboot frame length limit. <para>编码后的命令超过 fastboot 帧长度上限。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session has been disposed. <para>会话已释放。</para></exception>
     public FastbootResponse ExecuteCommand(string command)
     {
         ThrowIfDisposed();
@@ -68,6 +75,10 @@ public sealed partial class FastbootSession : IProtocolSession
     /// (matching AOSP behavior where an unknown variable yields no value).
     /// <para>发送 getvar 查询并返回变量值，FAIL/超时时返回空（与 AOSP 未知变量无值的行为一致）。</para>
     /// </summary>
+    /// <param name="key">Variable name without the <c>getvar:</c> prefix, matched case-sensitively in the cache. <para>不含 <c>getvar:</c> 前缀的变量名，在缓存中按大小写敏感匹配。</para></param>
+    /// <param name="useCache">When <see langword="true"/>, consults and updates the session getvar cache; pass <see langword="false"/> to force a fresh query. <para>为 <see langword="true"/> 时查询并更新会话 getvar 缓存；传 <see langword="false"/> 强制重新查询。</para></param>
+    /// <returns>The reported value, or <see cref="string.Empty"/> when the device answers FAIL or the exchange times out. <para>设备上报的值；设备回答 FAIL 或交换超时时返回 <see cref="string.Empty"/>。</para></returns>
+    /// <exception cref="ObjectDisposedException">The session has been disposed. <para>会话已释放。</para></exception>
     public string GetVariable(string key, bool useCache = true)
     {
         if (useCache && _varCache.TryGetValue(key, out var cached))
@@ -97,6 +108,10 @@ public sealed partial class FastbootSession : IProtocolSession
     /// <para>通过 getvar:all 查询所有设备变量并以字典形式返回。变量以 "key: value" 形式的
     /// INFO 行上报；解析结果同时写入 getvar 缓存。</para>
     /// </summary>
+    /// <returns>Case-sensitive dictionary of every reported variable; on duplicate keys the first occurrence wins.
+    /// <para>大小写敏感的变量字典；重复键以首次出现的值为准。</para>
+    /// </returns>
+    /// <exception cref="FastbootException">The device answered FAIL or the exchange timed out. <para>设备回答 FAIL 或交换超时。</para></exception>
     public Dictionary<string, string> GetAllVariables()
     {
         var response = ExecuteCommand(FastbootConstants.CommandGetVarAll);

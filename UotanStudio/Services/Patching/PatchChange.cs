@@ -44,7 +44,7 @@ public sealed record PatchChange(
 /// <summary>First bytes of one replacement window; invocation zero denotes the root workflow.</summary>
 public sealed record PatchBinaryPreview(long Offset, int Length, int Invocation, string BeforeHex, string AfterHex);
 
-/// <summary>A file no longer matches the state against which the patch was prepared.</summary>
+/// <summary>A file does not match the state against which the patch was prepared.</summary>
 public sealed class PatchConflictException(string path) : IOException($"Patch input changed: {path}")
 {
     /// <summary>Conflicting target or source.</summary>

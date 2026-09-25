@@ -2,22 +2,57 @@ using System.Text.RegularExpressions;
 
 namespace UotanStudio.Services.Projects;
 
-/// <summary>Structural validation for untrusted visual-plugin JSON.</summary>
+/// <summary>
+/// Structural validation for untrusted visual-plugin JSON.
+/// <para>针对不可信视觉插件 JSON 的结构性校验。</para>
+/// </summary>
 public static partial class VisualPluginValidation
 {
-    /// <summary>Maximum accepted JSON package size.</summary>
+    /// <summary>
+    /// Maximum accepted JSON package size.
+    /// <para>允许的 JSON 插件包最大体积。</para>
+    /// </summary>
     public const long MaximumFileSize = 8 * 1024 * 1024;
 
-    /// <summary>Maximum number of graph nodes.</summary>
+    /// <summary>
+    /// Maximum number of graph nodes.
+    /// <para>图节点数量上限。</para>
+    /// </summary>
     public const int MaximumNodeCount = 1024;
 
-    /// <summary>Maximum number of graph connections.</summary>
+    /// <summary>
+    /// Maximum number of graph connections.
+    /// <para>图连接数量上限。</para>
+    /// </summary>
     public const int MaximumConnectionCount = 4096;
 
-    /// <summary>Maximum total number of declared graph and public ports.</summary>
+    /// <summary>
+    /// Maximum total number of declared graph and public ports.
+    /// <para>声明的图端口与公共端口总数上限。</para>
+    /// </summary>
     public const int MaximumPortCount = 16384;
 
-    /// <summary>Validates a package without consulting host node registrations.</summary>
+    /// <summary>
+    /// Validates a package without consulting host node registrations.
+    /// <para>校验插件包的结构，不查询宿主节点注册信息。</para>
+    /// </summary>
+    /// <param name="package">
+    /// Package parsed from untrusted JSON, including the composites embedded in its graph nodes.
+    /// <para>由不可信 JSON 解析得到的插件包，包含其图节点内嵌的复合体。</para>
+    /// </param>
+    /// <returns>
+    /// An empty list when every structural check passes; otherwise one message per problem found. Composite graphs are walked
+    /// recursively up to 32 levels with cycle detection on manifest ids, and shared node, asset-count and asset-byte budgets
+    /// accumulate across the whole tree; a fatal structural problem ends validation of the affected package early, and nested
+    /// checks are skipped once an error has already been recorded.
+    /// <para>所有结构检查均通过时返回空列表；否则每发现一个问题返回一条消息。复合图会被递归遍历至多 32 层，并按清单 ID 进行环路检测；
+    /// 节点数、资源数与资源字节数的全局预算在整棵树上累计统计。致命的结构问题会提前结束受影响包的校验，且一旦已记录错误，
+    /// 后续嵌套检查将被跳过。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="package"/> is <see langword="null"/>.
+    /// <para><paramref name="package"/> 为 <see langword="null"/>。</para>
+    /// </exception>
     public static IReadOnlyList<string> Validate(VisualPluginPackage package)
     {
         ArgumentNullException.ThrowIfNull(package);
@@ -76,7 +111,6 @@ public static partial class VisualPluginValidation
     {
         ArgumentNullException.ThrowIfNull(package);
         var errors = new List<string>();
-        // Nullable annotations do not prevent explicit JSON nulls in untrusted packages.
         if (package.Manifest is null || package.Graph is null || package.Inputs is null || package.Outputs is null)
         {
             return ["Plugin manifest, graph and public port collections must not be null."];

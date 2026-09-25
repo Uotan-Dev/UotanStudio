@@ -49,12 +49,14 @@ public class FirehoseConfiguration
     /// Gets or sets the storage type.
     /// <para>获取或设置存储类型。</para>
     /// </summary>
+    /// <value>The target storage technology; defaults to <see cref="FirehoseStorageType.Emmc"/>. <para>目标存储技术；默认为 <see cref="FirehoseStorageType.Emmc"/>。</para></value>
     public FirehoseStorageType StorageType { get; set; } = FirehoseStorageType.Emmc;
 
     /// <summary>
     /// Gets or sets the maximum payload to target (bytes).
     /// <para>获取或设置到目标的最大负载（字节）。</para>
     /// </summary>
+    /// <value>The negotiated write chunk size in bytes; defaults to 1048576. <para>协商后的写入块大小（字节）；默认 1048576。</para></value>
     public long MaxPayloadSizeToTarget { get; set; } = 1048576;
 
     /// <summary>
@@ -63,12 +65,14 @@ public class FirehoseConfiguration
     /// <para>获取或设置 programmer 支持的到目标最大负载（字节）；通过同名 configure NAK
     /// 属性协商。</para>
     /// </summary>
+    /// <value>The upper bound reported by the programmer; defaults to 1048576. <para>programmer 报告的上限；默认 1048576。</para></value>
     public long MaxPayloadSizeToTargetSupported { get; set; } = 1048576;
 
     /// <summary>
     /// Gets or sets the maximum payload from target (bytes).
     /// <para>获取或设置来自目标的最大负载（字节）。</para>
     /// </summary>
+    /// <value>The negotiated read chunk size in bytes; defaults to 8192. <para>协商后的读取块大小（字节）；默认 8192。</para></value>
     public long MaxPayloadSizeFromTarget { get; set; } = 8192;
 
     /// <summary>
@@ -77,48 +81,56 @@ public class FirehoseConfiguration
     /// <para>获取或设置扇区大小（字节）。0 表示自动检测（configure 之后通过
     /// &lt;getstorageinfo&gt; 检测，失败则按存储类型回退默认值）。</para>
     /// </summary>
+    /// <value>The sector size in bytes; 0 requests auto-detection. <para>扇区大小（字节）；0 表示请求自动检测。</para></value>
     public long SectorSize { get; set; } = 0;
 
     /// <summary>
     /// Gets or sets whether the sector size should be auto-detected after configure.
     /// <para>获取或设置是否在 configure 之后自动检测扇区大小。</para>
     /// </summary>
+    /// <value><see langword="true"/> to run <c>getstorageinfo</c> when <see cref="SectorSize"/> is 0; defaults to <see langword="true"/>. <para>当 <see cref="SectorSize"/> 为 0 时是否运行 <c>getstorageinfo</c>；默认为 <see langword="true"/>。</para></value>
     public bool AutoDetectSectorSize { get; set; } = true;
 
     /// <summary>
     /// Gets or sets whether the host is ZLP-aware.
     /// <para>主机是否 ZLP 感知。</para>
     /// </summary>
+    /// <value><see langword="true"/> when the host handles zero-length packets; defaults to <see langword="true"/>. <para>主机是否可处理零长包；默认为 <see langword="true"/>。</para></value>
     public bool ZlpAwareHost { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the response timeout (seconds).
     /// <para>获取或设置响应超时（秒）。</para>
     /// </summary>
+    /// <value>The response timeout in seconds; defaults to 120. <para>响应超时（秒）；默认 120。</para></value>
     public int ResponseTimeoutSeconds { get; set; } = 120;
 
     /// <summary>
     /// Gets or sets the number of A/B slots (0 = not used).
     /// <para>获取或设置 A/B 槽位编号（0 表示未使用）。</para>
     /// </summary>
+    /// <value>The slot emitted on program/read/erase commands; 0 omits it. <para>program/read/erase 命令输出的槽位编号；0 表示省略。</para></value>
     public int Slot { get; set; } = 0;
 
     /// <summary>
     /// Gets or sets the Verbose configure attribute.
     /// <para>获取或设置 configure 的 Verbose 属性。</para>
     /// </summary>
+    /// <value>The Verbose value sent in the configure command; defaults to 0. <para>configure 命令中发送的 Verbose 值；默认 0。</para></value>
     public int Verbose { get; set; } = 0;
 
     /// <summary>
     /// Gets or sets the AlwaysValidate configure attribute.
     /// <para>获取或设置 configure 的 AlwaysValidate 属性。</para>
     /// </summary>
+    /// <value>The AlwaysValidate value sent in the configure command; defaults to 0. <para>configure 命令中发送的 AlwaysValidate 值；默认 0。</para></value>
     public int AlwaysValidate { get; set; } = 0;
 
     /// <summary>
     /// Gets or sets the MaxDigestTableSizeInBytes configure attribute.
     /// <para>获取或设置 configure 的 MaxDigestTableSizeInBytes 属性。</para>
     /// </summary>
+    /// <value>The digest table size budget in bytes; defaults to 8192. <para>摘要表大小预算（字节）；默认 8192。</para></value>
     public long MaxDigestTableSizeInBytes { get; set; } = 8192;
 
     /// <summary>
@@ -126,48 +138,56 @@ public class FirehoseConfiguration
     /// initialization).
     /// <para>获取或设置 configure 的 SkipStorageInit 属性（非零表示跳过存储初始化）。</para>
     /// </summary>
+    /// <value>Non-zero skips storage initialization; defaults to 0. <para>非零则跳过存储初始化；默认 0。</para></value>
     public int SkipStorageInit { get; set; } = 0;
 
     /// <summary>
     /// Gets or sets the SkipWrite configure attribute (non-zero to simulate writes).
     /// <para>获取或设置 configure 的 SkipWrite 属性（非零表示模拟写入）。</para>
     /// </summary>
+    /// <value>Non-zero simulates writes; defaults to 0. <para>非零则模拟写入；默认 0。</para></value>
     public int SkipWrite { get; set; } = 0;
 
     /// <summary>
     /// Gets or sets the SkipSettingMinClocks configure attribute.
     /// <para>获取或设置 configure 的 SkipSettingMinClocks 属性。</para>
     /// </summary>
+    /// <value>Non-zero skips setting minimum clocks; defaults to 0. <para>非零则跳过设置最低时钟；默认 0。</para></value>
     public int SkipSettingMinClocks { get; set; } = 0;
 
     /// <summary>
     /// Gets or sets the SkipSettingMaxClocks configure attribute.
     /// <para>获取或设置 configure 的 SkipSettingMaxClocks 属性。</para>
     /// </summary>
+    /// <value>Non-zero skips setting maximum clocks; defaults to 0. <para>非零则跳过设置最高时钟；默认 0。</para></value>
     public int SkipSettingMaxClocks { get; set; } = 0;
 
     /// <summary>
     /// Gets or sets the TargetName configure attribute (optional).
     /// <para>获取或设置 configure 的 TargetName 属性（可选）。</para>
     /// </summary>
+    /// <value>The target name sent in configure, or <see langword="null"/> to omit it. <para>configure 中发送的目标名称；为 <see langword="null"/> 时省略。</para></value>
     public string? TargetName { get; set; }
 
     /// <summary>
     /// Gets or sets the StorageSlot configure attribute (0 = not emitted).
     /// <para>获取或设置 configure 的 StorageSlot 属性（0 表示不输出）。</para>
     /// </summary>
+    /// <value>The physical storage slot for configure; 0 omits the attribute. <para>configure 使用的物理存储槽位；0 表示省略该属性。</para></value>
     public int StorageSlot { get; set; } = 0;
 
     /// <summary>
     /// Gets or sets the retry interval between configure attempts in milliseconds.
     /// <para>获取或设置 configure 尝试之间的重试间隔（毫秒）。</para>
     /// </summary>
+    /// <value>The delay before each retry after the first; defaults to 1000. <para>首个尝试之后每次重试前的延迟；默认 1000。</para></value>
     public int ConfigureRetryIntervalMs { get; set; } = 1000;
 
     /// <summary>
     /// Gets or sets the per-attempt response timeout for configure in milliseconds.
     /// <para>获取或设置 configure 单次尝试的响应超时（毫秒）。</para>
     /// </summary>
+    /// <value>The timeout applied to non-first attempts; 0 disables the per-attempt limit. <para>应用于非首次尝试的超时；0 表示禁用单次尝试限制。</para></value>
     public int ConfigureResponseTimeoutMs { get; set; } = EdlConstants.ConfigureResponseTimeoutMs;
 
     /// <summary>
@@ -177,6 +197,7 @@ public class FirehoseConfiguration
     /// <para>获取或设置首次 configure 尝试的响应超时（毫秒）。Sahara 握手刚结束时设备可能
     /// 仍在启动 Firehose 并忽略首个 configure；短超时让重试快速生效。</para>
     /// </summary>
+    /// <value>The shortened timeout for attempt zero; 0 falls back to the standard attempt timeout. <para>用于第零次尝试的缩短超时；0 表示回退到标准单次尝试超时。</para></value>
     public int ConfigureFirstAttemptTimeoutMs { get; set; } = EdlConstants.ConfigureFirstAttemptTimeoutMs;
 
     /// <summary>
@@ -185,33 +206,44 @@ public class FirehoseConfiguration
     /// <para>获取或设置连续 configure 超时后立即以 ConnectionLost 失败的上限（0 = 禁用，
     /// 按尝试次数上限重试）。</para>
     /// </summary>
+    /// <value>The consecutive-timeout threshold; defaults to 3. <para>连续超时阈值；默认 3。</para></value>
     public int ConfigureMaxConsecutiveTimeouts { get; set; } = 3;
 
     /// <summary>
     /// Gets or sets the budget in milliseconds for observing transport disconnection after
     /// a power ACK (0 disables observation). Disconnection does not prove successful boot.
+    /// <para>获取或设置在 power ACK 之后观察传输断开的预算时间（毫秒），0 表示禁用观察。断开不能证明启动成功。</para>
     /// </summary>
+    /// <value>The disconnection-observation window in milliseconds; 0 skips the wait. <para>断开观察窗口（毫秒）；0 表示跳过等待。</para></value>
     public int PowerResetVerifyTimeoutMs { get; set; } = EdlConstants.PowerResetVerifyTimeoutMs;
 
-    /// <summary>Gets or sets the timeout in milliseconds for the power command's actual response.</summary>
+    /// <summary>
+    /// Gets or sets the timeout in milliseconds for the power command's actual response.
+    /// <para>获取或设置 power 命令实际响应的超时时间（毫秒）。</para>
+    /// </summary>
+    /// <value>The response timeout in milliseconds for a power command. <para>power 命令的响应超时（毫秒）。</para></value>
     public int PowerResponseTimeoutMs { get; set; } = EdlConstants.PowerResponseTimeoutMs;
 
     /// <summary>
     /// Gets or sets an explicit write (ZLP) timeout in milliseconds (0 = per-storage default).
     /// <para>获取或设置显式写入（ZLP）超时（毫秒）（0 = 按存储类型默认值）。</para>
     /// </summary>
+    /// <value>The override write timeout in milliseconds; 0 selects the storage-type default. <para>写入超时的显式覆盖值（毫秒）；0 表示选择按存储类型的默认值。</para></value>
     public int WriteTimeoutMs { get; set; } = 0;
 
     /// <summary>
     /// Gets or sets an explicit erase timeout in milliseconds (0 = per-storage default).
     /// <para>获取或设置显式擦除超时（毫秒）（0 = 按存储类型默认值）。</para>
     /// </summary>
+    /// <value>The override erase timeout in milliseconds; 0 selects the storage-type default. <para>擦除超时的显式覆盖值（毫秒）；0 表示选择按存储类型的默认值。</para></value>
     public int EraseTimeoutMs { get; set; } = 0;
 
     /// <summary>
     /// Converts the storage type to its Firehose XML string.
     /// <para>转换存储类型为 Firehose XML 字符串。</para>
     /// </summary>
+    /// <value>The configure <c>STORAGE_TYPE</c> token: <c>ufs</c>, <c>nand</c>, <c>spinor</c>, <c>eMMC</c>, or an empty string for <see cref="FirehoseStorageType.Unknown"/>.
+    /// <para>configure 的 <c>STORAGE_TYPE</c> 记号：<c>ufs</c>、<c>nand</c>、<c>spinor</c>、<c>eMMC</c>；<see cref="FirehoseStorageType.Unknown"/> 时为空字符串。</para></value>
     public string StorageTypeString => StorageType switch
     {
         FirehoseStorageType.Ufs => "ufs",
@@ -235,9 +267,9 @@ public class FirehoseConfiguration
 /// Initializes a new instance of the <see cref="FirehoseProtocol"/> class.
 /// <para>初始化 <see cref="FirehoseProtocol"/> 类的新实例。</para>
 /// </remarks>
-/// <param name="transport">The device transport. 设备传输。</param>
-/// <param name="config">Optional Firehose configuration. 可选的 Firehose 配置。</param>
-/// <param name="timeoutMs">Optional per-read command timeout in milliseconds. 可选的单次读取命令超时（毫秒）。</param>
+/// <param name="transport">The device transport. <para>设备传输。</para></param>
+/// <param name="config">Optional Firehose configuration. <para>可选的 Firehose 配置。</para></param>
+/// <param name="timeoutMs">Optional per-read command timeout in milliseconds. <para>可选的单次读取命令超时（毫秒）。</para></param>
 public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseConfiguration? config = null, int? timeoutMs = null) : IDisposable
 {
     private readonly ICommTransport _transport = transport ?? throw new ArgumentNullException(nameof(transport));
@@ -248,13 +280,20 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     private volatile bool _disposed;
     private volatile bool _faulted;
 
-    /// <summary>Gets whether an uncertain transfer or acknowledged power command requires a new device session.</summary>
+    /// <summary>
+    /// Gets whether an uncertain transfer or acknowledged power command requires a new device session.
+    /// <para>获取不确定的传输或已确认的 power 命令是否需要新的设备会话。</para>
+    /// </summary>
+    /// <value><see langword="true"/> once the session has faulted; operations on a faulted session throw <see cref="EdlErrorCode.ConnectionLost"/>.
+    /// <para>会话进入不可复用状态后为 <see langword="true"/>；之后的操作会抛出 <see cref="EdlErrorCode.ConnectionLost"/>。</para></value>
     public bool RequiresReconnect => _faulted;
 
     /// <summary>
     /// Gets the current configuration.
     /// <para>获取当前配置。</para>
     /// </summary>
+    /// <value>The mutable <see cref="FirehoseConfiguration"/> backing this session; a fresh default instance when none was supplied.
+    /// <para>驱动本会话的可变 <see cref="FirehoseConfiguration"/>；未提供时为新建的默认实例。</para></value>
     public FirehoseConfiguration Configuration { get; } = config ?? new FirehoseConfiguration();
 
     /// <summary>
@@ -273,10 +312,10 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// Sends a configure command and negotiates payload sizes (and the sector size).
     /// <para>发送配置命令并协商负载大小（及扇区大小）。</para>
     /// </summary>
-    /// <param name="maxRetries">Maximum number of retry attempts. 最大重试次数。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The Firehose response. Firehose 响应。</returns>
-    /// <exception cref="EdlException">Thrown when configure fails or the device disconnects. 配置失败或设备断开时抛出。</exception>
+    /// <param name="maxRetries">Maximum number of retry attempts. <para>最大重试次数。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The Firehose response. <para>Firehose 响应。</para></returns>
+    /// <exception cref="EdlException">Thrown when configure fails or the device disconnects. <para>配置失败或设备断开时抛出。</para></exception>
     public async Task<FirehoseResponse> ConfigureAsync(int maxRetries = 30, CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
@@ -398,8 +437,8 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <para>通过 &lt;getstorageinfo physical_partition_number="0"/&gt; 自动检测扇区大小并存入
     /// 配置；失败时按存储类型回退默认值。</para>
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A task representing the asynchronous operation. <para>表示异步操作的任务。</para></returns>
     public async Task AutoDetectSectorSizeAsync(CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
@@ -579,7 +618,6 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // The previous owner may have faulted or been disposed while this call waited.
             ThrowIfDisposed();
             cancellationToken.ThrowIfCancellationRequested();
             return new OperationLease(_operationGate);
@@ -639,6 +677,5 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// Disposes the protocol.
     /// <para>释放协议。</para>
     /// </summary>
-    // Do not dispose the semaphore while active owners or queued callers may still use it.
     public void Dispose() => _disposed = true;
 }

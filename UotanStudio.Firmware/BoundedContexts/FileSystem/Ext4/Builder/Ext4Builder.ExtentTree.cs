@@ -2,6 +2,11 @@ using System.Text;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 
+/// <summary>
+/// EXT4 builder part that turns file contents into extents: it detects all-zero blocks, merges the remaining runs and emits a single node or a multi-level B-tree of index and leaf blocks sized by the block size.
+/// <para>EXT4 构建器的组成部分，负责把文件内容转换为 extent：检测全零块、合并其余连续区段，
+/// 并按块大小写出单节点或索引/叶子分层的多级 B 树。</para>
+/// </summary>
 public sealed partial class Ext4Builder
 {
     /// <summary>

@@ -4,23 +4,66 @@ using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Kernel;
 
-/// <summary>ELF machine identifiers supported by the managed raw-kernel symbolizer.</summary>
+/// <summary>
+/// ELF machine identifiers supported by the managed raw-kernel symbolizer.
+/// <para>托管原始内核符号化器所支持的 ELF 机器标识。</para>
+/// </summary>
 public enum KernelElfMachine : ushort
 {
+    /// <summary>ARM 32-bit (<c>EM_ARM</c>, value <c>40</c>). <para>32 位 ARM（<c>EM_ARM</c>，值 <c>40</c>）。</para></summary>
     Arm = 40,
+
+    /// <summary>x86-64 (<c>EM_X86_64</c>, value <c>62</c>). <para>x86-64（<c>EM_X86_64</c>，值 <c>62</c>）。</para></summary>
     X86_64 = 62,
+
+    /// <summary>ARM 64-bit (<c>EM_AARCH64</c>, value <c>183</c>). <para>64 位 ARM（<c>EM_AARCH64</c>，值 <c>183</c>）。</para></summary>
     AArch64 = 183,
+
+    /// <summary>RISC-V (<c>EM_RISCV</c>, value <c>243</c>). <para>RISC-V（<c>EM_RISCV</c>，值 <c>243</c>）。</para></summary>
     RiscV = 243
 }
 
-/// <summary>Options controlling raw-kernel ELF64 generation.</summary>
+/// <summary>
+/// Options controlling raw-kernel ELF64 generation.
+/// <para>控制原始内核 ELF64 生成的选项。</para>
+/// </summary>
 public sealed record KernelElfOptions
 {
+    /// <summary>
+    /// Machine identifier written to the ELF header; <see langword="null"/> selects automatic detection from the
+    /// kernel image signatures.
+    /// <para>写入 ELF 头的机器标识；为 <see langword="null"/> 时根据内核镜像特征自动探测。</para>
+    /// </summary>
+    /// <value>
+    /// An explicit machine, or <see langword="null"/> for detection. Detection recognizes ARM64, RISC-V and
+    /// x86-64 images and fails on anything else.
+    /// <para>显式机器标识，或 <see langword="null"/> 表示探测。探测可识别 ARM64、RISC-V 与 x86-64 镜像，其余情况失败。</para>
+    /// </value>
     public KernelElfMachine? Machine { get; init; }
+
+    /// <summary>
+    /// Segment load address recorded in the ELF program header; <see langword="null"/> infers it from the symbols.
+    /// <para>ELF 程序头记录的段加载地址；为 <see langword="null"/> 时按符号推断。</para>
+    /// </summary>
+    /// <value>
+    /// An explicit address, or <see langword="null"/> to use the lowest non-zero symbol address rounded down to a
+    /// page boundary.
+    /// <para>显式地址，或 <see langword="null"/> 表示取最小非零符号地址并向页边界向下取整。</para>
+    /// </value>
     public ulong? LoadAddress { get; init; }
 }
 
-/// <summary>Result of producing a symbolized ELF64 kernel image.</summary>
+/// <summary>
+/// Result of producing a symbolized ELF64 kernel image.
+/// <para>生成带符号 ELF64 内核镜像的结果。</para>
+/// </summary>
+/// <param name="OutputPath">Full path of the atomically written ELF file; an existing file was replaced.
+/// <para>原子写入的 ELF 文件完整路径；已存在的文件会被替换。</para></param>
+/// <param name="Machine">Machine identifier recorded in the ELF header. <para>ELF 头中记录的机器标识。</para></param>
+/// <param name="LoadAddress">Load address used for the text segment. <para>代码段使用的加载地址。</para></param>
+/// <param name="EntryAddress">Entry point taken from <c>_stext</c>/<c>_text</c>, else the first non-zero symbol address. <para>入口地址优先取 <c>_stext</c>/<c>_text</c>，否则取首个非零符号地址。</para></param>
+/// <param name="SymbolCount">Number of kernel symbols written to the symbol table, excluding its leading null entry. <para>写入符号表的内核符号数量，不含表首的空条目。</para></param>
+/// <param name="OutputLength">Exact length in bytes of the produced file. <para>生成文件的精确字节长度。</para></param>
 public sealed record KernelElfResult(
     string OutputPath,
     KernelElfMachine Machine,

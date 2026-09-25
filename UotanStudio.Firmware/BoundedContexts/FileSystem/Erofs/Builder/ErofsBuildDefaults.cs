@@ -18,7 +18,12 @@ public static class ErofsBuildDefaults
 
     private static bool _legacyCompatibility = DefaultLegacyCompatibility;
 
-    /// <summary>Legacy (pre-5.13) layout for EROFS images built without explicit options.</summary>
+    /// <summary>Legacy (pre-5.13) layout for EROFS images built without explicit options.
+    /// <para>未显式给出选项时构建的 EROFS 镜像采用 legacy（pre-5.13）布局。</para></summary>
+    /// <value>Process-wide flag read and written with volatile access so host settings synced at startup
+    /// are observed by concurrent builds; seeded from <see cref="DefaultLegacyCompatibility"/>.
+    /// <para>进程级标志，以 volatile 方式读写，使启动时同步的宿主设置能被并发构建观察到；初值来自
+    /// <see cref="DefaultLegacyCompatibility"/>。</para></value>
     public static bool LegacyCompatibility
     {
         get => Volatile.Read(ref _legacyCompatibility);

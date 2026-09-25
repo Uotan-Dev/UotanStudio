@@ -38,6 +38,8 @@ public readonly struct RepackMetadataContext
     /// Gets a value indicating whether this context is unspecified (legacy ambient behavior).
     /// <para>获取一个值，指示上下文是否未指定（沿用旧环境行为）。</para>
     /// </summary>
+    /// <value><see langword="true"/> when resolution still defers to the ambient metadata root; explicit contexts report <see langword="false"/>.
+    /// <para>解析仍交由环境元数据根决定时为 <see langword="true"/>；显式上下文返回 <see langword="false"/>。</para></value>
     public bool IsUnspecified => _kind == ContextKind.Unspecified;
 
     /// <summary>
@@ -46,6 +48,8 @@ public readonly struct RepackMetadataContext
     /// <para>创建未指定上下文：解析回退到 <see cref="RepackMetadata.DefaultMetadataRoot"/>，
     /// 与旧入口完全一致。</para>
     /// </summary>
+    /// <value>A context that resolves the metadata location at use time instead of at construction.
+    /// <para>在使用时才解析元数据位置、而不是在构造时就固定的上下文。</para></value>
     public static RepackMetadataContext Unspecified => default;
 
     /// <summary>
@@ -53,7 +57,12 @@ public readonly struct RepackMetadataContext
     /// location never falls back to the extraction directory.
     /// <para>创建显式工程根上下文。只使用该根目录；工程位置缺失时不回退到解包目录。</para>
     /// </summary>
-    /// <param name="projectMetadataRoot"><para>统一元数据根目录（如 <c>{项目根}/.uotan/metadata</c>）。</para>The consolidated metadata root (e.g. <c>{projectRoot}/.uotan/metadata</c>).</param>
+    /// <param name="projectMetadataRoot">The consolidated metadata root (e.g. <c>{projectRoot}/.uotan/metadata</c>).
+    /// <para>统一元数据根目录（如 <c>{项目根}/.uotan/metadata</c>）。</para></param>
+    /// <returns>A context that resolves metadata only below <paramref name="projectMetadataRoot"/>.
+    /// <para>只在 <paramref name="projectMetadataRoot"/> 之下解析元数据的上下文。</para></returns>
+    /// <exception cref="ArgumentNullException"><c>projectMetadataRoot</c> is <see langword="null"/>.
+    /// <para><c>projectMetadataRoot</c> 为 <see langword="null"/>。</para></exception>
     public static RepackMetadataContext FromProjectRoot(string projectMetadataRoot)
         => new(ContextKind.ProjectRoot, root: projectMetadataRoot ?? throw new ArgumentNullException(nameof(projectMetadataRoot)));
 
@@ -62,6 +71,8 @@ public readonly struct RepackMetadataContext
     /// when an ambient metadata root is set.
     /// <para>创建显式本地目录上下文。只使用解包目录自身，即使环境元数据根已设置。</para>
     /// </summary>
+    /// <value>A context that looks for metadata next to the extracted files and ignores ambient roots.
+    /// <para>在解出的文件旁查找元数据、并忽略环境根目录的上下文。</para></value>
     public static RepackMetadataContext LocalDirectory => new(ContextKind.LocalDirectory, root: string.Empty);
 
     /// <summary>
@@ -92,7 +103,14 @@ public readonly struct RepackMetadataContext
         }
     }
 
-    /// <summary>Freezes the legacy ambient default for one operation. 固定一次操作的旧环境默认值。</summary>
+    /// <summary>
+    /// Freezes the ambient default metadata root for one operation, so later changes to that default
+    /// cannot redirect the operation mid-way.
+    /// <para>为单次操作固定当前的环境默认元数据根，之后该默认值的改动不会在操作过程中改变解析位置。</para>
+    /// </summary>
+    /// <returns>This instance when the context is already explicit; otherwise a project-root context
+    /// for the current default, or a local-directory context when the default is empty or whitespace.
+    /// <para>上下文已经显式时返回自身；否则返回以当前默认根为工程根的上下文，默认根为空或仅空白时返回本地目录上下文。</para></returns>
     public RepackMetadataContext Capture()
     {
         if (!IsUnspecified) return this;

@@ -3,13 +3,14 @@
 
 namespace UotanStudio.Firmware.SharedKernel.Magic;
 
-/// <summary>生成器产出的编译型规则表。</summary>
+/// <summary>Compiled rule table emitted by the magic generator, consumed by <see cref="CompiledMagicEngine"/>.
+/// <para>生成器产出的编译型规则表，由 <see cref="CompiledMagicEngine"/> 消费。</para></summary>
 public static partial class CompiledMagicData
 {
-    /// <summary>生成时间戳。 / Generation timestamp.</summary>
+    /// <summary>UTC generation timestamp of this rule table. <para>本规则表的生成时间戳（UTC）。</para></summary>
     public const string GeneratedAt = "2026-09-19 06:34:07Z";
 
-    /// <summary>顶层规则数。 / Top-level rule count.</summary>
+    /// <summary>Number of top-level rules compiled into the table. <para>编译进规则表的顶层规则数。</para></summary>
     public const int RuleCount = 4205;
 
     private const int BlobByteLength = 3044942;
@@ -274,7 +275,12 @@ public static partial class CompiledMagicData
 
     private static byte[]? _rules;
 
-    /// <summary>序列化规则表字节。 / Serialized rule-table bytes.</summary>
+    /// <summary>Serialized rule-table bytes, decoded once from the embedded base64 parts and cached afterwards.
+    /// <para>序列化规则表字节；首次访问时由内嵌 Base64 分片解码得到，之后使用缓存。</para></summary>
+    /// <value>
+    /// The opaque rule blob read by <see cref="CompiledMagicEngine"/>; never mutate it.
+    /// <para>由 <see cref="CompiledMagicEngine"/> 读取的不透明规则块；不得修改。</para>
+    /// </value>
     public static byte[] Rules => _rules ??= Decode();
 
     private static byte[] Decode()

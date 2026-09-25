@@ -8,18 +8,87 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
 
+/// <summary>
+/// Entry points that convert between Android sparse images and raw images, in either direction, plus
+/// the split of an oversized sparse image into flashable pieces.
+/// <para>在 Android 稀疏镜像与原始镜像之间双向转换的入口，并把超出大小限制的稀疏镜像拆分为可刷写的分片。</para>
+/// </summary>
 public static class SparseImageConverter
 {
     /// <summary>
     /// Converts one or more sparse images to a raw image file.
     /// <para>将一个或多个稀疏镜像转换为原始镜像文件。</para>
     /// </summary>
+    /// <param name="inputFiles">
+    /// Paths of the sparse images to expand, consumed in enumeration order.
+    /// <para>待展开的稀疏镜像路径，按枚举顺序依次处理。</para>
+    /// </param>
+    /// <param name="outputFile">
+    /// Destination raw image path, replaced only after the whole conversion has succeeded.
+    /// <para>目标原始镜像路径；仅在整体转换成功后才会被替换。</para>
+    /// </param>
+    /// <example>
+    /// <code>SparseImageConverter.ConvertSparseToRaw(new[] { "system.sparse" }, "system.img");</code>
+    /// </example>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="inputFiles"/> is empty or <paramref name="outputFile"/> is blank.
+    /// <para><paramref name="inputFiles"/> 为空，或 <paramref name="outputFile"/> 为空白。</para>
+    /// </exception>
     public static void ConvertSparseToRaw(IEnumerable<string> inputFiles, string outputFile)
         => ConvertSparseToRawCancellable(inputFiles, outputFile, CancellationToken.None);
 
     /// <summary>
     /// Converts one or more sparse image chunks to a raw image with cancellation and atomic publication.
+    /// Inputs are validated first, the expansion runs into a temporary file beside the destination, and
+    /// the result replaces the destination only after every image has been written and flushed to disk.
+    /// The output is pre-sized to the largest declared logical image size, and each input is expanded in
+    /// order, so a multi-file request concatenates the expanded logical bytes.
+    /// <para>在支持取消的前提下把一个或多个稀疏镜像的数据块转换为原始镜像并原子发布。会先校验全部输入，
+    /// 把展开结果写入目标旁边的临时文件，只有在每个镜像都已写出并刷盘后才替换目标。
+    /// 输出会预设为最大的声明逻辑大小，并按顺序展开每个输入，因此多文件请求会把展开后的逻辑字节依次拼接。</para>
     /// </summary>
+    /// <param name="inputFiles">
+    /// Paths of the sparse images to expand; each must exist and must not be the destination path.
+    /// <para>待展开的稀疏镜像路径；每个都必须存在且不等于目标路径。</para>
+    /// </param>
+    /// <param name="outputFile">
+    /// Destination raw image path; its directory is created when missing and an existing file is replaced.
+    /// <para>目标原始镜像路径；缺失时创建其目录，已存在的文件会被替换。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Checked per input file and observed by the output stream; cancellation leaves the destination
+    /// content untouched because the temporary file is discarded.
+    /// <para>在每个输入文件处检查并由输出流观察；取消不会改动目标内容，因为临时文件会被丢弃。</para>
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="inputFiles"/> is <see langword="null"/>.
+    /// <para><paramref name="inputFiles"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// No input path was supplied, <paramref name="outputFile"/> is blank, or an input resolves to the
+    /// destination path.
+    /// <para>未提供任何输入路径、<paramref name="outputFile"/> 为空白，或某个输入解析后就是目标路径。</para>
+    /// </exception>
+    /// <exception cref="FileNotFoundException">
+    /// A sparse input image does not exist.
+    /// <para>某个稀疏输入镜像不存在。</para>
+    /// </exception>
+    /// <exception cref="EndOfStreamException">
+    /// An input is shorter than the 28-byte sparse header.
+    /// <para>某个输入短于 28 字节的稀疏头部。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// An input's header or chunks fail sparse parsing while the image is expanded.
+    /// <para>某个输入在展开时其头部或数据块未通过稀疏解析。</para>
+    /// </exception>
+    /// <exception cref="IOException">
+    /// An input is the output file itself, or the temporary file cannot be written.
+    /// <para>输入即输出文件本身，或临时文件无法写入。</para>
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para>
+    /// </exception>
     public static void ConvertSparseToRawCancellable(IEnumerable<string> inputFiles, string outputFile, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(inputFiles);
@@ -95,6 +164,34 @@ public static class SparseImageConverter
     /// Converts a raw image file to a sparse image file.
     /// <para>将原始镜像文件转换为稀疏镜像文件。</para>
     /// </summary>
+    /// <param name="inputFile">
+    /// Path of the raw image read from its beginning.
+    /// <para>从起始位置读取的原始镜像文件路径。</para>
+    /// </param>
+    /// <param name="outputFile">
+    /// Destination sparse path, truncated in place and left partially written when the conversion fails.
+    /// <para>目标稀疏路径；会被就地截断，转换失败时留下部分写入的内容。</para>
+    /// </param>
+    /// <param name="blockSize">
+    /// Logical block size used to classify zero, fill and raw runs; defaults to <c>4096</c> and must be
+    /// a positive multiple of <c>4</c>.
+    /// <para>用于判定零块、Fill 块与 Raw 块的逻辑块大小；默认为 <c>4096</c>，必须是 <c>4</c> 的正整数倍。</para>
+    /// </param>
+    /// <example>
+    /// <code>SparseImageConverter.ConvertRawToSparse("system.img", "system.sparse.img", blockSize: 4096);</code>
+    /// </example>
+    /// <exception cref="FileNotFoundException">
+    /// <paramref name="inputFile"/> does not exist.
+    /// <para><paramref name="inputFile"/> 不存在。</para>
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="blockSize"/> is not a positive multiple of <c>4</c>.
+    /// <para><paramref name="blockSize"/> 不是 <c>4</c> 的正整数倍。</para>
+    /// </exception>
+    /// <exception cref="IOException">
+    /// Either path cannot be opened for the required access.
+    /// <para>某个路径无法以所需访问方式打开。</para>
+    /// </exception>
     public static void ConvertRawToSparse(string inputFile, string outputFile, uint blockSize = 4096)
     {
         using var inputStream = new FileStream(inputFile, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -104,8 +201,52 @@ public static class SparseImageConverter
 
     /// <summary>
     /// Converts a raw image and atomically publishes a structurally validated Android Sparse image.
-    /// The publication temporary file is created beside the destination.
+    /// The publication temporary file is created beside the destination. The converted bytes are read
+    /// back and checked for the expected block count and the absence of trailing data before the
+    /// destination is replaced, so a failed conversion leaves the previous file untouched.
+    /// <para>转换原始镜像并原子发布一个经过结构校验的 Android Sparse 镜像。发布用的临时文件创建在目标旁边。
+    /// 转换结果会先被读回，检查预期的块数且不存在尾部多余数据，之后才替换目标，因此失败的转换不会改动已有文件。</para>
     /// </summary>
+    /// <param name="inputFile">
+    /// Path of the raw image; its file size at the start of the call fixes the converted logical length.
+    /// <para>原始镜像路径；调用开始时的文件大小决定转换后的逻辑长度。</para>
+    /// </param>
+    /// <param name="outputFile">
+    /// Destination sparse path, replaced only after validation succeeds.
+    /// <para>目标稀疏路径；仅在校验成功后才被替换。</para>
+    /// </param>
+    /// <param name="blockSize">
+    /// Logical block size in bytes; must be a positive multiple of <c>4</c>.
+    /// <para>逻辑块大小（字节数）；必须是 <c>4</c> 的正整数倍。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Checked before the publication and between blocks; cancellation aborts publication so the
+    /// destination keeps its previous content.
+    /// <para>在发布之前以及各块之间检查；取消会中止发布，目标保持原有内容。</para>
+    /// </param>
+    /// <example>
+    /// <code>SparseImageConverter.ConvertRawToSparseAtomic("vendor.img", "vendor.sparse.img", 4096, token);</code>
+    /// </example>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="inputFile"/> or <paramref name="outputFile"/> is blank.
+    /// <para><paramref name="inputFile"/> 或 <paramref name="outputFile"/> 为空白。</para>
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="blockSize"/> is not a positive multiple of <c>4</c>.
+    /// <para><paramref name="blockSize"/> 不是 <c>4</c> 的正整数倍。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// The published sparse image does not match the raw length or carries trailing data.
+    /// <para>发布的稀疏镜像与原始长度不符，或尾部存在多余数据。</para>
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para>
+    /// </exception>
+    /// <exception cref="IOException">
+    /// The input cannot be read or the publication cannot be written.
+    /// <para>无法读取输入或无法写入发布结果。</para>
+    /// </exception>
     public static void ConvertRawToSparseAtomic(
         string inputFile,
         string outputFile,
@@ -143,18 +284,39 @@ public static class SparseImageConverter
     }
 
     /// <summary>
-    /// Converts a raw image stream to a sparse image stream.
-    /// <para>将原始镜像流转换为稀疏镜像流。</para>
+    /// Converts a raw image stream to a sparse image stream. A seekable source is scanned block by
+    /// block and coalesced into <c>DONT_CARE</c>, <c>FILL</c> and <c>RAW</c> chunks, and the last block
+    /// is zero-padded to a full block; a non-seekable source becomes one <c>RAW</c> chunk read from the
+    /// current position. A zero-length source yields headers only.
+    /// <para>将原始镜像流转换为稀疏镜像流。可寻址的源会逐块扫描并合并为 <c>DONT_CARE</c>、<c>FILL</c>
+    /// 与 <c>RAW</c> 数据块，最后一个块会零填充至完整块；不可寻址的源会变成从当前位置读取的单个 <c>RAW</c> 数据块。
+    /// 长度为零的源只产生头部。</para>
     /// </summary>
-    /// <param name="input">The source raw stream. 源原始流。</param>
-    /// <param name="output">The destination sparse stream. 目标稀疏流。</param>
-    /// <param name="blockSize">Sparse block size; must be a positive multiple of 4 per the
-    /// Android sparse format. 稀疏块大小；须为 Android 稀疏格式要求的 4 的正整数倍。</param>
-    /// <param name="length">Explicit source length; when omitted uses <paramref name="input"/>.Length.
-    /// 显式源长度；省略时使用 <paramref name="input"/> 的 Length。</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="blockSize"/> is not
-    /// a positive multiple of 4, which would make the bootloader misparse the sparse stream.
-    /// 当 <paramref name="blockSize"/> 不是 4 的正整数倍时抛出，此时 bootloader 会错解析稀疏流。</exception>
+    /// <param name="input">
+    /// The source raw stream.
+    /// <para>源原始流。</para>
+    /// </param>
+    /// <param name="output">
+    /// The destination sparse stream.
+    /// <para>目标稀疏流。</para>
+    /// </param>
+    /// <param name="blockSize">
+    /// Sparse block size; must be a positive multiple of 4 per the Android sparse format.
+    /// <para>稀疏块大小；须为 Android 稀疏格式要求的 4 的正整数倍。</para>
+    /// </param>
+    /// <param name="length">
+    /// Explicit source length; when omitted uses <paramref name="input"/>.Length.
+    /// <para>显式源长度；省略时使用 <paramref name="input"/> 的 Length。</para>
+    /// </param>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown when <paramref name="blockSize"/> is not a positive multiple of 4, which would make the
+    /// bootloader misparse the sparse stream.
+    /// <para>当 <paramref name="blockSize"/> 不是 4 的正整数倍时抛出，此时 bootloader 会错解析稀疏流。</para>
+    /// </exception>
+    /// <exception cref="EndOfStreamException">
+    /// <paramref name="input"/> holds fewer bytes than the length it is asked to convert.
+    /// <para><paramref name="input"/> 实际字节数少于待转换的长度。</para>
+    /// </exception>
     public static void ConvertRawToSparse(Stream input, Stream output, uint blockSize = 4096, long? length = null)
         => ConvertRawToSparseCancellable(input, output, blockSize, length, CancellationToken.None);
 
@@ -371,6 +533,41 @@ public static class SparseImageConverter
     /// 对每个分片单独 download+flash（<c>flash_partition_files</c>）能落到正确位置。若分片改用
     /// 分片本地寻址（每片从块 0 开始），多次 flash 会反复覆盖分区前缀导致数据错位。</para>
     /// </remarks>
+    /// <param name="inputFile">
+    /// Path of the sparse image to split; it is parsed and fully expanded block addresses are preserved.
+    /// <para>待拆分稀疏镜像的路径；解析后保留完整的展开块地址。</para>
+    /// </param>
+    /// <param name="outputPattern">
+    /// Output path pattern: a pattern containing <c>{0}</c> is formatted with the piece number, and any
+    /// other pattern has the piece number appended as a two-digit <c>.NN</c> suffix. Pieces are written
+    /// with <c>FileMode.Create</c>, replacing files that already exist at those paths.
+    /// <para>输出路径模式：包含 <c>{0}</c> 的模式会用分片序号格式化，其他模式则追加分片序号的两位
+    /// <c>.NN</c> 后缀。分片以 <c>FileMode.Create</c> 写入，会替换这些路径上已存在的文件。</para>
+    /// </param>
+    /// <param name="maxFileSize">
+    /// Hard ceiling in bytes for every output piece, counted together with the piece's own headers;
+    /// must be at least <c>1</c> and large enough to hold one data block plus its headers.
+    /// <para>每个输出分片的字节硬上限，包含分片自身的头部；至少为 <c>1</c>，且必须能容纳一个数据块及其头部。</para>
+    /// </param>
+    /// <example>
+    /// <code>SparseImageConverter.ResparseImage("system.sparse.img", "sys.part{0}", 100 * 1024 * 1024);</code>
+    /// </example>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="inputFile"/> or <paramref name="outputPattern"/> is empty.
+    /// <para><paramref name="inputFile"/> 或 <paramref name="outputPattern"/> 为空。</para>
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="maxFileSize"/> is below <c>1</c> or too small to hold a single chunk plus one block.
+    /// <para><paramref name="maxFileSize"/> 小于 <c>1</c>，或不足以容纳单个数据块头部加一个块。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// The input does not parse as a sparse image.
+    /// <para>输入无法按稀疏镜像解析。</para>
+    /// </exception>
+    /// <remarks>
+    /// A logical image of zero blocks writes no output file at all.
+    /// <para>逻辑块数为 <c>0</c> 的镜像不会写出任何输出文件。</para>
+    /// </remarks>
     public static void ResparseImage(string inputFile, string outputPattern, long maxFileSize)
     {
         ArgumentException.ThrowIfNullOrEmpty(inputFile);
@@ -386,11 +583,6 @@ public static class SparseImageConverter
             return;
         }
 
-        // 与上游 move_chunks_up_to_len 相同的分片预算：除逻辑数据外，每个分片还携带稀疏头(28)、
-        // 收尾 DONT_CARE 块头(12)与可选 CRC 块头+CRC(16)。
-        // Piece budget mirrors upstream move_chunks_up_to_len: besides logical data each piece
-        // carries the sparse header (28), a potential trailing skip chunk header (12) and the
-        // optional CRC chunk (16).
         var perPieceOverhead = (long)SparseFormat.SparseHeaderSize + 2 * SparseFormat.ChunkHeaderSize + sizeof(uint);
         var usable = maxFileSize - perPieceOverhead;
         ArgumentOutOfRangeException.ThrowIfLessThan(usable, SparseFormat.ChunkHeaderSize + blockBytes, nameof(maxFileSize));
@@ -462,9 +654,6 @@ public static class SparseImageConverter
 
         foreach (var item in work)
         {
-            // 分片内空隙同样由写入端补 DONT_CARE，只占一个块头，计入预算。
-            // Gaps inside a piece also become DONT_CARE chunks on write; only the chunk header
-            // is charged to the budget.
             var gapHeader = item.StartBlock > lastEndBlock ? (long)SparseFormat.ChunkHeaderSize : 0;
             var dataBytes = (ChunkType)item.Source.Header.ChunkType == ChunkType.Fill
                 ? (long)sizeof(uint)

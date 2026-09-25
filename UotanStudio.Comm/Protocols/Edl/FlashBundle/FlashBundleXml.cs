@@ -32,8 +32,6 @@ internal static class FlashBundleXml
             switch (reader.NodeType)
             {
                 case XmlNodeType.Element:
-                    // Flash manifests are a root and attribute-only command elements.
-                    // Check limits before allocating a tree node or copying attributes.
                     if (reader.Depth > 1 || reader.AttributeCount > MaximumAttributes
                         || (reader.Depth == 1 && ++entries > MaximumEntries))
                     {

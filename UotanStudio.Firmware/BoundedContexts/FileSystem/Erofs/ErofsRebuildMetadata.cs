@@ -10,7 +10,7 @@ namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 /// Captures and restores the verified EROFS rebuild profile. The original image is not retained,
 /// so the structured metadata document must carry the superblock features, compression records and
 /// per-inode storage strategy that <see cref="ErofsParser.ReadRebuildOptions"/> derived from it.
-/// <para>采集并还原经校验的 EROFS 重建档案。原始镜像不再保留，因此结构化元数据文档必须携带
+/// <para>采集并还原经校验的 EROFS 重建档案。档案不保留原始镜像，因此结构化元数据文档必须携带
 /// <see cref="ErofsParser.ReadRebuildOptions"/> 从源镜像推导出的超级块特性、压缩记录与逐 inode 存储策略。</para>
 /// </summary>
 internal static class ErofsRebuildMetadata
@@ -110,19 +110,7 @@ internal static class ErofsRebuildMetadata
             BlockSize = parameters.BlockSize > 0 ? parameters.BlockSize : 4096,
             Compress = parameters.Compress,
             Algorithm = ParseAlgorithm(parameters.Algorithm),
-            // The EROFS disk format does not record the encoder level, so a preserved profile
-            // always carries the neutral default; rebuild at the maximum managed level to keep
-            // the output close to the source image instead of the lossy level-1 baseline.
-            // EROFS 磁盘格式不记录编码级别，保留档案总是中性默认值；重建时使用托管最大级别，
-            // 使输出尽量接近源镜像，而不是有损的级别 1 基线。
             CompressionLevel = parameters.CompressionLevel > 1 ? Math.Clamp(parameters.CompressionLevel, 1, 9) : 9,
-            // Same rationale as the level: the disk format records no LZ4 encoder identity, and the
-            // dense layouts upstream packers produce come from their HC search. A preserved rebuild
-            // targets the source density, so it defaults to the HC encoder; the fast matcher would
-            // measurably inflate the result.
-            // 与压缩级别同理：磁盘格式不记录 LZ4 编码器身份，而上游打包器产出的 dense 布局来自其
-            // HC 搜索。保留式重建以源镜像密度为目标，因此默认使用 HC 编码器；快速匹配器会明显增大
-            // 产物。
             Lz4HighCompression = true,
             TailPacking = parameters.TailPacking,
             CompressedTailPacking = parameters.CompressedTailPacking,
@@ -145,11 +133,6 @@ internal static class ErofsRebuildMetadata
             Lz4MaxDistance = checked((ushort)Math.Clamp(parameters.Lz4MaxDistance, 0, ushort.MaxValue)),
             MaxPclusterSize = parameters.MaxPclusterSize,
             LegacyCompatibility = parameters.LegacyCompatibility,
-            // A preserved rebuild exists to reproduce the source image, and upstream packers fill each
-            // physical block with byte-granular (dense) pclusters. Without the same layout the rebuilt
-            // image is measurably larger than its source, so the layout planner is always enabled here.
-            // 保留式重建的目标是复现源镜像，而上游打包器会用按字节粒度（dense）的 pcluster 填满每个
-            // 物理块。若不采用同一布局，重建镜像会明显大于源镜像，因此这里始终启用该布局规划器。
             OptimizeCompression = true,
         };
 
@@ -180,15 +163,8 @@ internal static class ErofsRebuildMetadata
                     DictionarySize = codec.DictionarySize,
                     WindowBits = codec.WindowBits,
                     Lz4MaxDistance = checked((ushort)Math.Clamp(codec.Lz4MaxDistance, 0, ushort.MaxValue)),
-                    // Same rationale as the primary level: EROFS stores no encoder level, so a
-                    // neutral 1 in the profile means "unknown" and is rebuilt at the maximum.
-                    // 与主级别同理：EROFS 不存编码级别，档案中的中性 1 表示"未知"，按最大级别重建。
                     CompressionLevel = codec.CompressionLevel > 1 ? Math.Clamp(codec.CompressionLevel, 1, 9) : 9,
                     Lz4HighCompression = true,
-                    // Per-node planning reads these codec objects (node.CompressionOptions), so the
-                    // dense layout has to be enabled on them too, not only on the primary options.
-                    // 逐节点规划读取的就是这些 codec 对象（node.CompressionOptions），因此 dense 布局
-                    // 也必须在其上启用，而不能只设主选项。
                     OptimizeCompression = true,
                 };
             }
@@ -219,11 +195,6 @@ internal static class ErofsRebuildMetadata
                     inode.SourceExtentClusterSize,
                     inode.SourceExtentRecordSize);
                 inodes[inode.Nid] = record;
-                // Newer documents carry the image-absolute path; it survives file additions and
-                // removals (which shift nids), so the builder can bind per-inode strategies in
-                // plain directory repacks where no edit plan maps paths back to nids.
-                // 新文档携带镜像内绝对路径；路径不随文件增删漂移（nid 会），因此无 editPlan 的
-                // 纯目录重打包也能按路径绑定逐 inode 策略。
                 if (inode.Path is { Length: > 0 } path)
                 {
                     byPath ??= new(StringComparer.Ordinal);

@@ -62,7 +62,11 @@ internal readonly struct HdcUsbHead
     }
 }
 
-/// <summary>A daemon command with shared channel identity and payload.</summary>
+/// <summary>A daemon command with shared channel identity and payload.<para>携带共享通道标识与负载的守护进程命令。</para></summary>
+/// <param name="Command">Daemon command opcode carried by this message.<para>本消息携带的守护进程命令操作码。</para></param>
+/// <param name="ChannelId">Identifier of the device channel the message belongs to.<para>消息所属设备通道的标识。</para></param>
+/// <param name="SessionId">Session identifier shared across the channel.<para>通道内共享的会话标识。</para></param>
+/// <param name="Payload">Optional raw payload bytes; <see langword="null"/> or empty means no payload.<para>可选的原始负载字节；<see langword="null"/> 或空表示无负载。</para></param>
 public sealed record HdcMessage(
     HdcCommand Command,
     uint ChannelId,
@@ -73,7 +77,7 @@ public sealed record HdcMessage(
     /// Decodes the payload as UTF-8 text.
     /// <para>将负载解码为 UTF-8 文本。</para>
     /// </summary>
-    /// <returns>The payload as a string, or empty when absent. 负载的字符串形式，无负载时为空串。</returns>
+    /// <returns>The payload as a string, or empty when absent.<para>负载的字符串形式；无负载时为空串。</para></returns>
     public string PayloadAsString() =>
         Payload is { Length: > 0 } ? Encoding.UTF8.GetString(Payload) : string.Empty;
 }

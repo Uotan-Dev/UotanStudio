@@ -37,7 +37,6 @@ internal static class AtomicJsonFile
 
     private static async Task<bool> SameTextAsync(string path, Stream staged, CancellationToken token)
     {
-        // Retain ReadAllText's BOM-aware comparison, including existing UTF-16 project files.
         using var existing = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
             16384, FileOptions.Asynchronous | FileOptions.SequentialScan));
         using var generated = new StreamReader(staged, leaveOpen: true);

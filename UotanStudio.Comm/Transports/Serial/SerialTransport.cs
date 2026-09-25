@@ -53,18 +53,26 @@ public sealed class SerialTransport(
     /// Gets a value indicating whether the serial port is open.
     /// <para>获取串口是否已打开。</para>
     /// </summary>
+    /// <value><c>true</c> while the underlying port handle is open; <c>false</c> after close or
+    /// before <see cref="Connect"/>. <para>底层端口句柄打开期间为 <c>true</c>；关闭后至
+    /// <see cref="Connect"/> 之前为 <c>false</c>。</para></value>
     public bool IsConnected => _port is { IsOpen: true };
 
     /// <summary>
     /// Gets or sets the default timeout in milliseconds used when a caller omits one.
     /// <para>获取或设置调用方未显式指定超时时使用的默认超时（毫秒）。</para>
     /// </summary>
+    /// <value>The fallback read/write timeout in milliseconds applied to newly opened ports and
+    /// <see cref="GetStream"/>; 5000 by default. <para>应用于新打开端口和 <see cref="GetStream"/>
+    /// 的回退读写超时（毫秒）；默认 5000。</para></value>
     public int DefaultTimeoutMs { get; set; } = 5000;
 
     /// <summary>
     /// Gets the serial port name this transport was configured for.
     /// <para>获取此传输配置的串口名称。</para>
     /// </summary>
+    /// <value>The OS port name (e.g. "COM3" or "/dev/ttyUSB0"); fixed for the transport's lifetime.
+    /// <para>操作系统端口名称（如 "COM3" 或 "/dev/ttyUSB0"）；在传输生命周期内固定不变。</para></value>
     public string PortName { get; } = portName ?? throw new ArgumentNullException(nameof(portName));
 
     /// <summary>
@@ -72,6 +80,8 @@ public sealed class SerialTransport(
     /// <see cref="SetBaudRate"/>).
     /// <para>获取当前生效的波特率（调用 <see cref="SetBaudRate"/> 后可能与构造时配置不同）。</para>
     /// </summary>
+    /// <value>The open port's live baud rate, or the last configured value while the port is closed.
+    /// <para>已打开端口的实时波特率；端口关闭时为最近一次配置值。</para></value>
     public int BaudRate => _port is { IsOpen: true } port ? port.BaudRate : _baudRate;
 
     /// <summary>
@@ -94,7 +104,6 @@ public sealed class SerialTransport(
             var port = _portFactory();
             try
             {
-                // Configure inside the ownership boundary: property setters can throw before Open.
                 port.PortName = PortName;
                 port.BaudRate = _baudRate;
                 port.Parity = _parity;
@@ -178,7 +187,6 @@ public sealed class SerialTransport(
         }
         catch
         {
-            // Preserve best-effort disconnect behavior after detaching the old instance.
         }
     }
 

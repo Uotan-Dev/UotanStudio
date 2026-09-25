@@ -4,6 +4,11 @@ using Microsoft.Win32.SafeHandles;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 
+/// <summary>
+/// EXT4 builder part for content-identical data blocks: it indexes blocks in disk-backed staging storage, allocates one physical block per distinct content across group boundaries, and re-reads every source block to compare it against the staged copy before writing.
+/// <para>EXT4 构建器的组成部分，处理内容相同的数据块：用磁盘暂存存储为块建立索引，为每种不同内容只分配一个物理块并跨越组边界，
+/// 写出前重新读取每个源块并与暂存副本逐字节比较。</para>
+/// </summary>
 public sealed partial class Ext4Builder
 {
     private static BlockAllocationResult AllocateSharedDataBlocksMultiGroup(

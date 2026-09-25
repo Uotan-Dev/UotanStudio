@@ -8,6 +8,11 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 
+/// <summary>
+/// Preservation part that verifies results: it checks inode flag support per format, then re-reads a rebuilt or captured image — sparse containers are expanded first — and fails on any attribute, xattr, timestamp, hardlink or content mismatch.
+/// <para>保留语义的组成部分，负责校验结果：先按格式检查 inode 标志是否受支持，再重新读取重建或采集得到的镜像（稀疏容器先展开），
+/// 任何属性、扩展属性、时间戳、硬链接或内容不一致都会失败。</para>
+/// </summary>
 public static partial class FileSystemPreservation
 {
     internal static void ValidateInodeFlags(IEnumerable<PreservedInodeEntry> entries, string format)

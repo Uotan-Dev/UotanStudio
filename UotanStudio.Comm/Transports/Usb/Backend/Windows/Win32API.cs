@@ -67,7 +67,6 @@ internal static partial class Win32API
         public IntPtr Reserved;
     }
 
-    // ---- advapi32 registry (used to read DeviceInterfaceGUIDs per device node) ----
     public const uint KEY_READ = 0x20019;
     public const uint REG_MULTI_SZ = 7;
     public static readonly IntPtr HKEY_LOCAL_MACHINE = new(0x80000002);
@@ -148,9 +147,6 @@ internal static partial class Win32API
     [LibraryImport("setupapi.dll", SetLastError = true)]
     public static partial IntPtr SetupDiGetClassDevsW(ref Guid guid, [MarshalAs(UnmanagedType.LPWStr)] string? enumerator, IntPtr parent, uint flag);
 
-    // NULL class GUID overload: with DIGCF_ALLCLASSES | DIGCF_DEVICEINTERFACE it returns every
-    // device interface on the system, so discovery no longer depends on a hardcoded GUID list
-    // (e.g. Zadig installs WinUSB with an arbitrary interface GUID).
     [LibraryImport("setupapi.dll", SetLastError = true)]
     public static partial IntPtr SetupDiGetClassDevsW(IntPtr classGuid, [MarshalAs(UnmanagedType.LPWStr)] string? enumerator, IntPtr parent, uint flag);
 
@@ -160,7 +156,6 @@ internal static partial class Win32API
                                                           ref Guid interfaceClassGuid, uint index,
                                                           ref SpDeviceInterfaceData deviceInterfaceData);
 
-    // NULL interface-GUID overload: enumerates interfaces of every class in the set.
     [LibraryImport("setupapi.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetupDiEnumDeviceInterfaces(IntPtr deviceInfoSet, IntPtr deviceInfoData,
@@ -221,7 +216,6 @@ internal static partial class Win32API
     [LibraryImport("kernel32.dll")]
     public static partial IntPtr GetModuleHandleW([MarshalAs(UnmanagedType.LPWStr)] string? lpModuleName);
 
-    // ---- Windows device notification (WM_DEVICECHANGE via hidden Message window) ----
     public const uint WM_DEVICECHANGE = 0x0219;
     public const uint WM_QUIT = 0x0012;
     public const uint DBT_DEVICEARRIVAL = 0x8000;

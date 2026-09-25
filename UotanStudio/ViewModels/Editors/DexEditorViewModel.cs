@@ -706,10 +706,10 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
 
     /// <summary>
     /// <para>释放文档持有的模型与视图数据（文档关闭时调用）：清空反汇编文本、原始字节、解析模型与容器状态。
-    /// 此后 VM 不再强持有大对象，内存可被 GC 回收。</para>
+    /// 调用后 VM 只保留轻量字段，大对象交由 GC 回收。</para>
     /// Releases the model and view data held by this document (called when the document is closed):
-    /// clears the disassembly text, raw bytes, parsed model and container state. The VM no longer
-    /// holds large objects, letting the GC reclaim the memory.
+    /// clears the disassembly text, raw bytes, parsed model and container state, so the VM retains only
+    /// lightweight fields afterwards and the GC can reclaim the memory.
     /// </summary>
     public void Cleanup()
     {

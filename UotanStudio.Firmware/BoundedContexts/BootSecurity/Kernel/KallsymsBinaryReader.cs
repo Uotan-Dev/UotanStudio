@@ -3,7 +3,20 @@ using System.Text;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Kernel;
 
-/// <summary>Layout evidence found while decoding a compressed binary kallsyms table.</summary>
+/// <summary>
+/// Layout evidence found while decoding a compressed binary kallsyms table.
+/// <para>解码压缩的二进制 kallsyms 表时发现的布局证据。</para>
+/// </summary>
+/// <param name="SymbolCount">Number of decoded symbols. <para>解码得到的符号数量。</para></param>
+/// <param name="IsBigEndian"><see langword="true"/> when the token index matched only in big-endian byte order. <para>token 索引仅以大端字节序匹配时为 <see langword="true"/>。</para></param>
+/// <param name="AddressSize">Width in bytes (<c>2</c>, <c>4</c> or <c>8</c>) of the marker and absolute address fields. <para>marker 与绝对地址字段的字节宽度（<c>2</c>、<c>4</c> 或 <c>8</c>）。</para></param>
+/// <param name="IsBaseRelative"><see langword="true"/> when addresses were rebuilt from 32-bit offsets against a base value; <see langword="false"/> for the absolute address table. <para>地址由相对基址的 32 位偏移还原时为 <see langword="true"/>；绝对地址表为 <see langword="false"/>。</para></param>
+/// <param name="RelativeBase">Base address used in relative mode; <see langword="null"/> for absolute addresses. <para>相对模式使用的基址；绝对地址表为 <see langword="null"/>。</para></param>
+/// <param name="AddressesOffset">Offset where the address table starts inside the kernel image. <para>地址表在内核镜像内的起始偏移。</para></param>
+/// <param name="NamesOffset">Offset where the token-encoded name stream starts. <para>token 编码名称流的起始偏移。</para></param>
+/// <param name="MarkersOffset">Offset of the marker value table. <para>marker 值表的偏移。</para></param>
+/// <param name="TokenTableOffset">Four-aligned offset of the 256-entry token table. <para>256 项 token 表的 4 字节对齐偏移。</para></param>
+/// <param name="TokenIndexOffset">Offset of the 16-bit token index array whose byte order fixes the table endianness. <para>16 位 token 索引数组的偏移，其字节序决定全表端序。</para></param>
 public sealed record KallsymsBinaryMetadata(
     int SymbolCount,
     bool IsBigEndian,
@@ -16,7 +29,12 @@ public sealed record KallsymsBinaryMetadata(
     int TokenTableOffset,
     int TokenIndexOffset);
 
-/// <summary>Symbols and structural evidence decoded from a binary kernel image.</summary>
+/// <summary>
+/// Symbols and structural evidence decoded from a binary kernel image.
+/// <para>从二进制内核镜像解码得到的符号与结构证据。</para>
+/// </summary>
+/// <param name="Symbols">Decoded symbols in name-stream order, each pairing an address with a type character and name. <para>按名称流顺序解码的符号，每项包含地址、类型字符与名称。</para></param>
+/// <param name="Metadata">Layout evidence recorded while decoding. <para>解码过程中记录的布局证据。</para></param>
 public sealed record KallsymsBinaryResult(
     IReadOnlyList<KernelSymbol> Symbols,
     KallsymsBinaryMetadata Metadata);

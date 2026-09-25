@@ -7,12 +7,6 @@ namespace UotanStudio.Comm.Transports.Usb.Providers;
 
 internal sealed class HarmonyOSUsbApiProvider : UsbApiProviderBase
 {
-    // The HarmonyOS USB DDK backend is opt-in. HarmonyOS cannot be detected reliably
-    // through os-release Style file probes (the platform's runtime differs), so the
-    // provider stays hidden unless explicitly enabled with FIRMWAREKIT_USB_ENABLE_HARMONY=1.
-    // <para>HarmonyOS USB DDK 后端为显式开启项。HarmonyOS 无法通过 os-release 类文件探测可靠
-    // 识别（平台运行时存在差异），因此除非设置 FIRMWAREKIT_USB_ENABLE_HARMONY=1 显式开启，
-    // 该提供器保持隐藏。</para>
     internal const string EnableEnvironmentVariable = "FIRMWAREKIT_USB_ENABLE_HARMONY";
 
     private static readonly Lazy<bool> DdkAvailable =

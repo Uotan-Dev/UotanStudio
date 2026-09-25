@@ -163,7 +163,7 @@ public partial class ImageView : UserControl
     private void OnImageMenuClosed(object? sender, RoutedEventArgs e)
     {
         // A later keyboard-opened menu may not have a pointer event to replace this
-        // value, so do not let a previously right-clicked row leak into it.
+        // value, so do not let the row captured by the right-click that closed the menu leak into it.
         _contextMenuImage = null;
     }
 

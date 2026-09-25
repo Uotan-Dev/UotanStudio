@@ -7,9 +7,36 @@ using UotanStudio.Firmware.BoundedContexts.Compression;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Workflow;
 
-/// <summary>Merges a recovery ramdisk into an Android boot image with explicit source precedence.</summary>
+/// <summary>Merges a recovery ramdisk into an Android boot image with explicit source precedence.
+/// <para>以显式的来源优先级将 recovery ramdisk 合并进 Android boot 镜像。</para></summary>
 public sealed class RecoveryRamdiskMergeService
 {
+    /// <summary>
+    /// Merges the recovery ramdisk into the source boot image and writes the repacked image to the output path.
+    /// <para>将 recovery ramdisk 合并进源 boot 镜像，并把重新打包的镜像写出到输出路径。</para>
+    /// </summary>
+    /// <param name="sourceBootPath">Boot image providing the base ramdisk; its entries override recovery
+    /// entries of the same name. <para>提供基础 ramdisk 的 boot 镜像；其中同名条目会覆盖 recovery 条目。</para></param>
+    /// <param name="recoveryPath">Boot image whose ramdisk supplies the merged baseline. <para>其 ramdisk 作为合并底座的 boot 镜像。</para></param>
+    /// <param name="outputPath">Destination file; must differ from <paramref name="sourceBootPath"/>
+    /// (case-insensitive full-path comparison) and an existing file is replaced.
+    /// <para>目标文件；必须与 <paramref name="sourceBootPath"/> 不同（按完整路径不区分大小写比较），已存在的文件会被替换。</para></param>
+    /// <param name="cancellationToken">Checked after parsing and during the CPIO merge and write;
+    /// cancellation is rethrown. <para>在解析后以及 CPIO 合并与写出期间检查；取消会重新抛出。</para></param>
+    /// <returns>
+    /// The merge result with uncompressed sizes and the inherited compression. Both ramdisks are
+    /// decompressed, the recovery CPIO archive is rebuilt with every source entry added or replacing an
+    /// equal name, and the merged archive is re-compressed with the source header's ramdisk compression.
+    /// <para>合并结果，包含未压缩大小与继承的压缩方式。两个 ramdisk 均先解压，随后在 recovery 的 CPIO
+    /// 归档上以同名添加或替换的方式合入全部源条目，合并后的归档按源头部的 ramdisk 压缩方式重新压缩。</para>
+    /// </returns>
+    /// <exception cref="ArgumentException">Any path is null, empty, or whitespace. <para>任一路径为 null、空白或仅含空白字符。</para></exception>
+    /// <exception cref="InvalidOperationException">The output path resolves to the source boot image.
+    /// <para>输出路径解析后与源 boot 镜像相同。</para></exception>
+    /// <exception cref="InvalidDataException">An image lacks a ramdisk, or a ramdisk compression is
+    /// unsupported, corrupt, or cannot be reproduced. <para>某镜像不含 ramdisk，或 ramdisk 压缩不受支持、已损坏、无法复现。</para></exception>
+    /// <exception cref="UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.ImageParseException">
+    /// Either boot image cannot be parsed. <para>任一 boot 镜像无法解析。</para></exception>
     public async Task<RecoveryRamdiskMergeResult> MergeAsync(
         string sourceBootPath, string recoveryPath, string outputPath,
         CancellationToken cancellationToken = default)
@@ -83,5 +110,15 @@ public sealed class RecoveryRamdiskMergeService
     }
 }
 
+/// <summary>
+/// Outcome of a recovery ramdisk merge, reporting the written path and uncompressed sizes.
+/// <para>recovery ramdisk 合并的结果，报告写出路径与各未压缩大小。</para>
+/// </summary>
+/// <param name="OutputPath">Published output image path. <para>已发布的输出镜像路径。</para></param>
+/// <param name="SourceBytes">Uncompressed size in bytes of the source ramdisk. <para>源 ramdisk 解压后的字节数。</para></param>
+/// <param name="RecoveryBytes">Uncompressed size in bytes of the recovery ramdisk. <para>recovery ramdisk 解压后的字节数。</para></param>
+/// <param name="MergedBytes">Uncompressed size in bytes of the merged CPIO archive. <para>合并后 CPIO 归档的字节数（未压缩）。</para></param>
+/// <param name="Compression">Ramdisk compression inherited from the source header and reapplied to the
+/// merged archive. <para>继承自源头部并重新应用于合并归档的 ramdisk 压缩方式。</para></param>
 public sealed record RecoveryRamdiskMergeResult(string OutputPath, int SourceBytes, int RecoveryBytes,
     int MergedBytes, CompressionType Compression);

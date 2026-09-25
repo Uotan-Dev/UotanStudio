@@ -5,18 +5,54 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.Archive.Formats.Cpio;
 
+/// <summary>
+/// Reads newc, crc, old ASCII, HP old ASCII, binary and HP binary CPIO archives with bounded, streaming payload views.
+/// <para>读取 newc、crc、old ASCII、HP old ASCII、binary 与 HP binary CPIO 归档，负载视图有界且流式。</para>
+/// </summary>
 public sealed class CpioArchiveReader
 {
     /// <summary>
     /// Reads all archive entries from a stream into memory.
     /// <para>从流中读取全部归档条目到内存。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable archive source kept open by the reader; every payload is materialized under the per-entry cap.
+    /// <para>可读的归档源流，读取器不会将其关闭；每个负载在单条目上限内被物化。</para>
+    /// </param>
+    /// <param name="formatHint">
+    /// Optional format override; <see langword="null"/> detects the format per record from stream bytes.
+    /// <para>可选的格式覆盖；<see langword="null"/> 表示逐记录从流字节检测格式。</para>
+    /// </param>
+    /// <returns>
+    /// A fully materialized list of entries; symlink targets are decoded into <c>LinkName</c>.
+    /// <para>完全物化的条目列表；符号链接目标已解码到 <c>LinkName</c>。</para>
+    /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// The archive is malformed or a payload exceeds the 256 MiB materialization limit.
+    /// <para>归档格式非法，或负载超出 256 MiB 物化上限。</para>
+    /// </exception>
     public IReadOnlyList<ArchiveEntry> ReadAll(Stream stream, ArchiveFormat? formatHint = null) => [.. ReadEntries(stream, formatHint)];
 
     /// <summary>
     /// Reads archive entries from a stream as a lazy sequence.
     /// <para>以惰性序列从流中读取归档条目。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable archive source kept open by the reader; materialized payloads are independent of later stream movement.
+    /// <para>可读的归档源流，读取器不会将其关闭；物化后的负载不受后续流移动影响。</para>
+    /// </param>
+    /// <param name="formatHint">
+    /// Optional format override; <see langword="null"/> detects the format per record from stream bytes.
+    /// <para>可选的格式覆盖；<see langword="null"/> 表示逐记录从流字节检测格式。</para>
+    /// </param>
+    /// <returns>
+    /// A sequence whose entries copy payloads up to 256 MiB into memory as enumeration advances.
+    /// <para>枚举推进时将不超过 256 MiB 的负载复制到内存的条目序列。</para>
+    /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// The archive is malformed or a payload exceeds the 256 MiB materialization limit.
+    /// <para>归档格式非法，或负载超出 256 MiB 物化上限。</para>
+    /// </exception>
     public IEnumerable<ArchiveEntry> ReadEntries(Stream stream, ArchiveFormat? formatHint = null)
     {
         foreach (var entry in ReadEntriesStreaming(stream, formatHint))
@@ -41,6 +77,26 @@ public sealed class CpioArchiveReader
     /// Non-seekable input is spooled to disk with a 64 GiB limit.
     /// <para>不可定位输入暂存到磁盘，上限为 64 GiB。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable archive source kept open by the reader.
+    /// <para>可读的归档源流，读取器不会将其关闭。</para>
+    /// </param>
+    /// <param name="formatHint">
+    /// Optional format override; <see langword="null"/> detects the format per record from stream bytes.
+    /// <para>可选的格式覆盖；<see langword="null"/> 表示逐记录从流字节检测格式。</para>
+    /// </param>
+    /// <returns>
+    /// A single-pass sequence whose payload factories read from the (possibly spooled) source stream.
+    /// <para>单遍序列，其负载工厂从（可能已暂存的）源流中读取。</para>
+    /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// The archive is malformed, a name or symlink exceeds its bound, or a CRC ASCII checksum mismatches.
+    /// <para>归档非法、名称或符号链接超出上限，或 CRC ASCII 校验和不匹配。</para>
+    /// </exception>
+    /// <exception cref="NotSupportedException">
+    /// The detected or hinted format is not a CPIO format.
+    /// <para>检测到或指定的格式不是 CPIO 格式。</para>
+    /// </exception>
     public IEnumerable<ArchiveEntry> ReadEntriesStreaming(Stream stream, ArchiveFormat? formatHint = null)
         => ReadEntriesStreaming(stream, formatHint, 64L * 1024 * 1024 * 1024);
 
@@ -130,6 +186,26 @@ public sealed class CpioArchiveReader
     /// Detects the CPIO format by probing stream header bytes.
     /// <para>通过探测流头部字节检测 CPIO 格式。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Seekable archive source positioned at a record header; the position is restored before returning.
+    /// <para>定位在记录头处的可寻址归档源；返回前会恢复其位置。</para>
+    /// </param>
+    /// <returns>
+    /// <see cref="ArchiveFormat.NewAscii"/>, <see cref="ArchiveFormat.CrcAscii"/>, <see cref="ArchiveFormat.OldAscii"/> or <see cref="ArchiveFormat.Binary"/> from the six-byte magic; HP variants are never detected automatically.
+    /// <para>依据六字节魔数返回 <see cref="ArchiveFormat.NewAscii"/>、<see cref="ArchiveFormat.CrcAscii"/>、<see cref="ArchiveFormat.OldAscii"/> 或 <see cref="ArchiveFormat.Binary"/>；不会自动检测到 HP 变体。</para>
+    /// </returns>
+    /// <exception cref="NotSupportedException">
+    /// <paramref name="stream"/> cannot seek.
+    /// <para><paramref name="stream"/> 不可定位。</para>
+    /// </exception>
+    /// <exception cref="EndOfStreamException">
+    /// Fewer than six bytes remain at the current position.
+    /// <para>当前位置剩余字节不足六个。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// The probed bytes match no known CPIO magic.
+    /// <para>探测字节不匹配任何已知 CPIO 魔数。</para>
+    /// </exception>
     public ArchiveFormat DetectFormat(Stream stream)
     {
         if (!stream.CanSeek)

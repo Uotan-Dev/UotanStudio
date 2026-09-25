@@ -49,8 +49,8 @@ public static class HdcConstants
     public const int MaxPayloadSize = 511 * 1024;
 
     /// <summary>
-    /// Stable / legacy maximum payload size (60 KiB, compatible with older versions).
-    /// <para>稳定版/旧版最大负载大小（60 KiB，兼容旧版本）。</para>
+    /// Stable / legacy maximum payload size (60 KiB, compatible with older server releases).
+    /// <para>稳定版/较早协议的最大负载大小（60 KiB，与更早的 server 版本兼容）。</para>
     /// </summary>
     public const int MaxPayloadSizeStable = 60 * 1024;
 
@@ -106,7 +106,7 @@ public static class HdcConstants
     /// Builds the connect system-information payload containing version and feature strings.
     /// <para>构建包含版本与特性字符串的连接系统信息负载。</para>
     /// </summary>
-    /// <returns>The connect payload string. 连接负载字符串。</returns>
+    /// <returns>The connect payload string. <para>连接负载字符串。</para></returns>
     public static string BuildConnectPayload() => $"ohos::{Features}";
 }
 
@@ -116,154 +116,143 @@ public static class HdcConstants
 /// </summary>
 public enum HdcCommand : ushort
 {
-    /// <summary>Help / usage. 帮助/用法。</summary>
+    /// <summary>Help / usage. <para>帮助/用法。</para></summary>
     Help = 0,
-    /// <summary>Session handshake. 会话握手。</summary>
+    /// <summary>Session handshake. <para>会话握手。</para></summary>
     Handshake = 1,
-    /// <summary>Channel close. 通道关闭。</summary>
+    /// <summary>Channel close. <para>通道关闭。</para></summary>
     ChannelClose = 2,
-    /// <summary>Target discover broadcast. 目标发现广播。</summary>
+    /// <summary>Target discover broadcast. <para>目标发现广播。</para></summary>
     TargetDiscover = 4,
-    /// <summary>Target list. 目标列表。</summary>
+    /// <summary>Target list. <para>目标列表。</para></summary>
     TargetList = 5,
-    /// <summary>Connect to any available target. 连接到任意可用目标。</summary>
+    /// <summary>Connect to any available target. <para>连接到任意可用目标。</para></summary>
     TargetAny = 6,
-    /// <summary>Connect to a specific target. 连接到指定目标。</summary>
+    /// <summary>Connect to a specific target. <para>连接到指定目标。</para></summary>
     TargetConnect = 7,
-    /// <summary>Disconnect from a target. 断开目标连接。</summary>
+    /// <summary>Disconnect from a target. <para>断开目标连接。</para></summary>
     TargetDisconnect = 8,
-    /// <summary>Echo request. 回显请求。</summary>
+    /// <summary>Echo request. <para>回显请求。</para></summary>
     Echo = 9,
-    /// <summary>Raw echo request. 原始回显请求。</summary>
+    /// <summary>Raw echo request. <para>原始回显请求。</para></summary>
     EchoRaw = 10,
-    /// <summary>Peer announces task creation; there is no response payload.</summary>
+    /// <summary>
+    /// Peer announces task creation; there is no response payload.
+    /// <para>对端宣告任务创建；没有响应负载。</para>
+    /// </summary>
     WakeupSlaveTask = 12,
-    /// <summary>Enable keep-alive. 启用保活。</summary>
+    /// <summary>Enable keep-alive. <para>启用保活。</para></summary>
     EnableKeepalive = 11,
-    /// <summary>Check HDC server status. 检查 HDC 服务端状态。</summary>
+    /// <summary>Check HDC server status. <para>检查 HDC 服务端状态。</para></summary>
     CheckServer = 13,
-    /// <summary>Check device status. 检查设备状态。</summary>
+    /// <summary>Check device status. <para>检查设备状态。</para></summary>
     CheckDevice = 14,
-    /// <summary>Wait for device. 等待设备。</summary>
+    /// <summary>Wait for device. <para>等待设备。</para></summary>
     WaitFor = 15,
-    /// <summary>Start a service. 启动服务。</summary>
+    /// <summary>Start a service. <para>启动服务。</para></summary>
     ServiceStart = 17,
-    /// <summary>SSL/TLS handshake. SSL/TLS 握手。</summary>
+    /// <summary>SSL/TLS handshake. <para>SSL/TLS 握手。</para></summary>
     SslHandshake = 20,
 
-    // Unity commands (1000+)
-
-    /// <summary>Execute a command. 执行命令。</summary>
+    /// <summary>Execute a command. <para>执行命令。</para></summary>
     UnityExecute = 1001,
-    /// <summary>Remount partitions. 重新挂载分区。</summary>
+    /// <summary>Remount partitions. <para>重新挂载分区。</para></summary>
     UnityRemount = 1002,
-    /// <summary>Reboot device. 重启设备。</summary>
+    /// <summary>Reboot device. <para>重启设备。</para></summary>
     UnityReboot = 1003,
-    /// <summary>Query / set run mode. 查询/设置运行模式。</summary>
+    /// <summary>Query / set run mode. <para>查询/设置运行模式。</para></summary>
     UnityRunmode = 1004,
-    /// <summary>Stream hilog output. 流式输出 hilog。</summary>
+    /// <summary>Stream hilog output. <para>流式输出 hilog。</para></summary>
     UnityHilog = 1005,
-    /// <summary>Execute as root. 以 root 执行。</summary>
+    /// <summary>Execute as root. <para>以 root 执行。</para></summary>
     UnityRootRun = 1007,
-    /// <summary>Lists debuggable processes.</summary>
+    /// <summary>Lists debuggable processes. <para>列出可调试进程。</para></summary>
     JdwpList = 1008,
-    /// <summary>Tracks changes to debuggable processes.</summary>
+    /// <summary>Tracks changes to debuggable processes. <para>跟踪可调试进程的变更。</para></summary>
     JdwpTrack = 1009,
-    /// <summary>Initialize bugreport. 初始化 bugreport。</summary>
+    /// <summary>Initialize bugreport. <para>初始化 bugreport。</para></summary>
     UnityBugreportInit = 1011,
-    /// <summary>Bugreport data transfer. bugreport 数据传输。</summary>
+    /// <summary>Bugreport data transfer. <para>bugreport 数据传输。</para></summary>
     UnityBugreportData = 1012,
-    /// <summary>Extended execute command. 扩展执行命令。</summary>
+    /// <summary>Extended execute command. <para>扩展执行命令。</para></summary>
     UnityExecuteEx = 1200,
 
-    // Shell (2000+)
-
-    /// <summary>Initialize shell session. 初始化 shell 会话。</summary>
+    /// <summary>Initialize shell session. <para>初始化 shell 会话。</para></summary>
     ShellInit = 2000,
-    /// <summary>Shell data stream. shell 数据流。</summary>
+    /// <summary>Shell data stream. <para>shell 数据流。</para></summary>
     ShellData = 2001,
 
-    // Forward (2500+)
-
-    /// <summary>Initialize port forwarding. 初始化端口转发。</summary>
+    /// <summary>Initialize port forwarding. <para>初始化端口转发。</para></summary>
     ForwardInit = 2500,
-    /// <summary>Check forward status. 检查转发状态。</summary>
+    /// <summary>Check forward status. <para>检查转发状态。</para></summary>
     ForwardCheck = 2501,
-    /// <summary>Forward check result. 转发检查结果。</summary>
+    /// <summary>Forward check result. <para>转发检查结果。</para></summary>
     ForwardCheckResult = 2502,
-    /// <summary>Activate slave channel. 激活从通道。</summary>
+    /// <summary>Activate slave channel. <para>激活从通道。</para></summary>
     ForwardActiveSlave = 2503,
-    /// <summary>Activate master channel. 激活主通道。</summary>
+    /// <summary>Activate master channel. <para>激活主通道。</para></summary>
     ForwardActiveMaster = 2504,
-    /// <summary>Forward data. 转发数据。</summary>
+    /// <summary>Forward data. <para>转发数据。</para></summary>
     ForwardData = 2505,
-    /// <summary>Free forward context. 释放转发上下文。</summary>
+    /// <summary>Free forward context. <para>释放转发上下文。</para></summary>
     ForwardFreeContext = 2506,
-    /// <summary>List forward rules. 列出转发规则。</summary>
+    /// <summary>List forward rules. <para>列出转发规则。</para></summary>
     ForwardList = 2507,
-    /// <summary>Remove forward rule. 移除转发规则。</summary>
+    /// <summary>Remove forward rule. <para>移除转发规则。</para></summary>
     ForwardRemove = 2508,
-    /// <summary>Forward success acknowledgment. 转发成功确认。</summary>
+    /// <summary>Forward success acknowledgment. <para>转发成功确认。</para></summary>
     ForwardSuccess = 2509,
 
-    // File (3000+)
-
-    /// <summary>Initialize file transfer. 初始化文件传输。</summary>
+    /// <summary>Initialize file transfer. <para>初始化文件传输。</para></summary>
     FileInit = 3000,
-    /// <summary>Check file transfer. 检查文件传输。</summary>
+    /// <summary>Check file transfer. <para>检查文件传输。</para></summary>
     FileCheck = 3001,
-    /// <summary>Begin file transfer. 开始文件传输。</summary>
+    /// <summary>Begin file transfer. <para>开始文件传输。</para></summary>
     FileBegin = 3002,
-    /// <summary>File data chunk. 文件数据块。</summary>
+    /// <summary>File data chunk. <para>文件数据块。</para></summary>
     FileData = 3003,
-    /// <summary>Finish file transfer. 完成文件传输。</summary>
+    /// <summary>Finish file transfer. <para>完成文件传输。</para></summary>
     FileFinish = 3004,
-    /// <summary>Sideload package. 侧载安装包。</summary>
+    /// <summary>Sideload package. <para>侧载安装包。</para></summary>
     FileSideload = 3005,
-    /// <summary>Set file mode. 设置文件权限。</summary>
+    /// <summary>Set file mode. <para>设置文件权限。</para></summary>
     FileMode = 3006,
-    /// <summary>Directory mode. 目录模式。</summary>
+    /// <summary>Directory mode. <para>目录模式。</para></summary>
     DirMode = 3007,
 
-    // App (3500+)
-
-    /// <summary>Initialize app management. 初始化应用管理。</summary>
+    /// <summary>Initialize app management. <para>初始化应用管理。</para></summary>
     AppInit = 3500,
-    /// <summary>Check app status. 检查应用状态。</summary>
+    /// <summary>Check app status. <para>检查应用状态。</para></summary>
     AppCheck = 3501,
-    /// <summary>Begin app install. 开始应用安装。</summary>
+    /// <summary>Begin app install. <para>开始应用安装。</para></summary>
     AppBegin = 3502,
-    /// <summary>App data transfer. 应用数据传输。</summary>
+    /// <summary>App data transfer. <para>应用数据传输。</para></summary>
     AppData = 3503,
-    /// <summary>Finish app install. 完成应用安装。</summary>
+    /// <summary>Finish app install. <para>完成应用安装。</para></summary>
     AppFinish = 3504,
-    /// <summary>Uninstall app. 卸载应用。</summary>
+    /// <summary>Uninstall app. <para>卸载应用。</para></summary>
     AppUninstall = 3505,
 
-    // Flash (4000+)
-
-    /// <summary>Initialize flash daemon update. 初始化刷机守护更新。</summary>
+    /// <summary>Initialize flash daemon update. <para>初始化刷机守护更新。</para></summary>
     FlashdUpdateInit = 4000,
-    /// <summary>Initialize flash operation. 初始化刷写操作。</summary>
+    /// <summary>Initialize flash operation. <para>初始化刷写操作。</para></summary>
     FlashdFlashInit = 4001,
-    /// <summary>Check flash status. 检查刷写状态。</summary>
+    /// <summary>Check flash status. <para>检查刷写状态。</para></summary>
     FlashdCheck = 4002,
-    /// <summary>Begin flash. 开始刷写。</summary>
+    /// <summary>Begin flash. <para>开始刷写。</para></summary>
     FlashdBegin = 4003,
-    /// <summary>Flash data transfer. 刷写数据传输。</summary>
+    /// <summary>Flash data transfer. <para>刷写数据传输。</para></summary>
     FlashdData = 4004,
-    /// <summary>Finish flash. 完成刷写。</summary>
+    /// <summary>Finish flash. <para>完成刷写。</para></summary>
     FlashdFinish = 4005,
-    /// <summary>Erase partition. 擦除分区。</summary>
+    /// <summary>Erase partition. <para>擦除分区。</para></summary>
     FlashdErase = 4006,
-    /// <summary>Format partition. 格式化分区。</summary>
+    /// <summary>Format partition. <para>格式化分区。</para></summary>
     FlashdFormat = 4007,
-    /// <summary>Flash progress report. 刷写进度报告。</summary>
+    /// <summary>Flash progress report. <para>刷写进度报告。</para></summary>
     FlashdProgress = 4008,
 
-    // Heartbeat
-
-    /// <summary>Heartbeat keep-alive message. 心跳保活消息。</summary>
+    /// <summary>Heartbeat keep-alive message. <para>心跳保活消息。</para></summary>
     HeartbeatMsg = 5000,
 }
 

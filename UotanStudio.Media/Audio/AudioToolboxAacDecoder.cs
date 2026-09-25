@@ -21,13 +21,11 @@ namespace UotanStudio.Media.Audio;
 [SupportedOSPlatform("macos")]
 public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
 {
-    private const uint FormatAac = 0x61616320;   // kAudioFormatMPEG4AAC ('aac ')
-    private const uint FormatPcm = 0x6C70636D;   // kAudioFormatLinearPCM ('lpcm')
-    private const uint FlagsPackedSignedInt = 0x8 | 0x4; // packed | signed integer
-    private const uint PropertyMagicCookie = 0x6D616769; // kAudioConverterDecompressionMagicCookie ('magi')
+    private const uint FormatAac = 0x61616320;
+    private const uint FormatPcm = 0x6C70636D;
+    private const uint FlagsPackedSignedInt = 0x8 | 0x4;
+    private const uint PropertyMagicCookie = 0x6D616769;
 
-    // One-packet input callback error; keeps the fill call failing loudly.
-    // 单包输入回调的错误码；让填充调用明确失败。
     private const int InputCallbackError = 1;
 
     private nint _converter;
@@ -41,19 +39,62 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
     private bool _disposed;
     private bool _inCallback;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Whether the native AudioConverter has been created.
+    /// <para>原生 AudioConverter 是否已创建。</para>
+    /// </summary>
+    /// <value><see langword="true"/> while the converter handle is held; otherwise <see langword="false"/>. <para>持有转换器句柄期间为 <see langword="true"/>，否则为 <see langword="false"/>。</para></value>
     public bool IsInitialized => _converter != 0;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// The output sample rate parsed from the AudioSpecificConfig.
+    /// <para>由 AudioSpecificConfig 解析出的输出采样率。</para>
+    /// </summary>
+    /// <value>Sample rate in hertz; valid once initialized. <para>以赫兹计的采样率；初始化后有效。</para></value>
     public int SampleRate => _sampleRate;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// The output channel count parsed from the AudioSpecificConfig.
+    /// <para>由 AudioSpecificConfig 解析出的输出通道数。</para>
+    /// </summary>
+    /// <value>Number of interleaved channels; valid once initialized. <para>交错通道数量；初始化后有效。</para></value>
     public int Channels => _channels;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// The fixed output width of the 16-bit signed PCM this decoder emits.
+    /// <para>本解码器输出的 16 位有符号 PCM 的固定位宽。</para>
+    /// </summary>
+    /// <value>Always <c>16</c>. <para>始终为 <c>16</c>。</para></value>
     public int BitsPerSample => 16;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Creates the AudioConverter from an AAC AudioSpecificConfig and installs the per-frame callback.
+    /// <para>依据 AAC AudioSpecificConfig 创建 AudioConverter，并安装逐帧回调。</para>
+    /// </summary>
+    /// <param name="codecConfig">
+    /// The AudioSpecificConfig bytes; must be 2 to 64 bytes long and is used as the converter magic cookie.
+    /// <para>AudioSpecificConfig 字节；长度须为 2 至 64 字节，用作转换器的 magic cookie。</para>
+    /// </param>
+    /// <param name="frameCallback">
+    /// Invoked on the calling thread for each decoded frame; the callback owns and must dispose the frame.
+    /// <para>对每一解码帧在调用线程上触发；回调接管该帧并必须将其释放。</para>
+    /// </param>
+    /// <exception cref="InvalidDataException">
+    /// <paramref name="codecConfig"/> is empty or longer than 64 bytes, or the converter call fails.
+    /// <para><paramref name="codecConfig"/> 为空或超过 64 字节，或转换器调用失败。</para>
+    /// </exception>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="frameCallback"/> is <see langword="null"/>.
+    /// <para><paramref name="frameCallback"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">
+    /// The decoder has been disposed.
+    /// <para>解码器已被释放。</para>
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// The call reenters from a callback or runs on a thread other than the owning thread.
+    /// <para>该调用从回调中重入，或在非属主线程上运行。</para>
+    /// </exception>
     public void Initialize(ReadOnlySpan<byte> codecConfig, Action<DecodedAudioFrame> frameCallback)
     {
         if (_inCallback) throw new InvalidOperationException("Decoder callbacks cannot reenter the decoder.");
@@ -103,7 +144,30 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
         _callback = frameCallback;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Decodes one AAC packet through the converter and emits interleaved 16-bit PCM via the callback on the owning thread.
+    /// <para>经转换器解码一个 AAC 包，并在属主线程上通过回调输出交错 16 位 PCM。</para>
+    /// </summary>
+    /// <param name="packet">
+    /// A single AAC access unit; must be non-empty and no larger than 1 MiB. The bytes are read only for the duration of the call.
+    /// <para>单个 AAC 访问单元；必须非空且不超过 1 MiB。这些字节仅在调用期间被读取。</para>
+    /// </param>
+    /// <param name="timestampTicks">
+    /// Presentation timestamp stamped onto every frame produced from this packet.
+    /// <para>盖在该包产生的每一帧上的显示时间戳。</para>
+    /// </param>
+    /// <exception cref="InvalidDataException">
+    /// The packet is empty or exceeds 1 MiB, or the converter returns a PCM size inconsistent with the sample layout.
+    /// <para>包为空或超过 1 MiB，或转换器返回的 PCM 大小与采样布局不一致。</para>
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// The decoder is not initialized, the call reenters from a callback, or it runs on a thread other than the owning thread.
+    /// <para>解码器未初始化、该调用从回调中重入，或在非属主线程上运行。</para>
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">
+    /// The decoder has been disposed.
+    /// <para>解码器已被释放。</para>
+    /// </exception>
     public void Decode(ReadOnlySpan<byte> packet, long timestampTicks)
     {
         CheckReady();
@@ -142,7 +206,18 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
             if (buffer is not null) System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
         }
     }
-    /// <inheritdoc />
+    /// <summary>
+    /// Resets the converter for a new stream, keeping the decoder initialized and its owning thread unchanged.
+    /// <para>重置转换器以开始新码流，解码器保持已初始化且属主线程不变。</para>
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// The decoder is not initialized, the call reenters from a callback, it runs on a thread other than the owning thread, or the reset call fails.
+    /// <para>解码器未初始化、该调用从回调中重入、在非属主线程上运行，或重置调用失败。</para>
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">
+    /// The decoder has been disposed.
+    /// <para>解码器已被释放。</para>
+    /// </exception>
     public void Reset()
     {
         CheckReady();
@@ -186,7 +261,14 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
         _callback = null;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Disposes the native AudioConverter and releases the self handle; repeated calls are no-ops once disposed.
+    /// <para>释放原生 AudioConverter 并解除自引用句柄；已释放后再次调用不产生效果。</para>
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// The call runs from within a callback or on a thread other than the owning thread.
+    /// <para>该调用在回调内部触发，或在非属主线程上运行。</para>
+    /// </exception>
     public void Dispose()
     {
         if (_disposed) return;

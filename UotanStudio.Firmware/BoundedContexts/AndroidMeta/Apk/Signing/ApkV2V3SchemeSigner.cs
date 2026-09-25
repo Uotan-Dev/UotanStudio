@@ -11,20 +11,31 @@ namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
 /// </summary>
 public static class ApkV2V3SchemeSigner
 {
-    /// <summary>SDK range for v3 signers without explicit rotation (apksigner defaults).</summary>
-    /// <para>无显式密钥轮换时 v3 签名者的 SDK 范围（apksigner 默认值）。</para>
+    /// <summary>SDK range for v3 signers without explicit rotation (apksigner defaults).
+    /// <para>无显式密钥轮换时 v3 签名者的 SDK 范围（apksigner 默认值）。</para></summary>
     public const int V3DefaultMinSdk = 28;
+
+    /// <summary>Upper SDK bound of a v3 signer when no explicit range is given (apksigner default).
+    /// <para>未显式指定范围时 v3 签名者保护的最高 SDK（apksigner 默认值）。</para></summary>
     public const int V3DefaultMaxSdk = int.MaxValue;
 
     /// <summary>
     /// Builds the v2 signer block value (length-prefixed signer sequence) for one signer.
     /// <para>为单个签名者构建 v2 签名者块值（带长度前缀的 signer 序列）。</para>
     /// </summary>
-    /// <param name="key">User-provided signing key. 用户提供的签名密钥。</param>
-    /// <param name="certificateChain">Certificate chain, leaf first. 证书链，叶子在前。</param>
-    /// <param name="algorithm">Signature algorithm. 签名算法。</param>
-    /// <param name="contentDigest">Content digest already computed for the algorithm's hash. 已按算法哈希计算好的内容摘要。</param>
-    /// <param name="protectV3">Requires the v3 block on supported platforms. 在受支持的平台要求存在 v3 分块。</param>
+    /// <param name="key">User-provided signing key. <para>用户提供的签名密钥。</para></param>
+    /// <param name="certificateChain">Certificate chain, leaf first. <para>证书链，叶子在前。</para></param>
+    /// <param name="algorithm">Signature algorithm. <para>签名算法。</para></param>
+    /// <param name="contentDigest">Content digest already computed for the algorithm's hash.
+    /// <para>已按算法哈希计算好的内容摘要。</para></param>
+    /// <param name="protectV3">Requires the v3 block on supported platforms.
+    /// <para>在受支持的平台要求存在 v3 分块。</para></param>
+    /// <returns>A uint32-length-prefixed signer sequence for the v2 block ID value.
+    /// <para>用于 v2 分块 ID 值的 uint32 长度前缀 signer 序列。</para></returns>
+    /// <exception cref="NotSupportedException">The key type cannot produce the selected algorithm's signature.
+    /// <para>密钥类型无法产生所选算法的签名。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="algorithm"/> is not a known algorithm ID.
+    /// <para><paramref name="algorithm"/> 不是已知的算法 ID。</para></exception>
     public static byte[] BuildV2Signer(
         AsymmetricAlgorithm key,
         IReadOnlyList<X509Certificate2> certificateChain,
@@ -41,12 +52,22 @@ public static class ApkV2V3SchemeSigner
     /// Builds the v3 signer block value (length-prefixed signer sequence) for one signer.
     /// <para>为单个签名者构建 v3 签名者块值（带长度前缀的 signer 序列）。</para>
     /// </summary>
-    /// <param name="key">User-provided signing key. 用户提供的签名密钥。</param>
-    /// <param name="certificateChain">Certificate chain, leaf first. 证书链，叶子在前。</param>
-    /// <param name="algorithm">Signature algorithm. 签名算法。</param>
-    /// <param name="contentDigest">Content digest already computed for the algorithm's hash. 已按算法哈希计算好的内容摘要。</param>
-    /// <param name="minSdk">Minimum SDK protected by this signer. 该签名者保护的最低 SDK。</param>
-    /// <param name="maxSdk">Maximum SDK protected by this signer. 该签名者保护的最高 SDK。</param>
+    /// <param name="key">User-provided signing key. <para>用户提供的签名密钥。</para></param>
+    /// <param name="certificateChain">Certificate chain, leaf first. <para>证书链，叶子在前。</para></param>
+    /// <param name="algorithm">Signature algorithm. <para>签名算法。</para></param>
+    /// <param name="contentDigest">Content digest already computed for the algorithm's hash.
+    /// <para>已按算法哈希计算好的内容摘要。</para></param>
+    /// <param name="minSdk">Minimum SDK protected by this signer.
+    /// <para>该签名者保护的最低 SDK。</para></param>
+    /// <param name="maxSdk">Maximum SDK protected by this signer.
+    /// <para>该签名者保护的最高 SDK。</para></param>
+    /// <returns>A uint32-length-prefixed signer sequence for the v3 block ID value, embedding the
+    /// min/max SDK bounds as little-endian uint32 fields. <para>用于 v3 分块 ID 值的 uint32 长度前缀
+    /// signer 序列，内嵌小端 uint32 的最低/最高 SDK 边界字段。</para></returns>
+    /// <exception cref="NotSupportedException">The key type cannot produce the selected algorithm's signature.
+    /// <para>密钥类型无法产生所选算法的签名。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="algorithm"/> is not a known algorithm ID.
+    /// <para><paramref name="algorithm"/> 不是已知的算法 ID。</para></exception>
     public static byte[] BuildV3Signer(
         AsymmetricAlgorithm key,
         IReadOnlyList<X509Certificate2> certificateChain,
@@ -60,11 +81,6 @@ public static class ApkV2V3SchemeSigner
         return LengthPrefixSequence([BuildSignerV3(signedData, algorithm, signature, key, minSdk, maxSdk)]);
     }
 
-    // ---- v2 structure ---------------------------------------------------------------
-
-    // Builds v2 signed-data as a concatenation of two-level length-prefixed digests,
-    // certificates and attributes, matching apksig's encodeAsSequenceOfLengthPrefixedElements.
-    // 构建 v2 签名数据：digests、certificates、attributes 按 apksig 带两级长度前缀的序列规则拼接。
     private static byte[] BuildSignedDataV2(
         ApkSignatureConstants.SignatureAlgorithm algorithm,
         byte[] contentDigest,
@@ -85,9 +101,6 @@ public static class ApkV2V3SchemeSigner
         return Concat(digests, certificates, attributes);
     }
 
-    // Builds the v2 signer element from length-prefixed signed data, signatures and public key, in the
-    // exact field order the v2 spec requires; the enclosing sequence supplies the signer length prefix.
-    // 按 v2 规范字段顺序将带长度前缀的 signed data、signatures 与公钥拼成 signer 元素。
     private static byte[] BuildSignerV2(
         byte[] signedData,
         ApkSignatureConstants.SignatureAlgorithm algorithm,
@@ -105,11 +118,6 @@ public static class ApkV2V3SchemeSigner
         return Concat(LengthPrefix(signedData), signatures, publicKey);
     }
 
-    // ---- v3 structure ---------------------------------------------------------------
-
-    // Builds v3 signed-data: digests, certificates, min/max SDK and empty additional attributes, in the
-    // field order required by the official v3 spec; the signature covers the signed-data content only.
-    // 按 v3 规范字段顺序构建签名数据：digests、certificates、min/max SDK、空附加属性。
     private static byte[] BuildSignedDataV3(
         ApkSignatureConstants.SignatureAlgorithm algorithm,
         byte[] contentDigest,
@@ -134,9 +142,6 @@ public static class ApkV2V3SchemeSigner
         return Concat(digests, certificates, minSdkBytes.ToArray(), maxSdkBytes.ToArray(), attributes);
     }
 
-    // Builds the v3 signer element in the field order the official v3 spec requires: signed data,
-    // min SDK, max SDK, signatures, public key.
-    // 按官方 v3 规范字段顺序构建 signer 元素：signed data、min SDK、max SDK、signatures、公钥。
     private static byte[] BuildSignerV3(
         byte[] signedData,
         ApkSignatureConstants.SignatureAlgorithm algorithm,
@@ -160,12 +165,22 @@ public static class ApkV2V3SchemeSigner
         return Concat(LengthPrefix(signedData), minSdkBytes.ToArray(), maxSdkBytes.ToArray(), signatures, publicKey);
     }
 
-    // ---- crypto ---------------------------------------------------------------------
-
     /// <summary>
     /// Signs the signed-data chunk with the user's key using the algorithm's hash and padding.
     /// <para>使用用户密钥按算法的哈希与填充方式对签名数据分块签名。</para>
     /// </summary>
+    /// <param name="key">User-provided signing key. <para>用户提供的签名密钥。</para></param>
+    /// <param name="algorithm">Signature algorithm fixing the hash and padding.
+    /// <para>决定哈希与填充方式的签名算法。</para></param>
+    /// <param name="signedData">Signed-data chunk bytes to sign over.
+    /// <para>待签名的签名数据分块字节。</para></param>
+    /// <returns>Raw signature bytes; RSA signatures follow the algorithm's PSS or PKCS#1 padding and
+    /// ECDSA signatures use the RFC 3279 DER sequence encoding.
+    /// <para>原始签名字节；RSA 按算法采用 PSS 或 PKCS#1 填充，ECDSA 使用 RFC 3279 DER 序列编码。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="algorithm"/> is not a known algorithm ID.
+    /// <para><paramref name="algorithm"/> 不是已知的算法 ID。</para></exception>
+    /// <exception cref="NotSupportedException">The key and algorithm combination is not RSA/PSS, RSA/PKCS#1
+    /// or ECDSA. <para>密钥与算法组合不属于 RSA/PSS、RSA/PKCS#1 或 ECDSA。</para></exception>
     public static byte[] SignSignedData(
         AsymmetricAlgorithm key,
         ApkSignatureConstants.SignatureAlgorithm algorithm,
@@ -188,8 +203,6 @@ public static class ApkV2V3SchemeSigner
                 $"Key type {key.GetType().Name} cannot produce this signature. 密钥类型 {key.GetType().Name} 无法产生该签名。"),
         };
     }
-
-    // ---- helpers --------------------------------------------------------------------
 
     private static byte[] ExportSubjectPublicKeyInfo(AsymmetricAlgorithm? key, IReadOnlyList<X509Certificate2> chain)
     {

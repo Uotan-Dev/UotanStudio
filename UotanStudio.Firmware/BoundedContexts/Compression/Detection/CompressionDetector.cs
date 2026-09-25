@@ -1,6 +1,7 @@
 namespace UotanStudio.Firmware.BoundedContexts.Compression.Detection;
 
-/// <summary>Detects compression framing from bytes or a stream header without selecting a codec by extension.</summary>
+/// <summary>Detects compression framing from bytes or a stream header without selecting a codec by extension.
+/// <para>从字节或流头部检测压缩封装，不按扩展名选择编解码器。</para></summary>
 public static class CompressionDetector
 {
     private static readonly byte[] MagicGzip = [0x1F, 0x8B];
@@ -9,8 +10,24 @@ public static class CompressionDetector
     private static readonly byte[] MagicXz = [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00];
     private static readonly byte[] MagicLzop = [0x89, 0x4C, 0x5A, 0x4F, 0x00, 0x0D, 0x0A, 0x1A, 0x0A];
 
+    /// <summary>Detects the compression format from the leading bytes of a buffer.
+    /// <para>根据缓冲区的前导字节检测压缩格式。</para></summary>
+    /// <param name="data">Buffer to inspect. <para>要检查的缓冲区。</para></param>
+    /// <returns>The matching format, or <see cref="CompressionFormat.None"/> when no magic applies.
+    /// <para>匹配到的格式；无适用魔数时返回 <see cref="CompressionFormat.None"/>。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is null. <para><paramref name="data"/> 为 null。</para></exception>
     public static CompressionFormat Detect(byte[] data) => data == null ? throw new ArgumentNullException(nameof(data)) : Detect(data.AsSpan());
 
+    /// <summary>
+    /// Detects the compression format from a byte span by magic and structural heuristics.
+    /// <para>通过魔数与结构启发式，从字节跨度检测压缩格式。</para>
+    /// </summary>
+    /// <param name="data">Leading bytes of the payload; spans shorter than two bytes are never a known format.
+    /// <para>数据的起始字节；短于两字节的跨度不视为已知格式。</para></param>
+    /// <returns>Gzip, zstd, bzip2, xz, lzop, LZ4, LZ4 legacy, LZMA or zlib framing; LZMA and zlib rely on
+    /// heuristics, and <see cref="CompressionFormat.None"/> means no match.
+    /// <para>可返回 Gzip、zstd、bzip2、xz、lzop、LZ4、LZ4 legacy、LZMA 或 zlib 封装；LZMA 与 zlib 依赖启发式，
+    /// <see cref="CompressionFormat.None"/> 表示无匹配。</para></returns>
     public static CompressionFormat Detect(ReadOnlySpan<byte> data)
     {
         if (data.Length < 2)
@@ -66,6 +83,11 @@ public static class CompressionDetector
     /// Reads the stream head to detect the compression format; restores the position when the stream is seekable.
     /// <para>读取流头部检测压缩格式；若流可定位则恢复原位置。</para>
     /// </summary>
+    /// <param name="input">Stream to peek at up to 16 bytes; for non-seekable streams the consumed head bytes
+    /// are not restored. <para>最多窥探 16 字节的流；对不可定位的流，已消费的头部字节不会恢复。</para></param>
+    /// <returns>The detected format, or <see cref="CompressionFormat.None"/> for a short or unknown head.
+    /// <para>检测到的格式；头部过短或未知时返回 <see cref="CompressionFormat.None"/>。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> is null. <para><paramref name="input"/> 为 null。</para></exception>
     public static CompressionFormat Detect(Stream input)
     {
         if (input == null)

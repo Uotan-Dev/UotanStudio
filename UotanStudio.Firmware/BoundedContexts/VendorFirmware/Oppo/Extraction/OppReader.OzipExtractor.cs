@@ -5,6 +5,10 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Extraction;
 
+/// <summary>
+/// Reads, parses and extracts Oppo firmware packages (OFP, OPS, Ozip, including ZIP-wrapped OFP) from files or streams. Package bytes are treated as untrusted input: structure, sizes and output paths are validated before anything is written, and outputs are written atomically through temporary files. The reader is stateless apart from its injected crypto provider and logger and can be used from multiple threads.
+/// <para>从文件或流中读取、解析并提取 Oppo 固件包（OFP、OPS、Ozip，含 ZIP 包裹的 OFP）。包字节视为不可信输入：写入前会校验结构、大小和输出路径，并通过临时文件原子写出。除注入的加密提供程序和日志器外，读取器无状态，可多线程使用。</para>
+/// </summary>
 public sealed partial class OppReader
 {
     private OppExtractResult ExtractOzipCore(

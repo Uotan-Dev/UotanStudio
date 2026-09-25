@@ -1,5 +1,9 @@
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Models;
 
+/// <summary>
+/// AES key and initialization-vector pair registered for one region key index of a given NTPI version; the stored bytes are private copies.
+/// <para>为某个 NTPI 版本的一个密钥索引登记的 AES 密钥与初始化向量对；内部保存的是私有副本。</para>
+/// </summary>
 public record NtpiVersionKey
 {
 
@@ -7,17 +11,34 @@ public record NtpiVersionKey
     /// Initializes a new instance of NtpiVersionKey with the specified key and initialization vector.
     /// <para>使用指定的密钥和初始化向量初始化 NtpiVersionKey 的新实例。</para>
     /// </summary>
+    /// <param name="key">
+    /// AES key bytes; cloned on entry, so later changes to the caller's array are not observed.
+    /// <para>AES 密钥字节；入参即被克隆，调用方后续修改该数组不会生效。</para>
+    /// </param>
+    /// <param name="iv">
+    /// Initialization vector bytes; cloned on entry. <para>初始化向量字节；入参即被克隆。</para>
+    /// </param>
+    /// <exception cref="ArgumentNullException"><paramref name="key"/> or <paramref name="iv"/> is <see langword="null"/>.
+    /// <para><paramref name="key"/> 或 <paramref name="iv"/> 为 <see langword="null"/>。</para></exception>
     public NtpiVersionKey(byte[] key, byte[] iv)
     {
         Key = (byte[])(key ?? throw new ArgumentNullException(nameof(key))).Clone();
         Iv = (byte[])(iv ?? throw new ArgumentNullException(nameof(iv))).Clone();
     }
 
+    /// <summary>Fresh clone of the stored AES key bytes. <para>所存 AES 密钥字节的新克隆。</para></summary>
+    /// <value>A copy of the key; mutating it does not affect this instance. <para>密钥副本；修改它不影响本实例。</para></value>
     public byte[] Key => (byte[])field.Clone();
 
+    /// <summary>Fresh clone of the stored initialization vector. <para>所存初始化向量的新克隆。</para></summary>
+    /// <value>A copy of the IV; mutating it does not affect this instance. <para>IV 副本；修改它不影响本实例。</para></value>
     public byte[] Iv => (byte[])field.Clone();
 }
 
+/// <summary>
+/// Mutable registry mapping NTPI versions to per-region-type AES keys and IVs, preloaded with version 1.3.0 key indices 1 through 5.
+/// <para>可将 NTPI 版本映射到各区域类型 AES 密钥与 IV 的可变注册表，预置 1.3.0 版密钥索引 1 至 5。</para>
+/// </summary>
 public static class NtpiVersionRegistry
 {
     private static readonly Dictionary<(ulong Major, ulong Minor, ulong Patch), Dictionary<int, NtpiVersionKey>> VersionKeyMap = new()
@@ -50,6 +71,14 @@ public static class NtpiVersionRegistry
     /// Retrieves the encryption key dictionary for the specified version.
     /// <para>根据版本号获取对应的加密密钥字典。</para>
     /// </summary>
+    /// <param name="major">Major version component. <para>主版本号。</para></param>
+    /// <param name="minor">Minor version component. <para>次版本号。</para></param>
+    /// <param name="patch">Patch version component. <para>修订版本号。</para></param>
+    /// <returns>The stored dictionary for an exact (major, minor, patch) match, or for a registered
+    /// (major, minor) pair when the patch does not match, or <see langword="null"/> when neither matches.
+    /// The dictionary is shared, not copied.
+    /// <para>精确匹配 (major, minor, patch) 时返回所存字典；补丁号不匹配但已登记同一 (major, minor) 时返回该字典；
+    /// 两者都不匹配时返回 <see langword="null"/>。返回的是共享字典，不是副本。</para></returns>
     public static Dictionary<int, NtpiVersionKey>? GetKeysForVersion(ulong major, ulong minor, ulong patch)
     {
         return VersionKeyMap.TryGetValue((major, minor, patch), out var exact)
@@ -61,6 +90,11 @@ public static class NtpiVersionRegistry
     /// Registers or overrides the key dictionary for the specified version.
     /// <para>注册或覆盖指定版本的密钥字典。</para>
     /// </summary>
+    /// <param name="major">Major version component. <para>主版本号。</para></param>
+    /// <param name="minor">Minor version component. <para>次版本号。</para></param>
+    /// <param name="patch">Patch version component. <para>修订版本号。</para></param>
+    /// <param name="keys">Dictionary of region key indices to store; it also serves later lookups that match only major and minor.
+    /// <para>要存储的区域密钥索引字典；它同时用于仅匹配主、次号版本的后续查询。</para></param>
     public static void RegisterVersion(ulong major, ulong minor, ulong patch, Dictionary<int, NtpiVersionKey> keys)
     {
         VersionKeyMap[(major, minor, patch)] = keys;

@@ -657,9 +657,9 @@ public sealed partial class CompareViewModel : Document
     {
         if (IsComparing)
         {
-            // 对比进行中列数固定为两列：拖入新路径只会被忽略，改为明确提示先结束对比。
-            // A comparison keeps exactly two columns: a dropped path is rejected with an explicit hint instead
-            // of silently changing the layout.
+            // 对比进行中列数固定为两列：拖入的新路径被拒绝并给出明确提示，两列布局保持不变。
+            // A comparison keeps exactly two columns: a dropped path is rejected with an explicit hint and the
+            // two-column layout is left unchanged.
             ReportError(LanguageService.Instance.GetString("Compare_AddColumnWhileComparing"));
             return false;
         }
@@ -1108,11 +1108,11 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>记录两栏当前选中的行索引（视图在选中变化时写回）：文本对比的「复制到另一侧」按这些行执行，
-    /// 目录对比的复制按钮不再依赖它（按行列表选中项定位条目）。</para>
+    /// <para>记录两栏当前选中的行索引（视图在选中变化时写回）：文本对比的「复制到另一侧」按这些行执行；
+    /// 目录对比的复制按钮按行列表自身的选中项定位条目。</para>
     /// Records the currently selected row indices (written back by the view on selection changes): "copy to the other
     /// side" in a text comparison acts on them, while the folder comparison's copy button locates its entry through the
-    /// row list's selection instead.
+    /// row list's own selection.
     /// </summary>
     /// <param name="indices"><para>选中的行索引。</para>The selected row indices.</param>
     internal void UpdateRowSelection(IEnumerable<int> indices) => _selectedRowIndices = [.. indices];

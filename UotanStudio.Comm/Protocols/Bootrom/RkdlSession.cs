@@ -44,18 +44,24 @@ public sealed partial class RkdlSession : IProtocolSession
     /// Gets the protocol name.
     /// <para>获取协议名称。</para>
     /// </summary>
+    /// <value>The constant <c>"rkdl"</c> identifying the Rockchip download protocol.
+    /// <para>常量 <c>"rkdl"</c>，标识 Rockchip 下载协议。</para></value>
     public string ProtocolName => "rkdl";
 
     /// <summary>
     /// Gets the underlying transport.
     /// <para>获取底层传输。</para>
     /// </summary>
+    /// <value>The transport this session performs bulk transfers on; disposed together with the session.
+    /// <para>本会话执行批量传输所使用的传输；随会话一同释放。</para></value>
     public ICommTransport Transport { get; }
 
     /// <summary>
     /// Gets whether the session is connected and ready for commands.
     /// <para>获取会话是否已连接并准备好接收命令。</para>
     /// </summary>
+    /// <value><c>true</c> while the session is undisposed and its transport reports a connection.
+    /// <para>会话未释放且其传输报告已连接时为 <c>true</c>。</para></value>
     public bool IsConnected => !_disposed && Transport.IsConnected;
 
     /// <summary>
@@ -67,14 +73,22 @@ public sealed partial class RkdlSession : IProtocolSession
     /// </summary>
     internal IUsbDeviceSession? UsbSession => (Transport as UsbDeviceTransport)?.Session;
 
-    /// <summary>Gets the USB vendor ID. USB 厂商 ID。</summary>
+    /// <summary>Gets the USB vendor ID of the underlying device.
+    /// <para>获取底层设备的 USB 厂商 ID。</para></summary>
+    /// <value>The vendor ID read from the USB session, or 0 when the transport is not USB-based.
+    /// <para>从 USB 会话读取的厂商 ID；传输非基于 USB 时为 0。</para></value>
     public ushort VendorId => UsbSession?.DeviceInfo.VendorId ?? 0;
 
-    /// <summary>Gets the USB product ID. USB 产品 ID。</summary>
+    /// <summary>Gets the USB product ID of the underlying device.
+    /// <para>获取底层设备的 USB 产品 ID。</para></summary>
+    /// <value>The product ID read from the USB session, or 0 when the transport is not USB-based.
+    /// <para>从 USB 会话读取的产品 ID；传输非基于 USB 时为 0。</para></value>
     public ushort ProductId => UsbSession?.DeviceInfo.ProductId ?? 0;
 
     /// <summary>Gets whether the device is in rockusb mode (ready for flash operations).
-    /// 设备是否处于 rockusb 模式（就绪可刷写）。</summary>
+    /// <para>设备是否处于 rockusb 模式（就绪可刷写）。</para></summary>
+    /// <value><c>true</c> when the device is a Rockchip device whose product ID matches a known
+    /// loader-mode ID. <para>设备为 Rockchip 且产品 ID 命中已知 loader 模式 ID 时为 <c>true</c>。</para></value>
     public bool IsRockusbMode => IsRockchipDevice() && RkdlConstants.KnownLoaderProductIds.Contains(ProductId);
 
     /// <summary>
@@ -84,6 +98,8 @@ public sealed partial class RkdlSession : IProtocolSession
     /// <para>获取设备是否仍处于 Mask ROM（bootrom）模式，即产品 ID 不在已知 loader 模式 ID
     /// 之列的 Rockchip 设备。只有 maskrom 设备接受 0x0471/0x0472 loader 下载 vendor 请求。</para>
     /// </summary>
+    /// <value><c>true</c> for a Rockchip device whose product ID is not a known loader-mode ID.
+    /// <para>设备为 Rockchip 且产品 ID 不属于已知 loader 模式 ID 时为 <c>true</c>。</para></value>
     public bool IsMaskromMode => IsRockchipDevice() && !IsRockusbMode;
 
     /// <summary>
@@ -94,6 +110,9 @@ public sealed partial class RkdlSession : IProtocolSession
     /// （厂商 0x2207 且 pid >> 8 != 0）加已知 loader 产品 ID（见 rkdeveloptool RKScan.cpp
     /// 的 IsRockusbDevice）。</para>
     /// </summary>
+    /// <returns><c>true</c> when the vendor and product IDs match the Rockchip bootrom or a
+    /// known loader product ID. <para>厂商与产品 ID 匹配 Rockchip bootrom 或已知 loader
+    /// 产品 ID 时返回 <c>true</c>。</para></returns>
     public bool IsRockchipDevice()
         => VendorId == RkdlConstants.RockchipVid && ((ProductId >> 8) != 0 || RkdlConstants.KnownLoaderProductIds.Contains(ProductId));
 

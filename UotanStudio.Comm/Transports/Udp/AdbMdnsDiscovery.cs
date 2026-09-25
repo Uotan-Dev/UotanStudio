@@ -34,7 +34,7 @@ internal static class AdbMdnsDiscovery
 
     /// <summary>
     /// Legacy adb service type.
-    /// <para>旧版 adb 服务类型。</para>
+    /// <para>较早 adbd 版本广播的 adb 服务类型。</para>
     /// </summary>
     public const string AdbLegacyService = "_adb._tcp.local";
 

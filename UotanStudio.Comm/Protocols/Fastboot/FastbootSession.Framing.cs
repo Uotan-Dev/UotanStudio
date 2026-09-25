@@ -6,7 +6,6 @@ using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Fastboot.Images;
 using UotanStudio.Comm.Transports.Abstractions;
 
-
 namespace UotanStudio.Comm.Protocols.Fastboot;
 
 public sealed partial class FastbootSession
@@ -18,6 +17,12 @@ public sealed partial class FastbootSession
     /// Sends a raw command string to the device (UTF-8 encoded, max 4096 bytes).
     /// <para>向设备发送原始命令字符串（UTF-8 编码，最大 4096 字节）。</para>
     /// </summary>
+    /// <param name="command">Command text to encode and write as a single frame. <para>要编码并按单帧写入的命令文本。</para></param>
+    /// <exception cref="ArgumentException">The UTF-8 encoding exceeds <see cref="FastbootConstants.MaxCommandLength"/> bytes.
+    /// <para>UTF-8 编码超过 <see cref="FastbootConstants.MaxCommandLength"/> 字节。</para></exception>
+    /// <exception cref="FastbootException">The transport accepted fewer bytes than the command length (short write).
+    /// <para>传输接收的字节数少于命令长度（短写）。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session has been disposed. <para>会话已释放。</para></exception>
     public void SendCommand(string command)
     {
         ThrowIfDisposed();
@@ -46,6 +51,13 @@ public sealed partial class FastbootSession
     /// INFO 行与 TEXT 内容累积到返回的响应对象上；仅在到达终止 OKAY/FAIL/DATA 帧
     /// （或出现不可恢复的未知前缀）时返回。超时截止时间自命令开始固定不变，与上游一致。</para>
     /// </summary>
+    /// <param name="timeoutMs">
+    /// Overall receive deadline in milliseconds; when <see langword="null"/> the session timeout is used. The deadline is fixed at call start.
+    /// <para>整体接收截止时间（毫秒）；为 <see langword="null"/> 时使用会话超时。截止时间在调用开始时即固定。</para>
+    /// </param>
+    /// <returns>The parsed response; <see cref="FastbootResponse.State"/> reports Success/Fail/Data/Timeout/Unknown.
+    /// <para>解析后的响应；<see cref="FastbootResponse.State"/> 报告 Success/Fail/Data/Timeout/Unknown。</para>
+    /// </returns>
     public FastbootResponse ReceiveResponse(int? timeoutMs = null)
     {
         ThrowIfDisposed();
@@ -90,9 +102,6 @@ public sealed partial class FastbootSession
 
                     if (!IsKnownPrefixAt(pending, pendingOffset))
                     {
-                        // Frame-boundary parsing like upstream fastboot: anything that is not a
-                        // known status at the boundary is garbage; scanning ahead would risk
-                        // re-syncing into the middle of a DATA payload.
                         var junk = pending[pendingOffset..];
                         response.State = FastbootResponseState.Unknown;
                         response.Info = "device sent unknown status code: " + junk;
@@ -116,8 +125,6 @@ public sealed partial class FastbootSession
 
                     if (isInfo || isText)
                     {
-                        // A fixed deadline from command start (upstream behavior): a device
-                        // flooding INFO frames cannot extend the wait indefinitely.
                         if (isInfo && response.InfoLines.Count >= MaxInfoLines)
                         {
                             response.State = FastbootResponseState.Fail;

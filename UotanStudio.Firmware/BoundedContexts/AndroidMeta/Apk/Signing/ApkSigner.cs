@@ -20,6 +20,30 @@ public static class ApkSigner
     /// output path (atomic replace). The input file is never modified.
     /// <para>使用给定的自定义密钥材料签署 APK 文件并把结果写入输出路径（原子替换）。不修改输入文件。</para>
     /// </summary>
+    /// <param name="inputApk">Path of an unsigned or already-signed APK; the file itself is never modified.
+    /// <para>已存在（未签名或已签过名）的 APK 路径；该文件本身不会被修改。</para></param>
+    /// <param name="outputApk">Destination path, written atomically via a temporary file and overwrite; parent
+    /// directories are created as needed. <para>目标路径，经临时文件与覆盖写入原子落盘，并按需创建父目录。</para></param>
+    /// <param name="keyMaterial">Signing key and certificate chain supplied by the user.
+    /// <para>用户提供的签名私钥与证书链。</para></param>
+    /// <param name="options">Scheme selection, v3 SDK range, JAR signer name and stripping policy; <see langword="null"/>
+    /// uses all defaults (v1+v2+v3 enabled, stripping on). <para>方案开关、v3 SDK 范围、JAR 签名名称与剥离策略；
+    /// 为 <see langword="null"/> 时全部采用默认值（启用 v1+v2+v3 并剥离旧签名）。</para></param>
+    /// <param name="cancellationToken">Cancels between entry and section copies; a cancelled run deletes the
+    /// temporary output. <para>在条目与区段复制之间取消；取消时会删除临时输出文件。</para></param>
+    /// <exception cref="FileNotFoundException"><paramref name="inputApk"/> does not exist.
+    /// <para><paramref name="inputApk"/> 不存在。</para></exception>
+    /// <exception cref="ArgumentException">The output path is blank or equals the input, no scheme is enabled,
+    /// the JAR signer name breaks the 1-8 ASCII/<c>_</c>/<c>-</c> rule, or the v3 SDK range is below 28 or inverted.
+    /// <para>输出路径为空或与输入相同、未启用任何方案、JAR 签名名称不满足 1-8 位 ASCII 字母/数字/<c>_</c>/<c>-</c>
+    /// 规则，或 v3 SDK 范围小于 28、上界小于下界。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌被取消。</para></exception>
+    /// <example>
+    /// <code>
+    /// ApkSigner.Sign("app-unsigned.apk", "app-signed.apk", keyMaterial);
+    /// </code>
+    /// </example>
     public static void Sign(
         string inputApk,
         string outputApk,

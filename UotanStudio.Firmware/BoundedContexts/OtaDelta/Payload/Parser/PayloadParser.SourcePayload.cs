@@ -7,6 +7,12 @@ using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
 
+/// <summary>
+/// Source-image part of <c>PayloadParser</c>: resolves base images for source-dependent operations and
+/// materializes ZIP-embedded payloads to temporary files that are cleaned up by the callers.
+/// <para><c>PayloadParser</c> 的源镜像分部：为源依赖操作解析基座镜像，并把 ZIP 内嵌载荷物化到
+/// 由调用方清理的临时文件。</para>
+/// </summary>
 public static partial class PayloadParser
 {
     private static Dictionary<string, string>? ResolveSourceImages(

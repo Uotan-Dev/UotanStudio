@@ -308,9 +308,9 @@ public partial class CompareView : UserControl
     }
 
     /// <summary>
-    /// <para>把各列宽度恢复成等分：开始对比时两栏宽度被锁定，此时回到等分状态（用户此前手动拖动过的宽度不再保留）。</para>
-    /// Resets every column to an equal share: entering a comparison locks the pane widths, and this puts them back to an equal split (a
-    /// width the user dragged earlier is no longer kept).
+    /// <para>把各列宽度恢复成等分：开始对比时两栏宽度被锁定，此时回到等分状态（覆盖用户手动拖动的列宽）。</para>
+    /// Resets every column to an equal share: entering a comparison locks the pane widths, and this puts them back to an equal split,
+    /// overwriting any widths the user dragged.
     /// </summary>
     private void ResetColumnWidths()
     {
@@ -1668,11 +1668,11 @@ public partial class CompareView : UserControl
     /// <summary>
     /// <para>双击激活一行：目录行展开/折叠（浏览与对比都一样；对比中两侧共享同一节点，一侧展开即两侧同步展开），
     /// 文件行在文件夹对比中于新标签打开该文件的对比，浏览状态下的文件行不做处理。
-    /// 「进入某个目录」改为右键菜单项，避免与展开手势冲突。</para>
+    /// 「进入某个目录」是右键菜单项，避免与双击展开手势冲突。</para>
     /// Activates a row on double-click: a folder row expands/collapses (both while browsing and comparing; a folder
     /// comparison shares one node so one side expands both), a file row opens its comparison in a new tab during a folder
-    /// comparison, and a file row while browsing does nothing. Entering a folder moved to the context menu so it no longer
-    /// competes with the expand gesture.
+    /// comparison, and a file row while browsing does nothing. Entering a folder is a context-menu item so it does not
+    /// compete with the expand gesture.
     /// </summary>
     private void ActivateRow(CompareRowViewModel row, ListBox list)
     {
@@ -1719,10 +1719,10 @@ public partial class CompareView : UserControl
 
     /// <summary>
     /// <para>按可视元素反查它所在的文件列：直接取最近的行列表的 DataContext（列模板的 DataContext 就是列视图模型）。
-    /// 不再依赖缓存的列条目，因此新增第 3、4…列时不会出现「找不到所属列」导致双击/拖拽失效的问题。</para>
+    /// 直接按行列表反查所属列，任意列数（第 3、4…列）都能正确定位，保证双击/拖拽不失效。</para>
     /// Resolves a control's file column from the nearest row list's DataContext (a column template's DataContext is its
-    /// column view model). It no longer relies on the cached column visuals, so adding a third, fourth … column cannot
-    /// break double-click or drag handling with "no owning column found".
+    /// column view model). Resolving through the row list works for any number of columns (third, fourth …), so double-click
+    /// and drag handling always find the owning column.
     /// </summary>
     private CompareColumnViewModel? FindColumnFor(Control source)
     {

@@ -9,18 +9,37 @@ namespace UotanStudio.Media.Decoding;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The conversion uses BT.601 limited-range coefficients. It does not infer color
-/// metadata from a codec and must not be used as a BT.709/BT.2020 or full-range converter.
-/// Chroma uses nearest-neighbour sampling at half resolution.
+/// Coefficient selection follows the explicit matrix and range arguments; the defaults are
+/// BT.601 limited-range. The converter never infers color metadata from a codec, and BT.2020
+/// is not among the coefficient sets. Chroma uses nearest-neighbour sampling at half resolution.
 /// </para>
 /// </remarks>
 public static unsafe class Nv12ToBgraConverter
 {
-    /// <summary>Computes the required BGRA buffer size for a frame.</summary>
-    /// <summary>计算一帧所需的 BGRA 缓冲区大小。</summary>
-    /// <param name="width">Frame width in pixels. 帧宽度（像素）。</param>
-    /// <param name="height">Frame height in pixels. 帧高度（像素）。</param>
-    /// <returns>The required buffer size in bytes. 所需缓冲区大小（字节）。</returns>
+    /// <summary>
+    /// Computes the required BGRA buffer size for a frame.
+    /// <para>计算一帧所需的 BGRA 缓冲区大小。</para>
+    /// </summary>
+    /// <param name="width">
+    /// Frame width in pixels.
+    /// <para>帧宽度（像素）。</para>
+    /// </param>
+    /// <param name="height">
+    /// Frame height in pixels.
+    /// <para>帧高度（像素）。</para>
+    /// </param>
+    /// <returns>
+    /// The required buffer size in bytes, that is width × height × 4.
+    /// <para>所需缓冲区大小（字节），即宽度 × 高度 × 4。</para>
+    /// </returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="width"/> or <paramref name="height"/> is not positive.
+    /// <para><paramref name="width"/> 或 <paramref name="height"/> 不是正数。</para>
+    /// </exception>
+    /// <exception cref="OverflowException">
+    /// The product of width, height and 4 exceeds <see cref="int"/>.
+    /// <para>宽度、高度与 4 的乘积超出 <see cref="int"/> 范围。</para>
+    /// </exception>
     public static int GetBgraBufferSize(int width, int height)
     {
         if (width <= 0 || height <= 0)
@@ -34,21 +53,52 @@ public static unsafe class Nv12ToBgraConverter
     /// <summary>
     /// Converts an NV12 frame to BGRA. Destination must be at least
     /// <see cref="GetBgraBufferSize"/> bytes.
+    /// <para>将 NV12 帧转换为 BGRA。目标缓冲区不得小于 <see cref="GetBgraBufferSize"/> 字节。</para>
     /// </summary>
-    /// <summary>
-    /// 将 NV12 帧转换为 BGRA。目标缓冲区不得小于 <see cref="GetBgraBufferSize"/> 字节。
-    /// </summary>
-    /// <param name="nv12">The NV12 source frame. NV12 源帧。</param>
-    /// <param name="width">Frame width in pixels. 帧宽度（像素）。</param>
-    /// <param name="height">Frame height in pixels. 帧高度（像素）。</param>
-    /// <param name="nv12Stride">Row pitch in bytes of the NV12 source. NV12 源数据的行距（字节）。</param>
-    /// <param name="destination">The BGRA destination buffer. BGRA 目标缓冲区。</param>
-    /// <param name="destinationStride">
-    /// Row pitch in bytes of the destination (defaults to width × 4).
-    /// 目标缓冲区的行距（字节），默认为宽度 × 4。
+    /// <param name="nv12">
+    /// The NV12 source frame, covering both planes at the given stride.
+    /// <para>NV12 源帧，须按给定行距完整覆盖两个平面。</para>
     /// </param>
-    /// <param name="matrix">YUV matrix. YUV 色彩矩阵。</param>
-    /// <param name="range">YUV range. YUV 数值范围。</param>
+    /// <param name="width">
+    /// Frame width in pixels.
+    /// <para>帧宽度（像素）。</para>
+    /// </param>
+    /// <param name="height">
+    /// Frame height in pixels.
+    /// <para>帧高度（像素）。</para>
+    /// </param>
+    /// <param name="nv12Stride">
+    /// Row pitch in bytes of the NV12 source; must be at least the width.
+    /// <para>NV12 源数据的行距（字节），不得小于宽度。</para>
+    /// </param>
+    /// <param name="destination">
+    /// The BGRA destination buffer, written row by row at <paramref name="destinationStride"/>.
+    /// <para>BGRA 目标缓冲区，按 <paramref name="destinationStride"/> 逐行写入。</para>
+    /// </param>
+    /// <param name="destinationStride">
+    /// Row pitch in bytes of the destination; pass <c>0</c> to default to width × 4 and must never be less than width × 4.
+    /// <para>目标缓冲区的行距（字节）；传 <c>0</c> 表示默认宽度 × 4，且不得小于宽度 × 4。</para>
+    /// </param>
+    /// <param name="matrix">
+    /// YUV matrix selecting the BT.601 or BT.709 coefficient set.
+    /// <para>YUV 色彩矩阵，用于选择 BT.601 或 BT.709 系数组。</para>
+    /// </param>
+    /// <param name="range">
+    /// YUV range selecting limited (offset 16, scale 298) or full (offset 0, scale 256) luma handling.
+    /// <para>YUV 数值范围，选择有限（偏移 16、缩放 298）或全量（偏移 0、缩放 256）亮度处理。</para>
+    /// </param>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Dimensions are not positive, <paramref name="nv12Stride"/> is below the width, or <paramref name="destinationStride"/> is below width × 4.
+    /// <para>尺寸非正数、<paramref name="nv12Stride"/> 小于宽度，或 <paramref name="destinationStride"/> 小于宽度 × 4。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="nv12"/> is shorter than the two stride-sized planes, or <paramref name="destination"/> cannot hold every row.
+    /// <para><paramref name="nv12"/> 短于按行距计算的两个平面，或 <paramref name="destination"/> 无法容纳全部行。</para>
+    /// </exception>
+    /// <exception cref="OverflowException">
+    /// A stride or size computation exceeds <see cref="int"/>.
+    /// <para>行距或尺寸计算超出 <see cref="int"/>。</para>
+    /// </exception>
     public static void Convert(ReadOnlySpan<byte> nv12, int width, int height, int nv12Stride, Span<byte> destination, int destinationStride = 0, VideoColorMatrix matrix = VideoColorMatrix.Bt601, VideoColorRange range = VideoColorRange.Limited)
     {
         if (destinationStride == 0)
@@ -63,7 +113,6 @@ public static unsafe class Nv12ToBgraConverter
             throw new ArgumentException("The source does not contain complete NV12 planes.", nameof(nv12));
         }
 
-
         fixed (byte* src = nv12)
         fixed (byte* dst = destination)
         {
@@ -71,8 +120,31 @@ public static unsafe class Nv12ToBgraConverter
         }
     }
 
-    /// <summary>Span overload taking a <see cref="DecodedVideoFrame"/> directly.</summary>
-    /// <summary>直接接收 <see cref="DecodedVideoFrame"/> 的 Span 重载。</summary>
+    /// <summary>
+    /// Span overload taking a <see cref="DecodedVideoFrame"/> directly, converted with the default
+    /// BT.601 limited-range coefficients.
+    /// <para>直接接收 <see cref="DecodedVideoFrame"/> 的 Span 重载，按默认的 BT.601 有限范围系数转换。</para>
+    /// </summary>
+    /// <param name="frame">
+    /// Decoded NV12 frame supplying pixels, dimensions and stride.
+    /// <para>提供像素、尺寸与行距的已解码 NV12 帧。</para>
+    /// </param>
+    /// <param name="destination">
+    /// The BGRA destination buffer.
+    /// <para>BGRA 目标缓冲区。</para>
+    /// </param>
+    /// <param name="destinationStride">
+    /// Row pitch in bytes of the destination; pass <c>0</c> to default to width × 4.
+    /// <para>目标缓冲区的行距（字节）；传 <c>0</c> 表示默认宽度 × 4。</para>
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// The frame span or the destination is too small for the computed layout.
+    /// <para>帧跨度或目标缓冲区小于按布局计算所需的大小。</para>
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The frame dimensions or strides violate the converter bounds.
+    /// <para>帧尺寸或行距超出转换器的边界约束。</para>
+    /// </exception>
     public static void Convert(in DecodedVideoFrame frame, Span<byte> destination, int destinationStride = 0)
         => Convert(frame.Span, frame.Width, frame.Height, frame.Stride, destination, destinationStride);
 
@@ -125,8 +197,6 @@ public static unsafe class Nv12ToBgraConverter
             int col = 0;
             if (Vector128.IsHardwareAccelerated)
             {
-                // Four pixels share two chroma pairs. Keep exact integer rounding
-                // and saturate before packing BGRA; no temporary buffers or allocations.
                 for (; col <= width - 4; col += 4)
                 {
                     var y = Vector128.Create((int)yRow[col], yRow[col + 1], yRow[col + 2], yRow[col + 3]);
@@ -146,9 +216,6 @@ public static unsafe class Nv12ToBgraConverter
 
             for (; col < width; col += 2)
             {
-                // Each 2×2 pixel block shares one UV pair; every pixel uses its
-                // own luma value.
-                // 每个 2×2 像素块共享一对 UV；每个像素使用自己的亮度值。
                 var uvIndex = col & ~1;
                 var u = uvRow[uvIndex];
                 var v = uvRow[uvIndex + 1];
@@ -159,8 +226,6 @@ public static unsafe class Nv12ToBgraConverter
                 {
                     var c = yRow[pixel] - yOffset;
 
-                    // BT.601 limited range: Y in [16,235], UV in [16,240] scaled by 1/256.
-                    // BT.601 有限范围：Y ∈ [16,235]，UV ∈ [16,240]，按 1/256 缩放。
                     var r = (yScale * c + red * e + 128) >> 8;
                     var g = (yScale * c - greenU * d - greenV * e + 128) >> 8;
                     var b = (yScale * c + blue * d + 128) >> 8;

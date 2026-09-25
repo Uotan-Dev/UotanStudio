@@ -3,16 +3,26 @@ using System.Runtime.InteropServices;
 
 namespace UotanStudio.Firmware.SharedKernel;
 
-/// <summary>Bounded default concurrency for firmware operations. Each operation snapshots its limit.</summary>
+/// <summary>Bounded default concurrency for firmware operations. Each operation snapshots its limit.
+/// <para>固件操作的有界默认并发度；每个操作会快照自己所用的上限。</para></summary>
 public static partial class FirmwareParallelism
 {
-    /// <summary>Default number of concurrent workers, based on the detected physical core count.</summary>
+    /// <summary>Default number of concurrent workers, based on the detected physical core count.
+    /// <para>默认并发工作者数量，依据检测到的物理核心数确定。</para></summary>
     public static readonly int DefaultWorkers = NormalizeWorkerCount(DetectPhysicalCoreCount());
-    /// <summary>Upper limit, keeping per-worker codec and I/O buffers bounded.</summary>
+    /// <summary>Upper limit, keeping per-worker codec and I/O buffers bounded.
+    /// <para>并发上限，用于约束每个工作者的编解码与 I/O 缓冲开销。</para></summary>
     public const int MaximumWorkers = 64;
     private static int _workers = DefaultWorkers;
 
-    /// <summary>Maximum concurrency for new operations; changing it does not resize running batches.</summary>
+    /// <summary>Maximum concurrency for new operations; changing it does not resize running batches.
+    /// <para>新操作的最大并发度；修改它不会改变已在运行的批次。</para></summary>
+    /// <value>
+    /// A worker count between <c>1</c> and <see cref="MaximumWorkers"/>, read with volatile semantics.
+    /// <para>介于 <c>1</c> 与 <see cref="MaximumWorkers"/> 之间的工作者数量，按 volatile 语义读取。</para>
+    /// </value>
+    /// <exception cref="ArgumentOutOfRangeException">The assigned value is below <c>1</c> or above <see cref="MaximumWorkers"/>.
+    /// <para>赋值小于 <c>1</c> 或大于 <see cref="MaximumWorkers"/>。</para></exception>
     public static int Workers
     {
         get => Volatile.Read(ref _workers);
@@ -61,7 +71,6 @@ public static partial class FirmwareParallelism
         }
         catch
         {
-            // CPU topology is optional platform information; logical processors remain a safe fallback.
             return Environment.ProcessorCount;
         }
     }

@@ -17,9 +17,6 @@ internal sealed class CommKit : ICommKit
 
     static CommKit()
     {
-        // 组合根在门面构造时向 USB 打开门注册 server 归属守卫；未注册时后端对调试接口 fail-closed。
-        // The composition root registers the server-ownership guard for USB opens when the facade
-        // is constructed; without it the backend fails closed on debug interfaces.
         UsbAccessPolicy.Configure(Devices.Services.DebugBridgeSessionOpener.RequireDirectUsb);
     }
 

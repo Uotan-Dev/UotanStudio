@@ -5,9 +5,31 @@ using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Parsing;
 
+/// <summary>
+/// Decodes Android binary resource tables (ARSC) into the <see cref="ResourceTable"/> model.
+/// <para>将 Android 二进制资源表（ARSC）解码为 <see cref="ResourceTable"/> 模型。</para>
+/// </summary>
+/// <remarks>
+/// Every chunk header, entry offset and count read from the input is treated as untrusted and re-checked against
+/// the span of its owning chunk before any bytes are touched.
+/// <para>从输入中读取的每个块头、条目偏移和计数都被视为不可信数据，只有在确认未超出其所属块的范围后才会访问对应字节。</para>
+/// </remarks>
 public static class ArscParser
 {
-    /// <summary>Parses a bounded resource table stream. <para>解析有界资源表流。</para></summary>
+    /// <summary>
+    /// Reads the stream to its end under a 256 MiB cap and parses the collected bytes as a resource table.
+    /// <para>在 256 MiB 上限内把流读到末尾，并将读到的字节按资源表解析。</para>
+    /// </summary>
+    /// <param name="stream">
+    /// Readable stream positioned at the first byte of the table. It is consumed to the end and left open; the
+    /// parser never writes to it.
+    /// <para>定位在资源表首字节处的可读流。会被读到末尾并保持打开；解析器不会向其写入数据。</para>
+    /// </param>
+    /// <returns>The parsed resource table. <para>解析后的资源表。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="stream"/> is null. <para><paramref name="stream"/> 为 null。</para></exception>
+    /// <exception cref="InvalidDataException">The remaining stream content exceeds the 256 MiB limit. <para>流中剩余内容超过 256 MiB 上限。</para></exception>
+    /// <exception cref="EndOfStreamException">The stream ends before its declared length has been read. <para>流在读完其声明长度前提前结束。</para></exception>
+    /// <exception cref="ArscException">The bytes are not a well-formed resource table. <para>这些字节不是结构合法的资源表。</para></exception>
     public static ResourceTable Parse(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -15,6 +37,29 @@ public static class ArscParser
     }
 
     /// <summary>Parses an Android resource table. <para>解析 Android 资源表。</para></summary>
+    /// <param name="data">
+    /// Complete little-endian table bytes, at least 12 bytes long. The header must carry resource-table magic 2, a
+    /// header size between 12 and the declared total size, and a total size that does not exceed the buffer.
+    /// <para>完整的小端序资源表字节，长度不少于 12 字节。头部必须包含资源表魔数 2、介于 12 与声明总大小之间的头部大小，
+    /// 且声明的总大小不得超过缓冲区。</para>
+    /// </param>
+    /// <returns>
+    /// The table with its global string pool, packages and entry values; chunks whose type is not a pool (0x0001)
+    /// or a package (0x0200) are kept verbatim so a later write can reproduce them.
+    /// <para>包含全局字符串池、包与条目值的资源表；类型既非字符串池（0x0001）也非包（0x0200）的块会原样保留，
+    /// 以便后续写出时能够还原。</para>
+    /// </returns>
+    /// <example>
+    /// <code>
+    /// ResourceTable table = ArscParser.Parse(File.ReadAllBytes("resources.arsc"));
+    /// string description = table.Describe();
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is null. <para><paramref name="data"/> 为 null。</para></exception>
+    /// <exception cref="ArscException">A magic, header size, chunk size, entry offset, sparse index or package count is invalid.
+    /// <para>魔数、头部大小、块大小、条目偏移、稀疏索引或包数量中存在无效值。</para></exception>
+    /// <exception cref="System.OverflowException">A declared size exceeds the range addressable by <see cref="int"/>.
+    /// <para>某个声明的大小超出 <see cref="int"/> 可表示的范围。</para></exception>
     public static ResourceTable Parse(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -41,6 +86,12 @@ public static class ArscParser
     }
 
     /// <summary>Checks the resource table magic. <para>检查资源表魔数。</para></summary>
+    /// <param name="data">
+    /// Candidate bytes. A null reference or a buffer shorter than 12 bytes is never recognized.
+    /// <para>待检测的字节。空引用或长度不足 12 字节的缓冲区一律视为不匹配。</para>
+    /// </param>
+    /// <returns>True when the first little-endian <see cref="ushort"/> of <paramref name="data"/> equals 2.
+    /// <para>当 <paramref name="data"/> 的首个小端 <see cref="ushort"/> 等于 2 时返回 true。</para></returns>
     public static bool IsArsc(byte[] data) => data is { Length: >= 12 } && U16(data, 0) == 2;
 
     private static ResPackage ParsePackage(byte[] data, int offset, int size)
@@ -217,8 +268,19 @@ public static class ArscParser
     private static uint U32(byte[] data, int pos) => BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(pos));
 }
 
+/// <summary>
+/// Raised when a resource table fails structural validation: a wrong magic, a header or chunk size that reaches
+/// past its owning span, an entry offset outside its type chunk, non-increasing sparse indices, or a package
+/// count that disagrees with the table header.
+/// <para>当资源表未通过结构校验时抛出：魔数错误、头部或块大小超出其所属范围、条目偏移越出其类型块、
+/// 稀疏索引未递增，或包数量与资源表头部不一致。</para>
+/// </summary>
 public sealed class ArscException : Exception
 {
     /// <summary>Initializes a resource table exception. <para>初始化资源表异常。</para></summary>
+    /// <param name="message">
+    /// Text naming the structure that failed validation; it is stored as <see cref="Exception.Message"/>.
+    /// <para>指明校验失败结构的文本；将作为 <see cref="Exception.Message"/> 保存。</para>
+    /// </param>
     public ArscException(string message) : base(message) { }
 }

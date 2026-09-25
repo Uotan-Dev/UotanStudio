@@ -8,6 +8,17 @@ using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
 
+/// <summary>
+/// Builds Android boot images with the <c>ANDROID!</c> magic for header versions 0 through 4, serializing the header,
+/// kernel, ramdisk, second-stage, recovery DTBO, DTB and V4 signature as page-aligned segments to a stream.
+/// <para>构建魔数为 <c>ANDROID!</c>、头部版本 0 至 4 的 Android Boot 镜像：将头部、kernel、ramdisk、second、recovery DTBO、DTB 与 V4 签名按页对齐序列化到流。</para>
+/// </summary>
+/// <example>
+/// <code>
+/// var packer = new BootImagePacker { Header = header, Kernel = kernelBytes };
+/// packer.PackToFile("out.img");
+/// </code>
+/// </example>
 public class BootImagePacker
 {
     private const string BootMagic = "ANDROID!";
@@ -25,6 +36,11 @@ public class BootImagePacker
     /// Creates a packer from an existing boot image parser.
     /// <para>从现有的 Boot 镜像解析器创建打包器。</para>
     /// </summary>
+    /// <param name="parser">Parsed boot image whose header and component buffers are taken.
+    /// <para>已解析的 Boot 镜像，直接取其头部与各组件缓冲区。</para></param>
+    /// <returns>Packer sharing the parser's <see cref="BootImageHeader"/> instance and component arrays; packing
+    /// rewrites fields on the shared header, which the parser then reports too.
+    /// <para>返回的打包器与解析器共享 <see cref="BootImageHeader"/> 实例和组件数组；打包会重写共享头部的字段，解析器随后报告的也是这些新值。</para></returns>
     public static BootImagePacker FromParser(BootImageParser parser)
     {
         return new BootImagePacker
@@ -39,24 +55,68 @@ public class BootImagePacker
         };
     }
 
+    /// <summary>Header serialized at the start of the image; packing refills its derived fields in place.
+    /// <para>写出在镜像开头的头部；打包过程会就地回填其中的派生字段。</para></summary>
+    /// <value>Never <see langword="null"/>. <see cref="PackToStream"/> rewrites the component size fields for the
+    /// packed version, and on the V0–V2 path also the header size, recovery DTBO offset (V1+) and image <c>Ids</c>;
+    /// page size and command line are only read from it.
+    /// <para>永不为 <see langword="null"/>。<see cref="PackToStream"/> 会按所打包版本重写对应组件大小字段，且 V0–V2 路径还会重写头部大小、recovery DTBO 偏移（V1 及以上）与镜像 <c>Ids</c>；页大小与命令行只读不写。</para></value>
     public BootImageHeader Header { get; set; } = new BootImageHeader();
 
+    /// <summary>Kernel bytes written page-aligned after the header.
+    /// <para>紧随头部按页对齐写出的 kernel 字节。</para></summary>
+    /// <value>Stored as-is without recompression; an empty array omits the segment and records size <c>0</c>. When a
+    /// backing component-file source is set, its entry for this component takes precedence over the array content.
+    /// <para>原样写出、不重新压缩；空数组时省略该区段并记录大小 <c>0</c>。当设置了组件文件后备来源时，该组件对应的文件条目优先于数组内容。</para></value>
     public byte[] Kernel { get; set; } = [];
 
+    /// <summary>Ramdisk bytes written page-aligned after the kernel.
+    /// <para>紧随 kernel 按页对齐写出的 ramdisk 字节。</para></summary>
+    /// <value>Stored as-is; an empty array omits the segment and records size <c>0</c>. Component-file precedence
+    /// applies as for <see cref="Kernel"/>.
+    /// <para>原样写出；空数组时省略该区段并记录大小 <c>0</c>。组件文件优先规则与 <see cref="Kernel"/> 相同。</para></value>
     public byte[] Ramdisk { get; set; } = [];
 
+    /// <summary>Second-stage bootloader bytes written page-aligned after the ramdisk (versions 0–2 only).
+    /// <para>紧随 ramdisk 按页对齐写出的 second-stage 引导字节（仅版本 0–2）。</para></summary>
+    /// <value>Stored as-is; an empty array omits the segment and records size <c>0</c>. Version 3 and 4 packing ignores
+    /// this array. Component-file precedence applies as for <see cref="Kernel"/>.
+    /// <para>原样写出；空数组时省略该区段并记录大小 <c>0</c>。版本 3/4 打包忽略该数组。组件文件优先规则与 <see cref="Kernel"/> 相同。</para></value>
     public byte[] Second { get; set; } = [];
 
+    /// <summary>Device tree blob bytes written last among V0/V2 components (version 2 and above only).
+    /// <para>在 V0/V2 组件中最后写出的设备树 blob 字节（仅版本 2 及以上）。</para></summary>
+    /// <value>Stored as-is; an empty array omits the segment and records size <c>0</c>. Version 0/1 and V3/V4 packing
+    /// ignores this array. Component-file precedence applies as for <see cref="Kernel"/>.
+    /// <para>原样写出；空数组时省略该区段并记录大小 <c>0</c>。版本 0/1 与 V3/V4 打包忽略该数组。组件文件优先规则与 <see cref="Kernel"/> 相同。</para></value>
     public byte[] Dtb { get; set; } = [];
 
+    /// <summary>Recovery DTBO bytes written page-aligned after the second-stage section (version 1 and above only).
+    /// <para>紧随 second 区段按页对齐写出的 recovery DTBO 字节（仅版本 1 及以上）。</para></summary>
+    /// <value>Stored as-is; an empty array omits the segment, records size <c>0</c> and leaves the header offset at
+    /// <c>0</c>. Version 0 and V3/V4 packing ignores this array. Component-file precedence applies as for
+    /// <see cref="Kernel"/>.
+    /// <para>原样写出；空数组时省略该区段、记录大小 <c>0</c>，头部偏移保持 <c>0</c>。版本 0 与 V3/V4 打包忽略该数组。组件文件优先规则与 <see cref="Kernel"/> 相同。</para></value>
     public byte[] RecoveryDtbo { get; set; } = [];
 
+    /// <summary>Signature bytes appended page-aligned after the ramdisk, written only for version 4.
+    /// <para>紧随 ramdisk 按页对齐追加的签名字节，仅在版本 4 时写出。</para></summary>
+    /// <value>Stored as-is; an empty array omits the segment and records signature size <c>0</c>. Other versions never
+    /// write this array. Component-file precedence applies as for <see cref="Kernel"/>.
+    /// <para>原样写出；空数组时省略该区段并记录签名大小 <c>0</c>。其他版本从不写出该数组。组件文件优先规则与 <see cref="Kernel"/> 相同。</para></value>
     public byte[] Signature { get; set; } = [];
 
     /// <summary>
     /// Packs the boot image to a file.
     /// <para>打包 Boot 镜像到文件。</para>
     /// </summary>
+    /// <param name="outputPath">
+    /// Destination path; the image is first written to a temporary file and the target is replaced only after the write completes.
+    /// <para>目标文件路径；先写入临时文件，写入完成后才替换目标文件。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="outputPath"/> is <see langword="null"/>.
+    /// <para><paramref name="outputPath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidDataException">The target or one of its parent directories is a symbolic link or reparse point.
+    /// <para>目标或其任一上级目录为符号链接或重解析点。</para></exception>
     public void PackToFile(string outputPath)
     {
         FileExtraction.WriteAtomic(outputPath, PackToStream);
@@ -66,6 +126,16 @@ public class BootImagePacker
     /// Writes the image to the given stream.
     /// <para>将镜像写入指定流。</para>
     /// </summary>
+    /// <param name="output">
+    /// Writable stream positioned at the start of the image so that page alignment is measured from it; it is left open
+    /// and not flushed beyond the writer's own buffering.
+    /// <para>可写流，需定位在镜像起始处以正确计算页对齐；写入后保持打开，除 BinaryWriter 自身缓冲外不做额外刷新。</para></param>
+    /// <exception cref="ArgumentException">The header version is unknown, the page size for V0–V2 is not a power of two
+    /// from 2048 to 65536, or the command line exceeds the header field or contains a NUL character.
+    /// <para>头部版本未知、V0–V2 页大小不是 2048 至 65536 之间的 2 的幂，或命令行超出头部字段长度或包含 NUL 字符。</para></exception>
+    /// <exception cref="OverflowException">A component length or aligned offset on the V3/V4 path exceeds the stored
+    /// <c>uint32</c> field range.
+    /// <para>V3/V4 路径上的组件长度或对齐偏移超出 <c>uint32</c> 字段范围。</para></exception>
     public void PackToStream(Stream output)
     {
         if (Header.HeaderVersion is < BootImageVersion.V0 or > BootImageVersion.V4)
@@ -84,6 +154,10 @@ public class BootImagePacker
     /// Packs the boot image to a byte array.
     /// <para>打包 Boot 镜像到字节数组。</para>
     /// </summary>
+    /// <returns>Complete image bytes, identical to what <see cref="PackToStream"/> would write to an empty stream.
+    /// <para>完整镜像字节，与 <see cref="PackToStream"/> 写入空流所得内容一致。</para></returns>
+    /// <exception cref="ArgumentException">The header version is unknown, the page size or command line is invalid; see <see cref="PackToStream"/>.
+    /// <para>头部版本未知、页大小或命令行无效；参见 <see cref="PackToStream"/>。</para></exception>
     [Obsolete("Use PackToStream(Stream) or PackToFile(string) for better memory efficiency. " +
               "This method allocates an intermediate byte array that duplicates the stream contents.")]
     public byte[] Pack()
@@ -294,6 +368,20 @@ public class BootImagePacker
     /// Packs a boot image using the specified original image as a template.
     /// <para>打包 Boot 镜像，使用指定的原始镜像作为模板。</para>
     /// </summary>
+    /// <param name="original">Parsed boot image supplying the header and every component that is not replaced.
+    /// <para>提供头部以及所有未被替换组件的已解析 Boot 镜像。</para></param>
+    /// <param name="kernel">Replacement kernel bytes, or <see langword="null"/> to keep the parsed kernel.
+    /// <para>替换的 kernel 字节；为 <see langword="null"/> 时保留解析所得的 kernel。</para></param>
+    /// <param name="ramdisk">Replacement ramdisk bytes, or <see langword="null"/> to keep the parsed ramdisk.
+    /// <para>替换的 ramdisk 字节；为 <see langword="null"/> 时保留解析所得的 ramdisk。</para></param>
+    /// <param name="second">Replacement second-stage bytes, or <see langword="null"/> to keep the parsed section.
+    /// <para>替换的 second-stage 字节；为 <see langword="null"/> 时保留解析所得区段。</para></param>
+    /// <param name="dtb">Replacement DTB bytes, or <see langword="null"/> to keep the parsed DTB.
+    /// <para>替换的 DTB 字节；为 <see langword="null"/> 时保留解析所得 DTB。</para></param>
+    /// <returns>Complete packed image bytes; replaced components also update their header size fields.
+    /// <para>完整打包镜像字节；被替换的组件同时更新其头部大小字段。</para></returns>
+    /// <exception cref="ArgumentException">The header version, page size or command line is invalid; see <see cref="PackToStream"/>.
+    /// <para>头部版本、页大小或命令行无效；参见 <see cref="PackToStream"/>。</para></exception>
     public static byte[] Repack(
         BootImageParser original,
         byte[]? kernel = null,

@@ -7,6 +7,10 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Compression;
 
+/// <summary>
+/// Compresses and decompresses NTDECOMP-framed LZMA payloads, either as whole byte arrays or bounded stream-to-stream.
+/// <para>压缩与解压以 NTDECOMP 头封装的 LZMA 数据，支持整字节数组和受限的流到流两种方式。</para>
+/// </summary>
 public interface ILzma2Compressor
 {
 
@@ -16,18 +20,61 @@ public interface ILzma2Compressor
     /// Decompresses data that includes the NtDecompressHeader.
     /// <para>解压包含 NtDecompressHeader 的压缩数据。</para>
     /// </summary>
+    /// <param name="data">
+    /// The 112-byte header, the compressed payload and any trailing zero AES padding.
+    /// <para>依次为 112 字节头部、压缩负载以及末尾的零值 AES 填充。</para>
+    /// </param>
+    /// <returns>The decompressed bytes, sized as declared by the header. <para>解压后的字节，长度为头部声明的大小。</para></returns>
     byte[] Decompress(byte[] data);
 
     /// <summary>
     /// Compresses data into a format that includes the NtDecompressHeader.
     /// <para>将数据压缩为包含 NtDecompressHeader 的格式。</para>
     /// </summary>
+    /// <param name="data">The plaintext bytes to compress. <para>待压缩的明文字节。</para></param>
+    /// <param name="originalSize">
+    /// The declared original size; it must equal <paramref name="data"/>.Length.
+    /// <para>声明的原始大小，必须等于 <paramref name="data"/>.Length。</para>
+    /// </param>
+    /// <returns>The header followed by the compressed payload. <para>头部后接压缩负载。</para></returns>
     byte[] Compress(byte[] data, ulong originalSize);
 
     /// <summary>
     /// Streams-decompresses a stream containing the NtDecompressHeader, bounding the number of output bytes by maximumOutputBytes.
     /// <para>流式解压包含 NtDecompressHeader 的压缩流,输出字节数受 maximumOutputBytes 限制。</para>
     /// </summary>
+    /// <param name="input">
+    /// Readable stream positioned at the header start; left open.
+    /// <para>定位在头部起始处的可读流，调用后保持打开。</para>
+    /// </param>
+    /// <param name="output">
+    /// Writable stream receiving the decompressed bytes; left open.
+    /// <para>接收解压字节的可写流，调用后保持打开。</para>
+    /// </param>
+    /// <param name="maximumOutputBytes">
+    /// Hard upper bound on the declared decompressed size; must not be negative.
+    /// <para>声明解压大小的硬上限；不得为负数。</para>
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="maximumOutputBytes"/> is negative. <para><paramref name="maximumOutputBytes"/> 为负数。</para>
+    /// </exception>
+    /// <exception cref="EndOfStreamException">
+    /// The input ends before the header or declared payload is consumed.
+    /// <para>输入流在头部或声明的负载读完前结束。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// The header is invalid, its declared size exceeds the limit, trailing padding is not all zero,
+    /// or the output length disagrees with the header.
+    /// <para>头部无效、声明大小超限、末尾填充非全零，或输出长度与头部不一致。</para>
+    /// </exception>
+    /// <exception cref="NotSupportedException">
+    /// The byte-array fallback would exceed the CLR byte-array limit.
+    /// <para>字节数组回退路径将超出 CLR 数组上限。</para>
+    /// </exception>
     void Decompress(Stream input, Stream output, long maximumOutputBytes)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -84,6 +131,32 @@ public interface ILzma2Compressor
     /// Streams-compresses the input stream into a format that includes the NtDecompressHeader.
     /// <para>流式压缩输入流为包含 NtDecompressHeader 的格式。</para>
     /// </summary>
+    /// <param name="input">
+    /// Readable stream providing exactly <paramref name="originalSize"/> bytes from its current
+    /// position; left open.
+    /// <para>从当前位置提供恰好 <paramref name="originalSize"/> 字节的可读流，调用后保持打开。</para>
+    /// </param>
+    /// <param name="output">
+    /// Writable stream receiving header and payload; left open.
+    /// <para>接收头部与负载的可写流，调用后保持打开。</para>
+    /// </param>
+    /// <param name="originalSize">Declared plaintext size in bytes. <para>声明的明文大小（字节）。</para></param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="NotSupportedException">
+    /// The byte-array fallback would exceed the CLR byte-array limit.
+    /// <para>字节数组回退路径将超出 CLR 数组上限。</para>
+    /// </exception>
+    /// <exception cref="EndOfStreamException">
+    /// The input ends before <paramref name="originalSize"/> bytes are consumed.
+    /// <para>输入流在读完 <paramref name="originalSize"/> 字节前结束。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// The input still has bytes after the declared size was consumed.
+    /// <para>读完声明大小后输入流仍有剩余字节。</para>
+    /// </exception>
     void Compress(Stream input, Stream output, ulong originalSize)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -117,6 +190,11 @@ public interface ILzma2Compressor
     }
 }
 
+/// <summary>
+/// Frames payloads with the 112-byte <c>NTDECOMP</c> header and encodes them with LZMA;
+/// decomposition reads the header subtype to select the LZMA1 or LZMA2 decoder.
+/// <para>使用 112 字节的 <c>NTDECOMP</c> 头封装数据并以 LZMA 编码；解压时根据头部子类型选择 LZMA1 或 LZMA2 解码器。</para>
+/// </summary>
 public sealed class Lzma2Compressor : ILzma2Compressor
 {
     private const int HeaderSize = 112;
@@ -128,6 +206,27 @@ public sealed class Lzma2Compressor : ILzma2Compressor
     /// Decompresses the input data.
     /// <para>解压输入数据。</para>
     /// </summary>
+    /// <param name="data">
+    /// Header, compressed payload and at most 15 trailing zero AES-padding bytes, read from index 0.
+    /// <para>从索引 0 起依次为头部、压缩负载，以及至多 15 字节的零值 AES 填充。</para>
+    /// </param>
+    /// <returns>
+    /// The decompressed bytes, exactly as long as the header's declared original size.
+    /// <para>解压后的字节，长度严格等于头部声明的原始大小。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="data"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="data"/> is no longer than the 112-byte header, or the header magic is not <c>NTDECOMP</c>.
+    /// <para><paramref name="data"/> 不长于 112 字节头部，或头部魔数不是 <c>NTDECOMP</c>。</para>
+    /// </exception>
+    /// <exception cref="Lzma2CompressionException">
+    /// A declared size is out of bounds, trailing padding is invalid, decoding fails, or the
+    /// produced length disagrees with the header.
+    /// <para>声明大小越界、末尾填充无效、解码失败，或产出长度与头部声明不一致。</para>
+    /// </exception>
     public byte[] Decompress(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -224,6 +323,38 @@ public sealed class Lzma2Compressor : ILzma2Compressor
     /// Decompresses the input data.
     /// <para>解压输入数据。</para>
     /// </summary>
+    /// <param name="input">
+    /// Readable stream positioned at the header start; consumed through the payload and trailing
+    /// padding, and left open.
+    /// <para>定位在头部起始处的可读流；读取负载与末尾填充后保持打开。</para>
+    /// </param>
+    /// <param name="output">
+    /// Writable stream receiving exactly the declared number of bytes; left open.
+    /// <para>接收声明字节数的可写流，调用后保持打开。</para>
+    /// </param>
+    /// <param name="maximumOutputBytes">
+    /// Hard upper bound on the declared decompressed size; must not be negative.
+    /// <para>声明解压大小的硬上限；不得为负数。</para>
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="maximumOutputBytes"/> is negative. <para><paramref name="maximumOutputBytes"/> 为负数。</para>
+    /// </exception>
+    /// <exception cref="EndOfStreamException">
+    /// The input ends before the header or declared payload is consumed.
+    /// <para>输入流在头部或声明的负载读完前结束。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// The header magic is not <c>NTDECOMP</c>. <para>头部魔数不是 <c>NTDECOMP</c>。</para>
+    /// </exception>
+    /// <exception cref="Lzma2CompressionException">
+    /// A declared size exceeds the output limit or the remaining input, decoding fails, the payload
+    /// is not fully consumed, the produced length disagrees with the header, or trailing padding is invalid.
+    /// <para>声明大小超出输出上限或剩余输入、解码失败、负载未读完、产出长度与头部不一致，或末尾填充无效。</para>
+    /// </exception>
     public void Decompress(Stream input, Stream output, long maximumOutputBytes)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -359,6 +490,27 @@ public sealed class Lzma2Compressor : ILzma2Compressor
     /// Compresses the input data.
     /// <para>压缩输入数据。</para>
     /// </summary>
+    /// <param name="data">Plaintext bytes to compress; must not be empty. <para>待压缩的明文字节；不得为空。</para></param>
+    /// <param name="originalSize">
+    /// Declared original size; must equal <paramref name="data"/>.Length.
+    /// <para>声明的原始大小，必须等于 <paramref name="data"/>.Length。</para>
+    /// </param>
+    /// <returns>
+    /// The <c>NTDECOMP</c> header followed by the 5-byte LZMA1 properties and the LZMA1 payload;
+    /// no trailing padding is added.
+    /// <para><c>NTDECOMP</c> 头部，其后为 5 字节 LZMA1 属性与 LZMA1 负载；不追加末尾填充。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="data"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="data"/> is empty or its length disagrees with <paramref name="originalSize"/>.
+    /// <para><paramref name="data"/> 为空，或其长度与 <paramref name="originalSize"/> 不一致。</para>
+    /// </exception>
+    /// <exception cref="Lzma2CompressionException">
+    /// The LZMA encoder failed. <para>LZMA 编码器执行失败。</para>
+    /// </exception>
     public byte[] Compress(byte[] data, ulong originalSize)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -422,6 +574,36 @@ public sealed class Lzma2Compressor : ILzma2Compressor
     /// Compresses the input data.
     /// <para>压缩输入数据。</para>
     /// </summary>
+    /// <param name="input">
+    /// Readable stream providing exactly <paramref name="originalSize"/> bytes from its current
+    /// position; left open and never repositioned.
+    /// <para>从当前位置提供恰好 <paramref name="originalSize"/> 字节的可读流；调用后保持打开且不会被重新定位。</para>
+    /// </param>
+    /// <param name="output">
+    /// Writable stream receiving header, LZMA1 properties and payload; left open. The encoder
+    /// spools through a temporary file that is always deleted.
+    /// <para>接收头部、LZMA1 属性与负载的可写流，调用后保持打开。编码过程经临时文件中转，且该文件必定被删除。</para>
+    /// </param>
+    /// <param name="originalSize">
+    /// Declared plaintext size in bytes; must be positive and no greater than <see cref="long.MaxValue"/>.
+    /// <para>声明的明文字节数；必须为正数且不超过 <see cref="long.MaxValue"/>。</para>
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="originalSize"/> is zero. <para><paramref name="originalSize"/> 为 0。</para>
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="originalSize"/> exceeds <see cref="long.MaxValue"/>.
+    /// <para><paramref name="originalSize"/> 超过 <see cref="long.MaxValue"/>。</para>
+    /// </exception>
+    /// <exception cref="Lzma2CompressionException">
+    /// The input ends early or carries bytes beyond the declared size, or the LZMA encoder failed;
+    /// a partial write to <paramref name="output"/> is possible when the encoder faults.
+    /// <para>输入提前结束或超出声明大小仍有剩余字节，或 LZMA 编码失败；编码器出错时 <paramref name="output"/> 可能已被部分写入。</para>
+    /// </exception>
     public void Compress(Stream input, Stream output, ulong originalSize)
     {
         ArgumentNullException.ThrowIfNull(input);

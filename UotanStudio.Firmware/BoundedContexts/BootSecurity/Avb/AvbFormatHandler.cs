@@ -4,16 +4,35 @@ using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb;
 
+/// <summary>
+/// Format handler for Android Verified Boot: recognizes standalone VBMeta images and partition images carrying an
+/// AVB footer, reads their metadata and extracts the VBMeta structures. All input is treated as untrusted and
+/// bounds-checked; malformed images produce failure results instead of throwing.
+/// <para>Android Verified Boot 的格式处理器：识别独立 VBMeta 镜像与带 AVB 尾部的分区镜像，读取元数据并提取 VBMeta 结构。
+/// 输入一律视为不可信并做边界检查；畸形镜像返回失败结果而不抛出异常。</para>
+/// </summary>
 public sealed class AvbFormatHandler : IFormatHandler
 {
+    /// <summary>Display name published with every operation result of this handler.
+    /// <para>本处理器每次操作结果随附的显示名称。</para></summary>
+    /// <value>The fixed string <c>Android Verified Boot (AVB)</c>.
+    /// <para>固定字符串 <c>Android Verified Boot (AVB)</c>。</para></value>
     public string FormatName => "Android Verified Boot (AVB)";
 
+    /// <summary>Lowercase file extensions this handler advertises for picker filters.
+    /// <para>本处理器在文件选择过滤器中声明的小写扩展名。</para></summary>
+    /// <value><c>img</c> and <c>vbmeta</c>; recognition still requires a header or footer magic match.
+    /// <para><c>img</c> 与 <c>vbmeta</c>；识别仍需头部或尾部魔数匹配。</para></value>
     public IReadOnlyList<string> FileExtensions => ["img", "vbmeta"];
 
     /// <summary>
     /// Determines whether the file matches this format.
     /// <para>判断文件是否匹配此格式。</para>
     /// </summary>
+    /// <param name="filePath">File to probe; a leading valid VBMeta header, or a trailing valid AVB footer whose content head is not already claimed by known filesystem or boot magic, identifies the format.
+    /// <para>待探测文件；起始处有效的 VBMeta 头，或结尾有效且内容头部未被已知文件系统/启动魔数占用的 AVB 尾部，均可识别本格式。</para></param>
+    /// <returns><see langword="true"/> when the file is AVB-related; <see langword="false"/> for blank, missing or unreadable files (all I/O errors are swallowed).
+    /// <para>与 AVB 相关时为 <see langword="true"/>；空白、缺失或不可读的文件为 <see langword="false"/>（吞掉所有 I/O 错误）。</para></returns>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -119,6 +138,13 @@ public sealed class AvbFormatHandler : IFormatHandler
     /// Reads the firmware metadata asynchronously.
     /// <para>异步读取固件元数据。</para>
     /// </summary>
+    /// <param name="filePath">Untrusted VBMeta or footer-bearing image; parsed sequentially with every declared range validated.
+    /// <para>不可信的 VBMeta 或带尾部镜像；顺序解析并校验每个声明范围。</para></param>
+    /// <param name="cancellationToken">Observed by the background task and the metadata reader. <para>由后台任务与元数据读取器共同观察。</para></param>
+    /// <returns>Result whose metadata dictionary holds the decoded AVB fields on success, or a failure result describing the parse or I/O error.
+    /// <para>成功时元数据字典包含解码出的 AVB 字段；解析或 I/O 错误以失败结果返回。</para></returns>
+    /// <exception cref="OperationCanceledException">Cancellation was requested before or during the read.
+    /// <para>读取前或读取期间请求了取消。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
 
@@ -154,6 +180,18 @@ public sealed class AvbFormatHandler : IFormatHandler
     /// Extracts the firmware contents asynchronously.
     /// <para>异步提取固件内容。</para>
     /// </summary>
+    /// <param name="filePath">Signed VBMeta image (extracts <c>.authentication.bin</c> and <c>.auxiliary.bin</c>) or footer-bearing partition image (extracts <c>.vbmeta.bin</c>); footer-declared ranges are validated before reading.
+    /// <para>已签名 VBMeta 镜像（提取 <c>.authentication.bin</c> 与 <c>.auxiliary.bin</c>），或带尾部的分区镜像（提取 <c>.vbmeta.bin</c>）；读取前校验尾部声明的范围。</para></param>
+    /// <param name="outputDirectory">Created on demand; receives the extracted files plus a repack metadata record after a successful extraction.
+    /// <para>按需创建；成功后接收提取文件及一份重打包元数据记录。</para></param>
+    /// <param name="options">Unpack options; <c>Overwrite</c> also governs replacing an existing repack metadata record. May be <see langword="null"/>.
+    /// <para>解包选项；<c>Overwrite</c> 同时控制是否替换既有重打包元数据记录。可为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Checked before extraction and observed by the metadata write, where cancellation is rethrown; the sequential extraction reads themselves do not poll the token.
+    /// <para>解包前检查并在元数据写入时被观察，此时取消会重新抛出；顺序解包读取本身不轮询该标记。</para></param>
+    /// <returns>Success result listing the extracted files, or a failure result for unsigned images, invalid VBMeta ranges or I/O errors.
+    /// <para>列出提取文件的成功结果；未签名镜像、无效 VBMeta 范围或 I/O 错误返回失败结果。</para></returns>
+    /// <exception cref="OperationCanceledException">Cancellation was requested before extraction or during the metadata write.
+    /// <para>解包前或元数据写入期间请求了取消。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -235,6 +273,12 @@ public sealed class AvbFormatHandler : IFormatHandler
     /// Packs the input into firmware asynchronously.
     /// <para>异步将输入打包为固件。</para>
     /// </summary>
+    /// <param name="inputPath">Accepted for interface conformity but never read; signing is not offered by this handler.
+    /// <para>为满足接口一致性而接受，但从不读取；本处理器不提供签名功能。</para></param>
+    /// <param name="outputPath">Accepted for interface conformity but never written. <para>为满足接口一致性而接受，从不写入。</para></param>
+    /// <param name="cancellationToken">Not observed; the result is produced synchronously. <para>不被观察；结果同步产生。</para></param>
+    /// <returns>Always a failure result stating that AVB packing requires a private key and this handler does not support it; no file is created.
+    /// <para>始终返回失败结果，声明 AVB 打包需要私钥且本处理器不支持；不创建任何文件。</para></returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default) =>
 
         Task.FromResult(FirmwareOpResult.Fail("AVB packing/signing requires a private key and is not supported by this handler."));

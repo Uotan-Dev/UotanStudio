@@ -175,20 +175,17 @@ internal sealed class RkdlCbw(RkdlCommand operationCode, byte flags, uint transf
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), Tag);
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8), TransferLength);
         bytes[12] = Flags;
-        bytes[13] = 0;          // ucCBWLUN
+        bytes[13] = 0;
         bytes[14] = CbwcbLength;
         bytes[15] = OperationCode;
-        bytes[16] = SubCode;    // ucReserved (reset/test/change-storage sub code)
-        // CBWCB.dwAddress is big-endian on the wire.
+        bytes[16] = SubCode;
         bytes[17] = (byte)(Address >> 24);
         bytes[18] = (byte)(Address >> 16);
         bytes[19] = (byte)(Address >> 8);
         bytes[20] = (byte)Address;
-        bytes[21] = 0;          // ucReserved2
-        // CBWCB.usLength is big-endian on the wire.
+        bytes[21] = 0;
         bytes[22] = (byte)(SectorLength >> 8);
         bytes[23] = (byte)SectorLength;
-        // bytes[24..30] remain zero (ucReserved3).
         return bytes;
     }
 }
@@ -341,21 +338,17 @@ internal static class RkdlGpt
         var backup = new byte[BackupSectors * RkdlConstants.SectorSize];
         var headerOff = 32 * RkdlConstants.SectorSize;
 
-        // Copy the partition entries (sectors 2..33) and the header (sector 1).
         Array.Copy(masterGpt, 2 * RkdlConstants.SectorSize, backup, 0, 32 * RkdlConstants.SectorSize);
         Array.Copy(masterGpt, 1 * RkdlConstants.SectorSize, backup, headerOff, RkdlConstants.SectorSize);
 
-        // backup.my_lba = master.alternate_lba ; backup.alternate_lba = master.my_lba
         var myLba = BinaryPrimitives.ReadUInt64LittleEndian(masterGpt.AsSpan(RkdlConstants.SectorSize + 24));
         var alternateLba = BinaryPrimitives.ReadUInt64LittleEndian(masterGpt.AsSpan(RkdlConstants.SectorSize + 32));
         BinaryPrimitives.WriteUInt64LittleEndian(backup.AsSpan(headerOff + 24), alternateLba);
         BinaryPrimitives.WriteUInt64LittleEndian(backup.AsSpan(headerOff + 32), myLba);
 
-        // backup.partition_entry_lba = master.last_usable_lba + 1
         var lastUsableLba = BinaryPrimitives.ReadUInt64LittleEndian(masterGpt.AsSpan(RkdlConstants.SectorSize + 48));
         BinaryPrimitives.WriteUInt64LittleEndian(backup.AsSpan(headerOff + 72), lastUsableLba + 1);
 
-        // Recompute the backup header CRC.
         BinaryPrimitives.WriteUInt32LittleEndian(backup.AsSpan(headerOff + 16), 0);
         var headerSize = BinaryPrimitives.ReadUInt32LittleEndian(backup.AsSpan(headerOff + 12));
         BinaryPrimitives.WriteUInt32LittleEndian(backup.AsSpan(headerOff + 16),
@@ -394,10 +387,9 @@ internal static class RkdlGpt
         var hdr = RkdlConstants.SectorSize;
         var oldDiskSize = BinaryPrimitives.ReadUInt64LittleEndian(masterGpt.AsSpan(hdr + 32)) + 1;
 
-        BinaryPrimitives.WriteUInt64LittleEndian(masterGpt.AsSpan(hdr + 32), (ulong)totalSectors - 1);   // alternate_lba
-        BinaryPrimitives.WriteUInt64LittleEndian(masterGpt.AsSpan(hdr + 48), (ulong)totalSectors - 34);  // last_usable_lba
+        BinaryPrimitives.WriteUInt64LittleEndian(masterGpt.AsSpan(hdr + 32), (ulong)totalSectors - 1);
+        BinaryPrimitives.WriteUInt64LittleEndian(masterGpt.AsSpan(hdr + 48), (ulong)totalSectors - 34);
 
-        // Grow the final partition when it ends at the old disk size - 34.
         var numEntries = BinaryPrimitives.ReadUInt32LittleEndian(masterGpt.AsSpan(hdr + 80));
         var lastEntryIndex = -1;
         for (var i = 0; i < (int)numEntries; i++)
@@ -422,13 +414,11 @@ internal static class RkdlGpt
             }
         }
 
-        // Recompute the master header CRC.
         BinaryPrimitives.WriteUInt32LittleEndian(masterGpt.AsSpan(hdr + 16), 0);
         var headerSize = BinaryPrimitives.ReadUInt32LittleEndian(masterGpt.AsSpan(hdr + 12));
         BinaryPrimitives.WriteUInt32LittleEndian(masterGpt.AsSpan(hdr + 16),
             RkdlCrc.Crc32(masterGpt.AsSpan(hdr, (int)headerSize)));
 
-        // Rebuild the backup GPT from the updated master.
         var rebuilt = BuildBackupGpt(masterGpt);
         Array.Copy(rebuilt, backupGpt, rebuilt.Length);
     }

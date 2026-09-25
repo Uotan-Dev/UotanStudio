@@ -11,8 +11,24 @@ public sealed partial class MtkSession
     /// Accepts and acknowledges an XML DA's initial START after an explicitly uploaded and
     /// started agent. This only establishes the control channel, not hardware, DRAM, DA2
     /// or storage readiness. No XFlash/XML fallback or loader autodetection is performed.
+    /// <para>在显式上传并启动的 agent 之后，接受并确认 XML DA 的初始 START。
+    /// 这仅建立控制通道，不代表硬件、DRAM、DA2 或存储已就绪。不进行 XFlash/XML
+    /// 回退，也不自动探测 loader。</para>
     /// </summary>
-    /// <param name="cancellationToken">Cancellation for waiting and the bounded initial exchange.</param>
+    /// <param name="cancellationToken">Cancellation for waiting and the bounded initial exchange.
+    /// <para>用于等待与有界初始交换的取消令牌。</para></param>
+    /// <returns>A task that completes once the control channel is attached.
+    /// <para>在控制通道附加完成后返回的异步任务。</para></returns>
+    /// <exception cref="InvalidOperationException">The agent has not been started or the session is disposed.
+    /// <para>agent 尚未启动或会话已被释放。</para></exception>
+    /// <exception cref="MtkProtocolException">The first message was not CMD:START or the exchange faulted.
+    /// <para>首条消息不是 CMD:START，或交换进入 fault 状态。</para></exception>
+    /// <exception cref="TimeoutException">The session deadline for the initial exchange expired.
+    /// <para>初始交换的会话截止时间到期。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled waiting or the exchange.
+    /// <para>调用方取消了等待或交换。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
     public async Task AttachXmlAgentAsync(CancellationToken cancellationToken = default)
     {
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -50,11 +66,32 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>Sends explicit host metadata and requires OK, END/OK and the next START before completing.</summary>
+    /// <summary>Sends explicit host metadata and requires OK, END/OK and the next START before completing.
+    /// <para>发送显式的主机元数据，并在完成前要求 OK、END/OK 与下一个 START。</para></summary>
     /// <remarks>No storage commands or target-requested file operations are performed. Unknown
     /// subcommands fault the session. Progress reports are consumed with bounded acknowledgements.</remarks>
-    /// <param name="hostInfo">Explicit metadata of at most 256 characters, without automatic timestamps.</param>
-    /// <param name="cancellationToken">Cancellation for waiting and the whole control exchange.</param>
+    /// <param name="hostInfo">Explicit metadata of at most 256 characters, without automatic timestamps.
+    /// <para>最多 256 个字符的显式元数据，不自动附加时间戳。</para></param>
+    /// <param name="cancellationToken">Cancellation for waiting and the whole control exchange.
+    /// <para>用于等待与整个控制交换的取消令牌。</para></param>
+    /// <returns>A task that completes after the control exchange is finished.
+    /// <para>在控制交换完成后返回的异步任务。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="hostInfo"/> is null.
+    /// <para><paramref name="hostInfo"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="hostInfo"/> exceeds 256 characters.
+    /// <para><paramref name="hostInfo"/> 超过 256 个字符。</para></exception>
+    /// <exception cref="System.Xml.XmlException"><paramref name="hostInfo"/> contains characters invalid in XML.
+    /// <para><paramref name="hostInfo"/> 包含 XML 非法字符。</para></exception>
+    /// <exception cref="InvalidOperationException">No attached XML DA control stage is available.
+    /// <para>没有可用的 XML DA 控制阶段。</para></exception>
+    /// <exception cref="MtkProtocolException">The DA rejected the command or the exchange faulted.
+    /// <para>DA 拒绝命令或交换进入 fault 状态。</para></exception>
+    /// <exception cref="TimeoutException">The session deadline for the control exchange expired.
+    /// <para>控制交换的会话截止时间到期。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled waiting or the exchange.
+    /// <para>调用方取消了等待或交换。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
     public Task SetXmlHostInfoAsync(string hostInfo, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(hostInfo);
@@ -132,8 +169,6 @@ public sealed partial class MtkSession
                 break;
             }
 
-            // A device-initiated file request may replace the expected OK; only an XML command
-            // frame can be one, so any other reply keeps the original rejection error.
             if (serviced < 16 && reply.Contains("<command", StringComparison.Ordinal) &&
                 await TryServiceXmlFileRequestOwnedAsync(channel, MtkXmlMessage.Parse(reply), token).ConfigureAwait(false))
             {

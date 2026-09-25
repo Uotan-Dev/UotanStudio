@@ -8,6 +8,8 @@ public sealed partial class MtkSession
     /// <summary>
     /// Uploads a DA with one explicitly configured Boot ROM SLA response if D7 reports
     /// 0x1D0D. The original upload is continued without resending D7 or trying another key.
+    /// <para>当 D7 报告 0x1D0D 时，使用一个显式配置的 Boot ROM SLA 响应上传 DA。
+    /// 原始上传会被继续，不会重发 D7，也不会尝试其他密钥。</para>
     /// </summary>
     /// <remarks>
     /// Uses the byte-stream profile. No credentials, signature algorithm or key selection
@@ -16,14 +18,34 @@ public sealed partial class MtkSession
     /// is awaited before buffers are cleared. A successful exchange is not a blanket grant
     /// of device authorization, and does not imply DA execution.
     /// </remarks>
-    /// <param name="image">Caller-owned DA stream.</param>
-    /// <param name="loadAddress">Selected DA load address.</param>
-    /// <param name="length">Total selected DA bytes, including the signature suffix.</param>
-    /// <param name="responder">Explicitly authorized response provider.</param>
-    /// <param name="signatureLength">Signature suffix length included in the image.</param>
-    /// <param name="slaTimeoutMs">Cooperative SLA exchange deadline, from 1 ms to 24 hours.</param>
-    /// <param name="progress">Cumulative DA bytes, excluding authentication traffic.</param>
-    /// <param name="cancellationToken">Cancellation for the whole upload.</param>
+    /// <param name="image">Caller-owned DA stream.
+    /// <para>调用方拥有的 DA 流。</para></param>
+    /// <param name="loadAddress">Selected DA load address.
+    /// <para>选定的 DA 加载地址。</para></param>
+    /// <param name="length">Total selected DA bytes, including the signature suffix.
+    /// <para>选定的 DA 总字节数，包含签名为后缀的部分。</para></param>
+    /// <param name="responder">Explicitly authorized response provider.
+    /// <para>显式授权的响应提供方。</para></param>
+    /// <param name="signatureLength">Signature suffix length included in the image.
+    /// <para>镜像中包含的签名后缀长度。</para></param>
+    /// <param name="slaTimeoutMs">Cooperative SLA exchange deadline, from 1 ms to 24 hours.
+    /// <para>SLA 交换的协作式截止时间，范围从 1 毫秒到 24 小时。</para></param>
+    /// <param name="progress">Cumulative DA bytes, excluding authentication traffic.
+    /// <para>累计 DA 字节数，不含认证流量。</para></param>
+    /// <param name="cancellationToken">Cancellation for the whole upload.
+    /// <para>用于整个上传过程的取消令牌。</para></param>
+    /// <returns>A task that completes when the SLA-gated DA upload has finished.
+    /// <para>在受 SLA 门控的 DA 上传结束后完成的异步任务。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="responder"/> is null.
+    /// <para><paramref name="responder"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="slaTimeoutMs"/> is outside 1 ms to 24 hours.
+    /// <para><paramref name="slaTimeoutMs"/> 超出 1 毫秒到 24 小时的范围。</para></exception>
+    /// <exception cref="MtkProtocolException">The SLA exchange or the upload was rejected by the target.
+    /// <para>SLA 交换或上传被目标拒绝。</para></exception>
+    /// <exception cref="TimeoutException">The SLA deadline expired; the upload must not be replayed.
+    /// <para>SLA 截止时间到期；不得重放本次上传。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
     public Task UploadDownloadAgentWithSlaAsync(Stream image, uint loadAddress, int length,
         IMtkBootRomSlaResponder responder, int signatureLength = 0, int slaTimeoutMs = 60000,
         IProgress<long>? progress = null, CancellationToken cancellationToken = default)
@@ -55,7 +77,6 @@ public sealed partial class MtkSession
                 await ReadAsync(2, _timeoutMs, token).ConfigureAwait(false));
             if (status == 0x7017)
             {
-                // The target reports no challenge for this step, not general authorization.
                 return;
             }
             CheckStatus(status, "SLA challenge request");

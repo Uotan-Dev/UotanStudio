@@ -5,6 +5,11 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
 
+/// <summary>
+/// F2FS builder part that emits the metadata regions: the fixed-geometry superblock with its checksum, the checkpoint packs and summary, the SIT and NAT tables, and the SSA blocks holding inode and dnode nodes.
+/// <para>F2FS 构建器的组成部分，负责写出元数据区域：带校验和且几何参数固定的超级块、checkpoint 包与摘要、SIT 与 NAT 表，
+/// 以及承载 inode 与 dnode 节点的 SSA 区。</para>
+/// </summary>
 public sealed partial class F2fsBuilder
 {
     private static F2fsSuperblock CreateSuperblock(Layout layout, F2fsOptions options, bool hasCompressedFiles, bool hasXattrs, uint metadataFeatures)

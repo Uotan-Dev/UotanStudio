@@ -2,6 +2,10 @@ using System.Buffers.Binary;
 
 namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 
+/// <summary>
+/// Flash-bundle execution stage: drives program, erase, patch, wipe and UFS provisioning commands for the preflighted manifests through the Firehose protocol owned by the session.
+/// <para>刷写包执行阶段：借助会话持有的 Firehose 协议，为已通过预检的清单驱动 program、erase、patch、wipe 与 UFS provisioning 命令。</para>
+/// </summary>
 public sealed partial class FlashBundleOrchestrator
 {
     private async Task<bool> ExecuteBundleAsync(
@@ -11,7 +15,6 @@ public sealed partial class FlashBundleOrchestrator
     {
         var touchedPartitions = new HashSet<int>();
 
-        // ---- Program / Erase phase ---------------------------------------------
         if (!options.SkipProgram)
         {
             var total = filteredPrograms.Count;
@@ -90,7 +93,6 @@ public sealed partial class FlashBundleOrchestrator
             result.ProgramEntriesSkipped = filteredPrograms.Count;
         }
 
-        // ---- Patch phase --------------------------------------------------------
         if (!options.SkipPatch && filteredPatches is { Count: > 0 })
         {
             var total = filteredPatches.Count;
@@ -132,7 +134,6 @@ public sealed partial class FlashBundleOrchestrator
             }
         }
 
-        // ---- Wipe phase (program-zeros over the first N sectors) -----------------
         if (!options.SkipWipe && options.WipeFirstSectors > 0 && touchedPartitions.Count > 0)
         {
             var targets = options.WipePhysicalPartitions is { Length: > 0 }
@@ -170,7 +171,6 @@ public sealed partial class FlashBundleOrchestrator
             }
         }
 
-        // ---- UFS provisioning phase ----------------------------------------------
         if (ufsProvision != null)
         {
             RaiseProgress(progress, FlashBundlePhase.UfsProvisioning, "Provisioning UFS... 配置 UFS...", 0, 1);

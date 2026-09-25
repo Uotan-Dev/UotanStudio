@@ -10,9 +10,6 @@ public sealed partial class ErofsBuilder
 {
     private static byte[] BuildCompressionConfiguration(ErofsOptions options)
     {
-        // Legacy (pre-5.13) images carry no compression configuration record; the LZ4 distance is
-        // published through s_available_compr_algs instead.
-        // legacy（pre-5.13）镜像不含压缩配置记录；LZ4 距离改由 s_available_compr_algs 承载。
         if (!options.Compress || options.LegacyCompatibility) return [];
         if (options.SourceCompressionOptions is { } codecs)
         {
@@ -27,7 +24,6 @@ public sealed partial class ErofsBuilder
     private static byte[] BuildSingleCompressionConfiguration(ErofsOptions options)
     {
 
-        // Linux fs/erofs/erofs_fs.h: each algorithm has its own length-prefixed record.
         var length = options.Algorithm switch
         {
             ErofsCompressionAlgorithm.Lz4 or ErofsCompressionAlgorithm.Lzma => 14,
@@ -40,10 +36,6 @@ public sealed partial class ErofsBuilder
         switch (options.Algorithm)
         {
             case ErofsCompressionAlgorithm.Lz4:
-                // erofs-utils compressor_lz4.c defaults the declared distance to LZ4_DISTANCE_MAX (65535);
-                // a zero ErofsOptions.Lz4MaxDistance denotes that same default, so the record carries 65535.
-                // erofs-utils compressor_lz4.c 将声明距离默认到 LZ4_DISTANCE_MAX（65535）；
-                // ErofsOptions.Lz4MaxDistance 为 0 即该默认值，记录应写入 65535。
                 BinaryPrimitives.WriteUInt16LittleEndian(configuration.AsSpan(2),
                     options.Lz4MaxDistance == 0 ? ErofsCompression.Lz4DistanceMax : options.Lz4MaxDistance);
                 BinaryPrimitives.WriteUInt16LittleEndian(configuration.AsSpan(4), checked((ushort)(options.MaxPclusterSize / options.BlockSize)));
@@ -63,22 +55,6 @@ public sealed partial class ErofsBuilder
 
     private static PclusterPlan[]? TryPlanCompressed(BuildNode node, int blockSize, ErofsOptions options)
     {
-        // LZ4's upstream destSize API safely supports byte-granular clusters. The
-        // other codecs retain the established logical-cluster planner until their
-        // window-specific destSize encoders are available.
-        // Dense packing is legal for legacy images too: both index formats store di_clusterofs, so
-        // the kernel derives a pcluster's exact byte length from the next head position (fs/erofs/
-        // zmap.c z_erofs_map_blocks_iter: m_la = (lcn << clusterbits) | clusterofs, m_llen = end -
-        // m_la) and never requires a pcluster to start or end on a logical cluster boundary. What
-        // legacy does require is one physical block per pcluster, no big-pcluster / fragment /
-        // dedup / tail-packing assumptions, and that every extent reach its own head cluster's end
-        // so the trailing partial cluster keeps an index slot for the end-of-file terminator.
-        // dense 打包对 legacy 镜像同样合法：两种索引格式都保存 di_clusterofs，内核由下一个 head
-        // 位置推导 pcluster 的精确字节长度（fs/erofs/zmap.c z_erofs_map_blocks_iter：
-        // m_la = (lcn << clusterbits) | clusterofs、m_llen = end - m_la），并不要求 pcluster 起于
-        // 或止于逻辑簇边界。legacy 真正的硬性要求是：每个 pcluster 只占一个物理块、不依赖
-        // big-pcluster/fragment/dedup/tail-packing，且每个 extent 至少到达其 head 簇边界，以便尾部
-        // 非整簇仍留有索引槽位承载文件末尾终止项。
         if (options.OptimizeCompression && options.Algorithm == ErofsCompressionAlgorithm.Lz4)
             return TryPlanDenseCompressed(node, blockSize, options);
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -102,25 +78,9 @@ public sealed partial class ErofsBuilder
             if (options.Algorithm == ErofsCompressionAlgorithm.Lz4 && options.Lz4MaxDistance != 0)
                 maxTake = Math.Min(maxTake, options.Lz4MaxDistance / clusterSize);
 
-            // Compresses the leading `take` clusters of this group. The window is
-            // extended incrementally: each probe only reads the newly added cluster
-            // instead of re-reading the shared prefix from disk.
             bool TryTake(int take, out int candidateLen, out int outLen)
             {
                 candidateLen = (int)Math.Min(node.Size - pos, (long)take * clusterSize);
-                // Legacy kernel compact-extent merging computes outputsize as the
-                // number of covered logical clusters times clusterSize, regardless of
-                // how much valid data the last cluster actually carries. Merging a
-                // trailing partial cluster into a compressed pcluster therefore
-                // causes LZ4 to emit fewer bytes than the kernel expects, resulting
-                // in "failed to decompress %d in[...] out[...]". Truncate the probe
-                // to a cluster boundary so the tail partial cluster stays for Plain
-                // handling just below (acceptedLen <= 0).
-                // legacy 内核的 compact extent merging 会按覆盖的逻辑簇数 × 簇大小
-                // 计算 outputsize，与最后一簇的有效载荷无关。如果把尾部非整簇合并到
-                // 压缩 pcluster，LZ4 解压字节数会少于内核预期，触发
-                // "failed to decompress %d in[...] out[...]"。截断探测长度到簇边界，
-                // 让尾部非整簇留给下面的 Plain 分支单独处理（acceptedLen <= 0）。
                 if (options.LegacyCompatibility)
                 {
                     var tail = candidateLen % clusterSize;
@@ -138,12 +98,6 @@ public sealed partial class ErofsBuilder
                 return outLen > 0 && outLen < options.MaxPclusterSize - 8;
             }
 
-            // The largest mergeable take is located with an exponential probe plus a
-            // binary search instead of a linear sweep: one-shot compression of a
-            // longer prefix practically never produces less output, so the accepted
-            // take keeps the same semantics as the linear scan while the probe count
-            // drops from up to 64 compressions per group to about 12. Every accepted
-            // take is still verified by an actual compression.
             var lo = 0;
             var hi = maxTake + 1;
             for (var probe = 1; probe < hi;)
@@ -177,8 +131,6 @@ public sealed partial class ErofsBuilder
 
             if (acceptedLen <= 0 || acceptedOut <= 0)
             {
-                // A file may mix incompressible logical blocks with compressed extents.
-                // Keep the plain block and continue looking for compressible data.
                 if (clusterSize != blockSize) return null;
                 var length = (int)Math.Min(node.Size - pos, clusterSize);
                 plans.Add(new PclusterPlan { SourceOffset = pos, SourceLength = length, CompressedLength = length, Plain = true });
@@ -191,7 +143,6 @@ public sealed partial class ErofsBuilder
             pos += acceptedLen;
             clusterIndex += CeilDiv(acceptedLen, clusterSize);
         }
-
 
         if (plans.Sum(p => CeilDiv(p.CompressedLength, blockSize)) >= totalClusters)
         {
@@ -233,7 +184,6 @@ public sealed partial class ErofsBuilder
                 continue;
             }
 
-
             var blockBytes = CeilDiv(p.CompressedLength, blockSize) * blockSize;
             var start = checked(p.BlockAddress * blockSize);
             if (outLen < blockBytes)
@@ -247,7 +197,6 @@ public sealed partial class ErofsBuilder
 
     private static void WriteCompressedIndexes(Stream output, long indexOffset, BuildNode node, int blockSize, ErofsOptions options)
     {
-
 
         var bigPcluster = node.BigPcluster;
         var advise = bigPcluster ? ZErofsMapHeader.AdviseBigPcluster1 : (ushort)0;
@@ -270,11 +219,9 @@ public sealed partial class ErofsBuilder
         if (node.CompactedIndexes)
         {
 
-
             WriteCompactedIndexes4B(output, indexOffset + ZErofsMapHeader.Size, node, blockSize);
             return;
         }
-
 
         var entryOffset = indexOffset + ZErofsMapHeader.Size + 8;
         var clusters = node.ClusterCount;
@@ -288,12 +235,10 @@ public sealed partial class ErofsBuilder
             var entry = new byte[ZErofsLclusterIndex.Size];
             if (c >= PlanEndCluster(node, pclusterIndex))
             {
-                // Upstream z_erofs_fini_full_indexes: a final PLAIN index marks EOF.
                 BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(2), (ushort)(node.Size % node.LogicalClusterSize));
             }
             else if (c == headCluster)
             {
-
 
                 BinaryPrimitives.WriteUInt16LittleEndian(entry, plan.Plain ? ZErofsLclusterIndex.LclusterTypePlain : ZErofsLclusterIndex.LclusterTypeHead1);
                 BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(2), (ushort)(plan.SourceOffset % node.LogicalClusterSize));
@@ -303,13 +248,11 @@ public sealed partial class ErofsBuilder
             {
                 var d0 = c - headCluster;
 
-
                 var d1 = (ushort)Math.Min(headCluster + coveredClusters - c, (long)(ZErofsLclusterIndex.LiD0CblkCnt - 1));
                 BinaryPrimitives.WriteUInt16LittleEndian(entry, ZErofsLclusterIndex.LclusterTypeNonHead);
                 BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(2), 0);
                 if (bigPcluster && d0 == 1)
                 {
-
 
                     var compressedBlocks = CeilDiv(plan.CompressedLength, blockSize);
                     if (compressedBlocks >= ZErofsLclusterIndex.LiD0CblkCnt)
@@ -361,15 +304,12 @@ public sealed partial class ErofsBuilder
         var entryIndex = 0L;
         var pclusterIndex = 0;
 
-
         var blkaddr = (long)pclusters[0].BlockAddress - (bigPcluster ? 0 : 1);
-
 
         var dummyHead = !bigPcluster;
 
         while (entryIndex < clusters)
         {
-
 
             var packStartBlkaddr = blkaddr + (bigPcluster && dummyHead ? 1 : 0);
             var bits = 0;
@@ -392,7 +332,6 @@ public sealed partial class ErofsBuilder
                     else if (entryIndex == headCluster)
                     {
 
-
                         type = plan.Plain ? (byte)0 : (byte)1;
                         offset = (uint)(plan.SourceOffset % node.LogicalClusterSize);
                         if (dummyHead)
@@ -414,7 +353,6 @@ public sealed partial class ErofsBuilder
                         if (bigPcluster && d0 == 1)
                         {
 
-
                             var compressedBlocks = CeilDiv(plan.CompressedLength, blockSize);
                             if (compressedBlocks >= ZErofsLclusterIndex.LiD0CblkCnt)
                             {
@@ -433,7 +371,6 @@ public sealed partial class ErofsBuilder
                         }
                         else if (i + 1 == vcnt)
                         {
-
 
                             var d1 = coveredClusters - d0;
                             offset = (uint)Math.Min(d1, ZErofsLclusterIndex.LiD0CblkCnt - 1);
@@ -457,7 +394,6 @@ public sealed partial class ErofsBuilder
                     offset = 0;
                 }
 
-
                 var v = ((uint)type << lobits) | offset;
                 var bytePos = bits >> 3;
                 var bitShift = bits & 7;
@@ -472,7 +408,6 @@ public sealed partial class ErofsBuilder
 
                 bits += encodebits;
             }
-
 
             BinaryPrimitives.WriteUInt32LittleEndian(pack.AsSpan(packSize - 4, 4), (uint)packStartBlkaddr);
             WriteAt(output, packOffset, pack, pack.Length);

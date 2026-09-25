@@ -45,7 +45,15 @@ public sealed record ContainerEntry(
     long SizeBytes,
     bool FromPayload)
 {
-    /// <summary>Full member path of the containing Payload inside a ZIP, when present.</summary>
+    /// <summary>
+    /// Full member path of the containing Payload inside a ZIP, when present.
+    /// <para>当分区条目来自 ZIP 内包裹的 Payload 时，记录该 Payload 成员在包内的完整路径。</para>
+    /// </summary>
+    /// <value>
+    /// The ZIP member path of the containing Payload entry, or <see langword="null"/>
+    /// when the entry was not listed from an embedded Payload.
+    /// <para>所属 Payload 成员的 ZIP 路径；条目并非来自内嵌 Payload 时为 <see langword="null"/>。</para>
+    /// </value>
     public string? PayloadMemberPath { get; init; }
 }
 
@@ -60,5 +68,7 @@ public sealed record ContainerStructure(
     IReadOnlyList<ContainerEntry> Entries)
 {
     /// <summary><para>空结果（非容器或解析失败）。</para>Empty result (not a container or parse failed).</summary>
+    /// <value>A shared instance with <see cref="ContainerKind.None"/> and an empty entry list.
+    /// <para>共享实例，类型为 <see cref="ContainerKind.None"/> 且条目列表为空。</para></value>
     public static ContainerStructure Empty { get; } = new(ContainerKind.None, []);
 }

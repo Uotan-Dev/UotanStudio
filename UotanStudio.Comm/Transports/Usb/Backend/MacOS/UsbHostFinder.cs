@@ -180,11 +180,6 @@ internal static partial class UsbHostFinder
             ? unchecked((ushort)raw)
             : (ushort)0;
 
-    // Reads a CFNumber property as uint32, dispatching on its actual storage type
-    // (same CFNumberGetType contract as the IOKit classic finder — a mismatched
-    // type returns garbage in the high bytes).
-    // <para>按实际存储类型派发将 CFNumber 属性读为 uint32（与 IOKit 经典查找器相同的
-    // CFNumberGetType 契约——类型不匹配时高位字节为垃圾值）。</para>
     private static bool TryReadCFNumberRawU32(IntPtr service, string propertyName, out uint value)
     {
         value = 0;
@@ -206,7 +201,7 @@ internal static partial class UsbHostFinder
             {
                 switch (CFNumberGetType(cfValue))
                 {
-                    case 1: // kCFNumberSInt16Type
+                    case 1:
                         ushort v16 = 0;
                         if (!CFNumberGetValueU16(cfValue, 1, ref v16))
                         {
@@ -215,7 +210,7 @@ internal static partial class UsbHostFinder
 
                         value = v16;
                         return true;
-                    case 3: // kCFNumberSInt32Type
+                    case 3:
                         uint v32 = 0;
                         if (!CFNumberGetValueU32(cfValue, 3, ref v32))
                         {
@@ -224,7 +219,7 @@ internal static partial class UsbHostFinder
 
                         value = v32;
                         return true;
-                    case 4: // kCFNumberSInt64Type
+                    case 4:
                         ulong v64 = 0;
                         if (!CFNumberGetValueU64(cfValue, 4, ref v64))
                         {
@@ -321,17 +316,11 @@ internal static partial class UsbHostFinder
     [return: MarshalAs(UnmanagedType.U1)]
     private static partial bool CFStringGetCString(IntPtr theString, IntPtr buffer, int maxLength, int encoding);
 
-    // Reads the IOService-plane path of a device service via IORegistryEntryGetPath
-    // (same contract as the IOKit classic finder — UsbHostDevice.CreateHandle feeds
-    // this path to IORegistryEntryFromPath to reopen the device by identity).
-    // <para>经 IORegistryEntryGetPath 读取设备服务的 IOService 平面路径（与 IOKit
-    // 经典查找器契约相同——UsbHostDevice.CreateHandle 将该路径交给
-    // IORegistryEntryFromPath 以按标识重开设备）。</para>
     private static string? TryGetServicePath(IntPtr service)
     {
         try
         {
-            var path = new byte[512]; // io_string_t is 512 chars
+            var path = new byte[512];
             int result;
             unsafe
             {

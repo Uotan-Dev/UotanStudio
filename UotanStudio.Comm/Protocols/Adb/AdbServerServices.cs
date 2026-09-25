@@ -5,10 +5,24 @@ using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
-/// <summary>Bounded ADB smart-socket service access through an already running local adb server.</summary>
+/// <summary>
+/// Bounded ADB smart-socket service access through an already running local adb server.
+/// <para>通过已在运行的本地 adb server 进行受限的 ADB 服务访问。</para>
+/// </summary>
+/// <param name="serial">The server-side serial identifying the target device; device-scoped calls
+/// require it to be non-blank. <para>标识目标设备的 server 侧 serial；设备级调用要求它非空。</para></param>
+/// <param name="host">The adb server host to connect to. <para>要连接的 adb server 主机。</para></param>
+/// <param name="port">The adb server TCP port. <para>adb server 的 TCP 端口。</para></param>
 public sealed class AdbServerServices(string serial, string host = "127.0.0.1", int port = 5037)
 {
-    /// <summary>Lists server-managed targets without selecting a device transport.</summary>
+    /// <summary>
+    /// Lists server-managed targets without selecting a device transport.
+    /// <para>列出 server 管理的目标，不选择设备传输通道。</para>
+    /// </summary>
+    /// <returns>One entry per non-empty <c>serial state</c> line reported by <c>host:devices-l</c>.
+    /// <para>对应 <c>host:devices-l</c> 报告的每条非空 "serial state" 行的条目。</para></returns>
+    /// <exception cref="IOException">The device list length is invalid or the server connection failed.
+    /// <para>设备列表长度非法或 server 连接失败。</para></exception>
     public IReadOnlyList<(string Serial, string State)> ListTargets()
     {
         using var client = new TcpClient { NoDelay = true };
@@ -41,7 +55,18 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         return targets;
     }
 
-    /// <summary>Opens an owned byte stream to a service on the explicitly selected device.</summary>
+    /// <summary>
+    /// Opens an owned byte stream to a service on the explicitly selected device.
+    /// <para>在显式选定的设备上打开一个由调用方持有的字节服务流。</para>
+    /// </summary>
+    /// <param name="service">The raw ADB service name, e.g. <c>shell:id</c> or <c>sync:</c>.
+    /// <para>原始 ADB 服务名，如 <c>shell:id</c> 或 <c>sync:</c>。</para></param>
+    /// <returns>A stream positioned after the OKAY handshake; the caller owns and must dispose it.
+    /// <para>定位在 OKAY 握手之后的流；归调用方所有并必须由其释放。</para></returns>
+    /// <exception cref="ArgumentException">The instance <c>serial</c> is blank.
+    /// <para>实例的 <c>serial</c> 为空。</para></exception>
+    /// <exception cref="IOException">The server rejected the transport or service request.
+    /// <para>server 拒绝了传输或服务请求。</para></exception>
     public Stream Open(string service)
     {
         var stream = OpenTransport();
@@ -49,7 +74,22 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         catch { stream.Dispose(); throw; }
     }
 
-    /// <summary>Runs a device shell command to completion and returns its interleaved stdout/stderr text.</summary>
+    /// <summary>
+    /// Runs a device shell command to completion and returns its interleaved stdout/stderr text.
+    /// <para>运行设备 shell 命令直至结束，返回其 stdout/stderr 交织的文本。</para>
+    /// </summary>
+    /// <param name="command">The shell command string sent as <c>shell:</c> plus this text.
+    /// <para>以 <c>shell:</c> 前缀加上该文本发送的 shell 命令字符串。</para></param>
+    /// <param name="cancellationToken">Cancels connection, request and response reads.
+    /// <para>取消连接、请求与响应读取。</para></param>
+    /// <returns>The UTF-8 decoded output with CRLF normalized to LF and trailing newlines trimmed.
+    /// <para>UTF-8 解码后的输出，CRLF 已归一化为 LF 并去除尾部换行。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="command"/> is blank.
+    /// <para><paramref name="command"/> 为空。</para></exception>
+    /// <exception cref="IOException">The adb server reported FAIL for the transport or service request.
+    /// <para>adb server 对传输或服务请求返回 FAIL。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled before completion.
+    /// <para>令牌在完成前被取消。</para></exception>
     public async Task<string> RunShellAsync(string command, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
@@ -63,6 +103,23 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// Streams device shell output line by line; <paramref name="onLine"/> returning <c>false</c> stops early.
     /// <para>逐行流式读取设备 shell 输出；<paramref name="onLine"/> 返回 <c>false</c> 时提前停止。</para>
     /// </summary>
+    /// <param name="command">The shell command string sent as <c>shell:</c> plus this text.
+    /// <para>以 <c>shell:</c> 前缀加上该文本发送的 shell 命令字符串。</para></param>
+    /// <param name="onLine">Invoked once per decoded line; returning <c>false</c> stops the stream.
+    /// <para>每解码一行调用一次；返回 <c>false</c> 即停止流式读取。</para></param>
+    /// <param name="cancellationToken">Checked before each read; a read interrupted by an
+    /// <see cref="IOException"/> after cancellation ends the loop instead of throwing.
+    /// <para>每次读取前检查；取消后以 <see cref="IOException"/> 形式结束的读取会退出循环而不抛出。</para></param>
+    /// <returns>A task that completes when the stream ends or <paramref name="onLine"/>
+    /// returned <c>false</c>. <para>当流结束或 <paramref name="onLine"/> 返回 <c>false</c> 时完成的任务。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="command"/> is blank.
+    /// <para><paramref name="command"/> 为空。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="onLine"/> is <c>null</c>.
+    /// <para><paramref name="onLine"/> 为 <c>null</c>。</para></exception>
+    /// <exception cref="IOException">The adb server reported FAIL for the transport or service request.
+    /// <para>adb server 对传输或服务请求返回 FAIL。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public async Task StreamShellAsync(string command, Func<string, bool> onLine, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
@@ -90,14 +147,42 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         if (pending.Length > 0) onLine(pending);
     }
 
-    /// <summary>Stops a local adb server over its control socket. Only a listening endpoint is contacted.</summary>
+    /// <summary>
+    /// Stops a local adb server over its control socket. Only a listening endpoint is contacted.
+    /// <para>通过控制套接字停止本地 adb server。只会联系处于监听状态的端点。</para>
+    /// </summary>
+    /// <param name="host">The adb server host. <para>adb server 主机。</para></param>
+    /// <param name="port">The adb server TCP port. <para>adb server 的 TCP 端口。</para></param>
+    /// <param name="cancellationToken">Cancels the connect and the <c>host:kill</c> exchange.
+    /// <para>取消连接与 <c>host:kill</c> 交互。</para></param>
+    /// <returns>A task that completes once the server accepted the <c>host:kill</c> request.
+    /// <para>server 接受 <c>host:kill</c> 请求后完成的任务。</para></returns>
+    /// <exception cref="IOException">The server reported FAIL or sent an invalid status.
+    /// <para>server 返回 FAIL 或发送了非法状态。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled before completion.
+    /// <para>令牌在完成前被取消。</para></exception>
     public static async Task KillAsync(string host, int port, CancellationToken cancellationToken = default)
     {
         using var stream = await OpenHostStreamAsync(host, port, cancellationToken).ConfigureAwait(false);
         await RequestAsync(stream, "host:kill", cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Disconnects one network target from the local adb server.</summary>
+    /// <summary>
+    /// Disconnects one network target from the local adb server.
+    /// <para>将单个网络目标从本地 adb server 断开。</para>
+    /// </summary>
+    /// <param name="serial">The <c>host:port</c> connect key of the target to disconnect.
+    /// <para>待断开目标的 <c>host:port</c> 连接标识。</para></param>
+    /// <param name="host">The adb server host. <para>adb server 主机。</para></param>
+    /// <param name="port">The adb server TCP port. <para>adb server 的 TCP 端口。</para></param>
+    /// <param name="cancellationToken">Cancels the connect and the <c>host:disconnect:</c> exchange.
+    /// <para>取消连接与 <c>host:disconnect:</c> 交互。</para></param>
+    /// <returns>A task that completes once the server accepted the disconnect request.
+    /// <para>server 接受断开请求后完成的任务。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="serial"/> is blank.
+    /// <para><paramref name="serial"/> 为空。</para></exception>
+    /// <exception cref="IOException">The server reported FAIL or sent an invalid status.
+    /// <para>server 返回 FAIL 或发送了非法状态。</para></exception>
     public static async Task DisconnectAsync(string serial, string host, int port, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serial);
@@ -150,7 +235,14 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         throw new IOException("ADB server: " + Encoding.UTF8.GetString(message));
     }
 
-    /// <summary>Checks the selected target without opening a device service.</summary>
+    /// <summary>
+    /// Checks the selected target without opening a device service.
+    /// <para>检查所选目标，但不打开设备服务。</para>
+    /// </summary>
+    /// <exception cref="ArgumentException">The <c>serial</c> of this instance is blank.
+    /// <para>本实例的 <c>serial</c> 为空。</para></exception>
+    /// <exception cref="IOException">The server rejected the transport request or the connection failed.
+    /// <para>server 拒绝传输请求或连接失败。</para></exception>
     public void ValidateTarget()
     {
         using var stream = OpenTransport();
@@ -173,7 +265,20 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         catch { client.Dispose(); throw; }
     }
 
-    /// <summary>Pushes a local file using the ADB sync protocol and checks the device's final status.</summary>
+    /// <summary>
+    /// Pushes a local file using the ADB sync protocol and checks the device's final status.
+    /// The remote path is sent with mode bits 0644 and the DONE marker carries the current UTC time.
+    /// <para>使用 ADB sync 协议推送本地文件并检查设备的最终状态。远端路径按模式位 0644 发送，
+    /// DONE 标记携带当前 UTC 时间。</para>
+    /// </summary>
+    /// <param name="localPath">Path of the existing local file to upload.
+    /// <para>待上传的现有本地文件路径。</para></param>
+    /// <param name="remotePath">Destination path on the device, sent verbatim as UTF-8.
+    /// <para>设备上的目标路径，按 UTF-8 原样发送。</para></param>
+    /// <exception cref="FileNotFoundException">The local file does not exist.
+    /// <para>本地文件不存在。</para></exception>
+    /// <exception cref="IOException">The device reported FAIL for the sync operation.
+    /// <para>设备对该 sync 操作返回 FAIL。</para></exception>
     public void Push(string localPath, string remotePath)
     {
         using Stream stream = Open("sync:");

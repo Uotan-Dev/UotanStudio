@@ -8,11 +8,6 @@ using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Writing;
 
 namespace UotanStudio.Comm.Protocols.Fastboot.Images;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LP 模型类型现在直接使用 Firmware.Lp 中的实现，消除 Comm 侧的重复定义。
-// LP model types now delegate directly to Firmware.Lp, eliminating duplicate definitions in Comm.
-// ─────────────────────────────────────────────────────────────────────────────
-
 /// <summary>
 /// Parsed <c>LpMetadataGeometry</c> from a super partition image (magic "gDla").
 /// <para>从 super 分区镜像解析的 <c>LpMetadataGeometry</c>（魔数 "gDla"）。</para>
@@ -89,12 +84,6 @@ internal sealed class LpGeometry
         var checksumValid = false;
         if (structSize == StructSizeBytes)
         {
-            // liblp hashes the first sizeof(lp_metadata_geometry) bytes of the struct
-            // (magic + struct_size + the still zeroed checksum field + remaining fields)
-            // and stores the result in the checksum field. Matches AOSP liblp and
-            // Firmware's MetadataWriter/Reader.
-            // liblp 对结构前 sizeof(lp_metadata_geometry) 字节求哈希并存入校验和字段。
-            // 与 AOSP liblp 及 Firmware 的 MetadataWriter/Reader 一致。
             var checksumInput = new byte[StructSizeBytes];
             s[..StructSizeBytes].CopyTo(checksumInput);
             Array.Clear(checksumInput, 8, 32);

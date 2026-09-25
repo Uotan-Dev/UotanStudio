@@ -14,7 +14,7 @@ internal static unsafe partial class Lz4DestinationCodec
         byte* source,
         byte* dest,
         int inputSize,
-        int* inputConsumed, /* only written when outputDirective == fillOutput */
+        int* inputConsumed,
         int maxOutputSize,
         limitedOutput_directive outputDirective,
         tableType_t tableType,
@@ -47,8 +47,6 @@ internal static unsafe partial class Lz4DestinationCodec
         byte* mflimitPlusOne = iend - MFLIMIT + 1;
         byte* matchlimit = iend - LASTLITERALS;
 
-        /* the dictCtx currentOffset is indexed on the start of the dictionary,
-         * while a dictionary in the current context precedes the currentOffset */
         byte* dictBase = (dictDirective == dict_directive.usingDictCtx) ?
             dictionary + dictSize - dictCtx->currentOffset :
             dictionary + dictSize - startIndex;
@@ -75,11 +73,8 @@ internal static unsafe partial class Lz4DestinationCodec
         lowLimit = (byte*)source
             - (dictDirective == dict_directive.withPrefix64k ? dictSize : 0);
 
-        /* Update context state */
         if (dictDirective == dict_directive.usingDictCtx)
         {
-            /* Subsequent linked blocks can't use the dictionary. */
-            /* Instead, they use the block we just compressed. */
             cctx->dictCtx = null;
             cctx->dictSize = (uint)inputSize;
         }
@@ -93,19 +88,16 @@ internal static unsafe partial class Lz4DestinationCodec
 
         if (inputSize < LZ4_minLength) goto _last_literals;
 
-        /* First Byte */
         LZ4_putPosition(ip, cctx->hashTable, tableType, @base);
         ip++;
         forwardH = LZ4_hashPosition(ip, tableType);
 
-        /* Main Loop */
         for (; ; )
         {
             byte* match;
             byte* token;
             byte* filledIp;
 
-            /* Find a match */
             if (tableType == tableType_t.byPtr)
             {
                 byte* forwardIp = ip;
@@ -130,7 +122,6 @@ internal static unsafe partial class Lz4DestinationCodec
             }
             else
             {
-                /* byU32, byU16 */
 
                 byte* forwardIp = ip;
                 int step = 1;
@@ -249,26 +240,16 @@ internal static unsafe partial class Lz4DestinationCodec
             }
 
         _next_match:
-            /* at this stage, the following variables must be correctly set :
-             * - ip : at start of LZ operation
-             * - match : at start of previous pattern occurence; can be within current prefix, or within extDict
-             * - offset : if maybe_ext_memSegment==1 (constant)
-             * - lowLimit : must be == dictionary to mean "match is within extDict"; must be == source otherwise
-             * - token and *token : position to write 4-bits for match length; higher 4-bits for literal length supposed already written
-             */
 
             if ((outputDirective == limitedOutput_directive.fillOutput) &&
                 (op + 2 + 1 + MFLIMIT - MINMATCH > olimit))
             {
-                /* the match was too close to the end, rewind and go to last literals */
                 op = token;
                 goto _last_literals;
             }
 
-            /* Encode Offset */
             if (maybe_extMem)
             {
-                /* static test */
                 Assert(offset <= LZ4_DISTANCE_MAX && offset > 0);
                 Mem.Poke2(op, (ushort)offset);
                 op += 2;
@@ -280,13 +261,12 @@ internal static unsafe partial class Lz4DestinationCodec
                 op += 2;
             }
 
-            /* Encode MatchLength */
             {
                 uint matchCode;
 
                 if ((dictDirective == dict_directive.usingExtDict
                         || dictDirective == dict_directive.usingDictCtx)
-                    && (lowLimit == dictionary) /* match within extDict */)
+                    && (lowLimit == dictionary))
                 {
                     byte* limit = ip + (dictEnd - match);
                     Assert(dictEnd > match);
@@ -311,7 +291,6 @@ internal static unsafe partial class Lz4DestinationCodec
                 {
                     if (outputDirective == limitedOutput_directive.fillOutput)
                     {
-                        /* Match description too long : reduce it */
                         uint newMatchCode =
                             15 - 1 + ((uint)(olimit - op) - 1 - LASTLITERALS) * 255;
                         ip -= matchCode - newMatchCode;
@@ -319,11 +298,6 @@ internal static unsafe partial class Lz4DestinationCodec
                         matchCode = newMatchCode;
                         if ((ip <= filledIp))
                         {
-                            /* We have already filled up to filledIp so if ip ends up less than filledIp
-                             * we have positions in the hash table beyond the current position. This is
-                             * a problem if we reuse the hash table. So we have to remove these positions
-                             * from the hash table.
-                             */
                             byte* ptr;
                             for (ptr = ip; ptr <= filledIp; ++ptr)
                             {
@@ -341,7 +315,7 @@ internal static unsafe partial class Lz4DestinationCodec
 
                 if (matchCode >= ML_MASK)
                 {
-                    *token += (byte)ML_MASK; //!!!
+                    *token += (byte)ML_MASK;
                     matchCode -= ML_MASK;
                     Mem.Poke4(op, 0xFFFFFFFF);
                     while (matchCode >= 4 * 255)
@@ -357,20 +331,16 @@ internal static unsafe partial class Lz4DestinationCodec
                 else
                     *token += (byte)(matchCode);
             }
-            /* Ensure we have enough space for the last literals. */
             Assert(
                 !(outputDirective == limitedOutput_directive.fillOutput
                     && op + 1 + LASTLITERALS > olimit));
 
             anchor = ip;
 
-            /* Test end of chunk */
             if (ip >= mflimitPlusOne) break;
 
-            /* Fill table */
             LZ4_putPosition(ip - 2, cctx->hashTable, tableType, @base);
 
-            /* Test next position */
             if (tableType == tableType_t.byPtr)
             {
                 match = LZ4_getPosition(ip, cctx->hashTable, tableType, @base);
@@ -384,7 +354,6 @@ internal static unsafe partial class Lz4DestinationCodec
             }
             else
             {
-                /* byU32, byU16 */
 
                 uint h = LZ4_hashPosition(ip, tableType);
                 uint current = (uint)(ip - @base);

@@ -2,11 +2,6 @@ using System.Text;
 using UotanStudio.Firmware.MagicGen;
 using UotanStudio.Firmware.SharedKernel.Magic;
 
-// Build-time code generator: converts the vendored upstream file(1) magic(5) corpus into a compiled
-// C# rule table consumed by UotanStudio.Firmware's CompiledMagicEngine at runtime.
-// Usage: dotnet run --project UotanStudio.Firmware.MagicGen [corpusDir] [outputCs]
-//        dotnet run --project UotanStudio.Firmware.MagicGen -- --smoke
-
 if (args.Length > 0 && args[0] == "--smoke")
 {
     return SmokeTest();
@@ -88,7 +83,7 @@ sb.AppendLine("    private const int BlobByteLength = " + blob.Length + ";");
 sb.AppendLine();
 sb.AppendLine("    private static readonly string[] Parts =");
 sb.AppendLine("    {");
-const int chunk = 16000; // multiple of 4 → each decodes independently
+const int chunk = 16000;
 for (int i = 0; i < b64.Length; i += chunk)
 {
     int len = Math.Min(chunk, b64.Length - i);

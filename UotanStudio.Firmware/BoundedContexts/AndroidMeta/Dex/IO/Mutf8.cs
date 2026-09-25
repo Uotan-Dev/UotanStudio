@@ -2,12 +2,26 @@ using System.Text;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.IO;
 
+/// <summary>
+/// Converts between .NET strings and the DEX modified UTF-8 (MUTF-8) encoding, where U+0000 is written as
+/// the two-byte form <c>0xC0 0x80</c> and each UTF-16 surrogate encodes independently in three bytes.
+/// <para>在 .NET 字符串与 DEX 修正 UTF-8（MUTF-8）编码之间转换：U+0000 编码为双字节 <c>0xC0 0x80</c>，
+/// 每个 UTF-16 代理项独立编码为三字节。</para>
+/// </summary>
 public static class Mutf8
 {
     /// <summary>
     /// Encodes a .NET string into a MUTF-8 byte sequence (without the terminating NUL).
     /// <para>把 .NET 字符串编码为 MUTF-8 字节序列（不含终止 NUL）。</para>
     /// </summary>
+    /// <param name="value">
+    /// String to encode; embedded U+0000 characters become <c>0xC0 0x80</c>.
+    /// <para>待编码字符串；内嵌的 U+0000 字符编码为 <c>0xC0 0x80</c>。</para>
+    /// </param>
+    /// <returns>The freshly allocated encoded byte array.
+    /// <para>新分配的编码字节数组。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.
+    /// <para><paramref name="value"/> 为 <see langword="null"/>。</para></exception>
     public static byte[] Encode(string value)
     {
         ArgumentNullException.ThrowIfNull(value);
@@ -45,6 +59,20 @@ public static class Mutf8
     /// Decodes a MUTF-8 byte sequence into a .NET string (byteCount bytes, no trailing NUL).
     /// <para>把 MUTF-8 字节序列解码为 .NET 字符串（字节数 byteCount，不含终止 NUL）。</para>
     /// </summary>
+    /// <param name="data">
+    /// Source bytes; at least <paramref name="byteCount"/> bytes must be readable from its start.
+    /// <para>源字节；起始处必须至少可读 <paramref name="byteCount"/> 字节。</para>
+    /// </param>
+    /// <param name="byteCount">
+    /// Number of bytes to decode; <c>0</c> yields <see cref="string.Empty"/>.
+    /// <para>要解码的字节数；<c>0</c> 返回 <see cref="string.Empty"/>。</para>
+    /// </param>
+    /// <returns>
+    /// The decoded string; a lead byte that cannot start a valid sequence contributes one <c>U+FFFD</c>
+    /// and skips three further bytes, and a sequence truncated at the range end reads missing bytes as zero.
+    /// <para>解码得到的字符串；无法起始有效序列的首字节输出一个 <c>U+FFFD</c> 并跳过后续三个字节，
+    /// 在范围末尾被截断的序列将缺失字节按零读取。</para>
+    /// </returns>
     public static string Decode(ReadOnlySpan<byte> data, int byteCount)
     {
         if (byteCount == 0) return string.Empty;
@@ -55,6 +83,24 @@ public static class Mutf8
     /// Decodes a MUTF-8 byte sequence from a byte[] slice into a .NET string (main parsing path; single allocation, no StringBuilder).
     /// <para>把 byte[] 切片中的 MUTF-8 字节序列解码为 .NET 字符串（解析主路径，一次分配，无 StringBuilder）。</para>
     /// </summary>
+    /// <param name="data">
+    /// Source array; <paramref name="start"/> and <paramref name="byteCount"/> must select a slice inside it.
+    /// <para>源数组；<paramref name="start"/> 与 <paramref name="byteCount"/> 必须选出其内部的切片。</para>
+    /// </param>
+    /// <param name="start">Index of the first encoded byte. <para>编码首字节在数组中的索引。</para></param>
+    /// <param name="byteCount">
+    /// Number of bytes to decode; <c>0</c> yields <see cref="string.Empty"/>
+    /// without consulting <paramref name="start"/>.
+    /// <para>要解码的字节数；<c>0</c> 时不读取 <paramref name="start"/>，直接返回 <see cref="string.Empty"/>。</para>
+    /// </param>
+    /// <returns>
+    /// The decoded string; a lead byte that cannot start a valid sequence contributes one <c>U+FFFD</c>
+    /// and skips three further bytes, and a sequence truncated at the range end reads missing bytes as zero.
+    /// <para>解码得到的字符串；无法起始有效序列的首字节输出一个 <c>U+FFFD</c> 并跳过后续三个字节，
+    /// 在范围末尾被截断的序列将缺失字节按零读取。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
     public static string Decode(byte[] data, int start, int byteCount)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -183,6 +229,11 @@ public static class Mutf8
     /// Computes the MUTF-8 encoded byte length of a string (without the terminating NUL).
     /// <para>计算字符串的 MUTF-8 编码字节长度（不含终止 NUL）。</para>
     /// </summary>
+    /// <param name="value">
+    /// String to measure; U+0000 counts as two bytes and every other character as one to three bytes.
+    /// <para>待测量的字符串；U+0000 计两个字节，其余字符计一到三个字节。</para>
+    /// </param>
+    /// <returns>Encoded byte length. <para>编码后的字节长度。</para></returns>
     public static int EncodedLength(string value)
     {
         var length = 0;

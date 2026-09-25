@@ -6,42 +6,112 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 
+/// <summary>
+/// One inode listing produced by <see cref="ErofsParser"/>: path, size, inode number and decoded metadata.
+/// <para><see cref="ErofsParser"/> 输出的一条 inode 清单：路径、大小、inode 编号与已解析的元数据。</para>
+/// </summary>
+/// <param name="Path">
+/// Slash-separated path of the entry relative to the image root.
+/// <para>相对于镜像根目录、以 '/' 分隔的条目路径。</para>
+/// </param>
+/// <param name="Size">
+/// Content size in bytes recorded by the inode, before decompression.
+/// <para>inode 记录的字节大小（解压前的内容尺寸）。</para>
+/// </param>
+/// <param name="Nid">
+/// On-disk inode number; the METABOX flag bit is kept when the inode lives in the metabox.
+/// <para>磁盘 inode 编号；inode 位于 metabox 时保留 METABOX 标志位。</para>
+/// </param>
 public sealed record ErofsFileEntry(
     string Path,
     long Size,
     ulong Nid)
 {
+    /// <summary>EROFS device id (<c>i_u</c>) recorded by the source inode.
+    /// <para>源 inode 记录的 EROFS 设备 id（<c>i_u</c>）。</para></summary>
+    /// <value><c>0</c> for the primary device; other values index the device table of multi-device images.
+    /// <para>主设备为 <c>0</c>；其他值索引多设备镜像的设备表。</para></value>
     public uint DeviceId { get; init; }
 
+    /// <summary>Raw 16-bit POSIX mode (<c>i_mode</c>) from the inode, including the file-type bits.
+    /// <para>inode 中原始的 16 位 POSIX 模式（<c>i_mode</c>），含文件类型位。</para></summary>
+    /// <value>Stored verbatim; the <c>Is*</c> properties decode its type field against the mode mask.
+    /// <para>按磁盘原值存储；各 <c>Is*</c> 属性用类型掩码解码其类型字段。</para></value>
     public ushort Mode { get; init; }
 
+    /// <summary>Owning user id of the file. <para>文件的属主用户 id。</para></summary>
+    /// <value>Raw <c>i_uid</c> value; no mapping to host accounts is applied.
+    /// <para>原始 <c>i_uid</c> 值；不映射到宿主机账户。</para></value>
     public uint Uid { get; init; }
 
+    /// <summary>Owning group id of the file. <para>文件的属主用户组 id。</para></summary>
+    /// <value>Raw <c>i_gid</c> value; no mapping to host groups is applied.
+    /// <para>原始 <c>i_gid</c> 值；不映射到宿主机用户组。</para></value>
     public uint Gid { get; init; }
 
+    /// <summary>Hard-link count (<c>i_nlink</c>) stored by the inode.
+    /// <para>inode 存储的硬链接数（<c>i_nlink</c>）。</para></summary>
+    /// <value>Read verbatim from the inode's nlink field.
+    /// <para>逐字取自 inode 的 nlink 字段。</para></value>
     public ulong LinkCount { get; init; }
 
+    /// <summary>Modification time in seconds since the Unix epoch, taken from the inode timestamp field.
+    /// <para>自 Unix 纪元起的秒级修改时间，取自 inode 时间戳字段。</para></summary>
+    /// <value>Paired with <see cref="MTimeNanoseconds"/> for the sub-second part.
+    /// <para>与 <see cref="MTimeNanoseconds"/> 组合表示秒以下部分。</para></value>
     public ulong MTime { get; init; }
 
-    /// <summary>Nanosecond component of the inode modification time.</summary>
+    /// <summary>Nanosecond component of the inode modification time.
+    /// <para>inode 修改时间的纳秒分量。</para></summary>
+    /// <value>Read verbatim from the inode; combine with <see cref="MTime"/>.
+    /// <para>逐字取自 inode；与 <see cref="MTime"/> 组合使用。</para></value>
     public uint MTimeNanoseconds { get; init; }
 
+    /// <summary>Mode type bits select symbolic link. <para>模式类型位选中符号链接。</para></summary>
+    /// <value><see langword="true"/> when this entry is a symlink.
+    /// <para>该条目为符号链接时为 <see langword="true"/>。</para></value>
     public bool IsSymlink => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeSymlink;
 
+    /// <summary>Mode type bits select a directory. <para>模式类型位选中目录。</para></summary>
+    /// <value><see langword="true"/> when this entry is a directory.
+    /// <para>该条目为目录时为 <see langword="true"/>。</para></value>
     public bool IsDirectory => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeDirectory;
 
+    /// <summary>Mode type bits select a character device. <para>模式类型位选中字符设备。</para></summary>
+    /// <value><see langword="true"/> for character device entries.
+    /// <para>条目为字符设备时为 <see langword="true"/>。</para></value>
     public bool IsCharacterDevice => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeCharacterDevice;
 
+    /// <summary>Mode type bits select a block device. <para>模式类型位选中块设备。</para></summary>
+    /// <value><see langword="true"/> for block device entries. <para>条目为块设备时为 <see langword="true"/>。</para></value>
     public bool IsBlockDevice => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeBlockDevice;
 
+    /// <summary>Mode type bits select a FIFO. <para>模式类型位选中 FIFO。</para></summary>
+    /// <value><see langword="true"/> for FIFO entries. <para>条目为 FIFO 时为 <see langword="true"/>。</para></value>
     public bool IsFifo => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeFifo;
 
+    /// <summary>Mode type bits select a socket. <para>模式类型位选中套接字。</para></summary>
+    /// <value><see langword="true"/> for socket entries. <para>条目为套接字时为 <see langword="true"/>。</para></value>
     public bool IsSocket => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeSocket;
 
+    /// <summary>True for the four device/FIFO/socket types that carry no data content.
+    /// <para>对无数据内容的设备、FIFO、套接字四类为真。</para></summary>
+    /// <value><see langword="true"/> when the entry is a character device, block device, FIFO or socket.
+    /// <para>条目为字符设备、块设备、FIFO 或套接字时为 <see langword="true"/>。</para></value>
     public bool IsSpecialFile => IsCharacterDevice || IsBlockDevice || IsFifo || IsSocket;
 
+    /// <summary>Decoded UTF-8 target content of the symlink.
+    /// <para>符号链接目标内容的 UTF-8 解码结果。</para></summary>
+    /// <value><see langword="null"/> for non-symlink entries, when the stored target is empty, or when
+    /// reading it failed while complete-metadata enforcement is off.
+    /// <para>非符号链接条目、目标内容为空，或未启用完整元数据校验时读取失败，均为 <see langword="null"/>。</para></value>
     public string? SymlinkTarget { get; init; }
 
+    /// <summary>Resolved inline and shared extended attributes of the inode.
+    /// <para>inode 已解析的内联与共享扩展属性。</para></summary>
+    /// <value><see langword="null"/> for regular files without attributes; directory entries carry the
+    /// parsed list, which may be empty.
+    /// <para>无属性的普通文件为 <see langword="null"/>；目录条目携带解析结果列表，可能为空。</para></value>
     public IReadOnlyList<ErofsXattrEntry>? Xattrs { get; init; }
 }
 
@@ -79,21 +149,65 @@ public sealed partial class ErofsParser : IDisposable
     /// Creates a parser from image bytes (the array is wrapped in a memory stream without copying; validates the magic at offset 1024).
     /// <para>从镜像字节创建解析器（字节数组直接包装为内存流，不复制；校验偏移 1024 处的魔数）。</para>
     /// </summary>
+    /// <param name="image">
+    /// Complete EROFS image bytes; the parser reads through them for its whole lifetime.
+    /// <para>完整的 EROFS 镜像字节；解析器整个生命周期都经由它们读取。</para>
+    /// </param>
+    /// <exception cref="ArgumentNullException"><paramref name="image"/> is null.
+    /// <para><paramref name="image"/> 为 null。</para></exception>
+    /// <exception cref="FormatException">The superblock magic, geometry, features or checksum is invalid.
+    /// <para>超级块魔数、几何信息、特性或校验和非法。</para></exception>
+    /// <exception cref="InvalidDataException">A metadata read exceeds the image bounds or the device table mismatches.
+    /// <para>元数据读取超出镜像边界，或设备表不一致。</para></exception>
     public ErofsParser(byte[] image)
         : this(CreateMemorySource(image), ownsStream: false)
     {
     }
 
     /// <summary>
-    /// Creates a parser from a stream.
-    /// <para>从流创建解析器。</para>
+    /// Creates a parser from a stream. The current position is treated as the image base; the stream
+    /// is never closed, and a non-seekable stream is staged into a temporary file owned by the parser.
+    /// <para>从流创建解析器。流的当前 position 被视为镜像基址；解析器不关闭该流，不可寻址的流会
+    /// 转存到解析器持有的临时文件。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable image stream covering the full EROFS image from its current position.
+    /// <para>从当前 position 起覆盖完整 EROFS 镜像的可读流。</para>
+    /// </param>
+    /// <exception cref="ArgumentException"><paramref name="stream"/> is not readable.
+    /// <para><paramref name="stream"/> 不可读。</para></exception>
+    /// <exception cref="InvalidDataException">The stream position exceeds its length.
+    /// <para>流的 position 超出其长度。</para></exception>
+    /// <exception cref="FormatException">The superblock magic, geometry, features or checksum is invalid.
+    /// <para>超级块魔数、几何信息、特性或校验和非法。</para></exception>
     public ErofsParser(Stream stream)
         : this(stream, ownsStream: false)
     {
     }
 
-    /// <summary>Reads a seekable image with explicit directory-entry/path budgets and cancellable reads; leaves the stream open.</summary>
+    /// <summary>Reads a seekable image with explicit directory-entry/path budgets and cancellable reads; leaves the stream open.
+    /// <para>读取可寻址镜像，显式限定目录条目数与路径字符预算，读取可取消；不关闭传入的流。</para></summary>
+    /// <param name="stream">Readable, seekable stream positioned at the image base.
+    /// <para>定位在镜像基址处的可读写入流。</para></param>
+    /// <param name="maximumEntries">Positive budget for entries visited during directory enumeration.
+    /// <para>目录枚举中访问条目数的正整数预算。</para></param>
+    /// <param name="maximumPathCharacters">Positive budget for the summed length of enumerated paths.
+    /// <para>枚举路径总长度的正整数预算。</para></param>
+    /// <param name="cancellationToken">Token observed by metadata reads and directory walks.
+    /// <para>元数据读取与目录遍历所观察的取消令牌。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="stream"/> is null.
+    /// <para><paramref name="stream"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="stream"/> cannot be read or seeked.
+    /// <para><paramref name="stream"/> 不可读或不可寻址。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumEntries"/> or
+    /// <paramref name="maximumPathCharacters"/> is not positive.
+    /// <para>预算参数不是正数。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was already signalled.
+    /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
+    /// <exception cref="FormatException">The superblock magic, geometry, features or checksum is invalid.
+    /// <para>超级块魔数、几何信息、特性或校验和非法。</para></exception>
+    /// <exception cref="InvalidDataException">A metadata read exceeds the image bounds or the device table mismatches.
+    /// <para>元数据读取超出镜像边界，或设备表不一致。</para></exception>
     public ErofsParser(Stream stream, int maximumEntries, long maximumPathCharacters, CancellationToken cancellationToken)
         : this(RequireSeekable(stream), false, maximumEntries, maximumPathCharacters, cancellationToken)
     {
@@ -110,6 +224,16 @@ public sealed partial class ErofsParser : IDisposable
     /// Creates a parser from a file path (opens and owns a FileStream; disposing the parser closes the file).
     /// <para>从文件路径创建解析器（内部打开并持有 FileStream；释放解析器即关闭文件）。</para>
     /// </summary>
+    /// <param name="filePath">Existing path to an EROFS image file, opened for shared reading.
+    /// <para>已存在的 EROFS 镜像文件路径，以共享读方式打开。</para></param>
+    /// <exception cref="ArgumentException">The path is null, empty or whitespace.
+    /// <para>路径为 null、空字符串或仅空白。</para></exception>
+    /// <exception cref="FileNotFoundException">No file exists at the path.
+    /// <para>该路径上不存在文件。</para></exception>
+    /// <exception cref="FormatException">The superblock magic, geometry, features or checksum is invalid.
+    /// <para>超级块魔数、几何信息、特性或校验和非法。</para></exception>
+    /// <exception cref="InvalidDataException">A metadata read exceeds the image bounds.
+    /// <para>元数据读取超出镜像边界。</para></exception>
     public ErofsParser(string filePath)
         : this(OpenFileSource(filePath), ownsStream: true)
     {
@@ -120,11 +244,59 @@ public sealed partial class ErofsParser : IDisposable
     /// <returns>A parser that leaves the supplied stream open. <para>不会关闭传入流的解析器。</para></returns>
     public static ErofsParser OpenFlatDevice(Stream stream) => new(stream) { _flatDevice = true };
 
+    /// <summary>
+    /// Creates a parser for a multi-device image from one stream per device id, with unlimited budgets.
+    /// <para>为多设备镜像创建解析器，每个设备 id 对应一条流，预算不受限。</para>
+    /// Index 0 is the primary image; the parser disposes the extra device streams when disposed and
+    /// leaves the primary stream open.
+    /// <para>索引 0 为主镜像；释放解析器时二级设备流随之关闭，主流保持打开。</para>
+    /// </summary>
+    /// <param name="deviceStreams">
+    /// Device streams indexed by device id; the count must equal the extra-device count in the
+    /// superblock plus one. A stream is addressed by its own position as device base.
+    /// <para>按设备 id 索引的流；数量必须等于超级块声明的额外设备数加一。每条流以其自身位置作为设备基址。</para>
+    /// </param>
+    /// <exception cref="ArgumentNullException"><paramref name="deviceStreams"/> or one of its elements is null.
+    /// <para><paramref name="deviceStreams"/> 或其某个元素为 null。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="deviceStreams"/> is empty.
+    /// <para><paramref name="deviceStreams"/> 为空。</para></exception>
+    /// <exception cref="InvalidDataException">The stream count differs from the on-disk device table.
+    /// <para>流数量与磁盘设备表不一致。</para></exception>
     public ErofsParser(IReadOnlyList<Stream> deviceStreams)
         : this(deviceStreams, int.MaxValue, long.MaxValue, default)
     {
     }
 
+    /// <summary>
+    /// Creates a budgeted, cancellable parser for a multi-device image from one stream per device id.
+    /// <para>为多设备镜像创建带预算、可取消的解析器，每个设备 id 对应一条流。</para>
+    /// Index 0 is the primary image; the parser disposes the extra device streams when disposed and
+    /// leaves the primary stream open.
+    /// <para>索引 0 为主镜像；释放解析器时二级设备流随之关闭，主流保持打开。</para>
+    /// </summary>
+    /// <param name="deviceStreams">
+    /// Device streams indexed by device id; the count must equal the extra-device count in the
+    /// superblock plus one.
+    /// <para>按设备 id 索引的流；数量必须等于超级块声明的额外设备数加一。</para>
+    /// </param>
+    /// <param name="maximumEntries">Positive budget for entries visited during directory enumeration.
+    /// <para>目录枚举中访问条目数的正整数预算。</para></param>
+    /// <param name="maximumPathCharacters">Positive budget for the summed length of enumerated paths.
+    /// <para>枚举路径总长度的正整数预算。</para></param>
+    /// <param name="cancellationToken">Token observed by metadata reads and directory walks.
+    /// <para>元数据读取与目录遍历所观察的取消令牌。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="deviceStreams"/> or one of its elements is null.
+    /// <para><paramref name="deviceStreams"/> 或其某个元素为 null。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="deviceStreams"/> is empty or the primary
+    /// stream is not readable.
+    /// <para><paramref name="deviceStreams"/> 为空，或主流不可读。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumEntries"/> or
+    /// <paramref name="maximumPathCharacters"/> is not positive.
+    /// <para>预算参数不是正数。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was already signalled.
+    /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
+    /// <exception cref="InvalidDataException">The stream count differs from the on-disk device table.
+    /// <para>流数量与磁盘设备表不一致。</para></exception>
     public ErofsParser(IReadOnlyList<Stream> deviceStreams, int maximumEntries,
         long maximumPathCharacters, CancellationToken cancellationToken)
         : this(ValidateDeviceStreams(deviceStreams)[0], ownsStream: false,
@@ -206,7 +378,6 @@ public sealed partial class ErofsParser : IDisposable
                 throw new FormatException($"Image too small to hold an EROFS superblock: {_imageSize} bytes.");
             }
 
-
             var sbCore = ReadBytes(ErofsSuperblock.SuperblockOffset, ErofsSuperblock.SuperblockSize, "Superblock");
             var preliminarySuperblock = ErofsSuperblock.FromBytes(sbCore);
             var sbSlotSize = ErofsSuperblock.SuperblockSize
@@ -218,7 +389,6 @@ public sealed partial class ErofsParser : IDisposable
                     "Superblock"))
                 : preliminarySuperblock;
 
-
             if (_superblock.BlockSizeBits is < 9 or > 16)
             {
                 throw new FormatException(
@@ -227,8 +397,6 @@ public sealed partial class ErofsParser : IDisposable
 
             if (_superblock.HasCompatChecksum)
             {
-                // fs/erofs/super.c erofs_superblock_csum_verify: crc32c(0x5045B54A) over [1024+8, blockSize),
-                // skipping the magic and checksum fields. Mirror the builder's capture window.
                 var windowLength = (int)Math.Min(
                     _superblock.BlockSize > ErofsSuperblock.SuperblockOffset
                         ? _superblock.BlockSize - ErofsSuperblock.SuperblockOffset
@@ -242,7 +410,6 @@ public sealed partial class ErofsParser : IDisposable
                         $"EROFS superblock checksum mismatch: stored 0x{_superblock.Checksum:X8}, computed 0x{computed:X8}.");
                 }
             }
-
 
             var unknownIncompat = _superblock.FeatureIncompat & ~ErofsSuperblock.AllIncompat;
             if (unknownIncompat != 0)
@@ -262,7 +429,6 @@ public sealed partial class ErofsParser : IDisposable
                 _deviceStreams = new Stream[_superblock.ExtraDevices + 1];
                 _deviceStreams[0] = _stream;
                 _deviceSlots = new ErofsDeviceSlot[_superblock.ExtraDevices + 1];
-
 
                 _deviceSlots[0] = new ErofsDeviceSlot { Blocks = _superblock.BlockCount64, UniAddr = 0 };
                 var devTableOffset = (long)_superblock.DevtSlotoff * ErofsDeviceSlot.Size;
@@ -292,36 +458,82 @@ public sealed partial class ErofsParser : IDisposable
     /// Checks whether the image bytes hold the erofs magic.
     /// <para>判断镜像字节是否包含 erofs 魔数。</para>
     /// </summary>
+    /// <param name="image">Candidate image bytes; null reports false.
+    /// <para>候选镜像字节；null 返回 false。</para></param>
+    /// <returns><see langword="true"/> when the erofs magic is present; otherwise <see langword="false"/>.
+    /// <para>存在 erofs 魔数时返回 <see langword="true"/>，否则返回 <see langword="false"/>。</para></returns>
     public static bool CanHandle(byte[] image) => image is not null && ErofsSuperblock.HasMagic(image);
 
     internal byte[] SourceUuid => _superblock.Uuid;
     internal string SourceVolumeName => _superblock.VolumeName;
 
+    /// <summary>Logical block size decoded from the superblock shift.
+    /// <para>由超级块位移解码出的逻辑块大小。</para></summary>
+    /// <value>A power of two between 512 and 65536 bytes; the unit of every block address in the image.
+    /// <para>512 到 65536 字节之间的 2 的幂；镜像内所有块地址以此为基本单位。</para></value>
     public int BlockSize => _blockSize;
 
+    /// <summary>Total block count recorded by the superblock.
+    /// <para>超级块记录的总块数。</para></summary>
+    /// <value>The 64-bit on-disk count carried as <see cref="long"/>; multiply by
+    /// <see cref="BlockSize"/> for bytes.
+    /// <para>磁盘 64 位计数按 <see cref="long"/> 承载；乘以 <see cref="BlockSize"/> 得到字节数。</para></value>
     public long BlockCount => (long)_superblock.BlockCount64;
 
+    /// <summary>Image bytes visible to the parser.
+    /// <para>解析器可见的镜像字节数。</para></summary>
+    /// <value>From the base position given at construction (or the start of the staged temporary
+    /// copy) to the end of the source.
+    /// <para>从构造时给定的基址（或转存临时副本的起点）到源末尾。</para></value>
     public long ImageSize => _imageSize;
 
+    /// <summary>Number of allocated inodes reported by the superblock.
+    /// <para>超级块报告的已分配 inode 数量。</para></summary>
+    /// <value>The on-disk count carried as <see cref="long"/>.
+    /// <para>磁盘计数按 <see cref="long"/> 承载。</para></value>
     public long InodeCount => (long)_superblock.Inos;
 
+    /// <summary>Inode number of the root directory.
+    /// <para>根目录的 inode 编号。</para></summary>
+    /// <value>Starting nid of directory walks, taken from the 64-bit superblock field.
+    /// <para>目录遍历的起始 nid，取自超级块的 64 位字段。</para></value>
     public ulong RootNid => _superblock.RootNid64;
 
+    /// <summary>Volume name stored in the superblock.
+    /// <para>超级块中存储的卷名。</para></summary>
+    /// <value>The decoded label string as carried by the superblock.
+    /// <para>按超级块内容解码出的标签字符串。</para></value>
     public string VolumeName => _superblock.VolumeName;
 
     internal ErofsSuperblock Superblock => _superblock;
 
     /// <summary>
-    /// Walks the directory tree and returns the file listing (paths use '/').
-    /// <para>遍历目录树并返回文件清单（路径使用 '/' 分隔）。</para>
+    /// Walks the directory tree and returns every inode entry — the root, directories (including
+    /// empty ones) and files — with paths separated by '/'.
+    /// <para>遍历目录树并返回全部 inode 条目——根目录、目录（含空目录）与文件，路径以 '/' 分隔。</para>
     /// </summary>
-    /// <summary>Returns all inode entries, including the root and empty directories.</summary>
+    /// <returns>Directory entries in traversal order followed by the file listing.
+    /// <para>按遍历顺序的目录条目在前，文件清单在后。</para></returns>
+    /// <exception cref="OperationCanceledException">The parser's cancellation token was signalled.
+    /// <para>解析器的取消令牌已被触发。</para></exception>
+    /// <exception cref="InvalidDataException">The entry or path budget is exhausted or metadata is malformed.
+    /// <para>条目/路径预算耗尽或元数据非法。</para></exception>
     public IReadOnlyList<ErofsFileEntry> EnumerateEntries()
     {
         var files = EnumerateFiles();
         return [.. _directoryEntries, .. files];
     }
 
+    /// <summary>
+    /// Returns the flat listing of files, symlinks and special files (directories and the root excluded).
+    /// <para>返回文件、符号链接与特殊文件的扁平清单（不含目录与根条目）。</para>
+    /// </summary>
+    /// <returns>The cached file table; the first call walks the tree, later calls reuse the result.
+    /// <para>已缓存的文件表；首次调用遍历目录树，其后调用复用结果。</para></returns>
+    /// <exception cref="OperationCanceledException">The parser's cancellation token was signalled.
+    /// <para>解析器的取消令牌已被触发。</para></exception>
+    /// <exception cref="InvalidDataException">The entry or path budget is exhausted or metadata is malformed.
+    /// <para>条目/路径预算耗尽或元数据非法。</para></exception>
     public IReadOnlyList<ErofsFileEntry> EnumerateFiles()
     {
         _readCancellation.ThrowIfCancellationRequested();
@@ -333,6 +545,16 @@ public sealed partial class ErofsParser : IDisposable
     /// Reads a single file and returns its bytes.
     /// <para>读取单个文件内容并返回字节数组。</para>
     /// </summary>
+    /// <param name="path">Exact '/'-separated image path as reported by <see cref="EnumerateFiles"/>.
+    /// <para>与 <see cref="EnumerateFiles"/> 输出逐字一致的 '/' 分隔镜像路径。</para></param>
+    /// <returns>The complete decoded contents of the file.
+    /// <para>文件完整解码后的内容字节。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="path"/> is null.
+    /// <para><paramref name="path"/> 为 null。</para></exception>
+    /// <exception cref="FileNotFoundException">No file has that exact path.
+    /// <para>不存在与该路径逐字匹配的文件。</para></exception>
+    /// <exception cref="InvalidDataException">The file's metadata or data blocks are malformed.
+    /// <para>文件的元数据或数据块非法。</para></exception>
     public byte[] ReadFileBytes(string path)
     {
         using var buffer = new MemoryStream();
@@ -344,6 +566,17 @@ public sealed partial class ErofsParser : IDisposable
     /// Reads a single file into the output stream (plain data read directly, inline data read directly, compressed data decompressed pcluster by pcluster, chunk-based data assembled chunk by chunk).
     /// <para>读取单个文件内容到输出流（plain 直读，inline 直读，compressed 逐 pcluster 解压，chunk 逐块拼接）。</para>
     /// </summary>
+    /// <param name="path">Exact '/'-separated image path of the file.
+    /// <para>文件的 '/' 分隔镜像路径（逐字匹配）。</para></param>
+    /// <param name="outputStream">Stream receiving the decoded bytes; writing starts at its current
+    /// position and the stream is not closed.
+    /// <para>接收解码字节的流；从其当前位置开始写入且不被关闭。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="path"/> or <paramref name="outputStream"/> is null.
+    /// <para><paramref name="path"/> 或 <paramref name="outputStream"/> 为 null。</para></exception>
+    /// <exception cref="FileNotFoundException">No file has that exact path.
+    /// <para>不存在与该路径逐字匹配的文件。</para></exception>
+    /// <exception cref="InvalidDataException">The file's metadata or data blocks are malformed.
+    /// <para>文件的元数据或数据块非法。</para></exception>
     public void ReadFile(string path, Stream outputStream)
     {
         ArgumentNullException.ThrowIfNull(path);
@@ -365,18 +598,40 @@ public sealed partial class ErofsParser : IDisposable
     /// Extracts all files to the output directory.
     /// <para>将镜像中全部文件解包到输出目录。</para>
     /// </summary>
+    /// <param name="outputDirectory">Host directory receiving the tree; created when missing.
+    /// <para>接收目录树的宿主目录；缺失时自动创建。</para></param>
+    /// <param name="overwrite">When <see langword="false"/>, files already present on the host are skipped.
+    /// <para>为 <see langword="false"/> 时跳过宿主上已存在的文件。</para></param>
+    /// <param name="progress">Receives processed/total entry counts; may be null.
+    /// <para>接收已处理/总条目数；可为 null。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="outputDirectory"/> is null.
+    /// <para><paramref name="outputDirectory"/> 为 null。</para></exception>
     public void ExtractToDirectory(string outputDirectory, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
         => ExtractToDirectory(outputDirectory, null, CancellationToken.None, overwrite, progress);
 
-    /// <summary>Extracts with measured output bytes and cancellation, including writes within a large file.</summary>
+    /// <summary>Extracts with measured output bytes and cancellation, including writes within a large file.
+    /// <para>按字节计量并支持取消地解包，取消点覆盖大文件内部的写入。</para></summary>
+    /// <param name="outputDirectory">Host directory receiving the tree; created when missing.
+    /// <para>接收目录树的宿主目录；缺失时自动创建。</para></param>
+    /// <param name="byteProgress">Receives processed/total output bytes; symlink targets count their
+    /// UTF-8 length and special files contribute nothing. May be null.
+    /// <para>接收已处理/总输出字节；符号链接目标按 UTF-8 长度计，特殊文件不计入。可为 null。</para></param>
+    /// <param name="cancellationToken">Stops remaining entries and interrupts in-flight counted writes.
+    /// <para>中止剩余条目，并打断进行中的计量写入。</para></param>
+    /// <param name="overwrite">When <see langword="false"/>, files already present on the host are skipped.
+    /// <para>为 <see langword="false"/> 时跳过宿主上已存在的文件。</para></param>
+    /// <param name="progress">Receives processed/total entry counts; may be null.
+    /// <para>接收已处理/总条目数；可为 null。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="outputDirectory"/> is null.
+    /// <para><paramref name="outputDirectory"/> 为 null。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public void ExtractToDirectory(string outputDirectory, IProgress<(long Processed, long Total)>? byteProgress,
         CancellationToken cancellationToken, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(outputDirectory);
         Directory.CreateDirectory(outputDirectory);
         var entries = EnumerateFiles();
-        // Preserve ReadFile's first-match rule even for duplicate paths in malformed images.
-        // 即使畸形镜像含重复路径，也保持 ReadFile 的首次命中语义。
         var firstNids = new Dictionary<string, ulong>(StringComparer.Ordinal);
         foreach (var entry in entries) firstNids.TryAdd(entry.Path, entry.Nid);
         var hostPaths = new UotanStudio.Firmware.BoundedContexts.FileSystem.Extraction.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path).Concat(_directoryPaths));
@@ -391,7 +646,6 @@ public sealed partial class ErofsParser : IDisposable
         var processedCount = 0;
         var progressGate = new object();
         var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        // Alias paths stay ordered within one worker, preserving first-nid and overwrite behavior.
         var groups = entries.GroupBy(entry => hostPaths.Resolve(entry.Path), comparer).ToArray();
         SharedKernel.FirmwareParallelism.ForEach(groups, group =>
         {
@@ -710,7 +964,6 @@ public sealed partial class ErofsParser : IDisposable
             if (entry.FileType == ErofsInode.FileTypeDirectory)
             {
 
-
                 if (entry.Nid == nid)
                 {
                     continue;
@@ -742,7 +995,6 @@ public sealed partial class ErofsParser : IDisposable
                 };
                 if (fileInode.IsSymlink)
                 {
-
 
                     try
                     {
@@ -794,7 +1046,6 @@ public sealed partial class ErofsParser : IDisposable
         try
         {
 
-
             var metaboxResident = _hasMetabox && (nid & NidMetaboxFlag) != 0;
             var ibodyOffset = checked((metaboxResident ? MetaboxOffset(nid) : _superblock.GetInodeOffset(nid)) + inode.OnDiskSize);
             var ibody = metaboxResident
@@ -804,11 +1055,9 @@ public sealed partial class ErofsParser : IDisposable
             var entries = ErofsXattr.ParseInline(ibody, inode.XattrICount, prefixTable);
             result.AddRange(entries);
 
-
             var sharedIds = ErofsXattr.ParseSharedXattrIds(ibody, inode.XattrICount);
             if (sharedIds.Length > 0)
             {
-
 
                 var sharedStart = _superblock.XattrBlkAddr * _blockSize;
                 var sharedInMetabox = (_superblock.FeatureCompat & ErofsSuperblock.CompatSharedEaInMetabox) != 0;
@@ -822,8 +1071,6 @@ public sealed partial class ErofsParser : IDisposable
                 {
                     foreach (var id in sharedIds)
                     {
-                        // Shared IDs are offsets in four-byte units, not block numbers.
-                        // 共享 ID 是以四字节为单位的偏移，不是块号。
                         var relativeOffset = ErofsXattr.GetSharedXattrByteOffset(id);
                         if (relativeOffset > sharedLength - ErofsXattr.EntryHeaderSize)
                         {
@@ -856,7 +1103,6 @@ public sealed partial class ErofsParser : IDisposable
         }
         catch (Exception ex) when (!RequireCompleteMetadata && ex is InvalidDataException or FormatException)
         {
-
 
         }
 
@@ -947,7 +1193,6 @@ public sealed partial class ErofsParser : IDisposable
     private ErofsInode ReadInode(ulong nid)
     {
 
-
         if (_hasMetabox && (nid & NidMetaboxFlag) != 0)
         {
             if (_metaboxData is null || _metaboxData.Length == 0)
@@ -1020,10 +1265,8 @@ public sealed partial class ErofsParser : IDisposable
         if (inode.DataLayout is not (ErofsInode.DataLayoutFlat or ErofsInode.DataLayoutInline))
         {
 
-
             throw new InvalidDataException($"Unsupported directory data layout {inode.DataLayout} for nid {nid}.");
         }
-
 
         var flatStart = checked(inode.RawBlockAddress * _blockSize);
         var length = checked((long)inode.Size);
@@ -1036,9 +1279,7 @@ public sealed partial class ErofsParser : IDisposable
                 $"Directory data size {length} exceeds the limit of {MaxMetadataComponentSize} bytes.");
         }
 
-
         var result = new List<ErofsDirectoryEntry>();
-        // Linux erofs_map_blocks: only the final partial block resides beside the inode.
         for (var done = 0L; done < length; done += dirBlockSize)
         {
             var blockLength = (int)Math.Min(dirBlockSize, length - done);

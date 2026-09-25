@@ -4,7 +4,6 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff;
 
-// BSDIFF40 stores signed-magnitude integers and three independently compressed streams.
 internal static class BinaryDeltaPatch
 {
     internal static long ReadOutputLength(Stream patch)

@@ -35,19 +35,66 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
     private byte[]? _codecConfig;
     private bool _inCallback;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets a value indicating whether the decoder is initialized and ready to decode.
+    /// <para>获取一个值，该值指示解码器是否已初始化并可开始解码。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> after <see cref="Initialize"/> until <see cref="Dispose"/>.
+    /// <para>在 <see cref="Initialize"/> 之后、<see cref="Dispose"/> 之前为 <see langword="true"/>。</para>
+    /// </value>
     public bool IsInitialized => _callback is not null && !_disposed;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets the sample rate of the negotiated PCM output.
+    /// <para>获取已协商的 PCM 输出采样率。</para>
+    /// </summary>
+    /// <value>
+    /// Sample rate in hertz once the MFT output type is selected during the first decode, 0 before that.
+    /// <para>首次解码选定 MFT 输出类型后的采样率（赫兹）；此前为 0。</para>
+    /// </value>
     public int SampleRate => _sampleRate;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets the channel count of the negotiated PCM output.
+    /// <para>获取已协商的 PCM 输出通道数。</para>
+    /// </summary>
+    /// <value>
+    /// Channel count once the MFT output type is selected during the first decode, 0 before that.
+    /// <para>首次解码选定 MFT 输出类型后的通道数；此前为 0。</para>
+    /// </value>
     public int Channels => _channels;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets the bit depth of the negotiated PCM output.
+    /// <para>获取已协商的 PCM 输出位深。</para>
+    /// </summary>
+    /// <value>
+    /// Bits per sample once the MFT output type is selected during the first decode, 0 before that;
+    /// type selection only accepts 16-bit PCM.
+    /// <para>首次解码选定 MFT 输出类型后的每样本位数；此前为 0。类型选择仅接受 16 位 PCM。</para>
+    /// </value>
     public int BitsPerSample => _bitsPerSample;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Initializes the decoder, binds it to the calling thread, and starts Media Foundation; the
+    /// callback receives every decoded PCM frame synchronously during <see cref="Decode"/>.
+    /// <para>初始化解码器、将其绑定到调用线程并启动 Media Foundation；回调在 <see cref="Decode"/>
+    /// 期间同步接收每个解码出的 PCM 帧。</para>
+    /// </summary>
+    /// <param name="codecConfig">
+    /// Optional AAC AudioSpecificConfig, at most 64 bytes; an empty span lets the MFT derive the
+    /// format from the packets. <para>可选的 AAC AudioSpecificConfig，至多 64 字节；空 span 时由 MFT 从数据包推导格式。</para>
+    /// </param>
+    /// <param name="frameCallback">
+    /// Invoked for every decoded frame on the owning thread; the frame is disposed after the
+    /// callback returns, so consumers must copy or convert within it.
+    /// <para>每解出一帧时在属主线程调用；回调返回后帧被释放，消费方须在回调内复制或转换。</para>
+    /// </param>
+    /// <exception cref="ArgumentNullException"><paramref name="frameCallback"/> is <see langword="null"/>. <para><paramref name="frameCallback"/> 为 <see langword="null"/> 时抛出。</para></exception>
+    /// <exception cref="InvalidDataException">The codec configuration exceeds 64 bytes. <para>编码配置超过 64 字节时抛出。</para></exception>
+    /// <exception cref="InvalidOperationException">Called from a different thread than the previous initialization, reentered from a callback, or a COM/Media Foundation call fails. <para>与先前初始化的线程不同、从回调中重入，或 COM/Media Foundation 调用失败时抛出。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder has been disposed. <para>解码器已释放时抛出。</para></exception>
     public void Initialize(ReadOnlySpan<byte> codecConfig, Action<DecodedAudioFrame> frameCallback)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -83,7 +130,19 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
         _callback = frameCallback;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Feeds one compressed AAC packet into the MFT and drains the PCM output it produces.
+    /// <para>向 MFT 输入一个压缩的 AAC 包，并排空其产生的 PCM 输出。</para>
+    /// </summary>
+    /// <param name="packet">
+    /// One non-empty AAC access unit up to 16 MiB; the first call also builds the transform.
+    /// <para>一个非空且至多 16 MiB 的 AAC 访问单元；首次调用还会创建转换实例。</para>
+    /// </param>
+    /// <param name="timestampTicks">Presentation timestamp in ticks attached to the MFT sample. <para>附加到 MFT 样本的显示时间戳（tick）。</para></param>
+    /// <exception cref="InvalidDataException">The packet is empty or oversized, or the MFT reports invalid buffers or output geometry. <para>数据包为空或超限，或 MFT 报告非法缓冲区/输出几何时抛出。</para></exception>
+    /// <exception cref="InvalidOperationException">The decoder is not initialized, another thread called it, it was reentered from a callback, or a Media Foundation call fails or stalls. <para>解码器未初始化、由其他线程调用、从回调重入，或 Media Foundation 调用失败/停滞时抛出。</para></exception>
+    /// <exception cref="NotSupportedException">No synchronous Media Foundation AAC decoder or no 16-bit PCM output type exists. <para>不存在同步的 Media Foundation AAC 解码器或 16 位 PCM 输出类型时抛出。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder has been disposed. <para>解码器已释放时抛出。</para></exception>
     public void Decode(ReadOnlySpan<byte> packet, long timestampTicks)
     {
         CheckReady();
@@ -104,7 +163,13 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
         finally { MfCom.Release(sample); }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Flushes and releases the current transform while keeping the configuration and callback;
+    /// the next <see cref="Decode"/> rebuilds it from scratch.
+    /// <para>冲刷并释放当前转换实例，但保留编码配置与回调；下次 <see cref="Decode"/> 会从头重建。</para>
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The decoder is not initialized, another thread called it, or a flush message fails. <para>解码器未初始化、由其他线程调用，或冲刷消息失败时抛出。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder has been disposed. <para>解码器已释放时抛出。</para></exception>
     public void Reset()
     {
         CheckReady();
@@ -113,7 +178,7 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
             Check(MfCom.Message(_transform, MfInterop.MftMessageFlush), "flush");
             Check(MfCom.Message(_transform, MfInterop.MftMessageStartOfStream), "restart stream");
         }
-        ReleaseTransform(); // Re-negotiate on the next packet; AAC headers may change.
+        ReleaseTransform();
     }
 
     private void InitializeTransform()
@@ -130,7 +195,7 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
                 Check(MfCom.SetUInt32(input, MfInterop.MtAudioNumChannels, (uint)channels), "AAC channels");
                 Check(MfCom.SetUInt32(input, new Guid("bfbabe79-7434-4d1c-94f0-72a3b9e17188"), 0), "raw AAC payload");
                 byte[] userData = new byte[12 + config.Length];
-                userData[2] = 0xFE; // HEAACWAVEINFO profile-level indication: unspecified.
+                userData[2] = 0xFE;
                 config.CopyTo(userData, 12);
                 Check(MfCom.SetBytes(input, MfInterop.MtUserData, userData), "codec private data");
             }
@@ -310,7 +375,12 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
         CheckThread();
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Releases the transform, shuts down Media Foundation when this was the last active decoder
+    /// instance, and uninitializes COM if this instance initialized it; calling it again has no effect.
+    /// <para>释放转换实例；当本实例是最后一个活跃解码器时关闭 Media Foundation，并在由本实例初始化时反初始化 COM；重复调用无效果。</para>
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Called from a thread other than the owning thread, or reentered from a callback. <para>由属主线程之外的线程调用，或从回调重入时抛出。</para></exception>
     public void Dispose()
     {
         if (_disposed) return;

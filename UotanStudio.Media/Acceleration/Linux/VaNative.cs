@@ -2,7 +2,6 @@
 
 namespace UotanStudio.Media.Acceleration.Linux;
 
-// libva 2.22 va.h and va_drm.h. All native handles are owned by VaApiSession.
 internal static unsafe partial class VaNative
 {
     private const string Va = "libva.so.2";

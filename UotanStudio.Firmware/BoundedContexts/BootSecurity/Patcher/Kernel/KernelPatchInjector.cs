@@ -23,8 +23,6 @@ internal static class KernelPatchInjector
     private const int SetupHeaderBackup = SetupOffset + 0xA0;
     private const int SetupSuperKey = SetupOffset + 0xA8;
     private const int SetupRootSuperKey = SetupOffset + 0xE8;
-    // KernelPatch appends a zeroed patch_extra_item_t sentinel so the extra
-    // region has a clearly terminated tail that kptools can rescan.
     private const int ExtraItemSentinelSize = 0x80;
 
     /// <summary>

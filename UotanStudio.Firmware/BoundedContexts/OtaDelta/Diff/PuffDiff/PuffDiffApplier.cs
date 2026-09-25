@@ -14,13 +14,79 @@ public static class PuffDiffApplier
     private sealed record Header(StreamInfo Source, StreamInfo Target, int PatchOffset);
 
     /// <summary>Returns the inner BSDIFF stream from a PUF1 container. <para>返回 PUF1 容器内的 BSDIFF 流。</para></summary>
+    /// <param name="puffDiffPatch">
+    /// Complete PUF1 container: the <c>PUF1</c> magic, a big-endian protobuf header length and the header itself.
+    /// <para>完整的 PUF1 容器：<c>PUF1</c> 魔数、大端序的 protobuf 头长度以及头部本身。</para>
+    /// </param>
+    /// <returns>
+    /// A new array holding the bytes that follow the header, i.e. a plain BSDIFF40 patch usable with
+    /// <see cref="Bsdiff.BinaryDeltaPatch"/>; DEFLATE extents are left untouched.
+    /// <para>新数组，包含头部之后的字节，即可与 <see cref="Bsdiff.BinaryDeltaPatch"/> 配合使用的普通 BSDIFF40
+    /// 补丁；DEFLATE 区间保持不变。</para>
+    /// </returns>
+    /// <exception cref="PayloadException">
+    /// The container is too short, has the wrong magic, declares an oversized protobuf header, or omits the source
+    /// or target stream info. <para>容器过短、魔数不符、声明的 protobuf 头过大，或缺少源或目标流信息。</para>
+    /// </exception>
     public static byte[] DecompressPatch(byte[] puffDiffPatch) => DecompressPatch(puffDiffPatch.AsSpan());
     /// <summary>Returns the inner BSDIFF stream without applying Puff transforms. <para>返回内部 BSDIFF 流，不执行 Puff 转换。</para></summary>
+    /// <param name="puffDiffPatch">
+    /// Complete PUF1 container read from its start; the span may be longer than the patch it describes only in
+    /// bytes after the trailing BSDIFF stream.
+    /// <para>从头读取的完整 PUF1 容器；仅在其尾部 BSDIFF 流之后的字节处允许 span 比所描述补丁更长。</para>
+    /// </param>
+    /// <returns>
+    /// A copy of every byte after the protobuf header, without any DEFLATE-to-puff expansion.
+    /// <para>protobuf 头之后所有字节的副本，不含任何 DEFLATE 到 puffed 的展开。</para>
+    /// </returns>
+    /// <exception cref="PayloadException">
+    /// The container is too short, has the wrong magic, declares an oversized protobuf header, or omits the source
+    /// or target stream info. <para>容器过短、魔数不符、声明的 protobuf 头过大，或缺少源或目标流信息。</para>
+    /// </exception>
     public static byte[] DecompressPatch(ReadOnlySpan<byte> puffDiffPatch)
     { var header = ParseHeader(puffDiffPatch); return puffDiffPatch[header.PatchOffset..].ToArray(); }
     /// <summary>Applies a PUF1 patch to a small source buffer. <para>将 PUF1 补丁应用到小型源缓冲区。</para></summary>
+    /// <param name="puffDiffPatch">
+    /// PUF1 container holding the header, the DEFLATE extents and the inner BSDIFF stream.
+    /// <para>包含头部、DEFLATE 区间与内部 BSDIFF 流的 PUF1 容器。</para>
+    /// </param>
+    /// <param name="oldData">
+    /// Source image bytes the patch transforms; must match the extents recorded in the container.
+    /// <para>被补丁转换的源镜像字节；必须与容器中记录的区间一致。</para>
+    /// </param>
+    /// <returns>
+    /// The reconstructed target image in its compressed (huffed) form; its length follows from the recorded target
+    /// extents and is shorter than the puffed working size whenever a DEFLATE extent is present.
+    /// <para>还原出的目标镜像，以压缩（huffed）形式给出；其长度由记录的目标区间推出，只要存在 DEFLATE 区间就会短于
+    /// puffed 工作尺寸。</para>
+    /// </returns>
+    /// <exception cref="PayloadException">
+    /// The container is malformed, a buffer exceeds <c>256</c> MiB, the extents overlap or run past the stream, or
+    /// the reconstructed size differs from the declared puffed target size.
+    /// <para>容器畸形、某个缓冲区超过 <c>256</c> MiB、区间互相重叠或越过流边界，或还原出的大小与声明的目标 puffed 大小不一致。</para>
+    /// </exception>
     public static byte[] Apply(byte[] puffDiffPatch, byte[] oldData) => Apply(puffDiffPatch.AsSpan(), oldData.AsSpan());
     /// <summary>Applies a PUF1 patch with a 256 MiB per-buffer limit. <para>按每个缓冲区 256 MiB 上限应用 PUF1 补丁。</para></summary>
+    /// <param name="puffDiffPatch">
+    /// PUF1 container; its length must not exceed <c>256</c> MiB. <para>PUF1 容器；其长度不得超过 <c>256</c> MiB。</para>
+    /// </param>
+    /// <param name="oldData">
+    /// Source image bytes, copied into a puffed working buffer whose size must also stay within <c>256</c> MiB.
+    /// <para>源镜像字节，会被复制进 puffed 工作缓冲区，该缓冲区大小同样不得超过 <c>256</c> MiB。</para>
+    /// </param>
+    /// <returns>
+    /// The huffed target image produced by applying the inner BSDIFF stream to the puffed source.
+    /// <para>把内部 BSDIFF 流应用到 puffed 源后所得到的 huffed 目标镜像。</para>
+    /// </returns>
+    /// <exception cref="PayloadException">
+    /// Any structural, size or mapping problem in the container or the result, including out-of-range gap bits.
+    /// Every failure surfaces as this exception type.
+    /// <para>容器或结果中的任何结构、大小或映射问题，包括越界的间隙位。所有失败都以该异常类型呈现。</para>
+    /// </exception>
+    /// <exception cref="OutOfMemoryException">
+    /// A working buffer larger than the limit could not be allocated; this escapes unwrapped.
+    /// <para>无法分配超过上限的工作缓冲区；该异常不会被包装。</para>
+    /// </exception>
     public static byte[] Apply(ReadOnlySpan<byte> puffDiffPatch, ReadOnlySpan<byte> oldData)
     {
         try
@@ -40,6 +106,28 @@ public static class PuffDiffApplier
     }
 
     /// <summary>Creates an interoperable PUF1 patch using byte extents without DEFLATE transforms. <para>生成可互操作的 PUF1 补丁，使用不进行 DEFLATE 转换的字节区间。</para></summary>
+    /// <param name="oldData">
+    /// Source image; its length is recorded as the source stream length and must not exceed <c>256</c> MiB.
+    /// <para>源镜像；其长度记入源流长度字段，且不得超过 <c>256</c> MiB。</para>
+    /// </param>
+    /// <param name="newData">
+    /// Target image; its length is recorded as the target stream length and must not exceed <c>256</c> MiB.
+    /// <para>目标镜像；其长度记入目标流长度字段，且不得超过 <c>256</c> MiB。</para>
+    /// </param>
+    /// <returns>
+    /// The complete container: <c>PUF1</c> magic, big-endian header length, a version-1 protobuf header carrying only
+    /// stream lengths, and the BSDIFF40 stream produced from the two buffers. Applying it reconstructs
+    /// <paramref name="newData"/> byte for byte.
+    /// <para>完整容器：<c>PUF1</c> 魔数、大端序头长度、仅携带流长度的版本 1 protobuf 头，以及由这两个缓冲区生成的
+    /// BSDIFF40 流。应用该补丁可逐字节还原 <paramref name="newData"/>。</para>
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// Either buffer exceeds <c>256</c> MiB. <para>任一缓冲区超过 <c>256</c> MiB。</para>
+    /// </exception>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="oldData"/> or <paramref name="newData"/> is <see langword="null"/>.
+    /// <para><paramref name="oldData"/> 或 <paramref name="newData"/> 为 <see langword="null"/>。</para>
+    /// </exception>
     public static byte[] CreatePatch(byte[] oldData, byte[] newData)
     {
         ArgumentNullException.ThrowIfNull(oldData); ArgumentNullException.ThrowIfNull(newData);

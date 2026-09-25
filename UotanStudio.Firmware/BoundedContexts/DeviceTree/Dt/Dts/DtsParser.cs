@@ -1004,13 +1004,6 @@ internal sealed class DtsParser
                 var right = ParseShift();
                 left = left >= right ? 1L : 0L;
             }
-            // NOTE: bare '<' and '>' are NOT parsed as relational operators here
-            // because they conflict with cell-list delimiters in `<...>`.  Users who
-            // need a bare '<' / '>' comparison must wrap it in parentheses, e.g.
-            // `<((1 < 2))>`, where '(' context still doesn't see '<' as a delimiter
-            // since ParsePrimary handles '(' recursively.  This matches dtc's
-            // behaviour where the lexer inside `<...>` treats '<' / '>' as
-            // delimiters, not relational tokens.
             else break;
         }
         return left;

@@ -266,8 +266,6 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
             }
         }
 
-        // macOS native has no event monitor yet; the polling fallback covers it (libusb
-        // hotplug remains available when libusb is explicitly selected).
         return new UsbDeviceMonitor(Enumerator, onChanged, onError, interval, fireInitialSnapshot, cancellationToken);
     }
 

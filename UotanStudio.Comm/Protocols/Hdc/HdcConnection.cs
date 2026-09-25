@@ -38,7 +38,15 @@ public sealed class HdcConnection : IDisposable
     /// </summary>
     private int _usbOutPacketSize;
 
-    /// <summary>Persistent native TCP mappings owned by this connection.</summary>
+    /// <summary>
+    /// Persistent native TCP mappings owned by this connection.
+    /// <para>由本连接持有的持久原生 TCP 映射。</para>
+    /// </summary>
+    /// <value>
+    /// Lazily created manager whose lifetime is tied to this connection; disposed by <see cref="Dispose"/>.
+    /// <para>延迟创建的管理器，生命周期跟随本连接；由 <see cref="Dispose"/> 释放。</para>
+    /// </value>
+    /// <exception cref="ObjectDisposedException">The connection has been disposed. <para>连接已释放。</para></exception>
     public HdcForwardManager Forwards
     {
         get
@@ -56,6 +64,7 @@ public sealed class HdcConnection : IDisposable
     /// Gets whether the connection is established.
     /// <para>获取连接是否已建立。</para>
     /// </summary>
+    /// <value><see langword="true"/> after the authentication handshake completes and while the message loop has not faulted; read under the stream lock. <para>认证握手完成且消息循环未故障时为 <see langword="true"/>；在流锁保护下读取。</para></value>
     public bool IsConnected
     {
         get { lock (_streamsLock) { return _connected; } }
@@ -65,32 +74,43 @@ public sealed class HdcConnection : IDisposable
     /// Gets the underlying transport.
     /// <para>获取底层传输。</para>
     /// </summary>
+    /// <value>The transport supplied at construction; the connection disposes it together with itself. <para>构造时传入的传输；连接释放时会一并处置它。</para></value>
     public ICommTransport Transport => _transport;
 
     /// <summary>
     /// Gets the peer protocol version.
     /// <para>获取对端协议版本。</para>
     /// </summary>
+    /// <value>The fixed constant assigned during the authentication handshake; 0 before <see cref="Connect"/> succeeds. <para>认证握手中赋值的固定常量；<see cref="Connect"/> 成功前为 0。</para></value>
     public uint PeerVersion => _peerVersion;
 
     /// <summary>
     /// Gets the peer banner / system info.
     /// <para>获取对端横幅 / 系统信息。</para>
     /// </summary>
+    /// <value>The handshake banner, later replaced by the daemon-reported <c>devname</c> when present; <see langword="null"/> before authentication. <para>握手横幅，认证中若上报 <c>devname</c> 会被替换；认证前为 <see langword="null"/>。</para></value>
     public string? PeerBanner => _peerBanner;
 
-    /// <summary>The version string reported by the daemon, without substituting our own protocol version.</summary>
+    /// <summary>
+    /// The version string reported by the daemon, without substituting our own protocol version.
+    /// <para>守护进程上报的版本字符串，不会用本端协议版本替换。</para>
+    /// </summary>
+    /// <value>The daemon handshake version; empty until the authentication handshake assigns it. <para>守护进程握手版本；认证握手赋值前为空字符串。</para></value>
     public string PeerVersionString => _peerVersionString;
 
-    /// <summary>Capabilities reported in the daemon's successful authentication response.</summary>
+    /// <summary>
+    /// Capabilities reported in the daemon's successful authentication response.
+    /// <para>守护进程认证成功响应中上报的能力集。</para>
+    /// </summary>
+    /// <value>Read-only capability map decoded from the final handshake state; empty until authentication completes. <para>从最终握手状态解码的只读能力映射；认证完成前为空。</para></value>
     public IReadOnlyDictionary<string, string> PeerCapabilities => _peerCapabilities;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="HdcConnection"/> class.
     /// <para>初始化 <see cref="HdcConnection"/> 类的新实例。</para>
     /// </summary>
-    /// <param name="transport">The device transport. 设备传输。</param>
-    /// <param name="authentication">The RSA-3072 authentication identity. RSA-3072 认证身份。</param>
+    /// <param name="transport">The device transport. <para>设备传输。</para></param>
+    /// <param name="authentication">The RSA-3072 authentication identity. <para>RSA-3072 认证身份。</para></param>
     public HdcConnection(ICommTransport transport, HdcAuthentication authentication)
     {
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
@@ -125,8 +145,6 @@ public sealed class HdcConnection : IDisposable
             _usbOutPacketSize = usbTransport.Session.DeviceInfo.Interfaces.SelectMany(i => i.Endpoints)
                 .FirstOrDefault(e => e.EndpointAddress == usbTransport.Session.EndpointOut)?.MaxPacketSize ?? 0;
 
-            // Official host_usb ClearUsbChannel: reset only the HDC session,
-            // then drain old USB replies before starting a fresh handshake.
             WriteExact([(byte)'U', (byte)'B', 2, 0, 0, 0, 0, 0, 0, 0, 0]);
             var discard = new byte[513 * 1024];
             var deadline = Environment.TickCount64 + 3000;
@@ -134,11 +152,6 @@ public sealed class HdcConnection : IDisposable
                 if (Environment.TickCount64 >= deadline) throw new IOException("HDC USB session did not become idle.");
         }
 
-        // session.h auth states: NONE=0, SIGNATURE=2, PUBLICKEY=3, OK=4.
-        // The authtype TLV and "Ver: 3.2.0f" banner snapshot the official host handshake
-        // (upstream host sends Base::GetVersion() and TlvAppend(TAG_AUTHTYPE, ...)); the
-        // daemon parses them tolerantly, and the exact wire strings need a real device to
-        // re-verify before any change.
         Send(new HdcMessage(HdcCommand.Handshake, 0, _sessionId,
             HdcDaemonCodec.Handshake(0, _sessionId, string.Empty, System.Text.Encoding.ASCII.GetBytes("authtype        1               1"), "Ver: 3.2.0f")));
         var authenticated = false;
@@ -149,7 +162,7 @@ public sealed class HdcConnection : IDisposable
             if (Environment.TickCount64 >= authDeadline) throw new TimeoutException("HDC authentication deadline exceeded.");
             HdcMessage response;
             try { response = ReadMessage(); }
-            catch (TimeoutException) { continue; } // Allow time for the device's host trust dialog.
+            catch (TimeoutException) { continue; }
             if (response.ChannelId == 0 && response.Command is HdcCommand.Echo or HdcCommand.ChannelClose)
                 continue;
             round++;
@@ -209,9 +222,6 @@ public sealed class HdcConnection : IDisposable
             if (response.ChannelId != 0 || response.Command != HdcCommand.ChannelClose ||
                 response.Payload is not { Length: 1 } close)
                 throw new InvalidDataException("Expected HDC authentication channel closure.");
-            // Reverse-engineered close countdown: the daemon sends N and expects N-1 echoes
-            // until zero; verify against upstream session.cpp CMD_KERNEL_CHANNEL_CLOSE
-            // handling on a real device before changing.
             if (close[0] > 0)
                 Send(HdcMessaging.BuildCommand(HdcCommand.ChannelClose, 0, [(byte)(close[0] - 1)]));
             break;
@@ -232,7 +242,9 @@ public sealed class HdcConnection : IDisposable
     /// Asynchronously connects to the HDC peer.
     /// <para>异步连接到 HDC 对端。</para>
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <param name="cancellationToken">On cancellation the underlying transport is disposed to break the blocking handshake. <para>取消时会释放底层传输以打断阻塞的握手。</para></param>
+    /// <returns>A task that completes once authentication, channel closure and the message loop startup have finished. <para>认证、通道关闭与消息循环启动全部完成后完成的任务。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled during the handshake. <para><paramref name="cancellationToken"/> 在握手期间被取消。</para></exception>
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -246,8 +258,9 @@ public sealed class HdcConnection : IDisposable
     /// Opens a channel to a remote service (e.g. "shell:cmd", "file:sync", "forward:tcp:").
     /// <para>打开到远端服务的通道（如 "shell:cmd"、"file:sync"、"forward:tcp:"）。</para>
     /// </summary>
-    /// <param name="command">The service command string. 服务命令字符串。</param>
-    /// <returns>An HDC stream. HDC 流。</returns>
+    /// <param name="command">The service command string. <para>服务命令字符串。</para></param>
+    /// <returns>An HDC stream. <para>HDC 流。</para></returns>
+    /// <exception cref="NotSupportedException">The prefix is neither <c>shell:</c> nor <c>exec:</c>; native tasks must use the <see cref="OpenChannel(HdcCommand, byte[])"/> overload. <para>前缀既不是 <c>shell:</c> 也不是 <c>exec:</c>；原生任务须使用 <see cref="OpenChannel(HdcCommand, byte[])"/> 重载。</para></exception>
     public HdcStream OpenChannel(string command)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -258,7 +271,18 @@ public sealed class HdcConnection : IDisposable
         throw new NotSupportedException("Use a native HDC command identifier for device channels.");
     }
 
-    /// <summary>Starts a native task directly on a shared channel ID, without a host-channel handshake.</summary>
+    /// <summary>
+    /// Starts a native task directly on a shared channel ID, without a host-channel handshake.
+    /// <para>在共享通道 ID 上直接启动原生任务，不进行宿主通道握手。</para>
+    /// </summary>
+    /// <param name="command">Native task command; it also becomes the channel's data command, except <c>shell:</c> traffic which uses <see cref="HdcCommand.ShellData"/>. <para>原生任务命令；它同时成为通道的数据命令，仅 <c>shell:</c> 流量改用 <see cref="HdcCommand.ShellData"/>。</para></param>
+    /// <param name="initialPayload">Payload carried by the opening message, or <see langword="null"/> for none. <para>打开消息携带的负载；为 <see langword="null"/> 表示不带负载。</para></param>
+    /// <returns>
+    /// The registered stream sharing the local and remote channel ID; the caller owns and must dispose it.
+    /// <para>注册后的流，本地与远端通道 ID 相同；由调用方持有并负责释放。</para>
+    /// </returns>
+    /// <exception cref="InvalidOperationException">The connection has not been established. <para>连接尚未建立。</para></exception>
+    /// <exception cref="IOException">The 128-channel limit is reached or the 32-bit channel IDs are exhausted. <para>达到 128 通道上限，或 32 位通道 ID 已耗尽。</para></exception>
     public HdcStream OpenChannel(HdcCommand command, byte[]? initialPayload = null)
     {
         EnsureConnected();
@@ -286,8 +310,8 @@ public sealed class HdcConnection : IDisposable
     /// Waits for the peer session handshake banner to arrive (handshake complete).
     /// <para>等待对端会话握手横幅到达（握手完成）。</para>
     /// </summary>
-    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <returns><c>true</c> if the peer responded; otherwise, <c>false</c>. 对端是否响应。</returns>
+    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时（毫秒）。</para></param>
+    /// <returns><c>true</c> if the peer responded; otherwise, <c>false</c>. <para>对端是否在超时前响应。</para></returns>
     public bool WaitForPeer(int timeoutMs = 10000) => _peerReady.Wait(timeoutMs);
 
     /// <summary>Sends a native task transition on a registered channel.</summary>
@@ -387,8 +411,6 @@ public sealed class HdcConnection : IDisposable
                     throw new InvalidDataException("Invalid HDC USB identity.");
                 if (!_connected && usb.SessionId != _sessionId)
                 {
-                    // A prior host can close during authorization with complete
-                    // replies still queued. Drain bounded old-session blocks.
                     if (usb.DataSize > HdcConstants.MaxPayloadSize + 1035)
                         throw new InvalidDataException("Invalid stale HDC USB block.");
                     if (usb.DataSize != 0) _ = ReadBody((int)usb.DataSize);
@@ -447,7 +469,6 @@ public sealed class HdcConnection : IDisposable
                             break;
 
                         case HdcCommand.WakeupSlaveTask:
-                            // session.cpp wakes the already-created task; no task payload or reply.
                             break;
 
                         case HdcCommand.ShellData:

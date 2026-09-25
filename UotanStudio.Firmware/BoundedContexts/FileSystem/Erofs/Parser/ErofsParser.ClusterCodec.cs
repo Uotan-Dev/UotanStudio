@@ -3,6 +3,10 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 
+/// <summary>
+/// EROFS parser part that decodes logical-cluster entries from the full and compact index formats, including the bit-level 4-byte and 2-byte slots and the big-pcluster lookback.
+/// <para>EROFS 解析器的组成部分，负责从完整与紧凑索引解码逻辑簇条目，含位级的 4 字节与 2 字节槽位以及 big-pcluster 回看。</para>
+/// </summary>
 public sealed partial class ErofsParser
 {
     /// <summary>
@@ -128,7 +132,6 @@ public sealed partial class ErofsParser
         }
         else
         {
-            // Random callers need only the containing 8/32-byte pack.
             index = ReadInodeMetadata(nid, checked(ebase + packStartRel), packSize, "compact index pack");
             packStartRel = 0;
         }
@@ -139,18 +142,15 @@ public sealed partial class ErofsParser
         if (type == LclusterTypeNonHead)
         {
 
-
             var clusterOfs = 1 << lclusterBits;
             if ((lo & (1u << 11)) != 0)
             {
-
 
                 return new LclusterEntry(type, clusterOfs, delta0: 1, delta1: 0, pblk: 0, compressedBlocks: (int)(lo & ~(1u << 11)));
             }
 
             if (i + 1 == vcnt)
             {
-
 
                 var (prevLo, prevType) = DecodeCompactedBits(index, packStartRel, lobits, encodebits * (i - 1));
                 if (prevType != LclusterTypeNonHead)
@@ -167,7 +167,6 @@ public sealed partial class ErofsParser
 
             return new LclusterEntry(type, clusterOfs, delta0: lo, delta1: 0, pblk: 0, compressedBlocks: 0);
         }
-
 
         var clusterOfsH = (int)lo;
         long nblk;
@@ -193,7 +192,6 @@ public sealed partial class ErofsParser
         else
         {
 
-
             nblk = 0;
             while (j > 0)
             {
@@ -207,7 +205,6 @@ public sealed partial class ErofsParser
                         nblk += prevLo3 & ~(1u << 11);
                         continue;
                     }
-
 
                     if (prevLo3 <= 1)
                     {
@@ -246,7 +243,6 @@ public sealed partial class ErofsParser
         var entry = ZErofsLclusterIndex.FromBytes(bytes.AsSpan(relative, ZErofsLclusterIndex.Size));
         if (entry.IsNonHead)
         {
-
 
             if ((entry.Delta0 & ZErofsLclusterIndex.LiD0CblkCnt) != 0)
             {

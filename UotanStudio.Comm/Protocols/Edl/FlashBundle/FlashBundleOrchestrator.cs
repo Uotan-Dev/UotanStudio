@@ -66,25 +66,41 @@ public enum FlashBundlePhase
 /// Initializes a new instance of the <see cref="FlashBundleProgress"/> class.
 /// <para>初始化 <see cref="FlashBundleProgress"/> 类的新实例。</para>
 /// </remarks>
+/// <param name="phase">The flash bundle phase this notification reports.
+/// <para>此通知所报告的刷写包阶段。</para></param>
+/// <param name="message">Human-readable status text describing the current item or phase.
+/// <para>描述当前条目或阶段的人类可读状态文本。</para></param>
+/// <param name="current">Zero-based index of the item being processed within the phase; <c>0</c> for phases without per-item progress.
+/// <para>阶段内正在处理条目的从零开始索引；不报告逐项进度的阶段为 <c>0</c>。</para></param>
+/// <param name="total">Item count for the phase; <c>0</c> when the phase has no enumerable items.
+/// <para>阶段条目总数；阶段无可枚举条目时为 <c>0</c>。</para></param>
 public sealed class FlashBundleProgress(FlashBundlePhase phase, string message, int current, int total)
 {
-    /// <summary>Gets the current phase. 当前阶段。</summary>
+    /// <summary>Gets the current phase. <para>当前阶段。</para></summary>
+    /// <value>The flash bundle phase the orchestrator was in when this notification was raised.
+    /// <para>产生此通知时编排器所处的刷写包阶段。</para></value>
     public FlashBundlePhase Phase { get; } = phase;
 
-    /// <summary>Gets a human-readable message. 人类可读的消息。</summary>
+    /// <summary>Gets a human-readable message. <para>人类可读的消息。</para></summary>
+    /// <value>Status text describing the current item or phase; device-facing messages carry an inline Chinese translation.
+    /// <para>描述当前条目或阶段的状态文本；面向设备的消息附带内联中文翻译。</para></value>
     public string Message { get; } = message;
 
-    /// <summary>Gets the zero-based index of the current item. 当前条目从 0 开始的索引。</summary>
+    /// <summary>Gets the zero-based index of the current item. <para>当前条目从 0 开始的索引。</para></summary>
+    /// <value>Index of the item being processed within the phase; 0 for phases that report no per-item progress.
+    /// <para>阶段内正在处理的条目索引；不报告逐项进度的阶段为 0。</para></value>
     public int Current { get; } = current;
 
-    /// <summary>Gets the total number of items in the current phase. 当前阶段条目总数。</summary>
+    /// <summary>Gets the total number of items in the current phase. <para>当前阶段条目总数。</para></summary>
+    /// <value>Item count for the phase; 0 when the phase has no enumerable items.
+    /// <para>阶段条目总数；阶段无可枚举条目时为 0。</para></value>
     public int Total { get; } = total;
 
     /// <summary>
     /// Returns a string representation of the progress.
     /// <para>返回进度的字符串表示。</para>
     /// </summary>
-    /// <returns>A string describing the progress. 描述进度的字符串。</returns>
+    /// <returns>A string describing the progress. <para>描述进度的字符串。</para></returns>
     public override string ToString() => $"FlashBundleProgress[{Phase}] {Message} ({Current}/{Total})";
 }
 
@@ -108,7 +124,7 @@ public sealed class FlashBundleProgress(FlashBundlePhase phase, string message, 
 /// Initializes a new instance of the <see cref="FlashBundleOrchestrator"/> class.
 /// <para>初始化 <see cref="FlashBundleOrchestrator"/> 类的新实例。</para>
 /// </remarks>
-/// <param name="session">The EDL session used for all device operations. 用于所有设备操作的 EDL 会话。</param>
+/// <param name="session">The EDL session used for all device operations. <para>用于所有设备操作的 EDL 会话。</para></param>
 public sealed partial class FlashBundleOrchestrator(EdlSession session)
 {
     private readonly EdlSession _session = session ?? throw new ArgumentNullException(nameof(session));
@@ -120,12 +136,12 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
     /// <para>从 rawprogram 文件（及可选的 patch 文件）运行刷写包，镜像路径按
     /// <paramref name="imageDir"/> 解析。UFS 配置 XML 在镜像目录中自动发现。</para>
     /// </summary>
-    /// <param name="rawprogramPath">The rawprogram XML file path. rawprogram XML 文件路径。</param>
-    /// <param name="patchPath">The optional patch XML file path. 可选的 patch XML 文件路径。</param>
-    /// <param name="imageDir">The base directory for image files; defaults to the rawprogram's directory. 镜像文件基础目录；默认为 rawprogram 所在目录。</param>
-    /// <param name="progress">Optional progress reporter. 可选的进度报告器。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The flash bundle result. 刷写包结果。</returns>
+    /// <param name="rawprogramPath">The rawprogram XML file path. <para>rawprogram XML 文件路径。</para></param>
+    /// <param name="patchPath">The optional patch XML file path. <para>可选的 patch XML 文件路径。</para></param>
+    /// <param name="imageDir">The base directory for image files; defaults to the rawprogram's directory. <para>镜像文件基础目录；默认为 rawprogram 所在目录。</para></param>
+    /// <param name="progress">Optional progress reporter. <para>可选的进度报告器。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The flash bundle result. <para>刷写包结果。</para></returns>
     public async Task<FlashBundleResult> FlashBundleAsync(
         string rawprogramPath,
         string? patchPath,
@@ -152,10 +168,10 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
     /// synchronously wait for another operation on the same session.
     /// <para>根据指定选项运行刷写包。</para>
     /// </summary>
-    /// <param name="options">The flash bundle options. 刷写包选项。</param>
-    /// <param name="progress">Optional progress reporter. 可选的进度报告器。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The flash bundle result. 刷写包结果。</returns>
+    /// <param name="options">The flash bundle options. <para>刷写包选项。</para></param>
+    /// <param name="progress">Optional progress reporter. <para>可选的进度报告器。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The flash bundle result. <para>刷写包结果。</para></returns>
     public Task<FlashBundleResult> FlashBundleAsync(
         FlashBundleOptions options,
         IProgress<FlashBundleProgress>? progress,
@@ -166,10 +182,18 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
     /// Validates sources and device ranges without program, erase, patch, wipe or provisioning.
     /// Session initialization and storage queries are allowed and require caller authorization.
     /// This observation does not retain a prepared plan; execution must validate again.
+    /// <para>在不执行 program、erase、patch、wipe 或 provisioning 的情况下校验源文件与设备
+    /// 范围。允许会话初始化与存储查询，且需要调用方授权。该观察不会保留已准备好的计划；
+    /// 执行时必须重新校验。</para>
     /// </summary>
-    /// <param name="options">Selected bundle inputs and policy, captured at entry.</param>
-    /// <param name="cancellationToken">Cancellation for preflight and device queries.</param>
-    /// <returns>The validation result; processed storage-operation counts remain zero.</returns>
+    /// <param name="options">Selected bundle inputs and policy, captured at entry.
+    /// <para>入口处捕获的所选包输入与策略。</para></param>
+    /// <param name="cancellationToken">Cancellation for preflight and device queries.
+    /// <para>用于预检与设备查询的取消令牌。</para></param>
+    /// <returns>The validation result; processed storage-operation counts remain zero.
+    /// <para>校验结果；已处理存储操作的计数保持为 0。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <see langword="null"/>.
+    /// <para><paramref name="options"/> 为 <see langword="null"/>。</para></exception>
     public Task<FlashBundleResult> PreflightDeviceAsync(FlashBundleOptions options,
         CancellationToken cancellationToken = default)
         => RunBundleAsync(options, null, true, cancellationToken);

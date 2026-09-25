@@ -5,25 +5,69 @@ using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 
+/// <summary>
+/// Parses Android boot images carrying the <c>ANDROID!</c> magic for header versions 0 through 4,
+/// extracting kernel, ramdisk, second-stage, DTB, recovery DTBO and V4 signature segments.
+/// <para>解析带 <c>ANDROID!</c> 魔数的 Android Boot 镜像（头部版本 0 至 4），提取 kernel、ramdisk、second、DTB、recovery DTBO 与 V4 签名区段。</para>
+/// </summary>
+/// <example>
+/// <code>
+/// using var parser = new BootImageParser();
+/// parser.ParseFile("boot.img");
+/// byte[] kernel = parser.Kernel;
+/// </code>
+/// </example>
 public class BootImageParser : IDisposable
 {
     private const string BootMagic = "ANDROID!";
     private bool _disposed;
 
+    /// <summary>The header fields produced by the most recent parse call.
+    /// <para>最近一次解析得到的头部字段。</para></summary>
+    /// <value>A default <see cref="BootImageHeader"/> before any parse; each parse replaces the instance entirely.
+    /// <para>未解析时为默认构造的 <see cref="BootImageHeader"/>；每次解析整体替换实例。</para></value>
     public BootImageHeader Header { get; private set; } = new BootImageHeader();
 
+    /// <summary>The kernel segment exactly as stored in the image, still compressed when the image compresses it.
+    /// <para>镜像中原样存放的 kernel 区段；镜像为压缩格式时仍保持压缩态。</para></summary>
+    /// <value>Bytes read from the page-aligned kernel offset; empty when the size is <c>0</c> or the stored range exceeds the image.
+    /// <para>从页对齐的 kernel 偏移读取的字节；大小为 <c>0</c> 或存储范围超出镜像时为空数组。</para></value>
     public byte[] Kernel { get; private set; } = [];
 
+    /// <summary>The ramdisk segment exactly as stored in the image, still compressed when the image compresses it.
+    /// <para>镜像中原样存放的 ramdisk 区段；镜像为压缩格式时仍保持压缩态。</para></summary>
+    /// <value>Bytes read from the page-aligned ramdisk offset; empty when the size is <c>0</c> or the stored range exceeds the image.
+    /// <para>从页对齐的 ramdisk 偏移读取的字节；大小为 <c>0</c> 或存储范围超出镜像时为空数组。</para></value>
     public byte[] Ramdisk { get; private set; } = [];
 
+    /// <summary>The second-stage bootloader segment of V0/V2 images, read from the page-aligned second offset.
+    /// <para>V0/V2 镜像的 second-stage 引导区段，从页对齐的 second 偏移读取。</para></summary>
+    /// <value>Raw segment bytes; empty when the size is <c>0</c>, on V3/V4 images, or when the stored range exceeds the image.
+    /// <para>原始字节；大小为 <c>0</c>、V3/V4 镜像，或存储范围超出镜像时为空数组。</para></value>
     public byte[] Second { get; private set; } = [];
 
+    /// <summary>The device tree blob segment of images whose header declares a DTB region.
+    /// <para>头部声明了 DTB 区域的镜像中的设备树 blob 区段。</para></summary>
+    /// <value>Raw DTB bytes; empty when the size is <c>0</c>, on V3/V4 images, or when the stored range exceeds the image.
+    /// <para>原始 DTB 字节；大小为 <c>0</c>、V3/V4 镜像，或存储范围超出镜像时为空数组。</para></value>
     public byte[] Dtb { get; private set; } = [];
 
+    /// <summary>A component buffer that the parse paths do not populate.
+    /// <para>各解析路径均不填充的组件缓冲区。</para></summary>
+    /// <value>Always an empty array after parsing; cleared again on dispose.
+    /// <para>解析后始终为空数组；释放时同样被清空。</para></value>
     public byte[] Extra { get; private set; } = [];
 
+    /// <summary>The recovery DTBO segment located at the header-declared absolute offset.
+    /// <para>按头部声明的绝对偏移定位的 recovery DTBO 区段。</para></summary>
+    /// <value>Raw DTBO bytes on V1/V2 images with a non-zero size and offset; empty otherwise or when the range exceeds the image.
+    /// <para>仅在 V1/V2 镜像且大小与非零偏移均存在时返回原始字节；其余情况或范围超出镜像时为空数组。</para></value>
     public byte[] RecoveryDtbo { get; private set; } = [];
 
+    /// <summary>The V4 boot image signature segment.
+    /// <para>V4 Boot 镜像的签名区段。</para></summary>
+    /// <value>Bytes read from the page-aligned signature region when the signature size is non-zero; empty for all other versions or sizes of <c>0</c>.
+    /// <para>签名大小非零时从页对齐的签名区域读取；其他版本或大小为 <c>0</c> 时为空数组。</para></value>
     public byte[] Signature { get; private set; } = [];
 
     internal static BootImageHeader ReadHeaderFile(string path)
@@ -80,6 +124,11 @@ public class BootImageParser : IDisposable
     /// Parses a boot image from a file.
     /// <para>从文件解析 Boot 镜像。</para>
     /// </summary>
+    /// <param name="filePath">
+    /// Path to an openable, seek-readable boot image file; the file is closed when parsing completes.
+    /// <para>可打开、可寻址读取的 Boot 镜像文件路径；解析完成后文件即被关闭。</para></param>
+    /// <exception cref="ImageParseException">The file is shorter than the magic or version field, or the first 8 bytes are not <c>ANDROID!</c>.
+    /// <para>文件长度不足魔数或版本字段所在范围，或前 8 字节不是 <c>ANDROID!</c>。</para></exception>
     public void ParseFile(string filePath)
     {
         using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
@@ -130,6 +179,11 @@ public class BootImageParser : IDisposable
     /// Parses a boot image from a byte array.
     /// <para>从字节数组解析 Boot 镜像。</para>
     /// </summary>
+    /// <param name="data">
+    /// Full image bytes beginning with the <c>ANDROID!</c> magic; a header version field greater than <c>4</c> is parsed as version 0.
+    /// <para>以 <c>ANDROID!</c> 魔数开头的完整镜像字节；头部版本字段大于 <c>4</c> 时按版本 0 解析。</para></param>
+    /// <exception cref="ImageParseException">The array is shorter than the magic or version field, or the first 8 bytes are not <c>ANDROID!</c>.
+    /// <para>数组长度不足魔数或版本字段所在范围，或前 8 字节不是 <c>ANDROID!</c>。</para></exception>
     public void Parse(byte[] data)
     {
         if (data.Length < 8)
@@ -377,6 +431,11 @@ public class BootImageParser : IDisposable
     /// Calculates the SHA1 checksum.
     /// <para>获取 SHA1 校验和。</para>
     /// </summary>
+    /// <param name="data">
+    /// Bytes to hash; an empty array hashes to the empty-input SHA-1 value.
+    /// <para>待哈希的字节；空数组得到空输入的 SHA-1 值。</para></param>
+    /// <returns>The 20-byte SHA-1 digest rendered as 40 lowercase hexadecimal characters.
+    /// <para>20 字节 SHA-1 摘要，呈现为 40 个小写十六进制字符。</para></returns>
     public static string CalculateSha1(byte[] data)
     {
         var hash = SHA1.HashData(data);

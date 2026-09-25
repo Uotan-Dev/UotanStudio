@@ -6,7 +6,6 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.ImgDiff;
 
-// Android recovery IMGDIFF2 contains NORMAL/BSDIFF, DEFLATE/BSDIFF and inline RAW chunks.
 internal static class ImageDeltaPatch
 {
     private sealed record Chunk(int Type, long SourceOffset, long SourceLength, long PatchOffset,
@@ -48,8 +47,6 @@ internal static class ImageDeltaPatch
         var chunkCount = (hasNormal ? 1 : 0) + (hasRaw ? 1 : 0);
         var normalSourceLength = Math.Min(normalLength, (long)sourceBytes.Length);
         var headerSize = 12 + (hasNormal ? 28 : 0) + (hasRaw ? 8 : 0);
-        // Apply parses chunk headers sequentially and skips each RAW chunk's inline body while scanning,
-        // so headerEnd falls past the RAW body and the NORMAL chunk's absolute offset must point after it.
         var normalPatchOffset = headerSize + (hasRaw ? (int)rawLength : 0);
 
         byte[] normalPatch;

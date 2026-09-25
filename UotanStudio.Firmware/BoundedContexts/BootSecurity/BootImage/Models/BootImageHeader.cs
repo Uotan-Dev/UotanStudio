@@ -2,60 +2,156 @@ using System.Text;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
 
+/// <summary>
+/// In-memory model of an Android boot image header: load addresses, section sizes and offsets,
+/// name strings and version fields used when unpacking or repacking a boot image.
+/// <para>Android boot image 头部的内存模型：加载地址、段大小与偏移、名称字符串和版本字段，用于解包或重打包 boot image。</para>
+/// </summary>
 public class BootImageHeader
 {
+    /// <summary>Header format version of the boot image.
+    /// <para>boot image 的头部格式版本。</para></summary>
+    /// <value>A <see cref="BootImageVersion"/> value; defaults to <see cref="BootImageVersion.V0"/>.
+    /// <para>取值为 <see cref="BootImageVersion"/> 枚举成员；默认为 <see cref="BootImageVersion.V0"/>。</para></value>
     public BootImageVersion HeaderVersion { get; set; } = BootImageVersion.V0;
 
+    /// <summary>Declared size of the header block in bytes.
+    /// <para>头部块声明的字节大小。</para></summary>
+    /// <value>Byte count; defaults to <c>1664</c>.
+    /// <para>字节数；默认为 <c>1664</c>。</para></value>
     public uint HeaderSize { get; set; } = 1664;
 
+    /// <summary>Physical load address for the kernel section.
+    /// <para>内核段的物理加载地址。</para></summary>
+    /// <value>64-bit target address; <c>0</c> when unset. <para>64 位目标地址；未设置时为 <c>0</c>。</para></value>
     public ulong KernelAddr { get; set; }
 
+    /// <summary>Physical load address for the ramdisk section.
+    /// <para>ramdisk 段的物理加载地址。</para></summary>
+    /// <value>64-bit target address; <c>0</c> when unset. <para>64 位目标地址；未设置时为 <c>0</c>。</para></value>
     public ulong RamdiskAddr { get; set; }
 
+    /// <summary>Physical load address for the second-stage bootloader section.
+    /// <para>二级引导加载程序段的物理加载地址。</para></summary>
+    /// <value>64-bit target address; <c>0</c> when unset. <para>64 位目标地址；未设置时为 <c>0</c>。</para></value>
     public ulong SecondAddr { get; set; }
 
+    /// <summary>Address where the tagged board information is placed.
+    /// <para>tag 板级信息块的放置地址。</para></summary>
+    /// <value>64-bit target address; <c>0</c> when unset. <para>64 位目标地址；未设置时为 <c>0</c>。</para></value>
     public ulong TagsAddr { get; set; }
 
+    /// <summary>Page alignment size of the image in bytes.
+    /// <para>镜像的页对齐大小（字节）。</para></summary>
+    /// <value>Page size such as 2048 or 4096; each section starts at a page boundary.
+    /// <para>例如 2048 或 4096 的页大小；每个段都从页边界开始。</para></value>
     public uint PageSize { get; set; }
 
+    /// <summary>Stored size of the kernel section in bytes.
+    /// <para>内核段在镜像中存储的字节大小。</para></summary>
+    /// <value>Byte count; <c>0</c> means no kernel section. <para>字节数；<c>0</c> 表示没有内核段。</para></value>
     public uint KernelSize { get; set; }
 
+    /// <summary>Stored size of the ramdisk section in bytes.
+    /// <para>ramdisk 段在镜像中存储的字节大小。</para></summary>
+    /// <value>Byte count; <c>0</c> means no ramdisk section. <para>字节数；<c>0</c> 表示没有 ramdisk 段。</para></value>
     public uint RamdiskSize { get; set; }
 
+    /// <summary>Stored size of the second-stage bootloader section in bytes.
+    /// <para>二级引导加载程序段在镜像中存储的字节大小。</para></summary>
+    /// <value>Byte count; <c>0</c> means no second-stage section. <para>字节数；<c>0</c> 表示没有二级引导段。</para></value>
     public uint SecondSize { get; set; }
 
+    /// <summary>Stored size of the DTB section in bytes.
+    /// <para>DTB 段在镜像中存储的字节大小。</para></summary>
+    /// <value>Byte count; <c>0</c> means no DTB section. <para>字节数；<c>0</c> 表示没有 DTB 段。</para></value>
     public uint DtbSize { get; set; }
 
+    /// <summary>64-bit kernel load address recorded in the header.
+    /// <para>头部记录的 64 位内核加载地址。</para></summary>
+    /// <value>Target address used by layouts that carry an explicit kernel load address field; <c>0</c> when unset.
+    /// <para>由带显式内核加载地址字段的布局使用的目标地址；未设置时为 <c>0</c>。</para></value>
     public ulong KernelLoadAddr { get; set; }
 
+    /// <summary>Stored size of the recovery DTBO section in bytes.
+    /// <para>recovery DTBO 段存储的字节大小。</para></summary>
+    /// <value>Byte count; <c>0</c> means no recovery DTBO section. <para>字节数；<c>0</c> 表示没有 recovery DTBO 段。</para></value>
     public uint RecoveryDtboSize { get; set; }
 
+    /// <summary>Byte offset of the recovery DTBO section within the image.
+    /// <para>recovery DTBO 段在镜像内的字节偏移。</para></summary>
+    /// <value>Offset counted from the image start; meaningful together with <see cref="RecoveryDtboSize"/>.
+    /// <para>从镜像起始计算的偏移；与 <see cref="RecoveryDtboSize"/> 配合使用。</para></value>
     public ulong RecoveryDtboOffset { get; set; }
 
+    /// <summary>Stored size of the vendor signature block in bytes.
+    /// <para>厂商签名块存储的字节大小。</para></summary>
+    /// <value>Byte count; <c>0</c> means no signature block. <para>字节数；<c>0</c> 表示没有签名块。</para></value>
     public uint SignatureSize { get; set; }
 
+    /// <summary>Kernel command line carried by the header.
+    /// <para>头部携带的内核命令行。</para></summary>
+    /// <value>Raw command-line string; empty by default. <para>原始命令行字符串；默认为空。</para></value>
     public string CommandLine { get; set; } = string.Empty;
 
+    /// <summary>Product name recorded in the header.
+    /// <para>头部记录的产品名称。</para></summary>
+    /// <value>Product string; empty by default. <para>产品字符串；默认为空。</para></value>
     public string ProductName { get; set; } = string.Empty;
 
+    /// <summary>Image name recorded in the header.
+    /// <para>头部记录的镜像名称。</para></summary>
+    /// <value>Name string; empty by default. <para>名称字符串；默认为空。</para></value>
     public string ImageName { get; set; } = string.Empty;
 
+    /// <summary>Compression format of the stored kernel section.
+    /// <para>存储的内核段的压缩格式。</para></summary>
+    /// <value>A <see cref="CompressionType"/> value; <see cref="CompressionType.None"/> means uncompressed or undetected.
+    /// <para>取值为 <see cref="CompressionType"/> 枚举成员；<see cref="CompressionType.None"/> 表示未压缩或未检测。</para></value>
     public CompressionType KernelCompression { get; set; }
 
+    /// <summary>Compression format of the stored ramdisk section.
+    /// <para>存储的 ramdisk 段的压缩格式。</para></summary>
+    /// <value>A <see cref="CompressionType"/> value; <see cref="CompressionType.None"/> means uncompressed or undetected.
+    /// <para>取值为 <see cref="CompressionType"/> 枚举成员；<see cref="CompressionType.None"/> 表示未压缩或未检测。</para></value>
     public CompressionType RamdiskCompression { get; set; }
 
+    /// <summary>Byte offset of the kernel section within the image.
+    /// <para>内核段在镜像内的字节偏移。</para></summary>
+    /// <value>Offset counted from the image start. <para>从镜像起始计算的偏移。</para></value>
     public uint KernelOffset { get; set; }
 
+    /// <summary>Byte offset of the ramdisk section within the image.
+    /// <para>ramdisk 段在镜像内的字节偏移。</para></summary>
+    /// <value>Offset counted from the image start. <para>从镜像起始计算的偏移。</para></value>
     public uint RamdiskOffset { get; set; }
 
+    /// <summary>Byte offset of the second-stage bootloader section within the image.
+    /// <para>二级引导加载程序段在镜像内的字节偏移。</para></summary>
+    /// <value>Offset counted from the image start. <para>从镜像起始计算的偏移。</para></value>
     public uint SecondOffset { get; set; }
 
+    /// <summary>Byte offset of the tagged board information block within the image.
+    /// <para>tag 板级信息块在镜像内的字节偏移。</para></summary>
+    /// <value>Offset counted from the image start. <para>从镜像起始计算的偏移。</para></value>
     public uint TagsOffset { get; set; }
 
+    /// <summary>Header identifier/checksum words embedded in the boot image header.
+    /// <para>嵌入 boot image 头部的标识/校验字。</para></summary>
+    /// <value>Always eight unsigned 32-bit words; freshly created headers hold all zeros.
+    /// <para>固定为八个无符号 32 位字；新建头部全为 0。</para></value>
     public uint[] Ids { get; set; } = new uint[8];
 
+    /// <summary>Packed Android OS version field.
+    /// <para>打包后的 Android OS 版本字段。</para></summary>
+    /// <value>Major version in bits 25-31, minor in bits 18-24 and patch in bits 11-17; see <see cref="OsVersionString"/>.
+    /// <para>主版本位于第 25-31 位，次版本位于第 18-24 位，补丁号位于第 11-17 位；参见 <see cref="OsVersionString"/>。</para></value>
     public uint OsVersion { get; set; }
 
+    /// <summary>Human-readable OS version decoded from <see cref="OsVersion"/>.
+    /// <para>由 <see cref="OsVersion"/> 解码出的可读 OS 版本。</para></summary>
+    /// <value><c>major.minor.patch</c> text; empty when all three packed components are zero.
+    /// <para><c>major.minor.patch</c> 文本；三个打包分量全为 0 时返回空字符串。</para></value>
     public string OsVersionString
     {
         get
@@ -72,12 +168,18 @@ public class BootImageHeader
         }
     }
 
+    /// <summary>Architecture code recorded in the header.
+    /// <para>头部记录的架构编码。</para></summary>
+    /// <value>Raw numeric architecture identifier as stored by the source image.
+    /// <para>按源镜像原样存储的数值型架构标识。</para></value>
     public uint Architecture { get; set; }
 
     /// <summary>
     /// Converts to a string format similar to the original header output.
     /// <para>转换为字符串格式，输出头部信息。</para>
     /// </summary>
+    /// <returns>Line-separated summary of version, sizes and addresses; addresses use 16-digit hexadecimal.
+    /// <para>按行分隔的版本、大小与地址摘要；地址采用 16 位十六进制表示。</para></returns>
     public override string ToString()
     {
         var sb = new StringBuilder();
@@ -105,6 +207,10 @@ public class BootImageHeader
     /// Serializes to text format for saving and restoring.
     /// <para>序列化为文本格式，用于保存和恢复。</para>
     /// </summary>
+    /// <returns>One <c>key=value</c> line per field; addresses and 64-bit offsets use <c>0x</c>-prefixed
+    /// 16-digit hexadecimal, sizes and numeric fields use decimal.
+    /// <para>每个字段一行 <c>key=value</c>；地址与 64 位偏移使用带 <c>0x</c> 前缀的 16 位十六进制，
+    /// 大小与数值字段使用十进制。</para></returns>
     public string ToHeaderFile()
     {
         var sb = new StringBuilder();
@@ -139,6 +245,16 @@ public class BootImageHeader
     /// Parses header information from text format.
     /// <para>从文本格式解析头部信息。</para>
     /// </summary>
+    /// <param name="content">
+    /// Whole header-file text using <c>key=value</c> lines; blank lines and lines starting with <c>#</c>
+    /// are skipped, and unrecognized keys are ignored. Hexadecimal values may carry a <c>0x</c> prefix.
+    /// <para>完整的头部文件文本，使用 <c>key=value</c> 行；跳过空行和以 <c>#</c> 开头的行，未识别的键被忽略；
+    /// 十六进制值可以带 <c>0x</c> 前缀。</para></param>
+    /// <returns>A header populated from the recognized keys, with defaults kept for absent ones;
+    /// <see langword="null"/> when the text is unparseable (a bad value, an unknown version name,
+    /// or <see langword="null"/> content). The method catches all parse failures and never throws.
+    /// <para>按已识别键填充的头部，缺省键保留默认值；文本无法解析（坏值、未知版本名或 <see langword="null"/> 内容）
+    /// 时返回 <see langword="null"/>。该方法捕获所有解析失败且不抛出异常。</para></returns>
     public static BootImageHeader? ParseHeaderFile(string content)
     {
         try

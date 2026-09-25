@@ -9,12 +9,24 @@ using ZstdSharp;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
 
+/// <summary>
+/// Detects and decompresses the compression containers used by boot image components, working on in-memory buffers.
+/// <para>检测并解压启动镜像组件使用的压缩容器，基于内存中的缓冲区工作。</para>
+/// </summary>
 public static class BootCompressor
 {
     /// <summary>
     /// Detects the compression format of data by magic bytes.
     /// <para>依据魔数检测数据的压缩格式。</para>
     /// </summary>
+    /// <param name="data">
+    /// Candidate compressed buffer; a <see langword="null"/> reference or fewer than 4 bytes always yields <c>CompressionType.None</c>.
+    /// <para>候选压缩缓冲区；<see langword="null"/> 引用或不足 4 字节时始终返回 <c>CompressionType.None</c>。</para>
+    /// </param>
+    /// <returns>
+    /// The container whose magic matched (gzip, LZ4, legacy LZ4, XZ, bzip2, Zstd, LZOP, Brotli, raw LZMA), otherwise <c>CompressionType.None</c>. Magic matching alone does not prove the payload decodes.
+    /// <para>魔数匹配的容器类型（gzip、LZ4、传统 LZ4 帧、XZ、bzip2、Zstd、LZOP、Brotli、原始 LZMA），否则为 <c>CompressionType.None</c>。仅魔数匹配并不能保证数据可以解码。</para>
+    /// </returns>
     public static CompressionType Detect(byte[] data)
     {
         if (data is null || data.Length < 4)
@@ -22,24 +34,20 @@ public static class BootCompressor
             return CompressionType.None;
         }
 
-
         if (data[0] == 0x1F && data[1] == 0x8B)
         {
             return CompressionType.Gzip;
         }
-
 
         if (data[0] == 0x02 && data[1] == 0x21 && data[2] == 0x4C && data[3] == 0x18)
         {
             return CompressionType.Lz4Legacy;
         }
 
-
         if (data[0] == 0x04 && data[1] == 0x22 && data[2] == 0x4D && data[3] == 0x18)
         {
             return CompressionType.Lz4;
         }
-
 
         if (data.Length >= 6 && data[0] == 0xFD && data[1] == 0x37 && data[2] == 0x7A
             && data[3] == 0x58 && data[4] == 0x5A && data[5] == 0x00)
@@ -47,30 +55,25 @@ public static class BootCompressor
             return CompressionType.Xz;
         }
 
-
         if (data[0] == (byte)'B' && data[1] == (byte)'Z' && data[2] == (byte)'h')
         {
             return CompressionType.Bzip2;
         }
-
 
         if (data[0] == 0x28 && data[1] == 0xB5 && data[2] == 0x2F && data[3] == 0xFD)
         {
             return CompressionType.Zstd;
         }
 
-
         if (data[0] == 0x89 && data[1] == 0x4C && data[2] == 0x5A && data[3] == 0x4F)
         {
             return CompressionType.Lzop;
         }
 
-
         if (data[0] == 0x0B && data[1] == 0x0A)
         {
             return CompressionType.Brotli;
         }
-
 
         return data[0] == 0x5D && data[1] == 0x00 && data[2] == 0x00 ? CompressionType.Lzma : CompressionType.None;
     }
@@ -79,6 +82,18 @@ public static class BootCompressor
     /// Decompresses data, or returns null when unsupported or on failure.
     /// <para>解压数据；失败或格式不受支持时返回 null。</para>
     /// </summary>
+    /// <param name="data">
+    /// Compressed container held entirely in memory; <see langword="null"/> or empty input yields <see langword="null"/>.
+    /// <para>完整驻留内存的压缩容器；<see langword="null"/> 或空输入返回 <see langword="null"/>。</para>
+    /// </param>
+    /// <param name="type">
+    /// Container format to attempt regardless of the actual contents; <c>CompressionType.None</c> decodes to an empty array and unsupported values yield <see langword="null"/>.
+    /// <para>无论实际内容为何、要尝试的容器格式；<c>CompressionType.None</c> 会解码为空数组，不受支持的值返回 <see langword="null"/>。</para>
+    /// </param>
+    /// <returns>
+    /// The decompressed bytes, or <see langword="null"/> when the format is unsupported or any decoding error occurs; all exceptions raised by the underlying codecs are swallowed.
+    /// <para>解压后的字节；当格式不受支持或出现任何解码错误时返回 <see langword="null"/>，底层编解码器抛出的异常全部被吞没。</para>
+    /// </returns>
     public static byte[]? TryDecompress(byte[] data, CompressionType type)
     {
         if (data is null || data.Length == 0)
@@ -140,13 +155,11 @@ public static class BootCompressor
                 case CompressionType.Lz4Legacy:
                     return CompressionService.Decompress(data, CompressionFormat.Lz4Legacy);
                 case CompressionType.Lz4Lg:
-                    // lz4_lg uses the same legacy block framing in Android boot images.
                     return CompressionService.Decompress(data, CompressionFormat.Lz4Legacy);
                 case CompressionType.Lzma:
                     return CompressionService.Decompress(data, CompressionFormat.Lzma);
                 case CompressionType.Lzop:
                     return LzopCompressor.Decompress(data);
-
 
                 default:
                     return null;
@@ -164,6 +177,13 @@ public static class BootCompressor
     /// Convenience overload: auto-detects and tries to decompress.
     /// <para>便捷重载：自动检测并尝试解压。</para>
     /// </summary>
+    /// <param name="data">
+    /// Candidate compressed buffer inspected by <see cref="Detect"/>. <para>由 <see cref="Detect"/> 检查的候选压缩缓冲区。</para>
+    /// </param>
+    /// <returns>
+    /// The decompressed bytes; the input array itself when no magic is detected or decompression fails.
+    /// <para>解压后的字节；未检测到魔数或解压失败时返回输入数组本身。</para>
+    /// </returns>
     public static byte[] DecompressOrReturn(byte[] data)
     {
         var type = Detect(data);

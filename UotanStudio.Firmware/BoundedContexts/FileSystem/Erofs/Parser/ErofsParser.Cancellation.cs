@@ -2,7 +2,6 @@ namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
 
 public sealed partial class ErofsParser
 {
-    // Writes remain bounded by the existing decoder/copy paths. The wrapper leaves caller streams open.
     private sealed class CancellableOutput(Stream inner, CancellationToken token) : Stream
     {
         public override bool CanRead => false;

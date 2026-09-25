@@ -22,15 +22,15 @@ namespace UotanStudio.Media.Audio;
 public sealed unsafe partial class AudioUnitSink : IAudioSink
 {
     private const string Au = "/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox";
-    private const uint ComponentTypeOutput = 0x61756F75; // kAudioUnitType_Output ('auou')
-    private const uint ComponentSubTypeDefault = 0x64656661; // kAudioUnitSubType_DefaultOutputUnit ('defa')
-    private const uint ComponentManufacturer = 0x61706C63; // kAudioUnitManufacturer_Apple ('aplc')
+    private const uint ComponentTypeOutput = 0x61756F75;
+    private const uint ComponentSubTypeDefault = 0x64656661;
+    private const uint ComponentManufacturer = 0x61706C63;
     private const uint ScopeOutput = 0;
-    private const uint ScopeInput = 1;                    // input side of the output unit = data we feed
+    private const uint ScopeInput = 1;
     private const uint ElementOutput = 0;
-    private const uint PropertyStreamFormat = 8;          // kAudioUnitProperty_StreamFormat
-    private const uint PropertyRenderCallback = 11;       // kAudioUnitProperty_SetRenderCallback
-    private const uint FormatIdPcm = 0x6C70636D;          // 'lpcm'
+    private const uint PropertyStreamFormat = 8;
+    private const uint PropertyRenderCallback = 11;
+    private const uint FormatIdPcm = 0x6C70636D;
     private nint _unit;
     private AudioPcmRingBuffer? _staging;
     private int _channels = 2, _sampleRate;
@@ -39,16 +39,33 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
     private GCHandle _self;
     private bool _disposed;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Whether the output AudioUnit is instantiated and rendering.
+    /// <para>输出 AudioUnit 是否已实例化并正在渲染。</para>
+    /// </summary>
+    /// <value><see langword="true"/> while the unit handle is held; otherwise <see langword="false"/>. <para>持有单元句柄期间为 <see langword="true"/>，否则为 <see langword="false"/>。</para></value>
     public bool IsOpen => _unit != 0;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// The channel count the sink was opened with.
+    /// <para>打开该输出端时指定的通道数。</para>
+    /// </summary>
+    /// <value>Channel count (1 or 2); valid once open. <para>通道数（1 或 2）；打开后有效。</para></value>
     public int Channels => _channels;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// The sample rate the sink was opened with.
+    /// <para>打开该输出端时指定的采样率。</para>
+    /// </summary>
+    /// <value>Sample rate in hertz; valid once open. <para>以赫兹计的采样率；打开后有效。</para></value>
     public int SampleRate => _sampleRate;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// The playback gain applied to staged PCM, in the range <c>0.0</c> to <c>1.0</c>.
+    /// <para>应用于暂存 PCM 的播放增益，取值范围为 <c>0.0</c> 到 <c>1.0</c>。</para>
+    /// </summary>
+    /// <value>The current gain; values below <c>0.0</c> clamp to <c>0.0</c> and values above <c>1.0</c> clamp to <c>1.0</c>. <para>当前增益；小于 <c>0.0</c> 的值被钳制为 <c>0.0</c>，大于 <c>1.0</c> 的值被钳制为 <c>1.0</c>。</para></value>
+    /// <exception cref="ArgumentOutOfRangeException">The assigned value is not a finite number. <para>所赋的值不是有限数。</para></exception>
     public float Volume
     {
         get => _volumeValue;
@@ -60,7 +77,34 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Opens the default output AudioUnit, closes any previous instance, and starts rendering; the unit is converted to the device float32 format internally.
+    /// <para>打开默认输出 AudioUnit，关闭此前的实例并开始渲染；单元在内部转换为设备 float32 格式。</para>
+    /// </summary>
+    /// <param name="channels">
+    /// Input channel count; must be 1 or 2.
+    /// <para>输入通道数；必须为 1 或 2。</para>
+    /// </param>
+    /// <param name="sampleRate">
+    /// Input sample rate in hertz; must be within 8000 to 192000.
+    /// <para>以赫兹计的输入采样率；必须处于 8000 至 192000 之间。</para>
+    /// </param>
+    /// <param name="bitsPerSample">
+    /// Input sample width; only 16-bit PCM is accepted.
+    /// <para>输入位宽；仅接受 16 位 PCM。</para>
+    /// </param>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The channel count, sample rate, or bit depth is outside the supported range.
+    /// <para>通道数、采样率或位深超出支持范围。</para>
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// The call runs on a thread other than the owning thread, the default output component is unavailable, or an AudioUnit call fails.
+    /// <para>该调用在非属主线程上运行、默认输出组件不可用，或某个 AudioUnit 调用失败。</para>
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">
+    /// The sink has been disposed.
+    /// <para>输出端已被释放。</para>
+    /// </exception>
     public void Open(int channels, int sampleRate, int bitsPerSample)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -75,9 +119,6 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
             ComponentSubType = ComponentSubTypeDefault,
             ComponentManufacturer = ComponentManufacturer,
         };
-        // AudioComponentFindNext returns the component handle (null = not found),
-        // not a status code.
-        // AudioComponentFindNext 返回组件句柄（null 表示未找到），而非状态码。
         nint component = AudioComponentFindNext(0, &description);
         if (component == 0) throw new InvalidOperationException("AudioUnit default output component is unavailable.");
         Check(AudioComponentInstanceNew(component, out _unit), "AudioComponentInstanceNew");
@@ -88,7 +129,7 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
             {
                 SampleRate = sampleRate,
                 FormatId = FormatIdPcm,
-                FormatFlags = 0x9, // interleaved float32
+                FormatFlags = 0x9,
                 BytesPerPacket = 4 * (uint)channels,
                 FramesPerPacket = 1,
                 BytesPerFrame = 4 * (uint)channels,
@@ -111,7 +152,26 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
         _sampleRate = sampleRate;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Stages 16-bit interleaved PCM for the render callback, scaled by the current <see cref="Volume"/>; an empty span is ignored.
+    /// <para>将 16 位交错 PCM 暂存以供渲染回调读取，并按当前 <see cref="Volume"/> 缩放；空区间会被忽略。</para>
+    /// </summary>
+    /// <param name="pcm">
+    /// Interleaved 16-bit PCM whose length is a multiple of the frame size; read only for the duration of the call.
+    /// <para>长度须为帧大小整数倍的交错 16 位 PCM；仅在调用期间被读取。</para>
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="pcm"/> is not frame aligned or exceeds the maximum packet size.
+    /// <para><paramref name="pcm"/> 未按帧对齐，或超过最大数据包大小。</para>
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// The sink is not open or the call runs on a thread other than the owning thread.
+    /// <para>输出端未打开，或该调用在非属主线程上运行。</para>
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">
+    /// The sink has been disposed.
+    /// <para>输出端已被释放。</para>
+    /// </exception>
     public void Write(ReadOnlySpan<byte> pcm)
     {
         CheckOpen();
@@ -119,9 +179,6 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
         if (pcm.Length % blockAlign != 0) throw new ArgumentException("PCM length is not frame aligned.", nameof(pcm));
         if (pcm.IsEmpty) return;
 
-        // Convert int16 → interleaved float32 and stage it; the render callback
-        // consumes on the HAL thread. Volume applies during conversion of new samples.
-        // int16 → 交错 float32 转换后暂存；渲染回调在 HAL 线程消费。音量在转换新样本时应用。
         if (pcm.Length > AudioFormatLimits.MaximumPacketBytes) throw new ArgumentException("Excessive PCM packet.", nameof(pcm));
         _staging!.Write(pcm, _volumeValue);
     }
@@ -143,7 +200,7 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
             else staging.Read(destination);
             return 0;
         }
-        catch { return -50; } // Never unwind managed exceptions across the native audio callback.
+        catch { return -50; }
     }
     private void CheckOpen()
     {
@@ -152,7 +209,10 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
         if (_thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The sink must remain on its owning thread.");
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Stops and disposes the output AudioUnit and releases the staging buffer and self handle; repeated calls are no-ops once disposed.
+    /// <para>停止并释放输出 AudioUnit，同时解除暂存缓冲区与自引用句柄；已释放后再次调用不产生效果。</para>
+    /// </summary>
     public void Dispose()
     {
         if (_disposed) return;
@@ -233,6 +293,5 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
     [LibraryImport(Au)] private static partial int AudioOutputUnitStop(nint unit);
     [LibraryImport(Au)] private static partial int AudioUnitSetProperty(nint unit, uint propertyId, uint scope, uint element, void* data, uint size);
     [LibraryImport(Au)] private static partial int AudioUnitSetParameter(nint unit, uint parameterId, uint scope, uint element, float value, uint bufferOffsetInFrames);
-
 
 }

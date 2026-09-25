@@ -9,12 +9,31 @@ using UotanStudio.Firmware.BoundedContexts.AndroidMeta.IO;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Parsing;
 
+/// <summary>
+/// Reads an APK container and extracts its manifest metadata, detected signature schemes, packaged ABIs,
+/// hardening markers and application icon into an <see cref="Models.ApkInfo"/>.
+/// <para>读取 APK 容器，把清单元数据、签名方案探测结果、打包 ABI、加固标记与应用图标提取到 <see cref="Models.ApkInfo"/>。</para>
+/// </summary>
 public static class ApkParser
 {
     /// <summary>
     /// Analyzes an APK file and extracts its metadata.
     /// <para>分析 APK 文件并提取元数据。</para>
     /// </summary>
+    /// <param name="apkPath">Path to the APK on disk; the file must exist and is opened for reading only. <para>磁盘上的 APK 路径；文件必须存在且仅以只读方式打开。</para></param>
+    /// <param name="preferredLanguage">Locale for the localized application label (for example <c>en-US</c> or <c>zh-rCN</c>; underscores and <c>-r</c> separators are normalized, exact match beats language-only match); <see langword="null"/> or empty keeps the default configuration. <para>用于本地化应用名称的语言（如 <c>en-US</c>、<c>zh-rCN</c>；下划线与 <c>-r</c> 分隔会被归一化，精确匹配优于仅语言匹配）；为 null 或空时取默认配置。</para></param>
+    /// <returns>A populated <see cref="Models.ApkInfo"/>; fields that could not be resolved keep their empty or zero defaults. Signature-block parse failures are swallowed and surface only as a missing v2/v3 entry. <para>填充完成的 <see cref="Models.ApkInfo"/>；未能解析的字段保持空值或零默认。签名块解析失败会被吞掉，仅表现为缺少 v2/v3 条目。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="apkPath"/> is <see langword="null"/>. <para><paramref name="apkPath"/> 为 null。</para></exception>
+    /// <exception cref="FileNotFoundException">No file exists at <paramref name="apkPath"/>. <para><paramref name="apkPath"/> 处没有文件。</para></exception>
+    /// <exception cref="InvalidDataException">The ZIP is malformed, or a manifest/icon/resources entry exceeds its read limit (16 MiB for manifest and icon). <para>ZIP 结构非法，或清单/图标/resources 条目超出读取上限（清单与图标为 16 MiB）。</para></exception>
+    /// <exception cref="AXmlException">The embedded <c>AndroidManifest.xml</c> cannot be parsed. <para>内嵌的 <c>AndroidManifest.xml</c> 无法解析。</para></exception>
+    /// <exception cref="ArscException">The embedded <c>resources.arsc</c> cannot be parsed. <para>内嵌的 <c>resources.arsc</c> 无法解析。</para></exception>
+    /// <example>
+    /// <code>
+    /// ApkInfo info = ApkParser.Analyze(@"packages\release.apk", "zh-rCN");
+    /// string line = info.Describe();
+    /// </code>
+    /// </example>
     public static ApkInfo Analyze(string apkPath, string? preferredLanguage = null)
     {
         ArgumentNullException.ThrowIfNull(apkPath);

@@ -3,9 +3,12 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 
+/// <summary>
+/// Partial declaration implementing in-place growth of an existing ext4 image by appending whole block groups.
+/// <para>实现就地扩大既有 ext4 镜像的局部声明：通过追加整块块组扩容。</para>
+/// </summary>
 public sealed partial class Ext4Builder
 {
-    // Superblock field offsets (relative to the start of the 1024-byte superblock).
     private const int SbInodesCountLo = 0x00;
     private const int SbBlocksCountLo = 0x04;
     private const int SbRBlocksCountLo = 0x08;
@@ -46,8 +49,12 @@ public sealed partial class Ext4Builder
     /// （不支持 <c>sparse_super2</c>）；新增组必须仍落在既有主 GDT 块数之内（超出需要重定位保留 GDT，尚未实现）；
     /// 增长以整块组为单位，请求向上取整。</para>
     /// </remarks>
-    /// <param name="imagePath">Path to the ext4 image file modified in place. / 就地修改的 ext4 镜像路径。</param>
-    /// <param name="targetBlocks">Desired total block count; rounded up to a whole block group. / 目标总块数，向上取整到整块组。</param>
+    /// <param name="imagePath">
+    /// Path to the ext4 image file modified in place. <para>就地修改的 ext4 镜像路径。</para>
+    /// </param>
+    /// <param name="targetBlocks">
+    /// Desired total block count; rounded up to a whole block group. <para>目标总块数，向上取整到整块组。</para>
+    /// </param>
     public static void Grow(string imagePath, long targetBlocks)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
@@ -60,6 +67,14 @@ public sealed partial class Ext4Builder
     /// Grows a seekable, writable ext4 stream by appending whole block groups.
     /// <para>通过追加整块块组扩大可随机读写的 ext4 流。</para>
     /// </summary>
+    /// <param name="image">
+    /// Readable, writable and seekable stream modified in place; it stays open afterwards. A stream missing any of the three capabilities throws <see cref="ArgumentException"/>.
+    /// <para>就地修改的可读、可写、可寻址流；调用后保持打开。缺少三者任一能力的流会抛出 <see cref="ArgumentException"/>。</para>
+    /// </param>
+    /// <param name="targetBlocks">
+    /// Desired total block count, rounded up to a whole block group; requests at or below the current capacity return unchanged. The layout limits listed in the remarks of <see cref="Grow(string, long)"/> apply and surface as <see cref="NotSupportedException"/>.
+    /// <para>目标总块数，向上取整到整块组；不大于当前容量的请求原样返回。<see cref="Grow(string, long)"/> 备注中列出的布局限制同样适用，并以 <see cref="NotSupportedException"/> 呈现。</para>
+    /// </param>
     public static void Grow(Stream image, long targetBlocks)
     {
         ArgumentNullException.ThrowIfNull(image);
@@ -112,9 +127,6 @@ public sealed partial class Ext4Builder
         var oldGroupCount = (oldTotal + blocksPerGroup - 1) / blocksPerGroup;
         if (targetBlocks <= oldTotal)
         {
-            // Nothing to append: the request is at or below the current size. Report an exact no-op so
-            // callers can distinguish "already large enough" from a real error.
-            // <para>无需追加：请求不大于当前容量。给出精确的空操作，便于调用方区分“已经足够大”与真正的错误。</para>
             return;
         }
 
@@ -135,8 +147,6 @@ public sealed partial class Ext4Builder
                 "relocating the reserved GDT blocks is not implemented.");
         }
 
-        // The inode table must fit the descriptor + reserved-GDT metadata at the head of every group.
-        // <para>inode 表必须能容纳每个块组头部的描述符 + 保留 GDT 元数据。</para>
         var inodeTableBlocks = (inodesPerGroup * inodeSize + blockSize - 1) / blockSize;
         var metaHead = 1L + oldGdtBlocks + reservedGdtBlocks;
         if (2 + inodeTableBlocks + (hasResizeInode ? 4 : 0) > blocksPerGroup)
@@ -153,9 +163,6 @@ public sealed partial class Ext4Builder
         var oldUsed = oldTotal - (long)sb.FreeBlocksCount;
         var oldUsedInodes = (long)sb.InodesCount - sb.FreeInodesCount;
 
-        // Reconstruct group 0's descriptor locations so the shared resize-inode helper targets the
-        // same fixed metadata blocks the original build used.
-        // <para>重建组 0 的描述符位置，使共享的 resize inode 辅助方法指向与原构建相同的固定元数据块。</para>
         var group0 = new GroupInfo
         {
             GroupIndex = 0,
@@ -172,18 +179,12 @@ public sealed partial class Ext4Builder
             resizeDindirBlock = group0.FirstDataBlock;
         }
 
-        // Read the existing primary GDT so every current group descriptor is preserved verbatim (its
-        // block/inode bitmap checksums and usage counts remain untouched).
-        // <para>读取现有主 GDT，逐字保留每个既有组描述符（其位图校验与用量计数保持不动）。</para>
         var gdtBuffer = new byte[checked((int)(oldGdtBlocks * blockSize))];
         output.Position = blockSize;
         output.ReadExactly(gdtBuffer, 0, gdtBuffer.Length);
 
         long addedMetaBlocks = 0;
 
-        // Size the file first so appends land in freshly zeroed space; every new group region is then
-        // written from a clean buffer regardless of any pre-existing bytes beyond the old filesystem.
-        // <para>先扩容文件，使追加落在新清零的空间；随后每个新组区域都用干净缓冲写入，不受旧文件系统之外的既有字节影响。</para>
         var newFileLength = checked(newTotal * blockSize);
         if (output.Length < newFileLength)
         {
@@ -206,8 +207,6 @@ public sealed partial class Ext4Builder
                 InodesInGroup = (int)inodesPerGroup,
             };
 
-            // Zero the whole group, then stamp the block/inode bitmaps and the empty inode table.
-            // <para>先清零整块组，再写入块/inode 位图与空的 inode 表。</para>
             var groupBlocks = Math.Min(blocksPerGroup, newTotal - groupStart);
             for (var b = 0L; b < groupBlocks; b++)
             {
@@ -235,8 +234,6 @@ public sealed partial class Ext4Builder
             addedMetaBlocks += groupBlocks - freeBlocks;
         }
 
-        // Rewrite the primary group descriptor table with the appended entries.
-        // <para>用新增条目重写主块组描述符表。</para>
         WriteAt(output, 0, blockSize, gdtBuffer, gdtBuffer.Length);
 
         var newUsed = oldUsed + addedMetaBlocks;
@@ -250,20 +247,14 @@ public sealed partial class Ext4Builder
         PatchSuperblock(primary, newTotal, newFree, newInodes, newFreeInodes, newReserved, metadataCsum);
         WriteAt(output, 0, 1024, primary, primary.Length);
 
-        // Regenerate the resize inode and its reserved/primary GDT backup table for the new group set.
-        // <para>按新的块组集合重建 resize inode 及其保留/主 GDT 备份表。</para>
         if (hasResizeInode)
         {
-            // Rebuild a group list the shared helper indexes by inode number (only group 0 holds inode 6).
-            // <para>重建辅助方法按 inode 号索引的组列表（仅组 0 持有 inode 6）。</para>
             var groupsForResize = new List<GroupInfo> { group0 };
             WriteResizeInodeMetadata(output, 0, groupsForResize, (int)blocksPerGroup, (int)newGroupCount,
                 oldGdtBlocks, (int)reservedGdtBlocks, (int)blockSize, (int)inodeSize, (int)inodesPerGroup, sb.Uuid,
                 metadataCsum, resizeDindirBlock);
         }
 
-        // Write every sparse-super backup (superblock + GDT) for the enlarged group set.
-        // <para>为扩大后的块组集合写入所有 sparse-super 备份（超级块 + GDT）。</para>
         foreach (var bg in BackupSuperblockGroups((int)newGroupCount))
         {
             var copy = (byte[])primary.Clone();
@@ -279,7 +270,7 @@ public sealed partial class Ext4Builder
 
     private static void PatchSuperblock(byte[] sb, long totalBlocks, long freeBlocks, long inodes, long freeInodes, long reserved, bool metadataCsum)
     {
-        _ = metadataCsum; // The checksum field is always recomputed below; csum_present only governs whether e2fsck trusts it.
+        _ = metadataCsum;
         WriteU32(sb, SbBlocksCountLo, (uint)totalBlocks);
         WriteU32(sb, SbBlocksCountHi, (uint)(totalBlocks >> 32));
         WriteU32(sb, SbFreeBlocksCountLo, (uint)freeBlocks);

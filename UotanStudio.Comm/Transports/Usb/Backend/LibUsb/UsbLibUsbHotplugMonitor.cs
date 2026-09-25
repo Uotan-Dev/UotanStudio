@@ -58,7 +58,6 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
 
     private void OnDeviceEvent(object? sender, DeviceEventArgs e)
     {
-        // Never block the libusb event thread: re-enumerate and diff on the thread pool.
         _ = e;
         _ = Task.Run(() =>
         {

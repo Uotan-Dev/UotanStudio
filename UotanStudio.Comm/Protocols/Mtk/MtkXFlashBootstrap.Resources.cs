@@ -60,7 +60,6 @@ public static partial class MtkXFlashBootstrap
         }
         finally
         {
-            // Attempt every release even when an external provider's stream throws on disposal.
             List<Exception>? failures = null;
             foreach (var resource in resources)
             {

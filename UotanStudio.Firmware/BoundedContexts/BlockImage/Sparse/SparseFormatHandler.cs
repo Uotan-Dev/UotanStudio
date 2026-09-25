@@ -9,6 +9,15 @@ using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
 
+/// <summary>
+/// Format handler for the Android sparse image (simg) container: recognizes the sparse header magic, reports chunk
+/// and block geometry, unpacks either the inner filesystem (ext4, erofs, f2fs) or the full raw image, and converts
+/// raw images back to sparse. Sparse structures from untrusted files are validated by the reader; operation errors
+/// surface as failure results.
+/// <para>Android 稀疏镜像（simg）容器的格式处理器：识别稀疏头魔数、报告块与 chunk 几何信息、解包内部文件系统
+/// （ext4、erofs、f2fs）或完整 raw 镜像，并把 raw 镜像转回稀疏格式。来自不可信文件的稀疏结构由读取器校验；
+/// 操作错误以失败结果呈现。</para>
+/// </summary>
 public sealed class SparseFormatHandler : SharedKernel.IFormatHandler, IRepackMetadataProvider
 {
     void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
@@ -18,14 +27,26 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler, IRepackMe
         string metadataDirectory, CancellationToken cancellationToken)
         => FileSystemRepackMetadata.CaptureAsync(metadata, sourcePath, outputDirectory, metadataDirectory, cancellationToken, sparse: true);
 
+    /// <summary>Display name published with every operation result of this handler.
+    /// <para>本处理器每次操作结果随附的显示名称。</para></summary>
+    /// <value>The fixed string <c>Android Sparse Image (simg)</c>.
+    /// <para>固定字符串 <c>Android Sparse Image (simg)</c>。</para></value>
     public string FormatName => "Android Sparse Image (simg)";
 
+    /// <summary>Lowercase file extensions this handler advertises for picker filters.
+    /// <para>本处理器在文件选择过滤器中声明的小写扩展名。</para></summary>
+    /// <value><c>img</c>, <c>simg</c> and <c>sparse</c>; <c>img</c> files still need the sparse header magic to be recognized.
+    /// <para><c>img</c>、<c>simg</c> 与 <c>sparse</c>；<c>img</c> 文件仍需稀疏头魔数才能被识别。</para></value>
     public IReadOnlyList<string> FileExtensions => ["img", "simg", "sparse"];
 
     /// <summary>
     /// Determines whether the file matches this format.
     /// <para>判断文件是否匹配此格式。</para>
     /// </summary>
+    /// <param name="filePath">File to probe; a <c>.simg</c> or <c>.sparse</c> extension matches directly, an <c>.img</c> (or other) file matches when its first four little-endian bytes equal the sparse header magic.
+    /// <para>待探测文件；<c>.simg</c> 或 <c>.sparse</c> 扩展名直接匹配，<c>.img</c>（及其他）文件在前四个小端字节等于稀疏头魔数时匹配。</para></param>
+    /// <returns><see langword="true"/> when the extension or magic matches; <see langword="false"/> for blank, missing or unreadable files (all I/O errors are swallowed).
+    /// <para>扩展名或魔数匹配时为 <see langword="true"/>；空白、缺失或不可读文件为 <see langword="false"/>（吞掉所有 I/O 错误）。</para></returns>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -53,6 +74,12 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler, IRepackMe
     /// Reads the firmware metadata asynchronously.
     /// <para>异步读取固件元数据。</para>
     /// </summary>
+    /// <param name="filePath">Sparse image file; only the fixed-size header is peeked, and the reported image size is TotalBlocks x BlockSize rather than the on-disk file length.
+    /// <para>稀疏镜像文件；仅窥探固定大小的头部，报告的镜像大小为 TotalBlocks × BlockSize，而非磁盘文件长度。</para></param>
+    /// <param name="cancellationToken">Checked once at entry. <para>在入口处检查一次。</para></param>
+    /// <returns>Success result summarizing chunk/block geometry with the corresponding metadata entries, or a failure result describing the header read error.
+    /// <para>汇总 chunk/块几何信息的成功结果及对应元数据条目；头部读取错误以失败结果返回。</para></returns>
+    /// <exception cref="OperationCanceledException">Cancellation was requested at entry. <para>入口处请求了取消。</para></exception>
     public Task<SharedKernel.FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -88,6 +115,18 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler, IRepackMe
     /// Extracts the firmware contents asynchronously.
     /// <para>异步提取固件内容。</para>
     /// </summary>
+    /// <param name="filePath">Sparse image, frozen to a temporary copy first so concurrent writes cannot mix into the extraction; the probe never exceeds a bounded 1082-byte logical read.
+    /// <para>稀疏镜像；先冻结为临时副本，防止并发写入混入解包过程；探测读取不超过有界的 1082 字节逻辑范围。</para></param>
+    /// <param name="outputDirectory">Created on demand; receives the inner filesystem tree, or a single <c>&lt;name&gt;.raw</c> file when no known filesystem magic is present, plus a repack metadata record on success.
+    /// <para>按需创建；成功时接收内部文件系统树，或在无已知文件系统魔数时的单个 <c>&lt;name&gt;.raw</c> 文件，另加重打包元数据记录。</para></param>
+    /// <param name="options">Unpack options; <c>Overwrite</c> defaults to enabled and <c>FileSystemProgress</c> receives byte progress. May be <see langword="null"/>.
+    /// <para>解包选项；<c>Overwrite</c> 默认开启，<c>FileSystemProgress</c> 接收字节进度。可为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Cancellation during the source freeze or the metadata write is rethrown; cancellation observed inside the extraction itself is reported as a failure result.
+    /// <para>源冻结或元数据写入期间的取消会重新抛出；解包内部捕获到的取消以失败结果报告。</para></param>
+    /// <returns>Success result with the extracted entry paths and inner-format metadata, or a failure result for unreadable or malformed images.
+    /// <para>带提取条目路径与内部格式元数据的成功结果；不可读或畸形镜像返回失败结果。</para></returns>
+    /// <exception cref="OperationCanceledException">Cancellation was requested during the source freeze or the metadata write.
+    /// <para>源冻结或元数据写入期间请求了取消。</para></exception>
     public Task<SharedKernel.FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, SharedKernel.UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, frozen => UnpackCoreAsync(frozen, outputDirectory, options, cancellationToken));
@@ -198,6 +237,14 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler, IRepackMe
     /// Packs the input into firmware asynchronously.
     /// <para>异步将输入打包为固件。</para>
     /// </summary>
+    /// <param name="inputPath">
+    /// Raw file, or an unpacked directory whose preserved-attribute metadata is restored first; otherwise its first non-metadata file is converted.
+    /// <para>raw 文件，或先恢复其保留属性元数据的已解包目录；否则转换目录中第一个非元数据文件。</para></param>
+    /// <param name="outputPath">Destination sparse image written by the conversion. <para>转换写入的目标稀疏镜像。</para></param>
+    /// <param name="cancellationToken">Observed while restoring preserved-attribute metadata; the raw-to-sparse conversion itself runs synchronously without polling it.
+    /// <para>在恢复保留属性元数据时会被观察；raw 到稀疏的转换本身同步执行且不轮询该标记。</para></param>
+    /// <returns>Success result naming the produced file, or a failure result for an empty input directory or a conversion error.
+    /// <para>指明生成文件的成功结果；空输入目录或转换错误返回失败结果。</para></returns>
     public Task<SharedKernel.FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try

@@ -153,7 +153,7 @@ public partial class KeyManagerViewModel : ViewModelBase
         RebuildDefaultIds();
     }
 
-    /// <summary>Re-reads the persisted default key ids and refreshes the badge binding source. A persisted id that is empty or no longer exists in the library falls back to the runtime identity matched by fingerprint, so the auto-imported entry is shown as in use.</summary>
+    /// <summary>Re-reads the persisted default key ids and refreshes the badge binding source. A persisted id that is empty or absent from the library falls back to the runtime identity matched by fingerprint, so the auto-imported entry is shown as in use.</summary>
     /// <summary>重新读取已持久化的默认密钥标识并刷新徽标绑定源。持久化 Id 为空或已不存在于库中时回退按指纹匹配运行时身份，使自动导入的条目显示为当前使用。</summary>
     private void RebuildDefaultIds()
     {

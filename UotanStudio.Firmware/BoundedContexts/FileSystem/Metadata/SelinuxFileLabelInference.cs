@@ -34,7 +34,7 @@ internal sealed class SelinuxFileLabelInference
             _ => null
         };
         systemAsRoot = partition == "system" && originals.ContainsKey("system") && !originals.ContainsKey("bin");
-        if (mount is null) return; // An unknown mount is not guessed from the host directory name.
+        if (mount is null) return;
         var originalPaths = imagePaths?.ToDictionary(p => p.Value, p => p.Key, StringComparer.Ordinal);
         long budget = 8 * 1024 * 1024;
         var count = 0;

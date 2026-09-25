@@ -22,14 +22,34 @@ namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Text;
 public static class AXmlTextFormat
 {
     /// <summary>
-    /// <para>把 XML 文本解析回 AXML 模型；<paramref name="reference"/> 提供类型与命名空间参照。</para>
     /// Parses XML text back into an AXML model; <paramref name="reference"/> supplies type and
     /// namespace hints.
+    /// <para>把 XML 文本解析回 AXML 模型；<paramref name="reference"/> 提供类型与命名空间参照。</para>
     /// </summary>
-    /// <param name="xml">XML 文本（通常来自 <see cref="AXmlDocument.ToXml"/>）。<para>The XML text (usually from <see cref="AXmlDocument.ToXml"/>).</para></param>
-    /// <param name="reference">原模型；为 <c>null</c> 时按文本推断类型。<para>The original model; types are inferred from text when <c>null</c>.</para></param>
-    /// <returns>重建的 AXML 模型。<para>The rebuilt AXML model.</para></returns>
-    /// <exception cref="AXmlException">XML 解析失败或缺少根元素时抛出。<para>Thrown when XML parsing fails or the root element is missing.</para></exception>
+    /// <param name="xml">
+    /// The XML text, normally the output of <see cref="AXmlDocument.ToXml"/>.
+    /// <para>XML 文本，通常来自 <see cref="AXmlDocument.ToXml"/>。</para>
+    /// </param>
+    /// <param name="reference">
+    /// The original model whose attribute types and namespaces are reused; when it is
+    /// <see langword="null"/>, types are inferred from the text and namespaces are collected from
+    /// the root element's declarations.
+    /// <para>原模型，其属性类型与命名空间会被复用；为 <see langword="null"/> 时按文本推断类型，
+    /// 并从根元素的命名空间声明收集命名空间。</para>
+    /// </param>
+    /// <returns>
+    /// The rebuilt AXML model, carrying the reference header size and resource map when a reference
+    /// is supplied.
+    /// <para>重建的 AXML 模型；提供参照模型时沿用其头部大小与资源映射。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="xml"/> is <see langword="null"/>.
+    /// <para><paramref name="xml"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="AXmlException">
+    /// XML parsing fails or the document has no root element.
+    /// <para>XML 解析失败或文档没有根元素。</para>
+    /// </exception>
     public static AXmlDocument Parse(string xml, AXmlDocument? reference = null)
     {
         ArgumentNullException.ThrowIfNull(xml);
@@ -114,8 +134,6 @@ public static class AXmlTextFormat
         }
         else
         {
-            // 参照模型按文档顺序平行遍历；类型提示按同名属性匹配。
-            // The reference model is walked in document order; type hints match by attribute name.
             var referenceChildren = reference?.Children;
             for (var i = 0; i < children.Count; i++)
             {
@@ -160,9 +178,6 @@ public static class AXmlTextFormat
             && string.Equals(reference.FormatValue(referenceDocument.StringPool, referenceDocument.ResourceMap),
                 text, StringComparison.Ordinal))
         {
-            // 文本未变：复用原始类型与编码值；字符串型的 ValueData 是新池索引，须重新 Intern。
-            // Unchanged text: reuse the original type and encoded value; a String-typed ValueData is a
-            // pool index and must be re-interned into the new document's pool.
             var valueData = reference.ValueType == AXmlValueType.String
                 ? (uint)document.StringPool.Intern(text)
                 : reference.ValueData;
@@ -196,8 +211,6 @@ public static class AXmlTextFormat
             };
         }
 
-        // 类型编码失败时退回字符串，避免丢失用户输入的文本。
-        // Fall back to a string when type encoding fails so no user text is lost.
         return new AXmlAttribute
         {
             Name = name,

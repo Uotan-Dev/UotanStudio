@@ -4,7 +4,6 @@ using UotanStudio.Media.Decoding;
 
 namespace UotanStudio.Media.Acceleration.Linux;
 
-// Fixed bridge ABI v1, independent of FFmpeg's versioned structure layouts.
 [StructLayout(LayoutKind.Sequential)]
 internal struct VaFrameInfo
 {

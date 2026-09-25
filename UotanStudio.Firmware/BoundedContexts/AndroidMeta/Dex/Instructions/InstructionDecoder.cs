@@ -2,12 +2,39 @@ using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Instructions;
 
+/// <summary>
+/// Decodes raw Dalvik code units into high-level instructions, resolving constant-pool references through
+/// the owning DEX file and emitting switch and array-data payloads as their own entries.
+/// <para>将原始 Dalvik 代码单元解码为高层指令，经所属 DEX 文件解析常量池引用，
+/// 并把 switch 与数组数据有效负载作为独立条目输出。</para>
+/// </summary>
 public static class InstructionDecoder
 {
     /// <summary>
     /// Decodes a raw instruction stream into an instruction list.
     /// <para>解码原始指令流为指令列表。</para>
     /// </summary>
+    /// <param name="raw">
+    /// The 16-bit code units of one method body, in stream order.
+    /// <para>单个方法体的 16 位代码单元，按流顺序排列。</para>
+    /// </param>
+    /// <param name="dex">
+    /// Source <see cref="DexFile"/> used to resolve string, type, field and method reference operands.
+    /// <para>用于解析字符串、类型、字段与方法引用操作数的 <see cref="DexFile"/>。</para>
+    /// </param>
+    /// <returns>
+    /// Instructions in stream order with byte offsets and code-unit sizes. A branch target of
+    /// <c>fill-array-data</c>, <c>packed-switch</c> or <c>sparse-switch</c> that carries a payload ident is
+    /// decoded as a payload entry; an opcode with no table entry becomes a one-unit <c>unknown-0xNN</c>
+    /// entry; an instruction cut off by the end of the stream becomes a <c>truncated-</c> entry and ends decoding.
+    /// <para>按流顺序返回的指令，含字节偏移与代码单元长度。<c>fill-array-data</c>、<c>packed-switch</c>
+    /// 或 <c>sparse-switch</c> 的跳转目标若带有有效负载标识，则解码为负载条目；无表项的操作码输出为
+    /// 1 单元的 <c>unknown-0xNN</c> 条目；被流尾截断的指令输出为 <c>truncated-</c> 前缀条目并结束解码。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="raw"/> or <paramref name="dex"/> is <see langword="null"/>.
+    /// <para><paramref name="raw"/> 或 <paramref name="dex"/> 为 <see langword="null"/>。</para>
+    /// </exception>
     public static List<Instruction> Decode(ushort[] raw, DexFile dex)
     {
         ArgumentNullException.ThrowIfNull(raw);

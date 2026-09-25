@@ -8,7 +8,6 @@ internal sealed class ErofsInode
 
     public const int ExtendedSize = 64;
 
-
     public const ushort DataLayoutMask = 0x7 << 1;
 
     public const ushort DataLayoutFlat = 0;
@@ -28,7 +27,6 @@ internal sealed class ErofsInode
     public const ushort AdviseAll = 0x1F;
 
     public const ushort AdviseBitNlinkOneOrDotOmitted = 1 << 4;
-
 
     private const ushort ChunkFormatBlkBitsMask = 0x001F;
 
@@ -212,7 +210,6 @@ internal sealed class ErofsInode
             XattrICount = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(2)),
             Mode = mode,
 
-
             Nlink = nlinkIsOne ? 1u : nb,
             Size = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(8)),
             Generation = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(12)),
@@ -246,12 +243,6 @@ internal sealed class ErofsInode
 
     private void WriteCompact(Span<byte> destination)
     {
-        // Non-directory compact inodes with nlink == 1 set EROFS_I_NLINK_1_BIT and leave the
-        // i_nb union unused for nlink (fs/erofs/erofs_fs.h). Pre-5.13 kernels reject any
-        // undefined i_format bit, so legacy images keep nlink in i_nb instead.
-        // 非目录紧凑 inode 的 nlink 为 1 时置 EROFS_I_NLINK_1_BIT，i_nb 联合体不再承载 nlink
-        // （fs/erofs/erofs_fs.h）。pre-5.13 内核拒绝任何未定义的 i_format 位，legacy 镜像改为
-        // 把 nlink 写入 i_nb。
         var nlinkOneBit = AllowNlinkOneBit && !IsDirectory && Nlink == 1;
         if (nlinkOneBit)
         {
@@ -261,7 +252,6 @@ internal sealed class ErofsInode
         BinaryPrimitives.WriteUInt16LittleEndian(destination, Advise);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[2..], XattrICount);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[4..], Mode);
-
 
         var nbValue = nlinkOneBit ? (ushort)0 : (ushort)Math.Min(Nlink, ushort.MaxValue);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[6..], nbValue);
@@ -278,7 +268,6 @@ internal sealed class ErofsInode
         BinaryPrimitives.WriteUInt16LittleEndian(destination, Advise);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[2..], XattrICount);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[4..], Mode);
-
 
         BinaryPrimitives.WriteUInt64LittleEndian(destination[8..], Size);
         BinaryPrimitives.WriteUInt32LittleEndian(destination[16..], U);

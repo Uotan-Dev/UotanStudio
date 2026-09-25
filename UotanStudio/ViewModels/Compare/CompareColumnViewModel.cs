@@ -234,7 +234,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
 
     /// <summary>
     /// <para>确认按钮：把路径框中的路径加载到本列（目录显示折叠的目录树，文件显示内容/元数据）；
-    /// 本列参与对比时改为用当前两列重新执行对比。</para>
+    /// 本列参与对比时则用当前两列重新执行对比。</para>
     /// Confirm button: loads the path from the box into this column (a directory shows a collapsed tree, a
     /// file shows content/metadata); a participating column re-runs the comparison with the current two
     /// columns instead.

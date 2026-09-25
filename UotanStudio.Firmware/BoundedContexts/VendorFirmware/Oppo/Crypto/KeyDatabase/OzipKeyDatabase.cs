@@ -1,5 +1,10 @@
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto.KeyDatabase;
 
+/// <summary>
+/// Built-in table of the AES-128 keys used by Oppo OZip payloads, each paired with the device or
+/// firmware generation it is known to serve.
+/// <para>OZip 负载所用的内置 AES-128 密钥表，每个密钥附带其已知适用的机型或固件代次。</para>
+/// </summary>
 public static class OzipKeyDatabase
 {
     private static readonly List<OzipKeyEntry> Entries = BuildKeyDatabase();
@@ -8,12 +13,26 @@ public static class OzipKeyDatabase
     /// Gets all known OZip key entries.
     /// <para>获取所有已知 OZip 密钥条目。</para>
     /// </summary>
+    /// <returns>
+    /// The full built-in list in declaration order; the same shared instance on every call.
+    /// <para>按声明顺序排列的完整内置列表；每次调用返回同一个共享实例。</para>
+    /// </returns>
     public static IReadOnlyList<OzipKeyEntry> GetAllKeys() => Entries;
 
     /// <summary>
     /// Gets a key entry by its index.
     /// <para>根据索引获取密钥条目。</para>
     /// </summary>
+    /// <param name="index">
+    /// Zero-based position in the built-in list; it corresponds to the key slot index a payload records.
+    /// <para>内置列表中从零开始的序号，对应负载中记录的密钥槽位编号。</para>
+    /// </param>
+    /// <returns>The entry at that position.
+    /// <para>该位置上的条目。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="index"/> is negative or greater than or equal to <see cref="Count"/>.
+    /// <para><paramref name="index"/> 为负数，或大于等于 <see cref="Count"/>。</para>
+    /// </exception>
     public static OzipKeyEntry FindByIndex(int index)
     {
         return index < 0 || index >= Entries.Count
@@ -22,6 +41,14 @@ public static class OzipKeyDatabase
             : Entries[index];
     }
 
+    /// <summary>
+    /// Number of keys in the built-in OZip table.
+    /// <para>内置 OZip 密钥表中的密钥数量。</para>
+    /// </summary>
+    /// <value>
+    /// Always greater than zero; valid lookup indices run from <c>0</c> to this value minus one.
+    /// <para>始终大于零；合法查找序号为 <c>0</c> 到该值减一。</para>
+    /// </value>
     public static int Count => Entries.Count;
 
     private static List<OzipKeyEntry> BuildKeyDatabase()

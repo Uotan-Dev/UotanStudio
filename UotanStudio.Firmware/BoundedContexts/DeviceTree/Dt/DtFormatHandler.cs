@@ -7,6 +7,11 @@ using DtTree = UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.DeviceT
 
 namespace UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
 
+/// <summary>
+/// Format handler that recognizes DTB and DTBO images by extension or magic, reads their metadata, extracts
+/// overlays or DTS text, and repacks them atomically.
+/// <para>格式处理器：按扩展名或魔数识别 DTB 与 DTBO 镜像，读取元数据，提取 overlay 或 DTS 文本，并原子重打包。</para>
+/// </summary>
 public sealed class DtFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
     void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
@@ -21,14 +26,27 @@ public sealed class DtFormatHandler : IFormatHandler, IRepackMetadataProvider
         metadata.CanPackDirectory = metadata.Configuration.Count > 0;
     }
 
+    /// <summary>Display name of the handled format family.
+    /// <para>所处理格式家族的显示名称。</para></summary>
+    /// <value>Always <c>Device Tree (DTB/DTBO)</c>. <para>恒为 <c>Device Tree (DTB/DTBO)</c>。</para></value>
     public string FormatName => "Device Tree (DTB/DTBO)";
 
+    /// <summary>Lowercase file extensions this handler claims.
+    /// <para>本处理器声称的小写文件扩展名。</para></summary>
+    /// <value><c>dtb</c>, <c>dtbo</c> and <c>img</c>; <c>img</c> still requires a magic match in
+    /// <see cref="CanHandle"/> for content dispatch. <para><c>dtb</c>、<c>dtbo</c> 与 <c>img</c>；
+    /// <c>img</c> 仍需由 <see cref="CanHandle"/> 魔数匹配来决定内容分派。</para></value>
     public IReadOnlyList<string> FileExtensions => ["dtb", "dtbo", "img"];
 
     /// <summary>
     /// Determines whether the file matches this format.
     /// <para>判断文件是否匹配此格式。</para>
     /// </summary>
+    /// <param name="filePath">Path to test; a missing or unreadable path is treated as no match.
+    /// <para>待测试的路径；路径不存在或不可读时视为不匹配。</para></param>
+    /// <returns><see langword="true"/> for <c>.dtb</c>/<c>.dtbo</c> extensions or files whose first four
+    /// big-endian bytes carry the FDT or DTBO magic. <para>扩展名为 <c>.dtb</c>/<c>.dtbo</c>，或前四大端字节为
+    /// FDT/DTBO 魔数时返回 <see langword="true"/>。</para></returns>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -63,6 +81,13 @@ public sealed class DtFormatHandler : IFormatHandler, IRepackMetadataProvider
     /// Reads the firmware metadata asynchronously.
     /// <para>异步读取固件元数据。</para>
     /// </summary>
+    /// <param name="filePath">DTB or DTBO file to inspect. <para>要检查的 DTB 或 DTBO 文件。</para></param>
+    /// <param name="cancellationToken">Cancels before any read; cancellation surfaces as
+    /// <see cref="OperationCanceledException"/>. <para>在读取前取消；取消以 <see cref="OperationCanceledException"/> 呈现。</para></param>
+    /// <returns>A completed task whose result summarizes entries or node counts with a metadata dictionary;
+    /// malformed or unreadable input yields a failed result instead of throwing.
+    /// <para>已完成的任务，其结果汇总条目数或节点数并附带元数据字典；输入无效或不可读时返回失败结果而不抛异常。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -107,6 +132,17 @@ public sealed class DtFormatHandler : IFormatHandler, IRepackMetadataProvider
     /// Extracts the firmware contents asynchronously.
     /// <para>异步提取固件内容。</para>
     /// </summary>
+    /// <param name="filePath">DTB or DTBO image to extract. <para>要提取的 DTB 或 DTBO 镜像。</para></param>
+    /// <param name="outputDirectory">Destination directory, created when missing; DTBO writes overlays plus
+    /// repack metadata, DTB writes <c>.dts</c> and a summary text file.
+    /// <para>目标目录，缺失时创建；DTBO 写出 overlay 与重打包元数据，DTB 写出 <c>.dts</c> 与摘要文本文件。</para></param>
+    /// <param name="options">Optional output-size limit, overwrite policy and progress sink; <see langword="null"/>
+    /// uses defaults. <para>可选的输出大小上限、覆盖策略与进度回调；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <param name="cancellationToken">Cancels staged extraction; a canceled run leaves the destination untouched.
+    /// <para>取消暂存式提取；被取消的运行不会改动目标目录。</para></param>
+    /// <returns>A task whose result lists the written files on success or carries the failure message;
+    /// format errors do not throw. <para>任务结果在成功时列出已写文件，失败时携带错误消息；格式错误不抛异常。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -144,6 +180,17 @@ public sealed class DtFormatHandler : IFormatHandler, IRepackMetadataProvider
     /// Packs the input into firmware asynchronously.
     /// <para>异步将输入打包为固件。</para>
     /// </summary>
+    /// <param name="inputPath">A directory containing DTBO repack metadata, or a DTB/DTBO file; a DTBO file
+    /// is revalidated and copied whole, a DTB is parsed and rewritten.
+    /// <para>包含 DTBO 重打包元数据的目录，或 DTB/DTBO 文件；DTBO 文件重新校验后整体复制，DTB 解析后重写。</para></param>
+    /// <param name="outputPath">Destination file, replaced atomically via a temporary file.
+    /// <para>目标文件，通过临时文件原子替换。</para></param>
+    /// <param name="cancellationToken">Cancels the write; the temporary output is deleted and the previous
+    /// destination content is kept. <para>取消写入；临时输出被删除并保留目标的原有内容。</para></param>
+    /// <returns>A task whose result reports success with the output path or a failure message for a missing
+    /// or unrecognized input; format errors do not throw.
+    /// <para>任务结果在成功时报告输出路径，在输入缺失或无法识别时给出失败消息；格式错误不抛异常。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try

@@ -61,8 +61,6 @@ public static class ContainerStructureAnalyzer
 
         try
         {
-            // 读取 4100 字节头部：payload 魔数 "CrAU"@0、ZIP "PK"@0、LP geometry 魔数@4096。
-            // Read a 4100-byte header: payload "CrAU"@0, ZIP "PK"@0, LP geometry magic@4096.
             var header = FormatDetector.ReadHeader(filePath, 4100);
             if (header.Length >= 4 && IsAscii(header, 0, "CrAU"))
             {
@@ -93,8 +91,6 @@ public static class ContainerStructureAnalyzer
     /// </summary>
     private static ContainerStructure AnalyzePayload(string filePath)
     {
-        // GetPayloadMetadata/GetPartitionInfo 均支持原始 payload.bin 与 ZIP 包裹（内部定位 payload.bin）。
-        // GetPayloadMetadata/GetPartitionInfo both accept raw payload.bin and ZIP-wrapped payloads.
         var info = UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser.PayloadParser.GetPartitionInfo(filePath);
         var entries = info.Select(p => new ContainerEntry(p.Name, "payload", (long)p.SizeBytes, FromPayload: true))
             .ToList();
@@ -151,8 +147,6 @@ public static class ContainerStructureAnalyzer
                 continue;
             }
 
-            // 仅枚举镜像文件；其他资源（配置文本、签名等）不进入勾选列表。
-            // Only image files are enumerated; other resources (configs, signatures) are not listed.
             if (ZipImageExtensions.Contains(Path.GetExtension(entry.FullName), StringComparer.OrdinalIgnoreCase))
             {
                 entries.Add(new ContainerEntry(entry.FullName, Path.GetExtension(entry.FullName).TrimStart('.'), (long)entry.Length, FromPayload: false));
@@ -161,8 +155,6 @@ public static class ContainerStructureAnalyzer
 
         if (hasPayload)
         {
-            // GetPartitionInfo 支持 ZIP 包裹的 payload（内部自动定位 payload.bin）。
-            // GetPartitionInfo accepts a ZIP-wrapped payload (locates payload.bin internally).
             var info = UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser.PayloadParser.GetPartitionInfo(filePath);
             entries.AddRange(info.Select(p => new ContainerEntry(p.Name, "payload", (long)p.SizeBytes, FromPayload: true)
             { PayloadMemberPath = payloadMemberPath }));

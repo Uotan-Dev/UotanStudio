@@ -2,20 +2,66 @@ using System.Xml.Linq;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
-/// <summary>Explicit target runtime policy; acknowledging it does not prove DRAM or storage readiness.</summary>
+/// <summary>
+/// Explicit target runtime policy; acknowledging it does not prove DRAM or storage readiness.
+/// <para>显式的目标端运行时策略；确认该策略并不证明 DRAM 或存储已经就绪。</para>
+/// </summary>
 public sealed record MtkXmlRuntimeOptions
 {
-    /// <summary>Gets the explicitly selected target checksum policy.</summary>
+    /// <summary>
+    /// Gets the explicitly selected target checksum policy.
+    /// <para>获取显式选择的目标端校验和策略。</para>
+    /// </summary>
+    /// <value>
+    /// The checksum level requested from the download agent; host-side readback verification is not implied.
+    /// <para>向下载代理请求的校验和级别；不意味着主机侧会进行读取回验。</para>
+    /// </value>
     public required MtkXmlChecksumLevel Checksum { get; init; }
-    /// <summary>Gets the explicit host OS token, not an inferred target compatibility profile.</summary>
+    /// <summary>
+    /// Gets the explicit host OS token, not an inferred target compatibility profile.
+    /// <para>获取显式的主机操作系统标记，而不是推断出的目标兼容性配置。</para>
+    /// </summary>
+    /// <value>
+    /// The token serialized as <c>system_os</c> in the runtime command.
+    /// <para>在运行时命令中以 <c>system_os</c> 序列化的标记。</para>
+    /// </value>
     public required MtkXmlHostOs HostOs { get; init; }
-    /// <summary>Gets whether the caller authorizes the target's DRAM initialization request.</summary>
+    /// <summary>
+    /// Gets whether the caller authorizes the target's DRAM initialization request.
+    /// <para>获取调用方是否授权目标端的 DRAM 初始化请求。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> writes <c>YES</c> into the command's <c>adv</c> element; authorization does not
+    /// prove that initialization succeeds.
+    /// <para>为 <see langword="true"/> 时向命令的 <c>adv</c> 元素写入 <c>YES</c>；授权并不证明初始化一定成功。</para>
+    /// </value>
     public required bool InitializeDram { get; init; }
-    /// <summary>Gets the target battery-presence policy.</summary>
+    /// <summary>
+    /// Gets the target battery-presence policy.
+    /// <para>获取目标端电池在位策略。</para>
+    /// </summary>
+    /// <value>
+    /// The policy serialized as <c>battery_exist</c>; <see cref="MtkXmlBatterySetting.AutoDetect"/> is the default.
+    /// <para>以 <c>battery_exist</c> 序列化的策略；默认值为 <see cref="MtkXmlBatterySetting.AutoDetect"/>。</para>
+    /// </value>
     public MtkXmlBatterySetting Battery { get; init; } = MtkXmlBatterySetting.AutoDetect;
-    /// <summary>Gets the target log verbosity.</summary>
+    /// <summary>
+    /// Gets the target log verbosity.
+    /// <para>获取目标端日志详细程度。</para>
+    /// </summary>
+    /// <value>
+    /// The level written as <c>da_log_level</c>; <see cref="MtkXmlLogLevel.Info"/> is the default.
+    /// <para>以 <c>da_log_level</c> 写入的级别；默认值为 <see cref="MtkXmlLogLevel.Info"/>。</para>
+    /// </value>
     public MtkXmlLogLevel LogLevel { get; init; } = MtkXmlLogLevel.Info;
-    /// <summary>Gets the target log channel.</summary>
+    /// <summary>
+    /// Gets the target log channel.
+    /// <para>获取目标端日志通道。</para>
+    /// </summary>
+    /// <value>
+    /// The destination written as <c>log_channel</c>; <see cref="MtkXmlLogChannel.Uart"/> is the default.
+    /// <para>以 <c>log_channel</c> 写入的目标通道；默认值为 <see cref="MtkXmlLogChannel.Uart"/>。</para>
+    /// </value>
     public MtkXmlLogChannel LogChannel { get; init; } = MtkXmlLogChannel.Uart;
 
     internal XElement BuildCommand()
@@ -65,61 +111,76 @@ public sealed record MtkXmlRuntimeOptions
     }
 }
 
-/// <summary>Target runtime checksum requests; these do not add host-side readback verification.</summary>
+/// <summary>
+/// Target runtime checksum requests; these do not add host-side readback verification.
+/// <para>目标端运行时校验和请求；这些请求不会增加主机侧的读取回验。</para>
+/// </summary>
 public enum MtkXmlChecksumLevel
 {
-    /// <summary>No target checksum request.</summary>
+    /// <summary>No target checksum request. <para>不请求目标端校验和。</para></summary>
     None,
-    /// <summary>Request USB checksums.</summary>
+    /// <summary>Request USB checksums. <para>请求 USB 校验和。</para></summary>
     Usb,
-    /// <summary>Request storage checksums.</summary>
+    /// <summary>Request storage checksums. <para>请求存储校验和。</para></summary>
     Storage,
-    /// <summary>Request both USB and storage checksums.</summary>
+    /// <summary>Request both USB and storage checksums. <para>同时请求 USB 与存储校验和。</para></summary>
     UsbAndStorage
 }
 
-/// <summary>Host OS tokens supported by the XML runtime profile.</summary>
+/// <summary>
+/// Host OS tokens supported by the XML runtime profile.
+/// <para>XML 运行时配置所支持的主机操作系统标记。</para>
+/// </summary>
 public enum MtkXmlHostOs
 {
-    /// <summary>Windows host.</summary>
+    /// <summary>Windows host. <para>Windows 主机。</para></summary>
     Windows,
-    /// <summary>Linux host.</summary>
+    /// <summary>Linux host. <para>Linux 主机。</para></summary>
     Linux
 }
 
-/// <summary>Target battery-presence policy.</summary>
+/// <summary>
+/// Target battery-presence policy.
+/// <para>目标端电池在位策略。</para>
+/// </summary>
 public enum MtkXmlBatterySetting
 {
-    /// <summary>Ask the agent to detect battery presence.</summary>
+    /// <summary>Ask the agent to detect battery presence. <para>要求代理自行检测电池是否在位。</para></summary>
     AutoDetect,
-    /// <summary>Declare a battery present.</summary>
+    /// <summary>Declare a battery present. <para>声明电池在位。</para></summary>
     Present,
-    /// <summary>Declare a battery absent.</summary>
+    /// <summary>Declare a battery absent. <para>声明电池不在位。</para></summary>
     Absent
 }
 
-/// <summary>Target log verbosity.</summary>
+/// <summary>
+/// Target log verbosity.
+/// <para>目标端日志详细程度。</para>
+/// </summary>
 public enum MtkXmlLogLevel
 {
-    /// <summary>Trace messages.</summary>
+    /// <summary>Trace messages. <para>跟踪级消息。</para></summary>
     Trace,
-    /// <summary>Debug messages.</summary>
+    /// <summary>Debug messages. <para>调试级消息。</para></summary>
     Debug,
-    /// <summary>Informational messages.</summary>
+    /// <summary>Informational messages. <para>信息级消息。</para></summary>
     Info,
-    /// <summary>Warnings.</summary>
+    /// <summary>Warnings. <para>警告级消息。</para></summary>
     Warn,
-    /// <summary>Errors.</summary>
+    /// <summary>Errors. <para>错误级消息。</para></summary>
     Error
 }
 
-/// <summary>Target logging destination.</summary>
+/// <summary>
+/// Target logging destination.
+/// <para>目标端日志输出目的地。</para>
+/// </summary>
 public enum MtkXmlLogChannel
 {
-    /// <summary>UART logging.</summary>
+    /// <summary>UART logging. <para>通过 UART 输出日志。</para></summary>
     Uart,
-    /// <summary>USB logging.</summary>
+    /// <summary>USB logging. <para>通过 USB 输出日志。</para></summary>
     Usb,
-    /// <summary>Both UART and USB logging.</summary>
+    /// <summary>Both UART and USB logging. <para>同时通过 UART 与 USB 输出日志。</para></summary>
     Both
 }

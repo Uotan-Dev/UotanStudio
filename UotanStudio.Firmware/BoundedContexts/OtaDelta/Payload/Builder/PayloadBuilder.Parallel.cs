@@ -12,10 +12,27 @@ public sealed partial class PayloadBuilder
     private int? _compressionWorkers;
 
     /// <summary>
-    /// Limits concurrent operation compression to 1–8 workers; overrides FirmwareParallelism.Workers for this builder.
+    /// Limits concurrent operation compression to 1 to <see cref="SharedKernel.FirmwareParallelism.MaximumWorkers"/> workers;
+    /// overrides FirmwareParallelism.Workers for this builder.
     /// Each worker holds at most 1 MiB input and 2 MiB + 64 KiB output, plus codec state.
     /// Choose one worker when multiple builds run concurrently or memory is constrained.
+    /// <para>将并发操作压缩限制在 1 到 <see cref="SharedKernel.FirmwareParallelism.MaximumWorkers"/> 个工作者之间；
+    /// 对本构建器覆盖 FirmwareParallelism.Workers。每个工作者最多持有 1 MiB 输入与 2 MiB + 64 KiB 输出，另有编解码器状态。
+    /// 当多个构建并发运行或内存受限时应选择单工作者。</para>
     /// </summary>
+    /// <param name="workers">
+    /// Number of compression slots used per partition batch; the setting is stored until the build reads it, and a
+    /// <c>CompressionType.None</c> partition always compresses on one worker regardless of this value.
+    /// <para>每个分区批次使用的压缩槽数量；该设置被保存直至构建时读取，无论取值如何，<c>CompressionType.None</c>
+    /// 分区始终在单个工作者上压缩。</para>
+    /// </param>
+    /// <returns>
+    /// This builder, so calls can be chained. <para>本构建器，便于链式调用。</para>
+    /// </returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="workers"/> is below <c>1</c> or above <see cref="SharedKernel.FirmwareParallelism.MaximumWorkers"/>.
+    /// <para><paramref name="workers"/> 小于 <c>1</c> 或大于 <see cref="SharedKernel.FirmwareParallelism.MaximumWorkers"/>。</para>
+    /// </exception>
     public PayloadBuilder WithCompressionWorkers(int workers)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(workers, 1);

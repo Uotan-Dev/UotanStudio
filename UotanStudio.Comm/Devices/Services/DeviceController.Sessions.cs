@@ -14,6 +14,27 @@ public sealed partial class DeviceController
     /// <para>会话类型仅选择会话工厂；路由决策与身份校验已在发现和传输开启阶段完成，
     /// 工厂失败绝不会回退到其他路由。</para>
     /// </summary>
+    /// <param name="snapshot">
+    /// The live snapshot the endpoint was taken from; a stale snapshot is rejected. <para>端点所来自的当前快照；过期快照会被拒绝。</para>
+    /// </param>
+    /// <param name="id">
+    /// Exact endpoint identity to lease. <para>待租用的精确端点身份。</para>
+    /// </param>
+    /// <param name="kind">
+    /// Session kind selecting the protocol factory. <para>用于选择协议工厂的会话类型。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels the open before the transport is acquired; a leased endpoint is released on cancellation.
+    /// <para>在传输取得之前取消开启；取消时已租用的端点会被归还。</para>
+    /// </param>
+    /// <returns>The lease owning the transport and the built session. <para>持有传输与已构建会话的租约。</para></returns>
+    /// <exception cref="InvalidOperationException">
+    /// The snapshot is stale, the endpoint is already leased, or the opener returned no transport.
+    /// <para>快照过期、端点已被租用，或开启器未返回传输。</para></exception>
+    /// <exception cref="KeyNotFoundException">
+    /// The endpoint is not present in the snapshot. <para>快照中不存在该端点。</para></exception>
+    /// <exception cref="NotSupportedException">
+    /// No session factory is registered for <paramref name="kind"/>. <para>未为 <paramref name="kind"/> 注册会话工厂。</para></exception>
     public async Task<DeviceLease> OpenAsync(DeviceSnapshot snapshot, DeviceEndpointId id,
         DeviceSessionKind kind, CancellationToken cancellationToken = default)
     {
@@ -59,6 +80,24 @@ public sealed partial class DeviceController
     /// identity shape as discovery, the server-ownership guard fails closed inside the native open,
     /// and the session factory only builds sessions for the protocol observed on the endpoint.
     /// </summary>
+    /// <param name="deviceKey">
+    /// Nonempty stable device key of the physical node to open. <para>待打开物理节点的非空稳定设备键。</para>
+    /// </param>
+    /// <param name="kind">
+    /// Session kind selecting the protocol factory. <para>用于选择协议工厂的会话类型。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Checked before opening and passed to the session factory. <para>开启前检查，并传递给会话工厂。</para>
+    /// </param>
+    /// <returns>The lease, or <see langword="null"/> when no device matches the key.
+    /// <para>租约；没有设备匹配该键时返回 <see langword="null"/>。</para></returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="deviceKey"/> is null, empty, or whitespace. <para><paramref name="deviceKey"/> 为 null、空白或仅含空白字符。</para></exception>
+    /// <exception cref="NotSupportedException">
+    /// The controller has no communication kit, or no factory is registered for <paramref name="kind"/>.
+    /// <para>控制器没有通信套件，或未为 <paramref name="kind"/> 注册工厂。</para></exception>
+    /// <exception cref="InvalidOperationException">
+    /// The synthesized endpoint is already leased. <para>合成的端点已被租用。</para></exception>
     public async Task<DeviceLease?> OpenLeaseByKeyAsync(string deviceKey, DeviceSessionKind kind,
         CancellationToken cancellationToken = default)
     {

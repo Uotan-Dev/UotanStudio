@@ -1,5 +1,12 @@
 namespace UotanStudio.Firmware.SharedKernel.Streams;
 
+/// <summary>
+/// Write-through stream wrapper that accumulates the forwarded byte count and refuses any write
+/// whose total would exceed a fixed budget. The check happens before the inner write, so the limit
+/// is never overshot.
+/// <para>透传写入的流包装器，累计转发的字节数，并拒绝总量超出固定预算的写入。上限检查发生在写入底层
+/// 流之前，因此不会超出限制。</para>
+/// </summary>
 public sealed class CountingWriteStream : Stream
 {
     private readonly Stream _inner;
@@ -13,6 +20,22 @@ public sealed class CountingWriteStream : Stream
     /// Creates a limited counting write stream.
     /// <para>创建受限计数写入流。</para>
     /// </summary>
+    /// <param name="inner">Writable stream the bytes are forwarded to.
+    /// <para>字节转发到的可写流。</para></param>
+    /// <param name="maximumBytes">Cumulative byte budget; zero allows no writes at all and must be non-negative.
+    /// <para>累计字节预算；为 0 表示不允许任何写入，取值必须非负。</para></param>
+    /// <param name="leaveOpen">When <see langword="true"/>, disposing this wrapper leaves <paramref name="inner"/> open.
+    /// <para>为 <see langword="true"/> 时，释放本包装器后 <paramref name="inner"/> 仍保持打开。</para></param>
+    /// <param name="cancellationToken">Token checked by every synchronous write.
+    /// <para>每次同步写入都会检查的取消令牌。</para></param>
+    /// <param name="bytesWritten">Optional callback invoked with the size of each accepted write after it reaches <paramref name="inner"/>.
+    /// <para>可选回调，在每次被接受的写入交给 <paramref name="inner"/> 之后收到本次写入的字节数。</para></param>
+    /// <exception cref="ArgumentNullException"><c>inner</c> is <see langword="null"/>.
+    /// <para><c>inner</c> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><c>inner</c> cannot be written.
+    /// <para><c>inner</c> 不可写。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><c>maximumBytes</c> is negative.
+    /// <para><c>maximumBytes</c> 为负数。</para></exception>
     public CountingWriteStream(Stream inner, long maximumBytes, bool leaveOpen = false, CancellationToken cancellationToken = default, Action<int>? bytesWritten = null)
     {
         ArgumentNullException.ThrowIfNull(inner);
@@ -25,12 +48,46 @@ public sealed class CountingWriteStream : Stream
         _bytesWritten = bytesWritten;
     }
 
+    /// <summary>
+    /// Gets the number of bytes forwarded so far.
+    /// <para>获取迄今已转发的字节数。</para>
+    /// </summary>
+    /// <value>The cumulative accepted byte count, always within <see cref="MaximumBytes"/>.
+    /// <para>累计被接受的字节数，始终不超过 <see cref="MaximumBytes"/>。</para></value>
     public long BytesWritten { get; private set; }
+    /// <summary>
+    /// Gets the cumulative write budget supplied at construction.
+    /// <para>获取构造时给定的累计写入预算。</para>
+    /// </summary>
+    /// <value>The inclusive maximum number of bytes that may be forwarded.
+    /// <para>允许转发的最大字节数（含该值）。</para></value>
     public long MaximumBytes => _maximumBytes;
+    /// <summary>Always <c>false</c>: the wrapper only forwards writes to the inner stream.
+    /// <para>恒为 <c>false</c>：包装器只把写入转发给底层流。</para></summary>
+    /// <value><c>false</c>. <para>始终为 <c>false</c>。</para></value>
     public override bool CanRead => false;
+
+    /// <summary>Reports whether the inner stream supports seeking; the byte counter does not restrict it.
+    /// <para>反映底层流是否支持定位；字节计数器不对其作额外限制。</para></summary>
+    /// <value><see langword="true"/> when the inner stream is seekable.
+    /// <para>底层流可定位时为 <see langword="true"/>。</para></value>
     public override bool CanSeek => _inner.CanSeek;
+
+    /// <summary>Writable until the wrapper is disposed.
+    /// <para>包装器在释放前均可写。</para></summary>
+    /// <value><c>true</c> while undisposed. <para>未释放时为 <c>true</c>。</para></value>
     public override bool CanWrite => !_disposed;
+
+    /// <summary>The inner stream's current length; the write budget is tracked separately in <see cref="MaximumBytes"/>.
+    /// <para>底层流的当前长度；写入预算由 <see cref="MaximumBytes"/> 单独记录。</para></summary>
+    /// <value>The value reported by the inner stream, which throws when that stream has no length support.
+    /// <para>由底层流报告的值；当该流不支持长度时会抛出异常。</para></value>
     public override long Length => _inner.Length;
+
+    /// <summary>The position within the inner stream; moving it does not change <see cref="BytesWritten"/>.
+    /// <para>底层流中的位置；移动位置不会改变 <see cref="BytesWritten"/>。</para></summary>
+    /// <value>Getting and setting forward directly to the inner stream, with the same seekability limits.
+    /// <para>读写均直接转发到底层流，并遵循其相同的可定位性限制。</para></value>
     public override long Position { get => _inner.Position; set => _inner.Position = value; }
 
     /// <summary>

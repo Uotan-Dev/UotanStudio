@@ -11,7 +11,23 @@ public static partial class FileSystemPreservation
     /// <summary>
     /// Replays a captured filesystem from its metadata directory and hashed content objects.
     /// Neither the source image nor the extracted host tree is required. Output layout is regenerated.
+    /// <para>从元数据目录与哈希内容对象回放已捕获的文件系统；既不需要源镜像，也不需要解包后的宿主文件树，
+    /// 输出布局会重新生成。</para>
     /// </summary>
+    /// <param name="metadataDirectory">Directory holding the snapshot configuration, <c>manifest.json</c> and the
+    /// <c>objects/</c> content store. <para>存放快照配置、<c>manifest.json</c> 与 <c>objects/</c> 内容存储的目录。</para></param>
+    /// <param name="outputPath">Image file written atomically; must lie outside the protected trees.
+    /// <para>以原子方式写出的镜像文件；必须位于受保护目录树之外。</para></param>
+    /// <param name="cancellationToken">Cancels hashing, object replay and rebuilding.
+    /// <para>取消哈希、对象回放与重建。</para></param>
+    /// <param name="maximumOutputBytes">Optional positive hard cap on written bytes, or <see langword="null"/> for no
+    /// limit. <para>可选的正数写出字节硬上限；<see langword="null"/> 表示不限制。</para></param>
+    /// <exception cref="InvalidDataException">The snapshot configuration, manifest hash, version, content objects or
+    /// projection fail validation, or the replay cannot restore an image.
+    /// <para>快照配置、清单哈希、版本、内容对象或投影校验失败，或回放无法还原镜像。</para></exception>
+    /// <exception cref="EndOfStreamException">A content object file ends before its declared length.
+    /// <para>内容对象文件提前结束，未达到声明长度。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
     public static void ReplaySnapshot(string metadataDirectory, string outputPath,
         CancellationToken cancellationToken = default, long? maximumOutputBytes = null)
     {

@@ -22,20 +22,18 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
     private readonly Action<IReadOnlyList<UsbDeviceChange>> _onChanged;
     private readonly Action<Exception>? _onError;
     private readonly Lock _gate = new();
-    private readonly Win32API.WndProcDelegate _wndProc; // keep the delegate alive for the native callback
+    private readonly Win32API.WndProcDelegate _wndProc;
     private readonly Thread? _thread;
     private IntPtr _hwnd;
     private Dictionary<string, UsbDeviceInfo> _lastSnapshot = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
 
-    // The same interface GUID set the finder enumerates; kept local so this Windows-specific
-    // adapter does not depend on WinUSBFinder internals.
     private static readonly Guid[] InterfaceGuids =
     [
-        new Guid("a5dcbf10-6530-11d2-901f-00c04fb951ed"), // USB Device
-        new Guid("f72fe0d4-cbcb-407d-8814-9ed673d0dd6b"), // WinUSB generic
-        new Guid("77395066-6C05-4B91-8071-3D7E2409546E"), // ADB
-        new Guid("4D36E978-E325-11CE-BFC1-08002BE10318")  // Ports
+        new Guid("a5dcbf10-6530-11d2-901f-00c04fb951ed"),
+        new Guid("f72fe0d4-cbcb-407d-8814-9ed673d0dd6b"),
+        new Guid("77395066-6C05-4B91-8071-3D7E2409546E"),
+        new Guid("4D36E978-E325-11CE-BFC1-08002BE10318")
     ];
 
     public UsbWindowsHotplugMonitor(
@@ -71,7 +69,7 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
 
         try
         {
-            if (Win32API.RegisterClassW(ref wc) == 0 && Marshal.GetLastWin32Error() != 1410 /* ERROR_CLASS_ALREADY_EXISTS */)
+            if (Win32API.RegisterClassW(ref wc) == 0 && Marshal.GetLastWin32Error() != 1410)
             {
                 throw new InvalidOperationException($"RegisterClassW failed: {Marshal.GetLastWin32Error()}");
             }

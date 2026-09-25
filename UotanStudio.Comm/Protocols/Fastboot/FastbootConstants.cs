@@ -44,7 +44,6 @@ public static class FastbootConstants
     /// </summary>
     public const int DefaultResponseTimeoutSeconds = 30;
 
-    // Response prefix strings (4-char status codes).
     /// <summary>
     /// OKAY response prefix.
     /// <para>OKAY 响应前缀。</para>
@@ -75,7 +74,6 @@ public static class FastbootConstants
     /// </summary>
     public const string Data = "DATA";
 
-    // USB class/subclass/protocol for fastboot devices.
     /// <summary>
     /// USB interface class for fastboot devices.
     /// <para>Fastboot 设备的 USB 接口类。</para>
@@ -94,7 +92,6 @@ public static class FastbootConstants
     /// </summary>
     public const byte FastbootInterfaceProtocol = 0x03;
 
-    // Common fastboot commands.
     /// <summary>
     /// getvar command prefix.
     /// <para>getvar 命令前缀。</para>
@@ -205,8 +202,8 @@ public static class FastbootConstants
     public const string CommandOem = "oem ";
 
     /// <summary>
-    /// boot command (boots a previously downloaded image).
-    /// <para>boot 命令（启动先前下载的镜像）。</para>
+    /// boot command (boots the image downloaded earlier in the same fastboot session).
+    /// <para>boot 命令（启动同一 fastboot 会话中较早下载的镜像）。</para>
     /// </summary>
     public const string CommandBoot = "boot";
 
@@ -234,7 +231,6 @@ public static class FastbootConstants
     /// </summary>
     public const string CommandSetActive = "set_active:";
 
-    // Common fastboot variable names/prefixes (getvar keys).
     /// <summary>
     /// Variable reporting the device's maximum download size.
     /// <para>报告设备最大下载大小的变量。</para>

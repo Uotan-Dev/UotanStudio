@@ -26,7 +26,10 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
 
-/// <summary>Retains source semantics and resolves edited host files into filesystem builders with original or inherited Linux attributes.</summary>
+/// <summary>
+/// Retains source semantics and resolves edited host files into filesystem builders with original or inherited Linux attributes.
+/// <para>保留源镜像语义，并把编辑后的宿主文件树解析为使用原始或继承 Linux 属性的文件系统构建器。</para>
+/// </summary>
 public static partial class FileSystemPreservation
 {
     private const string FolderName = ".filesystem";
@@ -35,7 +38,21 @@ public static partial class FileSystemPreservation
     private static readonly AsyncLocal<Dictionary<string, string>?> CapturedPaths = new();
     private static readonly AsyncLocal<IReadOnlyList<string>?> FrozenErofsDevices = new();
 
-    /// <summary>Opens the frozen EROFS device set for the current preservation operation.</summary>
+    /// <summary>
+    /// Opens the frozen EROFS device set for the current preservation operation.
+    /// <para>为当前保留操作打开已冻结的 EROFS 设备集。</para>
+    /// </summary>
+    /// <param name="source">Main EROFS image stream; ownership transfers to the returned parser.
+    /// <para>主 EROFS 镜像流；所有权转移给返回的解析器。</para></param>
+    /// <param name="token">Cancels parser reads; <para>取消解析器读取。</para></param>
+    /// <param name="requireCompleteMetadata">When <see langword="true"/>, the parser demands complete metadata coverage.
+    /// <para>为 <see langword="true"/> 时，解析器要求元数据完整覆盖。</para></param>
+    /// <returns>A parser over <paramref name="source"/> alone, or over the source plus the frozen external device
+    /// files captured by the active <see cref="UnpackAsync"/> operation when one is in scope on this async flow.
+    /// <para>仅基于 <paramref name="source"/> 的解析器；若当前异步流上存在活动的 <see cref="UnpackAsync"/> 操作，
+    /// 则返回基于源镜像及其冻结外部设备文件的解析器。</para></returns>
+    /// <exception cref="IOException">A frozen external device file cannot be opened; already-opened device streams are disposed.
+    /// <para>无法打开冻结的外部设备文件；已打开的设备流会被释放。</para></exception>
     public static ErofsParser OpenErofsParser(Stream source, CancellationToken token = default,
         bool requireCompleteMetadata = false)
     {
@@ -78,7 +95,28 @@ public static partial class FileSystemPreservation
             throw new InvalidDataException("Use the filesystem format handler for an extracted image; a fresh directory build would discard preserved source semantics.");
     }
 
-    /// <summary>Parses a private frozen source so extraction, inspection and the retained image have identical input bytes.</summary>
+    /// <summary>
+    /// Parses a private frozen source so extraction, inspection and the retained image have identical input bytes.
+    /// <para>对源镜像做私有冻结副本解析，确保解包、检查与保留镜像使用完全一致的输入字节。</para>
+    /// </summary>
+    /// <param name="handler">Read-only format handler whose metadata describes the source.
+    /// <para>元数据描述该源镜像的只读格式处理器。</para></param>
+    /// <param name="sourcePath">Source image file; copied byte-for-byte into a temporary snapshot and verified unchanged.
+    /// <para>源镜像文件；按字节复制到临时快照并校验未被改动。</para></param>
+    /// <param name="outputDirectory">Directory that receives the extraction output. <para>接收解包输出的目录。</para></param>
+    /// <param name="options">Unpack options; <c>FileSystemProgress</c> drives byte progress and <c>ErofsExtraDevicePaths</c>
+    /// supplies EROFS external devices (frozen alongside the source). May be <see langword="null"/>.
+    /// <para>解包选项；<c>FileSystemProgress</c> 驱动字节进度，<c>ErofsExtraDevicePaths</c> 提供 EROFS 外部设备
+    /// （与源镜像一同冻结）。可为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Cancels snapshot copying and extraction; cancellation propagates and the
+    /// temporary snapshot directory is removed. <para>取消快照复制与解包；取消会向外传播并删除临时快照目录。</para></param>
+    /// <param name="unpack">Extraction delegate invoked with the frozen copy path instead of the original.
+    /// <para>以冻结副本路径而非原始路径调用的解包委托。</para></param>
+    /// <returns>The delegate's result with the temporary snapshot path replaced by the original source path in the
+    /// summary; any non-cancellation failure becomes a fail result.
+    /// <para>委托结果，其摘要中的临时快照路径会被替换为原始源路径；除取消外的失败均转为失败结果。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was cancelled during snapshotting or extraction.
+    /// <para>快照或解包期间令牌被取消。</para></exception>
     public static async Task<FirmwareOpResult> UnpackAsync(IReadonlyFormatHandler handler, string sourcePath,
         string outputDirectory, UnpackOptions? options, CancellationToken cancellationToken,
         Func<string, Task<FirmwareOpResult>> unpack)
@@ -198,10 +236,6 @@ public static partial class FileSystemPreservation
             var metadataPath = FileExtraction.ResolvePath(directory, "metadata.json");
             await using (var output = new FileStream(metadataPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                // No size cap here: the metadata document carries the full per-inode rebuild
-                // profile (tens of MB for large partitions) and must never be silently truncated.
-                // 此处不设大小上限：metadata 文档携带完整的逐 inode 重建档案（大分区可达数十 MB），
-                // 绝不能被静默截断。
                 await JsonSerializer.SerializeAsync(output, document, FilesystemMetadataJsonContext.Default.FilesystemMetadataDocument,
                     cancellationToken).ConfigureAwait(false);
             }
@@ -323,7 +357,41 @@ public static partial class FileSystemPreservation
     /// Rebuilds the extraction tree using validated source metadata, without retaining the original image.
     /// An optional output limit bounds the emitted file extent before publication. For sparse output this
     /// is the container size, not the logical partition size.
+    /// <para>使用经过校验的源元数据重建解包文件树，不保留原始镜像。可选的输出上限会在发布前限制写出文件大小；
+    /// 对稀疏输出而言该上限是容器大小，而非逻辑分区大小。</para>
     /// </summary>
+    /// <param name="inputDirectory">Extracted tree whose <c>.uotan</c> metadata references the preservation snapshot.
+    /// <para>其 <c>.uotan</c> 元数据引用了保留快照的解包目录。</para></param>
+    /// <param name="outputPath">Image file to write atomically (overwriting); it must lie outside the extracted tree
+    /// and its preservation data. <para>以原子方式写出（允许覆盖）的镜像文件；必须位于解包树及其保留数据之外。</para></param>
+    /// <param name="format">Image format name; must equal the metadata format, including the sparse container name.
+    /// <para>镜像格式名；必须与元数据格式一致，稀疏容器同理。</para></param>
+    /// <param name="cancellationToken">Cancels manifest reads, hashing, rebuilding and verification.
+    /// <para>取消清单读取、哈希、重建与校验。</para></param>
+    /// <param name="rebuildReport">Optional callback receiving the EROFS rebuild report (sizes, compression profile)
+    /// after a successful EROFS rebuild; not invoked for other formats. May be <see langword="null"/>.
+    /// <para>可选回调；EROFS 重建成功后接收重建报告（体积、压缩档案），其他格式不触发。可为 <see langword="null"/>。</para></param>
+    /// <param name="maximumOutputBytes">Optional positive hard cap on written bytes enforced during publication, or
+    /// <see langword="null"/> for no limit. <para>可选的正数写出字节硬上限，在发布期间强制；<see langword="null"/> 表示不限制。</para></param>
+    /// <param name="attributeEdits">Optional ownership/permission edits applied to the edit plan before building;
+    /// guards and bounds are enforced per <see cref="FileSystemAttributeEdit"/>. May be <see langword="null"/>.
+    /// <para>可选的属主/权限编辑，构建前应用到编辑计划；守卫与边界按 <see cref="FileSystemAttributeEdit"/> 所述强制。
+    /// 可为 <see langword="null"/>。</para></param>
+    /// <param name="xattrEdits">Optional user-namespace xattr edits applied before building. May be <see langword="null"/>.
+    /// <para>可选的 user 命名空间扩展属性编辑，构建前应用。可为 <see langword="null"/>。</para></param>
+    /// <returns><see langword="true"/> when the image was rebuilt and verified; <see langword="false"/> when no
+    /// preservation metadata exists (or the sparse-container early return applies), leaving the caller to a fresh
+    /// directory build.
+    /// <para>成功重建并校验时返回 <see langword="true"/>；无保留元数据（或命中稀疏容器提前返回情形）时返回
+    /// <see langword="false"/>，此时由调用方执行全新目录构建。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumOutputBytes"/> is zero or negative.
+    /// <para><paramref name="maximumOutputBytes"/> 为零或负数。</para></exception>
+    /// <exception cref="InvalidDataException">The metadata format mismatches, the preservation snapshot is missing,
+    /// oversized, hash- or configuration-inconsistent, an edit guard fails, or the container is not editable.
+    /// <para>元数据格式不匹配、保留快照缺失/超限/哈希或配置不一致、编辑守卫失败，或容器不支持编辑。</para></exception>
+    /// <exception cref="IOException">The output path lies inside the protected trees, or content or attributes changed
+    /// during rebuilding. <para>输出路径位于受保护目录树内，或重建期间内容/属性发生变化。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
     public static bool TryRestore(string inputDirectory, string outputPath, string format,
         CancellationToken cancellationToken = default,
         Action<IReadOnlyDictionary<string, string>>? rebuildReport = null,
@@ -385,7 +453,6 @@ public static partial class FileSystemPreservation
         if (snapshotDirectory is not null)
         {
             ValidateSnapshotProjection(manifest, projection);
-            // Host permissions can change across platforms; original inode permissions remain authoritative.
             manifest.Projection = projection;
         }
         var fullOutput = Path.GetFullPath(outputPath);
@@ -480,11 +547,6 @@ public static partial class FileSystemPreservation
                 .OrderBy(codec => codec.Algorithm, StringComparer.Ordinal)
                 .Select(codec => $"{codec.Algorithm}: inherited from the verified source image; encoder identity and original level remain unproven"))
         };
-        // A partition image is normally padded past the end of its filesystem, so the rebuilt length is
-        // only comparable to the source filesystem's own block count. Profiles written before that field
-        // existed fall back to the padded image length and say so.
-        // 分区镜像通常会被填充到超出其文件系统的长度，因此重建长度只能与源文件系统自身的块数比较。
-        // 早于该字段写入的档案退回使用填充后的镜像长度，并明确说明。
         var paddedFallback = rebuild.SourceFilesystemBytes is not > 0;
         var target = paddedFallback ? rebuild.SourceLength : rebuild.SourceFilesystemBytes;
         if (target is > 0)

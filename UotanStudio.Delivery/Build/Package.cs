@@ -181,7 +181,6 @@ internal static partial class DeliveryPackageBuilder
         }
     }
 
-    // Inspect actual local headers rather than predicting ZIP64 extra field lengths.
     internal static Dictionary<string, (long Offset, ulong Size)> ReadStoredRanges(string path)
     {
         using var input = File.OpenRead(path);
@@ -261,7 +260,6 @@ internal static partial class DeliveryPackageBuilder
         await CopyPackageMemberAsync(input, output, member, token, progress);
     }
 
-    // AOSP only decompresses new.dat.br. Patch offsets always address uncompressed, STORED patch bytes.
     private static async Task<string> ExpandPatchAsync(string source, string stage, CancellationToken token)
     {
         var temporary = Path.Combine(stage, ".patch-" + Guid.NewGuid().ToString("N"));
@@ -381,7 +379,6 @@ internal static partial class DeliveryPackageBuilder
         await file.WriteAsync(length, token); await file.WriteAsync(comment, token);
     }
 
-    // Direct RSA signature, no authenticated attributes: matches signapk -w and recovery verifier.
     private static byte[] EncodeCms(X509Certificate2 cert, byte[] signature)
     {
         const string sha256 = "2.16.840.1.101.3.4.2.1", data = "1.2.840.113549.1.7.1";

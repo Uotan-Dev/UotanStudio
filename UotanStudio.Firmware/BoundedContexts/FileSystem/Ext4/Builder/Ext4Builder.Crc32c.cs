@@ -2,6 +2,10 @@ using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 
+/// <summary>
+/// EXT4 builder part carrying the CRC32c table used by <c>metadata_csum</c> together with the little-endian write and power-of-two rounding helpers.
+/// <para>EXT4 构建器的组成部分，提供 <c>metadata_csum</c> 使用的 CRC32c 查表实现，以及小端写出与 2 的幂取整辅助方法。</para>
+/// </summary>
 public sealed partial class Ext4Builder
 {
 

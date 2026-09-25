@@ -54,16 +54,36 @@ internal class PayloadExtractor
     /// <summary>
     /// Extracts a single partition from the payload stream to an output file.
     /// When <paramref name="openPayloadStream"/> is provided, a partition-exclusive read-only payload
-    /// handle is opened per partition so concurrent partitions no longer share (and serialize on) a
-    /// single payload stream; otherwise the caller-supplied shared stream is used.
+    /// handle is opened per partition so concurrent partitions do not share, and therefore do not
+    /// serialize on, a single payload stream; otherwise the caller-supplied shared stream is used.
     /// <para>从载荷流中提取单个分区到输出文件。当提供 <paramref name="openPayloadStream"/> 时，
-    /// 每个分区都会打开专属于自己的只读载荷句柄，使并发分区不再共享（并因共享而串行化）单一载荷流；
+    /// 每个分区都会打开专属于自己的只读载荷句柄，使并发分区不共享（因而不会因共享而串行化）单一载荷流；
     /// 否则使用调用方传入的共享流。</para>
     /// </summary>
+    /// <param name="partition">Manifest entry describing the partition's operations, block extents and hash metadata.
+    /// <para>描述该分区的操作、块 extent 与哈希元数据的清单项。</para></param>
+    /// <param name="outFilename">Destination image path; its directory is created on demand and the file is published only after the temporary output is complete.
+    /// <para>目标镜像路径；按需创建其目录，并且仅在临时输出完成后发布该文件。</para></param>
+    /// <param name="stream">Payload data stream holding the operation blobs, seekable when <paramref name="openPayloadStream"/> is absent;
+    /// may be <see langword="null"/> when a factory is supplied. Ownership stays with the caller.
+    /// <para>承载操作数据块的载荷流；在未提供 <paramref name="openPayloadStream"/> 时必须可寻址；提供工厂时可为 <see langword="null"/>。
+    /// 所有权始终属于调用方。</para></param>
+    /// <param name="baseOffset">Absolute byte offset in <paramref name="stream"/> where operation data begins.
+    /// <para><paramref name="stream"/> 中操作数据起始的绝对字节偏移。</para></param>
+    /// <param name="blockSize">Block size declared by the manifest, in bytes; it must be nonzero.
+    /// <para>清单声明的块大小（字节），必须非零。</para></param>
+    /// <param name="cancellationToken">Checked before the run, around every operation and while copying the base image; cancelling leaves only the temporary file, which is deleted.
+    /// <para>在执行前、每个操作前后以及复制基座镜像时都会检查；取消时仅留下随后会被删除的临时文件。</para></param>
+    /// <param name="sourceImages">Base image path per partition name, used by source-dependent operations; <see langword="null"/> or a missing entry makes such operations fail.
+    /// <para>按分区名索引的基座镜像路径，供源依赖操作使用；为 <see langword="null"/> 或缺少对应项时此类操作会失败。</para></param>
+    /// <param name="byteProgress">Optional per-partition byte progress sink reporting processed bytes against the validated partition total.
+    /// <para>可选的分区级字节进度回调，按已校验的分区总量上报已处理字节。</para></param>
     /// <param name="openPayloadStream">
     /// Optional factory opening a partition-exclusive read-only payload stream (disposed before return).
     /// <para>可选的工厂，用于打开分区专属只读载荷流（返回前释放）。</para>
     /// </param>
+    /// <param name="operationWorkers">Optional cap on concurrently processed operations within this partition; when absent, the shared worker count applies.
+    /// <para>可选的本分区内并发操作数上限；未提供时采用共享的工作者数量。</para></param>
     private void ExtractPartition(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize, CancellationToken cancellationToken, IReadOnlyDictionary<string, string>? sourceImages, IProgress<(long Processed, long Total)>? byteProgress = null, Func<Stream>? openPayloadStream = null, int? operationWorkers = null)
     {
         ArgumentNullException.ThrowIfNull(partition);
@@ -92,7 +112,6 @@ internal class PayloadExtractor
                 {
                     outFile.SetLength(totalSize);
                 }
-
 
                 var progressTracker = byteProgress is null
                     ? null
@@ -320,10 +339,10 @@ internal class PayloadExtractor
 
     /// <summary>
     /// Extracts all matching partitions from the manifest to the output directory.
-    /// Partitions are processed with bounded parallelism (<see cref="FirmwareParallelism.Workers"/>);
+    /// Partitions are processed with bounded parallelism (<see cref="UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers"/>);
     /// when <paramref name="byteProgress"/> is supplied, byte-level progress is aggregated across all
     /// partitions via a thread-safe accumulator (reports throttle to one per 100 ms).
-    /// <para>从清单中提取所有匹配的分区到输出目录。分区按有界并行度（<see cref="FirmwareParallelism.Workers"/>）
+    /// <para>从清单中提取所有匹配的分区到输出目录。分区按有界并行度（<see cref="UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers"/>）
     /// 处理；提供 <paramref name="byteProgress"/> 时，字节级进度通过线程安全累计器跨分区聚合（每 100ms 至多上报一次）。</para>
     /// </summary>
     public void ExtractPartitions(DeltaArchiveManifest manifest, Stream stream, ulong baseOffset, string[] extractFiles, string outputDir, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null, Func<Stream>? openPayloadStream = null)
@@ -355,7 +374,6 @@ internal class PayloadExtractor
 
         var workers = SharedKernel.FirmwareParallelism.Workers;
         var partitionWorkers = Math.Max(1, Math.Min(workers, selected.Length));
-        // Split a single operation's budget; nested Parallel loops must not multiply it.
         var operationWorkers = Math.Max(1, workers / partitionWorkers);
         try
         {
@@ -380,9 +398,9 @@ internal class PayloadExtractor
 
     /// <summary>
     /// Asynchronously extracts all matching partitions from the manifest to the output directory.
-    /// Partitions are processed with bounded parallelism (<see cref="FirmwareParallelism.Workers"/>);
+    /// Partitions are processed with bounded parallelism (<see cref="UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers"/>);
     /// byte-level progress is aggregated across all partitions via a thread-safe accumulator.
-    /// <para>异步从清单中提取所有匹配的分区到输出目录。分区按有界并行度（<see cref="FirmwareParallelism.Workers"/>）
+    /// <para>异步从清单中提取所有匹配的分区到输出目录。分区按有界并行度（<see cref="UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers"/>）
     /// 处理；字节级进度通过线程安全累计器跨分区聚合。</para>
     /// </summary>
     public async Task ExtractPartitionsAsync(DeltaArchiveManifest manifest, Stream stream, ulong baseOffset, string[] extractFiles, string outputDir, CancellationToken cancellationToken = default, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null, Func<Stream>? openPayloadStream = null)

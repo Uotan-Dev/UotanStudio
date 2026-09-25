@@ -9,6 +9,7 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <summary>
 /// Managed MTK boot protocol over an already selected transport. Initialization only queries
 /// identity; DA upload and execution require separate explicit calls.
+/// <para>在已选定的传输之上管理的 MTK 启动协议。初始化仅查询身份信息；DA 上传与执行需要单独显式调用。</para>
 /// </summary>
 public sealed partial class MtkSession : IProtocolSession
 {
@@ -34,27 +35,77 @@ public sealed partial class MtkSession : IProtocolSession
         _handshakeTimeoutMs = handshakeTimeoutMs;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// The protocol identifier reported for this session.
+    /// <para>本会话上报的协议标识。</para>
+    /// </summary>
+    /// <value>
+    /// The constant string <c>mtk</c>.
+    /// <para>常量字符串 <c>mtk</c>。</para>
+    /// </value>
     public string ProtocolName => "mtk";
 
-    /// <inheritdoc />
+    /// <summary>
+    /// The transport this session took ownership of at construction.
+    /// <para>本会话在构造时接管的传输。</para>
+    /// </summary>
+    /// <value>
+    /// The open transport used for every boot-protocol read and write; it is disposed together with the session.
+    /// <para>用于所有 boot 协议读写的已打开传输；会随会话一同释放。</para>
+    /// </value>
     public ICommTransport Transport { get; }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Whether the transport is connected while the session remains in a usable stage.
+    /// <para>在会话处于可用阶段时，传输是否仍处于连接状态。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> when the session is not disposed, the transport reports a connection, and the stage is neither faulted nor XFlash-shutdown-acknowledged.
+    /// <para>当会话未释放、传输报告已连接，且阶段既非故障也非已确认 XFlash 关闭时返回 <see langword="true"/>。</para>
+    /// </value>
     public bool IsConnected => !_disposed && Transport.IsConnected
         && _state is not (MtkSessionState.Faulted or MtkSessionState.XFlashShutdownAcknowledged);
 
-    /// <summary>Gets the current protocol stage; AgentStarted does not imply storage readiness.</summary>
+    /// <summary>
+    /// Gets the current protocol stage; AgentStarted does not imply storage readiness.
+    /// <para>获取当前协议阶段；AgentStarted 并不意味着存储已就绪。</para>
+    /// </summary>
+    /// <value>
+    /// The stage reached by completed commands, or <c>Disposed</c> once the session is released.
+    /// <para>由已完成命令推进到的阶段；会话释放后为 <c>Disposed</c>。</para>
+    /// </value>
     public MtkSessionState State => _disposed ? MtkSessionState.Disposed : _state;
 
-    /// <summary>Gets the queried device identity, or null before successful initialization.</summary>
+    /// <summary>
+    /// Gets the queried device identity, or null before successful initialization.
+    /// <para>获取已查询到的设备身份；初始化成功之前为 null。</para>
+    /// </summary>
+    /// <value>
+    /// The identity read during the boot handshake, or <see langword="null"/> until <c>InitializeAsync</c> completes.
+    /// <para>在 boot 握手中读取到的身份信息；在 <c>InitializeAsync</c> 完成前为 <see langword="null"/>。</para>
+    /// </value>
     public MtkDeviceInfo? DeviceInfo { get; private set; }
 
-    /// <summary>Opens a named COM/TTY port without RTS/CTS flow control and queries its bootloader.</summary>
-    /// <param name="portName">The explicitly selected port; no fallback or enumeration-order matching is performed.</param>
-    /// <param name="baudRate">The serial line speed.</param>
-    /// <param name="cancellationToken">The operation cancellation token.</param>
-    /// <returns>An initialized bootloader session which owns the serial transport.</returns>
+    /// <summary>
+    /// Opens a named COM/TTY port without RTS/CTS flow control and queries its bootloader.
+    /// <para>以无 RTS/CTS 流控的方式打开指定的 COM/TTY 端口，并查询其 bootloader。</para>
+    /// </summary>
+    /// <param name="portName">
+    /// The explicitly selected port; no fallback or enumeration-order matching is performed.
+    /// <para>显式选定的端口；不进行回退或按枚举顺序匹配。</para>
+    /// </param>
+    /// <param name="baudRate">
+    /// The serial line speed.
+    /// <para>串口波特率。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The operation cancellation token.
+    /// <para>操作取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// An initialized bootloader session which owns the serial transport.
+    /// <para>已初始化的 bootloader 会话，拥有该串口传输。</para>
+    /// </returns>
     public static async Task<MtkSession> OpenSerialAsync(string portName, int baudRate = 921600,
         CancellationToken cancellationToken = default)
     {
@@ -105,9 +156,18 @@ public sealed partial class MtkSession : IProtocolSession
         }
     }
 
-    /// <summary>Performs the complemented-byte handshake and reads hardware identity and security flags.</summary>
-    /// <param name="cancellationToken">The operation cancellation token.</param>
-    /// <returns>The queried identity. No watchdog, memory write, authentication bypass, or reset is performed.</returns>
+    /// <summary>
+    /// Performs the complemented-byte handshake and reads hardware identity and security flags.
+    /// <para>执行反码字节握手，并读取硬件身份信息与安全标志。</para>
+    /// </summary>
+    /// <param name="cancellationToken">
+    /// The operation cancellation token.
+    /// <para>操作取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// The queried identity. No watchdog, memory write, authentication bypass, or reset is performed.
+    /// <para>查询到的设备身份信息。不执行看门狗、内存写入、认证绕过或复位操作。</para>
+    /// </returns>
     public async Task<MtkDeviceInfo> InitializeAsync(CancellationToken cancellationToken = default)
     {
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -131,8 +191,6 @@ public sealed partial class MtkSession : IProtocolSession
                 var hardware = await ReadAsync(4, _timeoutMs, cancellationToken).ConfigureAwait(false);
                 await EchoAsync([0xFC], cancellationToken).ConfigureAwait(false);
                 var versions = await ReadAsync(8, _timeoutMs, cancellationToken).ConfigureAwait(false);
-                // mtkclient get_hw_sw_ver unpacks ">HHHH" without a status check; the fourth
-                // u16 is undefined, so validating it here would fail benign chip reports.
                 await EchoAsync([0xD8], cancellationToken).ConfigureAwait(false);
                 var configuration = await ReadAsync(6, _timeoutMs, cancellationToken).ConfigureAwait(false);
                 CheckStatus(BinaryPrimitives.ReadUInt16BigEndian(configuration.AsSpan(4)), "target configuration query");
@@ -162,13 +220,37 @@ public sealed partial class MtkSession : IProtocolSession
     /// <summary>
     /// Uploads one explicitly selected, word-aligned DA image including its signature bytes.
     /// Authentication failures are reported; no image patching or fallback agent is attempted.
+    /// <para>上传一个显式选定、按字对齐的 DA 镜像（含其签名字节）。认证失败会被上报；
+    /// 不进行镜像修补，也不尝试任何回退代理。</para>
     /// </summary>
-    /// <param name="image">A readable stream positioned at the agent image.</param>
-    /// <param name="loadAddress">The validated 32-bit target load address supplied by the device profile.</param>
-    /// <param name="length">The total image length, including the signature, limited to 64 MiB.</param>
-    /// <param name="signatureLength">The signature suffix length included in the image.</param>
-    /// <param name="progress">Optional cumulative uploaded-byte progress.</param>
-    /// <param name="cancellationToken">The operation cancellation token.</param>
+    /// <param name="image">
+    /// A readable stream positioned at the agent image.
+    /// <para>定位到代理镜像起始处、可读的流。</para>
+    /// </param>
+    /// <param name="loadAddress">
+    /// The validated 32-bit target load address supplied by the device profile.
+    /// <para>由设备配置提供、已校验的 32 位目标加载地址。</para>
+    /// </param>
+    /// <param name="length">
+    /// The total image length, including the signature, limited to 64 MiB.
+    /// <para>镜像总长度（含签名），上限为 64 MiB。</para>
+    /// </param>
+    /// <param name="signatureLength">
+    /// The signature suffix length included in the image.
+    /// <para>镜像中包含的签名后缀长度。</para>
+    /// </param>
+    /// <param name="progress">
+    /// Optional cumulative uploaded-byte progress.
+    /// <para>可选的累计已上传字节进度。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The operation cancellation token.
+    /// <para>操作取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// A task that completes once the device confirms the uploaded agent checksum and the session advances to the agent-uploaded stage.
+    /// <para>在设备确认已上传代理的校验和、会话推进到代理已上传阶段后完成的任务。</para>
+    /// </returns>
     public Task UploadDownloadAgentAsync(Stream image, uint loadAddress, int length, int signatureLength = 0,
         IProgress<long>? progress = null, CancellationToken cancellationToken = default)
         => UploadDownloadAgentCoreAsync(image, loadAddress, length, signatureLength, progress, null, 0, cancellationToken);
@@ -253,8 +335,18 @@ public sealed partial class MtkSession : IProtocolSession
         }
     }
 
-    /// <summary>Requests execution of the successfully uploaded agent at its recorded address.</summary>
-    /// <param name="cancellationToken">The operation cancellation token.</param>
+    /// <summary>
+    /// Requests execution of the successfully uploaded agent at its recorded address.
+    /// <para>请求在已记录地址处执行先前成功上传的代理。</para>
+    /// </summary>
+    /// <param name="cancellationToken">
+    /// The operation cancellation token.
+    /// <para>操作取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// A task that completes once the target acknowledges execution and the session advances to the agent-started stage.
+    /// <para>在目标确认执行、会话推进到代理已启动阶段后完成的任务。</para>
+    /// </returns>
     public async Task StartDownloadAgentAsync(CancellationToken cancellationToken = default)
     {
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -372,7 +464,12 @@ public sealed partial class MtkSession : IProtocolSession
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Marks the session disposed and releases the owned transport; further operations fail.
+    /// <para>将会话标记为已释放并释放所持有的传输；后续操作将失败。</para>
+    /// </summary>
+    /// <remarks>Idempotent: calling <c>Dispose</c> more than once has no additional effect.
+    /// <para>幂等：多次调用 <c>Dispose</c> 不会产生额外效果。</para></remarks>
     public void Dispose()
     {
         if (_disposed)
@@ -382,6 +479,5 @@ public sealed partial class MtkSession : IProtocolSession
 
         _disposed = true;
         Transport.Dispose();
-        // Waiters must wake and observe disposal; disposing their semaphore would strand them.
     }
 }

@@ -11,8 +11,8 @@ public static partial class FirehoseXmlBuilder
     /// <para>构建 &lt;nop&gt; XML 健康探测命令。元素名必须小写：Firehose XML 元素名大小写
     /// 敏感，大写的 &lt;NOP&gt; 可能被严格解析的 programmer 拒绝。</para>
     /// </summary>
-    /// <param name="value">The nop value (default "ping"). nop 值（默认 "ping"）。</param>
-    /// <returns>The nop XML string. nop XML 字符串。</returns>
+    /// <param name="value">The nop value (default "ping"). <para>nop 值（默认 "ping"）。</para></param>
+    /// <returns>The nop XML string. <para>nop XML 字符串。</para></returns>
     public static string BuildNop(string value = "ping")
     {
         var sb = new StringBuilder();
@@ -29,8 +29,8 @@ public static partial class FirehoseXmlBuilder
     /// <para>构建 &lt;power&gt; XML 命令。不输出 DelayInSeconds：真机上带 delay 属性时设备
     /// 只回 "Calling handler for power" 后挂起、复位永不执行。</para>
     /// </summary>
-    /// <param name="option">The reboot option. 复位选项。</param>
-    /// <returns>The power XML string. 电源 XML 字符串。</returns>
+    /// <param name="option">The reboot option. <para>复位选项。</para></param>
+    /// <returns>The power XML string. <para>电源 XML 字符串。</para></returns>
     public static string BuildPower(RebootOption option)
     {
         var valueStr = option switch
@@ -51,16 +51,17 @@ public static partial class FirehoseXmlBuilder
 
     /// <summary>
     /// Builds the &lt;patch&gt; XML command, including patches targeting physical storage via DISK.
+    /// <para>构建 &lt;patch&gt; XML 命令，包括通过 DISK 针对物理存储的补丁。</para>
     /// </summary>
-    /// <param name="sectorSizeInBytes">The sector size in bytes. 扇区大小（字节）。</param>
-    /// <param name="filename">The target filename. 目标文件名。</param>
-    /// <param name="physicalPartitionNumber">The physical partition number. 物理分区编号。</param>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <param name="byteOffset">The byte offset within the sector. 扇区内字节偏移。</param>
-    /// <param name="value">The value to patch (hex string). 待写入的值（十六进制字符串）。</param>
-    /// <param name="sizeInBytes">The size in bytes. 大小（字节）。</param>
-    /// <param name="slot">Optional slot number. 可选槽位编号。</param>
-    /// <returns>The patch XML string.</returns>
+    /// <param name="sectorSizeInBytes">The sector size in bytes. <para>扇区大小（字节）。</para></param>
+    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
+    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="byteOffset">The byte offset within the sector. <para>扇区内字节偏移。</para></param>
+    /// <param name="value">The value to patch (hex string). <para>待写入的值（十六进制字符串）。</para></param>
+    /// <param name="sizeInBytes">The size in bytes. <para>大小（字节）。</para></param>
+    /// <param name="slot">Optional slot number. <para>可选槽位编号。</para></param>
+    /// <returns>The patch XML string. <para>patch XML 字符串。</para></returns>
     public static string BuildPatch(long sectorSizeInBytes, string filename,
         int physicalPartitionNumber, long startSector,
         long byteOffset, string value, long sizeInBytes, int? slot = null)
@@ -97,13 +98,13 @@ public static partial class FirehoseXmlBuilder
     /// <para>构建擦写伪命令：通过 &lt;program&gt; 向分区首部写入零字节（对齐 fh_loader
     /// --wipefirst）。</para>
     /// </summary>
-    /// <param name="sectorSizeInBytes">The sector size in bytes. 扇区大小（字节）。</param>
-    /// <param name="numPartitionSectors">The number of sectors to wipe. 待擦写扇区数。</param>
-    /// <param name="physicalPartitionNumber">The physical partition number. 物理分区编号。</param>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <param name="zeroFilename">The filename identifier for the zeros payload. 零字节负载的文件名标识。</param>
-    /// <param name="slot">Optional slot number. 可选槽位编号。</param>
-    /// <returns>The wipe (program-with-zeros) XML string. 擦写（写零编程）XML 字符串。</returns>
+    /// <param name="sectorSizeInBytes">The sector size in bytes. <para>扇区大小（字节）。</para></param>
+    /// <param name="numPartitionSectors">The number of sectors to wipe. <para>待擦写扇区数。</para></param>
+    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="zeroFilename">The filename identifier for the zeros payload. <para>零字节负载的文件名标识。</para></param>
+    /// <param name="slot">Optional slot number. <para>可选槽位编号。</para></param>
+    /// <returns>The wipe (program-with-zeros) XML string. <para>擦写（写零编程）XML 字符串。</para></returns>
     public static string BuildWipe(long sectorSizeInBytes, long numPartitionSectors,
         int physicalPartitionNumber, long startSector,
         string zeroFilename = "Zeros16KB.bin", int? slot = null)
@@ -135,8 +136,8 @@ public static partial class FirehoseXmlBuilder
     /// Builds the &lt;setbootablestoragedrive&gt; XML command.
     /// <para>构建 &lt;setbootablestoragedrive&gt; XML 命令。</para>
     /// </summary>
-    /// <param name="value">The bootable storage drive number (UFS→1, eMMC→0). 可启动存储驱动器编号（UFS→1，eMMC→0）。</param>
-    /// <returns>The setbootablestoragedrive XML string. setbootablestoragedrive XML 字符串。</returns>
+    /// <param name="value">The bootable storage drive number (UFS→1, eMMC→0). <para>可启动存储驱动器编号（UFS→1，eMMC→0）。</para></param>
+    /// <returns>The setbootablestoragedrive XML string. <para>setbootablestoragedrive XML 字符串。</para></returns>
     public static string BuildSetBootableStorageDrive(int value)
     {
         var sb = new StringBuilder();
@@ -151,8 +152,8 @@ public static partial class FirehoseXmlBuilder
     /// Builds the &lt;getstorageinfo&gt; XML command.
     /// <para>构建 &lt;getstorageinfo&gt; XML 命令。</para>
     /// </summary>
-    /// <param name="physicalPartitionNumber">The physical partition number. 物理分区编号。</param>
-    /// <returns>The getstorageinfo XML string. getstorageinfo XML 字符串。</returns>
+    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
+    /// <returns>The getstorageinfo XML string. <para>getstorageinfo XML 字符串。</para></returns>
     public static string BuildGetStorageInfo(int physicalPartitionNumber)
     {
         var sb = new StringBuilder();
@@ -167,8 +168,12 @@ public static partial class FirehoseXmlBuilder
     /// Builds the &lt;setactivepartition&gt; XML command for setting the active A/B slot.
     /// <para>构建用于设置活跃 A/B 槽位的 &lt;setactivepartition&gt; XML 命令。</para>
     /// </summary>
-    /// <param name="slot">The slot identifier to set as active (e.g. "a" or "b"). 待设置为活跃的槽位标识（如 "a" 或 "b"）。</param>
-    /// <returns>The setactivepartition XML string. setactivepartition XML 字符串。</returns>
+    /// <param name="slot">The slot identifier to set as active (e.g. "a" or "b"). <para>待设置为活跃的槽位标识（如 "a" 或 "b"）。</para></param>
+    /// <returns>The setactivepartition XML string. <para>setactivepartition XML 字符串。</para></returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="slot"/> is null or empty.
+    /// <para><paramref name="slot"/> 为 null 或空。</para>
+    /// </exception>
     public static string BuildSetActivePartition(string slot)
     {
         if (string.IsNullOrEmpty(slot))
@@ -188,9 +193,9 @@ public static partial class FirehoseXmlBuilder
     /// Builds the &lt;peek&gt; XML command for reading memory from the target device.
     /// <para>构建用于从目标设备读取内存的 &lt;peek&gt; XML 命令。</para>
     /// </summary>
-    /// <param name="sizeInBytes">The number of bytes to read. 待读取字节数。</param>
-    /// <param name="address">The memory address to read from (hexadecimal string). 待读取的内存地址（十六进制字符串）。</param>
-    /// <returns>The peek XML string. peek XML 字符串。</returns>
+    /// <param name="sizeInBytes">The number of bytes to read. <para>待读取字节数。</para></param>
+    /// <param name="address">The memory address to read from (hexadecimal string). <para>待读取的内存地址（十六进制字符串）。</para></param>
+    /// <returns>The peek XML string. <para>peek XML 字符串。</para></returns>
     public static string BuildPeek(long sizeInBytes, string address)
     {
         var sb = new StringBuilder();
@@ -207,10 +212,10 @@ public static partial class FirehoseXmlBuilder
     /// Builds the &lt;poke&gt; XML command for writing memory on the target device.
     /// <para>构建用于向目标设备写入内存的 &lt;poke&gt; XML 命令。</para>
     /// </summary>
-    /// <param name="sizeInBytes">The number of bytes to write. 待写入字节数。</param>
-    /// <param name="address">The memory address to write to (hexadecimal string). 待写入的内存地址（十六进制字符串）。</param>
-    /// <param name="value">The value to write (hexadecimal string). 待写入的值（十六进制字符串）。</param>
-    /// <returns>The poke XML string. poke XML 字符串。</returns>
+    /// <param name="sizeInBytes">The number of bytes to write. <para>待写入字节数。</para></param>
+    /// <param name="address">The memory address to write to (hexadecimal string). <para>待写入的内存地址（十六进制字符串）。</para></param>
+    /// <param name="value">The value to write (hexadecimal string). <para>待写入的值（十六进制字符串）。</para></param>
+    /// <returns>The poke XML string. <para>poke XML 字符串。</para></returns>
     public static string BuildPoke(long sizeInBytes, string address, string value)
     {
         var sb = new StringBuilder();
@@ -228,9 +233,9 @@ public static partial class FirehoseXmlBuilder
     /// Builds the &lt;pokedword&gt; XML command for writing a 32-bit word to the target device.
     /// <para>构建用于向目标设备写入 32 位字的 &lt;pokedword&gt; XML 命令。</para>
     /// </summary>
-    /// <param name="address">The target address (hexadecimal string). 目标地址（十六进制字符串）。</param>
-    /// <param name="value">The 32-bit value to write (hexadecimal string). 待写入的 32 位值（十六进制字符串）。</param>
-    /// <returns>The pokedword XML string. pokedword XML 字符串。</returns>
+    /// <param name="address">The target address (hexadecimal string). <para>目标地址（十六进制字符串）。</para></param>
+    /// <param name="value">The 32-bit value to write (hexadecimal string). <para>待写入的 32 位值（十六进制字符串）。</para></param>
+    /// <returns>The pokedword XML string. <para>pokedword XML 字符串。</para></returns>
     public static string BuildPokeDword(string address, string value)
     {
         var sb = new StringBuilder();
@@ -247,10 +252,10 @@ public static partial class FirehoseXmlBuilder
     /// Builds the &lt;memcpy&gt; XML command for performing memory copy on the target device.
     /// <para>构建用于在目标设备执行内存拷贝的 &lt;memcpy&gt; XML 命令。</para>
     /// </summary>
-    /// <param name="dstOffset">Destination address (hexadecimal string). 目标地址（十六进制字符串）。</param>
-    /// <param name="srcOffset">Source address (hexadecimal string). 源地址（十六进制字符串）。</param>
-    /// <param name="size">Copy size in bytes. 拷贝大小（字节）。</param>
-    /// <returns>The memcpy XML string. memcpy XML 字符串。</returns>
+    /// <param name="dstOffset">Destination address (hexadecimal string). <para>目标地址（十六进制字符串）。</para></param>
+    /// <param name="srcOffset">Source address (hexadecimal string). <para>源地址（十六进制字符串）。</para></param>
+    /// <param name="size">Copy size in bytes. <para>拷贝大小（字节）。</para></param>
+    /// <returns>The memcpy XML string. <para>memcpy XML 字符串。</para></returns>
     public static string BuildMemcpy(string dstOffset, string srcOffset, long size)
     {
         var sb = new StringBuilder();

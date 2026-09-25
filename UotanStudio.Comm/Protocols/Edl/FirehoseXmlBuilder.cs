@@ -17,8 +17,8 @@ public static partial class FirehoseXmlBuilder
     /// Builds the &lt;configure&gt; XML command from the specified configuration.
     /// <para>根据指定配置构建 &lt;configure&gt; XML 命令。</para>
     /// </summary>
-    /// <param name="config">The Firehose configuration. Firehose 配置。</param>
-    /// <returns>The configure XML string. 配置 XML 字符串。</returns>
+    /// <param name="config">The Firehose configuration. <para>Firehose 配置。</para></param>
+    /// <returns>The configure XML string. <para>配置 XML 字符串。</para></returns>
     public static string BuildConfigure(FirehoseConfiguration config)
     {
         var sb = new StringBuilder();
@@ -76,14 +76,14 @@ public static partial class FirehoseXmlBuilder
     /// Builds the &lt;program&gt; XML command.
     /// <para>构建 &lt;program&gt; XML 命令。</para>
     /// </summary>
-    /// <param name="sectorSizeInBytes">The sector size in bytes. 扇区大小（字节）。</param>
-    /// <param name="numPartitionSectors">The number of sectors to program. 待编程扇区数。</param>
-    /// <param name="filename">The target filename. 目标文件名。</param>
-    /// <param name="physicalPartitionNumber">The physical partition number. 物理分区编号。</param>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <param name="label">Optional partition label. 可选分区标签。</param>
-    /// <param name="slot">Optional slot number. 可选槽位编号。</param>
-    /// <returns>The program XML string. 编程 XML 字符串。</returns>
+    /// <param name="sectorSizeInBytes">The sector size in bytes. <para>扇区大小（字节）。</para></param>
+    /// <param name="numPartitionSectors">The number of sectors to program. <para>待编程扇区数。</para></param>
+    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
+    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="label">Optional partition label. <para>可选分区标签。</para></param>
+    /// <param name="slot">Optional slot number. <para>可选槽位编号。</para></param>
+    /// <returns>The program XML string. <para>编程 XML 字符串。</para></returns>
     public static string BuildProgram(long sectorSizeInBytes, long numPartitionSectors,
         string filename, int physicalPartitionNumber, long startSector,
         string? label = null, int? slot = null)
@@ -122,17 +122,17 @@ public static partial class FirehoseXmlBuilder
     /// Programming (VIP).
     /// <para>构建带摘要表属性的 &lt;program&gt; XML 命令，用于验证镜像编程（VIP）。</para>
     /// </summary>
-    /// <param name="sectorSizeInBytes">The sector size in bytes. 扇区大小（字节）。</param>
-    /// <param name="numPartitionSectors">The number of sectors to program. 待编程扇区数。</param>
-    /// <param name="filename">The target filename. 目标文件名。</param>
-    /// <param name="physicalPartitionNumber">The physical partition number. 物理分区编号。</param>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <param name="digest">The hex string of the SHA256 digest. SHA256 摘要的十六进制字符串。</param>
-    /// <param name="digestSignature">The base64-encoded signature of the digest. 摘要的 Base64 编码签名。</param>
-    /// <param name="signatureSize">The size of the signature in bytes. 签名大小（字节）。</param>
-    /// <param name="label">Optional partition label. 可选分区标签。</param>
-    /// <param name="slot">Optional slot number. 可选槽位编号。</param>
-    /// <returns>The program XML string with digest attributes. 带摘要属性的编程 XML 字符串。</returns>
+    /// <param name="sectorSizeInBytes">The sector size in bytes. <para>扇区大小（字节）。</para></param>
+    /// <param name="numPartitionSectors">The number of sectors to program. <para>待编程扇区数。</para></param>
+    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
+    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="digest">The hex string of the SHA256 digest. <para>SHA256 摘要的十六进制字符串。</para></param>
+    /// <param name="digestSignature">The base64-encoded signature of the digest. <para>摘要的 Base64 编码签名。</para></param>
+    /// <param name="signatureSize">The size of the signature in bytes. <para>签名大小（字节）。</para></param>
+    /// <param name="label">Optional partition label. <para>可选分区标签。</para></param>
+    /// <param name="slot">Optional slot number. <para>可选槽位编号。</para></param>
+    /// <returns>The program XML string with digest attributes. <para>带摘要属性的编程 XML 字符串。</para></returns>
     public static string BuildProgramWithDigest(long sectorSizeInBytes, long numPartitionSectors,
         string filename, int physicalPartitionNumber, long startSector,
         string digest, string digestSignature, int signatureSize,
@@ -169,11 +169,11 @@ public static partial class FirehoseXmlBuilder
     /// from the target.
     /// <para>构建 &lt;getsha256digest&gt; XML 命令，从目标设备获取分区区域的 SHA256 哈希值。</para>
     /// </summary>
-    /// <param name="sectorSizeInBytes">The sector size in bytes. 扇区大小（字节）。</param>
-    /// <param name="numPartitionSectors">The number of sectors to hash. 待哈希扇区数。</param>
-    /// <param name="physicalPartitionNumber">The physical partition number. 物理分区编号。</param>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <returns>The getsha256digest XML string. getsha256digest XML 字符串。</returns>
+    /// <param name="sectorSizeInBytes">The sector size in bytes. <para>扇区大小（字节）。</para></param>
+    /// <param name="numPartitionSectors">The number of sectors to hash. <para>待哈希扇区数。</para></param>
+    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <returns>The getsha256digest XML string. <para>getsha256digest XML 字符串。</para></returns>
     public static string BuildGetSha256(long sectorSizeInBytes, long numPartitionSectors,
         int physicalPartitionNumber, long startSector)
     {
@@ -193,14 +193,14 @@ public static partial class FirehoseXmlBuilder
     /// Builds the &lt;read&gt; XML command.
     /// <para>构建 &lt;read&gt; XML 命令。</para>
     /// </summary>
-    /// <param name="sectorSizeInBytes">The sector size in bytes. 扇区大小（字节）。</param>
-    /// <param name="numPartitionSectors">The number of sectors to read. 待读取扇区数。</param>
-    /// <param name="filename">The target filename. 目标文件名。</param>
-    /// <param name="physicalPartitionNumber">The physical partition number. 物理分区编号。</param>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <param name="label">Optional partition label. 可选分区标签。</param>
-    /// <param name="slot">Optional slot number. 可选槽位编号。</param>
-    /// <returns>The read XML string. 读取 XML 字符串。</returns>
+    /// <param name="sectorSizeInBytes">The sector size in bytes. <para>扇区大小（字节）。</para></param>
+    /// <param name="numPartitionSectors">The number of sectors to read. <para>待读取扇区数。</para></param>
+    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
+    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="label">Optional partition label. <para>可选分区标签。</para></param>
+    /// <param name="slot">Optional slot number. <para>可选槽位编号。</para></param>
+    /// <returns>The read XML string. <para>读取 XML 字符串。</para></returns>
     public static string BuildRead(long sectorSizeInBytes, long numPartitionSectors,
         string filename, int physicalPartitionNumber, long startSector,
         string? label = null, int? slot = null)
@@ -232,12 +232,12 @@ public static partial class FirehoseXmlBuilder
     /// Builds the &lt;erase&gt; XML command.
     /// <para>构建 &lt;erase&gt; XML 命令。</para>
     /// </summary>
-    /// <param name="sectorSizeInBytes">The sector size in bytes. 扇区大小（字节）。</param>
-    /// <param name="numPartitionSectors">The number of sectors to erase. 待擦除扇区数。</param>
-    /// <param name="physicalPartitionNumber">The physical partition number. 物理分区编号。</param>
-    /// <param name="startSector">The starting sector. 起始扇区。</param>
-    /// <param name="slot">Optional slot number. 可选槽位编号。</param>
-    /// <returns>The erase XML string. 擦除 XML 字符串。</returns>
+    /// <param name="sectorSizeInBytes">The sector size in bytes. <para>扇区大小（字节）。</para></param>
+    /// <param name="numPartitionSectors">The number of sectors to erase. <para>待擦除扇区数。</para></param>
+    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="slot">Optional slot number. <para>可选槽位编号。</para></param>
+    /// <returns>The erase XML string. <para>擦除 XML 字符串。</para></returns>
     public static string BuildErase(long sectorSizeInBytes, long numPartitionSectors,
         int physicalPartitionNumber, long startSector, int? slot = null)
         => BuildErase(sectorSizeInBytes, numPartitionSectors, physicalPartitionNumber,
@@ -278,23 +278,44 @@ public static partial class FirehoseXmlBuilder
 /// </summary>
 public sealed class UfsCommon
 {
-    /// <summary>Gets or sets the number of logical units. 逻辑单元数量。</summary>
+    /// <summary>Gets or sets the number of logical units. <para>逻辑单元数量。</para></summary>
+    /// <value>Corresponds to the <c>bNumberLU</c> attribute of the common &lt;ufs&gt; command.
+    /// <para>对应公共 &lt;ufs&gt; 命令的 <c>bNumberLU</c> 属性。</para></value>
     public int BNumberLU { get; set; }
-    /// <summary>Gets or sets the boot enable flag. 启动使能标志。</summary>
+    /// <summary>Gets or sets the boot enable flag. <para>启动使能标志。</para></summary>
+    /// <value>Corresponds to the <c>bBootEnable</c> attribute of the common &lt;ufs&gt; command.
+    /// <para>对应公共 &lt;ufs&gt; 命令的 <c>bBootEnable</c> 属性。</para></value>
     public int BBootEnable { get; set; }
-    /// <summary>Gets or sets the descriptor access enable flag. 描述符访问使能标志。</summary>
+    /// <summary>Gets or sets the descriptor access enable flag. <para>描述符访问使能标志。</para></summary>
+    /// <value>Corresponds to the <c>bDescrAccessEn</c> attribute of the common &lt;ufs&gt; command.
+    /// <para>对应公共 &lt;ufs&gt; 命令的 <c>bDescrAccessEn</c> 属性。</para></value>
     public int BDescrAccessEn { get; set; }
-    /// <summary>Gets or sets the initial power mode. 初始电源模式。</summary>
+    /// <summary>Gets or sets the initial power mode. <para>初始电源模式。</para></summary>
+    /// <value>Corresponds to the <c>bInitPowerMode</c> attribute of the common &lt;ufs&gt; command.
+    /// <para>对应公共 &lt;ufs&gt; 命令的 <c>bInitPowerMode</c> 属性。</para></value>
     public int BInitPowerMode { get; set; }
-    /// <summary>Gets or sets the high priority LUN. 高优先级 LUN。</summary>
+    /// <summary>Gets or sets the high priority LUN. <para>高优先级 LUN。</para></summary>
+    /// <value>Corresponds to the <c>bHighPriorityLUN</c> attribute of the common &lt;ufs&gt; command.
+    /// <para>对应公共 &lt;ufs&gt; 命令的 <c>bHighPriorityLUN</c> 属性。</para></value>
     public int BHighPriorityLUN { get; set; }
-    /// <summary>Gets or sets the secure removal type. 安全擦除类型。</summary>
+    /// <summary>Gets or sets the secure removal type. <para>安全擦除类型。</para></summary>
+    /// <value>Corresponds to the <c>bSecureRemovalType</c> attribute of the common &lt;ufs&gt; command.
+    /// <para>对应公共 &lt;ufs&gt; 命令的 <c>bSecureRemovalType</c> 属性。</para></value>
     public int BSecureRemovalType { get; set; }
-    /// <summary>Gets or sets the initial active ICC level. 初始活跃 ICC 等级。</summary>
+    /// <summary>Gets or sets the initial active ICC level. <para>初始活跃 ICC 等级。</para></summary>
+    /// <value>Corresponds to the <c>bInitActiveICCLevel</c> attribute of the common &lt;ufs&gt; command.
+    /// <para>对应公共 &lt;ufs&gt; 命令的 <c>bInitActiveICCLevel</c> 属性。</para></value>
     public int BInitActiveICCLevel { get; set; }
-    /// <summary>Gets or sets the periodic RTC update. 周期性 RTC 更新。</summary>
+    /// <summary>Gets or sets the periodic RTC update. <para>周期性 RTC 更新。</para></summary>
+    /// <value>Corresponds to the <c>wPeriodicRTCUpdate</c> attribute of the common &lt;ufs&gt; command.
+    /// <para>对应公共 &lt;ufs&gt; 命令的 <c>wPeriodicRTCUpdate</c> 属性。</para></value>
     public int WPeriodicRTCUpdate { get; set; }
-    /// <summary>Gets or sets the configuration descriptor lock. 配置描述符锁定。</summary>
+    /// <summary>Gets or sets the configuration descriptor lock. <para>配置描述符锁定。</para></summary>
+    /// <value>
+    /// Corresponds to the <c>bConfigDescrLock</c> attribute of the common &lt;ufs&gt; command,
+    /// which is written only when non-zero.
+    /// <para>对应公共 &lt;ufs&gt; 命令的 <c>bConfigDescrLock</c> 属性，仅当非零时写出。</para>
+    /// </value>
     public int BConfigDescrLock { get; set; }
 }
 
@@ -304,27 +325,53 @@ public sealed class UfsCommon
 /// </summary>
 public sealed class UfsBody
 {
-    /// <summary>Gets or sets the LUN number. LUN 编号。</summary>
+    /// <summary>Gets or sets the LUN number. <para>LUN 编号。</para></summary>
+    /// <value>Corresponds to the <c>LUNum</c> attribute of the per-LUN &lt;ufs&gt; command.
+    /// <para>对应每 LUN &lt;ufs&gt; 命令的 <c>LUNum</c> 属性。</para></value>
     public int LUNum { get; set; }
-    /// <summary>Gets or sets the LU enable flag. LU 使能标志。</summary>
+    /// <summary>Gets or sets the LU enable flag. <para>LU 使能标志。</para></summary>
+    /// <value>Corresponds to the <c>bLUEnable</c> attribute of the per-LUN &lt;ufs&gt; command.
+    /// <para>对应每 LUN &lt;ufs&gt; 命令的 <c>bLUEnable</c> 属性。</para></value>
     public int BLUEnable { get; set; }
-    /// <summary>Gets or sets the boot LUN id. 启动 LUN 编号。</summary>
+    /// <summary>Gets or sets the boot LUN id. <para>启动 LUN 编号。</para></summary>
+    /// <value>Corresponds to the <c>bBootLunID</c> attribute of the per-LUN &lt;ufs&gt; command.
+    /// <para>对应每 LUN &lt;ufs&gt; 命令的 <c>bBootLunID</c> 属性。</para></value>
     public int BBootLUNID { get; set; }
-    /// <summary>Gets or sets the LUN size in kilobytes. LUN 大小（KB）。</summary>
+    /// <summary>Gets or sets the LUN size in kilobytes. <para>LUN 大小（KB）。</para></summary>
+    /// <value>Corresponds to the <c>size_in_kb</c> attribute of the per-LUN &lt;ufs&gt; command.
+    /// <para>对应每 LUN &lt;ufs&gt; 命令的 <c>size_in_kb</c> 属性。</para></value>
     public long SizeInKb { get; set; }
-    /// <summary>Gets or sets the data reliability. 数据可靠性。</summary>
+    /// <summary>Gets or sets the data reliability. <para>数据可靠性。</para></summary>
+    /// <value>Corresponds to the <c>bDataReliability</c> attribute of the per-LUN &lt;ufs&gt; command.
+    /// <para>对应每 LUN &lt;ufs&gt; 命令的 <c>bDataReliability</c> 属性。</para></value>
     public int BDataReliability { get; set; }
-    /// <summary>Gets or sets the LU write protect. LU 写保护。</summary>
+    /// <summary>Gets or sets the LU write protect. <para>LU 写保护。</para></summary>
+    /// <value>Corresponds to the <c>bLUWriteProtect</c> attribute of the per-LUN &lt;ufs&gt; command.
+    /// <para>对应每 LUN &lt;ufs&gt; 命令的 <c>bLUWriteProtect</c> 属性。</para></value>
     public int BLUWriteProtect { get; set; }
-    /// <summary>Gets or sets the memory type. 内存类型。</summary>
+    /// <summary>Gets or sets the memory type. <para>内存类型。</para></summary>
+    /// <value>Corresponds to the <c>bMemoryType</c> attribute of the per-LUN &lt;ufs&gt; command.
+    /// <para>对应每 LUN &lt;ufs&gt; 命令的 <c>bMemoryType</c> 属性。</para></value>
     public int BMemoryType { get; set; }
-    /// <summary>Gets or sets the logical block size. 逻辑块大小。</summary>
+    /// <summary>Gets or sets the logical block size. <para>逻辑块大小。</para></summary>
+    /// <value>Corresponds to the <c>bLogicalBlockSize</c> attribute of the per-LUN &lt;ufs&gt; command.
+    /// <para>对应每 LUN &lt;ufs&gt; 命令的 <c>bLogicalBlockSize</c> 属性。</para></value>
     public int BLogicalBlockSize { get; set; }
-    /// <summary>Gets or sets the provisioning type. 供应类型。</summary>
+    /// <summary>Gets or sets the provisioning type. <para>供应类型。</para></summary>
+    /// <value>Corresponds to the <c>bProvisioningType</c> attribute of the per-LUN &lt;ufs&gt; command.
+    /// <para>对应每 LUN &lt;ufs&gt; 命令的 <c>bProvisioningType</c> 属性。</para></value>
     public int BProvisioningType { get; set; }
-    /// <summary>Gets or sets the context capacities. 上下文容量。</summary>
+    /// <summary>Gets or sets the context capacities. <para>上下文容量。</para></summary>
+    /// <value>Corresponds to the <c>wContextCapabilities</c> attribute of the per-LUN
+    /// &lt;ufs&gt; command.
+    /// <para>对应每 LUN &lt;ufs&gt; 命令的 <c>wContextCapabilities</c> 属性。</para></value>
     public int WContextCapacities { get; set; }
-    /// <summary>Gets or sets the optional description. 可选描述。</summary>
+    /// <summary>Gets or sets the optional description. <para>可选描述。</para></summary>
+    /// <value>
+    /// Corresponds to the <c>desc</c> attribute of the per-LUN &lt;ufs&gt; command, written
+    /// XML-escaped and only when non-empty.
+    /// <para>对应每 LUN &lt;ufs&gt; 命令的 <c>desc</c> 属性，仅当非空时以 XML 转义后写出。</para>
+    /// </value>
     public string? Desc { get; set; }
 }
 
@@ -334,6 +381,9 @@ public sealed class UfsBody
 /// </summary>
 public sealed class UfsEpilogue
 {
-    /// <summary>Gets or sets the LUN to grow (serialized as LUNtoGrow). 待扩容的 LUN（序列化为 LUNtoGrow）。</summary>
+    /// <summary>Gets or sets the LUN to grow (serialized as LUNtoGrow). <para>待扩容的 LUN（序列化为 LUNtoGrow）。</para></summary>
+    /// <value>Corresponds to the <c>LUNtoGrow</c> attribute of the epilogue &lt;ufs&gt; command;
+    /// <c>BuildUfsReset</c> always writes 0.
+    /// <para>对应结语 &lt;ufs&gt; 命令的 <c>LUNtoGrow</c> 属性；<c>BuildUfsReset</c> 固定写 0。</para></value>
     public int LUNumToGrow { get; set; }
 }

@@ -1,7 +1,19 @@
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto.KeyDatabase;
 
+/// <summary>
+/// Built-in key table for MediaTek-based OFP packages; each entry either carries an encrypted AES
+/// key/IV pair decrypted through the master credential, or a directly usable AES key/IV pair.
+/// <para>
+/// 面向联发科平台 OFP 包的内置密钥表；每个条目要么携带需经主凭据解密的 AES 密钥/初始化向量密文，
+/// 要么直接携带可用的 AES 密钥/初始化向量。
+/// </para>
+/// </summary>
 public static class MtkKeyDatabase
 {
+    /// <summary>
+    /// ASCII byte pattern <c>geyixue</c> used to unshuffle OFP headers and file tables before they are parsed.
+    /// <para>用于在解析前对 OFP 头部与文件表执行反乱序的 ASCII 字节序列 <c>geyixue</c>。</para>
+    /// </summary>
     public static readonly byte[] MtkHeaderShuffleKey = [0x67, 0x65, 0x79, 0x69, 0x78, 0x75, 0x65];
 
     private static readonly MtkKeyEntry[] KeyEntries =
@@ -88,12 +100,32 @@ public static class MtkKeyDatabase
             Description: "Direct AES Key/IV"),
     ];
 
+    /// <summary>
+    /// Every built-in MediaTek key entry, in declaration order.
+    /// <para>全部内置联发科密钥条目，按声明顺序排列。</para>
+    /// </summary>
+    /// <value>
+    /// A read-only view over the shared backing array. Entries whose <c>DirectAesKey</c> is
+    /// <see langword="null"/> carry only the encrypted key material and must be unwrapped through the
+    /// master credential path.
+    /// <para>
+    /// 对共享底层数组的只读视图。<c>DirectAesKey</c> 为 <see langword="null"/> 的条目只携带密文密钥材料，
+    /// 必须经由主凭据路径解包后才能使用。
+    /// </para>
+    /// </value>
     public static IReadOnlyList<MtkKeyEntry> Entries => KeyEntries;
 
     /// <summary>
     /// Finds an MTK key entry by its key identifier.
     /// <para>根据密钥标识符查找 MTK 密钥条目。</para>
     /// </summary>
+    /// <param name="keyId">
+    /// Key identifier such as <c>MTK3</c>; matched case-insensitively. A <see langword="null"/> value
+    /// simply yields no match.
+    /// <para>形如 <c>MTK3</c> 的密钥标识符；按不区分大小写匹配。传入 <see langword="null"/> 时只会匹配失败。</para>
+    /// </param>
+    /// <returns>The matching entry, or <see langword="null"/> when the identifier is unknown.
+    /// <para>匹配的条目；标识符未知时返回 <see langword="null"/>。</para></returns>
     public static MtkKeyEntry? FindByKeyId(string keyId)
     {
         foreach (var entry in KeyEntries)

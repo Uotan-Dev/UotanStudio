@@ -26,7 +26,6 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
         _hdcServerAvailable = hdcServerAvailable;
     }
 
-    // MCP's gateway is synchronous; all controller async work completes at this boundary.
     private static T Complete<T>(Task<T> task) => task.ConfigureAwait(false).GetAwaiter().GetResult();
     private static void Close(DeviceLease lease) => lease.DisposeAsync().AsTask().ConfigureAwait(false).GetAwaiter().GetResult();
     private DeviceSnapshot Refresh() => Complete(_controller.RefreshAsync());

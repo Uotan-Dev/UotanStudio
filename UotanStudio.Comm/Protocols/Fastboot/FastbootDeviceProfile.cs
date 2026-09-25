@@ -85,10 +85,7 @@ internal static class FastbootDeviceProfiles
     /// </summary>
     public static IReadOnlyList<FastbootDeviceProfile> Default { get; } =
     [
-        // Amazon Kindle Fire (1st gen, stock bootloader) exposes fastboot with a
-        // non-standard interface descriptor in some firmware revisions.
         new FastbootDeviceProfile(0x1949, 0x0006, "Amazon Kindle Fire (stock bootloader)"),
-        // Amazon Kindle Fire with FireFireFire bootloader uses the Google VID.
         new FastbootDeviceProfile(0x18D1, 0x0100, "Amazon Kindle Fire (FFF bootloader)")
     ];
 }

@@ -9,10 +9,6 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// </summary>
 internal sealed class AdbConnection : IDisposable
 {
-    // Ordered auth identities; AUTH tokens are answered with each key in turn
-    // (AOSP NextKey semantics, see the constructor docs and HandleAuth).
-    // <para>有序认证身份列表；AUTH 令牌依次用每个密钥应答（AOSP NextKey 语义，
-    // 见构造函数文档与 HandleAuth）。</para>
     private readonly IReadOnlyList<AdbAuthentication> _authentications;
     private readonly AdbServerServices? _server;
     private readonly ICommTransport? _transport;
@@ -344,8 +340,6 @@ internal sealed class AdbConnection : IDisposable
                 }
                 else
                 {
-                    // NextKey semantics: after every signature candidate was rejected, announce
-                    // the last attempted key's public payload so the device can offer it.
                     var publicKey = _authentications[^1].BuildPublicKeyPayload();
                     Send(AdbMessaging.BuildAuth(AdbAuthType.RsaPublicKey, publicKey));
                 }
@@ -408,8 +402,6 @@ internal sealed class AdbConnection : IDisposable
 
         if (stream is null)
         {
-            // Unknown local id: converge like AOSP by closing the peer's stream instead of
-            // silently dropping, which could leave the peer waiting.
             Send(AdbMessaging.BuildClose(message.Arg1, message.Arg0));
             return;
         }
@@ -433,7 +425,6 @@ internal sealed class AdbConnection : IDisposable
             }
             else
             {
-                // Unknown local id: AOSP replies CLSE so the peer tears the stream down.
                 Send(AdbMessaging.BuildClose(message.Arg1, message.Arg0));
             }
         }
@@ -457,7 +448,6 @@ internal sealed class AdbConnection : IDisposable
 
         if (stream is not null)
         {
-            // AOSP only closes locally on a peer CLSE; echoing CLSE back is surplus traffic.
             stream.MarkClosed();
         }
     }

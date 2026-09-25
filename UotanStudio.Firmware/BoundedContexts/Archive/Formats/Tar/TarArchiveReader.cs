@@ -4,12 +4,27 @@ using UotanStudio.Firmware.BoundedContexts.Archive.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.Archive.Formats.Tar;
 
+/// <summary>
+/// Reads TAR archives through <c>System.Formats.Tar</c>, mapping entry types and PAX or libarchive extended attributes.
+/// <para>通过 <c>System.Formats.Tar</c> 读取 TAR 归档，映射条目类型以及 PAX 或 libarchive 扩展属性。</para>
+/// </summary>
 public sealed class TarArchiveReader
 {
     /// <summary>
     /// Reads all TAR entries from a stream into memory.
     /// <para>从流中读取全部 TAR 条目到内存。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable TAR source kept open by the reader; every payload is copied fully into memory.
+    /// <para>可读的 TAR 源流，读取器不会将其关闭；每个负载都会完整复制到内存。</para>
+    /// </param>
+    /// <returns>
+    /// Every entry with its payload copied into <c>Data</c>; the returned list is fully materialized.
+    /// <para>包含全部条目的列表，负载已复制到 <c>Data</c>；返回列表为完全物化结果。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="stream"/> is <see langword="null"/>. <para><paramref name="stream"/> 为 <see langword="null"/>。</para>
+    /// </exception>
     public IReadOnlyList<ArchiveEntry> ReadAll(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -25,6 +40,17 @@ public sealed class TarArchiveReader
     /// Reads TAR entries with independently usable payload data.
     /// <para>读取 TAR 条目，每个条目的数据可独立使用。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable TAR source kept open by the reader; each regular-file payload is materialized eagerly as the sequence advances.
+    /// <para>可读的 TAR 源流，读取器不会将其关闭；随着序列推进，每个常规文件负载会被及时物化。</para>
+    /// </param>
+    /// <returns>
+    /// A lazy sequence of entries whose data is already copied out of the underlying stream.
+    /// <para>惰性条目序列，其数据已从底层流中复制出来。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="stream"/> is <see langword="null"/>. <para><paramref name="stream"/> 为 <see langword="null"/>。</para>
+    /// </exception>
     public IEnumerable<ArchiveEntry> ReadEntries(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -38,6 +64,17 @@ public sealed class TarArchiveReader
     /// Reads TAR entries lazily; consume each payload stream before requesting the next entry.
     /// <para>延迟读取 TAR 条目；获取下一条目前须读完当前数据流。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable TAR source kept open by the reader; payload streams are live views into it and are invalid after enumeration moves on.
+    /// <para>可读的 TAR 源流，读取器不会将其关闭；负载流是其实时视图，序列前进后即失效。</para>
+    /// </param>
+    /// <returns>
+    /// A single-pass sequence of entries whose regular-file payloads are exposed through <c>DataStream</c> with the declared length.
+    /// <para>单遍条目序列，其常规文件负载经 <c>DataStream</c> 暴露，并附带声明长度。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="stream"/> is <see langword="null"/>. <para><paramref name="stream"/> 为 <see langword="null"/>。</para>
+    /// </exception>
     public IEnumerable<ArchiveEntry> ReadEntriesStreaming(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);

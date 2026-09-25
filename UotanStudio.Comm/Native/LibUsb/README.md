@@ -1,8 +1,8 @@
 # libusb 原生运行库
 
 每个文件均与来源执行 SHA-256
-比对；本目录的 `SHA256SUMS` 记录引入时的精确文件身份。macOS 目录从来源的
-`macos-*` 改为 .NET RID 使用的 `osx-*`，二进制内容不变。
+比对；本目录的 `SHA256SUMS` 记录引入时的精确文件身份。macOS 目录使用 .NET RID 的
+`osx-*` 命名（来源目录名为 `macos-*`），二进制内容一致。
 
 包含 Windows x64/ARM64、macOS x64/ARM64、Linux x64/ARM64/RISC-V64/LoongArch64
 八组依赖。Linux 保留 `libusb-1.0.so` 和 `libusb-1.0.so.0` 两个文件。
@@ -16,7 +16,7 @@
 
 Comm 和应用层 UotanStudio 都设置 `IsRidAgnostic=false`，使 Desktop 的目标 RID
 能穿过项目引用到达 Comm，避免在 Windows x64 主机发布 ARM64 时复制错误架构。
-新增位于它们之前的中间引用项目也应保留 RID。不支持的 RID 会给出构建警告，
+在 Comm 与宿主之间插入的中间引用项目同样需要保留 RID 传递。不支持的 RID 会给出构建警告，
 此时需提供兼容的系统 libusb 或通过 `CommKit.SetLibusbLibraryPath` 指定运行库。
 
 Windows 使用上游 release/MSYS2，macOS 使用

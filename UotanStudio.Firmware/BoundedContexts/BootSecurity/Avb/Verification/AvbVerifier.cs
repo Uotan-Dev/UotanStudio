@@ -5,31 +5,95 @@ using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
 
+/// <summary>
+/// Data carrier for the outcome of one AVB verification attempt.
+/// <para>一次 AVB 验证尝试结果的数据载体。</para>
+/// </summary>
 public sealed class AvbVerifyResult
 {
+    /// <summary>Whether the verification path recognized AVB structures in the image.
+    /// <para>验证流程是否在镜像中识别出 AVB 结构。</para></summary>
+    /// <value>
+    /// <see langword="true"/> once an AVB footer or standalone VBMeta header was located; <see cref="AvbVerifier.VerifyVBMeta"/> narrows it further to the presence of an embedded signature. <see langword="false"/> when the image is too small or holds no footer.
+    /// <para>定位到 AVB 尾部或独立 VBMeta 头部后为 <see langword="true"/>；<see cref="AvbVerifier.VerifyVBMeta"/> 会将其进一步收窄为嵌入签名的存在。镜像过小或无尾部时为 <see langword="false"/>。</para>
+    /// </value>
     public bool IsSigned { get; set; }
 
+    /// <summary>Whether the VBMeta content passed both the hash and the signature checks.
+    /// <para>VBMeta 内容是否同时通过哈希与签名校验。</para></summary>
+    /// <value>
+    /// <see langword="true"/> only on a fully successful cryptographic verification; <see langword="false"/> when any check failed, an early structural bail-out occurred, or (for <see cref="AvbVerifier.VerifyVBMetaFromStream"/>) no signature check ran at all.
+    /// <para>仅在密码学校验完全成功时为 <see langword="true"/>；任一检查失败、提前结构性退出，或（对 <see cref="AvbVerifier.VerifyVBMetaFromStream"/>）未执行签名检查时为 <see langword="false"/>。</para>
+    /// </value>
     public bool IsValid { get; set; }
 
+    /// <summary>English reason describing why verification failed or stopped.
+    /// <para>描述验证失败或中止原因的英文文本。</para></summary>
+    /// <value>
+    /// Not localized; may carry a message even when <see cref="IsValid"/> is <see langword="false"/> by omission, and stays <see langword="null"/> when the path set none.
+    /// <para>不做本地化；即使 <see cref="IsValid"/> 因未执行而保持 <see langword="false"/>，也可能带有消息；当该路径未设置时保持 <see langword="null"/>。</para>
+    /// </value>
     public string? ErrorMessage { get; set; }
 
+    /// <summary>Parsed AVB footer from the end of the image.
+    /// <para>从镜像末尾解析出的 AVB 尾部。</para></summary>
+    /// <value>
+    /// Set by the footer-based paths (<see cref="AvbVerifier.Verify"/> and <see cref="AvbVerifier.VerifyFromStream"/>) once the footer loads; <see langword="null"/> otherwise.
+    /// <para>由基于尾部的路径（<see cref="AvbVerifier.Verify"/> 与 <see cref="AvbVerifier.VerifyFromStream"/>）在尾部加载成功后设置；其他情况为 <see langword="null"/>。</para>
+    /// </value>
     public AvbFooter? Footer { get; set; }
 
+    /// <summary>Parsed VBMeta image header.
+    /// <para>解析出的 VBMeta 镜像头部。</para></summary>
+    /// <value>
+    /// Available whenever the VBMeta region bytes parsed without throwing, even if later validation fails; <see langword="null"/> when the region was never reached.
+    /// <para>只要 VBMeta 区域字节成功解析且未抛出异常即可获得，即使后续校验失败；未读取该区域时为 <see langword="null"/>。</para>
+    /// </value>
     public AvbVBMetaImageHeader? VBMetaHeader { get; set; }
 }
 
+/// <summary>
+/// Verifies Android Verified Boot footers and VBMeta structures in whole image buffers or seekable streams, treating all input as untrusted.
+/// <para>在完整镜像缓冲区或可定位流上验证 Android 验证启动（AVB）尾部与 VBMeta 结构，所有输入均视为不可信。</para>
+/// </summary>
 public static class AvbVerifier
 {
     /// <summary>
     /// Checks whether the image carries an AVB footer.
     /// <para>检查镜像是否携带 AVB 尾部。</para>
     /// </summary>
+    /// <param name="imageData">
+    /// Complete image bytes; fewer than one footer length never match. <para>完整镜像字节；不足一个尾部长度时永不匹配。</para>
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when a footer of the supported layout loads from the buffer; otherwise <see langword="false"/>. Reading a <see langword="null"/> buffer raises <see cref="System.NullReferenceException"/>.
+    /// <para>当受支持布局的尾部能从缓冲区加载时为 <see langword="true"/>，否则为 <see langword="false"/>。对 <see langword="null"/> 缓冲区取值会引发 <see cref="System.NullReferenceException"/>。</para>
+    /// </returns>
     public static bool IsSigned(byte[] imageData) => imageData.Length >= AvbFooter.Size && AvbFooter.TryLoad(imageData) != null;
 
     /// <summary>
     /// Verifies the complete VBMeta image referenced by an AVB footer.
     /// <para>验证 AVB 尾部所引用的完整 VBMeta 镜像。</para>
     /// </summary>
+    /// <param name="imageData">
+    /// Complete image bytes in memory; the footer must sit in the last <c>AvbFooter.Size</c> bytes and the VBMeta region must fall inside the buffer, otherwise the result reports the bound failure.
+    /// <para>内存中的完整镜像字节；尾部必须位于最后 <c>AvbFooter.Size</c> 字节内，且 VBMeta 区域必须落在缓冲区之内，否则结果报告会界失败。</para>
+    /// </param>
+    /// <param name="certificateData">
+    /// Optional certificate whose RSA public key is extracted as the trusted key; a <see langword="null"/> or empty value verifies against the public key embedded in VBMeta instead.
+    /// <para>可选证书，从中提取 RSA 公钥作为可信密钥；为 <see langword="null"/> 或空时使用 VBMeta 内嵌公钥验证。</para>
+    /// </param>
+    /// <returns>
+    /// An <see cref="AvbVerifyResult"/>. Every rejected layout (missing or unsupported footer, out-of-range VBMeta offset or size, unparsable or invalid header, unknown algorithm, bad ranges, NONE algorithm, failed hash or signature) is reported through <see cref="AvbVerifyResult.ErrorMessage"/> with <see cref="AvbVerifyResult.IsValid"/> left <see langword="false"/> rather than thrown.
+    /// <para>返回 <see cref="AvbVerifyResult"/>。所有被拒绝的布局（缺失或不支持的尾部、越界的 VBMeta 偏移或大小、无法解析或无效的头、未知算法、范围错误、NONE 算法、哈希或签名验证失败）都通过 <see cref="AvbVerifyResult.ErrorMessage"/> 报告，且 <see cref="AvbVerifyResult.IsValid"/> 保持 <see langword="false"/>，而不抛出异常。</para>
+    /// </returns>
+    /// <example>
+    /// <code>
+    /// var result = AvbVerifier.Verify(File.ReadAllBytes("boot.img"));
+    /// if (result.IsSigned &amp;&amp; !result.IsValid)
+    ///     Console.WriteLine(result.ErrorMessage);
+    /// </code>
+    /// </example>
     public static AvbVerifyResult Verify(byte[] imageData, byte[]? certificateData = null)
     {
         var result = new AvbVerifyResult();
@@ -143,6 +207,14 @@ public static class AvbVerifier
     /// Validates a standalone VBMeta image and returns its parsed header.
     /// <para>验证独立 VBMeta 镜像并返回解析出的头。</para>
     /// </summary>
+    /// <param name="imageData">
+    /// VBMeta image bytes starting at the AVB0 header; trailing padding beyond the declared blocks is accepted.
+    /// <para>以 AVB0 头起始的 VBMeta 镜像字节；接受超出声明块之后的尾部填充。</para>
+    /// </param>
+    /// <returns>
+    /// An <see cref="AvbVerifyResult"/> verified against the embedded public key only. Structural and hash/signature failures are reported through <see cref="AvbVerifyResult.ErrorMessage"/> instead of throwing; a NONE algorithm is reported as unsigned.
+    /// <para>返回仅使用内嵌公钥验证的 <see cref="AvbVerifyResult"/>。结构性失败与哈希/签名失败通过 <see cref="AvbVerifyResult.ErrorMessage"/> 报告而不抛出；NONE 算法被报告为未签名。</para>
+    /// </returns>
     public static AvbVerifyResult VerifyVBMeta(byte[] imageData)
     {
         var result = new AvbVerifyResult();
@@ -204,6 +276,20 @@ public static class AvbVerifier
     /// Verifies an AVB-signed image from a seekable stream, reading only the footer and the VBMeta region instead of loading the whole file.
     /// <para>从可定位流验证 AVB 签名镜像，仅读取尾部和 VBMeta 区域而非整文件。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable, seekable stream over the image; the caller keeps ownership, and the method repositions it (footer tail, then the VBMeta region) and leaves the position where the last read ended.
+    /// <para>覆盖镜像的可读、可定位流；调用方保留所有权，方法会重新定位（尾部，然后 VBMeta 区域）并将位置停留在最后一次读取结束处。</para>
+    /// </param>
+    /// <param name="imageLength">
+    /// Declared total image length in bytes; the footer is sought at <c>imageLength - AvbFooter.Size</c> and declared offsets are validated against this value.
+    /// <para>声明的镜像总长度（字节）；尾部在 <c>imageLength - AvbFooter.Size</c> 处查找，声明的偏移会依据此值校验。</para>
+    /// </param>
+    /// <returns>
+    /// An <see cref="AvbVerifyResult"/> verified against the embedded public key. Footer-range violations and header or algorithm failures are reported through <see cref="AvbVerifyResult.ErrorMessage"/> instead of thrown.
+    /// <para>返回使用内嵌公钥验证的 <see cref="AvbVerifyResult"/>。尾部范围违规以及头部或算法失败通过 <see cref="AvbVerifyResult.ErrorMessage"/> 报告而不抛出。</para>
+    /// </returns>
+    /// <exception cref="EndOfStreamException">The stream holds fewer bytes than <paramref name="imageLength"/> declares.
+    /// <para>流的实际字节数少于 <paramref name="imageLength"/> 声明的长度。</para></exception>
     public static AvbVerifyResult VerifyFromStream(Stream stream, long imageLength)
     {
         var result = new AvbVerifyResult();
@@ -295,6 +381,20 @@ public static class AvbVerifier
     /// Validates a standalone VBMeta image from a seekable stream, reading only the header and declared block sizes.
     /// <para>从可定位流验证独立 VBMeta 镜像，仅读取头部和声明的块大小。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable, seekable stream over the VBMeta image; the method seeks to offset 0, reads the header block and leaves the position after that read. The caller keeps ownership.
+    /// <para>覆盖 VBMeta 镜像的可读、可定位流；方法定位到偏移 0，读取头部块并将位置停留在该次读取之后。调用方保留所有权。</para>
+    /// </param>
+    /// <param name="imageLength">
+    /// Declared total image length in bytes; header and block ranges are validated against this value with trailing padding allowed.
+    /// <para>声明的镜像总长度（字节）；头部与块范围依据此值校验，并允许尾部填充。</para>
+    /// </param>
+    /// <returns>
+    /// An <see cref="AvbVerifyResult"/> carrying the parsed header and the signed flag. This path performs structural validation only and never runs the hash or signature check, so <see cref="AvbVerifyResult.IsValid"/> stays <see langword="false"/>; a NONE algorithm is reported through <see cref="AvbVerifyResult.ErrorMessage"/>.
+    /// <para>返回携带已解析头部与签名标志的 <see cref="AvbVerifyResult"/>。此路径仅执行结构校验，从不运行哈希或签名检查，因此 <see cref="AvbVerifyResult.IsValid"/> 保持 <see langword="false"/>；NONE 算法通过 <see cref="AvbVerifyResult.ErrorMessage"/> 报告。</para>
+    /// </returns>
+    /// <exception cref="EndOfStreamException">The stream holds fewer than the header size bytes at offset 0.
+    /// <para>流在偏移 0 处的字节少于头部大小。</para></exception>
     public static AvbVerifyResult VerifyVBMetaFromStream(Stream stream, long imageLength)
     {
         var result = new AvbVerifyResult();

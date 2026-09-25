@@ -7,7 +7,10 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Devices.Services;
 
-/// <summary>Coordinates discovery and exclusive, generation-checked endpoint leases.</summary>
+/// <summary>
+/// Coordinates discovery and exclusive, generation-checked endpoint leases.
+/// <para>协调设备发现与按代数校验的独占端点租约。</para>
+/// </summary>
 public sealed partial class DeviceController
 {
     private readonly ICommKit? _kit;
@@ -20,16 +23,24 @@ public sealed partial class DeviceController
     private readonly HashSet<DeviceEndpointId> _leased = [];
     private readonly Dictionary<DeviceEndpointId, DeviceLease> _openLeases = [];
 
-    /// <summary>Raised after a physical USB device disappeared and its leases were released.
-    /// 物理 USB 设备消失且其租约被释放后触发。</summary>
+    /// <summary>
+    /// Raised after a physical USB device disappeared and its leases were released.
+    /// <para>物理 USB 设备消失且其租约被释放后触发。</para>
+    /// </summary>
     public event Action<DeviceEndpoint>? DeviceRemoved;
 
-    /// <summary>Raised when a physical USB device changed its metadata (e.g. a mode switch).
-    /// 物理 USB 设备元数据变化（如模式切换）时触发。</summary>
+    /// <summary>
+    /// Raised when a physical USB device changed its metadata (e.g. a mode switch).
+    /// <para>物理 USB 设备元数据变化（如模式切换）时触发。</para>
+    /// </summary>
     public event Action<DeviceEndpoint>? DeviceChanged;
 
-    /// <summary>Gets the per-device static property cache shared by all controller consumers.
-    /// 获取所有消费方共享的每设备静态参数缓存。</summary>
+    /// <summary>
+    /// Per-device static property cache shared by all controller consumers.
+    /// <para>所有消费方共享的每设备静态参数缓存。</para>
+    /// </summary>
+    /// <value>The cache; entries for a device address are dropped when the device is removed.
+    /// <para>缓存；设备移除时丢弃按设备地址登记的条目。</para></value>
     public DevicePropertyCache Properties { get; } = new();
 
     internal DeviceController(IEnumerable<IDeviceDiscoverySource> sources, IDeviceTransportOpener opener)
@@ -66,11 +77,32 @@ public sealed partial class DeviceController
         _factories = builder.ToImmutable();
     }
 
+    /// <summary>
+    /// The latest committed inventory: a generation number plus the endpoints from the most recent
+    /// successful refresh.
+    /// <para>最近一次提交的清单：代数编号加最近一次成功刷新得到的端点集合。</para>
+    /// </summary>
+    /// <value>A consistent snapshot safe to read without locking; stale snapshots are rejected when opening.
+    /// <para>无需加锁即可读取的一致性快照；过期快照在开启时会被拒绝。</para></value>
     public DeviceSnapshot Snapshot
     {
         get { lock (_gate) { return _snapshot; } }
     }
 
+    /// <summary>
+    /// Runs every discovery source in registration order and commits the combined inventory as a
+    /// new generation. A concurrent later request wins the commit, so the returned snapshot may be
+    /// newer than this call's result.
+    /// <para>按注册顺序运行每个发现源，并把合并后的清单提交为新的一代。并发的后发请求会赢得提交，
+    /// 因此返回的快照可能比本次调用的结果更新。</para>
+    /// </summary>
+    /// <param name="cancellationToken">
+    /// Passed to each source and re-checked after every source. <para>传递给每个发现源，并在每个源结束后再次检查。</para>
+    /// </param>
+    /// <returns>The currently committed snapshot. <para>当前已提交的快照。</para></returns>
+    /// <exception cref="InvalidOperationException">
+    /// A source returned a null, foreign-sourced, malformed or duplicate endpoint.
+    /// <para>某发现源返回了 null、来源不符、格式非法或重复的端点。</para></exception>
     public async Task<DeviceSnapshot> RefreshAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -106,6 +138,27 @@ public sealed partial class DeviceController
         }
     }
 
+    /// <summary>
+    /// Leases the exact endpoint and opens only its transport, without building a protocol session.
+    /// <para>租用精确端点并仅打开其传输，不构建协议会话。</para>
+    /// </summary>
+    /// <param name="snapshot">
+    /// The live snapshot the endpoint was taken from; a stale snapshot is rejected. <para>端点所来自的当前快照；过期快照会被拒绝。</para>
+    /// </param>
+    /// <param name="id">
+    /// Exact endpoint identity to lease. <para>待租用的精确端点身份。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels the open before the transport is acquired; a leased endpoint is released on cancellation.
+    /// <para>在传输取得之前取消开启；取消时已租用的端点会被归还。</para>
+    /// </param>
+    /// <returns>A transport-only lease whose <see cref="DeviceLease.Session"/> is null.
+    /// <para>纯传输租约，其 <see cref="DeviceLease.Session"/> 为 null。</para></returns>
+    /// <exception cref="InvalidOperationException">
+    /// The snapshot is stale, the endpoint is already leased, or the opener returned no transport.
+    /// <para>快照过期、端点已被租用，或开启器未返回传输。</para></exception>
+    /// <exception cref="KeyNotFoundException">
+    /// The endpoint is not present in the snapshot. <para>快照中不存在该端点。</para></exception>
     public async Task<DeviceLease> OpenAsync(DeviceSnapshot snapshot, DeviceEndpointId id,
         CancellationToken cancellationToken = default)
     {
@@ -136,6 +189,16 @@ public sealed partial class DeviceController
     /// a no-op placeholder (the session owns its transport). Intended for server routes that have
     /// no exclusively ownable USB endpoint.
     /// </summary>
+    /// <param name="endpoint">
+    /// The endpoint whose identity carries the reservation. <para>承载占用登记、提供身份的端点。</para>
+    /// </param>
+    /// <param name="session">
+    /// The already-built protocol session to expose through the lease. <para>已经构建好、经租约对外暴露的协议会话。</para>
+    /// </param>
+    /// <returns>A lease whose transport slot is inert and whose release returns the reservation.
+    /// <para>传输槽为无操作占位、释放时归还占用登记的租约。</para></returns>
+    /// <exception cref="InvalidOperationException">
+    /// The endpoint is already leased. <para>该端点已被租用。</para></exception>
     public DeviceLease AdoptSession(DeviceEndpoint endpoint, object session)
     {
         ArgumentNullException.ThrowIfNull(endpoint);

@@ -6,17 +6,21 @@ using System.Text.RegularExpressions;
 namespace UotanStudio.Firmware.SharedKernel.Magic;
 
 /// <summary>
-/// <para>编译型魔数引擎：解码生成器产出的规则表并对文件字节执行匹配。取代旧的运行时文本解析引擎。</para>
-/// Compiled magic engine: decodes the generator's rule tables and matches file bytes. Replaces the old
-/// runtime text-parsing engine.
+/// Compiled magic engine: decodes the generator's rule tables and matches file bytes against them.
+/// <para>编译型魔数引擎：解码生成器产出的规则表，并用它对文件字节执行匹配。</para>
 /// </summary>
 public static class CompiledMagicEngine
 {
-    // Backstop against stack overflow from malformed/self-nesting rule trees (libmagic caps nesting too).
     private const int MaxDepth = 256;
 
-    /// <summary>诊断开关：记录每次 best 改进的顶层命中规则（仅测试用）。</summary>
+    /// <summary>Diagnostic switch: every improvement of the best top-level hit is appended to
+    /// <see cref="DebugMatches"/>; intended for tests. <para>诊断开关：每次最佳结果的顶层命中规则改进都会追加到
+    /// <see cref="DebugMatches"/>，仅用于测试。</para></summary>
     public static bool DebugMatch;
+
+    /// <summary>Diagnostic lines recorded while <see cref="DebugMatch"/> is enabled, one per improved hit;
+    /// never cleared by the engine itself. <para>在 <see cref="DebugMatch"/> 开启期间记录的诊断行，每次改进的命中一条；
+    /// 引擎自身不会清空。</para></summary>
     public static readonly List<string> DebugMatches = new();
 
     private static readonly List<CompiledRule> TopLevel = new();
@@ -24,7 +28,12 @@ public static class CompiledMagicEngine
     private static bool _loaded;
     private static readonly object Gate = new();
 
-    /// <summary>已加载的顶层规则数。 / Loaded top-level rule count.</summary>
+    /// <summary>Loaded top-level rule count, valid after <see cref="EnsureLoaded"/> has run.
+    /// <para>已加载的顶层规则数，在 <see cref="EnsureLoaded"/> 执行后有效。</para></summary>
+    /// <value>
+    /// Number of top-level entries in the rule table, <c>0</c> before loading.
+    /// <para>规则表顶层条目数量，加载前为 <c>0</c>。</para>
+    /// </value>
     public static int TopLevelCount => TopLevel.Count;
 
     /// <summary>
@@ -130,6 +139,23 @@ public static class CompiledMagicEngine
     /// <para>对文件字节执行匹配，返回最佳命中（强度优先，其次加载顺序）。</para>
     /// Matches the bytes, returning the best hit (strength first, then load order).
     /// </summary>
+    /// <param name="data">
+    /// File bytes to probe; the span is copied internally and may be a slice of a larger buffer. An
+    /// empty span yields no match. <para>待探测的文件字节；内部会复制，因此可以是更大缓冲区的切片。空区间不产生匹配。</para>
+    /// </param>
+    /// <returns>
+    /// The best hit, ranked by rule strength and, on a tie, by load order, or <see langword="null"/>
+    /// when no unnamed top-level rule produces a non-blank description. Evaluation stops early once a
+    /// rule with strength of at least <c>100</c> is reached.
+    /// <para>按规则强度排序、强度相同时按加载顺序取得的最佳命中；没有无名顶层规则产生非空白描述时返回
+    /// <see langword="null"/>。一旦出现强度不小于 <c>100</c> 的规则即提前停止。</para>
+    /// </returns>
+    /// <example>
+    /// <code>
+    /// MagicInfo? info = CompiledMagicEngine.Match(header);
+    /// string? mime = info?.MimeType;
+    /// </code>
+    /// </example>
     public static MagicInfo? Match(ReadOnlySpan<byte> data)
     {
         EnsureLoaded();
@@ -144,7 +170,6 @@ public static class CompiledMagicEngine
 
         foreach (var rule in TopLevel)
         {
-            // A `name` template is a macro invoked only via `use`; it never matches on its own.
             if (rule.Name is not null)
             {
                 continue;
@@ -199,14 +224,16 @@ public static class CompiledMagicEngine
     /// <para>仅返回 MIME 类型。</para>
     /// Returns just the MIME type.
     /// </summary>
+    /// <param name="data">
+    /// File bytes to probe, subject to the same rules as <see cref="Match"/>.
+    /// <para>待探测的文件字节，规则与 <see cref="Match"/> 相同。</para>
+    /// </param>
+    /// <returns>The declared MIME type of the best hit, or <see langword="null"/> when nothing matches or
+    /// the matched rule declares no type. <para>最佳命中声明的 MIME 类型；无匹配或所命中的规则未声明类型时为 <see langword="null"/>。</para></returns>
     public static string? MimeType(ReadOnlySpan<byte> data) => Match(data)?.MimeType;
 
     private static string? FirstNonEmpty(string? s) => string.IsNullOrEmpty(s) ? null : s;
 
-    // magic(5) `${x?TRUE:FALSE}` conditional conversions. The TRUE branch depends on a flag our
-    // engine does not model (e.g. ELF DF_1_PIE from the dynamic section), so we render the FALSE
-    // branch, which is the correct default for every input we classify (an ET_DYN without PIE).
-    // Non-conditional `${name}`/`${counter}` inline expansions (2 upstream files) are left verbatim.
     private static string? ResolveConditionals(string? s)
     {
         if (s is null || s.IndexOf("${", StringComparison.Ordinal) < 0)
@@ -288,8 +315,6 @@ public static class CompiledMagicEngine
                 return false;
             }
 
-            // A template that re-enters itself on the current path is a cycle; skip it (libmagic
-            // likewise forbids recursive templates). Guards against stack overflow on malformed trees.
             ctx.ActiveUses ??= new HashSet<string>(StringComparer.Ordinal);
             if (!ctx.ActiveUses.Add(rule.UseName))
             {
@@ -321,9 +346,6 @@ public static class CompiledMagicEngine
                 return false;
             }
 
-            // `default` is a fallback container: it prints its own message (if any) and its children
-            // are tried relative to the inherited base offset (not the default's own position), which is
-            // how libmagic resolves the `>N default` + `>>N <test>` idiom (e.g. PNG's "PNG image data").
             ctx.LastLevelMatched = true;
             Emit(rule, ctx, parentStart, strValue: null, intValue: null, defaultFormat: true);
             EvaluateChildren(rule, ctx, parentStart, parentEnd, depth);
@@ -333,8 +355,6 @@ public static class CompiledMagicEngine
 
         if (rule.Name is not null)
         {
-            // A name/regex template rule itself always passes; its body children decide.
-            // Children inherit this template's base offset (absolute-from-header), not its read position.
             ctx.LastLevelMatched = true;
             bool any = EvaluateChildren(rule, ctx, parentStart, parentEnd, depth);
             return any || rule.Children.Count == 0;
@@ -360,8 +380,6 @@ public static class CompiledMagicEngine
         }
 
         Emit(rule, ctx, offset, strValue, intValue, defaultFormat: false);
-        // Children are based on the inherited base offset (absolute-from-header), while `&` (relative-to-end)
-        // children still anchor to this rule's match end.
         EvaluateChildren(rule, ctx, parentStart, matchEnd, depth);
         _ = indirectReadSize;
         return true;
@@ -372,10 +390,6 @@ public static class CompiledMagicEngine
 
     private static bool EvaluateOrdered(List<CompiledRule> children, MatchContext ctx, int parentStart, int parentEnd, int depth)
     {
-        // `default` is the fallback for the block of tests sharing its offset: it fires only when no concrete
-        // (non-default) sibling at the SAME offset matched. Evaluate concrete children first, then defaults whose
-        // offset had no concrete hit (keeps ELF from printing "unknown arch" after a known machine, and PNG from
-        // printing "invalid color type" after RGB).
         HashSet<long>? matchedConcreteOffsets = null;
         bool any = false;
 
@@ -516,7 +530,6 @@ public static class CompiledMagicEngine
         intValue = null;
         matchEnd = offset;
 
-        // Match-any (`x` value): numeric prints the value; string-family captures a printable field for %s.
         if (rule.Relation == MagicRelation.Any && rule.Kind is not MagicKind.None)
         {
             if (rule.Kind == MagicKind.Number)
@@ -610,9 +623,6 @@ public static class CompiledMagicEngine
 
     private static bool CompareNumeric(CompiledRule rule, long actual, long expected)
     {
-        // libmagic compares within the number type's bit width: a value like `0xed26ff3a` in a
-        // (signed) lelong is the 32-bit pattern, not the sign-extended negative, so mask both operands
-        // to the width first. Signedness only decides ordering (`<`/`>`), never equality or bit tests.
         int width = WidthOf(rule.NumberType);
         if (width is <= 0 or > 8)
         {
@@ -795,7 +805,6 @@ public static class CompiledMagicEngine
         int n = (int)slen;
         if (p.Length > n)
         {
-            // pattern longer than actual string cannot match upstream equality
         }
 
         bool ic = (rule.StringFlags & MagicStringFlags.IgnoreCase) != 0;
@@ -909,7 +918,7 @@ public static class CompiledMagicEngine
 
         if (rule.Pattern is not { Length: 16 } want)
         {
-            return true; // any guid
+            return true;
         }
 
         for (int k = 0; k < 16; k++)
@@ -995,7 +1004,18 @@ public static class CompiledMagicEngine
         or MagicNumberType.Uleshort or MagicNumberType.Ubeshort or MagicNumberType.Ulelong or MagicNumberType.Ubelong
         or MagicNumberType.Ulequad or MagicNumberType.Ubequad or MagicNumberType.Uquad;
 
-    /// <summary>宽度（字节）。</summary>
+    /// <summary>
+    /// Width in bytes of a magic number type, used to size the read from file bytes.
+    /// <para>魔数数值类型的字节宽度，用于确定从文件字节读取的长度。</para>
+    /// </summary>
+    /// <param name="t">
+    /// Numeric magic type to measure; anything that is not one, two or four bytes wide is treated as
+    /// eight bytes. <para>待测量的魔数数值类型；不属于一、二、四字节宽度的类型一律按八字节处理。</para>
+    /// </param>
+    /// <returns>
+    /// <c>1</c> for byte types, <c>2</c> for short types, <c>4</c> for long and date types, and <c>8</c>
+    /// otherwise. <para>字节类型为 <c>1</c>，short 类型为 <c>2</c>，long 与 date 类型为 <c>4</c>，其余为 <c>8</c>。</para>
+    /// </returns>
     public static int WidthOf(MagicNumberType t) => t switch
     {
         MagicNumberType.Byte or MagicNumberType.UByte => 1,
@@ -1011,7 +1031,6 @@ public static class CompiledMagicEngine
 
     private static string DecodeString(CompiledRule rule, byte[] f, int offset, int count)
     {
-        // strip trailing NULs and optional trim
         int n = count;
         while (n > 0 && f[offset + n - 1] == 0)
         {
@@ -1049,9 +1068,6 @@ public static class CompiledMagicEngine
 
     private static string FormatDescription(CompiledRule rule, byte[] f, int offset, int len, long? intValue, string? strValue)
     {
-        // A rule with an empty message is a pure test/gate in libmagic and contributes nothing to the
-        // output. Value printing requires an explicit message with a %d/%s/... placeholder (or the
-        // dedicated `default` path handled in Emit).
         if (string.IsNullOrEmpty(rule.Description))
         {
             return string.Empty;
@@ -1114,7 +1130,6 @@ public static class CompiledMagicEngine
                 j++;
             }
 
-            // Skip printf length modifiers (l, L, h, q, j, z, t) so the conversion char is reached.
             while (j < template.Length && (template[j] is 'l' or 'L' or 'h' or 'q' or 'j' or 'z' or 't'))
             {
                 j++;

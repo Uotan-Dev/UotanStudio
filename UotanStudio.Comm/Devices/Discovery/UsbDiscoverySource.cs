@@ -22,32 +22,47 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
     {
         _kit = kit;
         _backend = backend;
-        // Test seam: unit tests inject a constant probe verdict so takeover suppression does
-        // not depend on whether a real hdc/adb server happens to run on the host.
-        // 单测注入固定探测结论，使接管抑制不依赖宿主是否恰好运行真实 server。
         _serverProbeOverride = serverProbeOverride;
     }
 
+    /// <summary>
+    /// Canonical <c>Source</c> value stamped on every direct-USB endpoint.
+    /// <para>盖在每个 direct-usb 端点上的规范 <c>Source</c> 值。</para>
+    /// </summary>
     public const string SourceName = "usb";
+
+    /// <summary>The source label <c>usb</c>. <para>源标签 <c>usb</c>。</para></summary>
+    /// <value>The stable name of this discovery source. <para>该发现源的稳定名称。</para></value>
     public string Name => SourceName;
 
+    /// <summary>
+    /// Enumerates the backend's USB devices and projects each into a <c>direct-usb</c> endpoint,
+    /// classifying its protocol and completing missing fastboot serials via <c>getvar serialno</c>.
+    /// <para>枚举后端的 USB 设备并把每个设备投影为 <c>direct-usb</c> 端点，分类其协议，并经
+    /// <c>getvar serialno</c> 补全缺失的 fastboot 序列号。</para>
+    /// While a debug-bridge server owns its protocol, adb/hdc endpoints for serials present in that
+    /// server's target list (and serialless adb endpoints) are suppressed; other protocols are never
+    /// filtered by server state.
+    /// <para>当调试桥 server 接管其协议时，该 server 目标列表中有序列号对应的 adb/hdc 端点（以及无序列号
+    /// 的 adb 端点）会被抑制；其他协议从不受 server 状态影响。</para>
+    /// </summary>
+    /// <param name="cancellationToken">
+    /// Cancels USB enumeration; it is re-checked once enumeration completes.
+    /// <para>取消 USB 枚举；枚举完成后会再次检查取消。</para>
+    /// </param>
+    /// <returns>
+    /// The surviving direct-USB endpoints in enumeration order.
+    /// <para>按枚举顺序保留下来的 direct-usb 端点。</para>
+    /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// A device was enumerated without an exact device key or device path.
+    /// <para>某设备枚举结果缺少精确的设备键或设备路径。</para>
+    /// </exception>
     public async Task<IReadOnlyList<DeviceEndpoint>> DiscoverAsync(CancellationToken cancellationToken)
     {
-        // One probe scope per scan pass merges the adb/hdc endpoint probes; only a refused
-        // connection means "no server", an inconclusive probe keeps USB enumeration (the
-        // open-time ownership guard stays fail-closed).
-        // 每个扫描 pass 一个探测范围以合并 adb/hdc 端点探测；仅"连接被拒"视为无 server，
-        // 探测不确定时保留 USB 枚举（打开时的归属守卫保持 fail-closed）。
         using var probeScope = DebugBridgeRoute.BeginProbeScope();
         var adbServerLive = ProbeQuietly(() => _serverProbeOverride?.Invoke("adb") ?? DebugBridgeRoute.UseAdbServer());
         var hdcServerLive = ProbeQuietly(() => _serverProbeOverride?.Invoke("hdc") ?? DebugBridgeRoute.UseHdcServer());
-        // Per-device takeover: a live server suppresses only the USB endpoints whose serial it
-        // actually lists; a device the server does not know about (e.g. its daemon has not
-        // re-registered after a server restart) falls back to direct USB. When the list cannot
-        // be fetched, suppression stays conservative (whole protocol hidden).
-        // 按设备接管：活着的 server 只抑制其列表中实际存在的 serial 对应的 USB 端点；server
-        // 不认识的设备（如 server 重启后 daemon 尚未重新注册）回退直连 USB。列表获取失败时
-        // 保持保守（整个协议隐藏）。
         var adbTargetSerials = adbServerLive ? TryFetchSerials(() =>
             new UotanStudio.Comm.Protocols.Adb.AdbServerServices(string.Empty,
                 UotanStudio.Comm.Routing.DebugBridgeEndpoints.ServerHost,
@@ -66,11 +81,6 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
                 throw new InvalidDataException("USB endpoint has no exact device key or path.");
             }
 
-            // Serial consistency invariant: when the descriptor serial is absent, the value read
-            // back over the protocol (fastboot getvar serialno) becomes authoritative so the same
-            // physical device keeps one identity across USB and server paths.
-            // serial 一致性不变量：描述符缺序列号时，以协议读回值（fastboot getvar serialno）
-            // 为权威，使同一物理设备在 USB 与 server 两条路径上身份一致。
             var serial = device.SerialNumber;
             var protocol = UsbProtocolClassifier.Classify(device);
             if (protocol == "fastboot" && (string.IsNullOrWhiteSpace(serial) || serial == "UNKNOWN"))
@@ -110,11 +120,11 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
 
     private static bool IsServerOwned(string? protocol, string? serial, bool adbLive, HashSet<string>? adbSerials,
         bool hdcLive, HashSet<string>? hdcSerials) => protocol switch
-    {
-        "adb" when adbLive => adbSerials is not { } list || serial is null || list.Contains(serial),
-        "hdc" when hdcLive => hdcSerials is not { } list || serial is null || list.Contains(serial),
-        _ => false
-    };
+        {
+            "adb" when adbLive => adbSerials is not { } list || serial is null || list.Contains(serial),
+            "hdc" when hdcLive => hdcSerials is not { } list || serial is null || list.Contains(serial),
+            _ => false
+        };
 
     private static bool ProbeQuietly(Func<bool> probe)
     {

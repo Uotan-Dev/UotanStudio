@@ -4,18 +4,35 @@ using UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
-/// <summary>One explicit loader-to-storage startup path without loader fallback, patching or authorization bypass.</summary>
+/// <summary>
+/// One explicit loader-to-storage startup path without loader fallback, patching or authorization bypass.
+/// <para>一条从加载器到存储的显式启动路径，不进行加载器回退、镜像修补或授权绕过。</para>
+/// </summary>
 public static partial class MtkXFlashBootstrap
 {
     /// <summary>
     /// Takes ownership of a selected open transport, validates resources and initializes stock XFlash.
     /// The session is returned only after storage discovery; all failures dispose the owned transport.
     /// Null argument checks occur before ownership transfer.
+    /// <para>接管所选定的已打开传输，校验资源并初始化标准 XFlash。仅在存储发现完成后才返回会话；
+    /// 所有失败路径都会释放所接管的传输。空值参数检查发生在所有权转移之前。</para>
     /// </summary>
-    /// <param name="transport">The open transport selected by physical identity or explicit COM/TTY name.</param>
-    /// <param name="options">Explicit resource selections and identity policy.</param>
-    /// <param name="cancellationToken">The operation cancellation token.</param>
-    /// <returns>A caller-owned storage-ready session; this workflow issues no storage write or erase command.</returns>
+    /// <param name="transport">
+    /// The open transport selected by physical identity or explicit COM/TTY name.
+    /// <para>按物理标识或显式 COM/TTY 名称选定的已打开传输。</para>
+    /// </param>
+    /// <param name="options">
+    /// Explicit resource selections and identity policy.
+    /// <para>显式的资源选择与身份策略。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The operation cancellation token.
+    /// <para>操作取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// A caller-owned storage-ready session; this workflow issues no storage write or erase command.
+    /// <para>由调用方持有、已就绪存储的会话；本流程不下发任何存储写入或擦除命令。</para>
+    /// </returns>
     public static Task<MtkSession> InitializeAsync(ICommTransport transport, MtkXFlashBootstrapOptions options,
         CancellationToken cancellationToken = default)
     {
@@ -24,11 +41,26 @@ public static partial class MtkXFlashBootstrap
         return InitializeCoreAsync(transport, options, null, cancellationToken);
     }
 
-    /// <summary>Preflights and retains the selected loader before opening one explicit serial port, then starts XFlash.</summary>
-    /// <param name="serial">Explicit port and line settings; no probing or fallback is performed.</param>
-    /// <param name="options">Explicit loader, stages, identity and storage selections.</param>
-    /// <param name="cancellationToken">The startup cancellation token.</param>
-    /// <returns>A caller-owned storage-ready session. Starting agents is not inherently side-effect-free.</returns>
+    /// <summary>
+    /// Preflights and retains the selected loader before opening one explicit serial port, then starts XFlash.
+    /// <para>在打开某一个显式串口之前预检并保留所选加载器，随后启动 XFlash。</para>
+    /// </summary>
+    /// <param name="serial">
+    /// Explicit port and line settings; no probing or fallback is performed.
+    /// <para>显式的端口与线路参数；不进行探测或回退。</para>
+    /// </param>
+    /// <param name="options">
+    /// Explicit loader, stages, identity and storage selections.
+    /// <para>显式的加载器、阶段、身份与存储选择。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The startup cancellation token.
+    /// <para>启动过程取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// A caller-owned storage-ready session. Starting agents is not inherently side-effect-free.
+    /// <para>由调用方持有、已就绪存储的会话。启动代理本身并非无副作用。</para>
+    /// </returns>
     public static Task<MtkSession> ConnectSerialAsync(SerialConnectionOptions serial, MtkXFlashBootstrapOptions options,
         CancellationToken cancellationToken = default) =>
         ConnectSerialCoreAsync(serial, options, static async (settings, token) =>
@@ -60,9 +92,6 @@ public static partial class MtkXFlashBootstrap
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.TransferTimeoutMs);
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.HandshakeTimeoutMs);
             using var loader = MtkDaFile.Open(options.LoaderPath, options.DirectoryLayout, cancellationToken);
-            // V6 all-in-one containers are supported: the region directory drives the upload and
-            // the BROM/XFlash wire protocol is DA-version independent (mtkclient uploads V6 DAs
-            // through the same 0xD7 flow). The V6 marker stays available via HeaderIndicatesV6.
             if (options.StageOneRegionIndex == options.StageTwoRegionIndex)
             {
                 throw new ArgumentException("DA1 and DA2 must be explicitly selected distinct regions.", nameof(options));

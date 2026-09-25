@@ -32,8 +32,6 @@ internal class UsbHostDevice : UsbDevice
 
     private const int PlatformDefaultTimeoutMs = UsbTransferPolicies.DefaultTimeoutMs;
 
-    // ObjC handles: device user client, interface user client, retained pipes.
-    // <para>ObjC 句柄：设备用户客户端、接口用户客户端、持有的管道。</para>
     private IntPtr _device = IntPtr.Zero;
     private IntPtr _interface = IntPtr.Zero;
     private IntPtr _pipeIn = IntPtr.Zero;
@@ -362,13 +360,6 @@ internal class UsbHostDevice : UsbDevice
         }
     }
 
-    // Opens one IOUSBHostInterface child service: creates the interface user
-    // client, discovers bulk pipes from the configuration descriptor (falling back
-    // to a bounded address scan), preferring bulk IN/OUT and falling back to
-    // interrupt pipes for HID-style interfaces (libusb/IOKit parity).
-    // <para>打开一个 IOUSBHostInterface 子服务：创建接口用户客户端，从配置描述符
-    // 发现批量管道（失败时有界地址扫描回退），优先批量 IN/OUT，HID 类接口回退中断
-    // 管道（与 libusb/IOKit 一致）。</para>
     private bool TryOpenInterface(uint ifcService)
     {
         var usbInterface = UsbHostAPI.CreateObject(UsbHostAPI.GetInterfaceClass(), ifcService, out _);
@@ -447,7 +438,7 @@ internal class UsbHostDevice : UsbDevice
             _pipeIn = inPipe;
             _pipeOut = outPipe;
             _interface = usbInterface;
-            usbInterface = IntPtr.Zero; // ownership transferred
+            usbInterface = IntPtr.Zero;
             return true;
         }
         finally
@@ -459,11 +450,6 @@ internal class UsbHostDevice : UsbDevice
         }
     }
 
-    // Collects endpoint (address, type) pairs for the claimed interface by walking
-    // the device's configuration descriptor; when the config descriptor is absent,
-    // performs a bounded scan over valid endpoint addresses via copyPipeWithAddress:error:.
-    // <para>遍历设备配置描述符收集所声明接口的端点（地址, 类型）对；配置描述符缺失时
-    // 经 copyPipeWithAddress 对有效端点地址做有界扫描。</para>
     private static List<(byte Address, byte Type)> CollectEndpoints(IntPtr usbInterface, byte interfaceNumber, byte numEndpoints)
     {
         var endpoints = new List<(byte Address, byte Type)>();

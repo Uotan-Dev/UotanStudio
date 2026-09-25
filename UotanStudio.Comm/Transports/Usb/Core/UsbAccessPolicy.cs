@@ -21,7 +21,6 @@ internal static class UsbAccessPolicy
             return;
         }
 
-        // A backend can be used before the service composition root is initialized.
         if (interfaceClass == 0xff && protocol == 1 && subclass is 0x42 or 0x50)
         {
             throw new IOException("Debug USB ownership cannot be checked before device services are initialized.");

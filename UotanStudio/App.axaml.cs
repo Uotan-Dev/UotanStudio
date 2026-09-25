@@ -27,11 +27,11 @@ public partial class App : Application
 
     /// <summary>
     /// <para>桌面进程唯一的设备监视组合实例，由应用组合根拥有并经由
-    /// <see cref="DesktopApplicationServices"/> 在退出时释放；界面与设备服务读取此实例，
-    /// 不再依赖 <c>DeviceMonitorService</c> 类型级全局单例。</para>
+    /// <see cref="DesktopApplicationServices"/> 在退出时释放；界面与设备服务统一读取此实例，
+    /// <c>DeviceMonitorService</c> 不提供类型级全局单例。</para>
     /// The single composition-root-owned device monitor for the desktop process, released on exit via
-    /// <see cref="DesktopApplicationServices"/>; UI and device services read this instance instead of a
-    /// type-level global singleton on <c>DeviceMonitorService</c>.
+    /// <see cref="DesktopApplicationServices"/>; UI and device services read this instance, since
+    /// <c>DeviceMonitorService</c> provides no type-level global singleton.
     /// </summary>
     internal static UotanStudio.Services.Devices.DeviceMonitorService DeviceMonitor { get; } =
         UotanStudio.Services.Devices.DeviceMonitorService.Create();

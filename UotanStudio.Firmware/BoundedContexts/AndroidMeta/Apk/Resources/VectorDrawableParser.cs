@@ -4,12 +4,36 @@ using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Resources;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Resources;
 
+/// <summary>
+/// Converts compiled (AXML) vector drawables into <see cref="VectorDrawable"/> models, tolerating
+/// malformed or truncated binary XML by returning <see langword="null"/> instead of throwing.
+/// <para>把编译后的（AXML）vector drawable 转换为 <see cref="VectorDrawable"/> 模型；对损坏或截断的二进制
+/// XML 返回 <see langword="null"/> 而非抛出异常。</para>
+/// </summary>
 public static class VectorDrawableParser
 {
     /// <summary>
     /// Parses AXML bytes into a VectorDrawable; returns null when the input root is not &lt;vector&gt;.
     /// <para>解析 AXML 字节为 vector drawable 模型；根元素不是 &lt;vector&gt; 时返回 null。</para>
     /// </summary>
+    /// <param name="bytes">
+    /// Raw compiled-XML file bytes, or <see langword="null"/>. A null reference, fewer than 4 bytes, a
+    /// leading byte other than 0x03 (AXML magic) and any AXML structural failure, including oversized
+    /// claimed lengths, are all rejected silently.
+    /// <para>编译后的 XML 原始字节，可为 <see langword="null"/>。空引用、不足 4 字节、首字节不是 0x03
+    /// （AXML 魔数），以及任何 AXML 结构性失败（含虚报的超长长度）都会被静默拒绝。</para>
+    /// </param>
+    /// <returns>The decoded drawable, or <see langword="null"/> when the input is not well-formed
+    /// binary XML rooted at a &lt;vector&gt; element; attribute defaults (24f dp sizes, 1f alphas) are
+    /// applied to accepted documents.
+    /// <para>解析成功时返回解码后的 drawable；输入不是以 &lt;vector&gt; 为根的合法二进制 XML 时返回
+    /// <see langword="null"/>；对接受的文档套用属性默认值（尺寸 24f dp、alpha 1f）。</para>
+    /// </returns>
+    /// <example>
+    /// <code>
+    /// VectorDrawable? drawable = VectorDrawableParser.Parse(File.ReadAllBytes("icon.xml.axml"));
+    /// </code>
+    /// </example>
     public static VectorDrawable? Parse(byte[]? bytes)
     {
         if (bytes is null || bytes.Length < 4 || bytes[0] != 0x03)

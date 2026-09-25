@@ -280,9 +280,9 @@ public static class FileOpenMode
         }
 
         // DTB/DTBO 魔数优先：FDT（0xD00DFEED）与 DTBO（0xD7B7AB1E，均大端）即使扩展名缺失或
-        // 被改为 .img/.bin（会被固件/Hex 路由拦截）也走设备树双栏编辑器。
+        // 为 .img/.bin（会被固件/Hex 路由拦截）也走设备树双栏编辑器。
         // DTB/DTBO magic first: FDT (0xD00DFEED) and DTBO (0xD7B7AB1E, both big-endian) open in the
-        // device-tree dual-pane editor even when the extension is absent or renamed to .img/.bin
+        // device-tree dual-pane editor even when the extension is absent or is .img/.bin
         // (which the firmware/Hex routes would claim).
         if (header is not null && IsDtbMagic(header))
         {

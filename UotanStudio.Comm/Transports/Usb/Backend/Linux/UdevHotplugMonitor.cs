@@ -80,7 +80,7 @@ internal sealed class UdevHotplugMonitor : IDisposable
 
             if (received <= 0)
             {
-                if (Marshal.GetLastWin32Error() == 4 /* EINTR */)
+                if (Marshal.GetLastWin32Error() == 4)
                 {
                     continue;
                 }
@@ -93,7 +93,6 @@ internal sealed class UdevHotplugMonitor : IDisposable
                 continue;
             }
 
-            // Coalesce bursts of uevents (one plug typically emits several) into one rescan.
             var now = Environment.TickCount64;
             if (now - lastEventTicks < 100)
             {
@@ -120,7 +119,6 @@ internal sealed class UdevHotplugMonitor : IDisposable
         }
     }
 
-
     /// <summary>Blocking recvfrom into the managed buffer; isolated so the loop stays await-safe.</summary>
     private unsafe int ReceiveFrom(byte[] buffer)
     {
@@ -134,8 +132,6 @@ internal sealed class UdevHotplugMonitor : IDisposable
 
     private static bool IsUsbDeviceUevent(byte[] buffer, int length)
     {
-        // Kernel uevents are NUL-separated; the first item is "action@DEVPATH" and the
-        // environment follows. Only whole usb_device events trigger a rescan.
         var span = new ReadOnlySpan<byte>(buffer, 0, length);
         var text = Encoding.UTF8.GetString(span);
         if (!text.StartsWith("add@", StringComparison.Ordinal) &&
@@ -205,7 +201,7 @@ internal sealed class UdevHotplugMonitor : IDisposable
         public uint Groups;
         public uint Pid;
 
-        public const int Size = 12; // ushort + ushort + uint + uint, packed
+        public const int Size = 12;
 
         public static SockaddrNetlink None => default;
 

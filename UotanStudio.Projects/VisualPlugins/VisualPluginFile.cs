@@ -3,10 +3,32 @@ using System.Text.Json.Serialization;
 
 namespace UotanStudio.Services.Projects;
 
-/// <summary>AOT-safe and bounded persistence for portable visual-plugin JSON files.</summary>
+/// <summary>
+/// AOT-safe and bounded persistence for portable visual-plugin JSON files.
+/// <para>面向可移植可视化插件 JSON 文件的 AOT 安全、有界持久化入口。</para>
+/// </summary>
 public static class VisualPluginFile
 {
-    /// <summary>Synchronously loads one small startup package with the same bounds and validation as the async path.</summary>
+    /// <summary>
+    /// Synchronously loads one small startup package with the same bounds and validation as the async path.
+    /// <para>同步加载一个小型启动期包，边界与校验规则和异步路径一致。</para>
+    /// </summary>
+    /// <param name="path">
+    /// File to read. A file whose first four bytes are the ZIP signature is routed to <see cref="VisualPluginBundle.Load(string)"/>; any other file is parsed as JSON and must not declare assets.
+    /// <para>要读取的文件。前四个字节为 ZIP 签名的文件交给 <see cref="VisualPluginBundle.Load(string)"/>；其余文件按 JSON 解析，且不得声明资源。</para>
+    /// </param>
+    /// <returns>
+    /// The validated package. The returned stream is closed before this method returns; the package is fully materialized in memory.
+    /// <para>校验后的包。返回前文件流已关闭，包内容已完整载入内存。</para>
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="path"/> is null, empty, or whitespace.
+    /// <para><paramref name="path"/> 为 null、空白或全空格。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// The file exceeds <see cref="VisualPluginValidation.MaximumFileSize"/>, the JSON document is empty or structurally invalid, validation reports errors, or a JSON (non-bundle) package declares assets.
+    /// <para>文件超过 <see cref="VisualPluginValidation.MaximumFileSize"/>、JSON 文档为空或结构非法、校验报错，或非 bundle 的 JSON 包声明了资源。</para>
+    /// </exception>
     public static VisualPluginPackage Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -31,7 +53,42 @@ public static class VisualPluginFile
         return package;
     }
 
-    /// <summary>Saves a structurally valid package through the existing atomic JSON publication path.</summary>
+    /// <summary>
+    /// Saves a structurally valid package through the existing atomic JSON publication path.
+    /// <para>通过既有的原子 JSON 发布路径保存结构合法的包。</para>
+    /// </summary>
+    /// <param name="path">
+    /// Destination file. A path ending in <c>.uotanplugin</c> (case-insensitive) is written as a binary bundle through <see cref="VisualPluginBundle.SaveAsync"/>; any other path is written as indented JSON.
+    /// <para>目标文件。以 <c>.uotanplugin</c> 结尾（不区分大小写）的路径经 <see cref="VisualPluginBundle.SaveAsync"/> 写为二进制 bundle；其余路径写为缩进 JSON。</para>
+    /// </param>
+    /// <param name="package">
+    /// Package to persist; it must pass <see cref="VisualPluginValidation.Validate"/> before anything is written.
+    /// <para>要持久化的包；写入前必须先通过 <see cref="VisualPluginValidation.Validate"/>。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels the publication; a cancelled save leaves the previous target content in place.
+    /// <para>取消发布操作；被取消的保存会保留目标的原有内容。</para>
+    /// </param>
+    /// <returns>
+    /// A task that completes once the package has been fully written and published to <paramref name="path"/>.
+    /// <para>在包完整写入并发布到 <paramref name="path"/> 后完成的任务。</para>
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="path"/> is null, empty, or whitespace.
+    /// <para><paramref name="path"/> 为 null、空白或全空格。</para>
+    /// </exception>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="package"/> is null.
+    /// <para><paramref name="package"/> 为 null。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// Validation reports errors (messages joined by the current line separator), or a package with assets is saved to a non-bundle path.
+    /// <para>校验报错（消息按当前行分隔符拼接），或含资源的包被保存到非 bundle 路径。</para>
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was canceled before publication finished.
+    /// <para>发布完成前 <paramref name="cancellationToken"/> 被取消。</para>
+    /// </exception>
     public static async Task SaveAsync(string path, VisualPluginPackage package,
         CancellationToken cancellationToken = default)
     {
@@ -55,7 +112,34 @@ public static class VisualPluginFile
             VisualPluginJsonContext.Default.VisualPluginPackage, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Loads and validates one untrusted package without reading more than the package limit.</summary>
+    /// <summary>
+    /// Loads and validates one untrusted package without reading more than the package limit.
+    /// <para>加载并校验一个不可信包，读取量不超过包大小上限。</para>
+    /// </summary>
+    /// <param name="path">
+    /// File to read. A file whose first four bytes are the ZIP signature is routed to <see cref="VisualPluginBundle.Load(string)"/> (synchronously, with cancellation checked around it); any other file is parsed as JSON.
+    /// <para>要读取的文件。前四个字节为 ZIP 签名的文件交给 <see cref="VisualPluginBundle.Load(string)"/>（同步执行，前后各检查一次取消）；其余文件按 JSON 解析。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels the read; the request is checked before opening the file and again after a bundle load completes.
+    /// <para>取消读取；打开文件前检查一次，bundle 加载完成后再次检查。</para>
+    /// </param>
+    /// <returns>
+    /// The validated package, fully materialized in memory with the stream closed before completion.
+    /// <para>校验后的包；完成前流已关闭，内容已完整载入内存。</para>
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="path"/> is null, empty, or whitespace.
+    /// <para><paramref name="path"/> 为 null、空白或全空格。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// The file exceeds <see cref="VisualPluginValidation.MaximumFileSize"/>, the JSON document is empty or structurally invalid, validation reports errors, or a JSON (non-bundle) package declares assets.
+    /// <para>文件超过 <see cref="VisualPluginValidation.MaximumFileSize"/>、JSON 文档为空或结构非法、校验报错，或非 bundle 的 JSON 包声明了资源。</para>
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was canceled before or during the read.
+    /// <para>读取前或读取过程中 <paramref name="cancellationToken"/> 被取消。</para>
+    /// </exception>
     public static async Task<VisualPluginPackage> LoadAsync(string path,
         CancellationToken cancellationToken = default)
     {

@@ -54,7 +54,6 @@ internal static class PosixAclPermissions
         {
             throw new InvalidDataException("Access ACL lacks required entries.");
         }
-        // Linux v6.12 fs/posix_acl.c __posix_acl_chmod_masq: group mode updates mask when present.
         BinaryPrimitives.WriteUInt16LittleEndian(result.AsSpan(owner), (ushort)((mode >> 6) & 7));
         BinaryPrimitives.WriteUInt16LittleEndian(result.AsSpan(mask >= 0 ? mask : group), (ushort)((mode >> 3) & 7));
         BinaryPrimitives.WriteUInt16LittleEndian(result.AsSpan(other), (ushort)(mode & 7));

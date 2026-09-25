@@ -6,15 +6,27 @@ namespace UotanStudio.Media.Decoding.MediaFoundation;
 /// <summary>
 /// D3D11-aware decoding with pooled NV12 readback or GPU NV12-to-BGRA processing.
 /// Supports synchronous system transforms and asynchronous hardware transforms sharing one D3D11 device.
+/// <para>支持 D3D11 的解码，可选池化 NV12 回读或 GPU 上的 NV12 转 BGRA 处理。</para>
+/// <para>同时支持同步系统变换与共享同一 D3D11 设备的异步硬件变换。</para>
 /// </summary>
 /// <remarks>Direct instances never fall back to CPU. The platform factory owns initialization fallback.</remarks>
 [SupportedOSPlatform("windows")]
 public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 {
     private readonly VideoDecoderOptions _options;
-    /// <summary>Creates a D3D11 decoder using stream color metadata. 创建采用码流色彩信息的 D3D11 解码器。</summary>
+    /// <summary>
+    /// Creates a D3D11 decoder using stream color metadata.
+    /// <para>创建采用码流色彩信息的 D3D11 解码器。</para>
+    /// </summary>
     public MediaFoundationGpuVideoDecoder() : this(new VideoDecoderOptions()) { }
-    /// <summary>Creates a D3D11 decoder with per-session color overrides. 创建带会话色彩设置的 D3D11 解码器。</summary>
+    /// <summary>
+    /// Creates a D3D11 decoder with per-session color overrides.
+    /// <para>创建带会话色彩设置的 D3D11 解码器。</para>
+    /// </summary>
+    /// <param name="options">
+    /// Color-space overrides and output-format preference; must not be <see langword="null"/>.
+    /// <para>色彩空间覆盖与输出格式偏好；不得为 <see langword="null"/>。</para>
+    /// </param>
     public MediaFoundationGpuVideoDecoder(VideoDecoderOptions options) => _options = options ?? throw new ArgumentNullException(nameof(options));
     private static readonly object LifetimeLock = new();
     private static int _leases;
@@ -43,14 +55,56 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private int _inputRequests;
     private bool _drainComplete;
     private uint _inputColorSpace;
-    // Callbacks are synchronous and cannot reenter this decoder. Reuse exact-size
-    // session storage without retaining rounded-up arrays in the global pool.
     private byte[]? _readbackBuffer;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Whether a D3D11 media transform is currently configured.
+    /// <para>当前是否已配置 D3D11 媒体变换。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> after a successful <see cref="Initialize"/>; <see langword="false"/> before
+    /// initialization, after a failed re-initialization, and after <see cref="Dispose"/>.
+    /// <para>成功执行 <see cref="Initialize"/> 后为 <see langword="true"/>；初始化之前、重新初始化失败之后
+    /// 以及 <see cref="Dispose"/> 之后为 <see langword="false"/>。</para>
+    /// </value>
     public bool IsInitialized => _transform != 0;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Creates a D3D11 device and Media Foundation device manager, activates the first asynchronous hardware or
+    /// synchronous system transform that advertises D3D11 awareness and NV12 output for the codec, and registers
+    /// the frame callback. Any previous native resources are released first. All calls must stay on the thread
+    /// that owns the decoder; the first call after construction claims the calling thread.
+    /// <para>创建 D3D11 设备与 Media Foundation 设备管理器，激活第一个声明支持 D3D11 且能按编码输出 NV12 的
+    /// 异步硬件变换或同步系统变换，并登记帧回调；既有原生资源会先行释放。全部调用必须留在解码器所属线程上；
+    /// 构造后的首次调用即绑定当前线程。</para>
+    /// </summary>
+    /// <param name="codec">Compressed codec of the incoming access units. <para>输入访问单元的压缩编码格式。</para></param>
+    /// <param name="width">
+    /// Expected coded frame width in pixels, from 1 to 16 384; the actual negotiated output size may differ.
+    /// <para>预期编码帧宽度（像素），1 到 16 384；实际协商出的输出尺寸可能不同。</para>
+    /// </param>
+    /// <param name="height">
+    /// Expected coded frame height in pixels, from 1 to 16 384.
+    /// <para>预期编码帧高度（像素），1 到 16 384。</para>
+    /// </param>
+    /// <param name="frameCallback">
+    /// Receives every decoded frame; the frame is disposed once the callback returns, so consumers must copy or
+    /// convert within it. The callback runs on the calling thread.
+    /// <para>接收每个解码帧；回调返回后帧即被释放，消费方须在其内部完成复制或转换。回调在调用线程上执行。</para>
+    /// </param>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="frameCallback"/> is <see langword="null"/>.
+    /// <para><paramref name="frameCallback"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The dimensions exceed the supported limits.
+    /// <para>尺寸超出支持上限。</para></exception>
+    /// <exception cref="InvalidOperationException">
+    /// Called from a callback or another thread, or a COM, D3D11 or Media Foundation call failed.
+    /// <para>在回调内或其他线程上调用，或 COM、D3D11、Media Foundation 调用失败。</para>
+    /// </exception>
+    /// <exception cref="NotSupportedException">
+    /// No D3D11-aware decoder accepts the codec at the requested size.
+    /// <para>没有支持 D3D11 的解码器接受该尺寸下的目标编码。</para>
+    /// </exception>
     public void Initialize(VideoCodecId codec, int width, int height, Action<DecodedVideoFrame> frameCallback)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -75,11 +129,54 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Feeds one access unit with a synthesized 60 fps timestamp derived from an internal frame counter.
+    /// <para>输入一个访问单元，时间戳为由内部帧计数器合成的 60 fps 值。</para>
+    /// </summary>
+    /// <param name="accessUnit">
+    /// One complete compressed access unit, 1 byte to 32 MiB.
+    /// <para>单个完整压缩访问单元，1 字节到 32 MiB。</para>
+    /// </param>
+    /// <exception cref="OverflowException">The internal timestamp sequence exceeded the tick range.
+    /// <para>内部时间戳序列超出 tick 范围。</para></exception>
     public void Decode(ReadOnlySpan<byte> accessUnit)
         => Decode(accessUnit, checked(_sequence++ * 166667));
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Feeds one access unit with an explicit timestamp. Synchronous transforms emit frames on the calling
+    /// thread immediately; asynchronous hardware transforms first wait until the decoder accepts input and then
+    /// pump its event queue, so output may arrive after this call returns and through <see cref="Poll"/>.
+    /// <para>输入一个访问单元并附带显式时间戳。同步变换立即在调用线程上输出帧；异步硬件变换会先等待解码器
+    /// 接受输入，再抽取其事件队列，因此输出可能在本调用返回之后以及 <see cref="Poll"/> 期间到达。</para>
+    /// </summary>
+    /// <param name="accessUnit">
+    /// One complete compressed access unit, 1 byte to 32 MiB.
+    /// <para>单个完整压缩访问单元，1 字节到 32 MiB。</para>
+    /// </param>
+    /// <param name="timestampTicks">
+    /// Presentation time in 100-nanosecond ticks, stamped onto the input sample.
+    /// <para>呈现时间，以 100 纳刻（tick）为单位，会写入输入样本。</para>
+    /// </param>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The access unit is empty or exceeds 32 MiB.
+    /// <para>访问单元为空或超过 32 MiB。</para></exception>
+    /// <exception cref="InvalidOperationException">
+    /// The decoder is not initialized, called from a callback or another thread, the event queue exceeds the
+    /// per-packet limit, or a COM or Media Foundation call failed.
+    /// <para>解码器未初始化、在回调内或其他线程上调用、事件队列超出单包上限，或 COM、Media Foundation 调用失败。</para>
+    /// </exception>
+    /// <exception cref="NotSupportedException">
+    /// A hardware decoder's renegotiated output type is not NV12.
+    /// <para>硬件解码器重新协商后的输出类型不是 NV12 格式。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// A decoded sample carried no buffers or an unexpected texture layout.
+    /// <para>解码样本不含缓冲区或纹理布局非预期。</para>
+    /// </exception>
+    /// <exception cref="TimeoutException">
+    /// The asynchronous decoder did not signal an input event within five seconds.
+    /// <para>异步解码器在五秒内未发出输入事件。</para>
+    /// </exception>
     public void Decode(ReadOnlySpan<byte> accessUnit, long timestampTicks)
     {
         CheckReady();
@@ -104,7 +201,18 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         finally { MfCom.Release(sample); }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Flushes the transform, discards any pending asynchronous events, restarts the stream, and resets the
+    /// timestamp and output counters. Use after a stream discontinuity; the decoder stays initialized.
+    /// <para>刷新变换对象、丢弃待处理的异步事件、重启码流并重置时间戳与输出计数器；用于码流不连续之后，
+    /// 解码器保持已初始化状态。</para>
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="InvalidOperationException">
+    /// The decoder is not initialized, called from a callback or another thread, the event queue did not empty
+    /// after the flush, or a Media Foundation message failed.
+    /// <para>解码器未初始化、在回调内或其他线程上调用、刷新后事件队列未清空，或 Media Foundation 消息失败。</para>
+    /// </exception>
     public void Reset()
     {
         CheckReady();
@@ -117,7 +225,22 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         _drainComplete = false;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Signals end of stream, issues the drain command, and emits all buffered frames: asynchronous transforms
+    /// wait up to five seconds for the drain-complete event, synchronous transforms are drained inline. Call
+    /// <see cref="Initialize"/> or <see cref="Reset"/> before feeding a new stream.
+    /// <para>发出码流结束通知并下发 drain 命令，输出全部缓存帧：异步变换最多等待五秒的 drain-complete 事件，
+    /// 同步变换则在调用内直接排空。输入新码流前须调用 <see cref="Initialize"/> 或 <see cref="Reset"/>。</para>
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="InvalidOperationException">
+    /// The decoder is not initialized, called from a callback or another thread, or a Media Foundation call failed.
+    /// <para>解码器未初始化、在回调内或其他线程上调用，或 Media Foundation 调用失败。</para>
+    /// </exception>
+    /// <exception cref="TimeoutException">
+    /// The asynchronous decoder did not report drain completion within five seconds.
+    /// <para>异步解码器在五秒内未报告 drain 完成。</para>
+    /// </exception>
     public void Drain()
     {
         CheckReady();
@@ -128,7 +251,26 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         else DrainSynchronousOutput();
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Pumps the asynchronous decoder's event queue, emitting output frames without consuming another input
+    /// packet; synchronous transforms return immediately. At most 4 096 events are processed per call.
+    /// <para>抽取异步解码器的事件队列，在不输入新数据包的情况下输出帧；同步变换立即返回。单次调用至多处理
+    /// 4 096 个事件。</para>
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="InvalidOperationException">
+    /// The decoder is not initialized, called from a callback or another thread, the event queue exceeded the
+    /// per-call limit, or a Media Foundation call failed.
+    /// <para>解码器未初始化、在回调内或其他线程上调用、事件队列超出单次上限，或 Media Foundation 调用失败。</para>
+    /// </exception>
+    /// <exception cref="NotSupportedException">
+    /// The decoder's output type while producing events is not NV12.
+    /// <para>解码器在产生事件期间的输出类型不是 NV12 格式。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// A decoded sample carried no buffers or an unexpected texture layout.
+    /// <para>解码样本不含缓冲区或纹理布局非预期。</para>
+    /// </exception>
     public void Poll()
     {
         CheckReady();
@@ -138,7 +280,16 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         throw new InvalidOperationException("Decoder event queue exceeded the polling limit.");
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Releases every COM and D3D11 resource, drops the process-wide Media Foundation startup lease, and clears
+    /// the frame callback. Repeat calls are no-ops; must run on the owning thread.
+    /// <para>释放全部 COM 与 D3D11 资源、归还进程级 Media Foundation 启动租约并清除帧回调；重复调用无效果，
+    /// 必须在所属线程上执行。</para>
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Called from inside a frame callback or from a thread other than the owning thread.
+    /// <para>在帧回调内部或所属线程之外的其他线程上调用。</para>
+    /// </exception>
     public void Dispose()
     {
         if (_disposed) return;
@@ -151,7 +302,6 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private void AcquireLifetime()
     {
         int hr = MfInterop.CoInitializeEx(0, MfInterop.CoInitMultithreaded);
-        // RPC_E_CHANGED_MODE means the caller already owns a different apartment.
         if (hr != unchecked((int)0x80010106)) Check(hr, "CoInitializeEx");
         _comOwned = hr >= 0;
         _ownerThread = Environment.CurrentManagedThreadId;
@@ -198,13 +348,10 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         {
             Check(MfCom.QueryInterface(_device, D3D11Interop.IidVideoDevice, out _videoDevice), "ID3D11VideoDevice");
             Check(MfCom.QueryInterface(_context, D3D11Interop.IidVideoContext, out _videoContext), "ID3D11VideoContext");
-            // The device manager hands the device to MF on another thread; enable
-            // multithread protection so concurrent decoder/processor use is legal.
             if (MfCom.QueryInterface(_context, D3D11Interop.IidMultithread, out nint multithread) >= 0)
             {
                 try
                 {
-                    // SetMultithreadProtected(TRUE) is ID3D11Multithread slot 5.
                     _ = ((delegate* unmanaged[Stdcall]<nint, int, int>)MfCom.PublicSlot(multithread, 5))(multithread, 1);
                 }
                 finally { MfCom.Release(multithread); }
@@ -272,7 +419,6 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private bool TryConfigureDecoder(nint transform, VideoCodecId codec, int width, int height)
     {
-        // Verify the MFT is D3D11-aware before investing in it.
         if (MfCom.GetAttributes(transform, out nint attributes) < 0 || attributes == 0) return false;
         try
         {
@@ -280,11 +426,10 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             _isAsync = MfCom.GetUInt32(attributes, MfInterop.TransformAsync, out uint asyncFlag) >= 0 && asyncFlag != 0;
             if (_isAsync) Check(MfCom.SetUInt32(attributes, MfInterop.TransformAsyncUnlock, 1), "unlock async MFT");
 
-
         }
         finally { MfCom.Release(attributes); }
 
-        Check(MfCom.Message(transform, 2 /* MFT_MESSAGE_SET_D3D_MANAGER */, _deviceManager), "set D3D manager");
+        Check(MfCom.Message(transform, 2, _deviceManager), "set D3D manager");
         if (_isAsync) Check(MfCom.QueryInterface(transform, MfInterop.IidImfMediaEventGenerator, out _eventGenerator), "event generator");
         MediaFoundationVideoDecoder.ConfigureLowLatency(transform, codec);
 
@@ -321,7 +466,6 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
                 _width = checked((int)(size >> 32));
                 _height = checked((int)(size & uint.MaxValue));
                 VideoFrameLimits.ValidateDimensions(_width, _height);
-                // MF and D3D11 use different numeric values for nominal range.
                 _ = MfCom.GetUInt32(type, new Guid("c21b8ee5-b956-4071-8daf-325edf5cab11"), out uint range);
                 _ = MfCom.GetUInt32(type, new Guid("3e23d450-2c75-4d25-a00e-b91670d12327"), out uint matrix);
                 if (_options.ColorRange != VideoColorRange.Auto) range = _options.ColorRange == VideoColorRange.Full ? 1u : 2u;
@@ -421,7 +565,6 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         throw new InvalidOperationException("Decoder event queue did not empty after flush.");
     }
 
-    // Never block GetEvent: a broken driver must not trap the owning decode thread forever.
     private bool PumpEvent()
     {
         int hr = MfCom.GetEvent(_eventGenerator, 1, out nint mediaEvent);
@@ -482,7 +625,6 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private void ConvertSample(nint sample)
     {
         Check(MfCom.GetTime(sample, out long timestamp), "sample time");
-        // The D3D11-aware MFT hands back one DXGI-backed buffer per sample.
         Check(MfCom.BufferCount(sample, out uint buffers), "GetBufferCount");
         if (buffers == 0) throw new InvalidDataException("Decoder produced a sample without buffers.");
         Check(MfCom.GetBufferByIndex(sample, 0, out nint buffer), "GetBufferByIndex");
@@ -512,7 +654,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private void ReadBackNv12(nint sourceTexture, uint subresource, long timestampTicks)
     {
         var desc = MfCom.D3DGetTexture2DDesc(sourceTexture);
-        if (desc.Format != 103 /* DXGI_FORMAT_NV12 */ || desc.Width < _width || desc.Height < _height
+        if (desc.Format != 103 || desc.Width < _width || desc.Height < _height
             || desc.SampleDescCount != 1 || desc.MipLevels != 1 || subresource >= desc.ArraySize)
             throw new InvalidDataException("Unexpected NV12 decoder texture layout.");
         VideoFrameLimits.ValidateDimensions(checked((int)desc.Width), checked((int)desc.Height));
@@ -547,7 +689,6 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             for (int row = 0; row < _height; row++)
                 new ReadOnlySpan<byte>((byte*)mapped.pData + (nint)row * sourceStride, rowBytes)
                     .CopyTo(pixels.AsSpan(row * rowBytes, rowBytes));
-            // UV starts after the texture's padded height, not the visible height.
             byte* uv = (byte*)mapped.pData + checked((nint)desc.Height * sourceStride);
             for (int row = 0; row < (_height + 1) / 2; row++)
                 new ReadOnlySpan<byte>(uv + (nint)row * sourceStride, rowBytes)
@@ -586,7 +727,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private void ReadBack(long timestampTicks)
     {
         MfCom.D3DCopySubresourceRegion(_context, _stagingTexture, 0, 0, 0, 0, _outputTexture, 0, 0);
-        Check(MfCom.D3DMap(_context, _stagingTexture, 0, 1 /* D3D11_MAP_READ */, 0, out var mapped), "Map(staging)");
+        Check(MfCom.D3DMap(_context, _stagingTexture, 0, 1, 0, out var mapped), "Map(staging)");
         try
         {
             int stride = checked((int)mapped.RowPitch);
@@ -715,7 +856,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 /// BGRA frame delivered by <see cref="MediaFoundationGpuVideoDecoder"/>. It
 /// derives from <see cref="DecodedVideoFrame"/> so the GPU path flows through
 /// the same callback; consumers detect it to skip the NV12→BGRA conversion.
-/// <para><see cref="MediaFoundationGpuVideoDecoder"/> 输出的 BGRA 帧。它派生自
+/// <para>由 <see cref="MediaFoundationGpuVideoDecoder"/> 输出的 BGRA 帧。它派生自
 /// <see cref="DecodedVideoFrame"/>，因此 GPU 路径走同一回调；消费方据此跳过
 /// NV12→BGRA 转换。</para>
 /// </summary>
@@ -733,8 +874,21 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 /// </remarks>
 public sealed class GpuDecodedVideoFrame : DecodedVideoFrame
 {
-    /// <summary>Creates a frame taking ownership of a pooled BGRA buffer.</summary>
-    /// <summary>创建一个接管池化 BGRA 缓冲区所有权的帧。</summary>
+    /// <summary>
+    /// Creates a frame taking ownership of a pooled BGRA buffer, skipping the base NV12 geometry validation.
+    /// <para>创建一个接管池化 BGRA 缓冲区所有权的帧，并跳过基类的 NV12 几何校验。</para>
+    /// </summary>
+    /// <param name="buffer">
+    /// Pooled BGRA pixel array held by the frame until disposal; must contain at least <paramref name="length"/> bytes.
+    /// <para>帧在释放前持有的池化 BGRA 像素数组；长度不得小于 <paramref name="length"/> 字节。</para>
+    /// </param>
+    /// <param name="length">Valid pixel byte count inside <paramref name="buffer"/>.
+    /// <para><paramref name="buffer"/> 内的有效像素字节数。</para></param>
+    /// <param name="width">Frame width in pixels. <para>帧宽度（像素）。</para></param>
+    /// <param name="height">Frame height in pixels. <para>帧高度（像素）。</para></param>
+    /// <param name="stride">Bytes per BGRA row, at least width × 4. <para>每行 BGRA 字节数，不小于宽度 × 4。</para></param>
+    /// <param name="timestampTicks">Presentation time in 100-nanosecond ticks.
+    /// <para>呈现时间，以 100 纳刻（tick）为单位。</para></param>
     public GpuDecodedVideoFrame(byte[] buffer, int length, int width, int height, int stride, long timestampTicks)
         : base(buffer, length, width, height, stride, timestampTicks, skipNv12Validation: true)
     {

@@ -3,16 +3,22 @@ using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
+/// <summary>
+/// Sahara handshake entry points: HELLO exchange, version negotiation, READ_DATA upload loop and DONE/DONE_RESPONSE completion.
+/// <para>Sahara 握手入口：HELLO 交换、版本协商、READ_DATA 上传循环以及 DONE/DONE_RESPONSE 完成。</para>
+/// </summary>
 public sealed partial class SaharaProtocol
 {
     /// <summary>
     /// Performs the Sahara handshake, uploading the specified programmer image.
     /// <para>执行 Sahara 握手，上传指定的 programmer 镜像。</para>
     /// </summary>
-    /// <param name="programmerImage">Optional programmer image stream. 可选的 programmer 镜像流。</param>
-    /// <param name="imageId">The image identifier. 镜像标识符。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The negotiated Sahara mode. 协商的 Sahara 模式。</returns>
+    /// <param name="programmerImage">Optional programmer image stream; the caller retains ownership and the stream must be readable and seekable. When <see langword="null"/>, the handshake expects the device to already be running Firehose.<para>可选的 programmer 镜像流；调用方保留所有权，流必须可读并可定位。为 <see langword="null"/> 时握手期望设备已在运行 Firehose。</para></param>
+    /// <param name="imageId">The image identifier used as the Sahara <c>ImageId</c> for the upload.<para>用作 Sahara <c>ImageId</c> 的镜像标识符。</para></param>
+    /// <param name="cancellationToken">Cancellation token checked between Sahara packet boundaries.<para>在 Sahara 数据包边界之间检查的取消令牌。</para></param>
+    /// <returns>The negotiated Sahara mode.<para>协商的 Sahara 模式。</para></returns>
+    /// <exception cref="EdlException">Version negotiation fails, an unknown Sahara command arrives, or a NAK status is reported.<para>版本协商失败、收到未知 Sahara 命令或返回 NAK 状态。</para></exception>
+    /// <exception cref="ObjectDisposedException">The protocol instance has been disposed.<para>协议实例已被释放。</para></exception>
     public async Task<SaharaMode> HandshakeAsync(Stream? programmerImage, SaharaImageId imageId = SaharaImageId.Firehose, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -26,9 +32,11 @@ public sealed partial class SaharaProtocol
     /// Performs the Sahara handshake with a set of images.
     /// <para>使用一组镜像执行 Sahara 握手。</para>
     /// </summary>
-    /// <param name="images">The images to upload. 要上传的镜像。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The negotiated Sahara mode. 协商的 Sahara 模式。</returns>
+    /// <param name="images">Images keyed by the Sahara <c>ImageId</c> the device will request. Callers retain ownership of each stream; every stream must be readable and seekable, and must not be mutated during the handshake.<para>以设备将请求的 Sahara <c>ImageId</c> 为键的镜像。调用方保留每个流的所有权；所有流必须可读、可定位，并且在握手期间不得被修改。</para></param>
+    /// <param name="cancellationToken">Cancellation token checked between Sahara packet boundaries.<para>在 Sahara 数据包边界之间检查的取消令牌。</para></param>
+    /// <returns>The negotiated Sahara mode. When the device is already running Firehose, returns <see cref="SaharaMode.ImageTxComplete"/> without uploading any image.<para>协商的 Sahara 模式。设备已在运行 Firehose 时直接返回 <see cref="SaharaMode.ImageTxComplete"/> 且不上传任何镜像。</para></returns>
+    /// <exception cref="EdlException">No image is provided for a device that is still in Sahara mode, the HELLO version range does not intersect the host range, an unknown image id or oversized 64-bit range is requested, or a NAK status is reported.<para>设备仍处于 Sahara 模式但未提供镜像、HELLO 版本区间与主机不相交、请求了未知镜像 id 或超大的 64 位区间，或返回 NAK 状态。</para></exception>
+    /// <exception cref="ObjectDisposedException">The protocol instance has been disposed.<para>协议实例已被释放。</para></exception>
     public async Task<SaharaMode> HandshakeAsync(IReadOnlyDictionary<uint, Stream> images, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -112,8 +120,6 @@ public sealed partial class SaharaProtocol
         }
 
         var negotiatedVersion = Math.Min(helloPacket.Version, EdlConstants.SaharaVersion);
-        // Sahara field 5 of HELLO is max_cmd_len (typically 3), not a USB packet size; image
-        // transfers are chunked independently, so MaxPacketLength keeps its transfer default.
         var mode = helloPacket.Mode;
 
         Log($"Sending HELLO_RESPONSE: Version={negotiatedVersion}, Mode={mode}");
@@ -198,8 +204,6 @@ public sealed partial class SaharaProtocol
                         var fullDone = await ReadRemainingPacket<SaharaDoneResponsePacket>(headerData, cancellationToken);
                         var dr = BytesToStruct<SaharaDoneResponsePacket>(fullDone);
                         Log($"DONE_RESPONSE: Status={dr.Status}");
-                        // Sahara spec: status 0 is SUCCESS; some loaders report 1. Both mean
-                        // the image transfer is complete (bkerler/edl ignores the field).
                         if (dr.Status is 0 or 1)
                         {
                             handshakeComplete = true;

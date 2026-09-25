@@ -1,5 +1,12 @@
 ﻿namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto.KeyDatabase;
 
+/// <summary>
+/// Built-in key table for OPS firmware packages: the round-key core, the derived table the OPS cipher
+/// looks up, and the known <c>mbox</c> material blobs.
+/// <para>
+/// 面向 OPS 固件包的内置密钥表：轮密钥核心、OPS 算法查表所用的派生表，以及已知的 <c>mbox</c> 材料块。
+/// </para>
+/// </summary>
 public static class OpsKeyDatabase
 {
     private static readonly byte[] AesSBoxInner =
@@ -22,8 +29,24 @@ public static class OpsKeyDatabase
         0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16
     ];
 
+    /// <summary>
+    /// 2048-byte lookup table derived from the AES S-box, eight bytes per source byte, consumed directly
+    /// by <c>OppOpsCipher</c>. The array is shared and mutable; callers must not write into it.
+    /// <para>
+    /// 由 AES S-Box 派生的 2048 字节查表，每个源字节占 8 字节，由 <c>OppOpsCipher</c> 直接使用。
+    /// 数组为共享且可写的实例，调用方不得写入。
+    /// </para>
+    /// </summary>
     public static readonly byte[] ExpandedSBox = GenerateExpandedSBox();
 
+    /// <summary>
+    /// 16-byte OPS core key read as four little-endian 32-bit round-key words before any <c>mbox</c>
+    /// material is applied. The array is shared and mutable; callers must not write into it.
+    /// <para>
+    /// OPS 核心密钥，共 16 字节，在应用任何 <c>mbox</c> 材料之前按小端序读作 4 个 32 位轮密钥字。
+    /// 数组为共享且可写的实例，调用方不得写入。
+    /// </para>
+    /// </summary>
     public static readonly byte[] OpsCoreKey =
     [
         0xD1, 0xB5, 0xE3, 0x9E, 0x5E, 0xEA, 0x04, 0x9D,
@@ -69,12 +92,29 @@ public static class OpsKeyDatabase
             Description: "guacamolet"),
     ];
 
+    /// <summary>
+    /// Every built-in OPS key entry, in declaration order.
+    /// <para>全部内置 OPS 密钥条目，按声明顺序排列。</para>
+    /// </summary>
+    /// <value>
+    /// A read-only view over the shared backing array; custom keys added at runtime are not part of it.
+    /// <para>对共享底层数组的只读视图；运行时添加的自定义密钥不在其中。</para>
+    /// </value>
     public static IReadOnlyList<OpsKeyEntry> Entries => KeyEntries;
 
     /// <summary>
     /// Finds an OPS key entry by its key identifier.
     /// <para>根据密钥标识符查找 OPS 密钥条目。</para>
     /// </summary>
+    /// <param name="keyId">
+    /// Key identifier such as <c>mbox5</c>; matched case-insensitively. A <see langword="null"/> value
+    /// simply yields no match.
+    /// <para>
+    /// 形如 <c>mbox5</c> 的密钥标识符；按不区分大小写匹配。传入 <see langword="null"/> 时只会匹配失败。
+    /// </para>
+    /// </param>
+    /// <returns>The matching entry, or <see langword="null"/> when the identifier is unknown.
+    /// <para>匹配的条目；标识符未知时返回 <see langword="null"/>。</para></returns>
     public static OpsKeyEntry? FindByKeyId(string keyId)
     {
         foreach (var entry in KeyEntries)

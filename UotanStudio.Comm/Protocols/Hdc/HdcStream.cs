@@ -19,12 +19,16 @@ public sealed class HdcStream : IDisposable
     /// Gets the local channel identifier.
     /// <para>获取本地通道标识。</para>
     /// </summary>
+    /// <value>The id this side assigned when the channel was opened; it stays fixed for the stream's lifetime.
+    /// <para>本端在打开通道时分配的标识；在流的生命周期内保持不变。</para></value>
     public uint ChannelId { get; }
 
     /// <summary>
     /// Gets the remote channel identifier, or 0 until the peer acknowledges.
     /// <para>获取远端通道标识，对端确认前为 0。</para>
     /// </summary>
+    /// <value>The peer-assigned id recorded by the handshake reply; 0 means the peer has not confirmed the channel yet.
+    /// <para>握手回复记录的对端分配标识；0 表示对端尚未确认该通道。</para></value>
     public uint RemoteChannelId { get; internal set; }
 
     /// <summary>
@@ -39,12 +43,16 @@ public sealed class HdcStream : IDisposable
     /// Gets whether the stream is closed.
     /// <para>获取流是否已关闭。</para>
     /// </summary>
+    /// <value><see langword="true"/> after a local close, a peer close, or a fault; reads then drain the queue and return <see langword="null"/>.
+    /// <para>本地关闭、对端关闭或发生故障后为 <see langword="true"/>；此后读取会排空队列并返回 <see langword="null"/>。</para></value>
     public bool IsClosed { get { lock (_lock) { return _closed; } } }
 
     /// <summary>
     /// Gets whether the stream is in a faulted state.
     /// <para>获取流是否处于故障状态。</para>
     /// </summary>
+    /// <value><see langword="true"/> once an error has faulted the channel; a faulted stream is closed as well and its queue is discarded.
+    /// <para>通道因错误进入故障状态后为 <see langword="true"/>；故障流同时处于关闭状态，其队列被丢弃。</para></value>
     public bool IsFaulted
     {
         get { lock (_lock) { return field; } }
@@ -57,6 +65,8 @@ public sealed class HdcStream : IDisposable
     /// is not faulted.
     /// <para>获取导致流故障的异常；流未故障时为 <c>null</c>。</para>
     /// </summary>
+    /// <value>The fault cause recorded when the receive buffer limit was exceeded or the connection failed.
+    /// <para>在接收缓冲区超限或连接失败时记录的故障原因。</para></value>
     public Exception? Fault
     {
         get { lock (_lock) { return field; } }
@@ -157,7 +167,7 @@ public sealed class HdcStream : IDisposable
     /// Writes data to the peer.
     /// <para>向对端写入数据。</para>
     /// </summary>
-    /// <param name="data">The data to write. 要写入的数据。</param>
+    /// <param name="data">The data to write.<para>要写入的数据。</para></param>
     public void Write(byte[] data)
     {
         if (data is null)
@@ -173,7 +183,13 @@ public sealed class HdcStream : IDisposable
         _connection.WriteToStream(this, data);
     }
 
-    /// <summary>Sends a task state transition on this channel.</summary>
+    /// <summary>
+    /// Sends a task state transition on this channel.
+    /// <para>在此通道上发送任务状态迁移。</para>
+    /// </summary>
+    /// <param name="command">The HDC command carried by the envelope.<para>信封携带的 HDC 命令。</para></param>
+    /// <param name="payload">The payload bytes sent with the command.<para>随命令一起发送的负载字节。</para></param>
+    /// <exception cref="IOException">The channel is closed. <para>通道已关闭。</para></exception>
     public void SendCommand(HdcCommand command, byte[] payload)
     {
         if (IsClosed) throw new IOException("HDC channel is closed.");
@@ -184,11 +200,20 @@ public sealed class HdcStream : IDisposable
     /// Reads the next chunk, blocking until data arrives or stream closes.
     /// <para>读取下一块数据，阻塞直至有数据到达或流关闭。</para>
     /// </summary>
-    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <returns>The data chunk, or <c>null</c> if the stream is closed. 数据块，流关闭时返回 null。</returns>
+    /// <param name="timeoutMs">Timeout in milliseconds.<para>超时（毫秒）。</para></param>
+    /// <returns>The data chunk, or <c>null</c> if the stream is closed.<para>数据块；流关闭时返回 null。</para></returns>
     public byte[]? Read(int timeoutMs = Timeout.Infinite) => ReadMessage(timeoutMs)?.Payload;
 
-    /// <summary>Reads a complete command envelope without discarding native task metadata.</summary>
+    /// <summary>
+    /// Reads a complete command envelope without discarding native task metadata.
+    /// <para>读取完整的命令信封，不丢弃原生任务元数据。</para>
+    /// </summary>
+    /// <param name="timeoutMs">Maximum milliseconds to wait for the next envelope; <see cref="Timeout.Infinite"/> waits indefinitely.
+    /// <para>等待下一个信封的最大毫秒数；<see cref="Timeout.Infinite"/> 表示无限等待。</para></param>
+    /// <returns>The next queued envelope, or <see langword="null"/> when the wait times out or the stream is closed with an empty queue.
+    /// <para>下一个入队的信封；等待超时或流已关闭且队列为空时返回 <see langword="null"/>。</para></returns>
+    /// <exception cref="IOException">The stream is faulted; the stored fault is attached as the inner exception.
+    /// <para>流处于故障状态；已存储的故障作为内部异常附加。</para></exception>
     public HdcMessage? ReadMessage(int timeoutMs = Timeout.Infinite)
     {
         while (true)
@@ -233,7 +258,7 @@ public sealed class HdcStream : IDisposable
             _closed = true;
         }
         try { _connection.CloseChannel(this, shouldNotify); }
-        catch { /* Best-effort peer notification; local registration is already removed. */ }
+        catch { }
 
         _dataAvailable.Set();
     }

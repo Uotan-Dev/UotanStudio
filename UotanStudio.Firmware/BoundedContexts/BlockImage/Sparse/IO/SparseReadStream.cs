@@ -2,6 +2,10 @@ using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
 
+/// <summary>
+/// Read-only, seekable view presenting a <see cref="SparseFile"/> as its fully expanded logical byte stream; holes, don't-care and unknown chunk types read back as zeros. The stream takes ownership of the model and disposes it with itself, and reads are serialized under an internal lock.
+/// <para>只读、可寻址的视图，将 <see cref="SparseFile"/> 呈现为完全展开的逻辑字节流；空隙、don't-care 与未知块类型按零读取。流接管模型所有权并随自身一同释放，读取在内部锁下串行执行。</para>
+/// </summary>
 public sealed class SparseReadStream : Stream
 {
     private readonly SparseFile _sparseFile;
@@ -14,14 +18,21 @@ public sealed class SparseReadStream : Stream
     /// Initializes a new SparseReadStream over the given sparse file.
     /// <para>在给定稀疏文件之上初始化新的 SparseReadStream。</para>
     /// </summary>
+    /// <param name="sparseFile">Model to expose; ownership transfers to the stream and truncated RAW payloads read as zeros in the missing range.
+    /// <para>要公开的模型；所有权转移给流，被截断的 RAW 载荷在缺失范围内按零读取。</para></param>
     public SparseReadStream(SparseFile sparseFile)
         : this(sparseFile, false)
     {
     }
 
-    /// <summary>Creates a logical reader with optional rejection of truncated RAW backing data.</summary>
-    /// <param name="sparseFile">The owned sparse image model.</param>
-    /// <param name="requireExactRawData">Reject missing RAW bytes instead of padding partial blocks with zeros.</param>
+    /// <summary>Creates a logical reader with optional rejection of truncated RAW backing data.
+    /// <para>创建逻辑读取器，可选拒绝被截断的 RAW 支撑数据。</para></summary>
+    /// <param name="sparseFile">Model to expose; ownership transfers to the stream.
+    /// <para>要公开的模型；所有权转移给流。</para></param>
+    /// <param name="requireExactRawData">Reject missing RAW bytes instead of padding partial blocks with zeros.
+    /// <para>拒绝缺失的 RAW 字节，而不是为不完整的块补零。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="sparseFile"/> is <see langword="null"/>.
+    /// <para><paramref name="sparseFile"/> 为 <see langword="null"/>。</para></exception>
     public SparseReadStream(SparseFile sparseFile, bool requireExactRawData)
     {
         ArgumentNullException.ThrowIfNull(sparseFile);
@@ -29,14 +40,32 @@ public sealed class SparseReadStream : Stream
         _requireExactRawData = requireExactRawData;
     }
 
+    /// <summary>Always <c>true</c>: the view expands the sparse model into a logical byte stream.
+    /// <para>恒为 <c>true</c>：该视图将稀疏模型展开为逻辑字节流。</para></summary>
+    /// <value><c>true</c>. <para>始终为 <c>true</c>。</para></value>
     public override bool CanRead => true;
 
+    /// <summary>Always <c>true</c>: reads address the logical image by absolute offset.
+    /// <para>恒为 <c>true</c>：读取按绝对偏移寻址逻辑镜像。</para></summary>
+    /// <value><c>true</c>. <para>始终为 <c>true</c>。</para></value>
     public override bool CanSeek => true;
 
+    /// <summary>Always <c>false</c>: the stream exposes expanded image bytes and accepts no writes.
+    /// <para>恒为 <c>false</c>：该流仅公开展开后的镜像字节，不接受写入。</para></summary>
+    /// <value><c>false</c>. <para>始终为 <c>false</c>。</para></value>
     public override bool CanWrite => false;
 
+    /// <summary>Logical size of the fully expanded image: the header's total block count times the block size.
+    /// <para>完全展开后镜像的逻辑大小：头部总块数乘以块大小。</para></summary>
+    /// <value>The full byte length of the logical stream, including holes and don't-care regions.
+    /// <para>逻辑流的完整字节长度，包含空隙与 don't-care 区域。</para></value>
     public override long Length => (long)_sparseFile.Header.TotalBlocks * _sparseFile.Header.BlockSize;
 
+    /// <summary>The current offset within the logical image, read and written under the internal lock.
+    /// <para>逻辑镜像中的当前偏移，读写均在内部锁下进行。</para></summary>
+    /// <value>Byte offset from the start of the logical stream. Setting rejects negative values but
+    /// accepts offsets past the end, where subsequent reads return <c>0</c>.
+    /// <para>距逻辑流起点的字节偏移。设置时拒绝负数，但允许超出末尾，此时后续读取返回 <c>0</c>。</para></value>
     public override long Position
     {
         get

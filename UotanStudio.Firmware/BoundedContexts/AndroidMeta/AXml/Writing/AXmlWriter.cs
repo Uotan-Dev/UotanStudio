@@ -5,6 +5,10 @@ using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Writing;
 
+/// <summary>
+/// Serializes an <c>AXmlDocument</c> model back to Android binary XML bytes, rebuilding the string pool and emitting the resource-map, namespace and element chunks in little-endian order.
+/// <para>将 <c>AXmlDocument</c> 模型序列化回 Android 二进制 XML 字节，重建字符串池，并按小端序输出资源映射、命名空间与元素块。</para>
+/// </summary>
 public static class AXmlWriter
 {
     private const ushort ResXmlType = 0x0003;
@@ -18,16 +22,37 @@ public static class AXmlWriter
     private const uint NoIndex = 0xFFFFFFFF;
 
     /// <summary>
-    /// Serializes the model into AXML bytes.
-    /// <para>把模型序列化为 AXML 字节。</para>
+    /// Serializes the model into AXML bytes. The string pool is rebuilt with the source pool entries kept at the head in their original order (later duplicates collapse onto the first ordinal match), followed by any namespace, element, attribute and text strings not already present; pool flags are always written as UTF-8 sorted and the source style offsets and style data are copied verbatim.
+    /// <para>把模型序列化为 AXML 字节。字符串池重建时保留源池条目在头部及其原有顺序（后出现的重复项按序数相等合并到首次出现的位置），其后追加命名空间、元素、属性与文本中尚未出现的字符串；池标志始终写为 UTF-8 排序，源样式偏移与样式数据原样复制。</para>
     /// </summary>
+    /// <param name="doc">
+    /// Document model to serialize; its <c>Root</c> must be a parsed or hand-built element tree.
+    /// <para>要序列化的文档模型；其 <c>Root</c> 必须是已解析或手工构建的元素树。</para>
+    /// </param>
+    /// <returns>
+    /// The complete little-endian AXML image, starting with the 8-byte root header. Chunk line numbers reuse each element's source line when positive, otherwise the tree depth.
+    /// <para>完整的 little-endian AXML 镜像，以 8 字节根头部开始。块行号在元素源行号为正时复用源行号，否则使用树深度。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="doc"/> is <see langword="null"/>.
+    /// <para><paramref name="doc"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="AXmlException">
+    /// The document has no root element, or a string referenced by the tree is absent from the rebuilt pool. Resource ids are preserved instead of being renumbered: the resource-map chunk and each attribute's raw value payload are copied byte-for-byte from the model, and a parsed attribute keeps its original name-pool index when that index still holds an equal name in the rebuilt pool. Only modeled constructs are emitted — text becomes a CDATA chunk solely on childless elements, so an element carrying both text and children emits its children and drops the text, and chunk types the parser did not model (they were skipped when reading) cannot be re-emitted.
+    /// <para>文档没有根元素，或元素树引用的字符串在重建后的池中缺失。资源 id 通过原样保留而非重新编号：资源映射块与每个属性的原始值载荷都按字节从模型复制；已解析的属性在其原名池索引在重建池中仍保存相等名称时保留该索引。只发射已建模的结构——文本仅在无子元素的元素上成为 CDATA 块，因此同时带有文本和子元素的元素会发射子元素并丢弃文本；解析器未建模的块类型（读取时已被跳过）无法再次发射。</para>
+    /// </exception>
+    /// <example>
+    /// <code language="csharp">
+    /// byte[] source = File.ReadAllBytes("AndroidManifest.xml");
+    /// var doc = AXmlParser.Parse(source);
+    /// byte[] rebuilt = AXmlWriter.Write(doc);
+    /// </code>
+    /// </example>
     public static byte[] Write(AXmlDocument doc)
     {
         ArgumentNullException.ThrowIfNull(doc);
         if (doc.Root is null) throw new AXmlException("AXML document has no root element");
 
-
-        // Existing indices also address typed string values and the resource map.
         var pool = Enumerable.Range(0, doc.StringPool.Count)
             .Select(doc.StringPool.GetString).ToList();
         int Intern(string s)
@@ -46,12 +71,10 @@ public static class AXmlWriter
             Intern(ns.Uri);
         }
 
-
         for (var i = 0; i < doc.StringPool.Count; i++)
         {
             Intern(doc.StringPool.GetString(i));
         }
-
 
         var stack = new Stack<AXmlElement>();
         stack.Push(doc.Root);
@@ -68,10 +91,8 @@ public static class AXmlWriter
                 if (attr.RawValue is not null) Intern(attr.RawValue);
             }
 
-
             for (var i = el.Children.Count - 1; i >= 0; i--) stack.Push(el.Children[i]);
         }
-
 
         var poolHeaderSize = 28;
         var stringOffsetsStart = poolHeaderSize;
@@ -87,25 +108,20 @@ public static class AXmlWriter
             poolDataSize += total;
         }
 
-
         var hasResourceMap = doc.ResourceMap.Count > 0;
         var resourceMapSize = hasResourceMap ? 8 + doc.ResourceMap.Count * 4 : 0;
         var namespaceOpenSize = doc.Namespaces.Count > 0 ? doc.Namespaces.Count * 24 : 0;
         var namespaceCloseSize = doc.Namespaces.Count > 0 ? doc.Namespaces.Count * 24 : 0;
-
 
         var treeSize = ElementTreeSize(doc.Root);
 
         var poolSize = poolDataSize + doc.StringPool.StyleData.Length;
         var totalSize = 8 + poolSize + resourceMapSize + namespaceOpenSize + treeSize + namespaceCloseSize;
 
-
         var buffer = new byte[totalSize];
         var pos = 0;
 
-
         WriteChunkHeader(buffer, ref pos, ResXmlType, 8, totalSize);
-
 
         WriteChunkHeader(buffer, ref pos, ResStringPoolType, (ushort)poolHeaderSize, poolSize);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos), (uint)pool.Count);
@@ -113,7 +129,6 @@ public static class AXmlWriter
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 8), 0x100u);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 12), (uint)stringsStart);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 16), doc.StringPool.StyleOffsets.Length == 0 ? 0 : (uint)poolDataSize);
-
 
         pos += 20;
         for (var i = 0; i < pool.Count; i++)
@@ -134,7 +149,6 @@ public static class AXmlWriter
         doc.StringPool.StyleData.CopyTo(buffer, pos);
         pos += doc.StringPool.StyleData.Length;
 
-
         if (hasResourceMap)
         {
             WriteChunkHeader(buffer, ref pos, ResXmlResourceMapType, 8, resourceMapSize);
@@ -144,7 +158,6 @@ public static class AXmlWriter
                 pos += 4;
             }
         }
-
 
         foreach (var ns in doc.Namespaces)
         {
@@ -156,9 +169,7 @@ public static class AXmlWriter
             pos += 16;
         }
 
-
         WriteElementTree(buffer, ref pos, doc.Root, pool, 0);
-
 
         foreach (var ns in doc.Namespaces)
         {
@@ -286,7 +297,6 @@ public static class AXmlWriter
     {
         var utf16Len = value.Length;
         var utf8Bytes = Encoding.UTF8.GetBytes(value);
-
 
         var utf16Header = EncodeLength(utf16Len);
         var utf8Header = EncodeLength(utf8Bytes.Length);

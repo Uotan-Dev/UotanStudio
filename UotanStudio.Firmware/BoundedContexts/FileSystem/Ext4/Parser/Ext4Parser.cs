@@ -5,20 +5,52 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 
+/// <summary>
+/// Read-only parser for raw ext4 images. The image is treated as untrusted input: superblock geometry,
+/// block size, feature flags, group descriptor table size, inode numbers, directory depth, cycles and
+/// xattr values are each validated against explicit bounds before content is produced, and an optional
+/// JBD2 journal replay is folded in as a dirty-block overlay.
+/// <para>ext4 原始镜像的只读解析器。镜像按不可信输入处理：超级块几何、块大小、特性标志、块组描述符表
+/// 大小、inode 编号、目录深度、目录环与 xattr 值都会在产出内容前对照显式边界校验，并可选地重放 JBD2
+/// 日志形成脏块覆盖层。</para>
+/// </summary>
 public sealed class Ext4Parser : IDisposable
 {
+    /// <summary>Classifies an entry found while walking the ext4 directory tree.
+    /// <para>对 ext4 目录树遍历过程中发现的条目进行分类。</para></summary>
     public enum Ext4EntryKind
     {
+        /// <summary>Regular file, or a special node reported as a file. <para>常规文件，或以文件形式上报的特殊节点。</para></summary>
         File,
 
+        /// <summary>Directory node. <para>目录节点。</para></summary>
         Directory,
 
+        /// <summary>Symbolic link whose decoded target sits in <c>SymlinkTarget</c>. <para>符号链接，其解码后的目标位于 <c>SymlinkTarget</c>。</para></summary>
         Symlink,
     }
 
+    /// <summary>
+    /// One filesystem entry collected by the directory walk, identified by its relative path.
+    /// <para>目录树遍历收集到的单个文件系统条目，以相对路径标识。</para>
+    /// </summary>
+    /// <param name="Path">Slash-separated path relative to the filesystem root, without a leading "./". <para>相对文件系统根目录、以 <c>/</c> 分隔的路径，不含开头的 "./"。</para></param>
+    /// <param name="Size">Logical inode size in bytes as stored in the image. <para>镜像中记录的 inode 逻辑字节大小。</para></param>
+    /// <param name="Inode">Inode number within the image. <para>镜像内的 inode 编号。</para></param>
+    /// <param name="Kind">Entry type classification. <para>条目类型分类。</para></param>
+    /// <param name="SymlinkTarget">Decoded UTF-8 link target, or <see langword="null"/> for non-symlink entries. <para>解码后的 UTF-8 链接目标；非符号链接条目为 <see langword="null"/>。</para></param>
+    /// <param name="Xattrs">Inline and external extended attributes merged under full names, or <see langword="null"/> when the inode has none; values are capped at 64 KiB. <para>已按完整名称合并的内联与外部扩展属性；inode 无属性时为 <see langword="null"/>；值上限为 64 KiB。</para></param>
+    /// <param name="Uid">Owner user identifier from the inode. <para>来自 inode 的所有者用户 ID。</para></param>
+    /// <param name="Gid">Owner group identifier from the inode. <para>来自 inode 的所有者组 ID。</para></param>
+    /// <param name="Mode">Raw inode mode including the file-type bits. <para>含文件类型位的原始 inode 模式。</para></param>
+    /// <param name="DeviceId">Device number read from the inode's first non-zero direct block pointer slot; defined for device nodes only. <para>取自 inode 首个非零直接块指针槽的设备及；仅对设备节点有定义。</para></param>
+    /// <param name="Flags">Raw inode flags as stored in the image. <para>镜像中记录的原始 inode 标志。</para></param>
     public sealed record Ext4FileEntry(string Path, long Size, uint Inode, Ext4EntryKind Kind, string? SymlinkTarget = null, IReadOnlyDictionary<string, byte[]>? Xattrs = null, uint Uid = 0, uint Gid = 0, ushort Mode = 0, uint DeviceId = 0, uint Flags = 0)
     {
-        /// <summary>Gets the source timestamps and inode identity attributes.</summary>
+        /// <summary>Gets the source timestamps and inode identity attributes.
+        /// <para>获取源时间戳与 inode 身份属性。</para></summary>
+        /// <value>The metadata preserved in the inode's extra space, or <see langword="null"/> when the inode carries none.
+        /// <para>保留在 inode 额外空间中的元数据；inode 未携带时为 <see langword="null"/>。</para></value>
         public FileSystemInodeMetadata? Metadata { get; init; }
     }
 
@@ -84,6 +116,10 @@ public sealed class Ext4Parser : IDisposable
     /// Opens an ext4 image file for parsing.
     /// <para>打开 ext4 镜像文件进行解析。</para>
     /// </summary>
+    /// <param name="imagePath">
+    /// Path to a readable raw ext4 image; the file is opened for shared reading and stays open until <see cref="Dispose"/>.
+    /// <para>可读的 ext4 原始镜像路径；文件以共享读方式打开，直到 <see cref="Dispose"/> 才关闭。</para>
+    /// </param>
     public Ext4Parser(string imagePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
@@ -95,11 +131,33 @@ public sealed class Ext4Parser : IDisposable
     /// Parses an ext4 image from an existing stream (ownership is transferred).
     /// <para>从既有流解析 ext4 镜像（所有权转移）。</para>
     /// </summary>
+    /// <param name="stream">
+    /// Readable, seekable image stream with unbounded entry and path budgets; it is closed by <see cref="Dispose"/>.
+    /// <para>条目与路径预算不受限制的可读、可寻址镜像流；由 <see cref="Dispose"/> 负责关闭。</para>
+    /// </param>
     public Ext4Parser(Stream stream) : this(stream, int.MaxValue, long.MaxValue, CancellationToken.None)
     {
     }
 
-    /// <summary>Parses a stream with explicit directory-entry/path budgets and cancellable metadata/content reads.</summary>
+    /// <summary>Parses a stream with explicit directory-entry/path budgets and cancellable metadata/content reads.
+    /// <para>按显式的目录条目/路径预算解析流，元数据与内容读取可取消。</para>
+    /// </summary>
+    /// <param name="stream">
+    /// Readable and seekable stream; ownership transfers and it is closed by <see cref="Dispose"/>. A non-readable or non-seekable stream throws <see cref="ArgumentException"/>.
+    /// <para>可读且可寻址的流；所有权转移并由 <see cref="Dispose"/> 关闭。流不可读或不可寻址时抛出 <see cref="ArgumentException"/>。</para>
+    /// </param>
+    /// <param name="maximumEntries">
+    /// Positive upper bound on visited directory entries; exceeding it during a walk throws <see cref="InvalidDataException"/>.
+    /// <para>已访问目录条目数的正整数上限；遍历中超出时抛出 <see cref="InvalidDataException"/>。</para>
+    /// </param>
+    /// <param name="maximumPathCharacters">
+    /// Positive upper bound on the accumulated total of all entry path lengths.
+    /// <para>所有条目路径长度累计总和的正整数上限。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels initialization and every subsequent metadata or content read; an already-cancelled token throws immediately.
+    /// <para>取消初始化及其后所有元数据/内容读取；传入已取消的令牌会立即抛出。</para>
+    /// </param>
     public Ext4Parser(Stream stream, int maximumEntries, long maximumPathCharacters, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -118,6 +176,10 @@ public sealed class Ext4Parser : IDisposable
         Initialize();
     }
 
+    /// <summary>Total filesystem size derived from the superblock.
+    /// <para>由超级块推导的文件系统总字节大小。</para></summary>
+    /// <value>Block count multiplied by block size, with overflow checking.
+    /// <para>总块数乘以块大小，带溢出检查。</para></value>
     public long PartitionSize => checked((long)_superblock.BlocksCount * _blockSize);
 
     internal byte[] SourceUuid => _superblock.Uuid;
@@ -126,10 +188,22 @@ public sealed class Ext4Parser : IDisposable
     /// <summary>The parsed superblock used for metadata inspection.</summary>
     internal Ext4Superblock Superblock => _superblock;
 
+    /// <summary>Filesystem block size in bytes.
+    /// <para>文件系统块大小（字节）。</para></summary>
+    /// <value>A power-of-two size between 1024 and 65536; images reporting any other value are rejected at open time.
+    /// <para>1024 到 65536 之间的 2 的幂；报告其他取值的镜像在打开时即被拒绝。</para></value>
     public long BlockSize => _blockSize;
 
+    /// <summary>Total block count reported by the superblock.
+    /// <para>超级块报告的总块数。</para></summary>
+    /// <value>The filesystem's logical block capacity, independent of the underlying stream length.
+    /// <para>文件系统的逻辑块容量，与底层流长度无关。</para></value>
     public ulong BlockCount => _superblock.BlocksCount;
 
+    /// <summary>Total inode count reported by the superblock.
+    /// <para>超级块报告的 inode 总数。</para></summary>
+    /// <value>The addressable inode upper bound; inode numbers run from 1 to this value.
+    /// <para>可寻址的 inode 上界；inode 编号范围为 1 到该值。</para></value>
     public uint InodeCount => _superblock.InodesCount;
 
     /// <summary>
@@ -153,6 +227,10 @@ public sealed class Ext4Parser : IDisposable
         }
     }
 
+    /// <summary>Number of non-directory entries in the image.
+    /// <para>镜像中非目录条目的数量。</para></summary>
+    /// <value>A cached count; reading it first walks the whole directory tree if that has not happened yet.
+    /// <para>缓存计数；若尚未遍历，首次读取会先完整遍历目录树。</para></value>
     public int FileCount
     {
         get
@@ -163,6 +241,10 @@ public sealed class Ext4Parser : IDisposable
         }
     }
 
+    /// <summary>Number of directory entries in the image, excluding the root.
+    /// <para>镜像中目录条目的数量，不含根目录。</para></summary>
+    /// <value>A cached count; reading it first walks the whole directory tree if that has not happened yet.
+    /// <para>缓存计数；若尚未遍历，首次读取会先完整遍历目录树。</para></value>
     public int DirectoryCount
     {
         get
@@ -184,7 +266,6 @@ public sealed class Ext4Parser : IDisposable
         {
             throw new InvalidDataException($"Unsupported ext4 block size {_blockSize}.");
         }
-
 
         const uint supportedIncompat = 0x0001 | 0x0002 | 0x0004
             | 0x0040 | 0x0080 | 0x0200 | 0x0400
@@ -211,7 +292,6 @@ public sealed class Ext4Parser : IDisposable
 
         var gdtLength = checked((long)groupCount * descSize);
 
-
         var gdtOffset = checked((_superblock.FirstDataBlock + 1) * _blockSize);
         if (gdtLength > MaximumGroupDescriptorTableSize || gdtLength > _stream.Length - gdtOffset)
         {
@@ -235,7 +315,6 @@ public sealed class Ext4Parser : IDisposable
             throw new InvalidDataException("ext4 inode table lies outside the image bounds.");
         }
 
-
         if ((_superblock.FeatureCompat & 0x4) != 0 && (_superblock.FeatureIncompat & 0x4) != 0)
         {
             try
@@ -244,7 +323,6 @@ public sealed class Ext4Parser : IDisposable
             }
             catch (Exception ex)
             {
-
 
                 System.Diagnostics.Debug.WriteLine($"ext4 journal replay failed: {ex.Message}");
             }
@@ -255,6 +333,8 @@ public sealed class Ext4Parser : IDisposable
     /// Walks the directory tree from the root inode (2) and returns all entries (files, directories and symlinks) with their relative paths.
     /// <para>从根 inode（2）遍历目录树，返回所有条目（文件、目录与符号链接）及其相对路径。</para>
     /// </summary>
+    /// <returns>A snapshot list of every non-root entry in walk order; the root itself is not included.
+    /// <para>除根目录外全部条目的快照列表，按遍历顺序排列；不包含根本身。</para></returns>
     public IReadOnlyList<Ext4FileEntry> ListFiles()
     {
         _readCancellation.ThrowIfCancellationRequested();
@@ -267,7 +347,11 @@ public sealed class Ext4Parser : IDisposable
         return [.. _entries.Values];
     }
 
-    /// <summary>Includes root inode metadata without changing the file-browser listing contract.</summary>
+    /// <summary>Includes root inode metadata without changing the file-browser listing contract.
+    /// <para>在保留文件浏览器列表现有契约的同时，附带根 inode 的元数据。</para>
+    /// </summary>
+    /// <returns>The root entry under path <c>"."</c> followed by the <see cref="ListFiles"/> snapshot.
+    /// <para>以 <c>"."</c> 为路径的根条目，其后跟随 <see cref="ListFiles"/> 的快照。</para></returns>
     public IReadOnlyList<Ext4FileEntry> ListEntriesWithRoot()
     {
         var entries = ListFiles();
@@ -280,6 +364,10 @@ public sealed class Ext4Parser : IDisposable
     /// Writes the full content of the file at path to output, zero-filling sparse holes.
     /// <para>将 path 处文件的完整内容写入 output， 稀疏洞补零；符号链接输出其目标字节。</para>
     /// </summary>
+    /// <param name="path">Exact stored path as returned by <see cref="ListFiles"/>; a missing path throws <see cref="FileNotFoundException"/> and a directory is rejected with <see cref="InvalidOperationException"/>.
+    /// <para>必须是 <see cref="ListFiles"/> 返回的精确存储路径；路径不存在时抛出 <see cref="FileNotFoundException"/>，目录会以 <see cref="InvalidOperationException"/> 拒绝。</para></param>
+    /// <param name="output">Writable destination stream written at its current position; it is never flushed or closed here.
+    /// <para>按当前位置写入的可写目标流；本方法不刷新也不关闭它。</para></param>
     public void ReadFile(string path, Stream output)
     {
         _readCancellation.ThrowIfCancellationRequested();
@@ -323,10 +411,20 @@ public sealed class Ext4Parser : IDisposable
     /// Extracts the whole filesystem tree into outputDirectory.
     /// <para>将整个文件系统树提取到 outputDirectory。</para>
     /// </summary>
+    /// <param name="outputDirectory">Host directory that receives the tree; created when absent. <para>接收目录树的主机目录；不存在时创建。</para></param>
+    /// <param name="overwrite">When <c>false</c>, host files that already exist are skipped. <para>为 <c>false</c> 时跳过主机上已存在的文件。</para></param>
+    /// <param name="progress">Reports processed/total entry counts; <see langword="null"/> disables reporting. <para>报告 已处理条目数/总条目数；<see langword="null"/> 表示不报告。</para></param>
     public void ExtractToDirectory(string outputDirectory, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
         => ExtractToDirectory(outputDirectory, null, CancellationToken.None, overwrite, progress);
 
-    /// <summary>Extracts with measured output bytes and cancellation, including writes within a large file.</summary>
+    /// <summary>Extracts with measured output bytes and cancellation, including writes within a large file.
+    /// <para>带字节计量与取消的提取，取消粒度可深入单个大文件的写入过程。</para>
+    /// </summary>
+    /// <param name="outputDirectory">Host directory that receives the tree; created when absent. <para>接收目录树的主机目录；不存在时创建。</para></param>
+    /// <param name="byteProgress">Receives counted output bytes against the estimated total; symlink entries contribute their UTF-8 target length. <para>接收相对估算总量的已计输出字节；符号链接条目按其目标的 UTF-8 长度计入。</para></param>
+    /// <param name="cancellationToken">Checked before each entry and inside content writes; extraction is not rolled back on cancellation. <para>在每个条目前及内容写入过程中检查；取消时不回滚已提取内容。</para></param>
+    /// <param name="overwrite">When <c>false</c>, host files that already exist are skipped. <para>为 <c>false</c> 时跳过主机上已存在的文件。</para></param>
+    /// <param name="progress">Reports processed/total entry counts; <see langword="null"/> disables reporting. <para>报告 已处理条目数/总条目数；<see langword="null"/> 表示不报告。</para></param>
     public void ExtractToDirectory(string outputDirectory, IProgress<(long Processed, long Total)>? byteProgress,
         CancellationToken cancellationToken, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
     {
@@ -362,7 +460,6 @@ public sealed class Ext4Parser : IDisposable
 
             if (entry.Kind == Ext4EntryKind.Symlink)
             {
-                // The host file is a portable projection; the inode type and original image remain authoritative.
                 SharedKernel.FileExtraction.WriteAtomic(targetPath,
                     output => { using var counted = bytes.Wrap(output); counted.Write(Encoding.UTF8.GetBytes(entry.SymlinkTarget ?? string.Empty)); }, overwrite);
 
@@ -411,7 +508,6 @@ public sealed class Ext4Parser : IDisposable
     {
         _readCancellation.ThrowIfCancellationRequested();
 
-
         if (depth > MaxDirectoryDepth)
         {
             throw new InvalidDataException($"ext4 directory tree exceeds the maximum depth of {MaxDirectoryDepth}.");
@@ -419,7 +515,6 @@ public sealed class Ext4Parser : IDisposable
 
         if (!visitedDirectories.Add(dirInode))
         {
-
 
             throw new InvalidDataException($"ext4 directory cycle detected at inode {dirInode}.");
         }
@@ -431,7 +526,6 @@ public sealed class Ext4Parser : IDisposable
             byte[] block;
             if (inode.HasInlineData)
             {
-                // Inline directories have a parent inode followed by two independent dirent regions.
                 block = logical == 0 ? inode.InlineData.AsSpan(4, 56).ToArray() : inode.InlineData.AsSpan(60).ToArray();
             }
             else
@@ -500,7 +594,6 @@ public sealed class Ext4Parser : IDisposable
     private Dictionary<string, byte[]>? ParseInlineXattrs(byte[] inodeRaw, int inodeSize)
     {
 
-
         if (inodeSize <= 132)
         {
             return null;
@@ -519,7 +612,6 @@ public sealed class Ext4Parser : IDisposable
             return null;
         }
 
-        // EA inode reads reuse _inodeBuffer, so finish parsing a stable copy of the owner first.
         return ReadXattrEntries(inodeRaw.AsSpan(0, inodeSize).ToArray(), xattrStart + 4, xattrStart + 4);
     }
 
@@ -570,9 +662,7 @@ public sealed class Ext4Parser : IDisposable
             return null;
         }
 
-
         var block = ReadBlock(inode.FileAcl);
-
 
         var magic = BinaryPrimitives.ReadUInt32LittleEndian(block.AsSpan(0, 4));
         if (magic != Ext4XattrMagic)
@@ -662,7 +752,6 @@ public sealed class Ext4Parser : IDisposable
         {
             var prefix = XattrNameIndexPrefixes[nameIndex];
 
-
             if (nameIndex is 2 or 3)
             {
                 return prefix;
@@ -707,10 +796,8 @@ public sealed class Ext4Parser : IDisposable
         if (inode.IsSymlink && !inode.HasExtents && inode.Size < 60)
         {
 
-
             return System.Text.Encoding.UTF8.GetString(inode.BlockData, 0, (int)inode.Size);
         }
-
 
         using var ms = new MemoryStream();
         ReadInodeContent(inode, inode.Size, ms);
@@ -737,7 +824,6 @@ public sealed class Ext4Parser : IDisposable
             return;
         }
 
-        // Replayed journal blocks override the disk image and must retain their blockwise path.
         var blockCount = (uint)((size + _blockSize - 1) / _blockSize);
         var buffer = new byte[_blockSize];
         var remaining = size;
@@ -766,7 +852,6 @@ public sealed class Ext4Parser : IDisposable
 
         var offset = checked(_inodeTableOffset + ((long)inodeNumber - 1) * _inodeSize);
 
-
         ReadExactlyAt(offset, _inodeBuffer);
         return Ext4Inode.FromBytes(_inodeBuffer, _inodeSize);
     }
@@ -790,7 +875,6 @@ public sealed class Ext4Parser : IDisposable
 
     private void ReadBlockTo(ulong physicalBlock, byte[] buffer)
     {
-
 
         if (_journalOverlay.TryGetBlock((long)physicalBlock, out var overlayData))
         {
@@ -908,14 +992,12 @@ public sealed class Ext4Parser : IDisposable
             return Journal.JournalOverlay.Empty;
         }
 
-
         var journalInode = ReadInode(journalIno);
         var journalSize = journalInode.Size;
         if (journalSize <= 0)
         {
             return Journal.JournalOverlay.Empty;
         }
-
 
         var jsbBlock = new byte[_blockSize];
         var firstPhysical = MapBlock(journalInode, 0);
@@ -931,7 +1013,6 @@ public sealed class Ext4Parser : IDisposable
             return Journal.JournalOverlay.Empty;
         }
 
-
         var journalBlocks = new Dictionary<uint, ulong>();
         for (uint i = 0; i <= jsb.MaxLen && i * _blockSize < journalSize; i++)
         {
@@ -941,7 +1022,6 @@ public sealed class Ext4Parser : IDisposable
                 journalBlocks[i] = (ulong)phys;
             }
         }
-
 
         var transactions = Journal.Jbd2Parser.ScanTransactions(jsb, blockNr =>
         {

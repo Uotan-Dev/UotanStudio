@@ -8,44 +8,108 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// </summary>
 public class FirehoseResponse
 {
-    /// <summary>Gets validated geometry from the logs associated with a getstorageinfo response, if reported.</summary>
+    /// <summary>
+    /// Gets validated geometry from the logs associated with a getstorageinfo response, if reported.
+    /// <para>获取与 getstorageinfo 响应关联的日志中经校验的几何信息（若有报告）。</para>
+    /// </summary>
+    /// <value>The geometry, or <see langword="null"/> when no getstorageinfo geometry was parsed.
+    /// <para>几何信息；未解析到 getstorageinfo 几何信息时为 <see langword="null"/>。</para></value>
     public FirehoseStorageGeometry? StorageGeometry { get; internal set; }
 
-    /// <summary>Gets or sets whether the response is an ACK. 是否为 ACK。</summary>
+    /// <summary>
+    /// Gets or sets whether the response is an ACK.
+    /// <para>获取或设置响应是否为 ACK。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when the response value is <c>ACK</c> or <c>true</c>. <para>响应值为 <c>ACK</c> 或 <c>true</c> 时为 <see langword="true"/>。</para></value>
     public bool IsAck { get; set; }
 
-    /// <summary>Gets or sets whether the response is a NAK. 是否为 NAK。</summary>
+    /// <summary>
+    /// Gets or sets whether the response is a NAK.
+    /// <para>获取或设置响应是否为 NAK。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when the response value is <c>NAK</c> or <c>false</c>. <para>响应值为 <c>NAK</c> 或 <c>false</c> 时为 <see langword="true"/>。</para></value>
     public bool IsNak { get; set; }
 
-    /// <summary>Gets or sets whether the response is a log block. 是否为日志块。</summary>
+    /// <summary>
+    /// Gets or sets whether the response is a log block.
+    /// <para>获取或设置响应是否为日志块。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when the parsed block carried only a log node. <para>所解析的块仅包含 log 节点时为 <see langword="true"/>。</para></value>
     public bool IsLog { get; set; }
 
-    /// <summary>Gets or sets whether the response indicates raw mode entry. 是否指示原始模式进入。</summary>
+    /// <summary>
+    /// Gets or sets whether the response indicates raw mode entry.
+    /// <para>获取或设置响应是否指示进入原始模式。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when the response carries <c>rawmode="true"</c>. <para>响应带有 <c>rawmode="true"</c> 时为 <see langword="true"/>。</para></value>
     public bool IsRawMode { get; set; }
 
-    /// <summary>Gets or sets the raw response value. 原始响应值。</summary>
+    /// <summary>
+    /// Gets or sets the raw response value.
+    /// <para>获取或设置原始响应值。</para>
+    /// </summary>
+    /// <value>The <c>value</c> attribute of the response or log node, or <see langword="null"/>.
+    /// <para>response 或 log 节点的 <c>value</c> 属性；无则为 <see langword="null"/>。</para></value>
     public string? RawValue { get; set; }
 
-    /// <summary>Gets or sets the raw XML. 原始 XML。</summary>
+    /// <summary>
+    /// Gets or sets the raw XML.
+    /// <para>获取或设置原始 XML。</para>
+    /// </summary>
+    /// <value>The containing XML text the response was parsed from. <para>解析该响应时所在的 XML 文本。</para></value>
     public string? RawXml { get; set; }
 
-    /// <summary>Gets or sets the log value (if IsLog). 日志值。</summary>
+    /// <summary>
+    /// Gets or sets the log value (if IsLog).
+    /// <para>获取或设置日志值（当 IsLog 时）。</para>
+    /// </summary>
+    /// <value>The log node's <c>value</c> attribute, or <see langword="null"/> when this is not a log.
+    /// <para>log 节点的 <c>value</c> 属性；非日志响应时为 <see langword="null"/>。</para></value>
     public string? LogValue { get; set; }
 
-    /// <summary>Gets the response attributes dictionary. 响应属性字典。</summary>
+    /// <summary>
+    /// Gets the response attributes dictionary.
+    /// <para>获取响应属性字典。</para>
+    /// </summary>
+    /// <value>Every XML attribute of the parsed node keyed by name; never <see langword="null"/>.
+    /// <para>以名称为键的所解析节点的全部 XML 属性；不会为 <see langword="null"/>。</para></value>
     public Dictionary<string, string> Attributes { get; set; } = [];
 
-    /// <summary>Gets an attribute by key. 按键获取属性。</summary>
+    /// <summary>
+    /// Gets an attribute by key.
+    /// <para>按键获取属性。</para>
+    /// </summary>
+    /// <param name="key">
+    /// The attribute name to look up. <para>要查找的属性名。</para>
+    /// </param>
+    /// <value>The attribute value, or <see langword="null"/> when the key is absent.
+    /// <para>属性值；键不存在时为 <see langword="null"/>。</para></value>
     public string? this[string key] => Attributes.TryGetValue(key, out var value) ? value : null;
 
-    /// <summary>Gets an attribute as Int64, or null. 获取 Int64 属性，无则 null。</summary>
+    /// <summary>
+    /// Gets an attribute as Int64, or null.
+    /// <para>获取 Int64 属性；无或无法解析时为 null。</para>
+    /// </summary>
+    /// <param name="key">
+    /// The attribute name to read. <para>要读取的属性名。</para>
+    /// </param>
+    /// <returns>The parsed value, or <see langword="null"/> when absent or not a valid Int64.
+    /// <para>解析后的值；属性缺失或不是有效 Int64 时为 <see langword="null"/>。</para></returns>
     public long? GetInt64(string key)
     {
         var val = this[key];
         return val == null ? null : long.TryParse(val, out var result) ? result : null;
     }
 
-    /// <summary>Gets an attribute as Int32, or null. 获取 Int32 属性，无则 null。</summary>
+    /// <summary>
+    /// Gets an attribute as Int32, or null.
+    /// <para>获取 Int32 属性；无或无法解析时为 null。</para>
+    /// </summary>
+    /// <param name="key">
+    /// The attribute name to read. <para>要读取的属性名。</para>
+    /// </param>
+    /// <returns>The parsed value, or <see langword="null"/> when absent or not a valid Int32.
+    /// <para>解析后的值；属性缺失或不是有效 Int32 时为 <see langword="null"/>。</para></returns>
     public int? GetInt32(string key)
     {
         var val = this[key];
@@ -212,7 +276,6 @@ internal static class FirehoseResponseParser
         var rawModeAttr = responseNode.Attributes?["rawmode"];
 
         response.RawValue = valueAttr?.Value;
-        // Some programmers answer with "true"/"false" instead of ACK/NAK (bkerler/edl).
         response.IsAck = string.Equals(valueAttr?.Value, "ACK", StringComparison.OrdinalIgnoreCase)
             || string.Equals(valueAttr?.Value, "true", StringComparison.OrdinalIgnoreCase);
         response.IsNak = string.Equals(valueAttr?.Value, "NAK", StringComparison.OrdinalIgnoreCase)
@@ -260,7 +323,10 @@ internal sealed class FirehoseDataBlock
 /// Initializes a new instance of the <see cref="FirehoseLogEventArgs"/> class.
 /// <para>初始化 <see cref="FirehoseLogEventArgs"/> 类的新实例。</para>
 /// </remarks>
-/// <param name="value">The log Message. 日志消息。</param>
+/// <param name="value">
+/// The log text emitted by the target inside a Firehose log node.
+/// <para>目标设备在 Firehose log 节点内输出的日志文本。</para>
+/// </param>
 public sealed class FirehoseLogEventArgs(string value) : EventArgs
 {
 
@@ -268,5 +334,7 @@ public sealed class FirehoseLogEventArgs(string value) : EventArgs
     /// Gets the log Message.
     /// <para>获取日志消息。</para>
     /// </summary>
+    /// <value>The <c>value</c> text emitted by the target inside a Firehose log node.
+    /// <para>目标设备在 Firehose log 节点内输出的 <c>value</c> 文本。</para></value>
     public string Value { get; } = value;
 }

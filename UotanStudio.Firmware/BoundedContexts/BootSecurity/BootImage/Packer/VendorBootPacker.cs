@@ -5,6 +5,11 @@ using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
 
+/// <summary>
+/// Builds vendor boot images with the <c>VNDRBOOT</c> magic for header versions 3 and 4, writing the header, vendor
+/// ramdisk, DTB, optional ramdisk table and bootconfig as page-aligned segments directly to the output stream.
+/// <para>构建魔数为 <c>VNDRBOOT</c>、头部版本 3/4 的 Vendor Boot 镜像：将头部、vendor ramdisk、DTB、可选 ramdisk 表和 bootconfig 按页对齐直接写出到输出流。</para>
+/// </summary>
 public class VendorBootPacker
 {
     private const string VendorBootMagic = "VNDRBOOT";
@@ -27,20 +32,52 @@ public class VendorBootPacker
         else writer.Write(data);
     }
 
+    /// <summary>Vendor boot header written to the output; packing normalizes and refills its derived fields in place.
+    /// <para>写出到输出的 vendor boot 头部；打包过程会就地规范化并回填其中的派生字段。</para></summary>
+    /// <value>Never <see langword="null"/>; <see cref="PackToStream"/> rewrites page size, header size, section sizes,
+    /// and the V4 table fields, and its field values are also read back by <see cref="Repack"/>.
+    /// <para>永不为 <see langword="null"/>；<see cref="PackToStream"/> 会重写页大小、头部大小、各区段大小以及 V4 表字段，其字段值也会被 <see cref="Repack"/> 读取。</para></value>
     public VendorBootHeader Header { get; set; } = new VendorBootHeader();
 
+    /// <summary>Vendor ramdisk content written page-aligned right after the header.
+    /// <para>紧随头部按页对齐写出的 vendor ramdisk 内容。</para></summary>
+    /// <value>Raw bytes as provided; an empty array omits the segment. When a backing component-file source is set, its
+    /// entry for this component takes precedence over the array content.
+    /// <para>按提供的原始字节写出；空数组时省略该区段。当设置了组件文件后备来源时，该组件对应的文件条目优先于数组内容。</para></value>
     public byte[] VendorRamdisk { get; set; } = [];
 
+    /// <summary>Device tree blob written page-aligned after the vendor ramdisk.
+    /// <para>紧随 vendor ramdisk 按页对齐写出的设备树 blob。</para></summary>
+    /// <value>Raw bytes as provided; an empty array omits the segment. Component-file precedence applies as for
+    /// <see cref="VendorRamdisk"/>.
+    /// <para>按提供的原始字节写出；空数组时省略该区段。组件文件优先规则与 <see cref="VendorRamdisk"/> 相同。</para></value>
     public byte[] Dtb { get; set; } = [];
 
+    /// <summary>Bootconfig content written last, only for version 4.
+    /// <para>最后写出的 bootconfig 内容，仅在版本 4 时写入。</para></summary>
+    /// <value>Raw bytes as provided; ignored (size <c>0</c> in the header) for version 3. Component-file precedence
+    /// applies as for <see cref="VendorRamdisk"/>.
+    /// <para>按提供的原始字节写出；版本 3 时被忽略（头部中大小为 <c>0</c>）。组件文件优先规则与 <see cref="VendorRamdisk"/> 相同。</para></value>
     public byte[] Bootconfig { get; set; } = [];
 
+    /// <summary>Vendor ramdisk table entries serialized one after another on version 4 images.
+    /// <para>在版本 4 镜像中顺序序列化写出的 vendor ramdisk 表条目。</para></summary>
+    /// <value>Mutable list that is never reassigned; empty by default. Entries are validated against the vendor ramdisk
+    /// size and ignored for version 3, where the table size is always <c>0</c>.
+    /// <para>永不整体重新赋值的可变列表；默认为空。条目会与 vendor ramdisk 大小做校验，版本 3 时忽略该表，表大小恒为 <c>0</c>。</para></value>
     public List<VendorRamdiskTableEntry> RamdiskTable { get; } = [];
 
     /// <summary>
     /// Creates a packer from an existing vendor boot image parser.
     /// <para>从现有的 Vendor Boot 镜像解析器创建打包器。</para>
     /// </summary>
+    /// <param name="parser">Parsed vendor boot image whose header and component buffers are taken.
+    /// <para>已解析的 Vendor Boot 镜像，直接取其头部与各组件缓冲区。</para></param>
+    /// <returns>Packer sharing the parser's <see cref="VendorBootHeader"/> instance and component arrays, with copied
+    /// ramdisk table entries; later parser mutations are visible through the shared header.
+    /// <para>返回的打包器与解析器共享 <see cref="VendorBootHeader"/> 实例和组件数组，ramdisk 表条目为逐条拷贝；解析器后续对头部的修改对其可见。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="parser"/> is <see langword="null"/>.
+    /// <para><paramref name="parser"/> 为 <see langword="null"/>。</para></exception>
     public static VendorBootPacker FromParser(VendorBootParser parser)
     {
         ArgumentNullException.ThrowIfNull(parser);
@@ -70,6 +107,14 @@ public class VendorBootPacker
     /// Packs the vendor boot image to a file (writes the file stream directly to avoid keeping the full image in memory).
     /// <para>打包 Vendor Boot 镜像到文件（直接写文件流，避免内存中保留完整镜像）。</para>
     /// </summary>
+    /// <param name="outputPath">Destination path, created or truncated in place; a failure mid-write leaves a partial
+    /// file behind.
+    /// <para>目标路径，就地创建或截断；写入中途失败会残留不完整文件。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="outputPath"/> is <see langword="null"/>.
+    /// <para><paramref name="outputPath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="outputPath"/> is empty, or a check in
+    /// <see cref="PackToStream(Stream)"/> fails.
+    /// <para><paramref name="outputPath"/> 为空字符串，或 <see cref="PackToStream(Stream)"/> 中的校验失败。</para></exception>
     public void PackToFile(string outputPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
@@ -82,6 +127,16 @@ public class VendorBootPacker
     /// Writes the vendor boot image to the given stream.
     /// <para>将 Vendor Boot 镜像写入指定流。</para>
     /// </summary>
+    /// <param name="output">Writable stream positioned where the image starts; it stays open and ends at the tail of
+    /// the written image.
+    /// <para>定位在镜像起始处的可写流；写入后保持打开，位置停在已写镜像末尾。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="output"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="NotSupportedException"><see cref="VendorBootHeader.HeaderVersion"/> is neither 3 nor 4.
+    /// <para><see cref="VendorBootHeader.HeaderVersion"/> 既不是 3 也不是 4。</para></exception>
+    /// <exception cref="ArgumentException">The page size is not a non-zero power of two, a ramdisk table entry exceeds
+    /// the vendor ramdisk region, or a V4 component offset exceeds the supported range.
+    /// <para>页大小不是非零的 2 的幂、ramdisk 表条目超出 vendor ramdisk 区域，或 V4 组件偏移超出支持范围。</para></exception>
     public void PackToStream(Stream output)
     {
         ArgumentNullException.ThrowIfNull(output);
@@ -229,6 +284,9 @@ public class VendorBootPacker
     /// Packs the vendor boot image to a byte array (only for small images; prefer PackToFile or PackToStream for large images).
     /// <para>打包 Vendor Boot 镜像到字节数组（仅适合小镜像；大镜像请使用 PackToFile 或 PackToStream 流式输出）。</para>
     /// </summary>
+    /// <returns>Complete image bytes held fully in memory; every exception of <see cref="PackToStream(Stream)"/> can
+    /// escape from here as well.
+    /// <para>完整驻留内存的镜像字节；<see cref="PackToStream(Stream)"/> 的所有异常同样可能在此抛出。</para></returns>
     public byte[] Pack()
     {
         using var ms = new MemoryStream();
@@ -240,6 +298,14 @@ public class VendorBootPacker
     /// Repacks an existing vendor boot image as the template (without modifying the parser).
     /// <para>以现有 Vendor Boot 镜像作为模板重新打包（不修改解析器）。</para>
     /// </summary>
+    /// <param name="original">Parsed vendor boot image supplying header, ramdisk, DTB, bootconfig and table content.
+    /// <para>提供头部、ramdisk、DTB、bootconfig 与表内容的已解析 Vendor Boot 镜像。</para></param>
+    /// <returns>Complete image bytes re-serialized from the parser state through <see cref="FromParser"/> and
+    /// <see cref="Pack"/>; header sizes and offsets are recomputed, so the result need not match the source file byte
+    /// for byte.
+    /// <para>由解析器状态经 <see cref="FromParser"/> 与 <see cref="Pack"/> 重新序列化得到的完整镜像字节；头部大小与偏移会重新计算，因此结果不必然与源文件逐字节相同。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="original"/> is <see langword="null"/>.
+    /// <para><paramref name="original"/> 为 <see langword="null"/>。</para></exception>
     public static byte[] Repack(VendorBootParser original)
     {
         ArgumentNullException.ThrowIfNull(original);

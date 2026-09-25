@@ -7,6 +7,10 @@ using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
 
+/// <summary>
+/// Format handler that routes Android boot, vendor boot, Tegra blob and ARM zImage files to their parsers for metadata reading, unpacking and repacking.
+/// <para>格式处理器，将 Android boot、vendor boot、Tegra blob 与 ARM zImage 文件分派到各自的解析器，完成元数据读取、解包与重打包。</para>
+/// </summary>
 public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
     void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
@@ -23,14 +27,29 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
     private const string BootMagic = "ANDROID!";
     private const string VendorBootMagic = "VNDRBOOT";
 
+    /// <summary>Display name identifying this handler's format family.
+    /// <para>标识此处理器格式家族的显示名称。</para></summary>
+    /// <value>
+    /// The fixed string <c>Android Boot / Vendor Boot Image</c>. <para>固定字符串 <c>Android Boot / Vendor Boot Image</c>。</para>
+    /// </value>
     public string FormatName => "Android Boot / Vendor Boot Image";
 
+    /// <summary>File-name extensions this handler claims.
+    /// <para>此处理器声明的文件名扩展名。</para></summary>
+    /// <value>Read-only list of dotless lowercase extensions: <c>img</c>, <c>boot</c>, <c>vendor_boot</c>.
+    /// <para>不含点的小写扩展名只读列表：<c>img</c>、<c>boot</c>、<c>vendor_boot</c>。</para></value>
     public IReadOnlyList<string> FileExtensions => ["img", "boot", "vendor_boot"];
 
     /// <summary>
     /// Determines whether the file matches this format.
     /// <para>判断文件是否匹配此格式。</para>
     /// </summary>
+    /// <param name="filePath">Path to probe; at most the first 64 bytes are read.
+    /// <para>要探测的路径；至多读取前 64 字节。</para></param>
+    /// <returns>
+    /// <see langword="true"/> when the file exists and its header matches the Android boot, vendor boot, Tegra blob or ARM zImage magic; <see langword="false"/> for blank paths, missing files and any I/O error, which is swallowed.
+    /// <para>当文件存在且其头部匹配 Android boot、vendor boot、Tegra blob 或 ARM zImage 魔数时为 <see langword="true"/>；对空路径、缺失文件以及任何被吞没的 I/O 错误返回 <see langword="false"/>。</para>
+    /// </returns>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -63,6 +82,16 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
     /// Reads the firmware metadata asynchronously.
     /// <para>异步读取固件元数据。</para>
     /// </summary>
+    /// <param name="filePath">Boot, vendor boot, Tegra blob or zImage file; the magic selects the parser, and the Tegra and zImage paths read the whole file.
+    /// <para>boot、vendor boot、Tegra blob 或 zImage 文件；由魔数选择解析器，Tegra 与 zImage 路径会读取整个文件。</para></param>
+    /// <param name="cancellationToken">
+    /// Checked before the work starts and bound to the background task; cancelling before the delegate begins leaves the returned task in the canceled state.
+    /// <para>在工作开始前检查并绑定到后台任务；若委托尚未开始即取消，返回的任务进入已取消状态。</para>
+    /// </param>
+    /// <returns>
+    /// A task carrying a <see cref="FirmwareOpResult"/>. Success reports a summary, per-format metadata entries and component sizes; an unrecognized magic or any caught exception comes back as a failure result with the message, never as a throw.
+    /// <para>返回携带 <see cref="FirmwareOpResult"/> 的任务。成功时给出摘要、各格式的元数据条目与组件大小；无法识别的魔数或任何被捕获的异常都以失败结果返回消息，而不抛出。</para>
+    /// </returns>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
@@ -178,6 +207,20 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
     /// Extracts the firmware contents asynchronously.
     /// <para>异步提取固件内容。</para>
     /// </summary>
+    /// <param name="filePath">Image file dispatched by magic; boot components, Tegra kernel/ramdisk and the zImage compressed payload are written as separate files and empty components are skipped.
+    /// <para>按魔数分派的镜像文件；boot 组件、Tegra 内核/ramdisk 与 zImage 压缩负载会写为独立文件，空组件被跳过。</para></param>
+    /// <param name="outputDirectory">Directory created if missing and filled with the extracted files; result entries list the written paths.
+    /// <para>缺失时会被创建并写入提取出的文件；结果条目列出已写入的路径。</para></param>
+    /// <param name="options">Optional unpack options forwarded through the shared repack pipeline; <see langword="null"/> uses the defaults.
+    /// <para>经由共享重打包管道转发的可选解包选项；<see langword="null"/> 使用默认值。</para></param>
+    /// <param name="cancellationToken">
+    /// Checked inside the background work and bound to the task; cancelling before the delegate begins leaves the returned task in the canceled state.
+    /// <para>在后台工作中检查并绑定到任务；若委托尚未开始即取消，返回的任务进入已取消状态。</para>
+    /// </param>
+    /// <returns>
+    /// A task carrying a <see cref="FirmwareOpResult"/> whose success message counts the extracted files; parse or I/O failures are returned as failure results with the exception message instead of throwing.
+    /// <para>返回携带 <see cref="FirmwareOpResult"/> 的任务，其成功消息统计已提取文件数；解析或 I/O 失败以携带异常消息的失败结果返回，而不抛出。</para>
+    /// </returns>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -232,11 +275,37 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
     /// Packs the input into firmware asynchronously.
     /// <para>异步将输入打包为固件。</para>
     /// </summary>
+    /// <param name="inputPath">
+    /// Directory of extracted components or a boot image file to re-pack. <para>已提取组件的目录，或要重新打包的 boot 镜像文件。</para>
+    /// </param>
+    /// <param name="outputPath">Destination image path written by the packer. <para>由打包器写入的目标镜像路径。</para></param>
+    /// <param name="cancellationToken">
+    /// Checked inside the background work and bound to the task; cancelling before the delegate begins leaves the returned task in the canceled state.
+    /// <para>在后台工作中检查并绑定到任务；若委托尚未开始即取消，返回的任务进入已取消状态。</para>
+    /// </param>
+    /// <returns>
+    /// A task carrying a <see cref="FirmwareOpResult"/>; this overload packs with the unspecified repack metadata context.
+    /// <para>返回携带 <see cref="FirmwareOpResult"/> 的任务；此重载使用未指定的重打包元数据上下文。</para>
+    /// </returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
         => PackAsync(inputPath, outputPath, cancellationToken, RepackMetadataContext.Unspecified);
 
     /// <summary>Packs using a metadata context captured before background work.
     /// <para>后台执行前固定元数据上下文并打包。</para></summary>
+    /// <param name="inputPath">Directory rebuilt through the repack configuration, or a single boot image file parsed and re-packed with its original structure.
+    /// <para>通过重打包配置重建的目录，或解析后按原结构重新打包的单个 boot 镜像文件。</para></param>
+    /// <param name="outputPath">Destination image path; a missing or blank input path is reported as a failure result.
+    /// <para>目标镜像路径；输入路径缺失或为空时报告为失败结果。</para></param>
+    /// <param name="cancellationToken">
+    /// Checked inside the background work and bound to the task; cancelling before the delegate begins leaves the returned task in the canceled state.
+    /// <para>在后台工作中检查并绑定到任务；若委托尚未开始即取消，返回的任务进入已取消状态。</para>
+    /// </param>
+    /// <param name="context">Repack metadata context snapshotted via capture before the work starts, so later UI mutations do not affect this run.
+    /// <para>在工作开始前通过捕获固定的重打包元数据上下文，后续界面变化不会影响本次运行。</para></param>
+    /// <returns>
+    /// A task carrying a <see cref="FirmwareOpResult"/> whose success message names the output path (and header version for re-packed boot images); any caught exception comes back as a failure result with its message instead of throwing.
+    /// <para>返回携带 <see cref="FirmwareOpResult"/> 的任务，其成功消息给出输出路径（重新打包的 boot 镜像还包含头部版本）；任何被捕获的异常都以携带其消息的失败结果返回，而不抛出。</para>
+    /// </returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken,
         RepackMetadataContext context)
     {

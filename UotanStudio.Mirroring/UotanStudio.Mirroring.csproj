@@ -3,6 +3,7 @@
   <PropertyGroup>
     <RootNamespace>UotanStudio.Services.Mirroring</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

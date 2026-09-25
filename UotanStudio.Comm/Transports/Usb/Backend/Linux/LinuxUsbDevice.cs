@@ -600,7 +600,7 @@ internal class LinuxUsbDevice : UsbDevice
         {
             Type = urbType,
             Endpoint = endpoint,
-            Flags = 0, // keep short reads completing normally (do not set SHORT_NOT_OK)
+            Flags = 0,
             Buffer = buffer,
             Buffer_length = length,
             Usercontext = IntPtr.Zero
@@ -651,7 +651,7 @@ internal class LinuxUsbDevice : UsbDevice
             var completed = Marshal.PtrToStructure<Usbdevfs_urb>(reaped);
             if (completed.Status != 0)
             {
-                var err = -completed.Status; // kernel reports negative errno in status
+                var err = -completed.Status;
                 return err is ETIMEDOUT or EPIPE
                     ? 0
                     : err is ENODEV or ESHUTDOWN or EPROTO

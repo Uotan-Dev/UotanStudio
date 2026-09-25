@@ -5,6 +5,11 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Journal;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 
+/// <summary>
+/// EXT4 builder part that lays out inode records: the internal journal area and inode 8, per-node inode encoding with block counts and <c>metadata_csum</c> checksums, and the inline extended-attribute area.
+/// <para>EXT4 构建器的组成部分，负责 inode 记录的排布：内部日志区域与 inode 8、按节点编码 inode 的块计数与
+/// <c>metadata_csum</c> 校验和，以及内联扩展属性区。</para>
+/// </summary>
 public sealed partial class Ext4Builder
 {
     /// <summary>
@@ -13,7 +18,6 @@ public sealed partial class Ext4Builder
     /// </summary>
     private static void WriteJournalArea(Stream output, long baseOffset, long journalStart, int journalBlocks, int blockSize, byte[] uuid)
     {
-
 
         var jsb = JournalSuperblock.CreateEmpty((uint)blockSize, (uint)journalBlocks, uuid, checksumV3: false).ToBytes();
         var block = new byte[blockSize];
@@ -57,7 +61,6 @@ public sealed partial class Ext4Builder
             WriteU32(inode, 108, (uint)((ulong)size >> 32));
         }
 
-
         var iblock = inode.AsSpan(40, 60);
         WriteExtentHeader(iblock, 1, 0, 4);
         WriteExtentEntry(iblock, 12, (0u, (ulong)journalStart, (ushort)journalBlocks));
@@ -81,7 +84,6 @@ public sealed partial class Ext4Builder
     /// </summary>
     private static void WriteInode(Stream output, long baseOffset, Node node, int blockSize, int inodeSize, List<GroupInfo> groups, int inodesPerGroup, byte[] uuid, bool enableMetadataCsum)
     {
-
 
         var inodeTableStartBlock = groups[(int)((node.Inode - 1) / (uint)inodesPerGroup)].InodeTableBlock;
         var localInodeIndex = (long)((node.Inode - 1) % (uint)inodesPerGroup);
@@ -144,7 +146,6 @@ public sealed partial class Ext4Builder
         if (node.IsDirectory && node.IsIndexed)
         {
 
-
             flags |= Ext4Htree.FlagIndex;
         }
 
@@ -168,12 +169,10 @@ public sealed partial class Ext4Builder
             WriteU32(inode, 108, (uint)(node.Size >> 32));
         }
 
-
         if (inodeSize >= 128 + Ext4ExtraIsize)
         {
             WriteU16(inode, 128, Ext4ExtraIsize);
         }
-
 
         WriteSourceMetadata(inode, node.SourceMetadata);
         if (node.AttributeValue is { } attributeValue)
@@ -200,7 +199,6 @@ public sealed partial class Ext4Builder
         {
             WriteInodeXattrs(inode, inodeSize, node.Xattrs);
         }
-
 
         if (enableMetadataCsum)
         {
@@ -243,7 +241,6 @@ public sealed partial class Ext4Builder
     private static void WriteInodeChecksum(byte[] inode, uint inodeNumber, byte[] uuid)
     {
 
-
         var crc = ComputeCrc32(uuid, 0xFFFF_FFFF);
 
         Span<byte> le = stackalloc byte[4];
@@ -255,7 +252,6 @@ public sealed partial class Ext4Builder
 
         var extraIsize = inode.Length > 128 ? BinaryPrimitives.ReadUInt16LittleEndian(inode.AsSpan(128, 2)) : (ushort)0;
         var hasHigh = inode.Length > 128 && extraIsize >= Ext4InodeChecksumHiExtraEnd;
-
 
         BinaryPrimitives.WriteUInt16LittleEndian(inode.AsSpan(124, 2), 0);
         if (hasHigh)
@@ -279,7 +275,6 @@ public sealed partial class Ext4Builder
     internal static void WriteInodeXattrs(byte[] inode, int inodeSize, Dictionary<string, byte[]> xattrs)
     {
 
-
         const int extraIsiz = Ext4ExtraIsize;
         var xattrStart = 128 + extraIsiz;
         var available = inodeSize - xattrStart - 4;
@@ -287,7 +282,6 @@ public sealed partial class Ext4Builder
         {
             throw new InvalidDataException("EXT4 inode has no room for extended attributes.");
         }
-
 
         var entries = new List<(string Name, byte NameIndex, byte[] Value)>();
         foreach (var kv in xattrs)
@@ -304,7 +298,6 @@ public sealed partial class Ext4Builder
             return;
         }
 
-
         var entrySectionSize = 4;
         var totalValueSize = 0L;
         foreach (var (name, _, value) in entries)
@@ -317,13 +310,10 @@ public sealed partial class Ext4Builder
         if (entrySectionSize + totalValueSize > available)
             throw new InvalidDataException("EXT4 inode xattrs exceed available capacity; no attributes were discarded.");
 
-
         WriteU16(inode, 128, extraIsiz);
-
 
         var hdrOff = xattrStart;
         WriteU32(inode, hdrOff, 0xEA020000);
-
 
         var pos = xattrStart + 4;
         var valueOff = entrySectionSize;
@@ -336,7 +326,6 @@ public sealed partial class Ext4Builder
             WriteU16(inode, pos + 2, (ushort)valueOff);
             WriteU32(inode, pos + 4, 0);
             WriteU32(inode, pos + 8, (uint)value.Length);
-            // Kernel ibody attributes keep e_hash zero unless the value uses an EA inode.
             WriteU32(inode, pos + 12, 0);
             nameBytes.CopyTo(inode.AsSpan(pos + 16));
             var entrySize = (16 + nameBytes.Length + 3) & ~3;
@@ -344,9 +333,7 @@ public sealed partial class Ext4Builder
             valueOff += valuePadded;
         }
 
-
         inode[pos] = 0;
-
 
         var valuePos = xattrStart + 4 + entrySectionSize;
         foreach (var (_, _, value) in entries)
@@ -386,7 +373,6 @@ public sealed partial class Ext4Builder
                 {
                     continue;
                 }
-
 
                 nameIndex = index;
                 shortName = rest;

@@ -4,27 +4,35 @@ using UotanStudio.Comm.Contracts;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
-/// <summary>Directory entry from sync STAT / LIST. sync STAT / LIST 返回的目录条目。</summary>
-/// <remarks>
-/// Initializes a new instance of the <see cref="SyncEntry"/> struct.
-/// <para>初始化 <see cref="SyncEntry"/> 结构的新实例。</para>
-/// </remarks>
-/// <param name="mode">The file mode bits (st_mode). 文件模式位。</param>
-/// <param name="size">The file size in bytes. 文件大小（字节）。</param>
-/// <param name="time">The modification time as Unix seconds. 修改时间（Unix 秒）。</param>
-/// <param name="name">The entry name. 条目名称。</param>
+/// <summary>
+/// Directory entry from sync STAT / LIST.
+/// <para>sync STAT / LIST 返回的目录条目。</para>
+/// </summary>
+/// <param name="mode">The file mode bits (st_mode). <para>文件模式位。</para></param>
+/// <param name="size">The file size in bytes. <para>文件大小（字节）。</para></param>
+/// <param name="time">The modification time as Unix seconds. <para>修改时间（Unix 秒）。</para></param>
+/// <param name="name">The entry name. <para>条目名称。</para></param>
 public readonly struct SyncEntry(uint mode, uint size, uint time, string name)
 {
-    /// <summary>Gets the entry mode bits (st_mode). 模式位。</summary>
+    /// <summary>Entry mode bits (st_mode) as reported by sync STAT / LIST.
+    /// <para>sync STAT / LIST 报告的条目模式位（st_mode）。</para></summary>
+    /// <value>The little-endian DWORD decoded from the wire body; encodes file type and permission bits.
+    /// <para>从线上数据体解码的小端 DWORD；编码了文件类型与权限位。</para></value>
     public uint Mode { get; } = mode;
 
-    /// <summary>Gets the entry size in bytes. 字节大小。</summary>
+    /// <summary>Entry size in bytes. <para>条目大小（字节）。</para></summary>
+    /// <value>The little-endian DWORD from the wire body; meaningful for regular files.
+    /// <para>线上数据体中的小端 DWORD；对普通文件有意义。</para></value>
     public uint Size { get; } = size;
 
-    /// <summary>Gets the modification time as Unix seconds. 修改时间（Unix 秒）。</summary>
+    /// <summary>Modification time as Unix seconds. <para>修改时间（Unix 秒）。</para></summary>
+    /// <value>The little-endian DWORD from the wire body.
+    /// <para>线上数据体中的小端 DWORD。</para></value>
     public uint Time { get; } = time;
 
-    /// <summary>Gets the entry name. 条目名称。</summary>
+    /// <summary>Entry name within its directory. <para>条目在其目录内的名称。</para></summary>
+    /// <value>The UTF-8 name from a LIST record, or the file-name portion of the queried path for STAT.
+    /// <para>来自 LIST 记录的 UTF-8 名称；STAT 时则为被查询路径的文件名部分。</para></value>
     public string Name { get; } = name;
 }
 
@@ -40,7 +48,7 @@ public readonly struct SyncEntry(uint mode, uint size, uint time, string name)
 /// </remarks>
 internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = AdbSyncClient.DefaultMaxChunk) : IAdbSyncClient
 {
-    private const int V1HeaderSize = 8;      // id(4) + length(4)
+    private const int V1HeaderSize = 8;
     private const uint DefaultMaxChunk = 64 * 1024;
 
     private readonly AdbConnection _connection = connection ?? throw new ArgumentNullException(nameof(connection));
@@ -80,8 +88,6 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
 
         if (id == SyncIds.Fail)
         {
-            // AOSP file_sync_service always reports the failure text; hiding it behind null
-            // masked the real cause. Errors here are fatal like LIST/RECV.
             var errLength = ReadUInt32(stream);
             var err = ReadExact(stream, (int)errLength);
             throw new InvalidDataException(
@@ -93,7 +99,7 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
             throw new InvalidDataException($"Unexpected sync response id '{id}' to STAT.");
         }
 
-        var body = ReadExact(stream, 12); // mode + size + mtime
+        var body = ReadExact(stream, 12);
         var mode = BitConverter.ToUInt32(body, 0);
         var size = BitConverter.ToUInt32(body, 4);
         var time = BitConverter.ToUInt32(body, 8);
@@ -124,8 +130,6 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
 
             if (id == SyncIds.Done)
             {
-                // AOSP do_list sends ID_DONE and nothing else; reading a trailing body would
-                // block forever. The DONE marker terminates LIST.
                 break;
             }
 
@@ -142,7 +146,7 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
                 throw new InvalidDataException($"Unexpected sync response id '{id}' to LIST.");
             }
 
-            var body = ReadExact(stream, 16); // mode + size + mtime + namelen
+            var body = ReadExact(stream, 16);
             var mode = BitConverter.ToUInt32(body, 0);
             var size = BitConverter.ToUInt32(body, 4);
             var time = BitConverter.ToUInt32(body, 8);

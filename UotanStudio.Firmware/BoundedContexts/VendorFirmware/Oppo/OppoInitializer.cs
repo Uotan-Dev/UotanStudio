@@ -7,11 +7,17 @@ using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Parsers;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
 
+/// <summary>
+/// One-time bootstrap that registers Oppo parsers, crypto providers and format detectors.
+/// <para>一次性引导：注册 Oppo 解析器、加密提供者与格式检测器。</para>
+/// </summary>
 public static class OppoInitializer
 {
     private static readonly Lock Lock = new();
     private static bool _initialized;
 
+    /// <summary>Aggregate crypto provider that the format parsers receive as their decryption backend. <para>聚合加密提供者，作为格式解析器的解密后端传入。</para></summary>
+    /// <value>A process-wide <see cref="OppCryptoProvider"/> instance; per-format providers are registered into it by <see cref="EnsureInitialized"/>. <para>进程级的 <see cref="OppCryptoProvider"/> 实例；各格式提供者由 <see cref="EnsureInitialized"/> 注册到其中。</para></value>
     public static OppCryptoProvider CryptoProvider { get; } = new OppCryptoProvider(NullOppLogger.Instance);
 
     /// <summary>

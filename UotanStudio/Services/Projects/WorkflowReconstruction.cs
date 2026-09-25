@@ -31,7 +31,7 @@ internal static class WorkflowReconstruction
             RestoreInitialValues(node, dto.InputInitialValues, dto.InputInitialValuesByPortId);
             return true;
         }
-        // A faulty registered factory must not become an "unknown type" warning during refactoring.
+        // A registered factory that throws surfaces here as an error, not the "unknown type" MissingNode above.
         node = NodeTypeRegistry.Create(dto.TypeKey)!;
         if (dto.NodeValueType is not null && node.IsConstantNode)
         {

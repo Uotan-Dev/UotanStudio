@@ -3,8 +3,9 @@
 Successful format-handler extraction creates `.uotanstudio-repack.json` in the
 output root. Application firmware extraction services also write this file when
 they call parsers directly. Ordinary filesystem subdirectories do not represent
-independent images and do not receive separate metadata. Previously extracted
-directories are not backfilled without their source image.
+independent images and do not receive separate metadata. Metadata is written only
+during extraction: an existing extraction directory without it gains one only by
+being extracted again from its source image.
 
 When a project is open, the application services pass a metadata root and the
 metadata file plus the filesystem sidecars are stored under
@@ -70,8 +71,8 @@ these settings and per-file inode attributes from the hash-verified retained
 image. They preserve UUID, raw volume bytes and source timestamps. The on-disk
 format does not identify encoder level or distinguish LZ4 from LZ4HC, so
 `compressionLevel` is explicitly null. Compressed data boundaries, physical
-layout and final image size can change. Unedited directories still restore the
-retained image exactly. See [EROFS conformance](../../docs/erofs-rebuild-conformance.md)
+layout and final image size can change. Unedited directories restore the
+retained image exactly. See [EROFS rebuild behaviour](../../docs/filesystem-erofs.md)
 for native-tool and kernel validation and the tested feature boundaries.
 
 | Format | Options |
@@ -98,8 +99,8 @@ by this directory-level metadata.
 
 Without an explicit `--format`, `firmware pack <directory>` reads the metadata to
 select the registered format. Unsupported directory packing, invalid metadata
-and unknown formats fail instead of falling back to EXT4. An explicit format is
-still an override. The firmware workflow pack node, image panel and MCP automatic
+and unknown formats fail instead of falling back to EXT4. An explicit format
+overrides the metadata identity. The firmware workflow pack node, image panel and MCP automatic
 packing use the same format identity and registered backend. In the image panel,
 directories with metadata use that configuration; directories without metadata
 continue to use the project packing settings.
@@ -109,12 +110,12 @@ Double-clicking an extraction directory in the project explorer opens its
 same single-location rule: the consolidated metadata file under
 `.uotan/metadata/<partition name>/` when a project is open, the local file
 otherwise. The file is opened even if it contains an unfinished JSON edit so it
-can be repaired. Directories without any discoverable metadata retain their
-existing navigation behavior. The metadata file is shown in the project
+can be repaired. Directories without any discoverable metadata keep the default
+navigation behavior. The metadata file is shown in the project
 explorer like any other file.
 
 The generic metadata file is excluded from filesystem, CPIO, NTPI, NB0, OPS and
-Sparse directory inputs. Image-only packers already select `*.img` inputs. Only
+Sparse directory inputs. Image-only packers select `*.img` inputs. Only
 files bearing this schema are excluded: an unrelated payload file with the same
 name is preserved, and extraction reports the reserved-name collision instead
 of replacing it with metadata.

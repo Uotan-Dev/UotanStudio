@@ -496,10 +496,10 @@ public class HexViewer : Grid
             for (var b = from; b <= to; b++)
             {
                 var byteInLine = (int)(b - start);
-                // 仅绘制十六进制区域的高亮矩形：ASCII 区域不再单独绘制，否则会在
-                // 正确高亮的右侧出现一个更窄、位置偏移的重复高亮。
-                // Only highlight the hex-zone cell: the ASCII zone is no longer drawn separately,
-                // which otherwise produced a narrower, right-offset duplicate highlight beside the real one.
+                // 仅绘制十六进制区域的高亮矩形：ASCII 区域不单独绘制，否则会
+                // 在正确高亮的右侧出现一个更窄、位置偏移的重复高亮。
+                // Only highlight the hex-zone cell: the ASCII zone is not drawn separately, since
+                // doing so would add a narrower, right-offset duplicate highlight beside the real one.
                 var hexX = layout.XFromByteIndex(byteInLine, hexZone: true);
                 context.FillRectangle(brush, new Rect(hexX, y, layout.HexCellWidth, HexMetrics.LineHeight));
             }

@@ -36,27 +36,33 @@ internal readonly struct ShellFrame(ShellFrameKind kind, byte[] payload)
 /// Initializes a new instance of the <see cref="ShellResult"/> struct.
 /// <para>初始化 <see cref="ShellResult"/> 结构的新实例。</para>
 /// </remarks>
-/// <param name="stdout">The captured stdout. 捕获的 stdout。</param>
-/// <param name="stderr">The captured stderr. 捕获的 stderr。</param>
-/// <param name="exitCode">The exit code. 退出码。</param>
+/// <param name="stdout">The concatenated stdout frame payloads. <para>各 stdout 帧负载的拼接结果。</para></param>
+/// <param name="stderr">The concatenated stderr frame payloads. <para>各 stderr 帧负载的拼接结果。</para></param>
+/// <param name="exitCode">The shell exit frame value. <para>shell 退出帧的值。</para></param>
 public readonly struct ShellResult(byte[] stdout, byte[] stderr, int exitCode)
 {
     /// <summary>
     /// Gets the captured stdout.
     /// <para>获取捕获的 stdout。</para>
     /// </summary>
+    /// <value>The concatenated stdout frame payloads; empty when the command wrote none.
+    /// <para>各 stdout 帧负载的拼接结果；命令未输出时为空。</para></value>
     public byte[] Stdout { get; } = stdout;
 
     /// <summary>
     /// Gets the captured stderr.
     /// <para>获取捕获的 stderr。</para>
     /// </summary>
+    /// <value>The concatenated stderr frame payloads; empty when the command wrote none.
+    /// <para>各 stderr 帧负载的拼接结果；命令未输出时为空。</para></value>
     public byte[] Stderr { get; } = stderr;
 
     /// <summary>
     /// Gets the exit code.
     /// <para>获取退出码。</para>
     /// </summary>
+    /// <value>The value of the shell exit frame, or 0 when the stream closed without one.
+    /// <para>shell 退出帧的值；流关闭而未见退出帧时为 0。</para></value>
     public int ExitCode { get; } = exitCode;
 }
 
@@ -75,7 +81,7 @@ public readonly struct ShellResult(byte[] stdout, byte[] stderr, int exitCode)
 /// <param name="pty">Whether to use a pseudo-terminal. 是否使用伪终端。</param>
 internal sealed class AdbShellClient(AdbConnection connection, string command, string? term = null, bool pty = false) : IAdbShellClient
 {
-    private const int FrameHeaderSize = 5; // kind(1) + length(4)
+    private const int FrameHeaderSize = 5;
     private const int MaxFramePayloadSize = 16 * 1024 * 1024;
 
     /// <summary>Incremental shell-v2 frame parser used across ADB WRTE chunk boundaries.</summary>

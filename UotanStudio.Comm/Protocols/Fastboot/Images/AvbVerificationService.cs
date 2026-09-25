@@ -6,21 +6,29 @@ using FirmwareAvbVerifier = UotanStudio.Firmware.BoundedContexts.BootSecurity.Av
 
 namespace UotanStudio.Comm.Protocols.Fastboot.Images;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AVB 模型来源：算法类型为普通 uint（值 0-6，与 libavb 一致），经
-// FirmwareAvbVerifier.TryGetKeySizeAndHash 校验；vbmeta 头与 footer 分别复用
-// Firmware 的 AvbVBMetaImageHeader（readonly struct）与 AvbFooter（readonly struct）。
-// AVB model sources: the algorithm type is a plain uint (0-6, matching libavb), validated
-// via FirmwareAvbVerifier.TryGetKeySizeAndHash; the vbmeta header and footer reuse
-// Firmware's AvbVBMetaImageHeader (readonly struct) and AvbFooter (readonly struct).
-// ─────────────────────────────────────────────────────────────────────────────
-
 /// <summary>
-/// Comm 侧 AVB 哈希描述符解析模型（用于从 vbmeta 辅助数据块中解析描述符）。
-/// 与 Firmware 的 <see cref="UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models.AvbHashDescriptor"/>（签名模型）不同。
-/// <para>Comm-side AVB hash descriptor parsing model (for extracting descriptors from vbmeta auxiliary data).
-/// Differs from Firmware's <see cref="UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models.AvbHashDescriptor"/> which is a signing model.</para>
+/// Comm-side AVB hash descriptor model, parsed from descriptors embedded in a vbmeta auxiliary data block.
+/// It is distinct from Firmware's signing model
+/// <see cref="UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models.AvbHashDescriptor"/>.
+/// <para>Comm 侧 AVB 哈希描述符模型，从 vbmeta 辅助数据块中内嵌的描述符解析得到。
+/// 与 Firmware 的签名模型
+/// <see cref="UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models.AvbHashDescriptor"/>不同。</para>
 /// </summary>
+/// <param name="tag">Descriptor tag identifying the descriptor kind; hash descriptors use 0.
+/// <para>描述符标签，用于标识描述符类型；哈希描述符为 0。</para></param>
+/// <param name="dmVerityVersion">dm-verity format version declared by the descriptor.
+/// <para>描述符声明的 dm-verity 格式版本。</para></param>
+/// <param name="imageSize">Size in bytes of the hashed image region covered by the hash tree.
+/// <para>哈希树覆盖的被哈希镜像区域大小（字节）。</para></param>
+/// <param name="hashBlockSize">Hash tree block size in bytes. <para>哈希树块大小（字节）。</para></param>
+/// <param name="hashAlgorithm">Digest algorithm name stored in the descriptor, e.g. "sha256".
+/// <para>描述符中存储的摘要算法名称，如 "sha256"。</para></param>
+/// <param name="partitionName">Name of the partition this digest applies to.
+/// <para>该摘要对应的分区名称。</para></param>
+/// <param name="salt">Salt bytes folded into the root-hash computation.
+/// <para>参与根哈希计算的盐值字节。</para></param>
+/// <param name="digest">Expected root digest bytes for the partition image.
+/// <para>分区镜像的期望根摘要字节。</para></param>
 public sealed class AvbHashDescriptor(
     ulong tag,
     uint dmVerityVersion,
@@ -31,28 +39,51 @@ public sealed class AvbHashDescriptor(
     byte[] salt,
     byte[] digest)
 {
-    /// <summary>Gets the descriptor tag (0 for a hash descriptor). 描述符标签（哈希描述符为 0）。</summary>
+    /// <summary>Descriptor tag identifying the descriptor kind; 0 denotes a hash descriptor.
+    /// <para>描述符标签，用于标识描述符类型；0 表示哈希描述符。</para></summary>
+    /// <value>The tag carried by this descriptor as produced by the parser or the caller.
+    /// <para>由解析器或调用方产生的该描述符所携带的标签值。</para></value>
     public ulong Tag { get; } = tag;
 
-    /// <summary>Gets the dm-verity version. dm-verity 版本。</summary>
+    /// <summary>dm-verity format version declared by the descriptor.
+    /// <para>描述符声明的 dm-verity 格式版本。</para></summary>
+    /// <value>The version DWORD read from the descriptor body.
+    /// <para>从描述符主体读取的版本 DWORD。</para></value>
     public uint DmVerityVersion { get; } = dmVerityVersion;
 
-    /// <summary>Gets the image size in bytes. 镜像大小（字节）。</summary>
+    /// <summary>Size in bytes of the hashed image region covered by this descriptor's hash tree.
+    /// <para>该描述符哈希树覆盖的被哈希镜像区域大小（字节）。</para></summary>
+    /// <value>The image extent a verifier must hash before comparing against <see cref="Digest"/>.
+    /// <para>校验方在可与 <see cref="Digest"/> 比对之前必须哈希的范围。</para></value>
     public ulong ImageSize { get; } = imageSize;
 
-    /// <summary>Gets the hash block size in bytes. 哈希块大小（字节）。</summary>
+    /// <summary>Hash tree block size in bytes. <para>哈希树块大小（字节）。</para></summary>
+    /// <value>The block granularity the on-image hash tree is built from.
+    /// <para>镜像内哈希树所使用的块粒度。</para></value>
     public ulong HashBlockSize { get; } = hashBlockSize;
 
-    /// <summary>Gets the hash algorithm name (e.g. "sha256"). 哈希算法名称（如 "sha256"）。</summary>
+    /// <summary>Name of the digest algorithm the hash tree uses, e.g. "sha256".
+    /// <para>哈希树使用的摘要算法名称，如 "sha256"。</para></summary>
+    /// <value>The NUL-trimmed ASCII algorithm name decoded from the fixed 32-byte descriptor field.
+    /// <para>从描述符固定 32 字节字段解码并按 NUL 截断的 ASCII 算法名。</para></value>
     public string HashAlgorithm { get; } = hashAlgorithm;
 
-    /// <summary>Gets the target partition name. 目标分区名称。</summary>
+    /// <summary>Name of the partition this digest applies to.
+    /// <para>该摘要对应的分区名称。</para></summary>
+    /// <value>The UTF-8 partition name, trimmed of trailing NUL characters.
+    /// <para>按尾部 NUL 字符裁剪后的 UTF-8 分区名。</para></value>
     public string PartitionName { get; } = partitionName;
 
-    /// <summary>Gets the salt. 盐值。</summary>
+    /// <summary>Salt bytes folded into the root-hash computation.
+    /// <para>参与根哈希计算的盐值字节。</para></summary>
+    /// <value>An exact-length copy of the descriptor's salt field; empty when the descriptor carries no salt.
+    /// <para>描述符盐值字段的等长拷贝；描述符不含盐时为空。</para></value>
     public byte[] Salt { get; } = salt;
 
-    /// <summary>Gets the expected digest. 期望摘要。</summary>
+    /// <summary>Expected root digest of the partition image.
+    /// <para>分区镜像的期望根摘要。</para></summary>
+    /// <value>An exact-length copy of the descriptor's digest field to compare recomputed hashes against.
+    /// <para>描述符摘要字段的等长拷贝，用于与重新计算的哈希比对。</para></value>
     public byte[] Digest { get; } = digest;
 }
 
@@ -130,8 +161,8 @@ internal sealed class AvbSignatureResult
 /// </summary>
 internal sealed class AvbVerificationService
 {
-    /// <summary>旧版 vbmeta 头大小候选值（用于兼容旧版镜像）。
-    /// <para>Legacy vbmeta header size candidates (for backward compatibility).</para></summary>
+    /// <summary>短头 vbmeta 镜像的候选头大小。
+    /// <para>Candidate header sizes for short-header vbmeta images.</para></summary>
     private static readonly int[] CandidateHeaderSizes = [204, 200, 196];
 
     /// <summary>
@@ -285,11 +316,9 @@ internal sealed class AvbVerificationService
         return !TryParseHeader(data, out var header) ? [] : ExtractHashDescriptors(data, header);
     }
 
-    // ── 私有辅助方法 ──────────────────────────────────────────────────────────
-
     /// <summary>
-    /// Attempts to parse a vbmeta header, supporting both modern (256-byte) and legacy (196-204-byte) headers.
-    /// <para>尝试解析 vbmeta 头，支持现代（256 字节）和旧版（196-204 字节）头。</para>
+    /// Attempts to parse a vbmeta header, supporting both the 256-byte and the shorter 196-204-byte layouts.
+    /// <para>尝试解析 vbmeta 头，支持 256 字节与 196-204 字节两种头部布局。</para>
     /// </summary>
     private static bool TryParseHeader(byte[] data, out AvbVBMetaImageHeader header)
     {
@@ -300,7 +329,7 @@ internal sealed class AvbVerificationService
         if (data.Length >= AvbVBMetaImageHeader.Size)
         {
             try { header = AvbVBMetaImageHeader.FromBytes(data); return true; }
-            catch { /* fall through to legacy parsing */ }
+            catch { }
         }
 
         ReadOnlySpan<byte> s = data;

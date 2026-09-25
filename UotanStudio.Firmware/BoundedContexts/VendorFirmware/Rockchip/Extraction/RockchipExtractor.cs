@@ -11,6 +11,17 @@ namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Extractio
 public static class RockchipExtractor
 {
     /// <summary>Lists RKFW loader/image entries or RKAF package files.<para>列出 RKFW 加载器和镜像，或 RKAF 包文件。</para></summary>
+    /// <param name="imagePath">
+    /// Container to open and fully validate, including the trailing RKFW MD5 or RKAF CRC checksum;
+    /// the file is closed when the call returns.
+    /// <para>要打开并完整校验的容器，包含尾部的 RKFW MD5 或 RKAF CRC 校验和；调用返回时文件已关闭。</para>
+    /// </param>
+    /// <returns>The loader, embedded-image and partition entries declared by the container.
+    /// <para>容器声明的加载器、内嵌镜像与分区条目。</para></returns>
+    /// <exception cref="InvalidDataException">The container magic, geometry or checksum is invalid.
+    /// <para>容器魔数、几何信息或校验和无效。</para></exception>
+    /// <exception cref="EndOfStreamException">A declared region or checksum extends beyond the end of the file.
+    /// <para>声明的区域或校验和超出文件末尾。</para></exception>
     public static List<RkfwEntry> List(string imagePath)
     {
         using var stream = File.OpenRead(imagePath);
@@ -18,9 +29,36 @@ public static class RockchipExtractor
     }
 
     /// <summary>Reads container entry metadata.<para>读取容器条目元数据。</para></summary>
+    /// <param name="imagePath">
+    /// Container to open; metadata reading runs the same full validation as <see cref="List"/>.
+    /// <para>要打开的容器；元数据读取执行与 <see cref="List"/> 相同的完整校验。</para>
+    /// </param>
+    /// <returns>The same entry list <see cref="List"/> produces.
+    /// <para>与 <see cref="List"/> 相同的条目列表。</para></returns>
+    /// <exception cref="InvalidDataException">The container magic, geometry or checksum is invalid.
+    /// <para>容器魔数、几何信息或校验和无效。</para></exception>
     public static List<RkfwEntry> ReadMetadata(string imagePath) => List(imagePath);
 
-    /// <summary>Reads bounded RKFW headers and the embedded RKAF table without scanning payload checksums.</summary>
+    /// <summary>Reads bounded RKFW headers and the embedded RKAF table without scanning payload checksums.
+    /// <para>读取经过边界校验的 RKFW 头部与内嵌 RKAF 表，但不扫描负载校验和。</para></summary>
+    /// <param name="imagePath">
+    /// RKFW file to preview; the payload MD5 trailer and the RKAF CRC are not verified. The file is closed
+    /// when the call returns.
+    /// <para>要预览的 RKFW 文件；不校验负载的 MD5 尾部与 RKAF 的 CRC。调用返回时文件已关闭。</para>
+    /// </param>
+    /// <returns>The parsed header plus loader, embedded-image and RKAF partition entries whose offsets are
+    /// absolute within the file.
+    /// <para>解析后的头部，以及加载器、内嵌镜像与 RKAF 分区条目；条目偏移为文件内绝对偏移。</para></returns>
+    /// <exception cref="InvalidDataException">The RKFW magic, header size, payload regions, loader magic or
+    /// embedded RKAF layout is invalid.
+    /// <para>RKFW 魔数、头部长度、负载区域、加载器魔数或内嵌 RKAF 布局无效。</para></exception>
+    /// <exception cref="EndOfStreamException">The file is shorter than the bytes the preview must read.
+    /// <para>文件长度不足以满足预览所需读取的字节数。</para></exception>
+    /// <example>
+    /// <code>
+    /// var (header, entries) = RockchipExtractor.PreviewRkfw("update.rkfw");
+    /// </code>
+    /// </example>
     public static (RkFwHeader Header, List<RkfwEntry> Entries) PreviewRkfw(string imagePath)
     {
         using var stream = File.OpenRead(imagePath);
@@ -53,11 +91,32 @@ public static class RockchipExtractor
     }
 
     /// <summary>Extracts validated entries with atomic file replacement.<para>校验条目后以原子文件替换方式提取。</para></summary>
-    /// <param name="imagePath">The source image path. 源镜像路径。</param>
-    /// <param name="outputDirectory">The output directory. 输出目录。</param>
-    /// <param name="progress">The optional progress sink. 可选进度接收器。</param>
-    /// <param name="overwrite">Whether existing files may be replaced. 是否允许替换现有文件。</param>
-    /// <param name="cancellationToken">The cancellation token. 取消令牌。</param>
+    /// <param name="imagePath">The source image path.
+    /// <para>源镜像路径。</para></param>
+    /// <param name="outputDirectory">Directory that receives the fixed header template file and one file
+    /// per validated entry.
+    /// <para>接收固定头部模板文件以及每个已校验条目对应文件的目录。</para></param>
+    /// <param name="progress">The optional progress sink, reported with a fraction between 0 and 1 after
+    /// each extracted entry.
+    /// <para>可选进度接收器，每提取完一个条目收到一次 0 到 1 之间的比例值。</para></param>
+    /// <param name="overwrite">Whether existing files may be replaced.
+    /// <para>是否允许替换现有文件。</para></param>
+    /// <param name="cancellationToken">The cancellation token.
+    /// <para>取消令牌。</para></param>
+    /// <returns>The number of container entries written, not counting the header template file.
+    /// <para>已写入的容器条目数量，不计头部模板文件。</para></returns>
+    /// <exception cref="InvalidDataException">The container fails validation, or two entries resolve to the
+    /// same output path.
+    /// <para>容器未通过校验，或两个条目解析到同一输出路径。</para></exception>
+    /// <exception cref="IOException">An output file already exists while replacement is disabled.
+    /// <para>禁用替换时目标文件已存在。</para></exception>
+    /// <exception cref="OperationCanceledException">Cancellation was requested before or during a copy.
+    /// <para>在复制开始前或复制期间请求了取消。</para></exception>
+    /// <example>
+    /// <code>
+    /// int count = RockchipExtractor.Extract("update.rkfw", @"D:\out", overwrite: false);
+    /// </code>
+    /// </example>
     public static int Extract(string imagePath, string outputDirectory, IProgress<double>? progress = null,
         bool overwrite = true, CancellationToken cancellationToken = default)
     {

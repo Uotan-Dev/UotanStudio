@@ -63,7 +63,6 @@ internal abstract partial class UsbDevice
     {
         var setup = new UsbSetupPacket
         {
-            // Host-to-device, standard request, recipient = interface.
             RequestType = 0x01,
             Request = 0x0B,
             Value = altSetting,
@@ -84,7 +83,6 @@ internal abstract partial class UsbDevice
     {
         var setup = new UsbSetupPacket
         {
-            // Host-to-device, standard request, recipient = device.
             RequestType = 0x00,
             Request = 0x09,
             Value = configuration,

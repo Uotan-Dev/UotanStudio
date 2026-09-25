@@ -11,12 +11,12 @@ public sealed partial class FirehoseProtocol
     /// epilogue (LUNtoGrow + commit).
     /// <para>配置 UFS 存储：发送公共配置、每个 LUN 一条主体命令以及结语（LUNtoGrow + commit）。</para>
     /// </summary>
-    /// <param name="common">The common configuration. 公共配置。</param>
-    /// <param name="bodies">The per-LUN body configurations. 每 LUN 主体配置。</param>
-    /// <param name="epilogue">The epilogue configuration. 结语配置。</param>
-    /// <param name="commit">Whether to commit the configuration. 是否提交配置。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The epilogue Firehose response. 结语的 Firehose 响应。</returns>
+    /// <param name="common">The common configuration carrying device-level descriptor attributes.<para>承载设备级描述符属性的公共配置。</para></param>
+    /// <param name="bodies">The per-LUN body configurations, one command each.<para>每 LUN 主体配置，每个生成一条命令。</para></param>
+    /// <param name="epilogue">The epilogue configuration carrying the LUN-to-grow value.<para>携带 LUNtoGrow 值的结语配置。</para></param>
+    /// <param name="commit">Whether to persist the configuration on the device; <see langword="false"/> leaves it pending until a later commit.<para>是否在设备上持久化配置；<see langword="false"/> 表示待后续提交后才生效。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The epilogue Firehose response returned by the last command in the sequence.<para>命令序列最后一条（结语）的 Firehose 响应。</para></returns>
     public async Task<FirehoseResponse> ProvisionUfsAsync(UfsCommon common, IReadOnlyList<UfsBody> bodies, UfsEpilogue epilogue, bool commit = false, CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
@@ -64,8 +64,8 @@ public sealed partial class FirehoseProtocol
     /// <para>复位目标端待生效的 UFS provisioning 配置（commit="0" 的 &lt;ufs&gt; 结语，丢弃且
     /// 不持久化）。</para>
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The Firehose response. Firehose 响应。</returns>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The Firehose response for the reset command.<para>复位命令的 Firehose 响应。</para></returns>
     public async Task<FirehoseResponse> UfsResetAsync(CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);

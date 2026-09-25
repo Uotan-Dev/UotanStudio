@@ -17,8 +17,7 @@ internal static class HdcDaemonCodec
         using var metadata = new MemoryStream();
         Number(metadata, 1, message.ChannelId);
         Number(metadata, 2, (uint)message.Command);
-        Number(metadata, 3, 0); // Upstream disables the optional additive checksum by default.
-        // session.h: const uint8_t HdcSessionBase::payloadProtectStaticVcode = 0x09.
+        Number(metadata, 3, 0);
         Number(metadata, 4, 9);
         var packet = new byte[checked(11 + (int)metadata.Length + payload.Length)];
         packet[0] = (byte)'H'; packet[1] = (byte)'W'; packet[4] = 1;

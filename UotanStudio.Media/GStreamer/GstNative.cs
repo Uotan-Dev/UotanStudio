@@ -40,7 +40,6 @@ internal static unsafe partial class GstNative
         gst_object_unref(factory);
         return true;
     }
-    // GstBuffer/GstMiniObject are public stable ABI structures; these offsets are tested against C headers.
     internal static int BufferPtsOffset => IntPtr.Size == 8 ? 72 : 40;
     internal static void SetTimestamp(nint buffer, long ticks)
     {

@@ -4,15 +4,18 @@ namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>
 /// Implements the Sahara protocol handshake for EDL (Emergency Download Mode) devices.
-/// <para>实现 EDL 设备的 Sahara 协议握手。</para>
 /// Protocol flow: passive HELLO read → HELLO_RESP → READ_DATA/READ_DATA64 loop → END_OF_IMAGE → DONE → DONE_RESPONSE → complete.
+/// <para>实现 EDL（紧急下载模式）设备的 Sahara 协议握手。协议流程：被动读取 HELLO → HELLO_RESP →
+/// READ_DATA/READ_DATA64 循环 → END_OF_IMAGE → DONE → DONE_RESPONSE → 完成。</para>
 /// </summary>
 /// <remarks>
 /// Initializes a new instance of the <see cref="SaharaProtocol"/> class.
 /// <para>初始化 <see cref="SaharaProtocol"/> 类的新实例。</para>
 /// </remarks>
-/// <param name="transport">The device transport. 设备传输。</param>
-/// <param name="timeoutMs">Optional timeout in milliseconds. 可选的超时（毫秒）。</param>
+/// <param name="transport">The device transport.<para>设备传输层。</para></param>
+/// <param name="timeoutMs">Optional timeout in milliseconds; <see langword="null"/> selects
+/// <see cref="EdlConstants.DefaultCommandTimeoutMs"/>.
+/// <para>可选的超时（毫秒）；<see langword="null"/> 选择 <see cref="EdlConstants.DefaultCommandTimeoutMs"/>。</para></param>
 public sealed partial class SaharaProtocol(ICommTransport transport, int? timeoutMs = null)
 {
     private readonly ICommTransport _transport = transport ?? throw new ArgumentNullException(nameof(transport));
@@ -23,6 +26,10 @@ public sealed partial class SaharaProtocol(ICommTransport transport, int? timeou
     /// Gets the negotiated maximum packet length.
     /// <para>获取协商的最大包长度。</para>
     /// </summary>
+    /// <value>The advertised maximum Sahara packet length in bytes, kept at
+    /// <see cref="EdlConstants.DefaultMaxPacketLength"/> (4096).
+    /// <para>对外声明的 Sahara 最大包字节数，取值为 <see cref="EdlConstants.DefaultMaxPacketLength"/>
+    /// （4096）。</para></value>
     public uint MaxPacketLength { get; private set; } = EdlConstants.DefaultMaxPacketLength;
 
     /// <summary>
@@ -32,12 +39,21 @@ public sealed partial class SaharaProtocol(ICommTransport transport, int? timeou
     /// <para>获取或设置是否启用 QUD HELLO 恢复。当初始被动 HELLO 读取超时（QUD 驱动可能
     /// 吞掉了设备的首个 HELLO）时，主动发送 48 字节的 HELLO_RESPONSE 让设备重发 HELLO。</para>
     /// </summary>
+    /// <value><see langword="true"/> lets <c>HandshakeAsync</c> send the unsolicited recovery
+    /// HELLO_RESPONSE after the initial passive HELLO read times out; the default is
+    /// <see langword="false"/>.
+    /// <para>为 <see langword="true"/> 时，初始被动 HELLO 读取超时后 <c>HandshakeAsync</c> 会发送
+    /// 主动的恢复 HELLO_RESPONSE；默认为 <see langword="false"/>。</para></value>
     public bool QudHelloRecoveryEnabled { get; set; }
 
     /// <summary>
     /// Gets whether the device is already running Firehose (skipped Sahara).
     /// <para>设备是否已在运行 Firehose（跳过了 Sahara）。</para>
     /// </summary>
+    /// <value><see langword="true"/> once <c>HandshakeAsync</c> detected a device already
+    /// running Firehose and skipped Sahara, returning <see cref="SaharaMode.ImageTxComplete"/>.
+    /// <para>当 <c>HandshakeAsync</c> 检测到设备已在运行 Firehose 并跳过 Sahara、直接返回
+    /// <see cref="SaharaMode.ImageTxComplete"/> 后为 <see langword="true"/>。</para></value>
     public bool FirehoseAlreadyRunning { get; private set; }
 
     /// <summary>

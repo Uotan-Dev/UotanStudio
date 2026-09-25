@@ -82,7 +82,7 @@ public sealed class ProjectOperationsService
         if (CaptureDeliveryState?.Invoke() is { ValueKind: JsonValueKind.Object } delivery)
             state[DeliveryPlanStore.StateKey] = delivery;
         // 交付页尚未加载时保留解决方案文件中原有的交付计划，避免被空捕获覆盖。
-        // Keep the previously stored delivery plan until the delivery page has loaded and captures.
+        // Keep the delivery plan already stored in the solution file until the delivery page has loaded and captures.
         else if (_session.SolutionState is { } previous && previous.TryGetValue(DeliveryPlanStore.StateKey, out var kept))
             state[DeliveryPlanStore.StateKey] = kept;
         var panels = WorkspacePanelService.Instance.CaptureVisibility();

@@ -4,10 +4,31 @@ using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Smali;
 
-/// <summary>Assembles canonical smali text back into a DEX model.</summary>
+/// <summary>
+/// Assembles canonical smali text back into a DEX model.
+/// <para>将规范 smali 文本重新汇编为 DEX 模型。</para>
+/// </summary>
 public static class SmaliAssembler
 {
-    /// <summary>Parses text emitted by <see cref="Disassembler"/>.</summary>
+    /// <summary>
+    /// Parses text emitted by <see cref="Disassembler"/>.
+    /// <para>解析由 <see cref="Disassembler"/> 输出的文本。</para>
+    /// </summary>
+    /// <param name="smali">
+    /// Whole-file smali text using the directives and mnemonics this assembler's disassembler emits; unrecognized in-method lines outside its supported formats fail the assembly.
+    /// <para>整文件 smali 文本，须使用本汇编器对应反汇编器输出的指令与助记符；方法体内不受支持的行会导致汇编失败。</para>
+    /// </param>
+    /// <returns>
+    /// A <see cref="DexFile"/> model with interned strings, types, protos, fields and methods; indices are assigned in first-use order and are not stable across inputs.
+    /// <para>返回完成了字符串、类型、原型、字段与方法驻留的 <see cref="DexFile"/> 模型；索引按首次使用顺序分配，跨输入不保持稳定。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="smali"/> is <see langword="null"/>. <para><paramref name="smali"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="FormatException">
+    /// The text declares no <c>.class</c> definition, or a field, method, instruction or number token is malformed.
+    /// <para>文本未声明 <c>.class</c> 定义，或字段、方法、指令、数字标记格式非法。</para>
+    /// </exception>
     public static DexFile Assemble(string smali)
     {
         ArgumentNullException.ThrowIfNull(smali);

@@ -9,24 +9,38 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 /// Host channel client following upstream channel.h/channel.cpp and host/client.cpp.
 /// <para>上游 HDC 主机通道客户端；每条命令独占连接，不混用设备端会话协议。</para>
 /// </summary>
+/// <param name="host">
+/// Hostname or address each command's connection targets; defaults to loopback.
+/// <para>每条命令连接所指向的主机名或地址；默认为本机回环。</para>
+/// </param>
+/// <param name="port">
+/// Explicit TCP port; <see langword="null"/> selects <see cref="DefaultServerPort"/>.
+/// <para>显式 TCP 端口；<see langword="null"/> 选择 <see cref="DefaultServerPort"/>。</para>
+/// </param>
 public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null) : IDisposable
 {
     private bool _disposed;
-    /// <summary>Server host. 服务端主机。</summary>
+    /// <summary>Server host.<para>服务端主机。</para></summary>
+    /// <value>Hostname or address each command's connection targets.<para>每条命令连接所指向的主机名或地址。</para></value>
     public string ServerHost { get; } = host;
-    /// <summary>Server port. 服务端端口。</summary>
+    /// <summary>Server port.<para>服务端端口。</para></summary>
+    /// <value>Effective TCP port, either the constructor value or <see cref="DefaultServerPort"/>.<para>生效的 TCP 端口，取自构造参数或 <see cref="DefaultServerPort"/>。</para></value>
     public int ServerPort { get; } = port ?? DefaultServerPort;
     /// <summary>Upstream OHOS_HDC_SERVER_PORT override, otherwise 8710; the single definition
     /// lives in <c>Routing.DebugBridgeEndpoints</c>.
     /// <para>遵循上游 OHOS_HDC_SERVER_PORT 环境变量，否则使用 8710；唯一定义在
     /// <c>Routing.DebugBridgeEndpoints</c>。</para></summary>
+    /// <value>The default host-channel port used when no explicit port is supplied.<para>未显式提供端口时使用的默认宿主通道端口。</para></value>
     public static int DefaultServerPort => Routing.DebugBridgeEndpoints.HdcServerPort;
-    /// <summary>Maximum frame allocation. 单帧分配上限。</summary>
+    /// <summary>Maximum frame allocation.<para>单帧分配上限。</para></summary>
     public const int MaximumFrameBytes = 4 * 1024 * 1024;
-    /// <summary>Maximum captured output. 捕获输出上限。</summary>
+    /// <summary>Maximum captured output.<para>捕获输出上限。</para></summary>
     public const int MaximumOutputBytes = 16 * 1024 * 1024;
 
-    /// <summary>Checks the server-initiated handshake. 检查服务端主动握手。</summary>
+    /// <summary>Checks the server-initiated handshake.<para>检查服务端主动握手。</para></summary>
+    /// <param name="timeoutMs">Connect-and-handshake deadline in milliseconds.<para>连接与握手的超时时限（毫秒）。</para></param>
+    /// <returns><see langword="true"/> when a host channel handshake completes in time; otherwise <see langword="false"/>.<para>宿主通道握手及时完成时返回 <see langword="true"/>，否则返回 <see langword="false"/>。</para></returns>
+    /// <exception cref="System.ObjectDisposedException">This client has been disposed.<para>此客户端已被释放。</para></exception>
     public bool DetectServer(int timeoutMs = 2000)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -34,11 +48,18 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
         try { ConnectAsync(timeout.Token).GetAwaiter().GetResult(); return true; }
         catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException) { return false; }
     }
-    /// <summary>Checks server availability. 检查服务端可用性。</summary>
+    /// <summary>Checks server availability.<para>检查服务端可用性。</para></summary>
+    /// <returns><see langword="true"/> when the default-timeout handshake succeeds; otherwise <see langword="false"/>.<para>默认超时的握手成功时返回 <see langword="true"/>，否则返回 <see langword="false"/>。</para></returns>
     public bool IsServerRunning() => DetectServer();
-    /// <summary>Validates a channel; each operation reconnects. 验证通道，各操作单独连接。</summary>
+    /// <summary>Validates a channel; each operation reconnects.<para>验证通道；每次操作单独重连。</para></summary>
+    /// <exception cref="System.ObjectDisposedException">This client has been disposed.<para>此客户端已被释放。</para></exception>
+    /// <exception cref="InvalidDataException">The host channel handshake is not a valid HDC greeting.<para>宿主通道握手不是有效的 HDC 问候。</para></exception>
     public void Connect() => ConnectAsync().GetAwaiter().GetResult();
-    /// <summary>Validates a channel with cancellation. 可取消地验证通道。</summary>
+    /// <summary>Validates a channel with cancellation.<para>可取消地验证通道。</para></summary>
+    /// <param name="cancellationToken">Cancels the connect-and-handshake within its own 3-second budget.<para>在其自带的 3 秒预算内取消连接与握手。</para></param>
+    /// <returns>A task that completes once the host-channel handshake succeeds.<para>宿主通道握手成功后完成的task。</para></returns>
+    /// <exception cref="System.ObjectDisposedException">This client has been disposed.<para>此客户端已被释放。</para></exception>
+    /// <exception cref="InvalidDataException">The host channel handshake is not a valid HDC greeting.<para>宿主通道握手不是有效的 HDC 问候。</para></exception>
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -59,8 +80,6 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
             var hello = await ReadFrameAsync(stream, ct).ConfigureAwait(false);
             if (hello is null || hello.Length is not (44 or 108) || !hello.AsSpan(0, 8).SequenceEqual("OHOS HDC"u8))
                 throw new InvalidDataException("Invalid HDC host channel handshake.");
-            // banner[12] + union(channelId, connectKey[32]); omit optional version as
-            // upstream clients without HDC_VERSION_CHECK do; preserve feature bytes.
             var reply = hello[..44];
             Array.Clear(reply, 12, 32);
             Encoding.UTF8.GetBytes(connectKey, reply.AsSpan(12));
@@ -87,7 +106,14 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
         await stream.ReadExactlyAsync(payload, ct).ConfigureAwait(false);
         return payload;
     }
-    /// <summary>Streams complete frames until EOF or cancellation. 流式读取完整帧，直到关闭或取消。</summary>
+    /// <summary>Streams complete frames until EOF or cancellation.<para>流式读取完整帧，直到 EOF 或取消。</para></summary>
+    /// <param name="connectKey">Target identifier; empty selects a host-level command.<para>目标标识；空串选择宿主级命令。</para></param>
+    /// <param name="command">Command text sent NUL-terminated; must be non-blank and free of NUL bytes.<para>以 NUL 结尾发送的命令文本；必须非空白且不含 NUL 字节。</para></param>
+    /// <param name="onOutput">Callback invoked once per complete frame, in order.<para>每个完整帧按顺序调用一次的回调。</para></param>
+    /// <param name="cancellationToken">Cancels the exchange; the connection closes on unwind.<para>取消交换；连接在栈展开时关闭。</para></param>
+    /// <returns>A task that completes when the server closes the frame stream or the call is cancelled.<para>服务端关闭帧流或调用被取消时完成的task。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="command"/> is blank, contains NUL, or is too large.<para><paramref name="command"/> 为空、含 NUL 或过大。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="onOutput"/> is null.<para><paramref name="onOutput"/> 为 null。</para></exception>
     public async Task ExecuteStreamingAsync(string connectKey, string command, Action<byte[]> onOutput,
         CancellationToken cancellationToken = default)
     {
@@ -102,7 +128,13 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
             onOutput(payload);
     }
 
-    /// <summary>Relays a target-bound interactive shell through the host channel.</summary>
+    /// <summary>Relays a target-bound interactive shell through the host channel.<para>通过宿主通道中继绑定目标的交互式 shell。</para></summary>
+    /// <param name="connectKey">Target identifier the shell runs against.<para>shell 运行所针对的目标标识。</para></param>
+    /// <param name="input">Readable stream of keystrokes forwarded to the device; the caller owns it.<para>转发到设备的按键输入流；由调用方持有。</para></param>
+    /// <param name="output">Writable stream receiving device output frames, flushed per frame; the caller owns it.<para>接收设备输出帧的写入流，逐帧刷新；由调用方持有。</para></param>
+    /// <param name="cancellationToken">Stops both directions and awaits the writer before returning.<para>停止双向传输并在返回前等待写入任务。</para></param>
+    /// <returns>A task that completes when the device closes the shell or the call is cancelled.<para>设备关闭 shell 或调用被取消时完成的task。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is null.<para><paramref name="input"/> 或 <paramref name="output"/> 为 null。</para></exception>
     public async Task RunInteractiveShellAsync(string connectKey, Stream input, Stream output,
         CancellationToken cancellationToken = default)
     {
@@ -137,7 +169,15 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
             await writer.ConfigureAwait(false);
         }
     }
-    /// <summary>Captures bounded output within a total deadline. 在总时限内有界捕获输出。</summary>
+    /// <summary>Captures bounded output within a total deadline.<para>在总时限内有界捕获输出。</para></summary>
+    /// <param name="connectKey">Target identifier; empty selects a host-level command.<para>目标标识；空串选择宿主级命令。</para></param>
+    /// <param name="command">Command text sent NUL-terminated; must be non-blank and free of NUL bytes.<para>以 NUL 结尾发送的命令文本；必须非空白且不含 NUL 字节。</para></param>
+    /// <param name="timeoutMs">Total capture deadline in milliseconds; must be positive.<para>总捕获时限（毫秒）；必须为正数。</para></param>
+    /// <param name="cancellationToken">Caller cancellation distinct from the timeout.<para>独立于超时的调用方取消。</para></param>
+    /// <returns>The concatenated output frames, capped at <see cref="MaximumOutputBytes"/>.<para>拼接后的输出帧，上限为 <see cref="MaximumOutputBytes"/>。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="timeoutMs"/> is zero or negative.<para><paramref name="timeoutMs"/> 为零或负数。</para></exception>
+    /// <exception cref="TimeoutException">The deadline elapsed before the stream closed.<para>流在时限到达前未关闭。</para></exception>
+    /// <exception cref="InvalidDataException">Captured output exceeded <see cref="MaximumOutputBytes"/>.<para>捕获输出超过 <see cref="MaximumOutputBytes"/>。</para></exception>
     public async Task<byte[]> ExecuteAsync(string connectKey, string command, int timeoutMs = 30000,
         CancellationToken cancellationToken = default)
     {
@@ -157,10 +197,17 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
         { throw new TimeoutException($"HDC command exceeded {timeoutMs} ms."); }
         return output.ToArray();
     }
-    /// <summary>Executes a device command using HDC syntax. 按 HDC 语法执行设备命令。</summary>
+    /// <summary>Executes a device command using HDC syntax.<para>按 HDC 语法执行设备命令。</para></summary>
+    /// <param name="connectKey">Target identifier; empty selects a host-level command.<para>目标标识；空串选择宿主级命令。</para></param>
+    /// <param name="command">Command text sent NUL-terminated.<para>以 NUL 结尾发送的命令文本。</para></param>
+    /// <param name="timeoutMs">Total capture deadline in milliseconds.<para>总捕获时限（毫秒）。</para></param>
+    /// <returns>The captured output frames, capped at <see cref="MaximumOutputBytes"/>.<para>捕获到的输出帧，上限为 <see cref="MaximumOutputBytes"/>。</para></returns>
     public byte[] ExecuteOnDevice(string connectKey, string command, int timeoutMs = 30000)
         => ExecuteAsync(connectKey, command, timeoutMs).GetAwaiter().GetResult();
-    /// <summary>Lists targets, excluding the upstream empty marker. 列出目标并排除上游空列表标记。</summary>
+    /// <summary>Lists targets, excluding the upstream empty marker.<para>列出目标并排除上游空列表标记。</para></summary>
+    /// <param name="timeoutMs">Overall command deadline in milliseconds.<para>命令总体时限（毫秒）。</para></param>
+    /// <returns>Distinct connect keys parsed from <c>list targets</c>.<para>由 <c>list targets</c> 解析出的去重连接键。</para></returns>
+    /// <exception cref="IOException">The server returned an explicit <c>[Fail]</c> response.<para>服务端返回明确的 <c>[Fail]</c> 响应。</para></exception>
     public IReadOnlyList<string> ListTargets(int timeoutMs = 10000)
     {
         var output = Encoding.UTF8.GetString(ExecuteOnDevice(string.Empty, "list targets", timeoutMs)).TrimEnd('\0');
@@ -170,13 +217,15 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
             .Select(line => line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)[0])
             .Distinct(StringComparer.Ordinal).ToArray();
     }
-    /// <summary>Lists authoritative transport and authorization state from the host server.</summary>
+    /// <summary>Lists authoritative transport and authorization state from the host server.<para>从宿主服务端列出权威的传输与授权状态。</para></summary>
+    /// <param name="timeoutMs">Overall command deadline in milliseconds.<para>命令总体时限（毫秒）。</para></param>
+    /// <returns>Parsed target records from <c>list targets -v</c>.<para>由 <c>list targets -v</c> 解析出的目标记录。</para></returns>
     public IReadOnlyList<HdcTargetInfo> ListTargetDetails(int timeoutMs = 10000)
         => HdcTargetInfo.Parse(Encoding.UTF8.GetString(ExecuteOnDevice(string.Empty, "list targets -v", timeoutMs)));
 
     /// <summary>
     /// <para>停止本机 hdc server。上游 <c>hdc kill</c> 不走主机通道协议：客户端读取
-    /// server 写入的 pid 文件（<c>.HDCServer.pid</c> / 旧版 <c>.hdc.pid</c>）后直接终止该
+    /// server 写入的 pid 文件（<c>.HDCServer.pid</c> / 较早 server 使用的 <c>.hdc.pid</c>）后直接终止该
     /// 进程（client.cpp KillServer + base.cpp ProgramMutex）。真机验证表明 server 会忽略
     /// 线上 kill 命令，因此这里对齐上游语义。找不到 pid 文件或进程已退出时视为无 server。</para>
     /// Stops the local hdc server the way upstream does: the client reads the server's pid
@@ -186,6 +235,9 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     /// </summary>
     /// <returns><c>true</c> when a running server was terminated; <c>false</c> when none was found.
     /// <para>成功终止运行中的 server 返回 <c>true</c>；未发现 server 返回 <c>false</c>。</para></returns>
+    /// <param name="timeoutMs">Milliseconds to wait for the terminated process to exit.<para>等待被终止进程退出的毫秒数。</para></param>
+    /// <param name="cancellationToken">Checked before any pid file is read.<para>在读取任何 pid 文件前进行检查。</para></param>
+    /// <exception cref="System.OperationCanceledException"><paramref name="cancellationToken"/> was already signaled.<para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<bool> KillAsync(int timeoutMs = 10000, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -195,7 +247,6 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
             int pid;
             try
             {
-                // The running server keeps the pid file open; a shared read is required.
                 using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
                     FileShare.ReadWrite | FileShare.Delete);
                 using var reader = new StreamReader(stream);
@@ -219,26 +270,31 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or SystemException
                 && ex is not OperationCanceledException)
             {
-                // Stale pid file pointing at an exited or foreign process; try the next name.
             }
         }
 
         return Task.FromResult(false);
     }
 
-    /// <summary>Rejects explicit server failures. 拒绝服务端明确失败响应。</summary>
+    /// <summary>Rejects explicit server failures.<para>拒绝服务端明确失败响应。</para></summary>
+    /// <param name="output">Server text inspected line by line for a leading <c>[Fail]</c> marker.<para>逐行检查是否以 <c>[Fail]</c> 开头的服务端文本。</para></param>
+    /// <exception cref="IOException">Any line begins with <c>[Fail]</c>.<para>存在以 <c>[Fail]</c> 开头的行。</para></exception>
     public static void ThrowOnFailure(string output)
     {
         if (output.Split('\n').Any(line => line.TrimStart().StartsWith("[Fail]", StringComparison.Ordinal)))
             throw new IOException(output.Trim());
     }
-    /// <summary>Creates a target-scoped session. 创建目标绑定会话。</summary>
+    /// <summary>Creates a target-scoped session.<para>创建目标绑定会话。</para></summary>
+    /// <param name="connectKey">Non-blank target identifier the session runs commands against.<para>会话执行命令所针对的非空白目标标识。</para></param>
+    /// <returns>A session over a dedicated host-channel client.<para>基于独立宿主通道客户端的会话。</para></returns>
+    /// <exception cref="System.ObjectDisposedException">This client has been disposed.<para>此客户端已被释放。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="connectKey"/> is null, empty or whitespace.<para><paramref name="connectKey"/> 为 null、空或仅含空白。</para></exception>
     public HdcSession CreateSession(string connectKey)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectKey);
         return new HdcSession(new HdcServerClient(ServerHost, ServerPort), connectKey);
     }
-    /// <summary>Prevents further requests. 禁止后续请求。</summary>
+    /// <summary>Prevents further requests.<para>禁止后续请求。</para></summary>
     public void Dispose() => _disposed = true;
 }

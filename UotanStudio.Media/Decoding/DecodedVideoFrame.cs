@@ -29,9 +29,23 @@ namespace UotanStudio.Media.Decoding;
 /// </remarks>
 public class DecodedVideoFrame : IDisposable
 {
-    /// <summary>Reported/effective YUV matrix, or Auto when unreported. 已报告或实际采用的色彩矩阵。</summary>
+    /// <summary>
+    /// Reported/effective YUV matrix, or Auto when unreported.
+    /// <para>已报告或实际采用的色彩矩阵；未报告时为 Auto。</para>
+    /// </summary>
+    /// <value>
+    /// The color matrix the consumer should assume when converting this frame.
+    /// <para>转换该帧时消费方应当假定的色彩矩阵。</para>
+    /// </value>
     public VideoColorMatrix ColorMatrix { get; init; }
-    /// <summary>Reported/effective YUV range, or Auto when unreported. 已报告或实际采用的色彩范围。</summary>
+    /// <summary>
+    /// Reported/effective YUV range, or Auto when unreported.
+    /// <para>已报告或实际采用的色彩范围；未报告时为 Auto。</para>
+    /// </summary>
+    /// <value>
+    /// The luma/chroma range the consumer should assume when converting this frame.
+    /// <para>转换该帧时消费方应当假定的亮度/色度范围。</para>
+    /// </value>
     public VideoColorRange ColorRange { get; init; }
     private byte[]? _buffer;
 
@@ -82,17 +96,22 @@ public class DecodedVideoFrame : IDisposable
         TimestampTicks = timestampTicks;
     }
 
-    /// <summary>Creates a frame that takes ownership of an existing pooled buffer.</summary>
-    /// <summary>创建一个接管现有池化缓冲区所有权的帧。</summary>
-    /// <param name="buffer">The pooled buffer holding the NV12 planes. 持有 NV12 平面的池化缓冲区。</param>
-    /// <param name="length">The number of valid bytes in <paramref name="buffer"/>. <paramref name="buffer"/> 中的有效字节数。</param>
-    /// <param name="width">Frame width in pixels. 帧宽度（像素）。</param>
-    /// <param name="height">Frame height in pixels. 帧高度（像素）。</param>
+    /// <summary>
+    /// Creates a frame that takes ownership of an existing pooled buffer.
+    /// <para>创建一个接管现有池化缓冲区所有权的帧。</para>
+    /// </summary>
+    /// <param name="buffer">The pooled buffer holding the NV12 planes. <para>持有 NV12 平面的池化缓冲区。</para></param>
+    /// <param name="length">The number of valid bytes in <paramref name="buffer"/>. <para><paramref name="buffer"/> 中的有效字节数。</para></param>
+    /// <param name="width">Frame width in pixels. <para>帧宽度（像素）。</para></param>
+    /// <param name="height">Frame height in pixels. <para>帧高度（像素）。</para></param>
     /// <param name="stride">
     /// Row pitch in bytes of the NV12 buffer (may exceed width for alignment).
-    /// NV12 缓冲区的行距（字节），为对齐可能大于宽度。
+    /// <para>NV12 缓冲区的行距（字节），为对齐可能大于宽度。</para>
     /// </param>
-    /// <param name="timestampTicks">Presentation timestamp in ticks. 显示时间戳（tick）。</param>
+    /// <param name="timestampTicks">Presentation timestamp in ticks. <para>显示时间戳（tick）。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="buffer"/> is <see langword="null"/>. <para><paramref name="buffer"/> 为 <see langword="null"/> 时抛出。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="length"/> is negative, exceeds <paramref name="buffer"/>, or the geometry is out of range. <para><paramref name="length"/> 为负、超出缓冲区，或几何参数超出范围时抛出。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="length"/> is smaller than the NV12 plane total. <para><paramref name="length"/> 小于 NV12 平面所需总字节数时抛出。</para></exception>
     public DecodedVideoFrame(byte[] buffer, int length, int width, int height, int stride, long timestampTicks)
     {
         if (buffer is null)
@@ -119,39 +138,83 @@ public class DecodedVideoFrame : IDisposable
         TimestampTicks = timestampTicks;
     }
 
-    /// <summary>Gets the number of valid bytes in <see cref="Buffer"/>.</summary>
-    /// <summary>获取 <see cref="Buffer"/> 中的有效字节数。</summary>
+    /// <summary>
+    /// Gets the number of valid bytes in <see cref="Buffer"/>.
+    /// <para>获取 <see cref="Buffer"/> 中的有效字节数。</para>
+    /// </summary>
+    /// <value>
+    /// Byte count of the usable frame data; the public constructor validates it against the NV12 plane total.
+    /// <para>可用帧数据的字节数；公共构造函数会按 NV12 平面所需总字节数校验该值。</para>
+    /// </value>
     public int Length { get; }
 
-    /// <summary>Gets the frame width in pixels.</summary>
-    /// <summary>获取帧宽度（像素）。</summary>
+    /// <summary>
+    /// Gets the frame width in pixels.
+    /// <para>获取帧宽度（像素）。</para>
+    /// </summary>
+    /// <value>
+    /// The width supplied at construction, used to locate pixels inside <see cref="Stride"/> rows.
+    /// <para>构造时给定的宽度，用于在 <see cref="Stride"/> 行内定位像素。</para>
+    /// </value>
     public int Width { get; }
 
-    /// <summary>Gets the frame height in pixels.</summary>
-    /// <summary>获取帧高度（像素）。</summary>
+    /// <summary>
+    /// Gets the frame height in pixels.
+    /// <para>获取帧高度（像素）。</para>
+    /// </summary>
+    /// <value>
+    /// The height supplied at construction, covering the luma rows and half-height chroma rows.
+    /// <para>构造时给定的高度，涵盖亮度行与半高的色度行。</para>
+    /// </value>
     public int Height { get; }
 
-    /// <summary>Gets the row pitch in bytes of the NV12 buffer.</summary>
-    /// <summary>获取 NV12 缓冲区的行距（字节）。</summary>
+    /// <summary>
+    /// Gets the row pitch in bytes of the NV12 buffer.
+    /// <para>获取 NV12 缓冲区的行距（字节）。</para>
+    /// </summary>
+    /// <value>
+    /// Bytes per row; it may exceed <see cref="Width"/> for alignment and applies to both planes.
+    /// <para>每行字节数；为对齐可能大于 <see cref="Width"/>，且同时适用于两个平面。</para>
+    /// </value>
     public int Stride { get; }
 
-    /// <summary>Gets the presentation timestamp in ticks.</summary>
-    /// <summary>获取显示时间戳（tick）。</summary>
+    /// <summary>
+    /// Gets the presentation timestamp in ticks.
+    /// <para>获取显示时间戳（tick）。</para>
+    /// </summary>
+    /// <value>
+    /// The timestamp carried through from the decoded access unit.
+    /// <para>从解码访问单元一路传递而来的时间戳。</para>
+    /// </value>
     public long TimestampTicks { get; }
 
-    /// <summary>Gets the buffer holding the NV12 planes (valid range <c>[0, Length)</c>).</summary>
-    /// <summary>获取持有 NV12 平面的缓冲区（有效范围 <c>[0, Length)</c>）。</summary>
+    /// <summary>
+    /// Gets the buffer holding the NV12 planes (valid range <c>[0, Length)</c>).
+    /// <para>获取持有 NV12 平面的缓冲区（有效范围 <c>[0, Length)</c>）。</para>
+    /// </summary>
+    /// <value>
+    /// The underlying array; read only <see cref="Length"/> bytes and never retain it after <see cref="Dispose"/>.
+    /// <para>底层数组；只应读取 <see cref="Length"/> 个字节，且在 <see cref="Dispose"/> 之后不得继续持有。</para>
+    /// </value>
+    /// <exception cref="ObjectDisposedException">The frame has been disposed. <para>帧已释放时抛出。</para></exception>
     public byte[] Buffer => _buffer ?? throw new ObjectDisposedException(nameof(DecodedVideoFrame));
 
     /// <summary>
     /// Returns the valid portion of the NV12 buffer. Throws if disposed.
+    /// <para>返回 NV12 缓冲区的有效部分；已释放时抛出异常。</para>
     /// </summary>
-    /// <summary>
-    /// 返回 NV12 缓冲区的有效部分；已释放时抛出异常。
-    /// </summary>
+    /// <value>
+    /// The span <c>[0, Length)</c> of <see cref="Buffer"/>, valid until the frame is disposed.
+    /// <para><see cref="Buffer"/> 的 <c>[0, Length)</c> 区间；在帧释放前有效。</para>
+    /// </value>
+    /// <exception cref="ObjectDisposedException">The frame has been disposed. <para>帧已释放时抛出。</para></exception>
     public ReadOnlySpan<byte> Span => Buffer.AsSpan(0, Length);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Releases the frame, returning its buffer to <see cref="ArrayPool{T}"/> unless the
+    /// storage is decoder-owned; calling it more than once has no additional effect.
+    /// <para>释放帧；除非存储归解码器所有，否则将缓冲区归还给 <see cref="ArrayPool{T}"/>。重复调用无额外效果。</para>
+    /// </summary>
     public void Dispose()
     {
         var buffer = Interlocked.Exchange(ref _buffer, null);

@@ -28,57 +28,68 @@ namespace UotanStudio.Media.Decoding;
 /// </remarks>
 public interface IVideoDecoder : IDisposable
 {
-    /// <summary>Gets a value indicating whether the decoder is initialized and ready to decode.</summary>
-    /// <summary>获取一个值，该值指示解码器是否已初始化并可开始解码。</summary>
+    /// <summary>
+    /// Gets a value indicating whether the decoder is initialized and ready to decode.
+    /// <para>获取一个值，该值指示解码器是否已初始化并可开始解码。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> once <see cref="Initialize"/> has completed and the decoder has not been disposed.
+    /// <para><see cref="Initialize"/> 完成且解码器尚未释放时为 <see langword="true"/>。</para>
+    /// </value>
     bool IsInitialized { get; }
 
     /// <summary>
     /// Initializes the decoder for the given codec and frame size.
+    /// <para>以指定的编码格式与帧尺寸初始化解码器。</para>
     /// </summary>
-    /// <summary>
-    /// 以指定的编码格式与帧尺寸初始化解码器。
-    /// </summary>
-    /// <param name="codec">The compressed codec. 压缩编码格式。</param>
-    /// <param name="width">Expected frame width in pixels. 预期帧宽度（像素）。</param>
-    /// <param name="height">Expected frame height in pixels. 预期帧高度（像素）。</param>
+    /// <param name="codec">The compressed codec. <para>压缩编码格式。</para></param>
+    /// <param name="width">Expected frame width in pixels. <para>预期帧宽度（像素）。</para></param>
+    /// <param name="height">Expected frame height in pixels. <para>预期帧高度（像素）。</para></param>
     /// <param name="frameCallback">
     /// Invoked for every decoded frame; the frame is disposed by the decoder
     /// after the callback returns, so consumers must copy or convert within it.
-    /// 每解出一帧时调用；回调返回后解码器会释放该帧，消费方须在回调内完成
-    /// 复制或转换。
+    /// <para>每解出一帧时调用；回调返回后解码器会释放该帧，消费方须在回调内完成
+    /// 复制或转换。</para>
     /// </param>
     void Initialize(VideoCodecId codec, int width, int height, Action<DecodedVideoFrame> frameCallback);
 
     /// <summary>
     /// Feeds one compressed access unit into the decoder. Decoded frames are
     /// delivered through the callback registered in <see cref="Initialize"/>.
-    /// </summary>
-    /// <summary>
-    /// 将一个压缩访问单元送入解码器。解码帧经 <see cref="Initialize"/>
-    /// 注册的回调返回。
+    /// <para>将一个压缩访问单元送入解码器。解码帧经 <see cref="Initialize"/>
+    /// 注册的回调返回。</para>
     /// </summary>
     /// <param name="accessUnit">
     /// One complete access unit (a single NAL unit or a full frame of NAL units).
-    /// 一个完整的访问单元（单个 NAL 单元或一帧的全部 NAL 单元）。
+    /// <para>一个完整的访问单元（单个 NAL 单元或一帧的全部 NAL 单元）。</para>
     /// </param>
-    /// <exception cref="InvalidOperationException">Thrown when not initialized. 未初始化时抛出。</exception>
+    /// <exception cref="InvalidOperationException">Thrown when not initialized. <para>未初始化时抛出。</para></exception>
     void Decode(ReadOnlySpan<byte> accessUnit);
 
-    /// <summary>Feeds an Annex-B access unit with an explicit presentation timestamp in TimeSpan ticks.</summary>
+    /// <summary>
+    /// Feeds an Annex-B access unit with an explicit presentation timestamp in TimeSpan ticks.
+    /// <para>送入带显式显示时间戳（以 TimeSpan tick 计）的 Annex-B 访问单元。</para>
+    /// </summary>
+    /// <param name="accessUnit">One complete Annex-B access unit. <para>一个完整的 Annex-B 访问单元。</para></param>
+    /// <param name="timestampTicks">Presentation timestamp in TimeSpan ticks. <para>以 TimeSpan tick 计的显示时间戳。</para></param>
     void Decode(ReadOnlySpan<byte> accessUnit, long timestampTicks);
 
-    /// <summary>Delivers delayed output at end of stream. Reset before decoding a new stream.</summary>
+    /// <summary>
+    /// Delivers delayed output at end of stream; reset before decoding a new stream.
+    /// <para>在流结束时交付滞后的输出；解码新码流前须先重置。</para>
+    /// </summary>
     void Drain();
-    /// <summary>Delivers asynchronously completed output without consuming another input packet. 提取已完成的异步输出。</summary>
+    /// <summary>
+    /// Delivers asynchronously completed output without consuming another input packet.
+    /// <para>提取已完成的异步输出，不消耗新的输入包。</para>
+    /// </summary>
     void Poll() { }
 
     /// <summary>
     /// Resets decoder state (after a resolution change or stream discontinuity);
     /// the decoder remains initialized with the same codec and callback.
-    /// </summary>
-    /// <summary>
-    /// 重置解码器状态（分辨率变更或码流不连续后调用）；解码器保持以相同的
-    /// 编码格式与回调处于已初始化状态。
+    /// <para>重置解码器状态（分辨率变更或码流不连续后调用）；解码器保持以相同的
+    /// 编码格式与回调处于已初始化状态。</para>
     /// </summary>
     void Reset();
 }

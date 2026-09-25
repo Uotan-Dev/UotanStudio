@@ -24,9 +24,13 @@ public enum TransferListCommandKind
 }
 
 /// <summary>Describes a half-open block interval. <para>描述左闭右开块区间。</para></summary>
+/// <param name="Start">Inclusive first block index. <para>闭区间首块索引。</para></param>
+/// <param name="End">Exclusive past-the-end block index. <para>开区间末块索引（不含）。</para></param>
 public readonly record struct BlockRange(long Start, long End)
 {
     /// <summary>Gets the block count. <para>获取块数。</para></summary>
+    /// <value>Number of blocks in the interval, computed with overflow checking.
+    /// <para>区间内块数，计算时检查溢出。</para></value>
     public long BlockCount => checked(End - Start);
 }
 
@@ -34,29 +38,59 @@ public readonly record struct BlockRange(long Start, long End)
 public sealed class TransferListCommand
 {
     /// <summary>Initializes a transfer command. <para>初始化传输命令。</para></summary>
+    /// <param name="kind">Operation kind performed by this command. <para>本命令执行的传输操作类型。</para></param>
+    /// <param name="ranges">Destination ranges, or saved ranges for a stash command.
+    /// <para>目标区间；stash 命令时为被暂存的区间。</para></param>
+    /// <param name="stashId">Stash identifier for stash/free commands; <see langword="null"/> otherwise.
+    /// <para>stash/free 命令的暂存标识；其余命令为 <see langword="null"/>。</para></param>
+    /// <param name="sourceRanges">Source disk ranges; <see langword="null"/> normalizes to an empty list.
+    /// <para>源磁盘区间；传入 <see langword="null"/> 时归一为空列表。</para></param>
     public TransferListCommand(TransferListCommandKind kind, IReadOnlyList<BlockRange> ranges, string? stashId = null, IReadOnlyList<BlockRange>? sourceRanges = null)
     { Kind = kind; Ranges = ranges; StashId = stashId; SourceRanges = sourceRanges ?? []; }
     /// <summary>Gets the command kind. <para>获取命令类型。</para></summary>
+    /// <value>The transfer operation this command performs. <para>本命令执行的传输操作。</para></value>
     public TransferListCommandKind Kind { get; }
     /// <summary>Gets destination ranges, or saved ranges for stash. <para>获取目标区间或暂存区间。</para></summary>
+    /// <value>Half-open destination block ranges in file order; the blocks being saved for a stash command.
+    /// <para>按文件顺序排列的左闭右开目标区间；stash 命令时为待保存的块。</para></value>
     public IReadOnlyList<BlockRange> Ranges { get; }
     /// <summary>Gets the stash identifier. <para>获取暂存标识。</para></summary>
+    /// <value>Identifier text for stash/free commands; <see langword="null"/> for every other kind.
+    /// <para>stash/free 命令的标识文本；其他类型均为 <see langword="null"/>。</para></value>
     public string? StashId { get; }
     /// <summary>Gets source disk ranges. <para>获取源磁盘区间。</para></summary>
+    /// <value>Half-open source ranges on disk; empty when the command declares no source.
+    /// <para>磁盘上的左闭右开源区间；无源时为空。</para></value>
     public IReadOnlyList<BlockRange> SourceRanges { get; }
     /// <summary>Gets source buffer placement ranges. <para>获取源缓冲区放置区间。</para></summary>
+    /// <value>Ranges locating the assembled source inside the source buffer; empty without source blocks.
+    /// <para>标识组装后源数据在源缓冲区内位置的区间；无源块时为空。</para></value>
     public IReadOnlyList<BlockRange> SourceLocations { get; internal init; } = [];
     /// <summary>Gets stash placement ranges keyed by identifier. <para>获取按标识索引的暂存放置区间。</para></summary>
+    /// <value>Buffer placement ranges per referenced stash identifier; empty when no stash is referenced.
+    /// <para>每个被引用暂存标识对应的缓冲区放置区间；未引用暂存时为空。</para></value>
     public IReadOnlyDictionary<string, IReadOnlyList<BlockRange>> StashReferences { get; internal init; } = new Dictionary<string, IReadOnlyList<BlockRange>>();
     /// <summary>Gets the assembled source block count. <para>获取组装后的源块数。</para></summary>
+    /// <value>Declared total source blocks forming the patch input; <c>0</c> when there is no source.
+    /// <para>构成补丁输入的声明源块总数；无源时为 <c>0</c>。</para></value>
     public long SourceBlockCount { get; internal init; }
     /// <summary>Gets the patch offset. <para>获取补丁偏移。</para></summary>
+    /// <value>Byte offset into the patch data file for diff/imgdiff commands; <c>0</c> otherwise.
+    /// <para>bsdiff/imgdiff 命令在补丁数据文件中的字节偏移；其他命令为 <c>0</c>。</para></value>
     public long PatchOffset { get; internal init; }
     /// <summary>Gets the patch length. <para>获取补丁长度。</para></summary>
+    /// <value>Patch byte length for diff/imgdiff commands; <c>0</c> otherwise.
+    /// <para>bsdiff/imgdiff 命令的补丁字节长度；其他命令为 <c>0</c>。</para></value>
     public long PatchLength { get; internal init; }
     /// <summary>Gets the source SHA-1. <para>获取源 SHA-1。</para></summary>
+    /// <value>Forty-hex-digit source digest for version 3 and later; <see langword="null"/> for versions 1 and 2.
+    /// <para>版本 3 及以上的 40 位十六进制源摘要；版本 1、2 为 <see langword="null"/>。</para></value>
     public string? SourceHash { get; internal init; }
     /// <summary>Gets the target SHA-1. <para>获取目标 SHA-1。</para></summary>
+    /// <value>Forty-hex-digit target digest for version 3 and later, equal to <see cref="SourceHash"/> for move
+    /// commands; <see langword="null"/> for versions 1 and 2.
+    /// <para>版本 3 及以上的 40 位十六进制目标摘要；move 命令时与 <see cref="SourceHash"/> 相同；
+    /// 版本 1、2 为 <see langword="null"/>。</para></value>
     public string? TargetHash { get; internal init; }
 }
 
@@ -64,6 +98,12 @@ public sealed class TransferListCommand
 public sealed class TransferList
 {
     /// <summary>Initializes a transfer list and derives its destination size. <para>初始化传输列表并计算目标大小。</para></summary>
+    /// <param name="version">Transfer-list format version. <para>传输列表格式版本。</para></param>
+    /// <param name="newBlocks">Advertised total blocks to write from the header. <para>头部声明的总写入块数。</para></param>
+    /// <param name="stashEntries">Legacy stash entry count from the header. <para>头部声明的传统暂存条目数。</para></param>
+    /// <param name="maxStashedBlocks">Maximum simultaneously stashed blocks from the header.
+    /// <para>头部声明的同时暂存块数上限。</para></param>
+    /// <param name="commands">Ordered transfer commands. <para>有序的传输命令列表。</para></param>
     public TransferList(int version, long newBlocks, int stashEntries, long maxStashedBlocks, IReadOnlyList<TransferListCommand> commands)
     {
         Version = version; NewBlocks = newBlocks; StashEntries = stashEntries; MaxStashedBlocks = maxStashedBlocks; Commands = commands;
@@ -78,18 +118,32 @@ public sealed class TransferList
         }
     }
     /// <summary>Gets the format version. <para>获取格式版本。</para></summary>
+    /// <value>The version line of the parsed header; the parser accepts <c>1</c> through <c>4</c>.
+    /// <para>解析头部的版本号行；解析器接受 <c>1</c> 至 <c>4</c>。</para></value>
     public int Version { get; }
     /// <summary>Gets the advertised total blocks to write, not image size. <para>获取声明的总写入块数，不是镜像大小。</para></summary>
+    /// <value>Header-declared block count; it can exceed or under-run the actual destination extent.
+    /// <para>头部声明的块数；可大于或小于实际目标范围。</para></value>
     public long NewBlocks { get; }
-    /// <summary>Gets the legacy stash entry count. <para>获取旧版暂存条目数。</para></summary>
+    /// <summary>Gets the legacy stash entry count. <para>获取传统暂存条目数。</para></summary>
+    /// <value>Header-declared stash slots; <c>0</c> for version 1, which has no stash header line.
+    /// <para>头部声明的暂存槽位数；版本 1 无该头部行，为 <c>0</c>。</para></value>
     public int StashEntries { get; }
     /// <summary>Gets the maximum simultaneously stashed blocks. <para>获取同时暂存块数上限。</para></summary>
+    /// <value>Header-declared stash block cap; <c>0</c> for version 1. <para>头部声明的暂存块数上限；版本 1 为 <c>0</c>。</para></value>
     public long MaxStashedBlocks { get; }
     /// <summary>Gets the ordered commands. <para>获取有序命令。</para></summary>
+    /// <value>Transfer commands in file order, the sequence a block updater must replay.
+    /// <para>按文件顺序排列的传输命令，即块更新器需重放的序列。</para></value>
     public IReadOnlyList<TransferListCommand> Commands { get; }
     /// <summary>Gets the highest destination block boundary. <para>获取最高目标块边界。</para></summary>
+    /// <value>Largest exclusive end across all destination ranges of stash/free-excluded commands,
+    /// derived at construction; <c>0</c> when no command writes a range.
+    /// <para>构造时推导的所有目标区间（不含 stash/free 命令）的最大开区间端点；无写入区间时为 <c>0</c>。</para></value>
     public long TotalBlocks { get; }
     /// <summary>Gets the number of new-data blocks consumed. <para>获取消耗的新数据块数。</para></summary>
+    /// <value>Checked sum of block counts across all new commands; zero-run blocks from other kinds are excluded.
+    /// <para>所有 new 命令块数的检查和（检查溢出）；不含其他命令类型消耗的块。</para></value>
     public long NewDataBlocks { get; }
 }
 
@@ -97,8 +151,22 @@ public sealed class TransferList
 public static class TransferListParser
 {
     /// <summary>Parses a transfer-list file. <para>解析传输列表文件。</para></summary>
+    /// <param name="path">Path to the transfer-list text file, opened for reading.
+    /// <para>待只读打开的传输列表文本文件路径。</para></param>
+    /// <returns>The parsed transfer list. <para>解析后的传输列表。</para></returns>
+    /// <exception cref="InvalidDataException">The file content is truncated or malformed.
+    /// <para>文件内容被截断或格式非法。</para></exception>
     public static TransferList Parse(string path) { using var reader = File.OpenText(path); return Parse(reader); }
     /// <summary>Parses a transfer list from text. <para>从文本解析传输列表。</para></summary>
+    /// <param name="reader">Text reader positioned at the version line; consumed to the end and left open.
+    /// <para>定位在版本行的文本读取器；会被读取到末尾且保持打开。</para></param>
+    /// <returns>The parsed transfer list with commands in file order.
+    /// <para>按文件顺序包含命令的解析结果。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="reader"/> is <see langword="null"/>.
+    /// <para><paramref name="reader"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidDataException">A header line is missing, the version is outside 1 through 4,
+    /// or a command line violates the version's field grammar, ranges, hashes or stash coverage.
+    /// <para>头部行缺失、版本超出 1 至 4，或命令行违反该版本的字段语法、区间、摘要或暂存覆盖规则。</para></exception>
     public static TransferList Parse(TextReader reader)
     {
         ArgumentNullException.ThrowIfNull(reader);

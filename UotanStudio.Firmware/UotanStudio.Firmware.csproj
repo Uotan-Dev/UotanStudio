@@ -3,6 +3,7 @@
   <PropertyGroup>
     <RootNamespace>UotanStudio.Firmware</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

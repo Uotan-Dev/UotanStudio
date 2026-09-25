@@ -18,8 +18,6 @@ internal sealed class MtkXmlChannel(ICommTransport transport, int timeoutMs)
     internal Task AcknowledgeAsync(CancellationToken cancellationToken)
     {
         RequireReady(cancellationToken);
-        // mtkclient xsend appends exactly one NUL; a second NUL changes the declared length
-        // and strict DA parsers would read the extra byte as payload.
         return _frames.SendAsync(1, "OK\0"u8.ToArray(), cancellationToken);
     }
 
@@ -74,7 +72,6 @@ internal sealed class MtkXmlChannel(ICommTransport transport, int timeoutMs)
         {
             for (var logs = 0; logs <= 64; logs++)
             {
-                // Logs keep their own bound even when the remaining binary payload is smaller.
                 var (type, payload) = await _frames.ReceiveAsync(Math.Max(maximumPayload, 65540), cancellationToken).ConfigureAwait(false);
                 if (type == 1)
                 {
@@ -88,7 +85,6 @@ internal sealed class MtkXmlChannel(ICommTransport transport, int timeoutMs)
                 {
                     throw new MtkProtocolException("Unsupported or excessive XML DA log framing.");
                 }
-                // A log payload starts with its four-byte priority; it is not protocol text.
                 _ = DecodeText(payload.AsSpan(4));
             }
             throw new MtkProtocolException("XML DA protocol text was not received.");

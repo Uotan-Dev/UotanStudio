@@ -97,14 +97,14 @@ public static class RkdlConstants
     /// </summary>
     public static readonly ushort[] KnownLoaderProductIds =
     [
-        0x301A, // RK3036
-        0x310C, // RK3128
-        0x320A, // RK3288
-        0x320B, // RK3229
-        0x320C, // RK3328
-        0x330A, // RK3368
-        0x330C, // RK3399
-        0x350A, // RK3566
+        0x301A,
+        0x310C,
+        0x320A,
+        0x320B,
+        0x320C,
+        0x330A,
+        0x330C,
+        0x350A,
     ];
 }
 
@@ -324,14 +324,12 @@ internal class RkChipInfo
     {
         return chipId switch
         {
-            // ASCII tags from the READ_CHIP_INFO response (upstream CRKDevice::CheckChip).
-            0x33323041 or 0x41303233 => "RK32",   // "320A"
-            0x33303041 or 0x41303033 => "RK30",   // "300A"
-            0x33313041 or 0x41303133 => "RK31",   // "310A"
-            0x33313042 or 0x42303133 => "RK31B",  // "310B"
-            0x32393058 or 0x58303932 => "RK29",   // "290X"
-            0x6E616E6F or 0x6F6E616E => "Nano",   // "nano"
-            // USB product IDs (loader mode, 99-rk-rockusb.rules).
+            0x33323041 or 0x41303233 => "RK32",
+            0x33303041 or 0x41303033 => "RK30",
+            0x33313041 or 0x41303133 => "RK31",
+            0x33313042 or 0x42303133 => "RK31B",
+            0x32393058 or 0x58303932 => "RK29",
+            0x6E616E6F or 0x6F6E616E => "Nano",
             0x301A => "RK3036",
             0x310C => "RK3128",
             0x320A => "RK3288",

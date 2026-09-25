@@ -6,8 +6,11 @@ namespace UotanStudio.Firmware.SharedKernel.Streams;
 /// <para>统计从底层流读出的字节数，并通过可选回调上报每次读取；除非 <c>leaveOpen</c> 被设置，
 /// 否则在释放时一并释放底层流。设计上不可定位。</para>
 /// </summary>
-/// <remarks>正向镜像 <see cref="CountingWriteStream"/>：读取侧用于把“已读字节 vs 已知总长”
-/// 换算成进度，比如 Brotli 压缩按源文件长度上报。</remarks>
+/// <remarks>Mirrors <see cref="CountingWriteStream"/> on the read side: the running count is compared
+/// against a known total to derive progress, for example Brotli compression reporting against the
+/// source file length.
+/// <para>在读侧与 <see cref="CountingWriteStream"/> 对称：把已读字节与已知总长换算成进度，例如 Brotli
+/// 压缩按源文件长度上报。</para></remarks>
 public sealed class CountingReadStream : Stream
 {
     private readonly Stream _inner;
@@ -20,10 +23,18 @@ public sealed class CountingReadStream : Stream
     /// Creates a counting read stream.
     /// <para>创建计数读取流。</para>
     /// </summary>
-    /// <param name="inner">底层可读流。The readable inner stream.</param>
-    /// <param name="leaveOpen">是否在 Dispose 时保留底层流。Whether to leave the inner stream open.</param>
-    /// <param name="cancellationToken">取消令牌。Cancellation token.</param>
-    /// <param name="bytesRead">每次读取完成后回调本次读取字节数。Callback invoked after each read with the byte count.</param>
+    /// <param name="inner">Readable stream the bytes are taken from.
+    /// <para>读取字节的来源流。</para></param>
+    /// <param name="leaveOpen">When <see langword="true"/>, disposing this wrapper leaves <paramref name="inner"/> open.
+    /// <para>为 <see langword="true"/> 时，释放本包装器后 <paramref name="inner"/> 仍保持打开。</para></param>
+    /// <param name="cancellationToken">Token checked before each read and after each accepted byte count, including reads issued through <see cref="Stream.ReadAsync(Memory{byte},CancellationToken)"/>.
+    /// <para>在每次读取前以及每次确认到的字节数后检查的令牌，经由 <see cref="Stream.ReadAsync(Memory{byte},CancellationToken)"/> 发起的读取同样检查。</para></param>
+    /// <param name="bytesRead">Optional callback invoked with the size of each read that returned at least one byte.
+    /// <para>可选回调，对每次返回至少一个字节的读取收到本次的字节数。</para></param>
+    /// <exception cref="ArgumentNullException"><c>inner</c> is <see langword="null"/>.
+    /// <para><c>inner</c> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><c>inner</c> cannot be read.
+    /// <para><c>inner</c> 不可读。</para></exception>
     public CountingReadStream(Stream inner, bool leaveOpen = false, CancellationToken cancellationToken = default, Action<int>? bytesRead = null)
     {
         ArgumentNullException.ThrowIfNull(inner);
@@ -34,13 +45,38 @@ public sealed class CountingReadStream : Stream
         _bytesRead = bytesRead;
     }
 
-    /// <summary>Total bytes read so far. 已累计读取的字节数。</summary>
+    /// <summary>Total bytes read so far.
+    /// <para>已累计读取的字节数。</para></summary>
+    /// <value>The cumulative count handed to callers since construction.
+    /// <para>自构造以来累计交给调用方的字节数。</para></value>
     public long BytesRead { get; private set; }
 
+    /// <summary>The wrapper is readable until it is disposed.
+    /// <para>包装器在释放前均可读。</para></summary>
+    /// <value><c>true</c> while undisposed. <para>未释放时为 <c>true</c>。</para></value>
     public override bool CanRead => !_disposed;
+
+    /// <summary>Always <c>false</c>: the wrapper is sequential by design and never repositions the source.
+    /// <para>恒为 <c>false</c>：包装器按设计为顺序访问，永不重定位来源流。</para></summary>
+    /// <value><c>false</c>. <para>始终为 <c>false</c>。</para></value>
     public override bool CanSeek => false;
+
+    /// <summary>Always <c>false</c>: the wrapper only counts bytes taken from the source.
+    /// <para>恒为 <c>false</c>：包装器只统计从来源流取出的字节。</para></summary>
+    /// <value><c>false</c>. <para>始终为 <c>false</c>。</para></value>
     public override bool CanWrite => false;
+
+    /// <summary>Not supported: the wrapper does not query the source length.
+    /// <para>不受支持：包装器不查询来源流长度。</para></summary>
+    /// <value>Reading always throws <see cref="NotSupportedException"/>.
+    /// <para>读取始终抛出 <see cref="NotSupportedException"/>。</para></value>
     public override long Length => throw new NotSupportedException();
+
+    /// <summary>The read position, expressed through the running byte counter.
+    /// <para>读取位置，通过累计字节计数器体现。</para></summary>
+    /// <value>Getting returns the cumulative <see cref="BytesRead"/>; setting always throws
+    /// <see cref="NotSupportedException"/>.
+    /// <para>读取时返回累计的 <see cref="BytesRead"/>；设置始终抛出 <see cref="NotSupportedException"/>。</para></value>
     public override long Position { get => BytesRead; set => throw new NotSupportedException(); }
 
     /// <summary>
@@ -83,9 +119,31 @@ public sealed class CountingReadStream : Stream
         return read;
     }
 
+    /// <summary>Throws: a read-only counting wrapper has nothing to flush.
+    /// <para>抛出异常：只读计数包装器没有可刷新的内容。</para></summary>
+    /// <exception cref="NotSupportedException">Always. <para>始终抛出。</para></exception>
     public override void Flush() => throw new NotSupportedException();
+
+    /// <summary>Throws because the counting wrapper is read-only.
+    /// <para>计数包装器为只读，调用时抛出异常。</para></summary>
+    /// <param name="buffer">Ignored. <para>被忽略。</para></param>
+    /// <param name="offset">Ignored. <para>被忽略。</para></param>
+    /// <param name="count">Ignored. <para>被忽略。</para></param>
+    /// <exception cref="NotSupportedException">Always. <para>始终抛出。</para></exception>
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+    /// <summary>Throws because the wrapper does not reposition the source stream.
+    /// <para>包装器不会重定位来源流，调用时抛出异常。</para></summary>
+    /// <param name="offset">Ignored. <para>被忽略。</para></param>
+    /// <param name="origin">Ignored. <para>被忽略。</para></param>
+    /// <returns>Never returns. <para>永不返回。</para></returns>
+    /// <exception cref="NotSupportedException">Always. <para>始终抛出。</para></exception>
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+    /// <summary>Throws because the wrapper never resizes the source stream.
+    /// <para>包装器不会调整来源流大小，调用时抛出异常。</para></summary>
+    /// <param name="value">Ignored. <para>被忽略。</para></param>
+    /// <exception cref="NotSupportedException">Always. <para>始终抛出。</para></exception>
     public override void SetLength(long value) => throw new NotSupportedException();
 
     /// <summary>

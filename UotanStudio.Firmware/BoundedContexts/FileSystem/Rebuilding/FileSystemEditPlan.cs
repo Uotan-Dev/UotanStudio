@@ -187,7 +187,6 @@ internal sealed class FileSystemEditPlan
             }
             if (!entries.TryGetValue(path, out var entry)) { throw new FileNotFoundException("Extended attribute target is missing.", path); }
             var current = entry.Xattrs?.GetValueOrDefault(edit.Name);
-            // Guards refer to the source attributes even if a prior request addressed a hardlink alias.
             var original = xattrOriginals.GetValueOrDefault((path, edit.Name), current);
             if (edit.CheckOldValue && !SameXattr(original, edit.ExpectedValue))
             {
@@ -269,7 +268,7 @@ internal sealed class FileSystemEditPlan
             stream.Position = checked((long)(offset + (ulong)index * size));
             stream.ReadExactly(header[..4]);
             var kind = little ? BinaryPrimitives.ReadUInt32LittleEndian(header) : BinaryPrimitives.ReadUInt32BigEndian(header);
-            if (kind == 3) return true; // PT_INTERP distinguishes a PIE executable from an ordinary shared library.
+            if (kind == 3) return true;
         }
         return false;
     }

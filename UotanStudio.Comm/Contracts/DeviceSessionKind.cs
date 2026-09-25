@@ -9,11 +9,39 @@ namespace UotanStudio.Comm.Contracts;
 /// </summary>
 public enum DeviceSessionKind
 {
+    /// <summary>
+    /// ADB session over an adb-server route or a direct USB interface.
+    /// <para>经 adb-server 路由或直连 USB 接口的 ADB 会话。</para>
+    /// </summary>
     Adb,
+    /// <summary>
+    /// HDC session over an hdc-server route or a direct USB interface.
+    /// <para>经 hdc-server 路由或直连 USB 接口的 HDC 会话。</para>
+    /// </summary>
     Hdc,
+    /// <summary>
+    /// Fastboot session on a direct USB flashing interface.
+    /// <para>运行在直连 USB 刷写接口上的 fastboot 会话。</para>
+    /// </summary>
     Fastboot,
+    /// <summary>
+    /// Screen-mirroring session kind; the default factory set registers no builder for it.
+    /// <para>投屏会话类型；默认工厂集合没有为它注册构建器。</para>
+    /// </summary>
     Scrcpy,
+    /// <summary>
+    /// Qualcomm EDL session on a direct USB transport.
+    /// <para>运行在直连 USB 传输上的高通 EDL 会话。</para>
+    /// </summary>
     Edl,
+    /// <summary>
+    /// MTK boot-protocol session on a direct transport.
+    /// <para>运行在直连传输上的 MTK boot 协议会话。</para>
+    /// </summary>
     Mtk,
+    /// <summary>
+    /// Rockchip bootrom (RKDL) session on a direct USB transport.
+    /// <para>运行在直连 USB 传输上的 Rockchip bootrom（RKDL）会话。</para>
+    /// </summary>
     Bootrom
 }

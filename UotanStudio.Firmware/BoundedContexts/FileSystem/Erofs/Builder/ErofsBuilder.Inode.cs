@@ -4,6 +4,11 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
 
+/// <summary>
+/// EROFS builder part that selects the compact or extended inode header, fills the inode fields for every data layout, and measures or writes the bin-packed directory blocks.
+/// <para>EROFS 构建器的组成部分，负责在紧凑与扩展 inode 头之间选择、按各种数据布局填充 inode 字段，
+/// 并测量与写出贪心装箱的目录块。</para>
+/// </summary>
 public sealed partial class ErofsBuilder
 {
     private static long EstimateDirPayloadLength(BuildNode node)
@@ -30,11 +35,6 @@ public sealed partial class ErofsBuilder
     }
 
     /// <summary>
-    /// Single-block directory payload: the dirent array first, then the contiguous name area (de[i].nameoff = name-area start + the sum of preceding name lengths), isomorphic to the kernel fill_dentries / mkfs fill_dirblock.
-    /// <para>目录单块负载：dirent 数组在前、名字区紧随（de[i].nameoff = 名字区起点 + 之前名字长 之和）。</para>
-    /// </summary>
-
-    /// <summary>
     /// Derives the dirent file type from a BuildNode.
     /// <para>根据 BuildNode 推导 dirent 文件类型。</para>
     /// </summary>
@@ -54,6 +54,10 @@ public sealed partial class ErofsBuilder
         return ErofsInode.FileTypeRegularFile;
     }
 
+    /// <summary>
+    /// Single-block directory payload: the dirent array first, then the contiguous name area (de[i].nameoff = name-area start + the sum of preceding name lengths), isomorphic to the kernel fill_dentries / mkfs fill_dirblock.
+    /// <para>目录单块负载：dirent 数组在前、名字区紧随（de[i].nameoff = 名字区起点 + 之前名字长 之和）。</para>
+    /// </summary>
     private static byte[] BuildDirPayload(BuildNode node)
     {
         var sorted = BuildDirEntries(node);
@@ -132,7 +136,6 @@ public sealed partial class ErofsBuilder
             if (direntCount == 0)
             {
 
-
                 index++;
             }
 
@@ -161,7 +164,6 @@ public sealed partial class ErofsBuilder
             {
                 break;
             }
-
 
             var direntCount = 0;
             var namesLength = 0;
@@ -207,12 +209,10 @@ public sealed partial class ErofsBuilder
     {
         var header = GetInodeHeaderSize(node) + node.XattrIbody.Length;
 
-
         if (node.IsSymlink)
         {
             return header + node.Size;
         }
-
 
         if (node.IsDevice)
         {
@@ -230,10 +230,8 @@ public sealed partial class ErofsBuilder
             if (node.CompactedIndexes)
             {
 
-
                 return AlignUp(header, 8) + ZErofsMapHeader.Size + 8L * CeilDiv(node.ClusterCount, 2L) + tailSize;
             }
-
 
             return AlignUp(header, 8) + ZErofsMapHeader.Size + 8L + node.ClusterCount * ZErofsLclusterIndex.Size + tailSize;
         }
@@ -241,10 +239,8 @@ public sealed partial class ErofsBuilder
         if (node.IsFragment)
         {
 
-
             return AlignUp(header, 8) + ZErofsMapHeader.Size;
         }
-
 
         return header + node.InlineData.Length;
     }
@@ -253,7 +249,6 @@ public sealed partial class ErofsBuilder
     {
         if (node.SourceInode is { Extended: true } || node.RequiresExtendedTime) return ErofsInode.ExtendedSize;
         if (node.Uid > ushort.MaxValue || node.Gid > ushort.MaxValue || node.LinkCount > ushort.MaxValue) return ErofsInode.ExtendedSize;
-
 
         if (node.IsDirectory)
         {
@@ -274,21 +269,17 @@ public sealed partial class ErofsBuilder
             inode.Advise |= ErofsInode.FlagExtended;
         }
 
-
         var effectiveTime = node.SourceInode?.Mtime ?? (node.Mtime > 0 ? (ulong)node.Mtime : now);
         inode.CTime = effectiveTime;
         inode.CTimeNsec = node.SourceInode?.MtimeNanoseconds ?? 0;
         inode.Uid = node.Uid;
         inode.Gid = node.Gid;
-        // Compact i_mtime is relative to the superblock epoch. Offset 12 is not a generation number.
         inode.Generation = inode.IsExtended ? 0 : checked((uint)(effectiveTime - now));
-
 
         if (node.XattrIbody.Length > 0)
         {
             inode.XattrICount = ErofsXattr.GetICountForIbodyLength(node.XattrIbody.Length);
         }
-
 
         if (node.IsSymlink)
         {
@@ -300,7 +291,6 @@ public sealed partial class ErofsBuilder
             node.InlineData = Encoding.UTF8.GetBytes(node.SymlinkTarget);
             return inode;
         }
-
 
         if (node.IsDevice)
         {
@@ -337,7 +327,6 @@ public sealed partial class ErofsBuilder
             if (node.Pclusters is not null)
             {
 
-
                 inode.Advise |= node.CompactedIndexes
                     ? ErofsInode.DataLayoutCompactIndexes
                     : ErofsInode.DataLayoutCompressed;
@@ -346,20 +335,17 @@ public sealed partial class ErofsBuilder
             else if (node.IsFragment)
             {
 
-
                 inode.Advise |= ErofsInode.DataLayoutCompressed;
                 inode.U = 0;
             }
             else if (node.FlatBlocks > 0)
             {
 
-
                 inode.Advise |= node.InlineData.Length > 0 ? ErofsInode.DataLayoutInline : ErofsInode.DataLayoutFlat;
                 inode.U = (uint)node.FlatBlockAddr;
             }
             else if (node.InlineData.Length > 0)
             {
-
 
                 inode.Advise |= ErofsInode.DataLayoutInline;
                 inode.U = uint.MaxValue;

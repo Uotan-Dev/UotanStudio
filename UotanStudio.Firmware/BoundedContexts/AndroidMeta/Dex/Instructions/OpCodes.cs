@@ -1,50 +1,220 @@
 ﻿namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Instructions;
 
+/// <summary>
+/// Encoding layout of a Dalvik instruction, named by total code-unit count and operand fields.
+/// <para>Dalvik 指令的编码布局，按代码单元总数与操作数字段命名。</para>
+/// </summary>
 public enum InstructionFormat
 {
+    /// <summary>
+    /// Opcode only; one code unit with no operands.
+    /// <para>仅操作码；1 个代码单元，无操作数。</para>
+    /// </summary>
     Format10x,
+    /// <summary>
+    /// One code unit holding two 4-bit register indices.
+    /// <para>1 个代码单元，包含两个 4 位寄存器编号。</para>
+    /// </summary>
     Format12x,
+    /// <summary>
+    /// One code unit holding a 4-bit register and a 4-bit signed literal.
+    /// <para>1 个代码单元，包含一个 4 位寄存器与一个 4 位有符号字面量。</para>
+    /// </summary>
     Format11n,
+    /// <summary>
+    /// One code unit holding a single 8-bit register index.
+    /// <para>1 个代码单元，包含一个 8 位寄存器编号。</para>
+    /// </summary>
     Format11x,
+    /// <summary>
+    /// One code unit with an 8-bit signed branch offset.
+    /// <para>1 个代码单元，包含 8 位有符号跳转偏移。</para>
+    /// </summary>
     Format10t,
+    /// <summary>
+    /// Two code units with a 16-bit signed branch offset.
+    /// <para>2 个代码单元，包含 16 位有符号跳转偏移。</para>
+    /// </summary>
     Format20t,
+    /// <summary>
+    /// Two code units: an 8-bit register and a 16-bit register index.
+    /// <para>2 个代码单元：8 位寄存器与 16 位寄存器编号。</para>
+    /// </summary>
     Format22x,
+    /// <summary>
+    /// Two code units: an 8-bit register and a 16-bit signed branch offset.
+    /// <para>2 个代码单元：8 位寄存器与 16 位有符号跳转偏移。</para>
+    /// </summary>
     Format21t,
+    /// <summary>
+    /// Two code units: an 8-bit register and a 16-bit signed literal.
+    /// <para>2 个代码单元：8 位寄存器与 16 位有符号字面量。</para>
+    /// </summary>
     Format21s,
+    /// <summary>
+    /// Two code units: an 8-bit register and a 16-bit literal placed in the high half of the value.
+    /// <para>2 个代码单元：8 位寄存器与置于高位的 16 位字面量。</para>
+    /// </summary>
     Format21h,
+    /// <summary>
+    /// Two code units: an 8-bit register and a 16-bit <see cref="RefKind"/>-typed constant-pool index.
+    /// <para>2 个代码单元：8 位寄存器与按 <see cref="RefKind"/> 类型解析的 16 位常量池索引。</para>
+    /// </summary>
     Format21c,
+    /// <summary>
+    /// Two code units holding three 8-bit register indices.
+    /// <para>2 个代码单元，包含三个 8 位寄存器编号。</para>
+    /// </summary>
     Format23x,
+    /// <summary>
+    /// Two code units: two 8-bit registers and an 8-bit signed literal.
+    /// <para>2 个代码单元：两个 8 位寄存器与 8 位有符号字面量。</para>
+    /// </summary>
     Format22b,
+    /// <summary>
+    /// Two code units: two 4-bit registers and a 16-bit signed branch offset.
+    /// <para>2 个代码单元：两个 4 位寄存器与 16 位有符号跳转偏移。</para>
+    /// </summary>
     Format22t,
+    /// <summary>
+    /// Two code units: two 4-bit registers and a 16-bit signed literal.
+    /// <para>2 个代码单元：两个 4 位寄存器与 16 位有符号字面量。</para>
+    /// </summary>
     Format22s,
+    /// <summary>
+    /// Two code units: two 4-bit registers and a 16-bit field or type index.
+    /// <para>2 个代码单元：两个 4 位寄存器与 16 位字段或类型索引。</para>
+    /// </summary>
     Format22c,
+    /// <summary>
+    /// Three code units with a 32-bit signed branch offset.
+    /// <para>3 个代码单元，包含 32 位有符号跳转偏移。</para>
+    /// </summary>
     Format30t,
+    /// <summary>
+    /// Three code units holding two 16-bit register indices.
+    /// <para>3 个代码单元，包含两个 16 位寄存器编号。</para>
+    /// </summary>
     Format32x,
+    /// <summary>
+    /// Three code units: an 8-bit register and a 32-bit signed literal.
+    /// <para>3 个代码单元：8 位寄存器与 32 位有符号字面量。</para>
+    /// </summary>
     Format31i,
+    /// <summary>
+    /// Three code units: an 8-bit register and a 32-bit signed branch offset.
+    /// <para>3 个代码单元：8 位寄存器与 32 位有符号跳转偏移。</para>
+    /// </summary>
     Format31t,
+    /// <summary>
+    /// Three code units: an 8-bit register and a 32-bit constant-pool index.
+    /// <para>3 个代码单元：8 位寄存器与 32 位常量池索引。</para>
+    /// </summary>
     Format31c,
+    /// <summary>
+    /// Three code units: up to five 4-bit registers and a 16-bit <see cref="RefKind"/>-typed index.
+    /// <para>3 个代码单元：最多五个 4 位寄存器与一个按 <see cref="RefKind"/> 类型解析的 16 位索引。</para>
+    /// </summary>
     Format35c,
+    /// <summary>
+    /// Three code units: a register range (start register plus count) and a 16-bit constant-pool index.
+    /// <para>3 个代码单元：寄存器区间（起始寄存器加数量）与 16 位常量池索引。</para>
+    /// </summary>
     Format3rc,
+    /// <summary>
+    /// Four code units: up to five 4-bit registers, a 16-bit method index and a 16-bit prototype index.
+    /// <para>4 个代码单元：最多五个 4 位寄存器、16 位方法索引与 16 位原型索引。</para>
+    /// </summary>
     Format45cc,
+    /// <summary>
+    /// Four code units: a register range, a 16-bit method index and a 16-bit prototype index.
+    /// <para>4 个代码单元：寄存器区间、16 位方法索引与 16 位原型索引。</para>
+    /// </summary>
     Format4rcc,
+    /// <summary>
+    /// Five code units: an 8-bit register and a 64-bit signed literal.
+    /// <para>5 个代码单元：8 位寄存器与 64 位有符号字面量。</para>
+    /// </summary>
     Format51l,
+    /// <summary>
+    /// Pseudo-format for switch and array-data payloads, which occupy their own run of code units.
+    /// <para>switch 与数组数据有效负载的伪格式，占用独立的若干代码单元。</para>
+    /// </summary>
     Payload
 }
 
+/// <summary>
+/// Kind of constant-pool region an instruction's index operand points into.
+/// <para>指令索引操作数所指向的常量池区域类型。</para>
+/// </summary>
 public enum RefKind
 {
+    /// <summary>
+    /// The opcode carries no index operand.
+    /// <para>操作码不含索引操作数。</para>
+    /// </summary>
     None,
+    /// <summary>
+    /// Index into the string identifiers region.
+    /// <para>指向字符串标识符区域。</para>
+    /// </summary>
     String,
+    /// <summary>
+    /// Index into the type identifiers region.
+    /// <para>指向类型标识符区域。</para>
+    /// </summary>
     Type,
+    /// <summary>
+    /// Index into the field identifiers region.
+    /// <para>指向字段标识符区域。</para>
+    /// </summary>
     Field,
+    /// <summary>
+    /// Index into the method identifiers region.
+    /// <para>指向方法标识符区域。</para>
+    /// </summary>
     Method,
+    /// <summary>
+    /// Index into the method prototype identifiers region.
+    /// <para>指向方法原型标识符区域。</para>
+    /// </summary>
     Proto,
+    /// <summary>
+    /// Index into the call site identifiers region.
+    /// <para>指向调用点标识符区域。</para>
+    /// </summary>
     CallSite,
+    /// <summary>
+    /// Index into the method handle region.
+    /// <para>指向方法句柄区域。</para>
+    /// </summary>
     MethodHandle
 }
 
+/// <summary>
+/// Immutable metadata for one Dalvik opcode: smali mnemonic, encoding format and constant-pool reference kind.
+/// <para>单个 Dalvik 操作码的不可变元数据：smali 助记符、编码格式与常量池引用类型。</para>
+/// </summary>
+/// <param name="Mnemonic">
+/// Smali-style mnemonic as used in disassembly output.
+/// <para>反汇编输出中使用的 smali 风格助记符。</para>
+/// </param>
+/// <param name="Format">
+/// Encoding layout of the instruction.
+/// <para>指令的编码布局。</para>
+/// </param>
+/// <param name="RefKind">
+/// Constant-pool kind the index operand points into, or <see cref="RefKind.None"/> when there is no reference.
+/// <para>索引操作数指向的常量池类型；无引用时为 <see cref="RefKind.None"/>。</para>
+/// </param>
 public sealed record OpCodeInfo(string Mnemonic, InstructionFormat Format, RefKind RefKind);
 
+/// <summary>
+/// Static lookup table over the full byte-wide Dalvik opcode space, including vendor quick and volatile
+/// extensions, exposing mnemonic, format, reference kind and instruction width per opcode.
+/// <para>覆盖整个字节宽度 Dalvik 操作码空间的静态查找表，含厂商 quick 与 volatile 扩展，
+/// 提供每个操作码的助记符、格式、引用类型与指令宽度查询。</para>
+/// </summary>
 public static class OpCodes
 {
     private static readonly OpCodeInfo[] Table = BuildTable();
@@ -54,9 +224,27 @@ public static class OpCodes
     /// Gets metadata for the given opcode; returns null for unknown opcodes.
     /// <para>获取指定操作码的元数据；未知操作码返回 null。</para>
     /// </summary>
+    /// <param name="opcode">
+    /// Opcode byte, taken from the high byte of a code unit.
+    /// <para>操作码字节，取自代码单元的高字节。</para>
+    /// </param>
+    /// <returns>
+    /// The opcode metadata, or <see langword="null"/> when no entry occupies the byte.
+    /// <para>操作码元数据；该字节没有表项时返回 <see langword="null"/>。</para>
+    /// </returns>
     public static OpCodeInfo? Get(byte opcode) => Table[opcode];
 
-    /// <summary>Resolves an opcode by its smali mnemonic.</summary>
+    /// <summary>Resolves an opcode by its smali mnemonic.
+    /// <para>按 smali 助记符解析操作码。</para></summary>
+    /// <param name="mnemonic">
+    /// Mnemonic to match case-insensitively; <see langword="null"/> matches nothing.
+    /// <para>以不区分大小写方式匹配的助记符；<see langword="null"/> 不匹配任何条目。</para>
+    /// </param>
+    /// <returns>
+    /// The opcode byte together with its metadata for the first matching table entry,
+    /// or <see langword="null"/> when nothing matches.
+    /// <para>首个匹配表项的操作码字节及其元数据；无匹配时返回 <see langword="null"/>。</para>
+    /// </returns>
     public static (byte Opcode, OpCodeInfo Info)? Find(string mnemonic)
     {
         for (var i = 0; i < Table.Length; i++)
@@ -71,6 +259,11 @@ public static class OpCodes
     /// Gets the instruction size in 16-bit code units.
     /// <para>获取指令大小（16 位代码单元数）。</para>
     /// </summary>
+    /// <param name="opcode">Opcode byte to look up. <para>待查询的操作码字节。</para></param>
+    /// <returns>
+    /// Instruction width from 1 to 5 code units; the payload pseudo-format reports 1.
+    /// <para>指令宽度，1 到 5 个代码单元；有效负载伪格式报告 1。</para>
+    /// </returns>
     public static int GetSize(byte opcode) => Sizes[opcode];
 
     private static byte[] BuildSizes()

@@ -14,7 +14,8 @@ namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
 /// </summary>
 public static class ApkV1Signer
 {
-    /// <summary>Base name (without extension) of the signature files. 签名文件基础名（不含扩展名）。</summary>
+    /// <summary>Base name (without extension) of the signature files.
+    /// <para>签名文件基础名（不含扩展名）。</para></summary>
     public const string DefaultSignerName = "UOTAN";
 
     private const int MaxLineBytes = 72;
@@ -24,7 +25,12 @@ public static class ApkV1Signer
     /// digest of the entry's uncompressed content; directory entries must be excluded by the caller.
     /// <para>由条目摘要构建 MANIFEST.MF。每个条目段携带条目未压缩内容的 SHA-256 摘要；目录条目由调用方排除。</para>
     /// </summary>
-    /// <param name="entries">Entry names and their SHA-256 content digests. 条目名与对应的 SHA-256 内容摘要。</param>
+    /// <param name="entries">Entry names and their SHA-256 content digests.
+    /// <para>条目名与对应的 SHA-256 内容摘要。</para></param>
+    /// <returns>UTF-8 MANIFEST.MF bytes: main section followed by one Name/SHA-256-Digest section per
+    /// entry, CRLF line endings with 72-byte continuation wrapping.
+    /// <para>UTF-8 编码的 MANIFEST.MF 字节：主段之后每个条目一个 Name/SHA-256-Digest 段，行尾为 CRLF，
+    /// 超过 72 字节按续行折行。</para></returns>
     public static byte[] BuildManifest(IReadOnlyList<(string Name, byte[] Sha256Digest)> entries)
     {
         var main = new List<(string Name, string Value)>
@@ -54,8 +60,17 @@ public static class ApkV1Signer
     /// <para>构建签名文件（.SF）。主段携带整个 MANIFEST.MF 的摘要（Android 优先校验路径）；
     /// 当启用 v2/v3 时附带 X-Android-APK-Signed 属性，防止对应方案被剥离。</para>
     /// </summary>
-    /// <param name="manifestBytes">Complete MANIFEST.MF bytes. 完整的 MANIFEST.MF 字节。</param>
-    /// <param name="protectedSchemeIds">APK signature scheme IDs to protect (e.g. 2 and 3). 要保护的 APK 签名方案 ID（如 2 和 3）。</param>
+    /// <param name="manifestBytes">Complete MANIFEST.MF bytes.
+    /// <para>完整的 MANIFEST.MF 字节。</para></param>
+    /// <param name="protectedSchemeIds">APK signature scheme IDs to protect (e.g. 2 and 3).
+    /// <para>要保护的 APK 签名方案 ID（如 2 和 3）。</para></param>
+    /// <returns>UTF-8 .SF bytes: main section with SHA-256-Digest-Manifest plus, per manifest section, a
+    /// Name/SHA-256-Digest pair mirroring the manifest order.
+    /// <para>UTF-8 的 .SF 字节：含 SHA-256-Digest-Manifest 的主段，随后按清单顺序为每个清单段生成
+    /// Name/SHA-256-Digest 对。</para></returns>
+    /// <exception cref="InvalidDataException">The manifest is malformed: a section lacks the leading
+    /// <c>Name: </c> attribute or the trailing blank line.
+    /// <para>清单格式无效：某段缺少开头的 <c>Name: </c> 属性或结尾空行。</para></exception>
     public static byte[] BuildSignatureFile(byte[] manifestBytes, IReadOnlyList<int> protectedSchemeIds)
     {
         var main = new List<(string Name, string Value)>
@@ -97,6 +112,15 @@ public static class ApkV1Signer
     /// <para>使用用户自定义密钥对签名文件签名，产出 DER 编码的 PKCS#7 CMS ContentInfo（分离 SF，与 apksig 一致）。
     /// 使用平台 SignedCms 实现，AOT 兼容且跨平台。</para>
     /// </summary>
+    /// <param name="sfBytes">Complete signature file bytes to sign.
+    /// <para>待签名的完整签名文件字节。</para></param>
+    /// <param name="keyMaterial">Private key and leaf certificate used for the CMS signature.
+    /// <para>用于 CMS 签名的私钥与叶子证书。</para></param>
+    /// <returns>DER-encoded PKCS#7 CMS ContentInfo with a detached SHA-256 signature over
+    /// <paramref name="sfBytes"/>. <para>DER 编码的 PKCS#7 CMS ContentInfo，携带对
+    /// <paramref name="sfBytes"/> 的分离式 SHA-256 签名。</para></returns>
+    /// <exception cref="NotSupportedException">The key material carries neither an RSA nor an ECDSA key.
+    /// <para>密钥材料既不是 RSA 也不是 ECDSA 私钥。</para></exception>
     public static byte[] SignSignatureFile(byte[] sfBytes, ApkSignerKeyMaterial keyMaterial)
     {
         X509Certificate2 certificateWithKey = keyMaterial.Key switch
@@ -129,6 +153,12 @@ public static class ApkV1Signer
     /// Returns the signature block file extension for the key type (.RSA/.EC/.DSA).
     /// <para>按键类型返回签名块文件扩展名（.RSA/.EC/.DSA）。</para>
     /// </summary>
+    /// <param name="key">Signing key whose type selects the extension.
+    /// <para>由密钥类型决定扩展名的签名密钥。</para></param>
+    /// <returns><c>".RSA"</c> for RSA, <c>".EC"</c> for ECDSA, <c>".DSA"</c> for DSA.
+    /// <para>RSA 返回 <c>".RSA"</c>，ECDSA 返回 <c>".EC"</c>，DSA 返回 <c>".DSA"</c>。</para></returns>
+    /// <exception cref="NotSupportedException">The key type has no defined extension.
+    /// <para>该密钥类型没有对应扩展名。</para></exception>
     public static string SignatureBlockExtension(AsymmetricAlgorithm key) => key switch
     {
         RSA => ".RSA",
@@ -142,6 +172,8 @@ public static class ApkV1Signer
     /// Computes the SHA-256 digest of entry content (convenience wrapper).
     /// <para>计算条目内容的 SHA-256 摘要（便捷封装）。</para>
     /// </summary>
+    /// <param name="content">Bytes to hash. <para>待摘要的字节。</para></param>
+    /// <returns>The 32-byte SHA-256 digest. <para>32 字节的 SHA-256 摘要。</para></returns>
     public static byte[] Sha256(byte[] content)
         => SHA256.HashData(content);
 
@@ -149,10 +181,11 @@ public static class ApkV1Signer
     /// Computes the SHA-256 digest of a stream (whole stream, from current position to end).
     /// <para>计算流的 SHA-256 摘要（从当前位置到流末尾）。</para>
     /// </summary>
+    /// <param name="content">Readable stream; not consumed past its end and not closed.
+    /// <para>可读流；读到末尾即止，且不被关闭。</para></param>
+    /// <returns>The 32-byte SHA-256 digest. <para>32 字节的 SHA-256 摘要。</para></returns>
     public static byte[] Sha256(Stream content)
         => SHA256.HashData(content);
-
-    // ---- JAR manifest text formatting -------------------------------------------------
 
     /// <summary>
     /// Writes one manifest section: main section header lines or a named individual section,

@@ -66,13 +66,6 @@ internal sealed class ErofsDeviceSlot
         WriteLe48(destination, OffsetUniAddrLo, OffsetUniAddrHi, UniAddr);
     }
 
-    // Upstream struct erofs_device_info splits each 48-bit counter into a 32-bit low half and a
-    // 16-bit high half stored after BOTH low halves (blocks_lo@64, uniaddr_lo@68, blocks_hi@72,
-    // uniaddr_hi@74), so the halves are read/written from separate offsets rather than a contiguous
-    // six-byte field.
-    // 上游 struct erofs_device_info 把每个 48 位计数拆成 32 位低半部与 16 位高半部，且两个高半部
-    // 位于两个低半部之后（blocks_lo@64、uniaddr_lo@68、blocks_hi@72、uniaddr_hi@74），因此应按独立
-    // 偏移读写，而非连续 6 字节字段。
     private static ulong ReadLe48(ReadOnlySpan<byte> data, int lowOffset, int highOffset)
     {
         var lo = BinaryPrimitives.ReadUInt32LittleEndian(data[lowOffset..]);

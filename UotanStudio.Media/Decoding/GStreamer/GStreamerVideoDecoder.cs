@@ -3,7 +3,14 @@ using UotanStudio.Media.GStreamer;
 
 namespace UotanStudio.Media.Decoding.GStreamer;
 
-/// <summary>Packetized GStreamer decoder using explicitly selected hardware or software plugins. GStreamer 分包视频解码器。</summary>
+/// <summary>
+/// Packetized GStreamer decoder using explicitly selected hardware or software plugins.
+/// <para>GStreamer 分包视频解码器，使用显式选择的硬件或软件插件。</para>
+/// </summary>
+/// <param name="hardware">
+/// When <see langword="true"/>, only hardware decoder candidate elements are accepted; software candidates otherwise.
+/// <para>为 <see langword="true"/> 时仅接受硬件解码器候选元素，否则接受软件候选元素。</para>
+/// </param>
 public sealed unsafe class GStreamerVideoDecoder(bool hardware) : IVideoDecoder
 {
     private GstPipeline? _pipeline;
@@ -13,11 +20,32 @@ public sealed unsafe class GStreamerVideoDecoder(bool hardware) : IVideoDecoder
     private long _sequence;
     private bool _disposed;
     private bool _inCallback;
-    /// <summary>Selected native decoder element. 实际原生解码器元素。</summary>
+    /// <summary>
+    /// Selected native decoder element.
+    /// <para>实际选用的原生解码器元素。</para>
+    /// </summary>
+    /// <value>
+    /// The GStreamer element name chosen by the last successful <see cref="Initialize"/>; empty before that.
+    /// <para>最近一次成功 <see cref="Initialize"/> 选用的 GStreamer 元素名称；在此之前为空。</para>
+    /// </value>
     public string DecoderElement { get; private set; } = string.Empty;
-    /// <summary>Whether this instance requires a hardware plugin. 是否要求硬件插件。</summary>
+    /// <summary>
+    /// Whether this instance requires a hardware plugin.
+    /// <para>本实例是否要求硬件插件。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> when only hardware decoder candidates are accepted; fixed at construction.
+    /// <para>为 <see langword="true"/> 时仅接受硬件解码器候选；该值在构造时固定。</para>
+    /// </value>
     public bool UsesHardware => hardware;
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets a value indicating whether a GStreamer pipeline is currently built.
+    /// <para>获取一个值，该值指示当前是否已构建 GStreamer 管线。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> after a successful <see cref="Initialize"/> until <see cref="Dispose"/> or a re-initialization.
+    /// <para>在 <see cref="Initialize"/> 成功后为 <see langword="true"/>，直到 <see cref="Dispose"/> 或重新初始化。</para>
+    /// </value>
     public bool IsInitialized => _pipeline is not null;
     internal static string[] Candidates(VideoCodecId codec, bool hardware)
     {
@@ -27,7 +55,17 @@ public sealed unsafe class GStreamerVideoDecoder(bool hardware) : IVideoDecoder
         if (OperatingSystem.IsMacOS()) return ["vtdec_hw"];
         return [$"va{name}dec", $"vaapi{name}dec", $"nv{name}dec", $"v4l2sl{name}dec"];
     }
-    /// <summary>Checks installed plugin registration; stream and device initialization may still fail. 检查插件注册，不保证实际码流可解码。</summary>
+    /// <summary>
+    /// Checks installed plugin registration; stream and device initialization may still fail.
+    /// <para>检查已安装插件的注册情况；码流与设备初始化仍可能失败。</para>
+    /// </summary>
+    /// <param name="codec">Codec whose candidate element names are probed. <para>要探测候选元素名称的编解码器。</para></param>
+    /// <param name="hardware">Whether only hardware decoder elements qualify; <see langword="false"/> probes software elements.
+    /// <para>是否仅硬件解码器元素符合条件；<see langword="false"/> 表示探测软件元素。</para></param>
+    /// <returns>
+    /// <see langword="true"/> when GStreamer initializes and at least one candidate element is registered; never throws for missing native libraries.
+    /// <para>当 GStreamer 初始化成功且至少注册了一个候选元素时返回 <see langword="true"/>；缺少原生库时不会抛出异常。</para>
+    /// </returns>
     public static bool IsAvailable(VideoCodecId codec, bool hardware)
     {
         try
@@ -37,7 +75,28 @@ public sealed unsafe class GStreamerVideoDecoder(bool hardware) : IVideoDecoder
         }
         catch (Exception error) when (error is DllNotFoundException or EntryPointNotFoundException or NotSupportedException or TypeInitializationException) { return false; }
     }
-    /// <inheritdoc />
+    /// <summary>
+    /// Builds an appsrc-to-appsink pipeline for the codec, trying registered candidate decoders until one accepts the NV12 layout.
+    /// <para>为该编解码器构建从 appsrc 到 appsink 的管线，依次尝试已注册的候选解码器，直到某个解码器接受 NV12 输出布局。</para>
+    /// </summary>
+    /// <param name="codec">H.264, H.265 or AV1. <para>H.264、H.265 或 AV1。</para></param>
+    /// <param name="width">Expected frame width in pixels. <para>预期帧宽度（像素）。</para></param>
+    /// <param name="height">Expected frame height in pixels. <para>预期帧高度（像素）。</para></param>
+    /// <param name="frameCallback">
+    /// Invoked for every decoded NV12 frame on the calling thread; the frame is disposed after the callback
+    /// returns, so consumers must copy or convert within it. Reentering the decoder from the callback is forbidden.
+    /// <para>每解出一帧 NV12 即在调用线程上触发；回调返回后该帧即被释放，消费方须在回调内完成复制或转换。
+    /// 禁止在回调中重入解码器。</para>
+    /// </param>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="ArgumentNullException"><c>frameCallback</c> is null.
+    /// <para><c>frameCallback</c> 为 null。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><c>codec</c> is unsupported or dimensions exceed the limits.
+    /// <para><c>codec</c> 不受支持，或尺寸超出上限。</para></exception>
+    /// <exception cref="InvalidOperationException">The call reenters the decoder from a callback.
+    /// <para>调用从回调中重入了解码器。</para></exception>
+    /// <exception cref="NotSupportedException">No registered candidate decoder accepts the codec, or GStreamer is unavailable.
+    /// <para>没有已注册的候选解码器接受该编解码器，或 GStreamer 不可用。</para></exception>
     public void Initialize(VideoCodecId codec, int width, int height, Action<DecodedVideoFrame> frameCallback)
     {
         if (_inCallback) throw new InvalidOperationException("Decoder callbacks cannot reenter the decoder.");
@@ -63,17 +122,55 @@ public sealed unsafe class GStreamerVideoDecoder(bool hardware) : IVideoDecoder
         }
         throw new NotSupportedException($"No GStreamer {(hardware ? "hardware" : "software")} decoder accepts {codec}. {string.Join("; ", errors)}");
     }
-    /// <inheritdoc />
+    /// <summary>
+    /// Feeds one compressed access unit into the pipeline with a synthesized 60 fps presentation timestamp.
+    /// <para>将一个压缩访问单元送入管线，时间戳为合成的 60 fps 递进值。</para>
+    /// </summary>
+    /// <param name="accessUnit">
+    /// One complete access unit (H.264/H.265 in Annex-B, AV1 in OBU stream form).
+    /// <para>一个完整的访问单元（H.264/H.265 为 Annex-B 形式，AV1 为 OBU 流形式）。</para>
+    /// </param>
+    /// <exception cref="InvalidOperationException">The decoder is not initialized or the call reenters from a callback.
+    /// <para>解码器未初始化，或调用从回调中重入。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The access unit is empty or exceeds 32 MiB.
+    /// <para>访问单元为空或超过 32 MiB。</para></exception>
+    /// <exception cref="InvalidDataException">The pipeline output had an unexpected layout or produced excessive frames.
+    /// <para>管线输出布局异常，或产出帧数过多。</para></exception>
     public void Decode(ReadOnlySpan<byte> accessUnit) => Decode(accessUnit, checked(_sequence++ * 166667));
-    /// <inheritdoc />
+    /// <summary>
+    /// Feeds one compressed access unit with an explicit presentation timestamp in TimeSpan ticks.
+    /// <para>送入一个带显式呈现时间戳（TimeSpan 刻度）的压缩访问单元。</para>
+    /// </summary>
+    /// <param name="accessUnit">
+    /// One complete access unit (H.264/H.265 in Annex-B, AV1 in OBU stream form).
+    /// <para>一个完整的访问单元（H.264/H.265 为 Annex-B 形式，AV1 为 OBU 流形式）。</para>
+    /// </param>
+    /// <param name="timestampTicks">Presentation timestamp in TimeSpan ticks, attached to the pushed buffer.
+    /// <para>以 TimeSpan 刻度表示的呈现时间戳，将附加到推入的缓冲区上。</para></param>
+    /// <exception cref="InvalidOperationException">The decoder is not initialized or the call reenters from a callback.
+    /// <para>解码器未初始化，或调用从回调中重入。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The access unit is empty or exceeds 32 MiB.
+    /// <para>访问单元为空或超过 32 MiB。</para></exception>
+    /// <exception cref="InvalidDataException">The pipeline output had an unexpected layout or produced excessive frames.
+    /// <para>管线输出布局异常，或产出帧数过多。</para></exception>
     public void Decode(ReadOnlySpan<byte> accessUnit, long timestampTicks)
     {
         CheckReady();
         VideoFrameLimits.ValidateAccessUnit(accessUnit);
         _pipeline!.Push(accessUnit, timestampTicks);
-        ReadFrames(20_000_000); // Bound initial wait; output remains lossless in appsink.
+        ReadFrames(20_000_000);
     }
-    /// <inheritdoc />
+    /// <summary>
+    /// Delivers frames that finished decoding asynchronously without submitting another access unit.
+    /// <para>在不提交新的访问单元的情况下，交付已异步完成解码的帧。</para>
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The decoder is not initialized or the call reenters from a callback.
+    /// <para>解码器未初始化，或调用从回调中重入。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="InvalidDataException">The pipeline output had an unexpected layout or produced excessive frames.
+    /// <para>管线输出布局异常，或产出帧数过多。</para></exception>
     public void Poll() { CheckReady(); ReadFrames(0); }
     private void ReadFrames(ulong timeout)
     {
@@ -94,7 +191,6 @@ public sealed unsafe class GStreamerVideoDecoder(bool hardware) : IVideoDecoder
         if (GstNative.gst_structure_get_int(structure, "width", out int width) == 0 || GstNative.gst_structure_get_int(structure, "height", out int height) == 0)
             throw new InvalidDataException("Missing video dimensions.");
         VideoFrameLimits.ValidateDimensions(width, height);
-        // GStreamer raw NV12 default layout: four-byte pitch, even luma plane height.
         int nativeStride = checked((width + 3) & ~3);
         int nativeYHeight = checked((height + 1) & ~1);
         int nativeSize = checked(nativeStride * (nativeYHeight + (height + 1) / 2));
@@ -154,7 +250,17 @@ public sealed unsafe class GStreamerVideoDecoder(bool hardware) : IVideoDecoder
     {
         if (GstNative.gst_buffer_extract(source, (nuint)offset, target, (nuint)bytes) != (nuint)bytes) throw new InvalidDataException("Truncated video plane.");
     }
-    /// <inheritdoc />
+    /// <summary>
+    /// Signals end of stream and keeps pulling output until the pipeline reports EOS within five seconds.
+    /// <para>发出流结束信号，并持续拉取输出，直到管线在 5 秒内报告 EOS。</para>
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The decoder is not initialized or the call reenters from a callback.
+    /// <para>解码器未初始化，或调用从回调中重入。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="TimeoutException">EOS was not reached within five seconds.
+    /// <para>5 秒内未到达 EOS。</para></exception>
+    /// <exception cref="InvalidDataException">The pipeline output had an unexpected layout or produced excessive frames.
+    /// <para>管线输出布局异常，或产出帧数过多。</para></exception>
     public void Drain()
     {
         CheckReady();
@@ -167,7 +273,15 @@ public sealed unsafe class GStreamerVideoDecoder(bool hardware) : IVideoDecoder
         } while (Environment.TickCount64 < deadline);
         throw new TimeoutException("GStreamer drain exceeded five seconds.");
     }
-    /// <inheritdoc />
+    /// <summary>
+    /// Rebuilds the pipeline for the same codec, size and callback after a resolution change or stream discontinuity.
+    /// <para>在分辨率变更或码流不连续后，以相同的编解码器、尺寸与回调重建管线。</para>
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The decoder is not initialized or the call reenters from a callback.
+    /// <para>解码器未初始化，或调用从回调中重入。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="NotSupportedException">No registered candidate decoder accepts the codec.
+    /// <para>没有已注册的候选解码器接受该编解码器。</para></exception>
     public void Reset() { CheckReady(); Initialize(_codec, _width, _height, _callback!); }
     private void CheckReady()
     {
@@ -175,6 +289,11 @@ public sealed unsafe class GStreamerVideoDecoder(bool hardware) : IVideoDecoder
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_pipeline is null) throw new InvalidOperationException("Decoder is not initialized.");
     }
-    /// <inheritdoc />
+    /// <summary>
+    /// Tears down the GStreamer pipeline and drops the callback; repeat calls are no-ops and the decoder cannot be reused.
+    /// <para>拆除 GStreamer 管线并卸下回调；重复调用不执行任何操作，且解码器不可再复用。</para>
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The call comes from a decoder callback.
+    /// <para>调用来自解码器回调。</para></exception>
     public void Dispose() { if (_inCallback) throw new InvalidOperationException("Decoder callbacks cannot dispose the decoder."); if (_disposed) return; _pipeline?.Dispose(); _pipeline = null; _callback = null; _disposed = true; }
 }

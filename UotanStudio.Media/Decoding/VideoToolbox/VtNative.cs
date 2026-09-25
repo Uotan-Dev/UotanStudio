@@ -21,14 +21,13 @@ internal unsafe struct VtCallback
     public nint RefCon;
 }
 
-// SDK signatures from VideoToolbox, CoreMedia, CoreVideo and CoreFoundation headers.
 internal static unsafe partial class VtNative
 {
     internal const string Vt = "/System/Library/Frameworks/VideoToolbox.framework/VideoToolbox";
     internal const string Cm = "/System/Library/Frameworks/CoreMedia.framework/CoreMedia";
     internal const string Cv = "/System/Library/Frameworks/CoreVideo.framework/CoreVideo";
     internal const string Cf = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
-    internal const uint Nv12 = 0x34323076; // kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange ('420v')
+    internal const uint Nv12 = 0x34323076;
     internal static uint Codec(VideoCodecId codec) => codec switch
     {
         VideoCodecId.H264 => 0x61766331,
@@ -39,7 +38,6 @@ internal static unsafe partial class VtNative
     {
         if (status != 0) throw new InvalidOperationException($"VideoToolbox {operation} failed: {status}.");
     }
-    // Exported CFString/CFBoolean symbols are pointer variables, not C strings.
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, nint> Libraries = new();
     private static nint Export(string library, string name) =>
         NativeLibrary.GetExport(Libraries.GetOrAdd(library, static path => NativeLibrary.Load(path)), name);
@@ -52,7 +50,7 @@ internal static unsafe partial class VtNative
     {
         nint dictionary = Dictionary();
         int format = unchecked((int)Nv12);
-        nint number = CFNumberCreate(0, 3, &format); // kCFNumberSInt32Type
+        nint number = CFNumberCreate(0, 3, &format);
         try { CFDictionarySetValue(dictionary, Symbol(Cv, "kCVPixelBufferPixelFormatTypeKey"), number); }
         catch { CFRelease(dictionary); throw; }
         finally { CFRelease(number); }

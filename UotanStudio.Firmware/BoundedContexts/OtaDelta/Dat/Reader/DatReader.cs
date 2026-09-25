@@ -18,15 +18,39 @@ public static class DatReader
     public const int BlockSize = 4096;
 
     /// <summary>Unpacks a full OTA image. <para>解包全量 OTA 镜像。</para></summary>
+    /// <param name="transferListPath">Path to the <c>.transfer.list</c> command file. <para>指向 <c>.transfer.list</c> 命令文件的路径。</para></param>
+    /// <param name="newDataPath">Path to the raw new data stream. <para>指向原始新数据流的路径。</para></param>
+    /// <param name="outputImagePath">Destination image path written atomically. <para>以原子方式写入的目标镜像路径。</para></param>
+    /// <param name="progress">Receives completion fractions in <c>0</c>..&lt;<c>1</c>&gt;, or <see langword="null"/> to omit reporting. <para>接收 <c>0</c>..&lt;<c>1</c>&gt; 的完成进度；为 <see langword="null"/> 时不报告。</para></param>
     public static void Unpack(string transferListPath, string newDataPath, string outputImagePath, IProgress<double>? progress = null)
         => Unpack(transferListPath, newDataPath, null, null, outputImagePath, false, progress);
     /// <summary>Unpacks a full OTA with optional Brotli data. <para>解包可选 Brotli 数据的全量 OTA。</para></summary>
+    /// <param name="transferListPath">Path to the <c>.transfer.list</c> command file. <para>指向 <c>.transfer.list</c> 命令文件的路径。</para></param>
+    /// <param name="newDataPath">Path to the new data stream, Brotli-compressed when <paramref name="brotliCompressed"/> is set. <para>指向新数据流的路径；当 <paramref name="brotliCompressed"/> 置位时为 Brotli 压缩。</para></param>
+    /// <param name="outputImagePath">Destination image path written atomically. <para>以原子方式写入的目标镜像路径。</para></param>
+    /// <param name="brotliCompressed">Forces Brotli decoding of <paramref name="newDataPath"/> regardless of its extension. <para>无论扩展名如何，都强制对 <paramref name="newDataPath"/> 进行 Brotli 解码。</para></param>
+    /// <param name="progress">Receives completion fractions in <c>0</c>..&lt;<c>1</c>&gt;, or <see langword="null"/> to omit reporting. <para>接收 <c>0</c>..&lt;<c>1</c>&gt; 的完成进度；为 <see langword="null"/> 时不报告。</para></param>
     public static void Unpack(string transferListPath, string newDataPath, string outputImagePath, bool brotliCompressed, IProgress<double>? progress = null)
         => Unpack(transferListPath, newDataPath, null, null, outputImagePath, brotliCompressed, progress);
     /// <summary>Unpacks a full or incremental block OTA. <para>解包全量或增量块 OTA。</para></summary>
+    /// <param name="transferListPath">Path to the <c>.transfer.list</c> command file. <para>指向 <c>.transfer.list</c> 命令文件的路径。</para></param>
+    /// <param name="newDataPath">Path to the raw new data stream. <para>指向原始新数据流的路径。</para></param>
+    /// <param name="patchDataPath">Path to <c>.patch.dat</c> for diff/imgdiff commands, or <see langword="null"/> for a full OTA. <para>diff/imgdiff 命令对应的 <c>.patch.dat</c> 路径；全量 OTA 时为 <see langword="null"/>。</para></param>
+    /// <param name="sourceImagePath">Path to the source image required by incremental commands, or <see langword="null"/> for a full OTA. <para>增量命令所需源镜像的路径；全量 OTA 时为 <see langword="null"/>。</para></param>
+    /// <param name="outputImagePath">Destination image path written atomically. <para>以原子方式写入的目标镜像路径。</para></param>
+    /// <param name="progress">Receives completion fractions in <c>0</c>..&lt;<c>1</c>&gt;, or <see langword="null"/> to omit reporting. <para>接收 <c>0</c>..&lt;<c>1</c>&gt; 的完成进度；为 <see langword="null"/> 时不报告。</para></param>
     public static void Unpack(string transferListPath, string newDataPath, string? patchDataPath, string? sourceImagePath, string outputImagePath, IProgress<double>? progress = null)
         => Unpack(transferListPath, newDataPath, patchDataPath, sourceImagePath, outputImagePath, false, progress);
     /// <summary>Unpacks an OTA and commits its output only after all commands pass. <para>解包 OTA，并在全部命令验证通过后提交输出。</para></summary>
+    /// <param name="transferListPath">Path to the <c>.transfer.list</c> command file. <para>指向 <c>.transfer.list</c> 命令文件的路径。</para></param>
+    /// <param name="newDataPath">Path to the new data stream, Brotli-compressed when <paramref name="brotliCompressed"/> is set. <para>指向新数据流的路径；当 <paramref name="brotliCompressed"/> 置位时为 Brotli 压缩。</para></param>
+    /// <param name="patchDataPath">Path to <c>.patch.dat</c> for diff/imgdiff commands, or <see langword="null"/> when none apply. <para>diff/imgdiff 命令对应的 <c>.patch.dat</c> 路径；无此类命令时为 <see langword="null"/>。</para></param>
+    /// <param name="sourceImagePath">Path to the source image required by move/stash/diff/imgdiff commands, or <see langword="null"/>. <para>move/stash/diff/imgdiff 命令所需源镜像的路径；可为 <see langword="null"/>。</para></param>
+    /// <param name="outputImagePath">Destination image path; the existing file is replaced atomically only on success. <para>目标镜像路径；仅在成功时原子替换现有文件。</para></param>
+    /// <param name="brotliCompressed">Forces Brotli decoding of <paramref name="newDataPath"/> regardless of its extension. <para>无论扩展名如何，都强制对 <paramref name="newDataPath"/> 进行 Brotli 解码。</para></param>
+    /// <param name="progress">Receives completion fractions in <c>0</c>..&lt;<c>1</c>&gt;, or <see langword="null"/> to omit reporting. <para>接收 <c>0</c>..&lt;<c>1</c>&gt; 的完成进度；为 <see langword="null"/> 时不报告。</para></param>
+    /// <exception cref="ArgumentException">The transfer list needs a source image or patch data that was not supplied. <para>传输清单需要源镜像或补丁数据，但未提供。</para></exception>
+    /// <exception cref="InvalidDataException">A command's ranges, stash, hash or patch output fails validation. <para>某个命令的范围、暂存、哈希或补丁输出未通过校验。</para></exception>
     public static void Unpack(string transferListPath, string newDataPath, string? patchDataPath, string? sourceImagePath, string outputImagePath, bool brotliCompressed, IProgress<double>? progress = null)
     {
         var list = TransferListParser.Parse(transferListPath);

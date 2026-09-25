@@ -7,13 +7,10 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.HarmonyOS;
 
 internal static class HarmonyOSUsbFinder
 {
-    // The USB DDK exposes no "list devices" API, so discovery probes device IDs 1..N.
-    // Device IDs are normally assigned sequentially by the system, but gaps can appear;
-    // callers that know their device ID can raise the limit to scan further, or lower it
-    // to reduce probing Time.
     /// <summary>
-    /// Gets or sets the maximum device ID probed during discovery (default 256).
-    /// <para>获取或设置发现期间探测的最大设备 ID（默认 256）。</para>
+    /// Gets or sets the highest device ID probed during discovery (default 256). Callers that know
+    /// their device ID raise it to scan further, or lower it to shorten the scan.
+    /// <para>获取或设置发现期间探测的最大设备 ID（默认 256）。已知设备 ID 的调用方可调大以继续向后扫描，或调小以缩短扫描。</para>
     /// </summary>
     public static int MaxDeviceId { get; set; } = 256;
 

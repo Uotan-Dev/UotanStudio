@@ -19,11 +19,19 @@ public sealed partial class DeviceController
 {
     private CancellationTokenSource? _serverWatch;
 
-    /// <summary>Raised when the adb/HDC server availability flips; arguments are (adbLive, hdcLive).
-    /// adb/HDC server 可用性翻转时触发；参数为 (adb 存活, hdc 存活)。</summary>
+    /// <summary>
+    /// Raised when the adb/HDC server availability flips; arguments are (adbLive, hdcLive).
+    /// <para>adb/HDC server 可用性翻转时触发；参数为 (adb 存活, hdc 存活)。</para>
+    /// </summary>
     public event Action<bool, bool>? DebugBridgeAvailabilityChanged;
 
-    /// <summary>Starts the periodic server-state watch. Idempotent. 启动周期 server 状态监视。幂等。</summary>
+    /// <summary>
+    /// Starts the periodic server-state watch. Idempotent.
+    /// <para>启动周期 server 状态监视。幂等。</para>
+    /// </summary>
+    /// <param name="interval">
+    /// Probe cadence; null uses 2500 milliseconds. <para>探测周期；null 使用 2500 毫秒。</para>
+    /// </param>
     public void StartServerStateWatch(TimeSpan? interval = null)
     {
         lock (_gate)
@@ -52,7 +60,6 @@ public sealed partial class DeviceController
                 {
                     first = false;
                     reported = (adbLive, hdcLive);
-                    // Drop cached probe verdicts so the next scan re-probes for real.
                     DebugBridgeRoute.InvalidateProbe(DebugBridgeEndpoints.ServerHost, DebugBridgeEndpoints.AdbServerPort);
                     DebugBridgeRoute.InvalidateProbe(DebugBridgeEndpoints.ServerHost, DebugBridgeEndpoints.HdcServerPort);
                     DebugBridgeAvailabilityChanged?.Invoke(adbLive, hdcLive);
@@ -96,8 +103,6 @@ public sealed partial class DeviceController
         }
         catch
         {
-            // Inconclusive probe: treat as not-live for watch purposes; the probe cache stays
-            // untouched so the discovery path still applies its own rules.
             return false;
         }
     }
@@ -140,7 +145,6 @@ public sealed partial class DeviceController
             }
             catch
             {
-                // Transient server/list failure: keep the lease until the next pass proves it gone.
             }
         }
     }

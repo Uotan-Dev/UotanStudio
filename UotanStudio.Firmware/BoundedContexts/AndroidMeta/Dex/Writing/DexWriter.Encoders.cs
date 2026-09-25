@@ -56,9 +56,7 @@ internal static partial class DexWriter
         if (code.Tries.Count > 0)
         {
 
-
             Align(w, 4);
-
 
             var listHeaderSize = Leb128.Uleb128Size((uint)code.Handlers.Count);
             var handlerOffsets = new int[code.Handlers.Count];
@@ -78,7 +76,6 @@ internal static partial class DexWriter
                     : 0;
                 w.Write((ushort)off);
             }
-
 
             WriteUleb128(w, (uint)code.Handlers.Count);
             foreach (var handler in code.Handlers)
@@ -117,7 +114,6 @@ internal static partial class DexWriter
     {
         var typedCount = handler.Entries.Count;
 
-
         WriteSleb128(w, handler.HasCatchAll ? -typedCount : typedCount);
         foreach (var entry in handler.Entries)
         {
@@ -139,8 +135,6 @@ internal static partial class DexWriter
         switch (value.Type)
         {
             case EncodedValueType.Byte:
-                // BinaryWriter.Write(int) 会写出 4 字节；encoded_value 的 Byte 载荷只有 1 字节。
-                // BinaryWriter.Write(int) emits 4 bytes; the Byte payload is exactly 1 byte.
                 w.Write((byte)EncodedValueType.Byte);
                 w.Write((byte)value.AsInt());
                 break;

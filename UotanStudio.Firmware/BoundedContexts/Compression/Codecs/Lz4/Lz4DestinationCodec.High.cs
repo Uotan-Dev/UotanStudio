@@ -17,7 +17,6 @@ internal static unsafe partial class Lz4DestinationCodec
 
         pattern |= pattern << 32;
 
-
         while ((ip < iEnd - (ARCH - 1)))
         {
             reg_t diff = Mem.PeekW(ip) ^ pattern;
@@ -75,7 +74,6 @@ internal static unsafe partial class Lz4DestinationCodec
         repeat_state_e repeat = repeat_state_e.rep_untested;
         size_t srcPatternLength = 0;
 
-        /* First Match */
         LZ4HC_Insert(hc4, ip);
         matchIndex = HashTable[LZ4HC_hashPtr(ip)];
 
@@ -86,11 +84,9 @@ internal static unsafe partial class Lz4DestinationCodec
             Assert(matchIndex < ipIndex);
             if (favorDecSpeed != 0 && (ipIndex - matchIndex < 8))
             {
-                /* do nothing */
             }
             else if (matchIndex >= dictLimit)
             {
-                /* within current Prefix */
                 byte* matchPtr = @base + matchIndex;
                 Assert(matchPtr >= lowPrefixPtr);
                 Assert(matchPtr < ip);
@@ -116,7 +112,6 @@ internal static unsafe partial class Lz4DestinationCodec
             }
             else
             {
-                /* lowestMatchIndex <= matchIndex < dictLimit */
                 byte* matchPtr = dictBase + matchIndex;
                 if (Mem.Peek4(matchPtr) == pattern)
                 {
@@ -137,7 +132,7 @@ internal static unsafe partial class Lz4DestinationCodec
                         longest = matchLength;
                         *matchpos =
                             @base + matchIndex
-                            + back; /* virtual pos, relative to ip, to retrieve offset */
+                            + back;
                         *startpos = ip + back;
                     }
                 }
@@ -145,8 +140,7 @@ internal static unsafe partial class Lz4DestinationCodec
 
             if (chainSwap && matchLength == longest)
             {
-                /* better match => select a better chain */
-                Assert(lookBackLength == 0); /* search forward only */
+                Assert(lookBackLength == 0);
                 if (matchIndex + (uint)longest <= ipIndex)
                 {
                     int kTrigger = 4;
@@ -169,7 +163,7 @@ internal static unsafe partial class Lz4DestinationCodec
 
                     if (distanceToNextMatch > 1)
                     {
-                        if (distanceToNextMatch > matchIndex) break; /* avoid overflow */
+                        if (distanceToNextMatch > matchIndex) break;
 
                         matchIndex -= distanceToNextMatch;
                         continue;
@@ -182,7 +176,6 @@ internal static unsafe partial class Lz4DestinationCodec
                 if (patternAnalysis && distNextMatch == 1 && matchChainPos == 0)
                 {
                     uint matchCandidateIdx = matchIndex - 1;
-                    /* may be a repeated pattern */
                     if (repeat == repeat_state_e.rep_untested)
                     {
                         if (((pattern & 0xFFFF) == (pattern >> 16))
@@ -206,7 +199,6 @@ internal static unsafe partial class Lz4DestinationCodec
                         byte* matchPtr = (extDict ? dictBase : @base) + matchCandidateIdx;
                         if (Mem.Peek4(matchPtr) == pattern)
                         {
-                            /* good candidate */
                             byte* dictStart = dictBase + hc4->lowLimit;
                             byte* iLimit = extDict ? dictBase + dictLimit : iHighLimit;
                             size_t forwardPatternLength = LZ4HC_countPattern(
@@ -233,25 +225,21 @@ internal static unsafe partial class Lz4DestinationCodec
                                         dictBase + dictLimit, dictStart, rotatedPattern);
                                 }
 
-                                /* Limit backLength not go further than lowestMatchIndex */
                                 backLength = matchCandidateIdx - MAX(
                                     matchCandidateIdx - (uint)backLength, lowestMatchIndex);
                                 Assert(
                                     matchCandidateIdx - backLength >= lowestMatchIndex);
                                 currentSegmentLength = backLength + forwardPatternLength;
-                                /* Adjust to end of pattern if the source pattern fits, otherwise the beginning of the pattern */
-                                if ((currentSegmentLength >= srcPatternLength) /* current pattern segment large enough to contain full srcPatternLength */
+                                if ((currentSegmentLength >= srcPatternLength)
                                     && (forwardPatternLength <= srcPatternLength))
                                 {
-                                    /* haven't reached this position yet */
                                     uint newMatchIndex = matchCandidateIdx
                                         + (uint)forwardPatternLength
-                                        - (uint)srcPatternLength; /* best position, full pattern, might be followed by more match */
+                                        - (uint)srcPatternLength;
                                     if (LZ4HC_protectDictEnd(dictLimit, newMatchIndex))
                                         matchIndex = newMatchIndex;
                                     else
                                     {
-                                        /* Can only happen if started in the prefix */
                                         Assert(
                                             newMatchIndex >= dictLimit - 3
                                             && newMatchIndex < dictLimit && !extDict);
@@ -262,7 +250,7 @@ internal static unsafe partial class Lz4DestinationCodec
                                 {
                                     uint newMatchIndex =
                                         matchCandidateIdx
-                                        - (uint)backLength; /* farthest position in current segment, will find a match of length currentSegmentLength + maybe some back */
+                                        - (uint)backLength;
                                     if (!LZ4HC_protectDictEnd(dictLimit, newMatchIndex))
                                     {
                                         Assert(
@@ -275,7 +263,6 @@ internal static unsafe partial class Lz4DestinationCodec
                                         matchIndex = newMatchIndex;
                                         if (lookBackLength == 0)
                                         {
-                                            /* no back possible */
                                             size_t maxML = MIN(
                                                 currentSegmentLength, srcPatternLength);
                                             if ((size_t)longest < maxML)
@@ -288,7 +275,7 @@ internal static unsafe partial class Lz4DestinationCodec
                                                 longest = (int)maxML;
                                                 *matchpos =
                                                     @base
-                                                    + matchIndex; /* virtual pos, relative to ip, to retrieve offset */
+                                                    + matchIndex;
                                                 *startpos = ip;
                                             }
 
@@ -296,7 +283,7 @@ internal static unsafe partial class Lz4DestinationCodec
                                                 uint distToNextPattern = DELTANEXTU16(
                                                     chainTable, matchIndex);
                                                 if (distToNextPattern > matchIndex)
-                                                    break; /* avoid overflow */
+                                                    break;
 
                                                 matchIndex -= distToNextPattern;
                                             }
@@ -308,11 +295,10 @@ internal static unsafe partial class Lz4DestinationCodec
                         }
                     }
                 }
-            } /* PA optimization */
+            }
 
-            /* follow current chain */
             matchIndex -= DELTANEXTU16(chainTable, matchIndex + matchChainPos);
-        } /* while ((matchIndex>=lowestMatchIndex) && (nbAttempts)) */
+        }
 
         if (dict == dictCtx_directive.usingDictCtxHc
             && nbAttempts != 0
@@ -358,7 +344,7 @@ internal static unsafe partial class Lz4DestinationCodec
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int LZ4HC_InsertAndFindBestMatch(
-        LZ4_streamHC_t* hc4, /* Index table will be updated */
+        LZ4_streamHC_t* hc4,
         byte* ip, byte* iLimit,
         byte** matchpos,
         int maxNbAttempts,
@@ -366,12 +352,9 @@ internal static unsafe partial class Lz4DestinationCodec
         dictCtx_directive dict)
     {
         byte* uselessPtr = ip;
-        /* note : LZ4HC_InsertAndGetWiderMatch() is able to modify the starting position of a match (*startpos),
-        * but this won't be the case here, as we define iLowLimit==ip,
-        * so LZ4HC_InsertAndGetWiderMatch() won't be allowed to search past ip */
         return LZ4HC_InsertAndGetWiderMatch(
             hc4, ip, ip, iLimit, MINMATCH - 1, matchpos, &uselessPtr, maxNbAttempts,
-            patternAnalysis, false /*chainSwap*/, dict, HCfavor_e.favorCompressionRatio);
+            patternAnalysis, false, dict, HCfavor_e.favorCompressionRatio);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -386,19 +369,16 @@ internal static unsafe partial class Lz4DestinationCodec
         match.len = 0;
         match.off = 0;
         byte* matchPtr = null;
-        /* note : LZ4HC_InsertAndGetWiderMatch() is able to modify the starting position of a match (*startpos),
-        * but this won't be the case here, as we define iLowLimit==ip,
-        * so LZ4HC_InsertAndGetWiderMatch() won't be allowed to search past ip */
         int matchLength = LZ4HC_InsertAndGetWiderMatch(
             ctx, ip, ip, iHighLimit, minLen, &matchPtr, &ip, nbSearches,
-            true /*patternAnalysis*/,
-            true /*chainSwap*/, dict, favorDecSpeed);
+            true,
+            true, dict, favorDecSpeed);
         if (matchLength <= minLen) return match;
 
         if (favorDecSpeed != 0)
         {
             if ((matchLength > 18) & (matchLength <= 36))
-                matchLength = 18; /* favor shortcut */
+                matchLength = 18;
         }
 
         match.len = matchLength;
@@ -419,10 +399,9 @@ internal static unsafe partial class Lz4DestinationCodec
         size_t length;
         byte* token = (*op)++;
 
-        /* Encode Literal length */
         length = (size_t)(*ip - *anchor);
         if ((limit != 0) && ((*op + (length / 255) + length + (2 + 1 + LASTLITERALS)) > oend))
-            return 1; /* Check output limit */
+            return 1;
 
         if (length >= RUN_MASK)
         {
@@ -436,22 +415,19 @@ internal static unsafe partial class Lz4DestinationCodec
             *token = (byte)(length << ML_BITS);
         }
 
-        /* Copy Literals */
         Mem.WildCopy8(*op, *anchor, (*op) + length);
         *op += length;
 
-        /* Encode Offset */
         Assert(
             (*ip - match)
-            <= LZ4_DISTANCE_MAX); /* note : consider providing offset as a value, rather than as a pointer difference */
+            <= LZ4_DISTANCE_MAX);
         Mem.Poke2(*op, (ushort)(*ip - match));
         *op += 2;
 
-        /* Encode MatchLength */
         Assert(matchLength >= MINMATCH);
         length = (size_t)matchLength - MINMATCH;
         if ((limit != 0) && (*op + (length / 255) + (1 + LASTLITERALS) > oend))
-            return 1; /* Check output limit */
+            return 1;
 
         if (length >= ML_MASK)
         {
@@ -476,7 +452,6 @@ internal static unsafe partial class Lz4DestinationCodec
             *token += (byte)(length);
         }
 
-        /* Prepare next loop */
         *ip += matchLength;
         *anchor = *ip;
 
@@ -495,7 +470,7 @@ internal static unsafe partial class Lz4DestinationCodec
         dictCtx_directive dict)
     {
         int inputSize = *srcSizePtr;
-        bool patternAnalysis = (maxNbAttempts > 128); /* levels 9+ */
+        bool patternAnalysis = (maxNbAttempts > 128);
 
         byte* ip = (byte*)source;
         byte* anchor = ip;
@@ -516,14 +491,12 @@ internal static unsafe partial class Lz4DestinationCodec
         byte* start3 = null;
         byte* ref3 = null;
 
-        /* init */
         *srcSizePtr = 0;
         if (limit == limitedOutput_directive.fillOutput)
-            oend -= LASTLITERALS; /* Hack for support LZ4 format restriction */
+            oend -= LASTLITERALS;
         if (inputSize < LZ4_minLength)
-            goto _last_literals; /* Input too small, no compression (all literals) */
+            goto _last_literals;
 
-        /* Main Loop */
         while (ip <= mflimit)
         {
             ml = LZ4HC_InsertAndFindBestMatch(
@@ -534,7 +507,6 @@ internal static unsafe partial class Lz4DestinationCodec
                 continue;
             }
 
-            /* saved, in case we would skip too much */
             start0 = ip;
             ref0 = @ref;
             ml0 = ml;
@@ -555,7 +527,6 @@ internal static unsafe partial class Lz4DestinationCodec
 
             if (ml2 == ml)
             {
-                /* No better match => encode ML1 */
                 optr = op;
                 if (LZ4HC_encodeSequence(&ip, &op, &anchor, ml, @ref, limit, oend) != 0)
                     goto _dest_overflow;
@@ -565,20 +536,16 @@ internal static unsafe partial class Lz4DestinationCodec
 
             if (start0 < ip)
             {
-                /* first match was skipped at least once */
                 if (start2 < ip + ml0)
                 {
-                    /* squeezing ML1 between ML0(original ML1) and ML2 */
                     ip = start0;
                     @ref = ref0;
-                    ml = ml0; /* restore initial ML1 */
+                    ml = ml0;
                 }
             }
 
-            /* Here, start0==ip */
             if ((start2 - ip) < 3)
             {
-                /* First Match too small : removed */
                 ml = ml2;
                 ip = start2;
                 @ref = ref2;
@@ -586,9 +553,6 @@ internal static unsafe partial class Lz4DestinationCodec
             }
 
         _Search3:
-            /* At this stage, we have :
-            *  ml2 > ml1, and
-            *  ip1+3 <= ip2 (usually < ip1+ml1) */
             if ((start2 - ip) < OPTIMAL_ML)
             {
                 int correction;
@@ -604,7 +568,6 @@ internal static unsafe partial class Lz4DestinationCodec
                     ml2 -= correction;
                 }
             }
-            /* Now, we have start2 = ip+new_ml, with new_ml = min(ml, OPTIMAL_ML=18) */
 
             if (start2 + ml2 <= mflimit)
             {
@@ -621,10 +584,7 @@ internal static unsafe partial class Lz4DestinationCodec
 
             if (ml3 == ml2)
             {
-                /* No better match => encode ML1 and ML2 */
-                /* ip & ref are known; Now for ml */
                 if (start2 < ip + ml) ml = (int)(start2 - ip);
-                /* Now, encode 2 sequences */
                 optr = op;
                 if (LZ4HC_encodeSequence(&ip, &op, &anchor, ml, @ref, limit, oend) != 0)
                     goto _dest_overflow;
@@ -643,10 +603,8 @@ internal static unsafe partial class Lz4DestinationCodec
 
             if (start3 < ip + ml + 3)
             {
-                /* Not enough space for match 2 : remove it */
                 if (start3 >= (ip + ml))
                 {
-                    /* can write Seq1 immediately ==> Seq2 is removed, so Seq3 becomes Seq1 */
                     if (start2 < ip + ml)
                     {
                         int correction = (int)(ip + ml - start2);
@@ -681,11 +639,6 @@ internal static unsafe partial class Lz4DestinationCodec
                 goto _Search3;
             }
 
-            /*
-            * OK, now we have 3 ascending matches;
-            * let's write the first one ML1.
-            * ip & ref are known; Now decide ml.
-            */
             if (start2 < ip + ml)
             {
                 if ((start2 - ip) < OPTIMAL_ML)
@@ -712,34 +665,29 @@ internal static unsafe partial class Lz4DestinationCodec
             if (LZ4HC_encodeSequence(&ip, &op, &anchor, ml, @ref, limit, oend) != 0)
                 goto _dest_overflow;
 
-            /* ML2 becomes ML1 */
             ip = start2;
             @ref = ref2;
             ml = ml2;
 
-            /* ML3 becomes ML2 */
             start2 = start3;
             ref2 = ref3;
             ml2 = ml3;
 
-            /* let's find a new ML3 */
             goto _Search3;
         }
 
     _last_literals:
-        /* Encode Last Literals */
         {
-            size_t lastRunSize = (size_t)(iend - anchor); /* literals */
+            size_t lastRunSize = (size_t)(iend - anchor);
             size_t litLength = (lastRunSize + 255 - RUN_MASK) / 255;
             size_t totalSize = 1 + litLength + lastRunSize;
             if (limit == limitedOutput_directive.fillOutput)
-                oend += LASTLITERALS; /* restore correct value */
+                oend += LASTLITERALS;
             if (limit != 0 && (op + totalSize > oend))
             {
                 if (limit == limitedOutput_directive.limitedOutput)
-                    return 0; /* Check output limit */
+                    return 0;
 
-                /* adapt lastRunSize to fill 'dest' */
                 lastRunSize = (size_t)(oend - op) - 1;
                 litLength = (lastRunSize + 256 - RUN_MASK) / 256;
                 lastRunSize -= litLength;
@@ -763,14 +711,13 @@ internal static unsafe partial class Lz4DestinationCodec
             op += lastRunSize;
         }
 
-        /* End */
         *srcSizePtr = (int)(((byte*)ip) - source);
         return (int)(((byte*)op) - dest);
 
     _dest_overflow:
         if (limit == limitedOutput_directive.fillOutput)
         {
-            op = optr; /* restore correct out pointer */
+            op = optr;
             EncodeOverflowMatch(&ip, &op, &anchor, ml, @ref, oend);
             goto _last_literals;
         }
@@ -793,7 +740,6 @@ internal static unsafe partial class Lz4DestinationCodec
         HCfavor_e favorDecSpeed)
     {
         const int TRAILING_LITERALS = 3;
-        /* ~64 KB, which is a bit large for stack... */
         LZ4HC_optimal_t* opt = stackalloc LZ4HC_optimal_t[LZ4_OPT_NUM + TRAILING_LITERALS];
 
         byte* ip = (byte*)source;
@@ -807,13 +753,11 @@ internal static unsafe partial class Lz4DestinationCodec
         int overflowMatchLength = MINMATCH;
         byte* overflowReference = null;
 
-        /* init */
         *srcSizePtr = 0;
         if (limit == limitedOutput_directive.fillOutput)
-            oend -= LASTLITERALS; /* Hack for support LZ4 format restriction */
+            oend -= LASTLITERALS;
         if (sufficient_len >= LZ4_OPT_NUM) sufficient_len = LZ4_OPT_NUM - 1;
 
-        /* Main Loop */
         Assert(ip - anchor < LZ4_MAX_INPUT_SIZE);
         while (ip <= mflimit)
         {
@@ -831,12 +775,11 @@ internal static unsafe partial class Lz4DestinationCodec
 
             if ((size_t)firstMatch.len > sufficient_len)
             {
-                /* good enough solution : immediate encoding */
                 int firstML = firstMatch.len;
                 byte* matchPos = ip - firstMatch.off;
                 opSaved = op;
                 if (LZ4HC_encodeSequence(&ip, &op, &anchor, firstML, matchPos, limit, oend) != 0
-                ) /* updates ip, op and anchor */
+                )
                 {
                     overflowMatchLength = firstML;
                     overflowReference = matchPos;
@@ -846,7 +789,6 @@ internal static unsafe partial class Lz4DestinationCodec
                 continue;
             }
 
-            /* set prices for first positions (literals) */
             {
                 int rPos;
                 for (rPos = 0; rPos < MINMATCH; rPos++)
@@ -858,10 +800,9 @@ internal static unsafe partial class Lz4DestinationCodec
                     opt[rPos].price = cost;
                 }
             }
-            /* set prices using initial match */
             {
                 int mlen = MINMATCH;
-                int matchML = firstMatch.len; /* necessarily < sufficient_len < LZ4_OPT_NUM */
+                int matchML = firstMatch.len;
                 int offset = firstMatch.off;
                 Assert(matchML < LZ4_OPT_NUM);
                 for (; mlen <= matchML; mlen++)
@@ -878,7 +819,7 @@ internal static unsafe partial class Lz4DestinationCodec
                 int addLit;
                 for (addLit = 1; addLit <= TRAILING_LITERALS; addLit++)
                 {
-                    opt[last_match_pos + addLit].mlen = 1; /* literal */
+                    opt[last_match_pos + addLit].mlen = 1;
                     opt[last_match_pos + addLit].off = 0;
                     opt[last_match_pos + addLit].litlen = addLit;
                     opt[last_match_pos + addLit].price =
@@ -886,7 +827,6 @@ internal static unsafe partial class Lz4DestinationCodec
                 }
             }
 
-            /* check further positions */
             for (cur = 1; cur < last_match_pos; cur++)
             {
                 byte* curPtr = ip + cur;
@@ -896,15 +836,12 @@ internal static unsafe partial class Lz4DestinationCodec
 
                 if (fullUpdate)
                 {
-                    /* not useful to search here if next position has same (or lower) cost */
                     if ((opt[cur + 1].price <= opt[cur].price)
-                        /* in some cases, next position has same cost, but cost rises sharply after, so a small match would still be beneficial */
-                        && (opt[cur + MINMATCH].price < opt[cur].price + 3 /*min seq price*/))
+                        && (opt[cur + MINMATCH].price < opt[cur].price + 3))
                         continue;
                 }
                 else
                 {
-                    /* not useful to search here if next position has same (or lower) cost */
                     if (opt[cur + 1].price <= opt[cur].price) continue;
                 }
 
@@ -912,7 +849,6 @@ internal static unsafe partial class Lz4DestinationCodec
                     newMatch = LZ4HC_FindLongerMatch(
                         ctx, curPtr, matchlimit, MINMATCH - 1, nbSearches, dict, favorDecSpeed);
                 else
-                    /* only test matches of minimum length; slightly faster, but misses a few bytes */
                     newMatch = LZ4HC_FindLongerMatch(
                         ctx, curPtr, matchlimit, last_match_pos - cur, nbSearches, dict,
                         favorDecSpeed);
@@ -921,14 +857,12 @@ internal static unsafe partial class Lz4DestinationCodec
                 if (((size_t)newMatch.len > sufficient_len)
                     || (newMatch.len + cur >= LZ4_OPT_NUM))
                 {
-                    /* immediate encoding */
                     best_mlen = newMatch.len;
                     best_off = newMatch.off;
                     last_match_pos = cur + 1;
                     goto encode;
                 }
 
-                /* before match : set price with literals at beginning */
                 {
                     int baseLitlen = opt[cur].litlen;
                     int litlen;
@@ -939,7 +873,7 @@ internal static unsafe partial class Lz4DestinationCodec
                         int pos = cur + litlen;
                         if (price < opt[pos].price)
                         {
-                            opt[pos].mlen = 1; /* literal */
+                            opt[pos].mlen = 1;
                             opt[pos].off = 0;
                             opt[pos].litlen = baseLitlen + litlen;
                             opt[pos].price = price;
@@ -947,7 +881,6 @@ internal static unsafe partial class Lz4DestinationCodec
                     }
                 }
 
-                /* set prices using match at position = cur */
                 {
                     int matchML = newMatch.len;
                     int ml = MINMATCH;
@@ -976,7 +909,7 @@ internal static unsafe partial class Lz4DestinationCodec
                             || price <= opt[pos].price - (int)favorDecSpeed)
                         {
                             Assert(pos < LZ4_OPT_NUM);
-                            if ((ml == matchML) /* last pos of last match */
+                            if ((ml == matchML)
                                 && (last_match_pos < pos))
                                 last_match_pos = pos;
                             opt[pos].mlen = ml;
@@ -986,53 +919,50 @@ internal static unsafe partial class Lz4DestinationCodec
                         }
                     }
                 }
-                /* complete following positions with literals */
                 {
                     int addLit;
                     for (addLit = 1; addLit <= TRAILING_LITERALS; addLit++)
                     {
-                        opt[last_match_pos + addLit].mlen = 1; /* literal */
+                        opt[last_match_pos + addLit].mlen = 1;
                         opt[last_match_pos + addLit].off = 0;
                         opt[last_match_pos + addLit].litlen = addLit;
                         opt[last_match_pos + addLit].price = opt[last_match_pos].price
                             + LZ4HC_literalsPrice(addLit);
                     }
                 }
-            } /* for (cur = 1; cur <= last_match_pos; cur++) */
+            }
 
             Assert(last_match_pos < LZ4_OPT_NUM + TRAILING_LITERALS);
             best_mlen = opt[last_match_pos].mlen;
             best_off = opt[last_match_pos].off;
             cur = last_match_pos - best_mlen;
 
-        encode: /* cur, last_match_pos, best_mlen, best_off must be set */
+        encode:
             Assert(cur < LZ4_OPT_NUM);
-            Assert(last_match_pos >= 1); /* == 1 when only one candidate */
+            Assert(last_match_pos >= 1);
             {
                 int candidate_pos = cur;
                 int selected_matchLength = best_mlen;
                 int selected_offset = best_off;
                 while (true)
                 {
-                    /* from end to beginning */
                     int next_matchLength =
-                        opt[candidate_pos].mlen; /* can be 1, means literal */
+                        opt[candidate_pos].mlen;
                     int next_offset = opt[candidate_pos].off;
                     opt[candidate_pos].mlen = selected_matchLength;
                     opt[candidate_pos].off = selected_offset;
                     selected_matchLength = next_matchLength;
                     selected_offset = next_offset;
                     if (next_matchLength > candidate_pos)
-                        break; /* last match elected, first match to encode */
+                        break;
 
-                    Assert(next_matchLength > 0); /* can be 1, means literal */
+                    Assert(next_matchLength > 0);
                     candidate_pos -= next_matchLength;
                 }
             }
 
-            /* encode all recorded sequences in order */
             {
-                int rPos = 0; /* relative position (to ip) */
+                int rPos = 0;
                 while (rPos < last_match_pos)
                 {
                     int ml = opt[rPos].mlen;
@@ -1042,14 +972,14 @@ internal static unsafe partial class Lz4DestinationCodec
                         ip++;
                         rPos++;
                         continue;
-                    } /* literal; note: can end up with several literals, in which case, skip them */
+                    }
 
                     rPos += ml;
                     Assert(ml >= MINMATCH);
                     Assert((offset >= 1) && (offset <= LZ4_DISTANCE_MAX));
                     opSaved = op;
                     if (LZ4HC_encodeSequence(&ip, &op, &anchor, ml, ip - offset, limit, oend)
-                        != 0) /* updates ip, op and anchor */
+                        != 0)
                     {
                         overflowMatchLength = ml;
                         overflowReference = ip - offset;
@@ -1057,22 +987,20 @@ internal static unsafe partial class Lz4DestinationCodec
                     }
                 }
             }
-        } /* while (ip <= mflimit) */
+        }
 
     _last_literals:
-        /* Encode Last Literals */
         {
-            size_t lastRunSize = (size_t)(iend - anchor); /* literals */
+            size_t lastRunSize = (size_t)(iend - anchor);
             size_t litLength = (lastRunSize + 255 - RUN_MASK) / 255;
             size_t totalSize = 1 + litLength + lastRunSize;
             if (limit == limitedOutput_directive.fillOutput)
-                oend += LASTLITERALS; /* restore correct value */
+                oend += LASTLITERALS;
             if (limit != 0 && (op + totalSize > oend))
             {
                 if (limit == limitedOutput_directive.limitedOutput)
-                    return 0; /* Check output limit */
+                    return 0;
 
-                /* adapt lastRunSize to fill 'dst' */
                 lastRunSize = (size_t)(oend - op) - 1;
                 litLength = (lastRunSize + 256 - RUN_MASK) / 256;
                 lastRunSize -= litLength;
@@ -1096,14 +1024,13 @@ internal static unsafe partial class Lz4DestinationCodec
             op += lastRunSize;
         }
 
-        /* End */
         *srcSizePtr = (int)(((byte*)ip) - source);
         return (int)((byte*)op - dst);
 
     _dest_overflow:
         if (limit == limitedOutput_directive.fillOutput)
         {
-            op = opSaved; /* restore correct out pointer */
+            op = opSaved;
             EncodeOverflowMatch(&ip, &op, &anchor, overflowMatchLength, overflowReference, oend);
             goto _last_literals;
         }
@@ -1127,19 +1054,19 @@ internal static unsafe partial class Lz4DestinationCodec
     }
 
     private static readonly cParams_t[] clTable = {
-        new cParams_t(lz4hc_strat_e.lz4hc, 2, 16), /* 0, unused */
-        new cParams_t(lz4hc_strat_e.lz4hc, 2, 16), /* 1, unused */
-        new cParams_t(lz4hc_strat_e.lz4hc, 2, 16), /* 2, unused */
-        new cParams_t(lz4hc_strat_e.lz4hc, 4, 16), /* 3 */
-        new cParams_t(lz4hc_strat_e.lz4hc, 8, 16), /* 4 */
-        new cParams_t(lz4hc_strat_e.lz4hc, 16, 16), /* 5 */
-        new cParams_t(lz4hc_strat_e.lz4hc, 32, 16), /* 6 */
-        new cParams_t(lz4hc_strat_e.lz4hc, 64, 16), /* 7 */
-        new cParams_t(lz4hc_strat_e.lz4hc, 128, 16), /* 8 */
-        new cParams_t(lz4hc_strat_e.lz4hc, 256, 16), /* 9 */
-        new cParams_t(lz4hc_strat_e.lz4opt, 96, 64), /*10==LZ4HC_CLEVEL_OPT_MIN*/
-        new cParams_t(lz4hc_strat_e.lz4opt, 512, 128), /*11 */
-        new cParams_t(lz4hc_strat_e.lz4opt, 16384, LZ4_OPT_NUM), /* 12==LZ4HC_CLEVEL_MAX */
+        new cParams_t(lz4hc_strat_e.lz4hc, 2, 16),
+        new cParams_t(lz4hc_strat_e.lz4hc, 2, 16),
+        new cParams_t(lz4hc_strat_e.lz4hc, 2, 16),
+        new cParams_t(lz4hc_strat_e.lz4hc, 4, 16),
+        new cParams_t(lz4hc_strat_e.lz4hc, 8, 16),
+        new cParams_t(lz4hc_strat_e.lz4hc, 16, 16),
+        new cParams_t(lz4hc_strat_e.lz4hc, 32, 16),
+        new cParams_t(lz4hc_strat_e.lz4hc, 64, 16),
+        new cParams_t(lz4hc_strat_e.lz4hc, 128, 16),
+        new cParams_t(lz4hc_strat_e.lz4hc, 256, 16),
+        new cParams_t(lz4hc_strat_e.lz4opt, 96, 64),
+        new cParams_t(lz4hc_strat_e.lz4opt, 512, 128),
+        new cParams_t(lz4hc_strat_e.lz4opt, 16384, LZ4_OPT_NUM),
     };
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1154,14 +1081,14 @@ internal static unsafe partial class Lz4DestinationCodec
         dictCtx_directive dict)
     {
         if (limit == limitedOutput_directive.fillOutput && dstCapacity < 1)
-            return 0; /* Impossible to store anything */
+            return 0;
         if ((uint)*srcSizePtr > (uint)LZ4_MAX_INPUT_SIZE)
-            return 0; /* Unsupported input size (too large or negative) */
+            return 0;
 
         ctx->end += *srcSizePtr;
         if (cLevel < 1)
             cLevel =
-                LZ4HC_CLEVEL_DEFAULT; /* note : convention is different from lz4frame, maybe something to review */
+                LZ4HC_CLEVEL_DEFAULT;
         cLevel = MIN(LZ4HC_CLEVEL_MAX, cLevel);
         {
             cParams_t cParam = clTable[cLevel];
@@ -1184,7 +1111,7 @@ internal static unsafe partial class Lz4DestinationCodec
                     ctx,
                     src, dst, srcSizePtr, dstCapacity,
                     (int)cParam.nbSearches, cParam.targetLength, limit,
-                    cLevel == LZ4HC_CLEVEL_MAX, /* ultra mode */
+                    cLevel == LZ4HC_CLEVEL_MAX,
                     dict, favor);
             }
 

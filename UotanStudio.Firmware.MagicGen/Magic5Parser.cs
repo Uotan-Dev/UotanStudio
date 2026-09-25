@@ -105,8 +105,7 @@ internal sealed class Magic5Parser
             return;
         }
 
-        // Form: `!:kind<TAB or space>value`.
-        int i = 2; // skip "!:"
+        int i = 2;
         int j = i;
         while (j < trimmed.Length && trimmed[j] != '\t' && trimmed[j] != ' ')
         {
@@ -149,14 +148,12 @@ internal sealed class Magic5Parser
 
                 break;
             default:
-                // apple/transform/enc/etc. recorded but not modeled as routing signals yet.
                 break;
         }
     }
 
     private static string NormalizeExt(string value)
     {
-        // `!/exe` marks exclusions upstream; keep only positive extensions, comma-normalized.
         var parts = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var kept = new List<string>(parts.Length);
         foreach (var p in parts)
@@ -198,7 +195,6 @@ internal sealed class Magic5Parser
         string typeTok = fields.Count > 1 ? fields[1] : string.Empty;
         string valueTok = fields.Count > 2 ? fields[2] : string.Empty;
 
-        // Directives handled by keyword in the TYPE slot (name/use/default/skip/strength/clear/der/...).
         var rule = new RuleAst { Indent = level };
 
         ParseOffset(rule, offsetTok);
@@ -209,7 +205,6 @@ internal sealed class Magic5Parser
             return null;
         }
 
-        // name template: `offset name templatename`
         if (typeTok == "name")
         {
             rule.Kind = MagicKind.None;
@@ -260,7 +255,6 @@ internal sealed class Magic5Parser
 
         if (typeTok == "indirect")
         {
-            // `indirect` as a TYPE is the CDF/OLE indirection template mechanism; not modeled yet.
             _stats.SkippedIndirectKeyword++;
             return null;
         }
@@ -291,7 +285,6 @@ internal sealed class Magic5Parser
             return;
         }
 
-        // Indirect: `(...)` optionally preceded by `&` (relative to end).
         if (tok.StartsWith("&", StringComparison.Ordinal))
         {
             rule.Flags |= MagicFlags.RelativeToEnd;
@@ -313,7 +306,6 @@ internal sealed class Magic5Parser
 
         if (tok.StartsWith("&", StringComparison.Ordinal))
         {
-            // another leading & after level handling: relative-to-end numeric
             tok = tok[1..];
         }
 
@@ -469,8 +461,6 @@ internal sealed class Magic5Parser
                     rule.NumberType = nt;
                     if (!ParseNumericValue(rule, valueTok))
                     {
-                        // Value could not be modelled (range set or malformed); drop rather than emit Value=0
-                        // which would false-match any file whose bytes at this offset are zero.
                         if (rule._skip != SkipKind.Range)
                         {
                             _stats.SkippedMalformed++;
@@ -664,7 +654,6 @@ internal sealed class Magic5Parser
             return false;
         }
 
-        // Character literal value, e.g. 'A' or '\0' for a byte/short operand.
         if (v.Length >= 3 && v[0] == '\'' && v[^1] == '\'')
         {
             if (TryCharLiteral(v[1..^1], out long code))
@@ -822,7 +811,6 @@ internal sealed class Magic5Parser
 
     private static byte[]? ParseGuid(string value)
     {
-        // {xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx} or with wildcards 'x'.
         string clean = value.Trim('{', '}').Replace("-", string.Empty, StringComparison.Ordinal);
         if (clean.Length != 32)
         {
@@ -844,7 +832,6 @@ internal sealed class Magic5Parser
 
     private static string UnescapeRegex(string v)
     {
-        // Upstream uses \xNN and \0NN in regex text; keep most verbatim, decode \xNN/\0NN to C# equivalents.
         if (v.IndexOf('\\') < 0)
         {
             return v;
@@ -897,7 +884,6 @@ internal sealed class Magic5Parser
                     consumed++;
                     if (consumed == fieldsWanted)
                     {
-                        // Skip further whitespace to the description start.
                         int k = i;
                         while (k < rest.Length && (rest[k] == ' ' || rest[k] == '\t'))
                         {
@@ -931,7 +917,6 @@ internal sealed class Magic5Parser
     {
         var bytes = new List<byte>(token.Length);
         int i = 0;
-        // Strip a leading relation prefix if present for numeric-like string tests? Strings keep value verbatim.
         while (i < token.Length)
         {
             char c = token[i];
@@ -991,8 +976,6 @@ internal sealed class Magic5Parser
 
         token = token.Trim();
 
-        // Strip C-style integer literal suffixes (L/U/LL/UL/...) so constants like
-        // 0x1b031336L or 100u parse. Only trailing l/L/u/U are removed and a digit must remain.
         if (token.Length > 1 && (char.IsDigit(token[^1]) is false && (token[^1] is 'l' or 'L' or 'u' or 'U')))
         {
             int end = token.Length;
@@ -1038,7 +1021,6 @@ internal sealed class Magic5Parser
 
     private static bool MapNumberType(string t, out MagicNumberType nt)
     {
-        // Handles base names and u/be/le/ube/ule/bu/lu prefixes and the single-letter indirect codes.
         switch (t)
         {
             case "byte" or "B" or "b": nt = MagicNumberType.Byte; return true;
@@ -1066,7 +1048,6 @@ internal sealed class Magic5Parser
             case "bedate": nt = MagicNumberType.Bedate; return true;
             case "ldate" or "leldate": nt = MagicNumberType.Ledate; return true;
             case "bldate" or "beldate": nt = MagicNumberType.Bedate; return true;
-            // single-letter indirect codes
             case "h": nt = MagicNumberType.Leshort; return true;
             case "H": nt = MagicNumberType.Beshort; return true;
             case "s": nt = MagicNumberType.Short; return true;
@@ -1079,7 +1060,6 @@ internal sealed class Magic5Parser
             case "c": nt = MagicNumberType.UByte; return true;
             case "C": nt = MagicNumberType.UByte; return true;
             default:
-                // tolerate u/be/le prefix forms like "ube" -> treat as unknown
                 nt = MagicNumberType.Long;
                 return false;
         }
