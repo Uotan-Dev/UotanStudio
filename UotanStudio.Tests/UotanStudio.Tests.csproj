@@ -13,6 +13,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Firmware 库测试宿主;本项目的 Comm/Edl/Services 测试复用其中公开的固件测试替身与 SigningTestKeys。 -->
+    <ProjectReference Include="..\UotanStudio.Firmware.Tests\UotanStudio.Firmware.Tests.csproj" />
     <ProjectReference Include="..\UotanStudio.Projects\UotanStudio.Projects.csproj" />
     <!-- Firmware library under test (AVB, boot image, CPIO, Sparse, compression, Payload) -->
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
@@ -32,6 +34,10 @@
     <PackageReference Include="Avalonia.Headless" />
     <!-- MCP 工具清单测试经由 UotanStudio.Mcp 暴露的 McpServerTool 元数据，需 Core 程序集参与重载解析。 -->
     <PackageReference Include="ModelContextProtocol.Core" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="TestData\**\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,373 @@
+{
+  "FormatVersion": 3,
+  "Kind": "CompositeNode",
+  "Manifest": {
+    "Id": "docs.examples.input-text",
+    "Version": "1.0.0",
+    "Name": "Text input",
+    "Description": "",
+    "Author": "",
+    "NodeApiVersion": 2,
+    "Platforms": [],
+    "Capabilities": [
+      "PatchSafe",
+      "RequiresInteraction"
+    ],
+    "RequiredNodeTypes": [
+      "UI.Dialog.Show",
+      "UI.Field.Text",
+      "UI.Form.Create",
+      "UI.Result.Read"
+    ],
+    "Dependencies": [],
+    "Conflicts": []
+  },
+  "Graph": {
+    "FormatVersion": 2,
+    "Nodes": [
+      {
+        "InstanceId": "7ed6d9c2fc12407da694dc50c0a5144c",
+        "Title": "UI.Field.Text",
+        "Category": "Output",
+        "X": 0,
+        "Y": 0,
+        "TypeKey": "UI.Field.Text",
+        "InputInitialValues": {
+          "Field ID": "value",
+          "Label": "Value",
+          "Required": "False",
+          "Max Length": "4096",
+          "Sensitive": "False"
+        },
+        "InputInitialValuesByPortId": {
+          "input.field-id": "value",
+          "input.label": "Value",
+          "input.required": "False",
+          "input.max-length": "4096",
+          "input.sensitive": "False"
+        },
+        "InputPorts": [
+          {
+            "Id": "input.field-id",
+            "Title": "Field ID",
+            "PortType": "Text",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.label",
+            "Title": "Label",
+            "PortType": "Text",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.description",
+            "Title": "Description",
+            "PortType": "Text",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.required",
+            "Title": "Required",
+            "PortType": "Boolean",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.max-length",
+            "Title": "Max Length",
+            "PortType": "Number",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.default",
+            "Title": "Default",
+            "PortType": "Text",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.sensitive",
+            "Title": "Sensitive",
+            "PortType": "Boolean",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.visible-when",
+            "Title": "Visible When",
+            "PortType": "Record",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.enabled-when",
+            "Title": "Enabled When",
+            "PortType": "Record",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.required-when",
+            "Title": "Required When",
+            "PortType": "Record",
+            "MaxConnections": 1
+          }
+        ],
+        "OutputPorts": [
+          {
+            "Id": "output.component",
+            "Title": "Component",
+            "PortType": "UiComponent",
+            "MaxConnections": 0
+          }
+        ]
+      },
+      {
+        "InstanceId": "8c35d4c070bb4a33b0508f2edf118a88",
+        "Title": "UI.Form.Create",
+        "Category": "Output",
+        "X": 0,
+        "Y": 0,
+        "TypeKey": "UI.Form.Create",
+        "InputInitialValues": {
+          "Title": "Text input"
+        },
+        "InputInitialValuesByPortId": {
+          "input.title": "Text input"
+        },
+        "InputPorts": [
+          {
+            "Id": "input.title",
+            "Title": "Title",
+            "PortType": "Text",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.content",
+            "Title": "Content",
+            "PortType": "UiComponent",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.submit-label",
+            "Title": "Submit Label",
+            "PortType": "Text",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.cancel-label",
+            "Title": "Cancel Label",
+            "PortType": "Text",
+            "MaxConnections": 1
+          }
+        ],
+        "OutputPorts": [
+          {
+            "Id": "output.form",
+            "Title": "Form",
+            "PortType": "UiForm",
+            "MaxConnections": 0
+          }
+        ]
+      },
+      {
+        "InstanceId": "7b74ea34b1ad4f42b91ce4508122898e",
+        "Title": "UI.Dialog.Show",
+        "Category": "Output",
+        "X": 0,
+        "Y": 0,
+        "TypeKey": "UI.Dialog.Show",
+        "InputInitialValues": {
+          "Timeout Seconds": "0"
+        },
+        "InputInitialValuesByPortId": {
+          "input.timeout-seconds": "0"
+        },
+        "InputPorts": [
+          {
+            "Id": "input.flow",
+            "Title": "Flow",
+            "PortType": "Flow",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.form",
+            "Title": "Form",
+            "PortType": "UiForm",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.timeout-seconds",
+            "Title": "Timeout Seconds",
+            "PortType": "Number",
+            "MaxConnections": 1
+          }
+        ],
+        "OutputPorts": [
+          {
+            "Id": "output.submitted",
+            "Title": "Submitted",
+            "PortType": "Flow",
+            "MaxConnections": 0
+          },
+          {
+            "Id": "output.cancelled",
+            "Title": "Cancelled",
+            "PortType": "Flow",
+            "MaxConnections": 0
+          },
+          {
+            "Id": "output.timedout",
+            "Title": "TimedOut",
+            "PortType": "Flow",
+            "MaxConnections": 0
+          },
+          {
+            "Id": "output.values",
+            "Title": "Values",
+            "PortType": "Record",
+            "MaxConnections": 0
+          }
+        ]
+      },
+      {
+        "InstanceId": "b76fcfd6b5c94e64880a7c5195f9f4c7",
+        "Title": "UI.Result.Read",
+        "Category": "Output",
+        "X": 0,
+        "Y": 0,
+        "TypeKey": "UI.Result.Read",
+        "InputInitialValues": {
+          "Field ID": "value",
+          "Value Type": "Text"
+        },
+        "InputInitialValuesByPortId": {
+          "input.field-id": "value",
+          "input.value-type": "Text"
+        },
+        "InputPorts": [
+          {
+            "Id": "input.values",
+            "Title": "Values",
+            "PortType": "Record",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.field-id",
+            "Title": "Field ID",
+            "PortType": "Text",
+            "MaxConnections": 1
+          },
+          {
+            "Id": "input.value-type",
+            "Title": "Value Type",
+            "PortType": "Text",
+            "MaxConnections": 1
+          }
+        ],
+        "OutputPorts": [
+          {
+            "Id": "output.text",
+            "Title": "Text",
+            "PortType": "Text",
+            "MaxConnections": 0
+          },
+          {
+            "Id": "output.number",
+            "Title": "Number",
+            "PortType": "Number",
+            "MaxConnections": 0
+          },
+          {
+            "Id": "output.boolean",
+            "Title": "Boolean",
+            "PortType": "Boolean",
+            "MaxConnections": 0
+          },
+          {
+            "Id": "output.selection",
+            "Title": "Selection",
+            "PortType": "List",
+            "MaxConnections": 0
+          }
+        ]
+      }
+    ],
+    "Connections": [
+      {
+        "SourcePortId": "output.component",
+        "TargetPortId": "input.content",
+        "SourceConnectorTitle": "Component",
+        "TargetConnectorTitle": "Content",
+        "SourceInstanceId": "7ed6d9c2fc12407da694dc50c0a5144c",
+        "TargetInstanceId": "8c35d4c070bb4a33b0508f2edf118a88"
+      },
+      {
+        "SourcePortId": "output.form",
+        "TargetPortId": "input.form",
+        "SourceConnectorTitle": "Form",
+        "TargetConnectorTitle": "Form",
+        "SourceInstanceId": "8c35d4c070bb4a33b0508f2edf118a88",
+        "TargetInstanceId": "7b74ea34b1ad4f42b91ce4508122898e"
+      },
+      {
+        "SourcePortId": "output.values",
+        "TargetPortId": "input.values",
+        "SourceConnectorTitle": "Values",
+        "TargetConnectorTitle": "Values",
+        "SourceInstanceId": "7b74ea34b1ad4f42b91ce4508122898e",
+        "TargetInstanceId": "b76fcfd6b5c94e64880a7c5195f9f4c7"
+      }
+    ]
+  },
+  "Inputs": [
+    {
+      "IsSensitive": false,
+      "AdditionalBindings": [],
+      "Id": "Flow",
+      "Name": "Flow",
+      "PortType": "Flow",
+      "NodeInstanceId": "7b74ea34b1ad4f42b91ce4508122898e",
+      "PortId": "input.flow",
+      "Required": false
+    }
+  ],
+  "Outputs": [
+    {
+      "IsSensitive": false,
+      "AdditionalBindings": [],
+      "Id": "submitted",
+      "Name": "Submitted",
+      "PortType": "Flow",
+      "NodeInstanceId": "7b74ea34b1ad4f42b91ce4508122898e",
+      "PortId": "output.submitted",
+      "Required": false
+    },
+    {
+      "IsSensitive": false,
+      "AdditionalBindings": [],
+      "Id": "cancelled",
+      "Name": "Cancelled",
+      "PortType": "Flow",
+      "NodeInstanceId": "7b74ea34b1ad4f42b91ce4508122898e",
+      "PortId": "output.cancelled",
+      "Required": false
+    },
+    {
+      "IsSensitive": false,
+      "AdditionalBindings": [],
+      "Id": "timedout",
+      "Name": "Timed out",
+      "PortType": "Flow",
+      "NodeInstanceId": "7b74ea34b1ad4f42b91ce4508122898e",
+      "PortId": "output.timedout",
+      "Required": false
+    },
+    {
+      "IsSensitive": false,
+      "AdditionalBindings": [],
+      "Id": "value",
+      "Name": "Value",
+      "PortType": "Text",
+      "NodeInstanceId": "b76fcfd6b5c94e64880a7c5195f9f4c7",
+      "PortId": "output.text",
+      "Required": false
+    }
+  ],
+  "Assets": []
+}

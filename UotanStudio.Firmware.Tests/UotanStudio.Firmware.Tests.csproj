@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- MTP 模式下 xUnit v3 测试工程必须是可执行程序（测试宿主） -->
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>UotanStudio.Tests</RootNamespace>
+    <!-- Legacy in-memory builders remain covered by compatibility tests; production callers use streaming overloads. -->
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
+    <!-- 启用 Microsoft.Testing.Platform 通道，使 dotnet test 可直接发现并运行 xunit.v3 测试 -->
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Firmware library under test (AVB, boot image, filesystems, CPIO, Sparse, compression, Payload) -->
+    <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+</Project>
