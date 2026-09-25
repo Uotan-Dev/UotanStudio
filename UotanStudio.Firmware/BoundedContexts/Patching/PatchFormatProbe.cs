@@ -213,7 +213,9 @@ public static class PatchFormatProbe
         using var source = new StringReader(text);
         using var reader = XmlReader.Create(source, new XmlReaderSettings
         {
-            DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = TextPatch.MaxCharacters
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = TextPatch.MaxCharacters
         });
         var entries = 0;
         while (reader.Read())

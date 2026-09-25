@@ -54,4 +54,28 @@ public sealed class Ext4CapacityPolicyTests
 
         Assert.Equal(existing, File.ReadAllBytes(output));
     }
+
+    [Fact]
+    public void Build_UndefinedModes_PreserveExistingDestination()
+    {
+        using var temp = new TempDirectory();
+        temp.WriteBytes("root/file", "content"u8.ToArray());
+        var existing = "existing"u8.ToArray();
+        var output = temp.WriteBytes("system.img", existing);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => Ext4Builder.Build(Path.Combine(temp.Path, "root"), output,
+            new Ext4Options
+            {
+                CapacityMode = (Ext4CapacityMode)999,
+                CancellationToken = TestContext.Current.CancellationToken
+            }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Ext4Builder.Build(Path.Combine(temp.Path, "root"), output,
+            new Ext4Options
+            {
+                BlockSharingMode = (Ext4BlockSharingMode)999,
+                CancellationToken = TestContext.Current.CancellationToken
+            }));
+
+        Assert.Equal(existing, File.ReadAllBytes(output));
+    }
 }

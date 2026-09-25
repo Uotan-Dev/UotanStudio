@@ -1128,7 +1128,12 @@ public sealed class FirmwareService
         string outputPath,
         ulong deviceSize,
         string groupName,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        uint metadataSize = 65536,
+        uint slots = 2,
+        uint blockSize = 4096,
+        bool sparse = true,
+        bool virtualAb = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         try
@@ -1141,9 +1146,11 @@ public sealed class FirmwareService
             {
                 DeviceSize = deviceSize,
                 Group = string.IsNullOrWhiteSpace(groupName) ? "default" : groupName,
-                MetadataSize = 65536,
-                Slots = 2,
-                Sparse = true
+                MetadataSize = metadataSize,
+                Slots = slots,
+                BlockSize = blockSize,
+                Sparse = sparse,
+                VirtualAb = virtualAb
             }, outputPath, token: cancellationToken).ConfigureAwait(false);
             return new FirmwareOpResult { Success = true, Summary = $"Synthesized super image with {partitions.Count} partition(s) -> {outputPath}" };
         }

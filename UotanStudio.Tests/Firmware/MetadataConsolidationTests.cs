@@ -89,14 +89,12 @@ public sealed class MetadataConsolidationTests : IDisposable
     }
 
     [Fact]
-    public async Task OptionsFor_WithDefaultRoot_DiscoversSidecarsAndBackfillsInfo()
+    public async Task OptionsFor_WithDefaultRoot_UsesSnapshotInsteadOfReferenceSidecars()
     {
         await BuildAndUnpackWithProjectAsync();
         var options = FileSystemPackingOptions.OptionsFor(Extracted, "EXT4");
-        Assert.True(options.ContainsKey("FsConfigPath"));
-        Assert.EndsWith("system_fs_config", options["FsConfigPath"], StringComparison.Ordinal);
-        Assert.True(options.ContainsKey("FileContextsPath"));
-        Assert.EndsWith("system_file_contexts", options["FileContextsPath"], StringComparison.Ordinal);
+        Assert.False(options.ContainsKey("FsConfigPath"));
+        Assert.False(options.ContainsKey("FileContextsPath"));
         // info 键值以补缺形式并入（packingOptions 已有 BlockSize 时保持原值）。
         // info keys backfill absent entries only; existing packingOptions win.
         Assert.Equal("4096", options["BlockSize"]);

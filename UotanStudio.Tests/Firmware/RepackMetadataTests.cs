@@ -54,7 +54,7 @@ public sealed class RepackMetadataTests : IDisposable
         Assert.True(baseline.Success, baseline.Summary);
         var baselineInfo = await handler.ReadMetadataAsync(Output, Cancellation);
         Assert.True(baselineInfo.Success, baselineInfo.Summary);
-        Assert.Contains(baselineInfo.Entries, path => path.EndsWith("hello.txt", StringComparison.Ordinal));
+        Assert.Contains(ReadImagePaths(Output, format), path => path.EndsWith("hello.txt", StringComparison.Ordinal));
 
         // A packing-option override must also rebuild and flow into the builder output.
         // 打包选项覆盖同样触发重建，并进入构建输出。
@@ -67,7 +67,7 @@ public sealed class RepackMetadataTests : IDisposable
             Assert.True(result.Success, result.Summary);
             var overridden = await handler.ReadMetadataAsync(Output, Cancellation);
             Assert.True(overridden.Success, overridden.Summary);
-            Assert.Contains(overridden.Entries, path => path.EndsWith("hello.txt", StringComparison.Ordinal));
+            Assert.Contains(ReadImagePaths(Output, format), path => path.EndsWith("hello.txt", StringComparison.Ordinal));
         }
     }
 
@@ -106,8 +106,36 @@ public sealed class RepackMetadataTests : IDisposable
         Assert.True(PackingService.BuildImage(Extracted, Output).Success);
         var info = await handler.ReadMetadataAsync(Output, Cancellation);
         Assert.True(info.Success, info.Summary);
-        Assert.DoesNotContain(info.Entries, path => path.Contains(RepackMetadata.FileName));
-        Assert.Contains(info.Entries, path => path.EndsWith("hello.txt", StringComparison.Ordinal));
+        var paths = ReadImagePaths(Output, format);
+        Assert.DoesNotContain(paths, path => path.Contains(RepackMetadata.FileName));
+        Assert.Contains(paths, path => path.EndsWith("hello.txt", StringComparison.Ordinal));
+    }
+
+    private static string[] ReadImagePaths(string path, string format)
+    {
+        if (format == "EXT4")
+        {
+            using var input = File.OpenRead(path);
+            Span<byte> magic = stackalloc byte[4];
+            input.ReadExactly(magic);
+            input.Position = 0;
+            if (System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(magic) == 0xED26FF3A)
+            {
+                using var sparse = UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO.SparseReader.FromStream(input);
+                using var logical = new UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO.SparseReadStream(sparse);
+                using var sparseParser = new UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser.Ext4Parser(logical);
+                return sparseParser.ListEntriesWithRoot().Select(entry => entry.Path).ToArray();
+            }
+            using var parser = new UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser.Ext4Parser(input);
+            return parser.ListEntriesWithRoot().Select(entry => entry.Path).ToArray();
+        }
+        if (format == "EROFS")
+        {
+            using var parser = new ErofsParser(path);
+            return parser.EnumerateEntries().Select(entry => entry.Path).ToArray();
+        }
+        using var f2fs = new UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser.F2fsParser(path);
+        return f2fs.ListEntriesWithRoot().Select(entry => entry.Path).ToArray();
     }
 
     [Fact]

@@ -4,6 +4,7 @@
 * text=auto
 UotanStudio.Tests/TestInfrastructure/avbtool.py text eol=lf
 UotanStudio.Tests/TestInfrastructure/FirmwareMountCheck/*.sh text eol=lf
+UotanStudio.Tests/TestInfrastructure/FilesystemGkiReplay/*.sh text eol=lf
 
 ###############################################################################
 # Set default behavior for command prompt diff.

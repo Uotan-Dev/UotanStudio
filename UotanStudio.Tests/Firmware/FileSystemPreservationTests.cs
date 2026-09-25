@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
@@ -95,6 +96,35 @@ public sealed class FileSystemPreservationTests : IDisposable
         Assert.Equal("patched-content", ReadImageFile(format, output, "data"));
     }
 
+    [Fact]
+    public async Task TryRestore_F2fsSparseWithinPartitionCapacity_PublishesValidatedOutput()
+    {
+        var (_, _, extracted) = await ExtractAsync("F2FS");
+        await File.WriteAllTextAsync(Path.Combine(extracted, "data"), "patched-content", Token);
+        using var overrides = RepackMetadata.UsePackingOverrides(new Dictionary<string, string>
+        {
+            ["OutputSparseContainer"] = "1",
+        });
+        var reference = Path.Combine(_root, "reference.sparse.img");
+        Assert.True(FileSystemPreservation.TryRestore(extracted, reference, "F2FS", Token));
+        var capacity = new FileInfo(reference).Length;
+        var output = Path.Combine(_root, "bounded.sparse.img");
+        await File.WriteAllTextAsync(output, "keep-original-output", Token);
+
+        Assert.True(FileSystemPreservation.TryRestore(
+            extracted,
+            output,
+            "F2FS",
+            Token,
+            maximumOutputBytes: capacity));
+
+        Assert.Equal(capacity, new FileInfo(output).Length);
+        var decoded = Path.Combine(_root, "bounded.raw.img");
+        SparseImageConverter.ConvertSparseToRaw([output], decoded);
+        Assert.Equal("patched-content", ReadImageFile("F2FS", decoded, "data"));
+        Assert.Empty(Directory.GetFiles(_root, "*.tmp-*"));
+    }
+
     [Theory]
     [InlineData("EXT4")]
     [InlineData("EROFS")]
@@ -168,7 +198,6 @@ public sealed class FileSystemPreservationTests : IDisposable
     [InlineData("manifest")]
     [InlineData("missing")]
     [InlineData("config")]
-    [InlineData("sidecar")]
     public async Task InvalidOrChangedState_NeverReplacesExistingOutput(string mutation)
     {
         var (handler, _, extracted) = await ExtractAsync("EROFS");
@@ -185,7 +214,6 @@ public sealed class FileSystemPreservationTests : IDisposable
                 metadata.PackingOptions["BlockSize"] = "8192";
                 await metadata.SaveAsync(extracted, Token);
                 break;
-            case "sidecar": File.AppendAllText(Path.Combine(extracted, "system_fs_config"), "\n/new 1 2 0755\n"); break;
         }
         var output = Path.Combine(_root, "existing.img");
         File.WriteAllText(output, "keep-original-output");

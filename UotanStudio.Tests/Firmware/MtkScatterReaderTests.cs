@@ -45,7 +45,9 @@ public class MtkScatterReaderTests
     [InlineData("storage-mismatch")]
     public void Read_UnsafeOrAmbiguousInput_RejectsWithoutClosingSource(string failure)
     {
-        var text = Document(true);
+        // 重写模式以 LF 为行尾锚点；源码 checkout 为 CRLF 时必须先归一化，否则 "missing" 无效。
+        // Rewrite patterns anchor on LF; normalize so a CRLF checkout cannot silently keep file_name.
+        var text = Document(true).Replace("\r\n", "\n", StringComparison.Ordinal);
         text = failure switch
         {
             "duplicate" => text.Replace("    file_name: NONE", "    file_name: NONE\n    file_name: boot.img", StringComparison.Ordinal),

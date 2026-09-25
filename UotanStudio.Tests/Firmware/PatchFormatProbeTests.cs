@@ -209,7 +209,9 @@ public sealed class PatchFormatProbeTests
         }
         public override long Seek(long offset, SeekOrigin origin) => Position = origin switch
         {
-            SeekOrigin.Begin => offset, SeekOrigin.Current => Position + offset, SeekOrigin.End => Length + offset,
+            SeekOrigin.Begin => offset,
+            SeekOrigin.Current => Position + offset,
+            SeekOrigin.End => Length + offset,
             _ => throw new ArgumentOutOfRangeException(nameof(origin))
         };
         public override void Flush() { }

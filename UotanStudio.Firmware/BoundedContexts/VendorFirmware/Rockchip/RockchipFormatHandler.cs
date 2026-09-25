@@ -1,7 +1,7 @@
+using System.Globalization;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Extraction;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Models;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Packing;
-using System.Globalization;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip;

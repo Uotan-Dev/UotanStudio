@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Org.BouncyCastle.Crypto;
@@ -8,6 +7,7 @@ using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 using Org.BouncyCastle.Math;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
 

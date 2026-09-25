@@ -60,7 +60,7 @@ public sealed class FileSystemByteProgressTests : IDisposable
             var samples = events.Where(e => e.Stage == stage).ToArray();
             Assert.True(samples.Length >= 2, stage.ToString());
             Assert.Equal(0, samples[0].Processed);
-            var total = stage is FileSystemWorkStage.Extracting or FileSystemWorkStage.VerifyingFiles
+            var total = stage is FileSystemWorkStage.Extracting or FileSystemWorkStage.VerifyingFiles or FileSystemWorkStage.Preserving
                 ? expectedBytes : new FileInfo(image).Length;
             Assert.All(samples, sample => { Assert.Equal(total, sample.Total); Assert.InRange(sample.Processed, 0, total); });
             Assert.Equal(total, samples[^1].Processed);
@@ -70,8 +70,15 @@ public sealed class FileSystemByteProgressTests : IDisposable
         // A progress-enabled scan must retain exactly the same projection hashes as a normal scan.
         var restored = Path.Combine(root, "restored.img");
         Assert.True((await handler.PackAsync(output, restored, Token)).Success);
-        Assert.Equal(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(image)),
-            System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(restored)));
+        var restoredTree = Path.Combine(root, "restored-tree");
+        var replay = await handler.UnpackAsync(restored, restoredTree, cancellationToken: Token);
+        Assert.True(replay.Success, replay.Summary);
+        Assert.True(Directory.Exists(Path.Combine(restoredTree, "empty")));
+        foreach (var name in new[] { "small", "large" })
+        {
+            Assert.Equal(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(output, name))),
+                System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(restoredTree, name))));
+        }
     }
 
     [Fact]
