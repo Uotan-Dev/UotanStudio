@@ -1,18 +1,22 @@
 using System.Buffers.Binary;
 using UotanStudio.Firmware.BoundedContexts.Executable.Elf;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
 public sealed class ElfReaderTests
 {
-    public static bool FirehoseSampleAvailable =>
-        File.Exists(Environment.GetEnvironmentVariable("UOTAN_ELF_FIREHOSE_SAMPLE"));
+    public static bool FirehoseSampleAvailable => RealSampleIndex.IsAvailable(RealSampleIndex.ElfFirehoseVariable);
 
     [Fact(Skip = "Set UOTAN_ELF_FIREHOSE_SAMPLE to the SM7150 DDR Firehose sample.", SkipUnless = nameof(FirehoseSampleAvailable))]
     public async Task ReadAsync_Sm7150Firehose_MatchesReadelfMetadata()
     {
-        var info = await ElfReader.ReadAsync(Environment.GetEnvironmentVariable("UOTAN_ELF_FIREHOSE_SAMPLE")!,
+        await RealSampleIndex.VerifyIdentityAsync(RealSampleIndex.GetPath(RealSampleIndex.ElfFirehoseVariable),
+            RealSampleIndex.ElfFirehoseVariable, RealSampleIndex.ElfFirehoseSha256,
+            TestContext.Current.CancellationToken);
+
+        var info = await ElfReader.ReadAsync(RealSampleIndex.GetPath(RealSampleIndex.ElfFirehoseVariable),
             TestContext.Current.CancellationToken);
 
         Assert.True(info.Header.Is64Bit);
