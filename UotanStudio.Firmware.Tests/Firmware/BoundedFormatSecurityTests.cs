@@ -271,7 +271,7 @@ public class BoundedFormatSecurityTests
         var ramdisk = Enumerable.Range(0, 256).Select(i => (byte)i).ToArray();
         const int pageSize = 4096;
         const int tableOffset = 8192;
-        const int entrySize = 332;
+        const int entrySize = 108;
         var data = new byte[tableOffset + entrySize];
         Encoding.ASCII.GetBytes("VNDRBOOT").CopyTo(data, 0);
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(8, 4), 4);
