@@ -8,6 +8,9 @@ public static class NodeFactoryRegistrar
 {
     private static readonly IReadOnlyList<NodeDescriptor> BuiltInDescriptors =
     [
+        D("Workspace.Document.Resolve", "Node_Workspace_Document_Resolve", NodeToolboxGroup.Data, () => WorkspaceDocumentNodeViewModel.Create("Workspace.Document.Resolve")),
+        D("Workspace.Document.ReadText", "Node_Workspace_Document_ReadText", NodeToolboxGroup.Data, () => WorkspaceDocumentNodeViewModel.Create("Workspace.Document.ReadText")),
+        D("Workspace.Document.ReplaceText", "Node_Workspace_Document_ReplaceText", NodeToolboxGroup.Data, () => WorkspaceDocumentNodeViewModel.Create("Workspace.Document.ReplaceText")),
         P("Image.Text.Read", "Node_Image_Text_Read", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Image.Text.Read")),
         P("Image.Text.Stage", "Node_Image_Text_Stage", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Image.Text.Stage")),
         P("Image.Edit.CollectText", "Node_Image_Edit_CollectText", NodeToolboxGroup.Patch, () => PatchNodeViewModel.Create("Image.Edit.CollectText")),
@@ -269,6 +272,10 @@ public static class NodeFactoryRegistrar
     {
         var descriptor = D(typeKey, resourceKey, group, factory);
         var capabilities = descriptor.Capabilities | NodeCapability.PatchOperation | NodeCapability.PatchSafe;
+        if (typeKey.StartsWith("Config.", StringComparison.Ordinal))
+        {
+            capabilities &= ~NodeCapability.PatchOperation;
+        }
         if (typeKey is "File.Text.Publish" or "Workspace.Text.Stage" or "Workspace.File.Import"
             or "Workspace.File.Delete" or "Workspace.Asset.Stage" or "Binary.Pattern.Replace" or "Image.Text.Stage"
             or "Image.Edit.Apply" or "Image.File.SetAttributes" or "Image.Xattr.Set" or "Image.Xattr.Delete")
@@ -342,7 +349,8 @@ public sealed record NodeDescriptor(
     /// <summary>Stable presentation category independent of execution capabilities.</summary>
     public string CategoryPath => TypeKey.Split('.')[0] switch
     {
-        "Resource" or "Network" or "Workspace" => "Inputs",
+        "Resource" or "Network" => "Inputs",
+        "Workspace" => "Workspace",
         "File" or "Data" or "Binary" => "Data",
         "Validation" => "Validation",
         "Config" => "Configuration",

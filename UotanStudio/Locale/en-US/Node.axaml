@@ -61,7 +61,7 @@
     <!-- Node Names -->
     <x:String x:Key="Node_Firmware_Container_Unpack">Unpack Firmware</x:String>
     <x:String x:Key="Node_Firmware_Container_Pack">Pack Firmware</x:String>
-    <x:String x:Key="Node_Validation_Signature_Verify">Verify Signature</x:String>
+    <x:String x:Key="Node_Validation_Signature_Verify">Assert AVB vbmeta signature</x:String>
     <x:String x:Key="Node_Firmware_Container_Extract">Extract Partition</x:String>
     <x:String x:Key="Node_Build_Ota_CreateDelta">OTA Delta</x:String>
     <x:String x:Key="Node_Build_Signature_Merge">Unsupported signature append</x:String>
@@ -722,4 +722,19 @@
     <x:String x:Key="Node_Network_Timeout">The download timed out.</x:String>
     <x:String x:Key="Node_Device_InvalidInput">The device operation is missing a valid device, partition or input file.</x:String>
     <x:String x:Key="Node_Device_RebootFailed">The device rejected the reboot request.</x:String>
+    <x:String x:Key="Node_Category_Workspace">Workspace operations</x:String>
+    <x:String x:Key="Node_Workspace_Document_Resolve">Resolve open document</x:String>
+    <x:String x:Key="Node_Workspace_Document_ReadText">Read document text</x:String>
+    <x:String x:Key="Node_Workspace_Document_ReplaceText">Replace document text</x:String>
+    <x:String x:Key="Node_Family_Document">Open documents</x:String>
+    <x:String x:Key="Node_PortType_Document">Document snapshot</x:String>
+    <x:String x:Key="Node_Conn_Document">Document</x:String>
+    <x:String x:Key="Node_Conn_CanEdit">Editable</x:String>
+    <x:String x:Key="Node_Document_NotFound">No unique open document matches the selection.</x:String>
+    <x:String x:Key="Node_Document_Closed">The selected document is no longer open.</x:String>
+    <x:String x:Key="Node_Document_ReadOnly">This document does not support the requested text operation.</x:String>
+    <x:String x:Key="Node_Document_Changed">The document changed after it was read. Read it again before applying changes.</x:String>
+    <x:String x:Key="Node_Document_TooLarge">Document text exceeds the 8 MiB character limit.</x:String>
+    <x:String x:Key="Node_Document_Unsupported">This workflow host has no open-document workspace.</x:String>
+    <x:String x:Key="Node_Document_TextRequired">A text value is required. Empty text clears the document.</x:String>
 </ResourceDictionary>

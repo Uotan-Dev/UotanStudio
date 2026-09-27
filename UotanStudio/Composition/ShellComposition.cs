@@ -106,6 +106,7 @@ internal sealed class ShellComponents : IDisposable
         Nodes = nodes;
         Settings = settings;
         Workspace = workspace;
+        Nodes.Documents = new WorkspaceWorkflowDocuments(workspace);
         Modifications = new(() => workspace.Layout);
         _projectBinding = projects.AttachWorkspace(nodes, workspace);
         AutoSave = new(workspace, settings, projects);

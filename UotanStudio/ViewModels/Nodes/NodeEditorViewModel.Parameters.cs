@@ -4,6 +4,7 @@ namespace UotanStudio.ViewModels.Nodes;
 
 public partial class NodeEditorViewModel
 {
+    public Services.Workspace.IWorkflowDocuments? Documents { get; set; }
     private bool _showAdvancedParameters;
     private bool _compactNodes;
     private IReadOnlyList<NodeConnectorViewModel> _selectedParameterInputs = [];

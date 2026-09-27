@@ -25,7 +25,7 @@ public partial class NodeEditorViewModel
         ToolboxCategories.Clear();
         NodeFactoryRegistrar.RegisterAll();
         var language = LanguageService.Instance;
-        string[] categories = ["Inputs", "Data", "Validation", "Configuration", "Firmware", "Build", "Device", "Flow", "Interaction", "Composite"];
+        string[] categories = ["Inputs", "Workspace", "Data", "Validation", "Configuration", "Firmware", "Build", "Device", "Flow", "Interaction", "Composite"];
         foreach (var category in categories)
         {
             var descriptors = NodeFactoryRegistrar.Descriptors.Where(descriptor =>

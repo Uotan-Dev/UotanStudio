@@ -8,7 +8,7 @@ namespace UotanStudio.Services.Interactions;
 /// <summary>Checks the complete graph before any file, device or interaction effect is executed.</summary>
 internal static class WorkflowInteractionPreflight
 {
-    internal static string? Validate(IReadOnlyList<FlowNodeViewModel> nodes, IWorkflowInteractionService host)
+    internal static string? Validate(IReadOnlyList<FlowNodeViewModel> nodes, IWorkflowInteractionService host, bool supportsDocuments = false)
     {
         var visiting = new HashSet<string>(StringComparer.Ordinal);
         foreach (var node in nodes)
@@ -18,8 +18,8 @@ internal static class WorkflowInteractionPreflight
                 return schemaError;
             }
             var error = node is CompositeNodeViewModel composite
-                ? InspectPackage(composite.Package, host, visiting, 0)
-                : InspectType(node.TypeKey, host, visiting, 0);
+                ? InspectPackage(composite.Package, host, visiting, 0, supportsDocuments)
+                : InspectType(node.TypeKey, host, visiting, 0, supportsDocuments);
             if (error is not null)
             {
                 return error;
@@ -107,8 +107,14 @@ internal static class WorkflowInteractionPreflight
         {
             foreach (var node in package.Graph.Nodes)
             {
-                CollectDestructive(node.CompositePackage?.NodeTypeKey is { } embedded ? embedded : node.TypeKey,
-                    operations, visiting, depth + 1);
+                if (node.CompositePackage is { } embedded)
+                {
+                    CollectDestructive(embedded, operations, visiting, depth + 1);
+                }
+                else
+                {
+                    CollectDestructive(node.TypeKey, operations, visiting, depth + 1);
+                }
             }
         }
         finally
@@ -124,7 +130,7 @@ internal static class WorkflowInteractionPreflight
         return localized == key ? typeKey : localized;
     }
 
-    private static string? InspectPackage(VisualPluginPackage package, IWorkflowInteractionService host, HashSet<string> visiting, int depth)
+    private static string? InspectPackage(VisualPluginPackage package, IWorkflowInteractionService host, HashSet<string> visiting, int depth, bool supportsDocuments)
     {
         if (depth >= 32 || !visiting.Add(package.NodeTypeKey))
         {
@@ -135,8 +141,8 @@ internal static class WorkflowInteractionPreflight
             foreach (var node in package.Graph.Nodes)
             {
                 var error = node.CompositePackage is { } embedded
-                    ? InspectPackage(embedded, host, visiting, depth + 1)
-                    : InspectType(node.TypeKey, host, visiting, depth + 1);
+                    ? InspectPackage(embedded, host, visiting, depth + 1, supportsDocuments)
+                    : InspectType(node.TypeKey, host, visiting, depth + 1, supportsDocuments);
                 if (error is not null)
                 {
                     return error;
@@ -150,11 +156,15 @@ internal static class WorkflowInteractionPreflight
         }
     }
 
-    private static string? InspectType(string typeKey, IWorkflowInteractionService host, HashSet<string> visiting, int depth)
+    private static string? InspectType(string typeKey, IWorkflowInteractionService host, HashSet<string> visiting, int depth, bool supportsDocuments)
     {
+        if (!supportsDocuments && typeKey.StartsWith("Workspace.Document.", StringComparison.Ordinal))
+        {
+            return LanguageService.Instance.GetString("Node_Document_Unsupported");
+        }
         if (NodeFactoryRegistrar.TryGetVisualPluginPackage(typeKey, out var package))
         {
-            return InspectPackage(package, host, visiting, depth);
+            return InspectPackage(package, host, visiting, depth, supportsDocuments);
         }
         var descriptor = NodeFactoryRegistrar.Descriptors.FirstOrDefault(candidate => candidate.TypeKey == typeKey);
         if (descriptor?.Capabilities.HasFlag(NodeCapability.MutatesDevice) == true && !host.IsSupported)

@@ -61,7 +61,7 @@
     <!-- 节点名称 -->
     <x:String x:Key="Node_Firmware_Container_Unpack">解包固件</x:String>
     <x:String x:Key="Node_Firmware_Container_Pack">打包固件</x:String>
-    <x:String x:Key="Node_Validation_Signature_Verify">验证签名</x:String>
+    <x:String x:Key="Node_Validation_Signature_Verify">断言 AVB vbmeta 签名有效</x:String>
     <x:String x:Key="Node_Firmware_Container_Extract">提取分区</x:String>
     <x:String x:Key="Node_Build_Ota_CreateDelta">OTA 差分</x:String>
     <x:String x:Key="Node_Build_Signature_Merge">不支持的签名字节拼接</x:String>
@@ -722,4 +722,19 @@
     <x:String x:Key="Node_Network_Timeout">下载超时。</x:String>
     <x:String x:Key="Node_Device_InvalidInput">设备操作缺少有效的设备、分区或输入文件。</x:String>
     <x:String x:Key="Node_Device_RebootFailed">设备拒绝了重启请求。</x:String>
+    <x:String x:Key="Node_Category_Workspace">工作区操作</x:String>
+    <x:String x:Key="Node_Workspace_Document_Resolve">定位已打开文档</x:String>
+    <x:String x:Key="Node_Workspace_Document_ReadText">读取文档文本</x:String>
+    <x:String x:Key="Node_Workspace_Document_ReplaceText">替换文档文本</x:String>
+    <x:String x:Key="Node_Family_Document">已打开文档</x:String>
+    <x:String x:Key="Node_PortType_Document">文档快照</x:String>
+    <x:String x:Key="Node_Conn_Document">文档</x:String>
+    <x:String x:Key="Node_Conn_CanEdit">可编辑</x:String>
+    <x:String x:Key="Node_Document_NotFound">没有唯一匹配的已打开文档。</x:String>
+    <x:String x:Key="Node_Document_Closed">所选文档已经关闭。</x:String>
+    <x:String x:Key="Node_Document_ReadOnly">此文档不支持请求的文本操作。</x:String>
+    <x:String x:Key="Node_Document_Changed">文档在读取后已发生变化，请重新读取后再应用修改。</x:String>
+    <x:String x:Key="Node_Document_TooLarge">文档文本超过 8 MiB 字符上限。</x:String>
+    <x:String x:Key="Node_Document_Unsupported">此工作流宿主没有已打开文档工作区。</x:String>
+    <x:String x:Key="Node_Document_TextRequired">需要文本值，空文本将清空文档。</x:String>
 </ResourceDictionary>

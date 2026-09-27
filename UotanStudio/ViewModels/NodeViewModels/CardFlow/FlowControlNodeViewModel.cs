@@ -178,13 +178,13 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
                 context.Log.Write(LogLevel.Info, Title, "Parallel branches dispatched.  分支并行分派。");
                 break;
             case "Flow.Execution.Terminate":
-            {
-                var reason = NodeDataUtil.ToDisplay(ReadInput("Reason"));
-                context.Log.Write(LogLevel.Warn, Title, "Terminate requested.  请求终止工作流。");
-                throw new OperationCanceledException(string.IsNullOrEmpty(reason)
-                    ? "Workflow terminated by Terminate node"
-                    : $"Workflow terminated by Terminate node: {reason}");
-            }
+                {
+                    var reason = NodeDataUtil.ToDisplay(ReadInput("Reason"));
+                    context.Log.Write(LogLevel.Warn, Title, "Terminate requested.  请求终止工作流。");
+                    throw new OperationCanceledException(string.IsNullOrEmpty(reason)
+                        ? "Workflow terminated by Terminate node"
+                        : $"Workflow terminated by Terminate node: {reason}");
+                }
             default:
                 return base.ExecuteAsync(context);
         }

@@ -48,4 +48,5 @@ public enum NodePortType
     List,
     /// <summary>File-backed artifact reference for bounded processing.</summary>
     Artifact,
+    Document,
 }

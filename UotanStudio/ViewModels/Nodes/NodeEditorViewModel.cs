@@ -1260,7 +1260,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             await ProjectOperationsService.Instance.ExecuteFileOperationAsync(async () =>
             {
                 result = await _engine.ExecuteAsync(nodes, connections, _runCts.Token,
-                    new NodeExecutionOptions { Preview = preview, Package = ResourcePackage, ValidatePackage = ValidatePackage, Interactions = Interactions }).ConfigureAwait(false);
+                    new NodeExecutionOptions { Preview = preview, Package = ResourcePackage, ValidatePackage = ValidatePackage, Interactions = Interactions, Documents = Documents }).ConfigureAwait(false);
             }, _runCts.Token);
             if (result is null) { throw new InvalidOperationException("Workflow returned no execution result."); }
 

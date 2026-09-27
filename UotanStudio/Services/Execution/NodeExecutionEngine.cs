@@ -23,6 +23,7 @@ public sealed class NodeExecutionEngine
     private PatchRun? _patches;
     private VisualPluginPackage? _package;
     private IWorkflowInteractionService _interactions = UnsupportedWorkflowInteractionService.Instance;
+    private Services.Workspace.IWorkflowDocuments? _documents;
     private readonly System.Collections.Concurrent.ConcurrentStack<IAsyncDisposable> _resources = new();
 
     /// <summary>
@@ -98,6 +99,7 @@ public sealed class NodeExecutionEngine
         _patches = options.SharedPatches ?? new PatchRun(options.Preview);
         _package = options.Package;
         _interactions = options.Interactions;
+        _documents = options.Documents;
 
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var token = _cts.Token;
@@ -129,7 +131,7 @@ public sealed class NodeExecutionEngine
                     return RejectPreflight(nodes, string.Join(Environment.NewLine, errors));
                 }
             }
-            var interactionError = WorkflowInteractionPreflight.Validate(nodes, _interactions);
+            var interactionError = WorkflowInteractionPreflight.Validate(nodes, _interactions, _documents is not null);
             if (interactionError is not null)
             {
                 return RejectPreflight(nodes, interactionError);
@@ -409,7 +411,7 @@ public sealed class NodeExecutionEngine
                 {
                     node.ExecutionStatus = waiting ? NodeExecutionStatus.WaitingForInput : NodeExecutionStatus.Running;
                     NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
-                }, _resources.Push);
+                }, _resources.Push, _documents);
             _log.Write(LogLevel.Info, "Engine", $"Executing node '{node.Title}' (id={node.InstanceId})");
             await node.ExecuteAsync(context).ConfigureAwait(false);
 
@@ -1099,7 +1101,8 @@ internal sealed class ExecutionContextImpl : INodeExecutionContext
 
     public ExecutionContextImpl(IUnifiedLog log, CancellationToken token, Action<double> progress, PatchRun? patches = null,
         VisualPluginPackage? package = null, IWorkflowInteractionService? interactions = null, Action<bool>? userWait = null,
-        Action<IAsyncDisposable>? registerResource = null)
+        Action<IAsyncDisposable>? registerResource = null,
+        Services.Workspace.IWorkflowDocuments? documents = null)
     {
         _log = log;
         _token = token;
@@ -1109,9 +1112,11 @@ internal sealed class ExecutionContextImpl : INodeExecutionContext
         Interactions = interactions ?? UnsupportedWorkflowInteractionService.Instance;
         _userWait = userWait;
         _registerResource = registerResource;
+        Documents = documents;
     }
 
     public IUnifiedLog Log => _log;
+    public Services.Workspace.IWorkflowDocuments? Documents { get; }
     public CancellationToken CancellationToken => _token;
     public PatchRun? Patches { get; }
     public VisualPluginPackage? Package { get; }

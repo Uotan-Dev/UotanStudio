@@ -20,6 +20,7 @@ public enum ExecutionFailurePolicy
 /// <summary>Execution policy supplied to <see cref="NodeExecutionEngine.ExecuteAsync"/>.</summary>
 public sealed record NodeExecutionOptions
 {
+    public Services.Workspace.IWorkflowDocuments? Documents { get; init; }
     /// <summary>Composite entry node activation; inactive-only descendants are skipped before execution.</summary>
     internal IReadOnlyDictionary<string, bool>? EntryActivation { get; init; }
     /// <summary>Host service used by declarative interaction nodes.</summary>

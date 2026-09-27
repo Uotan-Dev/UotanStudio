@@ -89,6 +89,7 @@ public sealed class CompositeNodeViewModel : FlowNodeViewModel
             context.CancellationToken, new NodeExecutionOptions
             {
                 SharedPatches = context.Patches,
+                Documents = context.Documents,
                 Package = _package,
                 Interactions = context.Interactions,
                 EntryActivation = _package.Inputs.Where(port => port.PortType == nameof(NodePortType.Flow))
