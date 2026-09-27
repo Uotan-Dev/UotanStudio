@@ -18,6 +18,8 @@ public sealed partial class MtkSession
     /// <para>存储未就绪、尚未发现，或 <paramref name="partitionId"/> 不是已发现的区域。</para></exception>
     /// <exception cref="InvalidDataException">A GPT block read was incomplete or the table failed validation.
     /// <para>某个 GPT 块读取不完整，或表未通过校验。</para></exception>
+    /// <exception cref="NotSupportedException">NOR/NAND page geometry does not define a GPT block-device layout.
+    /// <para>NOR/NAND 页几何信息未定义 GPT 块设备布局。</para></exception>
     /// <exception cref="MtkProtocolException">A storage exchange faulted the session.
     /// <para>某次存储交换使会话进入 fault 状态。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
@@ -52,6 +54,10 @@ public sealed partial class MtkSession
         RequireState(MtkSessionState.XFlashStorageReady);
         cancellationToken.ThrowIfCancellationRequested();
         var storage = XFlashStorage ?? throw new InvalidOperationException("Storage has not been discovered.");
+        if (storage.Kind is MtkXFlashStorageKind.Nor or MtkXFlashStorageKind.Nand)
+        {
+            throw new NotSupportedException("Raw flash page geometry does not define a GPT block-device layout.");
+        }
         storage.ValidateRange(partitionId, 0, storage.BlockSize);
         var region = storage.Regions.Single(region => region.PartitionId == partitionId);
         var table = await GptReader.ReadAsync(ReadBlocksAsync, storage.BlockSize,

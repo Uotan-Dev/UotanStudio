@@ -9,9 +9,9 @@ public sealed partial class MtkSession
     public MtkXFlashStorageInfo? XFlashStorage { get; private set; }
 
     /// <summary>
-    /// Queries an explicitly selected eMMC/UFS family and its packet sizes after DA2 startup.
+    /// Queries an explicitly selected eMMC/UFS/NOR/NAND family and its packet sizes after DA2 startup.
     /// A zero device type returns null without guessing another storage family.
-    /// <para>在 DA2 启动后查询显式选定的 eMMC/UFS 家族及其包大小。设备类型为 0 时返回
+    /// <para>在 DA2 启动后查询显式选定的 eMMC/UFS/NOR/NAND 家族及其包大小。设备类型为 0 时返回
     /// null，不会猜测其他存储家族。</para>
     /// </summary>
     /// <param name="kind">The storage family to query.
@@ -45,14 +45,11 @@ public sealed partial class MtkSession
             var channel = _xflash ?? throw new InvalidOperationException("XFlash was not initialized.");
             try
             {
-                var geometry = await QueryXFlashControlAsync(channel,
-                    kind == MtkXFlashStorageKind.Emmc ? 0x040001u : 0x040004u, cancellationToken).ConfigureAwait(false);
-                if (MtkXFlashStorageInfo.IsAbsent(geometry))
+                var storage = await QueryXFlashStorageOwnedAsync(channel, kind, cancellationToken).ConfigureAwait(false);
+                if (storage is null)
                 {
                     return null;
                 }
-                var packetLengths = await QueryXFlashControlAsync(channel, 0x040007, cancellationToken).ConfigureAwait(false);
-                var storage = MtkXFlashStorageInfo.Parse(kind, geometry, packetLengths);
                 cancellationToken.ThrowIfCancellationRequested();
                 ThrowIfDisposed();
                 XFlashStorage = storage;
@@ -73,14 +70,34 @@ public sealed partial class MtkSession
         }
     }
 
+    private async Task<MtkXFlashStorageInfo?> QueryXFlashStorageOwnedAsync(MtkXFlashChannel channel,
+        MtkXFlashStorageKind kind, CancellationToken cancellationToken)
+    {
+        var command = kind switch
+        {
+            MtkXFlashStorageKind.Emmc => 0x040001u,
+            MtkXFlashStorageKind.Ufs => 0x040004u,
+            MtkXFlashStorageKind.Nor => 0x040003u,
+            MtkXFlashStorageKind.Nand => 0x040002u,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
+        };
+        var geometry = await QueryXFlashControlAsync(channel, command, cancellationToken).ConfigureAwait(false);
+        if (MtkXFlashStorageInfo.IsAbsent(geometry))
+        {
+            return null;
+        }
+        var packetLengths = await QueryXFlashControlAsync(channel, 0x040007, cancellationToken).ConfigureAwait(false);
+        return MtkXFlashStorageInfo.Parse(kind, geometry, packetLengths);
+    }
+
     private async Task<byte[]> QueryXFlashControlAsync(MtkXFlashChannel channel, uint command,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, int maximumPayload = 1024 * 1024)
     {
         await SendXFlashWordAsync(channel, 0x010009, cancellationToken).ConfigureAwait(false);
         await ReadXFlashStatusAsync(channel, "device control", cancellationToken).ConfigureAwait(false);
         await SendXFlashWordAsync(channel, command, cancellationToken).ConfigureAwait(false);
         await ReadXFlashStatusAsync(channel, "device-control query", cancellationToken).ConfigureAwait(false);
-        var reply = await channel.ReceiveAsync(cancellationToken).ConfigureAwait(false);
+        var reply = await channel.ReceiveAsync(maximumPayload, cancellationToken).ConfigureAwait(false);
         await ReadXFlashStatusAsync(channel, "device-control completion", cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         ThrowIfDisposed();

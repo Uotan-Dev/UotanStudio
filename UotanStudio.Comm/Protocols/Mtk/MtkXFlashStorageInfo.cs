@@ -3,8 +3,8 @@ using System.Buffers.Binary;
 namespace UotanStudio.Comm.Protocols.Mtk;
 
 /// <summary>
-/// Storage families supported by the XFlash block-storage query.
-/// <para>XFlash 块存储查询所支持的存储类型。</para>
+/// Storage families supported by the XFlash storage query.
+/// <para>XFlash 存储查询所支持的存储类型。</para>
 /// </summary>
 public enum MtkXFlashStorageKind
 {
@@ -14,7 +14,13 @@ public enum MtkXFlashStorageKind
     /// Universal Flash Storage, using XFlash partition identifiers rather than XML LUN names.
     /// <para>通用闪存存储（UFS），使用 XFlash 分区标识符而不是 XML 的 LUN 名称。</para>
     /// </summary>
-    Ufs
+    Ufs,
+    /// <summary>NOR flash addressed through the agent's whole-device region.
+    /// <para>通过代理整片区域寻址的 NOR 闪存。</para></summary>
+    Nor,
+    /// <summary>NAND flash requiring explicit page, spare-area and addressing policies.
+    /// <para>需要显式页、备用区和寻址策略的 NAND 闪存。</para></summary>
+    Nand
 }
 
 /// <summary>
@@ -35,8 +41,8 @@ public sealed class MtkXFlashStorageRegion
     /// <para>获取 XFlash 存储命令使用的分区标识符。</para>
     /// </summary>
     /// <value>
-    /// The identifier assigned while reading the geometry reply; both families number their regions from <c>1</c>.
-    /// <para>读取几何信息应答时分配的标识符；两种存储类型的分区都从 <c>1</c> 开始编号。</para>
+    /// eMMC/UFS regions start at <c>1</c>; NOR uses the whole-device identifier <c>8</c>.
+    /// <para>eMMC/UFS 区域从 <c>1</c> 开始编号；NOR 使用整片标识符 <c>8</c>。</para>
     /// </value>
     public uint PartitionId { get; }
     /// <summary>
@@ -67,7 +73,8 @@ public sealed class MtkXFlashStorageRegion
 public sealed class MtkXFlashStorageInfo
 {
     private MtkXFlashStorageInfo(MtkXFlashStorageKind kind, uint deviceType, int blockSize,
-        MtkXFlashStorageRegion[] regions, string cidHex, int writePacketLength, int readPacketLength)
+        MtkXFlashStorageRegion[] regions, string cidHex, int writePacketLength, int readPacketLength,
+        MtkXFlashNandGeometry? nand = null)
     {
         Kind = kind;
         DeviceType = deviceType;
@@ -76,6 +83,7 @@ public sealed class MtkXFlashStorageInfo
         CidHex = cidHex;
         WritePacketLength = writePacketLength;
         ReadPacketLength = readPacketLength;
+        Nand = nand;
     }
 
     /// <summary>
@@ -87,6 +95,11 @@ public sealed class MtkXFlashStorageInfo
     /// <para>生成该快照所依据的几何信息应答对应的类型；它决定了分区数量与字段偏移。</para>
     /// </value>
     public MtkXFlashStorageKind Kind { get; }
+    /// <summary>Gets NAND-specific geometry when the explicitly queried family is NAND.
+    /// <para>获取显式查询家族为 NAND 时的专用几何信息。</para></summary>
+    /// <value>The page, spare-area and erase geometry, or null for another storage family.
+    /// <para>页、备用区和擦除几何信息；其他存储家族为 null。</para></value>
+    public MtkXFlashNandGeometry? Nand { get; }
     /// <summary>
     /// Gets the unmodified nonzero device type reported by the agent.
     /// <para>获取代理上报的未经修改且非零的设备类型值。</para>
@@ -102,8 +115,10 @@ public sealed class MtkXFlashStorageInfo
     /// <para>获取存储块大小（以字节为单位）。</para>
     /// </summary>
     /// <value>
-    /// A power of two between 512 and 65536 that every reported capacity and packet length is aligned to.
-    /// <para>512 到 65536 之间的 2 的幂；所有上报的容量与包长度都必须与其对齐。</para>
+    /// A power of two up to 65536, at least 512 for eMMC/UFS and 1 for NOR.
+    /// For NOR/NAND this is the reported page size, not an erase-block size.
+    /// <para>不超过 65536 的 2 的幂；eMMC/UFS 至少为 512，NOR 至少为 1。
+    /// NOR/NAND 的此值为上报页大小，不是擦除块大小。</para>
     /// </value>
     public int BlockSize { get; }
     /// <summary>
@@ -111,8 +126,10 @@ public sealed class MtkXFlashStorageInfo
     /// <para>获取物理分区，包含容量为零的分区以及设备上报的 RPMB 分区。</para>
     /// </summary>
     /// <value>
-    /// Regions ordered by <see cref="MtkXFlashStorageRegion.PartitionId"/>: eight for eMMC, three for UFS.
-    /// <para>按 <see cref="MtkXFlashStorageRegion.PartitionId"/> 排列的分区：eMMC 为八个，UFS 为三个。</para>
+    /// Eight regions for eMMC, three for UFS, one whole-device region for NOR, or NAND's logical available area.
+    /// NAND physical capacity is available through <see cref="Nand"/> and requires dedicated access methods.
+    /// <para>eMMC 为八个区域，UFS 为三个，NOR 为一个整片区域，NAND 为逻辑可用区域。
+    /// NAND 物理容量通过 <see cref="Nand"/> 提供，必须使用专用访问方法。</para>
     /// </value>
     public IReadOnlyList<MtkXFlashStorageRegion> Regions { get; }
     /// <summary>
@@ -120,8 +137,8 @@ public sealed class MtkXFlashStorageInfo
     /// <para>获取以十六进制编码的上报 16 字节卡标识信息。</para>
     /// </summary>
     /// <value>
-    /// Thirty-two hexadecimal characters taken from the offset that <see cref="Kind"/> selects.
-    /// <para>三十二个十六进制字符，其读取偏移由 <see cref="Kind"/> 决定。</para>
+    /// Thirty-two hexadecimal characters for eMMC/UFS, or an empty string for NOR/NAND, whose queries have no CID.
+    /// <para>eMMC/UFS 为三十二个十六进制字符；NOR/NAND 查询不含 CID，返回空字符串。</para>
     /// </value>
     public string CidHex { get; }
     /// <summary>
@@ -129,8 +146,8 @@ public sealed class MtkXFlashStorageInfo
     /// <para>获取代理有界写入包长度（以字节为单位）。</para>
     /// </summary>
     /// <value>
-    /// At least <see cref="BlockSize"/> and at most 1 MiB, always a multiple of <see cref="BlockSize"/>.
-    /// <para>不小于 <see cref="BlockSize"/> 且不超过 1 MiB，并且始终是 <see cref="BlockSize"/> 的整数倍。</para>
+    /// At most 1 MiB, block-aligned for eMMC/UFS/NOR; NAND reports a byte limit and its selected records must fit.
+    /// <para>不超过 1 MiB；eMMC/UFS/NOR 按块对齐，NAND 上报字节上限且选定记录必须能装入包中。</para>
     /// </value>
     public int WritePacketLength { get; }
     /// <summary>
@@ -138,8 +155,8 @@ public sealed class MtkXFlashStorageInfo
     /// <para>获取代理有界读取包长度（以字节为单位）。</para>
     /// </summary>
     /// <value>
-    /// At least <see cref="BlockSize"/> and at most 1 MiB, always a multiple of <see cref="BlockSize"/>.
-    /// <para>不小于 <see cref="BlockSize"/> 且不超过 1 MiB，并且始终是 <see cref="BlockSize"/> 的整数倍。</para>
+    /// At most 1 MiB, block-aligned for eMMC/UFS/NOR; NAND reports a byte limit greater than four status bytes.
+    /// <para>不超过 1 MiB；eMMC/UFS/NOR 按块对齐，NAND 上报大于四字节状态长度的字节上限。</para>
     /// </value>
     public int ReadPacketLength { get; }
 
@@ -166,11 +183,15 @@ public sealed class MtkXFlashStorageInfo
     /// 或该范围未按块对齐、超出上报容量。</para>
     /// </exception>
     /// <exception cref="NotSupportedException">
-    /// The matched region requires authenticated RPMB access.
-    /// <para>匹配到的分区需要经过认证的 RPMB 访问。</para>
+    /// The matched region requires authenticated RPMB access, or NAND requires an explicit page-stream policy.
+    /// <para>匹配到的分区需要经过认证的 RPMB 访问，或 NAND 需要显式页流策略。</para>
     /// </exception>
     public void ValidateRange(uint partitionId, long offset, long length)
     {
+        if (Kind == MtkXFlashStorageKind.Nand)
+        {
+            throw new NotSupportedException("NAND requires explicit page, spare-area and addressing policies.");
+        }
         ArgumentOutOfRangeException.ThrowIfNegative(offset);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(length);
         var region = Regions.FirstOrDefault(region => region.PartitionId == partitionId)
@@ -202,13 +223,21 @@ public sealed class MtkXFlashStorageInfo
         {
             throw new ArgumentOutOfRangeException(nameof(kind));
         }
-        var minimumLength = kind == MtkXFlashStorageKind.Emmc ? 96 : 48;
+        var minimumLength = kind switch
+        {
+            MtkXFlashStorageKind.Emmc => 96,
+            MtkXFlashStorageKind.Ufs => 48,
+            MtkXFlashStorageKind.Nor => 16,
+            MtkXFlashStorageKind.Nand => 45,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
+        };
         if (geometry.Length < minimumLength || geometry.Length > 4096 || IsAbsent(geometry))
         {
             throw new MtkProtocolException("The selected storage geometry is missing, truncated or oversized.");
         }
         var blockSize = BinaryPrimitives.ReadUInt32LittleEndian(geometry[4..]);
-        if (blockSize < 512 || blockSize > 65536 || (blockSize & (blockSize - 1)) != 0)
+        var minimumBlockSize = kind == MtkXFlashStorageKind.Nor ? 1u : 512u;
+        if (blockSize < minimumBlockSize || blockSize > 65536 || (blockSize & (blockSize - 1)) != 0)
         {
             throw new MtkProtocolException("The storage block size is unsupported or invalid.");
         }
@@ -218,11 +247,30 @@ public sealed class MtkXFlashStorageInfo
         }
         var writeLength = BinaryPrimitives.ReadUInt32LittleEndian(packetLengths);
         var readLength = BinaryPrimitives.ReadUInt32LittleEndian(packetLengths[4..]);
-        if (writeLength < blockSize || readLength < blockSize
+        var packetAlignment = kind == MtkXFlashStorageKind.Nand ? 1u : Math.Max(blockSize, 8u);
+        if (writeLength < packetAlignment || readLength < packetAlignment
+            || readLength < 5
             || writeLength > 1024 * 1024 || readLength > 1024 * 1024
-            || writeLength % blockSize != 0 || readLength % blockSize != 0)
+            || writeLength % packetAlignment != 0 || readLength % packetAlignment != 0)
         {
             throw new MtkProtocolException("The storage packet sizes are unsupported, unaligned or unbounded.");
+        }
+        if (kind == MtkXFlashStorageKind.Nor)
+        {
+            var capacity = BinaryPrimitives.ReadUInt64LittleEndian(geometry[8..]);
+            if (capacity < packetAlignment || capacity > long.MaxValue || capacity % packetAlignment != 0)
+            {
+                throw new MtkProtocolException("The NOR capacity is empty, overflowing or not transfer-aligned.");
+            }
+            return new MtkXFlashStorageInfo(kind, BinaryPrimitives.ReadUInt32LittleEndian(geometry), (int)blockSize,
+                [new MtkXFlashStorageRegion(8, (long)capacity, false)], string.Empty, (int)writeLength, (int)readLength);
+        }
+        if (kind == MtkXFlashStorageKind.Nand)
+        {
+            var nand = MtkXFlashNandGeometry.Parse(geometry);
+            return new MtkXFlashStorageInfo(kind, BinaryPrimitives.ReadUInt32LittleEndian(geometry), (int)blockSize,
+                [new MtkXFlashStorageRegion(8, nand.AvailableSize, false)], string.Empty,
+                (int)writeLength, (int)readLength, nand);
         }
         var count = kind == MtkXFlashStorageKind.Emmc ? 8 : 3;
         var regions = new MtkXFlashStorageRegion[count];

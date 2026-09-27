@@ -15,6 +15,20 @@ public sealed partial class MtkSession
     /// <para>已附加的主机文件存储；为 null 时设备发起的文件操作会使会话 fault。</para></value>
     public IMtkXmlHostFileStore? HostFileStore { get; set; }
 
+    /// <summary>Gets or sets the byte limit for each device-initiated host file transfer.
+    /// <para>获取或设置每次设备发起的主机文件传输的字节上限。</para></summary>
+    /// <value>A positive explicit limit, defaulting to 64 MiB. Set before starting hardware initialization.
+    /// <para>显式的正数上限，默认为 64 MiB。在开始硬件初始化之前设置。</para></value>
+    public long MaximumHostFileTransferBytes
+    {
+        get;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            field = value;
+        }
+    } = 64 * 1024 * 1024;
+
     private static bool IsXmlFileRequest(MtkXmlMessage message) =>
         message.Command is "CMD:DOWNLOAD-FILE" or "CMD:UPLOAD-FILE" or "CMD:FILE-SYS-OPERATION";
 
@@ -52,6 +66,10 @@ public sealed partial class MtkSession
 
                     var size = await store.GetSizeAsync(path, token).ConfigureAwait(false)
                         ?? throw new MtkProtocolException($"The host file store has no size for '{path}'.");
+                    if (size < 0 || size > MaximumHostFileTransferBytes)
+                    {
+                        throw new MtkProtocolException("The host file size exceeds the selected transfer limit.");
+                    }
                     await channel.AcknowledgeAsync(token).ConfigureAwait(false);
                     await channel.AcknowledgeValueAsync((ulong)size, token).ConfigureAwait(false);
                     return true;
@@ -74,6 +92,11 @@ public sealed partial class MtkSession
                         ?? throw new MtkProtocolException($"The host file store refused '{tokenName}'.");
                     using (content)
                     {
+                        if (length <= 0 || length > MaximumHostFileTransferBytes || !content.CanRead
+                            || (content.CanSeek && content.Length - content.Position < length))
+                        {
+                            throw new MtkProtocolException("The host download source exceeds its bounded transfer contract.");
+                        }
                         await channel.AcknowledgeAsync(token).ConfigureAwait(false);
                         await SendXmlSourceOwnedAsync(channel, content, length, packetLength, null, token).ConfigureAwait(false);
                     }
@@ -94,15 +117,19 @@ public sealed partial class MtkSession
                         throw new MtkProtocolException("The XML upload request does not match the bounded transfer profile.");
                     }
 
-                    var sink = await store.OpenWriteAsync(target, 0, token).ConfigureAwait(false)
+                    await channel.AcknowledgeAsync(token).ConfigureAwait(false);
+                    var declared = await channel.ReceiveTextAsync(token).ConfigureAwait(false);
+                    if (!TryParseXmlDeclaredLength(declared, out var length) || length > MaximumHostFileTransferBytes)
+                    {
+                        throw new MtkProtocolException("The XML DA upload length is invalid or exceeds the selected transfer limit.");
+                    }
+                    var sink = await store.OpenWriteAsync(target, length, token).ConfigureAwait(false)
                         ?? throw new MtkProtocolException($"The host file store refused the upload of '{target}'.");
                     using (sink)
                     {
-                        await channel.AcknowledgeAsync(token).ConfigureAwait(false);
-                        var declared = await channel.ReceiveTextAsync(token).ConfigureAwait(false);
-                        if (!TryParseXmlDeclaredLength(declared, out var length))
+                        if (!sink.CanWrite)
                         {
-                            throw new MtkProtocolException("The XML DA did not declare the upload length.");
+                            throw new MtkProtocolException("The host file store returned an unwritable sink.");
                         }
 
                         await channel.AcknowledgeAsync(token).ConfigureAwait(false);
@@ -127,7 +154,7 @@ public sealed partial class MtkSession
                             {
                                 await channel.AcknowledgeAsync(token).ConfigureAwait(false);
                             }
-                            else if (transferred != length)
+                            else if (status != "OK!EOT" || transferred != length)
                             {
                                 throw new MtkProtocolException("The XML upload ended before the declared length.");
                             }

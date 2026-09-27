@@ -25,6 +25,8 @@ public sealed partial class MtkSession
     /// <para><paramref name="timeoutMs"/> 超出 1 毫秒到 24 小时的范围。</para></exception>
     /// <exception cref="InvalidOperationException">Storage is not ready or has not been discovered.
     /// <para>存储未就绪或尚未发现。</para></exception>
+    /// <exception cref="NotSupportedException">NOR requires the explicit erase geometry accepted by <see cref="EraseXFlashNorStorageAsync"/>.
+    /// <para>NOR 必须使用 <see cref="EraseXFlashNorStorageAsync"/> 接受的显式擦除几何信息。</para></exception>
     /// <exception cref="MtkProtocolException">The device returned an unexpected status, exceeded the bounded
     /// continuation count, or requested an unsupported wait interval.
     /// <para>设备返回意外状态、超出有界的续轮次数，或请求了不支持的等待间隔。</para></exception>
@@ -51,12 +53,33 @@ public sealed partial class MtkSession
     }
 
     private async Task EraseXFlashStorageOwnedAsync(uint partitionId, long offset, long length, int timeoutMs,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, int? norEraseBlockSize = null)
     {
         RequireState(MtkSessionState.XFlashStorageReady);
         cancellationToken.ThrowIfCancellationRequested();
         var storage = XFlashStorage ?? throw new InvalidOperationException("Storage has not been discovered.");
         storage.ValidateRange(partitionId, offset, length);
+        if (storage.Kind == MtkXFlashStorageKind.Nor)
+        {
+            if (norEraseBlockSize is not { } eraseBlockSize)
+            {
+                throw new NotSupportedException("NOR erase requires an explicitly selected erase-block size.");
+            }
+            if (eraseBlockSize < storage.BlockSize || offset % eraseBlockSize != 0 || length % eraseBlockSize != 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(length), "The NOR erase range is not aligned to the selected erase block.");
+            }
+        }
+        else if (norEraseBlockSize is not null)
+        {
+            throw new InvalidOperationException("The selected storage is not NOR.");
+        }
+        await EraseXFlashRangeAsync(CreateXFlashStorageParameters(storage, partitionId, offset, length),
+            timeoutMs, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task EraseXFlashRangeAsync(byte[] parameters, int timeoutMs, CancellationToken cancellationToken)
+    {
         var channel = _xflash ?? throw new InvalidOperationException("XFlash was not initialized.");
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(timeoutMs);
@@ -65,7 +88,7 @@ public sealed partial class MtkSession
         {
             await SendXFlashWordAsync(channel, 0x010003, token).ConfigureAwait(false);
             await ReadXFlashStatusAsync(channel, "erase request", token).ConfigureAwait(false);
-            await channel.SendAsync(1, CreateXFlashStorageParameters(storage, partitionId, offset, length), token).ConfigureAwait(false);
+            await channel.SendAsync(1, parameters, token).ConfigureAwait(false);
             await ReadXFlashStatusAsync(channel, "erase parameters", token).ConfigureAwait(false);
             var polls = 0;
             while (true)

@@ -7,9 +7,14 @@ public sealed partial class MtkSession
     /// <summary>
     /// Reads an aligned physical storage range to a caller-owned stream. The destination may
     /// contain partial data on failure; callers publishing files must use temporary files.
+    /// NOR ranges smaller than the status-frame width are read through a bounded aligned window.
     /// <para>将对齐的物理存储范围读取到调用方拥有的流中。失败时目标流可能包含部分
-    /// 数据；发布文件的调用方必须使用临时文件。</para>
+    /// 数据；发布文件的调用方必须使用临时文件。小于状态帧宽度的 NOR 范围通过有界对齐窗口读取。</para>
     /// </summary>
+    /// <remarks><see cref="XFlashStorageTransferTimeoutMs"/> bounds the entire cooperative exchange.
+    /// At most 64 consecutive success-status frames may arrive without data.
+    /// <para><see cref="XFlashStorageTransferTimeoutMs"/> 限制整次协作式交换的时间。
+    /// 未收到数据时最多接受连续 64 个成功状态帧。</para></remarks>
     /// <param name="partitionId">The discovered XFlash physical partition identifier, not a GPT index.
     /// <para>已发现的 XFlash 物理分区标识符，不是 GPT 索引。</para></param>
     /// <param name="offset">The block-aligned byte offset within the physical partition.
@@ -32,6 +37,8 @@ public sealed partial class MtkSession
     /// <para>存储未就绪或尚未发现。</para></exception>
     /// <exception cref="MtkProtocolException">A frame violates the range, packet size or protocol; the session faults.
     /// <para>某帧违反范围、包大小或协议约定；会话进入 fault 状态。</para></exception>
+    /// <exception cref="TimeoutException">A frame or the whole cooperative exchange exceeded its deadline.
+    /// <para>某帧或整次协作式交换超出截止时间。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
     /// <para>调用方在任一协作点取消。</para></exception>
     /// <exception cref="ObjectDisposedException">The session is disposed.
@@ -55,18 +62,42 @@ public sealed partial class MtkSession
         }
     }
 
-    private async Task ReadXFlashStorageOwnedAsync(uint partitionId, long offset, long length, Stream destination,
+    private Task ReadXFlashStorageOwnedAsync(uint partitionId, long offset, long length, Stream destination,
+        IProgress<long>? progress, CancellationToken cancellationToken) =>
+        RunXFlashStorageTransferAsync(token => ReadXFlashStorageExchangeAsync(
+            partitionId, offset, length, destination, progress, token), cancellationToken);
+
+    private async Task ReadXFlashStorageExchangeAsync(uint partitionId, long offset, long length, Stream destination,
         IProgress<long>? progress, CancellationToken cancellationToken)
     {
         RequireState(MtkSessionState.XFlashStorageReady);
         cancellationToken.ThrowIfCancellationRequested();
         var storage = XFlashStorage ?? throw new InvalidOperationException("Storage has not been discovered.");
         storage.ValidateRange(partitionId, offset, length);
+        if (storage.Kind == MtkXFlashStorageKind.Nor && ((offset | length) & 7) != 0)
+        {
+            var alignedOffset = offset & ~7L;
+            var end = checked(offset + length);
+            var alignedEnd = checked(end + ((8 - (end & 7)) & 7));
+            using var window = new NorReadWindowStream(destination, offset - alignedOffset, length);
+            await ReadXFlashStorageExchangeAsync(partitionId, alignedOffset, alignedEnd - alignedOffset,
+                window, null, cancellationToken).ConfigureAwait(false);
+            progress?.Report(length);
+            return;
+        }
+        await ReadXFlashRangeAsync(CreateXFlashStorageParameters(storage, partitionId, offset, length),
+            storage.ReadPacketLength, length, destination, progress, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task ReadXFlashRangeAsync(byte[] parameters, int maximumPacketLength, long length, Stream destination,
+        IProgress<long>? progress, CancellationToken cancellationToken)
+    {
         var channel = _xflash ?? throw new InvalidOperationException("XFlash was not initialized.");
         try
         {
-            await BeginXFlashTransferAsync(channel, storage, false, partitionId, offset, length, cancellationToken).ConfigureAwait(false);
+            await BeginXFlashTransferAsync(channel, false, parameters, cancellationToken).ConfigureAwait(false);
             long transferred = 0;
+            var idleFrames = 0;
             while (transferred < length)
             {
                 var frame = await channel.ReceiveAsync(cancellationToken).ConfigureAwait(false);
@@ -80,22 +111,27 @@ public sealed partial class MtkSession
                     var status = BinaryPrimitives.ReadUInt32LittleEndian(frame.Payload);
                     if (status == 0)
                     {
+                        if (++idleFrames > 64)
+                        {
+                            throw new MtkProtocolException("Storage read exceeded the consecutive no-progress status limit.");
+                        }
                         continue;
                     }
 
                     throw new MtkProtocolException("Storage read failed with a device status frame.", status);
                 }
-                if (frame.Payload.Length is 2 or 0)
+                if (frame.Payload.Length < 5)
                 {
                     throw new MtkProtocolException("Storage read ended before the requested data was received.");
                 }
-                if (frame.Payload.Length > storage.ReadPacketLength || frame.Payload.Length > length - transferred)
+                if (frame.Payload.Length > maximumPacketLength || frame.Payload.Length > length - transferred)
                 {
                     throw new MtkProtocolException("The storage data frame violates the requested range or negotiated packet size.");
                 }
                 await destination.WriteAsync(frame.Payload, cancellationToken).ConfigureAwait(false);
                 await SendXFlashWordAsync(channel, 0, cancellationToken).ConfigureAwait(false);
                 transferred += frame.Payload.Length;
+                idleFrames = 0;
                 progress?.Report(transferred);
             }
             await ReadXFlashStatusAsync(channel, "storage read completion", cancellationToken).ConfigureAwait(false);
@@ -115,6 +151,8 @@ public sealed partial class MtkSession
     /// <para>从调用方拥有的流精确写入一段对齐的字节范围。不包含填充、重试、回滚、
     /// 厂商可选下载动作或回读校验等任何隐含行为。</para>
     /// </summary>
+    /// <remarks><see cref="XFlashStorageTransferTimeoutMs"/> includes reading the source and waiting for final confirmation.
+    /// <para><see cref="XFlashStorageTransferTimeoutMs"/> 包含读取源流与等待最终确认的时间。</para></remarks>
     /// <param name="partitionId">The discovered XFlash physical partition identifier, excluding RPMB.
     /// <para>已发现的 XFlash 物理分区标识符，不含 RPMB。</para></param>
     /// <param name="offset">The block-aligned byte offset within the physical partition.
@@ -141,6 +179,8 @@ public sealed partial class MtkSession
     /// <para>源在凑足 <paramref name="length"/> 字节前已结束。</para></exception>
     /// <exception cref="MtkProtocolException">A packet or the completion was rejected; the session faults.
     /// <para>某个数据包或完成状态被拒绝；会话进入 fault 状态。</para></exception>
+    /// <exception cref="TimeoutException">A frame or the whole cooperative exchange exceeded its deadline.
+    /// <para>某帧或整次协作式交换超出截止时间。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
     /// <para>调用方在任一协作点取消。</para></exception>
     /// <exception cref="ObjectDisposedException">The session is disposed.
@@ -165,18 +205,30 @@ public sealed partial class MtkSession
         }
     }
 
-    private async Task WriteXFlashStorageOwnedAsync(uint partitionId, long offset, long length, Stream source,
+    private Task WriteXFlashStorageOwnedAsync(uint partitionId, long offset, long length, Stream source,
+        IProgress<long>? progress, CancellationToken cancellationToken) =>
+        RunXFlashStorageTransferAsync(token => WriteXFlashStorageExchangeAsync(
+            partitionId, offset, length, source, progress, token), cancellationToken);
+
+    private async Task WriteXFlashStorageExchangeAsync(uint partitionId, long offset, long length, Stream source,
         IProgress<long>? progress, CancellationToken cancellationToken)
     {
         RequireState(MtkSessionState.XFlashStorageReady);
         cancellationToken.ThrowIfCancellationRequested();
         var storage = XFlashStorage ?? throw new InvalidOperationException("Storage has not been discovered.");
         storage.ValidateRange(partitionId, offset, length);
+        await WriteXFlashRangeAsync(CreateXFlashStorageParameters(storage, partitionId, offset, length),
+            storage.WritePacketLength, length, source, progress, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task WriteXFlashRangeAsync(byte[] parameters, int packetLength, long length, Stream source,
+        IProgress<long>? progress, CancellationToken cancellationToken)
+    {
         var channel = _xflash ?? throw new InvalidOperationException("XFlash was not initialized.");
         try
         {
-            await BeginXFlashTransferAsync(channel, storage, true, partitionId, offset, length, cancellationToken).ConfigureAwait(false);
-            var buffer = new byte[storage.WritePacketLength];
+            await BeginXFlashTransferAsync(channel, true, parameters, cancellationToken).ConfigureAwait(false);
+            var buffer = new byte[packetLength];
             long transferred = 0;
             while (transferred < length)
             {
@@ -206,12 +258,11 @@ public sealed partial class MtkSession
         }
     }
 
-    private async Task BeginXFlashTransferAsync(MtkXFlashChannel channel, MtkXFlashStorageInfo storage, bool write,
-        uint partitionId, long offset, long length, CancellationToken cancellationToken)
+    private async Task BeginXFlashTransferAsync(MtkXFlashChannel channel, bool write, byte[] parameters,
+        CancellationToken cancellationToken)
     {
         await SendXFlashWordAsync(channel, write ? 0x010004u : 0x010005u, cancellationToken).ConfigureAwait(false);
         await ReadXFlashStatusAsync(channel, "storage request", cancellationToken).ConfigureAwait(false);
-        var parameters = CreateXFlashStorageParameters(storage, partitionId, offset, length);
         await channel.SendAsync(1, parameters, cancellationToken).ConfigureAwait(false);
         await ReadXFlashStatusAsync(channel, "storage parameters", cancellationToken).ConfigureAwait(false);
         if (!write)
@@ -223,7 +274,13 @@ public sealed partial class MtkSession
     private static byte[] CreateXFlashStorageParameters(MtkXFlashStorageInfo storage, uint partitionId, long offset, long length)
     {
         var parameters = new byte[56];
-        BinaryPrimitives.WriteUInt32LittleEndian(parameters, storage.Kind == MtkXFlashStorageKind.Emmc ? 1u : 0x30u);
+        BinaryPrimitives.WriteUInt32LittleEndian(parameters, storage.Kind switch
+        {
+            MtkXFlashStorageKind.Emmc => 1u,
+            MtkXFlashStorageKind.Ufs => 0x30u,
+            MtkXFlashStorageKind.Nor => 0x20u,
+            _ => throw new ArgumentOutOfRangeException(nameof(storage))
+        });
         BinaryPrimitives.WriteUInt32LittleEndian(parameters.AsSpan(4), partitionId);
         BinaryPrimitives.WriteUInt64LittleEndian(parameters.AsSpan(8), (ulong)offset);
         BinaryPrimitives.WriteUInt64LittleEndian(parameters.AsSpan(16), (ulong)length);

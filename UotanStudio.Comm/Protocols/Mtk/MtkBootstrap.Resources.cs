@@ -1,8 +1,8 @@
 namespace UotanStudio.Comm.Protocols.Mtk;
 
-public static partial class MtkXFlashBootstrap
+public static partial class MtkBootstrap
 {
-    private static MtkBootResourceKind[] CaptureBootResourceOrder(MtkXFlashBootstrapOptions options)
+    private static MtkBootResourceKind[] CaptureBootResourceOrder(MtkBootstrapOptions options)
     {
         ArgumentNullException.ThrowIfNull(options.BootResourceOrder);
         if (options.BootResourceOrder.Count > 2)

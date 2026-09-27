@@ -73,10 +73,6 @@ public sealed partial class MtkSession
         ArgumentOutOfRangeException.ThrowIfGreaterThan(key.Length, 128);
         XmlConvert.VerifyXmlChars(key);
         ValidateXmlSetupTimeout(timeoutMs);
-        const string destination = "MEM://0x0:0x10000";
-        var command = new XElement("da", new XElement("version", "1.0"),
-            new XElement("command", "CMD:GET-SYS-PROPERTY"), new XElement("arg",
-                new XElement("key", key), new XElement("target_file", destination)));
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -93,13 +89,7 @@ public sealed partial class MtkSession
             var token = deadline.Token;
             try
             {
-                await SendXmlControlCommandOwnedAsync(channel, XmlHostCapabilities(download: false, upload: true), token).ConfigureAwait(false);
-                await channel.SendCommandAsync(command, token).ConfigureAwait(false);
-                await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
-                var text = await ReceiveXmlDocumentOwnedAsync(channel, destination,
-                    MtkXmlSystemProperty.MaximumDocumentLength, token).ConfigureAwait(false);
-                var property = MtkXmlSystemProperty.Parse(text, key, expectedEnvelope);
-                await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
+                var property = await QueryXmlSystemPropertyOwnedAsync(channel, key, expectedEnvelope, token).ConfigureAwait(false);
                 token.ThrowIfCancellationRequested();
                 ThrowIfDisposed();
                 return property;
@@ -119,5 +109,22 @@ public sealed partial class MtkSession
         {
             _operation.Release();
         }
+    }
+
+    private async Task<MtkXmlSystemProperty> QueryXmlSystemPropertyOwnedAsync(MtkXmlChannel channel,
+        string key, string? expectedEnvelope, CancellationToken token)
+    {
+        const string destination = "MEM://0x0:0x10000";
+        var command = new XElement("da", new XElement("version", "1.0"),
+            new XElement("command", "CMD:GET-SYS-PROPERTY"), new XElement("arg",
+                new XElement("key", key), new XElement("target_file", destination)));
+        await SendXmlControlCommandOwnedAsync(channel, XmlHostCapabilities(download: false, upload: true), token).ConfigureAwait(false);
+        await channel.SendCommandAsync(command, token).ConfigureAwait(false);
+        await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
+        var text = await ReceiveXmlDocumentOwnedAsync(channel, destination,
+            MtkXmlSystemProperty.MaximumDocumentLength, token).ConfigureAwait(false);
+        var property = MtkXmlSystemProperty.Parse(text, key, expectedEnvelope);
+        await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
+        return property;
     }
 }

@@ -86,14 +86,8 @@ public sealed partial class MtkSession
             var token = deadline.Token;
             try
             {
-                await SendXmlControlCommandOwnedAsync(channel, XmlHostCapabilities(download: true), token).ConfigureAwait(false);
-                await channel.SendCommandAsync(command, token).ConfigureAwait(false);
-                await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
-                var request = await ReceiveXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
-                var packetLength = ValidateXmlDownloadRequest(request, sourceId);
-                await channel.AcknowledgeAsync(token).ConfigureAwait(false);
-                await SendXmlSourceOwnedAsync(channel, resource, length, packetLength, progress, token).ConfigureAwait(false);
-                await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
+                await UploadXmlSecurityResourceOwnedAsync(channel, command, sourceId, resource,
+                    length, progress, token).ConfigureAwait(false);
                 token.ThrowIfCancellationRequested();
                 ThrowIfDisposed();
             }
@@ -112,5 +106,18 @@ public sealed partial class MtkSession
         {
             _operation.Release();
         }
+    }
+
+    private async Task UploadXmlSecurityResourceOwnedAsync(MtkXmlChannel channel, XElement command,
+        string sourceId, Stream resource, int length, IProgress<long>? progress, CancellationToken token)
+    {
+        await SendXmlControlCommandOwnedAsync(channel, XmlHostCapabilities(download: true), token).ConfigureAwait(false);
+        await channel.SendCommandAsync(command, token).ConfigureAwait(false);
+        await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
+        var request = await ReceiveXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
+        var packetLength = ValidateXmlDownloadRequest(request, sourceId);
+        await channel.AcknowledgeAsync(token).ConfigureAwait(false);
+        await SendXmlSourceOwnedAsync(channel, resource, length, packetLength, progress, token).ConfigureAwait(false);
+        await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
     }
 }

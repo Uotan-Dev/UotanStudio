@@ -46,10 +46,6 @@ public sealed partial class MtkSession
         CancellationToken cancellationToken = default)
     {
         ValidateXmlSetupTimeout(timeoutMs);
-        const int maximumLength = MtkXmlStorageInfo.MaximumDocumentLength;
-        const string destination = "MEM://0x0:0x10000";
-        var command = new XElement("da", new XElement("version", "1.0"), new XElement("command", "CMD:GET-HW-INFO"),
-            new XElement("arg", new XElement("target_file", destination)));
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -61,12 +57,7 @@ public sealed partial class MtkSession
             var token = deadline.Token;
             try
             {
-                await SendXmlControlCommandOwnedAsync(channel, XmlHostCapabilities(download: false, upload: true), token).ConfigureAwait(false);
-                await channel.SendCommandAsync(command, token).ConfigureAwait(false);
-                await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
-                var text = await ReceiveXmlDocumentOwnedAsync(channel, destination, maximumLength, token).ConfigureAwait(false);
-                var storage = MtkXmlStorageInfo.Parse(text);
-                await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
+                var storage = await QueryXmlStorageOwnedAsync(channel, token).ConfigureAwait(false);
                 token.ThrowIfCancellationRequested();
                 ThrowIfDisposed();
                 XmlStorage = storage;
@@ -88,6 +79,20 @@ public sealed partial class MtkSession
         {
             _operation.Release();
         }
+    }
+
+    private async Task<MtkXmlStorageInfo> QueryXmlStorageOwnedAsync(MtkXmlChannel channel, CancellationToken token)
+    {
+        const string destination = "MEM://0x0:0x10000";
+        var command = new XElement("da", new XElement("version", "1.0"), new XElement("command", "CMD:GET-HW-INFO"),
+            new XElement("arg", new XElement("target_file", destination)));
+        await SendXmlControlCommandOwnedAsync(channel, XmlHostCapabilities(download: false, upload: true), token).ConfigureAwait(false);
+        await channel.SendCommandAsync(command, token).ConfigureAwait(false);
+        await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
+        var text = await ReceiveXmlDocumentOwnedAsync(channel, destination, MtkXmlStorageInfo.MaximumDocumentLength, token).ConfigureAwait(false);
+        var storage = MtkXmlStorageInfo.Parse(text);
+        await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
+        return storage;
     }
 
     private static int ValidateXmlUploadRequest(MtkXmlMessage request, string destination, int maximumPacketLength)

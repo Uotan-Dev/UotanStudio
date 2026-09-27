@@ -95,7 +95,22 @@ public enum MtkSessionState
     XmlStageTwoHardwareInitialized,
     /// <summary>Bounded XML block-storage geometry was received; access authorization is not implied.
     /// <para>已接收到有界的 XML 块存储几何；并不表示已获访问授权。</para></summary>
-    XmlStorageGeometryKnown
+    XmlStorageGeometryKnown,
+    /// <summary>The XML agent acknowledged reboot; the actual boot transition remains unverified.
+    /// <para>XML 代理已确认重启；实际启动转换仍未经验证。</para></summary>
+    XmlRebootAcknowledged,
+    /// <summary>The non-IoT Legacy DA1 inventory matched the selected profile.
+    /// <para>非 IoT Legacy DA1 清单与所选配置匹配。</para></summary>
+    LegacyStageOneReady,
+    /// <summary>The Legacy runtime and any requested DRAM initialization completed.
+    /// <para>Legacy 运行时和任何请求的 DRAM 初始化已完成。</para></summary>
+    LegacyRuntimeReady,
+    /// <summary>The Legacy DA2 completed startup and reported validated eMMC geometry.
+    /// <para>Legacy DA2 已完成启动并上报经过校验的 eMMC 几何信息。</para></summary>
+    LegacyStorageReady,
+    /// <summary>The Legacy agent acknowledged shutdown; actual boot or power state is unverified.
+    /// <para>Legacy 代理已确认关闭；实际启动或电源状态未经验证。</para></summary>
+    LegacyShutdownAcknowledged
 }
 
 /// <summary>The boot stage reported by the XFlash download agent.

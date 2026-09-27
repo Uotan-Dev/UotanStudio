@@ -198,7 +198,8 @@ public partial class MtkSessionTests
     }
 
     private static void EnqueueBootstrap(ScriptedCommTransport transport, bool bootRom,
-        MtkBootResourceKind[]? resources = null, bool requireSla = false)
+        MtkBootResourceKind[]? resources = null, bool requireSla = false, bool requireDaSla = false,
+        byte[]? geometry = null)
     {
         EnqueueIdentity(transport);
         foreach (var kind in resources ?? [])
@@ -225,7 +226,15 @@ public partial class MtkSessionTests
         EnqueueXFlashValue(transport, 0);
         EnqueueXFlashValue(transport, 0);
         EnqueueXFlashValue(transport, 0x434E5953);
-        EnqueueControlReply(transport, StorageGeometry(MtkXFlashStorageKind.Emmc));
+        EnqueueControlReply(transport, requireDaSla ? [1, 0, 0, 0] : new byte[4]);
+        if (requireDaSla)
+        {
+            EnqueueControlReply(transport, new byte[20]);
+            EnqueueXFlashValue(transport, 0);
+            EnqueueXFlashValue(transport, 0);
+            EnqueueXFlashValue(transport, 0);
+        }
+        EnqueueControlReply(transport, geometry ?? StorageGeometry(MtkXFlashStorageKind.Emmc));
         EnqueueControlReply(transport, PacketLengths());
     }
 }

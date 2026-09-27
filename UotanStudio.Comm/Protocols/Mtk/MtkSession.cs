@@ -60,11 +60,12 @@ public sealed partial class MtkSession : IProtocolSession
     /// <para>在会话处于可用阶段时，传输是否仍处于连接状态。</para>
     /// </summary>
     /// <value>
-    /// <see langword="true"/> when the session is not disposed, the transport reports a connection, and the stage is neither faulted nor XFlash-shutdown-acknowledged.
-    /// <para>当会话未释放、传输报告已连接，且阶段既非故障也非已确认 XFlash 关闭时返回 <see langword="true"/>。</para>
+    /// <see langword="true"/> when the session is not disposed, the transport reports a connection, and the stage is neither faulted nor terminal.
+    /// <para>当会话未释放、传输报告已连接，且阶段既非故障也非终态时返回 <see langword="true"/>。</para>
     /// </value>
     public bool IsConnected => !_disposed && Transport.IsConnected
-        && _state is not (MtkSessionState.Faulted or MtkSessionState.XFlashShutdownAcknowledged);
+        && _state is not (MtkSessionState.Faulted or MtkSessionState.XFlashShutdownAcknowledged
+            or MtkSessionState.XmlRebootAcknowledged or MtkSessionState.LegacyShutdownAcknowledged);
 
     /// <summary>
     /// Gets the current protocol stage; AgentStarted does not imply storage readiness.
