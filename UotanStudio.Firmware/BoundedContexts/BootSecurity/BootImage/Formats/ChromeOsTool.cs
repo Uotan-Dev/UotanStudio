@@ -112,6 +112,15 @@ public static class ChromeOsTool
         /// <summary>Validated directory entries.
         /// <para>经过边界校验的目录条目。</para></summary>
         public required IReadOnlyList<RockchipResourceEntry> Entries { get; init; }
+
+        /// <summary>Capability marker reporting that no inspected reference confirms checksum semantics for
+        /// any RSCE field; it is a constant and not a result of validating the input.
+        /// <para>能力标记：任何已查阅的参考资料均未确认 RSCE 任何字段的校验和语义；该值是常量，并非校验输入的结果。</para></summary>
+        /// <value>
+        /// The fixed text <c>NoChecksumConfirmed</c>.
+        /// <para>固定文本 <c>NoChecksumConfirmed</c>。</para>
+        /// </value>
+        public string IntegrityStatus => "NoChecksumConfirmed";
     }
 
     /// <summary>
@@ -248,7 +257,9 @@ public static class ChromeOsTool
 
     /// <summary>
     /// Builds a canonical unsigned RSCE container from a flat directory.
-    /// <para>从扁平目录构建标准无签名 RSCE 容器。</para>
+    /// The output is canonical and unsigned; it claims no checksum and no byte fidelity with any
+    /// original OEM package.
+    /// <para>从扁平目录构建标准无签名 RSCE 容器。输出是标准且无签名的；不声明任何校验和，也不声明与任何 OEM 原包的字节保真。</para>
     /// </summary>
     /// <param name="inputDirectory">Directory containing resource files.
     /// <para>包含资源文件的目录。</para></param>
