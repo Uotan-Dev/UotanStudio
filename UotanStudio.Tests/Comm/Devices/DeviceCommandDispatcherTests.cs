@@ -17,13 +17,13 @@ public class DeviceCommandDispatcherTests
             order.Add(1);
             await gate.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
             return "one";
-        });
+        }, TestContext.Current.CancellationToken);
         var second = dispatcher.EnqueueAsync("second", async token =>
         {
             order.Add(2);
             await Task.Delay(10, token);
             return 2;
-        });
+        }, TestContext.Current.CancellationToken);
 
         await Task.Delay(50, TestContext.Current.CancellationToken);
         Assert.Equal([1], order);
@@ -46,10 +46,10 @@ public class DeviceCommandDispatcherTests
             started.SetResult();
             await release.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
             return "done";
-        });
+        }, TestContext.Current.CancellationToken);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
-        var queued = dispatcher.EnqueueAsync("queued", token => Task.FromResult("late"));
+        var queued = dispatcher.EnqueueAsync("queued", token => Task.FromResult("late"), TestContext.Current.CancellationToken);
         await Task.Delay(50, TestContext.Current.CancellationToken);
         Assert.False(queued.IsCompleted);
 
@@ -63,8 +63,8 @@ public class DeviceCommandDispatcherTests
     {
         await using var dispatcher = new DeviceCommandDispatcher();
 
-        var failing = dispatcher.EnqueueAsync<int>("fail", _ => throw new InvalidOperationException("boom"));
-        var following = dispatcher.EnqueueAsync("after-failure", _ => Task.FromResult("ok"));
+        var failing = dispatcher.EnqueueAsync<int>("fail", _ => throw new InvalidOperationException("boom"), TestContext.Current.CancellationToken);
+        var following = dispatcher.EnqueueAsync("after-failure", _ => Task.FromResult("ok"), TestContext.Current.CancellationToken);
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => failing.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
@@ -87,7 +87,7 @@ public class DeviceCommandDispatcherTests
         }, cts.Token);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
-        var queued = dispatcher.EnqueueAsync("queued", _ => Task.FromResult("ok"));
+        var queued = dispatcher.EnqueueAsync("queued", _ => Task.FromResult("ok"), TestContext.Current.CancellationToken);
         cts.Cancel();
 
         await Assert.ThrowsAsync<TaskCanceledException>(
@@ -107,16 +107,16 @@ public class DeviceCommandDispatcherTests
             started.SetResult();
             await release.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
             return "ran";
-        });
+        }, TestContext.Current.CancellationToken);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
-        var queued = dispatcher.EnqueueAsync("queued", _ => Task.FromResult("never"));
+        var queued = dispatcher.EnqueueAsync("queued", _ => Task.FromResult("never"), TestContext.Current.CancellationToken);
         await dispatcher.DisposeAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => queued.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => running.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
-        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await dispatcher.EnqueueAsync("late", _ => Task.FromResult(0)));
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await dispatcher.EnqueueAsync("late", _ => Task.FromResult(0), TestContext.Current.CancellationToken));
     }
 }

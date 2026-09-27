@@ -23,7 +23,7 @@ public sealed class ExtractionPathProbeTests : IDisposable
         try
         {
             var path = FileExtraction.ResolvePath(_root, "new/nested/file.bin");
-            FileExtraction.WriteAtomic(path, stream => stream.Write("complete"u8));
+            FileExtraction.WriteAtomic(path, stream => stream.Write("complete"u8), cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal("complete", File.ReadAllText(path));
             Assert.Equal(0, missing);
         }
@@ -53,7 +53,7 @@ public sealed class ExtractionPathProbeTests : IDisposable
         {
             var entry = directoryLink ? "link/missing/child.bin" : "link";
             Assert.Throws<InvalidDataException>(() => FileExtraction.ResolvePath(_root, entry));
-            Assert.Throws<InvalidDataException>(() => FileExtraction.WriteAtomic(Path.Combine(_root, entry), stream => stream.WriteByte(1)));
+            Assert.Throws<InvalidDataException>(() => FileExtraction.WriteAtomic(Path.Combine(_root, entry), stream => stream.WriteByte(1), cancellationToken: TestContext.Current.CancellationToken));
             Assert.False(File.Exists(Path.Combine(outside, "missing", "child.bin")));
         }
         finally

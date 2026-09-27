@@ -25,7 +25,7 @@ public class ZucchiniTests
             new(10, 0, 2),
             new(0, 2, 2),
             new(4, 6, 4),
-        ]);
+        ], cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(newData, ZucchiniPatchApplier.Apply(oldData, patch, newData.Length));
         Assert.Equal("Zucc"u8.ToArray(), patch[..4]);
@@ -38,7 +38,7 @@ public class ZucchiniTests
         var newData = new byte[8];
 
         Assert.Throws<InvalidDataException>(() => ZucchiniPatchApplier.CreateRawPatch(oldData, newData,
-            [new(0, 0, 4), new(4, 3, 2)]));
+            [new(0, 0, 4), new(4, 3, 2)], cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]

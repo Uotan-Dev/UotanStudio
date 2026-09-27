@@ -224,7 +224,7 @@ public sealed class HdcDirectChannelSuite
         try
         {
             var killer = new UotanStudio.Comm.Protocols.Hdc.HdcServerClient();
-            await killer.KillAsync();
+            await killer.KillAsync(cancellationToken: TestContext.Current.CancellationToken);
             var directEndpoint = await WaitForEndpointAsync(controller, route: "direct-usb");
             var snapshot = await controller.RefreshAsync(TestContext.Current.CancellationToken);
             var endpoint = snapshot.Endpoints.Single(candidate => candidate.Id == directEndpoint.Id);
@@ -246,8 +246,8 @@ public sealed class HdcDirectChannelSuite
                 await File.WriteAllBytesAsync(local, payload, TestContext.Current.CancellationToken);
                 var remote = "/data/local/tmp/hdc_suite_roundtrip.bin";
                 var sync = session.CreateSyncClient();
-                sync.Send(local, remote);
-                sync.Recv(remote, pulled);
+                sync.Send(local, remote, cancellationToken: TestContext.Current.CancellationToken);
+                sync.Recv(remote, pulled, TestContext.Current.CancellationToken);
                 var roundTrip = await File.ReadAllBytesAsync(pulled, TestContext.Current.CancellationToken);
                 Assert.Equal(Convert.ToHexString(System.Security.Cryptography.MD5.HashData(payload)),
                     Convert.ToHexString(System.Security.Cryptography.MD5.HashData(roundTrip)));

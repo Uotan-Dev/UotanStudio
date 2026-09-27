@@ -129,7 +129,7 @@ public sealed class ParentExtractionReviewTests : IDisposable
         {
             output.Write("partial"u8);
             throw new InvalidDataException("Independent payload verification failure.");
-        }));
+        }, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal("preserved", File.ReadAllText(target));
         Assert.Single(Directory.GetFiles(_root));
     }
@@ -172,7 +172,7 @@ public sealed class ParentExtractionReviewTests : IDisposable
         try
         {
             var output = directoryLink ? Path.Combine(link, "entry.bin") : link;
-            Assert.Throws<InvalidDataException>(() => FileExtraction.WriteAtomic(output, file => file.Write("changed"u8)));
+            Assert.Throws<InvalidDataException>(() => FileExtraction.WriteAtomic(output, file => file.Write("changed"u8), cancellationToken: TestContext.Current.CancellationToken));
             Assert.Equal("preserved", File.ReadAllText(target));
         }
         finally

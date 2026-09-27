@@ -1,5 +1,5 @@
-using System.Security.Cryptography;
 using System.IO.Compression;
+using System.Security.Cryptography;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
 using UotanStudio.Firmware.BoundedContexts.Archive;
@@ -9,8 +9,8 @@ using UotanStudio.Firmware.SharedKernel.Repacking;
 using UotanStudio.Projects.Interactions;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
-using UotanStudio.Services.Interactions;
 using UotanStudio.Services.Firmware;
+using UotanStudio.Services.Interactions;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
 using Xunit;
