@@ -323,12 +323,14 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     }
 
     /// <summary>Configures an already-owned transport; the caller must hold the operation lease.</summary>
-    internal async Task<FirehoseResponse> ConfigureCoreAsync(int maxRetries, CancellationToken cancellationToken)
+    internal async Task<FirehoseResponse> ConfigureCoreAsync(int maxRetries, CancellationToken cancellationToken,
+        bool deferStorageDetection = false)
     {
         ThrowIfDisposed();
         for (var attempt = 0; attempt < maxRetries; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            ValidateVipPayloadSize();
             if (attempt > 0)
             {
                 Log($"Configure attempt {attempt + 1}/{maxRetries}...");
@@ -362,6 +364,11 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
             if (!response.IsAck)
             {
+                if (_vip is not null)
+                {
+                    _faulted = true;
+                    throw new FirehoseException("VIP configure was rejected; negotiation retries would change the signed packet sequence.");
+                }
                 var maxPayloadStr = response["MaxPayloadSizeToTargetInBytes"];
                 if (maxPayloadStr != null && long.TryParse(maxPayloadStr, out var maxPayload) && maxPayload > 0 && maxPayload != Configuration.MaxPayloadSizeToTarget)
                 {
@@ -398,6 +405,11 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             var ackMax = response.GetInt64("MaxPayloadSizeToTargetInBytes");
             if (ackMax.HasValue)
             {
+                if (_vip is { } vip && ackMax.Value != vip.ProgramPayloadSize)
+                {
+                    _faulted = true;
+                    throw new FirehoseException("The negotiated VIP packet size differs from the signed profile.");
+                }
                 Configuration.MaxPayloadSizeToTarget = ackMax.Value;
             }
 
@@ -415,13 +427,9 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
             Log($"Configure OK: MaxPayload={Configuration.MaxPayloadSizeToTarget}, FromTarget={Configuration.MaxPayloadSizeFromTarget}");
 
-            if (Configuration.AutoDetectSectorSize && Configuration.SectorSize == 0)
+            if (!deferStorageDetection)
             {
-                await AutoDetectSectorSizeCoreAsync(cancellationToken);
-            }
-            else if (Configuration.SectorSize == 0)
-            {
-                Configuration.SectorSize = EdlConstants.DefaultSectorSizeSmall;
+                await CompleteStorageConfigurationOwnedAsync(cancellationToken).ConfigureAwait(false);
             }
 
             return response;
@@ -429,6 +437,23 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
         throw new EdlException(EdlErrorCode.ConfigureFailed,
             $"Firehose configure failed after {maxRetries} attempts (timeout).");
+    }
+
+    internal async Task CompleteStorageConfigurationOwnedAsync(CancellationToken cancellationToken)
+    {
+        if (_vip is not null)
+        {
+            ValidateVipPayloadSize();
+            return;
+        }
+        if (Configuration.AutoDetectSectorSize && Configuration.SectorSize == 0)
+        {
+            await AutoDetectSectorSizeCoreAsync(cancellationToken).ConfigureAwait(false);
+        }
+        else if (Configuration.SectorSize == 0)
+        {
+            Configuration.SectorSize = EdlConstants.DefaultSectorSizeSmall;
+        }
     }
 
     /// <summary>
@@ -494,9 +519,11 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <param name="responseTimeoutMs">Optional response timeout in milliseconds. 可选的响应超时（毫秒）。</param>
     /// <param name="writeTimeoutMs">Optional write timeout in milliseconds. 可选的写入超时（毫秒）。</param>
     /// <param name="logObserver">Optional bounded collector for logs belonging to this command.</param>
+    /// <param name="blockObserver">Optional bounded collector for structured authentication fields.</param>
     /// <returns>The Firehose response. Firehose 响应。</returns>
     private async Task<FirehoseResponse> SendCommandAndWaitResponseAsync(string xml, CancellationToken cancellationToken,
-        int? responseTimeoutMs = null, int? writeTimeoutMs = null, Action<string>? logObserver = null)
+        int? responseTimeoutMs = null, int? writeTimeoutMs = null, Action<string>? logObserver = null,
+        Action<FirehoseDataBlock>? blockObserver = null)
     {
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
@@ -504,7 +531,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         {
             var xmlBytes = System.Text.Encoding.UTF8.GetBytes(xml);
             await WriteDataAsync(xmlBytes, writeTimeoutMs ?? GetZlpTimeoutMs(), cancellationToken);
-            return await ReceiveResponseAsync(cancellationToken, responseTimeoutMs, logObserver);
+            return await ReceiveResponseAsync(cancellationToken, responseTimeoutMs, logObserver, blockObserver);
         }
         catch
         {
@@ -565,13 +592,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
     private async Task WriteDataAsync(byte[] data, int timeoutMs, CancellationToken cancellationToken)
     {
-        ThrowIfDisposed();
-        cancellationToken.ThrowIfCancellationRequested();
-        var w = await _transport.WriteAsync(data, 0, data.Length, timeoutMs, cancellationToken);
-        if (w != data.Length)
-        {
-            throw new EdlException(EdlErrorCode.WritePortTimeout);
-        }
+        await WritePacketAsync(data, data.Length, timeoutMs, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -589,6 +610,11 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <param name="value">The target log value. 目标日志值。</param>
     private void OnTargetLog(string value)
     {
+        if (_vip is null && value.Contains("VIP is enabled, receiving the signed table", StringComparison.OrdinalIgnoreCase))
+        {
+            _faulted = true;
+            throw new FirehoseException("The programmer requires VIP tables, but no signed sequence was selected.");
+        }
         Log($"TARGET: {value}");
         TargetLogReceived?.Invoke(this, new FirehoseLogEventArgs(value));
     }
@@ -656,6 +682,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
     private int GetProgramPayloadSize()
     {
+        ValidateVipPayloadSize();
         if (Configuration.MaxPayloadSizeToTarget < Configuration.SectorSize)
         {
             throw new EdlException(EdlErrorCode.InvalidParameter, "The negotiated payload cannot hold one sector.");

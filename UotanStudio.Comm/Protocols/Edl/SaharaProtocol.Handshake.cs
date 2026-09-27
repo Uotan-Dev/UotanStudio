@@ -40,6 +40,15 @@ public sealed partial class SaharaProtocol
     public async Task<SaharaMode> HandshakeAsync(IReadOnlyDictionary<uint, Stream> images, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(images);
+        DeviceIdentity = null;
+        foreach (var image in images.Values)
+        {
+            if (image is null || !image.CanRead || !image.CanSeek)
+            {
+                throw new ArgumentException("Sahara images must be readable and seekable.", nameof(images));
+            }
+        }
         Log("Waiting for Sahara HELLO from device...");
 
         var helloProbeTimeout = Math.Min(_timeoutMs, EdlConstants.HelloProbeTimeoutMs);
@@ -73,6 +82,7 @@ public sealed partial class SaharaProtocol
                 {
                     if (await ProbeFirehoseNopAsync(cancellationToken))
                     {
+                        RequireIdentityNotRequested();
                         FirehoseAlreadyRunning = true;
                         Log("Device is already running Firehose; skipping Sahara handshake.");
                         return SaharaMode.ImageTxComplete;
@@ -82,6 +92,7 @@ public sealed partial class SaharaProtocol
             }
             else if (await ProbeFirehoseNopAsync(cancellationToken))
             {
+                RequireIdentityNotRequested();
                 FirehoseAlreadyRunning = true;
                 Log("Device is already running Firehose; skipping Sahara handshake.");
                 return SaharaMode.ImageTxComplete;
@@ -94,6 +105,7 @@ public sealed partial class SaharaProtocol
 
         if (LooksLikeFirehoseXml(firstData))
         {
+            RequireIdentityNotRequested();
             FirehoseAlreadyRunning = true;
             Log("Device is already running Firehose; skipping Sahara handshake.");
             return SaharaMode.ImageTxComplete;
@@ -105,44 +117,29 @@ public sealed partial class SaharaProtocol
         }
 
         var helloPacket = BytesToStruct<SaharaHelloPacket>(firstData);
-        ValidateCommand(helloPacket.Command, SaharaCommand.Hello, helloPacket.Length, (uint)Marshal.SizeOf<SaharaHelloPacket>());
-
-        Log($"Received HELLO: Version={helloPacket.Version}, MinVersion={helloPacket.MinVersion}, MaxCommandLength={helloPacket.MaxCommandLength}, Mode={helloPacket.Mode}");
-
-        if (helloPacket.MinVersion > EdlConstants.SaharaVersion)
+        if (QueryIdentityBeforeUpload)
         {
-            throw new SaharaException($"Device requires min protocol version {helloPacket.MinVersion}, host supports {EdlConstants.SaharaVersion}");
+            helloPacket = await QueryIdentityOwnedAsync(helloPacket, cancellationToken).ConfigureAwait(false);
         }
-
-        if (helloPacket.Version < EdlConstants.SaharaMinVersion)
-        {
-            throw new SaharaException($"Device max protocol version {helloPacket.Version} < host min {EdlConstants.SaharaMinVersion}");
-        }
-
-        var negotiatedVersion = Math.Min(helloPacket.Version, EdlConstants.SaharaVersion);
         var mode = helloPacket.Mode;
-
-        Log($"Sending HELLO_RESPONSE: Version={negotiatedVersion}, Mode={mode}");
-
-        var helloResponse = new SaharaHelloResponsePacket
-        {
-            Command = SaharaCommand.HelloResponse,
-            Length = (uint)Marshal.SizeOf<SaharaHelloResponsePacket>(),
-            Version = negotiatedVersion,
-            MinVersion = EdlConstants.SaharaHostCompatibleVersion,
-            MaxCommandLength = 0,
-            Mode = mode
-        };
-        await WriteStructAsync(helloResponse, cancellationToken);
+        await AcknowledgeImageHelloAsync(helloPacket, cancellationToken).ConfigureAwait(false);
 
         Log("Starting image transfer...");
         var handshakeComplete = false;
+        var waitingForDone = false;
+        var waitingForHello = false;
+        var helloCount = 1;
 
         while (!handshakeComplete)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var headerData = await ReadExactAsync(Marshal.SizeOf<SaharaPacketHeader>(), _timeoutMs, cancellationToken);
             var header = BytesToStruct<SaharaPacketHeader>(headerData);
+            if ((waitingForDone && header.Command != SaharaCommand.DoneResponse)
+                || (waitingForHello && header.Command != SaharaCommand.Hello))
+            {
+                throw new SaharaException($"Unexpected Sahara command {header.Command} during image completion.");
+            }
 
             switch (header.Command)
             {
@@ -192,9 +189,14 @@ public sealed partial class SaharaProtocol
                         {
                             throw new SaharaException($"END_OF_IMAGE with non-zero status: {eoi.Status} ({DescribeSaharaStatus(eoi.Status)})");
                         }
+                        if (!images.ContainsKey(eoi.ImageId))
+                        {
+                            throw new SaharaException($"Unknown completed image id {eoi.ImageId}.");
+                        }
 
                         var done = new SaharaDonePacket { Command = SaharaCommand.Done, Length = (uint)Marshal.SizeOf<SaharaDonePacket>() };
                         await WriteStructAsync(done, cancellationToken);
+                        waitingForDone = true;
                         Log("Sent DONE, image transfer complete.");
                         break;
                     }
@@ -204,77 +206,73 @@ public sealed partial class SaharaProtocol
                         var fullDone = await ReadRemainingPacket<SaharaDoneResponsePacket>(headerData, cancellationToken);
                         var dr = BytesToStruct<SaharaDoneResponsePacket>(fullDone);
                         Log($"DONE_RESPONSE: Status={dr.Status}");
-                        if (dr.Status is 0 or 1)
+                        if (!waitingForDone)
+                        {
+                            throw new SaharaException("DONE_RESPONSE arrived before END_OF_IMAGE.");
+                        }
+                        waitingForDone = false;
+                        if (dr.Status == (uint)SaharaMode.ImageTxComplete
+                            || (dr.Status == (uint)SaharaMode.ImageTxPending && AllowSingleFirehosePendingCompletion
+                                && images.Count == 1 && images.ContainsKey((uint)SaharaImageId.Firehose)))
                         {
                             handshakeComplete = true;
+                            break;
+                        }
+                        if (dr.Status == (uint)SaharaMode.ImageTxPending)
+                        {
+                            waitingForHello = true;
                             break;
                         }
                         throw new SaharaException($"Unexpected DONE_RESPONSE status: {dr.Status} ({DescribeSaharaStatus(dr.Status)})");
                     }
 
-                case SaharaCommand.CommandReady:
-                    Log("Received COMMAND_READY.");
-                    break;
-
-                case SaharaCommand.Reset:
-                    Log("Received RESET; sending RESET_RESPONSE.");
-                    var rr = new SaharaResetResponsePacket { Command = SaharaCommand.ResetResponse, Length = (uint)Marshal.SizeOf<SaharaResetResponsePacket>() };
-                    await WriteStructAsync(rr, cancellationToken);
-                    handshakeComplete = true;
-                    break;
-
-                case SaharaCommand.ResetResponse:
-                    Log("Received RESET_RESPONSE.");
-                    handshakeComplete = true;
-                    break;
                 case SaharaCommand.Hello:
-                    break;
-                case SaharaCommand.HelloResponse:
-                    break;
-                case SaharaCommand.Done:
-                    break;
-                case SaharaCommand.MemoryDebug:
-                    break;
-                case SaharaCommand.MemoryRead:
-                    break;
-                case SaharaCommand.SwitchMode:
-                    break;
-                case SaharaCommand.Execute:
-                    break;
-                case SaharaCommand.ExecuteResponse:
-                    break;
-                case SaharaCommand.ExecuteData:
-                    break;
-                case SaharaCommand.MemoryDebug64:
-                    break;
-                case SaharaCommand.MemoryRead64:
+                    if (++helloCount > 64)
+                    {
+                        throw new SaharaException("Too many Sahara HELLO exchanges.");
+                    }
+                    var nextHello = await ReadRemainingPacket<SaharaHelloPacket>(headerData, cancellationToken).ConfigureAwait(false);
+                    await AcknowledgeImageHelloAsync(BytesToStruct<SaharaHelloPacket>(nextHello), cancellationToken).ConfigureAwait(false);
+                    waitingForHello = false;
                     break;
                 default:
                     throw new SaharaException($"Unexpected Sahara command: {header.Command}");
             }
         }
 
-        try
-        {
-            var trailing = await ReadExactAsync(Marshal.SizeOf<SaharaPacketHeader>(), EdlConstants.SaharaTrailingPacketTimeoutMs, cancellationToken);
-            var trailingHeader = BytesToStruct<SaharaPacketHeader>(trailing);
-            Log($"Received final packet after handshake: {trailingHeader.Command}.");
-        }
-        catch (EdlException ex) when (ex.ErrorCode == EdlErrorCode.ReadPortTimeout)
-        {
-            Log("No final packet after handshake (timeout); handshake considered complete.");
-        }
-
         HandshakeComplete?.Invoke(this, mode);
         return mode;
     }
-    /// <summary>
-    /// Returns whether the images dictionary holds exactly one Firehose image (MSM8916
-    /// DONE_RESPONSE status=0 quirk).
-    /// <para>判断镜像字典是否仅含单个 Firehose 镜像（MSM8916 DONE_RESPONSE status=0 特性）。</para>
-    /// </summary>
-    /// <param name="images">The images dictionary. 镜像字典。</param>
-    private static bool HasDonePendingQuirk(IReadOnlyDictionary<uint, Stream> images) => images.Count == 1 && images.ContainsKey((uint)SaharaImageId.Firehose);
+
+    private Task AcknowledgeImageHelloAsync(SaharaHelloPacket hello, CancellationToken token)
+    {
+        ValidateHello(hello);
+        if (hello.Mode != SaharaMode.ImageTxPending)
+        {
+            throw new SaharaException($"Image transfer requires ImageTxPending, received {hello.Mode}.");
+        }
+        return WriteStructAsync(new SaharaHelloResponsePacket
+        {
+            Command = SaharaCommand.HelloResponse,
+            Length = (uint)Marshal.SizeOf<SaharaHelloResponsePacket>(),
+            Version = Math.Min(hello.Version, EdlConstants.SaharaVersion),
+            MinVersion = EdlConstants.SaharaHostCompatibleVersion,
+            Mode = SaharaMode.ImageTxPending
+        }, token);
+    }
+
+    private static void ValidateHello(SaharaHelloPacket hello)
+    {
+        ValidateCommand(hello.Command, SaharaCommand.Hello, hello.Length, (uint)Marshal.SizeOf<SaharaHelloPacket>());
+        if (hello.MinVersion > EdlConstants.SaharaVersion)
+        {
+            throw new SaharaException($"Device requires min protocol version {hello.MinVersion}, host supports {EdlConstants.SaharaVersion}.");
+        }
+        if (hello.Version < EdlConstants.SaharaMinVersion || hello.MinVersion > hello.Version)
+        {
+            throw new SaharaException("Invalid Sahara protocol version range.");
+        }
+    }
 
     /// <summary>
     /// Maps common Sahara NAK status codes to descriptions (bkerler/edl sahara_defs.py).
@@ -310,27 +308,44 @@ public sealed partial class SaharaProtocol
             var nopBytes = Encoding.UTF8.GetBytes(EdlConstants.XmlHeader + EdlConstants.DataOpen + "<nop value=\"ping\"/>\n" + EdlConstants.DataClose);
             await WriteDataAsync(nopBytes, cancellationToken);
 
-            var sb = new StringBuilder();
+            var document = new byte[64 * 1024];
+            var length = 0;
+            var total = 0;
             var start = Environment.TickCount64;
             var budget = Math.Max(_timeoutMs, EdlConstants.ProbeReadBudgetMs);
             while ((Environment.TickCount64 - start) < budget)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var chunk = await ReadChunkAsync(EdlConstants.ProbeReadChunkBytes, _timeoutMs, cancellationToken);
+                var remainingMs = (int)Math.Max(1, budget - (Environment.TickCount64 - start));
+                var chunk = await ReadChunkAsync(EdlConstants.ProbeReadChunkBytes, Math.Min(_timeoutMs, remainingMs), cancellationToken);
                 if (chunk.Length == 0)
                 {
                     break;
                 }
 
-                sb.Append(Encoding.UTF8.GetString(chunk));
-                var s = sb.ToString();
-                if (s.Contains("<response", StringComparison.OrdinalIgnoreCase) && s.Contains("ACK", StringComparison.OrdinalIgnoreCase))
+                foreach (var value in chunk)
                 {
-                    break;
+                    if (++total > document.Length)
+                    {
+                        throw new SaharaException("Firehose probe exceeds its response limit.");
+                    }
+                    if (length == 0 && value is 0 or (byte)' ' or (byte)'\r' or (byte)'\n' or (byte)'\t')
+                    {
+                        continue;
+                    }
+                    document[length++] = value;
+                    if (document.AsSpan(0, length).EndsWith("</data>"u8))
+                    {
+                        var block = FirehoseResponseParser.ParseDataBlock(Encoding.UTF8.GetString(document, 0, length));
+                        if (block.Response is { } response)
+                        {
+                            return response.IsAck && !response.IsRawMode;
+                        }
+                        length = 0;
+                    }
                 }
             }
-            var text = sb.ToString();
-            return text.Contains("<response", StringComparison.OrdinalIgnoreCase) && text.Contains("ACK", StringComparison.OrdinalIgnoreCase);
+            return false;
         }
         catch (EdlException)
         {

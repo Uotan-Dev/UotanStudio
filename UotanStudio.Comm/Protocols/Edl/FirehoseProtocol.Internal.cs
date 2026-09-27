@@ -11,7 +11,7 @@ public sealed partial class FirehoseProtocol
     private const int MaximumResponseBytes = 64 * 1024;
 
     private async Task<FirehoseResponse> ReceiveResponseAsync(CancellationToken cancellationToken, int? timeoutMs = null,
-        Action<string>? logObserver = null)
+        Action<string>? logObserver = null, Action<FirehoseDataBlock>? blockObserver = null)
     {
         ThrowIfDisposed();
         var budget = timeoutMs ?? checked(Configuration.ResponseTimeoutSeconds * 1000);
@@ -62,7 +62,9 @@ public sealed partial class FirehoseProtocol
                 }
 
                 ShiftRxBufferLeft(consumed);
-                var block = FirehoseResponseParser.ParseDataBlock(Encoding.UTF8.GetString(document, 0, length));
+                var block = FirehoseResponseParser.ParseDataBlock(Encoding.UTF8.GetString(document, 0, length),
+                    capturePayloads: blockObserver is not null);
+                blockObserver?.Invoke(block);
                 foreach (var log in block.Logs)
                 {
                     logObserver?.Invoke(log);

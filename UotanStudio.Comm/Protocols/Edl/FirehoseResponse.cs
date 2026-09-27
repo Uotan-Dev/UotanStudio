@@ -198,8 +198,9 @@ internal static class FirehoseResponseParser
     /// 可避免把含 response 的块整体当作 log 丢弃。</para>
     /// </summary>
     /// <param name="xml">The complete <c>&lt;data&gt;</c> XML block. 完整的 <c>&lt;data&gt;</c> XML 块。</param>
+    /// <param name="capturePayloads">Whether to retain and validate scalar vendor payload attributes.</param>
     /// <returns>A <see cref="FirehoseDataBlock"/> with any logs and/or the response found. 包含所提取 log 及/或 response 的 <see cref="FirehoseDataBlock"/>。</returns>
-    public static FirehoseDataBlock ParseDataBlock(string xml)
+    public static FirehoseDataBlock ParseDataBlock(string xml, bool capturePayloads = false)
     {
         var block = new FirehoseDataBlock();
 
@@ -236,6 +237,27 @@ internal static class FirehoseResponseParser
                     }
 
                     block.Response = ParseResponseNode(node, xml);
+                }
+                else if (capturePayloads)
+                {
+                    if (node.NamespaceURI.Length != 0 || node.HasChildNodes || node.Attributes is null
+                        || node.Attributes.Count > 32 || block.PayloadElements.Count >= 32)
+                    {
+                        throw new FirehoseException("Invalid vendor authentication payload element.");
+                    }
+                    var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
+                    foreach (XmlAttribute attribute in node.Attributes)
+                    {
+                        if (attribute.NamespaceURI.Length != 0 || attribute.Value.Length > 16384)
+                        {
+                            throw new FirehoseException("Invalid vendor authentication payload attribute.");
+                        }
+                        attributes.Add(attribute.Name, attribute.Value);
+                    }
+                    if (!block.PayloadElements.TryAdd(node.Name, attributes))
+                    {
+                        throw new FirehoseException("Duplicate vendor authentication payload element.");
+                    }
                 }
             }
         }
@@ -302,6 +324,9 @@ internal static class FirehoseResponseParser
 /// </summary>
 internal sealed class FirehoseDataBlock
 {
+    /// <summary>Gets explicitly requested bounded vendor payload attributes.</summary>
+    public Dictionary<string, Dictionary<string, string>> PayloadElements { get; } = new(StringComparer.Ordinal);
+
     /// <summary>
     /// Gets the log messages extracted from this block.
     /// <para>从该块中提取的 log 消息列表。</para>

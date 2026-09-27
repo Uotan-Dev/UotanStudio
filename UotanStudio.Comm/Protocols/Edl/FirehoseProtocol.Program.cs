@@ -89,7 +89,9 @@ public sealed partial class FirehoseProtocol
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            var xml = FirehoseXmlBuilder.BuildProgram(Configuration.SectorSize, numSectors, filename, physicalPartition, startSector, slot: EffectiveSlot);
+            var credential = await GetOnePlusCommandTokenOwnedAsync("program", cancellationToken).ConfigureAwait(false);
+            var xml = FirehoseXmlBuilder.BuildProgram(Configuration.SectorSize, numSectors, filename, physicalPartition, startSector,
+                slot: EffectiveSlot, publicKey: credential.PublicKey, token: credential.Token);
             var ready = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
             RequireRawMode(ready, EdlErrorCode.ProgramFailed);
             await SendProgramPayloadAsync(dataStream, totalBytes, payloadSize, cancellationToken);
@@ -363,7 +365,9 @@ public sealed partial class FirehoseProtocol
     {
         ThrowIfDisposed();
         var address = ValidatePatch(Configuration.SectorSize, filename, physicalPartition, startSector, byteOffset, value, sizeInBytes);
-        var xml = FirehoseXmlBuilder.BuildPatch(Configuration.SectorSize, filename, physicalPartition, address, byteOffset, value, sizeInBytes, EffectiveSlot);
+        var credential = await GetOnePlusCommandTokenOwnedAsync("patch", cancellationToken).ConfigureAwait(false);
+        var xml = FirehoseXmlBuilder.BuildPatch(Configuration.SectorSize, filename, physicalPartition, address, byteOffset,
+            value, sizeInBytes, EffectiveSlot, credential.PublicKey, credential.Token);
 
         return await SendCommandAndWaitResponseAsync(xml, cancellationToken);
     }
@@ -447,12 +451,7 @@ public sealed partial class FirehoseProtocol
                 await dataStream.ReadExactlyAsync(buffer.AsMemory(0, toRead), cancellationToken);
                 ThrowIfDisposed();
                 cancellationToken.ThrowIfCancellationRequested();
-                var written = await _transport.WriteAsync(buffer, 0, toRead, zlpTimeout, cancellationToken);
-                if (written != toRead)
-                {
-                    throw new EdlException(EdlErrorCode.WritePortTimeout,
-                        "Incomplete raw write; device contents are uncertain. Reconnect before further commands.");
-                }
+                await WritePacketAsync(buffer, toRead, zlpTimeout, cancellationToken).ConfigureAwait(false);
 
                 bytesWritten += toRead;
             }

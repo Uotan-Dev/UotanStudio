@@ -17,6 +17,10 @@ public sealed partial class SaharaProtocol
     {
         var buffer = new byte[length];
         var n = await _transport.ReadAsync(buffer, 0, length, timeoutMs, cancellationToken).ConfigureAwait(false);
+        if (n < 0 || n > length)
+        {
+            throw new SaharaException("The transport returned an invalid receive length.");
+        }
         if (n == 0)
         {
             return [];
@@ -47,13 +51,27 @@ public sealed partial class SaharaProtocol
         try
         {
             var total = 0;
+            var started = Environment.TickCount64;
             while (total < length)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var n = await _transport.ReadAsync(buf, total, length - total, timeoutMs, cancellationToken);
+                var remainingMs = timeoutMs - (Environment.TickCount64 - started);
+                if (remainingMs <= 0)
+                {
+                    throw new SaharaException("The Sahara packet receive deadline expired.");
+                }
+                var n = await _transport.ReadAsync(buf, total, length - total, (int)remainingMs, cancellationToken);
                 if (n == 0)
                 {
+                    if (total != 0)
+                    {
+                        throw new SaharaException("The Sahara packet was truncated.");
+                    }
                     throw new EdlException(EdlErrorCode.ReadPortTimeout);
+                }
+                if (n < 0 || n > length - total)
+                {
+                    throw new SaharaException("The transport returned an invalid receive length.");
                 }
 
                 total += n;
@@ -106,6 +124,11 @@ public sealed partial class SaharaProtocol
     private async Task<byte[]> ReadRemainingPacket<T>(byte[] hd, CancellationToken ct) where T : struct
     {
         var sz = Marshal.SizeOf<T>();
+        var header = BytesToStruct<SaharaPacketHeader>(hd);
+        if (header.Length != sz)
+        {
+            throw new SaharaException($"Invalid packet length for {header.Command}: expected {sz}, got {header.Length}.");
+        }
         var fd = new byte[sz];
         Array.Copy(hd, fd, Math.Min(hd.Length, sz));
         var rem = sz - hd.Length;

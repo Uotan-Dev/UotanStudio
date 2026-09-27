@@ -92,7 +92,7 @@ public static partial class FirehoseXmlBuilder
 
     internal static string BuildProgram(long sectorSizeInBytes, long numPartitionSectors,
         string filename, int physicalPartitionNumber, FirehoseSectorAddress startSector,
-        string? label = null, int? slot = null)
+        string? label = null, int? slot = null, string? publicKey = null, string? token = null)
     {
         var sb = new StringBuilder();
         sb.Append(EdlConstants.XmlHeader);
@@ -110,6 +110,11 @@ public static partial class FirehoseXmlBuilder
         if (slot.HasValue && slot.Value != 0)
         {
             sb.Append($" slot=\"{slot.Value}\"");
+        }
+
+        if (publicKey is not null && token is not null)
+        {
+            sb.Append($" pk=\"{EscapeXml(publicKey)}\" token=\"{EscapeXml(token)}\"");
         }
 
         sb.Append(" />\n");

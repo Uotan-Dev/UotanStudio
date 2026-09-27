@@ -47,6 +47,14 @@ public sealed partial class SaharaProtocol(ICommTransport transport, int? timeou
     public bool QudHelloRecoveryEnabled { get; set; }
 
     /// <summary>
+    /// Gets or sets an explicit compatibility exception for a single Firehose image returning pending on completion.
+    /// <para>获取或设置单个 Firehose 镜像在完成时返回 pending 的显式兼容例外。</para>
+    /// </summary>
+    /// <value>False by default; enable only for a verified device profile. Multiple images always require completion.
+    /// <para>默认关闭；仅对已验证的设备配置启用。多个镜像始终要求完成状态。</para></value>
+    public bool AllowSingleFirehosePendingCompletion { get; set; }
+
+    /// <summary>
     /// Gets whether the device is already running Firehose (skipped Sahara).
     /// <para>设备是否已在运行 Firehose（跳过了 Sahara）。</para>
     /// </summary>

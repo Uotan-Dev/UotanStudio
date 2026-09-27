@@ -14,7 +14,7 @@ namespace UotanStudio.Tests.Comm.Protocols.Edl;
 /// DONE 流程、Firehose 已在运行检测与错误路径——全部通过 <see cref="ScriptedCommTransport"/>
 /// 脚本化模拟（无真实硬件）。</para>
 /// </summary>
-public class SaharaTests
+public partial class SaharaTests
 {
     [Fact]
     public async Task HandshakeAsync_CompletesFullFlowWithHelloAndDone()

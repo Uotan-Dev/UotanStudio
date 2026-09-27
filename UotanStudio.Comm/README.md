@@ -110,6 +110,25 @@ migration or validation; do not describe the controller as exclusive ownership
 of every communication operation yet. In-process leases do not prevent another
 process from owning a USB interface.
 
+## Resource registration and provenance
+
+Programmers, DAs, EMI images and authentication resources are external inputs. Every resource
+that a Comm selection flow may consume is registered with the fields below; selection decisions
+carry the registered SHA-256, never a filename or model-name guess, and a resource with an
+unknown license stays out of any default package.
+
+```text
+resource_path:
+resource_kind:      programmer | da | emi | auth-key
+sha256:
+origin:             user-supplied | bundled | derived
+source:             url / commit / supplier
+license:
+redistribution:     allowed | user-obligation | forbidden
+applicable_devices: hardware codes / HWID / PKHash constraints
+verification:       scripted | real-transport | device-readonly | unverified (+ date)
+```
+
 ## Validation
 
 Use the solution build and xUnit v3 tests with a nonzero test guard:

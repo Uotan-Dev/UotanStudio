@@ -10,6 +10,8 @@ namespace UotanStudio.Comm.Protocols.Edl;
 public sealed class EdlSession : IProtocolSession
 {
     private volatile bool _disposed;
+    private readonly EdlProbeTransport _probeTransport;
+    private EdlProtocolState _protocolState;
 
     /// <summary>
     /// Creates a new EDL session over the specified device transport.
@@ -19,8 +21,10 @@ public sealed class EdlSession : IProtocolSession
     /// <param name="firehoseConfig">Optional Firehose configuration. 可选的 Firehose 配置。</param>
     internal EdlSession(ICommTransport transport, FirehoseConfiguration? firehoseConfig = null)
     {
-        Transport = transport ?? throw new ArgumentNullException(nameof(transport));
-        Firehose = new FirehoseProtocol(transport, firehoseConfig);
+        ArgumentNullException.ThrowIfNull(transport);
+        _probeTransport = new EdlProbeTransport(transport);
+        Transport = _probeTransport;
+        Firehose = new FirehoseProtocol(Transport, firehoseConfig);
     }
 
     /// <summary>
@@ -56,6 +60,40 @@ public sealed class EdlSession : IProtocolSession
     /// initialization leaves this <c>false</c>. <para>Sahara 握手与 Firehose 配置均成功后为
     /// <c>true</c>；初始化失败时保持 <c>false</c>。</para></value>
     public bool IsConfigured { get; private set; }
+
+    /// <summary>Gets the last verified EDL protocol.<para>获取最近一次经校验的 EDL 协议。</para></summary>
+    /// <value>The observed protocol, or Unknown when no response was verified.<para>已观测到的协议；未校验到响应时为 Unknown。</para></value>
+    public EdlProtocolState ProtocolState => _protocolState;
+
+    /// <summary>Reports verified protocol changes within this session.<para>报告本会话内经校验的协议变化。</para></summary>
+    public event EventHandler<EdlProtocolState>? ProtocolStateChanged;
+
+    /// <summary>
+    /// Observes Sahara packets or a Firehose NOP response without loading a programmer or configuring storage.
+    /// <para>通过 Sahara 数据包或 Firehose NOP 响应检测协议，不加载 programmer，也不配置存储。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Cancels bounded protocol reads.<para>取消有界的协议读取。</para></param>
+    /// <returns>The verified protocol, or Unknown for absent or incomplete evidence.<para>经校验的协议；证据缺失或不完整时返回 Unknown。</para></returns>
+    public async Task<EdlProtocolState> ProbeProtocolAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        using var operation = await Firehose!.EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_protocolState == EdlProtocolState.Unknown)
+        {
+            SetProtocolState(await _probeTransport.ProbeAsync(cancellationToken).ConfigureAwait(false));
+        }
+        return _protocolState;
+    }
+
+    private void SetProtocolState(EdlProtocolState state)
+    {
+        if (_protocolState != state)
+        {
+            _protocolState = state;
+            ProtocolStateChanged?.Invoke(this, state);
+        }
+    }
 
     /// <summary>
     /// Gets the Sahara protocol instance.
@@ -97,25 +135,116 @@ public sealed class EdlSession : IProtocolSession
         await InitializeOwnedAsync(programmerImage, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Initializes using explicit Sahara requirements and compatibility settings.
+    /// <para>使用显式 Sahara 要求与兼容设置初始化。</para></summary>
+    /// <param name="programmerImage">The caller-owned programmer stream.
+    /// <para>调用方持有的 programmer 流。</para></param>
+    /// <param name="options">The immutable startup requirements.
+    /// <para>不可变的启动要求。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns>A task completing after Sahara and Firehose configuration succeed.
+    /// <para>在 Sahara 与 Firehose 配置成功后完成的任务。</para></returns>
+    public async Task InitializeAsync(Stream? programmerImage, EdlInitializationOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        FirehoseProtocol.ValidateAuthenticationTimeout(options.AuthenticationTimeoutMs);
+        options.ProjectAuthentication?.Validate();
+        options.Vip?.Validate();
+        if (options.ProjectAuthentication is not null && options.XiaomiAuthenticationProvider is not null)
+        {
+            throw new ArgumentException("Select one vendor authentication family.", nameof(options));
+        }
+        if (options.SendOnePlusNetType && (options.XiaomiAuthenticationProvider is not null
+            || options.ProjectAuthentication?.Kind is EdlProjectAuthenticationKind.NothingProject or EdlProjectAuthenticationKind.OnePlusProject))
+        {
+            throw new ArgumentException("The selected SetNetType startup path cannot be combined with this authentication variant.", nameof(options));
+        }
+        ThrowIfDisposed();
+        using var operation = await Firehose!.EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        await InitializeOwnedAsync(programmerImage, cancellationToken, options).ConfigureAwait(false);
+    }
+
     /// <summary>Initializes while the caller holds this session's Firehose operation lease.</summary>
-    internal async Task InitializeOwnedAsync(Stream? programmerImage, CancellationToken cancellationToken)
+    internal async Task InitializeOwnedAsync(Stream? programmerImage, CancellationToken cancellationToken,
+        EdlInitializationOptions? options = null)
     {
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
         if (IsConfigured)
         {
+            if (options?.XiaomiAuthenticationProvider is not null || options?.ProjectAuthentication is not null
+                || options?.Vip is not null || options?.SendOnePlusNetType == true)
+            {
+                throw new InvalidOperationException("Vendor startup requirements must be selected before session initialization.");
+            }
+            if (options?.QueryIdentityBeforeUpload == true && Sahara?.DeviceIdentity is null)
+            {
+                throw new InvalidOperationException("The configured session has no verified Sahara identity report.");
+            }
             return;
         }
 
         try
         {
-            Sahara = new SaharaProtocol(Transport);
-            await Sahara.HandshakeAsync(programmerImage, cancellationToken: cancellationToken).ConfigureAwait(false);
-            await Firehose!.ConfigureCoreAsync(30, cancellationToken).ConfigureAwait(false);
+            if (options?.Vip is { } vip)
+            {
+                if (_protocolState == EdlProtocolState.Firehose)
+                {
+                    throw new InvalidOperationException("VIP must be selected before Firehose probing changes the packet sequence.");
+                }
+                Firehose!.ConfigureVipOwned(vip);
+            }
+            if (_protocolState != EdlProtocolState.Firehose)
+            {
+                Sahara = new SaharaProtocol(Transport)
+                {
+                    QudHelloRecoveryEnabled = options?.QudHelloRecoveryEnabled ?? false,
+                    AllowSingleFirehosePendingCompletion = options?.AllowSingleFirehosePendingCompletion ?? false,
+                    QueryIdentityBeforeUpload = options?.QueryIdentityBeforeUpload ?? false
+                };
+                await Sahara.HandshakeAsync(programmerImage, cancellationToken: cancellationToken).ConfigureAwait(false);
+                SetProtocolState(EdlProtocolState.Firehose);
+            }
+            else if (options?.QueryIdentityBeforeUpload == true)
+            {
+                throw new SaharaException("A Firehose-only connection cannot provide the required Sahara identity.");
+            }
+            if (options?.XiaomiAuthenticationProvider is { } provider)
+            {
+                await Firehose!.AuthenticateXiaomiOwnedAsync(provider, Sahara?.DeviceIdentity,
+                    options.AuthenticationTimeoutMs, cancellationToken).ConfigureAwait(false);
+            }
+            var project = options?.ProjectAuthentication;
+            if (project is not null && Sahara?.DeviceIdentity is { } identity && identity.SerialNumber != project.SerialNumber)
+            {
+                throw new FirehoseException("The selected project authentication serial does not match Sahara.");
+            }
+            var netType = options?.SendOnePlusNetType == true;
+            var demacia = project?.Kind == EdlProjectAuthenticationKind.OnePlusDemacia;
+            await Firehose!.ConfigureCoreAsync(30, cancellationToken, deferStorageDetection: project is not null || netType).ConfigureAwait(false);
+            if (demacia)
+            {
+                await Firehose.AuthenticateProjectOwnedAsync(project!, options!.AuthenticationTimeoutMs, cancellationToken).ConfigureAwait(false);
+            }
+            if (netType)
+            {
+                await Firehose.SetOnePlusNetTypeOwnedAsync(options!.AuthenticationTimeoutMs, cancellationToken).ConfigureAwait(false);
+            }
+            if (project is not null && !demacia)
+            {
+                await Firehose.AuthenticateProjectOwnedAsync(project, options!.AuthenticationTimeoutMs, cancellationToken).ConfigureAwait(false);
+            }
+            if (project is not null || netType)
+            {
+                await Firehose.CompleteStorageConfigurationOwnedAsync(cancellationToken).ConfigureAwait(false);
+            }
             IsConfigured = true;
         }
         catch
         {
+            SetProtocolState(EdlProtocolState.Unknown);
             Firehose!.Invalidate();
             throw;
         }
