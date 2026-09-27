@@ -35,7 +35,12 @@ public class DatNodeViewModel : FlowNodeViewModel
             Location = new Point(100, 100),
             TypeKey = "Build.Dat.Convert"
         };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Transfer List", PortType = NodePortType.Path });
+        node.Input.Add(new NodeConnectorViewModel
+        {
+            Title = "Transfer List",
+            PortType = NodePortType.Path,
+            DisplayResourceKey = "Node_Conn_InputImage"
+        });
         node.Input.Add(new NodeConnectorViewModel { Title = "Output", PortType = NodePortType.Path });
         node.Output.Add(new NodeConnectorViewModel { Title = "Result", PortType = NodePortType.Text });
         return node;

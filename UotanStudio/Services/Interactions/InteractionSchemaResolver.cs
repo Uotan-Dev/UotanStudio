@@ -87,8 +87,8 @@ public static class InteractionSchemaResolver
         var edges = new List<NodeConnectionViewModel>();
         foreach (var connection in snapshot.Connections)
         {
-            var (_, source) = WorkflowReconstruction.ResolveEndpoint(nodes, created, connection.SourceInstanceId, connection.SourceConnectorTitle, true, false, connection.SourcePortId);
-            var (_, target) = WorkflowReconstruction.ResolveEndpoint(nodes, created, connection.TargetInstanceId, connection.TargetConnectorTitle, false, false, connection.TargetPortId);
+            var (_, source) = WorkflowReconstruction.ResolveEndpoint(nodes, created, connection.SourceInstanceId, connection.SourceConnectorTitle, true, connection.SourcePortId);
+            var (_, target) = WorkflowReconstruction.ResolveEndpoint(nodes, created, connection.TargetInstanceId, connection.TargetConnectorTitle, false, connection.TargetPortId);
             if (source is not null && target is not null)
             {
                 edges.Add(new NodeConnectionViewModel(source, target));

@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Nodes;
@@ -17,6 +18,45 @@ internal static class ShellComposition
     /// <see cref="ProjectOperationsService.Instance"/> singleton.
     /// </summary>
     internal static ShellComponents Create() => Create(ProjectOperationsService.Instance);
+
+    /// <summary>Builds UI-owned shell components in stages, yielding through the supplied progress callback.</summary>
+    /// <param name="report">Publishes each construction stage on the UI dispatcher.</param>
+    /// <param name="appliedCultureName">The persisted language preference already applied by startup, or null for independent construction.</param>
+    internal static async Task<ShellComponents> CreateAsync(Func<SplashPhase, Task> report,
+        string? appliedCultureName = null)
+    {
+        var projects = ProjectOperationsService.Instance;
+        if (projects.IsWorkspaceAttached)
+        {
+            throw new InvalidOperationException("Only one desktop project shell may be active.");
+        }
+        MenuViewModel? menu = null;
+        SettingsViewModel? settings = null;
+        NodeEditorViewModel? nodes = null;
+        WorkspaceViewModel? workspace = null;
+        try
+        {
+            await report(SplashPhase.Services);
+            menu = new MenuViewModel(projects);
+            await report(SplashPhase.Nodes);
+            nodes = new NodeEditorViewModel();
+            await report(SplashPhase.Workspace);
+            var appSettings = await Task.Run(SettingsPersistenceService.Instance.LoadSettings);
+            settings = new SettingsViewModel(appSettings,
+                applyLanguage: appliedCultureName is null
+                    || !string.Equals(appSettings.CultureName, appliedCultureName, StringComparison.Ordinal));
+            workspace = new WorkspaceViewModel(new WorkspaceDockFactory(settings.Ai));
+            return new ShellComponents(projects, menu, nodes, settings, workspace);
+        }
+        catch
+        {
+            menu?.Dispose();
+            nodes?.Dispose();
+            settings?.Dispose();
+            workspace?.Dispose();
+            throw;
+        }
+    }
 
     /// <summary>
     /// <para>显式装配：接收工程操作服务（桌面单例身份与释放归属不变，仍由应用进程持有），

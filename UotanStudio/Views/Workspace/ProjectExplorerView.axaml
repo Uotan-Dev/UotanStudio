@@ -27,6 +27,11 @@
                             </MenuItem.Icon>
                             <MenuItem Header="{DynamicResource Explorer_OpenAsAuto}" Tag="{x:Static controls:EditorOpenMode.Auto}" Click="OnOpenWith" />
                             <MenuItem Header="{DynamicResource Explorer_OpenAsElf}" Tag="{x:Static controls:EditorOpenMode.Elf}" Click="OnOpenWith" />
+                            <MenuItem Header="{DynamicResource Explorer_OpenAsQualcomm}" Tag="{x:Static controls:EditorOpenMode.Qualcomm}" Click="OnOpenWith">
+                                <MenuItem.Icon>
+                                    <icons:MaterialIcon Kind="Chip" />
+                                </MenuItem.Icon>
+                            </MenuItem>
                             <MenuItem Header="{DynamicResource Explorer_OpenAsPartition}" Tag="{x:Static controls:EditorOpenMode.Partition}" Click="OnOpenWith" />
                             <MenuItem Header="{DynamicResource Explorer_OpenAsText}"
                                       Tag="{x:Static controls:EditorOpenMode.Text}" Click="OnOpenWith">
@@ -135,6 +140,13 @@
                             <MenuItem.Icon>
                                 <icons:MaterialIcon Kind="PackageDown" />
                             </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="{DynamicResource Explorer_SplitVolumes}" IsVisible="{Binding !IsDirectory}">
+                            <MenuItem.Icon>
+                                <icons:MaterialIcon Kind="FileMultipleOutline" />
+                            </MenuItem.Icon>
+                            <MenuItem Header="{DynamicResource Explorer_SplitImport}" Click="OnImportSplitVolumes" />
+                            <MenuItem Header="{DynamicResource Explorer_SplitReconstruct}" Click="OnReconstructSplitDat" />
                         </MenuItem>
                         <Separator />
                         <MenuItem Header="{DynamicResource Menu_Cut}" Click="OnCut">

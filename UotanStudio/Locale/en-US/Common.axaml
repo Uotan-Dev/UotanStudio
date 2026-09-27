@@ -292,9 +292,12 @@
     <x:String x:Key="Splash_ApplyingSettings">Applying appearance and service settings...</x:String>
     <x:String x:Key="Splash_OpeningFiles">Opening startup files...</x:String>
     <x:String x:Key="Splash_Ready">Initialization complete</x:String>
-    <x:String x:Key="Splash_Scanning">Discovering USB, ADB and HDC devices...</x:String>
+    <x:String x:Key="Splash_Scanning">Scanning devices...</x:String>
     <x:String x:Key="Splash_FoundDevices">{0} device(s) found</x:String>
     <x:String x:Key="Splash_Preparing">Preparing main window...</x:String>
+    <x:String x:Key="Splash_Services">Loading workspace services...</x:String>
+    <x:String x:Key="Splash_Nodes">Preparing node editor...</x:String>
+    <x:String x:Key="Splash_Workspace">Creating workspace layout...</x:String>
 
     <!-- MainWindow -->
     <x:String x:Key="MainWindow_Title">UotanStudio</x:String>
@@ -324,6 +327,17 @@
     <x:String x:Key="Explorer_NewFile">New File</x:String>
     <x:String x:Key="Explorer_NewFolder">New Folder</x:String>
     <x:String x:Key="Explorer_Unpack">Unpack/Extract</x:String>
+    <x:String x:Key="Explorer_SplitVolumes">Split DAT / TWRP volumes</x:String>
+    <x:String x:Key="Explorer_SplitImport">Import as one artifact...</x:String>
+    <x:String x:Key="Explorer_SplitReconstruct">Reconstruct full DAT image...</x:String>
+    <x:String x:Key="Explorer_SplitRequiresNewDat">Full-image reconstruction requires numbered new-data volumes and a matching transfer list. Patch volumes can only be imported as patch artifacts.</x:String>
+    <x:String x:Key="Explorer_SplitRequiresTransferList">A matching transfer list is required for DAT volume import.</x:String>
+    <x:String x:Key="Explorer_SplitOverwrite">Replace the existing output file? Its current contents will be preserved if the operation fails or is canceled.&#xA;{0}</x:String>
+    <x:String x:Key="Explorer_SplitWorking">Processing volumes...</x:String>
+    <x:String x:Key="Explorer_SplitBytes">{0:N0} / {1:N0} bytes</x:String>
+    <x:String x:Key="Explorer_SplitPercent">{0:P0} complete</x:String>
+    <x:String x:Key="Explorer_SplitDone">Output created: {0}</x:String>
+    <x:String x:Key="Explorer_SplitCancelled">Volume operation canceled. Existing output was preserved.</x:String>
     <x:String x:Key="Explorer_Rename">Rename</x:String>
     <x:String x:Key="Explorer_CopyFullPath">Copy Full Path</x:String>
     <x:String x:Key="Explorer_OpenInFileExplorer">Open in File Explorer</x:String>
@@ -688,6 +702,7 @@
     <x:String x:Key="FirmwareField_PartitionHash">Partition hash</x:String>
     <x:String x:Key="Explorer_OpenAsAuto">Automatic detection</x:String>
     <x:String x:Key="Explorer_OpenAsElf">ELF binary information</x:String>
+    <x:String x:Key="Explorer_OpenAsQualcomm">Qualcomm image analysis</x:String>
     <x:String x:Key="Explorer_OpenAsPartition">Partition table</x:String>
     <x:String x:Key="UserError_OperationFailed">The operation could not be completed. See the error details.</x:String>
     <x:String x:Key="UserError_Details">Error details (original message):</x:String>

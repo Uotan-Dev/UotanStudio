@@ -51,7 +51,7 @@ public class ConstantNodeViewModel : FlowNodeViewModel
         get => base.NodeValueType;
         set
         {
-            if (base.NodeValueType != value)
+            if (!IsEditingLocked && base.NodeValueType != value)
             {
                 base.NodeValueType = value;
                 if (Output.Count > 0)

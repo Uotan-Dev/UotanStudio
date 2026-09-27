@@ -144,7 +144,6 @@ public class SuperNodeViewModel : FlowNodeViewModel
         }
 
         var partitions = new List<SuperPartitionInput>();
-        var skipped = false;
         foreach (var item in partitionsText.Split(';', StringSplitOptions.RemoveEmptyEntries))
         {
             var pair = item.Trim();
@@ -156,18 +155,14 @@ public class SuperNodeViewModel : FlowNodeViewModel
             var idx = pair.IndexOf('=');
             if (idx <= 0 || idx == pair.Length - 1)
             {
-                context.Log.Write(LogLevel.Warn, Title, $"Invalid partition entry: '{pair}' (expected name=path)  无效分区条目：'{pair}'（应为 name=path）。");
-                skipped = true;
-                continue;
+                throw new InvalidDataException($"Invalid partition entry '{pair}' (expected name=path).");
             }
 
             var name = pair[..idx].Trim();
             var path = pair[(idx + 1)..].Trim();
             if (string.IsNullOrWhiteSpace(name) || !File.Exists(path))
             {
-                context.Log.Write(LogLevel.Warn, Title, $"Partition image not found: {path ?? "<empty>"}  找不到分区镜像。");
-                skipped = true;
-                continue;
+                throw new FileNotFoundException($"Partition image for '{name}' was not found.", path);
             }
 
             partitions.Add(new SuperPartitionInput(name, path));
@@ -176,11 +171,6 @@ public class SuperNodeViewModel : FlowNodeViewModel
         if (partitions.Count == 0)
         {
             throw new InvalidOperationException("No valid partitions supplied.  未提供有效分区。");
-        }
-
-        if (skipped)
-        {
-            context.Log.Write(LogLevel.Warn, Title, "Some partition entries were skipped.  部分分区条目已被跳过。");
         }
 
         var result = await FirmwareService.Instance

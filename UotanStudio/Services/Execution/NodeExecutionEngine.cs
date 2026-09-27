@@ -109,12 +109,15 @@ public sealed class NodeExecutionEngine
             foreach (var node in nodes)
             {
                 node.ExecutionStatus = NodeExecutionStatus.Idle;
+                node.ExecutionError = string.Empty;
                 foreach (var input in node.Input)
                 {
+                    input.IsRuntimeSensitive = false;
                     input.Data = input.InitialValue;
                 }
                 foreach (var output in node.Output)
                 {
+                    output.IsRuntimeSensitive = false;
                     output.Data = null;
                 }
             }
@@ -130,6 +133,19 @@ public sealed class NodeExecutionEngine
             if (interactionError is not null)
             {
                 return RejectPreflight(nodes, interactionError);
+            }
+            var graphIssues = WorkflowGraphValidation.ValidateRuntime(nodes, connections);
+            if (graphIssues.Count > 0)
+            {
+                RecordUnreachedComposites(nodes, CompositeSkipReason.PreflightRejected);
+                foreach (var node in nodes)
+                {
+                    node.ExecutionError = string.Join(Environment.NewLine,
+                        graphIssues.Where(issue => ReferenceEquals(issue.Node, node)).Select(issue => issue.Message));
+                    node.ExecutionStatus = node.ExecutionError.Length > 0 ? NodeExecutionStatus.Failed : NodeExecutionStatus.Skipped;
+                    NodeStatusChanged?.Invoke(this, new(node));
+                }
+                return RejectPreflight(nodes, string.Join(Environment.NewLine, graphIssues.Select(issue => issue.DisplayText)));
             }
             var destructiveError = await WorkflowInteractionPreflight.ConfirmDestructiveAsync(nodes, _interactions, token).ConfigureAwait(false);
             if (destructiveError is not null)
@@ -341,10 +357,7 @@ public sealed class NodeExecutionEngine
             if (conn.SourceInstanceId == null || conn.TargetInstanceId == null) continue;
             if (!byId.TryGetValue(conn.SourceInstanceId, out var sourceNode)) continue;
             if (!byId.TryGetValue(conn.TargetInstanceId, out var targetNode)) continue;
-            if (string.IsNullOrWhiteSpace(conn.SourceConnector)) continue;
-
-            var sourceConnector = sourceNode.Output.FirstOrDefault(c =>
-                string.Equals(c.Title, conn.SourceConnector, StringComparison.Ordinal));
+            var sourceConnector = WorkflowGraphValidation.ResolvePort(sourceNode.Output, conn.SourcePortId, conn.SourceConnector);
             if (sourceConnector is not { PortType: NodePortType.Flow }) continue;
 
             if (!map.TryGetValue(sourceNode.InstanceId, out var list))
@@ -352,7 +365,7 @@ public sealed class NodeExecutionEngine
                 list = [];
                 map[sourceNode.InstanceId] = list;
             }
-            list.Add((conn.SourceConnector, targetNode));
+            list.Add((sourceConnector.Title, targetNode));
         }
         return map;
     }
@@ -381,6 +394,15 @@ public sealed class NodeExecutionEngine
                 compositeInvocation = _patches.BeginComposite(composite);
             }
             FlowInputs(node, byId, connections);
+            foreach (var input in node.Input)
+            {
+                if (input.IsRequired && input.PortType != NodePortType.Flow
+                    && input.IsVisibleWhen?.Invoke(node) != false
+                    && (input.Data is null || input.Data is string value && string.IsNullOrWhiteSpace(value)))
+                {
+                    throw new InvalidDataException(LanguageService.Instance.GetString("Node_Graph_Required", input.LocalizedTitle));
+                }
+            }
 
             var context = new ExecutionContextImpl(_log, token, progress, _patches, _package, _interactions,
                 waiting =>
@@ -405,6 +427,7 @@ public sealed class NodeExecutionEngine
         catch (Exception ex)
         {
             compositeError = ex.Message;
+            node.ExecutionError = ex.Message;
             _patches?.RecordFailure(ex);
             node.ExecutionStatus = NodeExecutionStatus.Failed;
             NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
@@ -501,6 +524,14 @@ public sealed class NodeExecutionEngine
                     var completed = CollectFlowReachable(node, "Completed", flowOut);
                     body.ExceptWith(completed);
                     if (body.Count == 0) break;
+                    if (iterations == 0)
+                    {
+                        foreach (var bodyNode in body)
+                        {
+                            skippedByBranch.Add(bodyNode.InstanceId);
+                        }
+                        break;
+                    }
 
                     var bodyOrder = topologicalOrder.Where(body.Contains).ToList();
                     _log.Write(LogLevel.Info, "Engine",
@@ -596,10 +627,12 @@ public sealed class NodeExecutionEngine
         {
             foreach (var input in node.Input)
             {
+                input.IsRuntimeSensitive = false;
                 input.Data = input.InitialValue;
             }
             foreach (var output in node.Output)
             {
+                output.IsRuntimeSensitive = false;
                 output.Data = null;
             }
         }
@@ -822,16 +855,14 @@ public sealed class NodeExecutionEngine
         {
             if (conn.TargetInstanceId != target.InstanceId) continue;
             if (!byId.TryGetValue(conn.SourceInstanceId, out var sourceNode)) continue;
-            if (string.IsNullOrWhiteSpace(conn.SourceConnector) || string.IsNullOrWhiteSpace(conn.TargetConnector)) continue;
-
-            var sourceConnector = sourceNode.Output.FirstOrDefault(c => string.Equals(c.Title, conn.SourceConnector, StringComparison.Ordinal));
-            var targetConnector = target.Input.FirstOrDefault(c => string.Equals(c.Title, conn.TargetConnector, StringComparison.Ordinal));
+            var sourceConnector = WorkflowGraphValidation.ResolvePort(sourceNode.Output, conn.SourcePortId, conn.SourceConnector);
+            var targetConnector = WorkflowGraphValidation.ResolvePort(target.Input, conn.TargetPortId, conn.TargetConnector);
             // A connected data output is authoritative even when absent (cancelled or hidden form fields).
             // Flow signals may intentionally have no payload.
             if (sourceConnector != null && targetConnector != null
                 && (sourceConnector.Data is not null || targetConnector.PortType != NodePortType.Flow))
             {
-                targetConnector.IsSensitive |= sourceConnector.IsSensitive;
+                targetConnector.IsRuntimeSensitive |= sourceConnector.IsSensitive || sourceConnector.IsRuntimeSensitive;
                 targetConnector.HasRuntimeSource = true;
                 targetConnector.Data = sourceConnector.Data;
             }
@@ -912,6 +943,9 @@ public sealed class NodeConnection
     /// </summary>
     public required string SourceConnector { get; init; }
 
+    /// <summary>Stable source port identity; title resolution is used only when absent.</summary>
+    public string? SourcePortId { get; init; }
+
     /// <summary>
     /// <para>目标节点实例 ID。</para>
     /// Target node instance ID.
@@ -923,6 +957,9 @@ public sealed class NodeConnection
     /// Target connector title.
     /// </summary>
     public required string TargetConnector { get; init; }
+
+    /// <summary>Stable target port identity; title resolution is used only when absent.</summary>
+    public string? TargetPortId { get; init; }
 }
 
 /// <summary>

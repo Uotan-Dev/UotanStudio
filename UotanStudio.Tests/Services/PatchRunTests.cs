@@ -209,7 +209,7 @@ public sealed class PatchRunTests : IDisposable
                 Outputs = [new VisualPluginPortDefinition { Id = "done", Name = "Done", NodeInstanceId = writer.InstanceId, PortId = "completed", PortType = "Flow" }]
             };
             source = new CompositeNodeViewModel(package);
-            outputPort = "Done";
+            outputPort = "done";
         }
         var fail = PatchNodeViewModel.Create("Validation.Boolean.Assert");
         var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([source, fail],

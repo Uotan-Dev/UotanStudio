@@ -11,11 +11,21 @@ using Xunit;
 
 namespace UotanStudio.Tests.Services;
 
-[Collection("Log pipeline")]
-public sealed class NodeFactoryRegistrarTests
+[Collection("Node editor UI")]
+public sealed class NodeFactoryRegistrarTests(UotanStudio.Tests.Views.NodeEditorUiFixture fixture)
 {
     [Fact]
     public async Task RegisterVisualPlugin_ConcurrentUpdates_PreservesDescriptorSnapshotsAndPackages()
+    {
+        Task dispatch;
+        using (ExecutionContext.SuppressFlow())
+        {
+            dispatch = fixture.DispatchAsync(RegisterConcurrentPluginsAsync, TestContext.Current.CancellationToken);
+        }
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+    }
+
+    private static async Task RegisterConcurrentPluginsAsync()
     {
         var prefix = "tests.registry." + Guid.NewGuid().ToString("N") + ".";
         var token = TestContext.Current.CancellationToken;
@@ -131,6 +141,56 @@ public sealed class NodeFactoryRegistrarTests
         Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "File.Artifact.Publish");
     }
 
+    [Theory]
+    [InlineData("Firmware.Container.Unpack", "Firmware Path")]
+    [InlineData("Firmware.Container.Pack", "Input Dir")]
+    [InlineData("Build.Dat.Convert", "Transfer List")]
+    [InlineData("Image.Super.Pack", "Device Size")]
+    [InlineData("Network.File.Download", "URL")]
+    [InlineData("Network.GitHub.Download", "Output Path")]
+    [InlineData("Device.Property.Read", "Name")]
+    [InlineData("Data.Value.Compare", "Data A")]
+    public void Descriptors_RequiredInputs_FollowOperationContract(string typeKey, string title)
+    {
+        var node = NodeFactoryRegistrar.Descriptors.Single(descriptor => descriptor.TypeKey == typeKey).Factory();
+
+        Assert.True(node.Input.Single(input => input.Title == title).IsRequired);
+    }
+
+    [Theory]
+    [InlineData("Firmware.Container.Pack", "Config")]
+    [InlineData("Firmware.Cpio.Pack", "Output Archive")]
+    [InlineData("Validation.Signature.Verify", "Public Key")]
+    [InlineData("Firmware.Container.Extract", "Partition Name")]
+    [InlineData("File.Artifact.Publish", "Data")]
+    [InlineData("File.Artifact.Publish", "Artifact")]
+    [InlineData("Image.Sparse.Convert", "Output")]
+    public void Descriptors_OptionalInputs_DoNotBlockPreflight(string typeKey, string title)
+    {
+        var node = NodeFactoryRegistrar.Descriptors.Single(descriptor => descriptor.TypeKey == typeKey).Factory();
+
+        Assert.False(node.Input.Single(input => input.Title == title).IsRequired);
+    }
+
+    [Fact]
+    public void FirmwarePackAndDat_LegacyPortIdentities_ExposeCorrectPathLabels()
+    {
+        var pack = NodeFactoryRegistrar.Descriptors.Single(descriptor =>
+            descriptor.TypeKey == "Firmware.Container.Pack").Factory();
+        var legacy = pack.Input.Single(input => input.Title == "Config");
+        var output = pack.Input.Single(input => input.Title == "Output Path");
+        var dat = NodeFactoryRegistrar.Descriptors.Single(descriptor =>
+            descriptor.TypeKey == "Build.Dat.Convert").Factory();
+        var input = dat.Input.Single(port => port.Title == "Transfer List");
+
+        Assert.Equal("config", legacy.StableId);
+        Assert.True(legacy.IsAdvanced);
+        Assert.Equal("Node_Conn_LegacyOutputPath", legacy.DisplayResourceKey);
+        Assert.Equal(NodePortType.Path, output.PortType);
+        Assert.Equal("transfer-list", input.StableId);
+        Assert.Equal("Node_Conn_InputImage", input.DisplayResourceKey);
+    }
+
     [Fact]
     public async Task Register_ConcurrentFactories_PreservesCreationAndSnapshotAfterRemoval()
     {
@@ -206,14 +266,33 @@ public sealed class NodeFactoryRegistrarTests
     }
 
     [Fact]
+    public void EffectfulNodes_FlowPorts_ConnectToBranchesAndLoops()
+    {
+        var branch = NodeFactoryRegistrar.Descriptors.Single(descriptor =>
+            descriptor.TypeKey == "Flow.Condition.Branch").Factory();
+        var firmware = NodeFactoryRegistrar.Descriptors.Single(descriptor =>
+            descriptor.TypeKey == "Firmware.Container.Unpack").Factory();
+        var flash = NodeFactoryRegistrar.Descriptors.Single(descriptor =>
+            descriptor.TypeKey == "Device.Partition.Flash").Factory();
+
+        Assert.Contains(branch.Input, port => port.Title == "Flow" && port.PortType == NodePortType.Flow);
+        foreach (var node in new[] { firmware, flash })
+        {
+            Assert.Contains(node.Input, port => port.Title == "Flow" && port.PortType == NodePortType.Flow);
+            Assert.Contains(node.Output, port => port.Title == "Completed" && port.PortType == NodePortType.Flow);
+        }
+    }
+
+    [Fact]
     public void Toolbox_IsBuiltFromTheSameDescriptorSet()
     {
         using var editor = new NodeEditorViewModel();
 
         var toolboxItems = editor.ToolboxCategories.SelectMany(category => category.Items).ToArray();
-        Assert.Equal(NodeFactoryRegistrar.Descriptors.Count, toolboxItems.Length);
+        Assert.Equal(NodeFactoryRegistrar.Descriptors.Count(descriptor => descriptor.IsToolboxVisible), toolboxItems.Length);
         Assert.Equal(
-            NodeFactoryRegistrar.Descriptors.Select(descriptor => descriptor.TypeKey).OrderBy(key => key),
+            NodeFactoryRegistrar.Descriptors.Where(descriptor => descriptor.IsToolboxVisible)
+                .Select(descriptor => descriptor.TypeKey).OrderBy(key => key),
             toolboxItems.Select(item => item.TypeKey).OrderBy(key => key));
     }
 
@@ -229,8 +308,16 @@ public sealed class NodeFactoryRegistrarTests
             {
                 Nodes =
                 [
-                    new NodeDto { InstanceId = "hdc", TypeKey = "HDC.Remount", Category = "Flash" },
-                    new NodeDto { InstanceId = "dex", TypeKey = "Dex.Parse", Category = "Dex" }
+                    new NodeDto
+                    {
+                        InstanceId = "hdc", TypeKey = "HDC.Remount", Category = "Flash",
+                        OutputPorts = [new NodePortDto { Title = "Flow", PortType = "Flow" }]
+                    },
+                    new NodeDto
+                    {
+                        InstanceId = "dex", TypeKey = "Dex.Parse", Category = "Dex",
+                        InputPorts = [new NodePortDto { Title = "Flow", PortType = "Flow" }]
+                    }
                 ],
                 Connections =
                 [
@@ -248,7 +335,7 @@ public sealed class NodeFactoryRegistrarTests
 
             Assert.Equal(2, editor.Nodes.Count);
             Assert.All(editor.Nodes, node => Assert.True(node.IsUnavailable));
-            Assert.Empty(editor.Connections);
+            Assert.Single(editor.Connections);
             var roundTrip = WorkflowPersistenceService.BuildNodeDtos(editor.Nodes);
             Assert.Contains(roundTrip, node => node.TypeKey == "HDC.Remount");
             Assert.Contains(roundTrip, node => node.TypeKey == "Dex.Parse");
@@ -315,11 +402,11 @@ public sealed class NodeFactoryRegistrarTests
         constant.IsSelected = true;
         editor.AddNode(constant);
 
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Copy));
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Paste));
+        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Copy, editor.EditorId));
+        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Paste, editor.EditorId));
 
         Assert.Equal(2, editor.Nodes.Count);
-        var copy = Assert.Single(editor.Nodes, node => node.Title.EndsWith("(copy)", StringComparison.Ordinal));
+        var copy = Assert.Single(editor.Nodes, node => !ReferenceEquals(node, constant));
         Assert.Equal("Data.Value.Constant", copy.TypeKey);
         Assert.Equal("Boolean", copy.NodeValueType);
         Assert.Equal("true", copy.NodeValue);

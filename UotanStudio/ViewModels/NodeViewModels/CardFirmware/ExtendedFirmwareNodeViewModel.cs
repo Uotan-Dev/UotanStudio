@@ -2,17 +2,18 @@ using System.Globalization;
 using Avalonia;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
-using UotanStudio.Services.Flash;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.Services.Projects;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>扩展固件操作节点视图模型，提供 OTA 差分生成、签名合并、双卡合并与 spl/uboot 刷写功能。</para>
-/// Extended firmware operation node view model, providing OTA delta generation, signature merging, dual-slot merging, and spl/uboot flashing capabilities.
+/// <para>扩展固件操作节点视图模型，生成 OTA 差分文件并保留不支持的旧构建节点身份以供加载。</para>
+/// Extended firmware operation node view model for OTA delta generation and loading unsupported legacy build nodes.
 /// </summary>
 public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
 {
+    public override bool IsUnavailable => TypeKey is "Build.Signature.Merge" or "Build.Slots.Merge";
+
     /// <summary>
     /// <para>创建具有指定标题的扩展固件操作节点。</para>
     /// Creates an extended firmware operation node with the specified title.
@@ -43,8 +44,8 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的签名合并节点，将签名嵌入固件镜像。</para>
-    /// Creates a default merge-signature node that embeds a signature into a firmware image.
+    /// <para>创建仅供旧工作流恢复的签名拼接节点。</para>
+    /// Creates the unsupported signature-append node for loading existing workflows.
     /// </summary>
     public static ExtendedFirmwareNodeViewModel CreateMergeSignatureNode()
     {
@@ -60,8 +61,8 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的双卡合并节点，将 A/B 槽位合并为单一镜像。</para>
-    /// Creates a default dual-slot merge node that combines A/B slots into a single image.
+    /// <para>创建仅供旧工作流恢复的槽位拼接节点。</para>
+    /// Creates the unsupported slot-concatenation node for loading existing workflows.
     /// </summary>
     public static ExtendedFirmwareNodeViewModel CreateMergeDualSlotNode()
     {
@@ -77,13 +78,8 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的扩展固件逻辑：Build.Ota.CreateDelta 调用差分引擎生成差分包、
-    /// Build.Signature.Merge 把签名追加进镜像、Build.Slots.Merge 拼接 A/B 槽位、Device.Partition.Flash
-    /// 调用 <see cref="FlashService.FlashImageAsync"/> 把引导加载程序刷写到设备。</para>
-    /// Dispatches extended firmware logic by the node type key (TypeKey): Build.Ota.CreateDelta generates a delta
-    /// package via the delta engine, Build.Signature.Merge appends a signature into the image,
-    /// Build.Slots.Merge concatenates the A/B slots, and Device.Partition.Flash flashes the bootloader
-    /// image to the device via <see cref="FlashService.FlashImageAsync"/>.
+    /// <para>按节点类型键生成 OTA 差分；旧签名与槽位拼接类型显式拒绝执行。</para>
+    /// Generates an OTA delta by type key and explicitly rejects unsupported signature and slot concatenation types.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -104,11 +100,11 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
                     await ExecuteOtaDeltaAsync(context).ConfigureAwait(false);
                     break;
                 case "Build.Signature.Merge":
-                    ExecuteMergeSignature(context);
-                    break;
+                    throw new NotSupportedException(
+                        "Appending signature bytes cannot produce a valid signed firmware image. Use a format-specific signing operation.");
                 case "Build.Slots.Merge":
-                    ExecuteMergeDualSlot(context);
-                    break;
+                    throw new NotSupportedException(
+                        "Concatenating A/B images cannot produce a valid dual-slot image. Use a format-specific build operation.");
                 default:
                     await base.ExecuteAsync(context).ConfigureAwait(false);
                     break;
@@ -123,37 +119,6 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
             context.Log.Write(LogLevel.Error, Title, $"Extended firmware node failed: {ex.Message}  扩展固件节点执行失败。");
             throw;
         }
-    }
-
-    private void ExecuteMergeSignature(INodeExecutionContext context)
-    {
-        var image = NodeDataUtil.ToBytes(ReadInput("Image"));
-        var signature = NodeDataUtil.ToBytes(ReadInput("Signature"));
-        if (image == null || signature == null)
-        {
-            throw new InvalidOperationException("Missing Image or Signature input.  缺少镜像或签名。");
-        }
-
-        var signed = new byte[image.Length + signature.Length];
-        image.CopyTo(signed, 0);
-        signature.CopyTo(signed, image.Length);
-        WriteOutput("Signed", signed);
-        context.Log.Write(LogLevel.Info, Title, $"Appended {signature.Length}-byte signature to {image.Length}-byte image.  已合并签名。");
-    }
-
-    private void ExecuteMergeDualSlot(INodeExecutionContext context)
-    {
-        var a = NodeDataUtil.ToBytes(ReadInput("Slot A"));
-        var b = NodeDataUtil.ToBytes(ReadInput("Slot B"));
-        if (a == null || b == null)
-        {
-            throw new InvalidOperationException("Missing Slot A or Slot B input.  缺少槽位镜像。");
-        }
-        var merged = new byte[a.Length + b.Length];
-        a.CopyTo(merged, 0);
-        b.CopyTo(merged, a.Length);
-        WriteOutput("Merged", merged);
-        context.Log.Write(LogLevel.Info, Title, $"Merged slot A ({a.Length}B) + slot B ({b.Length}B).  已合并双槽。");
     }
 
     private async Task ExecuteOtaDeltaAsync(INodeExecutionContext context)
@@ -181,7 +146,7 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
 
         if (result.Success)
         {
-            WriteOutput("Delta", output);
+            WriteOutput("Delta", new FileArtifact(output));
             context.Log.Write(LogLevel.Info, Title,
                 $"Delta generated: {output} ({result.SourceLength} -> {result.DiffLength} bytes).  差分文件生成完成。");
         }

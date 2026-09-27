@@ -80,6 +80,7 @@ public class DevicePropertyNodeViewModel : FlowNodeViewModel
         catch (Exception ex)
         {
             context.Log.Write(LogLevel.Error, Title, $"Get property failed: {ex.Message}  属性查询失败。");
+            throw;
         }
     }
 
@@ -88,23 +89,23 @@ public class DevicePropertyNodeViewModel : FlowNodeViewModel
         var device = NodeDataUtil.ToDevice(ReadInput("Device"));
         if (device is null)
         {
-            context.Log.Write(LogLevel.Warn, Title, "No device connected. 未连接设备。");
-            WriteOutput("Value", string.Empty);
-            return;
+            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Device_InvalidInput"));
         }
 
         var name = Text(ReadInput("Name"));
         if (string.IsNullOrWhiteSpace(name))
         {
-            context.Log.Write(LogLevel.Warn, Title, "No property name specified. 未指定属性名。");
-            WriteOutput("Value", string.Empty);
-            return;
+            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Device_InvalidInput"));
         }
 
         var result = await FlashService.Default.GetDevicePropertyAsync(
             new DeviceInfo(device), name, context.CancellationToken).ConfigureAwait(false);
         var value = result.Success ? ExtractValue(result.Summary, name) : string.Empty;
         WriteOutput("Value", value);
+        if (!result.Success)
+        {
+            throw new InvalidOperationException(result.Summary);
+        }
         context.Log.Write(result.Success ? LogLevel.Info : LogLevel.Error, Title,
             result.Success
                 ? $"{result.Summary}  属性查询完成。"

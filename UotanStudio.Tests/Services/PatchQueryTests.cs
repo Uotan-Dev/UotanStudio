@@ -123,7 +123,7 @@ public sealed class PatchQueryTests : IDisposable
         check = Assert.IsType<PatchNodeViewModel>(Assert.Single(WorkflowRuntimeBuilder.Build(snapshot, false).Nodes));
         var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([open, stage, find, check, condition, directory],
             [Connect(open, "Workspace", stage, "Workspace"), Connect(stage, "Workspace", find, "Workspace"),
-             Connect(find, "Path", check, "Path"), Connect(find, "Path", condition, "Value"), Connect(stage, "Completed", directory, "Flow")],
+             Connect(find, "Path", check, "Path"), Connect(find, "Path", condition, "Path"), Connect(stage, "Completed", directory, "Flow")],
             Token, new NodeExecutionOptions { Preview = true });
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         Assert.Equal("nested/config.bin", find.Output.Single(port => port.Title == "Relative Path").Data);

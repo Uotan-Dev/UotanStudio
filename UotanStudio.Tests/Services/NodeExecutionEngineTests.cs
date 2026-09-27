@@ -276,7 +276,7 @@ public sealed class NodeExecutionEngineTests
         var engine = new NodeExecutionEngine(new MemoryLog());
 
         var loop = FlowNode("Loop", "Flow.Collection.Loop", ["Count"], ["Body", "Index"]);
-        var body1 = FlowNode("Body1", "Test.Body1", ["Flow"], []);
+        var body1 = FlowNode("Body1", "Test.Body1", ["Flow"], ["Flow"]);
         var body2 = FlowNode("Body2", "Test.Body2", ["Flow"], []);
         var after = FlowNode("After", "Test.After", ["Flow"], []);
         var runs = 0;
@@ -419,6 +419,29 @@ public sealed class NodeExecutionEngineTests
 
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         Assert.Equal(3, bodyRuns);
+        Assert.Equal(1, completedRuns);
+    }
+
+    [Fact]
+    public async Task Engine_Loop_ZeroIterations_SkipsBodyAndRunsCompletedPath()
+    {
+        var engine = new NodeExecutionEngine(new MemoryLog());
+        var loop = FlowNode("Loop", "Flow.Collection.Loop", ["Count"], ["Body", "Completed", "Index"]);
+        var body = FlowNode("Body", "Test.Body", ["Flow"], []);
+        var completed = FlowNode("Completed", "Test.Completed", ["Flow"], []);
+        var bodyRuns = 0;
+        var completedRuns = 0;
+        loop.Input[0].InitialValue = 0.0;
+        body.Action = _ => { bodyRuns++; return Task.CompletedTask; };
+        completed.Action = _ => { completedRuns++; return Task.CompletedTask; };
+
+        var result = await engine.ExecuteAsync([loop, body, completed],
+            [Conn(loop, "Body", body, "Flow"), Conn(loop, "Completed", completed, "Flow")],
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+        Assert.Equal(NodeExecutionStatus.Skipped, body.ExecutionStatus);
+        Assert.Equal(0, bodyRuns);
         Assert.Equal(1, completedRuns);
     }
 

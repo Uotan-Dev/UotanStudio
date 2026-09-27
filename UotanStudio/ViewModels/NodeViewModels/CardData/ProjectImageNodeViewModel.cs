@@ -59,7 +59,13 @@ public class ProjectImageNodeViewModel : FlowNodeViewModel
     public override string SelectedImage
     {
         get => _selectedImage;
-        set => SetProperty(ref _selectedImage, value);
+        set
+        {
+            if (!IsEditingLocked)
+            {
+                SetProperty(ref _selectedImage, value);
+            }
+        }
     }
 
     /// <summary>
@@ -105,18 +111,20 @@ public class ProjectImageNodeViewModel : FlowNodeViewModel
     {
         if (string.IsNullOrWhiteSpace(SelectedImage))
         {
-            context.Log.Write(LogLevel.Warn, Title, "No image selected.  未选择镜像。");
-            return;
+            throw new InvalidOperationException("No project image was selected.");
         }
 
         var root = ProjectContextService.Instance.RootDirectory;
         if (string.IsNullOrWhiteSpace(root))
         {
-            context.Log.Write(LogLevel.Warn, Title, "No project is open.  尚未打开工程。");
-            return;
+            throw new InvalidOperationException("No project is open.");
         }
 
         var absolutePath = Path.Combine(root, SelectedImage);
+        if (!File.Exists(absolutePath))
+        {
+            throw new FileNotFoundException("The selected project image was not found.", absolutePath);
+        }
         WriteOutput("Path", absolutePath);
         context.Log.Write(LogLevel.Info, Title, $"Image path: {absolutePath}  已输出镜像路径。");
     }

@@ -1,6 +1,5 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
-using System.Text;
 using Avalonia;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
@@ -72,8 +71,14 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
             TypeKey = "Data.Cipher.Encrypt"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Key", PortType = NodePortType.Data });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Algorithm", PortType = NodePortType.Text });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Key", PortType = NodePortType.Data, IsRequired = true, IsSensitive = true });
+        node.Input.Add(new NodeConnectorViewModel
+        {
+            Title = "Algorithm",
+            PortType = NodePortType.Text,
+            InitialValue = "aes",
+            Choices = new[] { "aes", "aes-256", "xor" }.Select(value => new NodePortChoice(value)).ToArray()
+        });
         node.Output.Add(new NodeConnectorViewModel { Title = "Cipher", PortType = NodePortType.Data });
         return node;
     }
@@ -90,7 +95,13 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
             TypeKey = "Data.Compression.Compress"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Algorithm", PortType = NodePortType.Text });
+        node.Input.Add(new NodeConnectorViewModel
+        {
+            Title = "Algorithm",
+            PortType = NodePortType.Text,
+            InitialValue = "gzip",
+            Choices = new[] { "gzip", "deflate" }.Select(value => new NodePortChoice(value)).ToArray()
+        });
         node.Output.Add(new NodeConnectorViewModel { Title = "Compressed", PortType = NodePortType.Data });
         return node;
     }
@@ -174,8 +185,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
         var data = NodeDataUtil.ToBytes(ReadInput("Data"));
         if (data == null)
         {
-            context.Log.Write(LogLevel.Warn, Title, "No Data input.  缺少输入数据。");
-            return;
+            throw new InvalidDataException("No data was provided for slicing.");
         }
 
         var offset = NodeDataUtil.ToInt(ReadInput("Offset"), 0);
@@ -196,17 +206,21 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
         var data = NodeDataUtil.ToBytes(ReadInput("Data"));
         if (data == null || data.Length == 0)
         {
-            context.Log.Write(LogLevel.Warn, Title, "No Data input.  缺少输入数据。");
-            return;
+            throw new InvalidDataException("No data was provided for encryption.");
         }
 
-        var key = NodeDataUtil.ToBytes(ReadInput("Key")) ?? Encoding.UTF8.GetBytes("uotan-default-key");
+        var key = NodeDataUtil.ToBytes(ReadInput("Key"));
+        if (key is not { Length: > 0 })
+        {
+            throw new InvalidDataException("A nonempty encryption key is required.");
+        }
         var algorithm = (Convert.ToString(ReadInput("Algorithm"), System.Globalization.CultureInfo.InvariantCulture) ?? "aes").Trim().ToLowerInvariant();
 
         byte[] cipher = algorithm switch
         {
             "aes" or "aes-256" => AesEncrypt(data, key),
-            _ => XorCipher(data, key)
+            "xor" => XorCipher(data, key),
+            _ => throw new InvalidDataException($"Unsupported cipher algorithm '{algorithm}'.")
         };
         WriteOutput("Cipher", cipher);
         context.Log.Write(LogLevel.Info, Title, $"Encrypted {data.Length} bytes with {algorithm}.  已加密。");
@@ -217,15 +231,15 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
         var data = NodeDataUtil.ToBytes(ReadInput("Data"));
         if (data == null)
         {
-            context.Log.Write(LogLevel.Warn, Title, "No Data input.  缺少输入数据。");
-            return;
+            throw new InvalidDataException("No data was provided for compression.");
         }
 
         var algorithm = (Convert.ToString(ReadInput("Algorithm"), System.Globalization.CultureInfo.InvariantCulture) ?? "gzip").Trim().ToLowerInvariant();
         byte[] compressed = algorithm switch
         {
             "deflate" => CompressWith(data, mode => new DeflateStream(mode, CompressionLevel.Optimal)),
-            _ => CompressWith(data, mode => new GZipStream(mode, CompressionLevel.Optimal))
+            "gzip" => CompressWith(data, mode => new GZipStream(mode, CompressionLevel.Optimal)),
+            _ => throw new InvalidDataException($"Unsupported compression algorithm '{algorithm}'.")
         };
         WriteOutput("Compressed", compressed);
         context.Log.Write(LogLevel.Info, Title, $"Compressed {data.Length} -> {compressed.Length} bytes ({algorithm}).  已压缩。");
@@ -236,8 +250,7 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
         var data = NodeDataUtil.ToBytes(ReadInput("Data"));
         if (data == null)
         {
-            context.Log.Write(LogLevel.Warn, Title, "No Data input.  缺少输入数据。");
-            return;
+            throw new InvalidDataException("No data was provided for byte swapping.");
         }
 
         var swapped = new byte[data.Length];

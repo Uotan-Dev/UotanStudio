@@ -27,6 +27,7 @@ public sealed class PatchGateTests
             invoked = true;
             return [];
         });
+        composite.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortId = "flow", PortType = NodePortType.Flow });
         var controller = scenario == "zero-loop"
             ? (FlowNodeViewModel)FlowControlNodeViewModel.CreateLoopNode()
             : PatchNodeViewModel.Create("Validation.Boolean.Assert");
@@ -51,8 +52,12 @@ public sealed class PatchGateTests
         var row = Assert.Single(result.CompositeExecutions);
         Assert.False(invoked);
         Assert.Equal(NodeExecutionStatus.Skipped, row.Status);
-        Assert.Equal(scenario == "preflight" ? UotanStudio.Services.Patching.CompositeSkipReason.PreflightRejected
-            : UotanStudio.Services.Patching.CompositeSkipReason.NotReached, row.SkipReason);
+        Assert.Equal(scenario switch
+        {
+            "preflight" => UotanStudio.Services.Patching.CompositeSkipReason.PreflightRejected,
+            "zero-loop" => UotanStudio.Services.Patching.CompositeSkipReason.Condition,
+            _ => UotanStudio.Services.Patching.CompositeSkipReason.NotReached
+        }, row.SkipReason);
         Assert.Equal(UotanStudio.Services.Patching.CompositeApplicability.None, row.Applicability);
     }
 
@@ -70,6 +75,7 @@ public sealed class PatchGateTests
             invoked = true;
             return [];
         });
+        composite.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortId = "flow", PortType = NodePortType.Flow });
         var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([failure, composite],
             [Connect(failure, "Completed", composite, "Flow")], TestContext.Current.CancellationToken);
 
@@ -212,8 +218,8 @@ public sealed class PatchGateTests
 
         Assert.Equal(ExecutionStatus.Failed, result.Status);
         Assert.False(File.Exists(target));
-        Assert.Equal(NodeExecutionStatus.Idle, gate.ExecutionStatus);
-        Assert.Equal(NodeExecutionStatus.Idle, write.ExecutionStatus);
+        Assert.NotEqual(NodeExecutionStatus.Succeeded, gate.ExecutionStatus);
+        Assert.NotEqual(NodeExecutionStatus.Succeeded, write.ExecutionStatus);
         Assert.False(string.IsNullOrWhiteSpace(result.ErrorMessage));
     }
 

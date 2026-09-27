@@ -220,6 +220,12 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        if (mode == EditorOpenMode.Qualcomm)
+        {
+            await OpenQualcommAsync(path);
+            return;
+        }
+
         if (mode == EditorOpenMode.Log)
         {
             await OpenLogAsync(path);
@@ -401,6 +407,15 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     public Task OpenElfAsync(string path) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new ElfInfoViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
+        static (document, fullPath) => document.LoadAsync(fullPath));
+
+    /// <summary>Opens or activates Qualcomm static image analysis for a local file.
+    /// <para>为本地文件打开或激活 Qualcomm 镜像静态分析。</para></summary>
+    /// <param name="path">Local image path. <para>本地镜像路径。</para></param>
+    /// <returns>Completes when analysis has loaded. <para>分析加载完成后结束。</para></returns>
+    public Task OpenQualcommAsync(string path) => OpenOrActivateDocumentAsync(
+        path, static document => document.FilePath,
+        static fullPath => new QualcommImageViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
         static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
@@ -727,6 +742,9 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
                     break;
                 case "Elf":
                     await OpenElfAsync(fullPath);
+                    break;
+                case "Qualcomm":
+                    await OpenQualcommAsync(fullPath);
                     break;
                 case "Manifest":
                     await OpenManifestAsync(fullPath);

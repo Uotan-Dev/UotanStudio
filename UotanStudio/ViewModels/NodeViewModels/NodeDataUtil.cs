@@ -11,6 +11,8 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 /// </summary>
 internal static class NodeDataUtil
 {
+    internal const int MaxInMemoryBytes = 64 * 1024 * 1024;
+
     /// <summary>
     /// <para>判断两个端口类型是否可以连接：任意一方为 <see cref="NodePortType.Any"/> 则允许连接；
     /// <see cref="NodePortType.Device"/> 仅能与 <see cref="NodePortType.Device"/> 或
@@ -78,15 +80,83 @@ internal static class NodeDataUtil
     /// <para>得到的字节数组；<c>null</c> 表示无法转换。</para>
     /// The resulting byte array; <c>null</c> when conversion is not possible.
     /// </returns>
-    public static byte[]? ToBytes(object? value)
+    public static byte[]? ToBytes(object? value, CancellationToken cancellationToken = default)
     {
         return value switch
         {
             null => null,
-            byte[] bytes => bytes,
-            string text => File.Exists(text) ? File.ReadAllBytes(text) : Encoding.UTF8.GetBytes(text),
-            _ => Encoding.UTF8.GetBytes(Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty)
+            byte[] bytes when bytes.Length <= MaxInMemoryBytes => bytes,
+            byte[] => throw new InvalidDataException("The in-memory node data limit was exceeded. Use a file artifact for large inputs."),
+            Services.Projects.FileArtifact artifact => ReadFileBytes(artifact.Path, cancellationToken),
+            string text when File.Exists(text) => ReadFileBytes(text, cancellationToken),
+            string text => EncodeText(text),
+            _ => EncodeText(Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty)
         };
+    }
+
+    internal static byte[] ReadFileBytes(string path, CancellationToken cancellationToken)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+            64 * 1024, FileOptions.SequentialScan);
+        var bytes = AllocateFileBuffer(stream.Length);
+        var offset = 0;
+        while (offset < bytes.Length)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var read = stream.Read(bytes.AsSpan(offset));
+            if (read == 0)
+            {
+                throw new EndOfStreamException("The node input file changed while reading.");
+            }
+            offset += read;
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        if (stream.ReadByte() != -1)
+        {
+            throw new InvalidDataException("The node input file changed while reading.");
+        }
+        return bytes;
+    }
+
+    internal static async Task<byte[]> ReadFileBytesAsync(string path, CancellationToken cancellationToken)
+    {
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+            64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        var bytes = AllocateFileBuffer(stream.Length);
+        var offset = 0;
+        while (offset < bytes.Length)
+        {
+            var read = await stream.ReadAsync(bytes.AsMemory(offset), cancellationToken).ConfigureAwait(false);
+            if (read == 0)
+            {
+                throw new EndOfStreamException("The node input file changed while reading.");
+            }
+            offset += read;
+        }
+        var extra = new byte[1];
+        if (await stream.ReadAsync(extra, cancellationToken).ConfigureAwait(false) != 0)
+        {
+            throw new InvalidDataException("The node input file changed while reading.");
+        }
+        return bytes;
+    }
+
+    private static byte[] AllocateFileBuffer(long length)
+    {
+        if (length > MaxInMemoryBytes)
+        {
+            throw new InvalidDataException("The in-memory node data limit was exceeded. Use a file artifact for large inputs.");
+        }
+        return new byte[checked((int)length)];
+    }
+
+    private static byte[] EncodeText(string text)
+    {
+        if (Encoding.UTF8.GetByteCount(text) > MaxInMemoryBytes)
+        {
+            throw new InvalidDataException("The in-memory node data limit was exceeded. Use a file artifact for large inputs.");
+        }
+        return Encoding.UTF8.GetBytes(text);
     }
 
     /// <summary>

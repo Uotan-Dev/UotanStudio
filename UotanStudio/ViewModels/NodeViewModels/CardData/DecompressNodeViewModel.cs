@@ -36,7 +36,13 @@ public class DecompressNodeViewModel : FlowNodeViewModel
             TypeKey = "Data.Compression.Decompress"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Algorithm", PortType = NodePortType.Text });
+        node.Input.Add(new NodeConnectorViewModel
+        {
+            Title = "Algorithm",
+            PortType = NodePortType.Text,
+            InitialValue = "gzip",
+            Choices = new[] { "gzip", "deflate" }.Select(value => new NodePortChoice(value)).ToArray()
+        });
         node.Output.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
         return node;
     }
@@ -70,41 +76,41 @@ public class DecompressNodeViewModel : FlowNodeViewModel
 
     private void ExecuteDecompress(INodeExecutionContext context)
     {
-        var data = NodeDataUtil.ToBytes(ReadInput("Data"));
+        var data = NodeDataUtil.ToBytes(ReadInput("Data"), context.CancellationToken);
         if (data == null || data.Length == 0)
         {
-            context.Log.Write(LogLevel.Warn, Title, "No Data input.  缺少输入数据。");
-            return;
+            throw new InvalidDataException("No compressed data was provided.");
         }
 
         var algorithm = (Convert.ToString(ReadInput("Algorithm"), CultureInfo.InvariantCulture) ?? "gzip").Trim().ToLowerInvariant();
 
-        byte[] decompressed;
-        try
+        var decompressed = algorithm switch
         {
-            decompressed = algorithm switch
-            {
-                "deflate" => DecompressWith(data, mode => new DeflateStream(mode, CompressionMode.Decompress)),
-                _ => DecompressWith(data, mode => new GZipStream(mode, CompressionMode.Decompress))
-            };
-        }
-        catch (InvalidDataException ex)
-        {
-            context.Log.Write(LogLevel.Warn, Title, $"Decompression failed: {ex.Message}  解压失败。");
-            return;
-        }
-
+            "deflate" => DecompressWith(data, mode => new DeflateStream(mode, CompressionMode.Decompress), context.CancellationToken),
+            "gzip" => DecompressWith(data, mode => new GZipStream(mode, CompressionMode.Decompress), context.CancellationToken),
+            _ => throw new InvalidDataException($"Unsupported compression algorithm '{algorithm}'.")
+        };
         WriteOutput("Data", decompressed);
         context.Log.Write(LogLevel.Info, Title, $"Decompressed {data.Length} -> {decompressed.Length} bytes ({algorithm}).  已解压。");
     }
 
-    private static byte[] DecompressWith(byte[] data, Func<Stream, Stream> factory)
+    private static byte[] DecompressWith(byte[] data, Func<Stream, Stream> factory, CancellationToken cancellationToken)
     {
         using var input = new MemoryStream(data);
         using var output = new MemoryStream();
         using (var stream = factory(input))
         {
-            stream.CopyTo(output);
+            var buffer = new byte[64 * 1024];
+            int read;
+            while ((read = stream.Read(buffer)) != 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (output.Length + read > NodeDataUtil.MaxInMemoryBytes)
+                {
+                    throw new InvalidDataException("The decompressed data exceeds the in-memory node limit.");
+                }
+                output.Write(buffer, 0, read);
+            }
         }
 
         return output.ToArray();

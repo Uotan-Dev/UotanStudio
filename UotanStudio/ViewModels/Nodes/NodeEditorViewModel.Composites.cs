@@ -90,6 +90,12 @@ public partial class NodeEditorViewModel
 
     private ReplaceGraphCommand ApplyCompositePlan(CompositeGraphEditPlan plan)
     {
+        EnsureEditable();
+        var issues = WorkflowGraphValidation.Validate(plan.Nodes, plan.Connections);
+        if (issues.Count > 0)
+        {
+            throw new InvalidDataException(string.Join(Environment.NewLine, issues.Select(issue => issue.DisplayText)));
+        }
         var command = new ReplaceGraphCommand(this, [.. Nodes], [.. Connections], [.. SelectedNodes], plan);
         ExecuteCommand(command);
         return command;

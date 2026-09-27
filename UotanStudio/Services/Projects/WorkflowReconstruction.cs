@@ -20,6 +20,7 @@ internal static class WorkflowReconstruction
                 throw new InvalidDataException("Invalid embedded composite: " + string.Join(Environment.NewLine, errors));
             }
             node = new CompositeNodeViewModel(embedded);
+            node.CustomName = dto.CustomName ?? string.Empty;
             RestoreInstanceId(node, dto, restoreInstanceId);
             return true;
         }
@@ -27,6 +28,7 @@ internal static class WorkflowReconstruction
         {
             if (!preserveUnknown) return false;
             node = new MissingNodeViewModel(dto, $"Node type '{dto.TypeKey}' is unavailable.");
+            node.CustomName = dto.CustomName ?? string.Empty;
             RestoreInstanceId(node, dto, restoreInstanceId);
             RestoreInitialValues(node, dto.InputInitialValues, dto.InputInitialValuesByPortId);
             return true;
@@ -94,31 +96,36 @@ internal static class WorkflowReconstruction
     };
 
     /// <summary>
-    /// Resolves IDs first, then the first matching title. The canvas falls back on a missing port;
-    /// the CLI preserves an ID-matched node and lets the execution engine handle a missing port.
+    /// Resolves explicit identities exactly. Identity-free endpoints must have one unambiguous match.
     /// </summary>
     internal static (FlowNodeViewModel? Node, NodeConnectorViewModel? Port) ResolveEndpoint(
         IEnumerable<FlowNodeViewModel> nodes, IReadOnlyDictionary<string, FlowNodeViewModel> created,
-        string? instanceId, string title, bool output, bool fallbackOnMissingPort, string? portId = null)
+        string? instanceId, string title, bool output, string? portId = null)
     {
-        FlowNodeViewModel? node = null;
-        if (!string.IsNullOrEmpty(instanceId)) created.TryGetValue(instanceId, out node);
-        var port = FindPort(node, portId, title, output);
-        if (node is not null && (!fallbackOnMissingPort || port is not null)) return (node, port);
+        if (!string.IsNullOrWhiteSpace(instanceId))
+        {
+            created.TryGetValue(instanceId, out var node);
+            return (node, FindPort(node, portId, title, output));
+        }
+        (FlowNodeViewModel? Node, NodeConnectorViewModel? Port) result = (null, null);
         foreach (var candidate in nodes)
-            if (FindPort(candidate, portId, title, output) is { } match) return (candidate, match);
-        return (null, null);
+        {
+            if (FindPort(candidate, portId, title, output) is not { } match)
+            {
+                continue;
+            }
+            if (result.Node is not null)
+            {
+                return (null, null);
+            }
+            result = (candidate, match);
+        }
+        return result;
     }
 
     private static NodeConnectorViewModel? FindPort(FlowNodeViewModel? node, string? portId, string title, bool output)
     {
         if (node is null) return null;
-        var ports = output ? node.Output : node.Input;
-        if (!string.IsNullOrWhiteSpace(portId))
-        {
-            var byId = ports.FirstOrDefault(port => string.Equals(port.StableId, portId, StringComparison.Ordinal));
-            if (byId is not null) return byId;
-        }
-        return ports.FirstOrDefault(port => string.Equals(port.Title, title, StringComparison.Ordinal));
+        return WorkflowGraphValidation.ResolvePort(output ? node.Output : node.Input, portId, title);
     }
 }

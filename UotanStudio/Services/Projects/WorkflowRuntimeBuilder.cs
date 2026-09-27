@@ -6,18 +6,20 @@ namespace UotanStudio.Services.Projects;
 /// <summary>Reconstructs an executable workflow without creating an editor or mutating the source snapshot.</summary>
 internal static class WorkflowRuntimeBuilder
 {
-    internal static WorkflowRuntime Build(WorkflowSnapshot snapshot, bool preserveUnknown)
+    internal static WorkflowRuntime Build(WorkflowSnapshot snapshot, bool preserveUnknown,
+        bool restoreInstanceIds = true, bool canvasIdentityComparison = false)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         snapshot.EnsureSupportedVersion();
         var nodes = new List<FlowNodeViewModel>(snapshot.Nodes.Count);
-        var created = new Dictionary<string, FlowNodeViewModel>(StringComparer.Ordinal);
+        var created = new Dictionary<string, FlowNodeViewModel>(
+            canvasIdentityComparison ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         var errors = new List<string>();
 
         foreach (var dto in snapshot.Nodes)
         {
             if (!WorkflowReconstruction.TryCreateNode(dto, out var node, preserveUnknown,
-                    restoreInstanceId: true))
+                    restoreInstanceId: restoreInstanceIds))
             {
                 errors.Add($"Node type '{dto.TypeKey}' is unavailable.");
                 continue;
@@ -27,21 +29,24 @@ internal static class WorkflowRuntimeBuilder
                 dto.InputInitialValuesByPortId);
             node.Location = new Avalonia.Point(dto.X, dto.Y);
             nodes.Add(node);
-            if (!string.IsNullOrWhiteSpace(dto.InstanceId)) created[dto.InstanceId] = node;
+            if (string.IsNullOrWhiteSpace(dto.InstanceId) || !created.TryAdd(dto.InstanceId, node))
+            {
+                errors.Add(LanguageService.Instance.GetString("Node_Graph_InvalidIdentity"));
+            }
         }
 
         Interactions.InteractionSchemaResolver.RefreshFromSnapshot(nodes, created, snapshot);
         var connections = new List<NodeConnection>(snapshot.Connections.Count);
+        var viewConnections = new List<NodeConnectionViewModel>(snapshot.Connections.Count);
         foreach (var dto in snapshot.Connections)
         {
             var (sourceNode, sourcePort) = WorkflowReconstruction.ResolveEndpoint(nodes, created,
-                dto.SourceInstanceId, dto.SourceConnectorTitle, true, false, dto.SourcePortId);
+                dto.SourceInstanceId, dto.SourceConnectorTitle, true, dto.SourcePortId);
             var (targetNode, targetPort) = WorkflowReconstruction.ResolveEndpoint(nodes, created,
-                dto.TargetInstanceId, dto.TargetConnectorTitle, false, false, dto.TargetPortId);
+                dto.TargetInstanceId, dto.TargetConnectorTitle, false, dto.TargetPortId);
             if (sourceNode is null || sourcePort is null || targetNode is null || targetPort is null)
             {
-                errors.Add($"Connection '{dto.SourceInstanceId}:{dto.SourcePortId ?? dto.SourceConnectorTitle}' to "
-                    + $"'{dto.TargetInstanceId}:{dto.TargetPortId ?? dto.TargetConnectorTitle}' cannot be resolved.");
+                errors.Add(LanguageService.Instance.GetString("Node_Graph_MissingEndpoint"));
                 continue;
             }
 
@@ -49,12 +54,16 @@ internal static class WorkflowRuntimeBuilder
             {
                 SourceInstanceId = sourceNode.InstanceId,
                 SourceConnector = sourcePort.Title,
+                SourcePortId = sourcePort.StableId,
                 TargetInstanceId = targetNode.InstanceId,
-                TargetConnector = targetPort.Title
+                TargetConnector = targetPort.Title,
+                TargetPortId = targetPort.StableId
             });
+            viewConnections.Add(new(sourcePort, targetPort));
         }
 
-        return new(nodes, connections, created, errors);
+        errors.AddRange(WorkflowGraphValidation.Validate(nodes, viewConnections).Select(issue => issue.DisplayText));
+        return new(nodes, connections, created, errors, viewConnections);
     }
 }
 
@@ -62,4 +71,5 @@ internal sealed record WorkflowRuntime(
     IReadOnlyList<FlowNodeViewModel> Nodes,
     IReadOnlyList<NodeConnection> Connections,
     IReadOnlyDictionary<string, FlowNodeViewModel> NodesBySerializedId,
-    IReadOnlyList<string> Errors);
+    IReadOnlyList<string> Errors,
+    IReadOnlyList<NodeConnectionViewModel> ViewConnections);

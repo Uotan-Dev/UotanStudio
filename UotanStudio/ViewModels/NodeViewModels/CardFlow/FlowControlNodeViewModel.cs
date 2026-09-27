@@ -64,6 +64,7 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
             TypeKey = "Flow.Condition.Branch"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Condition", PortType = NodePortType.Boolean });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow, MaxConnections = 1 });
         node.Output.Add(new NodeConnectorViewModel { Title = "True", PortType = NodePortType.Flow });
         node.Output.Add(new NodeConnectorViewModel { Title = "False", PortType = NodePortType.Flow });
         return node;

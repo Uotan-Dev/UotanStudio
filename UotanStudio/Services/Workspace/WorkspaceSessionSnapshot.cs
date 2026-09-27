@@ -41,7 +41,7 @@ internal static class WorkspaceSessionCapture
     internal static bool IsDocument(IDockable item) => item switch
     {
         FileViewModel or FirmwareInfoViewModel or FileManagerEditorViewModel or DtbEditorViewModel
-            or DexEditorViewModel or ElfInfoViewModel or ManifestEditorViewModel or ArscEditorViewModel or HexEditorViewModel
+            or DexEditorViewModel or ElfInfoViewModel or QualcommImageViewModel or ManifestEditorViewModel or ArscEditorViewModel or HexEditorViewModel
             or ApkEditorViewModel or PartitionEditorViewModel or CompareViewModel => true,
         _ => false
     };
@@ -76,6 +76,7 @@ internal static class WorkspaceSessionCapture
                 DtbEditorViewModel file => ("Dtb", file.FilePath),
                 DexEditorViewModel file => ("Dex", file.FilePath),
                 ElfInfoViewModel file => ("Elf", file.FilePath),
+                QualcommImageViewModel file => ("Qualcomm", file.FilePath),
                 ManifestEditorViewModel file => ("Manifest", file.FilePath),
                 ArscEditorViewModel file => ("Arsc", file.FilePath),
                 HexEditorViewModel file => ("Hex", file.FilePath),

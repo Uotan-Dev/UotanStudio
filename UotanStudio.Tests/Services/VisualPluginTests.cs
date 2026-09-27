@@ -68,7 +68,7 @@ public sealed class VisualPluginTests
 
         Assert.Equal("value", loaded.Graph.Nodes[0].OutputPorts[0].Id);
         Assert.Equal("value", Assert.Single(loaded.Graph.Connections).SourcePortId);
-        Assert.Equal("input", Assert.Single(loaded.Graph.Connections).TargetPortId);
+        Assert.Equal("message", Assert.Single(loaded.Graph.Connections).TargetPortId);
     }
 
     [Fact]
@@ -497,7 +497,7 @@ public sealed class VisualPluginTests
                 {
                     InstanceId = "target",
                     TypeKey = "Feedback.Log.Write",
-                    InputPorts = [new NodePortDto { Id = "input", Title = "Input", PortType = "Text" }]
+                    InputPorts = [new NodePortDto { Id = "message", Title = "Message", PortType = "Text" }]
                 }
             ],
             Connections =
@@ -508,8 +508,8 @@ public sealed class VisualPluginTests
                     SourcePortId = "value",
                     SourceConnectorTitle = "Value",
                     TargetInstanceId = "target",
-                    TargetPortId = "input",
-                    TargetConnectorTitle = "Input"
+                    TargetPortId = "message",
+                    TargetConnectorTitle = "Message"
                 }
             ]
         }

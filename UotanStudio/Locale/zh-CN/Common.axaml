@@ -292,9 +292,12 @@
     <x:String x:Key="Splash_ApplyingSettings">正在应用主题、语言和服务设置...</x:String>
     <x:String x:Key="Splash_OpeningFiles">正在打开启动文件...</x:String>
     <x:String x:Key="Splash_Ready">初始化完成</x:String>
-    <x:String x:Key="Splash_Scanning">正在发现 USB、ADB 和 HDC 设备...</x:String>
+    <x:String x:Key="Splash_Scanning">正在扫描设备...</x:String>
     <x:String x:Key="Splash_FoundDevices">发现 {0} 台设备</x:String>
     <x:String x:Key="Splash_Preparing">正在准备主界面...</x:String>
+    <x:String x:Key="Splash_Services">正在加载工作区服务...</x:String>
+    <x:String x:Key="Splash_Nodes">正在准备节点编辑器...</x:String>
+    <x:String x:Key="Splash_Workspace">正在创建工作区布局...</x:String>
 
     <!-- MainWindow -->
     <x:String x:Key="MainWindow_Title">UotanStudio 固件工具箱</x:String>
@@ -324,6 +327,17 @@
     <x:String x:Key="Explorer_NewFile">新建文件</x:String>
     <x:String x:Key="Explorer_NewFolder">新建文件夹</x:String>
     <x:String x:Key="Explorer_Unpack">解包/解压</x:String>
+    <x:String x:Key="Explorer_SplitVolumes">分卷 DAT / TWRP</x:String>
+    <x:String x:Key="Explorer_SplitImport">合并导入为单一文件...</x:String>
+    <x:String x:Key="Explorer_SplitReconstruct">重建完整 DAT 镜像...</x:String>
+    <x:String x:Key="Explorer_SplitRequiresNewDat">重建完整镜像需要带编号的 new-data 卷及同组 transfer list。补丁卷只能导入为补丁文件。</x:String>
+    <x:String x:Key="Explorer_SplitRequiresTransferList">导入 DAT 卷需要同组 transfer list。</x:String>
+    <x:String x:Key="Explorer_SplitOverwrite">是否替换已有输出文件？如果操作失败或取消，原文件内容会保留。&#xA;{0}</x:String>
+    <x:String x:Key="Explorer_SplitWorking">正在处理分卷...</x:String>
+    <x:String x:Key="Explorer_SplitBytes">{0:N0} / {1:N0} 字节</x:String>
+    <x:String x:Key="Explorer_SplitPercent">已完成 {0:P0}</x:String>
+    <x:String x:Key="Explorer_SplitDone">已生成输出：{0}</x:String>
+    <x:String x:Key="Explorer_SplitCancelled">分卷操作已取消，已有输出未更改。</x:String>
     <x:String x:Key="Explorer_Rename">重命名</x:String>
     <x:String x:Key="Explorer_CopyFullPath">复制完整路径</x:String>
     <x:String x:Key="Explorer_OpenInFileExplorer">在文件资源管理器中打开</x:String>
@@ -688,6 +702,7 @@
     <x:String x:Key="FirmwareField_PartitionHash">分区哈希</x:String>
     <x:String x:Key="Explorer_OpenAsAuto">自动识别</x:String>
     <x:String x:Key="Explorer_OpenAsElf">ELF 二进制信息</x:String>
+    <x:String x:Key="Explorer_OpenAsQualcomm">Qualcomm 镜像分析</x:String>
     <x:String x:Key="Explorer_OpenAsPartition">分区表</x:String>
     <x:String x:Key="UserError_OperationFailed">操作未完成。请查看错误详情。</x:String>
     <x:String x:Key="UserError_Details">错误详情（原始信息）：</x:String>

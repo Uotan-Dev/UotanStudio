@@ -25,6 +25,34 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     private string _nodeValue = string.Empty;
     private string _selectedImage = string.Empty;
 
+    /// <summary>Prevents authoring changes while this node belongs to an executing editor.</summary>
+    internal bool IsEditingLocked { get; set; }
+
+    /// <summary>Last execution or validation error, without changing the execution result.</summary>
+    public string ExecutionError
+    {
+        get;
+        internal set => SetProperty(ref field, value);
+    } = string.Empty;
+
+    /// <summary>Inputs currently exposed on the canvas; persisted inputs remain unchanged.</summary>
+    public ObservableCollection<NodeConnectorViewModel> CanvasInputs { get; } = [];
+
+    internal void RefreshCanvasInputs(bool compact)
+    {
+        var visible = Input.Where(port => !compact || port.HasConnectedSource
+            || !port.IsAdvanced && port.IsVisibleWhen?.Invoke(this) != false).ToArray();
+        if (CanvasInputs.SequenceEqual(visible))
+        {
+            return;
+        }
+        CanvasInputs.Clear();
+        foreach (var port in visible)
+        {
+            CanvasInputs.Add(port);
+        }
+    }
+
     /// <summary>
     /// <para>节点实例唯一标识。</para>
     /// Unique identifier of the node instance.
@@ -38,7 +66,13 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     public string Title
     {
         get => _title;
-        set => SetProperty(ref _title, value);
+        set
+        {
+            if (!IsEditingLocked)
+            {
+                SetProperty(ref _title, value);
+            }
+        }
     }
 
     private string? _customName;
@@ -55,7 +89,7 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
         get => _customName ?? string.Empty;
         set
         {
-            if (SetProperty(ref _customName, value))
+            if (!IsEditingLocked && SetProperty(ref _customName, value))
             {
                 OnPropertyChanged(nameof(DisplayHeader));
             }
@@ -83,7 +117,13 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     public Point Location
     {
         get => _location;
-        set => SetProperty(ref _location, value);
+        set
+        {
+            if (!IsEditingLocked)
+            {
+                SetProperty(ref _location, value);
+            }
+        }
     }
 
     /// <summary>
@@ -214,7 +254,13 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     public virtual string NodeValueType
     {
         get => _nodeValueType;
-        set => SetProperty(ref _nodeValueType, value);
+        set
+        {
+            if (!IsEditingLocked)
+            {
+                SetProperty(ref _nodeValueType, value);
+            }
+        }
     }
 
     /// <summary>
@@ -225,7 +271,13 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     public virtual string NodeValue
     {
         get => _nodeValue;
-        set => SetProperty(ref _nodeValue, value);
+        set
+        {
+            if (!IsEditingLocked)
+            {
+                SetProperty(ref _nodeValue, value);
+            }
+        }
     }
 
     /// <summary>
@@ -251,7 +303,13 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     public virtual string SelectedImage
     {
         get => _selectedImage;
-        set => SetProperty(ref _selectedImage, value);
+        set
+        {
+            if (!IsEditingLocked)
+            {
+                SetProperty(ref _selectedImage, value);
+            }
+        }
     }
 
     /// <summary>
@@ -297,7 +355,6 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
         _category = category;
         Input.CollectionChanged += (_, e) => SetConnectorDirection(e, isInput: true);
         Output.CollectionChanged += (_, e) => SetConnectorDirection(e, isInput: false);
-        LanguageService.Instance.LanguageChanged += OnLanguageChanged;
     }
 
     private static void SetConnectorDirection(NotifyCollectionChangedEventArgs e, bool isInput)
@@ -306,12 +363,17 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
         foreach (NodeConnectorViewModel connector in e.NewItems)
         {
             connector.IsInput = isInput;
+            if (isInput && connector.PortType != NodePortType.Flow && connector.MaxConnections == 0)
+            {
+                connector.MaxConnections = 1;
+            }
         }
     }
 
-    private void OnLanguageChanged(object? sender, EventArgs e)
+    internal void RefreshLocalization()
     {
         OnPropertyChanged(nameof(LocalizedTitle));
+        OnPropertyChanged(nameof(DisplayHeader));
         foreach (var connector in Input.Concat(Output))
             connector.RefreshLocalization();
     }

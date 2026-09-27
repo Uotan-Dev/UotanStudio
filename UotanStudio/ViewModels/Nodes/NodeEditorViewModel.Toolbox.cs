@@ -28,7 +28,8 @@ public partial class NodeEditorViewModel
         string[] categories = ["Inputs", "Data", "Validation", "Configuration", "Firmware", "Build", "Device", "Flow", "Interaction", "Composite"];
         foreach (var category in categories)
         {
-            var descriptors = NodeFactoryRegistrar.Descriptors.Where(descriptor => descriptor.CategoryPath == category).ToArray();
+            var descriptors = NodeFactoryRegistrar.Descriptors.Where(descriptor =>
+                descriptor.IsToolboxVisible && descriptor.CategoryPath == category).ToArray();
             if (descriptors.Length == 0)
             {
                 continue;

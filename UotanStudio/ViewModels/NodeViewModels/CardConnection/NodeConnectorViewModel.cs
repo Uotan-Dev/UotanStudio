@@ -16,8 +16,23 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     private object? _data;
     private object? _initialValue;
 
+    internal bool IsEditingLocked { get; set; }
+
     /// <summary>Whether the current invocation obtains this input from an upstream connection.</summary>
     internal bool HasRuntimeSource { get; set; }
+
+    internal bool IsRuntimeSensitive
+    {
+        get;
+        set
+        {
+            if (field != value)
+            {
+                field = value;
+                OnPropertyChanged(nameof(DataPreview));
+            }
+        }
+    }
 
     /// <summary>
     /// <para>获取或设置连接器的唯一标识符。</para>
@@ -61,7 +76,7 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     {
         get
         {
-            if (IsSensitive && Data is not null)
+            if ((IsSensitive || IsRuntimeSensitive) && Data is not null)
             {
                 return LanguageService.Instance.GetString("Interaction_SensitiveValue");
             }
@@ -96,7 +111,7 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
         get => _initialValue;
         set
         {
-            if (SetProperty(ref _initialValue, value))
+            if (!IsEditingLocked && SetProperty(ref _initialValue, value))
             {
                 OnPropertyChanged(nameof(SelectedChoice));
                 OnPropertyChanged(nameof(InitialNumberValue));
@@ -256,6 +271,9 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// <summary>Schema-provided display label, independent of runtime endpoint identity.</summary>
     public string? DisplayName { get; set; }
 
+    /// <summary>Localized label override without changing a persisted port title or identity.</summary>
+    public string? DisplayResourceKey { get; init; }
+
     /// <summary>Gets the localized connector name used by the node editor.</summary>
     public string LocalizedTitle
     {
@@ -265,7 +283,7 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
             {
                 return DisplayName;
             }
-            var key = "Node_Conn_" + GetResourceSuffix(Title);
+            var key = DisplayResourceKey ?? "Node_Conn_" + GetResourceSuffix(Title);
             var localized = LanguageService.Instance.GetString(key);
             return string.Equals(localized, key, StringComparison.Ordinal) ? Title : localized;
         }

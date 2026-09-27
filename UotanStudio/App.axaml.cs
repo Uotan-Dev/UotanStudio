@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -142,7 +143,17 @@ public partial class App : Application
     /// <param name="splash">The splash view model receiving status updates. <para>接收状态更新的启动窗视图模型。</para></param>
     private async Task RunStartupSequenceAsync(MainSplashWindow splashWindow, SplashViewModel splash)
     {
-        splash.StatusText = LanguageService.Instance.GetString("Splash_Settings");
+        var stageTimer = Stopwatch.StartNew();
+        var previousPhase = SplashPhase.Initializing;
+        async Task ReportAsync(SplashPhase phase)
+        {
+            LogService.Instance.Write(LogLevel.Info, "Startup",
+                $"{previousPhase}: {stageTimer.ElapsedMilliseconds} ms; starting {phase}.");
+            await splash.AdvanceAsync(phase);
+            previousPhase = phase;
+            stageTimer.Restart();
+        }
+        await ReportAsync(SplashPhase.Settings);
         // 1) 后台读取持久化设置（文件 I/O 不应阻塞 UI 线程）。
         var settings = await Task.Run(() => SettingsPersistenceService.Instance.LoadSettings()).ConfigureAwait(true);
         global::UotanStudio.Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
@@ -151,36 +162,35 @@ public partial class App : Application
         // 2) 先应用持久化主题与语言（须在主窗口创建前完成，使主窗口拿到正确的语言/主题；
         //    此时启动窗已显示，DynamicResource 会自动刷新启动窗文案），随后的状态文本
         //    即可用持久化语言解析。
+        await ReportAsync(SplashPhase.ApplyingSettings);
         ApplyTheme(settings.ThemeMode);
         ApplyLanguage(settings.CultureName);
-
-        splash.StatusText = LanguageService.Instance.GetString("Splash_ApplyingSettings");
+        await splash.AdvanceAsync(SplashPhase.ApplyingSettings);
         // 按持久化设置启动内嵌 MCP 服务器（失败只记录日志，不阻断启动）。
         // Start the embedded MCP server per the persisted settings (failures only log, never block startup).
         McpExposureService.Instance.Apply(settings.McpExposeEnabled, settings.McpExposePort);
 
-        splash.StatusText = LanguageService.Instance.GetString("Splash_Scanning");
+        await ReportAsync(SplashPhase.Scanning);
         LogService.Instance.Write(LogLevel.Info, "App", "Startup sequence: initial USB scan starting.");
 
         // 3) 启动设备监视并执行首次全局 USB 扫描，整体放后台线程：Start 内含 SetupAPI 初次
         //    全量快照与 adb server 探测（可达数百毫秒），不能阻塞 UI 线程（启动窗会冻结）。
         var scanTask = _desktopServices!.StartAndScanAsync();
 
-        // 最小可见时长与扫描并行计时，缩短总启动耗时。
-        var minShowTask = Task.Delay(600);
-
         var devices = await scanTask.ConfigureAwait(true);
 
-        splash.StatusText = LanguageService.Instance.GetString("Splash_Preparing");
-        // 4) 扫描完成、启动窗仍可见时，在 UI 线程预构建主窗口（含全部子视图与 ViewModel，
-        //    把构造开销藏到启动窗显示期，消除过渡到主窗体时的卡顿）。
-        //    DataContext 由 MainWindow 构造函数自行设置，这里无需再赋值。
+        // UI-owned objects stay on the dispatcher; render each stage before constructing the next component.
+        // UI 对象仍在调度线程构建；每个阶段先刷新启动窗，再创建下一组组件。
+        MainViewModel? preparedModel = null;
         try
         {
-            splashWindow.PreparedMainWindow = new MainWindow();
+            preparedModel = new MainViewModel(await ShellComposition.CreateAsync(ReportAsync, settings.CultureName));
+            await ReportAsync(SplashPhase.Window);
+            splashWindow.PreparedMainWindow = new MainWindow(preparedModel);
         }
         catch (Exception ex)
         {
+            preparedModel?.Dispose();
             LogService.Instance.Write(LogLevel.Error, "App", $"Pre-building main window failed: {ex.Message}");
         }
 
@@ -188,7 +198,7 @@ public partial class App : Application
         // Apply startup file-association inputs: open a solution / import files (failures only log, never block startup).
         if (StartupFiles.Length > 0)
         {
-            splash.StatusText = LanguageService.Instance.GetString("Splash_OpeningFiles");
+            await ReportAsync(SplashPhase.OpeningFiles);
             await ApplyStartupFilesAsync(splashWindow, StartupFiles).ConfigureAwait(true);
         }
 
@@ -197,13 +207,9 @@ public partial class App : Application
 
         if (splashWindow.PreparedMainWindow is not null)
         {
-            splash.StatusText = LanguageService.Instance.GetString("Splash_Ready");
-            splash.IsInitializing = false;
+            await ReportAsync(SplashPhase.Ready);
+            await splashWindow.PresentCompletionAsync();
         }
-        await minShowTask.ConfigureAwait(true);
-        // Let the completed bar render before the main window's first layout occupies the UI thread.
-        if (!splash.IsInitializing)
-            await Task.Delay(32).ConfigureAwait(true);
     }
 
     /// <summary>Releases application-wide monitoring only after desktop shutdown has been accepted.</summary>

@@ -68,15 +68,16 @@ public sealed class CompositeBoundaryTests
         var active = Node("active");
         var exclusive = Node("exclusive");
         var join = Node("join");
-        NodeConnection Edge(FlowNodeViewModel source, FlowNodeViewModel target) => new()
+        join.Input.Add(new NodeConnectorViewModel { PortId = "active", Title = "Active", PortType = NodePortType.Text });
+        NodeConnection Edge(FlowNodeViewModel source, FlowNodeViewModel target, string input = "Value") => new()
         {
             SourceInstanceId = source.InstanceId,
             SourceConnector = "Value",
             TargetInstanceId = target.InstanceId,
-            TargetConnector = "Value"
+            TargetConnector = input
         };
         var result = await new NodeExecutionEngine(new SilentLog()).ExecuteAsync([inactive, active, exclusive, join],
-            [Edge(inactive, exclusive), Edge(inactive, join), Edge(active, join)], TestContext.Current.CancellationToken,
+            [Edge(inactive, exclusive), Edge(inactive, join), Edge(active, join, "Active")], TestContext.Current.CancellationToken,
             new NodeExecutionOptions { EntryActivation = new Dictionary<string, bool> { [inactive.InstanceId] = false, [active.InstanceId] = true } });
 
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);

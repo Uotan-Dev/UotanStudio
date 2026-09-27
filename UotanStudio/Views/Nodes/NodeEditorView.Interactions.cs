@@ -31,11 +31,21 @@ public partial class NodeEditorView
 
     private void BindInteractionHost()
     {
+        if (_interactionEditor is not null)
+        {
+            _interactionEditor.ViewportRequested -= OnViewportRequested;
+            _interactionEditor.InsertionLocationProvider = null;
+        }
         if (_interactionEditor is not null && ReferenceEquals(_interactionEditor.Interactions, WorkflowInteractionHost.Desktop))
         {
             _interactionEditor.Interactions = UnsupportedWorkflowInteractionService.Instance;
         }
         _interactionEditor = _interactionAttached ? DataContext as NodeEditorViewModel : null;
+        if (_interactionEditor is not null)
+        {
+            _interactionEditor.ViewportRequested += OnViewportRequested;
+            _interactionEditor.InsertionLocationProvider = GetInsertionLocation;
+        }
         if (_interactionEditor is not null && ReferenceEquals(_interactionEditor.Interactions, UnsupportedWorkflowInteractionService.Instance))
         {
             _interactionEditor.Interactions = WorkflowInteractionHost.Desktop;

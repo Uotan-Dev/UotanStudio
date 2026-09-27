@@ -16,8 +16,12 @@
             <TextBlock Text="{Binding StatusText}"
                        FontSize="12" Opacity="0.7"
                        HorizontalAlignment="Center" />
-            <ProgressBar IsIndeterminate="{Binding IsInitializing}" Value="100"
-                         Maximum="100" Height="4" MinWidth="320" />
+            <Grid Height="4" MinWidth="320">
+                <ProgressBar x:Name="BusyProgress" IsIndeterminate="True"
+                             IsVisible="{Binding IsInitializing}" Height="4" />
+                <ProgressBar x:Name="CompletedProgress" IsIndeterminate="False"
+                             IsVisible="{Binding !IsInitializing}" Value="100" Maximum="100" Height="4" />
+            </Grid>
         </StackPanel>
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
             <Image Source="/Assets/UotanToolbox.png" Width="72" Height="72" />

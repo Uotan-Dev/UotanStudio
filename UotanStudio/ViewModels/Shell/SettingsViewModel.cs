@@ -328,14 +328,18 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// <para>初始化设置视图模型，从持久化服务加载设置并初始化所有属性。</para>
     /// Initializes the settings view model, loading settings from the persistence service and initializing all properties.
     /// </summary>
-    public SettingsViewModel()
+    public SettingsViewModel() : this(SettingsPersistenceService.Instance.LoadSettings(), applyLanguage: true)
     {
-        _appSettings = SettingsPersistenceService.Instance.LoadSettings();
+    }
+
+    internal SettingsViewModel(AppSettings settings, bool applyLanguage)
+    {
+        _appSettings = settings;
 
         // 初始化语言列表（从 LanguageService 动态获取）
         Languages = new ObservableCollection<LanguageInfo>(LanguageService.Instance.AvailableLanguages);
 
-        InitializeFromAppSettings(_appSettings);
+        InitializeFromAppSettings(_appSettings, applyLanguage);
 
         LanguageService.Instance.LanguageChanged += OnLanguageChanged;
         LanguagePackRegistry.Instance.LanguagePackChanged += OnLanguagePackChanged;
@@ -349,7 +353,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// <para>要加载的应用程序设置实例。</para>
     /// The application settings instance to load from.
     /// </param>
-    private void InitializeFromAppSettings(AppSettings settings)
+    /// <param name="applyLanguage">Whether the loaded language still needs to be applied.</param>
+    private void InitializeFromAppSettings(AppSettings settings, bool applyLanguage = true)
     {
         global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers = settings.FirmwareParallelism;
         global::UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility = settings.ErofsLegacyCompatibility;
@@ -367,8 +372,11 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         // (including first-chance exceptions) stay filtered behind Info after a restart.
         LogService.Instance.ApplyDebugMode(_debugMode);
 
-        // Apply language based on loaded preference
-        ApplyLanguageInfo(_selectedLanguage);
+        // Startup has already applied this preference before constructing localized shell components.
+        if (applyLanguage)
+        {
+            ApplyLanguageInfo(_selectedLanguage);
+        }
 
         // 初始化 MCP 设置：连接列表按条目复制，避免编辑直接改写持久化实例。
         // Initialize the MCP settings: copy the connections so edits never mutate the persisted instance.

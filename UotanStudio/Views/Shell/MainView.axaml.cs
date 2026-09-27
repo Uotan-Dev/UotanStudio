@@ -4,6 +4,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.ViewModels.Shell;
+using UotanStudio.Views.Nodes;
 
 namespace UotanStudio.Views.Shell;
 
@@ -17,14 +18,61 @@ public partial class MainView : UserControl
     private const int NodeEditorTabIndex = 6;
     private const int SettingsTabIndex = 7;
 
-    public MainView()
+    private readonly Func<int, Control> _createPage;
+
+    public MainView() : this(CreatePage) { }
+
+    internal MainView(Func<int, Control> createPage)
     {
+        _createPage = createPage;
         InitializeComponent();
         // 默认选中 Workspace Tab（Flash=3, Workspace=4, Delivery=5, NodeEditor=6, Settings=7）。
         MainTabs.SelectedIndex = WorkspaceTabIndex;
+        MainTabs.PropertyChanged += (_, change) =>
+        {
+            if (change.Property == TabbedPage.SelectedIndexProperty)
+            {
+                EnsureSelectedPage();
+            }
+        };
+        MainTabs.SelectionChanged += OnSelectionChanged;
 
         // 初始同步：告知订阅者当前激活面板为 Workspace（与默认 SelectedIndex 对应）
         SendActiveTabChanged(MainTabs.SelectedIndex);
+    }
+
+    private static Control CreatePage(int index) => index switch
+    {
+        FlashTabIndex => new FlashView(),
+        DeliveryTabIndex => new DeliveryView(),
+        NodeEditorTabIndex => new NodeEditorView(),
+        SettingsTabIndex => new SettingsView(),
+        _ => throw new ArgumentOutOfRangeException(nameof(index))
+    };
+
+    private void EnsureSelectedPage()
+    {
+        var page = MainTabs.SelectedIndex switch
+        {
+            FlashTabIndex => FlashTab,
+            DeliveryTabIndex => DeliveryTab,
+            NodeEditorTabIndex => NodeEditorTab,
+            SettingsTabIndex => SettingsTab,
+            _ => null
+        };
+        if (page is not null && page.Content is null)
+        {
+            page.Content = _createPage(MainTabs.SelectedIndex);
+        }
+    }
+
+    private void RefreshDelivery()
+    {
+        EnsureSelectedPage();
+        if (DeliveryTab.Content is DeliveryView delivery)
+        {
+            delivery.Refresh();
+        }
     }
 
     /// <summary>
@@ -46,7 +94,7 @@ public partial class MainView : UserControl
                 _ => MainTabs.SelectedIndex
             };
             if (MainTabs.SelectedIndex == index && message.Target == NavigationTarget.Delivery)
-                DeliveryPage.Refresh();
+                RefreshDelivery();
             else MainTabs.SelectedIndex = index;
         });
     }
@@ -59,8 +107,12 @@ public partial class MainView : UserControl
     /// <param name="e"><para>切换事件参数。</para>The selection changed args.</param>
     private void OnSelectionChanged(object? sender, PageSelectionChangedEventArgs e)
     {
+        EnsureSelectedPage();
         SendActiveTabChanged(MainTabs.SelectedIndex);
-        if (MainTabs.SelectedIndex == DeliveryTabIndex) DeliveryPage.Refresh();
+        if (MainTabs.SelectedIndex == DeliveryTabIndex)
+        {
+            RefreshDelivery();
+        }
     }
 
     /// <summary>
@@ -86,7 +138,6 @@ public partial class MainView : UserControl
     {
         base.OnAttachedToVisualTree(e);
         WeakReferenceMessenger.Default.Register<NavigateToTabMessage>(this, OnNavigateToTab);
-        MainTabs.SelectionChanged += OnSelectionChanged;
         WeakReferenceMessenger.Default.Register<MainView, OpenDocumentSearchMessage>(this, static (view, message) =>
         {
             view.MainTabs.SelectedIndex = WorkspaceTabIndex;
@@ -104,7 +155,6 @@ public partial class MainView : UserControl
     {
         WeakReferenceMessenger.Default.Unregister<NavigateToTabMessage>(this);
         WeakReferenceMessenger.Default.Unregister<OpenDocumentSearchMessage>(this);
-        MainTabs.SelectionChanged -= OnSelectionChanged;
         base.OnDetachedFromVisualTree(e);
     }
 }

@@ -123,7 +123,7 @@ public sealed class CompositeNodeViewModel : FlowNodeViewModel
                     throw new InvalidOperationException($"Composite input '{definition.Id}' references a missing internal port.");
                 target.InitialValue = value;
                 target.Data = value;
-                target.IsSensitive |= source.IsSensitive;
+                target.IsSensitive |= source.IsSensitive || source.IsRuntimeSensitive;
             }
         }
     }
@@ -200,7 +200,7 @@ public sealed class CompositeNodeViewModel : FlowNodeViewModel
             target.Data = node.ExecutionStatus == NodeExecutionStatus.Succeeded
                 ? source.PortType == NodePortType.Flow ? source.Data ?? true : source.Data
                 : source.PortType == NodePortType.Flow ? false : null;
-            target.IsSensitive |= source.IsSensitive;
+            target.IsRuntimeSensitive |= source.IsSensitive || source.IsRuntimeSensitive;
         }
     }
 

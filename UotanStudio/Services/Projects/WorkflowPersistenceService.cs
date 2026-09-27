@@ -1,3 +1,4 @@
+using System.Text.Json;
 using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Services.Projects;
@@ -5,6 +6,31 @@ namespace UotanStudio.Services.Projects;
 /// <summary>Desktop node-to-data conversion; file persistence is provided by the project library.</summary>
 public static class WorkflowPersistenceService
 {
+    internal static WorkflowSnapshot CloneForEditing(WorkflowSnapshot snapshot)
+    {
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, WorkflowJsonContext.Default.WorkflowSnapshot);
+        var clone = JsonSerializer.Deserialize(bytes, WorkflowJsonContext.Default.WorkflowSnapshot)!;
+        RestoreResourceSources(snapshot, clone);
+        return clone;
+    }
+
+    private static void RestoreResourceSources(WorkflowSnapshot source, WorkflowSnapshot target)
+    {
+        for (var index = 0; index < source.Nodes.Count; index++)
+        {
+            if (source.Nodes[index].CompositePackage is not { } original
+                || target.Nodes[index].CompositePackage is not { } copy)
+            {
+                continue;
+            }
+            // These capabilities come only from already loaded objects, never from serialized input.
+            copy.BundlePath = original.BundlePath;
+            copy.BundleRoot = original.BundleRoot;
+            copy.Assets = original.Assets.Select(asset => asset.Snapshot()).ToList();
+            RestoreResourceSources(original.Graph, copy.Graph);
+        }
+    }
+
     public static Task<bool> SaveAsync(string path, IReadOnlyList<FlowNodeViewModel> nodes,
         IReadOnlyList<NodeConnectionViewModel> connections, CancellationToken cancellationToken = default)
         => WorkflowFile.SaveAsync(path, new() { Nodes = BuildNodeDtos(nodes), Connections = BuildConnectionDtos(nodes, connections) }, cancellationToken);
@@ -44,18 +70,21 @@ public static class WorkflowPersistenceService
         {
             // Membership in Input is authoritative even before the node view initializes IsInput.
             if (connector.IsSensitive || connector.InitialValue is null
-                || connector.PortType is not (NodePortType.Path or NodePortType.Text or NodePortType.Number or NodePortType.Boolean))
+                || !node.IsUnavailable && connector.PortType is not (NodePortType.Path or NodePortType.Text or NodePortType.Number or NodePortType.Boolean))
             {
                 continue;
             }
 
             var text = System.Convert.ToString(connector.InitialValue, System.Globalization.CultureInfo.InvariantCulture);
-            if (string.IsNullOrEmpty(text))
+            if (text is null)
             {
                 continue;
             }
 
-            (map ??= []).Add(useStableIds ? connector.StableId : connector.Title, text);
+            if (useStableIds || node.Input.Count(port => port.Title == connector.Title) == 1)
+            {
+                (map ??= []).Add(useStableIds ? connector.StableId : connector.Title, text);
+            }
         }
 
         return map;

@@ -18,9 +18,9 @@ namespace UotanStudio.Views.Nodes;
 public partial class NodeEditorView : UserControl
 {
     /// <summary><para>三栏在正常宽度下的最小宽度（像素）。</para>Pane minimums in pixels at normal widths.</summary>
-    private const double LeftPaneMinimum = 150;
+    private const double LeftPaneMinimum = 200;
     private const double CenterPaneMinimum = 200;
-    private const double RightPaneMinimum = 150;
+    private const double RightPaneMinimum = 280;
     private const double ConnectionHitTestThickness = 10;
 
     private bool _draggingLeft;
@@ -46,6 +46,7 @@ public partial class NodeEditorView : UserControl
     public NodeEditorView()
     {
         InitializeComponent();
+        AddHandler(KeyDownEvent, OnLocalEditorKeyDown, RoutingStrategies.Bubble);
         // 订阅画布选中变更：NodifyEditor 内部维护 SelectedItems，需在此同步到 ViewModel
         // Subscribe to canvas selection changes: NodifyEditor keeps its own SelectedItems, so sync to the ViewModel here.
         Editor.SelectionChanged += OnEditorSelectionChanged;
@@ -228,6 +229,11 @@ public partial class NodeEditorView : UserControl
     /// <summary><para>把当前生效的最小宽度应用到列定义（面板尺寸变化时调用）。</para>Applies the effective minimums to the column definitions (called when the pane size changes).</summary>
     private void ApplyPaneMinimums()
     {
+        UpdateResponsivePanes();
+        if (_isNarrowLayout)
+        {
+            return;
+        }
         var columns = PaneLayout.ColumnDefinitions;
         if (columns.Count < 5)
         {
@@ -378,11 +384,12 @@ public partial class NodeEditorView : UserControl
 
         if (sender is Button button && button.DataContext is NodeToolboxItem item)
         {
-            if (DataContext is NodeEditorViewModel vm)
+            if (DataContext is NodeEditorViewModel { CanEditGraph: true } vm)
             {
                 var node = item.CreateNode();
                 vm.AddNode(node);
                 vm.RecordToolboxUse(item.TypeKey);
+                vm.SetSelection([node]);
             }
         }
     }
@@ -635,6 +642,7 @@ public partial class NodeEditorView : UserControl
     private void OnCanvasDragOver(object? sender, DragEventArgs e)
     {
         if (DataContext is not NodeEditorViewModel vm
+            || !vm.CanEditGraph
             || ReadNodeDragPayload(e.DataTransfer) is not { } typeKey
             || FindToolboxItem(vm, typeKey) is not { } item)
         {
@@ -657,6 +665,7 @@ public partial class NodeEditorView : UserControl
     {
         HideNodeDropPreview();
         if (DataContext is not NodeEditorViewModel vm
+            || !vm.CanEditGraph
             || ReadNodeDragPayload(e.DataTransfer) is not { } typeKey)
         {
             return;
@@ -684,6 +693,7 @@ public partial class NodeEditorView : UserControl
         {
             _dropPreviewTypeKey = item.TypeKey;
             _dropPreviewNode = item.CreateNode();
+            _dropPreviewNode.RefreshCanvasInputs((DataContext as NodeEditorViewModel)?.CompactNodes == true);
             NodeDropPreview.DataContext = _dropPreviewNode;
         }
 

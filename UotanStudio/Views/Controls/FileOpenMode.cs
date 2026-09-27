@@ -5,6 +5,7 @@ using UotanStudio.Firmware.BoundedContexts.Archive.Browsing;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BoundedContexts.Executable.Elf;
+using UotanStudio.Firmware.BoundedContexts.Executable.Qualcomm;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Magic;
 using UotanStudio.Services.Logging;
@@ -91,7 +92,11 @@ public enum EditorOpenMode
     Log,
 
     /// <summary>Open validated ELF metadata in a read-only information panel.</summary>
-    Elf
+    Elf,
+
+    /// <summary>Open the Qualcomm image analysis workspace explicitly.
+    /// <para>显式打开 Qualcomm 镜像分析工作区。</para></summary>
+    Qualcomm
 }
 
 /// <summary>
@@ -106,6 +111,21 @@ public static class FileOpenMode
     /// Bounded file-header length used for format and binary-content detection during automatic opening.
     /// </summary>
     public const int ContentProbeLength = 65536;
+
+    private static bool IsQualcommElf(string path, byte[] header)
+    {
+        try
+        {
+            using Stream stream = File.Exists(path)
+                ? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.RandomAccess)
+                : new MemoryStream(header, writable: false);
+            return QualcommImageProbe.IsQualcommElf(stream);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>
     /// <para>解析指定文件应使用的打开方式。规则：<c>.dts→Text</c>、<c>.dtb/.dtbo→Dtb</c>、
@@ -266,7 +286,11 @@ public static class FileOpenMode
         // stays inspectable as hex instead of being claimed by an unrelated extension handler.
         if (header is not null && header.AsSpan().StartsWith("\u007fELF"u8))
         {
-            return ElfReader.TryReadHeader(header, out _) ? EditorOpenMode.Elf : EditorOpenMode.Hex;
+            if (!ElfReader.TryReadHeader(header, out _))
+            {
+                return EditorOpenMode.Hex;
+            }
+            return IsQualcommElf(path, header) ? EditorOpenMode.Qualcomm : EditorOpenMode.Elf;
         }
 
         // AXML 内容探测优先：AndroidManifest.xml 等二进制 XML 即使扩展名为 .xml（会被文本路由

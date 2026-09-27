@@ -82,7 +82,7 @@ public sealed class SharedEntryPointTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void WorkflowEndpoints_PreserveDifferentMissingPortFallbackPolicies(bool output)
+    public void WorkflowEndpoints_ExplicitIdentityNeverFallsBackToAnotherNode(bool output)
     {
         var identified = new FlowNodeViewModel("identified", NodeCategory.Data);
         var fallback = new FlowNodeViewModel("fallback", NodeCategory.Data);
@@ -90,14 +90,14 @@ public sealed class SharedEntryPointTests
         (output ? fallback.Output : fallback.Input).Add(port);
         FlowNodeViewModel[] nodes = [identified, fallback];
         var ids = new Dictionary<string, FlowNodeViewModel>(StringComparer.OrdinalIgnoreCase) { ["saved-id"] = identified };
-        var cli = WorkflowReconstruction.ResolveEndpoint(nodes, ids, "SAVED-ID", "Value", output, false);
+        var cli = WorkflowReconstruction.ResolveEndpoint(nodes, ids, "SAVED-ID", "Value", output);
         Assert.Same(identified, cli.Node);
         Assert.Null(cli.Port);
-        var canvas = WorkflowReconstruction.ResolveEndpoint(nodes, ids, "SAVED-ID", "Value", output, true);
+        var canvas = WorkflowReconstruction.ResolveEndpoint(nodes, ids, null, "Value", output);
         Assert.Same(fallback, canvas.Node);
         Assert.Same(port, canvas.Port);
-        Assert.Same(fallback, WorkflowReconstruction.ResolveEndpoint(nodes, ids, "missing", "Value", output, false).Node);
-        Assert.Null(WorkflowReconstruction.ResolveEndpoint(nodes, ids, null, "value", output, true).Node);
+        Assert.Null(WorkflowReconstruction.ResolveEndpoint(nodes, ids, "missing", "Value", output).Node);
+        Assert.Null(WorkflowReconstruction.ResolveEndpoint(nodes, ids, null, "value", output).Node);
     }
 
     [Fact]

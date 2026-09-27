@@ -1,4 +1,5 @@
 using UotanStudio.Services.Execution;
+using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
 
@@ -31,8 +32,8 @@ internal static class PatchGatePolicy
             {
                 continue;
             }
-            if (source.Output.Any(port => port.Title == connection.SourceConnector && port.PortType == NodePortType.Flow)
-                && !target.Input.Any(port => port.Title == connection.TargetConnector && port.PortType == NodePortType.Flow))
+            if (WorkflowGraphValidation.ResolvePort(source.Output, connection.SourcePortId, connection.SourceConnector)?.PortType == NodePortType.Flow
+                && WorkflowGraphValidation.ResolvePort(target.Input, connection.TargetPortId, connection.TargetConnector)?.PortType != NodePortType.Flow)
             {
                 return LanguageService.Instance.GetString("Node_Patch_GateFlowRequired");
             }

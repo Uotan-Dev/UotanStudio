@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using UotanStudio.Firmware.Infrastructure.Downloads;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
@@ -72,6 +73,86 @@ public sealed class NetworkNodeTests
         }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Download_ExpectedSha256_OnlyPublishesMatchingContent(bool matches)
+    {
+        var payload = "verified payload"u8.ToArray();
+        using var client = new HttpClient(new DownloadHandler(payload));
+        var node = NetworkNodeViewModel.CreateDownloadNode(client);
+        var output = Path.Combine(Path.GetTempPath(), $"uotanstudio-network-{Guid.NewGuid():N}.bin");
+        await File.WriteAllTextAsync(output, "existing", TestContext.Current.CancellationToken);
+        try
+        {
+            SetInput(node, "URL", "https://downloads.example.test/firmware.bin");
+            SetInput(node, "Output Path", output);
+            var hash = SHA256.HashData(matches ? payload : "wrong"u8.ToArray());
+            SetInput(node, "Expected SHA256", Convert.ToHexString(hash));
+
+            if (matches)
+            {
+                await node.ExecuteAsync(new TestExecutionContext(TestContext.Current.CancellationToken));
+                Assert.Equal(payload, await File.ReadAllBytesAsync(output, TestContext.Current.CancellationToken));
+            }
+            else
+            {
+                await Assert.ThrowsAsync<InvalidDataException>(() =>
+                    node.ExecuteAsync(new TestExecutionContext(TestContext.Current.CancellationToken)));
+                Assert.Equal("existing", await File.ReadAllTextAsync(output, TestContext.Current.CancellationToken));
+            }
+            Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(output)!, Path.GetFileName(output) + ".verify-*"));
+        }
+        finally
+        {
+            File.Delete(output);
+        }
+    }
+
+    [Fact]
+    public async Task Download_InvalidTimeout_RejectsBeforeNetworkAccess()
+    {
+        var handler = new DownloadHandler("payload"u8.ToArray());
+        using var client = new HttpClient(handler);
+        var node = NetworkNodeViewModel.CreateDownloadNode(client);
+        SetInput(node, "URL", "https://downloads.example.test/firmware.bin");
+        SetInput(node, "Output Path", Path.Combine(Path.GetTempPath(), "unused.bin"));
+        SetInput(node, "Timeout Seconds", -1d);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            node.ExecuteAsync(new TestExecutionContext(TestContext.Current.CancellationToken)));
+
+        Assert.Empty(handler.UserAgents);
+    }
+
+    [Fact]
+    public async Task Download_Timeout_FailsWorkflowAndPreservesExistingDestination()
+    {
+        using var client = new HttpClient(new WaitingHandler());
+        var node = NetworkNodeViewModel.CreateDownloadNode(client);
+        var output = Path.Combine(Path.GetTempPath(), $"uotanstudio-timeout-{Guid.NewGuid():N}.bin");
+        var token = TestContext.Current.CancellationToken;
+        await File.WriteAllTextAsync(output, "existing", token);
+        try
+        {
+            node.Input.Single(port => port.Title == "URL").InitialValue = "https://downloads.example.test/firmware.bin";
+            node.Input.Single(port => port.Title == "Output Path").InitialValue = output;
+            node.Input.Single(port => port.Title == "Timeout Seconds").InitialValue = 1d;
+
+            var result = await new NodeExecutionEngine(new TestExecutionContext(token)).ExecuteAsync(
+                [node], [], token);
+
+            Assert.Equal(ExecutionStatus.Failed, result.Status);
+            Assert.Equal(NodeExecutionStatus.Failed, node.ExecutionStatus);
+            Assert.Contains(LanguageService.Instance.GetString("Node_Network_Timeout"), node.ExecutionError);
+            Assert.Equal("existing", await File.ReadAllTextAsync(output, token));
+        }
+        finally
+        {
+            File.Delete(output);
+        }
+    }
+
     [Fact]
     public async Task GitHubDownload_NonGitHubUrl_RejectsBeforeNetworkAccess()
     {
@@ -133,6 +214,16 @@ public sealed class NetworkNodeTests
                 response.Headers.AcceptRanges.Add("bytes");
             }
             return Task.FromResult(response);
+        }
+    }
+
+    private sealed class WaitingHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("The request should have been cancelled.");
         }
     }
 

@@ -52,7 +52,14 @@ public class DataNodeViewModel : FlowNodeViewModel
             TypeKey = "Data.Value.Convert"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Input", PortType = NodePortType.Data });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Format", PortType = NodePortType.Text });
+        node.Input.Add(new NodeConnectorViewModel
+        {
+            Title = "Format",
+            PortType = NodePortType.Text,
+            InitialValue = "utf8",
+            Choices = new[] { "hex", "base64", "utf8", "text", "string" }
+                .Select(value => new NodePortChoice(value)).ToArray()
+        });
         node.Output.Add(new NodeConnectorViewModel { Title = "Output", PortType = NodePortType.Text });
         return node;
     }
@@ -111,13 +118,13 @@ public class DataNodeViewModel : FlowNodeViewModel
     /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
     /// </returns>
-    public override Task ExecuteAsync(INodeExecutionContext context)
+    public override async Task ExecuteAsync(INodeExecutionContext context)
     {
         var token = context.CancellationToken;
         switch (TypeKey)
         {
             case "File.Binary.Read":
-                ExecuteReadFile(context);
+                await ExecuteReadFileAsync(context).ConfigureAwait(false);
                 break;
             case "Data.Value.Convert":
                 ExecuteConvert(context);
@@ -129,34 +136,32 @@ public class DataNodeViewModel : FlowNodeViewModel
                 ExecuteCompare(context);
                 break;
             default:
-                return base.ExecuteAsync(context);
+                await base.ExecuteAsync(context).ConfigureAwait(false);
+                return;
         }
 
         token.ThrowIfCancellationRequested();
-        return Task.CompletedTask;
     }
 
-    private void ExecuteReadFile(INodeExecutionContext context)
+    private async Task ExecuteReadFileAsync(INodeExecutionContext context)
     {
         var path = Convert.ToString(ReadInput("Path"), System.Globalization.CultureInfo.InvariantCulture);
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
-            context.Log.Write(LogLevel.Warn, Title, $"Path not found: {path ?? "<empty>"}  找不到路径。");
-            return;
+            throw new FileNotFoundException("File input was not found.", path);
         }
 
-        var bytes = File.ReadAllBytes(path);
+        var bytes = await NodeDataUtil.ReadFileBytesAsync(path, context.CancellationToken).ConfigureAwait(false);
         WriteOutput("Data", bytes);
         context.Log.Write(LogLevel.Info, Title, $"Read {bytes.Length} bytes from '{path}'  已读取。");
     }
 
     private void ExecuteConvert(INodeExecutionContext context)
     {
-        var data = NodeDataUtil.ToBytes(ReadInput("Input"));
+        var data = NodeDataUtil.ToBytes(ReadInput("Input"), context.CancellationToken);
         if (data == null)
         {
-            context.Log.Write(LogLevel.Warn, Title, "No Input data.  缺少输入数据。");
-            return;
+            throw new InvalidDataException("No Input data was provided.");
         }
 
         var format = (Convert.ToString(ReadInput("Format"), System.Globalization.CultureInfo.InvariantCulture) ?? "text").Trim().ToLowerInvariant();
@@ -176,23 +181,17 @@ public class DataNodeViewModel : FlowNodeViewModel
                 WriteOutput("Output", Encoding.UTF8.GetString(data));
                 context.Log.Write(LogLevel.Info, Title, $"Decoded {data.Length} bytes to UTF-8 text.  已解码为文本。");
                 break;
-            case "bytes":
-                WriteOutput("Output", data);
-                context.Log.Write(LogLevel.Info, Title, $"Passed through {data.Length} bytes.  原样透传字节。");
-                break;
             default:
-                context.Log.Write(LogLevel.Warn, Title, $"Unsupported format '{format}'.  不支持的格式。");
-                break;
+                throw new InvalidDataException($"Unsupported conversion format '{format}'.");
         }
     }
 
     private void ExecuteChecksum(INodeExecutionContext context)
     {
-        var data = NodeDataUtil.ToBytes(ReadInput("Data"));
+        var data = NodeDataUtil.ToBytes(ReadInput("Data"), context.CancellationToken);
         if (data == null)
         {
-            context.Log.Write(LogLevel.Warn, Title, "No Data input.  缺少输入数据。");
-            return;
+            throw new InvalidDataException("No Data input was provided.");
         }
 
         var algorithm = (Convert.ToString(ReadInput("Algorithm"), System.Globalization.CultureInfo.InvariantCulture) ?? "sha256").Trim().ToLowerInvariant();
@@ -210,9 +209,13 @@ public class DataNodeViewModel : FlowNodeViewModel
 
     private void ExecuteCompare(INodeExecutionContext context)
     {
-        var a = NodeDataUtil.ToBytes(ReadInput("Data A"));
-        var b = NodeDataUtil.ToBytes(ReadInput("Data B"));
-        var match = a != null && b != null && CryptographicOperations.FixedTimeEquals(a, b);
+        var a = NodeDataUtil.ToBytes(ReadInput("Data A"), context.CancellationToken);
+        var b = NodeDataUtil.ToBytes(ReadInput("Data B"), context.CancellationToken);
+        if (a is null || b is null)
+        {
+            throw new InvalidDataException("Both comparison inputs are required.");
+        }
+        var match = CryptographicOperations.FixedTimeEquals(a, b);
         WriteOutput("Match", match);
         context.Log.Write(LogLevel.Info, Title, $"Compare result: {match}  比较结果。");
     }

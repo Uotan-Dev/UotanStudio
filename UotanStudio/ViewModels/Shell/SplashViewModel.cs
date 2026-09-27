@@ -1,4 +1,6 @@
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Shell;
 
@@ -20,7 +22,48 @@ public partial class SplashViewModel(string initialStatus) : ViewModelBase
     [ObservableProperty]
     private string _statusText = initialStatus;
 
-    /// <summary>Whether startup work is still in progress.</summary>
-    [ObservableProperty]
-    private bool _isInitializing = true;
+    private SplashPhase _phase;
+
+    public bool IsInitializing => _phase != SplashPhase.Ready;
+
+    /// <summary>Publishes the next stage before allowing synchronous UI construction to continue.</summary>
+    internal async Task AdvanceAsync(SplashPhase phase)
+    {
+        Dispatcher.UIThread.VerifyAccess();
+        if (phase < _phase || !Enum.IsDefined(phase))
+        {
+            throw new ArgumentOutOfRangeException(nameof(phase));
+        }
+        _phase = phase;
+        OnPropertyChanged(nameof(IsInitializing));
+        StatusText = LanguageService.Instance.GetString(phase switch
+        {
+            SplashPhase.Settings => "Splash_Settings",
+            SplashPhase.ApplyingSettings => "Splash_ApplyingSettings",
+            SplashPhase.Scanning => "Splash_Scanning",
+            SplashPhase.Services => "Splash_Services",
+            SplashPhase.Nodes => "Splash_Nodes",
+            SplashPhase.Workspace => "Splash_Workspace",
+            SplashPhase.Window => "Splash_Preparing",
+            SplashPhase.OpeningFiles => "Splash_OpeningFiles",
+            SplashPhase.Ready => "Splash_Ready",
+            _ => "Splash_Initializing"
+        });
+        // Render priority precedes Background, so the stage is painted before the next UI-bound operation.
+        await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Background);
+    }
+}
+
+internal enum SplashPhase
+{
+    Initializing,
+    Settings,
+    ApplyingSettings,
+    Scanning,
+    Services,
+    Nodes,
+    Workspace,
+    Window,
+    OpeningFiles,
+    Ready
 }

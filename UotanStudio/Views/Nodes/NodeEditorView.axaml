@@ -11,6 +11,9 @@
              x:Class="UotanStudio.Views.Nodes.NodeEditorView"
              x:DataType="vm:NodeEditorViewModel">
     <UserControl.Resources>
+        <DataTemplate x:Key="ValueTypeTemplate" DataType="{x:Type nodeVm:NodePortChoice}">
+            <TextBlock Text="{Binding DisplayName}" />
+        </DataTemplate>
         <DataTemplate x:Key="ToolboxOperationTemplate" DataType="{x:Type vm:NodeToolboxItem}">
             <Grid ColumnDefinitions="*,Auto,28" Margin="0,1">
                 <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
@@ -77,15 +80,18 @@
     </UserControl.Styles>
     <DockPanel>
         <!-- 顶部工具栏 -->
-        <Border DockPanel.Dock="Top" Height="40" Padding="8,4"
+        <Border DockPanel.Dock="Top" Padding="8,4"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-            <DockPanel>
-                <!-- 左侧: 搜索框 -->
-                <TextBox DockPanel.Dock="Left" Width="200" Height="28"
-                         PlaceholderText="{DynamicResource Node_SearchNodes}"
-                         Text="{Binding SearchText}"
-                         VerticalAlignment="Center" />
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" Margin="6,0,0,0">
+            <WrapPanel x:Name="EditorToolbar" Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,2,8,2" IsEnabled="{Binding CanEditGraph}">
+                    <Button Width="28" Height="28" Padding="0" Click="OnUndoClick" IsEnabled="{Binding CanUndo}"
+                            ToolTip.Tip="{DynamicResource Node_Undo}">
+                        <avalonia:MaterialIcon Kind="Undo" Width="16" Height="16" />
+                    </Button>
+                    <Button Width="28" Height="28" Padding="0" Click="OnRedoClick" IsEnabled="{Binding CanRedo}"
+                            ToolTip.Tip="{DynamicResource Node_Redo}">
+                        <avalonia:MaterialIcon Kind="Redo" Width="16" Height="16" />
+                    </Button>
                     <Button Width="28" Height="28" Padding="0" Click="OnImportTemplateClick"
                             ToolTip.Tip="{DynamicResource Node_ImportTemplate}">
                         <avalonia:MaterialIcon Kind="FileImportOutline" Width="16" Height="16" />
@@ -119,9 +125,8 @@
                 </StackPanel>
 
                 <!-- 右侧: 缩放控制 + 小地图开关 -->
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
-                            HorizontalAlignment="Right" VerticalAlignment="Center"
-                            Spacing="4">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                            Spacing="4" Margin="0,2,8,2">
                     <Button Width="28" Height="28" Padding="0"
                             Command="{Binding ZoomOutCommand}"
                             ToolTip.Tip="{DynamicResource Node_ZoomOut}">
@@ -140,6 +145,14 @@
                             ToolTip.Tip="{DynamicResource Node_ResetZoom}">
                         <avalonia:MaterialIcon Kind="Magnify" Width="16" Height="16" />
                     </Button>
+                    <Button x:Name="FitAllButton" Width="28" Height="28" Padding="0"
+                            Command="{Binding FitAllCommand}" ToolTip.Tip="{DynamicResource Node_FitAll}">
+                        <avalonia:MaterialIcon Kind="FitToScreenOutline" Width="16" Height="16" />
+                    </Button>
+                    <Button Width="28" Height="28" Padding="0" Command="{Binding FocusSelectionCommand}"
+                            IsEnabled="{Binding HasSelectedNodes}" ToolTip.Tip="{DynamicResource Node_FocusSelection}">
+                        <avalonia:MaterialIcon Kind="Crosshairs" Width="16" Height="16" />
+                    </Button>
                     <Border Width="1" Height="20" Background="{DynamicResource BorderBrush}"
                             Margin="4,0" />
                     <ToggleButton Width="28" Height="28" Padding="0"
@@ -147,25 +160,33 @@
                                   ToolTip.Tip="{DynamicResource Node_ToggleMinimap}">
                         <avalonia:MaterialIcon Kind="Map" Width="16" Height="16" />
                     </ToggleButton>
-                    <Border Width="1" Height="20" Background="{DynamicResource BorderBrush}"
-                            Margin="4,0" />
+                    <ToggleButton Width="28" Height="28" Padding="0" IsChecked="{Binding CompactNodes}"
+                                  ToolTip.Tip="{DynamicResource Node_CompactNodes}">
+                        <avalonia:MaterialIcon Kind="ViewCompactOutline" Width="16" Height="16" />
+                    </ToggleButton>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,8,2">
                     <Button x:Name="DeleteSelectedButton"
-                            MinWidth="92" Height="28" Padding="6,0"
+                            MinWidth="92" MaxWidth="220" Height="28" Padding="6,0"
                             Command="{Binding DeleteSelectedCommand}"
-                            IsEnabled="{Binding HasSelection}"
+                            IsEnabled="{Binding CanDeleteSelection}"
                             ToolTip.Tip="{Binding DeleteSelectionText}">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                             <avalonia:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
                             <TextBlock x:Name="DeleteSelectedLabel"
                                        Text="{Binding DeleteSelectionText}"
+                                       MaxWidth="180" TextTrimming="CharacterEllipsis"
                                        VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
                 </StackPanel>
 
                 <!-- 中间: 运行控制 -->
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
-                            VerticalAlignment="Center" Spacing="4">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="4" Margin="0,2,8,2">
+                    <Button x:Name="ValidateGraphButton" Width="28" Height="28" Padding="0"
+                            Command="{Binding ValidateGraphCommand}" ToolTip.Tip="{DynamicResource Node_ValidateGraph}">
+                        <avalonia:MaterialIcon Kind="CheckAll" Width="16" Height="16" />
+                    </Button>
                     <Button x:Name="PreviewPatchButton" Height="28" Padding="8,0"
                             Command="{Binding PreviewCommand}"
                             Content="{DynamicResource Node_Patch_Preview}"
@@ -181,17 +202,26 @@
                         <avalonia:MaterialIcon Kind="Stop" Width="16" Height="16" Foreground="Red" />
                     </Button>
                 </StackPanel>
-            </DockPanel>
+                <StackPanel x:Name="NarrowPaneControls" IsVisible="False" Orientation="Horizontal" Spacing="4" Margin="0,2">
+                    <ToggleButton x:Name="ToolboxPaneToggle" Width="28" Height="28" Padding="0"
+                                  Click="OnToolboxPaneToggle" ToolTip.Tip="{DynamicResource Node_Toolbox}">
+                        <avalonia:MaterialIcon Kind="ToolboxOutline" Width="16" Height="16" />
+                    </ToggleButton>
+                    <ToggleButton x:Name="PropertiesPaneToggle" Width="28" Height="28" Padding="0"
+                                  Click="OnPropertiesPaneToggle" ToolTip.Tip="{DynamicResource Node_Properties}">
+                        <avalonia:MaterialIcon Kind="Tune" Width="16" Height="16" />
+                    </ToggleButton>
+                </StackPanel>
+            </WrapPanel>
         </Border>
 
         <!-- 底部状态栏 -->
-        <Border DockPanel.Dock="Bottom" Height="24" Padding="8,2"
+        <Border DockPanel.Dock="Bottom" Padding="8,4"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Right" Text="{Binding SelectedNode.StatusDisplay}"
-                           FontSize="11" VerticalAlignment="Center"
-                           Foreground="{DynamicResource SecondaryTextBrush}" />
-                <TextBlock FontSize="11" VerticalAlignment="Center"
+            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBlock x:Name="WorkflowStatusText" Text="{Binding ExecutionStatus}" TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding ExecutionStatus}" FontSize="12" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" FontSize="11" VerticalAlignment="Center"
                            Foreground="{DynamicResource SecondaryTextBrush}">
                     <Run Text="{Binding Zoom, StringFormat='{}{0:P0}'}" />
                     <Run Text=" | " />
@@ -201,7 +231,9 @@
                     <Run Text="{Binding Connections.Count, Mode=OneWay}" />
                     <Run Text="{DynamicResource Node_ConnectionsLabel}" />
                 </TextBlock>
-            </DockPanel>
+                <ProgressBar x:Name="WorkflowProgress" Grid.Row="1" Grid.ColumnSpan="2" Height="3" Margin="0,4,0,0"
+                             Minimum="0" Maximum="1" Value="{Binding ExecutionProgress}" IsVisible="{Binding IsExecuting}" />
+            </Grid>
         </Border>
 
         <Expander x:Name="PatchChangesPanel" DockPanel.Dock="Bottom" MaxHeight="300"
@@ -258,7 +290,21 @@
         <!-- 底部执行日志面板（状态栏上方） -->
         <Border DockPanel.Dock="Bottom" MaxHeight="180"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-            <Expander Header="{DynamicResource Node_ExecLog}" IsExpanded="False" Padding="6,2">
+            <Expander Header="{DynamicResource Node_ExecLog}" IsExpanded="{Binding IsExecutionLogExpanded, Mode=TwoWay}" Padding="6,2">
+                <DockPanel>
+                    <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding FailedNodes}" IsVisible="{Binding HasFailures}" MaxHeight="90">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type nodeVm:FlowNodeViewModel}">
+                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnFocusFailureClick"
+                                        ToolTip.Tip="{Binding ExecutionError}" Margin="0,1">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <avalonia:MaterialIcon Kind="AlertCircleOutline" Width="16" Height="16" />
+                                        <TextBlock Text="{Binding DisplayHeader}" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 <ListBox ItemsSource="{Binding ExecutionLog}"
                          MaxHeight="150"
                          Background="Transparent" BorderThickness="0">
@@ -266,10 +312,11 @@
                         <DataTemplate>
                             <TextBlock Text="{Binding}" FontFamily="Consolas,monospace" FontSize="13"
                                        Foreground="{DynamicResource TextForeground}"
-                                       TextTrimming="CharacterEllipsis" />
+                                       TextWrapping="Wrap" />
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+                </DockPanel>
             </Expander>
         </Border>
 
@@ -281,22 +328,25 @@
              左右两栏无法被直接拖没。 -->
         <!-- Minimum widths live on the column definitions (not the children) so that GridSplitter honours
              them while dragging and the side panes cannot be collapsed. -->
-        <Grid Name="PaneLayout" ClipToBounds="True">
+        <Grid Name="PaneLayout" ClipToBounds="True" RowDefinitions="*,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1*" MinWidth="150" />
+                <ColumnDefinition Width="1*" MinWidth="200" />
                 <ColumnDefinition Width="1" />
                 <ColumnDefinition Width="4*" MinWidth="200" />
                 <ColumnDefinition Width="1" />
-                <ColumnDefinition Width="1*" MinWidth="150" />
+                <ColumnDefinition Width="1*" MinWidth="280" />
             </Grid.ColumnDefinitions>
         <!-- 左侧工具箱面板 -->
-        <Border Grid.Column="0" BorderThickness="0">
+        <Border x:Name="ToolboxPane" Grid.Column="0" BorderThickness="0">
             <DockPanel>
+                <TextBox DockPanel.Dock="Top" Margin="8,4" MinHeight="28"
+                         PlaceholderText="{DynamicResource Node_SearchNodes}"
+                         Text="{Binding SearchText}" />
                 <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Node_Toolbox}"
                            FontWeight="SemiBold" FontSize="13"
                            Margin="8,8,8,4" />
                 <ScrollViewer>
-                    <ItemsControl ItemsSource="{Binding VisibleToolboxCategories}" Margin="4">
+                    <ItemsControl ItemsSource="{Binding VisibleToolboxCategories}" Margin="4" IsEnabled="{Binding CanEditGraph}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:NodeToolboxCategory}">
                                 <Expander Header="{Binding Name}" IsExpanded="{Binding IsExpanded, Mode=TwoWay}" Margin="0,2">
@@ -322,13 +372,13 @@
             </DockPanel>
         </Border>
 
-        <controls:RoundedPaneDivider Grid.Column="1" Classes="pane-edge vertical" />
-        <Border Grid.Column="1" Classes="splitter-handle"
+        <controls:RoundedPaneDivider x:Name="LeftPaneDivider" Grid.Column="1" Classes="pane-edge vertical" />
+        <Border x:Name="LeftPaneHandle" Grid.Column="1" Classes="splitter-handle"
                 PointerPressed="OnLeftSplitterPressed" PointerMoved="OnSplitterMoved"
                 PointerReleased="OnSplitterReleased" PointerCaptureLost="OnSplitterCaptureLost" />
 
         <!-- 右侧属性面板 -->
-        <Border Grid.Column="4" BorderThickness="0">
+        <Border x:Name="PropertiesPane" Grid.Column="4" BorderThickness="0">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Node_Properties}"
                            FontWeight="SemiBold" FontSize="13"
@@ -378,7 +428,7 @@
                     </DockPanel>
                 </Border>
                 <ScrollViewer>
-                    <Grid>
+                    <Grid IsEnabled="{Binding CanEditGraph}">
                         <!-- 未选中节点时的占位提示 -->
                         <TextBlock Text="{DynamicResource Node_NoSelection}"
                                    FontSize="12"
@@ -421,8 +471,10 @@
                                                FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                                Margin="0,4,8,0" VerticalAlignment="Center" />
                                     <ComboBox Grid.Column="1" FontSize="12"
-                                              ItemsSource="{x:Static nodeVm:FlowNodeViewModel.ValueTypeOptions}"
-                                              SelectedItem="{Binding BatchNodeValueType, Mode=TwoWay}" />
+                                              ItemsSource="{Binding ValueTypeChoices}"
+                                              ItemTemplate="{StaticResource ValueTypeTemplate}"
+                                              SelectedValueBinding="{Binding Value, DataType={x:Type nodeVm:NodePortChoice}}"
+                                              SelectedValue="{Binding BatchNodeValueType, Mode=TwoWay}" />
                                 </Grid>
                                 <Grid ColumnDefinitions="Auto,*">
                                     <TextBlock Grid.Column="0" Text="{DynamicResource Node_Const_Value}"
@@ -450,17 +502,17 @@
                             <ItemsControl ItemsSource="{Binding BatchInputs}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type nodeVm:BatchNodeInputViewModel}">
-                                        <Grid ColumnDefinitions="Auto,*" Margin="0,2">
-                                            <TextBlock Grid.Column="0" FontSize="12" Margin="0,2,8,0"
+                                        <Grid RowDefinitions="Auto,Auto" Margin="0,2">
+                                            <TextBlock FontSize="12" Margin="0,2,0,4" TextWrapping="Wrap"
                                                        VerticalAlignment="Center" Text="{Binding LocalizedTitle}" />
-                                            <TextBox Grid.Column="1" FontSize="12" Height="24"
+                                            <TextBox Grid.Row="1" FontSize="12" MinHeight="28"
                                                      Text="{Binding TextValue, Mode=TwoWay}"
                                                      IsVisible="{Binding IsTextOrPathPort}"
                                                      PlaceholderText="{DynamicResource Node_BatchMixed}" />
-                                            <NumericUpDown Grid.Column="1" FontSize="12" Height="24"
+                                            <NumericUpDown Grid.Row="1" FontSize="12" MinHeight="28"
                                                            Value="{Binding NumberValue, Mode=TwoWay}"
                                                            IsVisible="{Binding IsNumberPort}" />
-                                            <CheckBox Grid.Column="1" IsChecked="{Binding BooleanValue, Mode=TwoWay}"
+                                            <CheckBox Grid.Row="1" IsChecked="{Binding BooleanValue, Mode=TwoWay}"
                                                       IsVisible="{Binding IsBooleanPort}" />
                                         </Grid>
                                     </DataTemplate>
@@ -470,8 +522,9 @@
 
                         <StackPanel Margin="8" Spacing="6"
                                     IsVisible="{Binding IsSingleSelection}">
-                            <TextBlock Text="{Binding SelectedNode.DisplayHeader}"
-                                       FontWeight="SemiBold" FontSize="13"
+                             <TextBlock Text="{Binding SelectedNode.DisplayHeader}"
+                                        FontWeight="SemiBold" FontSize="13"
+                                        TextWrapping="Wrap"
                                        Margin="0,0,0,4" />
                             <Separator Margin="0,4" />
 
@@ -504,8 +557,8 @@
                                            Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" />
                                 <TextBlock Grid.Column="1"
-                                           Text="{Binding SelectedNode.TypeKey}"
-                                           FontSize="12" />
+                                             Text="{Binding SelectedNode.TypeKey}"
+                                            FontSize="12" TextWrapping="Wrap" />
                             </Grid>
 
                             <!-- 位置 -->
@@ -514,11 +567,12 @@
                                            FontSize="11"
                                            Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" />
-                                <TextBlock Grid.Column="1"
-                                           FontSize="12">
-                                    <Run Text="{Binding SelectedNode.Location.X}" />
+                                <TextBlock x:Name="NodeLocationText" Grid.Column="1"
+                                           FontSize="12" TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding SelectedNode.Location}">
+                                    <Run Text="{Binding SelectedNode.Location.X, StringFormat='{}{0:0.#}'}" />
                                     <Run Text=", " />
-                                    <Run Text="{Binding SelectedNode.Location.Y}" />
+                                    <Run Text="{Binding SelectedNode.Location.Y, StringFormat='{}{0:0.#}'}" />
                                 </TextBlock>
                             </Grid>
 
@@ -542,9 +596,11 @@
                                     <TextBlock Grid.Column="0" Text="{DynamicResource Node_Const_ValueType}"
                                                FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                                Margin="0,4,8,0" VerticalAlignment="Center" />
-                                    <ComboBox Grid.Column="1" FontSize="12"
-                                              ItemsSource="{x:Static nodeVm:FlowNodeViewModel.ValueTypeOptions}"
-                                              SelectedItem="{Binding SelectedNode.NodeValueType, Mode=TwoWay}" />
+                                    <ComboBox x:Name="ConstantValueTypeSelector" Grid.Column="1" FontSize="12"
+                                              ItemsSource="{Binding ValueTypeChoices}"
+                                              ItemTemplate="{StaticResource ValueTypeTemplate}"
+                                              SelectedValueBinding="{Binding Value, DataType={x:Type nodeVm:NodePortChoice}}"
+                                              SelectedValue="{Binding SelectedNode.NodeValueType, Mode=TwoWay}" />
                                 </Grid>
                                 <Grid ColumnDefinitions="Auto,*">
                                     <TextBlock Grid.Column="0" Text="{DynamicResource Node_Const_Value}"
@@ -555,7 +611,7 @@
                                 </Grid>
                                 <TextBlock FontSize="11"
                                            Foreground="{DynamicResource SecondaryTextBrush}"
-                                           Text="{DynamicResource Node_Const_Hint}" />
+                                           Text="{DynamicResource Node_Const_Hint}" TextWrapping="Wrap" />
                             </StackPanel>
 
                             <!-- 工程镜像引用节点的镜像选择编辑区 -->
@@ -571,7 +627,7 @@
                                 </Grid>
                                 <TextBlock FontSize="11"
                                            Foreground="{DynamicResource SecondaryTextBrush}"
-                                           Text="{DynamicResource Node_ProjImg_Hint}" />
+                                           Text="{DynamicResource Node_ProjImg_Hint}" TextWrapping="Wrap" />
                             </StackPanel>
 
                             <!-- 输入端口：为 Text/Number/Boolean/Path 类型提供初始值编辑器 -->
@@ -579,24 +635,26 @@
                                        FontSize="11" FontWeight="SemiBold"
                                        Foreground="{DynamicResource SecondaryTextBrush}" />
                             <CheckBox Content="{DynamicResource Node_AdvancedParameters}" IsChecked="{Binding ShowAdvancedParameters}" />
+                            <TextBlock Text="{Binding SelectedNode.ExecutionError}" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource LogErrorBrush}" />
                             <ItemsControl ItemsSource="{Binding SelectedParameterInputs}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
-                                        <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" Margin="0,2">
-                                            <TextBlock Grid.Column="0" FontSize="12" Margin="0,2,8,0"
+                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" Margin="0,2">
+                                            <TextBlock Grid.ColumnSpan="2" FontSize="12" Margin="0,2,0,4" TextWrapping="Wrap"
                                                        VerticalAlignment="Center">
                                                 <Run Text="• " />
                                                 <Run Text="{Binding LocalizedTitle}" />
                                             </TextBlock>
                                             <!-- 文本 / 路径：文本框 + 路径浏览 -->
-                                            <TextBox Grid.Column="1" FontSize="12" MinHeight="{Binding EditorMinHeight}"
+                                            <TextBox Grid.Row="1" Grid.Column="0" FontSize="12" MinHeight="{Binding EditorMinHeight}"
                                                      AcceptsReturn="{Binding IsMultiline}"
                                                      TextWrapping="Wrap"
                                                      Text="{Binding InitialValue, Mode=TwoWay}"
                                                      PasswordChar="{Binding EditorPasswordChar}"
                                                      IsVisible="{Binding UsesTextEditor}">
                                             </TextBox>
-                                            <ComboBox Grid.Column="1" FontSize="12"
+                                            <ComboBox Grid.Row="1" Grid.Column="0" HorizontalAlignment="Stretch" FontSize="12"
                                                       ItemsSource="{Binding Choices}"
                                                       SelectedItem="{Binding SelectedChoice, Mode=TwoWay}"
                                                       IsVisible="{Binding CanEditChoice}">
@@ -607,22 +665,24 @@
                                                 </ComboBox.ItemTemplate>
                                             </ComboBox>
                                             <!-- 数值：数值框 -->
-                                            <NumericUpDown Grid.Column="1" FontSize="12" Height="24"
+                                            <NumericUpDown Grid.Row="1" Grid.Column="0" FontSize="12" MinHeight="28"
                                                            Value="{Binding InitialNumberValue, Mode=TwoWay}"
                                                            IsVisible="{Binding CanEditNumber}" />
                                             <!-- 布尔：开关 -->
-                                            <CheckBox Grid.Column="1" FontSize="12"
+                                            <CheckBox Grid.Row="1" Grid.Column="0" FontSize="12"
                                                       IsChecked="{Binding InitialBooleanValue, Mode=TwoWay}"
                                                       IsVisible="{Binding CanEditBoolean}"
                                                       VerticalContentAlignment="Center" />
-                                            <Button Grid.Column="2" Content="…" Width="26" Height="24" Padding="0"
+                                            <Button Grid.Row="1" Grid.Column="1" Width="28" Height="28" Padding="0"
                                                     Margin="4,0,0,0" FontSize="12"
                                                     IsVisible="{Binding CanBrowsePath}"
                                                     Click="OnBrowsePathClick"
-                                                    Tag="{Binding}" />
-                                            <TextBlock Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding SourceDescription}"
+                                                    Tag="{Binding}" ToolTip.Tip="{DynamicResource Node_BrowsePath}">
+                                                <avalonia:MaterialIcon Kind="FolderOpenOutline" Width="16" Height="16" />
+                                            </Button>
+                                            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding SourceDescription}"
                                                        IsVisible="{Binding HasConnectedSource}" TextWrapping="Wrap" FontSize="12" />
-                                            <TextBlock Grid.Row="1" Grid.ColumnSpan="3" Margin="0,4,0,6"
+                                            <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="0,4,0,6"
                                                        FontSize="12" LineHeight="18" TextWrapping="Wrap"
                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                        Text="{Binding LocalizedHint}" IsVisible="{Binding HasHint}" />
@@ -657,8 +717,8 @@
             </DockPanel>
         </Border>
 
-        <controls:RoundedPaneDivider Grid.Column="3" Classes="pane-edge vertical" ShadowLeft="True" />
-        <Border Grid.Column="3" Classes="splitter-handle"
+        <controls:RoundedPaneDivider x:Name="RightPaneDivider" Grid.Column="3" Classes="pane-edge vertical" ShadowLeft="True" />
+        <Border x:Name="RightPaneHandle" Grid.Column="3" Classes="splitter-handle"
                 PointerPressed="OnRightSplitterPressed" PointerMoved="OnSplitterMoved"
                 PointerReleased="OnSplitterReleased" PointerCaptureLost="OnSplitterCaptureLost" />
 
@@ -670,6 +730,7 @@
               DragDrop.DragLeave="OnCanvasDragLeave"
               DragDrop.Drop="OnCanvasDrop">
             <nodify:NodifyEditor ItemsSource="{Binding Nodes}"
+                                 IsEnabled="{Binding CanEditGraph}"
                                  Connections="{Binding Connections}"
                                  PendingConnection="{Binding PendingConnection}"
                                  Zoom="{Binding Zoom, Mode=TwoWay}"
@@ -685,7 +746,7 @@
                 <nodify:NodifyEditor.ItemTemplate>
                     <DataTemplate DataType="{x:Type nodeVm:FlowNodeViewModel}">
                                      <nodify:Node Header="{Binding DisplayHeader}"
-                                          Input="{Binding Input}"
+                                          Input="{Binding CanvasInputs}"
                                           Output="{Binding Output}"
                                           Location="{Binding Location, Mode=TwoWay}"
                                           IsSelected="{Binding IsSelected, Mode=TwoWay}"
@@ -772,7 +833,7 @@
                     </Border.RenderTransform>
                     <nodify:Node x:DataType="nodeVm:FlowNodeViewModel"
                                  Header="{Binding DisplayHeader}"
-                                 Input="{Binding Input}"
+                                 Input="{Binding CanvasInputs}"
                                  Output="{Binding Output}">
                         <nodify:Node.InputConnectorTemplate>
                             <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">

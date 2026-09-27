@@ -107,7 +107,8 @@ public class CpioNodeViewModel : FlowNodeViewModel
         }
 
         var outputDir = DeriveOutputDir(archivePath);
-        var result = await FirmwareService.Instance.UnpackCpioAsync(archivePath, outputDir).ConfigureAwait(false);
+        var result = await FirmwareService.Instance.UnpackCpioAsync(archivePath, outputDir,
+            cancellationToken: context.CancellationToken).ConfigureAwait(false);
         if (!result.Success)
         {
             throw new InvalidOperationException($"Unpack failed: {result.Summary}  解包失败。");

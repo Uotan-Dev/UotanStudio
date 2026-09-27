@@ -23,6 +23,7 @@ namespace UotanStudio.ViewModels.Nodes;
 /// </summary>
 public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 {
+    public Guid EditorId { get; } = Guid.NewGuid();
     /// <summary>Interaction service supplied by the visible desktop host.</summary>
     public Services.Interactions.IWorkflowInteractionService Interactions { get; set; }
         = Services.Interactions.UnsupportedWorkflowInteractionService.Instance;
@@ -135,7 +136,21 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     public ObservableCollection<NodeViewModels.FlowNodeViewModel> Nodes
     {
         get => _nodes;
-        set => SetProperty(ref _nodes, value);
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            EnsureEditable();
+            if (ReferenceEquals(_nodes, value))
+            {
+                return;
+            }
+            _nodes.CollectionChanged -= OnNodesChanged;
+            DetachAllPropertyTracking();
+            SetProperty(ref _nodes, value);
+            _nodes.CollectionChanged += OnNodesChanged;
+            OnNodesChanged(this, new(System.Collections.Specialized.NotifyCollectionChangedAction.Reset));
+            SetSelection([]);
+        }
     }
 
     /// <summary>
@@ -147,11 +162,14 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         get => _connections;
         set
         {
+            ArgumentNullException.ThrowIfNull(value);
+            EnsureEditable();
             if (ReferenceEquals(_connections, value)) return;
             _connections.CollectionChanged -= OnConnectionsChanged;
             SetProperty(ref _connections, value);
             _connections.CollectionChanged += OnConnectionsChanged;
             SelectConnection(null);
+            RefreshParameterPresentation();
         }
     }
 
@@ -173,14 +191,15 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         if (connection is not null) connection.IsSelected = true;
         OnPropertyChanged(nameof(SelectedConnection));
         OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(CanDeleteSelection));
         OnPropertyChanged(nameof(DeleteSelectionText));
         DeleteSelectedCommand.NotifyCanExecuteChanged();
     }
 
     private void OnConnectionsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
-        RefreshParameterPresentation();
         Services.Interactions.InteractionSchemaResolver.Refresh(Nodes, Connections);
+        RefreshParameterPresentation();
         if (_selectedConnection is not null && !Connections.Contains(_selectedConnection))
         {
             SelectConnection(null);
@@ -304,9 +323,37 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     public bool IsExecuting
     {
         get => _isExecuting;
-        set => SetProperty(ref _isExecuting, value);
+        private set
+        {
+            if (!SetProperty(ref _isExecuting, value))
+            {
+                return;
+            }
+            foreach (var node in Nodes)
+            {
+                node.IsEditingLocked = value;
+                foreach (var port in node.Input.Concat(node.Output))
+                {
+                    port.IsEditingLocked = value;
+                }
+            }
+            OnPropertyChanged(nameof(CanEditGraph));
+            OnPropertyChanged(nameof(CanRun));
+            OnPropertyChanged(nameof(CanDeleteSelection));
+            OnPropertyChanged(nameof(CanUndo));
+            OnPropertyChanged(nameof(CanRedo));
+            OnPropertyChanged(nameof(CanCollapseExpandedComposite));
+            RunCommand.NotifyCanExecuteChanged();
+            PreviewCommand.NotifyCanExecuteChanged();
+            ValidateGraphCommand.NotifyCanExecuteChanged();
+            StopCommand.NotifyCanExecuteChanged();
+            DeleteSelectedCommand.NotifyCanExecuteChanged();
+        }
     }
 
+    public bool CanEditGraph => !IsExecuting;
+    public bool CanRun => !IsExecuting && Nodes.Count > 0;
+    public bool CanDeleteSelection => !IsExecuting && HasSelection;
     /// <summary>Short workflow summaries shown in the bottom panel; detailed diagnostics remain in the global log.</summary>
     public ObservableCollection<string> ExecutionLog { get; } = [];
 
@@ -341,13 +388,13 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// <para>获取是否能执行撤销操作。</para>
     /// Gets whether an undo operation is available.
     /// </summary>
-    public bool CanUndo => _undoStack.Count > 0;
+    public bool CanUndo => !IsExecuting && _undoStack.Count > 0;
 
     /// <summary>
     /// <para>获取是否能执行重做操作。</para>
     /// Gets whether a redo operation is available.
     /// </summary>
-    public bool CanRedo => _redoStack.Count > 0;
+    public bool CanRedo => !IsExecuting && _redoStack.Count > 0;
 
     /// <summary>
     /// <para>获取待处理连接视图模型，管理拖拽连线状态。</para>
@@ -364,6 +411,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         ShowVisualPluginWorkspace = showVisualPluginWorkspace;
         SelectedNodes = new ReadOnlyObservableCollection<NodeViewModels.FlowNodeViewModel>(_selectedNodes);
         _connections.CollectionChanged += OnConnectionsChanged;
+        _nodes.CollectionChanged += OnNodesChanged;
         BatchInputs = new ReadOnlyObservableCollection<NodeViewModels.BatchNodeInputViewModel>(_batchInputs);
         InitializeToolbox();
         PendingConnection = new PendingConnectionViewModel(this);
@@ -410,6 +458,14 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
+        foreach (var node in Nodes)
+        {
+            node.RefreshLocalization();
+        }
+        foreach (var choice in ValueTypeChoices)
+        {
+            choice.RefreshLocalization();
+        }
         PatchChanges = PatchChanges.Select(item => new PatchChangeViewModel(item.Change)).ToArray();
         CompositeExecutions = CompositeExecutions.Select(item => new PatchCompositeExecutionViewModel(item.Execution)).ToArray();
         OnPropertyChanged(nameof(PatchOutcomeText));
@@ -435,7 +491,15 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </param>
     private void OnNodeEditorAction(object recipient, NodeEditorActionMessage message)
     {
-        switch (message.Action)
+        if (message.EditorId == EditorId)
+        {
+            ExecuteAction(message.Action);
+        }
+    }
+
+    internal void ExecuteAction(NodeEditorAction action)
+    {
+        switch (action)
         {
             case NodeEditorAction.Delete:
                 DeleteSelected();
@@ -447,6 +511,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
                 CopySelectedToClipboard();
                 break;
             case NodeEditorAction.Cut:
+                if (IsExecuting)
+                {
+                    return;
+                }
                 CopySelectedToClipboard();
                 DeleteSelectedNodes();
                 break;
@@ -465,6 +533,18 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             case NodeEditorAction.Stop:
                 Stop();
                 break;
+            case NodeEditorAction.ZoomIn:
+                ZoomIn();
+                break;
+            case NodeEditorAction.ZoomOut:
+                ZoomOut();
+                break;
+            case NodeEditorAction.ResetZoom:
+                ResetZoom();
+                break;
+            case NodeEditorAction.ToggleMinimap:
+                ToggleMinimap();
+                break;
         }
     }
 
@@ -479,6 +559,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </param>
     private void ExecuteCommand(NodeViewModels.EditorCommands.IEditorCommand command)
     {
+        if (IsExecuting)
+        {
+            return;
+        }
         command.Execute();
         _undoStack.Push(command);
         if (_undoStack.Count > MaxUndoDepth)
@@ -502,6 +586,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void Undo()
     {
+        if (IsExecuting)
+        {
+            return;
+        }
         if (_undoStack.Count == 0)
         {
             _log.Write(LogLevel.Info, "NodeEditor", "Undo requested but undo stack is empty");
@@ -518,6 +606,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             _suppressPropertyTracking = false;
         }
         _redoStack.Push(command);
+        SetSelection(_selectedNodes.Where(Nodes.Contains).ToArray());
         RefreshSelectionProperties();
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
@@ -531,6 +620,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void Redo()
     {
+        if (IsExecuting)
+        {
+            return;
+        }
         if (_redoStack.Count == 0)
         {
             _log.Write(LogLevel.Info, "NodeEditor", "Redo requested but redo stack is empty");
@@ -575,32 +668,13 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     {
         var selected = Nodes.Where(n => n.IsSelected).ToList();
         if (selected.Count == 0) return;
-        var selectedSet = selected.ToHashSet();
-        var indexByNode = selected.Select((node, index) => (node, index))
-            .ToDictionary(item => item.node, item => item.index);
-        _clipboard = new NodeClipboard(
-            selected.Select(node => new ClipboardNode(
-                node.TypeKey,
-                node.Title,
-                node.Category,
-                node.Location,
-                node.NodeValueType,
-                node.NodeValue,
-                node.SelectedImage,
-                node.Input
-                    .Where(port => port.HasPersistableInitialValue)
-                    .ToDictionary(port => port.Title, port => port.InitialValue),
-                node.InstanceId, (node as CompositeNodeViewModel)?.Package)).ToList(),
-            Connections
-                .Where(connection => connection.Source is not null && connection.Target is not null)
-                .Select(connection => (connection, source: selected.FirstOrDefault(node => node.Output.Contains(connection.Source!)), target: selected.FirstOrDefault(node => node.Input.Contains(connection.Target!))))
-                .Where(item => item.source is not null && item.target is not null && selectedSet.Contains(item.source) && selectedSet.Contains(item.target))
-                .Select(item => new ClipboardConnection(
-                    indexByNode[item.source!],
-                    SourceTitle: item.connection.Source!.Title,
-                    indexByNode[item.target!],
-                    TargetTitle: item.connection.Target!.Title))
-                .ToList());
+        _clipboard = WorkflowPersistenceService.CloneForEditing(new WorkflowSnapshot
+        {
+            Nodes = WorkflowPersistenceService.BuildNodeDtos(selected),
+            Connections = WorkflowPersistenceService.BuildConnectionDtos(selected, Connections)
+                .Where(edge => edge.SourceInstanceId is not null && edge.TargetInstanceId is not null).ToList()
+        });
+        _pasteCount = 0;
         _log.Write(LogLevel.Info, "NodeEditor", $"Copied {selected.Count} node(s)");
     }
 
@@ -610,59 +684,29 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void PasteFromClipboard()
     {
-        if (_clipboard is not { Nodes.Count: > 0 } clipboard) return;
-        var offset = new Point(40, 40);
-        var pasted = new List<NodeViewModels.FlowNodeViewModel>();
-        var pastedIndexByClipboardIndex = new Dictionary<int, int>();
-        for (var clipboardIndex = 0; clipboardIndex < clipboard.Nodes.Count; clipboardIndex++)
+        if (IsExecuting || _clipboard is not { Nodes.Count: > 0 } clipboard)
         {
-            var item = clipboard.Nodes[clipboardIndex];
-            var node = item.CompositePackage is { } package ? new CompositeNodeViewModel(package) : NodeTypeRegistry.Create(item.TypeKey);
-            if (node is null)
-            {
-                _log.Write(LogLevel.Warn, "NodeEditor", $"Cannot paste unknown node type '{item.TypeKey}'.");
-                continue;
-            }
-            node.Title = item.Title + " (copy)";
-            node.Location = item.Location + offset;
-            if (item.NodeValueType is not null) node.NodeValueType = item.NodeValueType;
-            if (item.NodeValue is not null) node.NodeValue = item.NodeValue;
-            if (item.SelectedImage is not null) node.SelectedImage = item.SelectedImage;
-            foreach (var (title, value) in item.InitialValues)
-            {
-                if (node.Input.FirstOrDefault(port => port.Title == title) is { } port)
-                    port.InitialValue = value;
-            }
-            pasted.Add(node);
-            pastedIndexByClipboardIndex[clipboardIndex] = pasted.Count - 1;
+            return;
         }
-        if (pasted.Count == 0) return;
-
-        var commands = pasted
-            .Select(node => (NodeViewModels.EditorCommands.IEditorCommand)new NodeViewModels.EditorCommands.AddNodeCommand(Nodes, Connections, node))
-            .ToList();
-        foreach (var connection in clipboard.Connections)
+        try
         {
-            if (!pastedIndexByClipboardIndex.TryGetValue(connection.SourceIndex, out var sourceIndex)
-                || !pastedIndexByClipboardIndex.TryGetValue(connection.TargetIndex, out var targetIndex)) continue;
-            var source = pasted[sourceIndex].Output.FirstOrDefault(port => port.Title == connection.SourceTitle);
-            var target = pasted[targetIndex].Input.FirstOrDefault(port => port.Title == connection.TargetTitle);
-            if (source is not null && target is not null)
-                commands.Add(new NodeViewModels.EditorCommands.AddConnectionCommand(Connections, new NodeViewModels.NodeConnectionViewModel(source, target)));
+            var graph = BuildEditableGraph(WorkflowPersistenceService.CloneForEditing(clipboard), restoreInstanceIds: false);
+            var offset = new Point(40 * (++_pasteCount), 40 * _pasteCount);
+            foreach (var node in graph.Nodes)
+            {
+                node.Location += offset;
+            }
+            AppendGraph(graph);
+            FocusSelection();
         }
-        ExecuteCommand(new NodeViewModels.EditorCommands.CompoundCommand(commands));
-        foreach (var node in pasted) AttachNodePropertyTracking(node);
-        _nextNodeLocation = new Point(_nextNodeLocation.X + offset.X, _nextNodeLocation.Y + offset.Y);
-        _log.Write(LogLevel.Info, "NodeEditor", $"Pasted {pasted.Count} node(s)");
+        catch (Exception error) when (error is InvalidDataException or InvalidOperationException or ArgumentException)
+        {
+            ExecutionStatus = UserError.Describe(error, "UserError_RunFailed");
+        }
     }
 
-    private NodeClipboard? _clipboard;
-
-    private sealed record NodeClipboard(List<ClipboardNode> Nodes, List<ClipboardConnection> Connections);
-    private sealed record ClipboardNode(string TypeKey, string Title, NodeCategory Category, Point Location,
-        string? NodeValueType, string? NodeValue, string? SelectedImage, Dictionary<string, object?> InitialValues, string InstanceId,
-        VisualPluginPackage? CompositePackage);
-    private sealed record ClipboardConnection(int SourceIndex, string SourceTitle, int TargetIndex, string TargetTitle);
+    private static WorkflowSnapshot? _clipboard;
+    private int _pasteCount;
 
     private void AttachNodePropertyTracking(NodeViewModels.FlowNodeViewModel node)
     {
@@ -671,6 +715,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         {
             AttachPropertyTracking(connector);
         }
+        node.RefreshCanvasInputs(CompactNodes);
     }
 
     /// <summary>Gets the nodes currently selected on the canvas.</summary>
@@ -814,6 +859,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(SelectedNodeCount));
         OnPropertyChanged(nameof(HasSelectedNodes));
         OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(CanDeleteSelection));
         OnPropertyChanged(nameof(IsSingleSelection));
         OnPropertyChanged(nameof(IsMultipleSelection));
         OnPropertyChanged(nameof(DeleteSelectionText));
@@ -943,13 +989,14 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     private void OnTrackedPropertyChanged(INotifyPropertyChanged target, string? propertyName)
     {
-        if (propertyName == nameof(NodeConnectorViewModel.InitialValue))
-        {
-            RefreshParameterPresentation();
-        }
         if (target is NodeConnectorViewModel && propertyName == nameof(NodeConnectorViewModel.InitialValue))
         {
             Services.Interactions.InteractionSchemaResolver.Refresh(Nodes, Connections);
+            RefreshParameterPresentation();
+        }
+        else if (propertyName == nameof(FlowNodeViewModel.CustomName))
+        {
+            RefreshParameterPresentation();
         }
         if (propertyName is null || !TrackedProperties(target).Contains(propertyName, StringComparer.Ordinal)) return;
 
@@ -984,9 +1031,13 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </param>
     public void AddNode(NodeViewModels.FlowNodeViewModel node, bool preserveLocation = false)
     {
+        if (IsExecuting)
+        {
+            return;
+        }
         if (!preserveLocation && (node.Location == DefaultNodeLocation || node.Location == default))
         {
-            node.Location = _nextNodeLocation;
+            node.Location = InsertionLocationProvider?.Invoke() ?? _nextNodeLocation;
             _nextNodeLocation = new Point(_nextNodeLocation.X + 40, _nextNodeLocation.Y + 40);
         }
 
@@ -1021,6 +1072,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </param>
     public void CreateConnection(NodeViewModels.NodeConnectorViewModel source, NodeViewModels.NodeConnectorViewModel target)
     {
+        if (IsExecuting)
+        {
+            return;
+        }
         if (source == target) return;
         if (source.IsInput == target.IsInput)
         {
@@ -1031,40 +1086,28 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         {
             (source, target) = (target, source);
         }
-        if (Nodes.Any(node => node.Output.Contains(source) && node.Input.Contains(target)))
+        if (WorkflowGraphValidation.ValidateConnection(Nodes, Connections, source, target) is { } error)
         {
-            RejectConnection("Node_Connection_SameNode", "Connection rejected: source and target belong to the same node");
+            ExecutionStatus = error;
+            AppendExecutionLog(error);
             return;
         }
-        // 检查是否已存在相同连接
-        if (Connections.Any(c => c.Source == source && c.Target == target))
+        var edge = new NodeConnectionViewModel(source, target);
+        var issues = WorkflowGraphValidation.Validate(Nodes, [.. Connections, edge]);
+        if (issues.Count > 0)
         {
-            RejectConnection("Node_Connection_Duplicate", "Connection rejected: duplicate connection");
+            ExecutionStatus = issues[0].DisplayText;
             return;
         }
-        // 端口类型兼容性校验：不兼容则拒绝连接并提示
-        if (!NodeDataUtil.CanConnect(source.PortType, target.PortType))
-        {
-            RejectConnection("Node_Connection_Incompatible",
-                $"Connection rejected: type {source.PortType} -> {target.PortType} incompatible");
-            return;
-        }
-        // MaxConnections 为端口声明的连线上限（0 表示不限制），编辑器必须强制执行而不是仅持久化。
-        // MaxConnections is the declared per-port connection limit (0 = unlimited); the editor enforces it rather than only persisting it.
-        if ((target.MaxConnections > 0 && Connections.Count(c => c.Target == target) >= target.MaxConnections)
-            || (source.MaxConnections > 0 && Connections.Count(c => c.Source == source) >= source.MaxConnections))
-        {
-            RejectConnection("Node_Connection_MaxReached", "Connection rejected: port reached its maximum connection count");
-            return;
-        }
-        ExecuteCommand(new NodeViewModels.EditorCommands.AddConnectionCommand(Connections, new NodeViewModels.NodeConnectionViewModel(source, target)));
+        ExecuteCommand(new AddConnectionCommand(Connections, edge));
     }
 
     /// <summary>Reports a rejected connection attempt to the execution log so the user sees why nothing happened.</summary>
     private void RejectConnection(string reasonKey, string detail)
     {
         _log.Write(LogLevel.Warn, "NodeEditor", detail);
-        AppendExecutionLog(LanguageService.Instance.GetString(reasonKey));
+        ExecutionStatus = LanguageService.Instance.GetString(reasonKey);
+        AppendExecutionLog(ExecutionStatus);
     }
 
     [RelayCommand]
@@ -1083,6 +1126,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     private void ResetZoom()
     {
         Zoom = 1.0;
+        ViewportRequested?.Invoke(NodeViewportAction.Reset);
     }
 
     [RelayCommand]
@@ -1091,7 +1135,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         ShowMinimap = !ShowMinimap;
     }
 
-    [RelayCommand(CanExecute = nameof(HasSelection))]
+    [RelayCommand(CanExecute = nameof(CanDeleteSelection))]
     private void DeleteSelected()
     {
         if (SelectedConnection is { } connection)
@@ -1136,11 +1180,11 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// <para>异步执行节点工作流。基于拓扑排序依次执行节点，并将上游输出注入下游输入。</para>
     /// Asynchronously executes the node workflow. Nodes are executed in topological order; upstream outputs are injected into downstream inputs.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRun))]
     private Task RunAsync() => ExecuteGraphAsync(false);
 
     /// <summary>Evaluates supported patch graphs without publishing staged files.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRun))]
     private Task PreviewAsync() => ExecuteGraphAsync(true);
 
     private async Task ExecuteGraphAsync(bool preview)
@@ -1158,6 +1202,12 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         }
 
         IsExecuting = true;
+        FailedNodes = [];
+        foreach (var node in Nodes)
+        {
+            node.ExecutionError = string.Empty;
+            node.ExecutionStatus = NodeExecutionStatus.Idle;
+        }
         PatchChanges = [];
         NodeArtifactRegistry.Reset();
         CompositeExecutions = [];
@@ -1180,6 +1230,18 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             _engine.ProgressChanged += OnExecutionProgress;
 
             var nodes = Nodes.ToList();
+            var issues = WorkflowGraphValidation.Validate(nodes, Connections);
+            if (issues.Count > 0)
+            {
+                foreach (var issue in issues)
+                {
+                    if (issue.Node is { } node)
+                    {
+                        node.ExecutionError = issue.Message;
+                    }
+                }
+                throw new InvalidDataException(string.Join(Environment.NewLine, issues.Select(issue => issue.DisplayText)));
+            }
             var connections = Connections
                 .Where(c => c.Source != null && c.Target != null)
                 .Select(c => new NodeConnection
@@ -1187,7 +1249,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
                     SourceInstanceId = FindOwnerInstanceId(c.Source!) ?? string.Empty,
                     TargetInstanceId = FindOwnerInstanceId(c.Target!) ?? string.Empty,
                     SourceConnector = c.Source!.Title,
-                    TargetConnector = c.Target!.Title
+                    TargetConnector = c.Target!.Title,
+                    SourcePortId = c.Source.StableId,
+                    TargetPortId = c.Target.StableId
                 })
                 .Where(c => !string.IsNullOrEmpty(c.SourceInstanceId) && !string.IsNullOrEmpty(c.TargetInstanceId))
                 .ToList();
@@ -1197,7 +1261,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             {
                 result = await _engine.ExecuteAsync(nodes, connections, _runCts.Token,
                     new NodeExecutionOptions { Preview = preview, Package = ResourcePackage, ValidatePackage = ValidatePackage, Interactions = Interactions }).ConfigureAwait(false);
-            }, _runCts.Token).ConfigureAwait(false);
+            }, _runCts.Token);
             if (result is null) { throw new InvalidOperationException("Workflow returned no execution result."); }
 
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
@@ -1219,18 +1283,30 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
                 _ => LanguageService.Instance.GetString("Node_StatusReady")
             };
             AppendExecutionLog(ExecutionStatus);
+            if (result.Status == Services.Execution.ExecutionStatus.Succeeded)
+            {
+                ExecutionProgress = 1;
+            }
+            IsExecutionLogExpanded |= result.Status is Services.Execution.ExecutionStatus.Failed or Services.Execution.ExecutionStatus.PartiallySucceeded;
+        }
+        catch (OperationCanceledException)
+        {
+            ExecutionStatus = LanguageService.Instance.GetString("Node_Patch_RunCancelled");
+            AppendExecutionLog(ExecutionStatus);
         }
         catch (Exception ex)
         {
             _log.Write(LogLevel.Error, "NodeEditor", $"Run failed: {ex.Message}");
             ExecutionStatus = global::UotanStudio.Services.UserError.Describe(ex, "UserError_RunFailed");
             AppendExecutionLog(ExecutionStatus);
+            IsExecutionLogExpanded = true;
         }
         finally
         {
             // 退订执行日志，避免跨次运行的重复收集
             // Unsubscribe from the execution log to avoid duplicate collection across runs.
             IsExecuting = false;
+            FailedNodes = Nodes.Where(node => node.ExecutionStatus == NodeExecutionStatus.Failed || node.ExecutionError.Length > 0).ToArray();
             if (_engine != null)
             {
                 _engine.ProgressChanged -= OnExecutionProgress;
@@ -1244,7 +1320,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// <para>停止正在执行的节点工作流。</para>
     /// Stops the currently executing node workflow.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsExecuting))]
     private void Stop()
     {
         if (!IsExecuting) return;
@@ -1259,6 +1335,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     public void Clear()
     {
+        if (IsExecuting)
+        {
+            return;
+        }
         DetachAllPropertyTracking();
         SetSelection([]);
         Connections.Clear();
@@ -1269,6 +1349,12 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CanRedo));
         ExecutionProgress = 0.0;
         ExecutionStatus = LanguageService.Instance.GetString("Node_StatusReady");
+        PatchChanges = [];
+        CompositeExecutions = [];
+        FailedNodes = [];
+        IsExecutionLogExpanded = false;
+        ExecutionLog.Clear();
+        _nextNodeLocation = DefaultNodeLocation;
     }
 
     private void DetachAllPropertyTracking()
@@ -1281,9 +1367,34 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         _trackedPropertyValues.Clear();
     }
 
+    private void DetachPropertyTracking(INotifyPropertyChanged target)
+    {
+        if (_propertyHandlers.Remove(target, out var handler))
+        {
+            target.PropertyChanged -= handler;
+        }
+        foreach (var property in TrackedProperties(target))
+        {
+            _trackedPropertyValues.Remove((target, property));
+        }
+    }
+
     private void OnExecutionProgress(object? sender, double progress)
     {
-        ExecutionProgress = progress;
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            ExecutionProgress = progress;
+        }
+        else
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (IsExecuting)
+                {
+                    ExecutionProgress = progress;
+                }
+            });
+        }
     }
 
     /// <summary>Appends one line to the execution log for the current run.</summary>
@@ -1408,118 +1519,84 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </returns>
     public Task LoadFromAsync(Services.Projects.WorkflowSnapshot snapshot)
     {
-        ArgumentNullException.ThrowIfNull(snapshot);
-        snapshot.EnsureSupportedVersion();
-        var restoredNodes = new List<FlowNodeViewModel>();
-        var restoredConnections = new List<NodeConnectionViewModel>();
-
-        // 重建节点：按 TypeKey 查注册表创建具体节点；未注册的类型跳过并告警（软件未发布，无旧工程兼容需求）
-        // Rebuild nodes: create concrete nodes via the registry by TypeKey; skip and warn on unregistered types
-        // (no released builds exist, so there are no legacy projects to keep loading).
-        var created = new System.Collections.Generic.Dictionary<string, NodeViewModels.FlowNodeViewModel>(StringComparer.OrdinalIgnoreCase);
-        foreach (var dto in snapshot.Nodes)
-        {
-            if (!System.Enum.TryParse<NodeViewModels.NodeCategory>(dto.Category, true, out var category))
-            {
-                category = NodeViewModels.NodeCategory.Firmware;
-            }
-            if (!Services.Projects.WorkflowReconstruction.TryCreateNode(dto, out var node, preserveUnknown: true,
-                    restoreInstanceId: true))
-            {
-                _log.Write(LogLevel.Warn, "NodeEditor", $"Unknown node type '{dto.TypeKey}' skipped while loading workflow.");
-                continue;
-            }
-            node.Location = new Point(dto.X, dto.Y);
-            // 恢复输入端口初始值：标题匹配输入端口，值为字符串；数字/布尔按原类型宽松转换。
-            // Restore input initial values: match input ports by title; the value is a string, leniently converted for numbers/booleans.
-            Services.Projects.WorkflowReconstruction.RestoreInitialValues(node, dto.InputInitialValues,
-                dto.InputInitialValuesByPortId);
-            restoredNodes.Add(node);
-            if (!string.IsNullOrEmpty(dto.InstanceId)) created[dto.InstanceId] = node;
-        }
-
-        // 重建连接：优先按持久化的源/目标实例 ID 精确匹配（新快照）；缺失时回退为按连接器标题匹配
-        //（简易匹配，仅当标题唯一时成功）。
-        // Rebuild connections: prefer exact matching via persisted source/target instance IDs (new snapshots);
-        // fall back to connector-title matching when absent (lenient matching, succeeds only when titles are unique).
-        Services.Interactions.InteractionSchemaResolver.RefreshFromSnapshot(restoredNodes, created, snapshot);
-        foreach (var cdto in snapshot.Connections)
-        {
-            var (_, src) = Services.Projects.WorkflowReconstruction.ResolveEndpoint(restoredNodes, created,
-                cdto.SourceInstanceId, cdto.SourceConnectorTitle, output: true, fallbackOnMissingPort: true,
-                cdto.SourcePortId);
-            var (_, tgt) = Services.Projects.WorkflowReconstruction.ResolveEndpoint(restoredNodes, created,
-                cdto.TargetInstanceId, cdto.TargetConnectorTitle, output: false, fallbackOnMissingPort: true,
-                cdto.TargetPortId);
-            if (src != null && tgt != null)
-            {
-                restoredConnections.Add(new NodeConnectionViewModel(src, tgt));
-            }
-            else
-            {
-                _log.Write(LogLevel.Warn, "NodeEditor",
-                    $"Could not rebuild connection: '{cdto.SourceConnectorTitle}' → '{cdto.TargetConnectorTitle}'");
-            }
-        }
-
+        EnsureEditable();
+        var graph = BuildEditableGraph(snapshot, restoreInstanceIds: true);
         Clear();
-        foreach (var node in restoredNodes)
+        foreach (var node in graph.Nodes)
         {
             Nodes.Add(node);
             AttachNodePropertyTracking(node);
         }
-        foreach (var connection in restoredConnections)
+        foreach (var connection in graph.ViewConnections)
         {
             Connections.Add(connection);
         }
         _log.Write(LogLevel.Info, "NodeEditor",
             $"Loaded {Nodes.Count} node(s), {Connections.Count} connection(s) from snapshot");
+        RefreshParameterPresentation();
+        FitAll();
         return Task.CompletedTask;
     }
 
     /// <summary>Appends a portable workflow template as one undoable canvas edit.</summary>
     public void ImportTemplate(Services.Projects.VisualPluginPackage package)
     {
+        EnsureEditable();
         ArgumentNullException.ThrowIfNull(package);
         if (package.Kind != Services.Projects.VisualPluginKind.WorkflowTemplate)
             throw new InvalidDataException("Only workflow-template packages can be imported into the canvas.");
 
-        var graph = package.Graph;
-        var created = new Dictionary<string, NodeViewModels.FlowNodeViewModel>(StringComparer.Ordinal);
-        var imported = new List<NodeViewModels.FlowNodeViewModel>();
-        var minimumX = graph.Nodes.Count == 0 ? 0 : graph.Nodes.Min(node => node.X);
-        var minimumY = graph.Nodes.Count == 0 ? 0 : graph.Nodes.Min(node => node.Y);
-        var offset = new Point(_nextNodeLocation.X - minimumX, _nextNodeLocation.Y - minimumY);
-
-        foreach (var dto in graph.Nodes)
+        var errors = VisualPluginValidation.Validate(package);
+        if (errors.Count > 0)
         {
-            if (!Services.Projects.WorkflowReconstruction.TryCreateNode(dto, out var node, preserveUnknown: true))
-                continue;
-            Services.Projects.WorkflowReconstruction.RestoreInitialValues(node, dto.InputInitialValues,
-                dto.InputInitialValuesByPortId);
-            node.Location = new Point(dto.X + offset.X, dto.Y + offset.Y);
-            imported.Add(node);
-            if (!string.IsNullOrWhiteSpace(dto.InstanceId)) created[dto.InstanceId] = node;
+            throw new InvalidDataException(string.Join(Environment.NewLine, errors));
         }
-        if (imported.Count == 0) throw new InvalidDataException("The workflow template contains no importable nodes.");
-
-        Services.Interactions.InteractionSchemaResolver.RefreshFromSnapshot(imported, created, graph);
-        var commands = imported.Select(node => (IEditorCommand)new AddNodeCommand(Nodes, Connections, node)).ToList();
-        foreach (var connection in graph.Connections)
+        var graph = BuildEditableGraph(package.Graph, restoreInstanceIds: false);
+        if (graph.Nodes.Count == 0)
         {
-            var (_, source) = Services.Projects.WorkflowReconstruction.ResolveEndpoint(imported, created,
-                connection.SourceInstanceId, connection.SourceConnectorTitle, true, false, connection.SourcePortId);
-            var (_, target) = Services.Projects.WorkflowReconstruction.ResolveEndpoint(imported, created,
-                connection.TargetInstanceId, connection.TargetConnectorTitle, false, false, connection.TargetPortId);
-            if (source is not null && target is not null)
-                commands.Add(new AddConnectionCommand(Connections, new NodeConnectionViewModel(source, target)));
+            throw new InvalidDataException(LanguageService.Instance.GetString("Node_Graph_Empty"));
         }
-
-        ExecuteCommand(new CompoundCommand(commands));
-        foreach (var node in imported) AttachNodePropertyTracking(node);
-        SetSelection(imported);
+        var position = InsertionLocationProvider?.Invoke() ?? _nextNodeLocation;
+        var offset = position - new Point(graph.Nodes.Min(node => node.Location.X), graph.Nodes.Min(node => node.Location.Y));
+        foreach (var node in graph.Nodes)
+        {
+            node.Location += offset;
+        }
+        AppendGraph(graph);
         _nextNodeLocation += new Point(40, 40);
-        _log.Write(LogLevel.Info, "NodeEditor", $"Imported template '{package.Manifest.Name}' with {imported.Count} node(s).");
+        FocusSelection();
+    }
+
+    private static WorkflowRuntime BuildEditableGraph(WorkflowSnapshot snapshot, bool restoreInstanceIds)
+    {
+        var graph = WorkflowRuntimeBuilder.Build(snapshot, preserveUnknown: true, restoreInstanceIds,
+            canvasIdentityComparison: true);
+        if (graph.Errors.Count > 0)
+        {
+            throw new InvalidDataException(string.Join(Environment.NewLine, graph.Errors));
+        }
+        return graph;
+    }
+
+    private void AppendGraph(WorkflowRuntime graph)
+    {
+        var commands = graph.Nodes.Select(node => (IEditorCommand)new AddNodeCommand(Nodes, Connections, node)).ToList();
+        commands.AddRange(graph.ViewConnections.Select(edge => new AddConnectionCommand(Connections, edge)));
+        ExecuteCommand(new CompoundCommand(commands));
+        foreach (var node in graph.Nodes)
+        {
+            AttachNodePropertyTracking(node);
+        }
+        SetSelection(graph.Nodes);
+        RefreshParameterPresentation();
+    }
+
+    private void EnsureEditable()
+    {
+        if (IsExecuting)
+        {
+            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Graph_Running"));
+        }
     }
 
     /// <summary>Captures the current canvas as a portable visual-plugin package.</summary>
@@ -1529,6 +1606,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        _nodes.CollectionChanged -= OnNodesChanged;
         _connections.CollectionChanged -= OnConnectionsChanged;
         DetachAllPropertyTracking();
         LanguageService.Instance.LanguageChanged -= OnLanguageChanged;

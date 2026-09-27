@@ -5,7 +5,6 @@ using UotanStudio.Firmware.SharedKernel.Repacking;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Firmware;
-using FirmwareOpResult = UotanStudio.Services.Firmware.FirmwareOpResult;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 
@@ -57,7 +56,13 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
             TypeKey = "Firmware.Container.Pack"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Input Dir", PortType = NodePortType.Path });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Config", PortType = NodePortType.Text });
+        node.Input.Add(new NodeConnectorViewModel
+        {
+            Title = "Config",
+            PortType = NodePortType.Text,
+            DisplayResourceKey = "Node_Conn_LegacyOutputPath"
+        });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Output Path", PortType = NodePortType.Path });
         node.Output.Add(new NodeConnectorViewModel { Title = "Firmware", PortType = NodePortType.Path });
         return node;
     }
@@ -94,14 +99,16 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         node.Input.Add(new NodeConnectorViewModel { Title = "Firmware", PortType = NodePortType.Path });
         node.Input.Add(new NodeConnectorViewModel { Title = "Partition Name", PortType = NodePortType.Text });
         node.Output.Add(new NodeConnectorViewModel { Title = "Image", PortType = NodePortType.Data });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Image File", PortType = NodePortType.Path });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Output Dir", PortType = NodePortType.Path });
         return node;
     }
 
     /// <summary>
     /// <para>按节点类型键（TypeKey）分发对应的固件逻辑：Firmware.Container.Unpack 解包（boot/oppo/dt）、Firmware.Container.Pack 打包（boot/cpio/dtbo）、
-    /// Validation.Signature.Verify 校验 AVB 签名或计算哈希、Firmware.Container.Extract 从 payload 提取分区。</para>
+    /// Validation.Signature.Verify 校验 AVB 签名、Firmware.Container.Extract 从 payload 提取分区。</para>
     /// Dispatches firmware logic by the node type key (TypeKey): Firmware.Container.Unpack unpacks (boot/oppo/dt), Firmware.Container.Pack packs
-    /// (boot/cpio/dtbo), Validation.Signature.Verify verifies the AVB signature or computes a hash, and Firmware.Container.Extract extracts a
+    /// (boot/cpio/dtbo), Validation.Signature.Verify verifies an AVB signature, and Firmware.Container.Extract extracts a
     /// partition from a payload.
     /// </summary>
     /// <param name="context">
@@ -195,45 +202,32 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
     {
         var inputDir = PathText(ReadInput("Input Dir"));
         var config = PathText(ReadInput("Config"));
+        var configuredOutput = PathText(ReadInput("Output Path"));
         if (string.IsNullOrWhiteSpace(inputDir) || !Directory.Exists(inputDir))
         {
             throw new DirectoryNotFoundException($"Input directory was not found: {inputDir}");
         }
 
-        var outputPath = string.IsNullOrWhiteSpace(config)
-            ? DefaultOutputFor(inputDir)
-            : config;
+        var outputPath = !string.IsNullOrWhiteSpace(configuredOutput)
+            ? configuredOutput
+            : string.IsNullOrWhiteSpace(config) ? DefaultOutputFor(inputDir) : config;
 
-        var service = FirmwareService.Instance;
-        FirmwareOpResult result;
         using var metadataScope = RepackMetadata.UseContext(
             UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(inputDir));
-        var repack = RepackMetadata.Read(inputDir);
-        if (repack is not null)
+        var repack = RepackMetadata.Read(inputDir)
+            ?? throw new InvalidDataException(LanguageService.Instance.GetString("Node_Pack_RequiresMetadata"));
+        if (!repack.CanPackDirectory)
         {
-            if (!repack.CanPackDirectory)
-            {
-                throw new InvalidDataException(repack.PackingNotes);
-            }
-            var packed = await RegisteredFirmwareFormats.PackDirectoryAsync(repack.FormatName, inputDir,
-                outputPath, context.CancellationToken, throwIfUnsupported: true).ConfigureAwait(false);
-            if (!packed.Success)
-            {
-                throw new InvalidDataException(packed.Summary);
-            }
-            WriteOutput("Firmware", outputPath);
-            context.Log.Write(LogLevel.Info, Title, packed.Summary);
-            return;
+            throw new InvalidDataException(repack.PackingNotes);
         }
-        result = await service.PackCpioAsync(inputDir, outputPath, context.CancellationToken).ConfigureAwait(false);
-
-        if (!result.Success)
+        var packed = await RegisteredFirmwareFormats.PackDirectoryAsync(repack.FormatName, inputDir,
+            outputPath, context.CancellationToken, throwIfUnsupported: true).ConfigureAwait(false);
+        if (!packed.Success)
         {
-            throw new InvalidDataException(result.Summary);
+            throw new InvalidDataException(packed.Summary);
         }
-
         WriteOutput("Firmware", outputPath);
-        context.Log.Write(LogLevel.Info, Title, $"{result.Summary}  已打包。");
+        context.Log.Write(LogLevel.Info, Title, packed.Summary);
     }
 
     private async Task ExecuteVerifyAsync(INodeExecutionContext context)
@@ -244,26 +238,23 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
             throw new FileNotFoundException("Firmware input was not found.", path);
         }
 
-        var service = FirmwareService.Instance;
-        var isVbmeta = await HasMagicAsync(path, "AVB0").ConfigureAwait(false);
-        FirmwareOpResult result;
-        if (isVbmeta)
+        if (!await HasMagicAsync(path, "AVB0", context.CancellationToken).ConfigureAwait(false))
         {
-            var publicKey = PathText(ReadInput("Public Key"));
-            result = await service.VerifyAvbAsync(path,
-                publicKeyPath: string.IsNullOrWhiteSpace(publicKey) ? null : publicKey,
-                context.CancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            var checksum = await service.VerifyChecksumAsync(path, null, context.CancellationToken).ConfigureAwait(false);
-            result = new FirmwareOpResult { Success = true, Summary = $"Computed {checksum.Summary}" };
+            throw new InvalidDataException("Signature verification requires an AVB vbmeta image.");
         }
 
+        var publicKey = PathText(ReadInput("Public Key"));
+        var result = await FirmwareService.Instance.VerifyAvbAsync(path,
+            publicKeyPath: string.IsNullOrWhiteSpace(publicKey) ? null : publicKey,
+            context.CancellationToken).ConfigureAwait(false);
         var report = result.Success ? result.Summary : $"Verification failed: {result.Summary}  校验失败。";
         WriteOutput("Valid", result.Success);
         WriteOutput("Report", report);
         context.Log.Write(result.Success ? LogLevel.Info : LogLevel.Error, Title, report);
+        if (!result.Success)
+        {
+            throw new InvalidDataException(report);
+        }
     }
 
     private async Task ExecuteExtractAsync(INodeExecutionContext context)
@@ -277,17 +268,20 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
 
         var outputDir = DeriveOutputDir(path);
         var result = await FirmwareService.Instance
-            .ExtractPayloadAsync(path, outputDir, partition)
+            .ExtractPayloadAsync(path, outputDir, partition, context.CancellationToken)
             .ConfigureAwait(false);
         if (!result.Success)
         {
             throw new InvalidDataException(result.Summary);
         }
 
-        var imagePath = string.IsNullOrWhiteSpace(partition)
-            ? outputDir
-            : Path.Combine(outputDir, partition);
-        WriteOutput("Image", imagePath);
+        if (!string.IsNullOrWhiteSpace(partition))
+        {
+            var imagePath = Path.Combine(outputDir, partition + ".img");
+            WriteOutput("Image", new UotanStudio.Services.Projects.FileArtifact(imagePath));
+            WriteOutput("Image File", imagePath);
+        }
+        WriteOutput("Output Dir", outputDir);
         context.Log.Write(LogLevel.Info, Title, $"{result.Summary}  已提取。");
     }
 
@@ -306,11 +300,11 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         return Path.Combine(parent, Path.GetFileName(inputDir) + ".img");
     }
 
-    private static async Task<bool> HasMagicAsync(string path, string magic)
+    private static async Task<bool> HasMagicAsync(string path, string magic, CancellationToken cancellationToken)
     {
         await using var fs = File.OpenRead(path);
         var buffer = new byte[magic.Length];
-        var read = await fs.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+        var read = await fs.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
         return read >= magic.Length && System.Text.Encoding.ASCII.GetString(buffer, 0, magic.Length) == magic;
     }
 }

@@ -157,6 +157,10 @@ internal static class WorkflowInteractionPreflight
             return InspectPackage(package, host, visiting, depth);
         }
         var descriptor = NodeFactoryRegistrar.Descriptors.FirstOrDefault(candidate => candidate.TypeKey == typeKey);
+        if (descriptor?.Capabilities.HasFlag(NodeCapability.MutatesDevice) == true && !host.IsSupported)
+        {
+            return LanguageService.Instance.GetString("Node_Destructive_UnsupportedHost");
+        }
         if (descriptor?.Capabilities.HasFlag(NodeCapability.RequiresInteraction) == true && !host.IsSupported)
         {
             return LanguageService.Instance.GetString("Node_Interaction_UnsupportedHost");

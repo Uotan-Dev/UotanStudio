@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Rendering.Composition;
 using Ursa.Controls;
 
 namespace UotanStudio.Views.Shell;
@@ -32,6 +33,24 @@ public partial class MainSplashWindow : SplashWindow
     public MainSplashWindow()
     {
         InitializeComponent();
+    }
+
+    /// <summary>Waits for the completed progress state to reach the render thread before closing.</summary>
+    internal async Task PresentCompletionAsync()
+    {
+        UpdateLayout();
+        if (IsVisible && ElementComposition.GetElementVisual(this)?.Compositor is { } compositor)
+        {
+            var batch = compositor.RequestCompositionBatchCommitAsync();
+            try
+            {
+                await batch.Rendered.WaitAsync(TimeSpan.FromSeconds(1));
+            }
+            catch (TimeoutException)
+            {
+                // A suspended or minimized renderer must not prevent the main window from opening.
+            }
+        }
     }
 
     /// <summary>

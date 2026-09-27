@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Security.Cryptography;
-using System.Text;
 using Avalonia;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
@@ -37,8 +36,14 @@ public class DecryptNodeViewModel : FlowNodeViewModel
             TypeKey = "Data.Cipher.Decrypt"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Key", PortType = NodePortType.Data });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Algorithm", PortType = NodePortType.Text });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Key", PortType = NodePortType.Data, IsRequired = true, IsSensitive = true });
+        node.Input.Add(new NodeConnectorViewModel
+        {
+            Title = "Algorithm",
+            PortType = NodePortType.Text,
+            InitialValue = "aes",
+            Choices = new[] { "aes", "aes-256", "xor" }.Select(value => new NodePortChoice(value)).ToArray()
+        });
         node.Output.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
         return node;
     }
@@ -75,22 +80,25 @@ public class DecryptNodeViewModel : FlowNodeViewModel
         var data = NodeDataUtil.ToBytes(ReadInput("Data"));
         if (data == null || data.Length == 0)
         {
-            context.Log.Write(LogLevel.Warn, Title, "No Data input.  缺少输入数据。");
-            return;
+            throw new InvalidDataException("No encrypted data was provided.");
         }
 
-        var key = NodeDataUtil.ToBytes(ReadInput("Key")) ?? Encoding.UTF8.GetBytes("uotan-default-key");
+        var key = NodeDataUtil.ToBytes(ReadInput("Key"));
+        if (key is not { Length: > 0 })
+        {
+            throw new InvalidDataException("A nonempty decryption key is required.");
+        }
         var algorithm = (Convert.ToString(ReadInput("Algorithm"), CultureInfo.InvariantCulture) ?? "aes").Trim().ToLowerInvariant();
 
         byte[]? plain = algorithm switch
         {
             "aes" or "aes-256" => AesDecrypt(data, key),
-            _ => XorDecrypt(data, key)
+            "xor" => XorDecrypt(data, key),
+            _ => throw new InvalidDataException($"Unsupported cipher algorithm '{algorithm}'.")
         };
         if (plain == null)
         {
-            context.Log.Write(LogLevel.Warn, Title, $"Decryption failed for algorithm '{algorithm}'.  解密失败。");
-            return;
+            throw new InvalidDataException($"Invalid {algorithm} ciphertext.");
         }
 
         WriteOutput("Data", plain);

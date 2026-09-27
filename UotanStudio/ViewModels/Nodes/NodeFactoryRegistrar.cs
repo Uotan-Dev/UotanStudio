@@ -74,8 +74,10 @@ public static class NodeFactoryRegistrar
         D("Build.Apk.Sign", "Node_Build_Apk_Sign", NodeToolboxGroup.Android, () => new ApkSignNodeViewModel()),
         D("Firmware.Container.Extract", "Node_Firmware_Container_Extract", NodeToolboxGroup.FirmwareContainer, () => FirmwareNodeViewModel.CreateExtractNode()),
         D("Build.Ota.CreateDelta", "Node_Build_Ota_CreateDelta", NodeToolboxGroup.Delivery, () => ExtendedFirmwareNodeViewModel.CreateOtaDeltaNode()),
-        D("Build.Signature.Merge", "Node_Build_Signature_Merge", NodeToolboxGroup.Android, () => ExtendedFirmwareNodeViewModel.CreateMergeSignatureNode()),
-        D("Build.Slots.Merge", "Node_Build_Slots_Merge", NodeToolboxGroup.Delivery, () => ExtendedFirmwareNodeViewModel.CreateMergeDualSlotNode()),
+        D("Build.Signature.Merge", "Node_Build_Signature_Merge", NodeToolboxGroup.Android,
+            () => ExtendedFirmwareNodeViewModel.CreateMergeSignatureNode()) with { IsToolboxVisible = false },
+        D("Build.Slots.Merge", "Node_Build_Slots_Merge", NodeToolboxGroup.Delivery,
+            () => ExtendedFirmwareNodeViewModel.CreateMergeDualSlotNode()) with { IsToolboxVisible = false },
         D("Firmware.Cpio.Unpack", "Node_Firmware_Cpio_Unpack", NodeToolboxGroup.FirmwareContainer, () => CpioNodeViewModel.CreateCpioUnpackNode()),
         D("Firmware.Cpio.Pack", "Node_Firmware_Cpio_Pack", NodeToolboxGroup.FirmwareContainer, () => CpioNodeViewModel.CreateCpioPackNode()),
         D("Image.Super.Unpack", "Node_Image_Super_Unpack", NodeToolboxGroup.FirmwareImage, () => SuperNodeViewModel.CreateSuperUnpackNode()),
@@ -260,7 +262,7 @@ public static class NodeFactoryRegistrar
                 capabilities |= NodeCapability.RequiresInteraction;
             }
         }
-        return new(typeKey, resourceKey, group, () => Prepare(factory()), destructive, capabilities);
+        return new(typeKey, resourceKey, group, () => Prepare(factory(), capabilities), destructive, capabilities);
     }
 
     private static NodeDescriptor P(string typeKey, string resourceKey, NodeToolboxGroup group, Func<FlowNodeViewModel> factory)
@@ -276,21 +278,33 @@ public static class NodeFactoryRegistrar
         return descriptor with { Capabilities = capabilities };
     }
 
-    private static FlowNodeViewModel Prepare(FlowNodeViewModel node)
+    private static FlowNodeViewModel Prepare(FlowNodeViewModel node, NodeCapability capabilities)
     {
+        if ((capabilities.HasFlag(NodeCapability.MutatesDevice)
+            || capabilities.HasFlag(NodeCapability.ProducesArtifact)
+            || capabilities.HasFlag(NodeCapability.PublishesFile)
+            || node.TypeKey is "Device.Property.Read" or "Feedback.Log.Write" or "Feedback.Progress.Report")
+            && node.Input.All(port => port.PortType != NodePortType.Flow))
+        {
+            node.Input.Add(new NodeConnectorViewModel
+            {
+                Title = "Flow",
+                PortType = NodePortType.Flow,
+                PortId = "flow",
+                MaxConnections = 1
+            });
+            node.Output.Add(new NodeConnectorViewModel
+            {
+                Title = "Completed",
+                PortType = NodePortType.Flow,
+                PortId = "completed"
+            });
+        }
         foreach (var port in node.Input.Concat(node.Output))
         {
             if (string.IsNullOrWhiteSpace(port.PortId))
             {
                 port.PortId = NodeConnectorViewModel.CreateStableId(port.Title);
-            }
-        }
-        foreach (var input in node.Input)
-        {
-            if (input.InitialValue is null && input.Title is "Device" or "Image" or "Path" or "Data" or "Workspace"
-                or "Asset" or "Text" or "Source" or "Input" or "File" or "Partition")
-            {
-                input.IsRequired = true;
             }
         }
         NodeParameterSchema.Apply(node);
@@ -322,6 +336,9 @@ public sealed record NodeDescriptor(
     NodeCapability Capabilities = NodeCapability.None,
     string? DisplayName = null)
 {
+    /// <summary>Whether users may create new instances from the toolbox; hidden types remain loadable.</summary>
+    public bool IsToolboxVisible { get; init; } = true;
+
     /// <summary>Stable presentation category independent of execution capabilities.</summary>
     public string CategoryPath => TypeKey.Split('.')[0] switch
     {

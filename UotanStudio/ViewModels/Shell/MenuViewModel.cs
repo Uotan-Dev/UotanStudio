@@ -964,7 +964,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     {
         if (_currentTab == ActiveTab.NodeEditor)
         {
-            WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Undo));
+            SendNodeEditorAction(NodeEditorAction.Undo);
             return;
         }
 
@@ -984,7 +984,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     {
         if (_currentTab == ActiveTab.NodeEditor)
         {
-            WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Redo));
+            SendNodeEditorAction(NodeEditorAction.Redo);
             return;
         }
 
@@ -1022,7 +1022,15 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     {
         if (TryGetEditable() is { } editable) edit(editable);
         else if (_currentTab == ActiveTab.NodeEditor)
-            WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(action));
+            SendNodeEditorAction(action);
+    }
+
+    private void SendNodeEditorAction(NodeEditorAction action)
+    {
+        if (_projectOps.NodeEditorVM is { } editor)
+        {
+            WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(action, editor.EditorId));
+        }
     }
 
     /// <summary>
@@ -1244,42 +1252,42 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void ToggleMinimap()
     {
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.ToggleMinimap));
+        SendNodeEditorAction(NodeEditorAction.ToggleMinimap);
     }
 
     /// <summary><para>放大节点画布。仅在节点编辑器面板激活时可用。</para>Zoom in the node canvas. Only available when the Node Editor panel is active.</summary>
     [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void ZoomIn()
     {
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.ZoomIn));
+        SendNodeEditorAction(NodeEditorAction.ZoomIn);
     }
 
     /// <summary><para>缩小节点画布。仅在节点编辑器面板激活时可用。</para>Zoom out the node canvas. Only available when the Node Editor panel is active.</summary>
     [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void ZoomOut()
     {
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.ZoomOut));
+        SendNodeEditorAction(NodeEditorAction.ZoomOut);
     }
 
     /// <summary><para>重置节点画布缩放。仅在节点编辑器面板激活时可用。</para>Reset the node canvas zoom. Only available when the Node Editor panel is active.</summary>
     [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void ResetZoom()
     {
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.ResetZoom));
+        SendNodeEditorAction(NodeEditorAction.ResetZoom);
     }
 
     /// <summary><para>运行当前节点工作流。仅在节点编辑器面板激活时可用。</para>Run the current node workflow. Only available when the Node Editor panel is active.</summary>
     [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void RunWorkflow()
     {
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Run));
+        SendNodeEditorAction(NodeEditorAction.Run);
     }
 
     /// <summary><para>停止正在执行的节点工作流。仅在节点编辑器面板激活时可用。</para>Stop the running node workflow. Only available when the Node Editor panel is active.</summary>
     [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void StopWorkflow()
     {
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Stop));
+        SendNodeEditorAction(NodeEditorAction.Stop);
     }
 
     // ===== 帮助 / Help =====
@@ -1520,11 +1528,16 @@ public class NodeEditorActionMessage
 {
     /// <summary><para>获取节点编辑器动作。</para>Gets the node editor action.</summary>
     public NodeEditorAction Action { get; }
+    public Guid EditorId { get; }
 
     /// <summary>
     /// <para>创建节点编辑器动作消息。</para>
     /// Creates a node editor action message.
     /// </summary>
     /// <param name="action"><para>动作类型。</para>The action type.</param>
-    public NodeEditorActionMessage(NodeEditorAction action) => Action = action;
+    public NodeEditorActionMessage(NodeEditorAction action, Guid editorId)
+    {
+        Action = action;
+        EditorId = editorId;
+    }
 }

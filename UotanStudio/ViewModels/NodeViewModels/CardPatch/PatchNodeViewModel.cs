@@ -127,6 +127,7 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
                 break;
             case "Validation.Condition.Evaluate":
                 node.AddInput("Value", NodePortType.Text, string.Empty, multiline: true);
+                node.AddInput("Path", NodePortType.Path, string.Empty);
                 node.AddInput("Expected Value", NodePortType.Text, string.Empty);
                 node.AddInput("Upper Version", NodePortType.Text, string.Empty);
                 node.AddInput("Operation", NodePortType.Text, "Equals", choices:
@@ -349,8 +350,10 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
     private async Task<bool> EvaluateConditionAsync(INodeExecutionContext context)
     {
         var value = Text("Value");
+        var pathInput = Input.First(port => port.Title == "Path");
+        var path = pathInput.HasRuntimeSource || !string.IsNullOrWhiteSpace(Text("Path")) ? Text("Path") : value;
         var expected = Text("Expected Value");
-        if (value.Length > TextPatch.MaxCharacters || expected.Length > 16_384)
+        if (value.Length > TextPatch.MaxCharacters || path.Length > TextPatch.MaxCharacters || expected.Length > 16_384)
         {
             throw new InvalidDataException("Condition input exceeds the size limit.");
         }
@@ -360,8 +363,8 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
             "Contains" => value.Contains(expected, StringComparison.Ordinal),
             "Regex" => Regex.IsMatch(value, expected, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1)),
             "VersionRange" => ParseVersion(value) >= ParseVersion(expected) && ParseVersion(value) <= ParseVersion(Text("Upper Version")),
-            "FileExists" => await GetRun(context).ExistsAsync(value, context.CancellationToken).ConfigureAwait(false),
-            "DirectoryExists" => await GetRun(context).DirectoryExistsAsync(value, context.CancellationToken).ConfigureAwait(false),
+            "FileExists" => await GetRun(context).ExistsAsync(path, context.CancellationToken).ConfigureAwait(false),
+            "DirectoryExists" => await GetRun(context).DirectoryExistsAsync(path, context.CancellationToken).ConfigureAwait(false),
             _ => throw new InvalidDataException("Invalid condition operation.")
         };
     }
