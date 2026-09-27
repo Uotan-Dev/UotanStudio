@@ -1,5 +1,5 @@
-using System.Text;
 using System.Buffers.Binary;
+using System.Text;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
