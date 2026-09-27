@@ -1,5 +1,6 @@
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Formats;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.SharedKernel;
@@ -118,12 +119,15 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
                 if (magic == BootMagic)
                 {
                     var h = BootImageParser.ReadHeaderFile(filePath);
+                    var role = BootImageRoleResolver.Detect(h.HeaderVersion, h.KernelSize, h.RamdiskSize,
+                        RepackMetadata.DetectPartitionName(Path.GetFileName(filePath)));
                     var summary = $"Boot image v{(int)h.HeaderVersion} parsed.\n" +
                                   $"Page size: {h.PageSize}\nKernel: {h.KernelSize} bytes\n" +
                                   $"Ramdisk: {h.RamdiskSize} bytes\nCmdline: {h.CommandLine}";
                     return FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
                     {
                         ["Type"] = "boot",
+                        ["Role"] = role.ToString(),
                         ["HeaderVersion"] = ((int)h.HeaderVersion).ToString(),
                         ["PageSize"] = h.PageSize.ToString(),
                         ["HeaderSize"] = h.HeaderSize.ToString(),

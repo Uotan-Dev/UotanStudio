@@ -30,7 +30,6 @@ public class VendorBootParser : IDisposable
 
     private const uint MaximumComponentSize = 512 * 1024 * 1024;
     private const uint MaximumRamdiskTableEntries = 65_536;
-    private const uint MaximumRamdiskTableEntrySize = 64 * 1024;
     private const uint MaximumRamdiskTableSize = 64 * 1024 * 1024;
     private bool _disposed;
     private readonly object _sourceLock = new();
@@ -327,10 +326,12 @@ public class VendorBootParser : IDisposable
         {
             throw new ImageParseException($"Vendor ramdisk 表条目数超过上限: {Header.VendorRamdiskTableEntryNum}");
         }
-        if (Header.VendorRamdiskTableEntrySize < RamdiskTableEntryMinSize ||
-            Header.VendorRamdiskTableEntrySize > MaximumRamdiskTableEntrySize)
+        if (Header.VendorRamdiskTableEntrySize != RamdiskTableEntryMinSize)
         {
-            throw new ImageParseException($"Vendor ramdisk 表条目大小不合理: {Header.VendorRamdiskTableEntrySize}");
+            throw new InvalidDataException(
+                $"Vendor ramdisk table entry size must equal {RamdiskTableEntryMinSize} bytes for header version 4; " +
+                $"this is the fixed size of the AOSP boot_image.h vendor_ramdisk_table_entry_v4 record. Found " +
+                $"{Header.VendorRamdiskTableEntrySize}. vendor ramdisk 表条目大小必须为 {RamdiskTableEntryMinSize} 字节。");
         }
         var required = checked((ulong)Header.VendorRamdiskTableEntryNum * Header.VendorRamdiskTableEntrySize);
         if (required > Header.VendorRamdiskTableSize)

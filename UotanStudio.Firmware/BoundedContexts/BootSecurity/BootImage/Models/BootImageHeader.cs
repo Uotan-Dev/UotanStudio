@@ -142,6 +142,20 @@ public class BootImageHeader
     /// <para>固定为八个无符号 32 位字；新建头部全为 0。</para></value>
     public uint[] Ids { get; set; } = new uint[8];
 
+    /// <summary>Verbatim header block captured by the version 3/4 parser, from the magic through the padded tail that
+    /// ends at the first page-aligned section offset.
+    /// <para>版本 3/4 解析路径按原样捕获的头部块：从魔数开始，直到首个页对齐区段偏移处结束的含填充尾部。</para></summary>
+    /// <value><see langword="null"/> for hand-built headers, version 0–2 parses, and any version 3/4 parse whose aligned
+    /// header block exceeds the image or the 64 KiB capture bound. When present, the packer rebuilds the version 3/4
+    /// header from a copy of these bytes, overwriting only the fields it owns (section sizes, header size, OS version,
+    /// header version, command line and the V4 signature-size field), which keeps unmodified unpack → repack output
+    /// byte-identical, including opaque reserved, hash and padding regions.
+    /// <para>手工构造的头部、版本 0–2 解析，以及版本 3/4 解析中对齐后头部块超出镜像长度或 64 KiB 捕获上限时为
+    /// <see langword="null"/>。存在时，打包器以这些字节的副本重建版本 3/4 头部，仅覆写其自有字段（区段大小、头部大小、
+    /// OS 版本、头部版本、命令行与 V4 签名大小字段），从而保证未修改镜像的解包 → 重打包输出逐字节一致，包括不透明的
+    /// reserved、hash 与填充区域。</para></value>
+    public byte[]? HeaderBlob { get; set; }
+
     /// <summary>Packed Android OS version field.
     /// <para>打包后的 Android OS 版本字段。</para></summary>
     /// <value>Major version in bits 25-31, minor in bits 18-24 and patch in bits 11-17; see <see cref="OsVersionString"/>.

@@ -91,6 +91,10 @@ public sealed class BootPatchService
             ? selected : detection.Architectures[0];
         using var parser = new BootImageParser();
         parser.ParseFile(bootPath);
+        var role = parser.DetectRole(SharedKernel.Repacking.RepackMetadata.DetectPartitionName(Path.GetFileName(bootPath)));
+        if (role == BootImage.Models.BootImageRole.InitBoot && detection.Kind is BootPatchKind.KernelSu or BootPatchKind.APatch)
+            throw new InvalidDataException(
+                $"{detection.Kind} patches the kernel, but init_boot images carry an empty kernel segment; select the boot image instead of init_boot.");
         string? stockBootSha1 = null;
         if (detection.Kind == BootPatchKind.Magisk)
         {

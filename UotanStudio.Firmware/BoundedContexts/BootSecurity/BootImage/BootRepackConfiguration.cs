@@ -54,6 +54,36 @@ internal sealed class BootRepackConfiguration
         return (JsonObject)JsonSerializer.SerializeToNode(configuration, BootRepackJsonContext.Default.BootRepackConfiguration)!;
     }
 
+    /// <summary>
+    /// Validates the header geometry of a version 3/4 boot configuration against its page size and the parser's
+    /// capture bound, replacing the former flat <c>16384</c> ceiling: the declared header size must be at least the
+    /// canonical size for the version and its page-aligned extent must stay within the 64 KiB header block the
+    /// unpack pipeline can persist, so 16 KiB-page devices pack while corrupt size words are refused.
+    /// <para>按页大小与解析器捕获上限校验版本 3/4 配置的头部几何信息，取代原先固定的 <c>16384</c> 上限：声明的头部大小
+    /// 不得小于该版本的规范尺寸，且其页对齐范围必须落在解包管道可持久化的 64 KiB 头部块内，从而支持 16 KiB 页设备，同时拒绝损坏的大小字段。</para>
+    /// </summary>
+    /// <param name="header">Header restored from the stored repack configuration.
+    /// <para>从已保存的重打包配置恢复的头部。</para></param>
+    /// <exception cref="InvalidDataException">The page size is not a supported V3/V4 size, the header size is below
+    /// the canonical minimum, or the page-aligned header extent exceeds the 64 KiB capture bound.
+    /// <para>页大小不属于 V3/V4 支持值、头部大小低于规范最小值，或页对齐的头部范围超过 64 KiB 捕获上限。</para></exception>
+    private static void ValidateV3V4HeaderGeometry(BootImageHeader header)
+    {
+        const uint MaximumHeaderBlobSize = 65536;
+        var pageSize = header.PageSize == 0 ? 4096u : header.PageSize;
+        if (header.PageSize != 0 && header.PageSize is not (2048u or 4096u or 8192u or 16384u))
+            throw new InvalidDataException(
+                $"Boot V3/V4 page size must be 2048, 4096, 8192 or 16384; found {header.PageSize}.");
+        var canonicalHeaderSize = header.HeaderVersion == BootImageVersion.V4 ? 1584u : 1580u;
+        var alignedHeaderExtent = checked(((long)header.HeaderSize + pageSize - 1) / pageSize * pageSize);
+        if (header.HeaderSize < canonicalHeaderSize
+            || header.HeaderSize > MaximumHeaderBlobSize
+            || alignedHeaderExtent > MaximumHeaderBlobSize)
+            throw new InvalidDataException(
+                $"Boot header size {header.HeaderSize} is invalid for version {(int)header.HeaderVersion} with page size {pageSize}; " +
+                $"expected at least {canonicalHeaderSize} within a {MaximumHeaderBlobSize}-byte page-aligned header block.");
+    }
+
     internal static void Pack(string directory, string outputPath, CancellationToken cancellationToken, RepackMetadataContext context)
     {
         var metadata = RepackMetadata.Read(directory, context);
@@ -74,9 +104,12 @@ internal sealed class BootRepackConfiguration
         if (configuration is { Magic: "ANDROID!", Header: { } header, VendorHeader: null })
         {
             if (metadata.Configuration["header"]?["headerVersion"] is null
-                || header.HeaderVersion is < BootImageVersion.V0 or > BootImageVersion.V4
-                || header.HeaderVersion >= BootImageVersion.V3 && header.HeaderSize > 4096)
+                || header.HeaderVersion is < BootImageVersion.V0 or > BootImageVersion.V4)
                 throw new InvalidDataException("Unsupported boot header version.");
+            if (header.HeaderVersion >= BootImageVersion.V3)
+                ValidateV3V4HeaderGeometry(header);
+            var role = BootImageRoleResolver.Detect(header.HeaderVersion, header.KernelSize, header.RamdiskSize,
+                RepackMetadata.DetectPartitionName(metadata.SourceFileName));
             files.Add("Kernel", "kernel", header.KernelSize);
             files.Add("Ramdisk", "ramdisk", header.RamdiskSize);
             files.Add("Second", "second", header.SecondSize);
@@ -86,7 +119,8 @@ internal sealed class BootRepackConfiguration
             var packer = new BootImagePacker
             {
                 Header = header,
-                ComponentFiles = files
+                ComponentFiles = files,
+                Role = role
             };
             pack = packer.PackToStream;
         }

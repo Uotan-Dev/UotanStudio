@@ -20,6 +20,10 @@ namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
 public class BootImageParser : IDisposable
 {
     private const string BootMagic = "ANDROID!";
+    private const uint CanonicalV3HeaderSize = 1580;
+    private const uint CanonicalV4HeaderSize = 1584;
+    private const int MaximumHeaderBlobLength = 65536;
+    private static readonly uint[] V3V4PageSizeCandidates = [16384, 8192, 4096, 2048];
     private bool _disposed;
 
     /// <summary>The header fields produced by the most recent parse call.
@@ -96,8 +100,16 @@ public class BootImageParser : IDisposable
             parser.ParseV0V2(bytes, version);
             if (version >= 1) parser.Header.HeaderSize = ReadUInt32LE(bytes, 1644);
         }
-        else if (version == 3) parser.ParseV3(bytes);
-        else parser.ParseV4(bytes);
+        else if (version == 3)
+        {
+            parser.ParseV3(bytes);
+            parser.ApplyV3V4PageLayout(input, input.Length, isV4: false);
+        }
+        else
+        {
+            parser.ParseV4(bytes);
+            parser.ApplyV3V4PageLayout(input, input.Length, isV4: true);
+        }
         var header = parser.Header;
         if (header.PageSize is < 2048 or > 65536 || (header.PageSize & (header.PageSize - 1)) != 0
             || header.HeaderSize < size || header.HeaderSize > header.PageSize)
@@ -161,11 +173,11 @@ public class BootImageParser : IDisposable
         }
         else if (headerVersionField == 3)
         {
-            ParseV3(headerBuf, fs);
+            ParseV3(headerBuf, fs, fs.Length);
         }
         else if (headerVersionField == 4)
         {
-            ParseV4(headerBuf, fs);
+            ParseV4(headerBuf, fs, fs.Length);
         }
         else
         {
@@ -211,11 +223,11 @@ public class BootImageParser : IDisposable
         }
         else if (headerVersionField == 3)
         {
-            ParseV3(data, ms);
+            ParseV3(data, ms, data.Length);
         }
         else if (headerVersionField == 4)
         {
-            ParseV4(data, ms);
+            ParseV4(data, ms, data.Length);
         }
         else
         {
@@ -237,6 +249,20 @@ public class BootImageParser : IDisposable
             Header.RamdiskCompression = BootCompressor.Detect(Ramdisk);
         }
     }
+
+    /// <summary>
+    /// Resolves the partition role of the parsed image from its header version, the emptiness of the kernel and
+    /// ramdisk segments, and an optional partition-name hint.
+    /// <para>依据头部版本、kernel 与 ramdisk 区段的空性以及可选的分区名提示，解析已加载镜像的分区角色。</para>
+    /// </summary>
+    /// <param name="partitionName">Partition-name hint such as <c>init_boot</c> or <c>recovery_a</c>;
+    /// <see langword="null"/> disables the hint path and falls back to the content heuristic alone.
+    /// <para>分区名提示（如 <c>init_boot</c>、<c>recovery_a</c>）；为 <see langword="null"/> 时仅使用内容启发式。</para></param>
+    /// <returns>The detected <see cref="Models.BootImageRole"/>; see <see cref="BootImageRoleResolver.Detect"/> for the
+    /// precedence rules.
+    /// <para>检测出的 <see cref="Models.BootImageRole"/>；优先级规则见 <see cref="BootImageRoleResolver.Detect"/>。</para></returns>
+    public BootImageRole DetectRole(string? partitionName = null)
+        => BootImageRoleResolver.Detect(Header.HeaderVersion, Header.KernelSize, Header.RamdiskSize, partitionName);
 
     private void ParseV0V2(byte[] data, uint headerVersion)
     {
@@ -309,7 +335,7 @@ public class BootImageParser : IDisposable
         Header.KernelSize = ReadUInt32LE(data, 8);
         Header.RamdiskSize = ReadUInt32LE(data, 12);
         Header.OsVersion = ReadUInt32LE(data, 16);
-        Header.HeaderSize = ReadUInt32LE(data, 20);
+        Header.HeaderSize = Math.Max(ReadUInt32LE(data, 20), CanonicalV3HeaderSize);
         Header.CommandLine = ReadString(data, 44, 1536).TrimEnd('\0');
         Header.PageSize = 4096;
         Header.SecondSize = 0;
@@ -317,9 +343,10 @@ public class BootImageParser : IDisposable
         Header.RecoveryDtboSize = 0;
     }
 
-    private void ParseV3(byte[] headerBuf, Stream stream)
+    private void ParseV3(byte[] headerBuf, Stream stream, long imageLength)
     {
         ParseV3(headerBuf);
+        ApplyV3V4PageLayout(stream, imageLength, isV4: false);
         ExtractComponentsV3Stream(stream);
     }
 
@@ -329,7 +356,7 @@ public class BootImageParser : IDisposable
         Header.KernelSize = ReadUInt32LE(data, 8);
         Header.RamdiskSize = ReadUInt32LE(data, 12);
         Header.OsVersion = ReadUInt32LE(data, 16);
-        Header.HeaderSize = ReadUInt32LE(data, 20);
+        Header.HeaderSize = Math.Max(ReadUInt32LE(data, 20), CanonicalV4HeaderSize);
         Header.CommandLine = ReadString(data, 44, 1536).TrimEnd('\0');
         Header.PageSize = 4096;
         Header.SecondSize = 0;
@@ -342,9 +369,10 @@ public class BootImageParser : IDisposable
         }
     }
 
-    private void ParseV4(byte[] headerBuf, Stream stream)
+    private void ParseV4(byte[] headerBuf, Stream stream, long imageLength)
     {
         ParseV4(headerBuf);
+        ApplyV3V4PageLayout(stream, imageLength, isV4: true);
         ExtractComponentsV3Stream(stream);
 
         if (Header.SignatureSize > 0)
@@ -357,6 +385,109 @@ public class BootImageParser : IDisposable
             Signature = ReadSegment(stream, signatureOffset, Header.SignatureSize);
         }
     }
+
+    /// <summary>
+    /// Infers the page size for version 3/4 images (whose header does not store it), normalizes the declared header
+    /// size to at least the canonical size for the version, and captures the raw header block for byte-identical
+    /// repacking.
+    /// <para>为版本 3/4 镜像（头部不存页大小）推断页大小，将声明的头部大小规范化为不小于该版本的规范尺寸，
+    /// 并捕获原始头部块以支持逐字节一致的重打包。</para>
+    /// </summary>
+    /// <param name="image">Seekable image stream; the header block is re-read from its start.
+    /// <para>可查找的镜像流；头部块从其起始处重新读取。</para></param>
+    /// <param name="imageLength">Total image length in bytes used as the alignment evidence.
+    /// <para>作为对齐证据的镜像总长度（字节）。</para></param>
+    /// <param name="isV4">Whether the parsed header is version 4; version 4 contributes its signature size to the
+    /// layout evidence and field capture.
+    /// <para>是否为版本 4；版本 4 的签名大小参与布局证据与字段捕获。</para></param>
+    private void ApplyV3V4PageLayout(Stream image, long imageLength, bool isV4)
+    {
+        var canonicalSize = isV4 ? CanonicalV4HeaderSize : CanonicalV3HeaderSize;
+        var effectiveHeaderSize = Math.Max(Header.HeaderSize, canonicalSize);
+        if (effectiveHeaderSize > MaximumHeaderBlobLength)
+        {
+            throw new ImageParseException(
+                $"Boot image header size exceeds the supported bound: {effectiveHeaderSize}.");
+        }
+
+        Header.HeaderSize = effectiveHeaderSize;
+        var signatureSize = isV4 ? Header.SignatureSize : 0u;
+        var pageSize = DetectV3V4PageSize(effectiveHeaderSize, Header.KernelSize, Header.RamdiskSize, signatureSize, imageLength);
+        Header.PageSize = pageSize;
+
+        var alignedHeaderLength = ((long)effectiveHeaderSize + pageSize - 1) / pageSize * pageSize;
+        if (image.CanSeek && alignedHeaderLength <= imageLength && alignedHeaderLength <= MaximumHeaderBlobLength)
+        {
+            image.Seek(0, SeekOrigin.Begin);
+            var blob = new byte[(int)alignedHeaderLength];
+            image.ReadExactly(blob);
+            Header.HeaderBlob = blob;
+        }
+    }
+
+    /// <summary>
+    /// Infers the page size of a version 3 or 4 boot image, whose header stores no page size, by probing the
+    /// candidate sizes against the image length and the declared section sizes.
+    /// <para>V3/V4 头部不存储页大小；本方法以候选页大小对照镜像长度与声明的区段大小进行推断。</para>
+    /// </summary>
+    /// <param name="headerSize">Effective (canonical-clamped) header size in bytes.
+    /// <para>已按规范尺寸钳制后的头部大小（字节）。</para></param>
+    /// <param name="kernelSize">Declared kernel section size; <c>0</c> contributes no aligned block.
+    /// <para>声明的 kernel 区段大小；为 <c>0</c> 时不贡献对齐块。</para></param>
+    /// <param name="ramdiskSize">Declared ramdisk section size; <c>0</c> contributes no aligned block.
+    /// <para>声明的 ramdisk 区段大小；为 <c>0</c> 时不贡献对齐块。</para></param>
+    /// <param name="signatureSize">Declared version 4 signature size; pass <c>0</c> for version 3.
+    /// <para>声明的 V4 签名大小；版本 3 传 <c>0</c>。</para></param>
+    /// <param name="imageLength">Total image length in bytes.
+    /// <para>镜像总长度（字节）。</para></param>
+    /// <returns>The largest candidate in {16384, 8192, 4096, 2048} whose fully page-aligned layout equals the image
+    /// length; failing that, the largest candidate whose layout fits within and divides the image length exactly;
+    /// otherwise the historical default <c>4096</c>.
+    /// <para>返回页对齐总长恰好等于镜像长度的最大候选（集合 {16384, 8192, 4096, 2048}）；否则返回布局可容纳且能整除
+    /// 镜像长度的最大候选；再否则返回历史默认值 <c>4096</c>。</para></returns>
+    internal static uint DetectV3V4PageSize(uint headerSize, uint kernelSize, uint ramdiskSize, uint signatureSize, long imageLength)
+    {
+        foreach (var candidate in V3V4PageSizeCandidates)
+        {
+            if (headerSize <= candidate && ComputePackedLength(candidate) == imageLength)
+            {
+                return candidate;
+            }
+        }
+
+        foreach (var candidate in V3V4PageSizeCandidates)
+        {
+            if (headerSize <= candidate && imageLength % candidate == 0 && ComputePackedLength(candidate) <= imageLength)
+            {
+                return candidate;
+            }
+        }
+
+        return 4096;
+
+        long ComputePackedLength(uint pageSize)
+        {
+            var length = AlignUp(headerSize, pageSize);
+            if (kernelSize > 0)
+            {
+                length += AlignUp(kernelSize, pageSize);
+            }
+
+            if (ramdiskSize > 0)
+            {
+                length += AlignUp(ramdiskSize, pageSize);
+            }
+
+            if (signatureSize > 0)
+            {
+                length += AlignUp(signatureSize, pageSize);
+            }
+
+            return length;
+        }
+    }
+
+    private static long AlignUp(uint value, uint pageSize) => ((long)value + pageSize - 1) / pageSize * pageSize;
 
     /// <summary>
     /// Streaming V0/V2 component extraction by offset from stream.
