@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
+using UotanStudio.Comm.Protocols.Common.Evidence;
+using UotanStudio.Comm.Protocols.Mtk.Sla;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -49,6 +51,8 @@ public sealed partial class MtkSession
             byte[]? information = null;
             byte[]? challenge = null;
             byte[]? response = null;
+            string? challengeDigest = null;
+            bool noProviderRecorded = false;
             try
             {
                 var property = await QueryXmlSystemPropertyOwnedAsync(channel, "DA.SLA",
@@ -64,8 +68,15 @@ public sealed partial class MtkSession
                 {
                     throw new MtkProtocolException("The XML DA2 returned an unknown SLA indication.");
                 }
+                RecordSlaEvidence(MtkSlaFlowKind.DaSlaXml, MtkSlaEvidenceStage.DeviceRequired,
+                    ClassifySlaResponder(responder), null, CommandOutcomeKind.Completed,
+                    "sla-required; XML DA2 reported SLA enabled.");
                 if (responder is null)
                 {
+                    RecordSlaFailure(MtkSlaFlowKind.DaSlaXml, responder: null, MtkSlaEvidenceStage.Rejected,
+                        "SlaNoProvider", null,
+                        "XML DA2 requires an explicitly authorized SLA response provider; no challenge response bytes were written.");
+                    noProviderRecorded = true;
                     throw new InvalidOperationException("XML DA2 requires an explicitly authorized SLA response provider.");
                 }
                 const string destination = "MEM://0x0:0x10000";
@@ -77,6 +88,7 @@ public sealed partial class MtkSession
                 await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
                 var text = await ReceiveXmlDocumentOwnedAsync(channel, destination, 64 * 1024, token).ConfigureAwait(false);
                 challenge = ParseXmlSlaChallenge(text);
+                challengeDigest = MtkSlaEvidence.ComputeChallengeSha256Hex(challenge);
                 await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
                 information = Encoding.UTF8.GetBytes(text);
                 response = await responder.CreateResponseAsync(DeviceInfo!, information, challenge, token).ConfigureAwait(false);
@@ -95,15 +107,26 @@ public sealed partial class MtkSession
                     response.Length, null, token).ConfigureAwait(false);
                 token.ThrowIfCancellationRequested();
                 ThrowIfDisposed();
+                RecordSlaEvidence(MtkSlaFlowKind.DaSlaXml, MtkSlaEvidenceStage.ResponseAccepted,
+                    ClassifySlaResponder(responder), challengeDigest, CommandOutcomeKind.Completed, "sla-accepted");
                 return true;
             }
             catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
             {
+                RecordSlaFailure(MtkSlaFlowKind.DaSlaXml, responder, MtkSlaEvidenceStage.Timeout, "SlaTimeout",
+                    challengeDigest, error.Message);
+                CaptureUploadFailure(error);
                 FaultXml();
                 throw new TimeoutException("The XML DA2 SLA deadline expired; reconnect before continuing.", error);
             }
-            catch
+            catch (Exception error)
             {
+                if (!noProviderRecorded)
+                {
+                    var (stage, classification) = MtkSlaEvidence.ClassifyFailure(error, deadlineExpired: false);
+                    RecordSlaFailure(MtkSlaFlowKind.DaSlaXml, responder, stage, classification, challengeDigest, error.Message);
+                }
+                CaptureUploadFailure(error);
                 FaultXml();
                 throw;
             }

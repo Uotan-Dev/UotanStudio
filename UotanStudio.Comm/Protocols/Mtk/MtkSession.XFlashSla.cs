@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using UotanStudio.Comm.Protocols.Common.Evidence;
+using UotanStudio.Comm.Protocols.Mtk.Sla;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -40,6 +42,8 @@ public sealed partial class MtkSession
             var token = deadline.Token;
             byte[]? information = null;
             byte[]? response = null;
+            string? challengeDigest = null;
+            bool noProviderRecorded = false;
             try
             {
                 var status = await QueryXFlashControlAsync(channel, 0x040016, token, 4).ConfigureAwait(false);
@@ -58,13 +62,21 @@ public sealed partial class MtkSession
                 }
                 if (responder is null)
                 {
+                    RecordSlaFailure(MtkSlaFlowKind.DaSlaXFlash, responder: null, MtkSlaEvidenceStage.Rejected,
+                        "SlaNoProvider", null,
+                        "DA2 requires an explicitly authorized SLA response provider; no challenge response bytes were written.");
+                    noProviderRecorded = true;
                     throw new InvalidOperationException("DA2 requires an explicitly authorized SLA response provider.");
                 }
+                RecordSlaEvidence(MtkSlaFlowKind.DaSlaXFlash, MtkSlaEvidenceStage.DeviceRequired,
+                    ClassifySlaResponder(responder), null, CommandOutcomeKind.Completed,
+                    "sla-required; DA2 reported SLA enabled.");
                 information = await QueryXFlashControlAsync(channel, 0x040013, token, 64 * 1024).ConfigureAwait(false);
                 if (information.Length < 20)
                 {
                     throw new MtkProtocolException("The DA2 device information does not contain the full SLA challenge.");
                 }
+                challengeDigest = MtkSlaEvidence.ComputeChallengeSha256Hex(information.AsSpan(4, 16));
                 response = await responder.CreateResponseAsync(DeviceInfo!, information,
                     information.AsMemory(4, 16), token).ConfigureAwait(false);
                 token.ThrowIfCancellationRequested();
@@ -81,16 +93,27 @@ public sealed partial class MtkSession
                 await ReadXFlashStatusAsync(channel, "SLA response", token).ConfigureAwait(false);
                 token.ThrowIfCancellationRequested();
                 ThrowIfDisposed();
+                RecordSlaEvidence(MtkSlaFlowKind.DaSlaXFlash, MtkSlaEvidenceStage.ResponseAccepted,
+                    ClassifySlaResponder(responder), challengeDigest, CommandOutcomeKind.Completed, "sla-accepted");
                 return true;
             }
             catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
             {
+                RecordSlaFailure(MtkSlaFlowKind.DaSlaXFlash, responder, MtkSlaEvidenceStage.Timeout, "SlaTimeout",
+                    challengeDigest, error.Message);
+                CaptureUploadFailure(error);
                 _state = MtkSessionState.Faulted;
                 _xflash = null;
                 throw new TimeoutException("The DA2 SLA exchange deadline expired; reconnect before continuing.", error);
             }
-            catch
+            catch (Exception error)
             {
+                if (!noProviderRecorded)
+                {
+                    var (stage, classification) = MtkSlaEvidence.ClassifyFailure(error, deadlineExpired: false);
+                    RecordSlaFailure(MtkSlaFlowKind.DaSlaXFlash, responder, stage, classification, challengeDigest, error.Message);
+                }
+                CaptureUploadFailure(error);
                 _state = MtkSessionState.Faulted;
                 _xflash = null;
                 throw;

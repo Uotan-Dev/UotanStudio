@@ -1,4 +1,7 @@
 using System.Buffers.Binary;
+using UotanStudio.Comm.Protocols.Common.Evidence;
+using UotanStudio.Comm.Protocols.Mtk.Profile;
+using UotanStudio.Comm.Protocols.Mtk.Storage;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
@@ -164,8 +167,17 @@ public sealed partial class MtkSession
                 token.ThrowIfCancellationRequested();
                 ThrowIfDisposed();
                 _legacyOptions = options;
+                _evidence.Add(new ProtocolEvidence
+                {
+                    Protocol = "mtk",
+                    Phase = "legacy-da-profile",
+                    Outcome = CommandOutcomeKind.Completed,
+                    Detail = MtkLegacyDaProfile.From(options, storageKind).Describe()
+                });
                 LegacyStorage = storage;
                 _state = MtkSessionState.LegacyStorageReady;
+                PublishStorageCapability(MtkStorageDiscoverySource.Legacy,
+                    (generation, evidence) => MtkStorageCapabilitySnapshot.FromLegacy(storage, generation, evidence));
                 return storage;
             }
             catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
@@ -302,6 +314,7 @@ public sealed partial class MtkSession
         LegacyCompletion = null;
         LegacyDramReportedChecksum = null;
         _legacyOptions = null;
+        ClearStorageCapability(MtkStorageDiscoverySource.Legacy);
         _state = MtkSessionState.Faulted;
     }
 }

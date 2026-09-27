@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Xml.Linq;
+using UotanStudio.Comm.Protocols.Mtk.Storage;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -62,6 +63,8 @@ public sealed partial class MtkSession
                 ThrowIfDisposed();
                 XmlStorage = storage;
                 _state = MtkSessionState.XmlStorageGeometryKnown;
+                PublishStorageCapability(MtkStorageDiscoverySource.Xml,
+                    (generation, evidence) => MtkStorageCapabilitySnapshot.FromXml(storage, generation, evidence));
                 return storage;
             }
             catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
@@ -90,11 +93,61 @@ public sealed partial class MtkSession
         await channel.SendCommandAsync(command, token).ConfigureAwait(false);
         await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
         var text = await ReceiveXmlDocumentOwnedAsync(channel, destination, MtkXmlStorageInfo.MaximumDocumentLength, token).ConfigureAwait(false);
-        var storage = MtkXmlStorageInfo.Parse(text);
+        var storage = ParseXmlStorageInfoNormalised(text);
         await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
         return storage;
     }
 
+    private static MtkXmlStorageInfo ParseXmlStorageInfoNormalised(string text)
+    {
+        try
+        {
+            return MtkXmlStorageInfo.Parse(text);
+        }
+        catch (InvalidDataException error)
+        {
+            throw new MtkProtocolException($"The XML DA returned an invalid hardware-info document: {error.Message}", inner: error);
+        }
+    }
+
+    /// <summary>
+    /// Denies XML read, write and erase against regions the unified storage snapshot marks as
+    /// authenticated-only or replay-protected, before any wire byte of the operation is sent.
+    /// 在 XML 读、写、擦除发送任何线上字节之前，拒绝统一存储快照标记为需认证或重放保护的区域。
+    /// </summary>
+    /// <param name="regionName">The exact XML region token. 精确的 XML 区域标记。</param>
+    private void RequireXmlOrdinaryRegionSnapshot(string regionName)
+    {
+        var snapshot = StorageCapability;
+        if (snapshot is null)
+        {
+            return;
+        }
+        var region = snapshot.FindRegion(regionName);
+        if (region is { AuthenticatedOnly: true } or { Kind: MtkStorageRegionKind.Rpmb })
+        {
+            throw new NotSupportedException(
+                $"The storage capability snapshot marks the XML region {regionName} as authenticated or replay-protected storage; XML DA I/O is denied by default.");
+        }
+    }
+
+    /// <summary>
+    /// Validates one device-initiated XML upload callback against the negotiated bounded
+    /// destination. The checks are intentional and must be kept: the checksum argument must be the
+    /// exact <c>CHK_NO</c> token (file transfers carry no cryptographic integrity claim, and a
+    /// device must never upgrade the negotiated mode), the packet length must be a bounded
+    /// hexadecimal value within the selected binary frame limit, and the direction must match the
+    /// destination the host declared in the control command. The target file must equal that
+    /// exact host-selected destination identifier.
+    /// 校验设备发起的 XML 上传回调是否符合协商出的有界目标。以下检查为刻意保留项：校验和参数必须是精确的
+    /// <c>CHK_NO</c> 标记（文件传输不携带密码学完整性声明，设备不得升级已协商的模式）、包长必须是有界
+    /// 十六进制值且不超过选定的二进制帧上限、方向必须与宿主在控制命令中声明的目标一致；目标文件必须与
+    /// 宿主选定的目标标识完全相同。
+    /// </summary>
+    /// <param name="request">The parsed device command message. 已解析的设备命令消息。</param>
+    /// <param name="destination">The host-declared destination identifier. 宿主声明的目标标识。</param>
+    /// <param name="maximumPacketLength">The inclusive packet length bound. 包长包含式上限。</param>
+    /// <returns>The validated packet length in bytes. 校验通过的包长（字节）。</returns>
     private static int ValidateXmlUploadRequest(MtkXmlMessage request, string destination, int maximumPacketLength)
     {
         RequireXmlCommand(request, "CMD:UPLOAD-FILE");

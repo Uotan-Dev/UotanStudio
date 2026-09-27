@@ -1,8 +1,15 @@
 using System.Buffers.Binary;
 using System.IO.Ports;
+using UotanStudio.Comm.Devices.Discovery;
+using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Common;
+using UotanStudio.Comm.Protocols.Common.Evidence;
+using UotanStudio.Comm.Protocols.Mtk.Discovery;
+using UotanStudio.Comm.Protocols.Mtk.Sla;
+using UotanStudio.Comm.Protocols.Mtk.Upload;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
+using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -15,10 +22,14 @@ public sealed partial class MtkSession : IProtocolSession
 {
     private const int MaximumAgentLength = 64 * 1024 * 1024;
     private readonly SemaphoreSlim _operation = new(1, 1);
+    private readonly List<ProtocolEvidence> _evidence = [];
     private readonly int _timeoutMs;
     private readonly int _handshakeTimeoutMs;
     private MtkSessionState _state;
+    private MtkDaUploadStage _uploadStage;
+    private bool _uploadCompletionPending;
     private uint _agentAddress;
+    private PhysicalDeviceIdentity? _physicalIdentity;
     private volatile bool _disposed;
 
     /// <summary>Creates a session which takes ownership of the selected transport.</summary>
@@ -88,6 +99,51 @@ public sealed partial class MtkSession : IProtocolSession
     public MtkDeviceInfo? DeviceInfo { get; private set; }
 
     /// <summary>
+    /// Gets the immutable observations this session recorded during discovery, profile gating, and
+    /// upload failures; serialised consumers must read these rather than message text.
+    /// <para>获取本会话在发现、配置门控与上传失败期间记录的不可变观测；序列化消费者必须读取这些记录而非消息文本。</para>
+    /// </summary>
+    /// <value>
+    /// The evidence recorded so far, in observation order.
+    /// <para>按观测顺序记录的证据。</para>
+    /// </value>
+    public IReadOnlyList<ProtocolEvidence> Evidence => _evidence;
+
+    /// <summary>
+    /// Gets the descriptor-level USB stage classified when this session was opened or adopted, or
+    /// <see langword="null"/> when no classification ran.
+    /// <para>获取本会话打开或被接管时分类出的描述符级 USB 阶段；未分类时为 <see langword="null"/>。</para>
+    /// </summary>
+    /// <value>
+    /// The classification with its reason, or <see langword="null"/>.
+    /// <para>带原因的分类结果，或 <see langword="null"/>。</para>
+    /// </value>
+    public MtkModeClassification? DiscoveredUsbMode { get; private set; }
+
+    /// <summary>
+    /// Gets the furthest download-agent bring-up stage this session has entered.
+    /// <para>获取本会话已进入的最远下载代理启动阶段。</para>
+    /// </summary>
+    /// <value>
+    /// The current stage; <see cref="MtkDaUploadStage.NotStarted"/> before any boot traffic.
+    /// <para>当前阶段；在任何 boot 通信之前为 <see cref="MtkDaUploadStage.NotStarted"/>。</para>
+    /// </value>
+    public MtkDaUploadStage UploadStage => _uploadStage;
+
+    /// <summary>
+    /// Gets the frozen result of the most recent failed bring-up attempt, or <see langword="null"/>
+    /// when no attempt has failed. This is read after the session faults to decide whether a replay
+    /// is admissible or only a reconnect.
+    /// <para>获取最近一次失败的启动尝试的定格结果；没有失败时为 <see langword="null"/>。
+    /// 会话进入 fault 后读取它，以判定允许重放还是只能重新连接。</para>
+    /// </summary>
+    /// <value>
+    /// The last failure result, or <see langword="null"/>.
+    /// <para>最近一次失败的结果，或 <see langword="null"/>。</para>
+    /// </value>
+    public MtkDaUploadResult? LastUploadResult { get; private set; }
+
+    /// <summary>
     /// Opens a named COM/TTY port without RTS/CTS flow control and queries its bootloader.
     /// <para>以无 RTS/CTS 流控的方式打开指定的 COM/TTY 端口，并查询其 bootloader。</para>
     /// </summary>
@@ -130,10 +186,10 @@ public sealed partial class MtkSession : IProtocolSession
     /// Opens a session over an already-opened USB bulk session (BROM PID 0E8D:0003 or
     /// preloader/DA 0E8D:2000|2001). The BROM/XFlash command set is identical over USB
     /// (mtkclient uses the same byte protocol on the bulk endpoints); the command interface
-    /// (port A) must be selected by the caller, not the logging port.
+    /// selection is now verified against the observed descriptors before the first protocol byte.
     /// <para>在已打开的 USB 批量端点会话上打开会话（BROM PID 0E8D:0003 或
     /// preloader/DA 0E8D:2000|2001）。BROM/XFlash 命令集在 USB 上与串口一致（mtkclient
-    /// 在 bulk 端点使用同一字节协议）；调用方须选定命令接口（port A）而非日志接口。</para>
+    /// 在 bulk 端点使用同一字节协议）；命令接口选择现在会在第一个协议字节前依据已观测描述符进行校验。</para>
     /// </summary>
     /// <param name="session">An opened USB device session bound to the command interface.
     /// 已打开并绑定命令接口的 USB 设备会话。</param>
@@ -144,15 +200,92 @@ public sealed partial class MtkSession : IProtocolSession
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
-        var usbSession = new MtkSession(new UsbDeviceTransport(session));
+        return await OpenUsbCoreAsync(new UsbDeviceTransport(session), session.DeviceInfo, options: null,
+            session.EndpointIn, session.EndpointOut, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Opens a session over a transport already bound to the command endpoints of the described
+    /// USB device, verifying the descriptor-level mode and command-interface selection before any
+    /// protocol byte is exchanged. A logging-only endpoint, an expected-mode mismatch, or an
+    /// ambiguous command interface is rejected without device I/O; the classification and the
+    /// selection are recorded as session evidence either way.
+    /// <para>在已绑定到所描述 USB 设备命令端点的传输上打开会话，并在交换任何协议字节之前校验描述符级模式与
+    /// 命令接口选择。仅日志端点、期望模式不符或命令接口存在歧义都会在无设备 I/O 的情况下被拒绝；
+    /// 无论如何，分类与选择结果都会记入会话证据。</para>
+    /// </summary>
+    /// <param name="transport">An open transport bound to the caller-selected endpoints.
+    /// 已绑定到调用方所选端点的打开传输。</param>
+    /// <param name="device">The observed descriptors of the device behind the transport.
+    /// 传输之后设备的已观测描述符。</param>
+    /// <param name="options">Optional expectations; <see langword="null"/> keeps compatible behaviour.
+    /// 可选的期望条件；为 <see langword="null"/> 时保持兼容行为。</param>
+    /// <param name="cancellationToken">The operation cancellation token. 取消令牌。</param>
+    /// <returns>An initialized bootloader session which owns the transport.
+    /// 拥有该传输的已初始化 bootloader 会话。</returns>
+    /// <exception cref="InvalidOperationException">The endpoint presents a logging-only or otherwise
+    /// unusable command interface, or the classified mode contradicts <see cref="MtkOpenOptions.ExpectedMode"/>;
+    /// no protocol byte was exchanged. <para>端点仅呈现日志接口或其他不可用命令接口，或分类模式与
+    /// <see cref="MtkOpenOptions.ExpectedMode"/> 矛盾；未交换任何协议字节。</para></exception>
+    public static Task<MtkSession> OpenUsbAsync(ICommTransport transport, UsbDeviceInfo device,
+        MtkOpenOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(transport);
+        ArgumentNullException.ThrowIfNull(device);
+        return OpenUsbCoreAsync(transport, device, options, boundEndpointIn: 0, boundEndpointOut: 0, cancellationToken);
+    }
+
+    private static async Task<MtkSession> OpenUsbCoreAsync(ICommTransport transport, UsbDeviceInfo device,
+        MtkOpenOptions? options, byte boundEndpointIn, byte boundEndpointOut, CancellationToken cancellationToken)
+    {
+        var session = new MtkSession(transport);
         try
         {
-            await usbSession.InitializeAsync(cancellationToken).ConfigureAwait(false);
-            return usbSession;
+            var classification = MtkModeClassifier.Classify(device);
+            var selection = MtkCommandInterfacePolicy.Select(device, options, boundEndpointIn, boundEndpointOut);
+            session.DiscoveredUsbMode = classification;
+            session._physicalIdentity = PhysicalDeviceIdentity.From(device);
+            session._evidence.Add(new ProtocolEvidence
+            {
+                Protocol = "mtk",
+                Phase = "mode-discovery",
+                Outcome = classification.Mode == MtkUsbMode.Unknown
+                    ? CommandOutcomeKind.Unknown : CommandOutcomeKind.Completed,
+                Detail = classification.Reason
+            });
+            session._evidence.Add(new ProtocolEvidence
+            {
+                Protocol = "mtk",
+                Phase = "command-interface-selection",
+                Outcome = selection.Status == MtkCommandInterfaceStatus.Selected
+                    ? CommandOutcomeKind.Completed
+                    : selection.Status == MtkCommandInterfaceStatus.NoMetadata
+                        ? CommandOutcomeKind.Unknown : CommandOutcomeKind.Rejected,
+                Detail = selection.Reason
+            });
+            if (classification.Mode == MtkUsbMode.LoggingOnly)
+            {
+                throw new InvalidOperationException($"The endpoint is logging-only and must not receive commands: {classification.Reason}");
+            }
+
+            if (options is { ExpectedMode: not MtkUsbMode.Unknown } expectation
+                && classification.Mode != expectation.ExpectedMode)
+            {
+                throw new InvalidOperationException(
+                    $"The endpoint was expected to present {expectation.ExpectedMode} but classified as {classification.Mode}: {classification.Reason}");
+            }
+
+            if (selection.Status != MtkCommandInterfaceStatus.Selected && selection.Status != MtkCommandInterfaceStatus.NoMetadata)
+            {
+                throw new InvalidOperationException($"No unambiguous command interface could be selected: {selection.Reason}");
+            }
+
+            await session.InitializeAsync(cancellationToken).ConfigureAwait(false);
+            return session;
         }
         catch
         {
-            usbSession.Dispose();
+            session.Dispose();
             throw;
         }
     }
@@ -176,6 +309,7 @@ public sealed partial class MtkSession : IProtocolSession
         {
             RequireState(MtkSessionState.Created);
             cancellationToken.ThrowIfCancellationRequested();
+            NoteUploadStage(MtkDaUploadStage.Handshake);
             try
             {
                 foreach (var value in new byte[] { 0xA0, 0x0A, 0x50, 0x05 })
@@ -188,6 +322,7 @@ public sealed partial class MtkSession : IProtocolSession
                     }
                 }
 
+                NoteUploadStage(MtkDaUploadStage.ChipInfoRequested);
                 await EchoAsync([0xFD], cancellationToken).ConfigureAwait(false);
                 var hardware = await ReadAsync(4, _timeoutMs, cancellationToken).ConfigureAwait(false);
                 await EchoAsync([0xFC], cancellationToken).ConfigureAwait(false);
@@ -206,8 +341,9 @@ public sealed partial class MtkSession : IProtocolSession
                 _state = MtkSessionState.Bootloader;
                 return DeviceInfo;
             }
-            catch
+            catch (Exception error)
             {
+                CaptureUploadFailure(error);
                 _state = MtkSessionState.Faulted;
                 throw;
             }
@@ -279,6 +415,7 @@ public sealed partial class MtkSession : IProtocolSession
         {
             RequireState(MtkSessionState.Bootloader);
             cancellationToken.ThrowIfCancellationRequested();
+            NoteUploadStage(MtkDaUploadStage.AgentRequest);
             try
             {
                 await EchoAsync([0xD7], cancellationToken).ConfigureAwait(false);
@@ -289,13 +426,24 @@ public sealed partial class MtkSession : IProtocolSession
                     await ReadAsync(2, _timeoutMs, cancellationToken).ConfigureAwait(false));
                 if (requestStatus == 0x1D0D && responder is not null)
                 {
+                    NoteUploadStage(MtkDaUploadStage.SlaChallenge);
+                    RecordSlaEvidence(MtkSlaFlowKind.BootRomSla, MtkSlaEvidenceStage.DeviceRequired,
+                        ClassifySlaResponder(responder), null, CommandOutcomeKind.Completed,
+                        "sla-required; the target reported 0x1D0D on the DA upload request.");
                     await RespondToBootRomSlaOwnedAsync(responder, slaTimeoutMs, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
+                    if (requestStatus == 0x1D0D)
+                    {
+                        RecordSlaFailure(MtkSlaFlowKind.BootRomSla, responder: null, MtkSlaEvidenceStage.Rejected,
+                            "SlaNoProvider", null,
+                            "The target required SLA and no response provider was supplied; no challenge response bytes were written.");
+                    }
                     CheckStatus(requestStatus, "DA upload request");
                 }
 
+                NoteUploadStage(MtkDaUploadStage.DataTransferring);
                 var buffer = new byte[1024];
                 ushort checksum = 0;
                 var uploaded = 0;
@@ -313,19 +461,23 @@ public sealed partial class MtkSession : IProtocolSession
                     progress?.Report(uploaded);
                 }
 
+                _uploadCompletionPending = true;
                 var completion = await ReadAsync(4, _timeoutMs, cancellationToken).ConfigureAwait(false);
+                _uploadCompletionPending = false;
                 CheckStatus(BinaryPrimitives.ReadUInt16BigEndian(completion.AsSpan(2)), "DA upload completion");
                 if (BinaryPrimitives.ReadUInt16BigEndian(completion) != checksum)
                 {
                     throw new MtkProtocolException("The uploaded agent checksum did not match the device response.");
                 }
 
+                NoteUploadStage(MtkDaUploadStage.ChecksumConfirmed);
                 ThrowIfDisposed();
                 _agentAddress = loadAddress;
                 _state = MtkSessionState.AgentUploaded;
             }
-            catch
+            catch (Exception error)
             {
+                CaptureUploadFailure(error);
                 _state = MtkSessionState.Faulted;
                 throw;
             }
@@ -355,6 +507,7 @@ public sealed partial class MtkSession : IProtocolSession
         {
             RequireState(MtkSessionState.AgentUploaded);
             cancellationToken.ThrowIfCancellationRequested();
+            NoteUploadStage(MtkDaUploadStage.AgentStarted);
             try
             {
                 await EchoAsync([0xD5], cancellationToken).ConfigureAwait(false);
@@ -369,8 +522,9 @@ public sealed partial class MtkSession : IProtocolSession
                 ThrowIfDisposed();
                 _state = MtkSessionState.AgentStarted;
             }
-            catch
+            catch (Exception error)
             {
+                CaptureUploadFailure(error);
                 _state = MtkSessionState.Faulted;
                 throw;
             }
@@ -464,6 +618,108 @@ public sealed partial class MtkSession : IProtocolSession
     }
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
+
+    /// <summary>
+    /// Advances the recorded bring-up stage; stages are monotonic so a later protocol family
+    /// cannot rewind the frozen failure context of an earlier attempt.
+    /// 推进记录的启动阶段；阶段单调递增，因此后续协议族不会回退早期尝试的定格失败上下文。
+    /// </summary>
+    /// <param name="stage">The stage being entered. 正在进入的阶段。</param>
+    internal void NoteUploadStage(MtkDaUploadStage stage)
+    {
+        if (stage > _uploadStage)
+        {
+            _uploadStage = stage;
+        }
+    }
+
+    /// <summary>
+    /// Freezes the current stage and the exception-classified outcome into
+    /// <see cref="LastUploadResult"/> before the caller transitions to the faulted state.
+    /// 在调用方转入故障状态之前，把当前阶段与按异常分类的结果定格进 <see cref="LastUploadResult"/>。
+    /// </summary>
+    /// <param name="error">The observed failure. 观察到的失败。</param>
+    internal void CaptureUploadFailure(Exception error)
+    {
+        var pending = _uploadCompletionPending;
+        var slaEvidence = Interlocked.Exchange(ref _pendingSlaEvidence, null);
+        var outcome = ClassifyUploadOutcome(error);
+        if (pending && outcome is CommandOutcomeKind.Rejected or CommandOutcomeKind.Unknown)
+        {
+            outcome = CommandOutcomeKind.Unknown;
+        }
+
+        LastUploadResult = new MtkDaUploadResult
+        {
+            Reached = _uploadStage,
+            RetrySafe = !pending && IsUploadReplaySafe(_uploadStage, outcome),
+            Evidence = slaEvidence is null
+                ?
+                [
+                    new ProtocolEvidence
+                    {
+                        Protocol = "mtk",
+                        Phase = "da-upload",
+                        Outcome = outcome,
+                        Detail = error.Message
+                    }
+                ]
+                :
+                [
+                    slaEvidence,
+                    new ProtocolEvidence
+                    {
+                        Protocol = "mtk",
+                        Phase = "da-upload",
+                        Outcome = outcome,
+                        Detail = error.Message
+                    }
+                ]
+        };
+        _pendingSlaEvidence = null;
+    }
+
+    /// <summary>
+    /// Records a descriptor-level mode classification performed by an adoption path such as the
+    /// device session factory; an <see cref="MtkUsbMode.Unknown"/> result is kept as evidence and
+    /// never upgraded or downgraded by enumeration position.
+    /// 记录由接管路径（如设备会话工厂）执行的描述符级模式分类；<see cref="MtkUsbMode.Unknown"/>
+    /// 结果仅作为证据保留，绝不按枚举位置升级或降级。
+    /// </summary>
+    /// <param name="classification">The classification with its reason. 带原因的分类结果。</param>
+    internal void NoteModeDiscovery(MtkModeClassification classification)
+    {
+        ArgumentNullException.ThrowIfNull(classification);
+        DiscoveredUsbMode = classification;
+        _evidence.Add(new ProtocolEvidence
+        {
+            Protocol = "mtk",
+            Phase = "mode-discovery",
+            Outcome = classification.Mode == MtkUsbMode.Unknown
+                ? CommandOutcomeKind.Unknown : CommandOutcomeKind.Completed,
+            Detail = classification.Reason
+        });
+    }
+
+    private static CommandOutcomeKind ClassifyUploadOutcome(Exception error) => error switch
+    {
+        MtkProtocolException => CommandOutcomeKind.Rejected,
+        TimeoutException => CommandOutcomeKind.Timeout,
+        OperationCanceledException => CommandOutcomeKind.Cancelled,
+        ObjectDisposedException => CommandOutcomeKind.ConnectionLost,
+        IOException => CommandOutcomeKind.ConnectionLost,
+        _ => CommandOutcomeKind.Unknown
+    };
+
+    private static bool IsUploadReplaySafe(MtkDaUploadStage reached, CommandOutcomeKind outcome) => outcome switch
+    {
+        CommandOutcomeKind.Rejected => true,
+        CommandOutcomeKind.Cancelled => reached < MtkDaUploadStage.AgentStarted,
+        CommandOutcomeKind.Timeout => reached < MtkDaUploadStage.DataTransferring,
+        CommandOutcomeKind.ConnectionLost => reached < MtkDaUploadStage.AgentStarted,
+        CommandOutcomeKind.Completed => true,
+        _ => false
+    };
 
     /// <summary>
     /// Marks the session disposed and releases the owned transport; further operations fail.

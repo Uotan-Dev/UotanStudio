@@ -8,6 +8,7 @@ public static partial class MtkBootstrap
         var xml = options.Xml!;
         session.HostFileStore = xml.HostFileStore;
         session.MaximumHostFileTransferBytes = xml.MaximumHostFileTransferBytes;
+        session.XmlFieldPolicy = xml.XmlFieldPolicy;
         await session.AttachXmlAgentAsync(cancellationToken).ConfigureAwait(false);
         await session.ConfigureXmlRuntimeAsync(xml.Runtime, xml.OperationTimeoutMs, cancellationToken).ConfigureAwait(false);
         await session.InitializeXmlHardwareAsync(xml.OperationTimeoutMs, cancellationToken).ConfigureAwait(false);

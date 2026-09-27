@@ -61,6 +61,7 @@ public sealed partial class MtkSession
             cancellationToken.ThrowIfCancellationRequested();
             var storage = XmlStorage ?? throw new InvalidOperationException("XML storage has not been discovered.");
             storage.ValidateRange(regionName, offset, length);
+            RequireXmlOrdinaryRegionSnapshot(regionName);
             var channel = _xml ?? throw new InvalidOperationException("The XML DA channel was not attached.");
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             deadline.CancelAfter(timeoutMs);
@@ -101,7 +102,7 @@ public sealed partial class MtkSession
                     }
                     else if (transferred == length && !status.StartsWith("ERR!", StringComparison.Ordinal))
                     {
-                        var end = MtkXmlMessage.Parse(status);
+                        var end = ParseXmlMessageOwned(status);
                         await AcknowledgeXmlEndOwnedAsync(channel, end, token).ConfigureAwait(false);
                     }
                     else

@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Protocols.Mtk.Storage;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
 
@@ -105,7 +106,11 @@ public sealed partial class MtkFlashPlan : IDisposable
     private readonly object _lifecycleGate = new();
     private MtkFlashPlanState _state;
 
-    private MtkFlashPlan(MtkXFlashStorageInfo storage) => Storage = storage;
+    private MtkFlashPlan(MtkXFlashStorageInfo storage)
+    {
+        Storage = storage;
+        Capability = MtkStorageCapabilitySnapshot.FromXFlash(storage);
+    }
 
     /// <summary>
     /// Gets the exact discovered geometry used to validate this plan.
@@ -117,6 +122,16 @@ public sealed partial class MtkFlashPlan : IDisposable
     /// <para>创建计划时捕获的存储几何信息；计划中的每个范围均已依据它完成校验。</para>
     /// </value>
     public MtkXFlashStorageInfo Storage { get; }
+    /// <summary>
+    /// Gets the unified storage capability snapshot this plan was prepared against.
+    /// <para>获取本计划准备时所依据的统一存储能力快照。</para>
+    /// </summary>
+    /// <value>
+    /// The immutable projection of <see cref="Storage"/> captured at preparation time; the session
+    /// rejects execution when its current capability no longer describes the same geometry.
+    /// <para>准备阶段对 <see cref="Storage"/> 的不可变投影；当会话当前能力不再描述相同几何信息时，执行会被拒绝。</para>
+    /// </value>
+    public MtkStorageCapabilitySnapshot Capability { get; }
     /// <summary>
     /// Gets the read-only executable ranges after complete preparation.
     /// <para>获取完整准备之后的只读可执行范围。</para>

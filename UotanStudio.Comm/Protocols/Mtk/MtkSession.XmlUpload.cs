@@ -88,11 +88,13 @@ public sealed partial class MtkSession
             }
             catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
             {
+                CaptureUploadFailure(error);
                 FaultXml();
                 throw new TimeoutException("The XML DA2 exchange deadline expired; do not replay the upload.", error);
             }
-            catch
+            catch (Exception error)
             {
+                CaptureUploadFailure(error);
                 FaultXml();
                 throw;
             }

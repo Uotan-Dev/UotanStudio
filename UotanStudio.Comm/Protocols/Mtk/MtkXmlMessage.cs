@@ -1,12 +1,15 @@
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
+using UotanStudio.Comm.Protocols.Mtk.XmlProfile;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
 /// <summary>A bounded host-directed control message; no target paths are opened or resolved.</summary>
-internal sealed record MtkXmlMessage(string Command, string? Result, IReadOnlyDictionary<string, string> Arguments)
+internal sealed record MtkXmlMessage(string Command, string? Result, IReadOnlyDictionary<string, string> Arguments,
+    IReadOnlyList<string> IgnoredFields)
 {
-    internal static MtkXmlMessage Parse(string text)
+    internal static MtkXmlMessage Parse(string text, MtkXmlFieldPolicy policy = MtkXmlFieldPolicy.Strict)
     {
         if (text.Length is 0 or > MtkXmlChannel.MaximumPayload)
         {
@@ -36,17 +39,39 @@ internal sealed record MtkXmlMessage(string Command, string? Result, IReadOnlyDi
             throw new InvalidDataException("Expected a host-directed XML DA message.");
         }
         var fields = new Dictionary<string, XElement>(StringComparer.Ordinal);
+        var ignored = new List<string>();
         foreach (var field in root.Elements())
         {
-            if (field.Name.NamespaceName.Length != 0
-                || field.Name.LocalName is not ("version" or "command" or "result" or "arg")
-                || !fields.TryAdd(field.Name.LocalName, field))
+            if (field.Name.NamespaceName.Length != 0)
             {
                 throw new InvalidDataException("Unsupported or duplicate XML DA field.");
             }
+            if (MtkXmlProfile.Version10.IsKnownField(field.Name.LocalName))
+            {
+                if (!fields.TryAdd(field.Name.LocalName, field))
+                {
+                    throw new InvalidDataException("Unsupported or duplicate XML DA field.");
+                }
+                continue;
+            }
+            if (policy == MtkXmlFieldPolicy.Strict || field.HasElements || field.HasAttributes
+                || field.Name.LocalName.Length > 128 || field.Value.Length > 4096
+                || ignored.Count >= 8 || ignored.Contains(field.Name.LocalName, StringComparer.Ordinal))
+            {
+                throw new InvalidDataException("Unsupported or duplicate XML DA field.");
+            }
+            ignored.Add(field.Name.LocalName);
         }
-        if (!fields.TryGetValue("version", out var version) || version.Value is not ("1.0" or "1.1") || version.HasElements
-            || !fields.TryGetValue("command", out var command) || command.HasElements
+        if (!fields.TryGetValue("version", out var version) || version.HasElements)
+        {
+            throw new InvalidDataException("The XML DA version or command is invalid.");
+        }
+        if (MtkXmlProfile.Recognize(version.Value) is null)
+        {
+            throw new InvalidDataException(
+                $"Unknown XML DA profile version '{SanitizeReportedVersion(version.Value)}'; it is not silently accepted as a known profile.");
+        }
+        if (!fields.TryGetValue("command", out var command) || command.HasElements
             || command.Value.Length is 0 or > 128 || !command.Value.StartsWith("CMD:", StringComparison.Ordinal))
         {
             throw new InvalidDataException("The XML DA version or command is invalid.");
@@ -73,6 +98,20 @@ internal sealed record MtkXmlMessage(string Command, string? Result, IReadOnlyDi
                 }
             }
         }
-        return new MtkXmlMessage(command.Value, result?.Value, arguments);
+        return new MtkXmlMessage(command.Value, result?.Value, arguments, ignored);
+    }
+
+    private static string SanitizeReportedVersion(string value)
+    {
+        var builder = new StringBuilder(Math.Min(value.Length, 32));
+        foreach (var character in value)
+        {
+            if (builder.Length == 32)
+            {
+                break;
+            }
+            builder.Append(char.IsControl(character) ? '?' : character);
+        }
+        return builder.ToString();
     }
 }

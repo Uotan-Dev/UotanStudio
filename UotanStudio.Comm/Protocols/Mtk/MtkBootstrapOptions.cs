@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Protocols.Mtk.Profile;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
@@ -212,4 +213,65 @@ public record MtkBootstrapOptions
     /// <para>SLA 握手整个交换过程的正数时间预算。</para>
     /// </value>
     public int SlaTimeoutMs { get; init; } = 60000;
+
+    /// <summary>
+    /// Builds startup options from an evaluated loader profile selection, carrying the entry and
+    /// region indices decided by hardware identity rather than by caller-counted indices. The
+    /// selection must be a single match; every weaker decision is rejected here so no bootstrap
+    /// attempt starts from an unproven pairing. Companion resources (EMI, XML settings, SLA
+    /// responders) are added by the caller through record <c>with</c> expressions.
+    /// <para>从已评估的加载器配置选择结果构建启动选项，携带由硬件身份而非调用方手数索引决定的条目与区域索引。
+    /// 选择结果必须是唯一匹配；任何更弱的决策都会在此被拒绝，使未证实的配对无法开始启动尝试。
+    /// 伴随资源（EMI、XML 设置、SLA 应答器）由调用方通过记录 <c>with</c> 表达式补充。</para>
+    /// </summary>
+    /// <param name="profile">
+    /// The parsed, hashed loader profile the selection was evaluated against.
+    /// <para>评估该选择时所依据的、已解析并哈希的加载器配置。</para>
+    /// </param>
+    /// <param name="selection">
+    /// The evaluated selection; must report <see cref="MtkProfileDecision.SingleMatch"/>.
+    /// <para>已评估的选择结果；必须报告 <see cref="MtkProfileDecision.SingleMatch"/>。</para>
+    /// </param>
+    /// <param name="storageKind">
+    /// The explicitly selected storage family. <para>显式选定的存储家族。</para>
+    /// </param>
+    /// <param name="identityMatch">
+    /// The revision policy that produced the selection. <para>产生该选择的版本策略。</para>
+    /// </param>
+    /// <returns>
+    /// Options wired to the selected entry and validated region pair.
+    /// <para>已接到所选条目与经校验区域配对的选项。</para>
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="profile"/> or <paramref name="selection"/> is null.
+    /// <para><paramref name="profile"/> 或 <paramref name="selection"/> 为 null。</para>
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// The selection is not a single match. <para>选择结果不是唯一匹配。</para>
+    /// </exception>
+    public static MtkBootstrapOptions From(MtkLoaderProfile profile, MtkProfileSelection selection,
+        MtkXFlashStorageKind storageKind, MtkDaIdentityMatch identityMatch = MtkDaIdentityMatch.Exact)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(selection);
+        if (selection.Decision != MtkProfileDecision.SingleMatch
+            || selection.EntryIndex is not { } entryIndex
+            || selection.StageOneRegionIndex is not { } stageOne
+            || selection.StageTwoRegionIndex is not { } stageTwo)
+        {
+            throw new InvalidOperationException(
+                $"Bootstrap options require a single-match profile selection; the evaluation returned {selection.Decision}.");
+        }
+
+        return new MtkBootstrapOptions
+        {
+            LoaderPath = profile.FilePath,
+            EntryIndex = entryIndex,
+            StageOneRegionIndex = stageOne,
+            StageTwoRegionIndex = stageTwo,
+            StageTwoContent = MtkDaRegionContent.WithoutSignatureSuffix,
+            IdentityMatch = identityMatch,
+            StorageKind = storageKind
+        };
+    }
 }

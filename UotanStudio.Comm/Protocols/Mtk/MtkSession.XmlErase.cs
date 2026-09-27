@@ -47,6 +47,7 @@ public sealed partial class MtkSession
             cancellationToken.ThrowIfCancellationRequested();
             var storage = XmlStorage ?? throw new InvalidOperationException("XML storage has not been discovered.");
             storage.ValidateRange(regionName, offset, length);
+            RequireXmlOrdinaryRegionSnapshot(regionName);
             var channel = _xml ?? throw new InvalidOperationException("The XML DA channel was not attached.");
             var command = new XElement("da", new XElement("version", "1.0"), new XElement("command", "CMD:ERASE-FLASH"),
                 new XElement("arg", new XElement("partition", regionName), new XElement("offset", $"0x{offset:x}"),

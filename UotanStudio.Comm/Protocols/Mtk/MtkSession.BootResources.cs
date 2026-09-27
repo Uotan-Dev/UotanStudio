@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using UotanStudio.Comm.Protocols.Common.Evidence;
+using UotanStudio.Comm.Protocols.Mtk.Sla;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -78,6 +80,7 @@ public sealed partial class MtkSession
             RequireState(MtkSessionState.Bootloader);
             cancellationToken.ThrowIfCancellationRequested();
             var buffer = new byte[1024];
+            bool terminalSlaRecorded = false;
             try
             {
                 await EchoAsync([kind == MtkBootResourceKind.RootCertificate ? (byte)0xE0 : (byte)0xE2],
@@ -87,8 +90,15 @@ public sealed partial class MtkSession
                     await ReadAsync(2, _timeoutMs, cancellationToken).ConfigureAwait(false));
                 if (initial > 0xFF || (kind == MtkBootResourceKind.Authentication && initial == 0xFF))
                 {
+                    RecordSlaEvidence(MtkSlaFlowKind.BootResourceAuthorization, MtkSlaEvidenceStage.Rejected,
+                        MtkSlaResponderKind.None, null, CommandOutcomeKind.Rejected,
+                        $"SlaRejected; the bootloader rejected the {kind} resource request (status 0x{initial:X4}).");
+                    terminalSlaRecorded = true;
                     throw new MtkProtocolException("The bootloader rejected the security resource request.", initial);
                 }
+                RecordSlaEvidence(MtkSlaFlowKind.BootResourceAuthorization, MtkSlaEvidenceStage.DeviceRequired,
+                    MtkSlaResponderKind.None, null, CommandOutcomeKind.Completed,
+                    $"boot-resource-requested; the bootloader accepted the {kind} resource request.");
                 ushort checksum = 0;
                 var remaining = length;
                 while (remaining > 0)
@@ -111,9 +121,24 @@ public sealed partial class MtkSession
                 }
                 cancellationToken.ThrowIfCancellationRequested();
                 ThrowIfDisposed();
+                RecordSlaEvidence(MtkSlaFlowKind.BootResourceAuthorization, MtkSlaEvidenceStage.ResponseAccepted,
+                    MtkSlaResponderKind.None, null, CommandOutcomeKind.Completed,
+                    $"boot-resource-accepted; the bootloader echoed the {kind} resource checksum.");
             }
-            catch
+            catch (Exception error)
             {
+                if (!terminalSlaRecorded)
+                {
+                    var (stage, classification) = MtkSlaEvidence.ClassifyFailure(error, deadlineExpired: false);
+                    RecordSlaEvidence(MtkSlaFlowKind.BootResourceAuthorization, stage, MtkSlaResponderKind.None, null,
+                        stage switch
+                        {
+                            MtkSlaEvidenceStage.Timeout => CommandOutcomeKind.Timeout,
+                            MtkSlaEvidenceStage.ProviderCancelled => CommandOutcomeKind.Cancelled,
+                            _ => CommandOutcomeKind.Rejected
+                        },
+                        $"{classification}; {error.Message}");
+                }
                 _state = MtkSessionState.Faulted;
                 throw;
             }

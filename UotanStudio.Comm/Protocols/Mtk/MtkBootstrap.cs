@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Protocols.Mtk.Upload;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
@@ -157,12 +158,16 @@ public static partial class MtkBootstrap
                 await session.InitializeLegacyAgentAsync(stageTwo, second.LoadAddress, checked((int)stageTwo.Length),
                     options.StorageKind, options.Legacy!, options.EmiParameters, cancellationToken).ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
+                session.NoteUploadStage(MtkDaUploadStage.StorageDiscovered);
+                session.NoteUploadStage(MtkDaUploadStage.Completed);
                 return session;
             }
             if (protocol == MtkDaProtocol.Xml)
             {
                 await InitializeXmlAsync(session, stageTwo, second.LoadAddress, options, cancellationToken).ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
+                session.NoteUploadStage(MtkDaUploadStage.StorageDiscovered);
+                session.NoteUploadStage(MtkDaUploadStage.Completed);
                 return session;
             }
             await session.InitializeXFlashAsync(options.DaLogLevel, cancellationToken).ConfigureAwait(false);
@@ -185,6 +190,8 @@ public static partial class MtkBootstrap
                 throw new InvalidOperationException("The selected storage family was not reported by the agent.");
             }
             cancellationToken.ThrowIfCancellationRequested();
+            session.NoteUploadStage(MtkDaUploadStage.StorageDiscovered);
+            session.NoteUploadStage(MtkDaUploadStage.Completed);
             return session;
         }
         catch

@@ -49,6 +49,11 @@ public sealed partial class MtkSession
             {
                 throw new InvalidOperationException("The plan was prepared against a different storage snapshot.");
             }
+            if (StorageCapability is { Source: UotanStudio.Comm.Protocols.Mtk.Storage.MtkStorageDiscoverySource.XFlash } capability
+                && !capability.GeometryEquals(plan.Capability))
+            {
+                throw new InvalidOperationException("The plan capability no longer matches the published storage capability.");
+            }
             var operations = plan.BeginExecution();
             var succeeded = false;
             try

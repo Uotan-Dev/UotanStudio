@@ -1,4 +1,5 @@
 using System.Xml;
+using UotanStudio.Comm.Protocols.Mtk.XmlProfile;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -41,6 +42,15 @@ public sealed record MtkXmlBootstrapOptions
     /// <value>Milliseconds from 1 through 86400000. SLA uses the common SLA deadline.
     /// <para>1 至 86400000 毫秒；SLA 使用共享 SLA 截止时间。</para></value>
     public int OperationTimeoutMs { get; init; } = 120000;
+
+    /// <summary>Gets the grading policy for unknown fields in device-authored XML DA messages.
+    /// <para>获取设备侧 XML DA 消息中未知字段的分级策略。</para></summary>
+    /// <value>Defaults to <see cref="MtkXmlFieldPolicy.Strict"/>, preserving the historical
+    /// reject-everything parsing; the tolerant policy only downgrades bounded ignorable fields to
+    /// warning evidence.
+    /// <para>默认 <see cref="MtkXmlFieldPolicy.Strict"/>，保持历史的全量拒绝解析；容忍策略仅将有界的可忽略
+    /// 字段降级为 warning 证据。</para></value>
+    public MtkXmlFieldPolicy XmlFieldPolicy { get; init; } = MtkXmlFieldPolicy.Strict;
 
     internal void Validate()
     {

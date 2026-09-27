@@ -65,6 +65,7 @@ public sealed partial class MtkSession
             cancellationToken.ThrowIfCancellationRequested();
             var storage = XmlStorage ?? throw new InvalidOperationException("XML storage has not been discovered.");
             storage.ValidateRange(regionName, offset, length);
+            RequireXmlOrdinaryRegionSnapshot(regionName);
             ValidateXmlStorageSource(source, length);
             var channel = _xml ?? throw new InvalidOperationException("The XML DA channel was not attached.");
             var sourceId = $"MEM://0x0:0x{length:x}";

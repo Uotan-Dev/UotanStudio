@@ -6,6 +6,7 @@ using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Protocols.Mtk;
+using UotanStudio.Comm.Protocols.Mtk.Discovery;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
@@ -151,6 +152,14 @@ internal sealed class MtkDeviceSessionFactory : IDeviceSessionFactory
         cancellationToken.ThrowIfCancellationRequested();
         LeasedTransport.RequireProtocol(endpoint, "mtk");
         var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
-        return Task.FromResult<object>(new MtkSession(new UsbDeviceTransport(usb)));
+        var classification = MtkModeClassifier.Classify(usb.DeviceInfo);
+        if (classification.Mode == MtkUsbMode.LoggingOnly)
+        {
+            throw new NotSupportedException($"The endpoint must not receive MTK commands: {classification.Reason}");
+        }
+
+        var session = new MtkSession(new UsbDeviceTransport(usb));
+        session.NoteModeDiscovery(classification);
+        return Task.FromResult<object>(session);
     }
 }

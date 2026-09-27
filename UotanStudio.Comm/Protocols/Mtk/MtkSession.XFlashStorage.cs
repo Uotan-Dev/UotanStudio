@@ -1,3 +1,5 @@
+using UotanStudio.Comm.Protocols.Mtk.Storage;
+
 namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
@@ -54,6 +56,8 @@ public sealed partial class MtkSession
                 ThrowIfDisposed();
                 XFlashStorage = storage;
                 _state = MtkSessionState.XFlashStorageReady;
+                PublishStorageCapability(MtkStorageDiscoverySource.XFlash,
+                    (generation, evidence) => MtkStorageCapabilitySnapshot.FromXFlash(storage, generation, evidence));
                 return storage;
             }
             catch
@@ -61,6 +65,7 @@ public sealed partial class MtkSession
                 XFlashStorage = null;
                 _xflash = null;
                 _state = MtkSessionState.Faulted;
+                ClearStorageCapability(MtkStorageDiscoverySource.XFlash);
                 throw;
             }
         }

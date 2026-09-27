@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Comm.Protocols.Mtk.Storage;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -292,5 +293,6 @@ public sealed partial class MtkSession
         _state = MtkSessionState.Faulted;
         _xflash = null;
         XFlashStorage = null;
+        ClearStorageCapability(MtkStorageDiscoverySource.XFlash);
     }
 }

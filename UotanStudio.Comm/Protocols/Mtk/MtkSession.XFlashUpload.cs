@@ -50,8 +50,9 @@ public sealed partial class MtkSession
                 ThrowIfDisposed();
                 _xflashExternalRamInitialized = true;
             }
-            catch
+            catch (Exception error)
             {
+                CaptureUploadFailure(error);
                 _state = MtkSessionState.Faulted;
                 _xflash = null;
                 throw;
@@ -130,8 +131,9 @@ public sealed partial class MtkSession
                 ThrowIfDisposed();
                 _state = MtkSessionState.XFlashStageTwoStarted;
             }
-            catch
+            catch (Exception error)
             {
+                CaptureUploadFailure(error);
                 _state = MtkSessionState.Faulted;
                 _xflash = null;
                 throw;

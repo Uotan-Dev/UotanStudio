@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Comm.Protocols.Mtk.Storage;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -62,6 +63,7 @@ public sealed partial class MtkSession
             LegacyStorage = null;
             LegacyCompletion = null;
             _legacyOptions = null;
+            ClearStorageCapability(MtkStorageDiscoverySource.Legacy);
             Transport.Disconnect();
         }
         finally

@@ -1,11 +1,67 @@
 using System.Xml;
 using System.Xml.Linq;
+using UotanStudio.Comm.Protocols.Common.Evidence;
+using UotanStudio.Comm.Protocols.Mtk.Storage;
+using UotanStudio.Comm.Protocols.Mtk.XmlProfile;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
     private MtkXmlChannel? _xml;
+
+    /// <summary>
+    /// Gets or sets how device-authored XML DA messages grade unknown top-level fields.
+    /// <para>获取或设置设备侧 XML DA 消息对未知顶层字段的分级方式。</para>
+    /// </summary>
+    /// <value>
+    /// <see cref="MtkXmlFieldPolicy.Strict"/> (default) preserves the historical reject-everything
+    /// behavior; <see cref="MtkXmlFieldPolicy.TolerantUnknown"/> downgrades bounded, scalar,
+    /// unqualified, non-duplicate unknown fields to warning evidence. Must be configured before the
+    /// XML agent is attached; structural violations, <c>CMD:</c> prefix violations, duplicates of
+    /// known fields and unknown profile versions are rejected under both policies.
+    /// <para>默认的 <see cref="MtkXmlFieldPolicy.Strict"/> 保持历史的全量拒绝行为；
+    /// <see cref="MtkXmlFieldPolicy.TolerantUnknown"/> 将有界、标量、无命名空间、不重复的未知字段降级为
+    /// warning 证据。必须在附加 XML agent 之前配置；两种策略下，结构违规、<c>CMD:</c> 前缀违规、
+    /// 已知字段重名与未知配置版本一律拒绝。</para>
+    /// </value>
+    public MtkXmlFieldPolicy XmlFieldPolicy { get; set; } = MtkXmlFieldPolicy.Strict;
+
+    /// <summary>
+    /// Parses one device-authored message under the configured field policy and records warning
+    /// evidence for every field the tolerant policy ignored.
+    /// 按已配置的字段策略解析一条设备侧消息，并为容忍策略忽略的每个字段记录 warning 证据。
+    /// </summary>
+    /// <param name="text">The received message text. 接收到的消息文本。</param>
+    /// <returns>The parsed message. 解析后的消息。</returns>
+    private MtkXmlMessage ParseXmlMessageOwned(string text)
+    {
+        var message = MtkXmlMessage.Parse(text, XmlFieldPolicy);
+        if (message.IgnoredFields.Count > 0)
+        {
+            _evidence.Add(new ProtocolEvidence
+            {
+                Protocol = "mtk",
+                Phase = "xml-profile-warning",
+                Outcome = CommandOutcomeKind.Completed,
+                Detail = $"warning: ignored XML DA field(s) {string.Join(",", message.IgnoredFields)} under {XmlFieldPolicy}."
+            });
+        }
+        return message;
+    }
+
+    private MtkXmlMessage ParseXmlControlReplyOwned(string text)
+    {
+        try
+        {
+            return ParseXmlMessageOwned(text);
+        }
+        catch (InvalidDataException error)
+        {
+            throw new MtkProtocolException($"The XML DA sent a message outside its protocol: {error.Message}", inner: error);
+        }
+    }
+
 
     /// <summary>
     /// Accepts and acknowledges an XML DA's initial START after an explicitly uploaded and
@@ -41,7 +97,7 @@ public sealed partial class MtkSession
             try
             {
                 var channel = new MtkXmlChannel(Transport, _timeoutMs);
-                var initial = MtkXmlMessage.Parse(await channel.ReceiveTextAsync(deadline.Token).ConfigureAwait(false));
+                var initial = ParseXmlMessageOwned(await channel.ReceiveTextAsync(deadline.Token).ConfigureAwait(false));
                 RequireXmlCommand(initial, "CMD:START");
                 await channel.AcknowledgeAsync(deadline.Token).ConfigureAwait(false);
                 deadline.Token.ThrowIfCancellationRequested();
@@ -170,7 +226,7 @@ public sealed partial class MtkSession
             }
 
             if (serviced < 16 && reply.Contains("<command", StringComparison.Ordinal) &&
-                await TryServiceXmlFileRequestOwnedAsync(channel, MtkXmlMessage.Parse(reply), token).ConfigureAwait(false))
+                await TryServiceXmlFileRequestOwnedAsync(channel, ParseXmlControlReplyOwned(reply), token).ConfigureAwait(false))
             {
                 continue;
             }
@@ -218,7 +274,7 @@ public sealed partial class MtkSession
         var serviced = 0;
         while (true)
         {
-            var message = MtkXmlMessage.Parse(await channel.ReceiveTextAsync(token).ConfigureAwait(false));
+            var message = ParseXmlMessageOwned(await channel.ReceiveTextAsync(token).ConfigureAwait(false));
             if (message.Command == "CMD:PROGRESS-REPORT")
             {
                 if (++reports > 16)
@@ -278,6 +334,7 @@ public sealed partial class MtkSession
     private void FaultXml()
     {
         XmlStorage = null;
+        ClearStorageCapability(MtkStorageDiscoverySource.Xml);
         _xml = null;
         _state = MtkSessionState.Faulted;
     }

@@ -81,6 +81,10 @@ public sealed class MtkFlashPreparation : IDisposable
 
     /// <summary>Gets the exact GPT observation used for resolving names; execution revalidates it.</summary>
     public MtkGptSnapshot Snapshot { get; }
+    /// <summary>Gets the session's unified storage capability snapshot published during discovery;
+    /// plan execution rejects it when the device geometry drifted.</summary>
+    public UotanStudio.Comm.Protocols.Mtk.Storage.MtkStorageCapabilitySnapshot? StorageCapability =>
+        _session.StorageCapability;
     /// <summary>Gets the read-only physical operations to preview, excluding sparse holes.</summary>
     public IReadOnlyList<MtkFlashOperation> Operations => _plan.Operations;
     /// <summary>Gets actual planned write/erase bytes, excluding optional readback and sparse holes.</summary>

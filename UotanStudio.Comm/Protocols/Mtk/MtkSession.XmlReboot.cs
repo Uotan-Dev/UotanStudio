@@ -1,9 +1,38 @@
 using System.Xml.Linq;
+using UotanStudio.Comm.Devices.Discovery;
+using UotanStudio.Comm.Devices.Services;
+using UotanStudio.Comm.Protocols.Common.Evidence;
+using UotanStudio.Comm.Protocols.Mtk.Storage;
+using UotanStudio.Comm.Protocols.Mtk.XmlProfile;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
+    /// <summary>
+    /// Gets or sets the transport generation of the lease this session was adopted under, when the
+    /// device layer supplied one. It is stamped into <see cref="LastRebootTransitionOffer"/> so the
+    /// host can retire cached observations bound to the rebooted transport instantiation.
+    /// <para>获取或设置本会话被接管时所属租约的传输代际（若设备层提供）。它会被写入
+    /// <see cref="LastRebootTransitionOffer"/>，使宿主能够废弃绑定到该已重启传输实例化的缓存观测。</para>
+    /// </summary>
+    /// <value>The bound generation, or <see langword="null"/> when the session is unbound.
+    /// <para>绑定的代际；会话未绑定时为 <see langword="null"/>。</para></value>
+    public TransportGeneration? LinkedTransportGeneration { get; set; }
+
+    /// <summary>
+    /// Gets the handoff produced by the most recent acknowledged XML DA reboot, or
+    /// <see langword="null"/> when no reboot has been acknowledged on this session.
+    /// <para>获取最近一次被确认的 XML DA 重启产出的交接信息；本会话未确认过重启时为
+    /// <see langword="null"/>。</para>
+    /// </summary>
+    /// <value>
+    /// The transition offer; the old session is permanently terminal, never replays commands, and
+    /// reconnection is performed by the host through the device layer.
+    /// <para>模式迁移交接；旧会话永久终结、绝不重放命令，重连由宿主经设备层完成。</para>
+    /// </value>
+    public MtkRebootTransitionOffer? LastRebootTransitionOffer { get; private set; }
+
     /// <summary>Explicitly requests an immediate XML DA reboot and terminates the session after acknowledgement.
     /// No startup, transfer or disposal operation calls this automatically.
     /// <para>显式请求 XML DA 立即重启，并在确认后终止会话。启动、传输或释放操作均不会自动调用此方法。</para></summary>
@@ -66,7 +95,25 @@ public sealed partial class MtkSession
             _state = MtkSessionState.XmlRebootAcknowledged;
             _xml = null;
             XmlStorage = null;
+            var storageGenerationAtReboot = StorageGeneration;
+            ClearStorageCapability(MtkStorageDiscoverySource.Xml);
             Transport.Disconnect();
+            LastRebootTransitionOffer = new MtkRebootTransitionOffer
+            {
+                Identity = _physicalIdentity,
+                Generation = LinkedTransportGeneration,
+                ReconnectTimeoutMs = timeoutMs,
+                StorageGenerationAtReboot = storageGenerationAtReboot
+            };
+            _evidence.Add(new ProtocolEvidence
+            {
+                Protocol = "mtk",
+                Phase = "xml-reboot-transition-offer",
+                Outcome = CommandOutcomeKind.Completed,
+                Detail = $"reboot acknowledged; session terminal, reconnect only via device layer; " +
+                    $"identity={_physicalIdentity?.Key ?? "unobserved"}, generation={LinkedTransportGeneration?.Value.ToString() ?? "unbound"}, " +
+                    $"budget={timeoutMs}ms"
+            });
         }
         finally
         {
