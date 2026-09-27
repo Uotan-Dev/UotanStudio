@@ -63,7 +63,7 @@ public class FormatSearchTextTests
         var text = FormatSearchText.TryRead(path, Token);
 
         Assert.NotNull(text);
-        Assert.Contains("com.example.Hello", text);
+        Assert.Contains("Lcom/example/Hello;", text);
     }
 
     [Fact]

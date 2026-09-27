@@ -43,9 +43,12 @@ public static class FirmwareFormatRegistry
             Register(new BoundedContexts.BlockImage.Lp.LpFormatHandler());
 
             Register(new BoundedContexts.BlockImage.Sparse.SparseFormatHandler());
+            Register(new BoundedContexts.BlockImage.Gpt.GptFormatHandler());
             Register(new BoundedContexts.FileSystem.Ext4.Ext4FormatHandler());
             Register(new BoundedContexts.FileSystem.Erofs.ErofsFormatHandler());
             Register(new BoundedContexts.FileSystem.F2fs.F2fsFormatHandler());
+            Register(new BoundedContexts.FileSystem.Romfs.RomfsFormatHandler());
+            Register(new BoundedContexts.FileSystem.Squashfs.SquashfsFormatHandler());
 
             Register(new BoundedContexts.BootSecurity.Avb.AvbFormatHandler());
             Register(new BoundedContexts.BootSecurity.BootImage.BootImageFormatHandler());
@@ -67,6 +70,11 @@ public static class FirmwareFormatRegistry
             Register(new BoundedContexts.VendorFirmware.Rockchip.RockchipFormatHandler());
             Register(new BoundedContexts.VendorFirmware.Amlogic.AmlogicFormatHandler());
             Register(new BoundedContexts.VendorFirmware.SonySin.SonySinFormatHandler());
+            Register(new BoundedContexts.VendorFirmware.Meizu.Mpk.MpkFormatHandler());
+            Register(new BoundedContexts.VendorFirmware.Lenovo.Qsb.QsbFormatHandler());
+            Register(new BoundedContexts.VendorFirmware.Allwinner.ImageWty.AllwinnerImageWtyFormatHandler());
+            Register(new BoundedContexts.VendorFirmware.MediaTek.MtkFormatHandler());
+            Register(new BoundedContexts.VendorFirmware.Oppo.Splash.OppoSplashFormatHandler());
 
             IsRegistered = true;
         }
