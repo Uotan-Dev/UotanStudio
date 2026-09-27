@@ -1046,19 +1046,6 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>从画布移除指定节点（可撤销）。</para>
-    /// Removes the specified node from the canvas (undoable).
-    /// </summary>
-    /// <param name="node">
-    /// <para>要移除的节点。</para>
-    /// The node to remove.
-    /// </param>
-    public void RemoveNode(NodeViewModels.FlowNodeViewModel node)
-    {
-        ExecuteCommand(new NodeViewModels.EditorCommands.RemoveNodeCommand(Nodes, Connections, node));
-    }
-
-    /// <summary>
     /// <para>在两个连接器之间创建连接。</para>
     /// Creates a connection between two connectors.
     /// </summary>
@@ -1129,7 +1116,6 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         ViewportRequested?.Invoke(NodeViewportAction.Reset);
     }
 
-    [RelayCommand]
     private void ToggleMinimap()
     {
         ShowMinimap = !ShowMinimap;

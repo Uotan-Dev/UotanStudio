@@ -223,14 +223,6 @@ public sealed class NodeToolboxItem : ViewModelBase
         }
     }
 
-    public NodeToolboxItem(string name, Func<FlowNodeViewModel> createNode)
-    {
-        Name = name;
-        CreateNode = createNode;
-        TypeKey = string.Empty;
-        ToggleFavoriteCommand = new RelayCommand(() => { });
-    }
-
     public NodeToolboxItem(NodeDescriptor descriptor, LanguageService language, bool isFavorite = false,
         Action<NodeToolboxItem>? toggleFavorite = null, Action<FlowNodeViewModel>? addPreset = null)
     {

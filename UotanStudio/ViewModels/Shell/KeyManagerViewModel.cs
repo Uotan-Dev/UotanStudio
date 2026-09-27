@@ -43,7 +43,6 @@ public partial class KeyManagerViewModel : ViewModelBase
     [ObservableProperty] private string _publicKey = "";
     [ObservableProperty] private string _status = "";
     [ObservableProperty][NotifyPropertyChangedFor(nameof(IsIdle))] private bool _isBusy;
-    [ObservableProperty] private bool _confirmRemoval;
     [ObservableProperty] private bool _confirmDeletion;
     [ObservableProperty][NotifyPropertyChangedFor(nameof(IsSelectedDefault), nameof(CanSetCurrentDefault))] private string _defaultSignatureIds = "";
     public bool IsIdle => !IsBusy;
@@ -222,7 +221,6 @@ public partial class KeyManagerViewModel : ViewModelBase
     partial void OnSearchChanged(string value) => Filter();
     partial void OnSelectedKeyChanged(ManagedKey? value)
     {
-        ConfirmRemoval = false;
         ConfirmDeletion = false;
         RenameText = value?.Name ?? "";
         PublicKey = "";
@@ -402,15 +400,6 @@ public partial class KeyManagerViewModel : ViewModelBase
         if (SelectedKey is not { } key) return;
         var name = RenameText;
         await Task.Run(() => _library.Rename(key, name));
-        _all = await Task.Run(_library.List);
-        Filter();
-    });
-
-    [RelayCommand]
-    private Task RemoveAsync() => RunAsync(async () =>
-    {
-        if (!ConfirmRemoval || SelectedKey is not { } key) return;
-        await Task.Run(() => _library.Remove(key));
         _all = await Task.Run(_library.List);
         Filter();
     });

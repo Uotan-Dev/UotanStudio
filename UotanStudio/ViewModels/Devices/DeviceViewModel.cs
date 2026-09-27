@@ -243,7 +243,6 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// Refreshes the device list: invokes the monitor service for a full scan, groups by
     /// protocol, then concurrently pulls ADB device properties to enrich details.
     /// </summary>
-    [RelayCommand]
     private Task RefreshDevicesAsync() => _refreshTask is { IsCompleted: false }
         ? _refreshTask : _refreshTask = RefreshDevicesCoreAsync();
 
