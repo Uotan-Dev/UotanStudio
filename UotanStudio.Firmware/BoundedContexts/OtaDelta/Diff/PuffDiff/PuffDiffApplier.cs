@@ -150,6 +150,57 @@ public static class PuffDiffApplier
         return output.ToArray();
     }
 
+    /// <summary>Creates a standard PUF1 patch from bounded seekable streams without buffering either image as a whole.
+    /// <para>从有界可定位流创建标准 PUF1 补丁，不将任一完整镜像整体载入内存。</para></summary>
+    /// <param name="oldData">Seekable source image stream positioned at zero.</param>
+    /// <param name="newData">Seekable target image stream positioned at zero.</param>
+    /// <param name="output">Writable destination receiving the complete PUF1 patch.</param>
+    /// <param name="cancellationToken">Cancellation token checked during patch generation and copying.</param>
+    /// <exception cref="ArgumentException">A stream is not seekable/readable or exceeds the 256 MiB limit.</exception>
+    public static void CreatePatch(Stream oldData, Stream newData, Stream output,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(oldData);
+        ArgumentNullException.ThrowIfNull(newData);
+        ArgumentNullException.ThrowIfNull(output);
+        if (!oldData.CanSeek || !oldData.CanRead || !newData.CanSeek || !newData.CanRead || !output.CanWrite
+            || oldData.Position != 0 || newData.Position != 0)
+            throw new ArgumentException("PUFFDIFF streams must be readable/seekable, with a writable output.");
+        var oldLength = oldData.Length;
+        var newLength = newData.Length;
+        if (oldLength < 0 || newLength < 0 || oldLength > MaximumBufferBytes || newLength > MaximumBufferBytes)
+            throw new ArgumentException("PUFFDIFF stream length exceeds the 256 MiB limit.");
+        cancellationToken.ThrowIfCancellationRequested();
+        using var header = new MemoryStream();
+        using (var proto = new CodedOutputStream(header, leaveOpen: true))
+        {
+            proto.WriteTag(1, WireFormat.WireType.Varint);
+            proto.WriteInt32(1);
+            WriteStreamInfo(proto, 2, oldLength);
+            WriteStreamInfo(proto, 3, newLength);
+        }
+
+        output.Write("PUF1"u8);
+        Span<byte> sizeBytes = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32BigEndian(sizeBytes, checked((uint)header.Length));
+        output.Write(sizeBytes);
+        output.Write(header.GetBuffer().AsSpan(0, checked((int)header.Length)));
+        cancellationToken.ThrowIfCancellationRequested();
+        BinaryDeltaPatch.Create(oldData, newData, output, cancellationToken);
+    }
+
+    private static void WriteStreamInfo(CodedOutputStream output, int field, long length)
+    {
+        using var info = new MemoryStream();
+        using (var child = new CodedOutputStream(info, leaveOpen: true))
+        {
+            child.WriteTag(3, WireFormat.WireType.Varint);
+            child.WriteUInt64(checked((ulong)length));
+        }
+        output.WriteTag(field, WireFormat.WireType.LengthDelimited);
+        output.WriteBytes(ByteString.CopyFrom(info.GetBuffer(), 0, checked((int)info.Length)));
+    }
+
     private static Header ParseHeader(ReadOnlySpan<byte> patch)
     {
         if (patch.Length < 8 || !patch[..4].SequenceEqual("PUF1"u8)) throw new PayloadException("Invalid PUF1 patch magic.");

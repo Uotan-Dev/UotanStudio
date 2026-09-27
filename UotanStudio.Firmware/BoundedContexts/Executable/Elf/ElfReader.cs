@@ -10,6 +10,11 @@ namespace UotanStudio.Firmware.BoundedContexts.Executable.Elf;
 /// <para>使用有界、可寻址的输入，以任一字节序读取 ELF32/ELF64 元数据。布局与扩展编号遵循 System V gABI
 /// 关于 ELF 头、程序头与节头的定义。</para>
 /// </summary>
+/// <remarks>
+/// This metadata reader does not validate executability. Packed firmware may carry load-segment file offsets
+/// that are not congruent with virtual addresses modulo alignment; their original values are preserved.
+/// <para>此元数据读取器不验证可执行性。紧凑布局固件的加载段文件偏移与虚拟地址可能不满足对齐同余条件；读取时保留原始值。</para>
+/// </remarks>
 public static class ElfReader
 {
     private const uint MaxTableEntries = 131072;
@@ -176,10 +181,9 @@ public static class ElfReader
                 {
                     ValidateRange(segment.Offset, segment.FileSize, length);
                     ValidateAlignment(segment.Alignment);
-                    if (segment.Type == 1 && (segment.FileSize > segment.MemorySize
-                        || segment.Alignment > 1 && segment.Offset % segment.Alignment != segment.VirtualAddress % segment.Alignment))
+                    if (segment.Type == 1 && segment.FileSize > segment.MemorySize)
                     {
-                        throw new InvalidDataException("Invalid ELF load-segment size or alignment.");
+                        throw new InvalidDataException("ELF load-segment file size exceeds its memory size.");
                     }
                 }
 

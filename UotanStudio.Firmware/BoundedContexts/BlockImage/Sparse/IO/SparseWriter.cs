@@ -28,6 +28,22 @@ public static class SparseWriter
     /// <para>某块的结束位置或重写后的总大小超过 32 位范围。</para></exception>
     public static void WriteToStream(SparseFile sparseFile, Stream stream, bool includeCrc = false)
     {
+        var temporaryChunks = new List<SparseChunk>();
+        try
+        {
+            WriteToStreamCore(sparseFile, stream, includeCrc, temporaryChunks);
+        }
+        finally
+        {
+            foreach (var chunk in temporaryChunks)
+            {
+                chunk.Dispose();
+            }
+        }
+    }
+
+    private static void WriteToStreamCore(SparseFile sparseFile, Stream stream, bool includeCrc, List<SparseChunk> temporaryChunks)
+    {
         var chunks = sparseFile.Chunks;
         var finalChunks = new List<SparseChunk>(chunks.Count + 10);
         uint currentBlock = 0;
@@ -47,7 +63,7 @@ public static class SparseWriter
             }
             if ((ChunkType)chunk.Header.ChunkType == ChunkType.Raw)
             {
-                AddSplitRawChunks(finalChunks, chunk, sparseFile.Header.BlockSize, sparseFile.Header.ChunkHeaderSize);
+                AddSplitRawChunks(finalChunks, temporaryChunks, chunk, sparseFile.Header.BlockSize, sparseFile.Header.ChunkHeaderSize);
             }
             else
             {
@@ -185,7 +201,7 @@ public static class SparseWriter
         }
     }
 
-    private static void AddSplitRawChunks(List<SparseChunk> output, SparseChunk chunk, uint blockSize, ushort headerSize)
+    private static void AddSplitRawChunks(List<SparseChunk> output, List<SparseChunk> temporaryChunks, SparseChunk chunk, uint blockSize, ushort headerSize)
     {
         if (blockSize == 0) throw new InvalidDataException("Sparse block size must be non-zero.");
         var maxBlocks = (uint)((uint.MaxValue - (ulong)headerSize) / blockSize);
@@ -198,8 +214,9 @@ public static class SparseWriter
             var blocks = (uint)Math.Min(remaining, maxBlocks);
             var byteOffset = checked(blockOffset * blockSize);
             var byteLength = checked((long)blocks * blockSize);
+            var startBlock = checked(chunk.StartBlock + (uint)blockOffset);
             var provider = chunk.DataProvider?.GetSubProvider(byteOffset, Math.Min(byteLength, Math.Max(0, chunk.DataProvider.Length - byteOffset)));
-            output.Add(new SparseChunk(new ChunkHeader
+            var split = new SparseChunk(new ChunkHeader
             {
                 ChunkType = (ushort)ChunkType.Raw,
                 Reserved = chunk.Header.Reserved,
@@ -207,9 +224,11 @@ public static class SparseWriter
                 TotalSize = checked((uint)(headerSize + (ulong)byteLength)),
             })
             {
-                StartBlock = checked(chunk.StartBlock + (uint)blockOffset),
+                StartBlock = startBlock,
                 DataProvider = provider,
-            });
+            };
+            temporaryChunks.Add(split);
+            output.Add(split);
             remaining -= blocks;
             blockOffset = checked(blockOffset + blocks);
         }

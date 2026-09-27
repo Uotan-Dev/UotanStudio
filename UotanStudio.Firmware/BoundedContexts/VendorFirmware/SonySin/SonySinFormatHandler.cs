@@ -341,6 +341,18 @@ public sealed class SonySinFormatHandler : IReadonlyFormatHandler
             outputEnd = checked(segment.OutputOffset + segment.OutputSize);
         }
 
+        var packedRanges = segments.OrderBy(segment => segment.PackedOffset).ToArray();
+        long packedEnd = headerSize + 8 + gptpLength;
+        foreach (var segment in packedRanges)
+        {
+            if (segment.PackedOffset < packedEnd)
+            {
+                throw new InvalidDataException("Sony SIN packed segment ranges overlap.");
+            }
+
+            packedEnd = checked(segment.PackedOffset + segment.PackedSize);
+        }
+
         return new SonySinImage(version, headerSize, dataSize, gptpLength, gptp.AsSpan(8, 16).ToArray(), segments, outputEnd);
     }
 

@@ -245,6 +245,7 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider
                     : Ext4CapacityMode.Default,
                 ReadOnly = IsTrue(options, "ReadOnly"),
                 BlockSharingMode = ParseBlockSharingMode(options),
+                CancellationToken = cancellationToken,
             }, progressSink);
             return Task.FromResult(FirmwareOpResult.Ok(
                 $"Packed EXT4 image '{inputPath}' -> '{outputPath}' ({new FileInfo(outputPath).Length} bytes).",

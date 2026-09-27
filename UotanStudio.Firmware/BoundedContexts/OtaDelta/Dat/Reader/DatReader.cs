@@ -52,15 +52,30 @@ public static class DatReader
     /// <exception cref="ArgumentException">The transfer list needs a source image or patch data that was not supplied. <para>传输清单需要源镜像或补丁数据，但未提供。</para></exception>
     /// <exception cref="InvalidDataException">A command's ranges, stash, hash or patch output fails validation. <para>某个命令的范围、暂存、哈希或补丁输出未通过校验。</para></exception>
     public static void Unpack(string transferListPath, string newDataPath, string? patchDataPath, string? sourceImagePath, string outputImagePath, bool brotliCompressed, IProgress<double>? progress = null)
+        => Unpack(transferListPath, newDataPath, patchDataPath, sourceImagePath, outputImagePath, brotliCompressed, progress, CancellationToken.None);
+
+    /// <summary>Unpacks an OTA with cancellation and atomic output publication. <para>支持取消及输出原子发布地解包 OTA。</para></summary>
+    /// <param name="transferListPath">Path to the transfer list. <para>传输清单的路径。</para></param>
+    /// <param name="newDataPath">Path to the new data stream. <para>新数据流的路径。</para></param>
+    /// <param name="patchDataPath">Optional incremental patch data path. <para>可选的增量补丁数据路径。</para></param>
+    /// <param name="sourceImagePath">Optional incremental source image path. <para>可选的增量源镜像路径。</para></param>
+    /// <param name="outputImagePath">Destination image path. <para>目标镜像路径。</para></param>
+    /// <param name="brotliCompressed">Forces Brotli decoding of new data. <para>强制对新数据进行 Brotli 解码。</para></param>
+    /// <param name="progress">Optional completion fraction sink. <para>可选的完成进度比例接收器。</para></param>
+    /// <param name="cancellationToken">Cancels copying before the output is published. <para>在输出发布前取消复制。</para></param>
+    /// <exception cref="ArgumentException">The transfer list needs a source image or patch data that was not supplied. <para>传输清单需要源镜像或补丁数据，但未提供。</para></exception>
+    /// <exception cref="InvalidDataException">A command's ranges, stash, hash or patch output fails validation. <para>某个命令的范围、暂存、哈希或补丁输出未通过校验。</para></exception>
+    public static void Unpack(string transferListPath, string newDataPath, string? patchDataPath, string? sourceImagePath, string outputImagePath, bool brotliCompressed, IProgress<double>? progress, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var list = TransferListParser.Parse(transferListPath);
         var needsSource = list.Commands.Any(command => command.Kind is TransferListCommandKind.Move or TransferListCommandKind.Stash or TransferListCommandKind.Diff or TransferListCommandKind.Imgdiff);
         var needsPatch = list.Commands.Any(command => command.Kind is TransferListCommandKind.Diff or TransferListCommandKind.Imgdiff);
         if (needsSource && string.IsNullOrWhiteSpace(sourceImagePath)) throw new ArgumentException("An incremental OTA requires a source image.", nameof(sourceImagePath));
         if (needsPatch && string.IsNullOrWhiteSpace(patchDataPath)) throw new ArgumentException("An incremental diff requires .patch.dat.", nameof(patchDataPath));
-        using var newData = OpenData(newDataPath, brotliCompressed, checked(list.NewDataBlocks * BlockSize));
+        using var newData = OpenData(newDataPath, brotliCompressed, checked(list.NewDataBlocks * BlockSize), cancellationToken);
         var patchLimit = list.Commands.Aggregate(0L, (limit, command) => Math.Max(limit, checked(command.PatchOffset + command.PatchLength)));
-        using var patch = needsPatch ? OpenData(patchDataPath!, false, patchLimit) : null;
+        using var patch = needsPatch ? OpenData(patchDataPath!, false, patchLimit, cancellationToken) : null;
         var destination = Path.GetFullPath(outputImagePath);
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         var temporary = destination + ".tmp-" + Guid.NewGuid().ToString("N");
@@ -69,16 +84,17 @@ public static class DatReader
             using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
             {
                 using (var source = needsSource ? File.OpenRead(sourceImagePath!) : null)
-                    if (source is not null) BinaryDeltaPatch.CopyExactly(source, output, source.Length);
+                    if (source is not null) BinaryDeltaPatch.CopyExactly(source, output, source.Length, cancellationToken);
                 output.SetLength(Math.Max(output.Length, checked(list.TotalBlocks * BlockSize)));
-                Execute(list, newData, patch, output, progress);
+                Execute(list, newData, patch, output, progress, cancellationToken);
             }
+            cancellationToken.ThrowIfCancellationRequested();
             File.Move(temporary, destination, overwrite: true);
         }
         finally { File.Delete(temporary); }
     }
 
-    private static void Execute(TransferList list, Stream newData, Stream? patch, FileStream output, IProgress<double>? progress)
+    private static void Execute(TransferList list, Stream newData, Stream? patch, FileStream output, IProgress<double>? progress, CancellationToken cancellationToken)
     {
         var stashes = new Dictionary<string, FileStream>(StringComparer.Ordinal);
         long stashBlocks = 0;
@@ -87,18 +103,26 @@ public static class DatReader
         {
             foreach (var command in list.Commands)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 switch (command.Kind)
                 {
                     case TransferListCommandKind.New:
                         using (var target = WriteRanges(output, command.Ranges))
-                        { BinaryDeltaPatch.CopyExactly(newData, target, target.Length); target.Complete(); }
+                        {
+                            BinaryDeltaPatch.CopyExactly(newData, target, target.Length, cancellationToken);
+                            target.Complete();
+                        }
                         break;
                     case TransferListCommandKind.Zero:
                     case TransferListCommandKind.Erase:
                         using (var target = WriteRanges(output, command.Ranges))
                         {
                             var zeros = new byte[64 * 1024];
-                            while (target.Position < target.Length) target.Write(zeros, 0, (int)Math.Min(zeros.Length, target.Length - target.Position));
+                            while (target.Position < target.Length)
+                            {
+                                cancellationToken.ThrowIfCancellationRequested();
+                                target.Write(zeros, 0, (int)Math.Min(zeros.Length, target.Length - target.Position));
+                            }
                             target.Complete();
                         }
                         break;
@@ -192,7 +216,7 @@ public static class DatReader
             throw new InvalidDataException("Transfer command SHA-1 mismatch.");
         stream.Position = 0;
     }
-    private static Stream OpenData(string path, bool forceBrotli, long maximumLength)
+    private static Stream OpenData(string path, bool forceBrotli, long maximumLength, CancellationToken cancellationToken)
     {
         var file = File.OpenRead(path);
         if (!forceBrotli && !path.EndsWith(".br", StringComparison.OrdinalIgnoreCase))
@@ -211,10 +235,25 @@ public static class DatReader
         {
             using (file)
             using (var decoder = new StrictBrotliReadStream(file))
-            using (var bounded = new CountingWriteStream(temporary, maximumLength, leaveOpen: true)) decoder.CopyTo(bounded);
+            using (var bounded = new CountingWriteStream(temporary, maximumLength, leaveOpen: true))
+            {
+                var buffer = new byte[64 * 1024];
+                while (true)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var read = decoder.Read(buffer);
+                    if (read == 0)
+                    {
+                        break;
+                    }
+
+                    bounded.Write(buffer, 0, read);
+                }
+            }
             temporary.Position = 0;
             return temporary;
         }
         catch { temporary.Dispose(); file.Dispose(); throw; }
     }
+
 }

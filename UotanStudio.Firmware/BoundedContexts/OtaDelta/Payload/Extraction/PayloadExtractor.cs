@@ -154,6 +154,7 @@ internal class PayloadExtractor
                         using var hash = new VerifyingReadStream(baseStream, sourceInfo.Hash.Length > 0 ? sourceInfo.Hash.ToArray() : null);
                         outFile.Position = 0;
                         BinaryDeltaPatch.CopyExactly(hash, outFile, Math.Min(baseStream.Length, totalSize), cancellationToken);
+                        BinaryDeltaPatch.CopyExactly(hash, Stream.Null, baseStream.Length - Math.Min(baseStream.Length, totalSize), cancellationToken);
                         hash.Complete();
                     }
                     else

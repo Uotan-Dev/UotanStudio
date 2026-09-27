@@ -1,8 +1,12 @@
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac.Build;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac.Extraction;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac.Models;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -193,6 +197,34 @@ public class PacFormatHandlerTests
     }
 
     [Fact]
+    public async Task PackAsync_CreatesCanonicalPackageThatChecksAndExtracts()
+    {
+        var source = CreateTempDir();
+        var nested = Path.Combine(source, "images");
+        Directory.CreateDirectory(nested);
+        File.WriteAllBytes(Path.Combine(source, "boot.img"), [1, 2, 3]);
+        File.WriteAllBytes(Path.Combine(nested, "system.img"), [4, 5, 6, 7]);
+        File.WriteAllText(Path.Combine(source, RepackMetadata.FileName), "ignored");
+
+        var package = Path.Combine(source, "output.pac");
+        var handler = new PacFormatHandler();
+        var packed = await handler.PackAsync(source, package, TestContext.Current.CancellationToken);
+
+        Assert.True(packed.Success, packed.Summary);
+        var checks = PacExtractor.Check(package, TestContext.Current.CancellationToken);
+        Assert.True(checks.HeadOk);
+        Assert.True(checks.DataOk);
+        Assert.Equal(["boot.img", "images/system.img"],
+            PacExtractor.List(package).Select(entry => entry.Name).ToArray());
+
+        var output = Path.Combine(source, "extracted");
+        Assert.Equal(2, PacExtractor.Extract(package, output, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal([1, 2, 3], File.ReadAllBytes(Path.Combine(output, "boot.img")));
+        Assert.Equal([4, 5, 6, 7], File.ReadAllBytes(Path.Combine(output, "images", "system.img")));
+        Directory.Delete(source, recursive: true);
+    }
+
+    [Fact]
     public void Detect_NoExtension_ContentMagic_IsPac()
     {
         FirmwareFormatRegistry.RegisterAll();
@@ -260,6 +292,46 @@ public class PacFormatHandlerTests
         finally
         {
             Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Check_DataCrc_IgnoresBytesAfterDeclaredPackage()
+    {
+        var package = BuildPac(("system.img", [1, 2, 3]));
+        var withTail = new byte[package.Length + 2];
+        package.CopyTo(withTail, 0);
+        withTail[^2] = 0xA5;
+        withTail[^1] = 0x5A;
+        var path = Path.Combine(CreateTempDir(), "tail.pac");
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, withTail);
+            var result = PacExtractor.Check(path, TestContext.Current.CancellationToken);
+            Assert.Equal((true, true), result);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Check_DeclaredPackageBeyondPhysicalFile_IsRejected()
+    {
+        var package = BuildPac(("system.img", [1, 2, 3]));
+        var path = Path.Combine(CreateTempDir(), "truncated.pac");
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            BinaryPrimitives.WriteUInt32LittleEndian(package.AsSpan(48), checked((uint)(package.Length + 1)));
+            File.WriteAllBytes(path, package);
+            Assert.Throws<InvalidDataException>(() => PacExtractor.Check(path, TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
         }
     }
 

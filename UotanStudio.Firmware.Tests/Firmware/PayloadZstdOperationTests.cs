@@ -20,6 +20,12 @@ public sealed class PayloadZstdOperationTests
         "KLUv/WQAH1UIAAQQCzBVep/E6Q4zWH2ix+wRNluApcrvFDleg6jN8hc8YYar0PUaP2SJrtP4HUJnjLHW+yBFao+02f4jSG2St9wBJktwlbrfBClOc5i94gcsUXabwOUKL1R5nsPoDTJXfKHG6xA1Wn+kye4TOF2Cp8zxFjtgharP9Bk+Y4it0vccQWaLsNX6H0RpjrPY/SJHbJG22wAlSm+Uud4DKE1yl7zhBitQdZq/5AkuU3idwucMMVZ7oMXqDzRZfqPI7RI3XIGmy/AVOl+Eqc7zGD1ih6zR9htAZYqv1PkeQ2iNstf8IUZrkLXa/yRJbpO43QInTHGWu+AFKk90mb7jCC1Sd5zB5gEAAP0+0K8pZigdHA==");
 
     [Fact]
+    public void ReplaceZstd_UsesExtensionOperationValueWithoutClaimingBuilderCompatibility()
+    {
+        Assert.Equal(14, (int)InstallOperation.Types.Type.ReplaceZstd);
+    }
+
+    [Fact]
     public void Extract_CliGeneratedFrame_ProducesReferenceBytes()
     {
         using var temp = new TempDirectory();

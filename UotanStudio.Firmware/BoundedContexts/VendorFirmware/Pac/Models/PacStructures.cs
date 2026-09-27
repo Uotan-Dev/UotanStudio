@@ -401,6 +401,35 @@ public sealed class SprdFile
     }
 
     /// <summary>
+    /// Serializes this directory entry using the fixed PAC layout.
+    /// <para>按 PAC 固定布局序列化此目录条目。</para>
+    /// </summary>
+    /// <returns>The 2,580-byte little-endian entry representation. <para>2,580 字节的小端条目表示。</para></returns>
+    public byte[] ToBytes()
+    {
+        using var ms = new MemoryStream();
+        using var writer = new BinaryWriter(ms);
+        writer.Write(StructSize);
+        foreach (var value in Id)
+            writer.Write(value);
+        foreach (var value in Name)
+            writer.Write(value);
+        foreach (var value in Unknown1)
+            writer.Write(value);
+        writer.Write(Size);
+        writer.Write(Type);
+        writer.Write(FlashUse);
+        writer.Write(PacOffset);
+        writer.Write(OmitFlag);
+        writer.Write(AddrNum);
+        foreach (var value in Addr)
+            writer.Write(value);
+        foreach (var value in Unknown2)
+            writer.Write(value);
+        return ms.ToArray();
+    }
+
+    /// <summary>
     /// Gets the entry ID string.
     /// <para>获取条目 ID 字符串。</para>
     /// </summary>

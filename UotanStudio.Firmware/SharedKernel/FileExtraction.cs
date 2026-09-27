@@ -26,9 +26,11 @@ internal static class FileExtraction
         return target;
     }
 
-    internal static void WriteAtomic(string targetPath, Action<FileStream> write, bool overwrite = true)
+    internal static void WriteAtomic(string targetPath, Action<FileStream> write, bool overwrite = true,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(write);
+        cancellationToken.ThrowIfCancellationRequested();
         var target = Path.GetFullPath(targetPath);
         RejectLinks(target);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
@@ -38,6 +40,7 @@ internal static class FileExtraction
         {
             using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920))
                 write(output);
+            cancellationToken.ThrowIfCancellationRequested();
             RejectLinks(target);
             File.Move(temporary, target, overwrite);
         }

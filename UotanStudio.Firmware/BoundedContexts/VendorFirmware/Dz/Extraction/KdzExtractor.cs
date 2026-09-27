@@ -42,25 +42,31 @@ public static class KdzExtractor
     /// </param>
     /// <returns>
     /// The header generation (<c>0</c>, <c>1</c> or <c>2</c>) chosen by the 8-byte magic, and the partition
-    /// entries decoded from the 272-byte records up to the <c>0x03</c>/<c>0x00</c> terminator.
+    /// entries decoded from 272-byte records. <c>0x03</c> precedes the final record; <c>0x00</c> ends the table immediately.
     /// <para>由 8 字节魔数决定的头部版本（<c>0</c>、<c>1</c> 或 <c>2</c>），以及从 272 字节记录解码、
-    /// 直到 <c>0x03</c>/<c>0x00</c> 终止符为止的分区条目。</para>
+    /// 遇到 <c>0x03</c> 后再读取最后一条记录，遇到 <c>0x00</c> 则立即结束。</para>
     /// </returns>
     /// <exception cref="ArgumentException">
     /// <paramref name="kdzPath"/> is null or empty.
     /// <para><paramref name="kdzPath"/> 为 <see langword="null"/> 或空字符串。</para>
     /// </exception>
     /// <exception cref="InvalidDataException">
-    /// The magic does not match a known KDZ header, a partition record is truncated, or a partition exceeds
-    /// the input bounds.
-    /// <para>魔数与已知 KDZ 头部不符、分区记录被截断，或分区超出输入文件边界。</para>
+    /// The magic is unknown, the table is empty, truncated, unterminated, overlaps payload data or exceeds
+    /// 65,536 entries, or a partition exceeds the input bounds.
+    /// <para>魔数未知，表为空、被截断、缺少结束标记、与数据重叠或超过 65,536 条，或分区超出输入边界。</para>
     /// </exception>
     public static (int HeaderType, List<KdzPartition> Partitions) Parse(string kdzPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(kdzPath);
 
         using var fs = new FileStream(kdzPath, FileMode.Open, FileAccess.Read);
-        using var br = new BinaryReader(fs);
+        return Parse(fs, CancellationToken.None);
+    }
+
+    internal static (int HeaderType, List<KdzPartition> Partitions) Parse(Stream fs, CancellationToken cancellationToken)
+    {
+        fs.Position = 0;
+        using var br = new BinaryReader(fs, Encoding.UTF8, leaveOpen: true);
 
         var magic = br.ReadBytes(8);
         var headerType = magic.SequenceEqual(DzConstants.KdzHeaderV0) ? 0
@@ -69,9 +75,37 @@ public static class KdzExtractor
             : throw new InvalidDataException("Unsupported KDZ file format.");
 
         var partitions = new List<KdzPartition>();
-        fs.Position = 8;
+        var tableLimit = fs.Length;
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (fs.Position >= tableLimit)
+            {
+                throw new InvalidDataException("The KDZ partition table has no end marker.");
+            }
+
+            var next = br.ReadByte();
+            if (next == 0x00)
+            {
+                if (partitions.Count == 0)
+                {
+                    throw new InvalidDataException("The KDZ partition table is empty.");
+                }
+
+                break;
+            }
+
+            var last = next == 0x03;
+            if (!last)
+            {
+                fs.Position--;
+            }
+
+            if (partitions.Count >= 65536 || tableLimit - fs.Position < KdzHeader.Size)
+            {
+                throw new InvalidDataException("The KDZ partition table is truncated or exceeds its entry limit.");
+            }
+
             var buf = br.ReadBytes(KdzHeader.Size);
             if (buf.Length < KdzHeader.Size)
             {
@@ -80,7 +114,16 @@ public static class KdzExtractor
 
             var header = KdzHeader.FromBytes(buf);
             if (header.Offset > (ulong)fs.Length || header.Length > (ulong)fs.Length - header.Offset)
+            {
                 throw new InvalidDataException("A KDZ partition exceeds the input bounds.");
+            }
+
+            tableLimit = Math.Min(tableLimit, (long)header.Offset);
+            if (fs.Position > tableLimit)
+            {
+                throw new InvalidDataException("The KDZ partition table overlaps partition data.");
+            }
+
             partitions.Add(new KdzPartition
             {
                 Name = header.GetName(),
@@ -88,13 +131,10 @@ public static class KdzExtractor
                 Offset = header.Offset
             });
 
-            var next = br.ReadByte();
-            if (next is 0x03 or 0x00)
+            if (last)
             {
                 break;
             }
-
-            fs.Seek(-1, SeekOrigin.Current);
         }
 
         return (headerType, partitions);
@@ -117,10 +157,9 @@ public static class KdzExtractor
         ArgumentException.ThrowIfNullOrEmpty(outDir);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var (_, partitions) = Parse(kdzPath);
-        var count = 0;
-
         using var fs = new FileStream(kdzPath, FileMode.Open, FileAccess.Read);
+        var (_, partitions) = Parse(fs, cancellationToken);
+        var count = 0;
         foreach (var part in partitions)
         {
             cancellationToken.ThrowIfCancellationRequested();

@@ -211,12 +211,33 @@ public sealed class VendorFormatBoundaryTests : IDisposable
     }
 
     [Fact]
+    public async Task SonySin_DeclaredDataSizeBeyondFile_IsRejected()
+    {
+        var sin = CreateSonySinFixture();
+        BinaryPrimitives.WriteUInt32BigEndian(sin.AsSpan(0x18), checked((uint)(sin.Length + 1)));
+
+        var result = await ReadSonyMetadataAsync("bad-data-size.sin", sin);
+
+        Assert.False(result.Success);
+    }
+
+    [Fact]
     public async Task SonySin_OverlappingOutputSegments_IsRejected()
     {
         var sin = CreateSonySinFixture();
         BinaryPrimitives.WriteUInt64BigEndian(sin.AsSpan(128), 8);
 
         var result = await ReadSonyMetadataAsync("overlap.sin", sin);
+
+        Assert.False(result.Success);
+    }
+
+    [Fact]
+    public async Task SonySin_OverlappingPackedSegments_AreRejectedBeforePublication()
+    {
+        var sin = CreateSonySinFixture();
+        BinaryPrimitives.WriteUInt64BigEndian(sin.AsSpan(112), 0);
+        var result = await ReadSonyMetadataAsync("packed-overlap.sin", sin);
 
         Assert.False(result.Success);
     }

@@ -47,6 +47,10 @@ internal sealed class RebuildParameters
     public ushort? Ext4Encoding { get; set; }
     /// <summary>Gets the EXT4 casefold encoding flags.</summary>
     public ushort Ext4EncodingFlags { get; set; }
+    /// <summary>Gets the captured EXT4 read-only policy.<para>获取捕获的 EXT4 只读策略。</para></summary>
+    public bool? Ext4ReadOnly { get; set; }
+    /// <summary>Gets whether the source EXT4 shares data blocks.<para>获取源 EXT4 是否共享数据块。</para></summary>
+    public bool? Ext4SharedBlocks { get; set; }
     /// <summary>Gets the raw filesystem UUID bytes (serialized as base64).<para>获取原始文件系统 UUID 字节（以 base64 序列化）。</para></summary>
     public byte[]? Uuid { get; set; }
     /// <summary>Gets the volume name.<para>获取卷名。</para></summary>

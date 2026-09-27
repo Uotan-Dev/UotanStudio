@@ -1,6 +1,8 @@
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac.Extraction;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac.Models;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac.Build;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac;
 
@@ -8,8 +10,14 @@ namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Pac;
 /// Handles SPRD/UNISOC PAC firmware packages for metadata reading and extraction; packing is not supported.
 /// <para>处理 SPRD/UNISOC PAC 固件包的元数据读取与解包；不支持打包。</para>
 /// </summary>
-public sealed class PacFormatHandler : IFormatHandler
+public sealed class PacFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
+    void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
+    {
+        metadata.CanPackDirectory = true;
+        metadata.PackingNotes = "Creates a canonical unsigned PAC from the extracted directory; original OEM header fields and device acceptance are not preserved.";
+    }
+
     /// <summary>Display name of the handled format.
     /// <para>所处理格式的显示名称。</para></summary>
     /// <value>The fixed string <c>"SPRD/UNISOC PAC Firmware"</c>.
@@ -180,7 +188,20 @@ public sealed class PacFormatHandler : IFormatHandler
     /// A completed failed result stating that PAC packing is not supported by this handler.
     /// <para>已完成、说明此处理器不支持 PAC 打包的失败结果。</para>
     /// </returns>
-    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default) =>
-
-        Task.FromResult(FirmwareOpResult.Fail("PAC packing is not supported by this handler."));
+    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var count = PacBuilder.Build(inputPath, outputPath, cancellationToken: cancellationToken);
+            return Task.FromResult(FirmwareOpResult.Ok($"Packed {count} files to {outputPath}"));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
+        }
+    }
 }

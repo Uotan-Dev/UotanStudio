@@ -1,12 +1,13 @@
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz.Extraction;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz.Models;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz;
 
 /// <summary>Reads and extracts LG DZ/KDZ firmware containers through the shared format-handler contract.
 /// <para>通过共享格式处理器契约读取并提取 LG DZ/KDZ 固件容器。</para></summary>
-public sealed class DzFormatHandler : IFormatHandler
+public sealed partial class DzFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
     /// <summary>The display name reported for this handler.
     /// <para>此处理器报告的可读格式名。</para></summary>
@@ -140,12 +141,16 @@ public sealed class DzFormatHandler : IFormatHandler
     /// Packs the input into firmware asynchronously.
     /// <para>异步将输入打包为固件。</para>
     /// </summary>
-    /// <param name="inputPath">Unused; this handler never produces a DZ or KDZ container. <para>未使用；此处理器不会生成 DZ 或 KDZ 容器。</para></param>
-    /// <param name="outputPath">Unused; no output file is written. <para>未使用；不会写出任何输出文件。</para></param>
-    /// <param name="cancellationToken">Unused; the operation completes immediately. <para>未使用；操作会立即完成。</para></param>
-    /// <returns>A failure result stating that DZ/KDZ packing is not supported; never a success result.
-    /// <para>返回表明不支持 DZ/KDZ 打包的失败结果；绝不会返回成功结果。</para></returns>
-    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default) => Task.FromResult(FirmwareOpResult.Fail("DZ/KDZ packing is not supported by this handler."));
+    /// <param name="inputPath">Extracted directory with complete DZ 2.1 or KDZ v2 preservation metadata.
+    /// <para>带完整 DZ 2.1 或 KDZ v2 保留元数据的解包目录。</para></param>
+    /// <param name="outputPath">Output container, replaced only after verification.
+    /// <para>输出容器，仅在验证成功后替换。</para></param>
+    /// <param name="cancellationToken">Cancels reconstruction and publication.
+    /// <para>取消重建与发布。</para></param>
+    /// <returns>The reconstruction result; unsupported generations and incomplete metadata are rejected.
+    /// <para>重建结果；拒绝不支持的版本和不完整的元数据。</para></returns>
+    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+        => Task.Run(() => RepackKdz(inputPath, outputPath, cancellationToken), cancellationToken);
 
     private static bool IsKdz(string path)
     {

@@ -25,6 +25,7 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Files;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
@@ -152,24 +153,36 @@ public sealed class FirmwareService
     /// <param name="archivePath">The archive file path.</param>
     /// <param name="outputDirectory">The output directory.</param>
     /// <param name="overwrite">Whether to overwrite existing files.</param>
+    /// <param name="cancellationToken">Cancels extraction before metadata publication.</param>
     /// <returns>Operation result.</returns>
-    public Task<FirmwareOpResult> UnpackCpioAsync(string archivePath, string outputDirectory, bool overwrite = true)
-        => CompleteUnpackAsync(archivePath, outputDirectory, () => UnpackCpioCoreAsync(archivePath, outputDirectory, overwrite), CancellationToken.None, new CpioFormatHandler(), overwrite, context: CaptureOperationContext(outputDirectory));
+    public Task<FirmwareOpResult> UnpackCpioAsync(string archivePath, string outputDirectory,
+        bool overwrite = true, CancellationToken cancellationToken = default)
+        => CompleteUnpackAsync(archivePath, outputDirectory,
+            () => UnpackCpioCoreAsync(archivePath, outputDirectory, overwrite, cancellationToken),
+            cancellationToken, new CpioFormatHandler(), overwrite, context: CaptureOperationContext(outputDirectory));
 
-    private async Task<FirmwareOpResult> UnpackCpioCoreAsync(string archivePath, string outputDirectory, bool overwrite = true)
+    private async Task<FirmwareOpResult> UnpackCpioCoreAsync(string archivePath, string outputDirectory,
+        bool overwrite, CancellationToken cancellationToken)
     {
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             await using var fs = File.OpenRead(archivePath);
             var archive = new CpioArchive();
             Directory.CreateDirectory(outputDirectory);
             archive.ExtractToDirectory(fs, outputDirectory, new ExtractOptions
             {
                 MakeDirectories = true,
-                Overwrite = overwrite
+                Overwrite = overwrite,
+                CancellationToken = cancellationToken
             });
+            cancellationToken.ThrowIfCancellationRequested();
             var count = Directory.EnumerateFiles(outputDirectory, "*", SearchOption.AllDirectories).Count();
             return new FirmwareOpResult { Success = true, Summary = $"Extracted {count} files to {outputDirectory}" };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -227,23 +240,41 @@ public sealed class FirmwareService
     /// <param name="payloadPath">The payload.bin file path.</param>
     /// <param name="outputDirectory">The output directory.</param>
     /// <param name="partitionName">Target partition name; null or empty means all partitions.</param>
+    /// <param name="cancellationToken">Cancels metadata reads, extraction and metadata publication. <para>取消元数据读取、提取与元数据发布。</para></param>
     /// <returns>Operation result.</returns>
-    public Task<FirmwareOpResult> ExtractPayloadAsync(string payloadPath, string outputDirectory, string? partitionName = null)
-        => CompleteUnpackAsync(payloadPath, outputDirectory, () => ExtractPayloadCoreAsync(payloadPath, outputDirectory, partitionName), CancellationToken.None, new PayloadFormatHandler(), context: CaptureOperationContext(outputDirectory));
+    public Task<FirmwareOpResult> ExtractPayloadAsync(string payloadPath, string outputDirectory,
+        string? partitionName = null, CancellationToken cancellationToken = default)
+        => CompleteUnpackAsync(payloadPath, outputDirectory,
+            () => ExtractPayloadCoreAsync(payloadPath, outputDirectory, partitionName, cancellationToken),
+            cancellationToken, new PayloadFormatHandler(), context: CaptureOperationContext(outputDirectory));
 
-    private async Task<FirmwareOpResult> ExtractPayloadCoreAsync(string payloadPath, string outputDirectory, string? partitionName = null)
+    private async Task<FirmwareOpResult> ExtractPayloadCoreAsync(string payloadPath, string outputDirectory,
+        string? partitionName, CancellationToken cancellationToken)
     {
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Directory.CreateDirectory(outputDirectory);
-            var metadata = await PayloadParser.GetPayloadMetadataAsync(payloadPath);
-            var allNames = metadata?.PartitionNames ?? [];
+            var metadata = await PayloadParser.GetPayloadMetadataAsync(payloadPath, cancellationToken).ConfigureAwait(false);
+            var allNames = metadata.PartitionNames;
             var targets = string.IsNullOrWhiteSpace(partitionName)
                 ? allNames.Where(n => !string.IsNullOrEmpty(n)).ToArray()
                 : [partitionName];
+            if (targets.Length == 0 || targets.Any(name => !allNames.Contains(name, StringComparer.Ordinal)))
+            {
+                throw new InvalidDataException("The requested payload partition was not found.");
+            }
 
-            await PayloadParser.ExtractAsync(payloadPath, targets, outputDirectory);
+            await PayloadParser.ExtractAsync(payloadPath, targets, outputDirectory, cancellationToken).ConfigureAwait(false);
+            if (targets.Any(name => !File.Exists(Path.Combine(outputDirectory, name + ".img"))))
+            {
+                throw new InvalidDataException("Payload extraction did not produce every requested partition image.");
+            }
             return new FirmwareOpResult { Success = true, Summary = $"Extracted {targets.Length} partitions", Entries = [.. targets] };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -307,7 +338,11 @@ public sealed class FirmwareService
                     sb.AppendLine($"  - tag={d.Tag} type={d.TypeName} size={d.Size} partition={d.PartitionName ?? "-"} hashAlg={d.HashAlgorithm ?? "-"}");
                 }
 
-                return new FirmwareOpResult { Success = true, Summary = sb.ToString().TrimEnd() };
+                return new FirmwareOpResult
+                {
+                    Success = result.IsSigned && result.HashIsValid && result.SignatureIsValid,
+                    Summary = sb.ToString().TrimEnd()
+                };
             }
             finally
             {
@@ -569,6 +604,49 @@ public sealed class FirmwareService
             return FirmwareOpResult.Fail(ex.Message);
         }
     }
+
+    /// <summary>Re-signs an AVB partition with explicit layout and rollback parameters.
+    /// <para>使用明确的布局与回滚参数重新签名 AVB 分区。</para></summary>
+    /// <param name="imagePath">Source raw or Sparse image. <para>源原始或 Sparse 镜像。</para></param>
+    /// <param name="privateKeyPath">RSA private key file. <para>RSA 私钥文件。</para></param>
+    /// <param name="outputPath">Atomic output destination. <para>原子发布目标。</para></param>
+    /// <param name="options">Protection, salt, capacity and rollback parameters.
+    /// <para>保护方式、盐、容量与回滚参数。</para></param>
+    /// <param name="cancellationToken">Cancels signing and publication. <para>取消签名与发布。</para></param>
+    /// <returns>The backend's structured signing result. <para>后端的结构化签名结果。</para></returns>
+    public async Task<AvbSignResult> ResignAvbImageAsync(
+        string imagePath, string privateKeyPath, string outputPath, AvbResignOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        cancellationToken.ThrowIfCancellationRequested();
+        var key = AvbSigner.LoadRsaPrivateKey(privateKeyPath);
+        if (key is null)
+        {
+            return new AvbSignResult { ErrorMessage = "Failed to load the RSA private key. 无法加载 RSA 私钥。" };
+        }
+        return await Task.Run(() => AvbResigner.ResignImageAsync(
+            imagePath, outputPath, key, options, cancellationToken), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Verifies an explicitly mapped AVB chain without accessing a device.
+    /// <para>使用显式分区映射离线验证 AVB 链，不访问设备。</para></summary>
+    /// <param name="options">Exact partition paths, an optional caller-supplied trusted AVB root public-key blob,
+    /// and optional externally supplied rollback minima. Omitting a trust or rollback policy leaves that check unverified.
+    /// <para>精确分区路径、可选的调用方可信 AVB 根公钥数据块，以及可选的外部回滚下限；省略策略时相应检查保持未验证。</para></param>
+    /// <param name="cancellationToken">Cancels image reads and verification; cancellation propagates.
+    /// <para>取消镜像读取与验证；取消异常向调用方传播。</para></param>
+    /// <returns>Per-image and per-partition checks, trust and rollback status, and diagnostics.
+    /// <para>逐镜像和逐分区检查、信任与回滚状态以及诊断信息。</para></returns>
+    /// <exception cref="ArgumentNullException">The options or required mapping is null.
+    /// <para>选项或必需的映射为 null。</para></exception>
+    /// <exception cref="ArgumentException">The root name, slot suffix, map size or public-key size is invalid.
+    /// <para>根名称、槽位后缀、映射大小或公钥大小无效。</para></exception>
+    /// <exception cref="OperationCanceledException">Cancellation was requested.
+    /// <para>请求了取消。</para></exception>
+    public Task<AvbChainVerifyResult> VerifyAvbChainAsync(
+        AvbChainVerifyOptions options, CancellationToken cancellationToken = default)
+        => AvbChainVerifier.VerifyAsync(options, cancellationToken);
 
     /// <summary>
     /// Unpacks a boot or vendor_boot image into a component directory: <c>kernel</c>, <c>ramdisk</c>
@@ -1107,6 +1185,92 @@ public sealed class FirmwareService
                 return FirmwareOpResult.Fail(ex.Message);
             }
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Inspects a numbered DAT or TWRP volume set without importing it.
+    /// <para>检查带编号的 DAT 或 TWRP 卷集合，但不执行导入。</para>
+    /// </summary>
+    /// <param name="selectedPath">Any member of the volume set. <para>卷集合中的任意成员。</para></param>
+    /// <param name="cancellationToken">Cancels inspection before it starts. <para>在检查开始前取消。</para></param>
+    /// <returns>The validated set and artifact kind. <para>经校验的卷集合及工件类型。</para></returns>
+    public DatSplitSet InspectSplitDatOrTwrp(string selectedPath, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return DatSplitImporter.Inspect(selectedPath);
+    }
+
+    /// <summary>
+    /// Imports numbered DAT or TWRP volumes to one validated artifact without changing existing output on failure.
+    /// <para>将带编号的 DAT 或 TWRP 卷导入为单个经校验的工件，失败时不更改现有输出。</para>
+    /// </summary>
+    /// <param name="selectedPath">Any numbered source volume. <para>任意带编号的源卷。</para></param>
+    /// <param name="outputPath">Output artifact path. <para>输出工件路径。</para></param>
+    /// <param name="progress">Optional processed and total input bytes. <para>可选的已处理与总输入字节数。</para></param>
+    /// <param name="cancellationToken">Cancels import before publication. <para>在发布前取消导入。</para></param>
+    /// <returns>Operation result with the imported source volume names. <para>含已导入源卷名称的操作结果。</para></returns>
+    public async Task<FirmwareOpResult> ImportSplitDatOrTwrpAsync(
+        string selectedPath, string outputPath,
+        IProgress<(long Processed, long Total)>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var set = await DatSplitImporter.ImportAsync(selectedPath, outputPath, progress, cancellationToken)
+                .ConfigureAwait(false);
+            return new FirmwareOpResult
+            {
+                Success = true,
+                Summary = $"Imported {set.Kind} artifact to {outputPath}. 已导入 {set.Kind} 工件。",
+                Entries = set.Parts.Select(path => Path.GetFileName(path)!).ToArray()
+            };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return FirmwareOpResult.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Reconstructs a full OTA image from numbered new-data volumes and their same-stem transfer list.
+    /// <para>从带编号的新数据卷与同词干传输清单重建全量 OTA 镜像。</para>
+    /// </summary>
+    /// <param name="selectedPath">Any numbered new-data volume. <para>任意带编号的新数据卷。</para></param>
+    /// <param name="outputImagePath">Output image path. <para>输出镜像路径。</para></param>
+    /// <param name="progress">Optional reconstruction fraction. <para>可选的重建进度比例。</para></param>
+    /// <param name="cancellationToken">Cancels reconstruction before publication. <para>在发布前取消重建。</para></param>
+    /// <returns>Operation result; patch-data volumes cannot be reconstructed without a source image.
+    /// <para>操作结果；补丁数据卷缺少源镜像时无法重建。</para></returns>
+    public async Task<FirmwareOpResult> ReconstructSplitDatImageAsync(
+        string selectedPath, string outputImagePath,
+        IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var set = await DatSplitImporter.ReconstructDatImageAsync(
+                selectedPath, outputImagePath, progress, cancellationToken).ConfigureAwait(false);
+            return new FirmwareOpResult
+            {
+                Success = true,
+                Summary = $"Reconstructed {set.Kind} image to {outputImagePath}. 已重建 {set.Kind} 镜像。",
+                Entries = set.Parts.Select(path => Path.GetFileName(path)!).ToArray()
+            };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return FirmwareOpResult.Fail(ex.Message);
+        }
     }
 
     /// <summary>

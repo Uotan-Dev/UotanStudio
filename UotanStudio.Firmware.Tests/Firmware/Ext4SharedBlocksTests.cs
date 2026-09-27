@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -330,8 +331,10 @@ public sealed class Ext4SharedBlocksTests
         Assert.Equal(existing, File.ReadAllBytes(output));
     }
 
-    [Fact]
-    public async Task Build_SharedDuplicateData_PassesNativeReadOnlyInspectionWhenAvailable()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Build_SharedDuplicateData_PassesNativeReadOnlyInspectionWhenAvailable(bool fragmented)
     {
         if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") != "1")
         {
@@ -348,6 +351,16 @@ public sealed class Ext4SharedBlocksTests
         var content = CreateDeterministicData(2 * 1024 * 1024);
         temp.WriteBytes("root/A.bin", content);
         temp.WriteBytes("root/B.bin", content);
+        if (fragmented)
+        {
+            var reordered = new byte[content.Length];
+            for (var i = 0; i < content.Length / BlockSize; i++)
+            {
+                content.AsSpan(i * BlockSize, BlockSize).CopyTo(
+                    reordered.AsSpan((content.Length / BlockSize - i - 1) * BlockSize, BlockSize));
+            }
+            temp.WriteBytes("root/C.bin", reordered);
+        }
         var output = Path.Combine(temp.Path, "shared.img");
         Ext4Builder.Build(Path.Combine(temp.Path, "root"), output,
             CreateOptions(Ext4BlockSharingMode.ShareDuplicateData));
@@ -363,6 +376,178 @@ public sealed class Ext4SharedBlocksTests
         Assert.True(first.ExitCode == 0, first.Output);
         Assert.True(second.ExitCode == 0, second.Output);
         Assert.Equal(NormalizeDebugfsBlocks(first.Output), NormalizeDebugfsBlocks(second.Output));
+        Assert.NotEmpty(NormalizeDebugfsBlocks(first.Output));
+        var extracted = Path.Combine(temp.Path, "dump.bin");
+        var extract = await RunWslAsync("debugfs", "-R", $"dump /A.bin {ToWslPath(extracted)}", linuxPath);
+        Assert.True(extract.ExitCode == 0, extract.Output);
+        Assert.Equal(content, await File.ReadAllBytesAsync(extracted, TestContext.Current.CancellationToken));
+        if (fragmented)
+        {
+            var reversed = await RunWslAsync("debugfs", "-R", $"dump /C.bin {ToWslPath(extracted)}", linuxPath);
+            Assert.True(reversed.ExitCode == 0, reversed.Output);
+            Assert.Equal(await File.ReadAllBytesAsync(Path.Combine(temp.Path, "root/C.bin"), TestContext.Current.CancellationToken),
+                await File.ReadAllBytesAsync(extracted, TestContext.Current.CancellationToken));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Pack_PreservedMetadataWithSharedBlocks_PreservesIdentityCapacityAndContents(bool native)
+    {
+        if (native && (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") != "1"))
+        {
+            Assert.Skip("Set UOTAN_NATIVE_TOOLS=1 on Windows with Alpine WSL and e2fsprogs to run this interoperability check.");
+        }
+        if (native && (await RunWslAsync("which", "e2fsck")).ExitCode != 0)
+        {
+            Assert.Skip("Alpine WSL with e2fsprogs is unavailable.");
+        }
+        using var temp = new TempDirectory();
+        var content = CreateDeterministicData(2 * 1024 * 1024);
+        temp.WriteBytes("root/A.bin", content);
+        temp.WriteBytes("root/B.bin", content);
+        var original = Path.Combine(temp.Path, "original.img");
+        var extracted = Path.Combine(temp.Path, "extracted");
+        var rebuilt = Path.Combine(temp.Path, "rebuilt.img");
+        var uuid = Guid.NewGuid().ToByteArray();
+        Ext4Builder.Build(Path.Combine(temp.Path, "root"), original, new Ext4Options
+        {
+            Uuid = uuid,
+            VolumeName = "shared-test",
+            TargetSizeBytes = 32 * 1024 * 1024,
+            CancellationToken = TestContext.Current.CancellationToken,
+        });
+        var handler = new Ext4FormatHandler();
+        var unpack = await handler.UnpackAsync(original, extracted, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(unpack.Success, unpack.Summary);
+        using (RepackMetadata.UsePackingOverrides(new Dictionary<string, string>
+        {
+            ["ReadOnly"] = "1",
+            ["BlockSharingMode"] = nameof(Ext4BlockSharingMode.ShareDuplicateData),
+            ["CapacityPolicy"] = "explicit",
+            ["TargetSizeBytes"] = (32 * 1024 * 1024).ToString(System.Globalization.CultureInfo.InvariantCulture),
+        }))
+        {
+            var pack = await handler.PackAsync(extracted, rebuilt, TestContext.Current.CancellationToken);
+            Assert.True(pack.Success, pack.Summary);
+        }
+        Assert.Equal(new FileInfo(original).Length, new FileInfo(rebuilt).Length);
+        using var parser = new Ext4Parser(rebuilt);
+        Assert.Equal(content, ReadFile(parser, "A.bin"));
+        Assert.Equal(content, ReadFile(parser, "B.bin"));
+        Assert.Equal(0x5000U, ReadRoCompatFeatures(rebuilt) & 0x5000U);
+        var entries = parser.ListFiles().ToDictionary(static entry => entry.Path, StringComparer.Ordinal);
+        Assert.NotEqual(entries["A.bin"].Inode, entries["B.bin"].Inode);
+        Assert.Equal(ReadDataBlocks(rebuilt, entries["A.bin"].Inode), ReadDataBlocks(rebuilt, entries["B.bin"].Inode));
+        using var image = File.OpenRead(rebuilt);
+        image.Position = 1024 + 0x68;
+        var identity = new byte[16];
+        image.ReadExactly(identity);
+        Assert.Equal(uuid, identity);
+        var volume = new byte[16];
+        image.ReadExactly(volume);
+        Assert.Equal("shared-test", System.Text.Encoding.UTF8.GetString(volume).TrimEnd('\0'));
+        Assert.NotEqual(0U, ReadRoCompatFeatures(rebuilt) & 0x400U);
+        if (native)
+        {
+            var check = await RunWslAsync("e2fsck", "-fn", ToWslPath(rebuilt));
+            Assert.True(check.ExitCode == 0, check.Output);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Pack_EditedSharedSourceDeleted_InheritsPolicyUnlessExplicitlyOverridden(bool overridePolicy)
+        => await VerifyEditedSharedSourceAsync(overridePolicy, false);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Pack_EditedSharedSourceDeleted_PassesNativePolicyAndContentInspection(bool overridePolicy)
+    {
+        if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") != "1")
+        {
+            Assert.Skip("Set UOTAN_NATIVE_TOOLS=1 on Windows with Alpine WSL and e2fsprogs to run this interoperability check.");
+        }
+        foreach (var tool in new[] { "e2fsck", "debugfs", "dumpe2fs" })
+        {
+            var probe = await RunWslAsync("which", tool);
+            if (probe.ExitCode != 0)
+            {
+                Assert.Skip($"Alpine WSL with {tool} is unavailable; UOTAN_NATIVE_TOOLS=1 requires e2fsprogs.");
+            }
+        }
+        await VerifyEditedSharedSourceAsync(overridePolicy, true);
+    }
+
+    private static async Task VerifyEditedSharedSourceAsync(bool overridePolicy, bool native)
+    {
+        using var temp = new TempDirectory();
+        var content = CreateDeterministicData(BlockSize * 8);
+        temp.WriteBytes("root/A.bin", content);
+        temp.WriteBytes("root/B.bin", content);
+        var original = Path.Combine(temp.Path, "original.img");
+        var extracted = Path.Combine(temp.Path, "extracted");
+        var rebuilt = Path.Combine(temp.Path, "rebuilt.img");
+        Ext4Builder.Build(Path.Combine(temp.Path, "root"), original,
+            CreateOptions(Ext4BlockSharingMode.ShareDuplicateData));
+        var handler = new Ext4FormatHandler();
+        var unpack = await handler.UnpackAsync(original, extracted, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(unpack.Success, unpack.Summary);
+        File.Delete(original);
+        var edited = content.ToArray();
+        edited[0] ^= 0x5A;
+        await File.WriteAllBytesAsync(Path.Combine(extracted, "A.bin"), edited, TestContext.Current.CancellationToken);
+        using var overrides = overridePolicy
+            ? RepackMetadata.UsePackingOverrides(new Dictionary<string, string>
+            {
+                ["ReadOnly"] = "0",
+                ["BlockSharingMode"] = nameof(Ext4BlockSharingMode.Independent),
+            })
+            : null;
+        var result = await handler.PackAsync(extracted, rebuilt, TestContext.Current.CancellationToken);
+        Assert.True(result.Success, result.Summary);
+        using var parser = new Ext4Parser(rebuilt);
+        Assert.Equal(edited, ReadFile(parser, "A.bin"));
+        Assert.Equal(content, ReadFile(parser, "B.bin"));
+        Assert.Equal(overridePolicy ? 0U : 0x5000U, ReadRoCompatFeatures(rebuilt) & 0x5000U);
+        var entries = parser.ListFiles().ToDictionary(static entry => entry.Path, StringComparer.Ordinal);
+        Assert.NotEqual(entries["A.bin"].Inode, entries["B.bin"].Inode);
+        var a = ReadDataBlocks(rebuilt, entries["A.bin"].Inode);
+        var b = ReadDataBlocks(rebuilt, entries["B.bin"].Inode);
+        Assert.NotEqual(a[0], b[0]);
+        Assert.Equal(overridePolicy ? 0 : 7, a.Zip(b).Count(static pair => pair.First == pair.Second));
+        Assert.False(File.Exists(original));
+        if (native)
+        {
+            var linuxPath = ToWslPath(rebuilt);
+            var check = await RunWslAsync("e2fsck", "-fn", linuxPath);
+            Assert.True(check.ExitCode == 0, check.Output);
+            var header = await RunWslAsync("dumpe2fs", "-h", linuxPath);
+            Assert.True(header.ExitCode == 0, header.Output);
+            var features = header.Output.Split([' ', '\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries);
+            Assert.Equal(!overridePolicy, features.Contains("shared_blocks", StringComparer.Ordinal));
+            Assert.Equal(!overridePolicy, features.Contains("read-only", StringComparer.Ordinal));
+            var first = await RunWslAsync("debugfs", "-R", "blocks /A.bin", linuxPath);
+            var second = await RunWslAsync("debugfs", "-R", "blocks /B.bin", linuxPath);
+            Assert.True(first.ExitCode == 0, first.Output);
+            Assert.True(second.ExitCode == 0, second.Output);
+            var firstBlocks = NormalizeDebugfsBlocks(first.Output).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var secondBlocks = NormalizeDebugfsBlocks(second.Output).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            Assert.Equal(8, firstBlocks.Length);
+            Assert.Equal(8, secondBlocks.Length);
+            Assert.NotEqual(firstBlocks[0], secondBlocks[0]);
+            Assert.Equal(overridePolicy ? 0 : 7, firstBlocks.Intersect(secondBlocks, StringComparer.Ordinal).Count());
+            foreach (var (name, expected) in new[] { ("A.bin", edited), ("B.bin", content) })
+            {
+                var dumped = Path.Combine(temp.Path, $"native-{name}");
+                var dump = await RunWslAsync("debugfs", "-R", $"dump /{name} {ToWslPath(dumped)}", linuxPath);
+                Assert.True(dump.ExitCode == 0, dump.Output);
+                Assert.Equal(expected, await File.ReadAllBytesAsync(dumped, TestContext.Current.CancellationToken));
+            }
+        }
     }
 
     private static Ext4Options CreateOptions(Ext4BlockSharingMode mode) => new()

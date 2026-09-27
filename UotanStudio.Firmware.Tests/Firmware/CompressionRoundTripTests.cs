@@ -88,7 +88,7 @@ public class CompressionRoundTripTests
     public void Lzop_StoredBlockWithAllChecksumFlags_Decompresses()
     {
         var payload = BuildPayload(1024);
-        const uint flags = 0x00000001 | 0x00000002 | 0x00010000 | 0x00020000;
+        const uint flags = 0x00000001 | 0x00000002 | 0x00000100 | 0x00000200;
         var lzop = BuildMinimalLzop(payload, compressedBlock: null, flags);
 
         Assert.Equal(payload, LzopCompressor.Decompress(lzop));
@@ -235,9 +235,9 @@ public class CompressionRoundTripTests
         WriteUInt32BE(ms, (uint)payload.Length);
         WriteUInt32BE(ms, (uint)block.Length);
         if ((flags & 0x00000001) != 0) WriteUInt32BE(ms, Adler32(payload));
-        if ((flags & 0x00010000) != 0) WriteUInt32BE(ms, Crc32.HashToUInt32(payload));
-        if ((flags & 0x00000002) != 0) WriteUInt32BE(ms, Adler32(block));
-        if ((flags & 0x00020000) != 0) WriteUInt32BE(ms, Crc32.HashToUInt32(block));
+        if ((flags & 0x00000100) != 0) WriteUInt32BE(ms, Crc32.HashToUInt32(payload));
+        if ((flags & 0x00000002) != 0 && block.Length < payload.Length) WriteUInt32BE(ms, Adler32(block));
+        if ((flags & 0x00000200) != 0 && block.Length < payload.Length) WriteUInt32BE(ms, Crc32.HashToUInt32(block));
         ms.Write(block);
 
         WriteUInt32BE(ms, 0);

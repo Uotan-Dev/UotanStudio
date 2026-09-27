@@ -1,4 +1,5 @@
 using System.Text;
+using System.Buffers.Binary;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
@@ -30,9 +31,21 @@ public sealed class UpdateAppEntry
     /// <value>An offset that, together with <see cref="FileSize"/>, stays inside the container. <para>与 <see cref="FileSize"/> 相加仍位于容器范围内的偏移。</para></value>
     public long DataOffset { get; set; }
 
+    /// <summary>Declared CRC block size, or zero when the entry uses the legacy unverified header form.
+    /// <para>声明的 CRC 分块大小；旧式未校验头部时为零。</para></summary>
+    /// <value>The positive payload block size used by the entry checksum table, when available.
+    /// <para>可用时表示条目校验表使用的正数载荷分块大小。</para></value>
+    public ushort BlockSize { get; set; }
+
+    /// <summary>Per-block CRC16 values read from the canonical Huawei entry header.
+    /// <para>从标准华为条目头部读取的逐块 CRC16 值。</para></summary>
+    /// <value>An empty array means that this entry has no verifiable checksum table.
+    /// <para>空数组表示条目没有可验证的校验表。</para></value>
+    public ushort[] ChecksumTable { get; set; } = [];
+
     /// <summary>
-    /// Optional SHA-256 hash read from the entry header for integrity verification.
-    /// When <see langword="null"/>, verification is skipped.
+    /// Optional caller-supplied SHA-256 hash for integrity verification.
+    /// The canonical Huawei entry header has no proven SHA-256 field, so the parser does not populate this value.
     /// <para>从条目头部读取的可选 SHA-256 哈希，用于完整性校验。为 <see langword="null"/> 时跳过校验。</para>
     /// </summary>
     /// <value>
@@ -48,6 +61,10 @@ public sealed class UpdateAppEntry
 /// </summary>
 public static class UpdateAppProcessor
 {
+    private const int CanonicalHeaderSize = 98;
+    private const int HeaderChecksumOffset = 92;
+    private const int BlockSizeOffset = 94;
+    private const int ChecksumTableLimit = 1_048_576;
     /// <summary>The 4-byte entry signature <c>55 AA 5A A5</c>. <para>4 字节条目签名 <c>55 AA 5A A5</c>。</para></summary>
     public static readonly byte[] Magic = [0x55, 0xAA, 0x5A, 0xA5];
 
@@ -98,14 +115,45 @@ public static class UpdateAppProcessor
             if (headerSize < 76)
                 throw new InvalidDataException("UPDATE.APP entry header is too short.");
             FileExtraction.ValidateRange(headerStart, headerSize, fs.Length, "UPDATE.APP entry header");
-            fs.Seek(16, SeekOrigin.Current);
-            var fileSize = br.ReadUInt32();
-            fs.Seek(32, SeekOrigin.Current);
+            if (headerSize > int.MaxValue)
+                throw new InvalidDataException("UPDATE.APP entry header is too large.");
 
-            var nameBytes = br.ReadBytes(16);
+            fs.Seek(headerStart, SeekOrigin.Begin);
+            var header = br.ReadBytes(checked((int)headerSize));
+            if (header.Length != headerSize)
+                throw new EndOfStreamException("UPDATE.APP entry header ended unexpectedly.");
+
+            var fileSize = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(24));
+            var nameBytes = header.AsSpan(60, 16).ToArray();
             var filename = Encoding.ASCII.GetString(nameBytes).TrimEnd('\0');
             filename = CleanFileName(filename).ToLowerInvariant();
             FileExtraction.ValidateRange(headerStart + headerSize, fileSize, fs.Length, "UPDATE.APP entry data");
+
+            var blockSize = (ushort)0;
+            ushort[] checksumTable = [];
+            if (headerSize >= CanonicalHeaderSize &&
+                BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(BlockSizeOffset)) != 0)
+            {
+                blockSize = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(BlockSizeOffset));
+                var tableBytes = checked((int)headerSize - CanonicalHeaderSize);
+                if ((tableBytes & 1) != 0)
+                    throw new InvalidDataException("UPDATE.APP checksum table has an odd byte length.");
+                var blockCount = blockSize == 0 || fileSize == 0
+                    ? 0
+                    : checked((int)(((ulong)fileSize + blockSize - 1) / blockSize));
+                if (blockCount > ChecksumTableLimit || tableBytes / 2 != blockCount)
+                    throw new InvalidDataException("UPDATE.APP checksum table length does not match the payload.");
+                checksumTable = new ushort[blockCount];
+                for (var index = 0; index < blockCount; index++)
+                    checksumTable[index] = BinaryPrimitives.ReadUInt16LittleEndian(
+                        header.AsSpan(CanonicalHeaderSize + index * 2));
+
+                var expectedHeaderCrc = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(HeaderChecksumOffset));
+                BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(HeaderChecksumOffset), 0);
+                var actualHeaderCrc = ComputeCrc16(header);
+                if (actualHeaderCrc != expectedHeaderCrc)
+                    throw new InvalidDataException($"UPDATE.APP header CRC mismatch at 0x{headerStart:X}.");
+            }
 
             if (string.IsNullOrEmpty(filename))
             {
@@ -118,7 +166,6 @@ public static class UpdateAppProcessor
                 continue;
             }
 
-            fs.Seek(22, SeekOrigin.Current);
             fs.Seek(headerStart + headerSize, SeekOrigin.Begin);
 
             var entry = new UpdateAppEntry
@@ -127,7 +174,9 @@ public static class UpdateAppProcessor
                 HeaderOffset = headerStart,
                 HeaderSize = headerSize,
                 FileSize = fileSize,
-                DataOffset = fs.Position
+                DataOffset = fs.Position,
+                BlockSize = blockSize,
+                ChecksumTable = checksumTable
             };
 
             yield return entry;
@@ -183,8 +232,35 @@ public static class UpdateAppProcessor
             FileExtraction.WriteAtomic(outPath, output =>
             {
                 using var hashingStream = new HashingWriteStream(output, leaveOpen: true);
-                StreamCopy.CopyExactly(fs, hashingStream, entry.FileSize,
-                    cancellationToken: cancellationToken);
+                if (entry.ChecksumTable.Length == 0)
+                {
+                    StreamCopy.CopyExactly(fs, hashingStream, entry.FileSize,
+                        cancellationToken: cancellationToken);
+                }
+                else
+                {
+                    var buffer = new byte[Math.Min(entry.BlockSize, 1024 * 1024)];
+                    for (var block = 0; block < entry.ChecksumTable.Length; block++)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var count = (int)Math.Min(buffer.Length,
+                            entry.FileSize - (long)block * entry.BlockSize);
+                        var remaining = count;
+                        var offset = 0;
+                        while (remaining > 0)
+                        {
+                            var read = fs.Read(buffer, offset, remaining);
+                            if (read == 0)
+                                throw new EndOfStreamException("UPDATE.APP payload ended unexpectedly.");
+                            offset += read;
+                            remaining -= read;
+                        }
+                        var actual = ComputeCrc16(buffer.AsSpan(0, count));
+                        if (actual != entry.ChecksumTable[block])
+                            throw new InvalidDataException($"UPDATE.APP payload CRC mismatch for '{entry.Name}' block {block}.");
+                        hashingStream.Write(buffer, 0, count);
+                    }
+                }
 
                 if (entry.Sha256Hash is not null)
                 {
@@ -204,4 +280,16 @@ public static class UpdateAppProcessor
     }
 
     private static string CleanFileName(string name) => new([.. name.Where(c => c is >= ((char)32) and <= ((char)126))]);
+
+    private static ushort ComputeCrc16(ReadOnlySpan<byte> bytes)
+    {
+        var crc = (ushort)0xFFFF;
+        foreach (var value in bytes)
+        {
+            crc ^= value;
+            for (var bit = 0; bit < 8; bit++)
+                crc = (ushort)((crc & 1) != 0 ? (crc >> 1) ^ 0x8408 : crc >> 1);
+        }
+        return (ushort)(crc ^ 0xFFFF);
+    }
 }

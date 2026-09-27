@@ -160,15 +160,112 @@ public class PayloadIncrementalBuilderTests
         Assert.Equal(0L, partition.Operations.Sum(op => (long)op.DataLength));
     }
 
+    [Theory]
+    [InlineData(3, 7, CompressionType.None)]
+    [InlineData(7, 3, CompressionType.None)]
+    [InlineData(3, 7, CompressionType.BZip2)]
+    [InlineData(7, 3, CompressionType.Xz)]
+    [InlineData(255, 259, CompressionType.None)]
+    [InlineData(259, 255, CompressionType.None)]
+    public async Task AddPartitionIncremental_DifferentAlignedLengths_AppliesExactTarget(int sourceBlocks, int targetBlocks, CompressionType compression)
+    {
+        const int blockSize = 4096;
+        var source = new byte[sourceBlocks * blockSize];
+        new Random(42).NextBytes(source);
+        var target = new byte[targetBlocks * blockSize];
+        source.AsSpan(0, Math.Min(source.Length, target.Length)).CopyTo(target);
+        target.AsSpan(blockSize, blockSize).Fill(0xE7);
+        using var temp = new TempDirectory();
+        var sourcePath = temp.WriteBytes("source.img", source);
+        var payload = Path.Combine(temp.Path, "payload.bin");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(output);
+        File.WriteAllBytes(Path.Combine(output, "system.img"), new byte[source.Length + target.Length]);
+        using (var builder = new PayloadBuilder().WithBlockSize(blockSize))
+        {
+            var targetStream = new MemoryStream(new byte[31].Concat(target).ToArray()) { Position = 31 };
+            var sourceStream = new MemoryStream(new byte[17].Concat(source).ToArray()) { Position = 17 };
+            builder.AddPartitionIncremental("system", targetStream, sourceStream, compression);
+            await builder.BuildAsync(payload, TestContext.Current.CancellationToken);
+        }
+
+        using (var stream = File.OpenRead(payload))
+        {
+            var (manifest, _) = PayloadParser.ReadManifest(stream);
+            var partition = Assert.Single(manifest.Partitions);
+            Assert.NotNull(partition.OldPartitionInfo);
+            Assert.NotNull(partition.NewPartitionInfo);
+            Assert.Equal((ulong)source.Length, partition.OldPartitionInfo.Size);
+            Assert.Equal(SHA256.HashData(source), partition.OldPartitionInfo.Hash.ToByteArray());
+            Assert.Equal((ulong)target.Length, partition.NewPartitionInfo.Size);
+            Assert.Equal(SHA256.HashData(target), partition.NewPartitionInfo.Hash.ToByteArray());
+            ulong next = 0;
+            foreach (var operation in partition.Operations)
+            {
+                var destination = Assert.Single(operation.DstExtents);
+                Assert.Equal(next, destination.StartBlock);
+                next += destination.NumBlocks;
+                Assert.True(operation.DstLength <= 1024 * 1024);
+                if (operation.Type == InstallOperation.Types.Type.SourceCopy)
+                {
+                    var extent = Assert.Single(operation.SrcExtents);
+                    Assert.True(extent.StartBlock + extent.NumBlocks <= (ulong)sourceBlocks);
+                    Assert.Equal(extent.NumBlocks, destination.NumBlocks);
+                    Assert.Equal(SHA256.HashData(source.AsSpan((int)extent.StartBlock * blockSize, (int)extent.NumBlocks * blockSize)), operation.SrcSha256Hash.ToByteArray());
+                }
+                else
+                {
+                    Assert.Empty(operation.SrcExtents);
+                }
+            }
+            Assert.Equal((ulong)targetBlocks, next);
+        }
+
+        await PayloadParser.ExtractAsync(payload, ["system"], output,
+            cancellationToken: TestContext.Current.CancellationToken,
+            sourceImages: new Dictionary<string, string> { ["system"] = sourcePath });
+        Assert.Equal(target, File.ReadAllBytes(Path.Combine(output, "system.img")));
+    }
+
     [Fact]
-    public void AddPartitionIncremental_MismatchedSizes_Throws()
+    public async Task AddPartitionIncremental_ShrunkSourceTailCorrupted_PreservesExistingOutput()
     {
         using var temp = new TempDirectory();
-        var sourcePath = temp.WriteBytes("source.img", BuildBase());
-        var shortTarget = temp.WriteBytes("target.img", BuildBase()[..((int)(2 * BlockSize))]);
+        var source = new byte[3 * 1024 * 1024];
+        var target = source[..4096];
+        var sourcePath = temp.WriteBytes("source.img", source);
+        var targetPath = temp.WriteBytes("target.img", target);
+        var payload = Path.Combine(temp.Path, "payload.bin");
+        using (var builder = new PayloadBuilder())
+        {
+            builder.AddPartitionIncremental("system", targetPath, sourcePath);
+            await builder.BuildAsync(payload, TestContext.Current.CancellationToken);
+        }
+        source[^1] = 1;
+        File.WriteAllBytes(sourcePath, source);
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(output);
+        var existing = new byte[] { 1, 2, 3 };
+        File.WriteAllBytes(Path.Combine(output, "system.img"), existing);
+        await Assert.ThrowsAsync<UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions.PartitionExtractionException>(() => PayloadParser.ExtractAsync(payload, ["system"], output,
+            cancellationToken: TestContext.Current.CancellationToken,
+            sourceImages: new Dictionary<string, string> { ["system"] = sourcePath }));
+        Assert.Equal(existing, File.ReadAllBytes(Path.Combine(output, "system.img")));
+        Assert.Single(Directory.GetFiles(output));
+    }
+
+    [Fact]
+    public void AddPartitionIncremental_UnalignedSource_PreservesExistingPayload()
+    {
+        using var temp = new TempDirectory();
+        var sourcePath = temp.WriteBytes("source.img", BuildBase()[..^1]);
+        var shortTarget = temp.WriteBytes("target.img", BuildBase());
+        var payload = temp.WriteBytes("payload.bin", [1, 2, 3]);
         using var builder = new PayloadBuilder().WithBlockSize(BlockSize);
         builder.AddPartitionIncremental("system", shortTarget, sourcePath);
         Assert.Throws<UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions.PayloadGenerationException>(() =>
-            builder.Build(Path.Combine(temp.Path, "payload.bin")));
+            builder.Build(payload));
+        Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(payload));
+        Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp-*"));
     }
 }

@@ -9,6 +9,13 @@ namespace UotanStudio.Firmware.BoundedContexts.Archive.Extraction;
 public sealed class ExtractOptions
 {
     /// <summary>
+    /// Cancels extraction between entries and during streamed payload copies.
+    /// <para>在条目之间及流式复制负载时取消提取。</para>
+    /// </summary>
+    /// <value>The cancellation token for this extraction. <para>本次提取的取消令牌。</para></value>
+    public CancellationToken CancellationToken { get; init; }
+
+    /// <summary>
     /// Whether existing destination nodes are replaced.
     /// <para>是否替换目标位置上已存在的节点。</para>
     /// </summary>

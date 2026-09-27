@@ -17,6 +17,23 @@ namespace UotanStudio.Tests.Firmware;
 public class PuffDiffTests
 {
     [Fact]
+    public void CreatePatch_SeekableStreams_ProducesIndependentPuf1Replay()
+    {
+        var oldData = new byte[96 * 1024];
+        var newData = new byte[112 * 1024];
+        new Random(0x510F).NextBytes(oldData);
+        oldData.AsSpan(0, 80 * 1024).CopyTo(newData);
+        new Random(0x510F + 1).NextBytes(newData.AsSpan(80 * 1024));
+        using var oldStream = new MemoryStream(oldData);
+        using var newStream = new MemoryStream(newData);
+        using var patch = new MemoryStream();
+        PuffDiffApplier.CreatePatch(oldStream, newStream, patch, TestContext.Current.CancellationToken);
+
+        var bytes = patch.ToArray();
+        Assert.Equal(newData, PuffDiffApplier.Apply(bytes, oldData));
+        Assert.Equal("PUF1"u8.ToArray(), bytes[..4]);
+    }
+    [Fact]
     public void CreateThenApply_RoundTripsLargeBuffer()
     {
         var oldData = BuildData(0x10000, seed: 1);

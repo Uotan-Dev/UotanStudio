@@ -150,6 +150,50 @@ public sealed class FirmwareExtractionConformanceTests : IDisposable
     }
 
     [Fact]
+    public void UpdateApp_VerifiesCanonicalHeaderAndPayloadCrcsBeforeAtomicCommit()
+    {
+        byte[] payload = [1, 2, 3, 4, 5, 6, 7];
+        var path = Write("CANONICAL.APP", BuildCanonicalUpdateEntry("SYSTEM", payload, 4));
+        var output = Path.Combine(_root, "canonical");
+
+        Assert.Equal(1, UpdateAppProcessor.Extract(path, output, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(payload, File.ReadAllBytes(Path.Combine(output, "system.img")));
+
+        var corrupted = File.ReadAllBytes(path);
+        corrupted[^1] ^= 0x20;
+        Write("CANONICAL.APP", corrupted);
+        File.WriteAllText(Path.Combine(output, "system.img"), "preserved");
+
+        Assert.Throws<InvalidDataException>(() => UpdateAppProcessor.Extract(
+            path, output, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal("preserved", File.ReadAllText(Path.Combine(output, "system.img")));
+    }
+
+    [Fact]
+    public async Task UpdateAppHandler_PacksCanonicalUnsignedEntriesThatExtract()
+    {
+        var source = Path.Combine(_root, "update-source");
+        Directory.CreateDirectory(source);
+        await File.WriteAllBytesAsync(Path.Combine(source, "system.img"), [1, 2, 3, 4, 5],
+            TestContext.Current.CancellationToken);
+        await File.WriteAllBytesAsync(Path.Combine(source, "vendor.img"), [6, 7],
+            TestContext.Current.CancellationToken);
+        var package = Path.Combine(_root, "rebuilt.app");
+
+        var packed = await new UpdateAppFormatHandler().PackAsync(
+            source, package, TestContext.Current.CancellationToken);
+
+        Assert.True(packed.Success, packed.Summary);
+        var entries = UpdateAppProcessor.GetEntries(package).ToList();
+        Assert.Equal(["system", "vendor"], entries.Select(entry => entry.Name));
+        var output = Path.Combine(_root, "rebuilt-output");
+        Assert.Equal(2, UpdateAppProcessor.Extract(package, output,
+            cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal([1, 2, 3, 4, 5], File.ReadAllBytes(Path.Combine(output, "system.img")));
+        Assert.Equal([6, 7], File.ReadAllBytes(Path.Combine(output, "vendor.img")));
+    }
+
+    [Fact]
     public void Nb0_PaddedOffsetsMatchAllOddSizedFiles()
     {
         var builder = Nb0Packer.CreateBuilder();
@@ -209,6 +253,40 @@ public sealed class FirmwareExtractionConformanceTests : IDisposable
         Encoding.ASCII.GetBytes(name).CopyTo(bytes, 60);
         payload.CopyTo(bytes, 100);
         return bytes;
+    }
+
+    private static byte[] BuildCanonicalUpdateEntry(string name, byte[] payload, ushort blockSize)
+    {
+        var blockCount = (payload.Length + blockSize - 1) / blockSize;
+        var header = new byte[98 + blockCount * 2];
+        UpdateAppProcessor.Magic.CopyTo(header, 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(4), (uint)header.Length);
+        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(24), (uint)payload.Length);
+        Encoding.ASCII.GetBytes(name).CopyTo(header, 60);
+        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(94), blockSize);
+        for (var block = 0; block < blockCount; block++)
+        {
+            var start = block * blockSize;
+            var length = Math.Min(blockSize, payload.Length - start);
+            BinaryPrimitives.WriteUInt16LittleEndian(
+                header.AsSpan(98 + block * 2), ComputeUpdateCrc16(payload.AsSpan(start, length)));
+        }
+
+        var crc = ComputeUpdateCrc16(header);
+        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(92), crc);
+        return [.. header, .. payload];
+    }
+
+    private static ushort ComputeUpdateCrc16(ReadOnlySpan<byte> bytes)
+    {
+        var crc = (ushort)0xFFFF;
+        foreach (var value in bytes)
+        {
+            crc ^= value;
+            for (var bit = 0; bit < 8; bit++)
+                crc = (ushort)((crc & 1) != 0 ? (crc >> 1) ^ 0x8408 : crc >> 1);
+        }
+        return (ushort)(crc ^ 0xFFFF);
     }
 
     private static byte[] BuildDz((string Name, byte[] Payload, uint Sector)[] chunks, bool zstd = false)

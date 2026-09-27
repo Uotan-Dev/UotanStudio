@@ -1,9 +1,10 @@
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.UpdateApp.Build;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.UpdateApp;
 
 /// <summary>
-/// Inspects and extracts Huawei update.app packages; repacking is not offered.
+/// Inspects, extracts, and creates canonical unsigned Huawei update.app packages.
 /// <para>检查并解包华为 update.app 升级包；不提供重新打包。</para>
 /// </summary>
 public sealed class UpdateAppFormatHandler : IFormatHandler
@@ -147,17 +148,32 @@ public sealed class UpdateAppFormatHandler : IFormatHandler
     }
 
     /// <summary>
-    /// Packs the input into firmware asynchronously.
+    /// Packs a flat directory into a canonical unsigned update.app.
     /// <para>异步将输入打包为固件。</para>
     /// </summary>
-    /// <param name="inputPath">Ignored; no source layout is accepted for this format.
+    /// <param name="inputPath">Flat directory containing partition files; a trailing <c>.img</c> is removed from entry names.
     /// <para>被忽略；此格式不接受任何源目录布局。</para></param>
-    /// <param name="outputPath">Ignored; nothing is written.
+    /// <param name="outputPath">Destination package path, published atomically.
     /// <para>被忽略；不会写出任何文件。</para></param>
-    /// <param name="cancellationToken">Ignored; the call completes immediately.
+    /// <param name="cancellationToken">Cancellation token observed during checksum and write passes.
     /// <para>被忽略；调用立即完成。</para></param>
-    /// <returns>An always-failed <see cref="FirmwareOpResult"/> stating that update.app packing is not
-    /// supported; no exception escapes for unsupported packing.
+    /// <returns>A success result for the canonical unsigned package, or a failed result for invalid input.
     /// <para>始终失败的 <see cref="FirmwareOpResult"/>，说明不支持打包 update.app；不支持的打包不会抛出异常。</para></returns>
-    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default) => Task.FromResult(FirmwareOpResult.Fail("update.app packing is not supported by this handler."));
+    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var count = UpdateAppBuilder.Build(inputPath, outputPath, cancellationToken: cancellationToken);
+            return Task.FromResult(FirmwareOpResult.Ok(
+                $"Packed {count} entries to {outputPath} (canonical unsigned update.app)."));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
+        }
+    }
 }

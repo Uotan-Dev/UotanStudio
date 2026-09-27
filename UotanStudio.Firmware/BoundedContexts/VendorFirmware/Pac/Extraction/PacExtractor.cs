@@ -246,23 +246,24 @@ public static class PacExtractor
         var headOk = head.HeadCrc == calculatedHeadCrc;
 
         long totalSize = head.PacSize;
-        if (totalSize < SprdHead.Size)
+        if (totalSize < SprdHead.Size || totalSize > fs.Length)
         {
-            throw new InvalidDataException("unexpected pac size");
+            throw new InvalidDataException("PAC declared size is outside the physical file.");
         }
 
         fs.Seek(SprdHead.Size, SeekOrigin.Begin);
         ushort calculatedDataCrc = 0;
         var buffer = new byte[ChunkSize];
         long totalRead = 0;
-        while (totalRead < totalSize)
+        var dataSize = totalSize - SprdHead.Size;
+        while (totalRead < dataSize)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var toRead = (int)Math.Min(ChunkSize, totalSize - totalRead);
+            var toRead = (int)Math.Min(ChunkSize, dataSize - totalRead);
             var read = fs.Read(buffer, 0, toRead);
             if (read == 0)
             {
-                break;
+                throw new EndOfStreamException("PAC data ended before the declared package size.");
             }
             calculatedDataCrc = Crc16.Calculate(calculatedDataCrc, read == buffer.Length ? buffer : buffer.AsSpan(0, read).ToArray());
             totalRead += read;

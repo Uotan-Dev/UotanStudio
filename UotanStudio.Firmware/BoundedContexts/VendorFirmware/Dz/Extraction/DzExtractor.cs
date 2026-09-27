@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using UotanStudio.Firmware.BoundedContexts.Compression;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz.Build;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz.Models;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Streams;
@@ -63,7 +64,8 @@ public static class DzExtractor
             (layout.LogicalBlockSize & (layout.LogicalBlockSize - 1)) != 0 ||
             layout.StartSector < 0 || layout.SectorCount <= 0)
             throw new ArgumentException("Invalid DZ partition layout.", nameof(layout));
-        var (_, allChunks) = Parse(dzPath);
+        using var source = File.OpenRead(dzPath);
+        var (_, allChunks) = Parse(source, cancellationToken);
         var chunks = allChunks.Where(c => c.Header.Dev == layout.Device &&
             c.Header.GetSliceName() == layout.Name).OrderBy(c => c.Header.TargetAddr).ToList();
         if (chunks.Count == 0) throw new InvalidDataException("DZ partition has no matching chunks.");
@@ -77,7 +79,6 @@ public static class DzExtractor
             if (offset < previousEnd) throw new InvalidDataException("DZ partition chunks overlap.");
             previousEnd = checked(offset + Math.Max(trimLength, chunk.Header.TargetSize));
         }
-        using var source = File.OpenRead(dzPath);
         FileExtraction.WriteAtomic(outputPath, output =>
         {
             output.SetLength(length);
@@ -111,20 +112,36 @@ public static class DzExtractor
         ArgumentException.ThrowIfNullOrEmpty(dzPath);
 
         using var fs = new FileStream(dzPath, FileMode.Open, FileAccess.Read);
+        return Parse(fs, CancellationToken.None);
+    }
 
+    internal static (DzFileHeader Header, List<DzChunk> Chunks) Parse(Stream fs, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        fs.Position = 0;
+        if (fs.Length < DzFileHeader.Size)
+        {
+            throw new InvalidDataException("The DZ file header is truncated.");
+        }
         var headerBuffer = new byte[DzFileHeader.Size];
         fs.ReadExactly(headerBuffer);
         var header = DzFileHeader.FromBytes(headerBuffer);
         if (!header.Header.AsSpan().SequenceEqual(DzConstants.DzFileHeader))
             throw new InvalidDataException("Unsupported DZ file format.");
-        if (header.ChunkCount > (fs.Length - DzFileHeader.Size) / DzChunkHeader.Size)
-            throw new InvalidDataException("The DZ chunk table is truncated.");
+        if (header.ChunkCount > DzBuilder.MaximumChunks || header.ChunkCount > (fs.Length - DzFileHeader.Size) / DzChunkHeader.Size)
+        {
+            throw new InvalidDataException("The DZ chunk table is truncated or exceeds the entry limit.");
+        }
 
         var chunks = new List<DzChunk>();
         var chunkBuffer = new byte[DzChunkHeader.Size];
+        using var digest = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
         for (uint index = 0; index < header.ChunkCount; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            FileExtraction.ValidateRange(fs.Position, DzChunkHeader.Size, fs.Length, "DZ chunk header");
             fs.ReadExactly(chunkBuffer);
+            digest.AppendData(chunkBuffer);
             var chunk = DzChunkHeader.FromBytes(chunkBuffer);
             if (!chunk.Header.AsSpan().SequenceEqual(DzConstants.DzChunkHeader))
                 throw new InvalidDataException($"The DZ chunk {index} has invalid magic.");
@@ -133,6 +150,11 @@ public static class DzExtractor
             fs.Position = checked(fs.Position + chunk.DataSize);
         }
 
+        if (header.Md5.Any(value => value != 0) && !digest.GetHashAndReset().AsSpan().SequenceEqual(header.Md5))
+        {
+            throw new InvalidDataException("DZ chunk header MD5 does not match.");
+        }
+        cancellationToken.ThrowIfCancellationRequested();
         return (header, chunks);
     }
 
@@ -153,8 +175,8 @@ public static class DzExtractor
         ArgumentException.ThrowIfNullOrEmpty(outDir);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var (_, chunks) = Parse(dzPath);
         using var fs = new FileStream(dzPath, FileMode.Open, FileAccess.Read);
+        var (_, chunks) = Parse(fs, cancellationToken);
         var count = 0;
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var chunk in chunks)
@@ -192,12 +214,19 @@ public static class DzExtractor
         CompressionService.Decompress(data, output, format, chunk.Header.TargetSize, cancellationToken);
         if (output.Position - start != chunk.Header.TargetSize)
             throw new InvalidDataException($"DZ chunk '{chunk.Name}' decompressed to an unexpected size.");
-        if (chunk.Header.Md5.Any(value => value != 0))
+        if (chunk.Header.Md5.Any(value => value != 0) || chunk.Header.Crc32 != 0)
         {
             output.Flush();
             using var decoded = new BoundedReadStream(output, start, chunk.Header.TargetSize, leaveOpen: true);
-            if (!MD5.HashData(decoded).AsSpan().SequenceEqual(chunk.Header.Md5))
+            var hashes = DzBuilder.HashContent(decoded, cancellationToken);
+            if (chunk.Header.Md5.Any(value => value != 0) && !hashes.Md5.AsSpan().SequenceEqual(chunk.Header.Md5))
+            {
                 throw new InvalidDataException($"DZ chunk '{chunk.Name}' MD5 does not match.");
+            }
+            if (chunk.Header.Crc32 != 0 && hashes.Crc32 != chunk.Header.Crc32)
+            {
+                throw new InvalidDataException($"DZ chunk '{chunk.Name}' CRC32 does not match.");
+            }
             output.Position = start + chunk.Header.TargetSize;
         }
     }

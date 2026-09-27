@@ -66,6 +66,7 @@ public sealed class CpioExtractor
         ArgumentNullException.ThrowIfNull(destinationDirectory);
 
         var opts = options ?? new ExtractOptions();
+        opts.CancellationToken.ThrowIfCancellationRequested();
         var destinationRoot = Path.GetFullPath(destinationDirectory);
         var volumeRoot = Path.GetPathRoot(destinationRoot)
             ?? throw new InvalidDataException($"Destination '{destinationDirectory}' has no filesystem root.");
@@ -79,6 +80,7 @@ public sealed class CpioExtractor
         var inodeMap = new Dictionary<(ulong Inode, uint DevMajor, uint DevMinor), string>();
         foreach (var entry in entries)
         {
+            opts.CancellationToken.ThrowIfCancellationRequested();
             var transformedEntry = TransformEntry(entry, renameMap);
             if (!ShouldInclude(transformedEntry.Name, includePatterns, opts.ExcludePatterns, opts.NonMatching))
             {
@@ -123,6 +125,7 @@ public sealed class CpioExtractor
 
             ApplyMetadataBestEffort(targetPath, transformedEntry, opts);
         }
+        opts.CancellationToken.ThrowIfCancellationRequested();
     }
 
     private static void ExtractRegularLikeFile(ArchiveEntry entry, string targetPath, ExtractOptions options)
@@ -137,12 +140,13 @@ public sealed class CpioExtractor
                     : null;
                 var source = entry.DataStream ?? opened!;
                 if (source.CanSeek) source.Position = 0;
-                CopyExactly(source, output, entry.DataLength, entry.Name);
+                CopyExactly(source, output, entry.DataLength, entry.Name, options.CancellationToken);
                 return;
             }
             ValidateInMemoryLength(entry);
+            options.CancellationToken.ThrowIfCancellationRequested();
             output.Write(entry.Data);
-        }, options.Overwrite);
+        }, options.Overwrite, options.CancellationToken);
     }
 
     private static void ExtractSymbolicLink(ArchiveEntry entry, string targetPath, ExtractOptions options)
@@ -152,7 +156,7 @@ public sealed class CpioExtractor
         string? payloadTarget = null;
         if (entry.Data.Length > 0 || entry.DataStream is not null || entry.DataStreamFactory is not null)
         {
-            payloadTarget = GetLinkText(entry);
+            payloadTarget = GetLinkText(entry, options.CancellationToken);
             if (entry.LinkName is not null && !string.Equals(entry.LinkName, payloadTarget, StringComparison.Ordinal))
             {
                 throw new InvalidDataException($"Symbolic link '{entry.Name}' target does not match its payload.");
@@ -392,13 +396,16 @@ public sealed class CpioExtractor
         }
     }
 
-    private static void CopyExactly(Stream source, Stream destination, long length, string entryName)
+    private static void CopyExactly(Stream source, Stream destination, long length, string entryName,
+        CancellationToken cancellationToken = default)
     {
         var buffer = new byte[81920];
         var remaining = length;
         while (remaining > 0)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var read = source.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+            cancellationToken.ThrowIfCancellationRequested();
             if (read == 0) throw new EndOfStreamException($"Entry '{entryName}' ended before its declared length.");
             destination.Write(buffer, 0, read);
             remaining -= read;
@@ -497,7 +504,7 @@ public sealed class CpioExtractor
     /// Resolves the symlink target text from ArchiveEntry.Data or, when the payload is streamed, from ArchiveEntry.DataStream.
     /// <para>从 ArchiveEntry.Data 或（负载为流式时）从 ArchiveEntry.DataStream 解析链接目标文本。</para>
     /// </summary>
-    private static string GetLinkText(ArchiveEntry entry)
+    private static string GetLinkText(ArchiveEntry entry, CancellationToken cancellationToken)
     {
         if (entry.Data.Length > 0)
         {
@@ -516,7 +523,7 @@ public sealed class CpioExtractor
             {
                 source.Position = 0;
             }
-            CopyExactly(source, ms, entry.DataLength, entry.Name);
+            CopyExactly(source, ms, entry.DataLength, entry.Name, cancellationToken);
             return Encoding.UTF8.GetString(ms.ToArray());
         }
 

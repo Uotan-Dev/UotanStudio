@@ -221,8 +221,8 @@ public class DeltaPayloadNotSupportedException : PayloadException
     /// </summary>
     /// <value>
     /// Value given at construction; supported values are <c>0</c>, <c>2</c>, <c>3</c>, <c>4</c>, <c>5</c>,
-    /// <c>6</c>, <c>8</c> and <c>9</c>, and <c>0</c> results from a message-only constructor.
-    /// <para>构造时给出的值；支持的取值为 <c>0</c>、<c>2</c>、<c>3</c>、<c>4</c>、<c>5</c>、<c>6</c>、<c>8</c>
+    /// <c>6</c>, <c>7</c>, <c>8</c> and <c>9</c>, and <c>0</c> results from a message-only constructor.
+    /// <para>构造时给出的值；支持的取值为 <c>0</c>、<c>2</c>、<c>3</c>、<c>4</c>、<c>5</c>、<c>6</c>、<c>7</c>、<c>8</c>
     /// 和 <c>9</c>，由仅带消息的构造函数创建时为 <c>0</c>。</para>
     /// </value>
     public uint MinorVersion { get; }
@@ -233,7 +233,7 @@ public class DeltaPayloadNotSupportedException : PayloadException
     /// </summary>
     /// <param name="minorVersion">Minor version read from the source payload header. <para>从源 payload 头部读取的次版本号。</para></param>
     public DeltaPayloadNotSupportedException(uint minorVersion)
-        : base($"Delta payload with minor_version={minorVersion} is not supported. Supported values are: 0, 2, 3, 4, 5, 6, 8, 9.")
+        : base($"Delta payload with minor_version={minorVersion} is not supported. Supported values are: 0, 2, 3, 4, 5, 6, 7, 8, 9.")
     {
         MinorVersion = minorVersion;
     }

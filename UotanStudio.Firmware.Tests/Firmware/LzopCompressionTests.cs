@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using UotanStudio.Firmware.BoundedContexts.Compression;
 using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
 using UotanStudio.Firmware.BoundedContexts.Compression.Detection;
@@ -12,6 +13,21 @@ namespace UotanStudio.Tests.Firmware;
 /// </summary>
 public class LzopCompressionTests
 {
+    [Fact]
+    public void Compress_StoredBlock_DeclaresSupportedVersionAndOmitsCompressedChecksum()
+    {
+        byte[] input = [11, 22, 33];
+
+        var encoded = LzopCompressor.Compress(input);
+
+        Assert.Equal((ushort)0x0940, BinaryPrimitives.ReadUInt16BigEndian(encoded.AsSpan(13)));
+        Assert.Equal(3U, BinaryPrimitives.ReadUInt32BigEndian(encoded.AsSpan(38)));
+        Assert.Equal(3U, BinaryPrimitives.ReadUInt32BigEndian(encoded.AsSpan(42)));
+        Assert.Equal(input, encoded[50..53]);
+        Assert.Equal(57, encoded.Length);
+        Assert.Equal(0U, BinaryPrimitives.ReadUInt32BigEndian(encoded.AsSpan(53)));
+    }
+
     [Fact]
     public void RoundTrip_EmptyInput_ProducesValidLzopFile()
     {

@@ -312,6 +312,8 @@ public static partial class FileSystemPreservation
             InodeSize = parser.Superblock.InodeSize,
             Ext4Encoding = (parser.Superblock.FeatureIncompat & 0x20000) != 0 ? parser.Superblock.Encoding : null,
             Ext4EncodingFlags = parser.Superblock.EncodingFlags,
+            Ext4ReadOnly = (parser.Superblock.FeatureRoCompat & 0x1000) != 0,
+            Ext4SharedBlocks = (parser.Superblock.FeatureRoCompat & 0x4000) != 0,
             Uuid = parser.SourceUuid,
             VolumeName = parser.SourceVolumeName,
             SourceLength = source.Length,
@@ -608,7 +610,11 @@ public static partial class FileSystemPreservation
                     if ((rebuildBlock & (rebuildBlock - 1)) != 0 || rebuildBlock is < 1024 or > 65536)
                         throw new InvalidDataException("Invalid EXT4 rebuild block size.");
                     var capacityPolicy = ParseExt4CapacityPolicy(options);
-                    var blockSharingMode = ParseExt4BlockSharingMode(options);
+                    var blockSharingMode = options.ContainsKey("BlockSharingMode")
+                        ? ParseExt4BlockSharingMode(options)
+                        : rebuild?.Ext4SharedBlocks == true
+                            ? Ext4BlockSharingMode.ShareDuplicateData
+                            : Ext4BlockSharingMode.Independent;
                     var ext4Options = new Ext4Options
                     {
                         BlockSize = rebuildBlock,
@@ -622,7 +628,9 @@ public static partial class FileSystemPreservation
                         CapacityMode = capacityPolicy == Ext4PreservedCapacityPolicy.Minimize
                             ? Ext4CapacityMode.Minimize
                             : Ext4CapacityMode.Default,
-                        ReadOnly = IsTrue(options.GetValueOrDefault("ReadOnly")),
+                        ReadOnly = options.TryGetValue("ReadOnly", out var readOnly)
+                            ? IsTrue(readOnly)
+                            : rebuild?.Ext4ReadOnly == true || rebuild?.Ext4SharedBlocks == true,
                         BlockSharingMode = blockSharingMode,
                         CancellationToken = token,
                     };

@@ -31,8 +31,8 @@ public static class LzopCompressor
     private const uint FAdler32U = 0x00000001;
     private const uint FAdler32C = 0x00000002;
     private const uint FHCrc32 = 0x00001000;
-    private const uint FCrc32U = 0x00010000;
-    private const uint FCrc32C = 0x00020000;
+    private const uint FCrc32U = 0x00000100;
+    private const uint FCrc32C = 0x00000200;
     private const uint FFilter = 0x00000800;
 
     /// <summary>
@@ -189,8 +189,10 @@ public static class LzopCompressor
 
                 var uncompressedAdler32 = hasUncompressedAdler32 ? ReadUInt32(input, "uncompressed Adler-32") : 0;
                 var uncompressedCrc32 = hasUncompressedCrc32 ? ReadUInt32(input, "uncompressed CRC-32") : 0;
-                var compressedAdler32 = hasCompressedAdler32 ? ReadUInt32(input, "compressed Adler-32") : 0;
-                var compressedCrc32 = hasCompressedCrc32 ? ReadUInt32(input, "compressed CRC-32") : 0;
+                var compressedAdler32 = hasCompressedAdler32 && compressedSize < uncompressedSize
+                    ? ReadUInt32(input, "compressed Adler-32") : uncompressedAdler32;
+                var compressedCrc32 = hasCompressedCrc32 && compressedSize < uncompressedSize
+                    ? ReadUInt32(input, "compressed CRC-32") : uncompressedCrc32;
                 var block = ReadBytes(input, (int)compressedSize, "block data");
                 if (hasCompressedAdler32 && Adler32(block, 0, block.Length) != compressedAdler32)
                     throw new CompressionException("Invalid LZOP data: compressed Adler-32 mismatch.");
@@ -260,8 +262,8 @@ public static class LzopCompressor
     /// Readable source drained block by block until end of stream, so the plaintext is never held in memory as a whole; ownership stays with the caller.
     /// <para>逐块读取直至流末尾的可读源流，明文不会整体驻留内存；所有权归调用方。</para></param>
     /// <param name="output">
-    /// Writable destination appended from its current position and left open; each block stores the uncompressed and compressed sizes plus both Adler-32 checksums, and a block whose LZO1X-1 encoding is not smaller than its input is stored verbatim.
-    /// <para>从当前位置追加并保持打开的写入目标；每块写出未压缩与压缩大小及两个 Adler-32 校验和，若 LZO1X-1 编码不小于输入则该块原样存储。</para></param>
+    /// Writable destination appended from its current position and left open; each block stores both sizes and an uncompressed Adler-32, with a compressed Adler-32 only when LZO1X-1 encoding is smaller than its input.
+    /// <para>从当前位置追加并保持打开的写入目标；每块写出两个大小和原始数据 Adler-32，仅在 LZO1X-1 编码小于输入时附加压缩数据 Adler-32。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="CompressionException">Reading, writing or an arithmetic overflow while sizing the output failed.
@@ -303,7 +305,7 @@ public static class LzopCompressor
         var position = 0;
         BinaryPrimitives.WriteUInt16BigEndian(header[position..], LzopVersion); position += 2;
         BinaryPrimitives.WriteUInt16BigEndian(header[position..], LzopVersion); position += 2;
-        BinaryPrimitives.WriteUInt16BigEndian(header[position..], 0); position += 2;
+        BinaryPrimitives.WriteUInt16BigEndian(header[position..], LzopVersion); position += 2;
         header[position++] = 1;
         header[position++] = 0;
         BinaryPrimitives.WriteUInt32BigEndian(header[position..], FAdler32U | FAdler32C); position += 4;
@@ -338,7 +340,10 @@ public static class LzopCompressor
         WriteUInt32BigEndian(output, (uint)uncompressedLength);
         WriteUInt32BigEndian(output, (uint)blockLength);
         WriteUInt32BigEndian(output, Adler32(uncompressed, 0, uncompressedLength));
-        WriteUInt32BigEndian(output, Adler32(block, 0, blockLength));
+        if (blockLength < uncompressedLength)
+        {
+            WriteUInt32BigEndian(output, Adler32(block, 0, blockLength));
+        }
         output.Write(block, 0, blockLength);
     }
 

@@ -6,6 +6,50 @@ namespace UotanStudio.Tests.Firmware;
 
 public sealed class ElfReaderTests
 {
+    public static bool FirehoseSampleAvailable =>
+        File.Exists(Environment.GetEnvironmentVariable("UOTAN_ELF_FIREHOSE_SAMPLE"));
+
+    [Fact(Skip = "Set UOTAN_ELF_FIREHOSE_SAMPLE to the SM7150 DDR Firehose sample.", SkipUnless = nameof(FirehoseSampleAvailable))]
+    public async Task ReadAsync_Sm7150Firehose_MatchesReadelfMetadata()
+    {
+        var info = await ElfReader.ReadAsync(Environment.GetEnvironmentVariable("UOTAN_ELF_FIREHOSE_SAMPLE")!,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(info.Header.Is64Bit);
+        Assert.True(info.Header.IsLittleEndian);
+        Assert.Equal(183, info.Header.Machine);
+        Assert.Equal(0x1482d2a8UL, info.Header.EntryPoint);
+        Assert.Equal(18, info.Segments.Count);
+        Assert.Empty(info.Sections);
+        Assert.Equal(0x80080UL, info.Segments[2].Offset);
+        Assert.Equal(0UL, info.Segments[2].FileSize);
+        Assert.Equal(0x14680000UL, info.Segments[2].VirtualAddress);
+        Assert.Equal(0x1000UL, info.Segments[2].Alignment);
+        Assert.Equal(0x5c250UL, info.Segments[3].Offset);
+        Assert.Equal(0x1dccUL, info.Segments[3].FileSize);
+        Assert.Equal(0x14699000UL, info.Segments[3].VirtualAddress);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Read_NonCongruentLoadSegment_PreservesMetadata(bool is64, bool little)
+    {
+        using var stream = new MemoryStream(ElfFixture.Create(is64, little, segmentOffset: 481));
+        stream.Position = 7;
+
+        var info = ElfReader.Read(stream, TestContext.Current.CancellationToken);
+
+        var segment = Assert.Single(info.Segments);
+        Assert.Equal(481UL, segment.Offset);
+        Assert.Equal(0x1000UL, segment.VirtualAddress);
+        Assert.Equal(16UL, segment.Alignment);
+        Assert.Equal(4UL, segment.FileSize);
+        Assert.Equal(7, stream.Position);
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
@@ -186,7 +230,7 @@ public sealed class ElfReaderTests
 
 internal static class ElfFixture
 {
-    internal static byte[] Create(bool is64 = true, bool little = true, bool extended = false)
+    internal static byte[] Create(bool is64 = true, bool little = true, bool extended = false, ulong segmentOffset = 480)
     {
         var data = new byte[512];
         "\u007fELF"u8.CopyTo(data);
@@ -208,7 +252,7 @@ internal static class ElfFixture
         Write(tail + 10, extended ? 0xffffUL : 1UL, 2);
         Write(64, 1, 4);
         Write(is64 ? 68 : 88, 5, 4);
-        Word(is64 ? 72 : 68, 480);
+        Word(is64 ? 72 : 68, segmentOffset);
         Word(is64 ? 80 : 72, 0x1000);
         Word(is64 ? 88 : 76, 0x2000);
         Word(is64 ? 96 : 80, 4);

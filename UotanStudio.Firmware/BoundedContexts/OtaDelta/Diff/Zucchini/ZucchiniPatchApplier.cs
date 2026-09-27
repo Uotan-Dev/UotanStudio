@@ -6,6 +6,117 @@ namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Zucchini;
 /// <summary>Applies Chromium Zucchini ensemble patches containing NoOp elements. <para>应用含 NoOp 元素的 Chromium Zucchini 集合补丁。</para></summary>
 public static class ZucchiniPatchApplier
 {
+    /// <summary>Describes a caller-confirmed raw equivalence used by the limited Raw/NoOp writer.
+    /// <para>描述受限 Raw/NoOp 写入器使用的调用方确认的原始等价区间。</para></summary>
+    public readonly record struct Equivalence(uint SourceOffset, uint DestinationOffset, uint Length);
+
+    /// <summary>
+    /// Creates a standard Zucc patch from caller-confirmed raw equivalences. The writer emits only Raw/NoOp elements,
+    /// never executable references or pools; executable-aware Chromium Zucchini generation is not provided.
+    /// <para>根据调用方确认的原始等价区间创建标准 Zucc 补丁。写入器仅生成 Raw/NoOp 元素，绝不生成可执行引用或池；
+    /// 不提供面向可执行文件的 Chromium Zucchini 生成。</para>
+    /// </summary>
+    public static byte[] CreateRawPatch(ReadOnlySpan<byte> oldData, ReadOnlySpan<byte> newData,
+        IReadOnlyList<Equivalence> equivalences, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(equivalences);
+        var sourceSkips = new List<byte>();
+        var destinationSkips = new List<byte>();
+        var lengths = new List<byte>();
+        var extra = new List<byte>();
+        var deltaSkips = new List<byte>();
+        var deltaBytes = new List<byte>();
+        uint sourceEnd = 0;
+        uint destinationEnd = 0;
+        uint copied = 0;
+        uint previousDelta = 0;
+        foreach (var equivalence in equivalences)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (equivalence.Length == 0
+                || equivalence.SourceOffset > (uint)oldData.Length
+                || equivalence.Length > oldData.Length - equivalence.SourceOffset
+                || equivalence.DestinationOffset < destinationEnd
+                || equivalence.Length > newData.Length - equivalence.DestinationOffset)
+            {
+                throw new InvalidDataException("Zucchini equivalences must be ordered, contiguous and in range.");
+            }
+
+            var sourceDelta = checked((long)equivalence.SourceOffset - sourceEnd);
+            ZucchiniLeb128.Write(EncodeSigned(sourceDelta), sourceSkips);
+            ZucchiniLeb128.Write(equivalence.DestinationOffset - destinationEnd, destinationSkips);
+            ZucchiniLeb128.Write(equivalence.Length, lengths);
+            for (var index = destinationEnd; index < equivalence.DestinationOffset; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                extra.Add(newData[checked((int)index)]);
+            }
+
+            for (uint index = 0; index < equivalence.Length; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var source = oldData[checked((int)(equivalence.SourceOffset + index))];
+                var target = newData[checked((int)(equivalence.DestinationOffset + index))];
+                var difference = unchecked((byte)(target - source));
+                if (difference != 0)
+                {
+                    var absolute = checked(copied + index);
+                    ZucchiniLeb128.Write(absolute - previousDelta, deltaSkips);
+                    deltaBytes.Add(difference);
+                    previousDelta = checked(absolute + 1);
+                }
+            }
+
+            copied = checked(copied + equivalence.Length);
+            sourceEnd = checked(equivalence.SourceOffset + equivalence.Length);
+            destinationEnd = checked(equivalence.DestinationOffset + equivalence.Length);
+        }
+
+        for (var index = destinationEnd; index < newData.Length; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            extra.Add(newData[checked((int)index)]);
+        }
+
+        var patch = new List<byte>(checked(32 + 54 + sourceSkips.Count + destinationSkips.Count
+            + lengths.Count + extra.Count + deltaSkips.Count + deltaBytes.Count));
+        WriteUInt32(ZucchiniConstants.Magic, patch);
+        WriteUInt32(ZucchiniConstants.Version, patch);
+        WriteUInt32(checked((uint)oldData.Length), patch);
+        WriteUInt32(Crc32.HashToUInt32(oldData), patch);
+        WriteUInt32(checked((uint)newData.Length), patch);
+        WriteUInt32(Crc32.HashToUInt32(newData), patch);
+        WriteUInt32(1, patch);
+        WriteUInt32(0, patch);
+        WriteUInt32(checked((uint)oldData.Length), patch);
+        WriteUInt32(0, patch);
+        WriteUInt32(checked((uint)newData.Length), patch);
+        WriteUInt32((uint)ZucchiniExecutableType.Raw, patch);
+        patch.Add(1);
+        patch.Add(0);
+        foreach (var stream in new[] { sourceSkips, destinationSkips, lengths, extra, deltaSkips, deltaBytes, new List<byte>() })
+        {
+            WriteUInt32(checked((uint)stream.Count), patch);
+            patch.AddRange(stream);
+        }
+        WriteUInt32(0, patch);
+        return [.. patch];
+    }
+
+    private static uint EncodeSigned(long value)
+    {
+        var encoded = checked((ulong)(value < 0 ? -value : value)) << 1;
+        return checked((uint)(value < 0 ? encoded - 1 : encoded));
+    }
+
+    private static void WriteUInt32(uint value, List<byte> output)
+    {
+        output.Add((byte)value);
+        output.Add((byte)(value >> 8));
+        output.Add((byte)(value >> 16));
+        output.Add((byte)(value >> 24));
+    }
+
     /// <summary>Applies a patch to a bounded output buffer. <para>将补丁应用到有界输出缓冲区。</para></summary>
     /// <param name="oldData">
     /// Source image the patch was created against; its length must equal the size recorded in the patch header.

@@ -12,12 +12,19 @@ namespace UotanStudio.Firmware.BoundedContexts.Archive;
 /// Format handler for CPIO and TAR archives used as firmware root filesystem images.
 /// <para>用作固件根文件系统镜像的 CPIO 与 TAR 归档格式处理器。</para>
 /// </summary>
-public sealed class CpioFormatHandler : IFormatHandler, IRepackMetadataProvider
+public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
     void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
     {
         metadata.CanPackDirectory = true;
-        metadata.PackingNotes = " The directory packer writes newc CPIO.";
+        metadata.PackingNotes = " CPIO dialect, compression container and entry headers are retained; encoding-specific framing beyond the recorded options may change.";
+    }
+
+    Task IRepackMetadataProvider.CaptureRepackMetadataAsync(RepackMetadata metadata, string sourcePath,
+        string outputDirectory, string metadataDirectory, CancellationToken cancellationToken)
+    {
+        CaptureArchiveConfiguration(metadata, sourcePath, cancellationToken);
+        return Task.CompletedTask;
     }
 
     private readonly CpioArchive _archive = new();
@@ -33,32 +40,45 @@ public sealed class CpioFormatHandler : IFormatHandler, IRepackMetadataProvider
     public string FormatName => "CPIO/TAR Archive";
 
     /// <summary>
-    /// File extensions this handler advertises for archive images.
-    /// <para>该处理器为归档镜像声明的文件扩展名。</para>
+    /// File extensions this handler advertises for archive images and compressed CPIO.
+    /// <para>此处理器声明归档和压缩 CPIO 的文件扩展名。</para>
     /// </summary>
     /// <value>
-    /// <c>cpio</c> and <c>tar</c>; an extension alone never claims a match, content probing in <see cref="CanHandle"/> decides.
-    /// <para>依次为 <c>cpio</c>、<c>tar</c>；仅凭扩展名不构成匹配，由 <see cref="CanHandle"/> 的内容探测决定。</para>
+    /// CPIO, TAR and supported compressed CPIO suffixes; <see cref="CanHandle"/> probes compressed candidates.
+    /// <para>包含 CPIO、TAR 及受支持的压缩 CPIO 后缀；压缩候选文件由 <see cref="CanHandle"/> 探测内容。</para>
     /// </value>
-    public IReadOnlyList<string> FileExtensions { get; } = ["cpio", "tar"];
+    public IReadOnlyList<string> FileExtensions { get; } = ["cpio", "tar", "gz", "xz", "zst", "lz4", "bz2", "lzma", "lzo"];
 
     /// <summary>
     /// Determines whether this handler can process the given file.
-    /// <para>判断该处理器能否处理指定文件；依据 .cpio/.tar 扩展名或魔数（'070701' newc、'070702' crc、'070707' odc/二进制，以及偏移 257 处的 'ustar'）进行判断。</para>
+    /// <para>判断文件是否匹配 CPIO、TAR 或带有已识别 CPIO 内层魔数的压缩封装。</para>
     /// </summary>
     /// <param name="filePath">
     /// Path to probe; a missing or blank path never matches, and read errors are treated as a non-match.
     /// <para>待探测的路径；不存在或为空的路径均不匹配，读取错误同样视为不匹配。</para>
     /// </param>
     /// <returns>
-    /// <see langword="true"/> when the extension is <c>.cpio</c>/<c>.tar</c> or the leading bytes carry a known CPIO or ustar magic.
-    /// <para>当扩展名为 <c>.cpio</c>/<c>.tar</c>，或起始字节携带已知 CPIO 或 ustar 魔数时返回 <see langword="true"/>。</para>
+    /// <see langword="true"/> for CPIO/TAR suffix or magic, or supported compressed CPIO with a decoded CPIO prefix.
+    /// <para>当后缀或魔数匹配 CPIO/TAR，或者压缩 CPIO 的解码前缀匹配时返回 <see langword="true"/>。</para>
     /// </returns>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
         {
             return false;
+        }
+
+        if (IsCompressedCpioPath(filePath))
+        {
+            try
+            {
+                using var compressed = File.OpenRead(filePath);
+                return ProbeCompressedCpio(compressed);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         var extension = Path.GetExtension(filePath);
@@ -140,7 +160,7 @@ public sealed class CpioFormatHandler : IFormatHandler, IRepackMetadataProvider
             try
             {
                 var summaries = new List<ArchiveEntrySummary>();
-                using (var fs = File.OpenRead(filePath))
+                using (var fs = OpenArchiveForRead(filePath, cancellationToken))
                 {
                     foreach (var summary in _archive.ListEntries(fs))
                     {
@@ -171,6 +191,7 @@ public sealed class CpioFormatHandler : IFormatHandler, IRepackMetadataProvider
             }
             catch (Exception ex)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 return FirmwareOpResult.Fail($"Failed to read metadata from '{filePath}': {ex.Message}");
             }
         }, cancellationToken);
@@ -215,10 +236,11 @@ public sealed class CpioFormatHandler : IFormatHandler, IRepackMetadataProvider
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var extractOptions = new ExtractOptions { Overwrite = options?.Overwrite ?? true };
+                var extractOptions = new ExtractOptions { Overwrite = options?.Overwrite ?? true, CancellationToken = cancellationToken };
                 IReadOnlyList<string> entries;
-                using (var fs = File.OpenRead(filePath))
+                using (var fs = OpenArchiveForRead(filePath, cancellationToken))
                 {
+                    ValidateBeforeExtraction(fs, cancellationToken);
                     _archive.ExtractToDirectory(fs, outputDirectory, extractOptions, null, out entries);
                 }
 
@@ -232,26 +254,27 @@ public sealed class CpioFormatHandler : IFormatHandler, IRepackMetadataProvider
             }
             catch (Exception ex)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 return FirmwareOpResult.Fail($"Failed to unpack '{filePath}': {ex.Message}");
             }
         }, cancellationToken);
     }
 
     /// <summary>
-    /// Packs a directory into a newc cpio archive.
-    /// <para>将目录打包为 newc cpio 归档。</para>
+    /// Packs a directory as CPIO, restoring captured dialect, compression and entry headers when metadata is available.
+    /// <para>将目录打包为 CPIO；有元数据时还原所记录的方言、压缩封装和条目头字段。</para>
     /// </summary>
     /// <param name="inputPath">
     /// Directory tree to enumerate; symlinked entries are stored as symbolic links and repack metadata files are skipped.
     /// <para>要枚举的目录树；符号链接条目以符号链接形式存储，重打包元数据文件被跳过。</para>
     /// </param>
     /// <param name="outputPath">
-    /// Destination archive file, created (or truncated) directly rather than atomically.
-    /// <para>目标归档文件，直接创建（或截断）而非原子提交。</para>
+    /// Destination archive, atomically replaced only after the temporary output is verified.
+    /// <para>目标归档；仅在临时输出校验通过后才原子替换。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// Cancel token checked before enumeration and before writing; the write loop itself is synchronous.
-    /// <para>在枚举前与写入前检查的取消令牌；写入循环本身为同步执行。</para>
+    /// Cancellation token observed during enumeration, streaming copies, hashing and verification.
+    /// <para>取消令牌贯穿枚举、流式复制、哈希计算和输出校验。</para>
     /// </param>
     /// <returns>
     /// An <see cref="FirmwareOpResult"/> listing the packed entry names on success, or a failure result when the input is not a directory or a source file changes during packing; only <see cref="OperationCanceledException"/> escapes.
@@ -273,18 +296,31 @@ public sealed class CpioFormatHandler : IFormatHandler, IRepackMetadataProvider
                     return FirmwareOpResult.Fail($"Input path is not a directory: '{inputPath}'.");
                 }
 
-                var fsConfig = FileSystemMetadataOverrides.LoadFsConfig(
-                    RepackMetadata.DiscoverMetadataFile(inputPath, "_fs_config"));
-                var entries = EnumerateDirectoryEntries(inputPath, fsConfig);
-                cancellationToken.ThrowIfCancellationRequested();
-
-                using (var fs = File.Create(outputPath))
+                var metadata = RepackMetadata.Read(inputPath);
+                var entries = BuildRepackEntries(inputPath, metadata, cancellationToken);
+                var archiveFormat = ResolveArchiveFormat(metadata);
+                var compression = ResolveCompression(metadata, outputPath);
+                var temporary = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(outputPath))!,
+                    $".{Path.GetFileName(outputPath)}.{Guid.NewGuid():N}.tmp");
+                try
                 {
-                    _archive.SaveAll(fs, entries, ArchiveFormat.NewAscii);
+                    byte[] expectedHash;
+                    using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                    {
+                        expectedHash = WriteArchive(output, entries, archiveFormat, compression, metadata, cancellationToken);
+                        output.Flush(true);
+                    }
+                    VerifyArchive(temporary, archiveFormat, compression, expectedHash, cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    File.Move(temporary, outputPath, overwrite: true);
+                }
+                finally
+                {
+                    File.Delete(temporary);
                 }
 
                 return FirmwareOpResult.Ok(
-                    $"Packed {entries.Count} entries from '{inputPath}' into '{outputPath}' (newc).",
+                    $"Packed {entries.Count} entries from '{inputPath}' into '{outputPath}' ({archiveFormat}, {compression}).",
                     [.. entries.Select(e => e.Name)]);
             }
             catch (OperationCanceledException)
@@ -293,6 +329,7 @@ public sealed class CpioFormatHandler : IFormatHandler, IRepackMetadataProvider
             }
             catch (Exception ex)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 return FirmwareOpResult.Fail($"Failed to pack '{inputPath}': {ex.Message}");
             }
         }, cancellationToken);
@@ -300,11 +337,12 @@ public sealed class CpioFormatHandler : IFormatHandler, IRepackMetadataProvider
 
     private string DetectFormatName(string filePath)
     {
-        using var fs = File.OpenRead(filePath);
+        using var fs = OpenArchiveForRead(filePath, CancellationToken.None);
         return _archive.DetectFormat(fs).ToString();
     }
 
-    private static List<ArchiveEntry> EnumerateDirectoryEntries(string sourceRoot, IReadOnlyDictionary<string, FsConfigEntry> fsConfig)
+    private static List<ArchiveEntry> EnumerateDirectoryEntries(string sourceRoot,
+        IReadOnlyDictionary<string, FsConfigEntry> fsConfig, CancellationToken cancellationToken = default)
     {
         var rootFull = Path.GetFullPath(sourceRoot);
         var result = new List<ArchiveEntry>();
@@ -313,9 +351,11 @@ public sealed class CpioFormatHandler : IFormatHandler, IRepackMetadataProvider
 
         while (pending.Count > 0)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var current = pending.Pop();
             foreach (var directoryPath in Directory.EnumerateDirectories(current))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (IsSymlink(directoryPath))
                 {
                     result.Add(BuildSymlinkEntry(directoryPath, rootFull));
@@ -328,6 +368,7 @@ public sealed class CpioFormatHandler : IFormatHandler, IRepackMetadataProvider
 
             foreach (var filePath in Directory.EnumerateFiles(current))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (RepackMetadata.IsMetadataFile(filePath)) continue;
                 if (IsSymlink(filePath))
                 {

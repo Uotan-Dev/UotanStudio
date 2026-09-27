@@ -16,6 +16,32 @@ public class ZucchiniTests
     private const uint BlockSize = 4;
 
     [Fact]
+    public void CreateRawPatch_WithMovedEquivalences_ReplaysThroughIndependentApplier()
+    {
+        var oldData = "abcdefghij0123456789"u8.ToArray();
+        var newData = "12abXYefghZZ"u8.ToArray();
+        var patch = ZucchiniPatchApplier.CreateRawPatch(oldData, newData,
+        [
+            new(10, 0, 2),
+            new(0, 2, 2),
+            new(4, 6, 4),
+        ]);
+
+        Assert.Equal(newData, ZucchiniPatchApplier.Apply(oldData, patch, newData.Length));
+        Assert.Equal("Zucc"u8.ToArray(), patch[..4]);
+    }
+
+    [Fact]
+    public void CreateRawPatch_RejectsOverlappingOrOutOfOrderDestination()
+    {
+        var oldData = new byte[8];
+        var newData = new byte[8];
+
+        Assert.Throws<InvalidDataException>(() => ZucchiniPatchApplier.CreateRawPatch(oldData, newData,
+            [new(0, 0, 4), new(4, 3, 2)]));
+    }
+
+    [Fact]
     public void Apply_BackwardSourceSkipAndDeltaAfterGap_UsesCopiedByteOffsets()
     {
         var oldData = "0123456789"u8.ToArray(); var newData = "56XY02"u8.ToArray();
