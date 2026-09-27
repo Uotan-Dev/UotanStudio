@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
+using UotanStudio.Comm.Routing;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
@@ -222,6 +223,64 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     /// <returns>Parsed target records from <c>list targets -v</c>.<para>由 <c>list targets -v</c> 解析出的目标记录。</para></returns>
     public IReadOnlyList<HdcTargetInfo> ListTargetDetails(int timeoutMs = 10000)
         => HdcTargetInfo.Parse(Encoding.UTF8.GetString(ExecuteOnDevice(string.Empty, "list targets -v", timeoutMs)));
+
+    /// <summary>
+    /// Connects or removes one TCP target using a host-level command.
+    /// <para>使用宿主级命令连接或移除单个 TCP 目标。</para>
+    /// </summary>
+    /// <param name="address">The explicit device host and port.<para>显式设备主机与端口。</para></param>
+    /// <param name="disconnect">Whether to remove the connection.<para>是否移除连接。</para></param>
+    /// <param name="cancellationToken">Cancels the command.<para>取消命令。</para></param>
+    /// <returns>The server's completion message.<para>server 的完成消息。</para></returns>
+    /// <exception cref="ArgumentException">The address is invalid or exceeds the connect-key field.<para>地址无效或超出连接键字段长度。</para></exception>
+    /// <exception cref="IOException">The server did not confirm the operation.<para>server 未确认操作成功。</para></exception>
+    public async Task<string> ConnectTargetAsync(string address, bool disconnect = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (!DebugBridgeNetworkAddress.TryNormalize(address, out var target) || Encoding.UTF8.GetByteCount(target) >= 32)
+        {
+            throw new ArgumentException("A network address fitting the HDC connect-key field is required.", nameof(address));
+        }
+        var command = disconnect ? "tconn " + target + " -remove" : "tconn " + target;
+        var text = Encoding.UTF8.GetString(await ExecuteAsync(string.Empty, command,
+            cancellationToken: cancellationToken).ConfigureAwait(false)).TrimEnd('\0').Trim();
+        ThrowOnFailure(text);
+        if (disconnect)
+        {
+            await VerifyTargetDisconnectedAsync(target, cancellationToken).ConfigureAwait(false);
+        }
+        else if (!text.Contains("Connect OK", StringComparison.Ordinal) &&
+                 !text.Contains("Target is connected, repeat operation", StringComparison.Ordinal))
+        {
+            throw new IOException("HDC server did not confirm the operation: " + text);
+        }
+        return text;
+    }
+
+    private async Task VerifyTargetDisconnectedAsync(string target, CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (true)
+            {
+                var output = await ExecuteAsync(string.Empty, "list targets -v",
+                    cancellationToken: timeout.Token).ConfigureAwait(false);
+                var targets = HdcTargetInfo.Parse(Encoding.UTF8.GetString(output));
+                if (!targets.Any(item => item.ConnectKey == target &&
+                    !string.Equals(item.State, "Offline", StringComparison.OrdinalIgnoreCase)))
+                {
+                    return;
+                }
+                await Task.Delay(100, timeout.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("HDC server did not confirm target disconnection within 5 seconds.");
+        }
+    }
 
     /// <summary>
     /// <para>停止本机 hdc server。上游 <c>hdc kill</c> 不走主机通道协议：客户端读取

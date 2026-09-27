@@ -60,6 +60,14 @@ public sealed class UsbDeviceInfo
     /// <para>将同一物理设备的各接口归组的容器 ID，或 <see langword="null"/>。</para></value>
     public Guid? ContainerId { get; set; }
 
+    /// <summary>Gets or sets the backend-observed USB bus and physical port chain.
+    /// <para>获取或设置后端观测到的 USB 总线与物理端口链。</para></summary>
+    /// <value>An opaque backend-scoped location, or null when unavailable. This identifies a connection
+    /// position, not a device or cryptographic identity, and need not survive host or hub topology changes.
+    /// <para>后端范围内的不透明位置，不可用时为 null。它标识连接位置，而非设备或密码学身份，
+    /// 不保证在主机或集线器拓扑变化后保持不变。</para></value>
+    public string? PhysicalPortPath { get; set; }
+
     /// <summary>OS device-instance identity for this USB interface, when available.
     /// <para>该 USB 接口的操作系统设备实例标识（若可用）。</para></summary>
     /// <value>The OS device-instance id, or <see langword="null"/> when the backend does not expose one.

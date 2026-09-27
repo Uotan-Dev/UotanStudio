@@ -318,6 +318,13 @@ internal class IOKitUsbDevice : UsbDevice
 
                 _pluginInterface = plugin;
 
+                var physicalPortPath = MacUsbPortIdentity.Observe(service);
+                if (!MacUsbPortIdentity.Matches(PhysicalPortPath, physicalPortPath))
+                {
+                    return -1;
+                }
+                PhysicalPortPath = physicalPortPath;
+
                 try
                 {
                     var getConf = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBGetConfigurationDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBGetConfiguration);

@@ -66,6 +66,8 @@ public sealed class DetectedDevice
     public string? PhysicalId { get; init; }
     /// <summary>状态文本（device/offline/fastboot/edl/maskrom/loader…）。 State text.</summary>
     public string State { get; set; } = string.Empty;
+    /// <summary>The observed EDL protocol, independent of USB presence.</summary>
+    public EdlProtocolState EdlProtocol { get; set; }
     /// <summary>USB 厂商 ID（非 USB 为 0）。 USB vendor ID.</summary>
     public ushort VendorId { get; init; }
     /// <summary>USB 产品 ID（非 USB 为 0）。 USB product ID.</summary>
@@ -76,7 +78,26 @@ public sealed class DetectedDevice
         : $"{Serial} ({State})";
 
     /// <summary>Connection choice shown when one physical device exposes several protocols.</summary>
-    public string ConnectionLabel => $"{Protocol} · {Transport} · {Serial}";
+    public string ConnectionLabel => $"{ProtocolLabel} · {Transport} · {Serial}";
+
+    /// <summary>Whether discovery identified a debug bridge server endpoint.</summary>
+    public bool UsesServer => Protocol switch
+    {
+        DeviceProtocolKind.Adb => Key.StartsWith("adb:", StringComparison.Ordinal),
+        DeviceProtocolKind.Hdc => Key.StartsWith("hdc:", StringComparison.Ordinal),
+        _ => false
+    };
+
+    /// <summary>Protocol and route label, independent of the device's physical transport.</summary>
+    public string ProtocolLabel => Protocol switch
+    {
+        DeviceProtocolKind.Adb => UsesServer ? "ADB server" : "ADB",
+        DeviceProtocolKind.Hdc => UsesServer ? "HDC server" : "HDC",
+        DeviceProtocolKind.Fastboot => "Fastboot",
+        DeviceProtocolKind.Edl => "EDL",
+        DeviceProtocolKind.Rkdl => "RKDL",
+        _ => throw new ArgumentOutOfRangeException(nameof(Protocol), Protocol, "Unexpected protocol kind.")
+    };
 }
 
 /// <summary>

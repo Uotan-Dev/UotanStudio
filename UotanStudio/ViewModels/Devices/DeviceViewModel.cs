@@ -17,6 +17,10 @@ namespace UotanStudio.ViewModels.Devices;
 /// </summary>
 public partial class DeviceViewModel : ViewModelBase, IDisposable
 {
+    private readonly bool _monitorDevices;
+    private readonly Func<DeviceProtocolKind, string, DetectedDevice?, CancellationToken, Task> _changeNetworkConnection;
+    private Task? _refreshTask;
+
     /// <summary>
     /// <para>获取当前激活的设备面板单例，供主窗口与工作区停靠面板共享同一实例
     /// （避免双实例导致重复订阅设备变更）。</para>
@@ -72,7 +76,10 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         if (ReferenceEquals(SelectedDevice, device))
         {
             NotifySelectedDeviceProperties();
-            _ = EnrichDeviceInfoAsync(device);
+            if (_monitorDevices)
+            {
+                _ = EnrichDeviceInfoAsync(device);
+            }
         }
     }
 
@@ -87,6 +94,9 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CanQuickFlash));
         OnPropertyChanged(nameof(CanBackupRestore));
         OnPropertyChanged(nameof(CanScreenMirror));
+        OnPropertyChanged(nameof(CanManageSelectedConnection));
+        ConnectCommand.NotifyCanExecuteChanged();
+        DisconnectCommand.NotifyCanExecuteChanged();
         OpenAdbShellCommand.NotifyCanExecuteChanged();
         HdcOperationCommand.NotifyCanExecuteChanged();
         FastbootReadInfoCommand.NotifyCanExecuteChanged();
@@ -178,18 +188,28 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// the startup full USB scan and begins hotplug monitoring), subscribes to device
     /// changes and performs the first refresh.
     /// </summary>
-    public DeviceViewModel()
+    public DeviceViewModel() : this(monitorDevices: true)
     {
-        Instance = this;
+    }
+
+    internal DeviceViewModel(bool monitorDevices,
+        Func<DeviceProtocolKind, string, DetectedDevice?, CancellationToken, Task>? changeNetworkConnection = null)
+    {
+        _monitorDevices = monitorDevices;
+        _changeNetworkConnection = changeNetworkConnection ?? ExecuteNetworkConnectionAsync;
         Devices.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasDevices));
             OnPropertyChanged(nameof(HasNoDevices));
             OnPropertyChanged(nameof(ShowSelectPlaceholder));
         };
-        App.DeviceMonitor.DevicesChanged += OnDevicesChanged;
-        App.DeviceMonitor.Start();
-        _ = RefreshDevicesAsync();
+        if (monitorDevices)
+        {
+            Instance = this;
+            App.DeviceMonitor.DevicesChanged += OnDevicesChanged;
+            App.DeviceMonitor.Start();
+            _ = RefreshDevicesAsync();
+        }
         WeakReferenceMessenger.Default.Register<BackupProgressMessage>(this, OnBackupProgress);
     }
 
@@ -224,9 +244,12 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// protocol, then concurrently pulls ADB device properties to enrich details.
     /// </summary>
     [RelayCommand]
-    private async Task RefreshDevicesAsync()
+    private Task RefreshDevicesAsync() => _refreshTask is { IsCompleted: false }
+        ? _refreshTask : _refreshTask = RefreshDevicesCoreAsync();
+
+    private async Task RefreshDevicesCoreAsync()
     {
-        if (IsRefreshing)
+        if (!_monitorDevices)
         {
             return;
         }
@@ -306,7 +329,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 $"Scan completed: {Devices.Count} device(s) found.");
 
             var enrichable = Devices
-                .Where(x => x.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Fastboot or DeviceProtocolKind.Hdc)
+                .Where(x => x.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Fastboot or DeviceProtocolKind.Hdc or DeviceProtocolKind.Edl)
                 .ToList();
             if (enrichable.Count > 0)
             {
@@ -316,6 +339,11 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         catch (OperationCanceledException)
         {
             StatusText = LanguageService.Instance.GetString("Device_NoDevices");
+        }
+        catch (Exception ex)
+        {
+            StatusText = LanguageService.Instance.GetString("Device_RefreshFailed");
+            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"Device refresh failed: {ex.Message}");
         }
         finally
         {
@@ -341,7 +369,15 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void Dispose()
     {
-        App.DeviceMonitor.DevicesChanged -= OnDevicesChanged;
+        _connectionCancellation?.Cancel();
+        if (_monitorDevices)
+        {
+            App.DeviceMonitor.DevicesChanged -= OnDevicesChanged;
+        }
+        if (ReferenceEquals(Instance, this))
+        {
+            Instance = null;
+        }
         WeakReferenceMessenger.Default.Unregister<BackupProgressMessage>(this);
         GC.SuppressFinalize(this);
     }

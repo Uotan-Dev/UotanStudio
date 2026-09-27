@@ -43,47 +43,22 @@ internal partial class LibUsbDevice : UsbDevice
     private static string BuildDevicePath(LibUsbDotNet.LibUsb.UsbDevice device)
         => $"Bus {device.BusNumber} Device {device.Address}: {device.VendorId:X4}:{device.ProductId:X4}";
 
-    private static bool HasBulkInterface(LibUsbDotNet.LibUsb.UsbDevice device)
+    internal bool MatchesSelectedLocation(byte bus, byte address, ushort vendorId, ushort productId,
+        string path, string? physicalPortPath)
     {
-        try
+        if (vendorId != Vid || productId != Pid)
         {
-            foreach (var config in device.Configs)
-            {
-                foreach (var ifc in config.Interfaces)
-                {
-                    var hasIn = false;
-                    var hasOut = false;
-                    foreach (var endpoint in ifc.Endpoints)
-                    {
-                        if ((endpoint.Attributes & 0x03) != 0x02)
-                        {
-                            continue;
-                        }
-
-                        if ((endpoint.EndpointAddress & 0x80) != 0)
-                        {
-                            hasIn = true;
-                        }
-                        else
-                        {
-                            hasOut = true;
-                        }
-                    }
-
-                    if (hasIn && hasOut)
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-        catch
-        {
-            UsbTrace.Log("LibUsbDevice.HasBulkInterface: failed to enumerate interface endpoints.");
             return false;
         }
-
-        return false;
+        var hasAddress = BusNumber != 0 || DeviceAddress != 0;
+        var hasPath = !string.IsNullOrWhiteSpace(DevicePath);
+        if (!hasAddress && !hasPath)
+        {
+            return false;
+        }
+        return (!hasAddress || bus == BusNumber && address == DeviceAddress)
+            && (!hasPath || string.Equals(DevicePath, path, StringComparison.OrdinalIgnoreCase))
+            && (PhysicalPortPath is null || string.Equals(PhysicalPortPath, physicalPortPath, StringComparison.Ordinal));
     }
 
     public override int CreateHandle()
@@ -95,23 +70,10 @@ internal partial class LibUsbDevice : UsbDevice
         {
             var candidateList = candidates.OfType<LibUsbDotNet.LibUsb.UsbDevice>().ToList();
 
-            device = null;
-            if (BusNumber != 0 || DeviceAddress != 0)
-            {
-                device = candidateList.FirstOrDefault(d => d.BusNumber == BusNumber && d.Address == DeviceAddress);
-            }
-
-            if (device == null && !string.IsNullOrWhiteSpace(DevicePath))
-            {
-                device = candidateList.FirstOrDefault(d =>
-                    string.Equals(BuildDevicePath(d), DevicePath, StringComparison.OrdinalIgnoreCase));
-            }
-
-            device ??= candidateList.FirstOrDefault(d =>
-                    d.VendorId == Vid &&
-                    d.ProductId == Pid &&
-                    HasBulkInterface(d));
-
+            var matches = candidateList.Where(candidate => MatchesSelectedLocation(candidate.BusNumber,
+                candidate.Address, candidate.VendorId, candidate.ProductId, BuildDevicePath(candidate),
+                PhysicalPortPath is null ? null : LibUsbPortIdentity.Observe(candidate))).Take(2).ToArray();
+            device = matches.Length == 1 ? matches[0] : null;
             if (device != null)
             {
                 _usbDevice = device.Clone();
@@ -128,6 +90,17 @@ internal partial class LibUsbDevice : UsbDevice
         try
         {
             _usbDevice.Open();
+            if (_usbDevice is not LibUsbDotNet.LibUsb.UsbDevice opened)
+            {
+                throw new IOException("The opened libusb device cannot provide native location evidence.");
+            }
+            var physicalPortPath = LibUsbPortIdentity.Observe(opened);
+            if (!MatchesSelectedLocation(opened.BusNumber, opened.Address, opened.VendorId, opened.ProductId,
+                BuildDevicePath(opened), physicalPortPath))
+            {
+                throw new IOException("The opened libusb handle no longer matches the selected location.");
+            }
+            PhysicalPortPath = physicalPortPath;
         }
         catch (Exception ex)
         {

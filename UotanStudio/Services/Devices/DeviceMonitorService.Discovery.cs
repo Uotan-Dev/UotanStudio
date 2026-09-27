@@ -94,6 +94,8 @@ public sealed partial class DeviceMonitorService
                 },
                 VendorId = info.VendorId,
                 ProductId = info.ProductId,
+                EdlProtocol = protocol == DeviceProtocolKind.Edl
+                    ? _edlConnections.GetState(info.DeviceKey) : EdlProtocolState.Unknown,
             });
         }
 
@@ -139,6 +141,8 @@ public sealed partial class DeviceMonitorService
                 $"adb server channel device: {target.Address}");
         }
 
+        _edlConnections.RetainDevices(devices.Where(device => device.Protocol == DeviceProtocolKind.Edl)
+            .Select(device => device.Key).ToHashSet(StringComparer.Ordinal));
         return CoalesceSameEndpoint(devices);
     }
 

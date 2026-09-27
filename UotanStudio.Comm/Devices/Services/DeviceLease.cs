@@ -14,17 +14,14 @@ public sealed class DeviceLease : IAsyncDisposable, IDisposable
     private readonly Action _release;
     private int _disposed;
 
-    internal DeviceLease(DeviceEndpoint endpoint, IAsyncDisposable transport, Action release)
-        : this(endpoint, transport, session: null, release)
-    {
-    }
-
-    internal DeviceLease(DeviceEndpoint endpoint, IAsyncDisposable transport, object? session, Action release)
+    internal DeviceLease(DeviceEndpoint endpoint, IAsyncDisposable transport, object? session, Action release,
+        TransportGeneration? generation = null)
     {
         Endpoint = endpoint;
         Transport = transport;
         Session = session;
         Commands = new DeviceCommandDispatcher();
+        Generation = generation;
         _release = release;
     }
 
@@ -34,6 +31,16 @@ public sealed class DeviceLease : IAsyncDisposable, IDisposable
     /// </summary>
     /// <value>The exact leased endpoint. <para>被租用的精确端点。</para></value>
     public DeviceEndpoint Endpoint { get; }
+
+    /// <summary>
+    /// The transport instantiation this lease was opened on, when the controller could derive a
+    /// stable physical identity; a lease without one never claims generation equivalence.
+    /// <para>本租约打开时所处的传输实例化代际（控制器可推导稳定物理身份时提供）；
+    /// 缺少代际的租约绝不声称代际等价。</para>
+    /// </summary>
+    /// <value>The stamped generation, or <see langword="null"/> when identity evidence was absent.
+    /// <para>盖印的代际；身份证据缺失时为 <see langword="null"/>。</para></value>
+    public TransportGeneration? Generation { get; }
 
     /// <summary>
     /// The opened transport owned by this lease and disposed with it.

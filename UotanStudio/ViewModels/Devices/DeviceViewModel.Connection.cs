@@ -6,96 +6,182 @@ namespace UotanStudio.ViewModels.Devices;
 
 public partial class DeviceViewModel
 {
-    /// <summary>
-    /// <para>连接到选中的设备（验证协议可达性）。</para>
-    /// Connects to the selected device (verifies protocol reachability).
-    /// </summary>
-    [RelayCommand]
-    private async Task ConnectAsync()
+    private CancellationTokenSource? _connectionCancellation;
+
+    public string RemoteAddress
     {
-        var device = SelectedDevice;
-        if (device == null)
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                NotifyRemoteAddressChanged();
+            }
+        }
+    } = string.Empty;
+
+    public int RemoteProtocolIndex
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                NotifyRemoteAddressChanged();
+            }
+        }
+    }
+
+    private DeviceProtocolKind RemoteProtocol => RemoteProtocolIndex switch
+    {
+        0 => DeviceProtocolKind.Adb,
+        1 => DeviceProtocolKind.Hdc,
+        _ => (DeviceProtocolKind)(-1)
+    };
+
+    public bool HasInvalidRemoteAddress => !string.IsNullOrEmpty(RemoteAddress) &&
+        !DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out _);
+
+    public bool IsConnectionBusy
+    {
+        get;
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(CanManageSelectedConnection));
+                ConnectCommand.NotifyCanExecuteChanged();
+                DisconnectCommand.NotifyCanExecuteChanged();
+                ConnectRemoteCommand.NotifyCanExecuteChanged();
+                CancelConnectionCommand.NotifyCanExecuteChanged();
+                foreach (var device in Devices)
+                {
+                    device.NotifyConnectionAvailabilityChanged();
+                }
+            }
+        }
+    }
+
+    public string ConnectionStatusText
+    {
+        get;
+        private set => SetProperty(ref field, value);
+    } = string.Empty;
+
+    public bool CanManageSelectedConnection => !IsConnectionBusy && SelectedDevice?.CanManageConnection == true;
+
+    private bool CanConnectRemote() => !IsConnectionBusy &&
+        DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out _);
+
+    private void NotifyRemoteAddressChanged()
+    {
+        OnPropertyChanged(nameof(HasInvalidRemoteAddress));
+        ConnectRemoteCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanConnectRemote))]
+    private async Task ConnectRemoteAsync()
+    {
+        if (!CanConnectRemote() ||
+            !DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out var address))
         {
             return;
         }
+        await ChangeNetworkConnectionAsync(RemoteProtocol, address, null);
+    }
 
-        StatusText = $"{LanguageService.Instance.GetString("Device_Connecting")} {device.Serial}";
+    [RelayCommand(CanExecute = nameof(CanManageSelectedConnection))]
+    private async Task ConnectAsync()
+    {
+        if (!CanManageSelectedConnection || SelectedDevice is not { } device)
+        {
+            return;
+        }
+        await ChangeNetworkConnectionAsync(device.Protocol, device.Serial, null);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanManageSelectedConnection))]
+    private async Task DisconnectAsync()
+    {
+        if (!CanManageSelectedConnection || SelectedDevice is not { } device)
+        {
+            return;
+        }
+        await ChangeNetworkConnectionAsync(device.Protocol, device.Serial, device.Device);
+    }
+
+    [RelayCommand(CanExecute = nameof(IsConnectionBusy))]
+    private void CancelConnection() => _connectionCancellation?.Cancel();
+
+    private static async Task ExecuteNetworkConnectionAsync(DeviceProtocolKind protocol, string address,
+        DetectedDevice? disconnect, CancellationToken cancellationToken)
+    {
+        if (disconnect is null)
+        {
+            await App.DeviceMonitor.ConnectNetworkDeviceAsync(protocol, address, cancellationToken);
+        }
+        else if (protocol == DeviceProtocolKind.Hdc)
+        {
+            await App.DeviceMonitor.HdcDisconnectAsync(disconnect, cancellationToken);
+        }
+        else
+        {
+            await App.DeviceMonitor.DisconnectAdbAsync(disconnect, cancellationToken);
+        }
+    }
+
+    private async Task ChangeNetworkConnectionAsync(DeviceProtocolKind protocol, string address, DetectedDevice? disconnect)
+    {
+        using var cancellation = new CancellationTokenSource();
+        _connectionCancellation = cancellation;
+        IsConnectionBusy = true;
+        var operation = disconnect is null ? "Connect" : "Disconnect";
+        ConnectionStatusText = string.Format(LanguageService.Instance.GetString(
+            disconnect is null ? "Device_RemoteConnecting" : "Device_RemoteDisconnecting"), address);
         try
         {
-            var ok = await Task.Run(() => device.Protocol switch
+            await _changeNetworkConnection(protocol, address, disconnect, cancellation.Token);
+            if (_monitorDevices)
             {
-                DeviceProtocolKind.Fastboot => TryFastboot(device),
-                DeviceProtocolKind.Edl => true, // EDL 握手需要 programmer，此处仅确认设备在位
-                DeviceProtocolKind.Rkdl => TryRkdl(device),
-                DeviceProtocolKind.Adb => TryAdb(device),
-                DeviceProtocolKind.Hdc => TryHdc(device),
-                _ => false,
-            }).ConfigureAwait(true);
-
-            device.State = ok ? device.State : "offline";
-            StatusText = ok
-                ? $"{LanguageService.Instance.GetString("Device_Connect")} {device.Serial} OK"
-                : $"{LanguageService.Instance.GetString("Device_Connect")} {device.Serial} FAIL";
-            LogService.Instance.Write(ok ? LogLevel.Info : LogLevel.Error, "DeviceManager",
-                $"Connect {device.Serial} ({device.Mode}): {(ok ? "OK" : "FAIL")}");
-            OnPropertyChanged(nameof(DeviceDetail));
+                if (_refreshTask is { IsCompleted: false })
+                {
+                    await _refreshTask.WaitAsync(cancellation.Token);
+                }
+                await App.DeviceMonitor.ForceRefreshAsync();
+                await RefreshDevicesAsync().WaitAsync(cancellation.Token);
+            }
+            if (disconnect is null)
+            {
+                var connected = Devices.FirstOrDefault(entry => entry.Connections.Any(
+                    endpoint => endpoint.Protocol == protocol && endpoint.Serial == address));
+                if (connected is not null)
+                {
+                    connected.SelectedConnection = connected.Connections.First(
+                        endpoint => endpoint.Protocol == protocol && endpoint.Serial == address);
+                    SelectedDevice = connected;
+                }
+            }
+            ConnectionStatusText = string.Format(LanguageService.Instance.GetString(
+                disconnect is null ? "Device_RemoteConnected" : "Device_RemoteDisconnected"), address);
+            LogService.Instance.Write(LogLevel.Info, "DeviceManager", $"{operation} {protocol} {address}: OK");
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            ConnectionStatusText = LanguageService.Instance.GetString("Device_RemoteCanceled");
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Device_Connect")} {device.Serial} {LanguageService.Instance.GetString("UserError_Failed")}";
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager",
-                $"Connect {device.Serial} failed: {ex.Message}");
+            ConnectionStatusText = string.Format(LanguageService.Instance.GetString("Device_RemoteFailed"), address);
+            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"{operation} {protocol} {address}: {ex.Message}");
         }
-    }
-
-    private static bool TryAdb(DeviceInfo device)
-        => App.DeviceMonitor.ProbeAdb(device.Device);
-
-    private static bool TryFastboot(DeviceInfo device)
-    {
-        var (ready, product) = App.DeviceMonitor.ProbeFastboot(device.Device);
-        if (ready && !string.IsNullOrEmpty(product)) device.Model = product;
-        return ready;
-    }
-
-    private static bool TryRkdl(DeviceInfo device)
-    {
-        return App.DeviceMonitor.ProbeRkdl(device.Device);
-    }
-
-    /// <summary>
-    /// <para>断开选中的设备（USB 直连无需显式断开；网络 ADB 设备断开 adb server 连接）。</para>
-    /// Disconnects the selected device (direct USB sessions need no explicit disconnect;
-    /// network ADB devices disconnect from the adb server).
-    /// </summary>
-    [RelayCommand]
-    private async Task DisconnectAsync()
-    {
-        var device = SelectedDevice;
-        if (device == null)
+        finally
         {
-            return;
-        }
-
-        StatusText = $"{LanguageService.Instance.GetString("Device_Disconnect")} {device.Serial}...";
-        try
-        {
-            if (device.Protocol == DeviceProtocolKind.Hdc)
+            _connectionCancellation = null;
+            IsConnectionBusy = false;
+            if (_monitorDevices)
             {
-                await App.DeviceMonitor.HdcDisconnectAsync(device.Device).ConfigureAwait(true);
-                await App.DeviceMonitor.ForceRefreshAsync().ConfigureAwait(true);
+                await App.DeviceMonitor.ForceRefreshAsync();
             }
-            else if (device.Transport == "Network")
-            {
-                await App.DeviceMonitor.DisconnectAdbAsync(device.Device).ConfigureAwait(true);
-            }
-            device.State = "offline";
-            StatusText = $"{LanguageService.Instance.GetString("Device_Disconnect")} {device.Serial} OK";
-            OnPropertyChanged(nameof(DeviceDetail));
-        }
-        catch
-        {
-            StatusText = $"{LanguageService.Instance.GetString("Device_Disconnect")} {device.Serial} {LanguageService.Instance.GetString("UserError_Failed")}";
         }
     }
 

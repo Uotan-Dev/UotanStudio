@@ -17,12 +17,32 @@ public partial class DeviceViewModel
         DeviceProtocolKind.Adb => EnrichAdbInfoAsync(device),
         DeviceProtocolKind.Hdc => EnrichHdcInfoAsync(device),
         DeviceProtocolKind.Fastboot => EnrichFastbootInfoAsync(device),
-        // EDL/RKDL 处于 bootrom/loader 模式，无可拉取的系统属性。
-        // EDL/RKDL stay in bootrom/loader mode with no system properties to retrieve.
-        DeviceProtocolKind.Edl => Task.CompletedTask,
+        DeviceProtocolKind.Edl => EnrichEdlInfoAsync(device),
         DeviceProtocolKind.Rkdl => Task.CompletedTask,
         _ => Task.CompletedTask,
     };
+
+    private async Task EnrichEdlInfoAsync(DeviceInfo device)
+    {
+        var endpoint = device.Device;
+        try
+        {
+            var state = await App.DeviceMonitor.ProbeEdlProtocolAsync(endpoint);
+            if (ReferenceEquals(device.Device, endpoint))
+            {
+                device.EdlProtocol = state;
+            }
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(device.Device, endpoint))
+            {
+                device.EdlProtocol = UotanStudio.Comm.Protocols.Edl.EdlProtocolState.Unknown;
+            }
+            LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                $"EDL protocol detection for {endpoint.Key} failed: {ex.Message}");
+        }
+    }
 
     /// <summary>
     /// <para>拉取 ADB 设备扩展信息（getprop / 系统级 / 电池 / 内存 / 存储）。官方 adb server 会枚举

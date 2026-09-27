@@ -262,9 +262,14 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
 
     /// <summary>Disconnects a network target; USB transport is not an ADB connection.
     /// <para>断开网络目标；USB 目标不走 ADB 断开路径。</para></summary>
-    public Task<string> DisconnectAsync(DetectedDevice device, CancellationToken ct = default)
+    public async Task<string> DisconnectAsync(DetectedDevice device, CancellationToken ct = default)
     {
-        if (!device.Serial.Contains(':')) throw new NotSupportedException("USB HDC targets disconnect when unplugged.");
-        return RunTaskAsync(device, ["tconn", device.Serial, "-remove"], ct);
+        ValidateDevice(device);
+        if (device.Transport != DeviceTransportKind.Tcp)
+        {
+            throw new NotSupportedException("USB HDC targets disconnect when unplugged.");
+        }
+        using var server = new HdcServerClient(host, _port);
+        return await server.ConnectTargetAsync(device.Serial, disconnect: true, cancellationToken: ct).ConfigureAwait(false);
     }
 }

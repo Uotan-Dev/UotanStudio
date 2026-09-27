@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.Input;
+using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Models;
 using UotanStudio.Services.Devices;
 
@@ -47,7 +48,8 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
                 nameof(ListTitle), nameof(ListSubtitle), nameof(LinkPort), nameof(UsbIds),
                 nameof(VendorName), nameof(IsAdb), nameof(IsHdc), nameof(HasSystemInfo),
                 nameof(IsFastboot), nameof(SupportsFastbootd), nameof(IsEdl), nameof(IsRkdl),
-                nameof(IsUsb), nameof(IsNetwork), nameof(IsSerial)
+                nameof(IsUsb), nameof(IsNetwork), nameof(IsSerial), nameof(CanManageConnection),
+                nameof(EdlProtocol), nameof(HasEdlProtocol)
             })
                 OnPropertyChanged(property);
             owner?.NotifyConnectionChanged(this);
@@ -63,7 +65,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
             var next = endpoints[index];
             if (current.Key != next.Key || current.Serial != next.Serial ||
                 current.State != next.State || current.Protocol != next.Protocol ||
-                current.Transport != next.Transport)
+                current.Transport != next.Transport || current.EdlProtocol != next.EdlProtocol)
                 return false;
         }
         return true;
@@ -124,15 +126,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     }
 
     /// <summary>连接模式（ADB/Fastboot/EDL/RKDL）。 Connection mode.</summary>
-    public string Mode => Device.Protocol switch
-    {
-        DeviceProtocolKind.Adb => "ADB",
-        DeviceProtocolKind.Fastboot => "Fastboot",
-        DeviceProtocolKind.Edl => "EDL",
-        DeviceProtocolKind.Rkdl => "RKDL",
-        DeviceProtocolKind.Hdc => "HDC",
-        _ => throw new ArgumentOutOfRangeException(nameof(Device.Protocol), Device.Protocol, "Unexpected protocol kind."),
-    };
+    public string Mode => Device.ProtocolLabel;
 
     /// <summary>协议类型枚举值。 Protocol kind value.</summary>
     public DeviceProtocolKind Protocol => Device.Protocol;
@@ -186,8 +180,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <summary>链接端口/地址信息（USB 标识、TCP host:port、串口路径）。 Link/port info.</summary>
     public string LinkPort => Device.Transport switch
     {
-        DeviceTransportKind.Tcp =>
-            Device.Key.StartsWith("tcp:", StringComparison.OrdinalIgnoreCase) ? Device.Key[4..] : Device.Key,
+        DeviceTransportKind.Tcp => Device.Serial,
         DeviceTransportKind.Serial => Device.Key,
         DeviceTransportKind.Usb => "USB",
         _ => "Unknown",
@@ -229,6 +222,24 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <summary>是否为 EDL 设备。 Whether the device is in EDL mode.</summary>
     public bool IsEdl => Device.Protocol == DeviceProtocolKind.Edl;
 
+    /// <summary>The latest verified EDL wire protocol.</summary>
+    public EdlProtocolState EdlProtocol
+    {
+        get => Device.EdlProtocol;
+        set
+        {
+            if (Device.EdlProtocol != value)
+            {
+                Device.EdlProtocol = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasEdlProtocol));
+            }
+        }
+    }
+
+    /// <summary>Whether Sahara or Firehose has been verified for this endpoint.</summary>
+    public bool HasEdlProtocol => IsEdl && EdlProtocol != EdlProtocolState.Unknown;
+
     /// <summary>是否为 RKDL 设备。 Whether the device is in RKDL mode.</summary>
     public bool IsRkdl => Device.Protocol == DeviceProtocolKind.Rkdl;
 
@@ -237,6 +248,12 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
 
     /// <summary>是否为网络（TCP/adb server）设备。 Whether the device is connected over network.</summary>
     public bool IsNetwork => Device.Transport == DeviceTransportKind.Tcp;
+
+    /// <summary>Whether this endpoint supports explicit network connection management.</summary>
+    public bool CanManageConnection => IsNetwork && Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc &&
+        owner?.IsConnectionBusy != true;
+
+    internal void NotifyConnectionAvailabilityChanged() => OnPropertyChanged(nameof(CanManageConnection));
 
     /// <summary>是否为串口设备。 Whether the device is connected over a serial port.</summary>
     public bool IsSerial => Device.Transport == DeviceTransportKind.Serial;

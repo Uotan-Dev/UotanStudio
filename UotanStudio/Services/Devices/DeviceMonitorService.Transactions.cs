@@ -114,26 +114,9 @@ public sealed partial class DeviceMonitorService
         }, cancellationToken);
     }
 
-    internal async Task<TResult> RunEdlAsync<TResult>(DetectedDevice device,
+    internal Task<TResult> RunEdlAsync<TResult>(DetectedDevice device,
         Func<EdlSession, Task<TResult>> operation, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        cancellationToken.ThrowIfCancellationRequested();
-        if (device.Protocol != DeviceProtocolKind.Edl)
-            throw new ArgumentException("An EDL target is required.", nameof(device));
-        var lease = LeaseEndpoint(device, sessionKind: DeviceSessionKind.Edl, cancellationToken: cancellationToken);
-        try
-        {
-            if (!lease.TryGetSession<EdlSession>(out var session))
-                throw new IOException("The selected device does not expose an EDL session.");
-            cancellationToken.ThrowIfCancellationRequested();
-            return await operation(session).ConfigureAwait(false);
-        }
-        finally
-        {
-            CloseLease(lease);
-        }
-    }
+        => _edlConnections.RunAsync(device, operation, cancellationToken);
 
     internal TResult RunAdb<TResult>(DetectedDevice device, Func<IAdbDeviceSession, TResult> operation,
         CancellationToken cancellationToken = default)

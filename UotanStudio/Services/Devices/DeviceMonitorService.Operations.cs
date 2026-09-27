@@ -215,14 +215,12 @@ public sealed partial class DeviceMonitorService
         => DebugBridgeServerControl.StopHdcAsync(this, cancellationToken);
 
     /// <summary>Disconnects only the selected network ADB target.</summary>
-    public Task DisconnectAdbAsync(DetectedDevice device)
+    public Task DisconnectAdbAsync(DetectedDevice device, CancellationToken cancellationToken = default)
     {
         if (device.Protocol != DeviceProtocolKind.Adb || device.Transport != DeviceTransportKind.Tcp)
             throw new ArgumentException("A network ADB target is required.", nameof(device));
-        if (!DebugBridgeRoute.UseAdbServer()) return Task.CompletedTask;
-        EnsureAdbServerTarget(device.Serial);
         return AdbServerServices.DisconnectAsync(device.Serial,
-            DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort);
+            DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort, cancellationToken);
     }
     /// <summary>Reboots through the routed debug bridge session or the Fastboot transport.</summary>
     public async Task<bool> RebootAsync(DetectedDevice device, string mode, CancellationToken cancellationToken = default)

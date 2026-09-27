@@ -19,6 +19,52 @@ public partial class DeviceView : UserControl
     public DeviceView()
     {
         InitializeComponent();
+        SizeChanged += OnViewSizeChanged;
+        LayoutUpdated += OnToolbarLayoutUpdated;
+    }
+
+    private bool _isCompact;
+
+    private void OnToolbarLayoutUpdated(object? sender, EventArgs e)
+    {
+        const double minimumRemoteWidth = 312;
+        const double preferredRemoteWidth = 400;
+        const double spacing = 16;
+        var available = DeviceToolbarScrollViewer.Bounds.Width;
+        if (available <= 0)
+        {
+            return;
+        }
+        var actionsWidth = DeviceActionsPanel.Children
+            .Where(control => control.IsVisible)
+            .Sum(control => control.DesiredSize.Width);
+        var toolbarWidth = Math.Max(available, actionsWidth + spacing + minimumRemoteWidth);
+        var remoteWidth = Math.Min(preferredRemoteWidth, toolbarWidth - actionsWidth - spacing);
+        if (double.IsNaN(DeviceToolbarGrid.Width) || Math.Abs(DeviceToolbarGrid.Width - toolbarWidth) > 0.5)
+        {
+            DeviceToolbarGrid.Width = toolbarWidth;
+        }
+        if (Math.Abs(RemoteConnectionPanel.Width - remoteWidth) > 0.5)
+        {
+            RemoteConnectionPanel.Width = remoteWidth;
+        }
+    }
+
+    private void OnViewSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        var compact = e.NewSize.Width < 720;
+        if (_isCompact == compact)
+        {
+            return;
+        }
+        _isCompact = compact;
+        DeviceContentGrid.ColumnDefinitions = new ColumnDefinitions(compact ? "*" : "300,*");
+        DeviceContentGrid.RowDefinitions = new RowDefinitions(compact ? "Auto,*" : "*");
+        DeviceContentGrid.ColumnSpacing = compact ? 0 : 20;
+        DeviceContentGrid.RowSpacing = compact ? 12 : 0;
+        DeviceListPanel.MaxHeight = compact ? 240 : double.PositiveInfinity;
+        Grid.SetColumn(DeviceDetailPanel, compact ? 0 : 1);
+        Grid.SetRow(DeviceDetailPanel, compact ? 1 : 0);
     }
 
     private void OnHdcOperationMenuClick(object? sender, RoutedEventArgs e)

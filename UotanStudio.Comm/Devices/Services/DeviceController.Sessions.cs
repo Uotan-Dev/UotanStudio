@@ -38,7 +38,7 @@ public sealed partial class DeviceController
     public async Task<DeviceLease> OpenAsync(DeviceSnapshot snapshot, DeviceEndpointId id,
         DeviceSessionKind kind, CancellationToken cancellationToken = default)
     {
-        var (endpoint, transport) = await OpenTransportAsync(snapshot, id, cancellationToken).ConfigureAwait(false);
+        var (endpoint, transport, generation) = await OpenTransportAsync(snapshot, id, cancellationToken).ConfigureAwait(false);
         try
         {
             if (!_factories.TryGetValue(kind, out var factory))
@@ -48,7 +48,7 @@ public sealed partial class DeviceController
 
             var session = await factory.CreateAsync(endpoint, transport, cancellationToken).ConfigureAwait(false);
             DeviceLease? lease = null;
-            lease = new DeviceLease(endpoint, transport, session, () => Release(id, lease!));
+            lease = new DeviceLease(endpoint, transport, session, () => Release(id, lease!), generation);
             lock (_gate)
             {
                 _openLeases[id] = lease;
@@ -147,7 +147,7 @@ public sealed partial class DeviceController
 
             var session = await factory.CreateAsync(endpoint, transport, cancellationToken).ConfigureAwait(false);
             DeviceLease? lease = null;
-            lease = new DeviceLease(endpoint, transport, session, () => Release(endpoint.Id, lease!));
+            lease = new DeviceLease(endpoint, transport, session, () => Release(endpoint.Id, lease!), CurrentGenerationFor(info));
             lock (_gate)
             {
                 _openLeases[endpoint.Id] = lease;

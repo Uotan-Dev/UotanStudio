@@ -128,34 +128,15 @@ internal static class LinuxUsbFinder
                     }
                 }
 
-                byte[] desc;
-                IntPtr ptr;
-                int n;
-
-                var capacity = 1024;
-                desc = new byte[capacity];
-                ptr = Marshal.AllocHGlobal(capacity);
                 try
                 {
-                    n = (int)read(fd, ptr, (UIntPtr)capacity);
-                    if (n < 18) { close(fd); fd = -1; continue; }
-
-                    if (n > 20)
+                    var desc = LinuxUsbDescriptors.Read(fd);
+                    if (desc is null)
                     {
-                        var wTotalLength = Marshal.ReadByte(ptr, 20) | (Marshal.ReadByte(ptr, 21) << 8);
-                        if (wTotalLength > capacity)
-                        {
-                            Marshal.FreeHGlobal(ptr);
-                            ptr = Marshal.AllocHGlobal(wTotalLength);
-                            desc = new byte[wTotalLength];
-                            n = (int)read(fd, ptr, (UIntPtr)wTotalLength);
-                            if (n < 18) { close(fd); fd = -1; continue; }
-                        }
+                        continue;
                     }
 
-                    Marshal.Copy(ptr, desc, 0, n);
-
-                    var info = TryParseDescriptor(desc, n, filter);
+                    var info = TryParseDescriptor(desc, desc.Length, filter);
                     if (info == null)
                     {
                         continue;
@@ -164,6 +145,7 @@ internal static class LinuxUsbFinder
                     var dev = new LinuxUsbDevice
                     {
                         DevicePath = dev_path,
+                        PhysicalPortPath = LinuxUsbPortIdentity.Observe(fd, dev_path),
                         VendorId = info.VendorId,
                         ProductId = info.ProductId,
                         InterfaceClass = info.InterfaceClass,
@@ -189,7 +171,6 @@ internal static class LinuxUsbFinder
                 }
                 finally
                 {
-                    Marshal.FreeHGlobal(ptr);
                     if (fd >= 0)
                     {
                         close(fd);
@@ -216,7 +197,7 @@ internal static class LinuxUsbFinder
     /// <returns>The parsed metadata when a matching interface was found; otherwise <c>null</c>. <para>找到匹配接口时返回解析元数据；否则返回 <c>null</c>。</para></returns>
     internal static LinuxUsbDescriptorInfo? TryParseDescriptor(byte[] desc, int length, UsbDeviceFilter? filter)
     {
-        if (desc == null || length < 18)
+        if (desc == null || length < 18 || length > desc.Length || desc[0] != 18 || desc[1] != 1)
         {
             return null;
         }
@@ -277,6 +258,10 @@ internal static class LinuxUsbFinder
                     }
 
                     var ept_type = desc[ept_pos + 1];
+                    if (ept_type is 0x04 or 0x02)
+                    {
+                        break;
+                    }
 
                     if (ept_type == 0x05 && ept_len >= 7)
                     {
@@ -305,6 +290,8 @@ internal static class LinuxUsbFinder
         var matched = false;
         foreach (var iface in interfaces)
         {
+            epIn = 0;
+            epOut = 0;
             var ifcClass = iface.Class;
             var ifcSubClass = iface.SubClass;
             var ifcProtocol = iface.Protocol;

@@ -27,6 +27,7 @@ internal static class UsbDeviceInfoFactory
             DevicePath = device.DevicePath,
             SerialNumber = device.SerialNumber,
             ContainerId = device.ContainerId,
+            PhysicalPortPath = device.PhysicalPortPath,
             DeviceInstanceId = device.DeviceInstanceId,
             VendorId = device.VendorId,
             ProductId = device.ProductId,

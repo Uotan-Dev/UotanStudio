@@ -36,16 +36,18 @@ internal static partial class WinUSBFinder
     /// <para>读取设备节点在 HKLM\SYSTEM\CurrentControlSet\Enum\&lt;instance&gt;\Device Parameters
     /// 下注册的 DeviceInterfaceGUIDs（REG_MULTI_SZ）；节点级值缺失时回退到 DeviceClasses
     /// 反向映射（winusb 驱动的接口如 ADB 通常只在那里注册接口 GUID）。</para>
+    /// The fallback map is shared only within one enumeration, so hotplug changes are visible on the next scan.
+    /// <para>回退映射仅在单轮枚举内共享，后续扫描仍能观察到热插拔变化。</para>
     /// </summary>
-    private static IEnumerable<Guid> ReadDeviceInterfaceGuids(
+    internal static IEnumerable<Guid> ReadDeviceInterfaceGuids(
         string instanceId,
-        Func<Dictionary<string, List<Guid>>> deviceClassGuidsFactory)
+        Lazy<Dictionary<string, List<Guid>>> deviceClassGuids)
     {
         var result = new List<Guid>();
         var subKey = @"SYSTEM\CurrentControlSet\Enum\" + instanceId + @"\Device Parameters";
         if (Win32API.RegOpenKeyExW(Win32API.HKEY_LOCAL_MACHINE, subKey, 0, Win32API.KEY_READ, out var key) != 0)
         {
-            return FallbackToDeviceClassGuids(result, instanceId, deviceClassGuidsFactory);
+            return FallbackToDeviceClassGuids(result, instanceId, deviceClassGuids);
         }
 
         try
@@ -54,7 +56,7 @@ internal static partial class WinUSBFinder
             if (Win32API.RegQueryValueExW(key, "DeviceInterfaceGUIDs", IntPtr.Zero, out var type, IntPtr.Zero, ref size) != 0 ||
                 size == 0)
             {
-                return FallbackToDeviceClassGuids(result, instanceId, deviceClassGuidsFactory);
+                return FallbackToDeviceClassGuids(result, instanceId, deviceClassGuids);
             }
 
             var buffer = Marshal.AllocHGlobal((int)size);
@@ -83,7 +85,7 @@ internal static partial class WinUSBFinder
             Win32API.RegCloseKey(key);
         }
 
-        return result.Count == 0 ? FallbackToDeviceClassGuids(result, instanceId, deviceClassGuidsFactory) : (IEnumerable<Guid>)result;
+        return result.Count == 0 ? FallbackToDeviceClassGuids(result, instanceId, deviceClassGuids) : (IEnumerable<Guid>)result;
     }
 
     /// <summary>
@@ -106,10 +108,11 @@ internal static partial class WinUSBFinder
 
         try
         {
+            var guidName = new char[64];
+            var linkName = new char[512];
             uint guidIndex = 0;
             while (true)
             {
-                var guidName = new char[64];
                 var guidNameCapacity = (uint)guidName.Length;
                 int guidEnumResult;
                 unsafe
@@ -142,7 +145,6 @@ internal static partial class WinUSBFinder
                     uint linkIndex = 0;
                     while (true)
                     {
-                        var linkName = new char[512];
                         var linkNameCapacity = (uint)linkName.Length;
                         int linkEnumResult;
                         unsafe
@@ -208,10 +210,9 @@ internal static partial class WinUSBFinder
     private static IReadOnlyList<Guid> FallbackToDeviceClassGuids(
         List<Guid> result,
         string instanceId,
-        Func<Dictionary<string, List<Guid>>> deviceClassGuidsFactory)
+        Lazy<Dictionary<string, List<Guid>>> deviceClassGuids)
     {
-        IReadOnlyDictionary<string, List<Guid>> deviceClassGuids = deviceClassGuidsFactory();
-        if (deviceClassGuids.TryGetValue(instanceId.ToLowerInvariant(), out var fallback))
+        if (deviceClassGuids.Value.TryGetValue(instanceId, out var fallback))
         {
             foreach (var guid in fallback)
             {

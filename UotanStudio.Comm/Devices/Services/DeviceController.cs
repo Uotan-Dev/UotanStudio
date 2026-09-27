@@ -22,6 +22,7 @@ public sealed partial class DeviceController
     private long _requestedGeneration;
     private readonly HashSet<DeviceEndpointId> _leased = [];
     private readonly Dictionary<DeviceEndpointId, DeviceLease> _openLeases = [];
+    private readonly Dictionary<string, ulong> _transportGenerations = [];
 
     /// <summary>
     /// Raised after a physical USB device disappeared and its leases were released.
@@ -34,6 +35,22 @@ public sealed partial class DeviceController
     /// <para>物理 USB 设备元数据变化（如模式切换）时触发。</para>
     /// </summary>
     public event Action<DeviceEndpoint>? DeviceChanged;
+
+    /// <summary>
+    /// <para>每次清单提交后触发：当同一物理身份（容器 ID 优先，其次可用物理端口路径）在新旧快照
+    /// 中观测到不同的协议集合时发布一条模式迁移。关联绝不使用 VID/PID、枚举顺序或列表位置。</para>
+    /// Raised after each committed inventory: one transition per physical identity whose observed
+    /// protocol set changed between the previous and the new snapshot, correlated by container id
+    /// first and usable physical port path second; never by VID/PID, enumeration order, or position.
+    /// </summary>
+    /// <remarks>
+    /// Transitions are observational evidence for cross-protocol flows such as Sahara to Firehose
+    /// relink or MTK BROM to DA migration; a consumer must still verify identity on the opened
+    /// handle before binding a new session.
+    /// <para>迁移只是观测证据，供 Sahara→Firehose 重链或 MTK BROM→DA 迁移等跨协议流程消费；
+    /// 绑定新会话前仍须在已打开句柄上复核身份。</para>
+    /// </remarks>
+    public event Action<ModeTransition>? ModeTransitionsObserved;
 
     /// <summary>
     /// Per-device static property cache shared by all controller consumers.
@@ -126,16 +143,27 @@ public sealed partial class DeviceController
             }
         }
 
+        DeviceSnapshot result;
+        ModeTransition[] transitions = [];
         lock (_gate)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (generation == _requestedGeneration)
             {
-                _snapshot = new DeviceSnapshot(generation, endpoints.ToImmutable());
+                var committed = new DeviceSnapshot(generation, endpoints.ToImmutable());
+                transitions = ObserveModeTransitionsLocked(_snapshot, committed);
+                _snapshot = committed;
             }
 
-            return _snapshot;
+            result = _snapshot;
         }
+
+        foreach (var transition in transitions)
+        {
+            ModeTransitionsObserved?.Invoke(transition);
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -162,11 +190,11 @@ public sealed partial class DeviceController
     public async Task<DeviceLease> OpenAsync(DeviceSnapshot snapshot, DeviceEndpointId id,
         CancellationToken cancellationToken = default)
     {
-        var (endpoint, transport) = await OpenTransportAsync(snapshot, id, cancellationToken).ConfigureAwait(false);
+        var (endpoint, transport, generation) = await OpenTransportAsync(snapshot, id, cancellationToken).ConfigureAwait(false);
         DeviceLease? lease = null;
         try
         {
-            lease = new DeviceLease(endpoint, transport, () => Release(id, lease!));
+            lease = new DeviceLease(endpoint, transport, session: null, () => Release(id, lease!), generation);
             lock (_gate)
             {
                 _openLeases[id] = lease;
@@ -235,7 +263,7 @@ public sealed partial class DeviceController
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private async Task<(DeviceEndpoint Endpoint, IAsyncDisposable Transport)> OpenTransportAsync(
+    private async Task<(DeviceEndpoint Endpoint, IAsyncDisposable Transport, TransportGeneration? Generation)> OpenTransportAsync(
         DeviceSnapshot snapshot, DeviceEndpointId id, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -268,7 +296,7 @@ public sealed partial class DeviceController
             {
                 if (!cancellationToken.IsCancellationRequested && ReferenceEquals(snapshot, _snapshot))
                 {
-                    return (endpoint, transport);
+                    return (endpoint, transport, NextTransportGenerationLocked(endpoint.UsbInfo));
                 }
             }
 
@@ -281,6 +309,118 @@ public sealed partial class DeviceController
             Release(id, null);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Reads the current transport generation observed for a physical identity, without opening
+    /// anything. A consumer holding an older generation must treat its cached observations and
+    /// leases as retired.
+    /// <para>读取某物理身份当前已观测的传输代际，不打开任何资源。持有较旧代际的消费方必须把
+    /// 其缓存观测与租约视为已废弃。</para>
+    /// </summary>
+    /// <param name="identity">
+    /// The physical identity to look up. <para>待查询的物理身份。</para>
+    /// </param>
+    /// <param name="generation">
+    /// The latest generation stamped by an open or an observed mode transition.
+    /// <para>由打开或已观测模式迁移盖印的最近代际。</para>
+    /// </param>
+    /// <returns><see langword="false"/> when no transport instantiation was ever observed for the identity.
+    /// <para>从未观测到该身份的任何传输实例化时返回 <see langword="false"/>。</para></returns>
+    public bool TryPeekTransportGeneration(PhysicalDeviceIdentity identity, out TransportGeneration generation)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        ulong value;
+        lock (_gate)
+        {
+            if (!_transportGenerations.TryGetValue(identity.Key, out value))
+            {
+                generation = default;
+                return false;
+            }
+        }
+
+        generation = new TransportGeneration(value);
+        return true;
+    }
+
+    private TransportGeneration? NextTransportGenerationLocked(UsbDeviceInfo? info)
+    {
+        var identity = info is null ? null : PhysicalDeviceIdentity.From(info);
+        if (identity is null)
+        {
+            return null;
+        }
+
+        return new TransportGeneration(
+            _transportGenerations[identity.Key] = _transportGenerations.GetValueOrDefault(identity.Key) + 1);
+    }
+
+    private TransportGeneration? CurrentGenerationFor(UsbDeviceInfo? info)
+    {
+        lock (_gate)
+        {
+            return NextTransportGenerationLocked(info);
+        }
+    }
+
+    private ModeTransition[] ObserveModeTransitionsLocked(DeviceSnapshot previous, DeviceSnapshot current)
+    {
+        var before = ModeProjections(previous.Endpoints);
+        if (before.Count == 0)
+        {
+            return [];
+        }
+
+        List<ModeTransition> transitions = [];
+        foreach (var (key, (identity, protocols)) in ModeProjections(current.Endpoints))
+        {
+            if (!before.TryGetValue(key, out var old) || string.Equals(old.Protocols, protocols, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var evidence = identity.ContainerId is not null
+                ? ModeTransitionEvidence.Container
+                : ModeTransitionEvidence.PhysicalPort;
+            var generation = new TransportGeneration(
+                _transportGenerations[key] = _transportGenerations.GetValueOrDefault(key) + 1);
+            transitions.Add(new ModeTransition(identity, old.Protocols, protocols, generation, evidence, DateTimeOffset.UtcNow));
+        }
+
+        return [.. transitions];
+    }
+
+    private static Dictionary<string, (PhysicalDeviceIdentity Identity, string Protocols)> ModeProjections(
+        ImmutableArray<DeviceEndpoint> endpoints)
+    {
+        var raw = new Dictionary<string, (PhysicalDeviceIdentity Identity, SortedSet<string> Protocols)>(
+            StringComparer.Ordinal);
+        foreach (var endpoint in endpoints)
+        {
+            if (endpoint.UsbInfo is not { } info ||
+                PhysicalDeviceIdentity.From(info) is not { } identity ||
+                identity.ContainerId is null && identity.PhysicalPortPath is null ||
+                string.IsNullOrEmpty(endpoint.Protocol))
+            {
+                continue;
+            }
+
+            if (!raw.TryGetValue(identity.Key, out var entry))
+            {
+                raw[identity.Key] = entry = (identity, new SortedSet<string>(StringComparer.Ordinal));
+            }
+
+            entry.Protocols.Add(endpoint.Protocol);
+        }
+
+        var joined = new Dictionary<string, (PhysicalDeviceIdentity, string)>(StringComparer.Ordinal);
+        foreach (var pair in raw)
+        {
+            joined[pair.Key] = (pair.Value.Identity, string.Join('+', pair.Value.Protocols));
+        }
+
+        return joined;
     }
 
     private void Release(DeviceEndpointId id, DeviceLease? lease)

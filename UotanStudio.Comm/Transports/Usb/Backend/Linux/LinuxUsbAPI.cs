@@ -40,6 +40,28 @@ internal static partial class LinuxUsbAPI
     public static uint USBDEVFS_CONTROL_X86 = 0xC0105500;
     public const uint USBDEVFS_CONTROL = 0xC0105500;
 
+    public const uint USBDEVFS_CONNINFO_EX = 0x80185520;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct Usbdevfs_conninfo_ex
+    {
+        public uint Size;
+        public uint BusNumber;
+        public uint DeviceAddress;
+        public uint Speed;
+        public byte PortCount;
+        public byte Port0;
+        public byte Port1;
+        public byte Port2;
+        public byte Port3;
+        public byte Port4;
+        public byte Port5;
+        public byte Port6;
+    }
+
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial int ioctl(int Fd, UIntPtr request, ref Usbdevfs_conninfo_ex arg);
+
     [LibraryImport(Libc, SetLastError = true)]
     public static partial int open([MarshalAs(UnmanagedType.LPStr)] string pathname, int Flags);
 
@@ -48,6 +70,9 @@ internal static partial class LinuxUsbAPI
 
     [LibraryImport(Libc, SetLastError = true)]
     public static partial IntPtr read(int Fd, IntPtr buf, UIntPtr count);
+
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial IntPtr pread(int Fd, IntPtr buf, UIntPtr count, long offset);
 
     [LibraryImport(Libc, SetLastError = true)]
     public static partial int ioctl(int Fd, UIntPtr request, IntPtr arg);

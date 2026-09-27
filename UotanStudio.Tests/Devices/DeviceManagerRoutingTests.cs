@@ -31,7 +31,7 @@ public sealed class DeviceManagerRoutingTests
     }
 
     [Fact]
-    public void OpenAdbLease_ServerOriginTarget_NeverFallsBackToUsb()
+    public async Task OpenAdbLease_ServerOriginTarget_NeverFallsBackToUsb()
     {
         var device = new DetectedDevice
         {
@@ -46,7 +46,7 @@ public sealed class DeviceManagerRoutingTests
         {
             var opened = UotanStudio.App.DeviceMonitor.OpenAdbLease(device);
             Assert.NotNull(opened);
-            opened.Value.Lease.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await opened.Value.Lease.DisposeAsync();
         }
         else
         {
@@ -80,7 +80,8 @@ public sealed class DeviceManagerRoutingTests
             Transport = DeviceTransportKind.Usb
         };
 
-        await Assert.ThrowsAsync<ArgumentException>(() => UotanStudio.App.DeviceMonitor.DisconnectAdbAsync(device));
+        await Assert.ThrowsAsync<ArgumentException>(() => UotanStudio.App.DeviceMonitor.DisconnectAdbAsync(
+            device, TestContext.Current.CancellationToken));
     }
 
     [Fact]

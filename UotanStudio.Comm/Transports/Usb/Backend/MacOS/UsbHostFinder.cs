@@ -137,6 +137,7 @@ internal static partial class UsbHostFinder
                     var device = new UsbHostDevice
                     {
                         DevicePath = path,
+                        PhysicalPortPath = MacUsbPortIdentity.Observe(service),
                         VendorId = vid,
                         ProductId = pid,
                         SerialNumber = serial ?? string.Empty,

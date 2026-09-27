@@ -135,6 +135,7 @@ internal static partial class IOKitUsbFinder
                     var dev = new IOKitUsbDevice
                     {
                         RegistryEntryId = registryEntryId,
+                        PhysicalPortPath = MacUsbPortIdentity.Observe(service),
                         DevicePath = TryGetServicePath(service) ?? $"IOKit:{registryEntryId}",
                         VendorId = vid,
                         ProductId = pid,

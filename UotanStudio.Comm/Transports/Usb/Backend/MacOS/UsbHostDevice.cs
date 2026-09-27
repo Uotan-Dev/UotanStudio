@@ -328,6 +328,16 @@ internal class UsbHostDevice : UsbDevice
 
             _device = device;
 
+            var openedService = ObjcRuntime.MsgSendUint(_device, ObjcRuntime.sel_registerName(UsbHostAPI.SelIoService));
+            var physicalPortPath = MacUsbPortIdentity.Observe((IntPtr)openedService);
+            if (!MacUsbPortIdentity.Matches(PhysicalPortPath, physicalPortPath))
+            {
+                UsbHostAPI.Destroy(_device);
+                _device = IntPtr.Zero;
+                return -1;
+            }
+            PhysicalPortPath = physicalPortPath;
+
             var children = UsbHostAPI.GetInterfaceServices((uint)service.ToInt32());
             UsbTrace.Log($"UsbHostDevice.CreateHandle: interface children={children.Count}");
             foreach (var child in children)

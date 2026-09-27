@@ -13,6 +13,7 @@ internal static class UsbInfoCopy
         DeviceKey = info.DeviceKey,
         SerialNumber = info.SerialNumber,
         ContainerId = info.ContainerId,
+        PhysicalPortPath = info.PhysicalPortPath,
         DeviceInstanceId = info.DeviceInstanceId,
         VendorId = info.VendorId,
         ProductId = info.ProductId,

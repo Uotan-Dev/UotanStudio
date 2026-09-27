@@ -48,6 +48,14 @@ internal class LinuxUsbDevice : UsbDevice
         }
         _fd.SetFd(fd);
 
+        var physicalPortPath = LinuxUsbPortIdentity.Observe(fd, DevicePath);
+        if (!LinuxUsbPortIdentity.Matches(PhysicalPortPath, physicalPortPath))
+        {
+            _fd.Dispose();
+            return -1;
+        }
+        PhysicalPortPath = physicalPortPath;
+
         var interfacesToClaim = new List<byte>(ClaimedInterfaceIds);
         if (InterfaceId is >= 0 and <= byte.MaxValue && !interfacesToClaim.Contains((byte)InterfaceId))
         {

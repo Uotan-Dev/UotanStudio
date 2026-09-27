@@ -61,7 +61,7 @@ internal static partial class WinUSBFinder
             return devices;
         }
 
-        Func<Dictionary<string, List<Guid>>> lazyDeviceClassGuids = BuildDeviceClassGuidMap;
+        var lazyDeviceClassGuids = new Lazy<Dictionary<string, List<Guid>>>(BuildDeviceClassGuidMap);
 
         try
         {

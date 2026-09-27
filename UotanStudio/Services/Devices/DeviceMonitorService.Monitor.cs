@@ -99,6 +99,9 @@ public sealed partial class DeviceMonitorService
     private DeviceMonitorService()
     {
         _controller = UotanStudio.Comm.Devices.Services.DeviceControllerFactory.CreateDefault();
+        _edlConnections = new EdlConnectionCache((device, token) => Task.Run(
+            () => LeaseEndpoint(device, sessionKind: UotanStudio.Comm.Contracts.DeviceSessionKind.Edl,
+                cancellationToken: token), token), ScheduleChange);
     }
 
     /// <summary>
@@ -209,6 +212,7 @@ public sealed partial class DeviceMonitorService
     /// </summary>
     public void Dispose()
     {
+        _edlConnections.Dispose();
         lock (_sync)
         {
             _usbMonitor?.Dispose();

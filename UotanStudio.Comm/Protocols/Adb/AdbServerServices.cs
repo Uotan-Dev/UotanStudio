@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
+using UotanStudio.Comm.Routing;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
@@ -168,6 +169,35 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     }
 
     /// <summary>
+    /// Connects one network device through an existing ADB server and checks its response.
+    /// <para>通过已运行的 ADB server 连接单个网络设备，并检查响应结果。</para>
+    /// </summary>
+    /// <param name="address">The explicit device host and port.<para>显式设备主机与端口。</para></param>
+    /// <param name="host">The ADB server host.<para>ADB server 主机。</para></param>
+    /// <param name="port">The ADB server port.<para>ADB server 端口。</para></param>
+    /// <param name="cancellationToken">Cancels the exchange.<para>取消协议交互。</para></param>
+    /// <returns>The server's connection result.<para>server 返回的连接结果。</para></returns>
+    /// <exception cref="ArgumentException">The address is invalid.<para>地址无效。</para></exception>
+    /// <exception cref="IOException">The server did not report a successful connection.<para>server 未报告连接成功。</para></exception>
+    public static async Task<string> ConnectAsync(string address, string host, int port,
+        CancellationToken cancellationToken = default)
+    {
+        if (!DebugBridgeNetworkAddress.TryNormalize(address, out var target))
+        {
+            throw new ArgumentException("A device host:port address is required.", nameof(address));
+        }
+
+        var response = await RunNetworkCommandAsync("host:connect:" + target, host, port, cancellationToken)
+            .ConfigureAwait(false);
+        if (!response.StartsWith("connected to ", StringComparison.Ordinal) &&
+            !response.StartsWith("already connected to ", StringComparison.Ordinal))
+        {
+            throw new IOException("ADB server: " + response);
+        }
+        return response;
+    }
+
+    /// <summary>
     /// Disconnects one network target from the local adb server.
     /// <para>将单个网络目标从本地 adb server 断开。</para>
     /// </summary>
@@ -186,8 +216,38 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     public static async Task DisconnectAsync(string serial, string host, int port, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serial);
-        using var stream = await OpenHostStreamAsync(host, port, cancellationToken).ConfigureAwait(false);
-        await RequestAsync(stream, "host:disconnect:" + serial, cancellationToken).ConfigureAwait(false);
+        var response = await RunNetworkCommandAsync("host:disconnect:" + serial, host, port, cancellationToken)
+            .ConfigureAwait(false);
+        if (!response.StartsWith("disconnected ", StringComparison.Ordinal))
+        {
+            throw new IOException("ADB server: " + response);
+        }
+    }
+
+    private static async Task<string> RunNetworkCommandAsync(string command, string host, int port,
+        CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            using var stream = await OpenHostStreamAsync(host, port, timeout.Token).ConfigureAwait(false);
+            await RequestAsync(stream, command, timeout.Token).ConfigureAwait(false);
+            var header = new byte[4];
+            await stream.ReadExactlyAsync(header, timeout.Token).ConfigureAwait(false);
+            if (!int.TryParse(Encoding.ASCII.GetString(header), NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture, out var length) || length is < 0 or > 65535)
+            {
+                throw new IOException("Invalid ADB server response length.");
+            }
+            var bytes = new byte[length];
+            await stream.ReadExactlyAsync(bytes, timeout.Token).ConfigureAwait(false);
+            return Encoding.UTF8.GetString(bytes).Trim();
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("ADB network operation exceeded 30 seconds.");
+        }
     }
 
     private async Task<Stream> OpenServiceAsync(string service, CancellationToken cancellationToken)
