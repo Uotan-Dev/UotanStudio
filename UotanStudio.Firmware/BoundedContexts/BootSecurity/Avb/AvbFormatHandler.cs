@@ -277,9 +277,11 @@ public sealed class AvbFormatHandler : IFormatHandler
     /// <para>为满足接口一致性而接受，但从不读取；本处理器不提供签名功能。</para></param>
     /// <param name="outputPath">Accepted for interface conformity but never written. <para>为满足接口一致性而接受，从不写入。</para></param>
     /// <param name="cancellationToken">Not observed; the result is produced synchronously. <para>不被观察；结果同步产生。</para></param>
-    /// <returns>Always a failure result stating that AVB packing requires a private key and this handler does not support it; no file is created.
-    /// <para>始终返回失败结果，声明 AVB 打包需要私钥且本处理器不支持；不创建任何文件。</para></returns>
+    /// <returns>Always a failure result stating that AVB packing requires a private key and redirecting callers to
+    /// <c>AvbSigner</c>/<c>AvbResignOptions</c> for re-signing or <c>AvbFooterEditor</c> for footer rewrites; no file is created.
+    /// <para>始终返回失败结果，声明 AVB 打包需要私钥，并指引调用方使用 <c>AvbSigner</c>/<c>AvbResignOptions</c> 重签名，
+    /// 或使用 <c>AvbFooterEditor</c> 重写尾部；不创建任何文件。</para></returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default) =>
-
-        Task.FromResult(FirmwareOpResult.Fail("AVB packing/signing requires a private key and is not supported by this handler."));
+        Task.FromResult(FirmwareOpResult.Fail(
+            "AVB packing requires a private key and is not supported by this handler; re-sign with AvbSigner using AvbResignOptions, or rewrite the embedded footer with AvbFooterEditor."));
 }

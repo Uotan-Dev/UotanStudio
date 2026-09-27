@@ -65,7 +65,7 @@ public sealed class AvbResignTests : IDisposable
         using (var sparse = SparseReader.FromRawFile(signed))
         await using (var destination = new FileStream(sparsePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
         {
-            SparseWriter.WriteToStream(sparse, destination, includeCrc: true);
+            SparseWriter.WriteToStream(sparse, destination, includeCrc: true, cancellationToken: token);
         }
         if (corruptCrc)
         {

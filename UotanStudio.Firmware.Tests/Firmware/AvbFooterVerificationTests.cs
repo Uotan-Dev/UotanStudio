@@ -154,6 +154,32 @@ public class AvbFooterVerificationTests
         }
     }
 
+    [Fact]
+    public async Task PackAsync_HandlerWithoutSigning_PointsToResignAndFooterApis()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var imagePath = Path.Combine(root, "standalone.img");
+            var outputPath = Path.Combine(root, "packed.img");
+            await File.WriteAllBytesAsync(imagePath, BuildVbmeta(algorithm: 0), TestContext.Current.CancellationToken);
+
+            var result = await new AvbFormatHandler().PackAsync(imagePath, outputPath, TestContext.Current.CancellationToken);
+
+            Assert.False(result.Success);
+            Assert.Contains("private key", result.Summary, StringComparison.Ordinal);
+            Assert.Contains("AvbSigner", result.Summary, StringComparison.Ordinal);
+            Assert.Contains("AvbResignOptions", result.Summary, StringComparison.Ordinal);
+            Assert.Contains("AvbFooterEditor", result.Summary, StringComparison.Ordinal);
+            Assert.False(File.Exists(outputPath));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static byte[] BuildVbmeta(uint algorithm)
     {
         var vbmeta = new byte[AvbVBMetaImageHeader.Size];

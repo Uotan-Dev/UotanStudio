@@ -160,7 +160,7 @@ public sealed class AvbFecTests
             using (var raw = SparseReader.FromRawFile(path, blockSize: 4096))
             {
                 await using var sparse = new FileStream(sparsePath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                SparseWriter.WriteToStream(raw, sparse, includeCrc: true);
+                SparseWriter.WriteToStream(raw, sparse, includeCrc: true, cancellationToken: token);
                 await sparse.FlushAsync(token);
             }
             paths["system"] = sparsePath;
