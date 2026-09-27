@@ -175,6 +175,30 @@
     <x:String x:Key="Flash_VbmetaMissing">请选中 vbmeta 分区及镜像以禁用校验。</x:String>
     <x:String x:Key="Flash_ChooseRootPackage">选择 Magisk 或 KernelSU 安装包</x:String>
     <x:String x:Key="Flash_RootBootMissing">请仅选择一个 boot 或 init_boot 镜像用于 Root 修补。</x:String>
+    <x:String x:Key="Flash_Status">状态</x:String>
+    <x:String x:Key="Flash_Status_Queued">排队中</x:String>
+    <x:String x:Key="Flash_Status_Flashing">刷写中</x:String>
+    <x:String x:Key="Flash_Status_Verifying">校验中</x:String>
+    <x:String x:Key="Flash_Status_Erasing">擦除中</x:String>
+    <x:String x:Key="Flash_Status_Succeeded">成功</x:String>
+    <x:String x:Key="Flash_Status_Failed">失败</x:String>
+    <x:String x:Key="Flash_Status_Skipped">已跳过</x:String>
+    <x:String x:Key="Flash_OverallProgress">{1} 项中第 {0} 项</x:String>
+    <x:String x:Key="Flash_VerifyAfterFlash">刷写后校验</x:String>
+    <x:String x:Key="Flash_VerifyUnsupported">该协议不支持回读校验。</x:String>
+    <x:String x:Key="Flash_NoDevice">未选择设备</x:String>
+    <x:String x:Key="Flash_RkdlLoaderMissing">缺少瑞芯微 loader。</x:String>
+    <x:String x:Key="Flash_Mtk">MTK 串口下载</x:String>
+    <x:String x:Key="Flash_MtkPorts">串口号</x:String>
+    <x:String x:Key="Flash_MtkRefreshPorts">刷新端口</x:String>
+    <x:String x:Key="Flash_MtkDaFile">选择 DA/加载器</x:String>
+    <x:String x:Key="Flash_MtkEmiFile">选择 EMI 参数</x:String>
+    <x:String x:Key="Flash_MtkEntryIndex">加载器条目</x:String>
+    <x:String x:Key="Flash_MtkStorageKind">存储类型</x:String>
+    <x:String x:Key="Flash_MtkAttachAgent">附加已运行代理</x:String>
+    <x:String x:Key="Flash_MtkFlash">开始 MTK 下载</x:String>
+    <x:String x:Key="Flash_MtkPlanPreview">共 {0} 项操作，合计 {1} MiB</x:String>
+    <x:String x:Key="Flash_MtkTooManySteps">所选 scatter 步骤过多。</x:String>
 
     <!-- 视图定位器 -->
     <x:String x:Key="ViewLocator_NotFound">未找到: </x:String>
@@ -408,6 +432,11 @@
     <x:String x:Key="Dock_Partition_Size">大小（扇区）</x:String>
     <x:String x:Key="Dock_Partition_Type">类型</x:String>
     <x:String x:Key="Dock_Partition_TypeHint">如 linear / zero / mtd / 0x83 / GPT GUID</x:String>
+    <x:String x:Key="Dock_Partition_Add">添加分区</x:String>
+    <x:String x:Key="Dock_Partition_Remove">删除分区</x:String>
+    <x:String x:Key="Dock_Partition_Unallocated">未分配</x:String>
+    <x:String x:Key="Dock_Partition_CapacityFormat">容量：{0} 扇区（{1}）</x:String>
+    <x:String x:Key="Dock_Partition_UsedFormat">已用至：{0} 扇区（{1}）</x:String>
 
     <!-- Compare tools -->
     <x:String x:Key="Compare_Equal">相等</x:String>
@@ -739,5 +768,6 @@
     <x:String x:Key="UserError_PartitionNameLong">分区名称过长（最多 36 个字符）：{0}</x:String>
     <x:String x:Key="UserError_PartitionStartInvalid">分区起始值无效：{0}</x:String>
     <x:String x:Key="UserError_PartitionSizeInvalid">分区大小值无效：{0}</x:String>
+    <x:String x:Key="UserError_PartitionOverlap">分区“{0}”与分区“{1}”重叠。</x:String>
     <x:String x:Key="UserError_PluginUnavailable">插件不可用。请检查兼容性和所需依赖。</x:String>
 </ResourceDictionary>

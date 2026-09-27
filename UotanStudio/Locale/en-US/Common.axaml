@@ -175,6 +175,30 @@
     <x:String x:Key="Flash_VbmetaMissing">Select a vbmeta partition and image to disable verification.</x:String>
     <x:String x:Key="Flash_ChooseRootPackage">Select Magisk or KernelSU package</x:String>
     <x:String x:Key="Flash_RootBootMissing">Select exactly one boot or init_boot image for Root patching.</x:String>
+    <x:String x:Key="Flash_Status">Status</x:String>
+    <x:String x:Key="Flash_Status_Queued">Queued</x:String>
+    <x:String x:Key="Flash_Status_Flashing">Flashing</x:String>
+    <x:String x:Key="Flash_Status_Verifying">Verifying</x:String>
+    <x:String x:Key="Flash_Status_Erasing">Erasing</x:String>
+    <x:String x:Key="Flash_Status_Succeeded">Succeeded</x:String>
+    <x:String x:Key="Flash_Status_Failed">Failed</x:String>
+    <x:String x:Key="Flash_Status_Skipped">Skipped</x:String>
+    <x:String x:Key="Flash_OverallProgress">{0} of {1}</x:String>
+    <x:String x:Key="Flash_VerifyAfterFlash">Verify after flash</x:String>
+    <x:String x:Key="Flash_VerifyUnsupported">Readback verification is not available for this protocol.</x:String>
+    <x:String x:Key="Flash_NoDevice">No device selected</x:String>
+    <x:String x:Key="Flash_RkdlLoaderMissing">Rockchip loader is missing.</x:String>
+    <x:String x:Key="Flash_Mtk">MTK serial download</x:String>
+    <x:String x:Key="Flash_MtkPorts">Serial port</x:String>
+    <x:String x:Key="Flash_MtkRefreshPorts">Refresh ports</x:String>
+    <x:String x:Key="Flash_MtkDaFile">Select DA/loader</x:String>
+    <x:String x:Key="Flash_MtkEmiFile">Select EMI parameters</x:String>
+    <x:String x:Key="Flash_MtkEntryIndex">Loader entry</x:String>
+    <x:String x:Key="Flash_MtkStorageKind">Storage type</x:String>
+    <x:String x:Key="Flash_MtkAttachAgent">Attach running agent</x:String>
+    <x:String x:Key="Flash_MtkFlash">Start MTK download</x:String>
+    <x:String x:Key="Flash_MtkPlanPreview">{0} operations, {1} MiB total</x:String>
+    <x:String x:Key="Flash_MtkTooManySteps">Too many selected scatter steps.</x:String>
 
     <!-- ViewLocator -->
     <x:String x:Key="ViewLocator_NotFound">Not Found: </x:String>
@@ -408,6 +432,11 @@
     <x:String x:Key="Dock_Partition_Size">Size (sectors)</x:String>
     <x:String x:Key="Dock_Partition_Type">Type</x:String>
     <x:String x:Key="Dock_Partition_TypeHint">e.g. linear / zero / mtd / 0x83 / GPT GUID</x:String>
+    <x:String x:Key="Dock_Partition_Add">Add Partition</x:String>
+    <x:String x:Key="Dock_Partition_Remove">Remove Partition</x:String>
+    <x:String x:Key="Dock_Partition_Unallocated">Free space</x:String>
+    <x:String x:Key="Dock_Partition_CapacityFormat">Capacity: {0} sectors ({1})</x:String>
+    <x:String x:Key="Dock_Partition_UsedFormat">Used through: {0} sectors ({1})</x:String>
 
     <!-- Compare tools -->
     <x:String x:Key="Compare_Equal">Equal</x:String>
@@ -739,5 +768,6 @@
     <x:String x:Key="UserError_PartitionNameLong">The partition name is too long (maximum 36 characters): {0}</x:String>
     <x:String x:Key="UserError_PartitionStartInvalid">Invalid partition start value: {0}</x:String>
     <x:String x:Key="UserError_PartitionSizeInvalid">Invalid partition size value: {0}</x:String>
+    <x:String x:Key="UserError_PartitionOverlap">Partition "{0}" overlaps partition "{1}".</x:String>
     <x:String x:Key="UserError_PluginUnavailable">The plugin is unavailable. Check compatibility and required dependencies.</x:String>
 </ResourceDictionary>

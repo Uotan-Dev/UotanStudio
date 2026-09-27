@@ -40,6 +40,34 @@ public sealed class UserErrorLocalizationTests(NodeEditorUiFixture fixture)
     }
 
     [Fact]
+    public async Task Resources_BothLanguages_FlashKeysMatchAndFormatArgumentsAlign()
+    {
+        var token = TestContext.Current.CancellationToken;
+        Task pending;
+        using (ExecutionContext.SuppressFlow())
+        {
+            pending = fixture.Session.Dispatch(() =>
+            {
+                var english = new UotanStudio.Locale.EnUs.Common();
+                var chinese = new UotanStudio.Locale.ZhCn.Common();
+                var keys = english.Keys.OfType<string>().Where(key => key.StartsWith("Flash_", StringComparison.Ordinal)).Order().ToArray();
+                Assert.NotEmpty(keys);
+                Assert.Equal(keys, chinese.Keys.OfType<string>().Where(key => key.StartsWith("Flash_", StringComparison.Ordinal)).Order());
+                foreach (var key in keys)
+                {
+                    var en = Assert.IsType<string>(english[key]);
+                    var zh = Assert.IsType<string>(chinese[key]);
+                    Assert.False(string.IsNullOrWhiteSpace(en));
+                    Assert.False(string.IsNullOrWhiteSpace(zh));
+                    Assert.NotEqual(en, zh);
+                    Assert.Equal(CompositeFormat.Parse(en).MinimumArgumentCount, CompositeFormat.Parse(zh).MinimumArgumentCount);
+                }
+            }, token);
+        }
+        await pending.WaitAsync(TimeSpan.FromSeconds(30), token);
+    }
+
+    [Fact]
     public async Task Describe_LanguageSwitch_LocalizesReasonAndPreservesOriginalException()
     {
         var token = TestContext.Current.CancellationToken;

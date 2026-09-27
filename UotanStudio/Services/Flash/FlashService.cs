@@ -653,6 +653,16 @@ public sealed class FlashService : IFlashService
     public async Task<FlashResult> FlashEdlPartitionAsync(
         EdlSession session, RawProgramEntry entry, string imageDir, string? programmerPath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
+        => await FlashEdlPartitionAsync(session, entry, imageDir, programmerPath, progress, ct, verify: false).ConfigureAwait(false);
+
+    /// <summary>
+    /// <para>上传包内 Firehose programmer（可选）后编程清单条目，并可在写入成功后执行回读校验。</para>
+    /// Uploads a package-supplied Firehose programmer before programming a manifest entry, with an
+    /// optional read-back verification after a successful write.
+    /// </summary>
+    public async Task<FlashResult> FlashEdlPartitionAsync(
+        EdlSession session, RawProgramEntry entry, string imageDir, string? programmerPath,
+        IProgress<FlashProgress>? progress, CancellationToken ct, bool verify)
     {
         ArgumentNullException.ThrowIfNull(session);
         if (programmerPath is not null && !File.Exists(programmerPath))
@@ -663,7 +673,7 @@ public sealed class FlashService : IFlashService
         await session.EnsureInitializedAsync(programmer, ct).ConfigureAwait(false);
         var firehose = session.Firehose
             ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
-        return await FlashEdlPartitionAsync(firehose, entry, imageDir, progress, ct).ConfigureAwait(false);
+        return await FlashEdlPartitionAsync(firehose, entry, imageDir, progress, ct, verify).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -682,6 +692,31 @@ public sealed class FlashService : IFlashService
     public async Task<FlashResult> FlashEdlPartitionAsync(
         FirehoseProtocol firehose, RawProgramEntry entry, string imageDir,
         IProgress<FlashProgress>? progress, CancellationToken ct)
+        => await FlashEdlPartitionAsync(firehose, entry, imageDir, progress, ct, verify: false).ConfigureAwait(false);
+
+    /// <summary>
+    /// <para>EDL 单分区直刷核心（带回读校验门控）：直接对 <see cref="FirehoseProtocol"/> 单发 program 命令
+    /// （跳过会话/Sahara，供测试与高级调用）。verify 为 true 且写入走整扇区原始数据路径、比对基准与源文件
+    /// 逐字节一致时，用 <see cref="FirehoseProtocol.VerifyProgramAsync"/> 回读校验；稀疏编程、非零
+    /// file_sector_offset 或镜像长于编程范围时安全跳过并在 Summary 说明。</para>
+    /// EDL single-partition flash core with an optional read-back gate: issues a single Firehose program
+    /// directly against a <see cref="FirehoseProtocol"/> (bypassing the session/Sahara, for tests and
+    /// advanced callers). When <paramref name="verify"/> is set and the write used the whole-sector raw
+    /// path whose byte-for-byte source comparison is well defined, the programmed range is read back with
+    /// <see cref="FirehoseProtocol.VerifyProgramAsync"/>; sparse programming, a non-zero file sector offset
+    /// or an image longer than the programmed range skip verification with a note in the summary.
+    /// </summary>
+    /// <param name="firehose"><para>已配置的 Firehose 协议实例。</para>A configured Firehose protocol instance.</param>
+    /// <param name="entry"><para>目标 rawprogram 条目。</para>The target rawprogram entry.</param>
+    /// <param name="imageDir"><para>镜像文件所在目录。</para>The image file directory.</param>
+    /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
+    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
+    /// <param name="verify"><para>写入成功后是否把该扇区范围回读并与源文件逐字节比对。</para>
+    /// Whether to read the programmed range back after a successful write and compare it with the source file.</param>
+    /// <returns>刷写结果。</returns>
+    public async Task<FlashResult> FlashEdlPartitionAsync(
+        FirehoseProtocol firehose, RawProgramEntry entry, string imageDir,
+        IProgress<FlashProgress>? progress, CancellationToken ct, bool verify)
     {
         ArgumentNullException.ThrowIfNull(firehose);
         ArgumentNullException.ThrowIfNull(entry);
@@ -716,10 +751,18 @@ public sealed class FlashService : IFlashService
 
         var startSector = entry.StartSector;
 
+        // 回读校验只在整扇区原始写入且比对基准可从源文件首字节对齐时可行；其余路径记录跳过原因。
+        // Read-back verification is only defined for a whole-sector raw write whose source comparison
+        // starts at the file's first byte; other paths record a skip reason instead.
+        long? verifyNumSectors = null;
+        long verifyStartSector = 0;
+        string? verifySkipReason = null;
+
         Report(progress, displayName, 30, $"Sending program for {displayName}... 正在发送 program 命令...");
         using var stream = File.OpenRead(sourceFile);
         if (entry.IsSparse || IsAndroidSparseImage(stream))
         {
+            verifySkipReason = "the image was programmed through the Android sparse path";
             if (entry.FileSectorOffset != 0)
             {
                 throw new InvalidOperationException("Sparse program entries cannot use a raw source-sector offset.");
@@ -777,12 +820,58 @@ public sealed class FlashService : IFlashService
                 throw new InvalidDataException("The device sector size differs from the configured sector size.");
             }
 
-            geometry.ResolveRange(startSector, numSectors);
+            var resolvedStart = geometry.ResolveRange(startSector, numSectors);
             var response = await firehose.ProgramAsync(
                 stream, startSector, numSectors, entry.Filename, entry.PhysicalPartitionNumber, ct).ConfigureAwait(false);
             if (!response.IsAck)
             {
                 throw new InvalidOperationException($"EDL program failed for '{displayName}'. Response: {response.RawValue}");
+            }
+
+            if (sourceOffset != 0)
+            {
+                verifySkipReason = "the entry programs from a non-zero file_sector_offset, so the device range does not start at the source file's first byte";
+            }
+            else if (checked(numSectors * sectorSize) != stream.Length)
+            {
+                verifySkipReason = "the image is longer than the programmed whole-sector range";
+            }
+            else
+            {
+                verifyNumSectors = numSectors;
+                verifyStartSector = resolvedStart;
+            }
+        }
+
+        var summary = $"EDL partition '{displayName}' flashed via Firehose program.";
+        if (verify)
+        {
+            if (verifyNumSectors is null)
+            {
+                summary += $" Read-back verification skipped ({verifySkipReason}). 已跳过回读校验。";
+            }
+            else
+            {
+                Report(progress, displayName, 90, $"Verifying read-back for {displayName}... 正在回读校验...");
+                try
+                {
+                    using var verificationStream = File.OpenRead(sourceFile);
+                    await firehose.VerifyProgramAsync(
+                        verificationStream, verifyStartSector, verifyNumSectors.Value,
+                        entry.Filename, entry.PhysicalPartitionNumber, ct).ConfigureAwait(false);
+                    summary += " Read-back verification passed. 回读校验通过。";
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    LogService.Instance.Write(LogLevel.Warn, "FlashService",
+                        $"EDL read-back verification failed for '{displayName}': {ex.Message}");
+                    Report(progress, displayName, 100, $"EDL read-back mismatch for {displayName}. {displayName} 回读校验不一致。");
+                    return new FlashResult
+                    {
+                        Success = false,
+                        Summary = $"EDL partition '{displayName}' was programmed but read-back verification failed (readback mismatch): {ex.Message} EDL 回读校验不一致。"
+                    };
+                }
             }
         }
 
@@ -790,7 +879,7 @@ public sealed class FlashService : IFlashService
         return new FlashResult
         {
             Success = true,
-            Summary = $"EDL partition '{displayName}' flashed via Firehose program."
+            Summary = summary
         };
     }
 
@@ -860,10 +949,13 @@ public sealed class FlashService : IFlashService
     /// Optional Rockchip loader (MiniLoaderAll / *loader*.bin); auto-discovered in the image directory when null.</param>
     /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
     /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
+    /// <param name="verify"><para>写入成功后是否把该分区区间回读并与源镜像逐字节比对。</para>
+    /// Whether to read the written range back from the device after a successful write and compare it
+    /// byte for byte with the source image.</param>
     /// <returns>刷写结果。</returns>
     public static async Task<FlashResult> FlashRkdlAsync(
         DeviceInfo device, string partition, string imagePath, string? loaderPath,
-        IProgress<FlashProgress>? progress, CancellationToken ct)
+        IProgress<FlashProgress>? progress, CancellationToken ct, bool verify = false)
     {
         Report(progress, partition, 0, "Opening RKDL session... 正在打开 RKDL 会话...");
         return await App.DeviceMonitor.RunRkdlAsync(device.Device, async rkdl =>
@@ -905,7 +997,51 @@ public sealed class FlashService : IFlashService
             }
 
             Report(progress, partition, 15, $"Writing {Path.GetFileName(imagePath)} to {target.Name} (LBA 0x{target.OffsetSectors:X})... 正在写入分区...");
-            return await Task.Run(() => FlashRkdlPartition(rkdl, target, imagePath, progress, ct), ct).ConfigureAwait(false);
+            var result = await Task.Run(() => FlashRkdlPartition(rkdl, target, imagePath, progress, ct), ct).ConfigureAwait(false);
+            if (!verify || !result.Success)
+            {
+                return result;
+            }
+
+            var imageLength = new FileInfo(imagePath).Length;
+            if (imageLength <= 0)
+            {
+                result.Summary += " Read-back verification skipped (the image is empty). 已跳过回读校验（镜像为空）。";
+                return result;
+            }
+
+            Report(progress, target.Name, 100, $"Verifying read-back for {target.Name} at LBA 0x{target.OffsetSectors:X}... 正在回读校验...");
+            try
+            {
+                var matches = await Task.Run(async () =>
+                {
+                    using var readback = new RkdlReadbackStream(rkdl, target.OffsetSectors, imageLength);
+                    return await CompareReadbackAsync(imagePath, readback, imageLength, ct).ConfigureAwait(false);
+                }, ct).ConfigureAwait(false);
+                if (!matches)
+                {
+                    LogService.Instance.Write(LogLevel.Warn, "FlashService",
+                        $"RKDL read-back verification mismatch for '{target.Name}' at LBA 0x{target.OffsetSectors:X}.");
+                    return new FlashResult
+                    {
+                        Success = false,
+                        Summary = $"RKDL wrote {imageLength} bytes to '{target.Name}' but read-back verification failed (readback mismatch). RKDL 回读校验不一致。"
+                    };
+                }
+
+                result.Summary += " Read-back verification passed. 回读校验通过。";
+                return result;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                LogService.Instance.Write(LogLevel.Warn, "FlashService",
+                    $"RKDL read-back verification could not complete for '{target.Name}': {ex.Message}");
+                return new FlashResult
+                {
+                    Success = false,
+                    Summary = $"RKDL wrote '{target.Name}' but read-back verification could not complete (possible readback mismatch): {ex.Message} RKDL 回读校验失败。"
+                };
+            }
         }, ct).ConfigureAwait(false);
     }
 
@@ -1176,7 +1312,7 @@ public sealed class FlashService : IFlashService
     /// <para>在镜像目录中查找 Rockchip loader 文件。</para>
     /// Locates a Rockchip loader file in the image directory.
     /// </summary>
-    private static string? ResolveLoaderPath(string? loaderPath, string imageDir)
+    internal static string? ResolveLoaderPath(string? loaderPath, string imageDir)
     {
         if (!string.IsNullOrWhiteSpace(loaderPath) && File.Exists(loaderPath))
         {
@@ -1207,7 +1343,7 @@ public sealed class FlashService : IFlashService
     /// <para>在镜像目录中查找 Rockchip parameter 文件（parameter / parameter.txt）。</para>
     /// Locates a Rockchip parameter file (parameter / parameter.txt) in the image directory.
     /// </summary>
-    private static string? FindParameterFile(string imageDir)
+    internal static string? FindParameterFile(string imageDir)
     {
         if (string.IsNullOrWhiteSpace(imageDir) || !Directory.Exists(imageDir))
         {
@@ -1221,6 +1357,68 @@ public sealed class FlashService : IFlashService
             ? exact
             : Directory.EnumerateFiles(imageDir, "parameter*", SearchOption.TopDirectoryOnly)
             .FirstOrDefault(f => !Path.GetExtension(f).Equals(".xml", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// <para>判断目录中是否存在 Rockchip parameter 分区表文件；目录不存在时为 false，不抛异常。</para>
+    /// Determines whether the directory contains a Rockchip parameter partition-table file;
+    /// returns false for a missing directory without throwing.
+    /// </summary>
+    /// <param name="imageDir"><para>待检查的目录。</para>The directory to inspect.</param>
+    /// <returns><para>存在 parameter 文件时为 true。</para>True when a Rockchip parameter file is present.</returns>
+    internal static bool HasRockchipParameter(string imageDir)
+        => FindParameterFile(imageDir) is not null;
+
+    /// <summary>
+    /// <para>把设备回读流与源文件逐字节比对：64 KiB 有界缓冲，源文件短于比对长度或任一块不一致
+    /// 时提前返回 false，禁止整读入内存。</para>
+    /// Compares a device read-back stream byte for byte against the source file using a bounded
+    /// 64 KiB buffer, returning false early when the source is shorter than the compared length or
+    /// any block differs; the payload is never buffered as a whole.
+    /// </summary>
+    private static async Task<bool> CompareReadbackAsync(string sourceFile, Stream deviceStream, long length, CancellationToken ct)
+    {
+        if (length <= 0)
+        {
+            return true;
+        }
+
+        const int ChunkSize = 65536;
+        using var source = File.OpenRead(sourceFile);
+        if (source.Length < length)
+        {
+            return false;
+        }
+
+        var sourceBuffer = new byte[ChunkSize];
+        var deviceBuffer = new byte[ChunkSize];
+        var remaining = length;
+        while (remaining > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            var count = (int)Math.Min(ChunkSize, remaining);
+            await source.ReadExactlyAsync(sourceBuffer.AsMemory(0, count), ct).ConfigureAwait(false);
+            var filled = 0;
+            while (filled < count)
+            {
+                var read = await deviceStream.ReadAsync(deviceBuffer.AsMemory(filled, count - filled), ct).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    return false;
+                }
+
+                filled += read;
+            }
+
+            if (!sourceBuffer.AsSpan(0, count).SequenceEqual(deviceBuffer.AsSpan(0, count)))
+            {
+                return false;
+            }
+
+            remaining -= count;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -1290,6 +1488,62 @@ public sealed class FlashService : IFlashService
 
             base.Dispose(disposing);
         }
+    }
+
+    /// <summary>
+    /// <para>把 <see cref="RkdlSession.ReadLBA"/> 的区间读取包装为拉取式只读流：每次以有界的
+    /// 64 KiB 整扇区块向设备取数，避免整段回读进入内存。</para>
+    /// Wraps a range of <see cref="RkdlSession.ReadLBA"/> as a pull-based read-only stream, fetching
+    /// device data in bounded 64 KiB whole-sector blocks so a full read-back never lands in memory.
+    /// </summary>
+    private sealed class RkdlReadbackStream(RkdlSession session, long startLba, long length) : Stream
+    {
+        private const int BlockBytes = 65536;
+
+        private readonly byte[] _block = new byte[BlockBytes];
+        private int _blockLength;
+        private int _blockPosition;
+        private long _fetched;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => length;
+        public override long Position { get => _fetched; set => throw new NotSupportedException(); }
+
+        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+
+        public override int Read(Span<byte> buffer)
+        {
+            if (_blockPosition >= _blockLength)
+            {
+                var remaining = length - _fetched;
+                if (remaining <= 0)
+                {
+                    return 0;
+                }
+
+                // 除末段外每次取整 64 KiB（扇区大小的倍数），保证下一段的起始 LBA 仍落在扇区边界上。
+                // Every block but the tail is a whole 64 KiB (a sector-size multiple), keeping each
+                // follow-up LBA on a sector boundary.
+                var toFetch = (int)Math.Min(BlockBytes, remaining);
+                using var blockStream = new MemoryStream(_block, 0, toFetch, writable: true);
+                session.ReadLBA(startLba + _fetched / RkdlConstants.SectorSize, blockStream, toFetch);
+                _blockLength = toFetch;
+                _blockPosition = 0;
+                _fetched += toFetch;
+            }
+
+            var copy = Math.Min(buffer.Length, _blockLength - _blockPosition);
+            _block.AsSpan(_blockPosition, copy).CopyTo(buffer);
+            _blockPosition += copy;
+            return copy;
+        }
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }
 

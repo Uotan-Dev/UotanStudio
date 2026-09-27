@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using UotanStudio.Services.Devices;
 using UotanStudio.Tests.Services;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Shell;
@@ -116,5 +117,43 @@ public sealed class FlashViewHeadlessTests(NodeEditorUiFixture fixture)
             await dispatch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         }
         finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Theory]
+    [InlineData(DeviceProtocolKind.Fastboot, false, false, false, false, true)]
+    [InlineData(DeviceProtocolKind.Rkdl, false, false, false, true, true)]
+    [InlineData(DeviceProtocolKind.Rkdl, false, false, false, false, false)]
+    [InlineData(DeviceProtocolKind.Rkdl, true, false, false, false, false)]
+    [InlineData(DeviceProtocolKind.Adb, true, false, false, false, true)]
+    [InlineData(DeviceProtocolKind.Adb, false, false, false, false, false)]
+    [InlineData(DeviceProtocolKind.Edl, true, true, true, false, true)]
+    [InlineData(DeviceProtocolKind.Edl, true, true, false, false, false)]
+    [InlineData(DeviceProtocolKind.Edl, true, false, true, false, false)]
+    [InlineData(DeviceProtocolKind.Edl, false, true, true, false, false)]
+    [InlineData(DeviceProtocolKind.Hdc, true, true, true, true, false)]
+    public void FlashModeAllowed_ProtocolMatrix_MatchesTransportCapability(
+        DeviceProtocolKind mode, bool flatBin, bool hasEdlEntries, bool hasProgrammer,
+        bool hasRockchipParameter, bool expected)
+        => Assert.Equal(expected, FlashView.FlashModeAllowed(mode, flatBin, hasEdlEntries, hasProgrammer, hasRockchipParameter));
+
+    [Fact]
+    public void FlashPartitionEntry_StateTransitions_RaiseIsRunningNotifications()
+    {
+        var entry = new FlashPartitionEntry { Name = "boot" };
+        Assert.False(entry.IsRunning);
+        Assert.Equal(-1, entry.Percent);
+        var runningNotifications = 0;
+        entry.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(FlashPartitionEntry.IsRunning))
+            {
+                runningNotifications++;
+            }
+        };
+        entry.State = FlashRowState.Running;
+        Assert.True(entry.IsRunning);
+        entry.State = FlashRowState.Succeeded;
+        Assert.False(entry.IsRunning);
+        Assert.Equal(2, runningNotifications);
     }
 }

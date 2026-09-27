@@ -7,6 +7,31 @@ using UotanStudio.Services.Flash;
 namespace UotanStudio.ViewModels.Shell;
 
 /// <summary>
+/// <para>分区行在刷写流程中所处的阶段。</para>
+/// The stage a partition row has reached in the flash run.
+/// </summary>
+public enum FlashRowState
+{
+    /// <summary><para>未参与本次操作。</para>The row takes no part in the current run.</summary>
+    Idle,
+
+    /// <summary><para>已排队，等待轮到该分区。</para>The row is queued and waits for its turn.</summary>
+    Queued,
+
+    /// <summary><para>正在执行刷写、擦除或校验。</para>The row is flashing, erasing or verifying now.</summary>
+    Running,
+
+    /// <summary><para>该行的操作已成功结束。</para>The row's operation finished successfully.</summary>
+    Succeeded,
+
+    /// <summary><para>该行的操作失败。</para>The row's operation failed.</summary>
+    Failed,
+
+    /// <summary><para>因取消或前序失败而跳过。</para>The row was skipped after a cancellation or an earlier failure.</summary>
+    Skipped
+}
+
+/// <summary>
 /// <para>烧录页面的单个分区条目：勾选状态、fastboot 命令、分区名、大小与镜像文件。</para>
 /// A single partition row on the flash page: selection state, fastboot command, partition name, size and image file.
 /// </summary>
@@ -44,6 +69,26 @@ public sealed partial class FlashPartitionEntry : ObservableObject
     /// <summary><para>镜像完整路径，用于条目提示。</para>The full image path, used by the row tooltip.</summary>
     [ObservableProperty]
     private string _filePath = string.Empty;
+
+    /// <summary><para>该行在刷写流程中所处的阶段。</para>The stage this row has reached in the flash run.</summary>
+    [ObservableProperty]
+    private FlashRowState _state;
+
+    /// <summary><para>行内进度百分比，-1 表示当前没有可显示的进度。</para>The row progress percentage; -1 means there is no progress to show.</summary>
+    [ObservableProperty]
+    private int _percent = -1;
+
+    /// <summary><para>行内状态文本，由刷写流程按当前语言写入。</para>The row status text, written by the flash run in the current language.</summary>
+    [ObservableProperty]
+    private string _statusText = string.Empty;
+
+    /// <summary>
+    /// <para>该行是否正在执行；界面据此显示行内进度条，避免在绑定里比较枚举。</para>
+    /// Whether the row is executing; the UI shows its progress bar from this instead of comparing enums in bindings.
+    /// </summary>
+    public bool IsRunning => State == FlashRowState.Running;
+
+    partial void OnStateChanged(FlashRowState value) => OnPropertyChanged(nameof(IsRunning));
 }
 
 /// <summary>
@@ -91,6 +136,22 @@ public sealed partial class FlashViewModel : ObservableObject
     /// <summary><para>过滤后是否存在可显示的分区。</para>Whether the filtered list contains rows.</summary>
     [ObservableProperty]
     private bool _hasVisiblePartitions;
+
+    /// <summary><para>整轮操作的总体进度百分比。</para>The overall progress percentage of the whole run.</summary>
+    [ObservableProperty]
+    private double _overallPercent;
+
+    /// <summary><para>总体进度旁的说明文本。</para>The caption shown next to the overall progress bar.</summary>
+    [ObservableProperty]
+    private string _overallText = string.Empty;
+
+    /// <summary><para>当前选中设备的描述文本，未选中时显示占位提示。</para>The selected device's description; a placeholder when nothing is selected.</summary>
+    [ObservableProperty]
+    private string _selectedDeviceText = string.Empty;
+
+    /// <summary><para>页面是否正在执行会改变设备或列表状态的操作。</para>Whether the page is running an operation that changes the device or the list state.</summary>
+    [ObservableProperty]
+    private bool _isBusy;
 
     partial void OnSearchTextChanged(string value) => RefreshVisiblePartitions();
 

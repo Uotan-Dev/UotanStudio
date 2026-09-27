@@ -94,7 +94,7 @@
             <Border Name="PartitionPane" Grid.Row="2" Grid.Column="2"
                     CornerRadius="8" BorderThickness="1"
                     Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}">
-                <Grid RowDefinitions="Auto,Auto,*">
+                <Grid RowDefinitions="Auto,Auto,Auto,*">
                     <Grid Margin="12,8,8,4" ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="10">
                         <CheckBox Name="SelectAllBox" VerticalAlignment="Center"
                                   Content="{DynamicResource Flash_SelectAll}"
@@ -107,7 +107,14 @@
                                  Text="{Binding SearchText, Mode=TwoWay}"
                                  AutomationProperties.Name="{DynamicResource Flash_SearchPlaceholder}" />
                     </Grid>
-                    <Grid Grid.Row="2" Margin="12,0,12,12">
+                    <!-- 总进度行常驻，数值与说明文本由刷写流程写入，未开始时显示 0。 -->
+                    <!-- The overall row is always present; the flash run writes its value and caption, and it reads zero before a run starts. -->
+                    <Grid Grid.Row="1" Margin="12,4,12,0" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <ProgressBar Name="OverallProgress" Minimum="0" Maximum="100"
+                                     Value="{Binding OverallPercent}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="{Binding OverallText}" VerticalAlignment="Center" />
+                    </Grid>
+                    <Grid Grid.Row="3" Margin="12,0,12,12">
                         <DataGrid Name="PartitionGrid" ItemsSource="{Binding VisiblePartitions}"
                                   AutoGenerateColumns="False" CanUserResizeColumns="True" CanUserSortColumns="False"
                                   CanUserReorderColumns="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
@@ -156,6 +163,22 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Width="Auto" MinWidth="140" IsReadOnly="True">
+                                    <DataGridTemplateColumn.Header>
+                                        <TextBlock Text="{DynamicResource Flash_Status}" />
+                                    </DataGridTemplateColumn.Header>
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="vm:FlashPartitionEntry">
+                                            <Grid ColumnDefinitions="Auto,*">
+                                                <ProgressBar Width="90" VerticalAlignment="Center"
+                                                             Minimum="0" Maximum="100" Value="{Binding Percent}"
+                                                             IsVisible="{Binding IsRunning}" />
+                                                <TextBlock Grid.Column="1" Text="{Binding StatusText}"
+                                                           Margin="6,0" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
                         <!-- 空态覆盖在列表上：没有分区时提示先加载刷机包，而不是显示空表头。 -->
@@ -178,6 +201,8 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               AllowAutoHide="True">
                     <StackPanel Margin="12" Spacing="10">
+                        <TextBlock Name="DeviceStatusBar" Text="{Binding SelectedDeviceText}"
+                                   TextWrapping="Wrap" FontWeight="SemiBold" />
                         <TextBlock Text="{DynamicResource Flash_Basic}" FontWeight="SemiBold" />
                         <StackPanel Spacing="8">
                             <Button Name="ReadInfoButton" Classes="pane-action"
@@ -201,10 +226,10 @@
                                     Content="{DynamicResource Flash_Cancel}" />
                         </StackPanel>
                         <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
-                        <!-- 复选框按两列三行排布：列宽由网格统一决定，同一列的勾选框上下对齐。 -->
-                        <!-- Check boxes form two columns by three rows; the grid fixes the column widths so boxes in
+                        <!-- 复选框按两列四行排布：列宽由网格统一决定，同一列的勾选框上下对齐。 -->
+                        <!-- Check boxes form two columns by four rows; the grid fixes the column widths so boxes in
                              the same column line up instead of being centred per line. -->
-                        <Grid Name="FlashOptionGrid" RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,Auto"
+                        <Grid Name="FlashOptionGrid" RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="Auto,Auto"
                               RowSpacing="6" ColumnSpacing="12" HorizontalAlignment="Left">
                             <CheckBox Name="DisableVbmetaBox" Content="{DynamicResource Flash_DisableVbmeta}"
                                       HorizontalAlignment="Left" />
@@ -218,11 +243,50 @@
                                       HorizontalAlignment="Left" />
                             <CheckBox Grid.Row="2" Grid.Column="1" Name="RebootAfterBox"
                                       Content="{DynamicResource Flash_RebootAfter}" HorizontalAlignment="Left" />
+                            <CheckBox Grid.Row="3" Name="VerifyAfterFlashBox"
+                                      Content="{DynamicResource Flash_VerifyAfterFlash}" HorizontalAlignment="Left" />
                         </Grid>
                         <Button Name="ChooseRootPackageButton" Classes="pane-action"
                                 Click="OnChooseRootPackageClick"
                                 Content="{DynamicResource Flash_ChooseRootPackage}" />
                         <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
+                        <TextBlock Text="{DynamicResource Flash_Mtk}" FontWeight="SemiBold" />
+                        <!-- MTK 串口下载只在检测到 scatter 输入时出现，整块由接线代码控制可见性。 -->
+                        <!-- The MTK serial block only appears once scatter input is available; the wiring code owns its visibility. -->
+                        <StackPanel Name="MtkPane" Spacing="8" IsVisible="False">
+                            <ComboBox Name="MtkPortBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkPorts}" />
+                            <Button Name="RefreshMtkPortsButton" Classes="pane-action"
+                                    Click="OnRefreshMtkPortsClick"
+                                    Content="{DynamicResource Flash_MtkRefreshPorts}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkRefreshPorts}" />
+                            <Button Name="ChooseMtkDaButton" Classes="pane-action"
+                                    Click="OnChooseMtkDaClick"
+                                    Content="{DynamicResource Flash_MtkDaFile}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkDaFile}" />
+                            <TextBlock Name="MtkDaPathText" TextTrimming="CharacterEllipsis"
+                                       FontSize="12" Opacity="0.8" />
+                            <Button Name="ChooseMtkEmiButton" Classes="pane-action"
+                                    Click="OnChooseMtkEmiClick"
+                                    Content="{DynamicResource Flash_MtkEmiFile}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkEmiFile}" />
+                            <TextBlock Name="MtkEmiPathText" TextTrimming="CharacterEllipsis"
+                                       FontSize="12" Opacity="0.8" />
+                            <ComboBox Name="MtkEntryIndexBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkEntryIndex}" />
+                            <ComboBox Name="MtkStorageKindBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkStorageKind}" />
+                            <CheckBox Name="MtkAttachAgentBox" Content="{DynamicResource Flash_MtkAttachAgent}"
+                                      HorizontalAlignment="Left"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkAttachAgent}" />
+                            <Button Name="MtkFlashButton" Classes="pane-action"
+                                    Click="OnMtkFlashClick"
+                                    Content="{DynamicResource Flash_MtkFlash}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkFlash}" />
+                        </StackPanel>
                         <TextBlock Text="{DynamicResource Flash_Image}" FontWeight="SemiBold" />
                         <StackPanel Spacing="8">
                             <Button Name="ExtractSelectedButton" Classes="pane-action" IsEnabled="False"
