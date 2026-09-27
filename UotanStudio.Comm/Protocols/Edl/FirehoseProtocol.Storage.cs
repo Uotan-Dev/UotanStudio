@@ -216,6 +216,10 @@ public sealed partial class FirehoseProtocol
         if (response.IsAck)
         {
             response.StorageGeometry = report.Parse(physicalPartitionNumber);
+            if (response.StorageGeometry is { } geometry)
+            {
+                _lastGeometry = geometry;
+            }
         }
         return response;
     }

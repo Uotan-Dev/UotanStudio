@@ -84,7 +84,7 @@ internal static class FlashEdlBundleService
             var preflight = await orchestrator.FlashBundleAsync(option, null, ct).ConfigureAwait(false);
             if (!preflight.IsSuccess)
             {
-                throw new InvalidDataException(string.Join("; ", preflight.Errors));
+                throw new InvalidDataException(DescribeFailure(preflight));
             }
             option.DryRun = false;
         }
@@ -98,8 +98,25 @@ internal static class FlashEdlBundleService
         {
             if (!result.IsSuccess)
             {
-                throw new IOException(string.Join("; ", result.Errors));
+                throw new IOException(DescribeFailure(result));
             }
         }
+    }
+
+    /// <summary>
+    /// <para>从结构化执行证据构造失败说明：取消、首个失败、部分完成与重连需求分别来自
+    /// FinalOutcome/FailureKind/Items/RequiresReconnect，而不是解析响应文本。</para>
+    /// Builds the failure description from structured execution evidence: cancellation, first
+    /// failure, partial completion, and reconnect need come from FinalOutcome/FailureKind/Items/
+    /// RequiresReconnect rather than from parsed response text.
+    /// </summary>
+    private static string DescribeFailure(FlashBundleResult result)
+    {
+        var interrupted = result.Items.FirstOrDefault(item =>
+            item.Outcome is not UotanStudio.Comm.Protocols.Common.Evidence.CommandOutcomeKind.Completed);
+        return $"EDL bundle failed: outcome={result.FinalOutcome}, failure={(result.FailureKind?.ToString() ?? "unclassified")}, " +
+            $"item={(interrupted is null ? "-" : $"{interrupted.Kind}:{interrupted.Outcome}/{interrupted.FailureKind?.ToString() ?? "-"}")}, " +
+            $"requiresReconnect={result.RequiresReconnect}, acknowledgedBytes={result.TotalBytesWritten}, " +
+            $"programmerHash={(result.ResourceSha256Hex ?? "-")}. Detail: {string.Join("; ", result.Errors)}";
     }
 }

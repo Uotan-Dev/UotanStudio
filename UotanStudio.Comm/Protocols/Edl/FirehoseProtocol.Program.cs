@@ -73,6 +73,7 @@ public sealed partial class FirehoseProtocol
         long numSectors, string filename, int physicalPartition, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
+        RequireCapability(EdlFirehoseCommand.Program);
         if (dataStream == null)
         {
             throw new ArgumentNullException(nameof(dataStream));
@@ -87,6 +88,8 @@ public sealed partial class FirehoseProtocol
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+        var transferStarted = false;
+        var payloadSent = false;
         try
         {
             var credential = await GetOnePlusCommandTokenOwnedAsync("program", cancellationToken).ConfigureAwait(false);
@@ -94,12 +97,16 @@ public sealed partial class FirehoseProtocol
                 slot: EffectiveSlot, publicKey: credential.PublicKey, token: credential.Token);
             var ready = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
             RequireRawMode(ready, EdlErrorCode.ProgramFailed);
+            transferStarted = true;
             await SendProgramPayloadAsync(dataStream, totalBytes, payloadSize, cancellationToken);
-            return await ReceiveTransferCompletionAsync(EdlErrorCode.ProgramFailed, cancellationToken);
+            payloadSent = true;
+            var completion = await ReceiveTransferCompletionAsync(EdlErrorCode.ProgramFailed, cancellationToken);
+            return completion;
         }
-        catch
+        catch (Exception ex)
         {
             _faulted = true;
+            RecordFailure(ex, transferStarted, payloadSent);
             throw;
         }
     }
@@ -169,6 +176,7 @@ public sealed partial class FirehoseProtocol
         Action<long>? rangeCompleted = null)
     {
         ThrowIfDisposed();
+        RequireCapability(EdlFirehoseCommand.Sparse);
         ArgumentNullException.ThrowIfNull(sparseStream);
         if (!sparseStream.CanSeek || !sparseStream.CanRead)
         {
@@ -292,6 +300,7 @@ public sealed partial class FirehoseProtocol
         int physicalPartition, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
+        RequireCapability(EdlFirehoseCommand.Erase);
         startSector.ValidateRange(numSectors);
         ValidateStorageRange(0, numSectors, physicalPartition);
         var xml = FirehoseXmlBuilder.BuildErase(Configuration.SectorSize, numSectors, physicalPartition, startSector, EffectiveSlot);
@@ -364,6 +373,7 @@ public sealed partial class FirehoseProtocol
         long byteOffset, string value, long sizeInBytes, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
+        RequireCapability(EdlFirehoseCommand.Patch);
         var address = ValidatePatch(Configuration.SectorSize, filename, physicalPartition, startSector, byteOffset, value, sizeInBytes);
         var credential = await GetOnePlusCommandTokenOwnedAsync("patch", cancellationToken).ConfigureAwait(false);
         var xml = FirehoseXmlBuilder.BuildPatch(Configuration.SectorSize, filename, physicalPartition, address, byteOffset,
@@ -421,6 +431,7 @@ public sealed partial class FirehoseProtocol
         string zeroFilename, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
+        RequireCapability(EdlFirehoseCommand.Wipe);
         Log($"Sending <wipe> (program-with-zeros) pp={physicalPartition}, start={startSector}, sectors={numSectors}");
         using var zeros = new ZeroFilledStream();
         return await ProgramCoreAsync(zeros, new FirehoseSectorAddress(startSector, false), numSectors,

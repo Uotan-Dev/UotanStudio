@@ -3,14 +3,43 @@ using UotanStudio.Comm.Protocols.Edl;
 
 namespace UotanStudio.Services.Devices;
 
-/// <summary>Preserves probe handshakes until the next operation on the same physical endpoint.</summary>
+/// <summary>
+/// <para>Preserves probe handshakes until the next operation on the same physical endpoint. A
+/// parked lease is reusable only when it carries a typed EDL session whose connection is still
+/// live and, when a generation probe is wired, its transport generation still matches the
+/// controller's current generation for that physical identity; a different generation means the
+/// transport instantiation is gone, so the lease is retired and reopened instead of trusting
+/// <c>IsConnected</c> alone.</para>
+/// Preserves probe handshakes until the next operation on the same physical endpoint. A parked
+/// lease is reusable only when <c>TryGetSession</c> yields a typed EDL session reporting a live
+/// connection and the optional generation probe still matches the lease's transport generation;
+/// a generation mismatch retires the lease and reopens rather than relying on <c>IsConnected</c>
+/// alone.
+/// </summary>
+/// <param name="open">Opens a fresh lease for the endpoint.</param>
+/// <param name="changed">Notifies the owner of publishable state changes.</param>
+/// <param name="leaseIsCurrent">Reports whether a parked lease's transport generation still matches
+/// the controller's current generation for the same physical identity; without contrary evidence
+/// the lease is kept.</param>
 internal sealed class EdlConnectionCache(
     Func<DetectedDevice, CancellationToken, Task<DeviceLease>> open,
-    Action changed) : IDisposable
+    Action changed,
+    Func<DeviceLease, bool>? leaseIsCurrent = null) : IDisposable
 {
     private readonly Lock _gate = new();
     private readonly Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
     private bool _disposed;
+
+    /// <summary>
+    /// <para>可选的代际判活探针，由宿主在服务构造后惰性接线（构造点位于监视器主文件时无法在
+    /// 其它文件传参）；与构造参数同时存在时构造参数优先。探针缺失时仅按类型化会话与连接状态
+    /// 判活。</para>
+    /// Optional generation-liveness probe wired lazily by the host after construction (the
+    /// construction site may live in a file the wiring cannot touch); the constructor delegate
+    /// wins when both are present. Without any probe liveness falls back to the typed session and
+    /// its connection state only.
+    /// </summary>
+    internal Func<DeviceLease, bool>? LeaseCurrentProbe { get; set; }
 
     private sealed class Entry
     {
@@ -18,6 +47,17 @@ internal sealed class EdlConnectionCache(
         internal DeviceLease? Parked;
         internal volatile EdlProtocolState State;
         internal volatile bool Removed;
+    }
+
+    private bool LeaseIsLive(DeviceLease lease)
+    {
+        if (!lease.TryGetSession<EdlSession>(out var session) || !session.IsConnected)
+        {
+            return false;
+        }
+
+        var probe = leaseIsCurrent ?? LeaseCurrentProbe;
+        return probe is null || probe(lease);
     }
 
     internal EdlProtocolState GetState(string key)
@@ -59,7 +99,7 @@ internal sealed class EdlConnectionCache(
             {
                 return EdlProtocolState.Unknown;
             }
-            if (entry.Parked?.Session is EdlSession { IsConnected: false })
+            if (entry.Parked is { } parked && !LeaseIsLive(parked))
             {
                 await entry.Parked.DisposeAsync().ConfigureAwait(false);
                 entry.Parked = null;
@@ -99,7 +139,7 @@ internal sealed class EdlConnectionCache(
             }
             lease = entry.Parked;
             entry.Parked = null;
-            if (lease?.Session is EdlSession { IsConnected: false })
+            if (lease is not null && !LeaseIsLive(lease))
             {
                 await lease.DisposeAsync().ConfigureAwait(false);
                 lease = null;

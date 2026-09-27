@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Edl;
@@ -279,6 +280,27 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     private int _rxBufferBytes;
     private volatile bool _disposed;
     private volatile bool _faulted;
+    private volatile EdlFailureKind _lastFailureKind;
+    private FirehoseCapabilitySnapshot? _capabilitySnapshot;
+    private FirehoseStorageGeometry? _lastGeometry;
+    private FirehoseResponse? _lastConfigureAck;
+
+    /// <summary>
+    /// Gets the immutable capability snapshot negotiated by the latest successful configure, or
+    /// <see langword="null"/> before the first configure completes.
+    /// <para>获取最近一次成功 configure 协商得到的不可变能力快照；首次 configure 完成前为
+    /// <see langword="null"/>。</para>
+    /// </summary>
+    /// <value>The snapshot guarding high-risk storage commands. <para>守卫高风险存储命令的快照。</para></value>
+    public FirehoseCapabilitySnapshot? Capabilities => _capabilitySnapshot;
+
+    /// <summary>
+    /// Gets the typed classification of the most recent failure observed by this protocol instance.
+    /// <para>获取本协议实例最近一次观测到的失败的类型化分类。</para>
+    /// </summary>
+    /// <value>The failure kind, or <see cref="EdlFailureKind.None"/> when no failure was observed.
+    /// <para>失败种类；未观测到失败时为 <see cref="EdlFailureKind.None"/>。</para></value>
+    public EdlFailureKind LastFailureKind => _lastFailureKind;
 
     /// <summary>
     /// Gets whether an uncertain transfer or acknowledged power command requires a new device session.
@@ -426,12 +448,14 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             }
 
             Log($"Configure OK: MaxPayload={Configuration.MaxPayloadSizeToTarget}, FromTarget={Configuration.MaxPayloadSizeFromTarget}");
+            _lastConfigureAck = response;
 
             if (!deferStorageDetection)
             {
                 await CompleteStorageConfigurationOwnedAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            CaptureCapabilities();
             return response;
         }
 
@@ -444,6 +468,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         if (_vip is not null)
         {
             ValidateVipPayloadSize();
+            CaptureCapabilities();
             return;
         }
         if (Configuration.AutoDetectSectorSize && Configuration.SectorSize == 0)
@@ -453,6 +478,63 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         else if (Configuration.SectorSize == 0)
         {
             Configuration.SectorSize = EdlConstants.DefaultSectorSizeSmall;
+        }
+
+        CaptureCapabilities();
+    }
+
+    /// <summary>
+    /// Freezes the negotiated capability snapshot from the latest configure acknowledgement.
+    /// <para>依据最近的 configure 确认应答定格协商得到的能力快照。</para>
+    /// </summary>
+    private void CaptureCapabilities()
+    {
+        if (_lastConfigureAck is { IsAck: true, IsRawMode: false } ack)
+        {
+            _capabilitySnapshot = FirehoseCapabilitySnapshot.FromConfigureAck(ack, Configuration, _lastGeometry,
+                _faulted, DateTimeOffset.UtcNow);
+        }
+    }
+
+    /// <summary>
+    /// Refuses a command before any byte reaches the wire when the negotiated snapshot exists and
+    /// does not report positive support. An absent snapshot means the caller drove the low-level
+    /// protocol without configuring; session entry points always configure first.
+    /// <para>当已协商的快照存在且未明确报告支持时，在任何字节上线之前拒绝该命令。快照缺失表示
+    /// 调用方在未 configure 的情况下直接驱动底层协议；会话入口总是先 configure。</para>
+    /// </summary>
+    /// <param name="command">The command about to be sent. <para>即将发送的命令。</para></param>
+    /// <exception cref="EdlException">Thrown when the snapshot reports the capability as unknown or
+    /// unsupported. <para>快照报告能力未知或不支持时抛出。</para></exception>
+    private void RequireCapability(EdlFirehoseCommand command)
+    {
+        var snapshot = _capabilitySnapshot;
+        if (snapshot is not null && snapshot.For(command) != FeatureSupport.Supported)
+        {
+            var kind = snapshot.For(command);
+            _lastFailureKind = EdlFailureKind.CapabilityNotReported;
+            throw new EdlException(EdlErrorCode.NotSupported,
+                $"The configure response did not report positive support for {command} (state {kind}); the command was refused before any byte was sent.")
+            {
+                FailureKind = EdlFailureKind.CapabilityNotReported
+            };
+        }
+    }
+
+    /// <summary>
+    /// Records the typed classification for an observed failure without changing its propagation.
+    /// <para>为观测到的失败记录类型化分类，不改变其传播方式。</para>
+    /// </summary>
+    /// <param name="error">The observed exception. <para>观测到的异常。</para></param>
+    /// <param name="transferStarted">Whether raw-mode transfer had begun. <para>原始模式传输是否已开始。</para></param>
+    /// <param name="payloadSent">Whether a complete raw payload had already been written. <para>完整原始载荷是否已写入。</para></param>
+    private void RecordFailure(Exception error, bool transferStarted = false, bool payloadSent = false)
+    {
+        var kind = EdlFailureClassification.ClassifyTransfer(error, transferStarted, payloadSent);
+        _lastFailureKind = kind;
+        if (error is EdlException edl && edl.FailureKind is null)
+        {
+            edl.FailureKind = kind;
         }
     }
 
@@ -533,9 +615,10 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             await WriteDataAsync(xmlBytes, writeTimeoutMs ?? GetZlpTimeoutMs(), cancellationToken);
             return await ReceiveResponseAsync(cancellationToken, responseTimeoutMs, logObserver, blockObserver);
         }
-        catch
+        catch (Exception ex)
         {
             _faulted = true;
+            RecordFailure(ex);
             throw;
         }
     }

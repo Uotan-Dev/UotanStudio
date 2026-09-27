@@ -1,4 +1,6 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
+using UotanStudio.Comm.Protocols.Common.Evidence;
 
 namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 
@@ -33,6 +35,7 @@ public sealed partial class FlashBundleOrchestrator
                     }
 
                     RaiseProgress(progress, FlashBundlePhase.Erasing, $"Erasing {displayName}... 擦除 {displayName}...", i, total);
+                    var eraseStarted = Stopwatch.GetTimestamp();
                     try
                     {
                         if (!options.DryRun)
@@ -45,26 +48,41 @@ public sealed partial class FlashBundleOrchestrator
                             if (!response.IsAck)
                             {
                                 throw new EdlException(EdlErrorCode.EraseFailed,
-                                    $"Erase failed for '{displayName}'. Response: {response.RawValue} 擦除失败。");
+                                    $"Erase failed for '{displayName}'. Response: {response.RawValue} 擦除失败。")
+                                {
+                                    FailureKind = EdlFailureKind.Rejected
+                                };
                             }
 
                             touchedPartitions.Add(entry.PhysicalPartitionNumber);
                         }
 
                         result.EraseEntriesProcessed++;
+                        RecordItem(result, FlashBundleItemKind.Erase, entry, sectorSize,
+                            CommandOutcomeKind.Completed, firehose, eraseStarted);
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
+                        RecordFailureItem(result, FlashBundleItemKind.Erase, entry, sectorSize, firehose, ex, eraseStarted);
+                        result.FailureKind ??= FailureKindOf(ex, firehose);
+                        result.RequiresReconnect = firehose.RequiresReconnect;
                         result.Errors.Add($"Erase failed for '{displayName}': {ex.Message} 擦除失败。");
                         result.ProgramEntriesSkipped++;
                         RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, i, total);
                         return false;
+                    }
+                    catch (OperationCanceledException ex)
+                    {
+                        RecordFailureItem(result, FlashBundleItemKind.Erase, entry, sectorSize, firehose, ex, eraseStarted);
+                        throw;
                     }
 
                     continue;
                 }
 
                 RaiseProgress(progress, FlashBundlePhase.Programming, $"Programming {displayName}... 编程 {displayName}...", i, total);
+                var programStarted = Stopwatch.GetTimestamp();
+                long itemAcked = 0;
                 try
                 {
                     if (options.DryRun)
@@ -75,16 +93,30 @@ public sealed partial class FlashBundleOrchestrator
 
                     var source = sources?.Get(entry) ?? throw new InvalidOperationException("The bundle source was not retained.");
                     await FlashProgramEntryAsync(entry, source, sectorSize,
-                        bytes => result.TotalBytesWritten = checked(result.TotalBytesWritten + bytes), cancellationToken).ConfigureAwait(false);
+                        bytes =>
+                        {
+                            itemAcked = checked(itemAcked + bytes);
+                            result.TotalBytesWritten = checked(result.TotalBytesWritten + bytes);
+                        }, cancellationToken).ConfigureAwait(false);
                     result.ProgramEntriesProcessed++;
                     touchedPartitions.Add(entry.PhysicalPartitionNumber);
+                    RecordItem(result, FlashBundleItemKind.Program, entry, sectorSize, CommandOutcomeKind.Completed,
+                        firehose, programStarted, itemAcked);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
+                    RecordFailureItem(result, FlashBundleItemKind.Program, entry, sectorSize, firehose, ex, programStarted, itemAcked);
+                    result.FailureKind ??= FailureKindOf(ex, firehose);
+                    result.RequiresReconnect = firehose.RequiresReconnect;
                     result.Errors.Add($"Program failed for '{displayName}': {ex.Message} 编程失败。");
                     result.ProgramEntriesSkipped++;
                     RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, i, total);
                     return false;
+                }
+                catch (OperationCanceledException ex)
+                {
+                    RecordFailureItem(result, FlashBundleItemKind.Program, entry, sectorSize, firehose, ex, programStarted, itemAcked);
+                    throw;
                 }
             }
         }
@@ -103,6 +135,7 @@ public sealed partial class FlashBundleOrchestrator
                 var displayName = string.IsNullOrEmpty(entry.Label) ? entry.Filename : entry.Label;
 
                 RaiseProgress(progress, FlashBundlePhase.Patching, $"Patching {displayName}... 修补 {displayName}...", i, total);
+                var patchStarted = Stopwatch.GetTimestamp();
                 try
                 {
                     if (!options.DryRun)
@@ -118,18 +151,30 @@ public sealed partial class FlashBundleOrchestrator
                         if (!response.IsAck)
                         {
                             throw new EdlException(EdlErrorCode.ProgramFailed,
-                                $"Patch failed for '{displayName}'. Response: {response.RawValue} 修补失败。");
+                                $"Patch failed for '{displayName}'. Response: {response.RawValue} 修补失败。")
+                            {
+                                FailureKind = EdlFailureKind.Rejected
+                            };
                         }
                     }
 
                     result.PatchEntriesProcessed++;
+                    RecordPatchItem(result, entry, sectorSize, CommandOutcomeKind.Completed, firehose, patchStarted);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
+                    RecordPatchItem(result, entry, sectorSize, OutcomeOf(ex), firehose, ex, patchStarted);
+                    result.FailureKind ??= FailureKindOf(ex, firehose);
+                    result.RequiresReconnect = firehose.RequiresReconnect;
                     result.Errors.Add($"Patch failed for '{displayName}': {ex.Message} 修补失败。");
                     result.PatchEntriesSkipped++;
                     RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, i, total);
                     return false;
+                }
+                catch (OperationCanceledException ex)
+                {
+                    RecordPatchItem(result, entry, sectorSize, OutcomeOf(ex), firehose, ex, patchStarted);
+                    throw;
                 }
             }
         }
@@ -146,6 +191,7 @@ public sealed partial class FlashBundleOrchestrator
                 var partition = targets[i];
                 RaiseProgress(progress, FlashBundlePhase.Wiping,
                     $"Wiping first {options.WipeFirstSectors} sectors of partition {partition}... 擦写分区 {partition} 前 {options.WipeFirstSectors} 个扇区...", i, targets.Length);
+                var wipeStarted = Stopwatch.GetTimestamp();
                 try
                 {
                     if (!options.DryRun)
@@ -155,18 +201,31 @@ public sealed partial class FlashBundleOrchestrator
                         if (!response.IsAck)
                         {
                             throw new EdlException(EdlErrorCode.ProgramFailed,
-                                $"Wipe failed for partition {partition}. Response: {response.RawValue} 擦写失败。");
+                                $"Wipe failed for partition {partition}. Response: {response.RawValue} 擦写失败。")
+                            {
+                                FailureKind = EdlFailureKind.Rejected
+                            };
                         }
                     }
 
                     result.WipeEntriesProcessed++;
                     result.TotalBytesWritten = checked(result.TotalBytesWritten + checked(options.WipeFirstSectors * sectorSize));
+                    RecordWipeItem(result, partition, options.WipeFirstSectors, sectorSize, CommandOutcomeKind.Completed,
+                        firehose, wipeStarted, options.Slot);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
+                    RecordWipeItem(result, partition, options.WipeFirstSectors, sectorSize, OutcomeOf(ex), firehose, ex, wipeStarted, options.Slot);
+                    result.FailureKind ??= FailureKindOf(ex, firehose);
+                    result.RequiresReconnect = firehose.RequiresReconnect;
                     result.Errors.Add($"Wipe failed for partition {partition}: {ex.Message} 擦写失败。");
                     RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, i, targets.Length);
                     return false;
+                }
+                catch (OperationCanceledException ex)
+                {
+                    RecordWipeItem(result, partition, options.WipeFirstSectors, sectorSize, OutcomeOf(ex), firehose, ex, wipeStarted, options.Slot);
+                    throw;
                 }
             }
         }
@@ -174,6 +233,7 @@ public sealed partial class FlashBundleOrchestrator
         if (ufsProvision != null)
         {
             RaiseProgress(progress, FlashBundlePhase.UfsProvisioning, "Provisioning UFS... 配置 UFS...", 0, 1);
+            var ufsStarted = Stopwatch.GetTimestamp();
             try
             {
                 if (!options.DryRun)
@@ -182,20 +242,186 @@ public sealed partial class FlashBundleOrchestrator
                     if (!response.IsAck)
                     {
                         throw new EdlException(EdlErrorCode.UfsProvisioningFailed,
-                            $"UFS provisioning failed. Response: {response.RawValue} UFS 配置失败。");
+                            $"UFS provisioning failed. Response: {response.RawValue} UFS 配置失败。")
+                        {
+                            FailureKind = EdlFailureKind.Rejected
+                        };
                     }
                 }
 
                 result.UfsProvisioned = true;
+                result.Record(new FlashItemEvidence
+                {
+                    Kind = FlashBundleItemKind.UfsProvision,
+                    Outcome = CommandOutcomeKind.Completed,
+                    RequiresReconnect = firehose.RequiresReconnect,
+                    ElapsedMs = (long)Stopwatch.GetElapsedTime(ufsStarted).TotalMilliseconds
+                });
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                result.Record(new FlashItemEvidence
+                {
+                    Kind = FlashBundleItemKind.UfsProvision,
+                    Outcome = OutcomeOf(ex),
+                    FailureKind = FailureKindOf(ex, firehose),
+                    RequiresReconnect = firehose.RequiresReconnect,
+                    ElapsedMs = (long)Stopwatch.GetElapsedTime(ufsStarted).TotalMilliseconds
+                });
+                result.FailureKind ??= FailureKindOf(ex, firehose);
+                result.RequiresReconnect = firehose.RequiresReconnect;
                 result.Errors.Add($"UFS provisioning failed: {ex.Message} UFS 配置失败。");
                 RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, 0, 1);
                 return false;
             }
+            catch (OperationCanceledException ex)
+            {
+                result.Record(new FlashItemEvidence
+                {
+                    Kind = FlashBundleItemKind.UfsProvision,
+                    Outcome = CommandOutcomeKind.Cancelled,
+                    FailureKind = FailureKindOf(ex, firehose),
+                    RequiresReconnect = firehose.RequiresReconnect,
+                    ElapsedMs = (long)Stopwatch.GetElapsedTime(ufsStarted).TotalMilliseconds
+                });
+                throw;
+            }
         }
         return true;
+    }
+
+    private static CommandOutcomeKind OutcomeOf(Exception error) => error switch
+    {
+        OperationCanceledException => CommandOutcomeKind.Cancelled,
+        TimeoutException => CommandOutcomeKind.Timeout,
+        EdlException { FailureKind: EdlFailureKind.CompletionLost or EdlFailureKind.ExecutionUnknown } => CommandOutcomeKind.Unknown,
+        EdlException { ErrorCode: EdlErrorCode.ConnectionLost } => CommandOutcomeKind.ConnectionLost,
+        EdlException { ErrorCode: EdlErrorCode.ReadPortTimeout or EdlErrorCode.WritePortTimeout or EdlErrorCode.TransportTimeout } => CommandOutcomeKind.Timeout,
+        EdlException => CommandOutcomeKind.Rejected,
+        _ => CommandOutcomeKind.Rejected
+    };
+
+    private static EdlFailureKind FailureKindOf(Exception error, FirehoseProtocol firehose)
+    {
+        var classified = EdlFailureClassification.Classify(error);
+        return classified == EdlFailureKind.Cancelled && firehose.LastFailureKind is not EdlFailureKind.None
+            ? firehose.LastFailureKind
+            : classified;
+    }
+
+    private static void RecordItem(FlashBundleResult result, FlashBundleItemKind kind, RawProgramEntry entry,
+        long sectorSize, CommandOutcomeKind outcome, FirehoseProtocol firehose, long startedTimestamp, long ackedBytes = 0)
+    {
+        result.Record(new FlashItemEvidence
+        {
+            Kind = kind,
+            FileName = entry.Filename,
+            Label = entry.Label,
+            Range = TryProgramRange(entry, sectorSize),
+            Outcome = outcome,
+            RequiresReconnect = firehose.RequiresReconnect,
+            AcknowledgedBytes = ackedBytes,
+            ElapsedMs = (long)Stopwatch.GetElapsedTime(startedTimestamp).TotalMilliseconds
+        });
+    }
+
+    private static void RecordFailureItem(FlashBundleResult result, FlashBundleItemKind kind, RawProgramEntry entry,
+        long sectorSize, FirehoseProtocol firehose, Exception error, long startedTimestamp, long ackedBytes = 0)
+    {
+        result.Record(new FlashItemEvidence
+        {
+            Kind = kind,
+            FileName = entry.Filename,
+            Label = entry.Label,
+            Range = TryProgramRange(entry, sectorSize),
+            Outcome = OutcomeOf(error),
+            FailureKind = FailureKindOf(error, firehose),
+            RequiresReconnect = firehose.RequiresReconnect,
+            AcknowledgedBytes = ackedBytes,
+            ElapsedMs = (long)Stopwatch.GetElapsedTime(startedTimestamp).TotalMilliseconds
+        });
+    }
+
+    private static void RecordPatchItem(FlashBundleResult result, PatchEntry entry, long sectorSize,
+        CommandOutcomeKind outcome, FirehoseProtocol firehose, long startedTimestamp)
+    {
+        result.Record(new FlashItemEvidence
+        {
+            Kind = FlashBundleItemKind.Patch,
+            FileName = entry.Filename,
+            Label = entry.Label,
+            Range = TryPatchRange(entry, sectorSize),
+            Outcome = outcome,
+            RequiresReconnect = firehose.RequiresReconnect,
+            ElapsedMs = (long)Stopwatch.GetElapsedTime(startedTimestamp).TotalMilliseconds
+        });
+    }
+
+    private static void RecordPatchItem(FlashBundleResult result, PatchEntry entry, long sectorSize,
+        CommandOutcomeKind outcome, FirehoseProtocol firehose, Exception error, long startedTimestamp)
+    {
+        result.Record(new FlashItemEvidence
+        {
+            Kind = FlashBundleItemKind.Patch,
+            FileName = entry.Filename,
+            Label = entry.Label,
+            Range = TryPatchRange(entry, sectorSize),
+            Outcome = outcome,
+            FailureKind = FailureKindOf(error, firehose),
+            RequiresReconnect = firehose.RequiresReconnect,
+            ElapsedMs = (long)Stopwatch.GetElapsedTime(startedTimestamp).TotalMilliseconds
+        });
+    }
+
+    private static void RecordWipeItem(FlashBundleResult result, int partition, long sectors, long sectorSize,
+        CommandOutcomeKind outcome, FirehoseProtocol firehose, long startedTimestamp, int? slot)
+    {
+        result.Record(new FlashItemEvidence
+        {
+            Kind = FlashBundleItemKind.Wipe,
+            Range = new EdlPhysicalRange(0, sectors, partition, sectorSize, StorageSlot: slot, StartSectorExpression: "0"),
+            Outcome = outcome,
+            RequiresReconnect = firehose.RequiresReconnect,
+            AcknowledgedBytes = outcome == CommandOutcomeKind.Completed ? checked(sectors * sectorSize) : 0,
+            ElapsedMs = (long)Stopwatch.GetElapsedTime(startedTimestamp).TotalMilliseconds
+        });
+    }
+
+    private static void RecordWipeItem(FlashBundleResult result, int partition, long sectors, long sectorSize,
+        CommandOutcomeKind outcome, FirehoseProtocol firehose, Exception error, long startedTimestamp, int? slot)
+    {
+        result.Record(new FlashItemEvidence
+        {
+            Kind = FlashBundleItemKind.Wipe,
+            Range = Try(() => new EdlPhysicalRange(0, sectors, partition, sectorSize, StorageSlot: slot, StartSectorExpression: "0")),
+            Outcome = outcome,
+            FailureKind = FailureKindOf(error, firehose),
+            RequiresReconnect = firehose.RequiresReconnect,
+            ElapsedMs = (long)Stopwatch.GetElapsedTime(startedTimestamp).TotalMilliseconds
+        });
+    }
+
+    private static EdlPhysicalRange? TryProgramRange(RawProgramEntry entry, long sectorSize) => Try(() =>
+        EdlPhysicalRange.Parse(entry.StartSector, entry.NumPartitionSectors > 0 ? entry.NumPartitionSectors : 1,
+            entry.PhysicalPartitionNumber, sectorSize, entry.Slot));
+
+    private static EdlPhysicalRange? TryPatchRange(PatchEntry entry, long sectorSize) => Try(() =>
+        EdlPhysicalRange.Parse(entry.StartSector, 1, entry.PhysicalPartitionNumber, sectorSize, entry.Slot));
+
+    private static EdlPhysicalRange? Try(Func<EdlPhysicalRange> build)
+    {
+        try
+        {
+            return build();
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+        catch (OverflowException)
+        {
+            return null;
+        }
     }
 
     private async Task FlashProgramEntryAsync(

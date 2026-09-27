@@ -130,6 +130,9 @@ public class FlashBundleCapacityTests
     private static ScriptedCommTransport CreateTransport(string failure)
     {
         const string ack = "<data><response value='ACK' rawmode='false'/></data>";
+        const string configureAck = """
+            <data><response value='ACK' rawmode='false' MaxPayloadSizeToTargetInBytes='1048576' Erase='true' Patch='true' Wipe='true' UfsProvisioning='true'/></data>
+            """;
         var transport = new ScriptedCommTransport();
         transport.Enqueue("<?xml version='1.0'?><data></data>".PadRight(48));
         transport.OnWrite = bytes =>
@@ -139,6 +142,10 @@ public class FlashBundleCapacityTests
                 return [Encoding.UTF8.GetBytes(ack)];
             }
             var command = XDocument.Parse(Encoding.UTF8.GetString(bytes)).Root!.Elements().Single();
+            if (command.Name == "configure")
+            {
+                return [Encoding.UTF8.GetBytes(configureAck)];
+            }
             if (command.Name == "getstorageinfo")
             {
                 if (failure == "missing")

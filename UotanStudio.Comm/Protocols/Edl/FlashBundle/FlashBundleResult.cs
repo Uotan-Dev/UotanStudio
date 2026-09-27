@@ -1,8 +1,11 @@
+using UotanStudio.Comm.Protocols.Common.Evidence;
+
 namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 
 /// <summary>
-/// Result of a flash bundle operation, containing processing statistics and error information.
-/// <para>固件刷写包操作的执行结果，包含处理统计和错误信息。</para>
+/// Result of a flash bundle operation, containing processing statistics, error information, and
+/// structured per-item execution evidence.
+/// <para>固件刷写包操作的执行结果，包含处理统计、错误信息与逐条目结构化执行证据。</para>
 /// </summary>
 public sealed class FlashBundleResult
 {
@@ -99,6 +102,94 @@ public sealed class FlashBundleResult
     /// <value>Wall-clock time from bundle entry to exit, recorded even when the run failed.
     /// <para>从进入本包到退出的挂钟时间，运行失败时同样记录。</para></value>
     public TimeSpan ElapsedTime { get; set; }
+
+    /// <summary>
+    /// Gets the structured per-item execution evidence produced by this run.
+    /// <para>获取本次运行产出的逐条目结构化执行证据。</para>
+    /// </summary>
+    /// <value>One entry per attempted storage item and per device preflight partition; consumers
+    /// distinguish cancellation, first failure, and partial completion from the recorded
+    /// <see cref="FlashItemEvidence.Outcome"/> rather than from <see cref="Errors"/> text.
+    /// <para>每个已尝试的存储条目与每个设备预检分区各一条；消费者依据记录的
+    /// <see cref="FlashItemEvidence.Outcome"/> 区分取消、首个失败与部分完成，而不是
+    /// <see cref="Errors"/> 文本。</para></value>
+    public IReadOnlyList<FlashItemEvidence> Items => ItemsSource;
+
+    /// <summary>
+    /// Gets the outcome of the last recorded storage item, or <see cref="CommandOutcomeKind.Unknown"/>
+    /// when nothing was attempted.
+    /// <para>获取最后一个已记录存储条目的结果；未尝试任何条目时为
+    /// <see cref="CommandOutcomeKind.Unknown"/>。</para>
+    /// </summary>
+    public CommandOutcomeKind FinalOutcome => ItemsSource.Count == 0
+        ? CommandOutcomeKind.Unknown
+        : ItemsSource[^1].Outcome;
+
+    /// <summary>
+    /// Gets whether every recorded storage item completed with a device acknowledgement.
+    /// <para>获取是否每个已记录存储条目均以设备确认完成。</para>
+    /// </summary>
+    /// <value><see langword="true"/> only for a non-empty item list whose every outcome is
+    /// <see cref="CommandOutcomeKind.Completed"/>. <para>仅当条目列表非空且每项结果均为
+    /// <see cref="CommandOutcomeKind.Completed"/> 时为 <see langword="true"/>。</para></value>
+    public bool AllPhasesCompleted => ItemsSource.Count > 0
+        && ItemsSource.TrueForAll(static item => item.Outcome == CommandOutcomeKind.Completed);
+
+    /// <summary>
+    /// Gets or sets whether the run ended with device-side state that requires a reconnect before
+    /// any retry.
+    /// <para>获取或设置本次运行是否结束于需先重连才能重试的设备端状态。</para>
+    /// </summary>
+    /// <value><see langword="true"/> after a cancelled mid-transfer, a lost completion, or a faulted
+    /// transport; <see langword="false"/> for clean success and plain device rejections.
+    /// <para>传输中途取消、完成确认丢失或传输故障后为 <see langword="true"/>；完全成功与单纯的
+    /// 设备拒绝均为 <see langword="false"/>。</para></value>
+    public bool RequiresReconnect { get; set; }
+
+    /// <summary>
+    /// Gets or sets the typed classification of the first fatal failure of this run.
+    /// <para>获取或设置本次运行首个致命失败的类型化分类。</para>
+    /// </summary>
+    /// <value>The failure kind, or <see langword="null"/> when nothing failed.
+    /// <para>失败种类；未失败时为 <see langword="null"/>。</para></value>
+    public EdlFailureKind? FailureKind { get; set; }
+
+    /// <summary>
+    /// Gets or sets the SHA-256 identity of the programmer the run executed against, when the session
+    /// recorded one.
+    /// <para>获取或设置本次运行所针对 programmer 的 SHA-256 身份（会话已记录时）。</para>
+    /// </summary>
+    public string? ResourceSha256Hex { get; set; }
+
+    /// <summary>
+    /// Gets or sets the transport generation the capability snapshot was negotiated on, when known.
+    /// <para>获取或设置能力快照协商所在的传输代际（已知时）。</para>
+    /// </summary>
+    public ulong? TransportGeneration { get; set; }
+
+    /// <summary>
+    /// Gets or sets the UTC instant at which the run was entered.
+    /// <para>获取或设置进入本次运行的 UTC 时刻。</para>
+    /// </summary>
+    public DateTimeOffset StartedAtUtc { get; set; }
+
+    /// <summary>
+    /// Gets or sets the UTC instant at which the run finished, failed, or was cancelled.
+    /// <para>获取或设置本次运行完成、失败或取消的 UTC 时刻。</para>
+    /// </summary>
+    public DateTimeOffset CompletedAtUtc { get; set; }
+
+    /// <summary>
+    /// Gets the shared-vocabulary evidence projected from the structured items.
+    /// <para>获取由结构化条目投影出的共享词汇证据。</para>
+    /// </summary>
+    /// <value>One <see cref="ProtocolEvidence"/> per recorded item, in execution order.
+    /// <para>每个已记录条目一条 <see cref="ProtocolEvidence"/>，按执行顺序排列。</para></value>
+    public IReadOnlyList<ProtocolEvidence> Evidence => [.. ItemsSource.Select(static item => item.ToEvidence())];
+
+    internal List<FlashItemEvidence> ItemsSource { get; } = [];
+
+    internal void Record(FlashItemEvidence item) => ItemsSource.Add(item);
 
     /// <summary>
     /// Returns a string representation of the result.

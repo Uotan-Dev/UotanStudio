@@ -8,6 +8,7 @@ namespace UotanStudio.Tests.Comm.Protocols.Edl;
 public sealed class FirehoseVipTests
 {
     private const string Ack = "<data><response value=\"ACK\"/></data>";
+    private const string ConfigureAck = "<data><response value=\"ACK\" MaxPayloadSizeToTargetInBytes=\"512\" Erase=\"true\" Patch=\"true\" Wipe=\"true\" UfsProvisioning=\"true\"/></data>";
     private const string RawAck = "<data><response value=\"ACK\" rawmode=\"true\"/></data>";
 
     [Fact]
@@ -53,7 +54,7 @@ public sealed class FirehoseVipTests
     {
         using var transport = new ScriptedCommTransport();
         transport.Enqueue(Ack);
-        transport.Enqueue(Ack);
+        transport.Enqueue(ConfigureAck);
         transport.Enqueue(RawAck);
         transport.Enqueue(Ack);
         transport.Enqueue(Ack);
@@ -82,7 +83,7 @@ public sealed class FirehoseVipTests
     {
         using var transport = new ScriptedCommTransport();
         transport.Enqueue(Ack);
-        transport.Enqueue(Ack);
+        transport.Enqueue(ConfigureAck);
         transport.Enqueue(RawAck);
         if (!missing)
         {

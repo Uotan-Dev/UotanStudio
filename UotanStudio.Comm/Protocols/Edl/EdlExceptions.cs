@@ -13,6 +13,15 @@ internal class EdlException : Exception
     public EdlErrorCode ErrorCode { get; }
 
     /// <summary>
+    /// Gets or sets the typed failure classification attached by the protocol when the failure
+    /// crossed a device-transfer boundary; consumers read it through
+    /// <see cref="EdlFailureClassification.Classify"/> instead of parsing messages.
+    /// <para>获取或设置协议在失败跨越设备传输边界时附加的类型化失败分类；消费者通过
+    /// <see cref="EdlFailureClassification.Classify"/> 读取，而不是解析消息文本。</para>
+    /// </summary>
+    public EdlFailureKind? FailureKind { get; set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="EdlException"/> class.
     /// <para>初始化 <see cref="EdlException"/> 类的新实例。</para>
     /// </summary>
@@ -82,6 +91,8 @@ internal class EdlException : Exception
         EdlErrorCode.OnTargetVerificationFailed => "On-target verification failed.",
         EdlErrorCode.SetActivePartitionFailed => "Setting the active A/B partition failed.",
         EdlErrorCode.XmlParseError => "XML parsing failed.",
+        EdlErrorCode.ProgrammerMismatch => "Programmer identity mismatch.",
+        EdlErrorCode.NeedsProgrammerSelection => "A programmer selection with explicit matching evidence is required.",
         _ => $"Unknown error code: {code}"
     };
 }

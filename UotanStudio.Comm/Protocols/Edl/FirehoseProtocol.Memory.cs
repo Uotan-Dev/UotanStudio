@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+
 namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>
@@ -52,6 +54,7 @@ public sealed partial class FirehoseProtocol
         string filename, int physicalPartition, CancellationToken cancellationToken, IProgress<long>? progress = null)
     {
         ThrowIfDisposed();
+        RequireCapability(EdlFirehoseCommand.Read);
         if (destination == null)
         {
             throw new ArgumentNullException(nameof(destination));
@@ -64,18 +67,143 @@ public sealed partial class FirehoseProtocol
 
         var totalBytes = ValidateStorageRange(startSector, numSectors, physicalPartition);
         cancellationToken.ThrowIfCancellationRequested();
+        var transferStarted = false;
         try
         {
             var xml = FirehoseXmlBuilder.BuildRead(Configuration.SectorSize, numSectors, filename, physicalPartition, startSector, slot: EffectiveSlot);
             var response = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
             RequireRawMode(response, EdlErrorCode.ReadFailed);
+            transferStarted = true;
             await ReadRawPayloadToStreamAsync(destination, totalBytes, cancellationToken, progress);
             return await ReceiveTransferCompletionAsync(EdlErrorCode.ReadFailed, cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
             _faulted = true;
+            RecordFailure(ex, transferStarted, payloadSent: false);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Streams a partition range into the destination while hashing every written byte, detecting
+    /// short reads, and reporting cumulative progress. Large reads never allocate a single
+    /// destination-sized buffer; the transport works chunk by chunk.
+    /// <para>将分区范围流式写入目标，同时对每个写入字节计算哈希、检测短读并上报累计进度。
+    /// 大读取绝不会分配等同于目标大小的单块缓冲；传输按分块推进。</para>
+    /// </summary>
+    /// <remarks>
+    /// The caller owns <paramref name="destination"/>. Atomic publication (temp file then rename)
+    /// is a host responsibility: a cancelled or failed read leaves the destination partially
+    /// written and it must never be published as a completed backup.
+    /// <para>调用方持有 <paramref name="destination"/>。原子发布（临时文件后重命名）是宿主职责：
+    /// 被取消或失败的读取会留下部分写入的目标，绝不能作为完成备份发布。</para>
+    /// </remarks>
+    /// <param name="destination">Writable destination stream. <para>可写目标流。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="numSectors">The number of sectors. <para>扇区数量。</para></param>
+    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
+    /// <param name="physicalPartition">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="progress">Optional cumulative transferred bytes; not evidence of final completion.
+    /// <para>可选的累计传输字节；不是最终完成的证据。</para></param>
+    /// <param name="expectedSha256Hex">Optional lowercase hex SHA-256 the transferred bytes must match.
+    /// <para>可选的十六进制小写 SHA-256；传输字节必须匹配。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The measured read result with device acknowledgement state. <para>带设备确认状态的计量读取结果。</para></returns>
+    /// <exception cref="EdlException">Thrown when the device short-reads, fails the completion
+    /// acknowledgement, or the measured hash contradicts <paramref name="expectedSha256Hex"/>.
+    /// <para>设备短读、完成确认失败，或实测哈希与 <paramref name="expectedSha256Hex"/> 矛盾时抛出。</para></exception>
+    public async Task<EdlStreamReadResult> ReadPartitionToStreamAsync(Stream destination, long startSector, long numSectors,
+        string filename = "partition.bin", int physicalPartition = 0, IProgress<long>? progress = null,
+        string? expectedSha256Hex = null, CancellationToken cancellationToken = default)
+    {
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        ArgumentNullException.ThrowIfNull(destination);
+        var totalBytes = ValidateStorageRange(startSector, numSectors, physicalPartition);
+        await using var hashing = new DigestWriteStream(destination);
+        var response = await ReadToStreamCoreAsync(hashing, startSector, numSectors, filename, physicalPartition,
+            cancellationToken, progress).ConfigureAwait(false);
+        await hashing.FlushAsync(cancellationToken).ConfigureAwait(false);
+        var written = hashing.WrittenBytes;
+        if (written != totalBytes)
+        {
+            throw new EdlException(EdlErrorCode.ReadFailed,
+                $"Short read detected: the device stream produced {written} of {totalBytes} declared bytes.")
+            {
+                FailureKind = EdlFailureKind.ExecutionUnknown
+            };
+        }
+
+        var sha256Hex = hashing.GetSha256Hex();
+        if (expectedSha256Hex is { Length: > 0 } expected
+            && !string.Equals(sha256Hex, expected, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new EdlException(EdlErrorCode.OnTargetVerificationFailed,
+                $"The read-back SHA-256 {sha256Hex} contradicts the expected {expected}.")
+            {
+                FailureKind = EdlFailureKind.ResourceMismatch
+            };
+        }
+
+        return new EdlStreamReadResult(written, totalBytes, sha256Hex, response);
+    }
+
+    /// <summary>
+    /// A write-through stream that hashes every byte appended and never disposes the wrapped
+    /// destination.
+    /// <para>透传写入流，对每个追加字节计算哈希，且绝不释放被包装的目标流。</para>
+    /// </summary>
+    private sealed class DigestWriteStream(Stream inner) : Stream
+    {
+        private readonly IncrementalHash _hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+
+        internal long WrittenBytes { get; private set; }
+
+        internal string GetSha256Hex() => Convert.ToHexStringLower(_hash.GetHashAndReset());
+
+        public override bool CanRead => false;
+        public override bool CanSeek => inner.CanSeek;
+        public override bool CanWrite => inner.CanWrite;
+        public override long Length => inner.Length;
+        public override long Position { get => inner.Position; set => inner.Position = value; }
+
+        public override void Flush() => inner.Flush();
+
+        public override Task FlushAsync(CancellationToken cancellationToken) => inner.FlushAsync(cancellationToken);
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
+
+        public override void SetLength(long value) => inner.SetLength(value);
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            var span = buffer.AsSpan(offset, count);
+            _hash.AppendData(span);
+            inner.Write(span);
+            WrittenBytes += count;
+        }
+
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            _hash.AppendData(buffer);
+            inner.Write(buffer);
+            WrittenBytes += buffer.Length;
+        }
+
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            => WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            _hash.AppendData(buffer.Span);
+            await inner.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
+            WrittenBytes += buffer.Length;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
         }
     }
 

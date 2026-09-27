@@ -245,6 +245,9 @@ public class EdlSerialBundleServiceTests
     private static ScriptedCommTransport Transport(bool rejectProgram = false)
     {
         const string ack = "<data><response value='ACK' rawmode='false'/></data>";
+        const string configureAck = """
+            <data><response value='ACK' rawmode='false' MaxPayloadSizeToTargetInBytes='1048576' Erase='true' Patch='true' Wipe='true' UfsProvisioning='true'/></data>
+            """;
         var transport = new ScriptedCommTransport();
         transport.Enqueue("<?xml version='1.0'?><data></data>".PadRight(48));
         transport.OnWrite = bytes =>
@@ -256,6 +259,7 @@ public class EdlSerialBundleServiceTests
             var command = XDocument.Parse(Encoding.UTF8.GetString(bytes)).Root!.Elements().Single().Name.LocalName;
             var response = command switch
             {
+                "configure" => configureAck,
                 "getstorageinfo" => """<data><log value='{"storage_info":{"block_size":512,"total_blocks":100}}'/><response value='ACK'/></data>""",
                 "program" => rejectProgram ? "<data><response value='NAK'/></data>"
                     : "<data><response value='ACK' rawmode='true'/></data>",

@@ -691,6 +691,18 @@ internal enum EdlErrorCode
     /// <para>XML 解析失败。</para>
     /// </summary>
     XmlParseError,
+
+    /// <summary>
+    /// The programmer image identity does not match the selected descriptor.
+    /// <para>programmer 镜像身份与所选描述符不匹配。</para>
+    /// </summary>
+    ProgrammerMismatch,
+
+    /// <summary>
+    /// The device identity or catalog evidence cannot uniquely select a programmer yet.
+    /// <para>设备身份或目录证据尚不足以唯一选定 programmer。</para>
+    /// </summary>
+    NeedsProgrammerSelection,
 }
 
 /// <summary>

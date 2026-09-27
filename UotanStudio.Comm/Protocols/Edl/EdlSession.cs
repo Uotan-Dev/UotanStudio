@@ -1,4 +1,12 @@
+using System.Diagnostics;
+using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Devices.Discovery;
+using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Common;
+using UotanStudio.Comm.Protocols.Common.Evidence;
+using UotanStudio.Comm.Protocols.Edl.Auth;
+using UotanStudio.Comm.Protocols.Edl.Programmer;
+using UotanStudio.Comm.Protocols.Edl.Reenum;
 using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Edl;
@@ -9,9 +17,18 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// </summary>
 public sealed class EdlSession : IProtocolSession
 {
+    private static readonly TimeSpan MaxRelinkTimeout = TimeSpan.FromHours(24);
+    private readonly List<ProtocolEvidence> _initializationEvidence = [];
+    private readonly List<ProtocolEvidence> _authenticationEvidence = [];
     private volatile bool _disposed;
     private readonly EdlProbeTransport _probeTransport;
     private EdlProtocolState _protocolState;
+    private DeviceEndpoint? _relinkEndpoint;
+    private PhysicalDeviceIdentity? _relinkIdentity;
+    private TransportGeneration? _relinkGeneration;
+    private TimeSpan _relinkTimeout = TimeSpan.FromSeconds(30);
+    private string? _programmerSha256Hex;
+    private string? _programmerFileName;
 
     /// <summary>
     /// Creates a new EDL session over the specified device transport.
@@ -67,6 +84,115 @@ public sealed class EdlSession : IProtocolSession
 
     /// <summary>Reports verified protocol changes within this session.<para>报告本会话内经校验的协议变化。</para></summary>
     public event EventHandler<EdlProtocolState>? ProtocolStateChanged;
+
+    /// <summary>
+    /// Gets the ordered evidence produced by programmer selection preflight and initialization gates.
+    /// <para>获取 programmer 选择预检与初始化门控产出的按序证据。</para>
+    /// </summary>
+    /// <value>Append-only across initialization attempts; never contains key material.
+    /// <para>跨初始化尝试只增不减；从不包含密钥材料。</para></value>
+    public IReadOnlyList<ProtocolEvidence> InitializationEvidence => _initializationEvidence;
+
+    /// <summary>
+    /// Gets the ordered evidence for each attempted vendor authentication stage.
+    /// <para>获取每个已尝试厂商认证阶段的按序证据。</para>
+    /// </summary>
+    /// <value>Stage names and observed outcomes only; challenge, token and signature bytes are never copied.
+    /// <para>仅含阶段名与观测结果；质询、令牌与签名字节从不复制。</para></value>
+    public IReadOnlyList<ProtocolEvidence> AuthenticationEvidence => _authenticationEvidence;
+
+    /// <summary>
+    /// Gets the finalized vendor authentication state after an authentication-selected initialization attempt.
+    /// <para>获取选定认证的初始化尝试后定格的厂商认证状态。</para>
+    /// </summary>
+    /// <value>The result once a run with authentication stages finished or failed; <see langword="null"/>
+    /// before that. <para>含认证阶段的运行完成或失败后可用；在此之前为 <see langword="null"/>。</para></value>
+    public EdlAuthenticationResult? AuthenticationResult { get; private set; }
+
+    /// <summary>
+    /// Gets the Sahara-to-Firehose link stage this session is believed to occupy.
+    /// <para>获取本会话被认定所处的 Sahara 到 Firehose 链路阶段。</para>
+    /// </summary>
+    /// <value>The host-side stage label. <para>宿主侧阶段标签。</para></value>
+    public EdlLinkStage LinkStage { get; private set; } = EdlLinkStage.Idle;
+
+    /// <summary>
+    /// Gets the latest relink offer published after initialization failed or reconnection became required.
+    /// <para>获取初始化失败或需要重连后发布的最近重链提议。</para>
+    /// </summary>
+    /// <value>The offer, or <see langword="null"/> until a failure occurs with attached endpoint evidence.
+    /// <para>重链提议；在具备已附加端点证据的失败发生前为 <see langword="null"/>。</para></value>
+    public EdlRelinkOffer? LastRelinkOffer { get; private set; }
+
+    /// <summary>
+    /// Gets the capability snapshot negotiated by the latest Firehose configure, bound to the
+    /// measured programmer identity and the transport generation attached to this session.
+    /// <para>获取最近一次 Firehose configure 协商得到的能力快照，并绑定到实测 programmer
+    /// 身份与本会话附加的传输代际。</para>
+    /// </summary>
+    /// <value>
+    /// The snapshot once configure has succeeded and the transport is still usable;
+    /// <see langword="null"/> before the first successful configure. High-risk storage commands are
+    /// refused by the protocol while the required capability is not reported as supported.
+    /// <para>configure 成功且传输仍可用时返回快照；首次成功 configure 之前为
+    /// <see langword="null"/>。required 能力未被报告为支持时，协议会拒绝高风险存储命令。</para>
+    /// </value>
+    public FirehoseCapabilitySnapshot? Capabilities
+    {
+        get
+        {
+            var snapshot = Firehose?.Capabilities;
+            if (snapshot is null)
+            {
+                return null;
+            }
+
+            return _programmerSha256Hex is null && _programmerFileName is null && _relinkGeneration is null
+                ? snapshot
+                : snapshot with
+                {
+                    ResourceSha256Hex = _programmerSha256Hex ?? snapshot.ResourceSha256Hex,
+                    ProgrammerFileName = _programmerFileName ?? snapshot.ProgrammerFileName,
+                    TransportGeneration = _relinkGeneration?.Value ?? snapshot.TransportGeneration
+                };
+        }
+    }
+
+    /// <summary>
+    /// Attaches the endpoint evidence used to publish relink offers when this link fails.
+    /// <para>附加端点证据，用于本链路失败时生成重链提议。</para>
+    /// </summary>
+    /// <remarks>The caller supplies the endpoint the session transport was leased on together with the
+    /// lease generation; the session never opens or reopens transports itself. Calling this after a
+    /// failure means the next failure publishes an offer.</remarks>
+    /// <param name="previousEndpoint">
+    /// The exact endpoint currently backing this session. <para>当前支撑本会话的精确端点。</para>
+    /// </param>
+    /// <param name="generation">
+    /// The transport generation stamped on the lease, or <see langword="null"/>.
+    /// <para>租约盖印的传输代际，或 <see langword="null"/>。</para>
+    /// </param>
+    /// <param name="timeout">
+    /// Recommended relink wait budget between 1 ms and 24 h. <para>建议的重链等待预算，介于 1 毫秒与 24 小时。</para>
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="previousEndpoint"/> is <see langword="null"/>. <para><paramref name="previousEndpoint"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The timeout leaves the supported range. <para>截止时间超出支持范围。</para>
+    /// </exception>
+    public void AttachRelinkContext(DeviceEndpoint previousEndpoint, TransportGeneration? generation = null,
+        TimeSpan? timeout = null)
+    {
+        ArgumentNullException.ThrowIfNull(previousEndpoint);
+        var effective = timeout ?? TimeSpan.FromSeconds(30);
+        ArgumentOutOfRangeException.ThrowIfLessThan(effective, TimeSpan.FromMilliseconds(1));
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(effective, MaxRelinkTimeout);
+        _relinkEndpoint = previousEndpoint;
+        _relinkGeneration = generation;
+        _relinkTimeout = effective;
+        _relinkIdentity = previousEndpoint.UsbInfo is { } info ? PhysicalDeviceIdentity.From(info) : null;
+    }
 
     /// <summary>
     /// Observes Sahara packets or a Firehose NOP response without loading a programmer or configuring storage.
@@ -149,6 +275,108 @@ public sealed class EdlSession : IProtocolSession
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ValidateInitializationOptions(options);
+        ThrowIfDisposed();
+        using var operation = await Firehose!.EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        await InitializeOwnedAsync(programmerImage, cancellationToken, options).ConfigureAwait(false);
+    }
+
+    /// <summary>Initializes with an evidence-backed programmer selection and a mandatory hash preflight.
+    /// <para>使用有证据支撑的 programmer 选择结果与强制哈希预检初始化。</para></summary>
+    /// <remarks>The selection must be <see cref="EdlProgrammerMatchDecision.Matched"/> with a descriptor,
+    /// and the SHA-256 measured from <paramref name="programmerImage"/> must equal both the descriptor hash
+    /// and, when recorded, the selection's measured hash. Any violation fails before the operation gate is
+    /// entered, so no byte reaches the device. The stream must be readable and seekable.</remarks>
+    /// <param name="selection">
+    /// The catalog selection produced for this device. <para>针对该设备生成的目录选择结果。</para>
+    /// </param>
+    /// <param name="programmerImage">
+    /// The caller-owned programmer stream. <para>调用方持有的 programmer 流。</para>
+    /// </param>
+    /// <param name="options">
+    /// Optional immutable startup requirements. <para>可选的不可变启动要求。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The operation cancellation token. <para>操作取消令牌。</para>
+    /// </param>
+    /// <returns>
+    /// A task completing after preflight, Sahara upload and Firehose configuration succeed.
+    /// <para>在预检、Sahara 上传与 Firehose 配置均成功后完成的任务。</para>
+    /// </returns>
+    /// <exception cref="EdlException">
+    /// The decision is not a unique match (<see cref="EdlErrorCode.NeedsProgrammerSelection"/>) or the
+    /// measured hash contradicts the descriptor (<see cref="EdlErrorCode.ProgrammerMismatch"/>).
+    /// <para>结论并非唯一匹配（<see cref="EdlErrorCode.NeedsProgrammerSelection"/>），或实测哈希与描述符矛盾
+    /// （<see cref="EdlErrorCode.ProgrammerMismatch"/>）。</para>
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// The stream cannot be hashed without device interaction. <para>流无法在不接触设备的情况下完成哈希。</para>
+    /// </exception>
+    public async Task InitializeAsync(EdlProgrammerSelection selection, Stream programmerImage,
+        EdlInitializationOptions? options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+        ArgumentNullException.ThrowIfNull(programmerImage);
+        if (options is not null)
+        {
+            ValidateInitializationOptions(options);
+        }
+
+        ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
+        if (selection.Descriptor is not { } descriptor
+            || selection.Decision != EdlProgrammerMatchDecision.Matched)
+        {
+            RecordInitializationEvidence("programmer-selection", CommandOutcomeKind.Rejected,
+                $"Decision {selection.Decision} is not an evidence-backed unique match.",
+                selection.Descriptor?.Sha256Hex, null);
+            throw new EdlException(selection.Decision == EdlProgrammerMatchDecision.NeedsExplicitSelection
+                ? EdlErrorCode.NeedsProgrammerSelection
+                : EdlErrorCode.ProgrammerMismatch);
+        }
+
+        descriptor.Validate();
+        RecordInitializationEvidence("programmer-selection", CommandOutcomeKind.Completed,
+            $"Matched {descriptor.FileName}.", descriptor.Sha256Hex, null);
+        var measured = MeasureProgrammerHash(programmerImage, cancellationToken);
+        var matched = string.Equals(measured, descriptor.Sha256Hex, StringComparison.OrdinalIgnoreCase)
+            && (selection.ActualSha256Hex is null
+                || string.Equals(measured, selection.ActualSha256Hex, StringComparison.OrdinalIgnoreCase));
+        RecordInitializationEvidence("programmer-hash-preflight",
+            matched ? CommandOutcomeKind.Completed : CommandOutcomeKind.Rejected,
+            matched ? "Measured SHA-256 equals the descriptor identity." : "Measured SHA-256 contradicts the selected descriptor.",
+            measured, null);
+        if (!matched)
+        {
+            throw new EdlException(EdlErrorCode.ProgrammerMismatch,
+                $"Programmer identity mismatch: expected {descriptor.Sha256Hex}, measured {measured}.");
+        }
+
+        _programmerSha256Hex = measured;
+        _programmerFileName = descriptor.FileName;
+        using var operation = await Firehose!.EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        await InitializeOwnedAsync(programmerImage, cancellationToken, options).ConfigureAwait(false);
+    }
+
+    private string MeasureProgrammerHash(Stream programmerImage, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return EdlProgrammerHash.ComputeSha256Hex(programmerImage, cancellationToken);
+        }
+        catch (Exception error) when (error is not EdlException)
+        {
+            RecordInitializationEvidence("programmer-hash-preflight", ClassifyFailure(error),
+                "The programmer stream could not be hashed before device interaction.", null, null);
+            throw;
+        }
+    }
+
+    /// <summary>Validates option well-formedness and vendor authentication mutual exclusion before any device I/O.
+    /// <para>在任何设备 I/O 之前校验参数合法性与厂商认证互斥关系。</para></summary>
+    /// <param name="options">The startup requirements to validate. <para>待校验的启动要求。</para></param>
+    private static void ValidateInitializationOptions(EdlInitializationOptions options)
+    {
         FirehoseProtocol.ValidateAuthenticationTimeout(options.AuthenticationTimeoutMs);
         options.ProjectAuthentication?.Validate();
         options.Vip?.Validate();
@@ -161,9 +389,6 @@ public sealed class EdlSession : IProtocolSession
         {
             throw new ArgumentException("The selected SetNetType startup path cannot be combined with this authentication variant.", nameof(options));
         }
-        ThrowIfDisposed();
-        using var operation = await Firehose!.EnterOperationAsync(cancellationToken).ConfigureAwait(false);
-        await InitializeOwnedAsync(programmerImage, cancellationToken, options).ConfigureAwait(false);
     }
 
     /// <summary>Initializes while the caller holds this session's Firehose operation lease.</summary>
@@ -186,6 +411,9 @@ public sealed class EdlSession : IProtocolSession
             return;
         }
 
+        var authenticationRequested = options?.Vip is not null || options?.XiaomiAuthenticationProvider is not null
+            || options?.ProjectAuthentication is not null || options?.SendOnePlusNetType == true;
+        var lastAuthStage = EdlAuthStage.NotRequired;
         try
         {
             if (options?.Vip is { } vip)
@@ -194,10 +422,15 @@ public sealed class EdlSession : IProtocolSession
                 {
                     throw new InvalidOperationException("VIP must be selected before Firehose probing changes the packet sequence.");
                 }
+                lastAuthStage = EdlAuthStage.VipEnabled;
+                var started = Stopwatch.GetTimestamp();
                 Firehose!.ConfigureVipOwned(vip);
+                RecordAuthenticationEvidence(EdlAuthStage.VipEnabled, CommandOutcomeKind.Completed,
+                    "The VIP packet profile was installed before probing.", started);
             }
             if (_protocolState != EdlProtocolState.Firehose)
             {
+                LinkStage = programmerImage is null ? EdlLinkStage.SaharaConnecting : EdlLinkStage.ProgrammerUploading;
                 Sahara = new SaharaProtocol(Transport)
                 {
                     QudHelloRecoveryEnabled = options?.QudHelloRecoveryEnabled ?? false,
@@ -206,6 +439,7 @@ public sealed class EdlSession : IProtocolSession
                 };
                 await Sahara.HandshakeAsync(programmerImage, cancellationToken: cancellationToken).ConfigureAwait(false);
                 SetProtocolState(EdlProtocolState.Firehose);
+                LinkStage = EdlLinkStage.FirehoseVerifying;
             }
             else if (options?.QueryIdentityBeforeUpload == true)
             {
@@ -213,12 +447,17 @@ public sealed class EdlSession : IProtocolSession
             }
             if (options?.XiaomiAuthenticationProvider is { } provider)
             {
-                await Firehose!.AuthenticateXiaomiOwnedAsync(provider, Sahara?.DeviceIdentity,
-                    options.AuthenticationTimeoutMs, cancellationToken).ConfigureAwait(false);
+                lastAuthStage = EdlAuthStage.XiaomiRsaAuth;
+                await RunAuthStageAsync(EdlAuthStage.XiaomiRsaAuth,
+                    token => Firehose!.AuthenticateXiaomiOwnedAsync(provider, Sahara?.DeviceIdentity,
+                        options.AuthenticationTimeoutMs, token), cancellationToken).ConfigureAwait(false);
             }
             var project = options?.ProjectAuthentication;
             if (project is not null && Sahara?.DeviceIdentity is { } identity && identity.SerialNumber != project.SerialNumber)
             {
+                lastAuthStage = EdlAuthStage.ProjectAuth;
+                RecordAuthenticationEvidence(EdlAuthStage.ProjectAuth, CommandOutcomeKind.Rejected,
+                    "The selected project serial does not match the Sahara report.", Stopwatch.GetTimestamp());
                 throw new FirehoseException("The selected project authentication serial does not match Sahara.");
             }
             var netType = options?.SendOnePlusNetType == true;
@@ -226,29 +465,159 @@ public sealed class EdlSession : IProtocolSession
             await Firehose!.ConfigureCoreAsync(30, cancellationToken, deferStorageDetection: project is not null || netType).ConfigureAwait(false);
             if (demacia)
             {
-                await Firehose.AuthenticateProjectOwnedAsync(project!, options!.AuthenticationTimeoutMs, cancellationToken).ConfigureAwait(false);
+                lastAuthStage = EdlAuthStage.ProjectAuth;
+                await RunAuthStageAsync(EdlAuthStage.ProjectAuth,
+                    token => Firehose.AuthenticateProjectOwnedAsync(project!, options!.AuthenticationTimeoutMs, token),
+                    cancellationToken).ConfigureAwait(false);
             }
             if (netType)
             {
-                await Firehose.SetOnePlusNetTypeOwnedAsync(options!.AuthenticationTimeoutMs, cancellationToken).ConfigureAwait(false);
+                lastAuthStage = EdlAuthStage.OnePlusNetType;
+                await RunAuthStageAsync(EdlAuthStage.OnePlusNetType,
+                    token => Firehose.SetOnePlusNetTypeOwnedAsync(options!.AuthenticationTimeoutMs, token),
+                    cancellationToken).ConfigureAwait(false);
             }
             if (project is not null && !demacia)
             {
-                await Firehose.AuthenticateProjectOwnedAsync(project, options!.AuthenticationTimeoutMs, cancellationToken).ConfigureAwait(false);
+                lastAuthStage = EdlAuthStage.ProjectAuth;
+                await RunAuthStageAsync(EdlAuthStage.ProjectAuth,
+                    token => Firehose.AuthenticateProjectOwnedAsync(project, options!.AuthenticationTimeoutMs, token),
+                    cancellationToken).ConfigureAwait(false);
             }
             if (project is not null || netType)
             {
                 await Firehose.CompleteStorageConfigurationOwnedAsync(cancellationToken).ConfigureAwait(false);
             }
             IsConfigured = true;
+            LinkStage = EdlLinkStage.FirehoseReady;
+            if (authenticationRequested || _authenticationEvidence.Count > 0)
+            {
+                AuthenticationResult = new EdlAuthenticationResult
+                {
+                    Evidence = _authenticationEvidence.ToArray(),
+                    ReachedStage = EdlAuthStage.Completed,
+                    AuthenticationRequested = authenticationRequested,
+                    Disposition = EdlAuthSessionDisposition.CanContinue
+                };
+            }
         }
         catch
         {
+            if (authenticationRequested || _authenticationEvidence.Count > 0)
+            {
+                AuthenticationResult = new EdlAuthenticationResult
+                {
+                    Evidence = _authenticationEvidence.ToArray(),
+                    ReachedStage = lastAuthStage == EdlAuthStage.NotRequired ? EdlAuthStage.Failed : lastAuthStage,
+                    AuthenticationRequested = authenticationRequested,
+                    Disposition = EdlAuthSessionDisposition.RequiresReconnect
+                };
+            }
             SetProtocolState(EdlProtocolState.Unknown);
             Firehose!.Invalidate();
+            LinkStage = EdlLinkStage.Failed;
+            PublishRelinkOffer();
             throw;
         }
     }
+
+    /// <summary>Runs one vendor authentication stage and records its observed outcome as evidence.
+    /// <para>执行单个厂商认证阶段，并把观测结果记录为证据。</para></summary>
+    private async Task RunAuthStageAsync(EdlAuthStage stage, Func<CancellationToken, Task> action,
+        CancellationToken cancellationToken)
+    {
+        var started = Stopwatch.GetTimestamp();
+        try
+        {
+            await action(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception error)
+        {
+            RecordAuthenticationEvidence(stage, ClassifyFailure(error), null, started);
+            throw;
+        }
+
+        RecordAuthenticationEvidence(stage, CommandOutcomeKind.Completed, null, started);
+    }
+
+    /// <summary>Classifies a failed exchange into the shared evidence outcome vocabulary.
+    /// <para>将失败的交换归类到共享证据结果词汇。</para></summary>
+    private static CommandOutcomeKind ClassifyFailure(Exception error) => error switch
+    {
+        TimeoutException => CommandOutcomeKind.Timeout,
+        OperationCanceledException => CommandOutcomeKind.Cancelled,
+        EdlException { ErrorCode: EdlErrorCode.ReadPortTimeout or EdlErrorCode.WritePortTimeout or EdlErrorCode.TransportTimeout }
+            => CommandOutcomeKind.Timeout,
+        EdlException { ErrorCode: EdlErrorCode.ConnectionLost } => CommandOutcomeKind.ConnectionLost,
+        EdlException => CommandOutcomeKind.Rejected,
+        _ => CommandOutcomeKind.Rejected
+    };
+
+    private void RecordInitializationEvidence(string phase, CommandOutcomeKind outcome, string? detail,
+        string? resourceSha256Hex, long? elapsedMs)
+    {
+        _initializationEvidence.Add(new ProtocolEvidence
+        {
+            Protocol = "edl",
+            Phase = phase,
+            Outcome = outcome,
+            Detail = detail,
+            ResourceSha256Hex = resourceSha256Hex,
+            ElapsedMs = elapsedMs
+        });
+    }
+
+    private void RecordAuthenticationEvidence(EdlAuthStage stage, CommandOutcomeKind outcome, string? detail,
+        long startedTimestamp)
+    {
+        _authenticationEvidence.Add(new ProtocolEvidence
+        {
+            Protocol = "edl",
+            Phase = AuthenticationPhase(stage),
+            Outcome = outcome,
+            Detail = detail ?? $"stage={stage}",
+            ElapsedMs = (long)Stopwatch.GetElapsedTime(startedTimestamp).TotalMilliseconds
+        });
+    }
+
+    private static string AuthenticationPhase(EdlAuthStage stage) => stage switch
+    {
+        EdlAuthStage.VipEnabled => "auth-vip-enabled",
+        EdlAuthStage.XiaomiRsaAuth => "auth-xiaomi-rsa",
+        EdlAuthStage.ConfigureBeforeAuth => "auth-configure-before-auth",
+        EdlAuthStage.ProjectAuth => "auth-project",
+        EdlAuthStage.OnePlusNetType => "auth-oneplus-nettype",
+        _ => "auth-stage"
+    };
+
+    /// <summary>Publishes a relink offer when endpoint evidence was attached before the failure.
+    /// <para>当失败前附加了端点证据时发布重链提议。</para></summary>
+    private void PublishRelinkOffer()
+    {
+        if (_relinkEndpoint is not { } endpoint)
+        {
+            return;
+        }
+
+        LastRelinkOffer = new EdlRelinkOffer
+        {
+            PreviousEndpoint = endpoint,
+            Identity = _relinkIdentity,
+            ObservedGeneration = _relinkGeneration,
+            LastIdentity = Sahara?.DeviceIdentity,
+            Timeout = _relinkTimeout,
+            Correlation = CorrelationEvidence(_relinkIdentity)
+        };
+    }
+
+    private static ModeTransitionEvidence? CorrelationEvidence(PhysicalDeviceIdentity? identity) => identity switch
+    {
+        null => null,
+        { ContainerId: { } container } when container != Guid.Empty => ModeTransitionEvidence.Container,
+        { PhysicalPortPath: { Length: > 0 and <= 1024 } port } when !port.Any(char.IsWhiteSpace)
+            && !port.Any(char.IsControl) => ModeTransitionEvidence.PhysicalPort,
+        _ => null
+    };
 
     /// <summary>
     /// Ensures the session is initialized (handshake + configure).
@@ -319,6 +688,50 @@ public sealed class EdlSession : IProtocolSession
     }
 
     /// <summary>
+    /// Streams a partition range into a caller-owned destination without allocating a
+    /// destination-sized buffer, hashing every transferred byte and reporting cumulative progress.
+    /// <para>将分区范围流式写入调用方持有的目标，不分配等同目标大小的缓冲，对每个传输字节计算
+    /// 哈希并上报累计进度。</para>
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="ReadPartitionAsync"/>, this path is not bounded by the 16 MiB in-memory
+    /// limit. Atomic publication is a host responsibility: publish by writing to a temporary file
+    /// and renaming it only after this call returns; a cancelled or failed read leaves the
+    /// destination partially written and must never be published as a completed backup. Short
+    /// reads and hash mismatches throw before a result is produced.
+    /// <para>与 <see cref="ReadPartitionAsync"/> 不同，本路径不受 16 MiB 内存上限约束。原子发布
+    /// 是宿主职责：先写临时文件，只在本调用返回后重命名发布；被取消或失败的读取会留下部分写入的
+    /// 目标，绝不能作为完成备份发布。短读与哈希不符会在产出结果前抛出。</para>
+    /// </remarks>
+    /// <param name="destination">Writable, caller-owned destination stream kept open for the whole call.
+    /// <para>可写、由调用方持有并在整个调用期间保持打开的目标流。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="numSectors">The number of sectors. <para>扇区数量。</para></param>
+    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
+    /// <param name="physicalPartition">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="progress">Optional cumulative transferred bytes; not evidence of completion.
+    /// <para>可选的累计传输字节；不是完成证据。</para></param>
+    /// <param name="expectedSha256Hex">Optional lowercase hex SHA-256 the transferred bytes must match.
+    /// <para>可选的十六进制小写 SHA-256；传输字节必须匹配。</para></param>
+    /// <param name="cancellationToken">Cancellation token threaded through transport and destination writes.
+    /// <para>贯穿传输与目标写入的取消令牌。</para></param>
+    /// <returns>The measured result with length, hash, and the device acknowledgement.
+    /// <para>带长度、哈希与设备确认的计量结果。</para></returns>
+    /// <exception cref="EdlException">Thrown for short reads, missing completion acknowledgements, or
+    /// hash contradictions; the partially written destination is left unpublished.
+    /// <para>短读、缺失完成确认或哈希矛盾时抛出；部分写入的目标保持未发布。</para></exception>
+    public async Task<EdlStreamReadResult> ReadPartitionToStreamAsync(Stream destination, long startSector, long numSectors,
+        string filename = "partition.bin", int physicalPartition = 0, IProgress<long>? progress = null,
+        string? expectedSha256Hex = null, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(destination);
+        await EnsureInitializedAsync(cancellationToken: cancellationToken);
+        return await Firehose!.ReadPartitionToStreamAsync(destination, startSector, numSectors, filename,
+            physicalPartition, progress, expectedSha256Hex, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Resets the device.
     /// <para>复位设备。</para>
     /// </summary>
@@ -332,8 +745,10 @@ public sealed class EdlSession : IProtocolSession
     }
 
     /// <summary>
-    /// Throws <see cref="ObjectDisposedException"/> if the session has been disposed.
-    /// <para>如果会话已释放，则抛出 <see cref="ObjectDisposedException"/>。</para>
+    /// Throws <see cref="ObjectDisposedException"/> when the session has been disposed, or an
+    /// <see cref="EdlException"/> reporting the lost connection once reconnection is required.
+    /// <para>会话已释放时抛出 <see cref="ObjectDisposedException"/>；需要重连后抛出报告连接丢失的
+    /// <see cref="EdlException"/>。</para>
     /// </summary>
     private void ThrowIfDisposed()
     {
@@ -344,6 +759,8 @@ public sealed class EdlSession : IProtocolSession
 
         if (Firehose?.RequiresReconnect == true)
         {
+            LinkStage = EdlLinkStage.Stale;
+            PublishRelinkOffer();
             throw new EdlException(EdlErrorCode.ConnectionLost, "The EDL session requires reconnection.");
         }
     }

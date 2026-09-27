@@ -27,7 +27,7 @@ public class FlashBundleOrchestratorTests
     private const string ConfigureAckXml = """
         <?xml version="1.0" encoding="UTF-8" ?>
         <data>
-        <response value="ACK" rawmode="false" MaxPayloadSizeToTargetInBytes="1048576"/>
+        <response value="ACK" rawmode="false" MaxPayloadSizeToTargetInBytes="1048576" Erase="true" Patch="true" Wipe="true" UfsProvisioning="true"/>
         </data>
         """;
 

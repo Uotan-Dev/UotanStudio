@@ -399,21 +399,93 @@ public static class BackupService
         }
 
         await session.EnsureInitializedAsync(cancellationToken: ct).ConfigureAwait(false);
-        var firehose = session.Firehose
-            ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
 
         Report(progress, displayName, 10, $"Reading {displayName} via Firehose read... 正在通过 Firehose 读取分区...");
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath)) ?? string.Empty);
-        using var fs = File.Create(outPath);
-        var response = await firehose.ReadToStreamAsync(
-            fs, startSector, sectorCount, filename, physicalPartition, ct).ConfigureAwait(false);
-        if (!response.IsAck)
-        {
-            throw new InvalidOperationException($"Firehose read failed for '{displayName}'. Response: {response.RawValue}");
-        }
+        var fullPath = Path.GetFullPath(outPath);
+        var directory = Path.GetDirectoryName(fullPath) ?? string.Empty;
+        Directory.CreateDirectory(directory);
+        var stagingPath = Path.Combine(directory, Path.GetFileName(fullPath) + "." + Guid.NewGuid().ToString("N") + ".partial");
+        var totalBytes = checked(sectorCount * sectorSize);
+        var read = await SessionStreamReadAsync(session, stagingPath, displayName, filename, physicalPartition,
+            startSector, sectorCount, totalBytes, progress, ct).ConfigureAwait(false);
+        File.Move(read.tempPath, fullPath, true);
 
         Report(progress, displayName, 100, $"EDL backup complete: {displayName}. EDL 分区备份完成。");
-        return new BackupResult { Success = true, Summary = $"Backed up EDL partition '{displayName}' ({fs.Length} bytes).", Bytes = fs.Length };
+        return new BackupResult
+        {
+            Success = true,
+            Summary = $"Backed up EDL partition '{displayName}' ({read.result.BytesWritten} bytes, SHA-256 {read.result.Sha256Hex}).",
+            Bytes = read.result.BytesWritten,
+            Sha256Hex = read.result.Sha256Hex
+        };
+    }
+
+    /// <summary>
+    /// <para>调用 Comm 流式读取门面把分区写入临时文件；失败或取消时删除临时文件，绝不发布不完整
+    /// 备份。设备 ACK、长度与哈希一致性由结构化读取结果给出，不再解析响应文本。</para>
+    /// Drives the Comm streaming read facade into a staging file; on failure or cancellation the
+    /// staging file is deleted and an incomplete backup is never published. Device acknowledgement,
+    /// length, and hash consistency come from the structured read result instead of response text.
+    /// </summary>
+    private static async Task<(EdlStreamReadResult result, string tempPath)> SessionStreamReadAsync(
+        EdlSession session, string stagingPath, string displayName, string filename, int physicalPartition,
+        long startSector, long sectorCount, long totalBytes, IProgress<BackupProgress>? progress, CancellationToken ct)
+    {
+        try
+        {
+            await using var fs = new FileStream(stagingPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            var byteProgress = new PartitionByteProgress(displayName, totalBytes, progress);
+            var result = await session.ReadPartitionToStreamAsync(fs, startSector, sectorCount, filename,
+                physicalPartition, byteProgress, expectedSha256Hex: null, ct).ConfigureAwait(false);
+            if (!result.DeviceAcknowledged)
+            {
+                throw new IOException($"Firehose read of '{displayName}' completed without a device acknowledgement. 设备未确认本次读取。");
+            }
+
+            await fs.FlushAsync(ct).ConfigureAwait(false);
+            return (result, stagingPath);
+        }
+        catch
+        {
+            TryDeleteStaging(stagingPath);
+            throw;
+        }
+    }
+
+    private static void TryDeleteStaging(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// <para>把 Comm 的字节级进度桥接为备份百分比进度。</para>
+    /// Bridges Comm byte-level progress into the backup percentage progress model.
+    /// </summary>
+    private sealed class PartitionByteProgress(string displayName, long totalBytes,
+        IProgress<BackupProgress>? progress) : IProgress<long>
+    {
+        public void Report(long value)
+        {
+            if (progress is null || totalBytes <= 0)
+            {
+                return;
+            }
+
+            var percent = 10 + (int)Math.Clamp(value * 85 / totalBytes, 0, 85);
+            BackupService.Report(progress, displayName, percent, $"Read {value}/{totalBytes} bytes of {displayName}. 已读取 {displayName} 的 {value}/{totalBytes} 字节。");
+        }
     }
 
     /// <summary>
@@ -479,6 +551,13 @@ public sealed class BackupResult
     /// Gets or sets the result summary (description on success, or the failure reason).
     /// </summary>
     public string Summary { get; set; } = string.Empty;
+
+    /// <summary>
+    /// <para>获取或设置 EDL 流式备份实测的 SHA-256 十六进制摘要；非 EDL 或未哈希路径为 null。</para>
+    /// Gets or sets the measured lowercase SHA-256 digest of an EDL streamed backup; null for
+    /// non-EDL or unhashed paths.
+    /// </summary>
+    public string? Sha256Hex { get; set; }
 
     /// <summary>
     /// <para>获取或设置处理的总字节数。</para>

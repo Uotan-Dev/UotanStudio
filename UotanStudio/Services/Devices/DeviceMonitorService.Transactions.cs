@@ -116,7 +116,10 @@ public sealed partial class DeviceMonitorService
 
     internal Task<TResult> RunEdlAsync<TResult>(DetectedDevice device,
         Func<EdlSession, Task<TResult>> operation, CancellationToken cancellationToken = default)
-        => _edlConnections.RunAsync(device, operation, cancellationToken);
+    {
+        EnsureEdlLivenessProbe();
+        return _edlConnections.RunAsync(device, operation, cancellationToken);
+    }
 
     internal TResult RunAdb<TResult>(DetectedDevice device, Func<IAdbDeviceSession, TResult> operation,
         CancellationToken cancellationToken = default)

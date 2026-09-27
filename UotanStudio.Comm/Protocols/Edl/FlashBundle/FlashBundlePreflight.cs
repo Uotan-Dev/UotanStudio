@@ -6,8 +6,6 @@ namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 /// <summary>Checks all selected source ranges and commands before starting destructive phases.</summary>
 internal static class FlashBundlePreflight
 {
-    internal sealed record StorageRange(int Partition, string StartSector, long Sectors);
-
     internal static long SelectSectorSize(IReadOnlyList<RawProgramEntry> programs, IReadOnlyList<PatchEntry>? patches,
         FlashBundleOptions options, long configuredSize)
     {
@@ -43,12 +41,13 @@ internal static class FlashBundlePreflight
         return selected;
     }
 
-    internal static List<StorageRange> Validate(IReadOnlyList<RawProgramEntry> programs, IReadOnlyList<PatchEntry>? patches,
-        FlashBundleOptions options, long sectorSize, CancellationToken cancellationToken, FlashBundleSources? sources = null)
+    internal static List<EdlPhysicalRange> Validate(IReadOnlyList<RawProgramEntry> programs, IReadOnlyList<PatchEntry>? patches,
+        FlashBundleOptions options, long sectorSize, CancellationToken cancellationToken, FlashBundleSources? sources = null,
+        int? storageSlot = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ValidateSectorSize(sectorSize);
-        var ranges = new List<StorageRange>();
+        var ranges = new List<EdlPhysicalRange>();
         if (!options.SkipProgram)
         {
             foreach (var entry in programs)
@@ -57,12 +56,13 @@ internal static class FlashBundlePreflight
                 var sectors = ValidateProgram(entry, sectorSize, cancellationToken, sources);
                 if (sectors > 0)
                 {
-                    ranges.Add(new StorageRange(entry.PhysicalPartitionNumber, entry.StartSector, sectors));
+                    ranges.Add(EdlPhysicalRange.Parse(entry.StartSector, sectors, entry.PhysicalPartitionNumber,
+                        sectorSize, entry.Slot ?? storageSlot));
                 }
             }
         }
 
-        var touchedPartitions = ranges.Select(range => range.Partition).ToHashSet();
+        var touchedPartitions = ranges.Select(range => range.PhysicalPartitionNumber).ToHashSet();
         if (!options.SkipPatch && patches is not null)
         {
             foreach (var entry in patches)
@@ -70,7 +70,8 @@ internal static class FlashBundlePreflight
                 cancellationToken.ThrowIfCancellationRequested();
                 FirehoseProtocol.ValidatePatch(sectorSize, entry.Filename, entry.PhysicalPartitionNumber,
                     entry.StartSector, entry.ByteOffset, entry.Value, entry.SizeInBytes);
-                ranges.Add(new StorageRange(entry.PhysicalPartitionNumber, entry.StartSector, 1));
+                ranges.Add(EdlPhysicalRange.Parse(entry.StartSector, 1, entry.PhysicalPartitionNumber,
+                    sectorSize, entry.Slot ?? storageSlot));
             }
         }
 
@@ -89,7 +90,8 @@ internal static class FlashBundlePreflight
                     : touchedPartitions;
                 foreach (var partition in targets)
                 {
-                    ranges.Add(new StorageRange(partition, "0", options.WipeFirstSectors));
+                    ranges.Add(new EdlPhysicalRange(0, options.WipeFirstSectors, partition, sectorSize,
+                        StorageSlot: storageSlot, StartSectorExpression: "0"));
                 }
             }
         }
@@ -97,20 +99,17 @@ internal static class FlashBundlePreflight
     }
 
     /// <summary>Checks device ranges while the caller owns the Firehose operation lease.</summary>
-    internal static async Task ValidateDeviceRangesOwnedAsync(FirehoseProtocol protocol, IReadOnlyList<StorageRange> ranges,
-        long sectorSize, CancellationToken cancellationToken)
+    internal static async Task ValidateDeviceRangesOwnedAsync(FirehoseProtocol protocol,
+        IReadOnlyList<EdlPhysicalRange> ranges, CancellationToken cancellationToken)
     {
-        foreach (var region in ranges.GroupBy(range => range.Partition).OrderBy(group => group.Key))
+        foreach (var region in ranges.GroupBy(range => range.PhysicalPartitionNumber).OrderBy(group => group.Key))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var geometry = await protocol.GetStorageGeometryOwnedAsync(region.Key, cancellationToken).ConfigureAwait(false);
-            if (geometry.SectorSize != sectorSize)
-            {
-                throw new InvalidDataException($"Physical partition {region.Key} reports a different sector size.");
-            }
             foreach (var range in region)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                geometry.ResolveRange(range.StartSector, range.Sectors);
+                range.ValidateAgainst(geometry);
             }
         }
     }

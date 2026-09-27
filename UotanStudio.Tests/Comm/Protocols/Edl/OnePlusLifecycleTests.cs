@@ -330,6 +330,7 @@ public sealed partial class ProjectAuthenticationTests
             var command = XDocument.Parse(Encoding.UTF8.GetString(bytes)).Root!.Elements().Single().Name.LocalName;
             var response = command switch
             {
+                "configure" => "<data><response value=\"ACK\" MaxPayloadSizeToTargetInBytes=\"1048576\"/></data>",
                 "SetNetType" => netTypeResponse,
                 "setprocstart" => "<data><response value=\"ACK\" device_timestamp=\"123456\"/></data>",
                 "demacia" => "<data><response value=\"ACK\" verify_res=\"0\"/></data>",

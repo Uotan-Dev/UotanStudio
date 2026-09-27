@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
+using UotanStudio.Comm.Protocols.Common.Evidence;
 
 namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 
@@ -213,7 +214,7 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
             options.DryRun = true;
         }
         var stopwatch = Stopwatch.StartNew();
-        var result = new FlashBundleResult();
+        var result = new FlashBundleResult { StartedAtUtc = DateTimeOffset.UtcNow };
 
         try
         {
@@ -228,10 +229,10 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
                 || filteredPatches is { Count: > 0 };
             var preflightSectorSize = FlashBundlePreflight.SelectSectorSize(filteredPrograms, filteredPatches,
                 options, RequireFirehose().Configuration.SectorSize);
-            List<FlashBundlePreflight.StorageRange>? storageRanges = null;
+            List<EdlPhysicalRange>? storageRanges = null;
             if (preflightSectorSize > 0)
             {
-                storageRanges = FlashBundlePreflight.Validate(filteredPrograms, filteredPatches, options, preflightSectorSize, cancellationToken, sources);
+                storageRanges = FlashBundlePreflight.Validate(filteredPrograms, filteredPatches, options, preflightSectorSize, cancellationToken, sources, options.Slot);
             }
 
             if (options.DryRun && !devicePreflight)
@@ -275,11 +276,19 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
 
             if (sectorSize != preflightSectorSize)
             {
-                storageRanges = FlashBundlePreflight.Validate(filteredPrograms, filteredPatches, options, sectorSize, cancellationToken, sources);
+                storageRanges = FlashBundlePreflight.Validate(filteredPrograms, filteredPatches, options, sectorSize, cancellationToken, sources, options.Slot);
             }
 
             firehose.Configuration.SectorSize = sectorSize;
-            await FlashBundlePreflight.ValidateDeviceRangesOwnedAsync(firehose, storageRanges ?? [], sectorSize, cancellationToken).ConfigureAwait(false);
+            await FlashBundlePreflight.ValidateDeviceRangesOwnedAsync(firehose, storageRanges ?? [], cancellationToken).ConfigureAwait(false);
+            result.Record(new FlashItemEvidence
+            {
+                Kind = FlashBundleItemKind.Preflight,
+                Outcome = CommandOutcomeKind.Completed,
+                FileName = options.RawProgramPath is { Length: > 0 } rawPath ? Path.GetFileName(rawPath) : null,
+                AcknowledgedBytes = 0,
+                Label = $"ranges={storageRanges?.Count ?? 0}"
+            });
             sources?.ValidateLengths(cancellationToken);
             if (devicePreflight)
             {
@@ -296,9 +305,38 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
             RaiseProgress(progress, FlashBundlePhase.Completed, "Flash bundle completed. 刷写包已完成。", 1, 1);
             result.IsSuccess = result.Errors.Count == 0;
         }
+        catch (OperationCanceledException ex)
+        {
+            result.IsSuccess = false;
+            var protocol = _session.Firehose;
+            var observedKind = protocol?.LastFailureKind;
+            var observed = observedKind is { } recorded && recorded != EdlFailureKind.None
+                ? recorded
+                : EdlFailureClassification.Classify(ex);
+            result.FailureKind = observed;
+            result.RequiresReconnect = protocol?.RequiresReconnect == true
+                || observed is EdlFailureKind.CancelledAfterTransfer or EdlFailureKind.ExecutionUnknown;
+            result.Record(new FlashItemEvidence
+            {
+                Kind = FlashBundleItemKind.Preflight,
+                Outcome = CommandOutcomeKind.Cancelled,
+                FailureKind = observed,
+                RequiresReconnect = result.RequiresReconnect,
+                Label = "bundle-cancelled"
+            });
+            result.Errors.Add("Flash bundle cancelled. 刷写包已取消。");
+            RaiseProgress(progress, FlashBundlePhase.Error, $"Flash bundle cancelled: {ex.Message} 刷写包已取消。", 0, 0);
+            stopwatch.Stop();
+            result.ElapsedTime = stopwatch.Elapsed;
+            result.CompletedAtUtc = DateTimeOffset.UtcNow;
+            BindRunIdentity(result);
+            throw new FlashBundleCancellationException(result, cancellationToken);
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             result.IsSuccess = false;
+            result.FailureKind ??= EdlFailureClassification.Classify(ex);
+            result.RequiresReconnect = _session.Firehose?.RequiresReconnect == true;
             result.Errors.Add($"Fatal error: {ex} 致命错误。");
             RaiseProgress(progress, FlashBundlePhase.Error, $"Flash bundle failed: {ex.Message} 刷写包失败。", 0, 0);
         }
@@ -306,9 +344,18 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
         {
             stopwatch.Stop();
             result.ElapsedTime = stopwatch.Elapsed;
+            result.CompletedAtUtc = DateTimeOffset.UtcNow;
+            BindRunIdentity(result);
         }
 
         return result;
+    }
+
+    private void BindRunIdentity(FlashBundleResult result)
+    {
+        var capabilities = _session.Capabilities;
+        result.ResourceSha256Hex ??= capabilities?.ResourceSha256Hex;
+        result.TransportGeneration ??= capabilities?.TransportGeneration;
     }
     private FirehoseProtocol RequireFirehose()
     {

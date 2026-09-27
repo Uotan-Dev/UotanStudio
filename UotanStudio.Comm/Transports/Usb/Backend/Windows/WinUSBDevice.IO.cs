@@ -86,8 +86,7 @@ internal partial class WinUSBDevice
         if (nativeError == ERROR_CRC)
         {
             return new Win32Exception(nativeError,
-                "USB 写数据循环冗余校验（CRC）失败。请检查线缆/端口，或避免与 adb server 同时占用同一 ADB 接口。"
-                + " USB write CRC failure. Check the cable/port, or avoid sharing the ADB interface with an adb server.");
+                "USB write CRC failure. Check the cable/port, or avoid sharing the ADB interface with an adb server.");
         }
 
         return new Win32Exception(nativeError);
