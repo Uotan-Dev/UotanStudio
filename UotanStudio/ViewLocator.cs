@@ -56,6 +56,7 @@ public class ViewLocator : IDataTemplate
         {
             var view = factory();
             if (param is UotanStudio.ViewModels.Editors.ElfInfoViewModel
+                or UotanStudio.ViewModels.Editors.QualcommImageViewModel
                 or UotanStudio.ViewModels.Editors.PartitionEditorViewModel
                 or UotanStudio.ViewModels.Editors.LogEditorViewModel
                 or UotanStudio.ViewModels.Editors.DexEditorViewModel

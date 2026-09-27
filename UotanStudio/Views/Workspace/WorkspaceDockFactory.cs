@@ -428,6 +428,10 @@ public class WorkspaceDockFactory : Factory
         {
             elfInfo.Cleanup();
         }
+        else if (dockable is UotanStudio.ViewModels.Editors.QualcommImageViewModel qualcomm)
+        {
+            qualcomm.Cleanup();
+        }
         else if (dockable is UotanStudio.ViewModels.Editors.FirmwareInfoViewModel firmwareInfo)
         {
             try

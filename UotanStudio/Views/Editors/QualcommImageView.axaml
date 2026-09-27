@@ -1,0 +1,150 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:UotanStudio.ViewModels.Editors"
+             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             x:Class="UotanStudio.Views.Editors.QualcommImageView"
+             x:DataType="vm:QualcommImageViewModel">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Padding="16,10" BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1">
+            <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="{DynamicResource Dock_Qualcomm_Title}" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding FilePath}" TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding FilePath}" Opacity="0.75" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Click="OnSelectImage"
+                            ToolTip.Tip="{DynamicResource Dock_Qualcomm_ChooseImage}"
+                            VerticalAlignment="Center">
+                        <icons:MaterialIcon Kind="FolderOpenOutline" Width="18" Height="18" />
+                    </Button>
+                </Grid>
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{DynamicResource Dock_Qualcomm_TrustedRoot}" VerticalAlignment="Center" />
+                    <TextBox Grid.Column="1" Text="{Binding TrustedRootPath, Mode=TwoWay}"
+                             PlaceholderText="{DynamicResource Dock_Qualcomm_OptionalRoot}"
+                             ToolTip.Tip="{DynamicResource Dock_Qualcomm_RootHint}" />
+                    <Button Grid.Column="2" Click="OnSelectRoot"
+                            ToolTip.Tip="{DynamicResource Dock_Qualcomm_ChooseRoot}">
+                        <icons:MaterialIcon Kind="FolderOpenOutline" Width="18" Height="18" />
+                    </Button>
+                    <Button Grid.Column="3" Command="{Binding AnalyzeCommand}"
+                            ToolTip.Tip="{DynamicResource Dock_Qualcomm_Analyze}">
+                        <icons:MaterialIcon Kind="Magnify" Width="18" Height="18" />
+                    </Button>
+                    <Button Grid.Column="4" Command="{Binding CancelCommand}" IsEnabled="{Binding IsBusy}"
+                            ToolTip.Tip="{DynamicResource Dock_Qualcomm_Cancel}">
+                        <icons:MaterialIcon Kind="Close" Width="18" Height="18" />
+                    </Button>
+                </Grid>
+            </StackPanel>
+        </Border>
+        <Border DockPanel.Dock="Top" IsVisible="{Binding IsBusy}" Padding="12,8">
+            <ProgressBar IsIndeterminate="True" Height="3" />
+        </Border>
+        <Border DockPanel.Dock="Top" IsVisible="{Binding HasError}" Padding="16,8">
+            <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+        </Border>
+        <Border DockPanel.Dock="Top" Padding="16,8" BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Click="OnExport" IsEnabled="{Binding HasResults}"
+                        ToolTip.Tip="{DynamicResource Dock_Qualcomm_Export}">
+                    <icons:MaterialIcon Kind="ExportVariant" Width="18" Height="18" />
+                </Button>
+            </Grid>
+        </Border>
+        <TabControl SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}" IsVisible="{Binding HasResults}"
+                    Margin="12,8">
+            <TabItem Header="{DynamicResource Dock_Qualcomm_Overview}">
+                <DataGrid ItemsSource="{Binding OverviewRows}" IsReadOnly="True" AutoGenerateColumns="False"
+                          GridLinesVisibility="Horizontal" CanUserResizeColumns="True">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn x:DataType="vm:QualcommRow" Header="{DynamicResource Dock_Qualcomm_Field}"
+                                            Binding="{Binding Name}" Width="210" />
+                        <DataGridTextColumn x:DataType="vm:QualcommRow" Header="{DynamicResource Dock_Qualcomm_Value}"
+                                            Binding="{Binding Value}" Width="*" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+            <TabItem Header="{DynamicResource Dock_Qualcomm_Segments}">
+                <DataGrid ItemsSource="{Binding SegmentRows}" IsReadOnly="True" AutoGenerateColumns="False"
+                          GridLinesVisibility="Horizontal" CanUserResizeColumns="True" FontFamily="Consolas">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn x:DataType="vm:QualcommRow" Header="{DynamicResource Dock_Qualcomm_Field}"
+                                            Binding="{Binding Name}" Width="180" />
+                        <DataGridTextColumn x:DataType="vm:QualcommRow" Header="{DynamicResource Dock_Qualcomm_Value}"
+                                            Binding="{Binding Value}" Width="*" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+            <TabItem Header="{DynamicResource Dock_Qualcomm_Metadata}">
+                <DataGrid ItemsSource="{Binding MetadataRows}" IsReadOnly="True" AutoGenerateColumns="False"
+                          GridLinesVisibility="Horizontal" CanUserResizeColumns="True"
+                          HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="{DynamicResource Dock_Qualcomm_Field}" Width="290">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:QualcommRow">
+                                    <TextBlock Text="{Binding Name}" TextWrapping="Wrap" Margin="8,4" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="{DynamicResource Dock_Qualcomm_Value}" Width="*" MinWidth="180">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:QualcommRow">
+                                    <SelectableTextBlock Text="{Binding Value}" TextWrapping="Wrap"
+                                                         Margin="8,4" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+            <TabItem Header="{DynamicResource Dock_Qualcomm_Verification}">
+                <DataGrid ItemsSource="{Binding VerificationRows}" IsReadOnly="True" AutoGenerateColumns="False"
+                          GridLinesVisibility="Horizontal" CanUserResizeColumns="True">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="{DynamicResource Dock_Qualcomm_Field}" Width="210">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:QualcommRow">
+                                    <TextBlock Text="{Binding Name}" TextWrapping="Wrap" Margin="8,4" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="{DynamicResource Dock_Qualcomm_Value}" Width="*" MinWidth="180">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:QualcommRow">
+                                    <SelectableTextBlock Text="{Binding Value}" TextWrapping="Wrap" Margin="8,4" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+            <TabItem Header="{DynamicResource Dock_Qualcomm_Programmer}">
+                <DataGrid ItemsSource="{Binding ProgrammerRows}" IsReadOnly="True" AutoGenerateColumns="False"
+                          GridLinesVisibility="Horizontal" CanUserResizeColumns="True">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="{DynamicResource Dock_Qualcomm_Field}" Width="210">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:QualcommRow">
+                                    <TextBlock Text="{Binding Name}" TextWrapping="Wrap" Margin="8,4" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="{DynamicResource Dock_Qualcomm_Value}" Width="*" MinWidth="180">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:QualcommRow">
+                                    <SelectableTextBlock Text="{Binding Value}" TextWrapping="Wrap" Margin="8,4" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</UserControl>
