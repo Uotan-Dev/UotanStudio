@@ -1,13 +1,15 @@
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.UpdateApp.Build;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Repacking;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.UpdateApp;
 
 /// <summary>
-/// Inspects, extracts, and creates canonical unsigned Huawei update.app packages.
-/// <para>检查并解包华为 update.app 升级包；不提供重新打包。</para>
+/// Inspects, extracts, and rebuilds Huawei-style <c>update.app</c> packages: packing an extraction directory
+/// restores the source byte for byte, and packing any other directory builds the canonical unsigned container.
+/// <para>检查并解包华为风格 <c>update.app</c> 升级包；打包解包目录时按字节还原源容器，打包其它目录则生成标准无签名容器。</para>
 /// </summary>
-public sealed class UpdateAppFormatHandler : IFormatHandler
+public sealed partial class UpdateAppFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
     /// <summary>Display name of the Huawei update.app package family.
     /// <para>华为 update.app 升级包族的显示名称。</para></summary>
@@ -76,9 +78,9 @@ public sealed class UpdateAppFormatHandler : IFormatHandler
     /// <param name="cancellationToken">Accepted for interface uniformity; entry enumeration itself is
     /// synchronous.
     /// <para>为接口一致性而保留；条目枚举本身是同步的。</para></param>
-    /// <returns>An <see cref="FirmwareOpResult"/> listing the entry names and reporting the entry count, or a
-    /// failed result carrying the parse error message.
-    /// <para>返回列出条目名称并报告条目数的 <see cref="FirmwareOpResult"/>，或携带解析错误信息的失败结果。</para></returns>
+    /// <returns>An <see cref="FirmwareOpResult"/> listing the entry names and reporting the entry count and header
+    /// generation flavour, or a failed result carrying the parse error message.
+    /// <para>返回列出条目名称、报告条目数与头部代际风格的 <see cref="FirmwareOpResult"/>，或携带解析错误信息的失败结果。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled inside
     /// the enumeration.
     /// <para>枚举过程中 <paramref name="cancellationToken"/> 被触发。</para></exception>
@@ -87,10 +89,15 @@ public sealed class UpdateAppFormatHandler : IFormatHandler
         try
         {
             var entries = UpdateAppProcessor.GetEntries(filePath).ToList();
+            var flavor = UpdateAppProcessor.DetectFlavor(entries);
             var summary = $"Huawei update.app: {entries.Count} partitions";
             return Task.FromResult(FirmwareOpResult.Ok(summary,
                 entries: [.. entries.Select(e => e.Name)],
-                metadata: new Dictionary<string, string> { ["EntryCount"] = entries.Count.ToString() }));
+                metadata: new Dictionary<string, string>
+                {
+                    ["EntryCount"] = entries.Count.ToString(),
+                    ["Flavor"] = flavor.ToString()
+                }));
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
@@ -148,21 +155,30 @@ public sealed class UpdateAppFormatHandler : IFormatHandler
     }
 
     /// <summary>
-    /// Packs a flat directory into a canonical unsigned update.app.
-    /// <para>异步将输入打包为固件。</para>
+    /// Packs a directory into an update.app container: a faithful restoration when the directory carries
+    /// captured <c>updateApp</c> repack metadata, otherwise a canonical unsigned container.
+    /// <para>将目录打包为 update.app 容器：目录带有已捕获的 <c>updateApp</c> 重打包元数据时按字节保真还原，否则生成标准无签名容器。</para>
     /// </summary>
     /// <param name="inputPath">Flat directory containing partition files; a trailing <c>.img</c> is removed from entry names.
-    /// <para>被忽略；此格式不接受任何源目录布局。</para></param>
+    /// <para>包含分区文件的扁平目录；条目名称会去掉 <c>.img</c> 后缀。</para></param>
     /// <param name="outputPath">Destination package path, published atomically.
-    /// <para>被忽略；不会写出任何文件。</para></param>
+    /// <para>目标容器路径，以原子方式发布。</para></param>
     /// <param name="cancellationToken">Cancellation token observed during checksum and write passes.
-    /// <para>被忽略；调用立即完成。</para></param>
-    /// <returns>A success result for the canonical unsigned package, or a failed result for invalid input.
-    /// <para>始终失败的 <see cref="FirmwareOpResult"/>，说明不支持打包 update.app；不支持的打包不会抛出异常。</para></returns>
+    /// <para>在校验与写入过程中观察的取消令牌。</para></param>
+    /// <returns>A success result for the produced package, or a failed result for invalid input or a
+    /// faithful-repack CRC rejection.
+    /// <para>成功时返回生成容器的结果；输入无效或保真重打包被 CRC 拒绝时返回失败结果。</para></returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try
         {
+            if (ReadFaithfulConfiguration(inputPath) is { } config)
+            {
+                var restored = UpdateAppFaithfulRepacker.Repack(config, inputPath, outputPath, cancellationToken);
+                return Task.FromResult(FirmwareOpResult.Ok(
+                    $"Rebuilt {restored} framed entries into {outputPath}; byte layout and headers preserved, payload CRC re-verified."));
+            }
+
             var count = UpdateAppBuilder.Build(inputPath, outputPath, cancellationToken: cancellationToken);
             return Task.FromResult(FirmwareOpResult.Ok(
                 $"Packed {count} entries to {outputPath} (canonical unsigned update.app)."));

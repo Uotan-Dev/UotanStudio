@@ -20,6 +20,24 @@ public static class RealSampleIndex
     /// <para>指定真实 Qualcomm ELF Firehose 样本的环境变量名。</para></summary>
     public const string ElfFirehoseVariable = "UOTAN_ELF_FIREHOSE_SAMPLE";
 
+    /// <summary>Environment variable naming the closed-source arm64 reference ELF used as the behavioural oracle
+    /// for Samsung <c>*.dat</c> merge-partition reconstruction. It is an executable oracle rather than firmware
+    /// input: tests run it and compare its output with the managed implementation.
+    /// <para>指定闭源 arm64 参考 ELF 的环境变量名，它作为 Samsung <c>*.dat</c> 合并分区重建的行为 oracle。
+    /// 它是可执行 oracle 而不是固件输入：测试运行它并把输出与自有实现对照。</para></summary>
+    public const string SamsungDatMergeOracleVariable = "UOTAN_SAMSUNG_DAT_MERGE_ORACLE";
+
+    /// <summary>Environment variable naming the closed-source arm64 reference ELF used as the behavioural oracle
+    /// for Samsung payload merge output. It is an executable oracle rather than firmware input, and is usually a
+    /// sibling of the <c>*.dat</c> merge oracle in the same tool directory.
+    /// <para>指定闭源 arm64 参考 ELF 的环境变量名，它作为 Samsung payload 合并输出的行为 oracle。
+    /// 它是可执行 oracle 而不是固件输入，通常与 <c>*.dat</c> 合并 oracle 位于同一工具目录。</para></summary>
+    public const string SamsungPayloadMergeOracleVariable = "UOTAN_SAMSUNG_PAYLOAD_MERGE_ORACLE";
+
+    /// <summary>Environment variable naming a real HarmonyOS <c>UPDATE.APP</c> corpus package.
+    /// <para>指定真实 HarmonyOS <c>UPDATE.APP</c> 语料包的环境变量名。</para></summary>
+    public const string HarmonyUpdateAppVariable = "UOTAN_HOS_UPDATE_APP_SAMPLE";
+
     /// <summary>SHA-256 of the SELinux policy sample recorded in <c>docs/firmware-sample-index.md</c>.
     /// <para><c>docs/firmware-sample-index.md</c> 中记录的 SELinux 策略样本的 SHA-256。</para></summary>
     public const string SelinuxPolicySha256 =
@@ -31,6 +49,23 @@ public static class RealSampleIndex
     /// <para>Qualcomm ELF Firehose 样本的 SHA-256。该固定值尚未确定：本机没有可读取的 Firehose 文件，
     /// <c>docs/qualcomm-metadata.md</c> 中记录的摘要无法复现，因此不做任何断言。</para></summary>
     public const string? ElfFirehoseSha256 = null;
+
+    /// <summary>SHA-256 of the Samsung <c>*.dat</c> merge oracle binary. The pin is pending: the reference ELF is
+    /// not readable on this machine, so nothing is asserted until a digest is recorded from a confirmed copy.
+    /// <para>Samsung <c>*.dat</c> 合并 oracle 二进制的 SHA-256。该固定值尚未确定：本机没有可读取的参考 ELF，
+    /// 因此直到从已确认副本记录摘要之前不做任何断言。</para></summary>
+    public const string? SamsungDatMergeOracleSha256 = null;
+
+    /// <summary>SHA-256 of the Samsung payload merge oracle binary. The pin is pending for the same reason as the
+    /// <c>*.dat</c> merge oracle.
+    /// <para>Samsung payload 合并 oracle 二进制的 SHA-256。该固定值尚未确定，原因与 <c>*.dat</c> 合并 oracle 相同。</para></summary>
+    public const string? SamsungPayloadMergeOracleSha256 = null;
+
+    /// <summary>SHA-256 of the HarmonyOS <c>UPDATE.APP</c> corpus. The pin is pending: no corpus copy is readable
+    /// on this machine, so <see cref="VerifyIdentityAsync"/> only reports the computed digest.
+    /// <para>HarmonyOS <c>UPDATE.APP</c> 语料的 SHA-256。该固定值尚未确定：本机没有可读取的语料副本，
+    /// 因此 <see cref="VerifyIdentityAsync"/> 只报告计算得到的摘要。</para></summary>
+    public const string? HarmonyUpdateAppSha256 = null;
 
     private const long MaxSampleBytes = 256L * 1024 * 1024;
     private const int SampleBufferSize = 128 * 1024;
