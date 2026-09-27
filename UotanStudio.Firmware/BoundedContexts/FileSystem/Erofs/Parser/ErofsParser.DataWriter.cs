@@ -209,8 +209,18 @@ public sealed partial class ErofsParser
     private const int FullIndexStartPad = 8;
 
     /// <summary>
-    /// Reads compressed file data through compact or full EROFS cluster indexes.
-    /// <para>通过紧凑或完整的 EROFS 簇索引读取压缩文件数据。</para>
+    /// Reads compressed file data through compact or full EROFS cluster indexes, including LZ4SC and
+    /// ZLIB4C semi-compressed pclusters: a PLAIN head lcluster followed by NONHEAD lclusters decodes as
+    /// one raw logical cluster (the head, stored verbatim at the pcluster start) plus the remaining
+    /// logical clusters produced by the HEAD1 codec (LZ4 for LZ4SC, raw DEFLATE for ZLIB4C). Semi
+    /// detection requires big-pcluster indexing (the CBLKCNT marker on the first NONHEAD lcluster), a
+    /// zero head clusterofs, and a non-interlaced, non-tailpacked pcluster; PLAIN heads that encode a
+    /// LZMA or ZSTD stream stay fully raw (SHIFTED) per the kernel semantics.
+    /// <para>通过紧凑或完整的 EROFS 簇索引读取压缩文件数据，含 LZ4SC 与 ZLIB4C 半压缩 pcluster：
+    /// 当 PLAIN head lcluster 后跟随 NONHEAD lcluster 时，首逻辑簇按 pcluster 起点的原始字节直接输出，
+    /// 其余逻辑簇由 HEAD1 编解码器解压产出（LZ4SC 为 LZ4，ZLIB4C 为原始 DEFLATE）。半压缩识别要求
+    /// big-pcluster 索引（首个 NONHEAD 携带 CBLKCNT 标记）、head 的 clusterofs 为 0，且非 interlaced、
+    /// 非尾部打包；编码 LZMA 或 ZSTD 流的 PLAIN head 按内核语义仍整体视为明文（SHIFTED）。</para>
     /// </summary>
     private void WriteCompressedData(ulong nid, ErofsInode inode, Stream output,
         CompressionObserver? observer = null, CancellationToken cancellationToken = default)
@@ -332,6 +342,15 @@ public sealed partial class ErofsParser
 
                 var isLastExtent = nextMLa >= (long)inode.Size;
                 var isTailPacked = tailPacking && isLastExtent;
+
+                var semiRawLength = 0;
+                var isSemiPcluster = lc.Type == LclusterTypePlain && !interlaced && !isTailPacked
+                    && lc.ClusterOfs == 0 && nextLcn > lcn + 1 && llen > lclusterSize
+                    && algorithmHead1 is ErofsAlgorithm.Lz4 or ErofsAlgorithm.Deflate;
+                if (isSemiPcluster)
+                {
+                    semiRawLength = lclusterSize;
+                }
                 if (observer is not null && (llen > 1 << 20 || lc.Type == LclusterTypePlain || fragmentPcluster && isLastExtent))
                 {
                     lcn = nextLcn;
@@ -346,7 +365,7 @@ public sealed partial class ErofsParser
                     continue;
                 }
 
-                if (lc.Type == LclusterTypePlain)
+                if (lc.Type == LclusterTypePlain && !isSemiPcluster)
                 {
 
                     var dataStart = isTailPacked ? CompressedIndexEnd(nid, inode, headerOffset, totalIdx, lclusterBits) : checked(lc.Pblk * _blockSize);
@@ -416,7 +435,13 @@ public sealed partial class ErofsParser
                 var compressedByteLen = isTailPacked ? header.IdataSize : checked(compressedBlocks * _blockSize);
                 if (compressedByteLen <= 0 || !isTailPacked && lc.Pblk < 0 || compressedByteLen > ErofsCompression.MaxPclusterSize)
                 {
-                    throw new InvalidDataException("Invalid compressed pcluster for nid {nid}.");
+                    throw new InvalidDataException($"Invalid compressed pcluster for nid {nid}.");
+                }
+
+                if (isSemiPcluster && compressedByteLen <= semiRawLength)
+                {
+                    throw new InvalidDataException(
+                        $"Semi-compressed pcluster {lcn} of nid {nid} has no encoded tail after its raw head cluster ({compressedByteLen} disk bytes, {semiRawLength} raw bytes).");
                 }
 
                 var pblkStart = isTailPacked ? CompressedIndexEnd(nid, inode, headerOffset, totalIdx, lclusterBits) : checked(lc.Pblk * _blockSize);
@@ -447,7 +472,7 @@ public sealed partial class ErofsParser
                     }
                 }
 
-                var inputMargin = 0;
+                var inputMargin = semiRawLength;
                 while (!isTailPacked && inputMargin < compressedByteLen && compressed[inputMargin] == 0)
                 {
                     inputMargin++;
@@ -460,11 +485,12 @@ public sealed partial class ErofsParser
                 }
 
                 var algorithm = headType == LclusterTypeHead2 ? algorithmHead2 : algorithmHead1;
+                var decodedTarget = (int)llen - semiRawLength;
                 int decodedLen;
                 try
                 {
                     decodedLen = ErofsCompression.AlgorithmDecompress(
-                        algorithm, compressed, inputMargin, compressedByteLen - inputMargin, decoded, 0, (int)llen);
+                        algorithm, compressed, inputMargin, compressedByteLen - inputMargin, decoded, 0, decodedTarget);
                 }
                 catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or ArgumentException)
                 {
@@ -472,18 +498,25 @@ public sealed partial class ErofsParser
                         $"Pcluster {lcn} of nid {nid} failed to decompress ({algorithm}): {ex.Message}");
                 }
 
-                if (decodedLen != (int)llen)
+                if (decodedLen != decodedTarget)
                 {
                     throw new InvalidDataException(
-                        $"Pcluster {lcn} decoded to {decodedLen} bytes, expected {llen}.");
+                        $"Pcluster {lcn} decoded to {decodedLen} bytes, expected {decodedTarget}.");
                 }
 
                 if (observer is not null)
                 {
                     if (!observer((ErofsCompressionAlgorithm)algorithm,
-                        compressed.AsSpan(inputMargin, compressedByteLen - inputMargin), decoded.AsSpan(0, (int)llen), lc.ClusterOfs, kernelExpectedOutputSize)) return;
+                        compressed.AsSpan(inputMargin, compressedByteLen - inputMargin), decoded.AsSpan(0, decodedTarget), lc.ClusterOfs, kernelExpectedOutputSize)) return;
                 }
-                else output.Write(decoded, 0, (int)llen);
+                else
+                {
+                    if (semiRawLength > 0)
+                    {
+                        output.Write(compressed, 0, semiRawLength);
+                    }
+                    output.Write(decoded, 0, decodedTarget);
+                }
                 lcn = nextLcn;
             }
         }

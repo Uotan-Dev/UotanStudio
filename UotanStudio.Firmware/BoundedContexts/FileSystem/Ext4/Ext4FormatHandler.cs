@@ -114,6 +114,10 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider
                 ["FeatureRoCompat"] = MetadataDisplay.Flags(sb.FeatureRoCompat, (1, "sparse_super"), (2, "large_file"), (4, "btree_dir"), (8, "huge_file"), (16, "gdt_csum"), (32, "dir_nlink"), (64, "extra_isize"), (128, "has_snapshot"), (256, "quota"), (512, "bigalloc"), (1024, "metadata_csum"), (2048, "replica"), (4096, "readonly"), (8192, "project"), (16384, "shared_blocks"), (32768, "verity"), (65536, "orphan_present")),
                 ["State"] = MetadataDisplay.Flags(sb.State, (1, "clean"), (2, "errors"), (4, "orphan_recovery")),
             };
+            if (sb.HasSparseSuper2)
+            {
+                metadata["BackupGroups"] = $"{sb.BackupGroup1}, {sb.BackupGroup2}";
+            }
             var summary = $"EXT4 image: {parser.BlockCount} blocks x {parser.BlockSize}B = {parser.PartitionSize} bytes, {parser.InodeCount} inodes.";
             return Task.FromResult(FirmwareOpResult.Ok(summary, metadata: metadata));
         }

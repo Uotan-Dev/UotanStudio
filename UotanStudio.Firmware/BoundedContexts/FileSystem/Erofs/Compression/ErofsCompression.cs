@@ -508,6 +508,24 @@ internal static class ErofsCompression
             return 0;
         }
 
+        try
+        {
+            return InflateDeflateRaw(source, sourceIndex, sourceLength, target, targetIndex, targetLength);
+        }
+        catch (ICSharpCode.SharpZipLib.SharpZipBaseException exception)
+        {
+            throw new InvalidDataException("EROFS DEFLATE compressed cluster data is invalid.", exception);
+        }
+    }
+
+    private static int InflateDeflateRaw(
+        byte[] source,
+        int sourceIndex,
+        int sourceLength,
+        byte[] target,
+        int targetIndex,
+        int targetLength)
+    {
         var inflater = new Inflater(noHeader: true);
         inflater.SetInput(source, sourceIndex, sourceLength);
 

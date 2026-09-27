@@ -7,12 +7,12 @@ namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
 
 /// <summary>
 /// Read-only parser for raw ext4 images. The image is treated as untrusted input: superblock geometry,
-/// block size, feature flags, group descriptor table size, inode numbers, directory depth, cycles and
-/// xattr values are each validated against explicit bounds before content is produced, and an optional
-/// JBD2 journal replay is folded in as a dirty-block overlay.
-/// <para>ext4 原始镜像的只读解析器。镜像按不可信输入处理：超级块几何、块大小、特性标志、块组描述符表
-/// 大小、inode 编号、目录深度、目录环与 xattr 值都会在产出内容前对照显式边界校验，并可选地重放 JBD2
-/// 日志形成脏块覆盖层。</para>
+/// block size, feature flags, sparse_super2 backup-group identity, group descriptor table size, inode
+/// numbers, directory depth, cycles and xattr values are each validated against explicit bounds before
+/// content is produced, and an optional JBD2 journal replay is folded in as a dirty-block overlay.
+/// <para>ext4 原始镜像的只读解析器。镜像按不可信输入处理：超级块几何、块大小、特性标志、sparse_super2
+/// 备份组身份、块组描述符表大小、inode 编号、目录深度、目录环与 xattr 值都会在产出内容前对照显式边界
+/// 校验，并可选地重放 JBD2 日志形成脏块覆盖层。</para>
 /// </summary>
 public sealed class Ext4Parser : IDisposable
 {
@@ -292,6 +292,21 @@ public sealed class Ext4Parser : IDisposable
 
         var gdtLength = checked((long)groupCount * descSize);
 
+        if (_superblock.HasSparseSuper2)
+        {
+            if (_superblock.FirstDataBlock != 0)
+            {
+                throw new InvalidDataException(
+                    $"ext4 sparse_super2 requires s_first_data_block to be 0, found {_superblock.FirstDataBlock}.");
+            }
+
+            if (_superblock.BackupGroup1 >= groupCount || _superblock.BackupGroup2 >= groupCount)
+            {
+                throw new InvalidDataException(
+                    $"ext4 sparse_super2 backup group ids {_superblock.BackupGroup1} and {_superblock.BackupGroup2} exceed the {groupCount} block groups of the image.");
+            }
+        }
+
         var gdtOffset = checked((_superblock.FirstDataBlock + 1) * _blockSize);
         if (gdtLength > MaximumGroupDescriptorTableSize || gdtLength > _stream.Length - gdtOffset)
         {
@@ -327,6 +342,51 @@ public sealed class Ext4Parser : IDisposable
                 System.Diagnostics.Debug.WriteLine($"ext4 journal replay failed: {ex.Message}");
             }
         }
+    }
+
+    /// <summary>
+    /// Reports whether one block group stores a backup superblock and group descriptor table copy
+    /// under the image's sparse-layout features: with COMPAT_SPARSE_SUPER2 only the two groups named
+    /// by <c>s_backup_bgs</c> (plus group 0) carry copies; otherwise RO_COMPAT_SPARSE_SUPER selects
+    /// groups 1, 3, 5, 7 and every power of three, five or seven; without either feature only group 0
+    /// stores the primary superblock.
+    /// <para>判断某个块组是否在本镜像的稀疏布局特性下保存超级块与组描述符表备份：置位
+    /// COMPAT_SPARSE_SUPER2 时，仅 <c>s_backup_bgs</c> 命名的两个组（加上组 0）保存备份；否则若置位
+    /// RO_COMPAT_SPARSE_SUPER，则组 1、3、5、7 以及 3、5、7 的各次幂保存备份；两者都未置位时，只有组 0
+    /// 保存主超级块。</para>
+    /// </summary>
+    /// <param name="group">Zero-based block group index. <para>从零开始的块组编号。</para></param>
+    /// <returns><see langword="true"/> when the group stores superblock copies; otherwise <see langword="false"/>.
+    /// <para>该组保存超级块备份时为 <see langword="true"/>，否则为 <see langword="false"/>。</para></returns>
+    public bool GroupHasSuperblock(uint group)
+    {
+        if (group == 0)
+        {
+            return true;
+        }
+        if (_superblock.HasSparseSuper2)
+        {
+            return group == _superblock.BackupGroup1 || group == _superblock.BackupGroup2;
+        }
+        if (!_superblock.HasSparseSuper)
+        {
+            return false;
+        }
+        if (group is 1 or 3 or 5 or 7)
+        {
+            return true;
+        }
+        foreach (var @base in new uint[] { 3, 5, 7 })
+        {
+            for (var power = @base; power <= group && power <= uint.MaxValue / @base; power *= @base)
+            {
+                if (power == group)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /// <summary>

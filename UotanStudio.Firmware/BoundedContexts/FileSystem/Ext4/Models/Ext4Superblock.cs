@@ -62,6 +62,19 @@ internal sealed class Ext4Superblock
 
     public uint Checksum { get; private init; }
 
+    public uint BackupGroup1 { get; private init; }
+
+    public uint BackupGroup2 { get; private init; }
+
+    /// <summary>RO_COMPAT_SPARSE_SUPER selects the classic backup-group sequence for superblock and descriptor copies. <para>RO_COMPAT_SPARSE_SUPER 决定超级块与描述符备份的经典备份组序列。</para></summary>
+    /// <value><see langword="true"/> when ro-compat bit 0x1 is set. <para>ro-compat 位 0x1 置位时为 <see langword="true"/>。</para></value>
+    public bool HasSparseSuper => (FeatureRoCompat & 0x0001) != 0;
+
+    /// <summary>COMPAT_SPARSE_SUPER2 restricts superblock and descriptor-table backups to the two groups named by the superblock. <para>COMPAT_SPARSE_SUPER2 把超级块与描述符表备份限定为超级块中记录的两个组。</para></summary>
+    /// <value><see langword="true"/> when compat bit 0x200 is set; the kernel then also mandates <c>s_first_data_block == 0</c>.
+    /// <para>compat 位 0x200 置位时为 <see langword="true"/>；此时内核还强制要求 <c>s_first_data_block == 0</c>。</para></value>
+    public bool HasSparseSuper2 => (FeatureCompat & 0x0200) != 0;
+
     public long BlockSize => 1024L << (int)LogBlockSize;
 
     public ulong BlocksCount => ((ulong)BlocksCountHi << 32) | BlocksCountLo;
@@ -118,6 +131,8 @@ internal sealed class Ext4Superblock
             DescSize = BinaryPrimitives.ReadUInt16LittleEndian(span[254..256]),
             BlocksCountHi = BinaryPrimitives.ReadUInt32LittleEndian(span[336..340]),
             FreeBlocksCountHi = BinaryPrimitives.ReadUInt32LittleEndian(span[344..348]),
+            BackupGroup1 = span.Length >= 0x250 ? BinaryPrimitives.ReadUInt32LittleEndian(span[0x24C..]) : 0u,
+            BackupGroup2 = span.Length >= 0x254 ? BinaryPrimitives.ReadUInt32LittleEndian(span[0x250..]) : 0u,
             Checksum = span.Length >= 1024
                 ? BinaryPrimitives.ReadUInt32LittleEndian(span[1020..1024])
                 : 0u,
