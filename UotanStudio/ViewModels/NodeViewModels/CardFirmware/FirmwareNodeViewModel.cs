@@ -100,6 +100,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         node.Input.Add(new NodeConnectorViewModel { Title = "Partition Name", PortType = NodePortType.Text });
         node.Output.Add(new NodeConnectorViewModel { Title = "Image", PortType = NodePortType.Data });
         node.Output.Add(new NodeConnectorViewModel { Title = "Image File", PortType = NodePortType.Path });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Artifact", PortType = NodePortType.Artifact });
         node.Output.Add(new NodeConnectorViewModel { Title = "Output Dir", PortType = NodePortType.Path });
         return node;
     }
@@ -280,6 +281,7 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
             var imagePath = Path.Combine(outputDir, partition + ".img");
             WriteOutput("Image", new UotanStudio.Services.Projects.FileArtifact(imagePath));
             WriteOutput("Image File", imagePath);
+            WriteOutput("Artifact", new UotanStudio.Services.Projects.FileArtifact(imagePath));
         }
         WriteOutput("Output Dir", outputDir);
         context.Log.Write(LogLevel.Info, Title, $"{result.Summary}  已提取。");

@@ -40,6 +40,7 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
         node.Input.Add(new NodeConnectorViewModel { Title = "Source", PortType = NodePortType.Path });
         node.Input.Add(new NodeConnectorViewModel { Title = "Target", PortType = NodePortType.Path });
         node.Output.Add(new NodeConnectorViewModel { Title = "Delta", PortType = NodePortType.Data });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Artifact", PortType = NodePortType.Artifact });
         return node;
     }
 
@@ -147,6 +148,7 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
         if (result.Success)
         {
             WriteOutput("Delta", new FileArtifact(output));
+            WriteOutput("Artifact", new FileArtifact(output));
             context.Log.Write(LogLevel.Info, Title,
                 $"Delta generated: {output} ({result.SourceLength} -> {result.DiffLength} bytes).  差分文件生成完成。");
         }

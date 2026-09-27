@@ -163,7 +163,7 @@ public sealed class SubProjectMetadataIsolationTests : IDisposable
         Assert.True(packed.Success, packed.Summary);
         desktop.SetActiveSubProject("other");
         var output = Path.Combine(first.RootPath, "ramdisk");
-        var unpacked = await service.UnpackCpioAsync(image, output);
+        var unpacked = await service.UnpackCpioAsync(image, output, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(unpacked.Success, unpacked.Summary);
         Assert.Equal("content", File.ReadAllText(Path.Combine(output, "hello")));
         Assert.True(File.Exists(Path.Combine(first.MetadataRoot, "ramdisk", RepackMetadata.FileName)));

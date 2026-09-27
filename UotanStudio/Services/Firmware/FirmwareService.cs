@@ -147,90 +147,110 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Unpacks a CPIO/TAR archive to the specified directory.
-    /// <para>将 CPIO/TAR 归档解包到指定目录。</para>
+    /// Replaces an extraction directory after staging a CPIO/TAR archive, restoring its contents on failure.
+    /// <para>暂存 CPIO/TAR 解包结果后替换输出目录，失败时恢复既有内容；底层提取 API 仍使用合并语义。</para>
     /// </summary>
     /// <param name="archivePath">The archive file path.</param>
     /// <param name="outputDirectory">The output directory.</param>
-    /// <param name="overwrite">Whether to overwrite existing files.</param>
+    /// <param name="overwrite">Whether to replace a nonempty output directory.</param>
     /// <param name="cancellationToken">Cancels extraction before metadata publication.</param>
     /// <returns>Operation result.</returns>
-    public Task<FirmwareOpResult> UnpackCpioAsync(string archivePath, string outputDirectory,
+    public async Task<FirmwareOpResult> UnpackCpioAsync(string archivePath, string outputDirectory,
         bool overwrite = true, CancellationToken cancellationToken = default)
-        => CompleteUnpackAsync(archivePath, outputDirectory,
-            () => UnpackCpioCoreAsync(archivePath, outputDirectory, overwrite, cancellationToken),
-            cancellationToken, new CpioFormatHandler(), overwrite, context: CaptureOperationContext(outputDirectory));
-
-    private async Task<FirmwareOpResult> UnpackCpioCoreAsync(string archivePath, string outputDirectory,
-        bool overwrite, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        var target = Path.TrimEndingDirectorySeparator(Path.GetFullPath(outputDirectory));
+        var context = CaptureOperationContext(target);
+        var staging = Path.Combine(Path.GetDirectoryName(target)!,
+            $".{Path.GetFileName(target)}.cpio-{Guid.NewGuid():N}");
         try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            await using var fs = File.OpenRead(archivePath);
-            var archive = new CpioArchive();
-            Directory.CreateDirectory(outputDirectory);
-            archive.ExtractToDirectory(fs, outputDirectory, new ExtractOptions
+            using var scope = RepackMetadata.UseContext(context);
+            var metadataDirectory = RepackMetadata.DefaultMetadataRoot is { } root
+                ? Path.Combine(root, RepackMetadata.DetectPartitionName(Path.GetFileName(archivePath))) : target;
+            var metadataPath = Path.Combine(metadataDirectory, RepackMetadata.FileName);
+            if (File.Exists(metadataPath) && (!overwrite || !RepackMetadata.IsMetadataFile(metadataPath)))
             {
-                MakeDirectories = true,
-                Overwrite = overwrite,
-                CancellationToken = cancellationToken
-            });
+                return FirmwareOpResult.Fail($"Repack metadata output already exists: {metadataPath}");
+            }
+            if (!overwrite && Directory.Exists(target) && Directory.EnumerateFileSystemEntries(target).Any())
+            {
+                return FirmwareOpResult.Fail($"Extraction output already exists: {target}");
+            }
+            var extracted = await UnpackCpioCoreAsync(archivePath, staging, true, cancellationToken).ConfigureAwait(false);
+            if (!extracted.Success)
+            {
+                return extracted;
+            }
             cancellationToken.ThrowIfCancellationRequested();
-            var count = Directory.EnumerateFiles(outputDirectory, "*", SearchOption.AllDirectories).Count();
-            return new FirmwareOpResult { Success = true, Summary = $"Extracted {count} files to {outputDirectory}" };
+            return await ExtractionDirectory.ReplaceAsync(target, () => CompleteUnpackAsync(
+                archivePath, target, () =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    Directory.Delete(target);
+                    Directory.Move(staging, target);
+                    return Task.FromResult(new FirmwareOpResult
+                    {
+                        Success = true,
+                        Summary = $"Extracted archive to {target}",
+                        Entries = extracted.Entries
+                    });
+                }, cancellationToken, new CpioFormatHandler(), overwrite, context)).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             throw;
         }
         catch (Exception ex)
         {
-            return new FirmwareOpResult { Success = false, Summary = ex.Message };
+            return FirmwareOpResult.Fail(ex.Message);
+        }
+        finally
+        {
+            if (Directory.Exists(staging))
+            {
+                Directory.Delete(staging, recursive: true);
+            }
         }
     }
 
+    private async Task<FirmwareOpResult> UnpackCpioCoreAsync(string archivePath, string outputDirectory,
+        bool overwrite, CancellationToken cancellationToken)
+    {
+        using var scope = RepackMetadata.UseContext(RepackMetadataContext.LocalDirectory);
+        var result = await new CpioFormatHandler().UnpackAsync(archivePath, outputDirectory,
+            new UnpackOptions { Overwrite = overwrite }, cancellationToken).ConfigureAwait(false);
+        if (result.Success)
+        {
+            File.Delete(Path.Combine(outputDirectory, RepackMetadata.FileName));
+        }
+        return new FirmwareOpResult
+        {
+            Success = result.Success,
+            Summary = result.Summary,
+            Entries = result.Entries
+        };
+    }
+
     /// <summary>
-    /// Packs a directory into a CPIO archive (newc format).
-    /// <para>将目录内容打包为 CPIO 归档（newc 格式）。</para>
+    /// Packs a directory with verified atomic publication, restoring captured archive headers and links when available.
+    /// <para>校验后原子发布目录归档；有重打包元数据时恢复归档头与链接，无元数据时使用目录构建器默认值。</para>
     /// </summary>
     /// <param name="inputDirectory">The input directory.</param>
     /// <param name="outputArchivePath">The output archive path.</param>
+    /// <param name="cancellationToken">Cancels enumeration, payload copying and validation before publication.</param>
     /// <returns>Operation result.</returns>
     public async Task<FirmwareOpResult> PackCpioAsync(string inputDirectory, string outputArchivePath, CancellationToken cancellationToken = default)
     {
-        try
+        using var scope = RepackMetadata.UseContext(CaptureOperationContext(inputDirectory));
+        var result = await new CpioFormatHandler().PackAsync(inputDirectory, outputArchivePath, cancellationToken)
+            .ConfigureAwait(false);
+        return new FirmwareOpResult
         {
-            var archive = new CpioArchive();
-            var entries = new List<ArchiveEntry>();
-            foreach (var file in Directory.EnumerateFiles(inputDirectory, "*", SearchOption.AllDirectories))
-            {
-                if (RepackMetadata.IsMetadataFile(file)) continue;
-                var rel = Path.GetRelativePath(inputDirectory, file);
-                // 惰性打开文件流，避免把整个目录的所有文件一次性读入内存。
-                // Open each file lazily so the whole directory is never materialized in memory.
-                entries.Add(new ArchiveEntry
-                {
-                    Name = rel.Replace('\\', '/'),
-                    Data = [],
-                    DataStreamFactory = () => File.OpenRead(file),
-                    DeclaredDataLength = new FileInfo(file).Length,
-                    Metadata = new ArchiveEntryMetadata
-                    {
-                        FileType = CpioFileType.Regular,
-                        UnixPermissions = 0x1A4,
-                        LinkCount = 1
-                    }
-                });
-            }
-            using var output = File.Create(outputArchivePath);
-            archive.SaveAll(output, entries, ArchiveFormat.NewAscii);
-            return new FirmwareOpResult { Success = true, Summary = $"Packed {entries.Count} entries to {outputArchivePath}" };
-        }
-        catch (Exception ex)
-        {
-            return new FirmwareOpResult { Success = false, Summary = ex.Message };
-        }
+            Success = result.Success,
+            Summary = result.Summary,
+            Entries = result.Entries
+        };
     }
 
     /// <summary>
