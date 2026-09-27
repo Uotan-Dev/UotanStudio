@@ -24,8 +24,13 @@ internal static partial class DeliveryScriptGenerator
     }
 
     /// <summary><para>按计划生成脚本；localize 非空时用其解析用户可见提示文案，否则回退英文。</para>
-    /// Generates scripts from the plan; when localize is set its lookup resolves user-visible prompts, otherwise English falls back.</summary>
-    internal static Dictionary<string, string> Generate(DeliveryPlan plan, Func<string, string>? localize = null)
+    /// Generates scripts from the plan; when localize is set its lookup resolves user-visible prompts, otherwise English falls back.
+    /// <para>excludeOatArtifacts 为可选开关：置位时按共享文件编排结果剔除 oat/ART 编译产物条目（.oat、.odex、.vdex），
+    /// 默认关闭且不影响任何既有输出。</para>
+    /// <para>excludeOatArtifacts is an opt-in switch: when set, the shared file-orchestration result drops
+    /// oat/ART compiled-artifact entries (.oat, .odex, .vdex); it defaults to off and never changes existing outputs.</para></summary>
+    internal static Dictionary<string, string> Generate(DeliveryPlan plan, Func<string, string>? localize = null,
+        bool excludeOatArtifacts = false)
     {
         DeliveryValidation.Validate(plan, false);
         if (plan.IsSuperEmptyOnly) return [];
@@ -33,7 +38,8 @@ internal static partial class DeliveryScriptGenerator
         if (!plan.OrganizeDirectory) return result;
         var flashFiles = plan.Files.Where(f => !f.FileName.Equals("payload.bin", StringComparison.OrdinalIgnoreCase) && f.Partition != "payload"
             && f.Partition != "super_empty"
-            && !DeliveryPackageBuilder.IsDatArtifact(f.FileName))
+            && !DeliveryPackageBuilder.IsDatArtifact(f.FileName)
+            && !(excludeOatArtifacts && IsOatArtifact(f.FileName)))
             .Select(f => f.Generated && f.Partition == "super"
                 ? f with { Generated = false, FileName = DeliveryOutputService.SuperFileName(plan.Super) }
                 : f)
@@ -89,6 +95,11 @@ internal static partial class DeliveryScriptGenerator
 
     private static string Txt(DeliveryPlan plan, IEnumerable<DeliveryFile> files) => string.Concat(files.Select(f => $"{f.Partition} {ImagePath(plan, f)}\r\n"));
     private static string Sh(string value) => "'" + value.Replace("'", "'\"'\"'") + "'";
+
+    /// <summary><para>判断文件名是否为 oat/ART 编译产物（.oat、.odex、.vdex），供可选清理剔除共享文件编排条目。</para>
+    /// Recognizes oat/ART compiled artifacts (.oat, .odex, .vdex) so the opt-in cleanup can drop them from the shared file-orchestration result.</summary>
+    private static bool IsOatArtifact(string fileName) =>
+        Path.GetExtension(fileName).ToLowerInvariant() is ".oat" or ".odex" or ".vdex";
 
     private static string Shell(DeliveryPlan plan, DeliveryFile[][] groups, string platform, Func<string, string>? localize)
     {

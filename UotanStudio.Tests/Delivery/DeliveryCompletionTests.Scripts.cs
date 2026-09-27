@@ -237,6 +237,26 @@ public sealed partial class DeliveryCompletionTests
     }
 
     [Fact]
+    public void OatArtifactExclusionDefaultsToOffAndRemovesExactlyTheOatMember()
+    {
+        var boot = Image("boot");
+        var oat = new DeliveryFile { FileName = "app.oat", Partition = "app_oat" };
+        var withOat = new DeliveryPlan { Windows = true, Linux = true, MacOS = true, Txt = true, Files = [boot, oat] };
+        var bootOnly = new DeliveryPlan { Windows = true, Linux = true, MacOS = true, Txt = true, Files = [boot] };
+        var defaults = DeliveryScriptGenerator.Generate(withOat);
+        var cleaned = DeliveryScriptGenerator.Generate(withOat, null, excludeOatArtifacts: true);
+        var plain = DeliveryScriptGenerator.Generate(bootOnly);
+        foreach (var name in new[] { "flash.txt", "FlashWindows.bat", "FlashLinux.sh", "FlashMacOS.sh" })
+        {
+            Assert.Contains("app.oat", defaults[name]);
+            Assert.DoesNotContain("app.oat", cleaned[name]);
+            Assert.Equal(plain[name], cleaned[name]);
+        }
+        Assert.Equal(defaults, DeliveryScriptGenerator.Generate(withOat, null, excludeOatArtifacts: false));
+        Assert.Equal(plain, DeliveryScriptGenerator.Generate(bootOnly, null, excludeOatArtifacts: true));
+    }
+
+    [Fact]
     public async Task OrganizedSuperExpandsSparseCompanionsForRecovery()
     {
         var boot = Image("boot");
