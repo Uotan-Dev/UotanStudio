@@ -39,20 +39,20 @@ public sealed class ApkSignNodeViewModel : FlowNodeViewModel
     }
 
     private string RequiredPath(string title) => ReadInput(title) is string path && !string.IsNullOrWhiteSpace(path)
-        ? path : throw new ArgumentException($"{title} is required. 必须提供 {title}。");
+        ? path : throw new ArgumentException($"{title} is required.");
 
     private bool Scheme(string title) => ReadInput(title) switch
     {
         null => true,
         bool value => value,
         string text when bool.TryParse(text, out var value) => value,
-        _ => throw new ArgumentException($"{title} must be true or false. {title} 必须为 true 或 false。")
+        _ => throw new ArgumentException($"{title} must be true or false.")
     };
 
     private string? Password(string title)
     {
         if (ReadInput(title) is not string name || string.IsNullOrWhiteSpace(name)) return null;
         return Environment.GetEnvironmentVariable(name)
-            ?? throw new ArgumentException($"Password environment variable '{name}' is not set. 密码环境变量未设置。");
+            ?? throw new ArgumentException($"Password environment variable '{name}' is not set.");
     }
 }

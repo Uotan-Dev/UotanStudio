@@ -194,7 +194,7 @@ public static class ContainerEntryExtractor
             }
             else
             {
-                throw new InvalidOperationException($"Payload partition '{name}' was not extracted. payload 分区 {name} 未提取成功。");
+                throw new InvalidOperationException($"Payload partition '{name}' was not extracted.");
             }
         }
 

@@ -63,8 +63,7 @@ internal sealed class BootRepackConfiguration
             ?? throw new InvalidDataException("Missing Boot configuration.");
         if (configuration.Footer is not null)
             throw new InvalidDataException(
-                "The source boot image carries an AVB footer; rebuilding this directory would drop the footer and its vbmeta and can break verified boot. Use an AVB-aware re-signing workflow. " +
-                "源 Boot 镜像含 AVB footer，重打包会丢弃该 footer 及其 vbmeta，可能破坏验证启动。请使用支持 AVB 的重签名流程。");
+                "The source boot image carries an AVB footer; rebuilding this directory would drop the footer and its vbmeta and can break verified boot. Use an AVB-aware re-signing workflow.");
         if (Path.GetFullPath(outputPath).Equals(Path.GetFullPath(Path.Combine(directory, RepackMetadata.FileName)),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
             throw new IOException("Boot output must not replace its configuration.");

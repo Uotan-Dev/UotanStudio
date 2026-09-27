@@ -99,7 +99,7 @@ public sealed class DiffFormatHandler : IFormatHandler
                 var header = FormatDetector.ReadHeader(filePath, BsdiffHeaderSize);
                 if (header.Length < BsdiffHeaderSize || !HasSupportedMagic(header))
                 {
-                    return FirmwareOpResult.Fail($"Not a bsdiff (BSDIFF40) patch: '{filePath}'.  不是 bsdiff (BSDIFF40) 补丁。");
+                    return FirmwareOpResult.Fail($"Not a bsdiff (BSDIFF40) patch: '{filePath}'.");
                 }
 
                 var controlLength = BinaryDeltaPatch.ReadNumber(header.AsSpan(8, 8));
@@ -107,7 +107,7 @@ public sealed class DiffFormatHandler : IFormatHandler
                 var newSize = BinaryDeltaPatch.ReadNumber(header.AsSpan(24, 8));
                 if (controlLength < 0 || diffLength < 0 || newSize < 0)
                 {
-                    return FirmwareOpResult.Fail("Invalid negative length in bsdiff header.  bsdiff 头部存在非法负长度。");
+                    return FirmwareOpResult.Fail("Invalid negative length in bsdiff header.");
                 }
 
                 var fileLength = new FileInfo(filePath).Length;
@@ -174,7 +174,7 @@ public sealed class DiffFormatHandler : IFormatHandler
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => Task.FromResult(FirmwareOpResult.Fail(
-            "Applying a bsdiff patch requires a source file; use DeltaEngine.ApplyDeltaAsync.  应用 bsdiff 补丁需要源文件，请使用 DeltaEngine.ApplyDeltaAsync。"));
+            "Applying a bsdiff patch requires a source file; use DeltaEngine.ApplyDeltaAsync."));
 
     /// <summary>
     /// Not supported: generating a patch needs source and target files; use DeltaEngine.GenerateDeltaAsync.
@@ -198,5 +198,5 @@ public sealed class DiffFormatHandler : IFormatHandler
     /// </returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
         => Task.FromResult(FirmwareOpResult.Fail(
-            "Generating a bsdiff patch requires source and target files; use DeltaEngine.GenerateDeltaAsync.  生成 bsdiff 补丁需要源文件与目标文件，请使用 DeltaEngine.GenerateDeltaAsync。"));
+            "Generating a bsdiff patch requires source and target files; use DeltaEngine.GenerateDeltaAsync."));
 }

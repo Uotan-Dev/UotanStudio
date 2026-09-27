@@ -59,7 +59,7 @@ public sealed partial class F2fsBuilder
     /// <para><paramref name="sourceDirectory"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidOperationException">The built image is larger than the maximum byte-array length.
     /// <para>构建出的镜像超过字节数组的最大长度。</para></exception>
-    [Obsolete("Loads the entire image into memory. Use Build(sourceDirectory, outputPath) or Build(sourceDirectory, Stream) instead. 整镜像驻留内存；请使用文件路径或流式重载。")]
+    [Obsolete("Loads the entire image into memory. Use Build(sourceDirectory, outputPath) or Build(sourceDirectory, Stream) instead.")]
     public static byte[] Build(string sourceDirectory, F2fsOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(sourceDirectory);
@@ -753,7 +753,7 @@ public sealed partial class F2fsBuilder
             if (read <= 0)
             {
                 throw new EndOfStreamException(
-                    "F2FS source file changed between the layout and write passes (short read).  F2FS 源文件在两遍构建之间被截短。");
+                    "F2FS source file changed between the layout and write passes (short read).");
             }
 
             offset += read;

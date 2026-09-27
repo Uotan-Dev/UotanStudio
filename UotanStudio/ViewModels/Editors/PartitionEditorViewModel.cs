@@ -302,7 +302,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                     SaveAmlogic(items);
                     break;
                 default:
-                    throw new InvalidOperationException("No partition table loaded. 未加载分区表。");
+                    throw new InvalidOperationException("No partition table loaded.");
             }
 
             IsDirty = false;
@@ -546,12 +546,12 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     {
         if (_gpt is null)
         {
-            throw new InvalidOperationException("No GPT table loaded. 未加载 GPT 分区表。");
+            throw new InvalidOperationException("No GPT table loaded.");
         }
 
         if (items.Count != _gpt.Entries.Count)
         {
-            throw new InvalidDataException("Partition count changed; add/remove is not supported. 分区数量发生变化，暂不支持增删分区。");
+            throw new InvalidDataException("Partition count changed; add/remove is not supported.");
         }
 
         var entries = new List<GptEntry>(items.Count);
@@ -577,12 +577,12 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     {
         if (_mbr is null)
         {
-            throw new InvalidOperationException("No MBR table loaded. 未加载 MBR 分区表。");
+            throw new InvalidOperationException("No MBR table loaded.");
         }
 
         if (items.Count != _mbr.Partitions.Count)
         {
-            throw new InvalidDataException("Partition count changed; add/remove is not supported. 分区数量发生变化，暂不支持增删分区。");
+            throw new InvalidDataException("Partition count changed; add/remove is not supported.");
         }
 
         var entries = new List<PartitionEntry>(items.Count);
@@ -609,12 +609,12 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     {
         if (_amlogic is null)
         {
-            throw new InvalidOperationException("No Amlogic table loaded. 未加载 Amlogic 分区表。");
+            throw new InvalidOperationException("No Amlogic table loaded.");
         }
 
         if (items.Count != _amlogic.Partitions.Count)
         {
-            throw new InvalidDataException("Partition count changed; add/remove is not supported. 分区数量发生变化，暂不支持增删分区。");
+            throw new InvalidDataException("Partition count changed; add/remove is not supported.");
         }
 
         var entries = new List<PartitionEntry>(items.Count);
@@ -641,12 +641,12 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     {
         if (_lpMetadata is null)
         {
-            throw new InvalidOperationException("No LP metadata loaded. 未加载 LP 元数据。");
+            throw new InvalidOperationException("No LP metadata loaded.");
         }
 
         if (items.Count != _lpMetadata.Partitions.Count)
         {
-            throw new InvalidDataException("Partition count changed; add/remove is not supported. 分区数量发生变化，暂不支持增删分区。");
+            throw new InvalidDataException("Partition count changed; add/remove is not supported.");
         }
 
         for (var i = 0; i < items.Count; i++)
@@ -656,7 +656,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             var nameBytes = Encoding.UTF8.GetBytes(item.Name);
             if (nameBytes.Length > 36)
             {
-                throw new InvalidDataException($"Partition name '{item.Name}' exceeds 36 bytes. 分区名称超过 36 字节。");
+                throw new InvalidDataException($"Partition name '{item.Name}' exceeds 36 bytes.");
             }
             _lpMetadata.Partitions[i] = partition with { Name = nameBytes };
 
@@ -677,7 +677,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 var newTarget = (long)extent.TargetData + delta;
                 if (newTarget < 0)
                 {
-                    throw new InvalidDataException($"Start of partition '{item.Name}' would go negative. 分区起始为负。");
+                    throw new InvalidDataException($"Start of partition '{item.Name}' would go negative.");
                 }
                 _lpMetadata.Extents[e] = extent with { TargetData = (ulong)newTarget };
             }
@@ -696,7 +696,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 var newLast = (long)last.NumSectors + (long)item.SizeSectors - (long)total;
                 if (newLast < 0)
                 {
-                    throw new InvalidDataException($"Size of partition '{item.Name}' too small for its extent layout. 分区大小小于其 extent 布局。");
+                    throw new InvalidDataException($"Size of partition '{item.Name}' too small for its extent layout.");
                 }
                 _lpMetadata.Extents[lastIndex] = last with { NumSectors = (ulong)newLast };
             }

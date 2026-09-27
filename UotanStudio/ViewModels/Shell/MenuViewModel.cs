@@ -408,12 +408,12 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             }
 
             LogService.Instance.Write(LogLevel.Info, "Images",
-                $"Extracted {extractedPaths.Count} image(s) from {Path.GetFileName(containerPath)}  已从 {Path.GetFileName(containerPath)} 提取 {extractedPaths.Count} 个镜像");
+                $"Extracted {extractedPaths.Count} image(s) from {Path.GetFileName(containerPath)}");
         }
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Images",
-                $"Container extraction failed: {ex.Message}  容器提取失败：{ex.Message}");
+                $"Container extraction failed: {ex.Message}");
             throw;
         }
 
@@ -596,7 +596,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var context = ProjectContextService.Instance;
         if (!context.IsProjectOpen || context.RootDirectory is null)
         {
-            Services.LogService.Instance.Write(LogLevel.Warn, "Menu", "Add sub-project aborted: no solution is open  添加子项目中止：尚未打开解决方案");
+            Services.LogService.Instance.Write(LogLevel.Warn, "Menu", "Add sub-project aborted: no solution is open");
             return;
         }
 
@@ -662,16 +662,16 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var loc = Path.GetFullPath(location);
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         if (string.Equals(rootPath, loc, comparison))
-            throw new IOException("A project folder must be an independent directory.  项目必须位于独立目录中。");
+            throw new IOException("A project folder must be an independent directory.");
         if (requireDirectChild)
         {
             if (!ProjectValidation.IsDirectSubProjectDirectory(rootPath, loc))
-                throw new IOException("A sub-project must be an independent folder directly under the solution root.  子项目必须为解决方案根下的独立文件夹，禁止嵌套。");
+                throw new IOException("A sub-project must be an independent folder directly under the solution root.");
             return;
         }
         var prefix = Path.TrimEndingDirectorySeparator(rootPath) + Path.DirectorySeparatorChar;
         if (loc.StartsWith(prefix, comparison))
-            throw new IOException("A project folder must not be nested inside an existing project.  项目文件夹禁止嵌套在现有项目中。");
+            throw new IOException("A project folder must not be nested inside an existing project.");
     }
 
     /// <summary>
@@ -918,7 +918,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var selected = ImageViewModel.EnsureInstance().SelectedImage;
         if (selected is null)
         {
-            Services.LogService.Instance.Write(LogLevel.Warn, "Menu", "Export image aborted: no image selected  导出镜像中止：未选中镜像");
+            Services.LogService.Instance.Write(LogLevel.Warn, "Menu", "Export image aborted: no image selected");
             return;
         }
 

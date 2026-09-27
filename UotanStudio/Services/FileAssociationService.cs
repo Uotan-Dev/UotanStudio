@@ -77,7 +77,7 @@ public static class FileAssociationService
                 SetStringValue(Path.Combine(ClassesRoot, extension), null, progId);
             }
 
-            LogService.Instance.Write(LogLevel.Info, "FileAssociation", $"Registered {Formats.Length} file association(s)  已注册 {Formats.Length} 个文件关联");
+            LogService.Instance.Write(LogLevel.Info, "FileAssociation", $"Registered {Formats.Length} file association(s)");
             return true;
         }
         catch (Exception ex)
@@ -113,7 +113,7 @@ public static class FileAssociationService
                 }
             }
 
-            LogService.Instance.Write(LogLevel.Info, "FileAssociation", $"Unregistered {Formats.Length} file association(s)  已注销 {Formats.Length} 个文件关联");
+            LogService.Instance.Write(LogLevel.Info, "FileAssociation", $"Unregistered {Formats.Length} file association(s)");
             return true;
         }
         catch (Exception ex)

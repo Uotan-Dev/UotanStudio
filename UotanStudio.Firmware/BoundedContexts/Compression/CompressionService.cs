@@ -347,7 +347,7 @@ public static class CompressionService
 
 
             CompressionFormat.Lzop => LzopCompressor.Compress(data),
-            CompressionFormat.Zopfli => throw new NotSupportedException("Zopfli compression is not supported. Zopfli 压缩不受支持。"),
+            CompressionFormat.Zopfli => throw new NotSupportedException("Zopfli compression is not supported."),
             _ => throw new ArgumentException($"Unsupported compression format: {format}", nameof(format))
         };
     }

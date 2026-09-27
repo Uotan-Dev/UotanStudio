@@ -331,7 +331,7 @@ public static class SparseImageConverter
         if (blockSize == 0 || blockSize % 4 != 0)
         {
             throw new ArgumentOutOfRangeException(nameof(blockSize),
-                "Sparse block size must be a positive multiple of 4 per the Android sparse format. 稀疏块大小必须是 Android 稀疏格式要求的 4 的正整数倍。");
+                "Sparse block size must be a positive multiple of 4 per the Android sparse format.");
         }
 
         var totalLength = length ?? input.Length;

@@ -73,7 +73,7 @@ public class DatNodeViewModel : FlowNodeViewModel
             var output = PathText(ReadInput("Output"));
             if (string.IsNullOrWhiteSpace(input) || !File.Exists(input))
             {
-                throw new InvalidOperationException($"Input image not found: {input ?? "<empty>"}  找不到输入镜像。");
+                throw new InvalidOperationException($"Input image not found: {input ?? "<empty>"}");
             }
 
             if (string.IsNullOrWhiteSpace(output))
@@ -86,7 +86,7 @@ public class DatNodeViewModel : FlowNodeViewModel
                 .ConfigureAwait(false);
             if (!result.Success)
             {
-                throw new InvalidOperationException($"DAT write failed: {result.Summary}  写出 DAT 失败。");
+                throw new InvalidOperationException($"DAT write failed: {result.Summary}");
             }
 
             WriteOutput("Result", result.Summary);
@@ -98,7 +98,7 @@ public class DatNodeViewModel : FlowNodeViewModel
         }
         catch (Exception ex)
         {
-            context.Log.Write(LogLevel.Error, Title, $"DAT node failed: {ex.Message}  DAT 节点执行失败。");
+            context.Log.Write(LogLevel.Error, Title, $"DAT node failed: {ex.Message}");
             throw;
         }
     }

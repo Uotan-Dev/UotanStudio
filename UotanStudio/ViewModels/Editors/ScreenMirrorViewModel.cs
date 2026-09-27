@@ -117,7 +117,7 @@ public partial class ScreenMirrorViewModel : Document
                 var device = App.DeviceMonitor.Scan()
                     .SingleOrDefault(candidate => candidate.Serial == serial &&
                         candidate.Protocol == Services.Devices.DeviceProtocolKind.Adb)
-                    ?? throw new InvalidOperationException($"Device {serial} is not connected. 设备 {serial} 未连接。");
+                    ?? throw new InvalidOperationException($"Device {serial} is not connected.");
                 var options = CreateOptionsFromSettings();
                 _streamOptions = options;
                 StatusText = GetLocalizedString("ScreenMirror_Installing");

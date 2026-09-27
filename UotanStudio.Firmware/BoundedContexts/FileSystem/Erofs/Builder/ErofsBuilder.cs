@@ -58,7 +58,7 @@ public sealed partial class ErofsBuilder
     /// <para><paramref name="directoryPath"/> 不存在。</para></exception>
     /// <exception cref="InvalidOperationException">The built image exceeds the maximum byte-array length.
     /// <para>构建出的镜像超过字节数组最大长度。</para></exception>
-    [Obsolete("Loads the entire image into memory. Use Build(directoryPath, outputPath) instead. 整镜像驻留内存；请使用文件路径重载。")]
+    [Obsolete("Loads the entire image into memory. Use Build(directoryPath, outputPath) instead.")]
     public byte[] Build(string directoryPath, ErofsOptions? options = null)
     {
         var temporaryPath = Path.Combine(Path.GetTempPath(), $"uotan-erofs-{Guid.NewGuid():N}.tmp");

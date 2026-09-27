@@ -191,7 +191,7 @@ public sealed class ApkFormatHandler : IFormatHandler
             System.IO.File.WriteAllText(metadataPath, FormatInfo(info));
             extractedFiles.Insert(0, metadataPath);
             return Task.FromResult(FirmwareOpResult.Ok(
-                $"APK unpacked to {outputDirectory} ({extractedFiles.Count} files)  APK 已完整解包到 {outputDirectory}（{extractedFiles.Count} 个文件）。",
+                $"APK unpacked to {outputDirectory} ({extractedFiles.Count} files)",
                 [.. extractedFiles]));
         }
         catch (OperationCanceledException)

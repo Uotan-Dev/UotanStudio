@@ -116,7 +116,7 @@ public sealed partial class Ext4Builder
     /// <param name="sourceDirectory">Host directory whose full tree is packed into the image; it must exist. <para>被完整打包进镜像的主机目录；必须存在。</para></param>
     /// <param name="options">Layout and capacity options; <see langword="null"/> uses <see cref="Ext4Options"/> defaults. Invalid combinations are rejected during validation. <para>布局与容量选项；<see langword="null"/> 时使用 <see cref="Ext4Options"/> 默认值。非法组合会在校验阶段被拒绝。</para></param>
     /// <returns>The complete filesystem image as a single byte array. <para>以单一字节数组返回的完整文件系统镜像。</para></returns>
-    [Obsolete("Builds the entire image in memory. Use Build(sourceDirectory, outputPath) or Build(sourceDirectory, Stream) instead. 整镜像驻留内存；大型输出请使用文件路径或流式重载。")]
+    [Obsolete("Builds the entire image in memory. Use Build(sourceDirectory, outputPath) or Build(sourceDirectory, Stream) instead.")]
     public static byte[] Build(string sourceDirectory, Ext4Options? options = null)
     {
         var effective = Validate(sourceDirectory, options);

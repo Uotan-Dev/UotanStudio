@@ -566,7 +566,7 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
     {
         if (string.IsNullOrWhiteSpace(FilePath) || SelectedJarKey is not { } key)
         {
-            SignStatus = "未选择 JAR 签名密钥。/ No JAR signing key selected.";
+            SignStatus = "No JAR signing key selected.";
             return;
         }
 

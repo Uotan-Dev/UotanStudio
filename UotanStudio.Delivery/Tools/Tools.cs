@@ -211,7 +211,7 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
                 }
                 finally { File.Delete(temporary); }
             }
-            throw new IOException("无法获取工具 / Tool download failed: " + package.Name + "\n" + string.Join("\n", errors));
+            throw new IOException("Tool download failed: " + package.Name + "\n" + string.Join("\n", errors));
         }
         finally { CacheGate.Release(); }
     }

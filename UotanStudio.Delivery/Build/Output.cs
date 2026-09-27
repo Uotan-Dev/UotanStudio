@@ -74,11 +74,11 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         foreach (var source in sources)
         {
             if (string.Equals(Path.GetFullPath(output), GetDirectoryNameOrRoot(source.SourcePath), comparison))
-                throw new InvalidDataException("输出目录不能是源镜像所在目录 / Output must not target a source image's own directory.");
+                throw new InvalidDataException("Output must not target a source image's own directory.");
             var sourcePath = Path.GetFullPath(source.SourcePath);
             for (var i = 0; i < plannedOutputs.Length; i++)
                 if (string.Equals(sourcePath, plannedOutputs[i], comparison))
-                    throw new InvalidDataException("输出会覆盖源镜像 / Output would overwrite a source image: " + source.SourcePath);
+                    throw new InvalidDataException("Output would overwrite a source image: " + source.SourcePath);
         }
         foreach (var source in new[] { plan.Payload.DynamicPartitionsFile, plan.Payload.SignatureFile, plan.Payload.SigningKeyPath, plan.Payload.PostinstallFile, plan.Package.SigningKeyPath, plan.Package.CertificatePath }.Where(p => p.Length > 0))
             if (IsUnder(source, output)) throw new InvalidDataException("Output must not contain Payload configuration inputs.");
@@ -86,13 +86,13 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
             throw new InvalidDataException("Output must not contain the source Recovery updater.");
         if (plan.OrganizeDirectory && !plan.PackPayload && (plan.Windows || plan.Linux || plan.MacOS || plan.Txt || plan.Recovery && plan.Scripts.ContainsKey("update-binary"))
             && plan.ScriptFingerprint != DeliveryScriptGenerator.Fingerprint(plan))
-            throw new InvalidDataException("脚本已过期，请重新生成 / Scripts are stale; generate them again.");
+            throw new InvalidDataException("Scripts are stale; generate them again.");
         var parent = Path.GetDirectoryName(output) ?? throw new InvalidDataException("Invalid output directory.");
         foreach (var destination in PlannedOutputPaths(plan))
         {
             CheckDirectory(Path.GetDirectoryName(destination)!);
-            if (Directory.Exists(destination)) throw new IOException("输出位置被目录占用 / A directory blocks the output: " + destination);
-            if (overwrite is null && File.Exists(destination)) throw new IOException("目标文件已存在 / Output already exists: " + destination);
+            if (Directory.Exists(destination)) throw new IOException("A directory blocks the output: " + destination);
+            if (overwrite is null && File.Exists(destination)) throw new IOException("Output already exists: " + destination);
         }
         Directory.CreateDirectory(parent);
         var stage = Path.Combine(parent, ".uotan-delivery-" + Guid.NewGuid().ToString("N"));
@@ -348,7 +348,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                 CheckDirectory(parent);
                 if (Path.Exists(file.Destination))
                 {
-                    if (Directory.Exists(file.Destination)) throw new IOException("输出位置被目录占用 / A directory blocks the output: " + file.Destination);
+                    if (Directory.Exists(file.Destination)) throw new IOException("A directory blocks the output: " + file.Destination);
                     if (overwrite is null || !overwrite.Contains(file.Destination))
                     {
                         skipped.Add(file.Destination);

@@ -246,10 +246,10 @@ public sealed class DexService
         {
             return entries.Contains(entryName, StringComparer.Ordinal)
                 ? entryName
-                : throw new InvalidDataException($"容器内不存在 DEX 条目 {entryName}。/ DEX entry {entryName} does not exist in the container.");
+                : throw new InvalidDataException($"DEX entry {entryName} does not exist in the container.");
         }
 
         return entries.FirstOrDefault()
-            ?? throw new InvalidDataException("容器内没有 classes*.dex 条目。/ The container has no classes*.dex entry.");
+            ?? throw new InvalidDataException("The container has no classes*.dex entry.");
     }
 }

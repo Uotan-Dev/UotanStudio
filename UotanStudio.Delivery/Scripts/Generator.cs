@@ -53,7 +53,7 @@ internal static partial class DeliveryScriptGenerator
         if (flashFiles.Count == 0) return result;
         plan = plan with { Files = flashFiles };
         var groups = plan.Files.GroupBy(f => f.Partition, StringComparer.Ordinal).Select(g => g.ToArray()).ToArray();
-        if (groups.Any(g => g.Length > 9)) throw new InvalidDataException("每个选择组最多 9 项 / At most 9 alternatives per partition.");
+        if (groups.Any(g => g.Length > 9)) throw new InvalidDataException("At most 9 alternatives per partition.");
         var defaults = groups.Select(g => g.FirstOrDefault(f => f.Default) ?? g[0]).Where(f => !f.Optional || f.Default).ToArray();
         if (plan.Txt && !plan.Super.Zstd)
         {

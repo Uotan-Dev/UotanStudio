@@ -69,7 +69,7 @@ public class SparseNodeViewModel : FlowNodeViewModel
             var toSparse = NodeDataUtil.ToBool(ReadInput("To Sparse"), true);
             if (string.IsNullOrWhiteSpace(input) || !File.Exists(input))
             {
-                throw new InvalidOperationException($"Input image not found: {input ?? "<empty>"}  找不到输入镜像。");
+                throw new InvalidOperationException($"Input image not found: {input ?? "<empty>"}");
             }
 
             if (string.IsNullOrWhiteSpace(output))
@@ -82,7 +82,7 @@ public class SparseNodeViewModel : FlowNodeViewModel
                 .ConfigureAwait(false);
             if (!result.Success)
             {
-                throw new InvalidOperationException($"Sparse conversion failed: {result.Summary}  稀疏转换失败。");
+                throw new InvalidOperationException($"Sparse conversion failed: {result.Summary}");
             }
 
             WriteOutput("Result", result.Summary);
@@ -94,7 +94,7 @@ public class SparseNodeViewModel : FlowNodeViewModel
         }
         catch (Exception ex)
         {
-            context.Log.Write(LogLevel.Error, Title, $"Sparse node failed: {ex.Message}  稀疏转换节点执行失败。");
+            context.Log.Write(LogLevel.Error, Title, $"Sparse node failed: {ex.Message}");
             throw;
         }
     }

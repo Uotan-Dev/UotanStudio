@@ -154,7 +154,7 @@ public sealed partial class ProjectSession
         {
             if (changingProject && _workspace.IsImageOperationRunning)
             {
-                ProjectDiagnostics.Write(ProjectLogLevel.Warn, "Projects", "Wait for the image operation before switching projects. 请等待镜像操作完成后再切换工程。");
+                ProjectDiagnostics.Write(ProjectLogLevel.Warn, "Projects", "Wait for the image operation before switching projects.");
                 return;
             }
             if (changingProject && BeforeProjectChangeAsync is { } flush && !await flush()) return;
@@ -527,26 +527,26 @@ public sealed partial class ProjectSession
         if (context.RootDirectory is { } solutionRoot && !ProjectValidation.IsDirectSubProjectDirectory(solutionRoot, dirPath)) return;
         if (!context.IsProjectOpen || context.RootDirectory is null)
         {
-            ProjectDiagnostics.Write(ProjectLogLevel.Warn, "Menu", "Import sub-project aborted: no solution is open  导入子项目中止：尚未打开解决方案");
+            ProjectDiagnostics.Write(ProjectLogLevel.Warn, "Menu", "Import sub-project aborted: no solution is open");
             return;
         }
 
         if (!Directory.Exists(dirPath))
         {
-            ProjectDiagnostics.Write(ProjectLogLevel.Error, "Menu", $"Import sub-project aborted: directory not found: {dirPath}  导入子项目中止：目录不存在：{dirPath}");
+            ProjectDiagnostics.Write(ProjectLogLevel.Error, "Menu", $"Import sub-project aborted: directory not found: {dirPath}");
             return;
         }
 
         var subName = Path.GetFileName(Path.TrimEndingDirectorySeparator(dirPath));
         if (string.IsNullOrEmpty(subName))
         {
-            ProjectDiagnostics.Write(ProjectLogLevel.Error, "Menu", "Import sub-project aborted: invalid directory name  导入子项目中止：无效的目录名");
+            ProjectDiagnostics.Write(ProjectLogLevel.Error, "Menu", "Import sub-project aborted: invalid directory name");
             return;
         }
 
         if (context.SubProjects.Any(sp => string.Equals(sp.Name, subName, StringComparison.OrdinalIgnoreCase)))
         {
-            ProjectDiagnostics.Write(ProjectLogLevel.Error, "Menu", $"Import sub-project aborted: \"{subName}\" already exists  导入子项目中止：\"{subName}\" 已存在");
+            ProjectDiagnostics.Write(ProjectLogLevel.Error, "Menu", $"Import sub-project aborted: \"{subName}\" already exists");
             return;
         }
 
@@ -567,7 +567,7 @@ public sealed partial class ProjectSession
             await transaction.StageAsync(fwPath, firmware, SolutionJsonContext.Default.FirmwareProjectSnapshot, cancellationToken);
         }
 
-        ProjectDiagnostics.Write(ProjectLogLevel.Info, "Menu", $"Imported sub-project: {subName} from {dirPath}  已导入子项目：{subName}（{dirPath}）");
+        ProjectDiagnostics.Write(ProjectLogLevel.Info, "Menu", $"Imported sub-project: {subName} from {dirPath}");
 
         await RegisterSubProjectAsync(fwPath, subName, transaction, cancellationToken);
     }

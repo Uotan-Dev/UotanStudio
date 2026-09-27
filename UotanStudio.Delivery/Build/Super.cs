@@ -25,7 +25,7 @@ internal static class DeliverySuperBuilder
                     if (result.All(f => f.Partition != name)) result.Add(new DeliveryFile { Partition = name });
                 }
         if (result.Any(f => !DeliveryValidation.IsPartition(f.Partition)) || result.Select(f => f.Partition).Distinct().Count() != result.Count)
-            throw new InvalidDataException("Super 分区名无效或重复 / Invalid or duplicate Super partition.");
+            throw new InvalidDataException("Invalid or duplicate Super partition.");
         return result;
     }
 
@@ -64,7 +64,7 @@ internal static class DeliverySuperBuilder
         {
             var file = partitions[i];
             var group = groups.SingleOrDefault(g => g.Partitions.Contains(file.Partition))
-                ?? throw new InvalidDataException("请在分组配置中指定分区归属：" + file.Partition);
+                ?? throw new InvalidDataException("No Super group assignment for partition: " + file.Partition);
             builder.AddPartition(file.Partition, group.Name, (ulong)lengths[i], 1);
         }
         var metadata = builder.Build();
