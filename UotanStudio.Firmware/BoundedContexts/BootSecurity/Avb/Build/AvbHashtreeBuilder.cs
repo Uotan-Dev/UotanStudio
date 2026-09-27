@@ -203,10 +203,10 @@ public static class AvbHashtreeBuilder
     /// </param>
     /// <param name="salt">Salt prepended to every hashed block; null is treated as an empty salt.
     /// <para>每个被哈希块前拼接的盐值；null 视为空盐。</para></param>
-    /// <param name="dataBlockSize">Bytes per hashed data block; must be a positive multiple of 32.
-    /// <para>每个被哈希数据块的字节数；必须是 32 的正整数倍。</para></param>
-    /// <param name="hashBlockSize">Bytes per tree block used to size each level; must be a positive multiple of 32.
-    /// <para>用于确定各层大小的每树块字节数；必须是 32 的正整数倍。</para></param>
+    /// <param name="dataBlockSize">Bytes per data block; a power of two from 512 to 1048576.
+    /// <para>数据块字节数；必须是 512 至 1048576 的二次幂。</para></param>
+    /// <param name="hashBlockSize">Bytes per tree block; a power of two from 512 to 1048576.
+    /// <para>树块字节数；必须是 512 至 1048576 的二次幂。</para></param>
     /// <returns>The root digest plus tree and block-aligned image sizes, with trees above 16 MiB held in a temporary file.
     /// <para>根摘要以及树大小与对齐后的镜像大小；超过 16 MiB 的树保存在临时文件中。</para></returns>
     /// <example>
@@ -216,8 +216,8 @@ public static class AvbHashtreeBuilder
     /// </code>
     /// </example>
     /// <exception cref="ArgumentNullException"><paramref name="imagePath"/> is null. <para><paramref name="imagePath"/> 为 null。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">A block size is not a positive multiple of 32.
-    /// <para>某个块大小不是 32 的正整数倍。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">A block size is outside the supported power-of-two range.
+    /// <para>某个块大小不在支持的二次幂范围内。</para></exception>
     /// <exception cref="FileNotFoundException">The image file does not exist. <para>镜像文件不存在。</para></exception>
     /// <exception cref="IOException">The image file cannot be opened or read. <para>无法打开或读取镜像文件。</para></exception>
     public static AvbHashtreeResult Build(string imagePath, byte[]? salt, int dataBlockSize = 4096, int hashBlockSize = 4096)
@@ -239,15 +239,15 @@ public static class AvbHashtreeBuilder
     /// <para>待哈希的镜像字节；该数组以只读方式包装，不会被修改。</para></param>
     /// <param name="salt">Salt prepended to every hashed block; null is treated as an empty salt.
     /// <para>每个被哈希块前拼接的盐值；null 视为空盐。</para></param>
-    /// <param name="dataBlockSize">Bytes per hashed data block; must be a positive multiple of 32.
-    /// <para>每个被哈希数据块的字节数；必须是 32 的正整数倍。</para></param>
-    /// <param name="hashBlockSize">Bytes per tree block used to size each level; must be a positive multiple of 32.
-    /// <para>用于确定各层大小的每树块字节数；必须是 32 的正整数倍。</para></param>
+    /// <param name="dataBlockSize">Bytes per data block; a power of two from 512 to 1048576.
+    /// <para>数据块字节数；必须是 512 至 1048576 的二次幂。</para></param>
+    /// <param name="hashBlockSize">Bytes per tree block; a power of two from 512 to 1048576.
+    /// <para>树块字节数；必须是 512 至 1048576 的二次幂。</para></param>
     /// <returns>The root digest plus tree and block-aligned image sizes; the caller owns the returned result and disposes it.
     /// <para>根摘要以及树大小与对齐后的镜像大小；调用方拥有返回结果并负责释放。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="imageData"/> is null. <para><paramref name="imageData"/> 为 null。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">A block size is not a positive multiple of 32.
-    /// <para>某个块大小不是 32 的正整数倍。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">A block size is outside the supported power-of-two range.
+    /// <para>某个块大小不在支持的二次幂范围内。</para></exception>
     public static AvbHashtreeResult Build(byte[] imageData, byte[]? salt, int dataBlockSize = 4096, int hashBlockSize = 4096)
     {
         ArgumentNullException.ThrowIfNull(imageData);
@@ -266,18 +266,18 @@ public static class AvbHashtreeBuilder
     /// </param>
     /// <param name="salt">Salt prepended to every hashed block; null is treated as an empty salt.
     /// <para>每个被哈希块前拼接的盐值；null 视为空盐。</para></param>
-    /// <param name="dataBlockSize">Bytes per hashed data block; must be a positive multiple of 32.
-    /// <para>每个被哈希数据块的字节数；必须是 32 的正整数倍。</para></param>
-    /// <param name="hashBlockSize">Bytes per tree block used to size each level; must be a positive multiple of 32.
-    /// <para>用于确定各层大小的每树块字节数；必须是 32 的正整数倍。</para></param>
+    /// <param name="dataBlockSize">Bytes per data block; a power of two from 512 to 1048576.
+    /// <para>数据块字节数；必须是 512 至 1048576 的二次幂。</para></param>
+    /// <param name="hashBlockSize">Bytes per tree block; a power of two from 512 to 1048576.
+    /// <para>树块字节数；必须是 512 至 1048576 的二次幂。</para></param>
     /// <returns>The root digest plus tree and block-aligned image sizes. An empty stream yields a zero tree size and
     /// a zero image size; a stream that fits one data block yields a zero tree size with the block's digest.
     /// <para>根摘要以及树大小与对齐后的镜像大小。空流的树大小与镜像大小均为 0；仅占一个数据块的流树大小为 0，但会给出该块的摘要。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is null. <para><paramref name="stream"/> 为 null。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="stream"/> cannot be read or cannot seek.
     /// <para><paramref name="stream"/> 不可读或不可定位。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">A block size is not a positive multiple of 32.
-    /// <para>某个块大小不是 32 的正整数倍。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">A block size is outside the supported power-of-two range.
+    /// <para>某个块大小不在支持的二次幂范围内。</para></exception>
     /// <exception cref="System.Security.Cryptography.CryptographicException">The SHA-256 digest could not be written.
     /// <para>无法写入 SHA-256 摘要。</para></exception>
     /// <exception cref="System.OverflowException">The image or tree size exceeds the addressable range.
@@ -285,7 +285,21 @@ public static class AvbHashtreeBuilder
     public static AvbHashtreeResult Build(Stream stream, byte[]? salt, int dataBlockSize = 4096, int hashBlockSize = 4096)
         => BuildCore(stream, salt, dataBlockSize, hashBlockSize, SpillThresholdBytes);
 
-    internal static AvbHashtreeResult BuildCore(Stream stream, byte[]? salt, int dataBlockSize, int hashBlockSize, long spillThresholdBytes)
+    /// <summary>Builds a bounded hash tree with cancellation between data and tree blocks.
+    /// <para>构建有界哈希树，并在数据块和树块之间响应取消。</para></summary>
+    /// <param name="stream">Caller-owned readable seekable stream; its position is restored.
+    /// <para>调用方持有的可读可定位流；结束后恢复位置。</para></param>
+    /// <param name="salt">Salt prepended to each block. <para>每个块前附加的盐。</para></param>
+    /// <param name="dataBlockSize">Data block size in bytes. <para>数据块字节大小。</para></param>
+    /// <param name="hashBlockSize">Hash block size in bytes. <para>哈希块字节大小。</para></param>
+    /// <param name="cancellationToken">Cancels block processing. <para>取消块处理。</para></param>
+    /// <returns>The caller-owned tree and root digest. <para>调用方持有的树和根摘要。</para></returns>
+    public static AvbHashtreeResult Build(Stream stream, byte[]? salt, int dataBlockSize, int hashBlockSize,
+        CancellationToken cancellationToken)
+        => BuildCore(stream, salt, dataBlockSize, hashBlockSize, SpillThresholdBytes, cancellationToken);
+
+    internal static AvbHashtreeResult BuildCore(Stream stream, byte[]? salt, int dataBlockSize, int hashBlockSize, long spillThresholdBytes,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
         if (!stream.CanRead || !stream.CanSeek)
@@ -295,6 +309,7 @@ public static class AvbHashtreeBuilder
 
         ValidateBlockSize(dataBlockSize, nameof(dataBlockSize));
         ValidateBlockSize(hashBlockSize, nameof(hashBlockSize));
+        cancellationToken.ThrowIfCancellationRequested();
 
         var effectiveSalt = salt ?? [];
         var originalPosition = stream.Position;
@@ -312,13 +327,14 @@ public static class AvbHashtreeBuilder
             {
                 stream.Position = 0;
                 var block = ReadAndPadBlock(stream, dataBlockSize);
+                cancellationToken.ThrowIfCancellationRequested();
                 return new AvbHashtreeResult(HashBlock(effectiveSalt, block), null, 0, imageSize);
             }
 
             store = AvbHashtreeResult.TreeStore.Create(treeSize, spillThresholdBytes, Math.Max(ReadBufferSize, hashBlockSize));
             var digestIndex = 0;
             stream.Position = 0;
-            StreamLevel0IntoStore(stream, effectiveSalt, dataBlockSize, store, levelOffsets[0], ref digestIndex);
+            StreamLevel0IntoStore(stream, effectiveSalt, dataBlockSize, store, levelOffsets[0], ref digestIndex, cancellationToken);
 
             var srcOffset = (long)levelOffsets[0];
             var srcSize = RoundUp((long)digestIndex * Sha256Size, hashBlockSize);
@@ -330,6 +346,7 @@ public static class AvbHashtreeBuilder
                 var dstOffset = (long)levelOffsets[level];
                 for (var i = 0; i < numDigests; i++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     store.Read(srcOffset + (long)i * hashBlockSize, blockBuffer);
                     HashBlockTo(effectiveSalt, blockBuffer, digestBuffer);
                     store.Write(dstOffset + (long)i * Sha256Size, digestBuffer);
@@ -341,6 +358,7 @@ public static class AvbHashtreeBuilder
 
             var rootBlock = new byte[srcSize];
             store.Read(srcOffset, rootBlock);
+            cancellationToken.ThrowIfCancellationRequested();
             var root = HashBlock(effectiveSalt, rootBlock);
             var result = new AvbHashtreeResult(root, store, treeSize, imageSize);
             store = null;
@@ -362,13 +380,15 @@ public static class AvbHashtreeBuilder
         var levelSizes = new List<int>();
         var treeSize = 0;
         var size = imageSize;
-        while (size > dataBlockSize)
+        var inputBlockSize = dataBlockSize;
+        while (size > inputBlockSize)
         {
-            var numBlocks = checked(((size + dataBlockSize - 1) / dataBlockSize));
+            var numBlocks = checked(((size + inputBlockSize - 1) / inputBlockSize));
             var levelSize = checked((int)RoundUp(numBlocks * Sha256Size, hashBlockSize));
             levelSizes.Add(levelSize);
             treeSize = checked(treeSize + levelSize);
             size = levelSize;
+            inputBlockSize = hashBlockSize;
         }
 
         var offsets = new int[levelSizes.Count];
@@ -390,7 +410,8 @@ public static class AvbHashtreeBuilder
     /// Streams the image in a single pass, computing each data block's digest into the level-0 region of the store.
     /// <para>单遍流式读取镜像，逐数据块计算摘要并写入后备存储的第 0 层区域。</para>
     /// </summary>
-    private static void StreamLevel0IntoStore(Stream stream, byte[] salt, int dataBlockSize, AvbHashtreeResult.TreeStore store, int level0Offset, ref int digestIndex)
+    private static void StreamLevel0IntoStore(Stream stream, byte[] salt, int dataBlockSize, AvbHashtreeResult.TreeStore store, int level0Offset,
+        ref int digestIndex, CancellationToken cancellationToken)
     {
         var buffer = new byte[ReadBufferSize];
         var block = new byte[dataBlockSize];
@@ -399,6 +420,7 @@ public static class AvbHashtreeBuilder
         int read;
         while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var offset = 0;
             while (offset < read)
             {
@@ -471,9 +493,9 @@ public static class AvbHashtreeBuilder
 
     private static void ValidateBlockSize(int blockSize, string paramName)
     {
-        if (blockSize <= 0 || blockSize % Sha256Size != 0)
+        if (blockSize < 512 || blockSize > 1024 * 1024 || (blockSize & (blockSize - 1)) != 0)
         {
-            throw new ArgumentOutOfRangeException(paramName, blockSize, "Block size must be a positive multiple of 32. 块大小必须是 32 的正整数倍。");
+            throw new ArgumentOutOfRangeException(paramName, blockSize, "Block size must be a power of two from 512 bytes to 1 MiB. 块大小必须是 512 字节至 1 MiB 的二次幂。");
         }
     }
 }

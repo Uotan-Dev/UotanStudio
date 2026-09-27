@@ -15,6 +15,16 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
 {
     void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
     {
+        if (File.Exists(sourcePath) &&
+            ChromeOsTool.DetectResource(ReadPrefix(sourcePath, 4096)) ==
+            ChromeOsTool.BootResourceType.RockchipResource)
+        {
+            metadata.CanPackDirectory = true;
+            metadata.Configuration["resource"] = "RSCE";
+            metadata.PackingNotes = "Creates a canonical unsigned RSCE container; original OEM fields, checksums and device acceptance are not preserved.";
+            return;
+        }
+
         metadata.Configuration = BootRepackConfiguration.FromImage(sourcePath);
         var hasAvbFooter = metadata.Configuration.ContainsKey("footer");
         metadata.CanPackDirectory = metadata.Configuration.Count > 0 && !hasAvbFooter;
@@ -26,6 +36,8 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
 
     private const string BootMagic = "ANDROID!";
     private const string VendorBootMagic = "VNDRBOOT";
+    private const string ChromeOsMagic = "CHROMEOS";
+    private const long MaximumChromeOsProbeBytes = 64L * 1024 * 1024;
 
     /// <summary>Display name identifying this handler's format family.
     /// <para>标识此处理器格式家族的显示名称。</para></summary>
@@ -69,7 +81,10 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
             var isVendor = header[0] == (byte)'V' && header[1] == (byte)'N' && header[2] == (byte)'D'
                 && header[3] == (byte)'R' && header[4] == (byte)'B' && header[5] == (byte)'O'
                 && header[6] == (byte)'O' && header[7] == (byte)'T';
-            return read >= 8 && (isAndroid || isVendor || TegraBlobTool.IsTegraBlob(header[..read]) ||
+            var chromeOs = DetectChromeOsFile(filePath).IsChromeOs;
+            return read >= 8 && (isAndroid || isVendor || chromeOs ||
+                ChromeOsTool.DetectResource(header[..read].ToArray()) != ChromeOsTool.BootResourceType.Unknown ||
+                TegraBlobTool.IsTegraBlob(header[..read]) ||
                 ZImageTool.IsZImage(header[..read]));
         }
         catch
@@ -158,6 +173,72 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
                 }
 
                 var prefix = ReadPrefix(filePath, 4096);
+                var chrome = DetectChromeOsFile(filePath);
+                if (chrome.IsChromeOs)
+                {
+                    var chromeMetadata = new Dictionary<string, string>
+                    {
+                        ["Type"] = chrome.ImageType.ToString(),
+                        ["StructureSize"] = chrome.StructureSize.ToString(),
+                        ["SignatureValidation"] = "not-implemented",
+                        ["KernelExtraction"] = "not-implemented"
+                    };
+                    if (chrome.ImageType is ChromeOsTool.ChromeOsImageType.Keyblock
+                        or ChromeOsTool.ChromeOsImageType.Vblock
+                        or ChromeOsTool.ChromeOsImageType.Kernel)
+                    {
+                        var data = File.ReadAllBytes(filePath);
+                        var keyblock = ChromeOsTool.ParseKeyblock(data);
+                        chromeMetadata["KeyblockVersion"] =
+                            $"{keyblock.HeaderVersionMajor}.{keyblock.HeaderVersionMinor}";
+                        chromeMetadata["KeyblockSize"] = keyblock.KeyblockSize.ToString();
+                        chromeMetadata["DataKeyOffset"] = keyblock.DataKey.Offset.ToString();
+                        chromeMetadata["DataKeySize"] = keyblock.DataKey.Size.ToString();
+                        if (chrome.ImageType is ChromeOsTool.ChromeOsImageType.Vblock
+                            or ChromeOsTool.ChromeOsImageType.Kernel)
+                        {
+                            var vblock = ChromeOsTool.ParseVblock(data);
+                            chromeMetadata["PreambleVersion"] =
+                                $"{vblock.PreambleVersionMajor}.{vblock.PreambleVersionMinor}";
+                            chromeMetadata["PreambleOffset"] = vblock.PreambleOffset.ToString();
+                            chromeMetadata["PreambleSize"] = vblock.PreambleSize.ToString();
+                            chromeMetadata["BodySize"] = vblock.BodySignature.DataSize.ToString();
+                            chromeMetadata["BodyPresent"] =
+                                (chrome.ImageType == ChromeOsTool.ChromeOsImageType.Kernel).ToString();
+                        }
+                    }
+
+                    return FirmwareOpResult.Ok(chrome.Description,
+                        metadata: chromeMetadata);
+                }
+
+                var resource = ChromeOsTool.DetectResource(prefix);
+                if (resource != ChromeOsTool.BootResourceType.Unknown)
+                {
+                    if (resource == ChromeOsTool.BootResourceType.RockchipResource)
+                    {
+                        var rsce = ChromeOsTool.ReadRockchipResourceMetadata(filePath);
+                        return FirmwareOpResult.Ok(
+                            $"RSCE resource container with {rsce.Entries.Count} entries.",
+                            entries: [.. rsce.Entries.Select(entry => entry.Name)],
+                            metadata: new Dictionary<string, string>
+                            {
+                                ["Type"] = resource.ToString(),
+                                ["FileCount"] = rsce.FileCount.ToString(),
+                                ["PayloadParsing"] = "directory-only"
+                            });
+                    }
+
+                    return FirmwareOpResult.Ok(
+                        $"{resource} boot resource signature recognized; payload format is not parsed.",
+                        metadata: new Dictionary<string, string>
+                        {
+                            ["Type"] = resource.ToString(),
+                            ["PayloadParsing"] = "not-implemented",
+                            ["Extraction"] = "not-implemented"
+                        });
+                }
+
                 if (TegraBlobTool.IsTegraBlob(prefix))
                 {
                     var parsed = TegraBlobTool.Parse(File.ReadAllBytes(filePath));
@@ -237,6 +318,28 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
                     return UnpackBoot(filePath, outputDirectory);
                 if (magic == VendorBootMagic)
                     return UnpackVendorBoot(filePath, outputDirectory);
+
+                var resource = ChromeOsTool.DetectResource(ReadPrefix(filePath, 4096));
+                if (magic == ChromeOsMagic)
+                {
+                    return FirmwareOpResult.Fail(
+                        "ChromeOS boot/signature extraction is not supported.");
+                }
+
+                if (resource == ChromeOsTool.BootResourceType.RockchipResource)
+                {
+                    var selected = options?.CreateSelectedEntrySet();
+                    var count = ChromeOsTool.ExtractRockchipResource(
+                        filePath, outputDirectory, selected, options?.Overwrite ?? true, cancellationToken);
+                    return FirmwareOpResult.Ok(
+                        $"Unpacked RSCE resource container ({count} files) to {outputDirectory}.");
+                }
+
+                if (resource != ChromeOsTool.BootResourceType.Unknown)
+                {
+                    return FirmwareOpResult.Fail(
+                        "This startup resource format is recognized but extraction is not supported.");
+                }
 
                 var data = File.ReadAllBytes(filePath);
                 if (TegraBlobTool.IsTegraBlob(data))
@@ -322,6 +425,14 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
 
                 if (Directory.Exists(inputPath))
                 {
+                    var metadata = RepackMetadata.Read(inputPath, context);
+                    if (metadata?.Configuration["resource"]?.GetValue<string>() == "RSCE")
+                    {
+                        var count = ChromeOsTool.BuildRockchipResource(inputPath, outputPath, cancellationToken);
+                        return FirmwareOpResult.Ok(
+                            $"Packed {count} RSCE resources to {outputPath} (canonical unsigned).");
+                    }
+
                     BootRepackConfiguration.Pack(inputPath, outputPath, cancellationToken, context);
                     return FirmwareOpResult.Ok($"Packed boot image to {outputPath}");
                 }
@@ -459,5 +570,23 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
         var buffer = new byte[length];
         fs.ReadExactly(buffer);
         return buffer;
+    }
+
+    private static ChromeOsTool.ChromeOsDetectionResult DetectChromeOsFile(string filePath)
+    {
+        using var fs = File.OpenRead(filePath);
+        if (fs.Length > MaximumChromeOsProbeBytes || fs.Length > int.MaxValue)
+        {
+            return new ChromeOsTool.ChromeOsDetectionResult
+            {
+                ImageType = ChromeOsTool.ChromeOsImageType.Unknown,
+                Description = "ChromeOS candidate exceeds bounded classifier size.",
+                ErrorMessage = "The ChromeOS classifier does not materialize files larger than 64 MiB."
+            };
+        }
+
+        var data = new byte[checked((int)fs.Length)];
+        fs.ReadExactly(data);
+        return ChromeOsTool.Detect(data);
     }
 }

@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
@@ -293,6 +295,33 @@ public class BootImageRoundTripTests
     }
 
     [Fact]
+    public void BootImage_UnknownHeaderVersion_IsRejectedInsteadOfDowngradingToV0()
+    {
+        var data = new byte[4096];
+        "ANDROID!"u8.CopyTo(data);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(40), 5);
+
+        using var parser = new BootImageParser();
+
+        Assert.Throws<ImageParseException>(() => parser.Parse(data));
+    }
+
+    [Fact]
+    public void BootImage_TruncatedDeclaredComponent_IsRejected()
+    {
+        var data = new byte[4096];
+        "ANDROID!"u8.CopyTo(data);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(8), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(16), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(36), 4096);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(40), 0);
+
+        using var parser = new BootImageParser();
+
+        Assert.Throws<ImageParseException>(() => parser.Parse(data));
+    }
+
+    [Fact]
     public void V0_UnpackRepack_PreservesComponentsAndKeyFields()
     {
         var packer = new BootImagePacker
@@ -436,10 +465,7 @@ public class BootImageRoundTripTests
         Array.Copy(image, truncated, truncated.Length);
 
         using var parser = new BootImageParser();
-        parser.Parse(truncated);
-
-        Assert.Equal(TestKernel, parser.Kernel);
-        Assert.Equal([], parser.Ramdisk);
+        Assert.Throws<ImageParseException>(() => parser.Parse(truncated));
     }
 
     private static byte[] BuildBytes(int length, int factor)

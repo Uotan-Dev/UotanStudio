@@ -9,6 +9,43 @@ namespace UotanStudio.Tests.Firmware;
 /// <summary>Tests strict verification of footer-referenced VBMeta images. <para>测试 footer 引用的 VBMeta 镜像的严格验证。</para></summary>
 public class AvbFooterVerificationTests
 {
+    [Theory]
+    [InlineData(false, 16777217UL)]
+    [InlineData(true, 16777217UL)]
+    [InlineData(false, 4294967296UL)]
+    [InlineData(true, 4294967296UL)]
+    public void VerifyVBMetaFromStream_OversizedMetadata_RejectsBeforeReadingBlock(bool authentication, ulong blockSize)
+    {
+        var header = BuildVbmeta(algorithm: 1);
+        BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(authentication ? 12 : 20, 8), blockSize);
+        using var stream = new MemoryStream(header, writable: false);
+
+        var result = AvbVerifier.VerifyVBMetaFromStream(stream, checked((long)blockSize + header.Length));
+
+        Assert.False(result.IsValid);
+        Assert.Contains("16 MiB", result.ErrorMessage);
+        Assert.Equal(header.Length, stream.Position);
+    }
+
+    [Theory]
+    [InlineData(16777217UL)]
+    [InlineData(4294967296UL)]
+    public void VerifyFromStream_OversizedMetadata_RejectsAfterFooterAndHeaderOnly(ulong blockSize)
+    {
+        var header = BuildVbmeta(algorithm: 1);
+        BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(20, 8), blockSize);
+        var footer = BuildFooterImage(header)[^AvbFooter.Size..];
+        BinaryPrimitives.WriteUInt64BigEndian(footer.AsSpan(28, 8), blockSize + (ulong)header.Length);
+        using var stream = new MetadataOnlyStream(header, footer, checked((long)blockSize + 64 + header.Length + AvbFooter.Size));
+
+        var result = AvbVerifier.VerifyFromStream(stream, stream.Length);
+
+        Assert.False(result.IsValid);
+        Assert.True(result.IsSigned);
+        Assert.Contains("16 MiB", result.ErrorMessage);
+        Assert.Equal(AvbFooter.Size + header.Length, stream.BytesRead);
+    }
+
     [Fact]
     public void Verify_StandardFooterWithAlgorithmNone_IsUnsignedAndInvalid()
     {
@@ -124,6 +161,31 @@ public class AvbFooterVerificationTests
         BinaryPrimitives.WriteUInt32BigEndian(vbmeta.AsSpan(4, 4), 1);
         BinaryPrimitives.WriteUInt32BigEndian(vbmeta.AsSpan(28, 4), algorithm);
         return vbmeta;
+    }
+
+    private sealed class MetadataOnlyStream(byte[] header, byte[] footer, long length) : Stream
+    {
+        public int BytesRead { get; private set; }
+        public override bool CanRead => true;
+        public override bool CanSeek => true;
+        public override bool CanWrite => false;
+        public override long Length => length;
+        public override long Position { get; set; }
+        public override int Read(Span<byte> buffer)
+        {
+            var bytes = Position == 64 ? header : Position == Length - AvbFooter.Size ? footer
+                : throw new InvalidOperationException("Only the header and footer may be read.");
+            Assert.Equal(bytes.Length, buffer.Length);
+            bytes.CopyTo(buffer);
+            Position += bytes.Length;
+            BytesRead += bytes.Length;
+            return bytes.Length;
+        }
+        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+        public override void Flush() => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     private static byte[] BuildFooterImage(byte[] vbmeta)

@@ -99,10 +99,15 @@ public sealed class AvbHashtreeDescriptor
 /// </remarks>
 public sealed class AvbChainPartitionDescriptor
 {
+    /// <summary>Controls chain partition slot suffix handling. <para>控制链分区的槽位后缀处理。</para></summary>
+    /// <value>Bit zero is DO_NOT_USE_AB; zero applies the selected slot suffix.
+    /// <para>第零位为 DO_NOT_USE_AB；零表示应用所选槽位后缀。</para></value>
+    public uint Flags { get; init; }
+
     /// <summary>Rollback-slot index the chained partition consumes.
     /// <para>链式分区所使用的回滚槽索引。</para></summary>
-    /// <value>A big-endian 32-bit location written in the body; 0 selects the first slot.
-    /// <para>主体中以大端序写出的 32 位位置；0 表示第一个槽位。</para></value>
+    /// <value>A big-endian 32-bit location written in the body; chain verification requires a nonzero slot below 32.
+    /// <para>主体中以大端序写出的 32 位位置；链验证要求为小于 32 的非零槽位。</para></value>
     public uint RollbackIndexLocation { get; init; }
 
     /// <summary>Partition whose vbmeta is verified by <see cref="PublicKey"/>.

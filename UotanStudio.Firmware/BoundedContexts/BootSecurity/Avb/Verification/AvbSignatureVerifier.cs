@@ -226,7 +226,7 @@ public sealed class AvbSignatureVerifyResult
 /// <para>对照受信任或内嵌的 RSA 公钥验证 AVB vbmeta 的签名与存储哈希，并解码辅助数据块中的描述符。
 /// 所有解析均做边界检查：畸形输入返回错误结果或空集合，而不抛出异常。</para>
 /// </summary>
-public static class AvbSignatureVerifier
+public static partial class AvbSignatureVerifier
 {
     /// <summary>Size of the fixed AVB0 vbmeta header in bytes. <para>固定 AVB0 vbmeta 头部的字节大小。</para></summary>
     public const int HeaderSize = 256;
@@ -456,7 +456,14 @@ public static class AvbSignatureVerifier
             return With(result, ErrorMessage: "vbmeta header declares invalid authentication or auxiliary block sizes. vbmeta 头声明的认证块或辅助块大小无效。");
         }
 
-        result = With(result, Descriptors: ExtractDescriptors(vbmetaData));
+        try
+        {
+            result = With(result, Descriptors: ReadDescriptorsStrict(vbmetaData));
+        }
+        catch (InvalidDataException ex)
+        {
+            return With(result, ErrorMessage: ex.Message);
+        }
         if (sigSize != (ulong)keySizeBits / 8 || sigOffset > authSize || sigSize > authSize - sigOffset ||
             sigOffset > int.MaxValue || sigSize > int.MaxValue)
         {
@@ -532,6 +539,15 @@ public static class AvbSignatureVerifier
             };
         }
 
+        IReadOnlyList<AvbDescriptorInfo> descriptors;
+        try
+        {
+            descriptors = ReadDescriptorsStrict(vbmetaData);
+        }
+        catch (InvalidDataException ex)
+        {
+            return new AvbSignatureVerifyResult { ErrorMessage = ex.Message };
+        }
         var valid = TryVerifySignature(vbmetaData, signature, key, algorithmType);
         return new AvbSignatureVerifyResult
         {
@@ -539,7 +555,7 @@ public static class AvbSignatureVerifier
             SignatureIsValid = valid,
             AlgorithmName = GetAlgorithmName(algorithmType),
             StoredSignature = signature,
-            Descriptors = ExtractDescriptors(vbmetaData)
+            Descriptors = descriptors
         };
     }
 
@@ -549,45 +565,19 @@ public static class AvbSignatureVerifier
     /// </summary>
     /// <param name="vbmetaData">Untrusted vbmeta buffer; header-declared ranges are validated before any read.
     /// <para>不可信的 vbmeta 缓冲区；读取前先校验头部声明的范围。</para></param>
-    /// <returns>One entry per decoded descriptor; the list is empty and iteration stops early when a declared size does not fit the buffer.
-    /// <para>每个成功解码的描述符一条记录；声明大小超出缓冲时列表为空或提前停止迭代。</para></returns>
+    /// <returns>One entry per descriptor, or an empty list if any descriptor is malformed or exceeds the inspection limits.
+    /// Use <see cref="ReadDescriptorsStrict"/> when an empty list must be distinguished from invalid input.
+    /// <para>每个描述符一条记录；任一描述符畸形或超出检查限制时返回空列表。需要区分空列表与无效输入时使用 <see cref="ReadDescriptorsStrict"/>。</para></returns>
     public static IReadOnlyList<AvbDescriptorInfo> ExtractDescriptors(byte[] vbmetaData)
     {
-        var result = new List<AvbDescriptorInfo>();
-        if (vbmetaData is not { Length: >= HeaderSize })
+        try
         {
-            return result;
+            return ReadDescriptorsStrict(vbmetaData);
         }
-
-        var authSize = (long)BinaryPrimitives.ReadUInt64BigEndian(vbmetaData.AsSpan(12, 8));
-        var auxSize = (long)BinaryPrimitives.ReadUInt64BigEndian(vbmetaData.AsSpan(20, 8));
-        var descriptorsOffset = (long)BinaryPrimitives.ReadUInt64BigEndian(vbmetaData.AsSpan(96, 8));
-        var descriptorsSize = (long)BinaryPrimitives.ReadUInt64BigEndian(vbmetaData.AsSpan(104, 8));
-
-        var auxStart = HeaderSize + authSize;
-        if (auxStart < HeaderSize || auxSize < 0 || descriptorsOffset < 0 || descriptorsSize < 0 ||
-            auxStart + auxSize > vbmetaData.Length ||
-            descriptorsOffset + descriptorsSize > auxSize)
+        catch (InvalidDataException)
         {
-            return result;
+            return [];
         }
-
-        var cursor = auxStart + descriptorsOffset;
-        var end = cursor + descriptorsSize;
-        while (cursor + 16 <= end)
-        {
-            var tag = BinaryPrimitives.ReadUInt64BigEndian(vbmetaData.AsSpan((int)cursor, 8));
-            var numBytesFollowing = (long)BinaryPrimitives.ReadUInt64BigEndian(vbmetaData.AsSpan((int)cursor + 8, 8));
-            if (numBytesFollowing < 0 || cursor + 16 + numBytesFollowing > end)
-            {
-                break;
-            }
-
-            result.Add(ParseDescriptor(tag, numBytesFollowing, vbmetaData, (int)cursor + 16));
-            cursor += 16 + numBytesFollowing;
-        }
-
-        return result;
     }
 
     private static AvbDescriptorInfo ParseDescriptor(ulong tag, long numBytesFollowing, byte[] data, int bodyStart)
@@ -733,6 +723,7 @@ public static class AvbSignatureVerifier
                             Size = (ulong)numBytesFollowing,
                             PartitionName = partitionName,
                             RollbackIndexLocation = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart, 4)),
+                            Flags = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 12, 4)),
                             PublicKey = publicKey
                         };
                     }

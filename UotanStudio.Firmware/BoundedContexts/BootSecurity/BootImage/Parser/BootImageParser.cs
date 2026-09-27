@@ -169,7 +169,7 @@ public class BootImageParser : IDisposable
         }
         else
         {
-            ParseV0V2(headerBuf, 0, fs);
+            throw new ImageParseException($"Unsupported Android boot image header version: {headerVersionField}.");
         }
 
         DetectCompression();
@@ -219,7 +219,7 @@ public class BootImageParser : IDisposable
         }
         else
         {
-            ParseV0V2(data, 0, ms);
+            throw new ImageParseException($"Unsupported Android boot image header version: {headerVersionField}.");
         }
 
         DetectCompression();
@@ -416,9 +416,15 @@ public class BootImageParser : IDisposable
     /// </summary>
     private static byte[] ReadSegment(Stream stream, uint offset, uint size)
     {
-        if (size == 0 || (long)offset + size > stream.Length)
+        if (size == 0)
         {
             return [];
+        }
+
+        if ((long)offset > stream.Length || size > stream.Length - offset)
+        {
+            throw new ImageParseException(
+                $"Boot image component range exceeds the input: offset={offset}, size={size}, length={stream.Length}.");
         }
 
         stream.Seek(offset, SeekOrigin.Begin);

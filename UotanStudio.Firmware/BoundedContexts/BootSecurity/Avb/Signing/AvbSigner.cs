@@ -7,9 +7,9 @@ using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 using Org.BouncyCastle.OpenSsl;
 using Org.BouncyCastle.Security;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Build;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
 
@@ -22,7 +22,7 @@ namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
 /// 并修补 VBMeta 标志以禁用校验。所有头部字段为大端序；非法输入与 I/O 故障返回带英文中文合并消息的失败结果，
 /// 仅参数为 null 的检查与取消请求会以异常形式逸出。</para>
 /// </summary>
-public static class AvbSigner
+public static partial class AvbSigner
 {
     /// <summary>Size of the fixed AVB0 VBMeta header this signer writes, in bytes. <para>本签名器写入的固定 AVB0 VBMeta 头字节大小。</para></summary>
     public const int HeaderSize = AvbVBMetaImageHeader.Size;
@@ -38,7 +38,6 @@ public static class AvbSigner
     private const int KernelCmdlineDescriptorTag = 3;
     private const int ChainPartitionDescriptorTag = 4;
     private static ReadOnlySpan<byte> MagicBytes => "AVB0"u8;
-    private static readonly byte[] ZeroBlock = new byte[BlockSize];
 
     /// <summary>VBMeta header flag bit that disables hashtree (dm-verity) verification. <para>禁用哈希树（dm-verity）校验的 VBMeta 头标志位。</para></summary>
     public const uint VbmetaFlagHashtreeDisabled = 0x1;
@@ -168,8 +167,8 @@ public static class AvbSigner
     /// <param name="key">RSA private key; the modulus must be 2048, 4096 or 8192 bits, otherwise the operation returns a failure result.
     /// <para>RSA 私钥；模数必须为 2048、4096 或 8192 位，否则返回失败结果。</para></param>
     /// <param name="outputPath">
-    /// Destination overwritten directly (FileMode.Create); must differ from <paramref name="vbmetaPath"/> (case-insensitive full-path comparison).
-    /// <para>目标路径，直接覆盖写入（FileMode.Create）；必须与 <paramref name="vbmetaPath"/> 不同（按不区分大小写的完整路径比较）。</para>
+    /// Destination published atomically after signature validation; must differ from <paramref name="vbmetaPath"/>.
+    /// <para>签名验证后原子发布的目标路径；必须与 <paramref name="vbmetaPath"/> 不同。</para>
     /// </param>
     /// <param name="descriptors">Hash descriptors serialized into the auxiliary block; partition names must be ASCII up to 255 bytes, salt and digest up to 255 bytes each, and the algorithm name up to 32 bytes.
     /// <para>序列化进辅助块的哈希描述符；分区名须为至多 255 字节的 ASCII，盐与摘要各至多 255 字节，算法名至多 32 字节。</para></param>
@@ -236,9 +235,7 @@ public static class AvbSigner
                 descriptorList, key, keyBits, algorithmType, rollbackIndex, flags, rollbackIndexLocation, releaseString,
                 requiredMajor, requiredMinor);
 
-            await using var output = new FileStream(
-                outputPath, FileMode.Create, FileAccess.Write, FileShare.None, BlockSize, FileOptions.SequentialScan);
-            await output.WriteAsync(vbmeta, cancellationToken);
+            await PublishVbmetaAsync(outputPath, vbmeta, cancellationToken).ConfigureAwait(false);
 
             return new AvbSignResult
             {
@@ -273,8 +270,8 @@ public static class AvbSigner
     /// <param name="key">RSA private key; the modulus must be 2048, 4096 or 8192 bits, otherwise the operation returns a failure result.
     /// <para>RSA 私钥；模数必须为 2048、4096 或 8192 位，否则返回失败结果。</para></param>
     /// <param name="outputPath">
-    /// Destination overwritten directly (FileMode.Create); must differ from <paramref name="vbmetaPath"/> (case-insensitive full-path comparison).
-    /// <para>目标路径，直接覆盖写入（FileMode.Create）；必须与 <paramref name="vbmetaPath"/> 不同（按不区分大小写的完整路径比较）。</para>
+    /// Destination published atomically after signature validation; must differ from <paramref name="vbmetaPath"/>.
+    /// <para>签名验证后原子发布的目标路径；必须与 <paramref name="vbmetaPath"/> 不同。</para>
     /// </param>
     /// <param name="descriptors">
     /// Heterogeneous list of hash, hashtree, kernel command line, chain partition or property descriptor models; unsupported element types fail the operation.
@@ -340,13 +337,20 @@ public static class AvbSigner
                 releaseString = ReleaseString;
             }
 
+            if (descriptorList.Any(descriptor => descriptor is AvbChainPartitionDescriptor { Flags: not 0 }))
+            {
+                requiredMinor = Math.Max(requiredMinor, 3);
+            }
+            if (descriptorList.Any(descriptor => descriptor is AvbHashDescriptor { Flags: not 0 }
+                or AvbHashtreeDescriptor { Flags: not 0 }))
+            {
+                requiredMinor = Math.Max(requiredMinor, 1);
+            }
             var vbmeta = BuildSignedVbmetaCore(
                 SerializeDescriptors(descriptorList), key, keyBits, algorithmType,
                 rollbackIndex, flags, rollbackIndexLocation, releaseString, requiredMajor, requiredMinor);
 
-            await using var output = new FileStream(
-                outputPath, FileMode.Create, FileAccess.Write, FileShare.None, BlockSize, FileOptions.SequentialScan);
-            await output.WriteAsync(vbmeta, cancellationToken);
+            await PublishVbmetaAsync(outputPath, vbmeta, cancellationToken).ConfigureAwait(false);
 
             return new AvbSignResult
             {
@@ -372,8 +376,8 @@ public static class AvbSigner
     /// Adds an AVB dm-verity hashtree footer to a partition image: builds the Merkle hash tree, appends a signed VBMeta with a hashtree descriptor, and writes the standard footer.
     /// <para>为分区镜像追加 AVB dm-verity 哈希树尾部：构建 Merkle 哈希树，追加带有哈希树描述符的 已签名 VBMeta，并写入标准尾部。</para>
     /// </summary>
-    /// <param name="imagePath">Existing partition image to copy and extend; the tree is built over its content at 4096-byte data and hash block sizes.
-    /// <para>待复制并扩展的现有分区镜像；哈希树以 4096 字节数据块与哈希块在其内容上构建。</para></param>
+    /// <param name="imagePath">Raw or Sparse partition image; a valid footer selects original content before rebuilding the 4096-byte-block tree.
+    /// <para>原始或 Sparse 分区镜像；存在有效 footer 时先选取原始内容，再按 4096 字节块重建哈希树。</para></param>
     /// <param name="partitionName">Name recorded in the hashtree descriptor; ASCII, non-empty, at most 255 bytes.
     /// <para>写入哈希树描述符的分区名；ASCII、非空、至多 255 字节。</para></param>
     /// <param name="key">RSA private key; the modulus must be 2048, 4096 or 8192 bits, otherwise the operation returns a failure result.
@@ -389,7 +393,7 @@ public static class AvbSigner
     /// <returns>Success result with tree layout output size and one descriptor, or a failure result explaining rejected input.
     /// <para>包含哈希树布局输出大小与单个描述符的成功结果；被拒绝的输入返回说明原因的失败结果。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="key"/> is <see langword="null"/>. <para><paramref name="key"/> 为 <see langword="null"/>。</para></exception>
-    public static async Task<AvbSignResult> AddHashtreeFooterAsync(
+    public static Task<AvbSignResult> AddHashtreeFooterAsync(
         string imagePath,
         string partitionName,
         RsaKeyParameters key,
@@ -397,137 +401,17 @@ public static class AvbSigner
         byte[]? salt = null,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(imagePath))
-        {
-            return Fail("imagePath must be provided. 必须提供 imagePath。");
-        }
-
-        if (string.IsNullOrWhiteSpace(partitionName))
-        {
-            return Fail("partitionName must be provided. 必须提供 partitionName。");
-        }
-
-        if (string.IsNullOrWhiteSpace(outputPath))
-        {
-            return Fail("outputPath must be provided. 必须提供 outputPath。");
-        }
-
-        ArgumentNullException.ThrowIfNull(key);
-
-        try
-        {
-            ValidatePartitionName(partitionName);
-            if (!File.Exists(imagePath))
-            {
-                return Fail($"Image file '{imagePath}' does not exist. 镜像文件 '{imagePath}' 不存在。");
-            }
-
-            if (PathsEqual(imagePath, outputPath))
-            {
-                return Fail("Output path must differ from the input image. 输出路径不能与输入镜像相同。");
-            }
-
-            var keyBits = key.Modulus.BitLength;
-            var algorithmType = GetAlgorithmType(keyBits);
-
-            var effectiveSalt = salt ?? new byte[Sha256Size];
-            if (salt == null)
-            {
-                RandomNumberGenerator.Fill(effectiveSalt);
-            }
-
-            using var tree = AvbHashtreeBuilder.Build(imagePath, effectiveSalt, BlockSize, BlockSize);
-            var treeOffset = checked((ulong)tree.ImageSize);
-            var vbmeta = BuildSignedVbmetaCore(
-                SerializeDescriptors(
-                    [new AvbHashtreeDescriptor
-                    {
-                        DmVerityVersion = 1,
-                        PartitionName = partitionName,
-                        ImageSize = (ulong)tree.ImageSize,
-                        TreeOffset = treeOffset,
-                        TreeSize = (ulong)tree.TreeSize,
-                        DataBlockSize = (uint)BlockSize,
-                        HashBlockSize = (uint)BlockSize,
-                        FecNumRoots = 0,
-                        HashAlgorithm = "sha256",
-                        Salt = effectiveSalt,
-                        RootDigest = tree.RootDigest,
-                        Flags = 0
-                    }]),
-                key, keyBits, algorithmType,
-                rollbackIndex: 0, flags: 0, rollbackIndexLocation: 0, releaseString: ReleaseString,
-                requiredMajor: 1, requiredMinor: 0);
-            var vbmetaPadding = (BlockSize - (vbmeta.Length % BlockSize)) % BlockSize;
-
-            var tempPath = outputPath + ".tmp";
-            try
-            {
-                await using (var input = new FileStream(
-                    imagePath, FileMode.Open, FileAccess.Read, FileShare.Read, BlockSize, FileOptions.SequentialScan))
-                await using (var output = new FileStream(
-                    tempPath, FileMode.Create, FileAccess.Write, FileShare.None, BlockSize, FileOptions.SequentialScan))
-                {
-                    var originalImageSize = input.Length;
-                    await input.CopyToAsync(output, cancellationToken).ConfigureAwait(false);
-
-                    var padding = checked((int)(tree.ImageSize - originalImageSize));
-                    if (padding > 0)
-                    {
-                        await output.WriteAsync(ZeroBlock.AsMemory(0, padding), cancellationToken).ConfigureAwait(false);
-                    }
-
-                    await tree.WriteTreeToAsync(output, cancellationToken).ConfigureAwait(false);
-
-                    var vbmetaOffset = checked(treeOffset + (ulong)tree.TreeSize);
-                    await output.WriteAsync(vbmeta, cancellationToken).ConfigureAwait(false);
-
-                    if (vbmetaPadding > 0)
-                    {
-                        await output.WriteAsync(ZeroBlock.AsMemory(0, vbmetaPadding), cancellationToken).ConfigureAwait(false);
-                    }
-
-                    await output.WriteAsync(ZeroBlock.AsMemory(0, BlockSize - AvbFooter.Size), cancellationToken).ConfigureAwait(false);
-                    var footer = new byte[AvbFooter.Size];
-                    BuildFooter(footer, checked((ulong)originalImageSize), vbmetaOffset, (ulong)vbmeta.Length);
-                    await output.WriteAsync(footer, cancellationToken).ConfigureAwait(false);
-                }
-
-                File.Move(tempPath, outputPath, overwrite: true);
-            }
-            catch
-            {
-                try { File.Delete(tempPath); } catch { }
-                throw;
-            }
-
-            var outputSize = checked(tree.ImageSize + tree.TreeSize + vbmetaPadding + vbmeta.Length + BlockSize);
-            return new AvbSignResult
-            {
-                Success = true,
-                OutputPath = outputPath,
-                AlgorithmType = algorithmType,
-                AlgorithmName = AvbSignatureVerifier.GetAlgorithmName(algorithmType),
-                DescriptorCount = 1,
-                OutputSize = outputSize
-            };
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return Fail(ex.Message);
-        }
+        return AvbResigner.ResignImageAsync(imagePath, outputPath, key,
+            new AvbResignOptions { Mode = AvbResignMode.Hashtree, PartitionName = partitionName, Salt = salt },
+            cancellationToken);
     }
 
     /// <summary>
     /// Adds an AVB hash footer to a partition image: computes the salted SHA-256 digest while streaming, appends a signed VBMeta with a hash descriptor, and writes the standard footer.
     /// <para>为分区镜像追加 AVB 哈希尾部：流式计算加盐 SHA-256 摘要，追加带有哈希描述符的 已签名 VBMeta，并写入标准尾部。</para>
     /// </summary>
-    /// <param name="imagePath">Existing partition image streamed through in 64 KiB blocks; the digest covers salt plus the original content, excluding padding.
-    /// <para>以 64 KiB 块流经的现有分区镜像；摘要覆盖盐值加原始内容，不含填充。</para></param>
+    /// <param name="imagePath">Raw or Sparse partition streamed in logical 64 KiB blocks; existing valid footer metadata and padding are excluded from the new digest.
+    /// <para>按逻辑 64 KiB 块读取的原始或 Sparse 分区；已有合法 footer 的元数据和填充不计入新摘要。</para></param>
     /// <param name="partitionName">Name recorded in the hash descriptor; ASCII, non-empty, at most 255 bytes.
     /// <para>写入哈希描述符的分区名；ASCII、非空、至多 255 字节。</para></param>
     /// <param name="key">RSA private key; the modulus must be 2048, 4096 or 8192 bits, otherwise the operation returns a failure result.
@@ -541,118 +425,15 @@ public static class AvbSigner
     /// <returns>Success result reporting the signed output file size, or a failure result explaining rejected input.
     /// <para>报告签名后输出文件大小的成功结果；被拒绝的输入返回说明原因的失败结果。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="key"/> is <see langword="null"/>. <para><paramref name="key"/> 为 <see langword="null"/>。</para></exception>
-    public static async Task<AvbSignResult> AddHashFooterAsync(
+    public static Task<AvbSignResult> AddHashFooterAsync(
         string imagePath,
         string partitionName,
         RsaKeyParameters key,
         string outputPath,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(imagePath))
-        {
-            return Fail("imagePath must be provided. 必须提供 imagePath。");
-        }
-
-        if (string.IsNullOrWhiteSpace(partitionName))
-        {
-            return Fail("partitionName must be provided. 必须提供 partitionName。");
-        }
-
-        if (string.IsNullOrWhiteSpace(outputPath))
-        {
-            return Fail("outputPath must be provided. 必须提供 outputPath。");
-        }
-
-        ArgumentNullException.ThrowIfNull(key);
-
-        try
-        {
-            ValidatePartitionName(partitionName);
-            if (!File.Exists(imagePath))
-            {
-                return Fail($"Image file '{imagePath}' does not exist. 镜像文件 '{imagePath}' 不存在。");
-            }
-
-            if (PathsEqual(imagePath, outputPath))
-            {
-                return Fail("Output path must differ from the input image. 输出路径不能与输入镜像相同。");
-            }
-
-            var keyBits = key.Modulus.BitLength;
-            var algorithmType = GetAlgorithmType(keyBits);
-
-            var salt = new byte[Sha256Size];
-            RandomNumberGenerator.Fill(salt);
-
-            var tempPath = outputPath + ".tmp-" + Guid.NewGuid().ToString("N");
-            try
-            {
-                await using (var input = new FileStream(
-                    imagePath, FileMode.Open, FileAccess.Read, FileShare.Read, BlockSize, FileOptions.SequentialScan))
-                await using (var output = new FileStream(
-                    tempPath, FileMode.Create, FileAccess.Write, FileShare.None, BlockSize, FileOptions.SequentialScan))
-                {
-                    var originalImageSize = input.Length;
-                    using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-                    hasher.AppendData(salt);
-
-                    var buffer = new byte[64 * 1024];
-                    long copied = 0;
-                    int read;
-                    while ((read = await input.ReadAsync(buffer, cancellationToken)) > 0)
-                    {
-                        hasher.AppendData(buffer, 0, read);
-                        await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-                        copied += read;
-                    }
-
-                    var digest = hasher.GetHashAndReset();
-
-                    var padding = (int)((((copied + BlockSize - 1) / BlockSize) * BlockSize) - copied);
-                    if (padding > 0)
-                    {
-                        await output.WriteAsync(ZeroBlock.AsMemory(0, padding), cancellationToken);
-                    }
-
-                    var vbmetaOffset = checked((ulong)copied + (ulong)padding);
-                    var vbmeta = BuildSignedVbmeta(
-                        [new AvbHashDescriptor { PartitionName = partitionName, ImageSize = (ulong)copied, Salt = salt, Digest = digest }],
-                        key, keyBits, algorithmType,
-                        rollbackIndex: 0, flags: 0, rollbackIndexLocation: 0, releaseString: ReleaseString);
-                    await output.WriteAsync(vbmeta, cancellationToken);
-
-                    var footer = new byte[AvbFooter.Size];
-                    BuildFooter(footer, (ulong)originalImageSize, vbmetaOffset, (ulong)vbmeta.Length);
-                    await output.WriteAsync(footer, cancellationToken);
-                }
-
-                File.Move(tempPath, outputPath, overwrite: true);
-            }
-            catch
-            {
-                try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
-                throw;
-            }
-
-            var signedSize = new FileInfo(outputPath).Length;
-            return new AvbSignResult
-            {
-                Success = true,
-                OutputPath = outputPath,
-                AlgorithmType = algorithmType,
-                AlgorithmName = AvbSignatureVerifier.GetAlgorithmName(algorithmType),
-                DescriptorCount = 1,
-                OutputSize = signedSize
-            };
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return Fail(ex.Message);
-        }
+        return AvbResigner.ResignImageAsync(imagePath, outputPath, key,
+            new AvbResignOptions { PartitionName = partitionName }, cancellationToken);
     }
 
     /// <summary>
@@ -739,7 +520,8 @@ public static class AvbSigner
         uint requiredMinor = 0)
         => BuildSignedVbmetaCore(
             SerializeHashDescriptors(descriptors), key, keyBits, algorithmType,
-            rollbackIndex, flags, rollbackIndexLocation, releaseString, requiredMajor, requiredMinor);
+            rollbackIndex, flags, rollbackIndexLocation, releaseString, requiredMajor,
+            descriptors.Any(descriptor => descriptor.Flags != 0) ? Math.Max(requiredMinor, 1) : requiredMinor);
 
     private static byte[] BuildSignedVbmetaCore(
         byte[] descriptorBytes,
@@ -753,13 +535,17 @@ public static class AvbSigner
         uint requiredMajor,
         uint requiredMinor)
     {
+        if (rollbackIndexLocation > 0)
+        {
+            requiredMinor = Math.Max(requiredMinor, 2);
+        }
         var keyNumBytes = keyBits / 8;
         var publicKeyBlob = AvbRsaPublicKeyCodec.Export(key, keyBits);
-        var auxSize = checked((ulong)publicKeyBlob.Length + (ulong)descriptorBytes.Length);
-        var authSize = checked(Sha256Size + (ulong)keyNumBytes);
+        var auxSize = checked(((ulong)publicKeyBlob.Length + (ulong)descriptorBytes.Length + 63) & ~63UL);
+        var authSize = checked((Sha256Size + (ulong)keyNumBytes + 63) & ~63UL);
 
         var header = BuildHeader(
-            authSize, auxSize, algorithmType, publicKeyBlob.Length, descriptorBytes.Length,
+            authSize, auxSize, algorithmType, keyNumBytes, publicKeyBlob.Length, descriptorBytes.Length,
             rollbackIndex, flags, rollbackIndexLocation, releaseString, requiredMajor, requiredMinor);
 
         var aux = new byte[checked((int)auxSize)];
@@ -784,6 +570,7 @@ public static class AvbSigner
         ulong authSize,
         ulong auxSize,
         uint algorithmType,
+        int signatureSize,
         int publicKeySize,
         int descriptorSize,
         ulong rollbackIndex,
@@ -803,7 +590,7 @@ public static class AvbSigner
         WriteUInt64BE(header, 32, 0);
         WriteUInt64BE(header, 40, Sha256Size);
         WriteUInt64BE(header, 48, Sha256Size);
-        WriteUInt64BE(header, 56, authSize - Sha256Size);
+        WriteUInt64BE(header, 56, (ulong)signatureSize);
         WriteUInt64BE(header, 64, 0);
         WriteUInt64BE(header, 72, (ulong)publicKeySize);
         WriteUInt64BE(header, 80, 0);
@@ -1027,6 +814,10 @@ public static class AvbSigner
 
     private static byte[] SerializeChainPartitionDescriptor(AvbChainPartitionDescriptor descriptor)
     {
+        if ((descriptor.Flags & ~1U) != 0)
+        {
+            throw new ArgumentException("Unsupported AVB chain descriptor flags.", nameof(descriptor));
+        }
         var nameBytes = Encoding.ASCII.GetBytes(ValidatePartitionName(descriptor.PartitionName));
         var publicKey = descriptor.PublicKey ?? [];
 
@@ -1040,6 +831,7 @@ public static class AvbSigner
         WriteUInt32BE(buffer, body, descriptor.RollbackIndexLocation);
         WriteUInt32BE(buffer, body + 4, (uint)nameBytes.Length);
         WriteUInt32BE(buffer, body + 8, (uint)publicKey.Length);
+        WriteUInt32BE(buffer, body + 12, descriptor.Flags);
 
         nameBytes.CopyTo(buffer, body + 76);
         publicKey.CopyTo(buffer, body + 76 + nameBytes.Length);
@@ -1165,7 +957,20 @@ public static class AvbSigner
     }
 
     private static bool PathsEqual(string first, string second)
-        => string.Equals(Path.GetFullPath(first), Path.GetFullPath(second), StringComparison.OrdinalIgnoreCase);
+        => string.Equals(Path.GetFullPath(first), Path.GetFullPath(second),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    private static Task PublishVbmetaAsync(string outputPath, byte[] vbmeta, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var result = AvbSignatureVerifier.Verify(vbmeta);
+        if (!result.HashIsValid || !result.SignatureIsValid)
+        {
+            throw new InvalidDataException(result.ErrorMessage ?? "Generated VBMeta failed signature validation.");
+        }
+        return FileExtraction.WriteAtomicAsync(outputPath,
+            output => output.WriteAsync(vbmeta, cancellationToken).AsTask(), cancellationToken: cancellationToken);
+    }
 
     private static void WriteUInt32BE(Span<byte> buffer, int offset, uint value)
         => BinaryPrimitives.WriteUInt32BigEndian(buffer.Slice(offset, 4), value);

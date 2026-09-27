@@ -27,6 +27,40 @@ public class AvbSignatureVerificationTests
     private const int Sha256Size = 32;
     private const int Rsa2048SignatureSize = 256;
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void VerifyVBMetaFromStream_SignedMetadata_MatchesBufferVerification(bool tamper)
+    {
+        using var rsa = SigningTestKeys.Create(2048);
+        var (vbmeta, _) = BuildMinimalSelfSignedVbmeta(rsa);
+        if (tamper)
+        {
+            vbmeta[140] ^= 1;
+        }
+        using var stream = new MemoryStream(vbmeta, writable: false);
+        var result = AvbVerifier.VerifyVBMetaFromStream(stream, vbmeta.Length + 8L * 1024 * 1024 * 1024);
+        var buffered = AvbVerifier.VerifyVBMeta(vbmeta);
+
+        Assert.Equal(!tamper, result.IsValid);
+        Assert.Equal(buffered.IsSigned, result.IsSigned);
+        Assert.Equal(buffered.IsValid, result.IsValid);
+        Assert.Equal(buffered.ErrorMessage, result.ErrorMessage);
+        Assert.Equal(vbmeta.Length, stream.Position);
+        Assert.True(stream.CanRead);
+    }
+
+    [Fact]
+    public void VerifyVBMetaFromStream_TruncatedMetadata_ThrowsWithoutClosingStream()
+    {
+        using var rsa = SigningTestKeys.Create(2048);
+        var (vbmeta, _) = BuildMinimalSelfSignedVbmeta(rsa);
+        using var stream = new MemoryStream(vbmeta[..^1], writable: false);
+
+        Assert.Throws<EndOfStreamException>(() => AvbVerifier.VerifyVBMetaFromStream(stream, vbmeta.Length));
+        Assert.True(stream.CanRead);
+    }
+
     [Fact]
     public void Verify_ValidSelfSignedVbmeta_Passes()
     {
@@ -217,11 +251,21 @@ public class AvbSignatureVerificationTests
             Assert.True(verify.IsSigned);
             Assert.True(verify.IsValid, verify.ErrorMessage);
             Assert.True(verify.Footer.HasValue);
+            using (var stream = new MemoryStream(signed, writable: false))
+            {
+                var streamed = AvbVerifier.VerifyFromStream(stream, signed.Length);
+                Assert.True(streamed.IsValid, streamed.ErrorMessage);
+                Assert.Equal(verify.Footer, streamed.Footer);
+                Assert.True(stream.CanRead);
+            }
 
             var footer = verify.Footer.Value;
             Assert.Equal((ulong)image.Length, footer.OriginalImageSize);
             Assert.Equal(0UL, footer.VbmetaOffset % 4096);
-            Assert.Equal((ulong)signed.Length - AvbFooter.Size, footer.VbmetaOffset + footer.VbmetaSize);
+            Assert.Equal(0, signed.Length % 4096);
+            Assert.Equal((ulong)signed.Length, footer.VbmetaOffset + ((footer.VbmetaSize + 4095) / 4096 * 4096) + 4096);
+            var metadataEnd = checked((int)(footer.VbmetaOffset + footer.VbmetaSize));
+            Assert.All(signed[metadataEnd..^AvbFooter.Size], value => Assert.Equal(0, value));
 
             var vbmetaBytes = signed.AsSpan((int)footer.VbmetaOffset, (int)footer.VbmetaSize).ToArray();
             var vbmetaVerify = AvbVerifier.VerifyVBMeta(vbmetaBytes);
@@ -233,6 +277,8 @@ public class AvbSignatureVerificationTests
             var tamperedVerification = AvbVerifier.Verify(tampered);
             Assert.True(tamperedVerification.IsSigned);
             Assert.False(tamperedVerification.IsValid);
+            using var tamperedStream = new MemoryStream(tampered, writable: false);
+            Assert.False(AvbVerifier.VerifyFromStream(tamperedStream, tampered.Length).IsValid);
         }
         finally
         {

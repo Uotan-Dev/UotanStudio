@@ -22,8 +22,8 @@ public sealed class AvbVerifyResult
     /// <summary>Whether the VBMeta content passed both the hash and the signature checks.
     /// <para>VBMeta 内容是否同时通过哈希与签名校验。</para></summary>
     /// <value>
-    /// <see langword="true"/> only on a fully successful cryptographic verification; <see langword="false"/> when any check failed, an early structural bail-out occurred, or (for <see cref="AvbVerifier.VerifyVBMetaFromStream"/>) no signature check ran at all.
-    /// <para>仅在密码学校验完全成功时为 <see langword="true"/>；任一检查失败、提前结构性退出，或（对 <see cref="AvbVerifier.VerifyVBMetaFromStream"/>）未执行签名检查时为 <see langword="false"/>。</para>
+    /// <see langword="true"/> only when the VBMeta hash and signature pass; this does not verify partition data or establish trust in the embedded key.
+    /// <para>仅在 VBMeta 哈希与签名通过时为 <see langword="true"/>；不代表已验证分区数据或信任内嵌密钥。</para>
     /// </value>
     public bool IsValid { get; set; }
 
@@ -58,6 +58,8 @@ public sealed class AvbVerifyResult
 /// </summary>
 public static class AvbVerifier
 {
+    private const ulong MaximumMetadataBlockSize = 16 * 1024 * 1024;
+
     /// <summary>
     /// Checks whether the image carries an AVB footer.
     /// <para>检查镜像是否携带 AVB 尾部。</para>
@@ -285,8 +287,9 @@ public static class AvbVerifier
     /// <para>声明的镜像总长度（字节）；尾部在 <c>imageLength - AvbFooter.Size</c> 处查找，声明的偏移会依据此值校验。</para>
     /// </param>
     /// <returns>
-    /// An <see cref="AvbVerifyResult"/> verified against the embedded public key. Footer-range violations and header or algorithm failures are reported through <see cref="AvbVerifyResult.ErrorMessage"/> instead of thrown.
-    /// <para>返回使用内嵌公钥验证的 <see cref="AvbVerifyResult"/>。尾部范围违规以及头部或算法失败通过 <see cref="AvbVerifyResult.ErrorMessage"/> 报告而不抛出。</para>
+    /// An <see cref="AvbVerifyResult"/> verified against the embedded public key. Each metadata block is limited to 16 MiB before allocation.
+    /// Footer-range, size-limit, header and algorithm failures are reported through <see cref="AvbVerifyResult.ErrorMessage"/>.
+    /// <para>返回使用内嵌公钥验证的 <see cref="AvbVerifyResult"/>；分配前限制每个元数据块不超过 16 MiB。尾部范围、大小限制、头部与算法错误通过 <see cref="AvbVerifyResult.ErrorMessage"/> 报告。</para>
     /// </returns>
     /// <exception cref="EndOfStreamException">The stream holds fewer bytes than <paramref name="imageLength"/> declares.
     /// <para>流的实际字节数少于 <paramref name="imageLength"/> 声明的长度。</para></exception>
@@ -325,88 +328,46 @@ public static class AvbVerifier
         }
 
 
-        var readOffset = (long)footer.Value.VbmetaOffset;
-        var readSize = (int)footer.Value.VbmetaSize;
-        var vbmeta = new byte[readSize];
-        stream.Position = readOffset;
-        stream.ReadExactly(vbmeta);
-
-        AvbVBMetaImageHeader header;
-        try
-        {
-            header = AvbVBMetaImageHeader.FromBytes(vbmeta);
-        }
-        catch (Exception ex)
-        {
-            result.ErrorMessage = ex.Message;
-            return result;
-        }
-
-        result.VBMetaHeader = header;
-        if (!header.IsValid())
-        {
-            result.ErrorMessage = "Invalid VBMeta header.";
-            return result;
-        }
-
-        if (!TryValidateVbmetaRanges(header, (ulong)vbmeta.Length, out var rangeError))
-        {
-            result.ErrorMessage = rangeError;
-            return result;
-        }
-
-        if (!AvbSignatureVerifier.TryGetKeySizeAndHash(header.AlgorithmType, out _, out _))
-        {
-            result.ErrorMessage = $"Unknown VBMeta algorithm type {header.AlgorithmType}.";
-            return result;
-        }
-
-        var signatureResult = AvbSignatureVerifier.Verify(vbmeta);
-        if (header.AlgorithmType == AvbSignatureVerifier.AlgorithmNone)
-        {
-            result.ErrorMessage = "VBMeta algorithm NONE is unsigned.";
-            return result;
-        }
-
-        result.IsValid = signatureResult.HashIsValid && signatureResult.SignatureIsValid;
-        if (!result.IsValid)
-        {
-            result.ErrorMessage = signatureResult.ErrorMessage ?? "VBMeta hash or embedded-key signature verification failed.";
-        }
-
+        var verified = VerifyRegionFromStream(stream, (long)footer.Value.VbmetaOffset, footer.Value.VbmetaSize, false);
+        result.VBMetaHeader = verified.VBMetaHeader;
+        result.IsValid = verified.IsValid;
+        result.ErrorMessage = verified.ErrorMessage;
         return result;
     }
 
     /// <summary>
-    /// Validates a standalone VBMeta image from a seekable stream, reading only the header and declared block sizes.
-    /// <para>从可定位流验证独立 VBMeta 镜像，仅读取头部和声明的块大小。</para>
+    /// Verifies a standalone VBMeta hash and signature from a seekable stream, reading only the bounded metadata region.
+    /// <para>从可定位流验证独立 VBMeta 的哈希与签名，仅读取有界的元数据区域。</para>
     /// </summary>
     /// <param name="stream">
-    /// Readable, seekable stream over the VBMeta image; the method seeks to offset 0, reads the header block and leaves the position after that read. The caller keeps ownership.
-    /// <para>覆盖 VBMeta 镜像的可读、可定位流；方法定位到偏移 0，读取头部块并将位置停留在该次读取之后。调用方保留所有权。</para>
+    /// Readable, seekable stream over the VBMeta image; the method seeks to offset 0 and leaves the position after the last metadata read. The caller keeps ownership.
+    /// <para>覆盖 VBMeta 镜像的可读、可定位流；方法定位到偏移 0，位置停留在最后一次元数据读取之后，调用方保留所有权。</para>
     /// </param>
     /// <param name="imageLength">
     /// Declared total image length in bytes; header and block ranges are validated against this value with trailing padding allowed.
     /// <para>声明的镜像总长度（字节）；头部与块范围依据此值校验，并允许尾部填充。</para>
     /// </param>
     /// <returns>
-    /// An <see cref="AvbVerifyResult"/> carrying the parsed header and the signed flag. This path performs structural validation only and never runs the hash or signature check, so <see cref="AvbVerifyResult.IsValid"/> stays <see langword="false"/>; a NONE algorithm is reported through <see cref="AvbVerifyResult.ErrorMessage"/>.
-    /// <para>返回携带已解析头部与签名标志的 <see cref="AvbVerifyResult"/>。此路径仅执行结构校验，从不运行哈希或签名检查，因此 <see cref="AvbVerifyResult.IsValid"/> 保持 <see langword="false"/>；NONE 算法通过 <see cref="AvbVerifyResult.ErrorMessage"/> 报告。</para>
+    /// An embedded-key verification result, without establishing external trust or verifying partition content.
+    /// Each authentication or auxiliary block is limited to 16 MiB before allocation; trailing image padding is not read.
+    /// <para>返回内嵌密钥验证结果，不建立外部信任，也不验证分区内容。分配前限制认证块和辅助块各不超过 16 MiB，不读取镜像尾部填充。</para>
     /// </returns>
-    /// <exception cref="EndOfStreamException">The stream holds fewer than the header size bytes at offset 0.
-    /// <para>流在偏移 0 处的字节少于头部大小。</para></exception>
+    /// <exception cref="EndOfStreamException">The header or declared metadata bytes cannot be read completely.
+    /// <para>无法完整读取头部或声明的元数据字节。</para></exception>
     public static AvbVerifyResult VerifyVBMetaFromStream(Stream stream, long imageLength)
     {
-        var result = new AvbVerifyResult();
         if (imageLength < AvbVBMetaImageHeader.Size)
         {
-            result.ErrorMessage = "Image too small to contain a VBMeta header.";
-            return result;
+            return new AvbVerifyResult { ErrorMessage = "Image too small to contain a VBMeta header." };
         }
+        return VerifyRegionFromStream(stream, 0, (ulong)imageLength, true);
+    }
 
-
+    private static AvbVerifyResult VerifyRegionFromStream(Stream stream, long offset, ulong availableSize, bool allowTrailingPadding)
+    {
+        var result = new AvbVerifyResult();
         Span<byte> headerBytes = stackalloc byte[AvbVBMetaImageHeader.Size];
-        stream.Position = 0;
+        stream.Position = offset;
         stream.ReadExactly(headerBytes);
 
         AvbVBMetaImageHeader header;
@@ -427,20 +388,23 @@ public static class AvbVerifier
         }
 
         result.VBMetaHeader = header;
-        if (!TryValidateVbmetaRanges(header, (ulong)imageLength, out var error, allowTrailingPadding: true))
+        if (!TryValidateVbmetaRanges(header, availableSize, out var error, allowTrailingPadding))
         {
             result.ErrorMessage = error;
             return result;
         }
 
-        result.IsSigned = true;
-        if (header.AlgorithmType == AvbSignatureVerifier.AlgorithmNone)
+        if (header.AuthenticationDataBlockSize > MaximumMetadataBlockSize || header.AuxiliaryDataBlockSize > MaximumMetadataBlockSize)
         {
-            result.ErrorMessage = "VBMeta algorithm NONE is unsigned.";
+            result.ErrorMessage = "VBMeta metadata exceeds the 16 MiB limit per block.";
             return result;
         }
 
-        return result;
+        var size = checked(AvbVBMetaImageHeader.Size + (int)header.AuthenticationDataBlockSize + (int)header.AuxiliaryDataBlockSize);
+        var vbmeta = new byte[size];
+        headerBytes.CopyTo(vbmeta);
+        stream.ReadExactly(vbmeta.AsSpan(AvbVBMetaImageHeader.Size));
+        return VerifyVBMeta(vbmeta);
     }
 
     private static bool TryValidateVbmetaRanges(AvbVBMetaImageHeader header, ulong vbmetaSize, out string? error, bool allowTrailingPadding = false)
