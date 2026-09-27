@@ -1,4 +1,6 @@
 using System.Buffers.Binary;
+using System.Formats.Asn1;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using UotanStudio.Firmware.BoundedContexts.Executable.Qualcomm;
@@ -196,6 +198,17 @@ public sealed class QualcommImageAnalyzerTests
         Assert.Equal(QualcommVerificationStatus.Invalid, result.OemSignature.TrustedRootStatus);
     }
 
+    [Fact]
+    public void Analyze_LegacyMbnSignature_VerifiesQualcommHmac()
+    {
+        var fixture = SignedImage.Create(legacy: true);
+        using var stream = new MemoryStream(fixture.Mbn);
+
+        var result = QualcommImageAnalyzer.Analyze(stream, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.SignatureStatus);
+        Assert.Equal("RSA-QCOM-HMAC-SHA256", result.OemSignature.SignatureAlgorithm);
+    }
     [Fact]
     public void Analyze_LegacyMbnSignatureMismatch_ReportsUnsupportedHmacVariant()
     {
@@ -484,17 +497,429 @@ public sealed class QualcommImageAnalyzerTests
         Assert.Equal(QualcommVerificationStatus.NotPresent, result.SignatureStatus);
     }
 
+    [Theory]
+    [InlineData(3u, "SHA384", "Pss")]
+    [InlineData(5u, "SHA384", "Pss")]
+    [InlineData(3u, "SHA512", "Pss")]
+    [InlineData(5u, "SHA512", "Pss")]
+    [InlineData(3u, "SHA384", "Pkcs1")]
+    [InlineData(5u, "SHA384", "Pkcs1")]
+    [InlineData(3u, "SHA512", "Pkcs1")]
+    [InlineData(5u, "SHA512", "Pkcs1")]
+    public void Analyze_DeclaredOuHashAlgorithm_VerifiesDeclaredDigestForLegacyVersions(
+        uint version, string hash, string mode)
+    {
+        var fixture = SignedImage.Create(leafUnits: [hash]).WithHeaderVersion(version,
+            hash: Digest(hash), padding: Mode(mode));
+        using var stream = new MemoryStream(fixture.Elf);
+
+        var result = QualcommImageAnalyzer.Analyze(stream, fixture.Trust(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(version, result.Mbn!.Version);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.HashStatus);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.SignatureStatus);
+        Assert.Equal($"RSA-{mode}-{hash}", result.OemSignature.SignatureAlgorithm);
+        Assert.DoesNotContain(result.Diagnostics, value =>
+            value.Contains("conflict", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Analyze_VersionSixWithoutOuDeclaration_KeepsSha384AsStandardResult()
+    {
+        var fixture = SignedImage.Create().WithHeaderVersion(6);
+        using var stream = new MemoryStream(fixture.Elf);
+
+        var result = QualcommImageAnalyzer.Analyze(stream, fixture.Trust(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(QualcommVerificationStatus.Valid, result.HashStatus);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.SignatureStatus);
+        Assert.Equal("RSA-Pkcs1-SHA384", result.OemSignature.SignatureAlgorithm);
+        Assert.DoesNotContain(result.Diagnostics, value =>
+            value.Contains("conflict", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Analyze_ConflictingOuDeclarationsWithoutVerifiableSignature_ReportsUnsupported()
+    {
+        var fixture = SignedImage.Create(leafUnits: ["SHA256", "SHA384"]);
+        var image = (byte[])fixture.Elf.Clone();
+        image[0x400 + 40] ^= 0x10;
+        using var stream = new MemoryStream(image);
+
+        var result = QualcommImageAnalyzer.Analyze(stream, fixture.Trust(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(QualcommVerificationStatus.Invalid, result.HashStatus);
+        Assert.Equal(QualcommVerificationStatus.Unsupported, result.OemSignature.SignatureStatus);
+        Assert.Null(result.OemSignature.SignatureAlgorithm);
+        Assert.Contains(result.Diagnostics, value =>
+            value.Contains("organizational-unit hash declarations", StringComparison.Ordinal)
+            && value.Contains("SHA256", StringComparison.Ordinal)
+            && value.Contains("SHA384", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Analyze_ConflictingOuDeclarationsWithVerifiableSignature_ReportsValid()
+    {
+        var fixture = SignedImage.Create(leafUnits: ["SHA256", "SHA384"])
+            .WithHeaderVersion(5, hash: HashAlgorithmName.SHA384);
+        using var stream = new MemoryStream(fixture.Elf);
+
+        var result = QualcommImageAnalyzer.Analyze(stream, fixture.Trust(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.SignatureStatus);
+        Assert.Equal("RSA-Pkcs1-SHA384", result.OemSignature.SignatureAlgorithm);
+        Assert.DoesNotContain(result.Diagnostics, value =>
+            value.Contains("conflict", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("SHA1024")]
+    [InlineData("SHA2")]
+    [InlineData("SHA256sum")]
+    [InlineData("Qualcomm")]
+    public void Analyze_UnrecognizedOuHashToken_UsesDefaultCandidateOrder(string unit)
+    {
+        var fixture = SignedImage.Create(leafUnits: [unit]).WithHeaderVersion(5);
+        using var stream = new MemoryStream(fixture.Elf);
+
+        var result = QualcommImageAnalyzer.Analyze(stream, fixture.Trust(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.SignatureStatus);
+        Assert.Equal("RSA-Pkcs1-SHA256", result.OemSignature.SignatureAlgorithm);
+        Assert.DoesNotContain(result.Diagnostics, value =>
+            value.Contains("conflict", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData(0, (byte)0x00)]
+    [InlineData(1, (byte)0x00)]
+    [InlineData(128, (byte)0x00)]
+    [InlineData(4, (byte)0xff)]
+    public void Analyze_RsaTrailingUniformFillerWithinBound_Verifies(int filler, byte value)
+    {
+        var fixture = SignedImage.Create();
+        var image = fixture.ElfWithSignatureSlot(256 + filler,
+            signature => [.. signature, .. Enumerable.Repeat(value, filler)]);
+
+        var result = AnalyzeImage(image, fixture.Trust());
+
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.SignatureStatus);
+        Assert.Equal("RSA-Pkcs1-SHA256", result.OemSignature.SignatureAlgorithm);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.HashStatus);
+    }
+
+    [Fact]
+    public void Analyze_RsaLeadingUniformFillerAtBound_Verifies()
+    {
+        var fixture = SignedImage.Create();
+        var image = fixture.ElfWithSignatureSlot(384,
+            signature => [.. Enumerable.Repeat((byte)0xff, 128), .. signature]);
+
+        var result = AnalyzeImage(image, fixture.Trust());
+
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.SignatureStatus);
+        Assert.Equal("RSA-Pkcs1-SHA256", result.OemSignature.SignatureAlgorithm);
+    }
+
+    [Theory]
+    [InlineData(129)]
+    [InlineData(256)]
+    public void Analyze_RsaFillerAboveBound_RejectsEncoding(int filler)
+    {
+        var fixture = SignedImage.Create();
+        var image = fixture.ElfWithSignatureSlot(256 + filler,
+            signature => [.. signature, .. Enumerable.Repeat((byte)0x00, filler)]);
+
+        var result = AnalyzeImage(image, fixture.Trust());
+
+        Assert.Equal(QualcommVerificationStatus.Invalid, result.OemSignature.SignatureStatus);
+        Assert.Null(result.OemSignature.SignatureAlgorithm);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.CertificateChainStatus);
+        Assert.Contains(result.Diagnostics, value =>
+            value.Contains("filler of at most 128 bytes", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Analyze_RsaMixedFillerBytes_RejectsEncoding()
+    {
+        var fixture = SignedImage.Create();
+        var image = fixture.ElfWithSignatureSlot(384, signature =>
+        [
+            .. Enumerable.Range(0, 128).Select(index => index % 2 == 0 ? (byte)0x00 : (byte)0x41),
+            .. signature
+        ]);
+
+        var result = AnalyzeImage(image, fixture.Trust());
+
+        Assert.Equal(QualcommVerificationStatus.Invalid, result.OemSignature.SignatureStatus);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.CertificateChainStatus);
+        Assert.Contains(result.Diagnostics, value =>
+            value.Contains("filler of at most 128 bytes", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Analyze_RsaSignatureShorterThanModulus_RejectsEncoding()
+    {
+        var fixture = SignedImage.Create();
+        var image = fixture.ElfWithSignatureSlot(255, signature => signature[..255]);
+
+        var result = AnalyzeImage(image, fixture.Trust());
+
+        Assert.Equal(QualcommVerificationStatus.Invalid, result.OemSignature.SignatureStatus);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.CertificateChainStatus);
+        Assert.Contains(result.Diagnostics, value =>
+            value.Contains("filler of at most 128 bytes", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Analyze_RsaPaddedButWrongSignature_ReportsUnverifiedVariantNotEncodingDefect()
+    {
+        var fixture = SignedImage.Create();
+        var image = fixture.ElfWithSignatureSlot(257,
+            _ => [.. RandomNumberGenerator.GetBytes(256), (byte)0x00]);
+
+        var result = AnalyzeImage(image, fixture.Trust());
+
+        Assert.Equal(QualcommVerificationStatus.Unsupported, result.OemSignature.SignatureStatus);
+        Assert.Contains(result.Diagnostics, value =>
+            value.Contains("legacy Qualcomm HMAC", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Diagnostics, value =>
+            value.Contains("filler", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Analyze_EcdsaExactDerSignature_Verifies()
+    {
+        var fixture = CreateEcdsaWithDerLength(72);
+
+        var result = AnalyzeImage(fixture.Elf, fixture.Trust());
+
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.SignatureStatus);
+        Assert.Equal("ECDSA-SHA256", result.OemSignature.SignatureAlgorithm);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.CertificateChainStatus);
+    }
+
+    [Fact]
+    public void Analyze_EcdsaDerWithUniformTrailingFiller_Verifies()
+    {
+        var fixture = CreateEcdsaWithDerLength(71);
+
+        var result = AnalyzeImage(fixture.Elf, fixture.Trust());
+
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.SignatureStatus);
+        Assert.Equal("ECDSA-SHA256", result.OemSignature.SignatureAlgorithm);
+    }
+
+    [Fact]
+    public void Analyze_EcdsaDerWithNonFillerTrailingByte_RejectsEncoding()
+    {
+        var fixture = CreateEcdsaWithDerLength(71);
+
+        var result = AnalyzeImage(PokeSignature(fixture, 71, 0x41), fixture.Trust());
+
+        Assert.Equal(QualcommVerificationStatus.Invalid, result.OemSignature.SignatureStatus);
+        Assert.Contains(result.Diagnostics, value =>
+            value.Contains("not a DER sequence followed by", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Analyze_EcdsaDerLengthBeyondStoredSignature_RejectsEncoding()
+    {
+        var fixture = CreateEcdsaWithDerLength(72);
+
+        var result = AnalyzeImage(PokeSignature(fixture, 1, (byte)(fixture.Mbn[105] + 1)), fixture.Trust());
+
+        Assert.Equal(QualcommVerificationStatus.Invalid, result.OemSignature.SignatureStatus);
+        Assert.Contains(result.Diagnostics, value =>
+            value.Contains("not a DER sequence followed by", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Analyze_EcdsaAlteredSignatureByte_ReportsUnverifiedVariantNotEncodingDefect()
+    {
+        var fixture = CreateEcdsaWithDerLength(72);
+        var altered = (byte)(fixture.Mbn[104 + 71] ^ 0x01);
+
+        var result = AnalyzeImage(PokeSignature(fixture, 71, altered), fixture.Trust());
+
+        Assert.Equal(QualcommVerificationStatus.Unsupported, result.OemSignature.SignatureStatus);
+        Assert.DoesNotContain(result.Diagnostics, value =>
+            value.Contains("DER sequence", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Analyze_TwoValidElfComponents_ReportsEachComponentIndependently()
+    {
+        var fixture = SignedImage.Create();
+
+        var result = AnalyzeImage([.. fixture.Elf, .. fixture.Elf], fixture.Trust());
+
+        Assert.Equal(2, result.MelfComponents.Count);
+        Assert.Equal(2, result.ComponentAuthentication.Count);
+        Assert.Equal(new long[] { 0, fixture.Elf.Length },
+            result.ComponentAuthentication.Select(entry => entry.Offset).ToArray());
+        Assert.All(result.ComponentAuthentication, entry =>
+        {
+            Assert.False(entry.IsNestedAuthenticated);
+            Assert.Equal("None", entry.FailureStage);
+            Assert.Equal(QualcommVerificationStatus.Valid, entry.HashTableStatus);
+            Assert.Equal(QualcommVerificationStatus.Valid, entry.SignatureStatus);
+            Assert.Equal(QualcommVerificationStatus.Valid, entry.CertificateChainStatus);
+        });
+        Assert.Equal(QualcommVerificationStatus.Valid, result.MelfAuthenticationStatus);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.HashStatus);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.SignatureStatus);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.TrustedRootStatus);
+    }
+
+    [Fact]
+    public void Analyze_SecondComponentHashedSegmentCorrupted_KeepsFirstComponentResult()
+    {
+        var fixture = SignedImage.Create();
+        var second = (byte[])fixture.Elf.Clone();
+        second[0x210] ^= 0x08;
+
+        var result = AnalyzeImage([.. fixture.Elf, .. second], fixture.Trust());
+
+        Assert.Equal(2, result.ComponentAuthentication.Count);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.ComponentAuthentication[0].HashTableStatus);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.ComponentAuthentication[0].SignatureStatus);
+        Assert.Equal("None", result.ComponentAuthentication[0].FailureStage);
+        Assert.Equal(QualcommVerificationStatus.Invalid, result.ComponentAuthentication[1].HashTableStatus);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.ComponentAuthentication[1].SignatureStatus);
+        Assert.Equal("HashTable", result.ComponentAuthentication[1].FailureStage);
+        Assert.Equal(QualcommVerificationStatus.Invalid, result.MelfAuthenticationStatus);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.HashStatus);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.SignatureStatus);
+    }
+
+    [Fact]
+    public void Analyze_MagicInsideValidlyHashedSegment_ReportsNestedSkipOnly()
+    {
+        var elf = SignedImage.Create()
+            .WithHashedPayload(96, payload => WriteElfHeader(payload[16..80], 183)).Elf;
+
+        var result = AnalyzeImage(elf);
+
+        Assert.Equal(2, result.ComponentAuthentication.Count);
+        Assert.Single(result.ComponentAuthentication, entry => !entry.IsNestedAuthenticated);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.ComponentAuthentication[0].SignatureStatus);
+        Assert.True(result.ComponentAuthentication[1].IsNestedAuthenticated);
+        Assert.Equal(0x210, result.ComponentAuthentication[1].Offset);
+        Assert.Equal(QualcommVerificationStatus.NotChecked, result.ComponentAuthentication[1].HashTableStatus);
+        Assert.Contains(result.ComponentAuthentication[1].Diagnostics, value =>
+            value.Contains("an earlier component hashes", StringComparison.Ordinal));
+        Assert.Equal(QualcommVerificationStatus.Valid, result.MelfAuthenticationStatus);
+    }
+
+    [Fact]
+    public void Analyze_TruncatedTailComponent_ReportsStructureFailureForThatComponentOnly()
+    {
+        var fixture = SignedImage.Create();
+        var tail = new byte[0x100];
+        fixture.Elf.AsSpan(0, 0x100).CopyTo(tail);
+
+        var result = AnalyzeImage([.. fixture.Elf, .. tail], fixture.Trust());
+
+        Assert.Equal(2, result.ComponentAuthentication.Count);
+        Assert.Equal("None", result.ComponentAuthentication[0].FailureStage);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.ComponentAuthentication[0].SignatureStatus);
+        Assert.Equal("ElfStructure", result.ComponentAuthentication[1].FailureStage);
+        Assert.Equal(QualcommVerificationStatus.NotChecked, result.ComponentAuthentication[1].SignatureStatus);
+        Assert.Contains(result.ComponentAuthentication[1].Diagnostics, value =>
+            value.Contains("ELF", StringComparison.Ordinal));
+        Assert.Equal(QualcommVerificationStatus.Invalid, result.MelfAuthenticationStatus);
+        Assert.Equal(QualcommVerificationStatus.Valid, result.OemSignature.SignatureStatus);
+    }
+
+    [Fact]
+    public void Analyze_MoreComponentsThanAnalysisBound_ReportsLimitAndUnsupported()
+    {
+        var data = new byte[64 * 33];
+        for (var index = 0; index < 33; index++)
+        {
+            WriteElfHeader(data.AsSpan(index * 64, 64), 183);
+        }
+
+        var result = AnalyzeImage(data);
+
+        Assert.Equal(33, result.MelfComponents.Count);
+        Assert.Equal(32, result.ComponentAuthentication.Count);
+        Assert.Equal(QualcommVerificationStatus.Unsupported, result.MelfAuthenticationStatus);
+        Assert.Contains(result.Diagnostics, value =>
+            value.Contains("were not authenticated", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Analyze_SingleElfComponent_ReportsNoAuthenticationEntries()
+    {
+        var fixture = SignedImage.Create();
+
+        var result = AnalyzeImage(fixture.Elf, fixture.Trust());
+
+        Assert.Empty(result.ComponentAuthentication);
+        Assert.Empty(result.MelfComponents);
+        Assert.Equal(QualcommVerificationStatus.NotChecked, result.MelfAuthenticationStatus);
+    }
+
+    private static QualcommAnalysisResult AnalyzeImage(byte[] image, QualcommAnalysisOptions? options = null)
+    {
+        using var stream = new MemoryStream(image);
+        return QualcommImageAnalyzer.Analyze(stream, options, TestContext.Current.CancellationToken);
+    }
+
+    private static SignedImage CreateEcdsaWithDerLength(int length)
+    {
+        for (var attempt = 0; attempt < 32; attempt++)
+        {
+            var candidate = SignedImage.Create(ecdsa: true);
+            if (StoredDerLength(candidate.Mbn) == length)
+            {
+                return candidate;
+            }
+        }
+
+        throw new InvalidOperationException($"No ECDSA image with a {length}-byte DER signature was produced.");
+    }
+
+    private static int StoredDerLength(byte[] mbn)
+    {
+        AsnDecoder.ReadEncodedValue(mbn.AsSpan(104, 72), AsnEncodingRules.DER, out _, out _, out var consumed);
+        return consumed;
+    }
+
+    private static byte[] PokeSignature(SignedImage fixture, int index, byte value)
+    {
+        var image = (byte[])fixture.Elf.Clone();
+        image[0x400 + 104 + index] = value;
+        return image;
+    }
+
+    private static HashAlgorithmName Digest(string name) => name switch
+    {
+        "SHA384" => HashAlgorithmName.SHA384,
+        "SHA512" => HashAlgorithmName.SHA512,
+        _ => HashAlgorithmName.SHA256
+    };
+
+    private static RSASignaturePadding Mode(string mode) => mode == "Pss"
+        ? RSASignaturePadding.Pss
+        : RSASignaturePadding.Pkcs1;
+
     private sealed class SignedImage
     {
         private readonly RSA _key;
+        private readonly ECDsa? _ecKey;
         private readonly byte[] _root;
         private readonly byte[] _certificates;
 
-        private SignedImage(RSA key, byte[] root, byte[] certificates, byte[] mbn, byte[] elf)
+        private SignedImage(RSA key, byte[] root, byte[] certificates, byte[] mbn, byte[] elf,
+            ECDsa? ecKey = null)
         {
             _key = key;
             _root = root;
             _certificates = certificates;
+            _ecKey = ecKey;
             Mbn = mbn;
             Elf = elf;
         }
@@ -503,7 +928,8 @@ public sealed class QualcommImageAnalyzerTests
         public byte[] Elf { get; }
 
         public SignedImage WithHeaderVersion(uint version, uint? rootSlot = null,
-            bool metadataHash = false, bool corruptRootDigest = false)
+            bool metadataHash = false, bool corruptRootDigest = false,
+            HashAlgorithmName? hash = null, RSASignaturePadding? padding = null)
         {
             var sha384 = version is 6 or 7;
             var headerLength = version == 6 ? 48 : 40;
@@ -555,7 +981,8 @@ public sealed class QualcommImageAnalyzerTests
             (sha384 ? SHA384.HashData(Elf.AsSpan(0x200, 32)) : SHA256.HashData(Elf.AsSpan(0x200, 32)))
                 .CopyTo(mbn.AsSpan(table));
             _key.SignData(mbn.AsSpan(0, table + hashLength),
-                sha384 ? HashAlgorithmName.SHA384 : HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+                hash ?? (sha384 ? HashAlgorithmName.SHA384 : HashAlgorithmName.SHA256),
+                padding ?? RSASignaturePadding.Pkcs1)
                 .CopyTo(mbn.AsSpan(table + hashLength));
             _certificates.CopyTo(mbn.AsSpan(table + hashLength + 256));
             var elf = new byte[0x400 + mbn.Length];
@@ -576,6 +1003,49 @@ public sealed class QualcommImageAnalyzerTests
             TrustedRootCertificateSha384 = [Convert.ToHexString(SHA384.HashData(_root)).ToLowerInvariant()]
         };
 
+        public byte[] ElfWithSignatureSlot(int declaredLength, Func<byte[], byte[]> slot)
+        {
+            var mbn = new byte[104 + declaredLength + _certificates.Length];
+            Write(mbn, 0, 5);
+            Write(mbn, 4, 5);
+            Write(mbn, 16, (uint)(mbn.Length - 40));
+            Write(mbn, 20, 64);
+            Write(mbn, 28, (uint)declaredLength);
+            Write(mbn, 36, (uint)_certificates.Length);
+            SHA256.HashData(Elf.AsSpan(0x200, 32)).CopyTo(mbn.AsSpan(40));
+            var real = _ecKey is null
+                ? _key.SignData(mbn.AsSpan(0, 104), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+                : _ecKey.SignData(mbn.AsSpan(0, 104), HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
+            var encoded = slot(real);
+            if (encoded.Length != declaredLength)
+            {
+                throw new InvalidOperationException("The composed signature slot differs from the declared length.");
+            }
+
+            encoded.CopyTo(mbn.AsSpan(104));
+            _certificates.CopyTo(mbn.AsSpan(104 + declaredLength));
+            var elf = new byte[0x400 + mbn.Length];
+            Elf.AsSpan(0, 0x400).CopyTo(elf);
+            Write(elf, 152, (ulong)mbn.Length, 8);
+            Write(elf, 160, (ulong)mbn.Length, 8);
+            mbn.CopyTo(elf.AsSpan(0x400));
+            return elf;
+        }
+
+        public SignedImage WithHashedPayload(int length, Action<Span<byte>> mutate)
+        {
+            var elf = (byte[])Elf.Clone();
+            var mbn = (byte[])Mbn.Clone();
+            Write(elf, 96, (ulong)length, 8);
+            Write(elf, 104, (ulong)length, 8);
+            mutate(elf.AsSpan(0x200, length));
+            SHA256.HashData(elf.AsSpan(0x200, length)).CopyTo(mbn.AsSpan(40));
+            _key.SignData(mbn.AsSpan(0, 104), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+                .CopyTo(mbn.AsSpan(104));
+            mbn.CopyTo(elf.AsSpan(0x400));
+            return new(_key, _root, _certificates, mbn, elf);
+        }
+
         public byte[] CreateSbl()
         {
             var image = new byte[80 + 16 + 256 + _certificates.Length];
@@ -593,32 +1063,41 @@ public sealed class QualcommImageAnalyzerTests
             return image;
         }
 
-        public static SignedImage Create()
+        public static SignedImage Create(bool legacy = false, string[]? leafUnits = null, bool ecdsa = false)
         {
             using var rootKey = RSA.Create(2048);
             var key = RSA.Create(2048);
+            var ecKey = ecdsa ? ECDsa.Create(ECCurve.NamedCurves.nistP256) : null;
+            var subject = "CN=Offline Programmer" + (legacy
+                ? ", OU=01 0000000000000003 SW_ID, OU=02 1234567800AB00CD HW_ID"
+                : string.Concat((leafUnits ?? []).Select(unit => ", OU=" + unit)));
             var rootRequest = new CertificateRequest("CN=Offline Root", rootKey,
                 HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
             rootRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
             rootRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign, true));
             var now = DateTimeOffset.UtcNow;
             using var root = rootRequest.CreateSelfSigned(now.AddDays(-1), now.AddDays(7));
-            var leafRequest = new CertificateRequest("CN=Offline Programmer", key,
-                HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            var leafRequest = ecKey is null
+                ? new CertificateRequest(subject, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+                : new CertificateRequest(subject, ecKey, HashAlgorithmName.SHA256);
             leafRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
             leafRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
-            using var leaf = leafRequest.Create(root, now.AddHours(-12),
-                now.AddDays(6), RandomNumberGenerator.GetBytes(16));
+            using var leaf = ecKey is null
+                ? leafRequest.Create(root, now.AddHours(-12), now.AddDays(6), RandomNumberGenerator.GetBytes(16))
+                : leafRequest.Create(root.SubjectName,
+                    X509SignatureGenerator.CreateForRSA(rootKey, RSASignaturePadding.Pkcs1),
+                    now.AddHours(-12), now.AddDays(6), RandomNumberGenerator.GetBytes(16));
             var certs = new byte[leaf.RawData.Length + root.RawData.Length];
             leaf.RawData.CopyTo(certs, 0);
             root.RawData.CopyTo(certs, leaf.RawData.Length);
 
-            var mbn = new byte[40 + 64 + 256 + certs.Length];
+            var slot = ecKey is null ? 256 : 72;
+            var mbn = new byte[40 + 64 + slot + certs.Length];
             Write(mbn, 0, 5);
             Write(mbn, 4, 5);
             Write(mbn, 16, (uint)(mbn.Length - 40));
             Write(mbn, 20, 64);
-            Write(mbn, 28, 256);
+            Write(mbn, 28, (uint)slot);
             Write(mbn, 36, (uint)certs.Length);
             var elf = new byte[0x400 + mbn.Length];
             "\u007fELF"u8.CopyTo(elf);
@@ -647,13 +1126,45 @@ public sealed class QualcommImageAnalyzerTests
             Write(elf, 168, 1, 8);
             elf.AsSpan(0x200, 32).Fill(0x33);
             SHA256.HashData(elf.AsSpan(0x200, 32)).CopyTo(mbn.AsSpan(40));
-            var signature = key.SignData(mbn.AsSpan(0, 104), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            var signature = ecKey is not null
+                ? ecKey.SignData(mbn.AsSpan(0, 104), HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence)
+                : legacy
+                    ? SignLegacy(key, mbn.AsSpan(0, 104))
+                    : key.SignData(mbn.AsSpan(0, 104), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
             signature.CopyTo(mbn.AsSpan(104));
-            certs.CopyTo(mbn.AsSpan(360));
+            certs.CopyTo(mbn.AsSpan(104 + slot));
             mbn.CopyTo(elf.AsSpan(0x400));
-            return new(key, root.RawData, certs, mbn, elf);
+            return new(key, root.RawData, certs, mbn, elf, ecKey);
         }
 
+        private static byte[] SignLegacy(RSA key, ReadOnlySpan<byte> data)
+        {
+            Span<byte> first = stackalloc byte[32];
+            SHA256.HashData(data, first);
+            Span<byte> input = stackalloc byte[40];
+            BinaryPrimitives.WriteUInt64BigEndian(input, 3UL ^ 0x3636363636363636UL);
+            first.CopyTo(input[8..]);
+            var second = SHA256.HashData(input);
+            BinaryPrimitives.WriteUInt64BigEndian(input, 0x1234567800AB00CDUL ^ 0x5C5C5C5C5C5C5C5CUL);
+            second.CopyTo(input[8..]);
+            var digest = SHA256.HashData(input);
+            var parameters = key.ExportParameters(true);
+            var modulus = parameters.Modulus!;
+            var privateExponent = parameters.D!;
+            var encoded = new byte[modulus.Length];
+            encoded[1] = 1;
+            var separator = encoded.Length - digest.Length - 1;
+            encoded.AsSpan(2, separator - 2).Fill(0xFF);
+            digest.CopyTo(encoded.AsSpan(separator + 1));
+            var message = new BigInteger(encoded, isUnsigned: true, isBigEndian: true);
+            var signature = BigInteger.ModPow(message,
+                new BigInteger(privateExponent, isUnsigned: true, isBigEndian: true),
+                new BigInteger(modulus, isUnsigned: true, isBigEndian: true))
+                .ToByteArray(isUnsigned: true, isBigEndian: true);
+            var result = new byte[modulus.Length];
+            signature.CopyTo(result, result.Length - signature.Length);
+            return result;
+        }
         private static void Write(byte[] data, int offset, ulong value, int size = 4)
         {
             for (var i = 0; i < size; i++)

@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using UotanStudio.Firmware.BoundedContexts.Executable.Elf;
+using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.Executable.Qualcomm;
 
@@ -8,6 +9,8 @@ namespace UotanStudio.Firmware.BoundedContexts.Executable.Qualcomm;
 /// <para>有界地离线分析 Qualcomm ELF/MBN，不访问设备。</para></summary>
 public static class QualcommImageAnalyzer
 {
+    private const int MaximumAnalyzedComponents = 32;
+
     /// <summary>Inspects a file on a worker thread; the file remains unchanged.
     /// <para>在工作线程检查文件；不会修改文件。</para></summary>
     /// <param name="path">Path of the file to inspect. <para>待检查的文件路径。</para></param>
@@ -67,9 +70,7 @@ public static class QualcommImageAnalyzer
             return result with
             {
                 FileSize = fileSize,
-                MelfComponents = result.Format == QualcommImageFormat.Elf
-                    ? QualcommMelfComponents.Scan(stream, cancellationToken)
-                    : [],
+                MelfComponents = result.Format == QualcommImageFormat.Elf ? result.MelfComponents : [],
                 SigningMetadata = [.. result.SigningMetadata,
                     .. result.Certificates.Where(certificate => certificate.Index == 0 && certificate.Attributes.Count > 0)
                         .Select(QualcommMetadataReader.FromCertificate)],
@@ -95,7 +96,7 @@ public static class QualcommImageAnalyzer
         QualcommMbnLayout.ReadAt(stream, 0, prefix, token);
         if (prefix[..4].SequenceEqual("\u007fELF"u8))
         {
-            return AnalyzeElf(stream, options, token);
+            return AnalyzeElfContainer(stream, options, token);
         }
 
         if (stream.Length >= 80
@@ -111,6 +112,205 @@ public static class QualcommImageAnalyzer
         }
 
         return new() { Diagnostics = ["No recognized Qualcomm ELF or MBN header."] };
+    }
+
+    /// <summary>
+    /// Analyzes an ELF input and, when it belongs to a multi-component container, each discovered component
+    /// inside its own bounded window.
+    /// A component is authenticated against the bytes of its window only, so its program-header offsets are
+    /// read relative to that window. The offset-0 analysis stays the returned top-level result and is never
+    /// overwritten by component results, which are reported independently. A candidate that starts strictly
+    /// inside a byte range an earlier component hashed successfully is recorded as nested evidence instead of
+    /// being analyzed again, because re-reading those bytes authenticates nothing new. Discovering several
+    /// components is not a claim that every component authenticated, and no result here speaks for OEM or
+    /// device acceptance.
+    /// <para>分析 ELF 输入；当其属于多组件容器时，在每个候选组件自己的有界窗口内分析该组件。
+    /// 组件仅针对其窗口内的字节完成认证，因此其程序头偏移按窗口相对位置解析。偏移 0 处的分析仍是返回值的
+    /// 顶层字段，绝不被组件结果覆盖，组件结果独立报告。起始位置严格落在更早组件已成功摘要的字节范围内的
+    /// 候选项，只记录为嵌套证据而不再次分析，因为重复读取这些字节不会产生新的认证结论。发现多个组件并不等于
+    /// 所有组件均已通过认证，此处的任何结果都不代表 OEM 或设备的接受。</para>
+    /// </summary>
+    /// <param name="stream">Readable, seekable container positioned anywhere.
+    /// <para>任意位置处的可读、可寻址容器。</para></param>
+    /// <param name="options">Resource limits and caller-owned root fingerprints.
+    /// <para>资源限制与调用方根指纹。</para></param>
+    /// <param name="token">Cancellation token checked before every component.
+    /// <para>每个组件分析前检查的取消令牌。</para></param>
+    /// <returns>The offset-0 result carrying per-component evidence.
+    /// <para>携带逐组件证据的偏移 0 处结果。</para></returns>
+    private static QualcommAnalysisResult AnalyzeElfContainer(
+        Stream stream, QualcommAnalysisOptions options, CancellationToken token)
+    {
+        var primary = AnalyzeElf(stream, options, token);
+        var components = QualcommMelfComponents.Scan(stream, token);
+        if (components.Count == 0)
+        {
+            return primary;
+        }
+
+        var results = new List<QualcommComponentAuthenticationResult>(components.Count);
+        var hashed = new List<(long Start, long End)>();
+        var diagnostics = new List<string>();
+        var combined = QualcommVerificationStatus.NotChecked;
+        var analyzed = 0;
+        for (var index = 0; index < components.Count; index++)
+        {
+            token.ThrowIfCancellationRequested();
+            var component = components[index];
+            if (hashed.Any(range => component.Offset > range.Start && component.Offset < range.End))
+            {
+                results.Add(new QualcommComponentAuthenticationResult
+                {
+                    ComponentIndex = index,
+                    Offset = component.Offset,
+                    Length = component.Length,
+                    IsNestedAuthenticated = true,
+                    Diagnostics = ["ELF magic lies inside a byte range an earlier component hashes, so it was not analyzed independently."]
+                });
+                continue;
+            }
+
+            if (analyzed == MaximumAnalyzedComponents)
+            {
+                diagnostics.Add($"Only the first {MaximumAnalyzedComponents} ELF components were analyzed; "
+                    + $"{components.Count - index} remaining candidates were not authenticated.");
+                combined = QualcommAnalysisResult.Combine(combined, QualcommVerificationStatus.Unsupported);
+                break;
+            }
+
+            analyzed++;
+            var (analysis, stage, componentDiagnostics) = AnalyzeComponent(stream, component, options, token);
+
+            combined = QualcommAnalysisResult.Combine(combined, analysis is null
+                ? QualcommVerificationStatus.Invalid
+                : QualcommAnalysisResult.Combine(
+                    QualcommAnalysisResult.Combine(analysis.HashStatus, analysis.SignatureStatus),
+                    analysis.CertificateChainStatus));
+            results.Add(new QualcommComponentAuthenticationResult
+            {
+                ComponentIndex = index,
+                Offset = component.Offset,
+                Length = component.Length,
+                HashTableStatus = analysis?.HashStatus ?? QualcommVerificationStatus.NotChecked,
+                SignatureStatus = analysis?.SignatureStatus ?? QualcommVerificationStatus.NotChecked,
+                CertificateChainStatus = analysis?.CertificateChainStatus ?? QualcommVerificationStatus.NotChecked,
+                TrustedRootStatus = analysis?.TrustedRootStatus ?? QualcommVerificationStatus.NotChecked,
+                FailureStage = stage,
+                Diagnostics = componentDiagnostics
+            });
+            if (analysis?.HashStatus == QualcommVerificationStatus.Valid && analysis.Elf is { } elf)
+            {
+                foreach (var segment in elf.Segments)
+                {
+                    if (segment.Type == 1 && segment.FileSize > 0)
+                    {
+                        var start = checked(component.Offset + (long)segment.Offset);
+                        hashed.Add((start, checked(start + (long)segment.FileSize)));
+                    }
+                }
+            }
+        }
+
+        return primary with
+        {
+            MelfComponents = components,
+            ComponentAuthentication = results.AsReadOnly(),
+            MelfAuthenticationStatus = combined,
+            Diagnostics = [.. primary.Diagnostics, .. diagnostics]
+        };
+    }
+
+    /// <summary>
+    /// Analyzes one ELF component inside the window that the following candidate boundary defines.
+    /// A container that stores another ELF inside a component's own hashed payload makes that boundary clip
+    /// the enclosing component's declared ranges, so a structural failure is retried once with the window
+    /// widened to the end of the input. The widened result is reported with its own diagnostic; widening never
+    /// turns a failed check into a passed one, it only lets the component be measured against bytes that belong
+    /// to it rather than being cut off.
+    /// <para>在下一个候选边界所定义的窗口内分析单个 ELF 组件。当容器把另一个 ELF 存放在某组件自身
+    /// 已摘要的载荷内时，该边界会裁掉外层组件声明的范围，因此结构失败会把窗口放宽到输入末尾并重试一次。
+    /// 放宽后的结果会附带自己的诊断；放宽绝不会把失败的检查变成通过，只是让组件按其真正拥有的字节而非
+    /// 被截断的字节参与度量。</para>
+    /// </summary>
+    /// <param name="stream">Container stream. <para>容器流。</para></param>
+    /// <param name="component">Component discovered by the scan. <para>扫描发现的组件。</para></param>
+    /// <param name="options">Resource limits and caller-owned root fingerprints.
+    /// <para>资源限制与调用方根指纹。</para></param>
+    /// <param name="token">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The component analysis, its failure stage and diagnostics; the analysis is
+    /// <see langword="null"/> when the component structure cannot be read at all.
+    /// <para>组件分析结果、失败阶段与诊断；当组件结构完全无法读取时分析结果为空。</para></returns>
+    private static (QualcommAnalysisResult? Analysis, string Stage, IReadOnlyList<string> Diagnostics)
+        AnalyzeComponent(Stream stream, QualcommMelfComponent component, QualcommAnalysisOptions options,
+            CancellationToken token)
+    {
+        try
+        {
+            using var window = new BoundedReadStream(stream, component.Offset, component.Length, true);
+            var analysis = AnalyzeElf(window, options, token);
+            return (analysis, ComponentFailureStage(analysis), analysis.Diagnostics);
+        }
+        catch (InvalidDataException error)
+        {
+            if (component.Offset + component.Length >= stream.Length)
+            {
+                return (null, "ElfStructure", [error.Message]);
+            }
+
+            try
+            {
+                using var widened = new BoundedReadStream(stream, component.Offset,
+                    stream.Length - component.Offset, true);
+                var retried = AnalyzeElf(widened, options, token);
+                return (retried, ComponentFailureStage(retried),
+                    [.. retried.Diagnostics,
+                        "A nested component boundary clipped this component's declared ranges, so the window was widened to the end of the input."]);
+            }
+            catch (InvalidDataException widenedError)
+            {
+                return (null, "ElfStructure", [widenedError.Message]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Names the first authentication stage a component failed.
+    /// ElfStructure covers a component whose declared ranges do not fit its own window, HashSegment a container
+    /// without one usable MI_PBT hash segment, HashTable a failed or unsupported digest-table comparison,
+    /// Signature an image signature that did not verify, and CertificateChain an embedded chain that did not
+    /// build. The stage is descriptive only; it never promotes a failed check into a passed one.
+    /// <para>指明组件最先失败的认证阶段。ElfStructure 表示组件声明的范围超出自身窗口，
+    /// HashSegment 表示容器没有单个可用的 MI_PBT 摘要段，HashTable 表示摘要表比较失败或不受支持，
+    /// Signature 表示镜像签名未通过验证，CertificateChain 表示内嵌证书链未能构建。
+    /// 该阶段仅作描述，绝不会把失败的检查提升为通过。</para>
+    /// </summary>
+    /// <param name="analysis">Component analysis result. <para>组件分析结果。</para></param>
+    /// <returns>The failure stage name. <para>失败阶段名称。</para></returns>
+    private static string ComponentFailureStage(QualcommAnalysisResult analysis)
+    {
+        if (analysis.Elf is null)
+        {
+            return "ElfStructure";
+        }
+
+        if (analysis.Mbn is null && analysis.HashStatus != QualcommVerificationStatus.NotPresent)
+        {
+            return "HashSegment";
+        }
+
+        if (analysis.HashStatus is QualcommVerificationStatus.Invalid or QualcommVerificationStatus.Unsupported)
+        {
+            return "HashTable";
+        }
+
+        if (analysis.SignatureStatus is QualcommVerificationStatus.Invalid or QualcommVerificationStatus.Unsupported)
+        {
+            return "Signature";
+        }
+
+        return analysis.CertificateChainStatus is QualcommVerificationStatus.Invalid or QualcommVerificationStatus.Unsupported
+            ? "CertificateChain"
+            : "None";
     }
 
     private static QualcommAnalysisResult AnalyzeElf(Stream stream, QualcommAnalysisOptions options, CancellationToken token)

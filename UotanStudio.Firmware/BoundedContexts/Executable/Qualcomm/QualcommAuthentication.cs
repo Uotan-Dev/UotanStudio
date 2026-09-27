@@ -1,4 +1,7 @@
+using System.Buffers.Binary;
 using System.Formats.Asn1;
+using System.Globalization;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -6,6 +9,8 @@ namespace UotanStudio.Firmware.BoundedContexts.Executable.Qualcomm;
 
 internal static class QualcommAuthentication
 {
+    private const int MaxSignaturePaddingBytes = 128;
+
     internal static (QualcommAuthorityResult Qualcomm, QualcommAuthorityResult Oem,
         QualcommVerificationStatus MetadataRootHashStatus,
         IReadOnlyList<QualcommCertificateInfo> Certificates, IReadOnlyList<string> Diagnostics)
@@ -147,9 +152,11 @@ internal static class QualcommAuthentication
 
             var signature = new byte[signatureLength];
             QualcommMbnLayout.ReadAt(stream, baseOffset + signatureOffset, signature, token);
-            var hashes = layout?.Version is 6 or 7 ? [HashAlgorithmName.SHA384] : new[] { HashAlgorithmName.SHA256, HashAlgorithmName.SHA1 };
+            var declaration = QualcommMetadataReader
+                .ReadOrganizationalUnitHashDeclaration(certs[0].SubjectName.RawData);
             var result = VerifySignature(stream, baseOffset, signedEnd, signature, certs[0],
-                layout, authority, hashes, token);
+                layout, authority, BuildHashCandidates(layout?.Version, declaration),
+                declaration.IsConflicting ? declaration.Names : null, token);
             if (!result.Valid)
             {
                 diagnostics.Add($"{authority}: {result.Error}");
@@ -299,16 +306,96 @@ internal static class QualcommAuthentication
         return QualcommVerificationStatus.Valid;
     }
 
+    /// <summary>
+    /// Orders the digest algorithms attempted for one image signature.
+    /// A hash declared by exactly one distinct certificate organizational-unit value is attempted first for
+    /// every MBN version, because the declaration describes how the signer hashed the image rather than which
+    /// MBN layout is in use. A conflicting declaration contributes no candidate: an ambiguous untrusted string
+    /// is not evidence about the algorithm. MBN v6 and v7 still keep SHA-384 ahead of the defaults, so a
+    /// declaration can only reorder candidates and can never widen the result of a verification. This mirrors
+    /// the reference tool's candidate composition, which is deliberately broader than the previous fixed
+    /// two-algorithm list.
+    /// <para>排列单个镜像签名依次尝试的摘要算法。当证书 organizational unit 恰好以一种互不冲突的算法
+    /// 声明时，所有 MBN 版本都会优先尝试该算法，因为声明描述的是签名方如何对镜像做摘要，而不是使用哪种
+    /// MBN 布局。声明冲突时不产生任何候选：歧义的不可信字符串不能作为算法证据。MBN v6 与 v7 仍把
+    /// SHA-384 排在默认序列之前，因此声明只能调整候选顺序，绝不能扩大验证结论。此处与参考工具的候选组合
+    /// 保持一致，明显宽于此前的两种算法固定列表。</para>
+    /// </summary>
+    /// <param name="version">MBN header version, or <see langword="null"/> for layouts without an MBN header.
+    /// <para>MBN 头版本；无 MBN 头的布局为空。</para></param>
+    /// <param name="declaration">Organizational-unit hash declarations.
+    /// <para>organizational unit 的哈希声明。</para></param>
+    /// <returns>Distinct candidate digests in attempt order. <para>按尝试顺序排列的去重候选摘要。</para></returns>
+    private static HashAlgorithmName[] BuildHashCandidates(uint? version, QualcommOuHashDeclaration declaration)
+    {
+        var candidates = new List<HashAlgorithmName>(5);
+        if (declaration.Algorithm is { } declared)
+        {
+            candidates.Add(declared);
+        }
+
+        if (version is 6 or 7)
+        {
+            candidates.Add(HashAlgorithmName.SHA384);
+        }
+
+        foreach (var candidate in new[]
+                 {
+                     HashAlgorithmName.SHA256, HashAlgorithmName.SHA384, HashAlgorithmName.SHA512,
+                     HashAlgorithmName.SHA1
+                 })
+        {
+            if (!candidates.Contains(candidate))
+            {
+                candidates.Add(candidate);
+            }
+        }
+
+        return [.. candidates];
+    }
+
     private static (bool Valid, QualcommVerificationStatus Status, string? Algorithm, string Error)
         VerifySignature(Stream stream, long baseOffset, long signedEnd, byte[] signature,
             X509Certificate2 leaf, QualcommMbnLayout? layout, string authority,
-            HashAlgorithmName[] candidates, CancellationToken token)
+            HashAlgorithmName[] candidates, IReadOnlyList<string>? conflictingDeclarations,
+            CancellationToken token)
     {
         using var rsa = leaf.GetRSAPublicKey();
         using var ecdsa = leaf.GetECDsaPublicKey();
         if (rsa is null && ecdsa is null)
         {
             return (false, QualcommVerificationStatus.Unsupported, null, "Unsupported leaf public key.");
+        }
+
+        var legacyApplicable = false;
+        if (rsa is not null && layout?.Version is 3 or 5)
+        {
+            var legacy = VerifyLegacySignature(stream, baseOffset, signedEnd, signature, leaf, layout.Value,
+                authority, token);
+            if (legacy.Valid)
+            {
+                return (true, QualcommVerificationStatus.Valid, "RSA-QCOM-HMAC-SHA256", "");
+            }
+
+            legacyApplicable = legacy.Applicable;
+        }
+
+        byte[] rsaSignature = [];
+        byte[] ecdsaSignature = [];
+        if (rsa is not null)
+        {
+            if (!TryNormalizeRsaSignature(signature, rsa.KeySize, MaxSignaturePaddingBytes, out rsaSignature))
+            {
+                return (false, QualcommVerificationStatus.Invalid, null,
+                    $"RSA signature length is incompatible with the {rsa.KeySize}-bit key: only 0x00 or 0xFF "
+                    + $"filler of at most {MaxSignaturePaddingBytes} bytes is tolerated at one end.");
+            }
+        }
+        else if (!TryTrimEcdsaDerSignature(signature, out ecdsaSignature))
+        {
+            return (false, QualcommVerificationStatus.Invalid, null,
+                $"ECDSA signature is not a DER sequence followed by at most {MaxSignaturePaddingBytes} bytes "
+                + "of 0x00 or 0xFF filler.");
         }
 
         Span<byte> zeros = stackalloc byte[4096];
@@ -357,13 +444,13 @@ internal static class QualcommAuthentication
                 digest = hash.GetHashAndReset();
             }
 
-            if (rsa is not null && signature.Length == rsa.KeySize / 8)
+            if (rsa is not null)
             {
                 foreach (var padding in new[] { RSASignaturePadding.Pss, RSASignaturePadding.Pkcs1 })
                 {
                     try
                     {
-                        if (rsa.VerifyHash(digest, signature, hashName, padding))
+                        if (rsa.VerifyHash(digest, rsaSignature, hashName, padding))
                         {
                             return (true, QualcommVerificationStatus.Valid, $"RSA-{padding.Mode}-{hashName.Name}", "");
                         }
@@ -378,21 +465,221 @@ internal static class QualcommAuthentication
             {
                 try
                 {
-                    if (ecdsa.VerifyHash(digest, signature, DSASignatureFormat.Rfc3279DerSequence))
+                    if (ecdsa.VerifyHash(digest, ecdsaSignature, DSASignatureFormat.Rfc3279DerSequence))
                     {
                         return (true, QualcommVerificationStatus.Valid, $"ECDSA-{hashName.Name}", "");
                     }
                 }
-                catch (CryptographicException)
+                catch (Exception exception) when (exception is CryptographicException or AsnContentException)
                 {
                     continue;
                 }
             }
         }
 
-        return layout?.Version is 3 or 5
-            ? (false, QualcommVerificationStatus.Unsupported, null,
-                "Standard image signature mismatch; legacy Qualcomm HMAC-signature variants are not verified.")
-            : (false, QualcommVerificationStatus.Invalid, null, "Image signature mismatch.");
+        if (conflictingDeclarations is not null)
+        {
+            return (false, QualcommVerificationStatus.Unsupported, null,
+                "Image signature mismatch and its organizational-unit hash declarations ("
+                + string.Join(", ", conflictingDeclarations)
+                + ") conflict; an ambiguous untrusted declaration is not evidence of a bad signature.");
+        }
+
+        if (layout?.Version is 3 or 5)
+        {
+            return legacyApplicable
+                ? (false, QualcommVerificationStatus.Invalid, null, "Image signature mismatch, including the legacy Qualcomm HMAC variant.")
+                : (false, QualcommVerificationStatus.Unsupported, null,
+                    "Standard image signature mismatch; legacy Qualcomm HMAC-signature variants are not verified.");
+        }
+
+        return (false, QualcommVerificationStatus.Invalid, null, "Image signature mismatch.");
+    }
+    private static (bool Valid, bool Applicable) VerifyLegacySignature(Stream stream, long baseOffset, long signedEnd, byte[] signature, X509Certificate2 certificate, QualcommMbnLayout layout, string authority, CancellationToken token)
+    {
+        if (!TryReadLegacyIdentifiers(certificate, out var softwareId, out var hardwareId)) return (false, false);
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        AppendSignedData(hash, stream, baseOffset, signedEnd, layout, authority, token);
+        var first = hash.GetHashAndReset();
+        Span<byte> identifier = stackalloc byte[8];
+        Span<byte> input = stackalloc byte[40];
+        BinaryPrimitives.WriteUInt64BigEndian(identifier, softwareId ^ 0x3636363636363636UL);
+        identifier.CopyTo(input); first.CopyTo(input[8..]);
+        var second = SHA256.HashData(input);
+        BinaryPrimitives.WriteUInt64BigEndian(identifier, hardwareId ^ 0x5C5C5C5C5C5C5C5CUL);
+        identifier.CopyTo(input); second.CopyTo(input[8..]);
+        var third = SHA256.HashData(input);
+        using var rsa = certificate.GetRSAPublicKey();
+        if (rsa is null || !TryNormalizeRsaSignature(signature, rsa.KeySize, out var normalized)) return (false, true);
+        return (VerifyRawPkcs1Digest(rsa, normalized, third), true);
+    }
+
+    private static bool TryReadLegacyIdentifiers(X509Certificate2 certificate, out ulong softwareId, out ulong hardwareId)
+    {
+        softwareId = 0; hardwareId = 0; var hasSoftwareId = false; var hasHardwareId = false;
+        foreach (var attribute in QualcommMetadataReader.ReadAttributes(certificate.SubjectName.RawData))
+        {
+            if (!ulong.TryParse(attribute.Value, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var value)) continue;
+            if (attribute.Name.Equals("SW_ID", StringComparison.OrdinalIgnoreCase)) { softwareId = value; hasSoftwareId = true; }
+            else if (attribute.Name.Equals("HW_ID", StringComparison.OrdinalIgnoreCase)) { hardwareId = value; hasHardwareId = true; }
+        }
+        return hasSoftwareId && hasHardwareId;
+    }
+
+    private static void AppendSignedData(IncrementalHash hash, Stream stream, long baseOffset, long signedEnd, QualcommMbnLayout layout, string authority, CancellationToken token)
+    {
+        Span<byte> zeros = stackalloc byte[4096]; zeros.Clear();
+        var masks = authority == "QTI"
+            ? new[] { (layout.Version == 7 ? 32 : 28, 4), (layout.Version == 7 ? 36 : 36, 4), (layout.OemMetadataOffset, layout.OemMetadataLength) }
+            : new[] { (layout.Version == 7 ? 24 : 8, 4), (layout.Version == 7 ? 28 : 12, 4), (layout.QualcommMetadataOffset, layout.QualcommMetadataLength) };
+        var cursor = baseOffset;
+        foreach (var (offset, length) in masks.Where(mask => mask.Item2 > 0).OrderBy(mask => mask.Item1))
+        {
+            var start = baseOffset + offset;
+            if (start < cursor || start + length > signedEnd) throw new InvalidDataException("Signed-data mask is out of range.");
+            QualcommImageAnalyzer.AppendRange(hash, stream, cursor, start - cursor, token);
+            for (var remaining = length; remaining > 0;) { var chunk = Math.Min(remaining, zeros.Length); hash.AppendData(zeros[..chunk]); remaining -= chunk; }
+            cursor = start + length;
+        }
+        QualcommImageAnalyzer.AppendRange(hash, stream, cursor, signedEnd - cursor, token);
+    }
+
+    private static bool TryNormalizeRsaSignature(ReadOnlySpan<byte> signature, int keySize, out byte[] normalized)
+        => TryNormalizeRsaSignature(signature, keySize, int.MaxValue, out normalized);
+
+    /// <summary>
+    /// Trims at most <paramref name="maximumPaddingBytes"/> bytes of homogeneous 0x00 or 0xFF filler from one
+    /// end of an RSA signature so that it matches the key modulus length. A signature shorter than the
+    /// modulus is always rejected, mixed filler byte values are rejected, and an excess larger than the bound
+    /// is rejected. The standard verification path uses the bounded form: the reference tool trims filler of
+    /// any length and additionally retries a byte-reversed signature, and neither behaviour was adopted here
+    /// because unbounded trimming lets an adversary choose the trimmed width, and a reversed encoding is not
+    /// an observed Qualcomm container variant but widens the space of byte sequences that can satisfy a public
+    /// key. Rejecting an encoding is an encoding defect, so callers report it rather than a signature mismatch.
+    /// <para>从 RSA 签名的一端裁剪最多 <paramref name="maximumPaddingBytes"/> 字节的单一 0x00 或 0xFF 填充，
+    /// 使其长度与密钥模数一致。短于模数的签名一律拒绝，填充区域出现其它字节值时拒绝，超出上限的多余长度也
+    /// 拒绝。标准验证路径使用有界形式：参考工具会裁剪任意长度的填充，并额外尝试字节序反转的签名；
+    /// 两者都未在此采纳，因为无界裁剪等于把裁剪宽度交给攻击者选择，而反转编码并非已知 Qualcomm 容器变体，
+    /// 却会扩大可满足公钥验证的字节序列空间。编码被拒绝属于编码缺陷，调用方应报告缺陷而非签名不匹配。</para>
+    /// </summary>
+    /// <param name="signature">Signature bytes as stored by the container. <para>容器内保存的签名字节。</para></param>
+    /// <param name="keySize">Public-key size in bits. <para>公钥位数。</para></param>
+    /// <param name="maximumPaddingBytes">Maximum accepted filler length. <para>可接受的填充最大长度。</para></param>
+    /// <param name="normalized">Modulus-sized signature bytes, or an empty array on rejection.
+    /// <para>与模数等长的签名字节；被拒绝时为空数组。</para></param>
+    /// <returns><see langword="true"/> when the encoding was accepted. <para>编码被接受时为 <see langword="true"/>。</para></returns>
+    private static bool TryNormalizeRsaSignature(ReadOnlySpan<byte> signature, int keySize,
+        int maximumPaddingBytes, out byte[] normalized)
+    {
+        normalized = [];
+        var length = checked((keySize + 7) / 8);
+        if (signature.Length == length)
+        {
+            normalized = signature.ToArray();
+            return true;
+        }
+
+        if (signature.Length < length || signature.Length - length > maximumPaddingBytes)
+        {
+            return false;
+        }
+
+        if (IsPadding(signature[length..]))
+        {
+            normalized = signature[..length].ToArray();
+            return true;
+        }
+
+        if (!IsPadding(signature[..^length]))
+        {
+            return false;
+        }
+
+        normalized = signature[^length..].ToArray();
+        return true;
+    }
+
+    /// <summary>
+    /// Trims at most <see cref="MaxSignaturePaddingBytes"/> bytes of homogeneous 0x00 or 0xFF filler from
+    /// the tail of an ECDSA signature and returns the enclosed DER sequence. An exact DER signature passes
+    /// through unchanged. Malformed ASN.1 yields a rejection rather than an exception, because container
+    /// bytes are untrusted input. The reference tool has no bound on the trimmed tail and converts the DER
+    /// into IEEE P1363 before verification; this implementation keeps the strict DER check inside
+    /// <see cref="ECDsa"/> and only bounds the filler, so a malformed interior is rejected by the cryptographic
+    /// layer rather than here.
+    /// <para>从 ECDSA 签名尾部裁剪最多 <see cref="MaxSignaturePaddingBytes"/> 字节的单一 0x00 或 0xFF
+    /// 填充，并返回其中的 DER 序列。精确的 DER 签名原样通过。ASN.1 结构错误会被判定为拒绝而不抛出异常，
+    /// 因为容器字节属于不可信输入。参考工具对裁剪的尾部长度不设上限，并在验证前把 DER 转换为 IEEE P1363；
+    /// 本实现把严格的 DER 检查留在 <see cref="ECDsa"/> 内部，仅对填充长度设界，因此内部结构错误由密码学层
+    /// 拒绝，而不是在此处。</para>
+    /// </summary>
+    /// <param name="signature">Signature bytes as stored by the container. <para>容器内保存的签名字节。</para></param>
+    /// <param name="trimmed">The DER sequence bytes including its header, or an empty array on rejection.
+    /// <para>含头的 DER 序列字节；被拒绝时为空数组。</para></param>
+    /// <returns><see langword="true"/> when the encoding was accepted. <para>编码被接受时为 <see langword="true"/>。</para></returns>
+    private static bool TryTrimEcdsaDerSignature(ReadOnlySpan<byte> signature, out byte[] trimmed)
+    {
+        trimmed = [];
+        if (signature.IsEmpty || signature[0] != 0x30)
+        {
+            return false;
+        }
+
+        try
+        {
+            AsnDecoder.ReadEncodedValue(signature, AsnEncodingRules.DER, out _, out _, out var consumed);
+            if (consumed > signature.Length
+                || signature.Length - consumed > MaxSignaturePaddingBytes
+                || !IsPadding(signature[consumed..]))
+            {
+                return false;
+            }
+
+            trimmed = signature[..consumed].ToArray();
+            return true;
+        }
+        catch (AsnContentException)
+        {
+            return false;
+        }
+    }
+
+    private static bool VerifyRawPkcs1Digest(RSA rsa, ReadOnlySpan<byte> signature, ReadOnlySpan<byte> digest)
+    {
+        var parameters = rsa.ExportParameters(false);
+        if (parameters.Modulus is null || parameters.Exponent is null) return false;
+        var modulus = FromBigEndianUnsigned(parameters.Modulus);
+        var exponent = FromBigEndianUnsigned(parameters.Exponent);
+        var signatureValue = FromBigEndianUnsigned(signature);
+        if (signatureValue.Sign < 0 || signatureValue >= modulus) return false;
+        var encoded = ToBigEndianUnsigned(BigInteger.ModPow(signatureValue, exponent, modulus), parameters.Modulus.Length);
+        if (encoded.Length < digest.Length + 11 || encoded[0] != 0 || encoded[1] != 1) return false;
+        var separator = encoded.Length - digest.Length - 1;
+        if (separator < 10 || encoded[separator] != 0) return false;
+        for (var index = 2; index < separator; index++) if (encoded[index] != 0xFF) return false;
+        return CryptographicOperations.FixedTimeEquals(encoded.AsSpan(separator + 1), digest);
+    }
+
+    private static BigInteger FromBigEndianUnsigned(ReadOnlySpan<byte> value)
+    {
+        var littleEndian = new byte[value.Length + 1];
+        for (var index = 0; index < value.Length; index++) littleEndian[index] = value[value.Length - index - 1];
+        return new BigInteger(littleEndian);
+    }
+
+    private static byte[] ToBigEndianUnsigned(BigInteger value, int length)
+    {
+        var littleEndian = value.ToByteArray(); var valueLength = littleEndian.Length;
+        while (valueLength > 1 && littleEndian[valueLength - 1] == 0) valueLength--;
+        if (valueLength > length) return [];
+        var result = new byte[length];
+        for (var index = 0; index < valueLength; index++) result[length - index - 1] = littleEndian[index];
+        return result;
+    }
+
+    private static bool IsPadding(ReadOnlySpan<byte> data)
+    {
+        foreach (var value in data) if (value is not (0 or 0xff)) return false;
+        return true;
     }
 }

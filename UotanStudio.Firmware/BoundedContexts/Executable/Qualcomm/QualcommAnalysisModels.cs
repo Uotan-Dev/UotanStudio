@@ -149,13 +149,88 @@ public sealed record QualcommAuthorityResult
     public string? RootCertificateSha384 { get; init; }
 }
 
+/// <summary>Reports authentication evidence for one ELF component discovered in a multi-component container.
+/// A nested component is not analyzed separately because its bytes lie inside a range an earlier component
+/// already hashed successfully, so the enclosing component's evidence covers it. These results say nothing
+/// about whether an OEM or a device accepts the container.
+/// <para>报告多组件容器中发现的单个 ELF 组件的认证证据。嵌套组件不再单独分析，因为其字节位于更早组件
+/// 已成功摘要的范围内，由外层组件的证据覆盖。这些结果不说明 OEM 或设备是否接受该容器。</para></summary>
+public sealed record QualcommComponentAuthenticationResult
+{
+    /// <summary>Gets the zero-based index of this entry within the reported component list.
+    /// <para>获取本条目在组件报告列表里从零开始的索引。</para></summary>
+    /// <value>The entry index. <para>条目索引。</para></value>
+    public int ComponentIndex { get; init; }
+    /// <summary>Gets the absolute file offset of the component's ELF header.
+    /// <para>获取组件 ELF 头在文件中的绝对偏移。</para></summary>
+    /// <value>Absolute offset in bytes. <para>绝对字节偏移。</para></value>
+    public long Offset { get; init; }
+    /// <summary>Gets the byte length of the window the component was analyzed within.
+    /// <para>获取分析该组件所用窗口的字节长度。</para></summary>
+    /// <value>Window length in bytes. <para>窗口字节长度。</para></value>
+    public long Length { get; init; }
+    /// <summary>Gets the ELF segment digest-table status for this component.
+    /// <para>获取该组件的 ELF 段摘要表状态。</para></summary>
+    /// <value>Hash-table status. <para>摘要表状态。</para></value>
+    public QualcommVerificationStatus HashTableStatus { get; init; } = QualcommVerificationStatus.NotChecked;
+    /// <summary>Gets the combined image-signature status for this component.
+    /// <para>获取该组件的合并镜像签名状态。</para></summary>
+    /// <value>Signature status. <para>签名状态。</para></value>
+    public QualcommVerificationStatus SignatureStatus { get; init; } = QualcommVerificationStatus.NotPresent;
+    /// <summary>Gets the embedded certificate-chain status for this component.
+    /// <para>获取该组件的内嵌证书链状态。</para></summary>
+    /// <value>Chain status without external trust. <para>不含外部信任的证书链状态。</para></value>
+    public QualcommVerificationStatus CertificateChainStatus { get; init; } = QualcommVerificationStatus.NotPresent;
+    /// <summary>Gets the caller-root trust status for this component.
+    /// <para>获取该组件的调用方根信任状态。</para></summary>
+    /// <value>External trust status. <para>外部信任状态。</para></value>
+    public QualcommVerificationStatus TrustedRootStatus { get; init; } = QualcommVerificationStatus.NotChecked;
+    /// <summary>Gets whether the component was skipped because an already-analyzed component validly hashes
+    /// the bytes containing it.
+    /// <para>获取该组件是否因已被分析组件有效摘要了包含它的字节而被跳过。</para></summary>
+    /// <value><see langword="true"/> for a nested, not independently analyzed component.
+    /// <para>嵌套且未独立分析的组件为 <see langword="true"/>。</para></value>
+    public bool IsNestedAuthenticated { get; init; }
+    /// <summary>Gets the first failed stage of this component's authentication.
+    /// <para>获取该组件认证过程中最先失败的阶段。</para></summary>
+    /// <value>One of None, ElfStructure, HashSegment, HashTable, Signature or CertificateChain.
+    /// <para>取值为 None、ElfStructure、HashSegment、HashTable、Signature 或 CertificateChain。</para></value>
+    public string FailureStage { get; init; } = "None";
+    /// <summary>Gets the diagnostics produced while analyzing this component.
+    /// <para>获取分析该组件时产生的诊断信息。</para></summary>
+    /// <value>Bounded diagnostics. <para>有界诊断信息。</para></value>
+    public IReadOnlyList<string> Diagnostics { get; init; } = [];
+}
+
 /// <summary>Read-only offline analysis with independent recognition, cryptography, trust and device states.
-/// <para>只读离线分析，独立报告识别、密码学、信任及设备状态。</para></summary>
+/// Every field below describes the analysis anchored at file offset 0. When a container carries several ELF
+/// components their results appear independently in <see cref="ComponentAuthentication"/> and
+/// <see cref="MelfAuthenticationStatus"/>, and never overwrite these offset-0 fields.
+/// <para>只读离线分析，独立报告识别、密码学、信任及设备状态。以下所有字段都描述以文件偏移 0 为锚点的
+/// 分析结果。当容器携带多个 ELF 组件时，其结果独立出现在 <see cref="ComponentAuthentication"/> 与
+/// <see cref="MelfAuthenticationStatus"/> 中，绝不会覆盖这些偏移 0 处的字段。</para></summary>
 public sealed record QualcommAnalysisResult
 {
     /// <summary>Gets ELF components discovered in a multi-component container; empty for a single ELF.
     /// <para>获取多组件容器中发现的 ELF 组件；单个 ELF 时为空。</para></summary>
     public IReadOnlyList<QualcommMelfComponent> MelfComponents { get; init; } = [];
+    /// <summary>Gets one authentication result per discovered ELF component, in file order; empty when the
+    /// input is a single ELF. Nested components are reported with
+    /// <see cref="QualcommComponentAuthenticationResult.IsNestedAuthenticated"/> instead of being analyzed
+    /// again, and a component list proves only that each entry was verified on its own bytes.
+    /// <para>获取按文件顺序为每个发现的 ELF 组件生成的认证结果；输入为单个 ELF 时为空。嵌套组件以
+    /// <see cref="QualcommComponentAuthenticationResult.IsNestedAuthenticated"/> 报告而不再次分析，
+    /// 组件列表仅证明每个条目都在其自身字节上完成验证。</para></summary>
+    /// <value>Per-component results. <para>逐组件结果。</para></value>
+    public IReadOnlyList<QualcommComponentAuthenticationResult> ComponentAuthentication { get; init; } = [];
+    /// <summary>Gets the combined per-component authentication status. It stays
+    /// <see cref="QualcommVerificationStatus.NotChecked"/> for a single ELF and is
+    /// <see cref="QualcommVerificationStatus.Unsupported"/> when the component count exceeded the analysis
+    /// bound, so it never claims more than was analyzed.
+    /// <para>获取合并后的逐组件认证状态。单个 ELF 时保持 <see cref="QualcommVerificationStatus.NotChecked"/>；
+    /// 组件数量超出分析上限时为 <see cref="QualcommVerificationStatus.Unsupported"/>，因此绝不会夸大已分析范围。</para></summary>
+    /// <value>Combined component status. <para>合并的组件状态。</para></value>
+    public QualcommVerificationStatus MelfAuthenticationStatus { get; init; } = QualcommVerificationStatus.NotChecked;
     /// <summary>Gets the source stream size observed during analysis.
     /// <para>获取分析期间所观察到的源流长度。</para></summary>
     /// <value>The source length in bytes. <para>源数据的字节长度。</para></value>
@@ -219,7 +294,13 @@ public sealed record QualcommAnalysisResult
     /// <value>Bounded diagnostics. <para>有界诊断信息。</para></value>
     public IReadOnlyList<string> Diagnostics { get; init; } = [];
 
-    private static QualcommVerificationStatus Combine(QualcommVerificationStatus first, QualcommVerificationStatus second)
+    /// <summary>Combines two verification states so that failures and unsupported variants are never
+    /// suppressed by a successful peer.
+    /// <para>合并两个验证状态，确保失败与不受支持的变体不会被另一方的成功结果掩盖。</para></summary>
+    /// <param name="first">First state. <para>第一个状态。</para></param>
+    /// <param name="second">Second state. <para>第二个状态。</para></param>
+    /// <returns>The dominant state. <para>占主导地位的状态。</para></returns>
+    internal static QualcommVerificationStatus Combine(QualcommVerificationStatus first, QualcommVerificationStatus second)
     {
         if (first == QualcommVerificationStatus.Invalid || second == QualcommVerificationStatus.Invalid) return QualcommVerificationStatus.Invalid;
         if (first == QualcommVerificationStatus.Unsupported || second == QualcommVerificationStatus.Unsupported) return QualcommVerificationStatus.Unsupported;

@@ -1,11 +1,24 @@
 using System.Buffers.Binary;
 using System.Formats.Asn1;
 using System.Globalization;
+using System.Security.Cryptography;
 
 namespace UotanStudio.Firmware.BoundedContexts.Executable.Qualcomm;
 
 internal static class QualcommMetadataReader
 {
+    private const string OrganizationalUnitOid = "2.5.4.11";
+    private const int MaximumAttributeFields = 64;
+    private const int MaximumAttributeValueLength = 4096;
+
+    private static readonly (string Token, HashAlgorithmName Algorithm)[] HashTokens =
+    [
+        ("SHA384", HashAlgorithmName.SHA384),
+        ("SHA512", HashAlgorithmName.SHA512),
+        ("SHA256", HashAlgorithmName.SHA256),
+        ("SHA1", HashAlgorithmName.SHA1)
+    ];
+
     internal static IReadOnlyList<QualcommImageRegion> Regions(long offset, QualcommMbnLayout layout)
     {
         var headerSize = layout.Version == 6 ? 48 : 40;
@@ -166,42 +179,121 @@ internal static class QualcommMetadataReader
     internal static IReadOnlyList<QualcommCertificateAttribute> ReadAttributes(byte[] subject)
     {
         var fields = new List<QualcommCertificateAttribute>();
+        if (!TryEnumerateOrganizationalUnits(subject, null, value =>
+        {
+            var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 3 && parts[0].Length == 2 && parts[0].All(char.IsAsciiDigit))
+            {
+                fields.Add(new(parts[^1], string.Join(' ', parts[1..^1])));
+            }
+
+            return fields.Count < MaximumAttributeFields;
+        }))
+        {
+            return [];
+        }
+
+        return fields.AsReadOnly();
+    }
+
+    /// <summary>
+    /// Resolves the digest algorithms declared by every organizational-unit value of a subject name.
+    /// A value declares an algorithm when it contains one of the tokens SHA384, SHA512, SHA256 or SHA1,
+    /// matched case-insensitively in that priority order and delimited so that a longer token such as
+    /// SHA1024 declares nothing. Unlike <see cref="ReadAttributes"/> no digit-prefix shape is required,
+    /// because Qualcomm hash declarations appear as bare units. The declaration is advisory: it only
+    /// orders candidate digests and never authenticates anything on its own.
+    /// <para>解析主题名中所有 organizational unit 值声明的摘要算法。当某个值包含 SHA384、SHA512、
+    /// SHA256、SHA1 之一时即视为声明该算法，按此优先级大小写不敏感匹配，并要求分隔，因此
+    /// SHA1024 之类的更长标记不构成声明。与 <see cref="ReadAttributes"/> 不同，此处不要求数字前缀形状，
+    /// 因为 Qualcomm 的哈希声明通常是裸单位。该声明仅为参考信息：只用于排列候选摘要顺序，
+    /// 本身不构成任何认证结果。</para>
+    /// </summary>
+    /// <param name="subject">DER-encoded X.500 subject name. <para>DER 编码的 X.500 主题名。</para></param>
+    /// <returns>The distinct declarations, with <see cref="QualcommOuHashDeclaration.Algorithm"/> set only
+    /// when exactly one algorithm was declared and the ambiguity flag cleared.
+    /// <para>去重后的声明集合；仅当恰好声明了一种算法且不存在歧义时
+    /// <see cref="QualcommOuHashDeclaration.Algorithm"/> 才有值。</para></returns>
+    internal static QualcommOuHashDeclaration ReadOrganizationalUnitHashDeclaration(byte[] subject)
+    {
+        var declarations = new List<HashAlgorithmName>(4);
+        TryEnumerateOrganizationalUnits(subject, MaximumAttributeFields, value =>
+        {
+            if (MatchHashToken(value) is { } match && !declarations.Contains(match))
+            {
+                declarations.Add(match);
+            }
+
+            return true;
+        });
+        return declarations.Count == 1
+            ? new(declarations[0], false, [])
+            : new(null, declarations.Count > 1, declarations.Select(value => value.Name!).ToArray());
+    }
+
+    private static bool TryEnumerateOrganizationalUnits(byte[] subject, int? maximumValues,
+        Func<string, bool> handle)
+    {
         try
         {
             var reader = new AsnReader(subject, AsnEncodingRules.DER);
             var sequence = reader.ReadSequence();
-            while (sequence.HasData && fields.Count < 64)
+            var values = 0;
+            while (sequence.HasData && (maximumValues is null || values < maximumValues))
             {
                 var set = sequence.ReadSetOf(skipSortOrderValidation: true);
-                while (set.HasData && fields.Count < 64)
+                while (set.HasData && (maximumValues is null || values < maximumValues))
                 {
                     var attribute = set.ReadSequence();
                     var oid = attribute.ReadObjectIdentifier();
                     var tag = attribute.PeekTag();
-                    if (oid != "2.5.4.11" || tag.TagClass != TagClass.Universal
+                    if (oid != OrganizationalUnitOid || tag.TagClass != TagClass.Universal
                         || tag.TagValue is not (12 or 19 or 20 or 22 or 28 or 30))
                     {
                         attribute.ReadEncodedValue();
                         continue;
                     }
+
                     var value = attribute.ReadCharacterString((UniversalTagNumber)tag.TagValue);
-                    if (value.Length > 4096)
+                    if (value.Length > MaximumAttributeValueLength)
                     {
                         continue;
                     }
-                    var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    if (parts.Length >= 3 && parts[0].Length == 2 && parts[0].All(char.IsAsciiDigit))
+
+                    values++;
+                    if (!handle(value))
                     {
-                        fields.Add(new(parts[^1], string.Join(' ', parts[1..^1])));
+                        return true;
                     }
                 }
             }
         }
         catch (AsnContentException)
         {
-            return [];
+            return false;
         }
-        return fields.AsReadOnly();
+
+        return true;
+    }
+
+    private static HashAlgorithmName? MatchHashToken(string value)
+    {
+        foreach (var (token, algorithm) in HashTokens)
+        {
+            for (var start = value.IndexOf(token, StringComparison.OrdinalIgnoreCase); start >= 0;
+                 start = value.IndexOf(token, start + token.Length, StringComparison.OrdinalIgnoreCase))
+            {
+                var end = start + token.Length;
+                var before = start == 0 || !char.IsAsciiLetterOrDigit(value[start - 1]);
+                var after = end == value.Length || !char.IsAsciiLetterOrDigit(value[end]);
+                if (before && after)
+                {
+                    return algorithm;
+                }
+            }
+        }
+
+        return null;
     }
 
     internal static QualcommSigningMetadata FromCertificate(QualcommCertificateInfo certificate)
@@ -276,3 +368,18 @@ internal static class QualcommMetadataReader
         return values;
     }
 }
+
+/// <summary>Carries the digest algorithms declared by certificate organizational units.
+/// The declaration orders verification candidates only; it is never treated as authentication evidence.
+/// <para>承载证书 organizational unit 声明的摘要算法。该声明仅用于排列验证候选顺序，
+/// 从不作为认证证据。</para></summary>
+/// <param name="Algorithm">The single declared algorithm, or <see langword="null"/> when nothing was
+/// declared or the declarations conflict. <para>唯一声明的算法；未声明或声明冲突时为空。</para></param>
+/// <param name="IsConflicting"><see langword="true"/> when two or more distinct algorithms were declared.
+/// <para>当声明了两种及以上不同算法时为 <see langword="true"/>。</para></param>
+/// <param name="Names">Distinct declared algorithm names in discovery order, bounded by the subject-name
+/// field limit. <para>按发现顺序排列的去重算法名称，数量受主题名字段上限约束。</para></param>
+internal readonly record struct QualcommOuHashDeclaration(
+    HashAlgorithmName? Algorithm,
+    bool IsConflicting,
+    IReadOnlyList<string> Names);
