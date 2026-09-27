@@ -166,7 +166,8 @@ public static partial class GptReader
                     throw new InvalidDataException("GPT partitions overlap.");
                 }
             }
-            return new GptTable(primary.DiskId, blockSize, blockCount, _entries, Convert.ToHexString(_hash.GetHashAndReset()));
+            return new GptTable(primary.DiskId, blockSize, blockCount, _entries, Convert.ToHexString(_hash.GetHashAndReset()),
+                primary.HeaderSize, primary.First, primary.Last, primary.Count, primary.Size, primary.ArrayLba, backup.ArrayLba);
         }
     }
 
@@ -228,7 +229,7 @@ public static partial class GptReader
         {
             throw new InvalidDataException("The GPT entry array overlaps usable storage or a header.");
         }
-        return new Header(first, last, diskId, arrayLba, count, entrySize, arrayCrc, SHA256.HashData(span));
+        return new Header(first, last, diskId, arrayLba, count, entrySize, arrayCrc, size, SHA256.HashData(span));
     }
 
     private static void ReadAt(Stream source, long offset, Span<byte> destination)
@@ -237,5 +238,5 @@ public static partial class GptReader
         source.ReadExactly(destination);
     }
 
-    private sealed record Header(ulong First, ulong Last, Guid DiskId, ulong ArrayLba, uint Count, uint Size, uint ArrayCrc, byte[] Sha256);
+    private sealed record Header(ulong First, ulong Last, Guid DiskId, ulong ArrayLba, uint Count, uint Size, uint ArrayCrc, uint HeaderSize, byte[] Sha256);
 }

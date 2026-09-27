@@ -40,13 +40,22 @@ public sealed record GptPartition(int Index, Guid TypeId, Guid Id, ulong FirstLb
 /// </summary>
 public sealed class GptTable
 {
-    internal GptTable(Guid diskId, int blockSize, ulong blockCount, List<GptPartition> partitions, string metadataSha256)
+    internal GptTable(Guid diskId, int blockSize, ulong blockCount, List<GptPartition> partitions, string metadataSha256,
+        uint headerSize, ulong firstUsableLba, ulong lastUsableLba, uint partitionEntryCount, uint partitionEntrySize,
+        ulong primaryEntryArrayLba, ulong backupEntryArrayLba)
     {
         DiskId = diskId;
         BlockSize = blockSize;
         BlockCount = blockCount;
         Partitions = partitions.AsReadOnly();
         MetadataSha256 = metadataSha256;
+        HeaderSize = headerSize;
+        FirstUsableLba = firstUsableLba;
+        LastUsableLba = lastUsableLba;
+        PartitionEntryCount = partitionEntryCount;
+        PartitionEntrySize = partitionEntrySize;
+        PrimaryEntryArrayLba = primaryEntryArrayLba;
+        BackupEntryArrayLba = backupEntryArrayLba;
     }
 
     /// <summary>
@@ -98,6 +107,79 @@ public sealed class GptTable
     /// <para>用于标识已校验元数据字节的大写十六进制摘要字符串。</para>
     /// </value>
     public string MetadataSha256 { get; }
+
+    /// <summary>
+    /// Gets the declared header structure size recorded by the reader.
+    /// <para>获取读取器记录的头部结构声明大小。</para>
+    /// </summary>
+    /// <value>
+    /// Header size in bytes, from <c>92</c> through <see cref="BlockSize"/>; the writer emits the header
+    /// with exactly this size and zero-fills the rest of the block.
+    /// <para>头部字节大小，范围 <c>92</c> 至 <see cref="BlockSize"/>；写入器按该大小输出头部并将块内剩余部分补零。</para>
+    /// </value>
+    public uint HeaderSize { get; }
+
+    /// <summary>
+    /// Gets the first usable logical block declared by both headers.
+    /// <para>获取两个头部共同声明的首个可用逻辑块。</para>
+    /// </summary>
+    /// <value>
+    /// Logical block index of the first partition-eligible block; the writer round-trips this value.
+    /// <para>允许承载分区的首个逻辑块索引；写入器原样往返该值。</para>
+    /// </value>
+    public ulong FirstUsableLba { get; }
+
+    /// <summary>
+    /// Gets the last usable logical block declared by both headers.
+    /// <para>获取两个头部共同声明的最后一个可用逻辑块。</para>
+    /// </summary>
+    /// <value>
+    /// Logical block index of the last partition-eligible block; the writer round-trips this value.
+    /// <para>允许承载分区的最后逻辑块索引；写入器原样往返该值。</para>
+    /// </value>
+    public ulong LastUsableLba { get; }
+
+    /// <summary>
+    /// Gets the declared capacity of the partition entry array, including unused slots.
+    /// <para>获取分区条目数组的声明容量（含未使用槽位）。</para>
+    /// </summary>
+    /// <value>
+    /// Total entry slots from the header, from <c>1</c> through <c>65536</c>; <see cref="Partitions"/>
+    /// only lists the non-empty slots within this count.
+    /// <para>头部声明的条目槽位总数，范围 <c>1</c> 至 <c>65536</c>；<see cref="Partitions"/> 仅列出其中非空槽位。</para>
+    /// </value>
+    public uint PartitionEntryCount { get; }
+
+    /// <summary>
+    /// Gets the declared byte size of one partition entry slot.
+    /// <para>获取单个分区条目槽位的声明字节大小。</para>
+    /// </summary>
+    /// <value>
+    /// Entry size in bytes, a power of two from <c>128</c> through <c>4096</c>; bytes beyond the
+    /// canonical <c>128</c>-entry layout are zero, as enforced by the reader.
+    /// <para>条目字节大小，须为 <c>128</c> 至 <c>4096</c> 之间 2 的幂；规范 <c>128</c> 字节布局之外的字节为零（由读取器强制）。</para>
+    /// </value>
+    public uint PartitionEntrySize { get; }
+
+    /// <summary>
+    /// Gets the logical block address of the primary partition entry array.
+    /// <para>获取主分区条目数组的逻辑块地址。</para>
+    /// </summary>
+    /// <value>
+    /// First block of the primary array; the writer places the primary entry array here.
+    /// <para>主条目数组的首块；写入器将主条目数组放在该位置。</para>
+    /// </value>
+    public ulong PrimaryEntryArrayLba { get; }
+
+    /// <summary>
+    /// Gets the logical block address of the backup partition entry array.
+    /// <para>获取备份分区条目数组的逻辑块地址。</para>
+    /// </summary>
+    /// <value>
+    /// First block of the backup array; the writer places the backup entry array here.
+    /// <para>备份条目数组的首块；写入器将备份条目数组放在该位置。</para>
+    /// </value>
+    public ulong BackupEntryArrayLba { get; }
 
     /// <summary>
     /// Resolves an exact, case-sensitive name, rejecting missing or ambiguous names.
