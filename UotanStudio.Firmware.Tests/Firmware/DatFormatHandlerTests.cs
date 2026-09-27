@@ -120,7 +120,8 @@ public class DatFormatHandlerTests
         var imagePath = temp.WriteBytes("input.img", BuildPattern(6 * DatWriter.BlockSize, 9));
         var datPath = Path.Combine(temp.Path, "system.new.dat");
         var listPath = Path.Combine(temp.Path, "system.transfer.list");
-        DatWriter.Write(imagePath, datPath, listPath, new DatWriteOptions { CompressWithBrotli = true });
+        DatWriter.Write(imagePath, datPath, listPath, new DatWriteOptions { CompressWithBrotli = true },
+            cancellationToken: TestContext.Current.CancellationToken);
         var brPath = datPath + ".br";
         Assert.True(File.Exists(brPath));
 
@@ -150,7 +151,8 @@ public class DatFormatHandlerTests
         var imagePath = temp.WriteBytes("input.img", image);
         var datPath = Path.Combine(temp.Path, "system.new.dat");
         var listPath = Path.Combine(temp.Path, "system.transfer.list");
-        DatWriter.Write(imagePath, datPath, listPath, new DatWriteOptions { CompressWithBrotli = brotli });
+        DatWriter.Write(imagePath, datPath, listPath, new DatWriteOptions { CompressWithBrotli = brotli },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var outputDir = Path.Combine(temp.Path, "out");
         var handler = FormatDetector.Detect(listPath);

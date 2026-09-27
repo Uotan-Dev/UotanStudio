@@ -104,6 +104,58 @@ public static class AndroidPropertyPatch
         return new TextPatchResult(result, 1, !string.Equals(text, result, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// Appends an <c>import &lt;path&gt;</c> directive to a property file. Appending an import that is already
+    /// present leaves the source untouched, so repeated imports are idempotent.
+    /// <para>向属性文件追加 <c>import &lt;path&gt;</c> 指令。若该导入已存在则保持源文本不变，因此重复导入是幂等的。</para>
+    /// </summary>
+    /// <param name="text">
+    /// The existing property file source text. <para>现有的属性文件源文本。</para>
+    /// </param>
+    /// <param name="path">
+    /// Absolute single-line path to import, e.g. <c>/my_product/build.prop</c>. <para>待导入的绝对单行路径，例如 <c>/my_product/build.prop</c>。</para>
+    /// </param>
+    /// <returns>
+    /// The patch result with the directive appended, the number of matching existing directives and whether the text changed.
+    /// <para>补丁结果，包含追加指令后的文本、已存在的匹配指令数量以及文本是否发生变化。</para>
+    /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// The text exceeds the size limit, the path is not a safe absolute single-line path, or the output exceeds the size limit.
+    /// <para>文本超出大小上限、路径不是安全的绝对单行路径，或输出超出大小上限。</para>
+    /// </exception>
+    public static TextPatchResult ImportLine(string text, string path)
+    {
+        TextPatch.ValidateSize(text);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if (!path.StartsWith('/') || path.Length > 4096 || path.Contains('\0') || path.Any(char.IsWhiteSpace)
+            || path.IndexOfAny(['=', '#']) >= 0
+            || path.Split('/').Any(part => part is "." or ".."))
+        {
+            throw new InvalidDataException("Import path must be a safe absolute single-line path.");
+        }
+
+        var directive = "import " + path;
+        var offset = 0;
+        while (offset < text.Length)
+        {
+            var newline = text.IndexOf('\n', offset);
+            var end = newline < 0 ? text.Length : newline + 1;
+            if (string.Equals(text.AsSpan(offset, end - offset).Trim(['\r', '\n', ' ', '\t']).ToString(),
+                    directive, StringComparison.Ordinal))
+            {
+                return new TextPatchResult(text, 1, false);
+            }
+
+            offset = end;
+        }
+
+        var separator = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var prefix = text.Length == 0 || text.EndsWith('\n') ? string.Empty : separator;
+        var result = text + prefix + directive + separator;
+        TextPatch.ValidateSize(result);
+        return new TextPatchResult(result, 0, true);
+    }
+
     private static List<PropertyEntry> Find(string text, string key)
     {
         TextPatch.ValidateSize(text);

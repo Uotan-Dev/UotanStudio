@@ -2,7 +2,9 @@ using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Models;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Reader;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Serialization;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.Bsdiff;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.ImgDiff;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
@@ -24,6 +26,13 @@ public static class DatWriter
     public const int BlockSize = 4096;
 
     private const int StreamBufferSize = 1024 * 1024;
+
+    /// <remarks>
+    /// A block-diff run longer than this many blocks (16 MiB) is split across several commands so one command's
+    /// source and target regions stay bounded in memory, mirroring blockimgdiff's cache-budget splitting.
+    /// <para>超过该块数（16 MiB）的差分区段会拆成多条命令，使单条命令的源/目标区域在内存中有界，对应 blockimgdiff 按缓存预算的拆分。</para>
+    /// </remarks>
+    private const long MaximumBlocksPerPatchCommand = 4096;
 
     /// <summary>
     /// Writes a raw image as a DAT image pair.
@@ -74,13 +83,21 @@ public static class DatWriter
     /// Optional byte progress, fed with (processed bytes read from the raw image, total raw bytes); <c>null</c> to
     /// disable reporting. <para>可选的按字节进度回调（读入原始镜像的字节数、原始镜像总字节数）；<c>null</c> 表示不报告。</para>
     /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels between blocks and before self-verification; a cancelled write may leave partial output files and
+    /// never runs the verify pass. <para>在块间与自校验前响应取消；被取消的写出可能留下部分输出文件且不会执行校验趟。</para>
+    /// </param>
     /// <exception cref="ArgumentException">
     /// A path is empty or contains only whitespace. <para>路径为空或仅含空白字符。</para>
     /// </exception>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="options"/> is <see langword="null"/>. <para><paramref name="options"/> 为 <see langword="null"/>。</para>
     /// </exception>
-    public static void Write(string inputImagePath, string outputDatPath, string outputTransferListPath, DatWriteOptions options, IProgress<(long Processed, long Total)>? progress = null)
+    /// <exception cref="InvalidDataException">
+    /// <see cref="DatWriteOptions.SelfVerifyIncremental"/> is set and the freshly written dataset does not rebuild
+    /// the input image. <para>设置了 <see cref="DatWriteOptions.SelfVerifyIncremental"/> 且新写出的数据集未能重建输入镜像。</para>
+    /// </exception>
+    public static void Write(string inputImagePath, string outputDatPath, string outputTransferListPath, DatWriteOptions options, IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputImagePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDatPath);
@@ -102,6 +119,7 @@ public static class DatWriter
             long? zeroStart = null;
             while (block < totalBlocks)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var read = ReadBlock(input, buffer);
                 var isZero = IsZeroBlock(buffer, read);
                 if (isZero)
@@ -164,6 +182,11 @@ public static class DatWriter
         {
             CompressDatWithBrotli(outputDatPath);
         }
+
+        if (options.SelfVerifyIncremental)
+        {
+            SelfVerify(outputTransferListPath, options.CompressWithBrotli ? outputDatPath + ".br" : outputDatPath, null, null, inputImagePath, cancellationToken);
+        }
     }
 
     /// <summary>
@@ -199,6 +222,9 @@ public static class DatWriter
     /// <para>应用于所写出数据的压缩与单条命令块数上限设置；所有权归调用方。</para>
     /// </param>
     /// <param name="progress">Optional byte progress over the target image. <para>可选的按目标镜像字节进度。</para></param>
+    /// <param name="cancellationToken">
+    /// Cancels between blocks, patch computations and the self-verification pass. <para>在块间、补丁计算与自校验趟之间响应取消。</para>
+    /// </param>
     /// <exception cref="ArgumentException">One of the paths is empty or contains only whitespace. <para>某个路径为空或仅含空白字符。</para></exception>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="options"/> is <see langword="null"/>. <para><paramref name="options"/> 为 <see langword="null"/>。</para>
@@ -207,8 +233,13 @@ public static class DatWriter
     /// <paramref name="sourceImagePath"/> or <paramref name="targetImagePath"/> does not exist.
     /// <para><paramref name="sourceImagePath"/> 或 <paramref name="targetImagePath"/> 不存在。</para>
     /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// <see cref="DatWriteOptions.SelfVerifyIncremental"/> is set and the generated triple does not rebuild the
+    /// target image when replayed through <c>DatReader</c>. <para>设置了 <see cref="DatWriteOptions.SelfVerifyIncremental"/>
+    /// 且生成的三元组经 <c>DatReader</c> 回放后未能重建目标镜像。</para>
+    /// </exception>
     public static void WriteIncremental(string sourceImagePath, string targetImagePath, string outputDatPath, string outputPatchDatPath,
-        string outputTransferListPath, DatWriteOptions options, IProgress<(long Processed, long Total)>? progress = null)
+        string outputTransferListPath, DatWriteOptions options, IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceImagePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetImagePath);
@@ -231,6 +262,7 @@ public static class DatWriter
             long block = 0;
             while (block < totalBlocks)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 ReadAt(target, block * BlockSize, targetBlock);
                 if (block * BlockSize < sourceLength)
                 {
@@ -273,7 +305,7 @@ public static class DatWriter
         if (!runs.Any(run => run.Imgdiff))
         {
             File.WriteAllBytes(outputPatchDatPath, []);
-            Write(targetImagePath, outputDatPath, outputTransferListPath, options);
+            Write(targetImagePath, outputDatPath, outputTransferListPath, options, null, cancellationToken);
             return;
         }
 
@@ -282,38 +314,168 @@ public static class DatWriter
         using (var source = new FileStream(sourceImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.RandomAccess))
         using (var target = new FileStream(targetImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.RandomAccess))
         using (var patch = new FileStream(outputPatchDatPath, FileMode.Create, FileAccess.Write, FileShare.None, StreamBufferSize))
-        using (new FileStream(outputDatPath, FileMode.Create, FileAccess.Write, FileShare.None))
+        using (var newData = new FileStream(outputDatPath, FileMode.Create, FileAccess.Write, FileShare.None, StreamBufferSize))
         {
             foreach (var (start, end, isImgdiff) in runs)
             {
-                var count = end - start;
                 if (!isImgdiff)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     commands.Add(new TransferListCommand(TransferListCommandKind.Zero, [new BlockRange(start, end)]));
                     continue;
                 }
 
-                var sourceRegion = ReadRegion(source, start, count);
-                var targetRegion = ReadRegion(target, start, count);
-                using var patchStream = new MemoryStream();
-                ImageDeltaPatch.Create(new MemoryStream(sourceRegion, writable: false), new MemoryStream(targetRegion, writable: false), patchStream);
-                var patchBytes = patchStream.ToArray();
-                patch.Write(patchBytes);
-                patchOffset += patchBytes.Length;
-                commands.Add(new TransferListCommand(TransferListCommandKind.Imgdiff, [new BlockRange(start, end)], sourceRanges: [new BlockRange(start, end)])
+                for (var pieceStart = start; pieceStart < end; pieceStart += MaximumBlocksPerPatchCommand)
                 {
-                    SourceBlockCount = count,
-                    SourceLocations = [new BlockRange(0, count)],
-                    PatchOffset = patchOffset - patchBytes.Length,
-                    PatchLength = patchBytes.Length,
-                    SourceHash = Sha1(sourceRegion),
-                    TargetHash = Sha1(targetRegion),
-                });
+                    var count = Math.Min(MaximumBlocksPerPatchCommand, end - pieceStart);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var sourceRegion = ReadRegion(source, pieceStart, count);
+                    var targetRegion = ReadRegion(target, pieceStart, count);
+                    var range = new BlockRange(pieceStart, pieceStart + count);
+                    var (kind, patchBytes) = CreateRunPatch(sourceRegion, targetRegion, options.IncrementalCommandStyle, cancellationToken);
+                    if (options.AllowRawNewCommands && targetRegion.LongLength <= patchBytes.LongLength)
+                    {
+                        commands.Add(new TransferListCommand(TransferListCommandKind.New, [range]));
+                        newData.Write(targetRegion);
+                        continue;
+                    }
+
+                    patch.Write(patchBytes);
+                    patchOffset += patchBytes.Length;
+                    commands.Add(new TransferListCommand(kind, [range], sourceRanges: [range])
+                    {
+                        SourceBlockCount = count,
+                        SourceLocations = [new BlockRange(0, count)],
+                        PatchOffset = patchOffset - patchBytes.Length,
+                        PatchLength = patchBytes.Length,
+                        SourceHash = Sha1(sourceRegion),
+                        TargetHash = Sha1(targetRegion),
+                    });
+                }
             }
+        }
+
+        if (!commands.Any(command => command.Kind is TransferListCommandKind.Imgdiff or TransferListCommandKind.Diff
+            or TransferListCommandKind.Move or TransferListCommandKind.Stash))
+        {
+            // A dataset without source-dependent commands cannot be seeded from the base image by the
+            // recovery reader, so ship the target as a plain full image instead.
+            File.WriteAllBytes(outputPatchDatPath, []);
+            Write(targetImagePath, outputDatPath, outputTransferListPath, options, null, cancellationToken);
+            return;
         }
 
         var list = new TransferList(4, totalBlocks, 0, 0, commands);
         TransferListSerializer.Write(outputTransferListPath, list);
+        if (options.SelfVerifyIncremental)
+        {
+            SelfVerify(outputTransferListPath, outputDatPath, outputPatchDatPath, sourceImagePath, targetImagePath, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Encodes one differing run with the requested command style and returns the command kind together with
+    /// its patch bytes. <see cref="DatIncrementalCommandStyle.ShortestWins"/> computes both encodings and keeps
+    /// the smaller one; the other styles compute a single encoding.
+    /// <para>按请求的命令风格编码一个差异区段，返回命令类型及其补丁字节。<see cref="DatIncrementalCommandStyle.ShortestWins"/>
+    /// 同时计算两种编码并保留较短者；其余风格只计算一种编码。</para>
+    /// </summary>
+    private static (TransferListCommandKind Kind, byte[] PatchBytes) CreateRunPatch(byte[] sourceRegion, byte[] targetRegion, DatIncrementalCommandStyle style, CancellationToken ct)
+    {
+        byte[]? imgdiffBytes = null;
+        byte[]? bsdiffBytes = null;
+        if (style is DatIncrementalCommandStyle.Imgdiff or DatIncrementalCommandStyle.ShortestWins)
+        {
+            using var container = new MemoryStream();
+            ImageDeltaBuilder.Build(
+                new MemoryStream(sourceRegion, writable: false),
+                new MemoryStream(targetRegion, writable: false),
+                container,
+                ImageDeltaBuilder.DefaultBlockSize,
+                new ImgDiffBuilderOptions { SelfVerify = false },
+                ct);
+            imgdiffBytes = container.ToArray();
+        }
+
+        if (style is DatIncrementalCommandStyle.Bsdiff or DatIncrementalCommandStyle.ShortestWins)
+        {
+            using var raw = new MemoryStream();
+            BinaryDeltaPatch.Create(new MemoryStream(sourceRegion, writable: false), new MemoryStream(targetRegion, writable: false), raw, ct);
+            bsdiffBytes = raw.ToArray();
+        }
+
+        if (imgdiffBytes is null)
+        {
+            return (TransferListCommandKind.Diff, bsdiffBytes!);
+        }
+
+        if (bsdiffBytes is null || imgdiffBytes.LongLength <= bsdiffBytes.LongLength)
+        {
+            return (TransferListCommandKind.Imgdiff, imgdiffBytes);
+        }
+
+        return (TransferListCommandKind.Diff, bsdiffBytes);
+    }
+
+    /// <summary>
+    /// Replays the freshly written dataset through <c>DatReader</c> and fails unless the rebuilt image equals
+    /// the reference image byte-for-byte (extra block padding must be zero). Generation therefore always implies
+    /// an apply-side check when self-verification is enabled.
+    /// <para>用 <c>DatReader</c> 回放刚写出的数据集，除非重建镜像与参照镜像逐字节相等（多出的块填充必须为零）否则失败。
+    /// 因此启用自校验时，生成必然蕴含一次 apply 端检查。</para>
+    /// </summary>
+    private static void SelfVerify(string transferListPath, string newDataPath, string? patchDataPath, string? sourceImagePath, string referenceImagePath, CancellationToken ct)
+    {
+        var rebuiltPath = Path.Combine(Path.GetTempPath(), "uotan-dat-verify-" + Guid.NewGuid().ToString("N") + ".img");
+        try
+        {
+            DatReader.Unpack(transferListPath, newDataPath, patchDataPath, sourceImagePath, rebuiltPath, false, null, ct);
+            var expected = new FileInfo(referenceImagePath).Length;
+            using var expectedStream = File.OpenRead(referenceImagePath);
+            using var actualStream = File.OpenRead(rebuiltPath);
+            var buffer = new byte[64 * 1024];
+            var expectedBuffer = new byte[buffer.Length];
+            long offset = 0;
+            while (offset < expected)
+            {
+                ct.ThrowIfCancellationRequested();
+                var left = (int)Math.Min(buffer.Length, expected - offset);
+                expectedStream.ReadExactly(expectedBuffer, 0, left);
+                try
+                {
+                    actualStream.ReadExactly(buffer, 0, left);
+                }
+                catch (EndOfStreamException)
+                {
+                    throw new InvalidDataException("Incremental DAT self-verification failed: rebuilt image is shorter than the target.");
+                }
+
+                if (!expectedBuffer.AsSpan(0, left).SequenceEqual(buffer.AsSpan(0, left)))
+                {
+                    throw new InvalidDataException($"Incremental DAT self-verification failed at byte {offset}.");
+                }
+
+                offset += left;
+            }
+
+            while (actualStream.Position < actualStream.Length)
+            {
+                var read = actualStream.Read(buffer, 0, buffer.Length);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                if (buffer.AsSpan(0, read).IndexOfAnyExcept((byte)0) >= 0)
+                {
+                    throw new InvalidDataException("Incremental DAT self-verification failed: non-zero data beyond the target length.");
+                }
+            }
+        }
+        finally
+        {
+            File.Delete(rebuiltPath);
+        }
     }
 
     private static void ReadAt(FileStream stream, long offset, byte[] buffer)

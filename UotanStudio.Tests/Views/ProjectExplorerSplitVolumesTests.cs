@@ -116,7 +116,8 @@ public sealed class ProjectExplorerSplitVolumesTests(NodeEditorUiFixture fixture
         var source = Path.Combine(temp.Path, "source.img");
         await File.WriteAllBytesAsync(source, original, token);
         var data = Path.Combine(temp.Path, "system.new.dat");
-        DatWriter.Write(source, data, Path.Combine(temp.Path, "system.transfer.list"), new DatWriteOptions());
+        DatWriter.Write(source, data, Path.Combine(temp.Path, "system.transfer.list"), new DatWriteOptions(),
+            cancellationToken: TestContext.Current.CancellationToken);
         var payload = await File.ReadAllBytesAsync(data, token);
         File.Delete(data);
         var selected = data + ".000";

@@ -4,11 +4,130 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
 namespace UotanStudio.Firmware.BoundedContexts.Patching;
 
 /// <summary>
+/// Outcome of rebasing an fs_config document under a merged-partition root prefix.
+/// <para>将 fs_config 文档按合并分区的根前缀改基的结果。</para>
+/// </summary>
+/// <param name="Text">The rebased document text. <para>改基后的文档文本。</para></param>
+/// <param name="PrefixedEntries">Entry paths that received the root prefix. <para>被加上根前缀的条目路径数量。</para></param>
+/// <param name="DroppedEntries">Root-default and duplicate-prefix entries that were removed. <para>被移除的根默认条目与前缀重复条目数量。</para></param>
+/// <param name="Changed"><see langword="true"/> when the text differs from the input. <para>文本与输入不同时为 <see langword="true"/>。</para></param>
+public sealed record FsConfigRebaseResult(string Text, int PrefixedEntries, int DroppedEntries, bool Changed);
+
+/// <summary>
 /// Source-preserving edits for the fs_config sidecars consumed by UotanStudio filesystem builders.
 /// <para>供 UotanStudio 文件系统构建器使用的 fs_config 附属文件的保源编辑。</para>
 /// </summary>
 public static class FsConfigPatch
 {
+    /// <summary>
+    /// Rebases a partition-owned fs_config document under <c>&lt;rootPrefix&gt;&lt;partition&gt;</c>: removes the
+    /// root <c>/</c> default entry and duplicate prefix defaults, prefixes every other entry path with the
+    /// configured root, keeps already-rebased entries verbatim, and appends the <c>0 0 0755</c> default entry.
+    /// Rebasing an already-rebased document yields the same text.
+    /// <para>将分区自有的 fs_config 文档改基到 <c>&lt;rootPrefix&gt;&lt;partition&gt;</c> 之下：移除根 <c>/</c> 默认条目与前缀
+    /// 默认重复条目，为其余条目路径加上配置根前缀，保持已改基条目原样，并追加 <c>0 0 0755</c> 默认条目。
+    /// 对已改基文档再次改基得到完全相同的文本。</para>
+    /// </summary>
+    /// <param name="text">
+    /// The existing fs_config source text. <para>现有的 fs_config 源文本。</para>
+    /// </param>
+    /// <param name="rootPrefix">
+    /// Configured relative root such as <c>system/</c>; blank segments, traversal segments and absolute roots are rejected.
+    /// <para>配置的相对根前缀（如 <c>system/</c>）；空段、穿越段与绝对根会被拒绝。</para>
+    /// </param>
+    /// <param name="partition">
+    /// Merged partition name (<c>[A-Za-z0-9_-]</c>, at most 64 characters), e.g. <c>my_product</c>.
+    /// <para>被合并的分区名（<c>[A-Za-z0-9_-]</c>，至多 64 个字符），如 <c>my_product</c>。</para>
+    /// </param>
+    /// <param name="token">
+    /// Cancels the bounded line scan. <para>取消有界的逐行扫描。</para>
+    /// </param>
+    /// <returns>
+    /// The rebased document with accounting details. <para>改基后的文档及其计数信息。</para>
+    /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// The root prefix or partition is invalid, the source contains NUL, or a size limit is exceeded.
+    /// <para>根前缀或分区无效、源文本包含 NUL，或超出大小上限。</para>
+    /// </exception>
+    /// <exception cref="OperationCanceledException"><paramref name="token"/> was signaled. <para><paramref name="token"/> 被触发。</para></exception>
+    public static FsConfigRebaseResult Rebase(string text, string rootPrefix, string partition, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        TextPatch.ValidateSize(text);
+        if (text.Contains('\0'))
+            throw new InvalidDataException("Filesystem metadata source must not contain NUL.");
+        ArgumentException.ThrowIfNullOrWhiteSpace(partition);
+        if (partition.Length > 64 || partition.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not '_' and not '-'))
+            throw new InvalidDataException("Rebase partition name must use letters, digits, '_' or '-'.");
+        ArgumentException.ThrowIfNullOrWhiteSpace(rootPrefix);
+        var normalizedRoot = rootPrefix.TrimEnd('/');
+        if (normalizedRoot.StartsWith('/') || normalizedRoot.Length > 4096
+            || normalizedRoot.Any(character => char.IsWhiteSpace(character) || character == '\\' || character == '#')
+            || normalizedRoot.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(part => part is "." or ".."))
+        {
+            throw new InvalidDataException("Root prefix must be a safe relative directory path.");
+        }
+
+        normalizedRoot += "/";
+        var root = normalizedRoot + partition;
+        var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var output = new System.Text.StringBuilder();
+        var prefixed = 0;
+        var dropped = 0;
+        var position = 0;
+        var lineNumber = 0;
+        while (position < text.Length)
+        {
+            token.ThrowIfCancellationRequested();
+            if (++lineNumber > 100000)
+                throw new InvalidDataException("Too many filesystem metadata lines.");
+            var end = text.IndexOf('\n', position);
+            var lineEnd = end < 0 ? text.Length : end + 1;
+            var contentEnd = end < 0 ? text.Length : end > position && text[end - 1] == '\r' ? end - 1 : end;
+            var cursor = position;
+            while (cursor < contentEnd && text[cursor] == ' ')
+                cursor++;
+            if (cursor >= contentEnd || text[cursor] == '#')
+            {
+                output.Append(text, position, lineEnd - position);
+                position = lineEnd;
+                continue;
+            }
+
+            var pathStart = cursor;
+            while (cursor < contentEnd && text[cursor] != ' ')
+                cursor++;
+            var pathLength = cursor - pathStart;
+            var path = text.Substring(pathStart, pathLength).Trim('/');
+            if (path.Length == 0 || path == root)
+            {
+                dropped++;
+                position = lineEnd;
+                continue;
+            }
+
+            if (path.StartsWith(root + "/", StringComparison.Ordinal))
+            {
+                output.Append(text, position, lineEnd - position);
+            }
+            else
+            {
+                output.Append(text, position, pathStart - position).Append(root).Append('/').Append(path)
+                    .Append(text, cursor, lineEnd - cursor);
+                prefixed++;
+            }
+
+            position = lineEnd;
+        }
+
+        var separator = output.Length > 0 && output[^1] != '\n' ? newline : "";
+        output.Append(separator).Append(root).Append(" 0 0 0755").Append(newline);
+        var result = output.ToString();
+        TextPatch.ValidateSize(result);
+        return new FsConfigRebaseResult(result, prefixed, dropped,
+            !string.Equals(text, result, StringComparison.Ordinal));
+    }
+
     /// <summary>
     /// Adds a missing metadata entry; equivalent existing ownership/permissions preserve opaque trailing data.
     /// <para>添加缺失的元数据条目；已存在的等价所有权/权限会保留不透明的尾部数据。</para>

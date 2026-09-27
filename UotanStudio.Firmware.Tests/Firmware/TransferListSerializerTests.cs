@@ -27,10 +27,24 @@ public class TransferListSerializerTests
     }
 
     [Fact]
-    public void Serialize_Move_MirrorsSourceHashIntoTarget()
+    public void Serialize_Move_EmitsSingleMirroredHash()
     {
         var list = TransferListParser.Parse(new StringReader($"3\n1\n0\n0\nmove {H} 2,2,3 1 2,0,1 2,0,1\n"));
-        Assert.Equal($"3\n1\n0\n0\nmove {H} {H} 2,2,3 1 2,0,1 2,0,1\n", TransferListSerializer.Serialize(list));
+        Assert.Equal($"3\n1\n0\n0\nmove {H} 2,2,3 1 2,0,1 2,0,1\n", TransferListSerializer.Serialize(list));
+    }
+
+    [Fact]
+    public void Serialize_MoveWithDistinctHashes_Throws()
+    {
+        var command = new TransferListCommand(TransferListCommandKind.Move, [new BlockRange(2, 3)], sourceRanges: [new BlockRange(0, 1)])
+        {
+            SourceBlockCount = 1,
+            SourceLocations = [new BlockRange(0, 1)],
+            SourceHash = H,
+            TargetHash = T,
+        };
+        var list = new TransferList(3, 1, 0, 0, [command]);
+        Assert.Throws<InvalidDataException>(() => TransferListSerializer.Serialize(list));
     }
 
     [Fact]
@@ -53,6 +67,8 @@ public class TransferListSerializerTests
     [InlineData("1\n1\nnew 4,0,1,2,3\n")]
     [InlineData("1\n1\nmove 2,0,1 2,1,2\n")]
     [InlineData("2\n1\n0\n0\nmove 2,2,3 1 2,0,1\n")]
+    [InlineData($"3\n1\n0\n0\nmove {H} 2,2,3 1 2,0,1 2,0,1\n")]
+    [InlineData($"4\n1\n0\n0\nmove {H} 2,2,3 1 2,0,1\n")]
     [InlineData("4\n2\n0\n0\nnew 4,0,1,2,3\n")]
     [InlineData("4\n2\n0\n0\nzero 2,1,2\n")]
     [InlineData($"4\n1\n1\n1\nstash {H} 2,0,1\n")]

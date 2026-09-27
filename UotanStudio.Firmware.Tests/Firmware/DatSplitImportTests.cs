@@ -46,7 +46,8 @@ public class DatSplitImportTests
         var imagePath = temp.WriteBytes("source.img", image);
         var dat = Path.Combine(temp.Path, "system.new.dat");
         var list = Path.Combine(temp.Path, "system.transfer.list");
-        DatWriter.Write(imagePath, dat, list, new DatWriteOptions { CompressWithBrotli = true });
+        DatWriter.Write(imagePath, dat, list, new DatWriteOptions { CompressWithBrotli = true },
+            cancellationToken: TestContext.Current.CancellationToken);
         var original = File.ReadAllBytes(dat + ".br");
         File.Delete(dat + ".br");
         temp.WriteBytes("system.new.dat.br.000", original[..(original.Length / 2)]);
@@ -72,7 +73,7 @@ public class DatSplitImportTests
         var source = temp.WriteBytes("source.img", image);
         var dat = Path.Combine(temp.Path, "system.new.dat");
         DatWriter.Write(source, dat, Path.Combine(temp.Path, "system.transfer.list"),
-            new DatWriteOptions { CompressWithBrotli = brotli });
+            new DatWriteOptions { CompressWithBrotli = brotli }, cancellationToken: TestContext.Current.CancellationToken);
         var original = File.ReadAllBytes(dat + (brotli ? ".br" : ""));
         File.Delete(dat + (brotli ? ".br" : ""));
         var prefix = brotli ? "system.new.dat.br." : "system.new.dat.";
@@ -96,7 +97,7 @@ public class DatSplitImportTests
         var source = temp.WriteBytes("source.img", image);
         var dat = Path.Combine(temp.Path, "system.new.dat");
         DatWriter.Write(source, dat, Path.Combine(temp.Path, "system.transfer.list"),
-            new DatWriteOptions { MaxCommandRangeBlocks = 1 });
+            new DatWriteOptions { MaxCommandRangeBlocks = 1 }, cancellationToken: TestContext.Current.CancellationToken);
         var original = File.ReadAllBytes(dat);
         File.Delete(dat);
         var first = temp.WriteBytes("system.new.dat.000", original[..(original.Length / 2)]);

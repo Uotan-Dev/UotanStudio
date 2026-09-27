@@ -111,7 +111,16 @@ public sealed class InstallOperation : IMessage<InstallOperation>
             /// Decompress the payload data with Zstandard, then write it to the destination extents.
             /// <para>先用 Zstandard 解压载荷数据，再写入目标范围。</para>
             /// </summary>
-            ReplaceZstd = 14
+            ReplaceZstd = 14,
+
+            /// <summary>
+            /// Apply an IMGDIFF2 container from the payload against source extents; unlike SOURCE_BSDIFF the data
+            /// blob is the VERSION2 chunk layout rather than a bare BSDIFF1 stream. Repository extension value;
+            /// the parallel extractor does not yet execute this type.
+            /// <para>针对源范围应用载荷中的 IMGDIFF2 容器；与 SOURCE_BSDIFF 不同，数据块是 VERSION2 块布局而非裸
+            /// BSDIFF1 流。仓库扩展值；并行提取器尚不执行该类型。</para>
+            /// </summary>
+            SourceImagediff = 15
         }
     }
 
@@ -167,6 +176,7 @@ public sealed class InstallOperation : IMessage<InstallOperation>
         DstLength = other.DstLength;
         _dataSha256Hash = other._dataSha256Hash;
         _srcSha256Hash = other._srcSha256Hash;
+        SourcePartitionName = other.SourcePartitionName;
         _unknownFields = UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -292,6 +302,21 @@ public sealed class InstallOperation : IMessage<InstallOperation>
         set => _srcSha256Hash = value ?? ByteString.Empty;
     }
 
+    /// <summary>Protobuf field number for the source partition name field. <para>源分区名字段的 protobuf 字段编号。</para></summary>
+    public const int SourcePartitionNameFieldNumber = 15;
+
+    /// <summary>
+    /// Partition whose blocks back this operation's source extents (field 15); an empty name means the
+    /// partition the update writes. Repository extension used by SOURCE_IMAGEDIFF operations.
+    /// <para>为本操作源范围提供块的分区名（字段 15）；空名表示本更新所写入的分区。SOURCE_IMAGEDIFF 操作使用的仓库扩展。</para>
+    /// </summary>
+    /// <value>
+    /// The partition name text; assigning <see langword="null"/> stores <see cref="string.Empty"/>, and an
+    /// empty name is omitted when serialized. <para>分区名文本；赋 <see langword="null"/> 存入 <see cref="string.Empty"/>，
+    /// 空名在序列化时省略。</para>
+    /// </value>
+    public string SourcePartitionName { get; set; } = string.Empty;
+
     /// <summary>
     /// Determines whether this operation equals another object by delegating to the typed comparison.
     /// <para>通过转向强类型比较，判定本操作是否与另一对象相等。</para>
@@ -318,7 +343,7 @@ public sealed class InstallOperation : IMessage<InstallOperation>
     /// extent, hash and unknown-field value matches.
     /// <para>当另一消息为同一实例，或所有标量、范围、哈希与未知字段值均匹配时返回 <see langword="true"/>。</para></returns>
     public bool Equals(InstallOperation? other)
-        => other is not null && (ReferenceEquals(other, this) || (Type == other.Type && DataOffset == other.DataOffset && DataLength == other.DataLength && SrcExtents.Equals(other.SrcExtents) && SrcLength == other.SrcLength && DstExtents.Equals(other.DstExtents) && DstLength == other.DstLength && DataSha256Hash == other.DataSha256Hash && SrcSha256Hash == other.SrcSha256Hash && Equals(_unknownFields, other._unknownFields)));
+        => other is not null && (ReferenceEquals(other, this) || (Type == other.Type && DataOffset == other.DataOffset && DataLength == other.DataLength && SrcExtents.Equals(other.SrcExtents) && SrcLength == other.SrcLength && DstExtents.Equals(other.DstExtents) && DstLength == other.DstLength && DataSha256Hash == other.DataSha256Hash && SrcSha256Hash == other.SrcSha256Hash && SourcePartitionName == other.SourcePartitionName && Equals(_unknownFields, other._unknownFields)));
 
     /// <summary>
     /// Computes the hash code of this operation.
@@ -375,6 +400,11 @@ public sealed class InstallOperation : IMessage<InstallOperation>
         if (_srcSha256Hash.Length != 0)
         {
             hash ^= SrcSha256Hash.GetHashCode();
+        }
+
+        if (SourcePartitionName.Length != 0)
+        {
+            hash ^= SourcePartitionName.GetHashCode();
         }
 
         if (_unknownFields != null)
@@ -450,6 +480,12 @@ public sealed class InstallOperation : IMessage<InstallOperation>
             output.WriteBytes(SrcSha256Hash);
         }
 
+        if (SourcePartitionName.Length != 0)
+        {
+            output.WriteRawTag(122);
+            output.WriteString(SourcePartitionName);
+        }
+
         _unknownFields?.WriteTo(output);
     }
 
@@ -498,6 +534,11 @@ public sealed class InstallOperation : IMessage<InstallOperation>
         if (_srcSha256Hash.Length != 0)
         {
             size += 1 + CodedOutputStream.ComputeBytesSize(SrcSha256Hash);
+        }
+
+        if (SourcePartitionName.Length != 0)
+        {
+            size += 1 + CodedOutputStream.ComputeStringSize(SourcePartitionName);
         }
 
         if (_unknownFields != null)
@@ -561,6 +602,11 @@ public sealed class InstallOperation : IMessage<InstallOperation>
             SrcSha256Hash = other._srcSha256Hash;
         }
 
+        if (other.SourcePartitionName.Length != 0)
+        {
+            SourcePartitionName = other.SourcePartitionName;
+        }
+
         _unknownFields = UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -610,6 +656,9 @@ public sealed class InstallOperation : IMessage<InstallOperation>
                     break;
                 case 74:
                     SrcSha256Hash = input.ReadBytes();
+                    break;
+                case 122:
+                    SourcePartitionName = input.ReadString();
                     break;
             }
         }

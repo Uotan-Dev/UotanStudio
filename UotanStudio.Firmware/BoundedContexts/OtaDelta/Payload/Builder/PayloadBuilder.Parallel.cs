@@ -82,13 +82,13 @@ public sealed partial class PayloadBuilder
             if (count == 0) break;
 
             if (count == 1)
-                slots[0].Compress(partition.CompressionType, cancellationToken);
+                slots[0].Compress(partition.CompressionType, partition.ZstdDictionary ?? Memory<byte>.Empty, cancellationToken);
             else
             {
                 try
                 {
                     Parallel.For(0, count, parallelOptions,
-                        i => slots[i].Compress(partition.CompressionType, cancellationToken));
+                        i => slots[i].Compress(partition.CompressionType, partition.ZstdDictionary ?? Memory<byte>.Empty, cancellationToken));
                 }
                 catch (AggregateException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -125,7 +125,7 @@ public sealed partial class PayloadBuilder
         internal ulong StartBlock;
         internal byte[] Hash = [];
 
-        internal void Compress(CompressionType compression, CancellationToken cancellationToken)
+        internal void Compress(CompressionType compression, ReadOnlyMemory<byte> dictionary, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             using var source = new MemoryStream(Input, 0, InputLength, writable: false);
@@ -138,6 +138,10 @@ public sealed partial class PayloadBuilder
                 {
                     var original = InputLength == Input.Length ? Input : Input.AsSpan(0, InputLength).ToArray();
                     bounded.Write(XzCompressor.Compress(original, dictionarySize: 1u << 20, maxDegreeOfParallelism: 1));
+                }
+                else if (compression == CompressionType.Zstd)
+                {
+                    CompressZstdChunk(source, bounded, dictionary, level: 3);
                 }
                 else
                 {

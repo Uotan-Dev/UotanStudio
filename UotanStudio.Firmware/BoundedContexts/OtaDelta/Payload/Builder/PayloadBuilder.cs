@@ -767,6 +767,10 @@ public sealed partial class PayloadBuilder : IDisposable
 
         /// <summary>When true the partition is emitted as SOURCE_COPY (unchanged blocks) + REPLACE (changed blocks).</summary>
         public bool Incremental { get; set; }
+
+        public bool Imagediff { get; set; }
+        public string? SourcePartitionName { get; set; }
+        public byte[]? ZstdDictionary { get; set; }
         public string? SourcePath { get; set; }
         public Stream? SourceStream { get; set; }
     }

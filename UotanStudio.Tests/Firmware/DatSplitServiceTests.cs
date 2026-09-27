@@ -24,7 +24,7 @@ public sealed class DatSplitServiceTests : IDisposable
         var image = await WriteAsync("source.img", original, token);
         var data = Path.Combine(_root, "system.new.dat");
         DatWriter.Write(image, data, Path.Combine(_root, "system.transfer.list"),
-            new DatWriteOptions { CompressWithBrotli = brotli });
+            new DatWriteOptions { CompressWithBrotli = brotli }, cancellationToken: TestContext.Current.CancellationToken);
         var generated = data + (brotli ? ".br" : "");
         var bytes = await File.ReadAllBytesAsync(generated, token);
         File.Delete(generated);

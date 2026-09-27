@@ -1,6 +1,7 @@
 using System.Formats.Tar;
 using System.Globalization;
 using System.IO.Compression;
+using UotanStudio.Firmware.BoundedContexts.Compression;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Models;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Reader;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.IO;
@@ -23,7 +24,7 @@ public enum DatSplitKind
     PatchDatBrotli,
     /// <summary>Independent TWRP TAR volumes. <para>各自完整的 TWRP TAR 卷。</para></summary>
     TwrpTar,
-    /// <summary>Numbered TWRP raw image pieces. <para>带编号的 TWRP 原始镜像片段。</para></summary>
+    /// <summary>Numbered TWRP image pieces, stored raw or per-volume gzip/LZ4-legacy/zstd streams. <para>带编号的 TWRP 镜像片段，原始存储或每卷独立的 gzip/LZ4 传统/zstd 流。</para></summary>
     TwrpImage
 }
 
@@ -184,13 +185,41 @@ public static class DatSplitImporter
     /// <param name="progress">Optional byte progress for raw/DAT joining. <para>原始镜像和 DAT 拼接时可选的字节进度。</para></param>
     /// <param name="cancellationToken">Cancels streaming before publication. <para>发布前取消流式处理。</para></param>
     /// <returns>The validated set and its dispatch kind. <para>已校验的集合及其分发类型。</para></returns>
-    public static async Task<DatSplitSet> ImportAsync(
+    public static Task<DatSplitSet> ImportAsync(
         string selectedPath,
         string outputPath,
         IProgress<(long Processed, long Total)>? progress = null,
         CancellationToken cancellationToken = default)
+        => ImportAsync(selectedPath, outputPath, progress, MaximumBytes, cancellationToken);
+
+    /// <summary>
+    /// Imports a numbered set with an explicit decoded-size cap for compressed TWRP image volumes.
+    /// <para>以显式解码大小上限导入编号集合，用于压缩的 TWRP 镜像卷。</para>
+    /// </summary>
+    /// <param name="selectedPath">Any member used to resolve siblings. <para>用于定位同组卷的任一成员。</para></param>
+    /// <param name="outputPath">Destination file; must differ from every input. <para>目标文件，不得与任何输入相同。</para></param>
+    /// <param name="progress">Optional byte progress for raw/DAT joining. <para>原始镜像和 DAT 拼接时可选的字节进度。</para></param>
+    /// <param name="maximumDecodedBytes">Cumulative cap over the bytes produced by decoding compressed image volumes; never unbounded. <para>压缩镜像卷解码产出字节的累计上限，绝不无界。</para></param>
+    /// <param name="cancellationToken">Cancels streaming before publication. <para>发布前取消流式处理。</para></param>
+    /// <returns>The validated set and its dispatch kind. <para>已校验的集合及其分发类型。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="maximumDecodedBytes"/> is below <c>1</c> or exceeds the import ceiling.
+    /// <para><paramref name="maximumDecodedBytes"/> 小于 <c>1</c> 或超过导入上限。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// A compressed TWRP volume carries a truncated codec header or the decoded stream exceeds the cap.
+    /// <para>压缩 TWRP 卷携带被截断的编解码器头部，或解码流超过上限。</para>
+    /// </exception>
+    internal static async Task<DatSplitSet> ImportAsync(
+        string selectedPath,
+        string outputPath,
+        IProgress<(long Processed, long Total)>? progress,
+        long maximumDecodedBytes,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maximumDecodedBytes, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(maximumDecodedBytes, MaximumBytes);
         cancellationToken.ThrowIfCancellationRequested();
         var set = Inspect(selectedPath);
         if (set.Kind is (DatSplitKind.NewDat or DatSplitKind.NewDatBrotli or DatSplitKind.PatchDat
@@ -220,7 +249,7 @@ public static class DatSplitImporter
                 }
                 else
                 {
-                    await CopyPartsAsync(set, output, progress, cancellationToken);
+                    await CopyPartsAsync(set, output, progress, maximumDecodedBytes, cancellationToken);
                 }
 
                 await output.FlushAsync(cancellationToken);
@@ -297,10 +326,12 @@ public static class DatSplitImporter
         DatSplitSet set,
         FileStream output,
         IProgress<(long Processed, long Total)>? progress,
+        long maximumDecodedBytes,
         CancellationToken token)
     {
         var buffer = new byte[BufferSize];
         long total = 0;
+        long decodedTotal = 0;
         foreach (var path in set.Parts)
         {
             await using var input = new FileStream(path, FileMode.Open, FileAccess.Read,
@@ -313,17 +344,27 @@ public static class DatSplitImporter
 
             if (set.Kind is DatSplitKind.TwrpImage)
             {
-                var signature = new byte[2];
-                if (length >= signature.Length)
+                var codec = DetectCompressedVolume(input);
+                if (codec is not null)
                 {
-                    await input.ReadExactlyAsync(signature, token);
-                    if (signature[0] == 0x1F && signature[1] == 0x8B)
+                    if (length < MinimumCodecHeaderBytes(codec.Value))
                     {
-                        throw new InvalidDataException("Compressed TWRP image volumes require a separate image decoder.");
+                        throw new InvalidDataException(
+                            $"Compressed TWRP image volume has a truncated codec header: {Path.GetFileName(path)}");
                     }
-                }
+                    if (decodedTotal >= maximumDecodedBytes)
+                    {
+                        throw new InvalidDataException("The decoded TWRP image budget is exhausted.");
+                    }
 
-                input.Position = 0;
+                    var before = output.Position;
+                    var budget = Math.Min(maximumDecodedBytes - decodedTotal, MaximumBytes);
+                    await Task.Run(() => CompressionService.Decompress(input, output, codec.Value, budget, token), token);
+                    decodedTotal = checked(decodedTotal + (output.Position - before));
+                    total += length;
+                    progress?.Report((total, set.TotalInputBytes));
+                    continue;
+                }
             }
 
             var remaining = length;
@@ -353,6 +394,42 @@ public static class DatSplitImporter
             throw new InvalidDataException("The split set changed during import.");
         }
     }
+
+    private static CompressionFormat? DetectCompressedVolume(Stream stream)
+    {
+        Span<byte> header = stackalloc byte[4];
+        var read = 0;
+        while (read < 4)
+        {
+            var count = stream.Read(header[read..]);
+            if (count == 0)
+            {
+                break;
+            }
+            read += count;
+        }
+        stream.Position = 0;
+        if (read >= 2 && header[0] == 0x1F && header[1] == 0x8B)
+        {
+            return CompressionFormat.Gzip;
+        }
+        if (read == 4 && header[0] == 0x02 && header[1] == 0x21 && header[2] == 0x4C && header[3] == 0x18)
+        {
+            return CompressionFormat.Lz4Legacy;
+        }
+        if (read == 4 && header[0] == 0x28 && header[1] == 0xB5 && header[2] == 0x2F && header[3] == 0xFD)
+        {
+            return CompressionFormat.Zstd;
+        }
+        return null;
+    }
+
+    private static int MinimumCodecHeaderBytes(CompressionFormat format) => format switch
+    {
+        CompressionFormat.Gzip => 10,
+        CompressionFormat.Lz4Legacy => 8,
+        _ => 5
+    };
 
     private static void ValidateJoinedNewData(DatSplitSet set, string path, CancellationToken token)
     {
@@ -458,10 +535,10 @@ public static class DatSplitImporter
         if (prefix.EndsWith(".emmc.win", StringComparison.OrdinalIgnoreCase))
         {
             using var raw = File.OpenRead(path);
-            Span<byte> header = stackalloc byte[2];
-            if (raw.Read(header) == 2 && header[0] == 0x1F && header[1] == 0x8B)
+            var codec = DetectCompressedVolume(raw);
+            if (codec is not null && raw.Length < MinimumCodecHeaderBytes(codec.Value))
             {
-                throw new InvalidDataException("Compressed TWRP image volumes require a separate image decoder.");
+                throw new InvalidDataException("Compressed TWRP image volume has a truncated codec header.");
             }
 
             return DatSplitKind.TwrpImage;

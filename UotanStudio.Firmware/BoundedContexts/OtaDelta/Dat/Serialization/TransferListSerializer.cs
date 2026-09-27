@@ -139,8 +139,14 @@ public static class TransferListSerializer
         if (version >= 3)
         {
             builder.Append(Hash(command.SourceHash)).Append(' ');
-            var targetHash = command.Kind == TransferListCommandKind.Move ? command.SourceHash : command.TargetHash;
-            builder.Append(Hash(targetHash)).Append(' ');
+            if (command.Kind != TransferListCommandKind.Move)
+            {
+                builder.Append(Hash(command.TargetHash)).Append(' ');
+            }
+            else if (command.TargetHash is not null && !string.Equals(command.SourceHash, command.TargetHash, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException("Move commands mirror the source hash; distinct hashes cannot be emitted.");
+            }
         }
 
         if (version == 1)
@@ -154,8 +160,11 @@ public static class TransferListSerializer
         else
         {
             builder.Append(Ranges(command.Ranges)).Append(' ').Append(Number(command.SourceBlockCount)).Append(' ');
-            builder.Append(command.SourceRanges.Count == 0 ? "-" : Ranges(command.SourceRanges)).Append(' ');
-            builder.Append(command.SourceLocations.Count == 0 ? "-" : Ranges(command.SourceLocations));
+            builder.Append(command.SourceRanges.Count == 0 ? "-" : Ranges(command.SourceRanges));
+            if (command.SourceLocations.Count > 0)
+            {
+                builder.Append(' ').Append(Ranges(command.SourceLocations));
+            }
         }
 
         foreach (var (id, locations) in command.StashReferences)

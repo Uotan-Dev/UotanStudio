@@ -240,8 +240,11 @@ public sealed partial class PayloadBuilder
                 if (++operationCount > maximumOperations)
                     throw new PayloadGenerationException("Payload exceeds the supported 65536 operations.");
                 update.Operations.Add(changed
-                    ? WriteIncrementalBestDelta(data, targetBuffer, start * blockBytes, runBytes, partition,
-                        startBlock, deltaSource, sourceIndex, sourceLength, sourceBuffer, cancellationToken)
+                    ? partition.Imagediff
+                        ? WriteIncrementalImagediff(data, targetBuffer, start * blockBytes, runBytes, partition,
+                            startBlock, deltaSource, sourceIndex, sourceLength, sourceBuffer, cancellationToken)
+                        : WriteIncrementalBestDelta(data, targetBuffer, start * blockBytes, runBytes, partition,
+                            startBlock, deltaSource, sourceIndex, sourceLength, sourceBuffer, cancellationToken)
                     : WriteIncrementalSourceCopy(targetBuffer, start * blockBytes, runBytes, runBlocks, startBlock, (ulong)matches[start]));
             }
 

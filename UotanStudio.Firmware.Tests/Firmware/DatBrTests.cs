@@ -55,7 +55,7 @@ public class DatBrTests
         var listPath = Path.Combine(temp.Path, "output.transfer.list");
 
         var progress = new SyncProgress<(long Processed, long Total)>();
-        DatWriter.Write(imagePath, datPath, listPath, new DatWriteOptions(), progress);
+        DatWriter.Write(imagePath, datPath, listPath, new DatWriteOptions(), progress, TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(progress.Reports);
         Assert.Equal(image.Length, progress.Reports[^1].Total);
@@ -73,7 +73,8 @@ public class DatBrTests
         var datPath = Path.Combine(temp.Path, "output.new.dat");
         var listPath = Path.Combine(temp.Path, "output.transfer.list");
 
-        DatWriter.Write(imagePath, datPath, listPath, new DatWriteOptions { MaxCommandRangeBlocks = 10 });
+        DatWriter.Write(imagePath, datPath, listPath, new DatWriteOptions { MaxCommandRangeBlocks = 10 },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var transferList = TransferListParser.Parse(listPath);
         var newCommands = transferList.Commands.Where(c => c.Kind == TransferListCommandKind.New).ToList();
@@ -98,7 +99,8 @@ public class DatBrTests
         var datPath = Path.Combine(temp.Path, "output.new.dat");
         var listPath = Path.Combine(temp.Path, "output.transfer.list");
 
-        DatWriter.Write(imagePath, datPath, listPath, new DatWriteOptions { CompressWithBrotli = true });
+        DatWriter.Write(imagePath, datPath, listPath, new DatWriteOptions { CompressWithBrotli = true },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var brPath = datPath + ".br";
         Assert.True(File.Exists(brPath));
