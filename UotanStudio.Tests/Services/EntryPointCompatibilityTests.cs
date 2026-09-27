@@ -70,7 +70,7 @@ public sealed class EntryPointCompatibilityTests
         {
             sparse.AddFillChunk(0x01010101, 4096);
             using var stream = File.Create(path);
-            sparse.WriteToStream(stream, sparse: true);
+            sparse.WriteToStream(stream, sparse: true, cancellationToken: TestContext.Current.CancellationToken);
         }
         var output = Path.Combine(temp.Path, "editor");
         var result = await UotanStudio.Services.Firmware.FirmwareService.Instance

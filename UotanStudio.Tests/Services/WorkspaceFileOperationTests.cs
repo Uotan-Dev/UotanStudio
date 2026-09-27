@@ -32,7 +32,7 @@ public class WorkspaceFileOperationTests
         {
             sparse.AddFillChunk(0x01010101, 4096);
             using var stream = File.Create(input);
-            sparse.WriteToStream(stream, sparse: true);
+            sparse.WriteToStream(stream, sparse: true, cancellationToken: TestContext.Current.CancellationToken);
         }
         var output = Path.Combine(temp.Path, "output");
         Assert.True(ImageOutputService.Build(new(input, false, temp.Path, output), "dat", 3).Success);

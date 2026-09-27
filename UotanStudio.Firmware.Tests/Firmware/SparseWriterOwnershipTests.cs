@@ -20,18 +20,18 @@ public sealed class SparseWriterOwnershipTests
             using Stream destination = fail ? new RejectDataStream() : new MemoryStream();
             if (fail)
             {
-                Assert.Throws<IOException>(() => SparseWriter.WriteToStream(sparse, destination));
+                Assert.Throws<IOException>(() => SparseWriter.WriteToStream(sparse, destination, cancellationToken: TestContext.Current.CancellationToken));
             }
             else
             {
-                SparseWriter.WriteToStream(sparse, destination);
+                SparseWriter.WriteToStream(sparse, destination, cancellationToken: TestContext.Current.CancellationToken);
             }
             using (var exclusive = new FileStream(input, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             {
                 Assert.Equal(4096, exclusive.Length);
             }
             using var retry = new MemoryStream();
-            SparseWriter.WriteToStream(sparse, retry);
+            SparseWriter.WriteToStream(sparse, retry, cancellationToken: TestContext.Current.CancellationToken);
             Assert.True(retry.Length > 4096);
         }
         finally

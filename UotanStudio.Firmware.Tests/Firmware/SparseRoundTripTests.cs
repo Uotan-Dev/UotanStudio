@@ -129,7 +129,7 @@ public class SparseRoundTripTests
         byte[] sparseBytes;
         using (var ms = new MemoryStream())
         {
-            sparse.WriteToStream(ms, sparse: true);
+            sparse.WriteToStream(ms, sparse: true, cancellationToken: TestContext.Current.CancellationToken);
             sparseBytes = ms.ToArray();
         }
 
@@ -167,7 +167,7 @@ public class SparseRoundTripTests
         byte[] sparseBytes;
         using (var ms = new MemoryStream())
         {
-            sparse.WriteToStream(ms, sparse: true, includeCrc: true);
+            sparse.WriteToStream(ms, sparse: true, includeCrc: true, cancellationToken: TestContext.Current.CancellationToken);
             sparseBytes = ms.ToArray();
         }
 
@@ -200,7 +200,7 @@ public class SparseRoundTripTests
         byte[] sparseBytes;
         using (var ms = new MemoryStream())
         {
-            sparse.WriteToStream(ms, sparse: true);
+            sparse.WriteToStream(ms, sparse: true, cancellationToken: TestContext.Current.CancellationToken);
             sparseBytes = ms.ToArray();
         }
 
@@ -225,7 +225,7 @@ public class SparseRoundTripTests
         {
             using (var fs = File.Create(tmp))
             {
-                sparse.WriteToStream(fs, sparse: true);
+                sparse.WriteToStream(fs, sparse: true, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using var loaded = SparseReader.FromImageFile(tmp);
@@ -270,7 +270,7 @@ public class SparseRoundTripTests
         {
             using (var fs = File.Create(tmp))
             {
-                sparse.WriteToStream(fs, sparse: true, includeCrc: true);
+                sparse.WriteToStream(fs, sparse: true, includeCrc: true, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             using var loaded = SparseReader.FromImageFile(tmp, validateCrc: true);
@@ -314,7 +314,7 @@ public class SparseRoundTripTests
         {
             using (var fs = File.Create(input))
             {
-                sparse.WriteToStream(fs, sparse: true);
+                sparse.WriteToStream(fs, sparse: true, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             SparseImageConverter.ResparseImage(input, Path.Combine(tmpDir, "part{0}.img"), BlockSize * 4);
@@ -355,7 +355,7 @@ public class SparseRoundTripTests
         {
             using (var fs = File.Create(input))
             {
-                sparse.WriteToStream(fs, sparse: true);
+                sparse.WriteToStream(fs, sparse: true, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             var maxFileSize = BlockSize * 4;
@@ -403,7 +403,7 @@ public class SparseRoundTripTests
         {
             using (var fs = File.Create(input))
             {
-                sparse.WriteToStream(fs, sparse: true);
+                sparse.WriteToStream(fs, sparse: true, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             SparseImageConverter.ResparseImage(input, Path.Combine(tmpDir, "part{0}.img"), BlockSize * 4);

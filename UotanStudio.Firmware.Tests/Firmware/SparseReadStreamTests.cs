@@ -140,7 +140,7 @@ public sealed class SparseReadStreamTests
         {
             using (var fs = File.Create(tmp))
             {
-                sparse.WriteToStream(fs, sparse: true);
+                sparse.WriteToStream(fs, sparse: true, cancellationToken: TestContext.Current.CancellationToken);
             }
 
             var peek = SparseReader.PeekLogicalRange(tmp, BlockSize, 8);
@@ -169,7 +169,7 @@ public sealed class SparseReadStreamTests
         byte[] sparseBytes;
         using (var ms = new MemoryStream())
         {
-            sparse.WriteToStream(ms, sparse: true);
+            sparse.WriteToStream(ms, sparse: true, cancellationToken: TestContext.Current.CancellationToken);
             sparseBytes = ms.ToArray();
         }
 

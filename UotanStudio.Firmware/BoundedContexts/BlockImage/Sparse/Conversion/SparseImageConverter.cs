@@ -174,8 +174,15 @@ public static class SparseImageConverter
     /// </param>
     /// <param name="blockSize">
     /// Logical block size used to classify zero, fill and raw runs; defaults to <c>4096</c> and must be
-    /// a positive multiple of <c>4</c>.
-    /// <para>用于判定零块、Fill 块与 Raw 块的逻辑块大小；默认为 <c>4096</c>，必须是 <c>4</c> 的正整数倍。</para>
+    /// a positive multiple of <c>4</c>. When <paramref name="options"/> is supplied, its validated
+    /// <see cref="SparseWriteOptions"/> geometry additionally caps RAW chunks, appends the CRC32 chunk
+    /// and pads the total block count; the classification block size stays <paramref name="blockSize"/>.
+    /// <para>用于判定零块、Fill 块与 Raw 块的逻辑块大小；默认为 <c>4096</c>，必须是 <c>4</c> 的正整数倍。
+    /// 提供 <paramref name="options"/> 时，其已校验的几何会额外限制 RAW 块、追加 CRC32 块并填充总块数；分类块大小仍为 <paramref name="blockSize"/>。</para>
+    /// </param>
+    /// <param name="options">
+    /// Optional write geometry; <see langword="null"/> reproduces the historical byte output.
+    /// <para>可选写出几何；<see langword="null"/> 复现历史字节输出。</para>
     /// </param>
     /// <example>
     /// <code>SparseImageConverter.ConvertRawToSparse("system.img", "system.sparse.img", blockSize: 4096);</code>
@@ -192,11 +199,13 @@ public static class SparseImageConverter
     /// Either path cannot be opened for the required access.
     /// <para>某个路径无法以所需访问方式打开。</para>
     /// </exception>
-    public static void ConvertRawToSparse(string inputFile, string outputFile, uint blockSize = 4096)
+    public static void ConvertRawToSparse(string inputFile, string outputFile, uint blockSize = 4096,
+        SparseWriteOptions? options = null)
     {
+        options?.Validate();
         using var inputStream = new FileStream(inputFile, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var outputStream = new FileStream(outputFile, FileMode.Create, FileAccess.Write, FileShare.None);
-        ConvertRawToSparse(inputStream, outputStream, blockSize, inputStream.Length);
+        ConvertRawToSparseCancellable(inputStream, outputStream, blockSize, inputStream.Length, CancellationToken.None, options);
     }
 
     /// <summary>
@@ -259,12 +268,80 @@ public static class SparseImageConverter
             static (input, output, size, length, token) => ConvertRawToSparseCancellable(input, output, size, length, token),
             cancellationToken);
 
+    /// <summary>
+    /// Converts a raw image with explicit <see cref="SparseWriteOptions"/> geometry and atomically
+    /// publishes the structurally validated result. The alignment check honours
+    /// <see cref="SparseWriteOptions.FileAlignment"/>, so a padded image is validated against the
+    /// aligned block count rather than the raw length alone.
+    /// <para>使用显式 <see cref="SparseWriteOptions"/> 几何转换原始镜像，并原子发布经过结构校验的结果。
+    /// 对齐检查遵循 <see cref="SparseWriteOptions.FileAlignment"/>，因此填充后的镜像按对齐后的块数校验，而非仅按原始长度。</para>
+    /// </summary>
+    /// <param name="inputFile">
+    /// Path of the raw image; its file size at the start of the call fixes the converted logical length.
+    /// <para>原始镜像路径；调用开始时的文件大小决定转换后的逻辑长度。</para>
+    /// </param>
+    /// <param name="outputFile">
+    /// Destination sparse path, replaced only after validation succeeds.
+    /// <para>目标稀疏路径；仅在校验成功后才被替换。</para>
+    /// </param>
+    /// <param name="blockSize">
+    /// Classification block size; must be a positive multiple of <c>4</c> and is not overridden by
+    /// <see cref="SparseWriteOptions.BlockSize"/>.
+    /// <para>分类块大小；必须是 <c>4</c> 的正整数倍，且不会被 <see cref="SparseWriteOptions.BlockSize"/> 覆盖。</para>
+    /// </param>
+    /// <param name="options">
+    /// Validated write geometry supplying the CRC chunk, RAW cap and alignment padding.
+    /// <para>已校验的写出几何，提供 CRC 块、RAW 上限与对齐填充。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Checked before the publication and between blocks; cancellation aborts publication.
+    /// <para>在发布之前以及各块之间检查；取消会中止发布。</para>
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="inputFile"/> or <paramref name="outputFile"/> is blank.
+    /// <para><paramref name="inputFile"/> 或 <paramref name="outputFile"/> 为空白。</para>
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="blockSize"/> is not a positive multiple of <c>4</c>, or the options are invalid.
+    /// <para><paramref name="blockSize"/> 不是 <c>4</c> 的正整数倍，或选项无效。</para>
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// The published sparse image does not match the expected padded length or carries trailing data.
+    /// <para>发布的稀疏镜像与预期的填充长度不符，或尾部存在多余数据。</para>
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para>
+    /// </exception>
+    /// <exception cref="IOException">
+    /// The input cannot be read or the publication cannot be written.
+    /// <para>无法读取输入或无法写入发布结果。</para>
+    /// </exception>
+    public static void ConvertRawToSparseAtomic(
+        string inputFile,
+        string outputFile,
+        uint blockSize,
+        SparseWriteOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        options.Validate();
+        ConvertRawToSparseAtomic(
+            inputFile,
+            outputFile,
+            blockSize,
+            (input, output, size, length, token) => ConvertRawToSparseCancellable(input, output, size, length, token, options),
+            cancellationToken,
+            options);
+    }
+
     internal static void ConvertRawToSparseAtomic(
         string inputFile,
         string outputFile,
         uint blockSize,
         Action<Stream, Stream, uint, long, CancellationToken> converter,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SparseWriteOptions? options = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputFile);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputFile);
@@ -278,7 +355,7 @@ public static class SparseImageConverter
             converter(input, output, blockSize, sourceLength, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             output.Flush(flushToDisk: true);
-            ValidateSparseOutput(output, sourceLength, blockSize);
+            ValidateSparseOutput(output, sourceLength, blockSize, options);
             cancellationToken.ThrowIfCancellationRequested();
         });
     }
@@ -308,6 +385,13 @@ public static class SparseImageConverter
     /// Explicit source length; when omitted uses <paramref name="input"/>.Length.
     /// <para>显式源长度；省略时使用 <paramref name="input"/> 的 Length。</para>
     /// </param>
+    /// <param name="options">
+    /// Optional write geometry; <see langword="null"/> reproduces the historical byte output. The
+    /// classification block size remains <paramref name="blockSize"/>; options add RAW chunk caps, the
+    /// trailing CRC32 chunk and total-block alignment padding.
+    /// <para>可选写出几何；<see langword="null"/> 复现历史字节输出。分类块大小仍为 <paramref name="blockSize"/>；
+    /// 选项额外提供 RAW 块上限、CRC32 尾块与总块数对齐填充。</para>
+    /// </param>
     /// <exception cref="ArgumentOutOfRangeException">
     /// Thrown when <paramref name="blockSize"/> is not a positive multiple of 4, which would make the
     /// bootloader misparse the sparse stream.
@@ -317,17 +401,20 @@ public static class SparseImageConverter
     /// <paramref name="input"/> holds fewer bytes than the length it is asked to convert.
     /// <para><paramref name="input"/> 实际字节数少于待转换的长度。</para>
     /// </exception>
-    public static void ConvertRawToSparse(Stream input, Stream output, uint blockSize = 4096, long? length = null)
-        => ConvertRawToSparseCancellable(input, output, blockSize, length, CancellationToken.None);
+    public static void ConvertRawToSparse(Stream input, Stream output, uint blockSize = 4096, long? length = null,
+        SparseWriteOptions? options = null)
+        => ConvertRawToSparseCancellable(input, output, blockSize, length, CancellationToken.None, options);
 
     private static void ConvertRawToSparseCancellable(
         Stream input,
         Stream output,
         uint blockSize,
         long? length,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SparseWriteOptions? options = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        options?.Validate();
         if (blockSize == 0 || blockSize % 4 != 0)
         {
             throw new ArgumentOutOfRangeException(nameof(blockSize),
@@ -344,7 +431,8 @@ public static class SparseImageConverter
             {
                 sparseFile.AddRawChunk(new StreamDataProvider(input, input.Position, totalLength), totalBlocks);
             }
-            sparseFile.WriteToStream(new CancellationWriteStream(output, cancellationToken), sparse: true);
+            sparseFile.WriteToStream(new CancellationWriteStream(output, cancellationToken), sparse: true,
+                includeCrc: options?.EmitCrc ?? false, options: options, cancellationToken: cancellationToken);
             return;
         }
 
@@ -421,7 +509,8 @@ public static class SparseImageConverter
             }
             Flush();
 
-            sparseFile.WriteToStream(new CancellationWriteStream(output, cancellationToken), sparse: true);
+            sparseFile.WriteToStream(new CancellationWriteStream(output, cancellationToken), sparse: true,
+                includeCrc: options?.EmitCrc ?? false, options: options, cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
         }
         finally
@@ -436,9 +525,10 @@ public static class SparseImageConverter
         uint blockSize,
         long length,
         CancellationToken cancellationToken,
-        Stream? validationOutput = null)
+        Stream? validationOutput = null,
+        SparseWriteOptions? options = null)
     {
-        ConvertRawToSparseCancellable(input, output, blockSize, length, cancellationToken);
+        ConvertRawToSparseCancellable(input, output, blockSize, length, cancellationToken, options);
         cancellationToken.ThrowIfCancellationRequested();
         output.Flush();
         var readableOutput = validationOutput ?? output;
@@ -450,11 +540,11 @@ public static class SparseImageConverter
         {
             readableOutput.Flush();
         }
-        ValidateSparseOutput(readableOutput, length, blockSize);
+        ValidateSparseOutput(readableOutput, length, blockSize, options);
         cancellationToken.ThrowIfCancellationRequested();
     }
 
-    private static void ValidateSparseOutput(Stream output, long sourceLength, uint blockSize)
+    private static void ValidateSparseOutput(Stream output, long sourceLength, uint blockSize, SparseWriteOptions? options)
     {
         if (!output.CanSeek || !output.CanRead)
         {
@@ -465,6 +555,11 @@ public static class SparseImageConverter
         output.Position = 0;
         using var sparse = SparseReader.FromStream(output);
         var expectedBlocks = checked((ulong)((sourceLength + blockSize - 1) / blockSize));
+        if (options is { FileAlignment: > 1 })
+        {
+            var alignment = options.FileAlignment;
+            expectedBlocks = (expectedBlocks + alignment - 1) / alignment * alignment;
+        }
         if (sparse.Header.BlockSize != blockSize || sparse.Header.TotalBlocks != expectedBlocks || output.Position != end)
         {
             throw new InvalidDataException("Converted sparse image does not match the raw image length or contains trailing data.");

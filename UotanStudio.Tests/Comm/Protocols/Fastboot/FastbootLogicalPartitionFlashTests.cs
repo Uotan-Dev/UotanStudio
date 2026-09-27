@@ -132,7 +132,7 @@ public class FastbootLogicalPartitionFlashTests
         {
             sparse.AddRawChunk(new byte[BlockSize]);
             using var fs = File.Create(imagePath);
-            sparse.WriteToStream(fs, sparse: true);
+            sparse.WriteToStream(fs, sparse: true, cancellationToken: TestContext.Current.CancellationToken);
         }
 
         var logicalSize = FlashService.GetImageLogicalSize(imagePath);

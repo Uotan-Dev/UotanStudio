@@ -22,16 +22,23 @@ public static class SparseWriter
     /// <para>调用方持有的可写目标；不刷新也不关闭。发出的头部会抬高声明的块数，块覆盖超出声明总块数时同样抬高总块数；超出基础大小的头部字节以零填充。</para></param>
     /// <param name="includeCrc">Appends a trailing CRC32 chunk covering the fully expanded image — RAW bytes, repeated fill patterns and all zero-filled regions included — and stores its little-endian value; the header's image checksum field is left untouched.
     /// <para>追加一个覆盖完整展开镜像的 CRC32 尾块——包含 RAW 字节、重复的填充模式与所有补零区域——并写入其小端值；头部的镜像校验和字段保持不变。</para></param>
+    /// <param name="options">Optional write geometry; <see langword="null"/> keeps the historical output. <see cref="SparseWriteOptions.MaxRawChunkBlocks"/> caps RAW chunk sizes beyond the automatic 32-bit fitting, <see cref="SparseWriteOptions.EmitCrc"/> is OR-combined with <paramref name="includeCrc"/>, and <see cref="SparseWriteOptions.FileAlignment"/> rounds the emitted total block count up with a trailing don't-care chunk.
+    /// <para>可选写出几何；<see langword="null"/> 保持历史输出。<see cref="SparseWriteOptions.MaxRawChunkBlocks"/> 在自动 32 位适配之外进一步限制 RAW 块大小，<see cref="SparseWriteOptions.EmitCrc"/> 与 <paramref name="includeCrc"/> 取或，<see cref="SparseWriteOptions.FileAlignment"/> 用尾块 don't-care 将输出的总块数向上取整。</para></param>
+    /// <param name="cancellationToken">Checked before the header and between chunk writes; cancellation leaves the destination stream partially written because this stream-level API has no atomic publication.
+    /// <para>在头部之前以及各数据块写入之间检查；取消会因该流级 API 无原子发布而在目标流留下部分写入。</para></param>
     /// <exception cref="InvalidDataException">The header's block size is zero or too large for a RAW chunk's total size to fit 32 bits.
     /// <para>头部块大小为 0，或过大导致 RAW 块总大小无法容纳于 32 位。</para></exception>
     /// <exception cref="OverflowException">A chunk end position or rewritten total size exceeds the 32-bit range.
     /// <para>某块的结束位置或重写后的总大小超过 32 位范围。</para></exception>
-    public static void WriteToStream(SparseFile sparseFile, Stream stream, bool includeCrc = false)
+    public static void WriteToStream(SparseFile sparseFile, Stream stream, bool includeCrc = false,
+        SparseWriteOptions? options = null, CancellationToken cancellationToken = default)
     {
+        options?.Validate();
+        var effectiveCrc = includeCrc || (options?.EmitCrc ?? false);
         var temporaryChunks = new List<SparseChunk>();
         try
         {
-            WriteToStreamCore(sparseFile, stream, includeCrc, temporaryChunks);
+            WriteToStreamCore(sparseFile, stream, effectiveCrc, temporaryChunks, options, cancellationToken);
         }
         finally
         {
@@ -42,14 +49,17 @@ public static class SparseWriter
         }
     }
 
-    private static void WriteToStreamCore(SparseFile sparseFile, Stream stream, bool includeCrc, List<SparseChunk> temporaryChunks)
+    private static void WriteToStreamCore(SparseFile sparseFile, Stream stream, bool includeCrc,
+        List<SparseChunk> temporaryChunks, SparseWriteOptions? options, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var chunks = sparseFile.Chunks;
         var finalChunks = new List<SparseChunk>(chunks.Count + 10);
         uint currentBlock = 0;
 
         foreach (var chunk in chunks)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (chunk.StartBlock > currentBlock)
             {
                 var gapBlocks = chunk.StartBlock - currentBlock;
@@ -63,7 +73,7 @@ public static class SparseWriter
             }
             if ((ChunkType)chunk.Header.ChunkType == ChunkType.Raw)
             {
-                AddSplitRawChunks(finalChunks, temporaryChunks, chunk, sparseFile.Header.BlockSize, sparseFile.Header.ChunkHeaderSize);
+                AddSplitRawChunks(finalChunks, temporaryChunks, chunk, sparseFile.Header.BlockSize, sparseFile.Header.ChunkHeaderSize, options?.MaxRawChunkBlocks);
             }
             else
             {
@@ -74,7 +84,13 @@ public static class SparseWriter
 
         var outHeader = sparseFile.Header;
         var sumBlocks = currentBlock;
-        var needsTrailingSkip = outHeader.TotalBlocks > sumBlocks;
+        var declaredBlocks = Math.Max(outHeader.TotalBlocks, sumBlocks);
+        if (options is { FileAlignment: > 1 })
+        {
+            var alignment = options.FileAlignment;
+            declaredBlocks = checked((uint)(((declaredBlocks + (ulong)alignment - 1) / alignment) * alignment));
+        }
+        var needsTrailingSkip = declaredBlocks > sumBlocks;
 
         var totalChunks = (uint)finalChunks.Count;
         if (needsTrailingSkip)
@@ -86,11 +102,7 @@ public static class SparseWriter
             totalChunks++;
         }
 
-        outHeader = outHeader with { TotalChunks = totalChunks };
-        if (sumBlocks > outHeader.TotalBlocks)
-        {
-            outHeader = outHeader with { TotalBlocks = sumBlocks };
-        }
+        outHeader = outHeader with { TotalChunks = totalChunks, TotalBlocks = declaredBlocks };
 
         var headerData = new byte[SparseFormat.SparseHeaderSize];
         outHeader.WriteTo(headerData);
@@ -108,6 +120,7 @@ public static class SparseWriter
 
         foreach (var chunk in finalChunks)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var expectedTotal = ChunkHelper.GetExpectedTotalSize(chunk.Header.ChunkType, chunk.Header.ChunkSize, outHeader.ChunkHeaderSize, outHeader.BlockSize);
             var headerToWrite = chunk.Header.TotalSize == expectedTotal
                 ? chunk.Header
@@ -160,6 +173,7 @@ public static class SparseWriter
                 case ChunkType.Raw:
                     break;
                 case ChunkType.DontCare:
+                    AppendZeros(crc, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
                     break;
                 case ChunkType.Crc32:
                     break;
@@ -201,11 +215,12 @@ public static class SparseWriter
         }
     }
 
-    private static void AddSplitRawChunks(List<SparseChunk> output, List<SparseChunk> temporaryChunks, SparseChunk chunk, uint blockSize, ushort headerSize)
+    private static void AddSplitRawChunks(List<SparseChunk> output, List<SparseChunk> temporaryChunks, SparseChunk chunk, uint blockSize, ushort headerSize, uint? maxBlocksOverride)
     {
         if (blockSize == 0) throw new InvalidDataException("Sparse block size must be non-zero.");
-        var maxBlocks = (uint)((uint.MaxValue - (ulong)headerSize) / blockSize);
-        if (maxBlocks == 0) throw new InvalidDataException("Sparse block size is too large for a RAW chunk.");
+        var fitCeiling = (uint)((uint.MaxValue - (ulong)headerSize) / blockSize);
+        if (fitCeiling == 0) throw new InvalidDataException("Sparse block size is too large for a RAW chunk.");
+        var maxBlocks = maxBlocksOverride is > 0 ? Math.Min(maxBlocksOverride.Value, fitCeiling) : fitCeiling;
 
         var remaining = (long)chunk.Header.ChunkSize;
         long blockOffset = 0;

@@ -194,11 +194,17 @@ public sealed class SparseFile : IDisposable
     /// <para>为 <see langword="true"/> 时经 <see cref="SparseWriter.WriteToStream"/> 输出稀疏容器；否则按刷写效果展开每个块。</para></param>
     /// <param name="includeCrc">Appends a CRC32 chunk when <paramref name="sparse"/> is <see langword="true"/>; ignored for raw output.
     /// <para>当 <paramref name="sparse"/> 为 <see langword="true"/> 时追加 CRC32 块；原始输出时忽略。</para></param>
-    public void WriteToStream(Stream stream, bool sparse = true, bool includeCrc = false)
+    /// <param name="options">Optional sparse write geometry passed through to <see cref="SparseWriter"/>; <see langword="null"/> and its defaults keep the historical byte output. Ignored for raw output.
+    /// <para>透传给 <see cref="SparseWriter"/> 的可选稀疏写出几何；<see langword="null"/> 及其默认值保持历史字节输出。原始输出时忽略。</para></param>
+    /// <param name="cancellationToken">Cancellation checked between sparse chunk writes; ignored for raw output.
+    /// <para>在稀疏块写入之间检查的取消令牌；原始输出时忽略。</para></param>
+    public void WriteToStream(Stream stream, bool sparse = true, bool includeCrc = false,
+        UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.SparseWriteOptions? options = null,
+        CancellationToken cancellationToken = default)
     {
         if (sparse)
         {
-            SparseWriter.WriteToStream(this, stream, includeCrc);
+            SparseWriter.WriteToStream(this, stream, includeCrc, options, cancellationToken);
         }
         else
         {

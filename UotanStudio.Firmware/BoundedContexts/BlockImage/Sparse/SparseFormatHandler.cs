@@ -249,28 +249,78 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler, IRepackMe
     {
         try
         {
-            if (Directory.Exists(inputPath) && UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
-                return Task.FromResult(SharedKernel.FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes."));
-            if (Directory.Exists(inputPath))
-            {
-
-
-                var rawFile = Directory.EnumerateFiles(inputPath)
-                    .FirstOrDefault(path => !UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.IsMetadataFile(path));
-                if (rawFile == null)
-                {
-                    return Task.FromResult(SharedKernel.FirmwareOpResult.Fail("Input directory is empty."));
-                }
-                SparseImageConverter.ConvertRawToSparse(rawFile, outputPath);
-                return Task.FromResult(SharedKernel.FirmwareOpResult.Ok($"Packed {rawFile} -> {outputPath}"));
-            }
-
-            SparseImageConverter.ConvertRawToSparse(inputPath, outputPath);
-            return Task.FromResult(SharedKernel.FirmwareOpResult.Ok($"Packed {inputPath} -> {outputPath}"));
+            return Task.FromResult(PackCore(inputPath, outputPath, options: null, cancellationToken));
         }
         catch (Exception ex)
         {
             return Task.FromResult(SharedKernel.FirmwareOpResult.Fail(ex.Message));
         }
+    }
+
+    /// <summary>
+    /// Packs the input into a sparse image with explicit write geometry, publishing atomically.
+    /// <para>使用显式写出几何把输入打包为稀疏镜像，并原子发布。</para>
+    /// </summary>
+    /// <param name="inputPath">
+    /// Raw file, or an unpacked directory whose preserved-attribute metadata is restored first; otherwise its first non-metadata file is converted.
+    /// <para>raw 文件，或先恢复其保留属性元数据的已解包目录；否则转换目录中第一个非元数据文件。</para></param>
+    /// <param name="outputPath">
+    /// Destination sparse path, written to a temporary publication file first and replaced only after structural validation.
+    /// <para>目标稀疏路径；先写入临时发布文件，仅结构校验通过后替换。</para></param>
+    /// <param name="options">
+    /// Validated write geometry: classification block size, optional RAW chunk cap, trailing CRC32 chunk and total-block alignment padding.
+    /// <para>已校验的写出几何：分类块大小、可选 RAW 块上限、CRC32 尾块与总块数对齐填充。</para></param>
+    /// <param name="cancellationToken">
+    /// Observed while restoring preserved-attribute metadata and during the atomic conversion.
+    /// <para>在恢复保留属性元数据以及原子转换期间被观察。</para></param>
+    /// <returns>
+    /// Success result naming the produced file, or a failure result for an empty input directory or a conversion error.
+    /// <para>指明生成文件的成功结果；空输入目录或转换错误返回失败结果。</para></returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="options"/> is <see langword="null"/>.
+    /// <para><paramref name="options"/> 为 <see langword="null"/>。</para>
+    /// </exception>
+    public Task<SharedKernel.FirmwareOpResult> PackAsync(string inputPath, string outputPath,
+        SparseWriteOptions options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        options.Validate();
+        try
+        {
+            return Task.FromResult(PackCore(inputPath, outputPath, options, cancellationToken));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(SharedKernel.FirmwareOpResult.Fail(ex.Message));
+        }
+    }
+
+    private SharedKernel.FirmwareOpResult PackCore(string inputPath, string outputPath,
+        SparseWriteOptions? options, CancellationToken cancellationToken)
+    {
+        if (Directory.Exists(inputPath) && UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
+        {
+            return SharedKernel.FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes.");
+        }
+        var rawFile = inputPath;
+        if (Directory.Exists(inputPath))
+        {
+            rawFile = Directory.EnumerateFiles(inputPath)
+                .FirstOrDefault(path => !UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.IsMetadataFile(path));
+            if (rawFile == null)
+            {
+                return SharedKernel.FirmwareOpResult.Fail("Input directory is empty.");
+            }
+        }
+
+        if (options is null)
+        {
+            SparseImageConverter.ConvertRawToSparse(rawFile, outputPath);
+        }
+        else
+        {
+            SparseImageConverter.ConvertRawToSparseAtomic(rawFile, outputPath, options.BlockSize, options, cancellationToken);
+        }
+        return SharedKernel.FirmwareOpResult.Ok($"Packed {rawFile} -> {outputPath}");
     }
 }
