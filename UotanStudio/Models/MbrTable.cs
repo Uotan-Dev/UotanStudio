@@ -208,6 +208,26 @@ public static class MbrTable
             throw new ArgumentException($"MBR partition count {entries.Count} is too large. MBR 分区数量过多。", nameof(entries));
         }
 
+        // MBR 的起始 LBA 与大小是两个独立的 32 位字段，超出即需要 GPT。保护性 0xEE 条目把大小写成
+        // 整盘扇区数（可达 0xFFFFFFFF），因此不能按 start+size 的上限来判定。
+        // MBR start LBA and size are separate 32-bit fields; beyond them the disk needs GPT. A protective
+        // 0xEE entry carries the whole-disk sector count as its size (up to 0xFFFFFFFF), so the fields are
+        // bounded individually rather than by their sum.
+        foreach (var entry in entries)
+        {
+            if (entry.SizeSectors == 0)
+            {
+                throw new ArgumentException($"MBR partition '{entry.Name}' has zero size. MBR 分区大小不能为零。", nameof(entries));
+            }
+
+            if (entry.StartSector > uint.MaxValue || entry.SizeSectors > uint.MaxValue)
+            {
+                throw new ArgumentException(
+                    $"MBR partition '{entry.Name}' uses {entry.StartSector}+{entry.SizeSectors} sectors, beyond the 32-bit LBA limit. 分区超出 MBR 32 位 LBA 上限，请改用 GPT。",
+                    nameof(entries));
+            }
+        }
+
         var bootable = bootableFlags ?? [];
         bool IsBootable(int index) => index < bootable.Count && bootable[index];
 
@@ -226,6 +246,12 @@ public static class MbrTable
             extendedStart = checked(entries[primaryCount].StartSector - 1);
             var lastLogical = entries[^1];
             extendedEnd = checked(lastLogical.StartSector + lastLogical.SizeSectors - 1);
+            if (extendedEnd > uint.MaxValue)
+            {
+                throw new ArgumentException(
+                    $"The extended partition ends at sector {extendedEnd}, beyond the 32-bit LBA limit. 扩展分区超出 MBR 32 位 LBA 上限，请改用 GPT。",
+                    nameof(entries));
+            }
             for (var i = 0; i < logicalCount; i++)
             {
                 var entry = entries[primaryCount + i];
@@ -246,22 +272,17 @@ public static class MbrTable
             }
         }
 
-        // 计算镜像扇区数：主分区或扩展区末尾 + 名称表保留扇区。
-        // Compute the image sector count: the primary/extended region end plus a spare sector.
-        ulong endLba = 0;
-        foreach (var entry in entries)
-        {
-            endLba = Math.Max(endLba, checked(entry.StartSector + entry.SizeSectors));
-        }
-
-        if (logicalCount > 0)
-        {
-            endLba = Math.Max(endLba, extendedEnd + 1);
-        }
-
+        // 镜像只承载表结构：扇区 0 的 MBR 与每个逻辑分区之前的 EBR。分区数据范围不参与镜像大小，
+        // 否则覆盖整盘的保护性 0xEE 条目会把镜像推到磁盘容量。
+        // The image carries only table structures: the MBR sector and the EBR in front of each logical
+        // partition. Partition data extents must not size the image, or a protective 0xEE entry spanning
+        // the whole disk would inflate it to the disk capacity.
+        var endLba = logicalCount > 0 ? entries[^1].StartSector : 1UL;
         if (endLba > MaxImageSectors)
         {
-            throw new ArgumentException($"MBR image would exceed {MaxImageSectors} sectors. MBR 镜像过大。", nameof(entries));
+            throw new ArgumentException(
+                $"The MBR EBR chain would need {endLba} sectors, above the {MaxImageSectors} limit. 逻辑分区 EBR 链超出镜像上限。",
+                nameof(entries));
         }
 
         var image = new byte[checked((long)endLba * SectorSize)];

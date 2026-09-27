@@ -118,6 +118,15 @@ public static class GptTable
     /// <summary>分区表项数量上限（解析时校验）。 Maximum partition-entry count (parse bound).</summary>
     public const int MaxEntryCount = 1024;
 
+    /// <summary>
+    /// <para>在头部附近搜索条目数组的最大字节距离。标准磁盘上数组紧随头部或由头部声明的 LBA
+    /// 给出；EDL 合并 GPT 镜像把头部与数组聚在头部附近的少量扇区内。</para>
+    /// Maximum byte distance searched for a header's entry array. On a standard disk the array follows the
+    /// header or is given by its declared LBA; EDL combined GPT images keep their headers and arrays
+    /// clustered close to each other.
+    /// </summary>
+    private const long MaxMetadataDistance = 1024 * 1024;
+
     /// <summary>GPT 头签名（"EFI PART"）。 GPT header signature ("EFI PART").</summary>
     public static readonly byte[] Signature = "EFI PART"u8.ToArray();
 
@@ -146,12 +155,39 @@ public static class GptTable
     }
 
     /// <summary>
-    /// <para>检查给定字节是否携带 GPT 签名（"EFI PART" @512）。</para>
-    /// Checks whether the given bytes carry the GPT signature ("EFI PART" @512).
+    /// <para>检查给定字节是否在扇区对齐偏移上携带 GPT 签名（<c>EFI PART</c>）。</para>
+    /// Checks whether the given bytes carry the GPT signature (<c>EFI PART</c>) at a sector-aligned offset.
     /// </summary>
-    public static bool HasSignature(ReadOnlySpan<byte> data) =>
-        data.Length >= HeaderOffset + Signature.Length &&
-        data.Slice(HeaderOffset, Signature.Length).SequenceEqual(Signature);
+    public static bool HasSignature(ReadOnlySpan<byte> data) => FindHeaderOffset(data) >= 0;
+
+    /// <summary>
+    /// <para>返回首个扇区对齐的 <c>EFI PART</c> 签名偏移，未找到时返回 <c>-1</c>。EDL 合并 GPT 镜像
+    /// （<c>gpt_both*.bin</c>）把头部放在非 LBA 1 的位置，因此不能只检查偏移 512。</para>
+    /// Returns the first sector-aligned <c>EFI PART</c> signature offset, or <c>-1</c> when there is none.
+    /// EDL combined GPT images (<c>gpt_both*.bin</c>) keep their headers away from LBA 1, so offset 512
+    /// alone is not a sufficient probe.
+    /// </summary>
+    public static long FindHeaderOffset(ReadOnlySpan<byte> data)
+    {
+        for (var search = 0; search < data.Length;)
+        {
+            var relative = data[search..].IndexOf(Signature);
+            if (relative < 0)
+            {
+                break;
+            }
+
+            var offset = search + relative;
+            if (offset % SectorSize == 0)
+            {
+                return offset;
+            }
+
+            search = offset + 1;
+        }
+
+        return -1;
+    }
 
     /// <summary>
     /// <para>由归一化条目构建 GPT 镜像（唯一 GUID 自动生成，类型 GUID 无法解析时用 Linux 默认值）。</para>
@@ -245,14 +281,7 @@ public static class GptTable
         var entriesSpan = image.AsSpan((int)checked(EntriesStartLba * SectorSize), entryBytes);
         for (var i = 0; i < entries.Count; i++)
         {
-            var entry = entries[i];
-            var slot = entriesSpan.Slice(i * EntrySize, EntrySize);
-            WriteGuidBigEndian(slot, entry.TypeGuid);
-            WriteGuidBigEndian(slot[16..], entry.UniqueGuid);
-            BinaryPrimitives.WriteUInt64LittleEndian(slot[32..], entry.FirstLba);
-            BinaryPrimitives.WriteUInt64LittleEndian(slot[40..], entry.LastLba);
-            BinaryPrimitives.WriteUInt64LittleEndian(slot[48..], entry.Attributes);
-            WriteName(slot[56..], entry.Name);
+            WriteEntry(entriesSpan.Slice(i * EntrySize, EntrySize), entries[i]);
         }
 
         // 回填 CRC：先分区表项数组，再头（头 CRC 覆盖分区表 CRC 字段）。
@@ -263,100 +292,277 @@ public static class GptTable
     }
 
     /// <summary>
-    /// <para>解析 GPT 镜像：校验签名、头大小、条目范围与 CRC-32，返回分区表信息。</para>
-    /// Parses a GPT image: validates the signature, header size, entry ranges and CRC-32 values,
-    /// returning the partition-table information.
+    /// <para>解析 GPT 镜像：定位每个扇区对齐的头部，校验头 CRC，并按声明的条目 LBA 或 CRC 搜索定位
+    /// 条目数组；以首个有效副本作为分区表来源。</para>
+    /// Parses a GPT image: locates every sector-aligned header, validates the header CRC, resolves each
+    /// entry array from its declared LBA or a bounded CRC search, and takes the first valid copy as the
+    /// partition-table source.
     /// </summary>
     public static GptTableInfo Parse(byte[] image)
     {
         ArgumentNullException.ThrowIfNull(image);
-        if (image.Length < HeaderOffset + HeaderSize)
+        if (!TryDetect(image, out _, out var entries, out var diskSizeBytes, out var diskGuid))
         {
-            throw new ArgumentException("Image too small for a GPT header. 镜像太小，不包含 GPT 头。", nameof(image));
+            throw new ArgumentException(
+                "No GPT header with a CRC-verified entry array was found. 未找到 CRC 校验通过的 GPT 头与条目数组。",
+                nameof(image));
         }
 
-        if (!HasSignature(image))
+        return new GptTableInfo { DiskSizeBytes = diskSizeBytes, DiskGuid = diskGuid, Entries = entries };
+    }
+
+    /// <summary>
+    /// <para>原位回写分区表项：把条目按顺序紧凑写入镜像中每个已定位的条目数组，保留文件长度、未建模
+    /// 区域与头部几何字段，只更新条目数量与两处 CRC-32。槽位不足时抛出异常，不会改写相邻结构。</para>
+    /// Writes partition entries back in place: the entries are stored compactly in every located entry
+    /// array while the file length, the unmodelled regions and the header geometry fields are preserved;
+    /// only the entry count and the two CRC-32 values change. A full array throws instead of overwriting
+    /// a neighbouring structure.
+    /// </summary>
+    public static byte[] Patch(byte[] image, IReadOnlyList<GptEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        ArgumentNullException.ThrowIfNull(entries);
+        if (!TryDetect(image, out var copies, out _, out _, out _))
         {
-            throw new ArgumentException("Missing GPT signature (\"EFI PART\"). 缺少 GPT 签名。", nameof(image));
+            throw new ArgumentException(
+                "No GPT header with a CRC-verified entry array was found. 未找到 CRC 校验通过的 GPT 头与条目数组。",
+                nameof(image));
         }
 
-        var header = image.AsSpan(HeaderOffset, HeaderSize);
+        if (entries.Count == 0)
+        {
+            throw new ArgumentException("GPT requires at least one partition. GPT 至少需要一个分区。", nameof(entries));
+        }
+
+        // 沿用原声明的槽位数，未使用的槽位继续按原布局置零；只有条目多于声明时才扩展数组。
+        // Keep the declared slot count so unused slots stay zero-padded as before; the array only grows
+        // when more entries are supplied than were declared.
+        var slotCount = Math.Max(copies.Max(copy => (int)copy.EntryCount), entries.Count);
+        if (slotCount > MaxEntryCount)
+        {
+            throw new ArgumentException($"GPT partition count {slotCount} exceeds {MaxEntryCount}. 分区数量超限。", nameof(entries));
+        }
+
+        var arrayBytes = slotCount * EntrySize;
+        foreach (var copy in copies)
+        {
+            if (arrayBytes > FreeBytesAfter(image, copies, copy))
+            {
+                throw new ArgumentException(
+                    $"The GPT entry array at offset {copy.EntriesOffset} cannot hold {slotCount} slots. 分区表槽位已满，无法写入更多分区。",
+                    nameof(entries));
+            }
+        }
+
+        var result = (byte[])image.Clone();
+        foreach (var copy in copies)
+        {
+            var array = result.AsSpan((int)copy.EntriesOffset, arrayBytes);
+            array.Clear();
+            for (var i = 0; i < entries.Count; i++)
+            {
+                WriteEntry(array.Slice(i * EntrySize, EntrySize), entries[i]);
+            }
+
+            // 头 CRC 覆盖 header_size 字节，且计算时其自身的 CRC 字段必须为 0。
+            // The header CRC covers header_size bytes with its own CRC field zeroed.
+            var header = result.AsSpan((int)copy.HeaderOffset, copy.HeaderSize);
+            BinaryPrimitives.WriteUInt32LittleEndian(header[EntriesCrcOffset..], Crc32(array));
+            BinaryPrimitives.WriteUInt32LittleEndian(header[80..], (uint)slotCount);
+            BinaryPrimitives.WriteUInt32LittleEndian(header[HeaderCrcOffset..], 0);
+            BinaryPrimitives.WriteUInt32LittleEndian(header[HeaderCrcOffset..], Crc32(header));
+        }
+
+        return result;
+    }
+
+    private static bool TryDetect(byte[] image, out List<GptCopy> copies, out List<GptEntry> entries, out ulong diskSizeBytes, out Guid diskGuid)
+    {
+        copies = [];
+        entries = [];
+        diskSizeBytes = 0;
+        diskGuid = Guid.Empty;
+
+        for (var headerOffset = 0L; headerOffset + HeaderSize <= image.Length; headerOffset += SectorSize)
+        {
+            if (!image.AsSpan((int)headerOffset, Signature.Length).SequenceEqual(Signature)
+                || !TryReadCopy(image, headerOffset, out var copy))
+            {
+                continue;
+            }
+
+            copies.Add(copy);
+            if (copies.Count > 1)
+            {
+                continue;
+            }
+
+            // 首个有效副本决定分区表内容与磁盘几何。
+            // The first valid copy supplies the table contents and the disk geometry.
+            var header = image.AsSpan((int)copy.HeaderOffset, HeaderSize);
+            entries = ReadEntries(image.AsSpan((int)copy.EntriesOffset, (int)copy.EntryCount * EntrySize), copy.EntryCount);
+            diskGuid = ReadGuidBigEndian(header[56..]);
+            diskSizeBytes = checked((BinaryPrimitives.ReadUInt64LittleEndian(header[32..]) + 1) * SectorSize);
+        }
+
+        return copies.Count > 0;
+    }
+
+    private static bool TryReadCopy(byte[] image, long headerOffset, out GptCopy copy)
+    {
+        copy = default;
+        var header = image.AsSpan((int)headerOffset, HeaderSize);
         var headerSize = BinaryPrimitives.ReadUInt32LittleEndian(header[12..]);
-        if (headerSize < HeaderSize)
-        {
-            throw new ArgumentException($"Invalid GPT header size {headerSize}. GPT 头大小无效。");
-        }
-
-        var entryCount = BinaryPrimitives.ReadUInt32LittleEndian(header[80..]);
         var entrySize = BinaryPrimitives.ReadUInt32LittleEndian(header[84..]);
-        if (entrySize != EntrySize)
+        var entryCount = BinaryPrimitives.ReadUInt32LittleEndian(header[80..]);
+        if (headerSize is < HeaderSize or > SectorSize || entrySize != EntrySize
+            || entryCount is 0 or > MaxEntryCount || !HeaderChecksumValid(image, headerOffset, (int)headerSize))
         {
-            throw new ArgumentException($"Unsupported GPT entry size {entrySize}. GPT 分区表项大小不受支持。");
+            return false;
         }
 
-        if (entryCount == 0 || entryCount > MaxEntryCount)
+        var arrayBytes = (int)(entryCount * entrySize);
+        var declared = SectorOffset(BinaryPrimitives.ReadUInt64LittleEndian(header[72..]));
+        var entriesOffset = FindEntryArray(image, headerOffset, declared, arrayBytes,
+            BinaryPrimitives.ReadUInt32LittleEndian(header[EntriesCrcOffset..]));
+        if (entriesOffset < 0)
         {
-            throw new ArgumentException($"Invalid GPT entry count {entryCount}. GPT 分区表项数量无效。");
+            return false;
         }
 
-        var entriesStartLba = BinaryPrimitives.ReadUInt64LittleEndian(header[72..]);
-        var entriesStart = checked(entriesStartLba * SectorSize);
-        var entryBytes = checked(entryCount * EntrySize);
-        if (entriesStart > (ulong)image.Length || entryBytes > (ulong)image.Length - entriesStart)
+        copy = new GptCopy(headerOffset, (int)headerSize, entriesOffset, entryCount);
+        return true;
+    }
+
+    private static bool HeaderChecksumValid(byte[] image, long headerOffset, int headerSize)
+    {
+        var header = image.AsSpan((int)headerOffset, headerSize);
+        var stored = BinaryPrimitives.ReadUInt32LittleEndian(header[HeaderCrcOffset..]);
+        Span<byte> scratch = stackalloc byte[SectorSize];
+        header.CopyTo(scratch);
+        BinaryPrimitives.WriteUInt32LittleEndian(scratch[HeaderCrcOffset..], 0);
+        return stored == Crc32(scratch[..headerSize]);
+    }
+
+    /// <summary>
+    /// <para>定位条目数组：先按头声明的 LBA 校验 CRC，失败后在头部附近的有界窗口内按扇区对齐搜索，
+    /// 取距离该头部最近的匹配。EDL 合并 GPT 镜像里声明 LBA 是打包时的占位值，且主备数组内容相同，
+    /// 只有 CRC 加最近距离才能把每个头部配到自己的数组。</para>
+    /// Locates the entry array: the declared LBA is verified first, then a bounded sector-aligned window
+    /// around the header is searched and the closest match wins. In EDL combined GPT images the declared
+    /// LBA is a packaging placeholder and both copies hold identical arrays, so only the CRC plus the
+    /// shortest distance pairs each header with its own array.
+    /// </summary>
+    private static long FindEntryArray(byte[] image, long headerOffset, long declared, int arrayBytes, uint expectedCrc)
+    {
+        if (arrayBytes > image.Length)
         {
-            throw new ArgumentException("GPT partition entries exceed the image size. GPT 分区表项超出镜像大小。");
+            return -1;
         }
 
-        // 校验分区表项数组 CRC 与头 CRC（头 CRC 计算时 CRC 字段置 0）。
-        // Verify the entry-array CRC and the header CRC (the header CRC field is zeroed when recomputing).
-        var entriesSpan = image.AsSpan((int)entriesStart, (int)entryBytes);
-        var storedEntriesCrc = BinaryPrimitives.ReadUInt32LittleEndian(header[EntriesCrcOffset..]);
-        if (storedEntriesCrc != Crc32(entriesSpan))
+        if (ChecksumMatches(image, declared, arrayBytes, expectedCrc))
         {
-            throw new ArgumentException("GPT partition-entry CRC mismatch. GPT 分区表项 CRC 校验失败。");
+            return declared;
         }
 
-        Span<byte> headerCopy = stackalloc byte[HeaderSize];
-        header.CopyTo(headerCopy);
-        BinaryPrimitives.WriteUInt32LittleEndian(headerCopy[HeaderCrcOffset..], 0);
-        var storedHeaderCrc = BinaryPrimitives.ReadUInt32LittleEndian(header[HeaderCrcOffset..]);
-        if (storedHeaderCrc != Crc32(headerCopy))
+        var low = Math.Max(0, headerOffset - MaxMetadataDistance) & ~(SectorSize - 1);
+        var high = Math.Min(image.Length - arrayBytes, headerOffset + MaxMetadataDistance);
+        var best = -1L;
+        var bestDistance = long.MaxValue;
+        for (var offset = low; offset <= high; offset += SectorSize)
         {
-            throw new ArgumentException("GPT header CRC mismatch. GPT 头 CRC 校验失败。");
+            if (offset == declared || Math.Abs(offset - headerOffset) >= bestDistance)
+            {
+                continue;
+            }
+
+            if (ChecksumMatches(image, offset, arrayBytes, expectedCrc))
+            {
+                best = offset;
+                bestDistance = Math.Abs(offset - headerOffset);
+            }
         }
 
-        var diskGuid = ReadGuidBigEndian(header[56..]);
-        var backupLba = BinaryPrimitives.ReadUInt64LittleEndian(header[32..]);
+        return best;
+    }
 
+    private static bool ChecksumMatches(byte[] image, long offset, int arrayBytes, uint expectedCrc) =>
+        offset >= 0 && offset + arrayBytes <= image.Length
+        && Crc32(image.AsSpan((int)offset, arrayBytes)) == expectedCrc;
+
+    private static long FreeBytesAfter(byte[] image, IReadOnlyList<GptCopy> copies, GptCopy copy)
+    {
+        var boundary = (long)image.Length;
+        foreach (var other in copies)
+        {
+            if (other.EntriesOffset > copy.EntriesOffset)
+            {
+                boundary = Math.Min(boundary, other.EntriesOffset);
+            }
+
+            if (other.HeaderOffset > copy.EntriesOffset)
+            {
+                boundary = Math.Min(boundary, other.HeaderOffset);
+            }
+        }
+
+        return boundary - copy.EntriesOffset;
+    }
+
+    private static List<GptEntry> ReadEntries(ReadOnlySpan<byte> array, uint entryCount)
+    {
         var list = new List<GptEntry>((int)entryCount);
         for (var i = 0; i < entryCount; i++)
         {
-            var slot = entriesSpan.Slice(i * EntrySize, EntrySize);
+            var slot = array.Slice(i * EntrySize, EntrySize);
+            var typeGuid = ReadGuidBigEndian(slot);
             var first = BinaryPrimitives.ReadUInt64LittleEndian(slot[32..]);
             var last = BinaryPrimitives.ReadUInt64LittleEndian(slot[40..]);
-            if (last < first)
+            var name = ReadName(slot[56..]);
+
+            // 末 LBA 小于首 LBA 的条目是零大小分区（常见于 userdata），必须保留，
+            // 否则回写时该条目会消失；空槽位则由全零类型 GUID 与全零几何标记。
+            // An entry whose last LBA is below its first LBA is a zero-size partition (commonly userdata)
+            // and must be kept or it would vanish on write-back; unused slots carry a zero type GUID and
+            // zero geometry.
+            if (typeGuid == Guid.Empty && name.Length == 0 && first == 0 && last == 0)
             {
                 continue;
             }
 
             list.Add(new GptEntry
             {
-                TypeGuid = ReadGuidBigEndian(slot),
+                TypeGuid = typeGuid,
                 UniqueGuid = ReadGuidBigEndian(slot[16..]),
                 FirstLba = first,
                 LastLba = last,
                 Attributes = BinaryPrimitives.ReadUInt64LittleEndian(slot[48..]),
-                Name = ReadName(slot[56..])
+                Name = name
             });
         }
 
-        return new GptTableInfo
-        {
-            DiskSizeBytes = checked((backupLba + 1) * SectorSize),
-            DiskGuid = diskGuid,
-            Entries = list
-        };
+        return list;
     }
+
+    private static void WriteEntry(Span<byte> slot, GptEntry entry)
+    {
+        WriteGuidBigEndian(slot, entry.TypeGuid);
+        WriteGuidBigEndian(slot[16..], entry.UniqueGuid);
+        BinaryPrimitives.WriteUInt64LittleEndian(slot[32..], entry.FirstLba);
+        BinaryPrimitives.WriteUInt64LittleEndian(slot[40..], entry.LastLba);
+        BinaryPrimitives.WriteUInt64LittleEndian(slot[48..], entry.Attributes);
+        WriteName(slot[56..], entry.Name);
+    }
+
+    private static long SectorOffset(ulong lba) =>
+        lba > (ulong)(long.MaxValue / SectorSize) ? -1 : (long)lba * SectorSize;
+
+    /// <summary>
+    /// <para>头部与其条目数组在源镜像中的定位。</para>
+    /// A header and its entry array located inside the source image.
+    /// </summary>
+    private readonly record struct GptCopy(long HeaderOffset, int HeaderSize, long EntriesOffset, uint EntryCount);
 
     private static void WriteProtectiveMbr(Span<byte> image, ulong diskSectors)
     {

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
@@ -15,11 +16,14 @@ using UotanStudio.Views.Controls;
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>
-/// <para>分区表编辑器视图模型：左侧分区列表 + 右侧属性编辑（分区名/起始/大小/类型），
-/// 支持 Android LP super 元数据与 Rockchip parameter 两种数据源，可解析、可视化编辑与回写保存。</para>
-/// Partition-table editor view model: a left partition list plus a right property pane
-/// (name/start/size/type), supporting Android LP super metadata and Rockchip parameter files; it
-/// parses, edits visually and saves the table back to the file.
+/// <para>分区表编辑器视图模型：顶部为 GNOME Disks 风格的可视化分区段布局（按扇区比例排布，
+/// 点击联动选择），下方左侧分区列表 + 右侧属性编辑（分区名/起始/大小/类型），
+/// 支持 Android LP super 元数据、GPT、MBR、Amlogic 与 Rockchip parameter 多种数据源，
+/// 可解析、可视化编辑、增删分区并回写保存。</para>
+/// Partition-table editor view model: a GNOME Disks style visual partition band at the top (segments
+/// laid out by sector proportion, clicking selects), a left partition list plus a right properties
+/// pane (name/start/size/type); it parses Android LP super metadata, GPT, MBR, Amlogic and Rockchip
+/// parameter files, edits, adds/removes partitions and saves the table back to the file.
 /// </summary>
 public partial class PartitionEditorViewModel : Document, ICommandSaveableDocument
 {
@@ -31,6 +35,8 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     private string _rockchipOriginal = string.Empty;
     private string _rockchipDevice = string.Empty;
     private string _rockchipSuffix = string.Empty;
+    private ulong _capacitySectors;
+    private bool _isLoaded;
 
     /// <summary>
     /// <para>保存按钮的本地化标题。</para>
@@ -87,6 +93,24 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     public static string TypeHintLabel => LanguageService.Instance.GetString("Dock_Partition_TypeHint");
 
     /// <summary>
+    /// <para>“添加分区”按钮的本地化标题。</para>
+    /// The localized title of the add-partition button.
+    /// </summary>
+    public static string AddLabel => LanguageService.Instance.GetString("Dock_Partition_Add");
+
+    /// <summary>
+    /// <para>“删除分区”按钮的本地化标题。</para>
+    /// The localized title of the remove-partition button.
+    /// </summary>
+    public static string RemoveLabel => LanguageService.Instance.GetString("Dock_Partition_Remove");
+
+    /// <summary>
+    /// <para>未分配间隙段的本地化文本。</para>
+    /// The localized text of an unallocated gap segment.
+    /// </summary>
+    public static string UnallocatedLabel => LanguageService.Instance.GetString("Dock_Partition_Unallocated");
+
+    /// <summary>
     /// <para>文档对应的文件路径。</para>
     /// The file path of the document.
     /// </summary>
@@ -119,10 +143,17 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     [ObservableProperty] private string _sourceDescription = string.Empty;
 
     /// <summary>
-    /// <para>当前选中的分区（左栏选择联动，驱动右栏属性面板）。</para>
-    /// The currently selected partition (left-pane selection linkage, drives the right properties pane).
+    /// <para>当前选中的分区（左栏选择与分区段布局点击联动，驱动右栏属性面板）。</para>
+    /// The currently selected partition (linked with the left list and the visual band clicks, drives
+    /// the right properties pane).
     /// </summary>
     [ObservableProperty] private PartitionItemViewModel? _selectedPartition;
+
+    /// <summary>
+    /// <para>容量/范围摘要文本（分区段布局上方的本地化标签）。</para>
+    /// Capacity/extent summary text (shown above the visual partition band).
+    /// </summary>
+    [ObservableProperty] private string _capacityText = string.Empty;
 
     /// <summary>
     /// <para>左栏分区列表。</para>
@@ -131,10 +162,29 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     public ObservableCollection<PartitionItemViewModel> Partitions { get; } = [];
 
     /// <summary>
+    /// <para>可视化分区段布局的段列表（含未分配间隙），按起始扇区排序。</para>
+    /// Segments of the visual partition band (including unallocated gaps), ordered by start sector.
+    /// </summary>
+    public ObservableCollection<PartitionSegmentViewModel> Segments { get; } = [];
+
+    /// <summary>
     /// <para>保存命令：将当前编辑写回原文件。</para>
     /// Save command: writes the current edits back to the file.
     /// </summary>
     public IAsyncRelayCommand SaveCommand { get; }
+
+    /// <summary>
+    /// <para>添加分区命令：在列表末尾追加一个新分区条目（起始取当前最大结束扇区的对齐值）。</para>
+    /// Add-partition command: appends a new partition entry (starting at the aligned end of the
+    /// current last partition).
+    /// </summary>
+    public RelayCommand AddPartitionCommand { get; }
+
+    /// <summary>
+    /// <para>删除分区命令：从列表移除当前选中的分区条目。</para>
+    /// Remove-partition command: removes the selected partition entry from the list.
+    /// </summary>
+    public RelayCommand RemovePartitionCommand { get; }
 
     /// <summary>
     /// <para>分区总数；未加载时为 0。</para>
@@ -155,13 +205,25 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     public PartitionEditorViewModel()
     {
         SaveCommand = new AsyncRelayCommand(SaveAsync);
+        AddPartitionCommand = new RelayCommand(AddPartition, () => _isLoaded && !IsBusy);
+        RemovePartitionCommand = new RelayCommand(RemoveSelectedPartition, () => _isLoaded && SelectedPartition is not null);
     }
 
     /// <summary>
-    /// <para>选中分区变化：刷新属性面板可见性。</para>
-    /// Selected partition changed: refreshes the properties-pane visibility.
+    /// <para>选中分区变化：刷新属性面板可见性、分区段布局高亮与删除命令可用态。</para>
+    /// Selected partition changed: refreshes the properties-pane visibility, the visual band highlight
+    /// and the remove command availability.
     /// </summary>
-    partial void OnSelectedPartitionChanged(PartitionItemViewModel? value) => OnPropertyChanged(nameof(HasSelection));
+    partial void OnSelectedPartitionChanged(PartitionItemViewModel? value)
+    {
+        OnPropertyChanged(nameof(HasSelection));
+        foreach (var segment in Segments)
+        {
+            segment.IsSelected = ReferenceEquals(segment.Item, value);
+        }
+
+        RemovePartitionCommand.NotifyCanExecuteChanged();
+    }
 
     /// <summary>
     /// <para>异步加载分区表：先尝试 LP super 元数据，失败后回落到 Rockchip parameter 文本，
@@ -183,6 +245,9 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
         IsBusy = true;
         try
         {
+            _capacitySectors = 0;
+            _isLoaded = false;
+
             // LP super 元数据优先；读失败（非 LP）再试 Rockchip parameter。
             // LP super metadata first; on failure (not an LP image) try a Rockchip parameter.
             LpMetadata? lp = null;
@@ -202,6 +267,9 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             {
                 _source = PartitionTableSource.Lp;
                 _lpMetadata = lp;
+                _capacitySectors = lp.BlockDevices.Count > 0
+                    ? lp.BlockDevices[0].Size / (ulong)MetadataFormat.LP_SECTOR_SIZE
+                    : 0;
                 BuildLpItems(lp);
                 SourceDescription = $"LP super metadata: {lp.Partitions.Count} partition(s), {lp.Groups.Count} group(s)";
             }
@@ -238,6 +306,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                     }
 
                     _source = PartitionTableSource.Rockchip;
+                    _capacitySectors = 0;
                     _rockchipOriginal = await File.ReadAllTextAsync(path).ConfigureAwait(true);
                     var cmdline = FindCmdline(_rockchipOriginal);
                     (_rockchipDevice, _rockchipSuffix) = cmdline is null
@@ -251,6 +320,10 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             PartitionCount = Partitions.Count;
             CompileError = string.Empty;
             IsDirty = false;
+            _isLoaded = true;
+            RebuildBand();
+            AddPartitionCommand.NotifyCanExecuteChanged();
+            RemovePartitionCommand.NotifyCanExecuteChanged();
         }
         finally
         {
@@ -281,6 +354,12 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             }
         }
 
+        if (TryFindOverlap(items, out var overlapFirst, out var overlapSecond))
+        {
+            CompileError = LanguageService.Instance.GetString("UserError_PartitionOverlap", overlapFirst, overlapSecond);
+            return;
+        }
+
         IsBusy = true;
         try
         {
@@ -293,7 +372,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                     await SaveRockchipAsync(items).ConfigureAwait(true);
                     break;
                 case PartitionTableSource.Gpt:
-                    SaveGpt(items);
+                    await SaveGptAsync(items).ConfigureAwait(true);
                     break;
                 case PartitionTableSource.Mbr:
                     SaveMbr(items);
@@ -307,6 +386,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
 
             IsDirty = false;
             CompileError = string.Empty;
+            RebuildBand();
             LogService.Instance.Write(LogLevel.Info, "PartitionEditor", $"Saved partition table to {FilePath}");
         }
         catch (Exception ex)
@@ -324,6 +404,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
     {
         SelectedPartition = null;
         Partitions.Clear();
+        Segments.Clear();
         _lpMetadata = null;
         _gpt = null;
         _mbr = null;
@@ -331,11 +412,16 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
         _rockchipOriginal = string.Empty;
         _rockchipDevice = string.Empty;
         _rockchipSuffix = string.Empty;
+        _capacitySectors = 0;
+        _isLoaded = false;
         FilePath = null;
         SourceDescription = string.Empty;
+        CapacityText = string.Empty;
         CompileError = string.Empty;
         IsDirty = false;
         PartitionCount = 0;
+        AddPartitionCommand.NotifyCanExecuteChanged();
+        RemovePartitionCommand.NotifyCanExecuteChanged();
     }
 
     private void BuildLpItems(LpMetadata metadata)
@@ -377,7 +463,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 },
                 i,
                 group,
-                () => IsDirty = true));
+                MarkDirtyAndRefresh));
         }
     }
 
@@ -397,7 +483,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 },
                 i,
                 group: null,
-                () => IsDirty = true));
+                MarkDirtyAndRefresh));
         }
     }
 
@@ -416,6 +502,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 var info = GptTable.Parse(bytes);
                 _source = PartitionTableSource.Gpt;
                 _gpt = info;
+                _capacitySectors = info.DiskSizeBytes / (ulong)GptTable.SectorSize;
                 BuildGptItems(info);
                 SourceDescription = $"GPT: {info.Entries.Count} partition(s), disk {info.DiskSizeBytes} bytes";
                 return true;
@@ -426,6 +513,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 var info = MbrTable.Parse(bytes);
                 _source = PartitionTableSource.Mbr;
                 _mbr = info;
+                _capacitySectors = 0;
                 BuildMbrItems(info);
                 SourceDescription = $"MBR: {info.Partitions.Count} partition(s)";
                 return true;
@@ -436,6 +524,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 var info = AmlogicTable.Parse(bytes);
                 _source = PartitionTableSource.Amlogic;
                 _amlogic = info;
+                _capacitySectors = 0;
                 BuildAmlogicItems(info);
                 SourceDescription = $"Amlogic: {info.Partitions.Count} partition(s)";
                 return true;
@@ -493,12 +582,12 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 {
                     Name = entry.Name,
                     StartSector = entry.FirstLba,
-                    SizeSectors = entry.LastLba - entry.FirstLba + 1,
+                    SizeSectors = entry.LastLba >= entry.FirstLba ? entry.LastLba - entry.FirstLba + 1 : 0,
                     Type = entry.TypeGuid.ToString("D")
                 },
                 i,
                 group: null,
-                () => IsDirty = true));
+                MarkDirtyAndRefresh));
         }
     }
 
@@ -518,7 +607,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 },
                 i,
                 group: null,
-                () => IsDirty = true));
+                MarkDirtyAndRefresh));
         }
     }
 
@@ -538,39 +627,42 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 },
                 i,
                 group: null,
-                () => IsDirty = true));
+                MarkDirtyAndRefresh));
         }
     }
 
-    private void SaveGpt(IReadOnlyList<PartitionItemViewModel> items)
+    private async Task SaveGptAsync(IReadOnlyList<PartitionItemViewModel> items)
     {
         if (_gpt is null)
         {
             throw new InvalidOperationException("No GPT table loaded.");
         }
 
-        if (items.Count != _gpt.Entries.Count)
-        {
-            throw new InvalidDataException("Partition count changed; add/remove is not supported.");
-        }
+        // 原位回写需要源镜像：EDL 合并 GPT 镜像的头部与条目数组不在标准 LBA 上，
+        // 重新构建会破坏其布局。
+        // In-place write-back needs the source image: in an EDL combined GPT image the headers and entry
+        // arrays sit off their standard LBAs, so rebuilding from scratch would break the layout.
+        var image = await ReadBoundedTableAsync(FilePath!).ConfigureAwait(true)
+            ?? throw new InvalidDataException("The GPT source file is no longer readable as a bounded table image.");
 
         var entries = new List<GptEntry>(items.Count);
-        for (var i = 0; i < items.Count; i++)
+        foreach (var item in items)
         {
-            var item = items[i];
-            var original = _gpt.Entries[i];
+            var original = item.OriginalIndex >= 0 && item.OriginalIndex < _gpt.Entries.Count
+                ? _gpt.Entries[item.OriginalIndex]
+                : null;
             entries.Add(new GptEntry
             {
-                TypeGuid = Guid.TryParse(item.Type, out var parsed) ? parsed : original.TypeGuid,
-                UniqueGuid = original.UniqueGuid,
+                TypeGuid = Guid.TryParse(item.Type, out var parsed) ? parsed : original?.TypeGuid ?? GptTable.DefaultTypeGuid,
+                UniqueGuid = original?.UniqueGuid ?? Guid.NewGuid(),
                 FirstLba = item.StartSector,
                 LastLba = checked(item.StartSector + item.SizeSectors - 1),
-                Attributes = original.Attributes,
+                Attributes = original?.Attributes ?? 0,
                 Name = item.Name
             });
         }
 
-        File.WriteAllBytes(FilePath!, GptTable.Build(_gpt.DiskSizeBytes, _gpt.DiskGuid, entries));
+        await File.WriteAllBytesAsync(FilePath!, GptTable.Patch(image, entries)).ConfigureAwait(true);
     }
 
     private void SaveMbr(IReadOnlyList<PartitionItemViewModel> items)
@@ -580,18 +672,14 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             throw new InvalidOperationException("No MBR table loaded.");
         }
 
-        if (items.Count != _mbr.Partitions.Count)
-        {
-            throw new InvalidDataException("Partition count changed; add/remove is not supported.");
-        }
-
         var entries = new List<PartitionEntry>(items.Count);
         var bootable = new List<bool>(items.Count);
-        for (var i = 0; i < items.Count; i++)
+        foreach (var item in items)
         {
-            var item = items[i];
-            var original = _mbr.Partitions[i];
-            var type = MbrTable.TryParseType(item.Type, out var parsed) ? parsed : original.Type;
+            var original = item.OriginalIndex >= 0 && item.OriginalIndex < _mbr.Partitions.Count
+                ? _mbr.Partitions[item.OriginalIndex]
+                : null;
+            var type = MbrTable.TryParseType(item.Type, out var parsed) ? parsed : original?.Type ?? MbrTable.DefaultLinuxType;
             entries.Add(new PartitionEntry
             {
                 Name = item.Name,
@@ -599,7 +687,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 SizeSectors = item.SizeSectors,
                 Type = "0x" + type.ToString("X2", CultureInfo.InvariantCulture)
             });
-            bootable.Add(original.Bootable);
+            bootable.Add(original?.Bootable ?? false);
         }
 
         File.WriteAllBytes(FilePath!, MbrTable.Build(_mbr.DiskSignature, entries, bootable));
@@ -612,18 +700,14 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             throw new InvalidOperationException("No Amlogic table loaded.");
         }
 
-        if (items.Count != _amlogic.Partitions.Count)
-        {
-            throw new InvalidDataException("Partition count changed; add/remove is not supported.");
-        }
-
         var entries = new List<PartitionEntry>(items.Count);
         var bootable = new List<bool>(items.Count);
-        for (var i = 0; i < items.Count; i++)
+        foreach (var item in items)
         {
-            var item = items[i];
-            var original = _amlogic.Partitions[i];
-            var type = MbrTable.TryParseType(item.Type, out var parsed) ? parsed : original.Type;
+            var original = item.OriginalIndex >= 0 && item.OriginalIndex < _amlogic.Partitions.Count
+                ? _amlogic.Partitions[item.OriginalIndex]
+                : null;
+            var type = MbrTable.TryParseType(item.Type, out var parsed) ? parsed : original?.Type ?? AmlogicTable.DefaultType;
             entries.Add(new PartitionEntry
             {
                 Name = item.Name,
@@ -631,7 +715,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 SizeSectors = item.SizeSectors,
                 Type = "0x" + type.ToString("X2", CultureInfo.InvariantCulture)
             });
-            bootable.Add(original.Bootable);
+            bootable.Add(original?.Bootable ?? false);
         }
 
         File.WriteAllBytes(FilePath!, AmlogicTable.Build(_amlogic.DiskSignature, entries, bootable));
@@ -644,75 +728,103 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             throw new InvalidOperationException("No LP metadata loaded.");
         }
 
-        if (items.Count != _lpMetadata.Partitions.Count)
+        var partitions = new List<LpMetadataPartition>(items.Count);
+        var extents = new List<LpMetadataExtent>();
+        foreach (var item in items)
         {
-            throw new InvalidDataException("Partition count changed; add/remove is not supported.");
-        }
-
-        for (var i = 0; i < items.Count; i++)
-        {
-            var item = items[i];
-            var partition = _lpMetadata.Partitions[i];
             var nameBytes = Encoding.UTF8.GetBytes(item.Name);
             if (nameBytes.Length > 36)
             {
                 throw new InvalidDataException($"Partition name '{item.Name}' exceeds 36 bytes.");
             }
-            _lpMetadata.Partitions[i] = partition with { Name = nameBytes };
 
-            var extentStart = (int)partition.FirstExtentIndex;
-            var extentCount = (int)partition.NumExtents;
-            if (extentCount <= 0)
+            if (item.OriginalIndex < 0 || item.OriginalIndex >= _lpMetadata.Partitions.Count)
             {
+                partitions.Add(new LpMetadataPartition
+                {
+                    Name = nameBytes,
+                    Attributes = 0,
+                    FirstExtentIndex = (uint)extents.Count,
+                    NumExtents = 1,
+                    GroupIndex = 0
+                });
+                extents.Add(new LpMetadataExtent
+                {
+                    NumSectors = item.SizeSectors,
+                    TargetType = item.Type == "zero" ? MetadataFormat.LP_TARGET_TYPE_ZERO : MetadataFormat.LP_TARGET_TYPE_LINEAR,
+                    TargetData = item.StartSector,
+                    TargetSource = 0
+                });
                 continue;
             }
 
-            // 起始偏移：所有 extent 平移 delta，保持相对布局。
-            // Start offset: shift all extents by the delta, preserving the relative layout.
-            var first = _lpMetadata.Extents[extentStart];
-            var delta = (long)item.StartSector - (long)first.TargetData;
-            for (var e = extentStart; e < extentStart + extentCount; e++)
+            var partition = _lpMetadata.Partitions[item.OriginalIndex];
+            var sourceStart = (int)partition.FirstExtentIndex;
+            var sourceCount = (int)partition.NumExtents;
+            var firstIndex = extents.Count;
+            for (var e = 0; e < sourceCount && sourceStart + e < _lpMetadata.Extents.Count; e++)
             {
-                var extent = _lpMetadata.Extents[e];
-                var newTarget = (long)extent.TargetData + delta;
-                if (newTarget < 0)
-                {
-                    throw new InvalidDataException($"Start of partition '{item.Name}' would go negative.");
-                }
-                _lpMetadata.Extents[e] = extent with { TargetData = (ulong)newTarget };
+                extents.Add(_lpMetadata.Extents[sourceStart + e]);
             }
 
-            // 大小：总大小的差值调整到最后一个 extent。
-            // Size: apply the total-size delta to the last extent.
-            ulong total = 0;
-            for (var e = extentStart; e < extentStart + extentCount; e++)
+            var copied = extents.Count - firstIndex;
+            if (copied > 0)
             {
-                total += _lpMetadata.Extents[e].NumSectors;
-            }
-            if (total != item.SizeSectors)
-            {
-                var lastIndex = extentStart + extentCount - 1;
-                var last = _lpMetadata.Extents[lastIndex];
-                var newLast = (long)last.NumSectors + (long)item.SizeSectors - (long)total;
-                if (newLast < 0)
+                var first = extents[firstIndex];
+
+                // 起始偏移：所有 extent 平移 delta，保持相对布局。
+                // Start offset: shift all extents by the delta, preserving the relative layout.
+                var delta = (long)item.StartSector - (long)first.TargetData;
+                ulong total = 0;
+                for (var i = 0; i < copied; i++)
                 {
-                    throw new InvalidDataException($"Size of partition '{item.Name}' too small for its extent layout.");
+                    var extent = extents[firstIndex + i];
+                    var newTarget = (long)extent.TargetData + delta;
+                    if (newTarget < 0)
+                    {
+                        throw new InvalidDataException($"Start of partition '{item.Name}' would go negative.");
+                    }
+
+                    total += extent.NumSectors;
+                    extents[firstIndex + i] = extent with { TargetData = (ulong)newTarget };
                 }
-                _lpMetadata.Extents[lastIndex] = last with { NumSectors = (ulong)newLast };
+
+                // 大小：总大小的差值调整到最后一个 extent。
+                // Size: apply the total-size delta to the last extent.
+                if (total != item.SizeSectors)
+                {
+                    var lastIndex = firstIndex + copied - 1;
+                    var last = extents[lastIndex];
+                    var newLast = (long)last.NumSectors + (long)item.SizeSectors - (long)total;
+                    if (newLast < 0)
+                    {
+                        throw new InvalidDataException($"Size of partition '{item.Name}' too small for its extent layout.");
+                    }
+
+                    extents[lastIndex] = last with { NumSectors = (ulong)newLast };
+                }
+
+                // 类型：仅当为 linear/zero 时写回第一个 extent 的目标类型，未知值保持原样。
+                // Type: only linear/zero is written back to the first extent's target type; unknown values are kept.
+                var targetType = item.Type switch
+                {
+                    "linear" => MetadataFormat.LP_TARGET_TYPE_LINEAR,
+                    "zero" => MetadataFormat.LP_TARGET_TYPE_ZERO,
+                    _ => first.TargetType
+                };
+                extents[firstIndex] = extents[firstIndex] with { TargetType = targetType };
             }
 
-            // 类型：仅当为 linear/zero 时写回第一个 extent 的目标类型，未知值保持原样。
-            // Type: only linear/zero is written back to the first extent's target type; unknown values are kept.
-            var targetType = item.Type switch
+            partitions.Add(partition with
             {
-                "linear" => MetadataFormat.LP_TARGET_TYPE_LINEAR,
-                "zero" => MetadataFormat.LP_TARGET_TYPE_ZERO,
-                _ => first.TargetType
-            };
-            var updated = _lpMetadata.Extents[extentStart];
-            _lpMetadata.Extents[extentStart] = updated with { TargetType = targetType };
+                Name = nameBytes,
+                FirstExtentIndex = (uint)firstIndex,
+                NumExtents = (uint)copied
+            });
         }
 
+        _lpMetadata.Partitions = partitions;
+        _lpMetadata.Extents = extents;
         MetadataWriter.WriteToImageFile(FilePath!, _lpMetadata);
     }
 
@@ -781,6 +893,321 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
         }
         return string.Join(lineBreak, lines);
     }
+
+    private void MarkDirtyAndRefresh()
+    {
+        IsDirty = true;
+        RebuildBand();
+    }
+
+    private void AddPartition()
+    {
+        ulong nextEnd = 0;
+        var hasEnd = false;
+        foreach (var item in Partitions)
+        {
+            var geometry = EffectiveGeometry(item);
+            var end = SaturatingEnd(geometry.Start, geometry.Size);
+            if (!hasEnd || end > nextEnd)
+            {
+                nextEnd = end;
+                hasEnd = true;
+            }
+        }
+
+        var start = hasEnd
+            ? AlignUp(nextEnd)
+            : _source switch
+            {
+                PartitionTableSource.Lp => 4096UL,
+                PartitionTableSource.Gpt => GptTable.FirstUsableLba,
+                _ => 2048UL
+            };
+        var size = _capacitySectors > start && _capacitySectors - start >= 2048 ? _capacitySectors - start : 2048UL;
+        var type = _source switch
+        {
+            PartitionTableSource.Lp => "linear",
+            PartitionTableSource.Rockchip => "mtd",
+            PartitionTableSource.Gpt => GptTable.DefaultTypeGuid.ToString("D"),
+            _ => "0x83"
+        };
+        var group = _lpMetadata is { Groups.Count: > 0 } ? _lpMetadata.Groups[0].NameString : null;
+        var added = new PartitionItemViewModel(
+            new PartitionEntry
+            {
+                Name = $"partition_{Partitions.Count + 1}",
+                StartSector = start,
+                SizeSectors = size,
+                Type = type
+            },
+            -1,
+            group,
+            MarkDirtyAndRefresh);
+        Partitions.Add(added);
+        PartitionCount = Partitions.Count;
+        SelectedPartition = added;
+        MarkDirtyAndRefresh();
+    }
+
+    private void RemoveSelectedPartition()
+    {
+        var selected = SelectedPartition;
+        if (selected is null)
+        {
+            return;
+        }
+
+        Partitions.Remove(selected);
+        SelectedPartition = null;
+        PartitionCount = Partitions.Count;
+        MarkDirtyAndRefresh();
+    }
+
+    /// <summary>
+    /// <para>按当前编辑值重建可视化分区段布局：有效值优先取可解析的输入文本，解析失败回落到
+    /// 上次已应用的条目值；间隙段与首尾未分配区域一并生成。</para>
+    /// Rebuilds the visual partition band from the current edits: effective values prefer parseable
+    /// input text and fall back to the last applied entry values; gap segments including the leading
+    /// and trailing unallocated regions are generated as well.
+    /// </summary>
+    private void RebuildBand()
+    {
+        var ordered = Partitions
+            .Select(item => (Item: item, Geometry: EffectiveGeometry(item)))
+            .OrderBy(t => t.Geometry.Start)
+            .ToList();
+
+        double maxEnd = 0;
+        foreach (var (_, geometry) in ordered)
+        {
+            maxEnd = Math.Max(maxEnd, (double)geometry.Start + geometry.Size);
+        }
+
+        var baseSectors = Math.Max(_capacitySectors, Math.Max(maxEnd, 1));
+
+        Segments.Clear();
+        double cursor = 0;
+        var colorIndex = 0;
+        foreach (var (item, geometry) in ordered)
+        {
+            var start = (double)geometry.Start;
+            if (start > cursor)
+            {
+                Segments.Add(CreateGap((start - cursor) / baseSectors));
+                cursor = start;
+            }
+
+            var widthRatio = Math.Max((double)geometry.Size, 0) / baseSectors;
+            var segment = new PartitionSegmentViewModel(
+                item,
+                item.Name,
+                item.Name,
+                PartitionTableFormat.FormatSectors(geometry.Start),
+                string.Join('\n',
+                    item.Name,
+                    $"{StartLabel}: {PartitionTableFormat.FormatSectors(geometry.Start)} ({FormatBytes(geometry.Start * (ulong)PartitionTableFormat.SectorSize)})",
+                    $"{SizeLabel}: {PartitionTableFormat.FormatSectors(geometry.Size)} ({FormatBytes(geometry.Size * (ulong)PartitionTableFormat.SectorSize)})"),
+                PartitionSegmentViewModel.BrushFor(colorIndex++),
+                widthRatio)
+            {
+                IsSelected = ReferenceEquals(SelectedPartition, item)
+            };
+            Segments.Add(segment);
+            cursor = Math.Max(cursor, start + geometry.Size);
+        }
+
+        if (cursor < baseSectors)
+        {
+            Segments.Add(CreateGap((baseSectors - cursor) / baseSectors));
+        }
+
+        var shown = _capacitySectors > 0 ? _capacitySectors : maxEnd > 0 ? checked((ulong)maxEnd) : 0UL;
+        CapacityText = shown == 0
+            ? string.Empty
+            : LanguageService.Instance.GetString(
+                _capacitySectors > 0 ? "Dock_Partition_CapacityFormat" : "Dock_Partition_UsedFormat",
+                PartitionTableFormat.FormatSectors(shown),
+                FormatBytes(shown * (ulong)PartitionTableFormat.SectorSize));
+    }
+
+    private PartitionSegmentViewModel CreateGap(double widthRatio) => new(
+        null,
+        string.Empty,
+        UnallocatedLabel,
+        string.Empty,
+        UnallocatedLabel,
+        PartitionSegmentViewModel.GapFill,
+        widthRatio);
+
+    private static (ulong Start, ulong Size) EffectiveGeometry(PartitionItemViewModel item)
+    {
+        var start = PartitionTableFormat.TryParseSectors(item.Start, out var parsedStart) ? parsedStart : item.StartSector;
+        var size = PartitionTableFormat.TryParseSectors(item.Size, out var parsedSize) ? parsedSize : item.SizeSectors;
+        return (start, size);
+    }
+
+    private static bool TryFindOverlap(IReadOnlyList<PartitionItemViewModel> items, out string firstName, out string secondName)
+    {
+        firstName = string.Empty;
+        secondName = string.Empty;
+        double maxEnd = -1;
+        var maxEndName = string.Empty;
+        foreach (var (item, geometry) in items
+                     .Select(i => (Item: i, Geometry: (Start: i.StartSector, Size: i.SizeSectors)))
+                     .OrderBy(t => t.Geometry.Start))
+        {
+            var end = (double)geometry.Start + geometry.Size;
+            if (geometry.Size > 0 && (double)geometry.Start < maxEnd)
+            {
+                firstName = maxEndName;
+                secondName = item.Name;
+                return true;
+            }
+
+            if (end > maxEnd)
+            {
+                maxEnd = end;
+                maxEndName = item.Name;
+            }
+        }
+
+        return false;
+    }
+
+    private static ulong AlignUp(ulong sectors) =>
+        sectors > ulong.MaxValue - 7 ? sectors : (sectors + 7) / 8 * 8;
+
+    private static ulong SaturatingEnd(ulong start, ulong size) =>
+        size > ulong.MaxValue - start ? ulong.MaxValue : start + size;
+
+    private static string FormatBytes(ulong bytes)
+    {
+        string[] units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
+        double value = bytes;
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return unit == 0 ? $"{value:0} {units[unit]}" : $"{value:0.##} {units[unit]}";
+    }
+}
+
+/// <summary>
+/// <para>可视化分区段布局中的一个段（分区或未分配间隙），宽度按扇区占比计算。</para>
+/// One segment of the visual partition band (a partition or an unallocated gap); the width is the
+/// sector-count ratio of the layout base.
+/// </summary>
+public sealed partial class PartitionSegmentViewModel : ObservableObject, IBandSegmentLayout
+{
+    private static readonly IBrush GapBrush = CreateBrush("#8494A8", 0x66);
+    private static readonly IBrush[] Palette =
+    [
+        CreateBrush("#4C8DF6"),
+        CreateBrush("#3DBE7B"),
+        CreateBrush("#E8A33D"),
+        CreateBrush("#A86FD6"),
+        CreateBrush("#2FB8C9"),
+        CreateBrush("#E0687A"),
+        CreateBrush("#89B83F"),
+        CreateBrush("#C97AB8")
+    ];
+
+    /// <summary>
+    /// <para>创建分区段视图模型。</para>
+    /// Creates a band segment view model.
+    /// </summary>
+    /// <param name="item">对应的分区条目；间隙段为 <c>null</c>。 The owning partition entry; <c>null</c> for gaps.</param>
+    /// <param name="text">条内显示的文本。 The text shown inside the bar segment.</param>
+    /// <param name="labelText">标签行显示的文本。 The text shown in the label row.</param>
+    /// <param name="offsetText">标签行中的偏移文本。 The offset text in the label row.</param>
+    /// <param name="tooltip">悬停提示文本。 The tooltip text.</param>
+    /// <param name="fill">段填充画刷。 The segment fill brush.</param>
+    /// <param name="bandWidthRatio">段宽度占比（0..1）。 The segment width ratio (0..1).</param>
+    public PartitionSegmentViewModel(PartitionItemViewModel? item, string text, string labelText, string offsetText, string tooltip, IBrush fill, double bandWidthRatio)
+    {
+        Item = item;
+        Text = text;
+        LabelText = labelText;
+        OffsetText = offsetText;
+        Tooltip = tooltip;
+        Fill = fill;
+        BandWidthRatio = bandWidthRatio;
+    }
+
+    /// <summary>
+    /// <para>对应的分区条目；间隙段为 <c>null</c>。</para>
+    /// The owning partition entry; <c>null</c> for gaps.
+    /// </summary>
+    public PartitionItemViewModel? Item { get; }
+
+    /// <summary>
+    /// <para>条内显示文本（分区名；间隙为空）。</para>
+    /// The text shown inside the bar segment (partition name; empty for gaps).
+    /// </summary>
+    public string Text { get; }
+
+    /// <summary>
+    /// <para>标签行显示的文本。</para>
+    /// The text shown in the label row.
+    /// </summary>
+    public string LabelText { get; }
+
+    /// <summary>
+    /// <para>标签行中的偏移文本。</para>
+    /// The offset text in the label row.
+    /// </summary>
+    public string OffsetText { get; }
+
+    /// <summary>
+    /// <para>悬停提示文本。</para>
+    /// The tooltip text.
+    /// </summary>
+    public string Tooltip { get; }
+
+    /// <summary>
+    /// <para>段填充画刷。</para>
+    /// The segment fill brush.
+    /// </summary>
+    public IBrush Fill { get; }
+
+    /// <summary>
+    /// <para>段宽度占可用总宽的比例（0..1）。</para>
+    /// The fraction of the available width this segment occupies (0..1).
+    /// </summary>
+    public double BandWidthRatio { get; }
+
+    /// <summary>
+    /// <para>是否为未分配间隙段。</para>
+    /// Whether this segment is an unallocated gap.
+    /// </summary>
+    public bool BandIsGap => Item is null;
+
+    /// <summary>
+    /// <para>是否为当前选中分区对应的段。</para>
+    /// Whether this segment belongs to the currently selected partition.
+    /// </summary>
+    [ObservableProperty] private bool _isSelected;
+
+    /// <summary>
+    /// <para>按序取分区段配色。</para>
+    /// Returns the palette brush for the given segment ordinal.
+    /// </summary>
+    public static IBrush BrushFor(int index) => Palette[index % Palette.Length];
+
+    /// <summary>
+    /// <para>未分配间隙的填充画刷。</para>
+    /// The fill brush of unallocated gaps.
+    /// </summary>
+    public static IBrush GapFill => GapBrush;
+
+    private static IBrush CreateBrush(string hexColor, byte alpha = 0xFF)
+    {
+        var color = Color.Parse(hexColor);
+        return new SolidColorBrush(Color.FromArgb(alpha, color.R, color.G, color.B));
+    }
 }
 
 /// <summary>
@@ -797,14 +1224,15 @@ public partial class PartitionItemViewModel : ObservableObject
     /// Creates a partition-entry view model.
     /// </summary>
     /// <param name="entry">条目数据。 The entry data.</param>
-    /// <param name="index">条目在表中的索引。 The entry index in the table.</param>
+    /// <param name="index">条目在原表中的索引；会话内新增的条目为 <c>-1</c>。 The entry index in the original table; <c>-1</c> for entries added in this session.</param>
     /// <param name="group">条目所属组（LP；Rockchip 为 <c>null</c>）。 The owning group (LP; <c>null</c> for Rockchip).</param>
-    /// <param name="onChanged">属性变更时的回调（标记文档为脏）。 Callback invoked on property change (marks document dirty).</param>
+    /// <param name="onChanged">属性变更时的回调（标记文档为脏并刷新分区段布局）。 Callback invoked on property change (marks document dirty and refreshes the band).
+    /// </param>
     public PartitionItemViewModel(PartitionEntry entry, int index, string? group, Action? onChanged = null)
     {
         _entry = entry;
         _onChanged = onChanged;
-        Index = index;
+        OriginalIndex = index;
         Group = group;
         Name = entry.Name;
         Start = PartitionTableFormat.FormatSectors(entry.StartSector);
@@ -813,10 +1241,12 @@ public partial class PartitionItemViewModel : ObservableObject
     }
 
     /// <summary>
-    /// <para>条目在表中的索引。</para>
-    /// The entry index in the table.
+    /// <para>条目在原表中的索引；会话内新增的条目为 <c>-1</c>（保存时据此保留原 GUID、可引导标志等
+    /// 每条目元数据）。</para>
+    /// The entry index in the original table; <c>-1</c> for entries added in this session (the save
+    /// path uses it to carry per-entry metadata such as GUIDs and bootable flags).
     /// </summary>
-    public int Index { get; }
+    public int OriginalIndex { get; }
 
     /// <summary>
     /// <para>条目所属组（LP；Rockchip 为 <c>null</c>）。</para>

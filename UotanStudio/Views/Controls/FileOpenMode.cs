@@ -890,18 +890,19 @@ public static class FileOpenMode
     }
 
     /// <summary>
-    /// <para>分区表内容探测所需的头部读取长度（覆盖 GPT 头魔数 @512 与 MBR 签名 @510）。</para>
-    /// Header length read for partition-table content detection (covers the GPT header magic @512
-    /// and the MBR signature @510).
+    /// <para>分区表内容探测所需的头部读取长度（覆盖 EDL 合并 GPT 镜像里不在 LBA 1 的头部，
+    /// 以及 MBR 签名 @510）。</para>
+    /// Header length read for partition-table content detection (covers the GPT headers that EDL combined
+    /// images place away from LBA 1, and the MBR signature @510).
     /// </summary>
-    private const int PartitionHeaderLength = 520;
+    private const int PartitionHeaderLength = 64 * 1024;
 
     /// <summary>
-    /// <para>判断头部字节是否携带 GPT 签名（"EFI PART" @512）。</para>
-    /// Whether the header bytes carry the GPT signature ("EFI PART" @512).
+    /// <para>判断头部字节是否携带扇区对齐的 GPT 签名（<c>EFI PART</c>）。</para>
+    /// Whether the header bytes carry a sector-aligned GPT signature (<c>EFI PART</c>).
     /// </summary>
     public static bool IsGptMagic(ReadOnlySpan<byte> header) =>
-        header.Length >= 520 && header.Slice(512, 8).SequenceEqual("EFI PART"u8);
+        UotanStudio.Models.GptTable.HasSignature(header);
 
     /// <summary>
     /// <para>判断头部是否包含有效的非空 MBR 分区表，排除 FAT 卷引导扇区。</para>
