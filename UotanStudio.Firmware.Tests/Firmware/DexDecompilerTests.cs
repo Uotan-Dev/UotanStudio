@@ -17,7 +17,7 @@ public class DexDecompilerTests
     [Fact]
     public void ConstAndReturn_ProducesLiteralReturn()
     {
-        var dex = BuildSimpleDex([0x1250, 0x0F00]);
+        var dex = BuildSimpleDex([0x5012, 0x000F]);
         var output = LightweightDecompiler.DecompileAll(dex);
         Assert.Contains("return 5;", output);
     }
@@ -25,7 +25,7 @@ public class DexDecompilerTests
     [Fact]
     public void FieldRead_OnThis_RendersFieldAccess()
     {
-        var dex = BuildFieldDex([0x4C10, 0x0000, 0x0F00]);
+        var dex = BuildFieldDex([0x1052, 0x0000, 0x000F]);
         var output = LightweightDecompiler.DecompileAll(dex);
         Assert.Contains("return this.count;", output);
     }
@@ -35,11 +35,11 @@ public class DexDecompilerTests
     {
         var dex = BuildFieldDex(
         [
-            0x3800, 0x0006,
-            0x1221, 0x5321, 0x0000,
-            0x2804,
-            0x1231, 0x5321, 0x0000,
-            0x0E00
+            0x0038, 0x0006,
+            0x2112, 0x2159, 0x0000,
+            0x0428,
+            0x3112, 0x2159, 0x0000,
+            0x000E
         ], registersSize: 3);
         var output = LightweightDecompiler.DecompileAll(dex);
         Assert.Contains("if (v0 == 0)", output);
@@ -51,7 +51,7 @@ public class DexDecompilerTests
     [Fact]
     public void WhileLoop_IsStructured()
     {
-        var dex = BuildSimpleDex([0x3800, 0x0005, 0xCF01, 0x0101, 0x28FC, 0x0E00]);
+        var dex = BuildSimpleDex([0x0038, 0x0005, 0x01D8, 0x0101, 0xFC28, 0x000E]);
         var output = LightweightDecompiler.DecompileAll(dex);
         Assert.Contains("while (v0 != 0)", output);
         Assert.Contains("return;", output);
@@ -62,12 +62,12 @@ public class DexDecompilerTests
     {
         var dex = BuildSimpleDex(
         [
-            0x2B00, 0x000A, 0x0000,
-            0x121F, 0x2805,
-            0x1211, 0x2803,
-            0x1212, 0x2801,
-            0x0F01,
-            0x0100, 0x0002, 0x0000, 0x0000, 0xFFFB, 0xFFFF, 0xFFFD, 0xFFFF
+            0x002B, 0x000A, 0x0000,
+            0xF112, 0x0528,
+            0x1112, 0x0328,
+            0x2112, 0x0128,
+            0x010F,
+            0x0100, 0x0002, 0x0000, 0x0000, 0x0005, 0x0000, 0x0007, 0x0000
         ]);
         var output = LightweightDecompiler.DecompileAll(dex);
         Assert.Contains("switch (v0)", output);
@@ -94,7 +94,7 @@ public class DexDecompilerTests
     [Fact]
     public void BytecodeGuideMode_AddsOffsetsAndRawComments()
     {
-        var dex = BuildSimpleDex([0x1250, 0x0F00]);
+        var dex = BuildSimpleDex([0x5012, 0x000F]);
         var output = LightweightDecompiler.DecompileAll(dex, new DecompileOptions { Mode = DecompileOutputMode.BytecodeGuide });
         Assert.Contains("// 0x0002", output);
         Assert.Contains("const/4 v0, #5", output);
@@ -236,7 +236,7 @@ public class DexDecompilerTests
                 RegistersSize = 3,
                 InsSize = 1,
                 OutsSize = 0,
-                RawInsns = [0x1A01, 0x0005, 0x6801, 0x0000, 0x1111, 0x0E00]
+                RawInsns = [0x011A, 0x0005, 0x206E, 0x0000, 0x0012, 0x000E]
             }
         });
         dex.Classes.Add(cls);
@@ -267,7 +267,7 @@ public class DexDecompilerTests
             "V"
         ]);
         dex.Protos.AddRange([
-            new ProtoDefinition { ShortyIndex = 7, ReturnTypeIndex = 4 },
+            new ProtoDefinition { ShortyIndex = 7, ReturnTypeIndex = 4, ParameterTypeIndices = [3] },
             new ProtoDefinition { ShortyIndex = 8, ReturnTypeIndex = 2 }
         ]);
         dex.Methods.AddRange([
@@ -290,7 +290,7 @@ public class DexDecompilerTests
                 RegistersSize = 3,
                 InsSize = 1,
                 OutsSize = 0,
-                RawInsns = [0x2200, 0x0002, 0x1A01, 0x0005, 0x6A01, 0x0000, 0x1111, 0x1100]
+                RawInsns = [0x0022, 0x0002, 0x011A, 0x0005, 0x2070, 0x0000, 0x0010, 0x0011]
             }
         });
         dex.Classes.Add(cls);

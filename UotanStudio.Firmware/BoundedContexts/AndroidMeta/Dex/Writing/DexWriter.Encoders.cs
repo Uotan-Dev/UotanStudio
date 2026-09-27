@@ -130,8 +130,12 @@ internal static partial class DexWriter
     /// Writes an encoded value (encoded_value), minimally encoded per value_arg/value_type.
     /// <para>写出编码值（encoded_value），按 value_arg/value_type 极小编码。</para>
     /// </summary>
-    private static void WriteEncodedValue(BinaryWriter w, EncodedValue value)
+    private static void WriteEncodedValue(BinaryWriter w, EncodedValue value, int depth = 0)
     {
+        if (depth > 64)
+        {
+            throw new InvalidDataException("Encoded value nesting exceeds 64.");
+        }
         switch (value.Type)
         {
             case EncodedValueType.Byte:
@@ -173,7 +177,12 @@ internal static partial class DexWriter
             case EncodedValueType.Float:
                 {
                     var bits = BitConverter.SingleToUInt32Bits((float)(value.Value ?? 0f));
-                    var n = UnsignedByteCount(bits, 4);
+                    var n = 4;
+                    while (n > 1 && (bits & 255) == 0)
+                    {
+                        bits >>= 8;
+                        n--;
+                    }
                     w.Write((byte)((n - 1) << 5 | (byte)EncodedValueType.Float));
                     for (var i = 0; i < n; i++) w.Write((byte)(bits >> (i * 8)));
                     break;
@@ -181,7 +190,12 @@ internal static partial class DexWriter
             case EncodedValueType.Double:
                 {
                     var bits = BitConverter.DoubleToUInt64Bits((double)(value.Value ?? 0d));
-                    var n = UnsignedByteCount(bits, 8);
+                    var n = 8;
+                    while (n > 1 && (bits & 255) == 0)
+                    {
+                        bits >>= 8;
+                        n--;
+                    }
                     w.Write((byte)((n - 1) << 5 | (byte)EncodedValueType.Double));
                     for (var i = 0; i < n; i++) w.Write((byte)(bits >> (i * 8)));
                     break;
@@ -205,14 +219,14 @@ internal static partial class DexWriter
                     w.Write((byte)EncodedValueType.Array);
                     var items = value.AsArray() ?? [];
                     WriteUleb128(w, (uint)items.Length);
-                    foreach (var item in items) WriteEncodedValue(w, item);
+                    foreach (var item in items) WriteEncodedValue(w, item, depth + 1);
                     break;
                 }
             case EncodedValueType.Annotation:
                 {
                     w.Write((byte)EncodedValueType.Annotation);
                     var item = value.Value as AnnotationItem;
-                    WriteEncodedAnnotation(w, item ?? new AnnotationItem());
+                    WriteEncodedAnnotation(w, item ?? new AnnotationItem(), depth + 1);
                     break;
                 }
             case EncodedValueType.Null:
@@ -230,14 +244,18 @@ internal static partial class DexWriter
     /// Writes an encoded annotation (encoded_annotation).
     /// <para>写出编码注解（encoded_annotation）。</para>
     /// </summary>
-    private static void WriteEncodedAnnotation(BinaryWriter w, AnnotationItem item)
+    private static void WriteEncodedAnnotation(BinaryWriter w, AnnotationItem item, int depth = 0)
     {
+        if (depth > 64)
+        {
+            throw new InvalidDataException("Encoded annotation nesting exceeds 64.");
+        }
         WriteUleb128(w, (uint)item.TypeIndex);
         WriteUleb128(w, (uint)item.Elements.Count);
         foreach (var element in item.Elements)
         {
             WriteUleb128(w, (uint)element.NameIndex);
-            WriteEncodedValue(w, element.Value);
+            WriteEncodedValue(w, element.Value, depth + 1);
         }
     }
 

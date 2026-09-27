@@ -18,8 +18,8 @@ public class DexDisassemblerTests
         var dex = BuildMinimalDex();
         var text = Disassembler.DisassembleAll(dex);
 
-        Assert.Contains(".class public com.example.Hello", text);
-        Assert.Contains(".super java.lang.Object", text);
+        Assert.Contains(".class public Lcom/example/Hello;", text);
+        Assert.Contains(".super Ljava/lang/Object;", text);
         Assert.Contains(".method public static main(", text);
         Assert.Contains("const/4", text);
         Assert.Contains("return-void", text);
@@ -27,12 +27,12 @@ public class DexDisassemblerTests
     }
 
     [Fact]
-    public void DisassembleAll_ShowsRegistersAndLocals()
+    public void DisassembleAll_UsesSingleRegisterDeclaration()
     {
         var dex = BuildMinimalDex();
         var text = Disassembler.DisassembleAll(dex);
         Assert.Contains(".registers 1", text);
-        Assert.Contains(".locals 1", text);
+        Assert.DoesNotContain(".locals", text);
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public class DexDisassemblerTests
             RegistersSize = 0,
             InsSize = 0,
             OutsSize = 0,
-            RawInsns = [0x2804, 0x0000, 0x0E00]
+            RawInsns = [0x0428, 0x0000, 0x000E]
         };
         var cls = new ClassDefinition
         {
@@ -98,7 +98,7 @@ public class DexDisassemblerTests
             RegistersSize = 1,
             InsSize = 0,
             OutsSize = 0,
-            RawInsns = [0x1200, 0x0E00]
+            RawInsns = [0x0012, 0x000E]
         };
         var cls = new ClassDefinition
         {

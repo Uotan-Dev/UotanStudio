@@ -123,7 +123,8 @@ internal static class DexReader
                 || site[1].Type != EncodedValueType.String || site[2].Type != EncodedValueType.MethodType
                 || Convert.ToUInt32(site[0].Value) >= dex.MethodHandles.Count
                 || Convert.ToUInt32(site[1].Value) >= dex.Strings.Count
-                || Convert.ToUInt32(site[2].Value) >= dex.Protos.Count)
+                || Convert.ToUInt32(site[2].Value) >= dex.Protos.Count
+                || dex.MethodHandles[site[0].AsIndex()].Kind != 4)
                 throw new DexException("Invalid call-site bootstrap arguments.");
         }
     }
@@ -617,15 +618,23 @@ internal static class DexReader
     /// Reads an encoded annotation (encoded_annotation).
     /// <para>读取编码注解（encoded_annotation）。</para>
     /// </summary>
-    private static AnnotationItem ReadEncodedAnnotation(byte[] data, ref int offset, DexFile dex)
+    private static AnnotationItem ReadEncodedAnnotation(byte[] data, ref int offset, DexFile dex, int depth = 0)
     {
+        if (depth > 64)
+        {
+            throw new InvalidDataException("Encoded annotation nesting exceeds 64.");
+        }
         var typeIdx = checked((int)Leb128.ReadUleb128(data, ref offset));
         var size = Leb128.ReadUleb128(data, ref offset);
+        if (size > (data.Length - offset) / 2)
+        {
+            throw new InvalidDataException("The annotation element count exceeds the remaining input.");
+        }
         var item = new AnnotationItem { TypeIndex = typeIdx };
         for (var i = 0; i < size; i++)
         {
             var nameIdx = checked((int)Leb128.ReadUleb128(data, ref offset));
-            var value = ReadEncodedValue(data, ref offset, dex);
+            var value = ReadEncodedValue(data, ref offset, dex, depth + 1);
             item.Elements.Add(new AnnotationElement { NameIndex = nameIdx, Value = value });
         }
         return item;
@@ -635,17 +644,32 @@ internal static class DexReader
     /// Reads an encoded value (encoded_value), decoded per the value_arg/value_type rules.
     /// <para>读取编码值（encoded_value），按 value_arg/value_type 规则解码。</para>
     /// </summary>
-    private static EncodedValue ReadEncodedValue(byte[] data, ref int offset, DexFile dex)
+    private static EncodedValue ReadEncodedValue(byte[] data, ref int offset, DexFile dex, int depth = 0)
     {
+        if (depth > 64 || (uint)offset >= (uint)data.Length)
+        {
+            throw new InvalidDataException("Encoded value nesting or offset exceeds the input bounds.");
+        }
         var header = data[offset++];
 
         var arg = header >> 5;
         var type = (EncodedValueType)(header & 0x1f);
+        var maxArg = type switch
+        {
+            EncodedValueType.Byte or EncodedValueType.Array or EncodedValueType.Annotation or EncodedValueType.Null => 0,
+            EncodedValueType.Short or EncodedValueType.Char or EncodedValueType.Boolean => 1,
+            EncodedValueType.Long or EncodedValueType.Double => 7,
+            _ => 3
+        };
+        if (arg > maxArg)
+        {
+            throw new InvalidDataException("The encoded value_arg exceeds its type's width.");
+        }
 
         switch (type)
         {
             case EncodedValueType.Byte:
-                return EncodedValue.Byte(data[offset++]);
+                return EncodedValue.Byte((byte)ReadUnsignedValue(data, ref offset, 1));
             case EncodedValueType.Short:
                 return EncodedValue.Short((short)ReadSignedValue(data, ref offset, arg + 1));
             case EncodedValueType.Char:
@@ -656,12 +680,12 @@ internal static class DexReader
                 return EncodedValue.Long(ReadSignedValue(data, ref offset, arg + 1));
             case EncodedValueType.Float:
                 {
-                    var bits = unchecked((uint)ReadUnsignedValue(data, ref offset, arg + 1));
+                    var bits = unchecked((uint)ReadUnsignedValue(data, ref offset, arg + 1)) << ((3 - arg) * 8);
                     return EncodedValue.Float(BitConverter.Int32BitsToSingle(unchecked((int)bits)));
                 }
             case EncodedValueType.Double:
                 {
-                    var bits = ReadUnsignedValue(data, ref offset, arg + 1);
+                    var bits = ReadUnsignedValue(data, ref offset, arg + 1) << ((7 - arg) * 8);
                     return EncodedValue.Double(BitConverter.Int64BitsToDouble(unchecked((long)bits)));
                 }
             case EncodedValueType.MethodType:
@@ -681,15 +705,19 @@ internal static class DexReader
             case EncodedValueType.Array:
                 {
                     var size = Leb128.ReadUleb128(data, ref offset);
+                    if (size > data.Length - offset)
+                    {
+                        throw new InvalidDataException("The encoded array count exceeds the remaining input.");
+                    }
                     var items = new EncodedValue[size];
                     for (var i = 0; i < size; i++)
                     {
-                        items[i] = ReadEncodedValue(data, ref offset, dex);
+                        items[i] = ReadEncodedValue(data, ref offset, dex, depth + 1);
                     }
                     return EncodedValue.Array(items);
                 }
             case EncodedValueType.Annotation:
-                return EncodedValue.Annotation(ReadEncodedAnnotation(data, ref offset, dex));
+                return EncodedValue.Annotation(ReadEncodedAnnotation(data, ref offset, dex, depth + 1));
             case EncodedValueType.Null:
                 return EncodedValue.Null();
             case EncodedValueType.Boolean:
@@ -705,6 +733,10 @@ internal static class DexReader
     /// </summary>
     private static ulong ReadUnsignedValue(byte[] data, ref int offset, int byteCount)
     {
+        if (offset < 0 || byteCount < 1 || byteCount > 8 || offset > data.Length - byteCount)
+        {
+            throw new InvalidDataException("An encoded scalar value exceeds the remaining input.");
+        }
         ulong value = 0;
         for (var i = 0; i < byteCount; i++)
         {

@@ -8,8 +8,13 @@ namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Smali;
 /// labels and decoded instructions.
 /// <para>把已解析的 DEX 结构输出为 smali 风格文本：类与成员声明、注解、编码值、标签以及解码后的指令。</para>
 /// </summary>
-public static class Disassembler
+public static partial class Disassembler
 {
+    /// <remarks>
+    /// Unreferenced switch tables use project-specific .packed-switch-raw or .sparse-switch-raw blocks,
+    /// retaining signed code-unit offsets without inventing a case-label origin.
+    /// <para>无引用 switch 表使用项目专用的 .packed-switch-raw 或 .sparse-switch-raw 块，保留有符号代码单元偏移而不虚构标签起点。</para>
+    /// </remarks>
     /// <summary>
     /// Disassembles the entire DEX file into text.
     /// <para>反汇编整个 DEX 文件为文本。</para>
@@ -86,21 +91,21 @@ public static class Disassembler
 
     private static void AppendDisassembleClass(StringBuilder sb, DexFile dex, ClassDefinition cls)
     {
-        var access = AccessFlags.Format(cls.AccessFlags);
-        var className = dex.FormatType(cls.TypeIndex);
+        var access = AccessFlags.FormatClass(cls.AccessFlags);
+        var className = dex.GetType(cls.TypeIndex);
         sb.Append(".class ").Append(access).Append(access.Length > 0 ? " " : string.Empty).AppendLine(className);
 
         if (cls.SuperclassIndex >= 0)
         {
-            sb.Append(".super ").AppendLine(dex.FormatType(cls.SuperclassIndex));
+            sb.Append(".super ").AppendLine(dex.GetType(cls.SuperclassIndex));
         }
         foreach (var i in cls.InterfaceTypeIndices)
         {
-            sb.Append(".implements ").AppendLine(dex.FormatType(i));
+            sb.Append(".implements ").AppendLine(dex.GetType(i));
         }
         if (cls.SourceFileIndex >= 0)
         {
-            sb.Append(".source \"").Append(dex.GetString(cls.SourceFileIndex)).AppendLine("\"");
+            sb.Append(".source \"").Append(EscapeString(dex.GetString(cls.SourceFileIndex))).AppendLine("\"");
         }
 
 
@@ -115,9 +120,9 @@ public static class Disassembler
             var f = cls.StaticFields[i];
             var field = dex.GetField(f.FieldIndex);
             if (field == null) continue;
-            var fieldAccess = AccessFlags.Format(f.AccessFlags);
+            var fieldAccess = AccessFlags.FormatField(f.AccessFlags);
             sb.Append(".field ").Append(fieldAccess).Append(fieldAccess.Length > 0 ? " " : string.Empty)
-              .Append(dex.GetString(field.NameIndex)).Append(':').Append(dex.FormatType(field.TypeIndex));
+              .Append(dex.GetString(field.NameIndex)).Append(':').Append(dex.GetType(field.TypeIndex));
             if (cls.StaticValues is { Count: > 0 } staticValues && i < staticValues.Count)
             {
                 sb.Append(" = ").Append(FormatEncodedValue(dex, staticValues[i]));
@@ -129,9 +134,9 @@ public static class Disassembler
         {
             var field = dex.GetField(f.FieldIndex);
             if (field == null) continue;
-            var fieldAccess = AccessFlags.Format(f.AccessFlags);
+            var fieldAccess = AccessFlags.FormatField(f.AccessFlags);
             sb.Append(".field ").Append(fieldAccess).Append(fieldAccess.Length > 0 ? " " : string.Empty)
-              .Append(dex.GetString(field.NameIndex)).Append(':').AppendLine(dex.FormatType(field.TypeIndex));
+              .Append(dex.GetString(field.NameIndex)).Append(':').AppendLine(dex.GetType(field.TypeIndex));
             AppendFieldAnnotations(sb, dex, cls, f.FieldIndex);
         }
 
@@ -147,7 +152,8 @@ public static class Disassembler
         var annotations = cls.Annotations?.FieldAnnotations.FirstOrDefault(fa => fa.FieldIndex == fieldIndex)?.Annotations;
         if (annotations is { IsEmpty: false })
         {
-            sb.Append(FormatAnnotationSet(dex, annotations, string.Empty));
+            sb.Append(FormatAnnotationSet(dex, annotations, "    "));
+            sb.AppendLine(".end field");
         }
     }
 
@@ -165,18 +171,17 @@ public static class Disassembler
     /// omits every annotation block while the declaration and bytecode still print.
     /// <para>用于查找方法级注解与参数注解的所属类；为 <see langword="null"/> 时不输出任何注解块，但声明行与字节码照常输出。</para></param>
     /// <returns>
-    /// The <c>.method</c> line with formatted flags and readable parameter and return types; for a method with a
-    /// code item the <c>.registers</c> and <c>.locals</c> lines, annotation blocks, then one instruction per line
+    /// The <c>.method</c> line with formatted flags and parameter and return descriptors; for a method with a
+    /// code item the <c>.registers</c> line, annotation blocks, then one instruction per line
     /// with <c>:label_XXXX</c>, <c>:try_start_</c>, <c>:try_end_</c> and <c>:catch</c> labels, closed by
     /// <c>.end method</c>. A body without a code item prints as the declaration followed by <c>.end method</c>.
-    /// <c>.locals</c> is the raw difference of <c>registers_size</c> and <c>ins_size</c>, so untrusted counts can
-    /// make it negative; label and catch addresses are derived from try and handler offsets that are not validated
+    /// Label and catch addresses are derived from try and handler offsets that are not validated
     /// against the instruction stream, and the whole text is built in memory. Empty when the
     /// <c>method_idx</c> resolves to no <c>method_ids</c> entry.
-    /// <para>输出带格式化标志与可读参数、返回类型的 <c>.method</c> 行；方法含 code item 时接着输出 <c>.registers</c>
-    /// 与 <c>.locals</c> 行、注解块，然后每行一条指令，并插入 <c>:label_XXXX</c>、<c>:try_start_</c>、
+    /// <para>输出带格式化标志与参数、返回类型描述符的 <c>.method</c> 行；方法含 code item 时接着输出 <c>.registers</c>
+    /// 行、注解块，然后每行一条指令，并插入 <c>:label_XXXX</c>、<c>:try_start_</c>、
     /// <c>:try_end_</c> 与 <c>:catch</c> 标签，以 <c>.end method</c> 结束。没有 code item 的方法体只输出声明行与
-    /// <c>.end method</c>。<c>.locals</c> 是 <c>registers_size</c> 与 <c>ins_size</c> 的原始差值，未经信任的计数可能使其为负；
+    /// <c>.end method</c>。
     /// 标签与 catch 地址取自不与指令流比对的 try 和处理程序偏移，全部文本在内存中构造。<c>method_idx</c>
     /// 找不到 <c>method_ids</c> 条目时返回空字符串。</para>
     /// </returns>
@@ -208,7 +213,7 @@ public static class Disassembler
         if (method == null) return;
 
         var proto = dex.GetProto(method.ProtoIndex);
-        var access = AccessFlags.Format(encodedMethod.AccessFlags);
+        var access = AccessFlags.FormatMethod(encodedMethod.AccessFlags);
 
         sb.Append(".method ").Append(access).Append(access.Length > 0 ? " " : string.Empty)
           .Append(dex.GetString(method.NameIndex)).Append('(');
@@ -216,17 +221,16 @@ public static class Disassembler
         {
             for (var i = 0; i < proto.ParameterTypeIndices.Length; i++)
             {
-                if (i > 0) sb.Append(", ");
-                sb.Append(dex.FormatType(proto.ParameterTypeIndices[i]));
+                sb.Append(dex.GetType(proto.ParameterTypeIndices[i]));
             }
         }
         sb.Append(')');
-        sb.Append(proto != null ? dex.FormatType(proto.ReturnTypeIndex) : "?").AppendLine();
+        sb.Append(proto != null ? dex.GetType(proto.ReturnTypeIndex) : "?").AppendLine();
 
         var code = encodedMethod.Code;
         if (code == null)
         {
-            AppendMethodAnnotations(sb, dex, cls, encodedMethod.MethodIndex, code: null);
+            AppendMethodAnnotations(sb, dex, cls, encodedMethod.MethodIndex, encodedMethod.AccessFlags, code: null);
             sb.AppendLine(".end method");
             return;
         }
@@ -234,13 +238,13 @@ public static class Disassembler
 
         var instructions = code.Instructions.Count > 0
             ? code.Instructions
-            : Instructions.InstructionDecoder.Decode(code.RawInsns, dex);
+            : Instructions.InstructionDecoder.DecodeForSmali(code.RawInsns, dex);
 
         sb.Append("    .registers ").AppendLine(code.RegistersSize.ToString());
-        sb.Append("    .locals ").AppendLine((code.RegistersSize - code.InsSize).ToString());
 
 
-        AppendMethodAnnotations(sb, dex, cls, encodedMethod.MethodIndex, code);
+        AppendMethodAnnotations(sb, dex, cls, encodedMethod.MethodIndex, encodedMethod.AccessFlags, code);
+        var debugDirectives = ReadDebugDirectives(dex, code, instructions);
 
 
         var labels = new HashSet<int>();
@@ -253,6 +257,7 @@ public static class Disassembler
         }
 
 
+        var payloadOwners = CollectPayloadLabels(instructions, labels);
         var tryStarts = new Dictionary<int, List<string>>();
         var tryEnds = new Dictionary<int, (List<string> Labels, List<string> CatchLines)>();
         var catchLabels = new Dictionary<int, string>();
@@ -315,9 +320,47 @@ public static class Disassembler
                     foreach (var c in ends.CatchLines) sb.Append("    ").AppendLine(c);
                 }
             }
+            if (debugDirectives.TryGetValue(insn.Offset, out var directives))
+            {
+                foreach (var directive in directives)
+                {
+                    sb.Append("    ").AppendLine(directive);
+                }
+            }
+            if (insn.Operands.FirstOrDefault() is PayloadOperand)
+            {
+                AppendPayloadBlock(sb, insn, payloadOwners.Owners.TryGetValue(insn.Offset, out var owner) ? owner : null);
+                continue;
+            }
             sb.Append("    ").Append(insn.Mnemonic).Append(' ');
-            AppendOperands(sb, insn);
+            if (payloadOwners.TargetLabels.TryGetValue(insn.Offset, out var targetLabel))
+            {
+                AppendOperand(sb, insn.Operands[0], dex);
+                sb.Append(", ").Append(targetLabel);
+            }
+            else
+            {
+                AppendOperands(sb, insn, dex);
+            }
             sb.AppendLine();
+        }
+
+        if (debugDirectives.TryGetValue(code.RawInsns.Length * 2, out var terminalDirectives))
+        {
+            foreach (var directive in terminalDirectives)
+            {
+                sb.Append("    ").AppendLine(directive);
+            }
+        }
+        if (tryEnds.TryGetValue(code.RawInsns.Length * 2, out var terminalEnds))
+        {
+            foreach (var label in terminalEnds.Labels) sb.Append("  ").AppendLine(label);
+            foreach (var line in terminalEnds.CatchLines) sb.Append("    ").AppendLine(line);
+        }
+        foreach (var copy in payloadOwners.Copies)
+        {
+            sb.Append("  ").AppendLine(copy.Label);
+            AppendPayloadBlock(sb, copy.Payload, copy.Owner);
         }
 
         sb.AppendLine(".end method");
@@ -327,37 +370,45 @@ public static class Disassembler
     /// Emits method-level and parameter annotations (.annotation / .param).
     /// <para>输出方法级注解与参数注解（.annotation / .param）。</para>
     /// </summary>
-    private static void AppendMethodAnnotations(StringBuilder sb, DexFile dex, ClassDefinition? cls, int methodIndex, CodeItem? code)
+    private static void AppendMethodAnnotations(StringBuilder sb, DexFile dex, ClassDefinition? cls, int methodIndex, uint flags, CodeItem? code)
     {
-        if (cls?.Annotations == null) return;
-
-        var methodAnns = cls.Annotations.MethodAnnotations.FirstOrDefault(ma => ma.MethodIndex == methodIndex)?.Annotations;
+        var methodAnns = cls?.Annotations?.MethodAnnotations.FirstOrDefault(ma => ma.MethodIndex == methodIndex)?.Annotations;
         if (methodAnns is { IsEmpty: false })
         {
             sb.Append(FormatAnnotationSet(dex, methodAnns, "    "));
         }
 
-        var paramAnns = cls.Annotations.ParameterAnnotations.FirstOrDefault(pa => pa.MethodIndex == methodIndex)?.Parameters;
-        if (paramAnns == null || code == null) return;
-
-
-        var paramBase = code.RegistersSize - code.InsSize;
-        for (var i = 0; i < paramAnns.Sets.Count; i++)
+        var paramAnns = cls?.Annotations?.ParameterAnnotations.FirstOrDefault(pa => pa.MethodIndex == methodIndex)?.Parameters;
+        var method = dex.GetMethod(methodIndex)!;
+        var proto = dex.GetProto(method.ProtoIndex);
+        if (proto is null)
         {
-            var set = paramAnns.Sets[i];
-            if (set is not { IsEmpty: false }) continue;
-            foreach (var item in set.Annotations)
+            return;
+        }
+        var names = ReadParameterNames(dex, code, proto.ParameterTypeIndices.Length);
+        if (paramAnns is not null && paramAnns.Sets.Count > proto.ParameterTypeIndices.Length)
+        {
+            throw new InvalidDataException("The parameter annotation list exceeds the method signature.");
+        }
+        var word = (flags & AccessFlags.Static) == 0 ? 1 : 0;
+        for (var i = 0; i < proto.ParameterTypeIndices.Length; i++)
+        {
+            var set = paramAnns is not null && i < paramAnns.Sets.Count ? paramAnns.Sets[i] : null;
+            if (names[i] is not null || set is { IsEmpty: false })
             {
-                sb.Append("    .param p").Append(paramBase + i).Append(", .annotation ")
-                  .Append(VisibilityName(item.Visibility)).Append(' ').Append(dex.GetType(item.TypeIndex)).AppendLine();
-                foreach (var element in item.Elements)
+                sb.Append("    .param p").Append(word);
+                if (names[i] is { } name)
                 {
-                    sb.Append("        ").Append(dex.GetString(element.NameIndex)).Append(" = ")
-                      .AppendLine(FormatEncodedValue(dex, element.Value));
+                    sb.Append(", \"").Append(EscapeString(name)).Append('"');
                 }
-                sb.AppendLine("    .end annotation");
-                sb.AppendLine("    .end param");
+                sb.AppendLine();
+                if (set is { IsEmpty: false })
+                {
+                    sb.Append(FormatAnnotationSet(dex, set, "        "));
+                    sb.AppendLine("    .end param");
+                }
             }
+            word += dex.GetType(proto.ParameterTypeIndices[i]) is "J" or "D" ? 2 : 1;
         }
     }
 
@@ -375,7 +426,7 @@ public static class Disassembler
             foreach (var element in item.Elements)
             {
                 sb.Append(indent).Append("    ").Append(dex.GetString(element.NameIndex)).Append(" = ")
-                  .AppendLine(FormatEncodedValue(dex, element.Value));
+                  .AppendLine(FormatEncodedValue(dex, element.Value, indent + "    "));
             }
             sb.Append(indent).AppendLine(".end annotation");
         }
@@ -393,12 +444,12 @@ public static class Disassembler
     /// Formats an encoded value as a smali-style literal (annotation element values / field initializers).
     /// <para>把编码值格式化为 smali 风格字面量（注解元素值 / 字段初始值）。</para>
     /// </summary>
-    private static string FormatEncodedValue(DexFile dex, EncodedValue value)
+    private static string FormatEncodedValue(DexFile dex, EncodedValue value, string indent = "")
     {
         switch (value.Type)
         {
             case EncodedValueType.Byte:
-                return value.AsInt().ToString(System.Globalization.CultureInfo.InvariantCulture) + "t";
+                return unchecked((sbyte)value.AsInt()).ToString(System.Globalization.CultureInfo.InvariantCulture) + "t";
             case EncodedValueType.Short:
                 return value.AsInt().ToString(System.Globalization.CultureInfo.InvariantCulture) + "s";
             case EncodedValueType.Char:
@@ -412,10 +463,12 @@ public static class Disassembler
                 return value.AsLong().ToString(System.Globalization.CultureInfo.InvariantCulture) + "L";
             case EncodedValueType.Float:
                 return Convert.ToSingle(value.Value, System.Globalization.CultureInfo.InvariantCulture)
-                    .ToString("R", System.Globalization.CultureInfo.InvariantCulture) + "f";
+                    .ToString("R", System.Globalization.CultureInfo.InvariantCulture).Replace("E+", "E", StringComparison.Ordinal) + "f";
             case EncodedValueType.Double:
-                return Convert.ToDouble(value.Value, System.Globalization.CultureInfo.InvariantCulture)
-                    .ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+                var number = Convert.ToDouble(value.Value, System.Globalization.CultureInfo.InvariantCulture);
+                var formatted = number.ToString("R", System.Globalization.CultureInfo.InvariantCulture).Replace("E+", "E", StringComparison.Ordinal);
+                return double.IsFinite(number) && !formatted.Contains('.') && !formatted.Contains('E')
+                    ? formatted + ".0" : formatted;
             case EncodedValueType.Boolean:
                 return value.AsBoolean() ? "true" : "false";
             case EncodedValueType.Null:
@@ -430,7 +483,8 @@ public static class Disassembler
                     var field = dex.GetField(value.AsIndex());
                     return field == null
                         ? "?"
-                        : $"{dex.GetType(field.ClassIndex)}->{dex.GetString(field.NameIndex)}:{dex.GetType(field.TypeIndex)}";
+                        : (value.Type == EncodedValueType.Enum ? ".enum " : string.Empty)
+                          + $"{dex.GetType(field.ClassIndex)}->{dex.GetString(field.NameIndex)}:{dex.GetType(field.TypeIndex)}";
                 }
             case EncodedValueType.Method:
                 {
@@ -452,25 +506,32 @@ public static class Disassembler
             case EncodedValueType.Array:
                 {
                     var items = value.AsArray() ?? [];
-                    return "{" + string.Join(", ", items.Select(v => FormatEncodedValue(dex, v))) + "}";
+                    return items.Length == 0 ? "{}" : "{\n" + string.Join(",\n",
+                        items.Select(v => indent + "    " + FormatEncodedValue(dex, v, indent + "    "))) + "\n" + indent + "}";
                 }
             case EncodedValueType.Annotation:
                 {
                     var item = value.Value as AnnotationItem;
                     if (item == null) return "?";
                     var sb = new StringBuilder();
-                    sb.Append('@').Append(dex.GetType(item.TypeIndex)).Append('{');
-                    for (var i = 0; i < item.Elements.Count; i++)
+                    sb.Append(".subannotation ").Append(dex.GetType(item.TypeIndex)).AppendLine();
+                    foreach (var element in item.Elements)
                     {
-                        if (i > 0) sb.Append(", ");
-                        sb.Append(dex.GetString(item.Elements[i].NameIndex)).Append('=')
-                          .Append(FormatEncodedValue(dex, item.Elements[i].Value));
+                        sb.Append(indent).Append("    ").Append(dex.GetString(element.NameIndex)).Append(" = ")
+                          .AppendLine(FormatEncodedValue(dex, element.Value, indent + "    "));
                     }
-                    sb.Append('}');
+                    sb.Append(indent).Append(".end subannotation");
                     return sb.ToString();
                 }
             case EncodedValueType.MethodHandle:
-                return "method-handle@" + value.AsIndex();
+                var index = value.AsIndex();
+                if (index < 0 || index >= dex.MethodHandles.Count)
+                {
+                    throw new InvalidDataException("A method-handle reference is outside its table.");
+                }
+                var handle = dex.MethodHandles[index];
+                return SmaliMethodHandles.Name(handle.Kind) + "@" + FormatEncodedValue(dex,
+                    new EncodedValue(handle.Kind <= 3 ? EncodedValueType.Field : EncodedValueType.Method, (int)handle.MemberIndex));
             default:
                 return "?";
         }
@@ -487,7 +548,7 @@ public static class Disassembler
         _ => c.ToString()
     };
 
-    private static void AppendOperands(StringBuilder sb, Instruction insn)
+    private static void AppendOperands(StringBuilder sb, Instruction insn, DexFile dex)
     {
         if (insn.Operands.Count == 0) return;
 
@@ -495,16 +556,23 @@ public static class Disassembler
         if (insn.Operands[0] is IReadOnlyList<int> regs)
         {
             sb.Append('{');
-            for (var i = 0; i < regs.Count; i++)
+            if (insn.Mnemonic.EndsWith("/range", StringComparison.Ordinal) && regs.Count > 0)
             {
-                if (i > 0) sb.Append(", ");
-                sb.Append('v').Append(regs[i]);
+                sb.Append('v').Append(regs[0]).Append(" .. v").Append(regs[^1]);
+            }
+            else
+            {
+                for (var i = 0; i < regs.Count; i++)
+                {
+                    if (i > 0) sb.Append(", ");
+                    sb.Append('v').Append(regs[i]);
+                }
             }
             sb.Append('}');
             for (var i = 1; i < insn.Operands.Count; i++)
             {
                 sb.Append(", ");
-                AppendOperand(sb, insn.Operands[i]);
+                AppendOperand(sb, insn.Operands[i], dex);
             }
             return;
         }
@@ -512,11 +580,11 @@ public static class Disassembler
         for (var i = 0; i < insn.Operands.Count; i++)
         {
             if (i > 0) sb.Append(", ");
-            AppendOperand(sb, insn.Operands[i]);
+            AppendOperand(sb, insn.Operands[i], dex);
         }
     }
 
-    private static void AppendOperand(StringBuilder sb, object? operand)
+    private static void AppendOperand(StringBuilder sb, object? operand, DexFile dex)
     {
         switch (operand)
         {
@@ -533,20 +601,33 @@ public static class Disassembler
                 sb.Append(type.Descriptor);
                 break;
             case FieldRefOperand field:
-                sb.Append(field.OwnerClass).Append("->").Append(field.Name).Append(':').Append(field.Type);
+                sb.Append(SmaliTypes.Single(field.OwnerClass, allowVoid: false)).Append("->").Append(field.Name)
+                    .Append(':').Append(SmaliTypes.Single(field.Type, allowVoid: false));
                 break;
             case MethodRefOperand method:
-                sb.Append(method.OwnerClass).Append("->").Append(method.Name).Append('(');
+                sb.Append(SmaliTypes.Single(method.OwnerClass, allowVoid: false)).Append("->").Append(method.Name).Append('(');
                 for (var i = 0; i < method.Parameters.Length; i++)
                 {
-                    if (i > 0) sb.Append(", ");
-                    sb.Append(method.Parameters[i]);
+                    sb.Append(SmaliTypes.Single(method.Parameters[i], allowVoid: false));
                 }
-                sb.Append(')').Append(method.ReturnType);
+                sb.Append(')').Append(SmaliTypes.Single(method.ReturnType, allowVoid: true));
                 break;
-            case PayloadOperand payload:
-                AppendPayload(sb, payload);
+            case ProtoRefOperand prototype:
+                sb.Append('(');
+                foreach (var parameter in prototype.Parameters)
+                {
+                    sb.Append(parameter);
+                }
+                sb.Append(')').Append(prototype.ReturnType);
                 break;
+            case MethodHandleRefOperand handle:
+                sb.Append(FormatEncodedValue(dex, new EncodedValue(EncodedValueType.MethodHandle, handle.Index)));
+                break;
+            case CallSiteRefOperand site:
+                AppendCallSite(sb, dex, site.Index);
+                break;
+            case PayloadOperand:
+                throw new InvalidDataException("A payload must be rendered as a complete directive block.");
             case int reg:
                 sb.Append('v').Append(reg);
                 break;
@@ -561,41 +642,10 @@ public static class Disassembler
 
     private static void AppendNumber(StringBuilder sb, long value)
     {
-        sb.Append("#0x").Append(value is >= 0 and <= 0xFFFF ? value.ToString("X") : value.ToString("X8"));
-    }
-
-    private static void AppendPayload(StringBuilder sb, PayloadOperand payload)
-    {
-        sb.Append(payload.Kind);
-        if (payload.Kind == "packed-switch")
+        sb.Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (value is < int.MinValue or > int.MaxValue)
         {
-            sb.Append(" first_key=").Append(payload.FirstKey).Append(" targets=[");
-            AppendValueList(sb, payload.Values);
-            sb.Append(']');
-        }
-        else if (payload.Kind == "sparse-switch")
-        {
-            sb.Append(" entries=").Append(payload.Values.Length);
-        }
-        else if (payload.Kind == "fill-array-data")
-        {
-            sb.Append(" width=").Append(payload.FirstKey).Append(" units=").Append(payload.Values.Length);
-        }
-        else
-        {
-            sb.Append('[');
-            AppendValueList(sb, payload.Values);
-            sb.Append(']');
-        }
-    }
-
-    private static void AppendValueList(StringBuilder sb, int[] values)
-    {
-        var count = Math.Min(values.Length, 8);
-        for (var i = 0; i < count; i++)
-        {
-            if (i > 0) sb.Append(", ");
-            sb.Append(values[i]);
+            sb.Append('L');
         }
     }
 

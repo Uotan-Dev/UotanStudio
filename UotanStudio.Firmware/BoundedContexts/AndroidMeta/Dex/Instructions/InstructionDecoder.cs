@@ -23,51 +23,40 @@ public static class InstructionDecoder
     /// <para>用于解析字符串、类型、字段与方法引用操作数的 <see cref="DexFile"/>。</para>
     /// </param>
     /// <returns>
-    /// Instructions in stream order with byte offsets and code-unit sizes. A branch target of
-    /// <c>fill-array-data</c>, <c>packed-switch</c> or <c>sparse-switch</c> that carries a payload ident is
-    /// decoded as a payload entry; an opcode with no table entry becomes a one-unit <c>unknown-0xNN</c>
+    /// Instructions in stream order with byte offsets and code-unit sizes. A payload ident at an
+    /// instruction boundary is decoded as a payload entry; an opcode with no table entry becomes a one-unit <c>unknown-0xNN</c>
     /// entry; an instruction cut off by the end of the stream becomes a <c>truncated-</c> entry and ends decoding.
-    /// <para>按流顺序返回的指令，含字节偏移与代码单元长度。<c>fill-array-data</c>、<c>packed-switch</c>
-    /// 或 <c>sparse-switch</c> 的跳转目标若带有有效负载标识，则解码为负载条目；无表项的操作码输出为
+    /// <para>按流顺序返回的指令，含字节偏移与代码单元长度。指令边界上的有效负载标识解码为负载条目；无表项的操作码输出为
     /// 1 单元的 <c>unknown-0xNN</c> 条目；被流尾截断的指令输出为 <c>truncated-</c> 前缀条目并结束解码。</para>
     /// </returns>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="raw"/> or <paramref name="dex"/> is <see langword="null"/>.
     /// <para><paramref name="raw"/> 或 <paramref name="dex"/> 为 <see langword="null"/>。</para>
     /// </exception>
+    /// <exception cref="InvalidDataException">A payload is truncated, misaligned, or has an invalid width,
+    /// or a fixed register list exceeds five words.
+    /// <para>负载被截断、未对齐或元素宽度无效，或者固定寄存器列表超过五个字。</para></exception>
     public static List<Instruction> Decode(ushort[] raw, DexFile dex)
+        => Decode(raw, dex, descriptors: false);
+
+    internal static List<Instruction> DecodeForSmali(ushort[] raw, DexFile dex)
+        => Decode(raw, dex, descriptors: true);
+
+    private static List<Instruction> Decode(ushort[] raw, DexFile dex, bool descriptors)
     {
         ArgumentNullException.ThrowIfNull(raw);
         ArgumentNullException.ThrowIfNull(dex);
 
 
-        List<int>? payloadTargets = null;
-        var instructionCount = 0;
-        var scan = 0;
-        while (scan < raw.Length)
-        {
-            var scanUnit = raw[scan];
-            var scanOpcode = (byte)(scanUnit >> 8);
-            if (scanOpcode is 0x26 or 0x2b or 0x2c && scan + 2 < raw.Length)
-            {
-                var rel = (int)((uint)(raw[scan + 1] | (raw[scan + 2] << 16)));
-                (payloadTargets ??= []).Add(scan + rel);
-            }
-            scan += Math.Max(1, OpCodes.GetSize(scanOpcode));
-            instructionCount++;
-        }
-
-
-        var instructions = new List<Instruction>(instructionCount);
+        var instructions = new List<Instruction>();
         var index = 0;
         while (index < raw.Length)
         {
             var unit = raw[index];
-            var opcode = (byte)(unit >> 8);
+            var opcode = (byte)unit;
 
 
-            if (payloadTargets is { Count: > 0 } targets && targets.Contains(index)
-                && (unit == 0x0100 || unit == 0x0200 || unit == 0x0300))
+            if (unit is 0x0100 or 0x0200 or 0x0300)
             {
                 var consumed = DecodePayload(raw, index, instructions, unit);
                 index += consumed;
@@ -82,7 +71,7 @@ public static class InstructionDecoder
                     Offset = index * 2,
                     OpCode = opcode,
                     Mnemonic = $"unknown-0x{opcode:X2}",
-                    Operands = [unit & 0xff],
+                    Operands = [unit >> 8],
                     Size = 1
                 });
                 index++;
@@ -103,7 +92,7 @@ public static class InstructionDecoder
                 break;
             }
 
-            var operands = DecodeOperands(raw, index, info, dex);
+            var operands = DecodeOperands(raw, index, info, dex, descriptors);
             instructions.Add(new Instruction
             {
                 Offset = index * 2,
@@ -119,12 +108,30 @@ public static class InstructionDecoder
 
     private static int DecodePayload(ushort[] raw, int index, List<Instruction> code, ushort ident)
     {
+        if ((index & 1) != 0 || raw.Length - index < (ident == 0x0200 ? 2 : 4))
+        {
+            throw new InvalidDataException("A DEX payload must be aligned to four bytes and contain its complete header.");
+        }
+        long required = ident switch
+        {
+            0x0100 => 4L + raw[index + 1] * 2L,
+            0x0200 => 2L + raw[index + 1] * 4L,
+            _ => 4L + (raw[index + 1] * (long)((uint)raw[index + 2] | (uint)raw[index + 3] << 16) + 1) / 2
+        };
+        if (required > raw.Length - index || ident == 0x0300 && raw[index + 1] is not (1 or 2 or 4 or 8))
+        {
+            throw new InvalidDataException("The DEX payload exceeds the instruction stream or has an invalid element width.");
+        }
         switch (ident)
         {
             case 0x0100:
                 {
                     var size = raw[index + 1];
                     var firstKey = (int)((uint)(raw[index + 2] | (raw[index + 3] << 16)));
+                    if (size > 0 && (long)firstKey + size - 1 > int.MaxValue)
+                    {
+                        throw new InvalidDataException("The packed-switch key range exceeds a signed 32-bit integer.");
+                    }
                     var targets = new int[size];
                     for (var i = 0; i < size; i++)
                     {
@@ -148,6 +155,10 @@ public static class InstructionDecoder
                     for (var i = 0; i < size; i++)
                     {
                         keys[i] = (int)((uint)(raw[index + 2 + i * 2] | (raw[index + 3 + i * 2] << 16)));
+                        if (i > 0 && keys[i] <= keys[i - 1])
+                        {
+                            throw new InvalidDataException("Sparse-switch keys must be strictly increasing.");
+                        }
                         targets[i] = (int)((uint)(raw[index + 2 + size * 2 + i * 2] | (raw[index + 3 + size * 2 + i * 2] << 16)));
                     }
                     code.Add(new Instruction
@@ -163,8 +174,7 @@ public static class InstructionDecoder
             default:
                 {
                     var width = raw[index + 1];
-                    var size = raw[index + 2] | (raw[index + 3] << 16);
-                    var dataUnits = (width * size + 1) / 2;
+                    var dataUnits = checked((int)required - 4);
                     var payload = new int[dataUnits];
                     for (var i = 0; i < dataUnits; i++)
                     {
@@ -175,7 +185,10 @@ public static class InstructionDecoder
                         Offset = index * 2,
                         OpCode = 0,
                         Mnemonic = "fill-array-data-payload",
-                        Operands = [new PayloadOperand("fill-array-data", width, payload)],
+                        Operands = [new PayloadOperand("fill-array-data", width, payload)
+                        {
+                            ElementCount = (uint)raw[index + 2] | (uint)raw[index + 3] << 16
+                        }],
                         Size = 4 + dataUnits
                     });
                     return 4 + dataUnits;
@@ -183,12 +196,12 @@ public static class InstructionDecoder
         }
     }
 
-    private static IReadOnlyList<object?> DecodeOperands(ushort[] raw, int index, OpCodeInfo info, DexFile dex)
+    private static IReadOnlyList<object?> DecodeOperands(ushort[] raw, int index, OpCodeInfo info, DexFile dex, bool descriptors)
     {
         var unit0 = raw[index];
-        var aNibble = unit0 & 0x0f;
-        var bNibble = (unit0 >> 4) & 0x0f;
-        var aa = (byte)(unit0 & 0xff);
+        var aNibble = (unit0 >> 8) & 0x0f;
+        var bNibble = (unit0 >> 12) & 0x0f;
+        var aa = unit0 >> 8;
 
         switch (info.Format)
         {
@@ -198,7 +211,7 @@ public static class InstructionDecoder
                 return [aNibble, bNibble];
             case InstructionFormat.Format11n:
                 {
-                    var literal = SignExtend4((byte)((unit0 >> 4) & 0x0f));
+                    var literal = SignExtend4((byte)bNibble);
                     return [aNibble, new LiteralOperand(literal)];
                 }
             case InstructionFormat.Format11x:
@@ -214,7 +227,7 @@ public static class InstructionDecoder
                     return [new BranchTargetOperand((index + rel) * 2)];
                 }
             case InstructionFormat.Format22x:
-                return [aa, raw[index + 1]];
+                return [aa, (int)raw[index + 1]];
             case InstructionFormat.Format21t:
                 {
                     var rel = (short)raw[index + 1];
@@ -224,15 +237,17 @@ public static class InstructionDecoder
                 return [aa, new LiteralOperand((short)raw[index + 1])];
             case InstructionFormat.Format21h:
                 {
-                    var value = (uint)(raw[index + 1] << 16);
-                    return [aa, new LiteralOperand((int)value)];
+                    var value = (byte)unit0 == 0x19
+                        ? (long)(short)raw[index + 1] << 48
+                        : (long)(short)raw[index + 1] << 16;
+                    return [aa, new LiteralOperand(value)];
                 }
             case InstructionFormat.Format21c:
-                return [aa, ResolveRef(dex, raw[index + 1], info.RefKind)];
+                return [aa, ResolveRef(dex, raw[index + 1], info.RefKind, descriptors)];
             case InstructionFormat.Format23x:
-                return [aa, (byte)(raw[index + 1] & 0xff), (byte)(raw[index + 1] >> 8)];
+                return [aa, raw[index + 1] & 0xff, raw[index + 1] >> 8];
             case InstructionFormat.Format22b:
-                return [aa, (byte)(raw[index + 1] & 0xff), new LiteralOperand((sbyte)(raw[index + 1] >> 8))];
+                return [aa, raw[index + 1] & 0xff, new LiteralOperand((sbyte)(raw[index + 1] >> 8))];
             case InstructionFormat.Format22t:
                 {
                     var rel = (short)raw[index + 1];
@@ -241,14 +256,14 @@ public static class InstructionDecoder
             case InstructionFormat.Format22s:
                 return [aNibble, bNibble, new LiteralOperand((short)raw[index + 1])];
             case InstructionFormat.Format22c:
-                return [aNibble, bNibble, ResolveRef(dex, raw[index + 1], info.RefKind)];
+                return [aNibble, bNibble, ResolveRef(dex, raw[index + 1], info.RefKind, descriptors)];
             case InstructionFormat.Format30t:
                 {
                     var rel = (int)((uint)(raw[index + 1] | (raw[index + 2] << 16)));
                     return [new BranchTargetOperand((index + rel) * 2)];
                 }
             case InstructionFormat.Format32x:
-                return [raw[index + 1], raw[index + 2]];
+                return [(int)raw[index + 1], (int)raw[index + 2]];
             case InstructionFormat.Format31i:
                 {
                     var value = (int)((uint)(raw[index + 1] | (raw[index + 2] << 16)));
@@ -262,12 +277,12 @@ public static class InstructionDecoder
             case InstructionFormat.Format31c:
                 {
                     var refIdx = raw[index + 1] | (raw[index + 2] << 16);
-                    return [aa, ResolveRef(dex, refIdx, info.RefKind)];
+                    return [aa, ResolveRef(dex, refIdx, info.RefKind, descriptors)];
                 }
             case InstructionFormat.Format35c:
                 {
                     var count = (byte)((unit0 >> 12) & 0x0f);
-                    var g = (byte)(unit0 & 0x0f);
+                    var g = (byte)((unit0 >> 8) & 0x0f);
 
 
                     var c = (byte)(raw[index + 2] & 0x0f);
@@ -276,15 +291,9 @@ public static class InstructionDecoder
                     var f = (byte)((raw[index + 2] >> 12) & 0x0f);
 
 
-                    var regs = new int[count];
-                    var pos = count;
-                    if (count > 0) regs[--pos] = g;
-                    if (count > 1) regs[--pos] = f;
-                    if (count > 2) regs[--pos] = e;
-                    if (count > 3) regs[--pos] = d;
-                    if (count > 4) regs[--pos] = c;
+                    var regs = RegisterList(count, c, d, e, f, g);
                     var refIdx = raw[index + 1];
-                    return [regs, ResolveRef(dex, refIdx, info.RefKind)];
+                    return [regs, ResolveRef(dex, refIdx, info.RefKind, descriptors)];
                 }
             case InstructionFormat.Format3rc:
                 {
@@ -293,28 +302,22 @@ public static class InstructionDecoder
                     var regs = new int[count];
                     for (var i = 0; i < count; i++) regs[i] = first + i;
                     var refIdx = raw[index + 1];
-                    return [regs, ResolveRef(dex, refIdx, info.RefKind)];
+                    return [regs, ResolveRef(dex, refIdx, info.RefKind, descriptors)];
                 }
             case InstructionFormat.Format45cc:
                 {
                     var count = (byte)((unit0 >> 12) & 0x0f);
-                    var g = (byte)(unit0 & 0x0f);
+                    var g = (byte)((unit0 >> 8) & 0x0f);
 
 
                     var c = (byte)(raw[index + 2] & 0x0f);
                     var d = (byte)((raw[index + 2] >> 4) & 0x0f);
                     var e = (byte)((raw[index + 2] >> 8) & 0x0f);
                     var f = (byte)((raw[index + 2] >> 12) & 0x0f);
-                    var regs = new int[count];
-                    var pos = count;
-                    if (count > 0) regs[--pos] = g;
-                    if (count > 1) regs[--pos] = f;
-                    if (count > 2) regs[--pos] = e;
-                    if (count > 3) regs[--pos] = d;
-                    if (count > 4) regs[--pos] = c;
+                    var regs = RegisterList(count, c, d, e, f, g);
                     var methodRef = raw[index + 1];
                     var protoRef = raw[index + 3];
-                    return [regs, ResolveRef(dex, methodRef, info.RefKind), ResolveProtoRef(dex, protoRef)];
+                    return [regs, ResolveRef(dex, methodRef, info.RefKind, descriptors), ResolveProtoRef(dex, protoRef)];
                 }
             case InstructionFormat.Format4rcc:
                 {
@@ -324,7 +327,7 @@ public static class InstructionDecoder
                     for (var i = 0; i < count; i++) regs[i] = first + i;
                     var methodRef = raw[index + 1];
                     var protoRef = raw[index + 3];
-                    return [regs, ResolveRef(dex, methodRef, info.RefKind), ResolveProtoRef(dex, protoRef)];
+                    return [regs, ResolveRef(dex, methodRef, info.RefKind, descriptors), ResolveProtoRef(dex, protoRef)];
                 }
             case InstructionFormat.Format51l:
                 {
@@ -338,19 +341,36 @@ public static class InstructionDecoder
 
     private static int SignExtend4(byte nibble) => nibble >= 8 ? nibble - 16 : nibble;
 
-    private static object? ResolveRef(DexFile dex, int index, RefKind kind)
+    private static int[] RegisterList(int count, int c, int d, int e, int f, int g)
     {
+        if (count > 5)
+        {
+            throw new InvalidDataException("A fixed DEX register list cannot contain more than five words.");
+        }
+        ReadOnlySpan<int> registers = [c, d, e, f, g];
+        return registers[..count].ToArray();
+    }
+
+    private static object? ResolveRef(DexFile dex, int index, RefKind kind, bool descriptors)
+    {
+        string TypeName(int typeIndex) => descriptors ? dex.GetType(typeIndex) : dex.FormatType(typeIndex);
         switch (kind)
         {
             case RefKind.String:
                 return dex.GetString(index);
             case RefKind.Type:
                 return new TypeRefOperand(dex.GetType(index));
+            case RefKind.Proto:
+                return ResolveProtoRef(dex, index);
+            case RefKind.MethodHandle:
+                return new MethodHandleRefOperand(index);
+            case RefKind.CallSite:
+                return new CallSiteRefOperand(index);
             case RefKind.Field:
                 {
                     var field = dex.GetField(index);
                     if (field == null) return index;
-                    return new FieldRefOperand(dex.FormatType(field.ClassIndex), dex.GetString(field.NameIndex), dex.FormatType(field.TypeIndex));
+                    return new FieldRefOperand(TypeName(field.ClassIndex), dex.GetString(field.NameIndex), TypeName(field.TypeIndex));
                 }
             case RefKind.Method:
                 {
@@ -370,11 +390,11 @@ public static class InstructionDecoder
                         parameters = new string[indices.Length];
                         for (var i = 0; i < indices.Length; i++)
                         {
-                            parameters[i] = dex.FormatType(indices[i]);
+                            parameters[i] = TypeName(indices[i]);
                         }
                     }
-                    var returnType = proto == null ? "?" : dex.FormatType(proto.ReturnTypeIndex);
-                    return new MethodRefOperand(dex.FormatType(method.ClassIndex), dex.GetString(method.NameIndex), returnType, parameters);
+                    var returnType = proto == null ? "?" : TypeName(proto.ReturnTypeIndex);
+                    return new MethodRefOperand(TypeName(method.ClassIndex), dex.GetString(method.NameIndex), returnType, parameters);
                 }
             default:
                 return index;
@@ -385,6 +405,6 @@ public static class InstructionDecoder
     {
         var proto = dex.GetProto(index);
         if (proto == null) return index;
-        return $"({string.Join(", ", proto.ParameterTypeIndices.Select(dex.FormatType))}){dex.FormatType(proto.ReturnTypeIndex)}";
+        return new ProtoRefOperand(dex.GetType(proto.ReturnTypeIndex), [.. proto.ParameterTypeIndices.Select(dex.GetType)]);
     }
 }

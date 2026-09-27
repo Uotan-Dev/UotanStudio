@@ -212,7 +212,7 @@ public static class CfgBuilder
             {
                 if (payload.Offset != payloadRef.Offset || payload.Operands.Count == 0) continue;
 
-                var payloadUnit = payload.Offset / 2;
+                var payloadUnit = terminator.Offset / 2;
                 foreach (var payloadOperand in payload.Operands)
                 {
                     if (payloadOperand is not PayloadOperand p) continue;
@@ -264,7 +264,7 @@ public static class CfgBuilder
         }
 
         var payloadInsn = instructions[payloadIndex];
-        var payloadUnit = payloadInsn.Offset / 2;
+        var payloadUnit = insn.Offset / 2;
         foreach (var payloadOperand in payloadInsn.Operands)
         {
             if (payloadOperand is not PayloadOperand p) continue;

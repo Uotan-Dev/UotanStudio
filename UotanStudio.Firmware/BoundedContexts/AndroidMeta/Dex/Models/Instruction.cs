@@ -28,8 +28,8 @@ public sealed record TypeRefOperand(string Descriptor);
 /// <para>所属类的可读描述符形式，例如 <c>com.x.Foo</c>；类索引无法解析时为 <c>"?"</c>。</para></param>
 /// <param name="Name">Field name decoded from <c>string_ids</c>; empty when the name index is out of range.
 /// <para>由 <c>string_ids</c> 解码的字段名；名称索引越界时为空字符串。</para></param>
-/// <param name="Type">Field type in readable descriptor form, for example <c>int</c> or <c>com.x.Foo[</c>.
-/// <para>字段类型的可读描述符形式，例如 <c>int</c> 或 <c>com.x.Foo[</c>。</para></param>
+/// <param name="Type">Field type in readable descriptor form, for example <c>int</c> or <c>com.x.Foo[]</c>.
+/// <para>字段类型的可读描述符形式，例如 <c>int</c> 或 <c>com.x.Foo[]</c>。</para></param>
 public sealed record FieldRefOperand(string OwnerClass, string Name, string Type);
 
 /// <summary>
@@ -46,6 +46,24 @@ public sealed record FieldRefOperand(string OwnerClass, string Name, string Type
 /// parameters or its proto index does not resolve.
 /// <para>按声明顺序排列的参数类型描述符；方法无参数或 proto 索引无法解析时为空数组。</para></param>
 public sealed record MethodRefOperand(string OwnerClass, string Name, string ReturnType, string[] Parameters);
+
+/// <summary>Describes a method prototype operand using DEX type descriptors.
+/// <para>使用 DEX 类型描述符表示方法原型操作数。</para></summary>
+/// <param name="ReturnType">Return type descriptor. <para>返回类型描述符。</para></param>
+/// <param name="Parameters">Parameter descriptors in declaration order. <para>按声明顺序排列的参数描述符。</para></param>
+public sealed record ProtoRefOperand(string ReturnType, string[] Parameters);
+
+/// <summary>Identifies a method-handle table operand.
+/// <para>标识方法句柄表操作数。</para></summary>
+/// <param name="Index">Zero-based index in the owning DEX method-handle table.
+/// <para>所属 DEX 方法句柄表中的零基索引。</para></param>
+public sealed record MethodHandleRefOperand(int Index);
+
+/// <summary>Identifies a call-site table operand used by invoke-custom instructions.
+/// <para>标识 invoke-custom 指令使用的调用点表操作数。</para></summary>
+/// <param name="Index">Zero-based index in the owning DEX call-site table.
+/// <para>所属 DEX 调用点表中的零基索引。</para></param>
+public sealed record CallSiteRefOperand(int Index);
 
 /// <summary>
 /// The destination of a branch, expressed as an offset inside the same method body.
@@ -64,21 +82,26 @@ public sealed record BranchTargetOperand(int Offset);
 /// </summary>
 /// <param name="Kind">Payload discriminator: <c>packed-switch</c>, <c>sparse-switch</c>,
 /// <c>fill-array-data</c>, or <c>targets</c> for the companion offset list of a sparse switch. The smali
-/// writer renders only the first three specially and prints any other value as a bracketed value list.
+/// writer combines these operands into complete directive blocks.
 /// <para>负载类型标识：<c>packed-switch</c>、<c>sparse-switch</c>、<c>fill-array-data</c>，
-/// 或 <c>targets</c>（稀疏 switch 的配套偏移列表）。smali 输出只对前三种特殊处理，其他值以方括号值列表打印。</para></param>
+/// 或 <c>targets</c>（稀疏 switch 的配套偏移列表）。smali 输出将这些操作数组合成完整指令块。</para></param>
 /// <param name="FirstKey">First switch key for <c>packed-switch</c>; element width in bytes for
 /// <c>fill-array-data</c>; <c>0</c> for <c>sparse-switch</c> and <c>targets</c>.
 /// <para><c>packed-switch</c> 的首个 switch 键值；<c>fill-array-data</c> 的元素字节宽度；
 /// <c>sparse-switch</c> 与 <c>targets</c> 为 <c>0</c>。</para></param>
 /// <param name="Values">Relative branch offsets in code units for <c>packed-switch</c> and <c>targets</c>;
 /// sparse-switch match keys for <c>sparse-switch</c>; the raw 16-bit data units backing the array for
-/// <c>fill-array-data</c>. The decoder allocates this array from the untrusted size field of the payload, so
-/// its length is not bounded by the instruction stream.
+/// <c>fill-array-data</c>. The decoder validates the complete payload against the instruction stream before allocation.
 /// <para><c>packed-switch</c> 与 <c>targets</c> 为以代码单元计的相对跳转偏移；<c>sparse-switch</c>
-/// 为稀疏 switch 的匹配键；<c>fill-array-data</c> 为数组对应的原始 16 位数据单元。该数组按负载中未经信任的大小字段分配，
-/// 其长度不受指令流长度约束。</para></param>
-public sealed record PayloadOperand(string Kind, long FirstKey, int[] Values);
+/// 为稀疏 switch 的匹配键；<c>fill-array-data</c> 为数组对应的原始 16 位数据单元。解码器在分配之前校验完整负载不越过指令流。</para></param>
+public sealed record PayloadOperand(string Kind, long FirstKey, int[] Values)
+{
+    /// <summary>Gets the array element count independently of code-unit padding.
+    /// <para>获取独立于代码单元填充的数组元素数量。</para></summary>
+    /// <value>The array payload's unsigned count, or null for non-array payloads.
+    /// <para>数组负载中的无符号数量，非数组负载为 null。</para></value>
+    public uint? ElementCount { get; init; }
+}
 
 /// <summary>
 /// One decoded Dalvik instruction, including the pseudo entries the decoder produces for payloads and for
@@ -99,8 +122,8 @@ public sealed class Instruction
     /// <summary>
     /// Opcode byte of the instruction.
     /// <para>指令的操作码字节。</para></summary>
-    /// <value>The high byte of the first code unit; <c>0</c> for a payload pseudo entry, which is identified by
-    /// <see cref="Mnemonic"/> instead. <para>首个代码单元的高字节；有效负载伪条目为 <c>0</c>，其身份由 <see cref="Mnemonic"/> 标识。</para></value>
+    /// <value>The low byte of the first little-endian code unit; <c>0</c> for a payload pseudo entry, which is identified by
+    /// <see cref="Mnemonic"/> instead. <para>首个小端代码单元的低字节；有效负载伪条目为 <c>0</c>，其身份由 <see cref="Mnemonic"/> 标识。</para></value>
     public byte OpCode { get; init; }
 
     /// <summary>

@@ -397,7 +397,8 @@ internal static partial class DexWriter
                 || values[1].Type != EncodedValueType.String || values[2].Type != EncodedValueType.MethodType
                 || Convert.ToUInt32(values[0].Value) >= dex.MethodHandles.Count
                 || Convert.ToUInt32(values[1].Value) >= dex.Strings.Count
-                || Convert.ToUInt32(values[2].Value) >= dex.Protos.Count)
+                || Convert.ToUInt32(values[2].Value) >= dex.Protos.Count
+                || dex.MethodHandles[values[0].AsIndex()].Kind != 4)
                 throw new DexException("Invalid call-site bootstrap arguments.");
             callSiteOffsets[i] = (uint)ms.Position;
             if (encodedArrayCount++ == 0) firstEncodedArray = (uint)ms.Position;

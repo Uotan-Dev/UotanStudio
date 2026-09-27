@@ -339,7 +339,7 @@ public sealed class DexFile
                 _ => descriptor[bodyStart..]
             };
         }
-        return arrayDepth == 0 ? name : name + new string('[', arrayDepth);
+        return arrayDepth == 0 ? name : name + string.Concat(Enumerable.Repeat("[]", arrayDepth));
     }
 
     /// <summary>

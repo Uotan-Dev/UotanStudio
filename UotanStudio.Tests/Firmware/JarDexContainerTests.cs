@@ -291,7 +291,7 @@ public class JarDexContainerTests : IDisposable
             RegistersSize = 1,
             InsSize = 0,
             OutsSize = 0,
-            RawInsns = [0x1200, 0x0E00]
+            RawInsns = [0x0012, 0x000E]
         };
 
         var cls = new ClassDefinition

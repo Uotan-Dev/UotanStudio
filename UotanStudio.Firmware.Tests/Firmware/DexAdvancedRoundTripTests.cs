@@ -160,7 +160,7 @@ public class DexAdvancedRoundTripTests
             RegistersSize = 1,
             InsSize = 0,
             OutsSize = 0,
-            RawInsns = [0x1200, 0x0000, 0x0E00]
+            RawInsns = [0x0012, 0x0000, 0x000E]
         };
         code.Tries.Add(new TryBlock { StartAddress = 1, InsnCount = 1, HandlerIndex = 0 });
         code.Handlers.Add(new CatchHandler());
@@ -275,7 +275,7 @@ public class DexAdvancedRoundTripTests
         {
             MethodIndex = 0,
             AccessFlags = AccessFlags.Public,
-            Code = new CodeItem { RegistersSize = 1, InsSize = 0, OutsSize = 0, RawInsns = [0x0E00] }
+            Code = new CodeItem { RegistersSize = 1, InsSize = 0, OutsSize = 0, RawInsns = [0x000E] }
         });
 
         var dir = new AnnotationsDirectory

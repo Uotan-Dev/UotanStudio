@@ -20,34 +20,34 @@ public static class AccessFlags
     public const uint Synchronized = 0x0020;
     /// <summary>Bit <c>0x00040</c>, printed as <c>volatile</c>. <para>位 <c>0x00040</c>，输出为 <c>volatile</c>。</para></summary>
     public const uint Volatile = 0x0040;
-    /// <summary>Bit <c>0x00080</c>, printed as <c>bridge</c>. <para>位 <c>0x00080</c>，输出为 <c>bridge</c>。</para></summary>
-    public const uint Bridge = 0x0080;
-    /// <summary>Bit <c>0x00100</c>, printed as <c>transient</c>. <para>位 <c>0x00100</c>，输出为 <c>transient</c>。</para></summary>
-    public const uint Transient = 0x0100;
-    /// <summary>Bit <c>0x00200</c>, printed as <c>varargs</c>. <para>位 <c>0x00200</c>，输出为 <c>varargs</c>。</para></summary>
-    public const uint Varargs = 0x0200;
-    /// <summary>Bit <c>0x00400</c>, printed as <c>native</c>. <para>位 <c>0x00400</c>，输出为 <c>native</c>。</para></summary>
-    public const uint Native = 0x0400;
-    /// <summary>Bit <c>0x00800</c>, printed as <c>interface</c>. <para>位 <c>0x00800</c>，输出为 <c>interface</c>。</para></summary>
-    public const uint Interface = 0x0800;
-    /// <summary>Bit <c>0x01000</c>, printed as <c>abstract</c>. <para>位 <c>0x01000</c>，输出为 <c>abstract</c>。</para></summary>
-    public const uint Abstract = 0x1000;
-    /// <summary>Bit <c>0x02000</c>, printed as <c>strictfp</c>. <para>位 <c>0x02000</c>，输出为 <c>strictfp</c>。</para></summary>
-    public const uint Strict = 0x2000;
-    /// <summary>Bit <c>0x04000</c>, printed as <c>synthetic</c>. <para>位 <c>0x04000</c>，输出为 <c>synthetic</c>。</para></summary>
-    public const uint Synthetic = 0x4000;
-    /// <summary>Bit <c>0x08000</c>, printed as <c>annotation</c>. <para>位 <c>0x08000</c>，输出为 <c>annotation</c>。</para></summary>
-    public const uint Annotation = 0x8000;
-    /// <summary>Bit <c>0x10000</c>, printed as <c>enum</c>. <para>位 <c>0x10000</c>，输出为 <c>enum</c>。</para></summary>
-    public const uint Enum = 0x10000;
-    /// <summary>Bit <c>0x20000</c>, printed as <c>constructor</c>. <para>位 <c>0x20000</c>，输出为 <c>constructor</c>。</para></summary>
-    public const uint Constructor = 0x20000;
-    /// <summary>Bit <c>0x40000</c>; <see cref="Format"/> prints no modifier for it. <para>位 <c>0x40000</c>；<see cref="Format"/> 不为其输出修饰符。</para></summary>
-    public const uint DeclaredSynchronized = 0x40000;
+    /// <summary>Method bit <c>0x00040</c>, printed as <c>bridge</c>. <para>方法位 <c>0x00040</c>，输出为 <c>bridge</c>。</para></summary>
+    public const uint Bridge = 0x0040;
+    /// <summary>Field bit <c>0x00080</c>, printed as <c>transient</c>. <para>字段位 <c>0x00080</c>，输出为 <c>transient</c>。</para></summary>
+    public const uint Transient = 0x0080;
+    /// <summary>Method bit <c>0x00080</c>, printed as <c>varargs</c>. <para>方法位 <c>0x00080</c>，输出为 <c>varargs</c>。</para></summary>
+    public const uint Varargs = 0x0080;
+    /// <summary>Bit <c>0x00100</c>, printed as <c>native</c>. <para>位 <c>0x00100</c>，输出为 <c>native</c>。</para></summary>
+    public const uint Native = 0x0100;
+    /// <summary>Bit <c>0x00200</c>, printed as <c>interface</c>. <para>位 <c>0x00200</c>，输出为 <c>interface</c>。</para></summary>
+    public const uint Interface = 0x0200;
+    /// <summary>Bit <c>0x00400</c>, printed as <c>abstract</c>. <para>位 <c>0x00400</c>，输出为 <c>abstract</c>。</para></summary>
+    public const uint Abstract = 0x0400;
+    /// <summary>Bit <c>0x00800</c>, printed as <c>strictfp</c>. <para>位 <c>0x00800</c>，输出为 <c>strictfp</c>。</para></summary>
+    public const uint Strict = 0x0800;
+    /// <summary>Bit <c>0x01000</c>, printed as <c>synthetic</c>. <para>位 <c>0x01000</c>，输出为 <c>synthetic</c>。</para></summary>
+    public const uint Synthetic = 0x1000;
+    /// <summary>Bit <c>0x02000</c>, printed as <c>annotation</c>. <para>位 <c>0x02000</c>，输出为 <c>annotation</c>。</para></summary>
+    public const uint Annotation = 0x2000;
+    /// <summary>Bit <c>0x04000</c>, printed as <c>enum</c>. <para>位 <c>0x04000</c>，输出为 <c>enum</c>。</para></summary>
+    public const uint Enum = 0x4000;
+    /// <summary>Bit <c>0x10000</c>, printed as <c>constructor</c>. <para>位 <c>0x10000</c>，输出为 <c>constructor</c>。</para></summary>
+    public const uint Constructor = 0x10000;
+    /// <summary>Bit <c>0x20000</c>, printed as <c>declared-synchronized</c>. <para>位 <c>0x20000</c>，输出为 <c>declared-synchronized</c>。</para></summary>
+    public const uint DeclaredSynchronized = 0x20000;
 
     /// <summary>
-    /// Formats the access flags into a space-separated list of modifiers.
-    /// <para>把访问标志格式化为以空格分隔的修饰符列表。</para>
+    /// Formats the access flags into modifiers, interpreting shared bits as field modifiers.
+    /// <para>把访问标志格式化为修饰符列表，共享位按字段修饰符解释。</para>
     /// </summary>
     /// <param name="flags">
     /// Raw <c>access_flags</c> value; bits outside the defined constants are ignored.
@@ -59,6 +59,28 @@ public static class AccessFlags
     /// <para>按常量顺序以单个空格分隔的修饰符名；没有任何已列出的位被置位时返回 <see cref="string.Empty"/>。</para>
     /// </returns>
     public static string Format(uint flags)
+        => FormatCore(flags, method: false);
+
+    /// <summary>Formats class access modifiers. <para>格式化类访问修饰符。</para></summary>
+    /// <param name="flags">Raw access flags. <para>原始访问标志。</para></param>
+    /// <returns>Space-separated modifiers valid for classes. <para>以空格分隔的类修饰符。</para></returns>
+    public static string FormatClass(uint flags)
+        => FormatCore(flags & (Public | Private | Protected | Static | Final | Interface | Abstract | Synthetic | Annotation | Enum), method: false);
+
+    /// <summary>Formats field access modifiers. <para>格式化字段访问修饰符。</para></summary>
+    /// <param name="flags">Raw access flags. <para>原始访问标志。</para></param>
+    /// <returns>Space-separated modifiers with field-specific shared bits. <para>以空格分隔且共享位按字段解释的修饰符。</para></returns>
+    public static string FormatField(uint flags)
+        => FormatCore(flags & (Public | Private | Protected | Static | Final | Volatile | Transient | Synthetic | Enum), method: false);
+
+    /// <summary>Formats method access modifiers. <para>格式化方法访问修饰符。</para></summary>
+    /// <param name="flags">Raw access flags. <para>原始访问标志。</para></param>
+    /// <returns>Space-separated modifiers with method-specific shared bits. <para>以空格分隔且共享位按方法解释的修饰符。</para></returns>
+    public static string FormatMethod(uint flags)
+        => FormatCore(flags & (Public | Private | Protected | Static | Final | Synchronized | Bridge | Varargs | Native
+            | Abstract | Strict | Synthetic | Constructor | DeclaredSynchronized), method: true);
+
+    private static string FormatCore(uint flags, bool method)
     {
         var parts = new List<string>(8);
         if ((flags & Public) != 0) parts.Add("public");
@@ -67,10 +89,8 @@ public static class AccessFlags
         if ((flags & Static) != 0) parts.Add("static");
         if ((flags & Final) != 0) parts.Add("final");
         if ((flags & Synchronized) != 0) parts.Add("synchronized");
-        if ((flags & Volatile) != 0) parts.Add("volatile");
-        if ((flags & Bridge) != 0) parts.Add("bridge");
-        if ((flags & Transient) != 0) parts.Add("transient");
-        if ((flags & Varargs) != 0) parts.Add("varargs");
+        if ((flags & Volatile) != 0) parts.Add(method ? "bridge" : "volatile");
+        if ((flags & Transient) != 0) parts.Add(method ? "varargs" : "transient");
         if ((flags & Native) != 0) parts.Add("native");
         if ((flags & Interface) != 0) parts.Add("interface");
         if ((flags & Abstract) != 0) parts.Add("abstract");
@@ -79,6 +99,7 @@ public static class AccessFlags
         if ((flags & Annotation) != 0) parts.Add("annotation");
         if ((flags & Enum) != 0) parts.Add("enum");
         if ((flags & Constructor) != 0) parts.Add("constructor");
+        if ((flags & DeclaredSynchronized) != 0) parts.Add("declared-synchronized");
         return parts.Count == 0 ? string.Empty : string.Join(' ', parts);
     }
 }
