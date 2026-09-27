@@ -46,9 +46,47 @@ public sealed record SelinuxPolicyMetadata
     /// <para>通过头部校验后剩余的策略 body 字节数。</para></summary>
     public required long BodyLength { get; init; }
 
+    /// <summary>Body sections reported by the bounded section cursor in libsepol read order.
+    /// <para>有界 section 游标按 libsepol 读取顺序报告的 body section。</para></summary>
+    /// <value>Never empty; the final entry is always the single phase-limited span beginning where the
+    /// cursor stopped, and its <see cref="SelinuxPolicySection.EndOffset"/> is <see langword="null"/>
+    /// when no byte is left.
+    /// <para>始终非空；最后一项恒为从游标停止处开始的单个 phase 受限区间，其
+    /// <see cref="SelinuxPolicySection.EndOffset"/> 在没有剩余字节时为 <see langword="null"/>。</para></value>
+    public required IReadOnlyList<SelinuxPolicySection> Sections { get; init; }
+
+    /// <summary>Whether every body byte was covered by a section the cursor actually parsed.
+    /// <para>body 的每个字节是否都被游标真正解析过的 section 覆盖。</para></summary>
+    /// <value><see langword="true"/> only when the cursor reached the body end without truncation
+    /// or rejection; a phase-limited tail keeps this <see langword="false"/>.
+    /// <para>仅在游标在未截断且未拒绝的情况下到达 body 末尾时为 <see langword="true"/>；
+    /// 存在 phase 受限尾部时保持 <see langword="false"/>。</para></value>
+    public required bool BodyFullyConsumed { get; init; }
+
     /// <summary>Whether the input contains at least one policy body byte.
     /// <para>输入是否至少包含一个策略 body 字节。</para></summary>
     public bool HasBody => BodyLength > 0;
+
+    /// <summary>Body bytes not covered by any parsed section.
+    /// <para>未被任何已解析 section 覆盖的 body 字节数。</para></summary>
+    /// <value>The body length minus the bytes of sections reported as
+    /// <see cref="SelinuxSectionStatus.Consumed"/>, which equals <see cref="BodyLength"/> when the
+    /// cursor parsed nothing and equals the phase-limited tail span when the cursor stopped cleanly.
+    /// <para>body 长度减去报告为 <see cref="SelinuxSectionStatus.Consumed"/> 的 section 字节数；
+    /// 游标未解析任何内容时等于 <see cref="BodyLength"/>，游标正常停止时等于 phase 受限区间的长度。</para></value>
+    public long UnconsumedTailLength
+    {
+        get
+        {
+            var consumed = 0L;
+            foreach (var section in Sections)
+            {
+                if (section is { Status: SelinuxSectionStatus.Consumed, EndOffset: { } end })
+                    consumed = checked(consumed + (end - section.StartOffset));
+            }
+            return checked(BodyLength - consumed);
+        }
+    }
 
     /// <summary>Whether this parser enumerates policy rules.
     /// <para>当前解析器是否枚举策略规则。</para></summary>
@@ -59,7 +97,7 @@ public sealed record SelinuxPolicyMetadata
     public string CapabilityStatus =>
         RuleEnumerationSupported
             ? "rules-enumerated"
-            : "header-and-body-boundary-only";
+            : "header-and-bounded-section-cursor";
 
     /// <summary>Always false because this bounded reader does not modify policy rules.
     /// <para>始终为 false，因为此有界读取器不修改策略规则。</para></summary>
