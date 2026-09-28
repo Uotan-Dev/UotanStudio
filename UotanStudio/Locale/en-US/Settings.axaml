@@ -67,6 +67,12 @@
     <x:String x:Key="Settings_McpExpose">Expose as MCP server</x:String>
     <x:String x:Key="Settings_McpExposePort">Port</x:String>
     <x:String x:Key="Settings_McpSave">Save MCP Settings</x:String>
+    <x:String x:Key="Settings_McpExposeRoot">Sandbox root</x:String>
+    <x:String x:Key="Settings_McpExposeRootPlaceholder">Full directory path (empty = unrestricted)</x:String>
+    <x:String x:Key="Settings_McpExposeRootPick">Select the MCP sandbox root</x:String>
+    <x:String x:Key="Settings_McpExposeRootHint">Every file path an MCP client sends must resolve inside this directory. Leaving it empty exposes the whole filesystem, the behavior this setting replaces.</x:String>
+    <x:String x:Key="Settings_McpExposeFlash">Allow flash tools</x:String>
+    <x:String x:Key="Settings_McpExposeFlashWarning">Warning: enabling this registers the wiping, flashing and reboot tools on the loopback port, so any local process that can reach that port can erase or rewrite partitions on a connected device and reboot it. Keep it off unless you trust every program running on this machine.</x:String>
     <x:String x:Key="Settings_Developers">Developers</x:String>
     <x:String x:Key="Settings_GitHub">GitHub</x:String>
     <x:String x:Key="Settings_Coolapk">Coolapk</x:String>

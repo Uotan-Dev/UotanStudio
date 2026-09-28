@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using UotanStudio.Mcp.Resources;
 using UotanStudio.Mcp.Tools;
 
 namespace UotanStudio.Mcp;
@@ -29,6 +30,24 @@ public sealed class McpServerHost
     }
 
     /// <summary>
+    /// <para>组装带交付工具准备提供器的宿主；该提供器类型是交付子项目的内部契约，因此此重载只对本程序集与
+    /// 经 <c>InternalsVisibleTo</c> 授权的桌面宿主可见。</para>
+    /// Assembles a host with a delivery tool-preparation provider; that provider's type is a
+    /// delivery-project internal contract, so this overload stays visible only to this assembly and the
+    /// desktop host granted through <c>InternalsVisibleTo</c>.
+    /// </summary>
+    /// <param name="config">Sandbox root and flash gate for this run. <para>本次运行的沙箱根目录与刷写门控。</para></param>
+    /// <param name="deviceManager">Device gateway used by device tools. <para>设备工具使用的设备网关。</para></param>
+    /// <param name="deliveryTools">Tool-preparation provider enabling <c>delivery_build</c> on this host only.
+    /// <para>仅对本宿主启用 <c>delivery_build</c> 的工具准备提供器。</para></param>
+    internal McpServerHost(McpServerConfig config, IDeviceManagerGateway? deviceManager,
+        Func<UotanStudio.Services.Delivery.IDeliveryTools?>? deliveryTools)
+        : this(new PathSandbox(config.RootDirectory), config.AllowFlash, deviceManager)
+    {
+        DeliveryTools = deliveryTools;
+    }
+
+    /// <summary>
     /// <para>用现成的沙箱与刷写门控组装宿主，供 HTTP 暴露路径复用同一套工具注册。</para>
     /// Assembles the host from an existing sandbox plus flash gate, so the HTTP exposure path
     /// registers exactly the same tool set.
@@ -51,6 +70,33 @@ public sealed class McpServerHost
 
     private IDeviceManagerGateway DeviceManager { get; }
 
+    /// <summary>
+    /// <para>用现成沙箱、门控、设备网关与交付工具准备提供器组装宿主；提供器类型是交付子项目的内部契约，
+    /// 因此此重载只对本程序集与经 <c>InternalsVisibleTo</c> 授权的桌面宿主可见。</para>
+    /// Assembles a host from an existing sandbox, gate, device gateway and delivery tool-preparation
+    /// provider; the provider's type is a delivery-project internal contract, so this overload stays
+    /// visible only to this assembly and the desktop host granted through <c>InternalsVisibleTo</c>.
+    /// </summary>
+    /// <param name="sandbox">Path confine shared by every file-touching tool. <para>所有文件类工具共用的路径限制。</para></param>
+    /// <param name="allowFlash">Registers the flashing/wiping/reboot tools when <see langword="true"/>. <para>为 <see langword="true"/> 时注册刷写、擦除、重启类工具。</para></param>
+    /// <param name="deviceManager">Device gateway used by device tools. <para>设备工具使用的设备网关。</para></param>
+    /// <param name="deliveryTools">Tool-preparation provider enabling <c>delivery_build</c> on this host only.
+    /// <para>仅对本宿主启用 <c>delivery_build</c> 的工具准备提供器。</para></param>
+    internal McpServerHost(PathSandbox sandbox, bool allowFlash, IDeviceManagerGateway? deviceManager,
+        Func<UotanStudio.Services.Delivery.IDeliveryTools?>? deliveryTools)
+        : this(sandbox, allowFlash, deviceManager)
+    {
+        DeliveryTools = deliveryTools;
+    }
+
+    /// <summary>
+    /// <para>本宿主的交付工具准备提供器；只对本程序集与经授权的桌面宿主可见。</para>
+    /// This host's delivery tool-preparation provider; visible only to this assembly and the granted
+    /// desktop host because its payload type is a delivery-project internal contract.
+    /// </summary>
+    /// <value><para>构造时给出的提供器，或 <see langword="null"/>。</para>The provider supplied at construction, or <see langword="null"/>.</value>
+    internal Func<UotanStudio.Services.Delivery.IDeliveryTools?>? DeliveryTools { get; private set; }
+
     /// <summary>Gets the sandbox all file-touching tools share. <para>所有文件工具共享的沙箱。</para></summary>
     /// <value>The instance built for this run, used to resolve and confine every client-supplied path.
     /// <para>本次运行所构建的实例，用于解析并限制客户端给出的所有路径。</para></value>
@@ -68,15 +114,18 @@ public sealed class McpServerHost
     /// Exposed for tests: the flashing tools must appear only when allowed.
     /// <para>供测试使用：未授权时刷写类工具不得出现。</para>
     /// </summary>
-    /// <returns>Every tool registered for this host, in firmware, compression, device, delivery, project, misc and environment order, with flashing tools appended only under <see cref="AllowFlash"/>.
-    /// <para>本次宿主注册的全部工具，顺序为固件、压缩、设备、交付、工程、杂项与环境，且仅在 <see cref="AllowFlash"/> 允许时追加刷写类工具。</para></returns>
+    /// <returns>Every tool registered for this host, in firmware, compression, device, delivery, OTA,
+    /// project, misc and environment order, with flashing tools appended only under <see cref="AllowFlash"/>.
+    /// <para>本次宿主注册的全部工具，顺序为固件、压缩、设备、交付、OTA、工程、杂项与环境，且仅在
+    /// <see cref="AllowFlash"/> 允许时追加刷写类工具。</para></returns>
     public IReadOnlyList<McpServerTool> BuildTools()
     {
         var tools = new List<McpServerTool>();
         tools.AddRange(FirmwareToolFactory.CreateTools(Sandbox));
         tools.AddRange(CompressionToolFactory.CreateTools(Sandbox));
         tools.AddRange(DeviceToolFactory.CreateTools(Sandbox, DeviceManager));
-        tools.AddRange(DeliveryToolFactory.CreateTools(Sandbox));
+        tools.AddRange(DeliveryToolFactory.CreateTools(Sandbox, DeliveryTools));
+        tools.AddRange(OtaToolFactory.CreateTools(Sandbox));
         tools.AddRange(ProjectToolFactory.CreateTools(Sandbox));
         tools.AddRange(MiscToolFactory.CreateTools(Sandbox));
         tools.AddRange(EnvToolFactory.CreateTools(Sandbox, AllowFlash));
@@ -89,17 +138,60 @@ public sealed class McpServerHost
         return tools;
     }
 
+    /// <summary>
+    /// Builds the resource collection every transport shares, so a client can inspect containers,
+    /// images and filesystem entries without asking a tool to unpack them first.
+    /// <para>构建各传输共用的资源集合，让客户端无需先调用解包工具即可检查容器、镜像与文件系统条目。</para>
+    /// </summary>
+    /// <returns>Resources and resource templates confined to <see cref="Sandbox"/>. <para>限制在 <see cref="Sandbox"/> 内的资源与资源模板。</para></returns>
+    public IReadOnlyList<McpServerResource> BuildResources() => ContainerResourceFactory.CreateResources(Sandbox);
+
     /// <summary>Builds the server options every transport (stdio, HTTP) shares.
     /// <para>构建各传输（stdio、HTTP）共用的服务器选项。</para></summary>
-    internal static McpServerOptions CreateOptions(IReadOnlyList<McpServerTool> tools) => new()
+    internal static McpServerOptions CreateOptions(IReadOnlyList<McpServerTool> tools) => CreateOptions(tools, null);
+
+    /// <summary>
+    /// <para>构建各传输共用的服务器选项，并在给出资源时同时声明 Resources 能力。</para>
+    /// Builds the shared server options, declaring the resources capability when resources are supplied.
+    /// </summary>
+    /// <param name="tools">Tool set for this host. <para>本次宿主的工具集合。</para></param>
+    /// <param name="resources">Resource collection for this host; <see langword="null"/> keeps the server tools-only.
+    /// <para>本次宿主的资源集合；为 <see langword="null"/> 时服务器仍只暴露工具。</para></param>
+    /// <returns>The options passed to <see cref="McpServer.Create"/>. <para>传给 <see cref="McpServer.Create"/> 的选项。</para></returns>
+    internal static McpServerOptions CreateOptions(
+        IReadOnlyList<McpServerTool> tools,
+        IReadOnlyList<McpServerResource>? resources)
     {
-        ServerInfo = new Implementation
+        var options = new McpServerOptions
         {
-            Name = "uotanstudio",
-            Version = typeof(McpServerHost).Assembly.GetName().Version?.ToString(3) ?? "0.1.0"
-        },
-        ToolCollection = [.. tools]
-    };
+            ServerInfo = new Implementation
+            {
+                Name = "uotanstudio",
+                Version = typeof(McpServerHost).Assembly.GetName().Version?.ToString(3) ?? "0.1.0"
+            },
+            ToolCollection = [.. tools],
+            ServerInstructions = "UotanStudio firmware workbench. Read structure with resources before "
+                + "calling tools: uotan://container/{path}/entries and uotan://filesystem/{path}/entries "
+                + "list inner partitions, ZIP members and filesystem entries without extracting, and "
+                + "uotan://image/{path}/metadata reports format headers only. Tools then act on those "
+                + "names: unpack_firmware/pack_firmware convert whole images, extract_container_entries "
+                + "writes selected entries, delivery_* build flashable outputs, and ota_* patch or rebuild "
+                + "OTA ZIPs. Every client-supplied path is confined to the advertised sandbox root, "
+                + "failures set isError with the underlying cause in the text, and long operations report "
+                + "notifications/progress and honor cancellation."
+        };
+
+        if (resources is { Count: > 0 })
+        {
+            options.ResourceCollection = [.. resources];
+            options.Capabilities = new ServerCapabilities
+            {
+                Resources = new ResourcesCapability { ListChanged = false, Subscribe = false }
+            };
+        }
+
+        return options;
+    }
 
     /// <summary>
     /// Runs the server until the client closes the stdio connection or cancellation fires.
@@ -110,7 +202,7 @@ public sealed class McpServerHost
     /// <returns>A task that completes when the stdio session ends. <para>stdio 会话结束时完成的任务。</para></returns>
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        var options = CreateOptions(BuildTools());
+        var options = CreateOptions(BuildTools(), BuildResources());
 
         var server = McpServer.Create(
             new StdioServerTransport("uotanstudio"),

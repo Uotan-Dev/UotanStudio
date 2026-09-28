@@ -64,28 +64,28 @@ public static class McpLauncher
     public static async Task RunCompanionAsync(string[] args, Tools.IDeviceManagerGateway deviceManager,
         CancellationToken cancellationToken = default)
     {
-        EnableDeliveryBuild();
-
-        var host = new McpServerHost(McpServerConfig.Parse(args), deviceManager);
+        var config = McpServerConfig.Parse(args);
+        var host = new McpServerHost(
+            new PathSandbox(config.RootDirectory), config.AllowFlash, deviceManager,
+            CreateDesktopDeliveryTools());
         await host.RunAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Injects the host-equivalent delivery tool-preparation service so <c>delivery_build</c> works
-    /// inside a desktop session, both for the companion stdio launch and for the settings-page HTTP
-    /// exposure.
-    /// <para>注入与宿主等价的交付工具准备服务，使 <c>delivery_build</c> 在伴随 stdio 启动与设置页的
-    /// HTTP 暴露中均可用。</para>
+    /// Builds the host-equivalent delivery tool-preparation provider for <c>delivery_build</c> inside a
+    /// desktop session. It is passed to a single <see cref="McpServerHost"/> instead of being written to
+    /// process-wide state, so availability follows the host that was constructed rather than launch order.
+    /// <para>构建桌面会话内 <c>delivery_build</c> 使用的宿主等价工具准备提供器。它只交给单个
+    /// <see cref="McpServerHost"/>，不再写入进程级状态，因此能力可用性取决于所构建的宿主而非启动顺序。</para>
     /// </summary>
-    public static void EnableDeliveryBuild()
-    {
-        Tools.DeliveryToolFactory.ToolsProvider = static () =>
+    /// <returns><para>每次调用创建缓存目录与 HTTP 客户端组合的工具准备服务。</para>A provider creating a tool service over the shared cache directory on each call.</returns>
+    internal static Func<UotanStudio.Services.Delivery.IDeliveryTools?> CreateDesktopDeliveryTools() =>
+        static () =>
             new UotanStudio.Services.Delivery.DeliveryToolService(
                 new HttpClient { Timeout = Timeout.InfiniteTimeSpan },
                 System.IO.Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "UotanStudio", "delivery-tools"));
-    }
 
     private static bool HasFlag(string[] args, string flag) => args.Any(a =>
         string.Equals(a, flag, StringComparison.OrdinalIgnoreCase));

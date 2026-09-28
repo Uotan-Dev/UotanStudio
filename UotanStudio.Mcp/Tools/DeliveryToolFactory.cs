@@ -1,4 +1,9 @@
 using System.ComponentModel;
+using System.Globalization;
+using System.Net.Http;
+using System.Text.Json;
+using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using UotanStudio.Services.Delivery;
 
@@ -12,23 +17,42 @@ namespace UotanStudio.Mcp.Tools;
 /// The delivery backend intentionally knows nothing about UI or key storage: validation and
 /// output listing run standalone, while building requires the host to inject an
 /// <see cref="IDeliveryTools"/> implementation (tool preparation, platform binaries); without it
-/// the build tool reports the gap instead of pretending to work.
+/// the build tool reports the gap instead of pretending to work. Builds run through the public
+/// <see cref="DeliveryService"/> facade, so the sandbox-confined plan is re-serialized back to
+/// the JSON contract before the facade re-parses it.
 /// <para>交付后端有意不感知 UI 与密钥存储：校验与输出列举可独立运行；构建则需要宿主注入
-/// <see cref="IDeliveryTools"/>（工具准备、平台二进制）；未注入时构建工具如实报告缺口。</para>
+/// <see cref="IDeliveryTools"/>（工具准备、平台二进制）；未注入时构建工具如实报告缺口。
+/// 构建经公共 <see cref="DeliveryService"/> 门面对外执行，因此沙箱收敛后的计划会先重新序列化
+/// 回 JSON 契约，再由门面解析。</para>
+/// Every delegate ends with the ambient <see cref="IProgress{T}"/> and
+/// <see cref="CancellationToken"/> parameters the MCP server binds itself; neither appears in the
+/// emitted <c>inputSchema</c>, so clients cannot pass them but cancellation and progress propagate
+/// into the delivery build that supports them.
+/// <para>每个委托末尾都是 MCP 服务器自行绑定的环境参数 <see cref="IProgress{T}"/> 与
+/// <see cref="CancellationToken"/>；两者都不出现在生成的 <c>inputSchema</c> 中，客户端无法传入，
+/// 但取消与进度会传导到支持它们的交付构建。</para>
 /// </summary>
 internal static class DeliveryToolFactory
 {
     /// <summary>
-    /// Injected by the desktop host in companion mode; null in headless mode.
-    /// <para>伴随模式下由桌面宿主注入；无头模式下为 null。</para>
+    /// Builds the delivery tools for one host, binding the tool-preparation provider that host was
+    /// given; the provider is no longer a process-wide mutable static, so a headless server can never
+    /// inherit another session's injection and the honest-gap result depends only on this host's config.
+    /// <para>为单个宿主构建交付工具，并绑定该宿主获得的工具准备服务提供器；该提供器不再是进程级可变静态，
+    /// 因此无头服务器不会继承其他会话的注入，能力缺口的如实上报只取决于本宿主配置。</para>
     /// </summary>
-    internal static Func<IDeliveryTools?>? ToolsProvider { get; set; }
-
-    internal static IReadOnlyList<McpServerTool> CreateTools(PathSandbox sandbox)
+    /// <param name="sandbox"><para>约束计划与输出路径的沙箱。</para>The sandbox confining plan and output paths.</param>
+    /// <param name="deliveryTools"><para>本宿主的工具准备服务提供器；为 <see langword="null"/> 时 <c>delivery_build</c> 如实报告能力缺口。</para>
+    /// This host's tool-preparation provider; when <see langword="null"/> <c>delivery_build</c> reports the capability gap.</param>
+    internal static IReadOnlyList<McpServerTool> CreateTools(
+        PathSandbox sandbox,
+        Func<IDeliveryTools?>? deliveryTools = null)
     {
         var validate = McpServerTool.Create(
             ([Description("Delivery plan JSON (DeliveryPlan schema; paths sandbox-relative or absolute inside the sandbox).")] string planJson,
-             [Description("Skip source-image existence checks.")] bool skipSources = false) => DeliveryToolHandlers.Validate(sandbox, planJson, skipSources),
+             [Description("Skip source-image existence checks.")] bool skipSources = false,
+             CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
+                token => Task.FromResult(DeliveryToolHandlers.Validate(sandbox, planJson, skipSources)), cancellationToken),
             new McpServerToolCreateOptions
             {
                 Name = "delivery_validate",
@@ -41,7 +65,9 @@ internal static class DeliveryToolFactory
             });
 
         var outputs = McpServerTool.Create(
-            ([Description("Delivery plan JSON.")] string planJson) => DeliveryToolHandlers.ListOutputs(sandbox, planJson),
+            ([Description("Delivery plan JSON.")] string planJson,
+             CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
+                token => Task.FromResult(DeliveryToolHandlers.ListOutputs(sandbox, planJson)), cancellationToken),
             new McpServerToolCreateOptions
             {
                 Name = "delivery_list_outputs",
@@ -55,13 +81,17 @@ internal static class DeliveryToolFactory
 
         var build = McpServerTool.Create(
             ([Description("Delivery plan JSON.")] string planJson,
-             [Description("Existing output file names allowed to be replaced (defaults to none).")] string[]? overwrite = null) => DeliveryToolHandlers.Build(sandbox, planJson, overwrite),
+             [Description("Existing output file names allowed to be replaced (defaults to none).")] string[]? overwrite = null,
+             IProgress<ProgressNotificationValue>? progress = null,
+             CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
+                token => DeliveryToolHandlers.Build(sandbox, planJson, overwrite, progress, deliveryTools, token), cancellationToken),
             new McpServerToolCreateOptions
             {
                 Name = "delivery_build",
                 Description = "Build the delivery output (Super/Payload/Recovery/organized files) "
-                    + "from a validated delivery plan. Fails honestly when no tool-preparation "
-                    + "service has been injected (headless mode).",
+                    + "from a validated delivery plan. Fails honestly when this host has no "
+                    + "tool-preparation service injected. Honors request cancellation and "
+                    + "emits notifications/progress when the client supplies a progress token.",
                 ReadOnly = false,
                 Idempotent = false,
                 OpenWorld = false,
@@ -75,62 +105,91 @@ internal static class DeliveryToolFactory
 /// <summary>
 /// Implementations for the delivery tool delegates; kept separate for direct unit testing.
 /// <para>交付工具委托的实现；独立存放便于直接单元测试。</para>
+/// All handlers return the <see cref="ToolResult"/> envelope and accept the caller's
+/// <see cref="CancellationToken"/>; <see cref="ToolGuard"/> turns the envelope into the protocol result.
+/// <para>所有处理器返回 <see cref="ToolResult"/> 信封并接受调用方的 <see cref="CancellationToken"/>；
+/// 由 <see cref="ToolGuard"/> 把信封转为协议结果。</para>
 /// </summary>
 internal static class DeliveryToolHandlers
 {
-    public static Task<string> Validate(PathSandbox sandbox, string planJson, bool skipSources)
-        => Task.Run(() =>
+    public static ToolResult Validate(PathSandbox sandbox, string planJson, bool skipSources)
+    {
+        var plan = ParsePlan(sandbox, planJson);
+        try
         {
-            var plan = ParsePlan(sandbox, planJson);
-            try
-            {
-                DeliveryValidation.Validate(plan, sources: !skipSources);
-                return ToolJson.Serialize(new ToolResult(true, "Delivery plan is valid."));
-            }
-            catch (Exception ex)
-            {
-                return ToolJson.Serialize(new ToolResult(false, ex.Message));
-            }
-        });
-
-    public static Task<string> ListOutputs(PathSandbox sandbox, string planJson)
-        => Task.Run(() =>
+            DeliveryValidation.Validate(plan, sources: !skipSources);
+            return new ToolResult(true, "Delivery plan is valid.");
+        }
+        catch (Exception ex)
         {
-            var plan = ParsePlan(sandbox, planJson);
-            var planned = DeliveryOutputService.PlannedOutputPaths(plan).ToList();
-            var existing = DeliveryOutputService.FindExistingOutputs(plan);
-            return ToolJson.Serialize(new ToolResult(true,
-                $"{planned.Count} planned output path(s), {existing.Length} already exist.",
-                ToolJson.Data(new DeliveryOutputsPayload(planned, existing))));
-        });
+            return new ToolResult(false, ex.Message);
+        }
+    }
 
-    public static Task<string> Build(PathSandbox sandbox, string planJson, string[]? overwrite)
-        => Task.Run(async () =>
+    public static ToolResult ListOutputs(PathSandbox sandbox, string planJson)
+    {
+        var plan = ParsePlan(sandbox, planJson);
+        var planned = DeliveryOutputService.PlannedOutputPaths(plan).ToList();
+        var existing = DeliveryOutputService.FindExistingOutputs(plan);
+        return new ToolResult(true,
+            $"{planned.Count} planned output path(s), {existing.Length} already exist.",
+            ToolJson.Data(new DeliveryOutputsPayload(planned, existing)));
+    }
+
+    /// <summary>
+    /// Runs a full delivery build through the public <see cref="DeliveryService"/> facade, threading
+    /// the request's cancellation token and progress sink all the way down. The sandbox-confined plan
+    /// is re-serialized back to the delivery JSON contract first, because the facade parses plain
+    /// JSON and must only ever see sandbox-resolved paths.
+    /// <para>通过公共 <see cref="DeliveryService"/> 门面执行完整交付构建，把请求的取消令牌与进度
+    /// 接收端一路贯穿到底。沙箱收敛后的计划会先重新序列化回交付 JSON 契约——门面只解析纯 JSON，
+    /// 必须只看到经沙箱解析后的路径。</para>
+    /// </summary>
+    /// <param name="sandbox"><para>约束计划路径的沙箱。</para>The sandbox confining the plan's paths.</param>
+    /// <param name="planJson"><para>待构建的交付计划 JSON。</para>The delivery plan JSON to build from.</param>
+    /// <param name="overwrite"><para>允许覆盖的既有输出文件名，可为 null。</para>Existing output file names allowed to be replaced, possibly null.</param>
+    /// <param name="progress"><para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para>The MCP-bound progress instance, possibly <see langword="null"/>.</param>
+    /// <param name="deliveryTools"><para>本宿主的工具准备服务提供器；为 <see langword="null"/> 或未产出实例时如实报告能力缺口。</para>
+    /// This host's tool-preparation provider; when <see langword="null"/> or empty the capability gap is reported honestly.</param>
+    /// <param name="cancellationToken"><para>取消进行中构建或工具下载的令牌。</para>Token cancelling the in-flight build or tool download.</param>
+    /// <returns><para>描述产出路径数量的结果信封。</para>An envelope summarizing the produced output paths.</returns>
+    /// <exception cref="OperationCanceledException"><para>客户端在构建中请求取消时重新抛出，交由 <see cref="ToolGuard"/> 映射为取消结果。</para>
+    /// Rethrown when the client requests cancellation during the build so <see cref="ToolGuard"/> maps it to a cancellation result.</exception>
+    public static async Task<ToolResult> Build(
+        PathSandbox sandbox, string planJson, string[]? overwrite,
+        IProgress<ProgressNotificationValue>? progress, Func<IDeliveryTools?>? deliveryTools,
+        CancellationToken cancellationToken)
+    {
+        if (deliveryTools?.Invoke() is null)
         {
-            var tools = DeliveryToolFactory.ToolsProvider?.Invoke();
-            if (tools is null)
-            {
-                return ToolJson.Serialize(new ToolResult(false,
-                    "Delivery build requires a tool-preparation service (IDeliveryTools), which is "
-                    + "only injected when UotanStudio runs with its desktop host. Use delivery_validate "
-                    + "and delivery_list_outputs instead, or launch the companion mode."));
-            }
+            return new ToolResult(false,
+                "Delivery build requires a tool-preparation service (IDeliveryTools), which is "
+                + "only injected when UotanStudio runs with its desktop host. Use delivery_validate "
+                + "and delivery_list_outputs instead, or launch the companion mode.");
+        }
 
-            var plan = ParsePlan(sandbox, planJson);
-            var overwriteSet = overwrite is { Length: > 0 } ? new HashSet<string>(overwrite) : null;
-            try
-            {
-                var service = new DeliveryOutputService(tools);
-                var outputs = await service.ExportAsync(plan, progress: null, token: default,
-                    overwrite: overwriteSet).ConfigureAwait(false);
-                return ToolJson.Serialize(new ToolResult(true,
-                    $"Delivery build produced {outputs.Length} output path(s).", ToolJson.Data(outputs)));
-            }
-            catch (Exception ex)
-            {
-                return ToolJson.Serialize(new ToolResult(false, ex.Message));
-            }
-        });
+        var plan = ParsePlan(sandbox, planJson);
+        var confinedPlanJson = JsonSerializer.Serialize(plan, DeliveryJsonContext.Default.DeliveryPlan);
+        var overwriteSet = overwrite is { Length: > 0 } ? new HashSet<string>(overwrite) : null;
+        try
+        {
+            using var httpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+            var outputs = await new DeliveryService(httpClient)
+                .BuildAsync(confinedPlanJson, overwriteSet, ToLogProgress(progress), cancellationToken)
+                .ConfigureAwait(false);
+            return new ToolResult(true,
+                $"Delivery build produced {outputs.Count} output path(s).",
+                ToolJson.Data(outputs.ToArray()));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return new ToolResult(false, ex.Message);
+        }
+    }
 
     /// <summary>
     /// Parses a plan from JSON and confines its paths to the sandbox.
@@ -147,31 +206,86 @@ internal static class DeliveryToolHandlers
     /// <summary>
     /// Rewrites every path-bearing field to its sandbox-resolved equivalent before validation.
     /// <para>校验前把所有含路径的字段重写为沙箱解析后的等价路径。</para>
+    /// An unset output directory stays unset: it is a draft plan the backend must reject with its own
+    /// validation message, not a path the sandbox may resolve, and resolving an empty string throws
+    /// before the client ever learns which field is missing.
+    /// <para>未设置的输出目录保持未设置：这是应由后端以自身校验信息拒绝的草稿计划，而不是沙箱可解析的路径；
+    /// 对空串做解析会在客户端得知缺失字段之前先抛出异常。</para>
+    /// Deserialization leaves every omitted section null because the plan type is built without running
+    /// its initializers, so each section and collection is normalized to its empty form here: a client
+    /// plan that skips a section must reach plan validation, not a null reference.
+    /// <para>计划类型在构造时不会执行其初始化器，因此 JSON 中省略的节会全部反序列化为 null，所以这里把每一节
+    /// 与集合归一为空形态：省略节的客户端计划必须进入计划校验，而不是空引用异常。</para>
     /// </summary>
-    private static DeliveryPlan Confine(DeliveryPlan plan, PathSandbox sandbox) => plan with
+    private static DeliveryPlan Confine(DeliveryPlan plan, PathSandbox sandbox)
     {
-        OutputDirectory = sandbox.ResolveOutput(plan.OutputDirectory),
-        Package = plan.Package with
+        var package = plan.Package ?? new DeliveryPackageOptions();
+        var payload = plan.Payload ?? new DeliveryPayloadOptions();
+        return plan with
         {
-            CertificatePath = ConfineOptional(plan.Package.CertificatePath, sandbox),
-            SigningKeyPath = ConfineOptional(plan.Package.SigningKeyPath, sandbox),
-            RecoveryUpdaterPath = ConfineOptional(plan.Package.RecoveryUpdaterPath, sandbox)
-        },
-        Payload = plan.Payload with
-        {
-            DynamicPartitionsFile = ConfineOptional(plan.Payload.DynamicPartitionsFile, sandbox),
-            SignatureFile = ConfineOptional(plan.Payload.SignatureFile, sandbox),
-            SigningKeyPath = ConfineOptional(plan.Payload.SigningKeyPath, sandbox),
-            PostinstallFile = ConfineOptional(plan.Payload.PostinstallFile, sandbox)
-        },
-        LocalZstd = plan.LocalZstd.ToDictionary(p => p.Key, p => ConfineOptional(p.Value, sandbox)),
-        Container = plan.Container.Select(f => ConfineFile(f, sandbox)).ToList(),
-        Files = plan.Files.Select(f => ConfineFile(f, sandbox)).ToList()
-    };
+            OutputDirectory = string.IsNullOrWhiteSpace(plan.OutputDirectory)
+                ? plan.OutputDirectory
+                : sandbox.ResolveOutput(plan.OutputDirectory),
+            Package = package with
+            {
+                CertificatePath = ConfineOptional(package.CertificatePath, sandbox),
+                SigningKeyPath = ConfineOptional(package.SigningKeyPath, sandbox),
+                RecoveryUpdaterPath = ConfineOptional(package.RecoveryUpdaterPath, sandbox)
+            },
+            Payload = payload with
+            {
+                DynamicPartitionsFile = ConfineOptional(payload.DynamicPartitionsFile, sandbox),
+                SignatureFile = ConfineOptional(payload.SignatureFile, sandbox),
+                SigningKeyPath = ConfineOptional(payload.SigningKeyPath, sandbox),
+                PostinstallFile = ConfineOptional(payload.PostinstallFile, sandbox)
+            },
+            LocalZstd = (plan.LocalZstd ?? []).ToDictionary(p => p.Key, p => ConfineOptional(p.Value, sandbox)),
+            Container = (plan.Container ?? []).Select(f => ConfineFile(f, sandbox)).ToList(),
+            Files = (plan.Files ?? []).Select(f => ConfineFile(f, sandbox)).ToList()
+        };
+    }
 
     private static string ConfineOptional(string path, PathSandbox sandbox)
         => string.IsNullOrEmpty(path) ? path : sandbox.Resolve(path);
 
     private static Services.Delivery.DeliveryFile ConfineFile(Services.Delivery.DeliveryFile file, PathSandbox sandbox)
         => file with { SourcePath = string.IsNullOrEmpty(file.SourcePath) ? "" : sandbox.Resolve(file.SourcePath) };
+
+    /// <summary>
+    /// <para>把协议进度目标转为交付门面的文本进度接收端；没有进度令牌时返回 <see langword="null"/>，
+    /// 底层实现因此不会消耗上报开销。门面只公开 <c>DeliveryProgress</c> 的「NN% 消息」行（该记录是子项目内部类型），
+    /// 所以这里把行首百分比还原为协议进度值，并把总进度固定为 100。</para>
+    /// Converts the protocol progress sink into the facade's text-progress sink; without a progress
+    /// token this returns <see langword="null"/> so backing implementations skip reporting overhead.
+    /// The public facade only exposes each <c>DeliveryProgress</c> as an "NN% message" line (the record
+    /// itself is delivery-internal), so the leading percentage is recovered as the protocol progress
+    /// value with the total pinned to 100.
+    /// </summary>
+    /// <param name="progress"><para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para>The MCP-bound progress instance, possibly <see langword="null"/>.</param>
+    /// <returns><para>供交付构建上报进度行的接收端。</para>A progress-line sink for the delivery build to report to.</returns>
+    private static IProgress<string>? ToLogProgress(IProgress<ProgressNotificationValue>? progress) =>
+        progress is null
+            ? null
+            : new Progress<string>(line => progress.Report(ToNotification(line)));
+
+    /// <summary>
+    /// <para>把门面的一行进度文本还原为协议进度通知；无法解析前导百分比时按 0 上报并保留原文。</para>
+    /// Recovers a protocol progress notification from one facade line; when the leading percentage
+    /// cannot be parsed the progress stays 0 and the raw line is kept as the message.
+    /// </summary>
+    /// <param name="line"><para>门面输出的一行进度文本。</para>One progress line emitted by the delivery facade.</param>
+    /// <returns><para>百分比与原文组成的协议进度值。</para>A protocol progress value carrying the percent and the text.</returns>
+    private static ProgressNotificationValue ToNotification(string line)
+    {
+        var percent = 0f;
+        var split = line.IndexOf(' ');
+        if (split > 1 && line[split - 1] == '%' &&
+            float.TryParse(line.AsSpan(0, split - 1), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture,
+                out var parsed))
+        {
+            percent = parsed;
+        }
+
+        return new ProgressNotificationValue { Progress = percent, Total = 100f, Message = line };
+    }
 }

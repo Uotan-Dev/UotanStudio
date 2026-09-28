@@ -2,8 +2,8 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using ModelContextProtocol.Server;
 using UotanStudio.Firmware.Application.Formats;
-using UotanStudio.Firmware.BoundedContexts.Compression;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Compression;
+using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Mcp.Tools;
 
@@ -12,13 +12,18 @@ namespace UotanStudio.Mcp.Tools;
 /// instead of guessing its version, sandbox shape, registered handlers and codec set.
 /// <para>构建环境/能力探测 MCP 工具，让客户端特性探测本服务器的版本、沙箱形态、已注册处理器与编解码集合，
 /// 而非猜测。</para>
+/// The delegate ends with the ambient <see cref="CancellationToken"/> parameter the MCP server binds
+/// itself; it does not appear in the emitted <c>inputSchema</c>, so clients cannot pass it.
+/// <para>委托以 MCP 服务器自行绑定的环境参数 <see cref="CancellationToken"/> 结尾；它不出现在生成的
+/// <c>inputSchema</c> 中，客户端无法传入。</para>
 /// </summary>
 internal static class EnvToolFactory
 {
     internal static IReadOnlyList<McpServerTool> CreateTools(PathSandbox sandbox, bool allowFlash)
     {
         var getEnv = McpServerTool.Create(
-            () => EnvToolHandlers.GetEnv(sandbox, allowFlash),
+            (CancellationToken cancellationToken) => ToolGuard.RunAsync(
+                token => Task.FromResult(EnvToolHandlers.GetEnv(sandbox, allowFlash)), cancellationToken),
             new McpServerToolCreateOptions
             {
                 Name = "get_env",
@@ -37,10 +42,13 @@ internal static class EnvToolFactory
 /// <summary>
 /// Implementation for the environment tool delegate; kept separate for direct unit testing.
 /// <para>环境工具委托的实现；独立存放便于直接单元测试。</para>
+/// The handler returns the <see cref="ToolResult"/> envelope and <see cref="ToolGuard"/> turns that
+/// envelope into the protocol result.
+/// <para>处理器返回 <see cref="ToolResult"/> 信封，由 <see cref="ToolGuard"/> 把信封转为协议结果。</para>
 /// </summary>
 internal static class EnvToolHandlers
 {
-    public static string GetEnv(PathSandbox sandbox, bool allowFlash)
+    public static ToolResult GetEnv(PathSandbox sandbox, bool allowFlash)
     {
         FirmwareFormatRegistry.RegisterAll();
         var handlers = FormatDetector.RegisteredHandlers.ToList();
@@ -62,6 +70,6 @@ internal static class EnvToolHandlers
             writable,
             codecs);
 
-        return ToolJson.Serialize(new ToolResult(true, "UotanStudio MCP environment report.", ToolJson.Data(payload)));
+        return new ToolResult(true, "UotanStudio MCP environment report.", ToolJson.Data(payload));
     }
 }

@@ -50,17 +50,27 @@ public interface IDeviceManagerGateway
     /// <para>原始 ADB 服务字符串，例如 <c>shell:getprop</c>、<c>sync:</c> 或 <c>reboot:bootloader</c>。</para></param>
     /// <param name="operation">Callback that reads or writes the service stream and produces the result.
     /// <para>读写服务流并产出结果的回调。</para></param>
+    /// <param name="cancellationToken">Token checked before the endpoint is leased, before the service
+    /// stream is opened and by the caller's callback between packets; the ADB protocol stream itself is
+    /// synchronous and cannot interrupt a single blocking read.
+    /// <para>在租用端点前、打开服务流前以及调用方回调的每个数据包之间检查该令牌；ADB 协议流本身是同步的，
+    /// 无法中断单次阻塞读取。</para></param>
     /// <returns>The value returned by <paramref name="operation"/>.
     /// <para><paramref name="operation"/> 返回的值。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="serial"/> is empty or only whitespace.
     /// <para><paramref name="serial"/> 为空或仅包含空白。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="operation"/> is <see langword="null"/>.
     /// <para><paramref name="operation"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="IOException">No unique target matches the identity, or ADB authentication did not complete.
-    /// <para>没有唯一目标与该标识匹配，或 ADB 授权未完成。</para></exception>
-    /// <exception cref="InvalidOperationException">The selected endpoint offers no supported ADB session.
-    /// <para>所选端点没有受支持的 ADB 会话。</para></exception>
-    TResult RunAdbService<TResult>(string serial, string service, Func<Stream, TResult> operation);
+    /// <exception cref="IOException">No unique target matches the identity, or the endpoint could not be
+    /// leased or authenticated.
+    /// <para>没有唯一目标与该标识匹配，或端点无法租用/无法通过认证。</para></exception>
+    /// <exception cref="InvalidOperationException">The selected endpoint offers no supported ADB session or
+    /// the connection did not reach the connected state.
+    /// <para>所选端点没有受支持的 ADB 会话，或连接未进入已连接状态。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was requested.
+    /// <para><paramref name="cancellationToken"/> 已请求取消。</para></exception>
+    TResult RunAdbService<TResult>(string serial, string service, Func<Stream, TResult> operation,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Uploads an existing local file to the target through the ADB sync service.
@@ -71,32 +81,55 @@ public interface IDeviceManagerGateway
     /// <param name="localPath">Absolute path of the file to upload, already confined by the caller's <see cref="PathSandbox"/>.
     /// <para>待上传文件的绝对路径，已由调用方的 <see cref="PathSandbox"/> 限制。</para></param>
     /// <param name="remotePath">Device-side destination path. <para>设备侧目标路径。</para></param>
+    /// <param name="cancellationToken">Token checked before the endpoint is leased and before the sync
+    /// client is created; <c>push</c> itself is a synchronous protocol call without its own token.
+    /// <para>在租用端点前与创建 sync 客户端前检查该令牌；<c>push</c> 本身是没有令牌的同步协议调用。</para></param>
     /// <exception cref="ArgumentException"><paramref name="serial"/> is empty or only whitespace.
     /// <para><paramref name="serial"/> 为空或仅包含空白。</para></exception>
-    /// <exception cref="IOException">No unique target matches the identity, or the device rejected the upload.
-    /// <para>没有唯一目标与该标识匹配，或设备拒绝该上传。</para></exception>
-    /// <exception cref="InvalidOperationException">The selected endpoint offers no supported ADB session.
-    /// <para>所选端点没有受支持的 ADB 会话。</para></exception>
-    void PushAdbFile(string serial, string localPath, string remotePath);
+    /// <exception cref="IOException">No unique target matches the identity, the endpoint could not be
+    /// leased or authenticated, or the device rejected the upload.
+    /// <para>没有唯一目标与该标识匹配、端点无法租用/无法通过认证，或设备拒绝该上传。</para></exception>
+    /// <exception cref="InvalidOperationException">The selected endpoint offers no supported ADB session or
+    /// the connection did not reach the connected state.
+    /// <para>所选端点没有受支持的 ADB 会话，或连接未进入已连接状态。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was requested.
+    /// <para><paramref name="cancellationToken"/> 已请求取消。</para></exception>
+    void PushAdbFile(string serial, string localPath, string remotePath,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Runs one transaction against the single connected Fastboot device.
-    /// <para>对唯一接入的 Fastboot 设备执行一次事务。</para>
+    /// Runs one transaction against a Fastboot device.
+    /// <para>对一个 Fastboot 设备执行一次事务。</para>
     /// The session is borrowed for the duration of <paramref name="operation"/> only and is closed
     /// afterwards, so the callback must not retain or return it.
     /// <para>会话仅在 <paramref name="operation"/> 执行期间借用，随后关闭，因此回调不得保留或返回该会话。</para>
     /// </summary>
     /// <typeparam name="TResult">Type of the value produced by the operation.
     /// <para>由操作产出的值类型。</para></typeparam>
+    /// <param name="target">Fastboot serial or USB device key selecting the endpoint, as reported by the
+    /// device inventory. When <see langword="null"/> or blank the call requires exactly one directly
+    /// routable Fastboot endpoint and uses it.
+    /// <para>用于选择端点的 Fastboot serial 或 USB 设备键（取自设备清单）。为
+    /// <see langword="null"/> 或空白时要求恰好存在一个可直接路由的 Fastboot 端点并使用它。</para></param>
     /// <param name="operation">Callback that uses the borrowed Fastboot session and produces the result.
     /// <para>使用借出的 Fastboot 会话并产出结果的回调。</para></param>
+    /// <param name="cancellationToken">Token checked before discovery is refreshed, before the endpoint
+    /// is leased and again before the callback runs.
+    /// <para>在刷新发现结果前、租用端点前以及调用回调前都会检查该令牌。</para></param>
     /// <returns>The value returned by <paramref name="operation"/>.
     /// <para><paramref name="operation"/> 返回的值。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="operation"/> is <see langword="null"/>.
     /// <para><paramref name="operation"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidOperationException">Fastboot devices are not exactly one, or the selected device does not expose Fastboot.
-    /// <para>Fastboot 设备数量不恰好为一，或所选设备未暴露 Fastboot。</para></exception>
-    /// <exception cref="IOException">The Fastboot session could not be opened.
-    /// <para>无法打开 Fastboot 会话。</para></exception>
-    TResult RunFastboot<TResult>(Func<FastbootSession, TResult> operation);
+    /// <exception cref="InvalidOperationException"><paramref name="target"/> is absent and the directly
+    /// routable Fastboot endpoints are not exactly one, or the leased endpoint offers no Fastboot session.
+    /// <para><paramref name="target"/> 为空且可直接路由的 Fastboot 端点数量不恰好为一，或所租用的端点未提供
+    /// Fastboot 会话。</para></exception>
+    /// <exception cref="IOException">No Fastboot endpoint matches <paramref name="target"/>, several do,
+    /// the leased endpoint offers no Fastboot session, or the session could not be opened.
+    /// <para>没有 Fastboot 端点匹配 <paramref name="target"/>、匹配者不止一个、所租用的端点未提供 Fastboot
+    /// 会话，或无法打开会话。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was requested.
+    /// <para><paramref name="cancellationToken"/> 已请求取消。</para></exception>
+    TResult RunFastboot<TResult>(string? target, Func<FastbootSession, TResult> operation,
+        CancellationToken cancellationToken = default);
 }

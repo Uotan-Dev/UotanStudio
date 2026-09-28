@@ -159,16 +159,38 @@
                             HorizontalAlignment="Right" />
 
                     <!-- 暴露为 MCP 服务器 -->
-                    <Grid ColumnDefinitions="160,*,180" ColumnSpacing="8" Margin="0,8,0,0">
-                        <TextBlock Grid.Column="0" Text="{DynamicResource Settings_McpExpose}"
+                    <Grid ColumnDefinitions="160,*,180" ColumnSpacing="8" RowDefinitions="Auto,Auto,Auto,Auto,Auto" Margin="0,8,0,0">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_McpExpose}"
                                    VerticalAlignment="Center" FontSize="13" />
-                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding McpExposeEnabled, Mode=TwoWay}" />
-                        <Grid Grid.Column="2" ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                        <ToggleSwitch Grid.Row="0" Grid.Column="1" IsChecked="{Binding McpExposeEnabled, Mode=TwoWay}" />
+                        <Grid Grid.Row="0" Grid.Column="2" ColumnDefinitions="*,Auto" ColumnSpacing="6">
                             <TextBlock Grid.Column="0" Text="{DynamicResource Settings_McpExposePort}"
                                        VerticalAlignment="Center" HorizontalAlignment="Right" FontSize="13" />
                             <NumericUpDown Grid.Column="1" Value="{Binding McpExposePort, Mode=TwoWay}"
                                            Minimum="1" Maximum="65535" Width="100" />
                         </Grid>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Settings_McpExposeRoot}"
+                                   VerticalAlignment="Center" FontSize="13" Margin="0,8,0,0" />
+                        <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto"
+                              ColumnSpacing="6" Margin="0,8,0,0">
+                            <TextBox Grid.Column="0" Text="{Binding McpExposeRootDirectory, Mode=TwoWay}"
+                                     PlaceholderText="{DynamicResource Settings_McpExposeRootPlaceholder}" />
+                            <Button Grid.Column="1" Content="{DynamicResource Keys_Browse}"
+                                    Command="{Binding BrowseMcpRootCommand}" />
+                        </Grid>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                                   Text="{DynamicResource Settings_McpExposeRootHint}"
+                                   FontSize="12" Opacity="0.7" TextWrapping="Wrap" Margin="0,4,0,0" />
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{DynamicResource Settings_McpExposeFlash}"
+                                   VerticalAlignment="Center" FontSize="13" Margin="0,8,0,0" />
+                        <ToggleSwitch Grid.Row="3" Grid.Column="1" IsChecked="{Binding McpExposeAllowFlash, Mode=TwoWay}"
+                                      Margin="0,8,0,0" HorizontalAlignment="Left" />
+                        <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3"
+                                   Text="{DynamicResource Settings_McpExposeFlashWarning}"
+                                   FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                                   Foreground="{DynamicResource LogErrorBrush}" />
                     </Grid>
 
                     <!-- 保存 MCP 设置：右对齐 -->

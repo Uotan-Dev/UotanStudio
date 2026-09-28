@@ -112,24 +112,24 @@ public class McpSandboxTests : IDisposable
     }
 
     [Fact]
-    public async Task ListFormats_ReportsRegisteredHandlers()
+    public void ListFormats_ReportsRegisteredHandlers()
     {
-        var sandbox = new PathSandbox(_root);
-        var json = await FirmwareToolHandlers.ListFormatsAsync();
-        using var document = JsonDocument.Parse(json);
-        Assert.True(document.RootElement.GetProperty("success").GetBoolean());
-        Assert.True(document.RootElement.GetProperty("data").GetArrayLength() > 0);
+        var result = FirmwareToolHandlers.ListFormats();
+
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.True(result.Data!.Value.GetArrayLength() > 0);
     }
 
     [Fact]
     public void GetEnv_ReportsVersionHandlersAndCodecs()
     {
         var sandbox = new PathSandbox(_root);
-        using var document = JsonDocument.Parse(EnvToolHandlers.GetEnv(sandbox, allowFlash: false));
-        var root = document.RootElement;
-        Assert.True(root.GetProperty("success").GetBoolean());
+        var result = EnvToolHandlers.GetEnv(sandbox, allowFlash: false);
 
-        var data = root.GetProperty("data");
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        var data = result.Data!.Value;
         Assert.Equal("uotanstudio", data.GetProperty("name").GetString());
         Assert.False(string.IsNullOrWhiteSpace(data.GetProperty("version").GetString()));
         Assert.False(data.GetProperty("allowFlash").GetBoolean());
@@ -170,11 +170,12 @@ public class McpSandboxTests : IDisposable
             entryStream.Write(content);
         }
 
-        var json = await FirmwareToolHandlers.ExtractAsync(sandbox, zipPath, ["images/system.img"], "extracted",
-            fromPayloadOnly: false, maximumOutputBytes: ContainerEntryExtractor.DefaultMaximumOutputBytes);
-        using var document = JsonDocument.Parse(json);
-        Assert.True(document.RootElement.GetProperty("success").GetBoolean(), json);
-        var data = document.RootElement.GetProperty("data");
+        var result = await FirmwareToolHandlers.ExtractAsync(sandbox, zipPath, ["images/system.img"], "extracted",
+            fromPayloadOnly: false, maximumOutputBytes: ContainerEntryExtractor.DefaultMaximumOutputBytes,
+            progress: null, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(result.Success, result.Summary);
+        Assert.NotNull(result.Data);
+        var data = result.Data!.Value;
         Assert.Equal("Zip", data.GetProperty("kind").GetString());
         Assert.Equal("images/system.img", data.GetProperty("entries")[0].GetString());
         var outputPath = data.GetProperty("outputPaths")[0].GetString();
@@ -187,7 +188,8 @@ public class McpSandboxTests : IDisposable
     {
         var sandbox = new PathSandbox(_root);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
-            () => FirmwareToolHandlers.ExtractAsync(sandbox, @"..\evil.zip", ["x"], "out", false, 1024 * 1024));
+            () => FirmwareToolHandlers.ExtractAsync(sandbox, @"..\evil.zip", ["x"], "out", false, 1024 * 1024,
+                progress: null, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -201,25 +203,26 @@ public class McpSandboxTests : IDisposable
         Random.Shared.NextBytes(payload);
         File.WriteAllBytes(input, payload);
 
-        var compressJson = await CompressionToolHandlers.Compress(sandbox, input, compressed, "zstd", null, null);
-        Assert.True(JsonDocument.Parse(compressJson).RootElement.GetProperty("success").GetBoolean(),
-            compressJson);
+        var compress = await CompressionToolHandlers.Compress(sandbox, input, compressed, "zstd", null, null,
+            progress: null, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(compress.Success, compress.Summary);
 
-        var decompressJson = await CompressionToolHandlers.Decompress(sandbox, compressed, restored, null, 1024 * 1024);
-        Assert.True(JsonDocument.Parse(decompressJson).RootElement.GetProperty("success").GetBoolean(),
-            decompressJson);
+        var decompress = await CompressionToolHandlers.Decompress(sandbox, compressed, restored, null, 1024 * 1024,
+            TestContext.Current.CancellationToken);
+        Assert.True(decompress.Success, decompress.Summary);
 
         Assert.True(payload.AsSpan().SequenceEqual(File.ReadAllBytes(restored)));
     }
 
     [Fact]
-    public async Task ListAlgorithms_ReportsCompressionPayloadShape()
+    public void ListAlgorithms_ReportsCompressionPayloadShape()
     {
-        var json = await CompressionToolHandlers.ListAlgorithms();
-        using var document = JsonDocument.Parse(json);
-        Assert.True(document.RootElement.GetProperty("success").GetBoolean(), json);
-        var algorithms = document.RootElement.GetProperty("data");
-        Assert.True(algorithms.GetArrayLength() > 0, json);
+        var result = CompressionToolHandlers.ListAlgorithms();
+
+        Assert.True(result.Success, result.Summary);
+        Assert.NotNull(result.Data);
+        var algorithms = result.Data!.Value;
+        Assert.True(algorithms.GetArrayLength() > 0, result.Summary);
         var first = algorithms[0];
         Assert.True(first.TryGetProperty("format", out _));
         Assert.True(first.TryGetProperty("canCompress", out _));
@@ -237,15 +240,16 @@ public class McpSandboxTests : IDisposable
         var tar = Path.Combine(_root, "payload.tar");
         TarFile.CreateFromDirectory(staged, tar, includeBaseDirectory: false);
 
-        var json = await FirmwareToolHandlers.UnpackAsync(sandbox, tar, "unpacked", 1024 * 1024);
-        using var document = JsonDocument.Parse(json);
-        Assert.True(document.RootElement.GetProperty("success").GetBoolean(), json);
-        var entries = document.RootElement.GetProperty("data").GetProperty("entries");
+        var result = await FirmwareToolHandlers.UnpackAsync(sandbox, tar, "unpacked", 1024 * 1024,
+            TestContext.Current.CancellationToken);
+        Assert.True(result.Success, result.Summary);
+        Assert.NotNull(result.Data);
+        var entries = result.Data!.Value.GetProperty("entries");
         Assert.Equal(2, entries.GetArrayLength());
     }
 
     [Fact]
-    public async Task DeliveryListOutputs_ReportsPlannedAndExistingPaths()
+    public void DeliveryListOutputs_ReportsPlannedAndExistingPaths()
     {
         var sandbox = new PathSandbox(_root);
         var source = Path.Combine(_root, "boot.img");
@@ -258,12 +262,25 @@ public class McpSandboxTests : IDisposable
         };
         var planJson = JsonSerializer.Serialize(plan, DeliveryJsonContext.Default.DeliveryPlan);
 
-        var json = await DeliveryToolHandlers.ListOutputs(sandbox, planJson);
-        using var document = JsonDocument.Parse(json);
-        Assert.True(document.RootElement.GetProperty("success").GetBoolean(), json);
-        var data = document.RootElement.GetProperty("data");
-        Assert.True(data.GetProperty("planned").GetArrayLength() > 0, json);
+        var result = DeliveryToolHandlers.ListOutputs(sandbox, planJson);
+        Assert.True(result.Success, result.Summary);
+        Assert.NotNull(result.Data);
+        var data = result.Data!.Value;
+        Assert.True(data.GetProperty("planned").GetArrayLength() > 0, result.Summary);
         Assert.Equal(0, data.GetProperty("existing").GetArrayLength());
+    }
+
+    [Fact]
+    public void DeliveryValidate_PlanWithoutOptionalSections_ReportsValidationFailureInsteadOfCrashing()
+    {
+        var sandbox = new PathSandbox(_root);
+
+        var result = DeliveryToolHandlers.Validate(sandbox, """{"outputDirectory":"","files":[]}""", skipSources: false);
+
+        Assert.False(result.Success);
+        Assert.False(string.IsNullOrWhiteSpace(result.Summary));
+        Assert.DoesNotContain("NullReference", result.Summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("ArgumentNullException", result.Summary, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -271,7 +288,8 @@ public class McpSandboxTests : IDisposable
     {
         var sandbox = new PathSandbox(_root);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
-            () => FirmwareToolHandlers.UnpackAsync(sandbox, @"..\evil.bin", "out", 1024 * 1024));
+            () => FirmwareToolHandlers.UnpackAsync(sandbox, @"..\evil.bin", "out", 1024 * 1024,
+                TestContext.Current.CancellationToken));
     }
 
     [Fact]

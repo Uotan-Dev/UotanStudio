@@ -11,15 +11,24 @@ using ModelContextProtocol.Server;
 namespace UotanStudio.Mcp.Http;
 
 /// <summary>
-/// Serves the UotanStudio MCP tools over the Streamable HTTP transport on a loopback port, so
+/// Serves the UotanStudio MCP tools and resources over the Streamable HTTP transport on a loopback port, so
 /// external clients connect to <c>http://127.0.0.1:&lt;port&gt;/</c> instead of spawning a stdio
 /// process. Started by the desktop host when the settings page enables MCP exposure.
-/// <para>把 UotanStudio 的 MCP 工具以 Streamable HTTP 传输暴露在回环端口上：外部客户端直接连接
+/// <para>把 UotanStudio 的 MCP 工具与资源以 Streamable HTTP 传输暴露在回环端口上：外部客户端直接连接
 /// <c>http://127.0.0.1:&lt;port&gt;/</c>，无需自行启动 stdio 进程。由桌面宿主在设置页开启 MCP 暴露时启动。</para>
 /// Only the loopback interface is bound, requests carrying a non-loopback <c>Origin</c> are rejected
 /// (DNS-rebinding guard), and every accepted path maps to the single MCP endpoint.
 /// <para>只绑定回环接口；携带非回环 <c>Origin</c> 的请求会被拒绝（防 DNS 重绑定）；任意路径都映射到同一个
 /// MCP 端点。</para>
+/// Every JSON-RPC request body is handed to the transport as-is: the host never filters by method name,
+/// so <c>tools/*</c>, <c>resources/*</c> and any other method the <see cref="McpServer"/> registers are
+/// reachable through this listener. Which methods actually resolve is decided by the shared
+/// <c>McpServerHost.CreateOptions</c> call, because the SDK registers a method group only when the
+/// matching primitive collection is supplied.
+/// <para>每个 JSON-RPC 请求体都会原样交给传输层：宿主从不按方法名过滤，因此
+/// <c>tools/*</c>、<c>resources/*</c> 以及 <see cref="McpServer"/> 注册的其他方法都能经由该监听器到达。
+/// 哪些方法真正可解析取决于共用的 <c>McpServerHost.CreateOptions</c> 调用，
+/// 因为 SDK 只在给出对应原语集合时才注册该方法组。</para>
 /// </summary>
 public sealed class McpHttpServerHost : IAsyncDisposable
 {
@@ -36,6 +45,7 @@ public sealed class McpHttpServerHost : IAsyncDisposable
         (JsonTypeInfo<JsonRpcMessage>)McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(JsonRpcMessage));
 
     private readonly IReadOnlyList<McpServerTool> _tools;
+    private readonly IReadOnlyList<McpServerResource> _resources;
     private readonly ILoggerFactory? _loggerFactory;
     private readonly ILogger? _logger;
     private readonly ConcurrentDictionary<TcpClient, byte> _connections = new();
@@ -45,15 +55,32 @@ public sealed class McpHttpServerHost : IAsyncDisposable
     private bool _disposed;
 
     /// <summary>
-    /// Creates the host from an already built tool list (see <see cref="McpServerHost.BuildTools"/>).
-    /// <para>由已构建的工具列表创建宿主（见 <see cref="McpServerHost.BuildTools"/>）。</para>
+    /// Creates the host from an already built tool list (see <see cref="McpServerHost.BuildTools"/>),
+    /// optionally adding the resources built by <see cref="McpServerHost.BuildResources"/>.
+    /// <para>由已构建的工具列表（见 <see cref="McpServerHost.BuildTools"/>）创建宿主，并可选加入
+    /// <see cref="McpServerHost.BuildResources"/> 构建的资源。</para>
+    /// The Streamable HTTP listener forwards every JSON-RPC method to the server unchanged, so omitting
+    /// the resources is what keeps <c>resources/list</c>, <c>resources/templates/list</c> and
+    /// <c>resources/read</c> answering <c>-32601</c>: the SDK registers those method groups only when a
+    /// resource collection is present in the shared options.
+    /// <para>Streamable HTTP 监听器会把任意 JSON-RPC 方法原样转发给服务器，因此未给出资源才是
+    /// <c>resources/list</c>、<c>resources/templates/list</c> 与 <c>resources/read</c> 仍返回
+    /// <c>-32601</c> 的原因：SDK 只在共用选项中存在资源集合时才注册这些方法组。</para>
     /// </summary>
     /// <param name="tools">Tools every session registers. <para>会话注册的工具。</para></param>
+    /// <param name="resources">Resources and resource templates every session serves; <see langword="null"/>
+    /// or empty registers none. <para>会话服务的资源与资源模板；为 <see langword="null"/> 或空时不注册。</para></param>
     /// <param name="loggerFactory">Optional SDK diagnostics logger factory. <para>可选的 SDK 诊断日志工厂。</para></param>
-    public McpHttpServerHost(IReadOnlyList<McpServerTool> tools, ILoggerFactory? loggerFactory = null)
+    /// <exception cref="ArgumentNullException"><paramref name="tools"/> is <see langword="null"/>.
+    /// <para><paramref name="tools"/> 为 <see langword="null"/>。</para></exception>
+    public McpHttpServerHost(
+        IReadOnlyList<McpServerTool> tools,
+        IReadOnlyList<McpServerResource>? resources = null,
+        ILoggerFactory? loggerFactory = null)
     {
         ArgumentNullException.ThrowIfNull(tools);
         _tools = tools;
+        _resources = resources ?? [];
         _loggerFactory = loggerFactory;
         _logger = loggerFactory?.CreateLogger("UotanStudio.Mcp");
     }
@@ -94,7 +121,7 @@ public sealed class McpHttpServerHost : IAsyncDisposable
 
             var cancellation = new CancellationTokenSource();
             var transport = new StreamableHttpServerTransport(_loggerFactory);
-            var session = new Session(listener, transport, McpServer.Create(transport, McpServerHost.CreateOptions(_tools), _loggerFactory), cancellation);
+            var session = new Session(listener, transport, McpServer.Create(transport, McpServerHost.CreateOptions(_tools, _resources), _loggerFactory), cancellation);
 
             _session = session;
             Port = ((IPEndPoint)listener.LocalEndpoint).Port;

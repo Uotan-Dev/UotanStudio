@@ -13,10 +13,10 @@ namespace UotanStudio.Tests.Services;
 
 /// <summary>
 /// End-to-end coverage for the desktop MCP HTTP exposure: a real Streamable HTTP MCP client connects
-/// to the loopback listener, lists and calls tools through it, and the settings-driven service starts
-/// and releases the port.
-/// <para>桌面 MCP HTTP 暴露的端到端覆盖：真实 Streamable HTTP MCP 客户端连接回环监听并通过它列举、
-/// 调用工具；由设置驱动的服务负责启动与释放端口。</para>
+/// to the loopback listener, lists and calls tools, lists and reads resources, and the settings-driven
+/// service starts and releases the port.
+/// <para>桌面 MCP HTTP 暴露的端到端覆盖：真实 Streamable HTTP MCP 客户端连接回环监听并通过它列举与调用工具、
+/// 列举与读取资源；由设置驱动的服务负责启动与释放端口。</para>
 /// </summary>
 public sealed class McpHttpExposureTests
 {
@@ -111,8 +111,66 @@ public sealed class McpHttpExposureTests
         }
     }
 
+    [Fact]
+    public async Task HttpHost_SandboxedContainerResource_ListsEntriesWithoutExtraction()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var root = Path.Combine(Path.GetTempPath(), "uotan-mcp-http-resources-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var zipPath = Path.Combine(root, "rom.zip");
+        using (var archive = System.IO.Compression.ZipFile.Open(
+            zipPath, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            using var entryStream = archive.CreateEntry("images/boot.img").Open();
+            entryStream.Write([0x55, 0xAA, 0x5A, 0xA5]);
+        }
+
+        try
+        {
+            await using var host = CreateHost(new PathSandbox(root));
+            host.Start(0);
+
+            await using var transport = new HttpClientTransport(new HttpClientTransportOptions
+            {
+                Endpoint = new Uri($"http://127.0.0.1:{host.Port}/"),
+                TransportMode = HttpTransportMode.StreamableHttp
+            });
+            await using var client = await McpClient.CreateAsync(transport, cancellationToken: cancellationToken);
+
+            var resources = await client.ListResourcesAsync(cancellationToken: cancellationToken);
+            Assert.Contains(resources, resource => resource.Name == "sandbox-overview");
+
+            var templates = await client.ListResourceTemplatesAsync(cancellationToken: cancellationToken);
+            Assert.Contains(templates, template => template.Name == "container-entries");
+            Assert.Contains(templates, template => template.Name == "filesystem-entries");
+
+            var read = await client.ReadResourceAsync(
+                "uotan://container/rom.zip/entries", null, cancellationToken);
+            var text = string.Concat(read.Contents.OfType<TextResourceContents>().Select(content => content.Text));
+            Assert.NotEmpty(text);
+            Assert.Contains("images/boot.img", text, StringComparison.Ordinal);
+            Assert.DoesNotContain(root, text, StringComparison.Ordinal);
+
+            var escaped = await Record.ExceptionAsync(async () =>
+                await client.ReadResourceAsync(
+                    "uotan://container/%2e%2e%2f%2e%2e%2fwindows.ini/entries", null, cancellationToken));
+            Assert.NotNull(escaped);
+            Assert.Contains("sandbox", escaped!.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static McpHttpServerHost CreateHost()
-        => new(new McpServerHost(PathSandbox.Unrestricted, allowFlash: false).BuildTools());
+        => CreateHost(PathSandbox.Unrestricted);
+
+    private static McpHttpServerHost CreateHost(PathSandbox sandbox)
+    {
+        var serverHost = new McpServerHost(sandbox, allowFlash: false);
+        return new McpHttpServerHost(serverHost.BuildTools(), serverHost.BuildResources());
+    }
 
     private static string TextOf(CallToolResult result)
         => string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text));

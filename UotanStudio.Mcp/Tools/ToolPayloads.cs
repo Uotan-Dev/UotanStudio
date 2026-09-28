@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Mcp.Tools;
 
@@ -23,17 +23,25 @@ internal sealed record DeliveryOutputsPayload(
     IReadOnlyList<string> Planned,
     IReadOnlyList<string> Existing);
 
+/// <summary>
+/// <para>清单中单个 USB 端点的负载。<c>Protocol</c> 来自 Comm 的协议分类器，无法分类时为
+/// <c>unknown</c>。<c>DevicePath</c> 与 <c>DeviceKey</c> 仅在请求详细清单时才填充，默认结果省略它们以保持精简。</para>
+/// One USB endpoint in the inventory. <c>Protocol</c> comes from the communication layer's protocol
+/// classifier and is <c>unknown</c> when nothing identifies a known protocol. <c>DevicePath</c> and
+/// <c>DeviceKey</c> are populated only for a detailed inventory request, so the default payload stays small.
+/// </summary>
 internal sealed record UsbDevicePayload(
     string Api,
     string SourceApiKind,
     int VendorId,
     int ProductId,
     string? Serial,
-    string DevicePath,
-    string DeviceKey,
+    string Protocol,
     int? InterfaceClass,
     int? InterfaceSubClass,
-    int? InterfaceProtocol);
+    int? InterfaceProtocol,
+    string? DevicePath = null,
+    string? DeviceKey = null);
 
 internal sealed record AdbTargetPayload(string Serial, string State);
 
@@ -144,6 +152,11 @@ internal sealed record EnvPayload(
 [JsonSerializable(typeof(InputOutputPayload))]
 [JsonSerializable(typeof(PathPayload))]
 [JsonSerializable(typeof(ContainerExtractionPayload))]
+[JsonSerializable(typeof(OtaZipVerificationPayload))]
+[JsonSerializable(typeof(OtaZipPatchPayload))]
+[JsonSerializable(typeof(OtaZipRebuildPayload))]
+[JsonSerializable(typeof(SuperPayloadConversionPayload))]
+[JsonSerializable(typeof(PreparedToolsPayload))]
 [JsonSerializable(typeof(EnvPayload))]
 [JsonSerializable(typeof(List<string>))]
 internal sealed partial class McpToolJsonContext : JsonSerializerContext;

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
@@ -124,10 +125,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         get => _appSettings.FirmwareParallelism;
         set
         {
-            var workers = Math.Clamp(value, 1, global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.MaximumWorkers);
+            var workers = Math.Clamp(value, 1, global::UotanStudio.Firmware.Core.FirmwareParallelism.MaximumWorkers);
             if (_appSettings.FirmwareParallelism == workers) return;
             _appSettings.FirmwareParallelism = workers;
-            global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers = workers;
+            global::UotanStudio.Firmware.Core.FirmwareParallelism.Workers = workers;
             OnPropertyChanged();
             DebouncedSaveSettings();
         }
@@ -146,6 +147,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     // MCP settings fields
     private bool _mcpExposeEnabled;
     private int _mcpExposePort = AppSettings.DefaultMcpExposePort;
+    private string _mcpExposeRootDirectory = string.Empty;
+    private bool _mcpExposeAllowFlash;
 
     /// <summary>
     /// <para>获取可用语言列表，从语言服务动态获取。</para>
@@ -193,7 +196,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _erofsLegacyCompatibility, value))
             {
-                global::UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility = value;
+                global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility = value;
                 DebouncedSaveSettings();
             }
         }
@@ -207,6 +210,50 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     {
         get => _mcpExposePort;
         set => SetProperty(ref _mcpExposePort, Math.Clamp(value, 1, 65535));
+    }
+
+    /// <summary>
+    /// <para>获取或设置内嵌 MCP 服务器的文件沙箱根目录；空字符串表示不限制根目录。</para>
+    /// Gets or sets the filesystem root the embedded MCP server confines client paths to; empty means unrestricted.
+    /// </summary>
+    public string McpExposeRootDirectory
+    {
+        get => _mcpExposeRootDirectory;
+        set => SetProperty(ref _mcpExposeRootDirectory, value?.Trim() ?? string.Empty);
+    }
+
+    /// <summary>
+    /// <para>获取或设置内嵌 MCP 服务器是否暴露刷写、擦除、重启类工具（默认关闭）。</para>
+    /// Gets or sets whether the embedded MCP server exposes the flashing, wiping and reboot tools (off by default).
+    /// </summary>
+    public bool McpExposeAllowFlash
+    {
+        get => _mcpExposeAllowFlash;
+        set => SetProperty(ref _mcpExposeAllowFlash, value);
+    }
+
+    /// <summary>
+    /// <para>选择内嵌 MCP 服务器的沙箱根目录；平台没有目录选择器或用户取消时保持原值。</para>
+    /// Picks the sandbox root directory for the embedded MCP server; keeps the current value when the platform
+    /// has no folder picker or the user cancels.
+    /// </summary>
+    [RelayCommand]
+    private async Task BrowseMcpRootAsync()
+    {
+        if (TopLevelExtensions.GetTopLevel() is not { StorageProvider.CanPickFolder: true } topLevel)
+        {
+            return;
+        }
+
+        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString("Settings_McpExposeRootPick"),
+            AllowMultiple = false
+        });
+        if (folders.FirstOrDefault()?.TryGetLocalPath() is { Length: > 0 } path)
+        {
+            McpExposeRootDirectory = path;
+        }
     }
 
 
@@ -356,8 +403,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// <param name="applyLanguage">Whether the loaded language still needs to be applied.</param>
     private void InitializeFromAppSettings(AppSettings settings, bool applyLanguage = true)
     {
-        global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers = settings.FirmwareParallelism;
-        global::UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility = settings.ErofsLegacyCompatibility;
+        global::UotanStudio.Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
+        global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility = settings.ErofsLegacyCompatibility;
         _erofsLegacyCompatibility = settings.ErofsLegacyCompatibility;
         // 根据 CultureName 查找或创建 LanguageInfo
         _selectedLanguage = string.IsNullOrEmpty(settings.CultureName)
@@ -396,6 +443,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
         _mcpExposeEnabled = settings.McpExposeEnabled;
         _mcpExposePort = settings.McpExposePort is > 0 and <= 65535 ? settings.McpExposePort : AppSettings.DefaultMcpExposePort;
+        _mcpExposeRootDirectory = settings.McpExposeRootDirectory?.Trim() ?? string.Empty;
+        _mcpExposeAllowFlash = settings.McpExposeAllowFlash;
     }
 
     /// <summary>
@@ -478,6 +527,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.McpServers = [.. McpServers];
         _appSettings.McpExposeEnabled = _mcpExposeEnabled;
         _appSettings.McpExposePort = _mcpExposePort;
+        _appSettings.McpExposeRootDirectory = _mcpExposeRootDirectory;
+        _appSettings.McpExposeAllowFlash = _mcpExposeAllowFlash;
 
         var saved = SettingsPersistenceService.Instance.TrySaveSettings(_appSettings, out var error);
         WeakReferenceMessenger.Default.Send(new SettingsSaveCompletedMessage(saved, error));
@@ -486,7 +537,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         // Apply the exposure state right after a successful save; a busy port only logs and never fails the save.
         if (saved)
         {
-            McpExposureService.Instance.Apply(_mcpExposeEnabled, _mcpExposePort);
+            McpExposureService.Instance.Apply(_mcpExposeEnabled, _mcpExposePort, _mcpExposeRootDirectory, _mcpExposeAllowFlash);
         }
     }
 
@@ -555,11 +606,11 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>保存 MCP 设置：把连接列表与暴露开关、端口写入应用设置并持久化；保存成功后立即按新配置
-    /// 启动、换端口或停止内嵌 MCP 服务器。</para>
-    /// Saves the MCP settings: writes the connection list plus the exposure toggle and port into the
-    /// application settings and persists them; a successful save immediately starts, re-targets or
-    /// stops the embedded MCP server per the new configuration.
+    /// <para>保存 MCP 设置：把连接列表与暴露开关、端口、沙箱根目录、刷写门控写入应用设置并持久化；保存成功后
+    /// 立即按新配置启动、换配置或停止内嵌 MCP 服务器。</para>
+    /// Saves the MCP settings: writes the connection list plus the exposure toggle, port, sandbox root and
+    /// flash gate into the application settings and persists them; a successful save immediately starts,
+    /// re-targets or stops the embedded MCP server per the new configuration.
     /// </summary>
     [RelayCommand]
     private void SaveMcpSettings() => SaveSettings();
@@ -574,7 +625,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         Ai.Reset();
         _appSettings = SettingsPersistenceService.Instance.ResetToDefaults();
         InitializeFromAppSettings(_appSettings);
-        McpExposureService.Instance.Apply(_mcpExposeEnabled, _mcpExposePort);
+        McpExposureService.Instance.Apply(_mcpExposeEnabled, _mcpExposePort, _mcpExposeRootDirectory, _mcpExposeAllowFlash);
 
         // 同步语言列表
         Languages.Clear();

@@ -33,9 +33,9 @@ public class AppSettings : IJsonOnDeserialized
     public int FirmwareParallelism
     {
         get;
-        set => field = value is >= 1 and <= global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.MaximumWorkers
-            ? value : global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.DefaultWorkers;
-    } = global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.DefaultWorkers;
+        set => field = value is >= 1 and <= global::UotanStudio.Firmware.Core.FirmwareParallelism.MaximumWorkers
+            ? value : global::UotanStudio.Firmware.Core.FirmwareParallelism.DefaultWorkers;
+    } = global::UotanStudio.Firmware.Core.FirmwareParallelism.DefaultWorkers;
 
     /// <summary>Copies settings with independently editable collections.<para>复制设置，隔离可编辑集合。</para></summary>
     internal AppSettings Copy()
@@ -56,7 +56,7 @@ public class AppSettings : IJsonOnDeserialized
     /// </summary>
     [JsonPropertyName("erofsLegacyCompatibility")]
     public bool ErofsLegacyCompatibility { get; set; } =
-        global::UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuildDefaults.DefaultLegacyCompatibility;
+        global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.DefaultLegacyCompatibility;
 
     /// <summary>
     /// <para>获取或设置当前语言的文化名称（如 "en-US"、"zh-CN"）。空字符串表示跟随系统。</para>
@@ -263,6 +263,22 @@ public class AppSettings : IJsonOnDeserialized
     /// </summary>
     [JsonPropertyName("mcpExposePort")]
     public int McpExposePort { get; set; } = DefaultMcpExposePort;
+
+    /// <summary>
+    /// Gets or sets the directory the embedded MCP server confines every client-supplied path to;
+    /// empty leaves the server unrestricted, exactly as before this setting existed.
+    /// <para>获取或设置内嵌 MCP 服务器对客户端路径限制的根目录；空字符串表示不限制，与本设置出现前的行为一致。</para>
+    /// </summary>
+    [JsonPropertyName("mcpExposeRootDirectory")]
+    public string McpExposeRootDirectory { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets whether the embedded MCP server registers the flashing, wiping and reboot tools;
+    /// <see langword="false"/> keeps the destructive tools absent, mirroring the CLI's <c>--allow-flash</c> gate.
+    /// <para>获取或设置内嵌 MCP 服务器是否注册刷写、擦除与重启类工具；<see langword="false"/> 时这些破坏性工具不会暴露，与命令行的 <c>--allow-flash</c> 门控一致。</para>
+    /// </summary>
+    [JsonPropertyName("mcpExposeAllowFlash")]
+    public bool McpExposeAllowFlash { get; set; }
 }
 
 /// <summary>

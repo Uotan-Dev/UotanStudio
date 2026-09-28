@@ -67,6 +67,12 @@
     <x:String x:Key="Settings_McpExpose">暴露为 MCP 服务器</x:String>
     <x:String x:Key="Settings_McpExposePort">端口</x:String>
     <x:String x:Key="Settings_McpSave">保存 MCP 设置</x:String>
+    <x:String x:Key="Settings_McpExposeRoot">沙箱根目录</x:String>
+    <x:String x:Key="Settings_McpExposeRootPlaceholder">完整目录路径（留空表示不限制）</x:String>
+    <x:String x:Key="Settings_McpExposeRootPick">选择 MCP 沙箱根目录</x:String>
+    <x:String x:Key="Settings_McpExposeRootHint">MCP 客户端传入的所有文件路径都必须落在该目录内。留空将暴露整个文件系统，即本设置引入前的行为。</x:String>
+    <x:String x:Key="Settings_McpExposeFlash">允许刷写工具</x:String>
+    <x:String x:Key="Settings_McpExposeFlashWarning">警告：开启后会在回环端口上注册擦除、刷写与重启工具，任何能访问该端口的本机进程都可以擦除或改写已连接设备的分区并重启设备。除非你信任本机上运行的所有程序，否则请保持关闭。</x:String>
     <x:String x:Key="Settings_Developers">开发成员</x:String>
     <x:String x:Key="Settings_GitHub">GitHub</x:String>
     <x:String x:Key="Settings_Coolapk">酷安</x:String>
