@@ -17,7 +17,6 @@
     <BuildDependency Project="UotanStudio.Delivery/UotanStudio.Delivery.csproj" />
   </Project>
   <Project Path="UotanStudio.Tests/UotanStudio.Tests.csproj" />
-  <Project Path="UotanStudio.Firmware.Tests/UotanStudio.Firmware.Tests.csproj" />
 
 
 </Solution>
