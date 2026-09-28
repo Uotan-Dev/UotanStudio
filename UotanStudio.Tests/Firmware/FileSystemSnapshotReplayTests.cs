@@ -145,11 +145,6 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
                 Assert.True(check.ExitCode == 0, check.Output);
             }
         }
-        if (Environment.GetEnvironmentVariable("UOTAN_GKI_REPLAY_IMAGES") is { Length: > 0 } artifacts)
-        {
-            Directory.CreateDirectory(artifacts);
-            File.Copy(rebuilt, Path.Combine(artifacts, format.ToLowerInvariant() + ".img"), overwrite: true);
-        }
     }
 
     [Theory]
@@ -343,11 +338,6 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
             using var data = new MemoryStream();
             parser.ReadFile(path, data);
             Assert.Equal(payload, data.ToArray());
-        }
-        if (Environment.GetEnvironmentVariable("UOTAN_GKI_REPLAY_IMAGES") is { Length: > 0 } artifacts)
-        {
-            Directory.CreateDirectory(artifacts);
-            File.Copy(output, Path.Combine(artifacts, "mixed-f2fs.img"), overwrite: true);
         }
     }
 
@@ -972,11 +962,6 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
             var remove = await Wsl("rmdir", mountpoint);
             Assert.True(remove.ExitCode == 0, remove.Output);
         }
-        if (Environment.GetEnvironmentVariable("UOTAN_GKI_REPLAY_IMAGES") is { Length: > 0 } artifacts)
-        {
-            Directory.CreateDirectory(artifacts);
-            File.Copy(replayed, Path.Combine(artifacts, "external-erofs.img"), overwrite: true);
-        }
     }
 
     [Fact]
@@ -1080,111 +1065,6 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
         }
         var check = await Wsl("e2fsck", "-fn", WslPath(replayed));
         Assert.True(check.ExitCode == 0, check.Output);
-        if (Environment.GetEnvironmentVariable("UOTAN_GKI_REPLAY_IMAGES") is { Length: > 0 } artifacts)
-        {
-            Directory.CreateDirectory(artifacts);
-            File.Copy(replayed, Path.Combine(artifacts, "casefold-ext4.img"), overwrite: true);
-        }
-    }
-
-    [Fact]
-    public async Task ReplaySnapshot_NativeF2fsMountedSource_PreservesInodeAttributesAndContent()
-    {
-        if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") != "1")
-        {
-            Assert.Skip("Requires Alpine WSL with loop mounting and F2FS security xattrs.");
-        }
-        var available = await Wsl("sh", "-c", "command -v mkfs.f2fs && command -v setfattr && command -v fsck.f2fs");
-        if (available.ExitCode != 0)
-        {
-            Assert.Skip("Alpine WSL F2FS tools are unavailable.");
-        }
-        var security = await Wsl("sh", "-c", "zcat /proc/config.gz | grep -qx 'CONFIG_F2FS_FS_SECURITY=y'");
-        if (security.ExitCode != 0)
-        {
-            Assert.Skip("The WSL kernel does not support F2FS security xattrs.");
-        }
-        var fixture = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..",
-            "TestInfrastructure", "FilesystemGkiReplay", "create-native-f2fs.sh"));
-        var image = Path.Combine(root, "system.img");
-        var create = await WslRoot("sh", WslPath(fixture), WslPath(image));
-        Assert.True(create.ExitCode == 0, create.Output);
-        Dictionary<string, PreservedInodeEntry> before;
-        using (var parser = new F2fsParser(image))
-        {
-            before = parser.ListEntriesWithRoot().Select(entry => new PreservedInodeEntry
-            {
-                Path = entry.Path,
-                Inode = entry.Inode,
-                Mode = entry.Mode,
-                Uid = entry.Uid,
-                Gid = entry.Gid,
-                Flags = entry.Flags,
-                Metadata = entry.Metadata,
-                Xattrs = entry.Xattrs?.ToDictionary(StringComparer.Ordinal)
-            }).ToDictionary(entry => FileSystemEditPlan.Normalize(entry.Path), StringComparer.Ordinal);
-        }
-        var captured = await Capture("F2FS", image);
-        var manifestPath = Directory.GetFiles(captured, "manifest.json", SearchOption.AllDirectories).Single();
-        var manifest = JsonSerializer.Deserialize<FileSystemPreservationManifest>(await File.ReadAllTextAsync(manifestPath, Token))!;
-        Assert.Equal(0x400u, manifest.ParsedEntries.Single(entry => entry.Path == "data").Flags & 0x400u);
-        var extracted = Path.Combine(root, "system");
-        var plan = new FileSystemEditPlan(extracted, manifest,
-            new Dictionary<string, string>(manifest.Projection, StringComparer.Ordinal));
-        Assert.Equal(0x400u, plan.Entries["data"].Flags & 0x400u);
-        File.Delete(image);
-        Directory.Delete(Path.Combine(root, "system"), recursive: true);
-        var rebuilt = Path.Combine(root, "replayed.img");
-
-        FileSystemPreservation.ReplaySnapshot(captured, rebuilt, Token);
-
-        var after = ReadEntries("F2FS", rebuilt);
-        Assert.Equal(before.Keys.Order(), after.Keys.Order());
-        Assert.Equal(before["data"].Metadata, after["data"].Metadata);
-        Assert.Equal(before["data"].Mode, after["data"].Mode);
-        Assert.Equal(0x400u, before["data"].Flags & 0x400u);
-        Assert.Equal(before["data"].Flags & 0x400u, after["data"].Flags & 0x400u);
-        Assert.Equal(0x1000u, before["empty"].Flags & 0x1000u);
-        Assert.Equal(before["empty"].Flags & 0x1000u, after["empty"].Flags & 0x1000u);
-        Assert.Equal(before["data"].Uid, after["data"].Uid);
-        Assert.Equal(before["data"].Gid, after["data"].Gid);
-        Assert.Equal(before["data"].Xattrs!["user.binary"], after["data"].Xattrs!["user.binary"]);
-        Assert.Equal(before["data"].Xattrs!["security.capability"], after["data"].Xattrs!["security.capability"]);
-        Assert.Equal(after["data"].Inode, after["alias"].Inode);
-        Assert.Equal("native-f2fs-content", ReadFile("F2FS", rebuilt, "data"));
-        var check = await Wsl("fsck.f2fs", "--dry-run", "-f", WslPath(rebuilt));
-        Assert.True(check.ExitCode == 0, check.Output);
-        var mountpoint = "/tmp/uotan-f2fs-replay-" + Guid.NewGuid().ToString("N");
-        var mkdir = await Wsl("mkdir", mountpoint);
-        Assert.True(mkdir.ExitCode == 0, mkdir.Output);
-        try
-        {
-            var mount = await WslRoot("mount", "-t", "f2fs", "-o", "loop,ro", WslPath(rebuilt), mountpoint);
-            Assert.True(mount.ExitCode == 0, mount.Output);
-            try
-            {
-                var stat = await Wsl("stat", "-c", "%u:%g:%a", mountpoint + "/data");
-                Assert.Equal("70001:80002:4755", stat.Output.Trim());
-                var content = await Wsl("cat", mountpoint + "/alias");
-                Assert.Equal("native-f2fs-content", content.Output);
-                var attribute = await WslRoot("getfattr", "-n", "security.capability", "-e", "hex", mountpoint + "/data");
-                Assert.Contains("security.capability=0x0000000201000000", attribute.Output, StringComparison.Ordinal);
-            }
-            finally
-            {
-                var unmount = await WslRoot("umount", mountpoint);
-                Assert.True(unmount.ExitCode == 0, unmount.Output);
-            }
-        }
-        finally
-        {
-            await Wsl("rmdir", mountpoint);
-        }
-        if (Environment.GetEnvironmentVariable("UOTAN_GKI_REPLAY_IMAGES") is { Length: > 0 } artifacts)
-        {
-            Directory.CreateDirectory(artifacts);
-            File.Copy(rebuilt, Path.Combine(artifacts, "native-f2fs.img"), overwrite: true);
-        }
     }
 
     [Fact]

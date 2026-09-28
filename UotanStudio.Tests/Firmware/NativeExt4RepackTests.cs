@@ -98,11 +98,11 @@ public sealed class NativeExt4RepackTests
     public async Task MakeExt4fs_SyntheticStagingTree_ProducesValidExt4SuperblockWhenNativeToolsAvailable()
     {
         Assert.SkipUnless(NativeOracleGate.NativeToolsEnabled,
-            $"Set {NativeOracleGate.NativeToolsVariable}=1 to run the native make_ext4fs wrapper; mounted read-write plus fsck acceptance runs in the FilesystemGkiReplay suite.");
+            $"Set {NativeOracleGate.NativeToolsVariable}=1 to run the native make_ext4fs wrapper; mounted read-write plus fsck acceptance runs in the kernel mount validation environment.");
         var tools = CreateTools();
         var probe = await tools.RunAsync("make_ext4fs", [], TestContext.Current.CancellationToken);
         Assert.SkipUnless(probe.ExitCode != 127,
-            "make_ext4fs is not installed in the selected native environment; mounted read-write plus fsck acceptance runs in the FilesystemGkiReplay suite.");
+            "make_ext4fs is not installed in the selected native environment; mounted read-write plus fsck acceptance runs in the kernel mount validation environment.");
         using var temp = CreateStagingTree();
         var output = Path.Combine(temp.Path, "legacy.img");
         var result = await tools.MakeExt4fsAsync(Path.Combine(temp.Path, "root"), output,
@@ -115,19 +115,19 @@ public sealed class NativeExt4RepackTests
     public async Task E2fsDroid_SyntheticStagingTree_ProducesValidExt4SuperblockWhenNativeToolsAvailable()
     {
         Assert.SkipUnless(NativeOracleGate.NativeToolsEnabled,
-            $"Set {NativeOracleGate.NativeToolsVariable}=1 to run the native mke2fs plus e2fsdroid wrapper; mounted read-write plus fsck acceptance runs in the FilesystemGkiReplay suite.");
+            $"Set {NativeOracleGate.NativeToolsVariable}=1 to run the native mke2fs plus e2fsdroid wrapper; mounted read-write plus fsck acceptance runs in the kernel mount validation environment.");
         var tools = CreateTools();
         foreach (var tool in new[] { "mke2fs", "e2fsdroid" })
         {
             var probe = await tools.RunAsync(tool, [], TestContext.Current.CancellationToken);
             Assert.SkipUnless(probe.ExitCode != 127,
-                $"{tool} is not installed in the selected native environment; mounted read-write plus fsck acceptance runs in the FilesystemGkiReplay suite.");
+                $"{tool} is not installed in the selected native environment; mounted read-write plus fsck acceptance runs in the kernel mount validation environment.");
         }
         var dryRun = await tools.RunAsync("mke2fs",
             ["-n", "-q", "-F", "-t", "ext4", "-T", "android", "-b", "4096", "unused.img", "1024"],
             TestContext.Current.CancellationToken);
         Assert.SkipUnless(dryRun.ExitCode == 0,
-            "mke2fs in the selected native environment lacks the android profile; mounted read-write plus fsck acceptance runs in the FilesystemGkiReplay suite.");
+            "mke2fs in the selected native environment lacks the android profile; mounted read-write plus fsck acceptance runs in the kernel mount validation environment.");
         using var temp = CreateStagingTree();
         var output = Path.Combine(temp.Path, "modern.img");
         var result = await tools.E2fsDroidAsync(Path.Combine(temp.Path, "root"), output,
