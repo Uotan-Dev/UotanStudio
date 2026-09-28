@@ -8,9 +8,13 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// Factory for creating <see cref="AdbSession"/> instances from USB device sessions.
 /// <para>从 USB 设备会话创建 <see cref="AdbSession"/> 实例的工厂。</para>
 /// A factory targets the standard ADB USB interface (class 0xFF, subclass 0x42,
-/// protocol 0x01) and matches by VID/PID when provided.
-/// <para>工厂针对标准 ADB USB 接口（类 0xFF、子类 0x42、协议 0x01），
-/// 并在提供时按 VID/PID 匹配。</para>
+/// protocol 0x01) and matches by VID/PID when provided. When interface metadata was
+/// not observed, only the Google ADB PnP identity is accepted as a fallback — a bare
+/// "has any interface" result never counts, so unrelated device classes (fastboot,
+/// EDL, MTP) are never claimed and never receive CNXN frames.
+/// <para>工厂针对标准 ADB USB 接口（类 0xFF、子类 0x42、协议 0x01），并在提供时按
+/// VID/PID 匹配。接口元数据未观测时，仅接受 Google ADB PnP 标识作为兜底；“存在任意
+/// 接口”不构成证据，因此 fastboot、EDL、MTP 等无关设备类不会被认领，也不会收到 CNXN 帧。</para>
 /// </summary>
 internal sealed class AdbFactory : IProtocolFactory
 {
@@ -74,8 +78,7 @@ internal sealed class AdbFactory : IProtocolFactory
             }
             else
             {
-                hasAdbInterface = info.Interfaces.Count > 0 ||
-                    (info.VendorId == 0x18D1 && (info.ProductId == 0x4EE2 || info.ProductId == 0x4EE7));
+                hasAdbInterface = info.VendorId == 0x18D1 && (info.ProductId == 0x4EE2 || info.ProductId == 0x4EE7);
             }
 
             if (!hasAdbInterface)

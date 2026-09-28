@@ -53,7 +53,9 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
 
     private readonly AdbConnection _connection = connection ?? throw new ArgumentNullException(nameof(connection));
     private readonly uint _maxChunk = maxChunk;
-    private readonly Queue<byte> _readBuffer = new();
+    private byte[]? _pendingChunk;
+    private int _pendingOffset;
+    private int _pendingCount;
     private AdbStream? _stream;
     private bool _disposed;
 
@@ -89,7 +91,7 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         if (id == SyncIds.Fail)
         {
             var errLength = ReadUInt32(stream);
-            var err = ReadExact(stream, (int)errLength);
+            var err = ReadExact(stream, CheckedChunkLength(errLength, "STAT fail message"));
             throw new InvalidDataException(
                 $"sync STAT failed for '{remotePath}': {Encoding.UTF8.GetString(err)}");
         }
@@ -136,7 +138,7 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
             if (id == SyncIds.Fail)
             {
                 var msglen = ReadUInt32(stream);
-                var err = ReadExact(stream, (int)msglen);
+                var err = ReadExact(stream, CheckedChunkLength(msglen, "LIST fail message"));
                 throw new InvalidDataException(
                     $"sync LIST failed for '{remotePath}': {Encoding.UTF8.GetString(err)}");
             }
@@ -151,7 +153,7 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
             var size = BitConverter.ToUInt32(body, 4);
             var time = BitConverter.ToUInt32(body, 8);
             var namelen = BitConverter.ToUInt32(body, 12);
-            var nameBytes = ReadExact(stream, (int)namelen);
+            var nameBytes = ReadExact(stream, CheckedChunkLength(namelen, "DENT name"));
             entries.Add(new SyncEntry(mode, size, time, Encoding.UTF8.GetString(nameBytes)));
         }
 
@@ -275,13 +277,13 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
 
             if (id == SyncIds.Fail)
             {
-                var err = ReadExact(stream, (int)length);
+                var err = ReadExact(stream, CheckedChunkLength(length, "RECV fail message"));
                 throw new InvalidDataException($"sync pull failed for '{remotePath}': {Encoding.UTF8.GetString(err)}");
             }
 
             if (id == SyncIds.Data)
             {
-                var body = ReadExact(stream, (int)length);
+                var body = ReadExact(stream, CheckedChunkLength(length, "RECV data"));
                 destination.Write(body, 0, body.Length);
                 continue;
             }
@@ -299,6 +301,10 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         }
 
         _disposed = true;
+
+        _pendingChunk = null;
+        _pendingOffset = 0;
+        _pendingCount = 0;
 
         var stream = _stream;
         _stream = null;
@@ -340,7 +346,7 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
 
         if (id == SyncIds.Fail)
         {
-            var err = ReadExact(stream, (int)length);
+            var err = ReadExact(stream, CheckedChunkLength(length, $"{operation} fail message"));
             throw new InvalidDataException($"sync {operation} failed: {Encoding.UTF8.GetString(err)}");
         }
 
@@ -371,8 +377,11 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     }
 
     /// <summary>
-    /// Reads an exact number of bytes from the sync stream, buffering any excess.
-    /// <para>从 sync 流读取精确数量的字节，多余部分入缓冲。</para>
+    /// Reads an exact number of bytes from the sync stream, buffering any excess. The excess is
+    /// retained as a chunk slice instead of a per-byte queue, so a 64 KiB DATA chunk followed by a
+    /// small request does not degenerate into per-byte enqueue/dequeue work.
+    /// <para>从 sync 流读取精确数量的字节，多余部分入缓冲。多余部分以分块切片保存而非逐字节队列，
+    /// 因此 64 KiB DATA 分块之后的小请求不会退化为逐字节的入队/出队操作。</para>
     /// </summary>
     /// <param name="stream">The sync stream. Sync 流。</param>
     /// <param name="length">The number of bytes to read. 要读取的字节数。</param>
@@ -386,9 +395,18 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         var result = new byte[length];
         var offset = 0;
 
-        while (offset < length && _readBuffer.Count > 0)
+        while (offset < length && _pendingCount > 0)
         {
-            result[offset++] = _readBuffer.Dequeue();
+            var take = Math.Min(length - offset, _pendingCount);
+            Buffer.BlockCopy(_pendingChunk!, _pendingOffset, result, offset, take);
+            _pendingOffset += take;
+            _pendingCount -= take;
+            offset += take;
+            if (_pendingCount == 0)
+            {
+                _pendingChunk = null;
+                _pendingOffset = 0;
+            }
         }
 
         while (offset < length)
@@ -404,13 +422,35 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
             {
                 Buffer.BlockCopy(chunk, 0, result, offset, needed);
                 offset += needed;
-                for (var i = needed; i < chunk.Length; i++)
-                {
-                    _readBuffer.Enqueue(chunk[i]);
-                }
+                _pendingChunk = chunk;
+                _pendingOffset = needed;
+                _pendingCount = chunk.Length - needed;
             }
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Validates a device-supplied chunk length against the negotiated maximum. The sync v1 wire
+    /// protocol never reports a payload or name longer than the sync chunk size, so a larger value
+    /// is a protocol violation from an untrusted peer and must fail instead of driving an
+    /// attacker-sized allocation.
+    /// <para>按协商上限校验设备给出的分块长度。sync v1 线上协议上报的负载或名称不会超过 sync
+    /// 分块大小，更大的值属于不可信对端的协议违规，必须失败而不是驱动攻击者指定大小的分配。</para>
+    /// </summary>
+    /// <param name="length">The length field as reported by the device. 设备上报的长度字段。</param>
+    /// <param name="context">Protocol context used in the error message. 用于错误消息的协议上下文。</param>
+    /// <returns>The validated length as an <see cref="int"/>. 校验后的 <see cref="int"/> 长度。</returns>
+    /// <exception cref="InvalidDataException">The reported length exceeds the negotiated maximum chunk size.
+    /// <para>上报长度超过协商的最大分块大小。</para></exception>
+    private int CheckedChunkLength(uint length, string context)
+    {
+        if (length > _maxChunk)
+        {
+            throw new InvalidDataException($"Sync {context} length {length} exceeds the {nameof(_maxChunk)} limit {_maxChunk}.");
+        }
+
+        return (int)length;
     }
 }

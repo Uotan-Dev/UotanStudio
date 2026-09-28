@@ -155,13 +155,24 @@ internal static class AdbMessaging
     }
 
     /// <summary>
-    /// Verifies the payload CRC against the header value.
-    /// <para>校验负载 CRC 是否与头部值匹配。</para>
+    /// Validates the header CRC field of an inbound message. Modern peers transmit the field as
+    /// zero (the additive checksum was deprecated in the AOSP wire protocol) while legacy peers
+    /// transmit the additive byte sum, so exactly those two values are accepted and any other
+    /// value is rejected as framing corruption.
+    /// <para>校验入站消息头部的 CRC 字段。新式对端将该字段置零（AOSP 线上协议已弃用累加校验和），
+    /// 旧式对端则发送负载字节累加和，因此仅接受这两种取值；其余值按帧损坏拒绝。</para>
     /// </summary>
     /// <param name="payload">The payload bytes. 负载字节。</param>
-    /// <param name="expectedCrc">The expected CRC value. 期望的 CRC 值。</param>
+    /// <param name="expectedCrc">The header CRC field as received. 收到的头部 CRC 字段值。</param>
+    /// <exception cref="InvalidDataException">The header CRC matches neither the reserved zero value nor the legacy additive checksum.
+    /// <para>头部 CRC 既不是保留的零值也不是旧式累加校验和。</para></exception>
     public static void VerifyCrc(byte[]? payload, uint expectedCrc)
     {
+        if (expectedCrc == 0)
+        {
+            return;
+        }
+
         var actual = ComputeCrc(payload);
         if (actual != expectedCrc)
         {

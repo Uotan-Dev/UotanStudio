@@ -53,13 +53,24 @@ internal sealed class AdbDeviceServices(AdbConnection connection) : IAdbDeviceSe
     public string Remount() => RunService("remount:");
 
     /// <summary>
-    /// Reads a system property via the shell.
-    /// <para>通过 shell 读取系统属性。</para>
+    /// Reads a system property via the shell. The key is validated against the property-name
+    /// character set before interpolation, so a crafted key can never introduce shell
+    /// metacharacters into the <c>getprop</c> command line.
+    /// <para>通过 shell 读取系统属性。属性名先按属性名字符集校验再插值，
+    /// 构造的属性名无法向 <c>getprop</c> 命令行注入 shell 元字符。</para>
     /// </summary>
-    /// <param name="key">The property key. 属性名。</param>
+    /// <param name="key">The property key; letters, digits and <c>.</c> <c>_</c> <c>-</c> <c>@</c> <c>:</c> only.
+    /// 属性名；仅允许字母、数字以及 <c>.</c> <c>_</c> <c>-</c> <c>@</c> <c>:</c>。</param>
     /// <returns>The property value, trimmed. 去除首尾空白的属性值。</returns>
+    /// <exception cref="ArgumentException"><paramref name="key"/> is empty or contains characters outside the property-name set.
+    /// <para><paramref name="key"/> 为空或包含属性名字符集以外的字符。</para></exception>
     public string GetProp(string key)
     {
+        if (string.IsNullOrEmpty(key) || key.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not '.' and not '_' and not '-' and not '@' and not ':'))
+        {
+            throw new ArgumentException("The property key contains characters outside the allowed set.", nameof(key));
+        }
+
         var shell = new AdbShellClient(_connection, $"getprop {key}");
         var result = shell.Execute();
         return Encoding.UTF8.GetString(result.Stdout).Trim();

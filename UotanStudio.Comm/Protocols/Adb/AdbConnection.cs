@@ -486,10 +486,19 @@ internal sealed class AdbConnection : IDisposable
         }
 
         var idx = banner.IndexOf("features=", StringComparison.Ordinal);
-        return idx < 0
-            ? []
-            : banner[(idx + "features=".Length)..].Trim()
-            .Split([','], StringSplitOptions.RemoveEmptyEntries);
+        if (idx < 0)
+        {
+            return [];
+        }
+
+        var remainder = banner[(idx + "features=".Length)..];
+        var end = remainder.IndexOf(';');
+        var value = end >= 0 ? remainder[..end] : remainder;
+        return value
+            .Split([','], StringSplitOptions.RemoveEmptyEntries)
+            .Select(feature => feature.Trim())
+            .Where(feature => feature.Length > 0)
+            .ToArray();
     }
 
     /// <summary>
