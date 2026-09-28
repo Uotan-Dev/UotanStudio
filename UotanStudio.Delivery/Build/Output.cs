@@ -1,9 +1,11 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
-using UotanStudio.Firmware.BoundedContexts.Compression;
-using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
+using UotanStudio.Firmware.Application.Equivalence;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.Compression;
+using UotanStudio.Firmware.Compression.Compressors;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -13,6 +15,100 @@ internal sealed record DeliveryProgress(double Percent, string Message,
     (long Processed, long Total)? Bytes = null, string? Stage = null,
     (long Processed, long Total)? Items = null, string? Detail = null,
     IReadOnlyDictionary<string, string>? Metadata = null);
+
+/// <summary>
+/// <para>交付等价门禁关注的维度，与库门面的四个维度一一对应，用于说明某一维度在该输出种类下是否被要求等价。</para>
+/// A dimension the delivery equivalence gate tracks, mirroring the library façade one-to-one, used to state whether the
+/// output kind requires that dimension to be equivalent.
+/// </summary>
+internal enum DeliveryEquivalenceDimension
+{
+    /// <summary><para>字节一致性：暂存副本与所选源镜像是否同一份字节。</para>Byte identity: whether the staged copy and the selected source are the same bytes.</summary>
+    Byte,
+
+    /// <summary><para>inode 结构等价性，只能继承自受保留重建的等价元数据。</para>Inode-structure equivalence, inheritable only from preserved-rebuild metadata.</summary>
+    Structure,
+
+    /// <summary><para>文件内容等价性，只能继承自受保留重建的等价元数据。</para>File-content equivalence, inheritable only from preserved-rebuild metadata.</summary>
+    Content,
+
+    /// <summary><para>容量等价性，交付仅记录不要求，因为重建后的镜像不承诺适合原分区容量。</para>
+    /// Capacity equivalence, which delivery records but never requires because a rebuilt image makes no fit promise.</summary>
+    Capacity,
+}
+
+/// <summary>
+/// <para>单个暂存镜像的等价评估结果：四维度报告加上本条输出真正要求等价的维度集合。只有同时出现在要求集合里
+/// 且被判为不等价的维度才会中止交付；不评估的维度既不会中止交付，也绝不被报告成已通过。</para>
+/// The equivalence outcome for one staged image: the four-dimension report plus the set of dimensions this output kind
+/// actually requires. Only a dimension that is both required and judged not equivalent aborts the delivery; an
+/// unevaluated dimension never aborts it and is never reported as verified.
+/// </summary>
+/// <param name="FileName"><para>暂存镜像的文件名。</para>The staged image filename.</param>
+/// <param name="Report"><para>库门面形式的四维度报告。</para>The four-dimension report in library façade form.</param>
+/// <param name="RequiredDimensions"><para>本条输出要求等价的维度。</para>The dimensions this output kind requires.</param>
+internal sealed record DeliveryStagedEquivalence(
+    string FileName,
+    FilesystemEquivalenceReport Report,
+    IReadOnlyList<DeliveryEquivalenceDimension> RequiredDimensions)
+{
+    /// <summary>
+    /// <para>返回被要求却判定为不等价的维度文本；没有任何维度要求失败时返回 null。</para>
+    /// Returns the failure text of a required dimension judged not equivalent, or null when no required dimension failed.
+    /// </summary>
+    /// <value><para>中止交付所用的失败说明，或 null。</para>The abort message for a failed required dimension, or null.</value>
+    internal string? RequiredFailure
+    {
+        get
+        {
+            foreach (var dimension in RequiredDimensions)
+            {
+                if (StateOf(dimension) == FirmwareEquivalenceState.NotEquivalent)
+                    return $"Staged image failed required {Name(dimension)} equivalence: {FileName}";
+            }
+
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// <para>把四维度状态与要求集合渲染成一行可诊断文本，未评估的维度如实写作 not_evaluated。</para>
+    /// Renders the four dimension states plus the requirement set as one diagnostic line, spelling unevaluated
+    /// dimensions honestly as not_evaluated.
+    /// </summary>
+    /// <returns><para>形如 <c>byte=equivalent(required); structure=not_evaluated</c> 的单行文本。</para>
+    /// A single line such as <c>byte=equivalent(required); structure=not_evaluated</c>.</returns>
+    internal string Format()
+        => string.Join("; ", Enum.GetValues<DeliveryEquivalenceDimension>()
+            .Select(dimension => $"{Name(dimension)}={StateText(dimension)}"));
+
+    private string StateText(DeliveryEquivalenceDimension dimension)
+    {
+        var state = StateOf(dimension) switch
+        {
+            FirmwareEquivalenceState.Equivalent => "equivalent",
+            FirmwareEquivalenceState.NotEquivalent => "not_equivalent",
+            _ => "not_evaluated",
+        };
+        return RequiredDimensions.Contains(dimension) ? state + "(required)" : state;
+    }
+
+    private FirmwareEquivalenceState StateOf(DeliveryEquivalenceDimension dimension) => dimension switch
+    {
+        DeliveryEquivalenceDimension.Byte => Report.ByteEquivalence,
+        DeliveryEquivalenceDimension.Structure => Report.StructureEquivalence,
+        DeliveryEquivalenceDimension.Content => Report.ContentEquivalence,
+        _ => Report.CapacityEquivalence,
+    };
+
+    private static string Name(DeliveryEquivalenceDimension dimension) => dimension switch
+    {
+        DeliveryEquivalenceDimension.Byte => "byte",
+        DeliveryEquivalenceDimension.Structure => "structure",
+        DeliveryEquivalenceDimension.Content => "content",
+        _ => "capacity",
+    };
+}
 
 /// <summary><para>按交付计划在暂存目录准备平台工具。</para>Prepares platform tools in a staging directory for a delivery plan.</summary>
 internal interface IDeliveryTools
@@ -34,6 +130,25 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         "imagefv", "keymaster", "modem", "multiimgqti", "qupfw", "recovery", "shrm", "tz", "uefi",
         "uefisecapp", "vbmeta_system", "vbmeta", "vendor_boot", "xbl_config", "xbl_ramdump", "xbl"
     };
+
+    /// <summary><para>进度元数据里记录生成型容器等价状态的固定键名。</para>
+    /// Fixed progress-metadata key recording the equivalence state of the generated containers.</summary>
+    internal const string GeneratedContainerEquivalenceKey = "generated-containers";
+
+    /// <summary><para>生成型容器（super / payload / ZIP / ZST）没有任何源身份，四个维度如实记为未评估，
+    /// 绝不写成已通过。</para>
+    /// Generated containers (super / payload / ZIP / ZST) hold no source identity, so all four dimensions read
+    /// not_evaluated rather than a fabricated pass.</summary>
+    internal const string GeneratedContainerEquivalence =
+        "byte=not_evaluated; structure=not_evaluated; content=not_evaluated; capacity=not_evaluated";
+
+    /// <summary><para>受保留重建等价元数据中记录源镜像摘要的键，与库的 FileSystemPreservation 报告一致。</para>
+    /// Metadata key carrying the source digest of a preserved rebuild, matching the library's FileSystemPreservation report.</summary>
+    internal const string RecordedSourceHashKey = "SourceImageHash";
+
+    /// <summary><para>受保留重建等价元数据中记录源镜像长度的键，与库的 FileSystemPreservation 报告一致。</para>
+    /// Metadata key carrying the source length of a preserved rebuild, matching the library's FileSystemPreservation report.</summary>
+    internal const string RecordedSourceLengthKey = "SourceImageLength";
 
     private static string OrganizedImagePath(DeliveryPlan plan, string stage, DeliveryFile file)
     {
@@ -190,6 +305,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
             if (plan.PackPayload && !plan.OrganizeDirectory)
                 File.Delete(Path.Combine(imageDirectory, "payload_properties.txt"));
             var stagedFiles = Directory.EnumerateFiles(stage, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
+            await VerifyStagedEquivalenceAsync(plan, stage, progress, token).ConfigureAwait(false);
             var hashes = new StringBuilder();
             long totalBytes = 0;
             foreach (var file in stagedFiles) totalBytes = checked(totalBytes + new FileInfo(file).Length);
@@ -237,6 +353,158 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
             return result;
         }
         finally { if (Directory.Exists(stage)) Directory.Delete(stage, true); }
+    }
+
+    /// <summary>
+    /// <para>在写校验和之前，逐个校验交付暂存的镜像副本，并把四维度结果按文件汇总进进度元数据。要求矩阵按输出种类划定：</para>
+    /// <para>· 纯拷贝（组织目录输出且未做 Super 展开）：字节维度用源镜像的真实摘要与长度评估并被要求等价；
+    /// 结构、内容与容量在交付路径上没有任何库侧计算，保持不评估。</para>
+    /// <para>· 附带受保留重建等价元数据、且元数据记录的源摘要与长度与磁盘上的源镜像完全一致：结构与内容维度成为要求项，
+    /// 容量只记录不要求——交付不承诺重建后的镜像仍适合原分区容量，Super 的容量由 DeliverySuperCapacity 单独硬校验。</para>
+    /// <para>· 元数据无法与源镜像绑定（缺少记录的源摘要或长度）时不继承任何维度，也不失败，只如实报告不评估；
+    /// 元数据记录的源身份与磁盘上的源镜像不符时说明证据已过期，直接中止交付而不是悄悄降级。</para>
+    /// <para>· Super 打包会把稀疏源展开为逻辑镜像，产出字节本就与源不同，且源侧的重建证据不再描述展开后的产物，
+    /// 因此该模式下四个维度一律不评估，仅在 Details 中保留源侧元数据供诊断。</para>
+    /// <para>· 生成型容器（super.img / super_empty.img / payload.bin / ota.zip / super.zip / recovery.zip）没有源身份，
+    /// 四个维度如实记为不评估，绝不当作已通过。</para>
+    /// <para>只有“被要求且被判定为不等价”的维度才会中止交付；不评估既不会让交付失败，也绝不报告为成功。中止时尚未
+    /// 发布任何文件，暂存目录由调用方的 finally 清理，用户既有输出保持不变。</para>
+    /// Verifies every staged image copy through the library's public equivalence façade before checksums are written and
+    /// folds the four dimensions into per-file progress metadata. The requirement matrix follows the output kind: a pure
+    /// copy requires the byte dimension, which is evaluated for real against the source image's digest and length, while
+    /// structure, content and capacity stay unevaluated because no library computation runs on that path; a copy carrying
+    /// preserved-rebuild metadata whose recorded source identity still matches the source on disk additionally requires
+    /// structure and content, and records capacity without requiring it because delivery never promises the rebuilt image
+    /// still fits the original partition (Super fit is hard-checked separately by DeliverySuperCapacity); metadata that
+    /// cannot be bound to the source because it records no source identity inherits nothing and still must not fail,
+    /// while metadata whose recorded identity no longer matches the source is stale evidence and aborts the delivery
+    /// rather than being silently downgraded; Super packing expands sparse sources into their logical image, whose bytes
+    /// legitimately differ and whose source-side evidence no longer describes the artifact, so every dimension stays
+    /// unevaluated there; generated containers (super.img / super_empty.img / payload.bin / ota.zip / super.zip /
+    /// recovery.zip) hold no source identity at all and are reported honestly as unevaluated instead of verified.
+    /// Only a dimension that is both required and judged not equivalent aborts the delivery; an unevaluated dimension
+    /// neither fails nor passes. Nothing has been published when that happens, the staging directory is discarded, and
+    /// the caller's previous output stays untouched.
+    /// </summary>
+    internal static async Task<IReadOnlyList<DeliveryStagedEquivalence>> VerifyStagedEquivalenceAsync(DeliveryPlan plan, string stage,
+        IProgress<DeliveryProgress>? progress, CancellationToken token)
+    {
+        var results = new List<DeliveryStagedEquivalence>();
+        if (!plan.OrganizeDirectory) return results;
+        foreach (var file in plan.Files)
+        {
+            token.ThrowIfCancellationRequested();
+            if (file.Generated || file.SourcePath.Length == 0) continue;
+            var staged = OrganizedImagePath(plan, stage, file);
+            if (!File.Exists(staged)) throw new IOException("Staged image is missing: " + file.FileName);
+            progress?.Report(new(90, "Verifying image equivalence",
+                Stage: "Delivery_ProgressEquivalence", Detail: file.FileName));
+            var result = await EvaluateStagedEquivalenceAsync(file, staged, plan.PackSuper, token).ConfigureAwait(false);
+            var failure = result.RequiredFailure;
+            if (failure is not null) throw new IOException(failure);
+            results.Add(result);
+        }
+        if (results.Count > 0)
+        {
+            var summary = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [GeneratedContainerEquivalenceKey] = GeneratedContainerEquivalence,
+            };
+            foreach (var result in results) summary[result.FileName] = result.Format();
+            progress?.Report(new(90, "Image equivalence verified", Stage: "Delivery_ProgressEquivalence", Metadata: summary));
+        }
+        return results;
+    }
+
+    /// <summary>
+    /// <para>评估单个暂存镜像的四个等价维度并给出本条输出所要求的维度。字节维度只在拷贝未被展开为逻辑镜像时评估，
+    /// 因为该维度衡量的是“暂存副本与所选源是否同一份字节”；结构、内容与容量只能继承自受保留重建的等价元数据，
+    /// 且只有当元数据记录的源摘要与长度与磁盘上的源镜像完全一致时才继承——否则这份证据描述的不是眼前这份文件。
+    /// 继承而来的字节判定保留在 Details 中原文可查，报告的字节维度始终替换为交付自己算出的拷贝校验结果。</para>
+    /// Evaluates one staged image across the four dimensions and lists the dimensions this output kind requires. The byte
+    /// dimension is evaluated only when the copy was not expanded into its logical image, because it measures whether the
+    /// staged copy and the selected source are the same bytes; structure, content and capacity can only be inherited from
+    /// preserved-rebuild metadata, and only when that metadata's recorded source digest and length still match the source
+    /// on disk, since otherwise the evidence describes a different file. The inherited byte verdict stays readable in
+    /// Details, while the report's byte dimension is always replaced by delivery's own copy check.
+    /// </summary>
+    internal static async Task<DeliveryStagedEquivalence> EvaluateStagedEquivalenceAsync(DeliveryFile file,
+        string stagedPath, bool expandedToLogicalImage, CancellationToken token)
+    {
+        var details = file.RebuildEquivalence ?? new Dictionary<string, string>();
+        var required = new List<DeliveryEquivalenceDimension>();
+        var inherited = false;
+        FirmwareEquivalenceState byteState = FirmwareEquivalenceState.NotEvaluated;
+        if (!expandedToLogicalImage)
+        {
+            required.Add(DeliveryEquivalenceDimension.Byte);
+            var (sourceHash, sourceLength) = await ReadSourceIdentityAsync(file.SourcePath, token).ConfigureAwait(false);
+            if (file.RebuildEquivalence is { Count: > 0 } && TryRecordedSourceIdentity(details, out var recordedHash, out var recordedLength))
+            {
+                if (sourceLength != recordedLength
+                    || !string.Equals(sourceHash, recordedHash, StringComparison.OrdinalIgnoreCase))
+                    throw new IOException("Equivalence metadata no longer matches its source image: " + file.FileName);
+                inherited = true;
+            }
+
+            byteState = await Task.Run(() =>
+            {
+                using var produced = new FileStream(stagedPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                    1024 * 1024, FileOptions.SequentialScan);
+                return FilesystemEquivalenceReport.EvaluateByteEquivalence(produced, sourceHash, sourceLength, token);
+            }, token).ConfigureAwait(false);
+        }
+
+        if (inherited)
+        {
+            required.Add(DeliveryEquivalenceDimension.Structure);
+            required.Add(DeliveryEquivalenceDimension.Content);
+        }
+
+        var provenance = FilesystemEquivalenceReport.FromMetadata(details);
+        return new DeliveryStagedEquivalence(file.FileName, new FilesystemEquivalenceReport
+        {
+            ByteEquivalence = byteState,
+            StructureEquivalence = inherited ? provenance.StructureEquivalence : FirmwareEquivalenceState.NotEvaluated,
+            ContentEquivalence = inherited ? provenance.ContentEquivalence : FirmwareEquivalenceState.NotEvaluated,
+            CapacityEquivalence = inherited ? provenance.CapacityEquivalence : FirmwareEquivalenceState.NotEvaluated,
+            Details = details,
+        }, required);
+    }
+
+    /// <summary>
+    /// <para>读取镜像的 SHA-256 摘要（小写十六进制）与长度，流式有界缓冲，取消令牌逐块观察。</para>
+    /// Reads an image's lowercase SHA-256 digest and length through a bounded streaming buffer, observing the token per block.
+    /// </summary>
+    private static async Task<(string Hash, long Length)> ReadSourceIdentityAsync(string path, CancellationToken token)
+    {
+        await using var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+            1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        var length = source.Length;
+        var hash = Convert.ToHexString(await SHA256.HashDataAsync(source, token).ConfigureAwait(false)).ToLowerInvariant();
+        return (hash, length);
+    }
+
+    /// <summary>
+    /// <para>从等价元数据里取出库记录的源摘要与源长度（SourceImageHash、SourceImageLength），用于判断这份证据是否
+    /// 仍描述当前选中的源镜像；两键任一缺失或格式不合法都按“无法绑定”处理，不猜测。</para>
+    /// Extracts the source digest and length the library recorded (SourceImageHash, SourceImageLength) to decide whether
+    /// the evidence still describes the selected source; a missing or malformed key means "cannot bind" and is never guessed.
+    /// </summary>
+    private static bool TryRecordedSourceIdentity(IReadOnlyDictionary<string, string> details, out string hash, out long length)
+    {
+        hash = "";
+        length = 0;
+        if (!details.TryGetValue(RecordedSourceHashKey, out var recordedHash)
+            || recordedHash.Length != 64 || !recordedHash.All(static character => char.IsAsciiHexDigit(character)))
+            return false;
+        if (!details.TryGetValue(RecordedSourceLengthKey, out var recordedLengthText)
+            || !long.TryParse(recordedLengthText, NumberStyles.None, CultureInfo.InvariantCulture, out var recordedLength)
+            || recordedLength < 0)
+            return false;
+        hash = recordedHash;
+        length = recordedLength;
+        return true;
     }
 
     /// <summary>

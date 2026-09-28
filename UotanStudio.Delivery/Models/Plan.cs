@@ -28,6 +28,18 @@ internal sealed record DeliveryFile
     public bool Fastbootd { get; init; }
     /// <summary><para>自动添加的零大小分区条目（VAB B 槽伴随），不可编辑且豁免空镜像检查。</para>Auto-added zero-size partition (VAB B-slot companion); read-only and exempt from the empty-image check.</summary>
     public bool AutoZero { get; init; }
+    /// <summary>
+    /// <para>宿主在该镜像出自受保留重建之后附上的等价元数据，键名与库的 FilesystemEquivalenceReport 记录的一致；
+    /// 为 null 或空表示没有任何等价证据，此时交付只按纯拷贝校验字节维度，绝不把结构、内容与容量当作已校验。
+    /// 这份证据只在本次进程内有效：解决方案快照从不持久化镜像归属，重新打开后源路径与证据都可能失效。</para>
+    /// Equivalence metadata the host attaches when this image came out of a preserved rebuild, keyed exactly as the
+    /// library's FilesystemEquivalenceReport documents. Null or empty means there is no equivalence evidence at all:
+    /// delivery then verifies only the byte dimension of the copy and never treats structure, content or capacity as
+    /// checked. The evidence is valid in this process only — solution snapshots never persist image membership, so both
+    /// the source path and the evidence can be stale after a reopen.
+    /// </summary>
+    /// <value><para>等价元数据字典，或 null。</para>The equivalence metadata dictionary, or null.</value>
+    public Dictionary<string, string>? RebuildEquivalence { get; init; }
 }
 
 /// <summary><para>Payload 选项与所选签名身份；不支持（旧）的输入仍以字段显式保留。</para>
