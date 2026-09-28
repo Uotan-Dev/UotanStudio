@@ -12,8 +12,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 - `UotanStudio.Mirroring`（命名空间 `UotanStudio.Services.Mirroring`）是独立投屏服务层，承载 scrcpy 等投屏协议与会话管理，仅引用 `UotanStudio.Comm`；`UotanStudio.Media` 保持零 Comm 依赖，经解码工厂消费帧数据。scrcpy 不属于 Comm 协议层。
 - `UotanStudio.Media` 负责音视频解码、投屏呈现和平台媒体后端。
 - `UotanStudio.Projects` 负责项目文件、解决方案快照和项目生命周期模型。
-- `UotanStudio.Firmware.Tests` 使用 xUnit v3 和 Microsoft.Testing.Platform，覆盖 `UotanStudio.Firmware` 库的格式、文件系统和 Payload 测试。
-- `UotanStudio.Tests` 使用 xUnit v3 和 Microsoft.Testing.Platform，覆盖宿主服务、Comm、Delivery、Mirroring、Media、Projects 和界面流程；其中固件宿主服务测试仍保留在本项目。两个测试项目是两个独立可执行测试宿主，`dotnet test --solution` 会依次运行两者。
+- `UotanStudio.Tests` 使用 xUnit v3 和 Microsoft.Testing.Platform，覆盖 `UotanStudio.Firmware` 库的格式、文件系统和 Payload 测试，并覆盖宿主服务、Comm、Delivery、Mirroring、Media、Projects 和界面流程。它是唯一的可执行测试宿主，`dotnet test --solution` 与该宿主直接运行覆盖全部测试。
 
 交付子项目可以引用 `UotanStudio.Firmware` 和必要的第三方库，但不得反向引用宿主 UI、项目服务或 `KeyLibraryService`。签名依赖通过 `IDeliverySigningKeyProvider` 注入；桌面宿主只负责适配、权限、资源和界面策略。
 
@@ -93,12 +92,12 @@ dotnet format UotanStudio.slnx style --no-restore --verify-no-changes
 
 测试项目是可执行的 xUnit v3 测试宿主。异步测试使用 `async Task`、`await` 和 `TestContext.Current.CancellationToken`；测试方法中禁止 `.Result`、`.Wait()` 和 `.GetAwaiter().GetResult()`。同步等待只能留在明确的同步基础设施边界，并且不得因此让 xUnit analyzer 报警。
 
-测试命令使用 `global.json` 选择的 Microsoft.Testing.Platform。项目级和解决方案级入口分别使用 `--project` 与 `--solution`；固件库测试位于 `UotanStudio.Firmware.Tests`，其余测试位于 `UotanStudio.Tests`；定向测试优先使用 xUnit v3 原生过滤参数，并用 `--minimum-expected-tests 1` 防止过滤条件失效时把“零测试”误报为成功：
+测试命令使用 `global.json` 选择的 Microsoft.Testing.Platform。项目级和解决方案级入口分别使用 `--project` 与 `--solution`；全部测试位于 `UotanStudio.Tests`，固件测试按 `Firmware/` 目录分组；定向测试优先使用 xUnit v3 原生过滤参数，并用 `--minimum-expected-tests 1` 防止过滤条件失效时把“零测试”误报为成功：
 
 ```text
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Shell.ChecksumServiceTests --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-method UotanStudio.Tests.Shell.ChecksumServiceTests.ComputeAsync_KnownVectors_ProducesStandardDigests --minimum-expected-tests 1
-dotnet test --project UotanStudio.Firmware.Tests/UotanStudio.Firmware.Tests.csproj --no-build --filter-class UotanStudio.Tests.Firmware.ErofsTests --minimum-expected-tests 1
+dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Firmware.ErofsTests --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter "FullyQualifiedName~ChecksumServiceTests" --minimum-expected-tests 1
 dotnet test --solution UotanStudio.slnx --no-restore
 ```
@@ -107,7 +106,7 @@ dotnet test --solution UotanStudio.slnx --no-restore
 
 测试名称使用 `Method_Scenario_ExpectedBehavior`，遵循 Arrange/Act/Assert，优先验证真实格式互操作性、失败回滚、取消和边界，而不是只验证内部对象往返。跨平台、WSL、QEMU、真实设备和真实语料测试缺少环境时应明确跳过并写出原因。原生工具互操作测试（mkfs/e2fsck/fsck.erofs/fsck.f2fs 与环回挂载）默认跳过，仅 `UOTAN_NATIVE_TOOLS=1` 显式开启；TB 级稀疏源的大数据构建测试仅 `UOTAN_LARGE_DATA=1` 显式开启；两类门控的跳过原因必须写出对应变量名。
 
-测试项目（`UotanStudio.Tests`、`UotanStudio.Firmware.Tests`）不使用行间 `//` 或 `/* */` 注释。跳过原因必须来自代码里的 `Skip = "…"` 文案，测试夹具的意图写在测试名称与断言中，不写在注释里。
+测试项目（`UotanStudio.Tests`）不使用行间 `//` 或 `/* */` 注释。跳过原因必须来自代码里的 `Skip = "…"` 文案，测试夹具的意图写在测试名称与断言中，不写在注释里。
 
 测试项目中保留的 `CS0618` 抑制只用于覆盖旧的整镜像内存型构建 API；生产代码必须使用文件路径或流式重载。不要用项目级 `NoWarn` 隐藏新的生产警告，也不要用它掩盖可修复的空引用、裁剪或异步问题。
 
@@ -115,7 +114,7 @@ dotnet test --solution UotanStudio.slnx --no-restore
 
 ## 公开 API 文档
 
-`UotanStudio.Comm`、`UotanStudio.Firmware`、`UotanStudio.Firmware.MagicGen`、`UotanStudio.Delivery`、`UotanStudio.Media`、`UotanStudio.Mirroring`、`UotanStudio.Projects`、`UotanStudio.Mcp`、`UotanStudio.Desktop` 的 csproj 显式设置 `GenerateDocumentationFile`，根 `.editorconfig` 把 `CS1591` 设为 `warning`；`UotanStudio`、`UotanStudio.Tests` 和 `UotanStudio.Firmware.Tests` 各自的 `.editorconfig` 把它设为 `none`。
+`UotanStudio.Comm`、`UotanStudio.Firmware`、`UotanStudio.Firmware.MagicGen`、`UotanStudio.Delivery`、`UotanStudio.Media`、`UotanStudio.Mirroring`、`UotanStudio.Projects`、`UotanStudio.Mcp`、`UotanStudio.Desktop` 的 csproj 显式设置 `GenerateDocumentationFile`，根 `.editorconfig` 把 `CS1591` 设为 `warning`；`UotanStudio` 和 `UotanStudio.Tests` 各自的 `.editorconfig` 把它设为 `none`。
 
 - 上述项目的公共类型与成员都要有中英双语 XML 注释：`<summary>` 内英文整句在前，中文整句写在同一 `<summary>` 的 `<para>` 中。
 - 参数写在 `<param>`，方法返回值写在 `<returns>`，属性和索引器的取值写在 `<value>`（属性不用 `<returns>`）。`<param>` 名称必须与签名逐一对应。
