@@ -92,6 +92,14 @@ internal static partial class MfInterop
     /// <summary>MF_MT_DEFAULT_STRIDE。</summary>
     public static readonly Guid MtDefaultStride = new("644b4c48-b489-4089-8cec-9f9e3caa1ee7");
 
+    /// <summary>MF_MT_VIDEO_NOMINAL_RANGE (MFNominalRange: 1 = 0-255, 2 = 16-235).</summary>
+    /// <summary>MF_MT_VIDEO_NOMINAL_RANGE（MFNominalRange：1 = 0-255，2 = 16-235）。</summary>
+    public static readonly Guid MtVideoNominalRange = new("c21b8ee5-b956-4071-8daf-325edf5cab11");
+
+    /// <summary>MF_MT_YUV_MATRIX (MFYUVMatrix: 1 = BT.709, 2 = BT.601).</summary>
+    /// <summary>MF_MT_YUV_MATRIX（MFYUVMatrix：1 = BT.709，2 = BT.601）。</summary>
+    public static readonly Guid MtYuvMatrix = new("3e23d450-2c75-4d25-a00e-b91670d12327");
+
     /// <summary>MFMediaType_Audio ('auds').</summary>
     /// <summary>MFMediaType_Audio（'auds'）。</summary>
     public static readonly Guid MediaTypeAudio = new("73647561-0000-0010-8000-00AA00389B71");

@@ -94,16 +94,20 @@ public static class VideoDecoderFactory
                 () => Create(options with { Backend = VideoDecoderBackend.MediaFoundationCpu })),
             VideoDecoderBackend.Auto when OperatingSystem.IsMacOS() => new VideoToolbox.VideoToolboxVideoDecoder(),
             VideoDecoderBackend.Auto when OperatingSystem.IsLinux() => new FallbackVideoDecoder(
-                () => new VaApiVideoDecoder(options),
-                static () => new FallbackVideoDecoder(
-                    static () => new GStreamer.GStreamerVideoDecoder(true),
-                    static () => new GStreamer.GStreamerVideoDecoder(false))),
+                () => OperatingSystem.IsLinux()
+                    ? new VaApiVideoDecoder(options)
+                    : throw new NotSupportedException("VA-API requires Linux."),
+                () => OperatingSystem.IsLinux()
+                    ? new FallbackVideoDecoder(
+                        () => new GStreamer.GStreamerVideoDecoder(true, options),
+                        () => new GStreamer.GStreamerVideoDecoder(false, options))
+                    : throw new NotSupportedException("GStreamer fallback requires Linux.")),
             VideoDecoderBackend.VaApi when OperatingSystem.IsLinux() => new VaApiVideoDecoder(options),
             VideoDecoderBackend.MediaFoundationGpu when OperatingSystem.IsWindows() => new MediaFoundation.MediaFoundationGpuVideoDecoder(options),
-            VideoDecoderBackend.MediaFoundationCpu when OperatingSystem.IsWindows() => new MediaFoundation.MediaFoundationVideoDecoder(),
+            VideoDecoderBackend.MediaFoundationCpu when OperatingSystem.IsWindows() => new MediaFoundation.MediaFoundationVideoDecoder(options),
             VideoDecoderBackend.VideoToolbox when OperatingSystem.IsMacOS() => new VideoToolbox.VideoToolboxVideoDecoder(),
-            VideoDecoderBackend.GStreamerHardware => new GStreamer.GStreamerVideoDecoder(true),
-            VideoDecoderBackend.GStreamerSoftware => new GStreamer.GStreamerVideoDecoder(false),
+            VideoDecoderBackend.GStreamerHardware => new GStreamer.GStreamerVideoDecoder(true, options),
+            VideoDecoderBackend.GStreamerSoftware => new GStreamer.GStreamerVideoDecoder(false, options),
             _ => throw new NotSupportedException("Selected video backend is unavailable on this platform."),
         };
     }
@@ -138,7 +142,7 @@ public static class VideoDecoderFactory
         ArgumentNullException.ThrowIfNull(options);
         if (codec is not (VideoCodecId.H264 or VideoCodecId.H265 or VideoCodecId.Av1)) throw new ArgumentOutOfRangeException(nameof(codec));
         if (OperatingSystem.IsMacOS() && codec == VideoCodecId.Av1 && options.Backend is VideoDecoderBackend.Auto or VideoDecoderBackend.VideoToolbox)
-            return new GStreamer.GStreamerVideoDecoder(true);
+            return new GStreamer.GStreamerVideoDecoder(true, options);
 
         return Create(options);
     }

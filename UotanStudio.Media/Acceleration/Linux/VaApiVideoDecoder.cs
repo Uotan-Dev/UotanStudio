@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Runtime.Versioning;
 using UotanStudio.Media.Decoding;
 
 namespace UotanStudio.Media.Acceleration.Linux;
@@ -21,6 +22,7 @@ namespace UotanStudio.Media.Acceleration.Linux;
 /// 码流出错后必须先 Reset 或重新初始化。
 /// </para>
 /// </remarks>
+[SupportedOSPlatform("linux")]
 public sealed class VaApiVideoDecoder : IVideoDecoder
 {
     private readonly VideoDecoderOptions _options;
@@ -29,9 +31,11 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
     private Action<DecodedVideoFrame>? _callback;
     private VideoCodecId _codec;
     private int _thread;
-    private bool _disposed, _inCallback, _faulted, _ended;
+    private bool _disposed, _inCallback, _faulted, _ended, _exportFailed;
+    private volatile bool _exportEnabled;
     private byte[]? _configuration;
     private long _sequence;
+    private int _generation;
 
     /// <summary>
     /// Creates an uninitialized hardware-only VA-API decoder.
@@ -63,6 +67,40 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
     /// <para>在 <see cref="Initialize"/> 成功后为 <see langword="true"/>，直到 <see cref="Dispose"/> 或重新初始化。</para>
     /// </value>
     public bool IsInitialized => _session is not null;
+
+    /// <summary>
+    /// Gets or sets the callback that receives zero-copy exported frames. When set together with
+    /// <see cref="GpuExportEnabled"/>, decoded VA surfaces are delivered as
+    /// <see cref="VaDmaBufVideoFrame"/>; unlike the NV12 callback the receiver may retain the frame
+    /// beyond this call and must dispose it once the compositor is done.
+    /// <para>获取或设置接收零拷贝导出帧的回调。与 <see cref="GpuExportEnabled"/> 一起设置时，解码后的 VA
+    /// 表面以 <see cref="VaDmaBufVideoFrame"/> 交付；与 NV12 回调不同，接收方可以在本次调用之后继续持有该帧，
+    /// 并在合成器完成后释放。</para>
+    /// </summary>
+    /// <value>
+    /// The presentation callback, or <see langword="null"/> to keep every frame on the download path.
+    /// <para>呈现回调；为 <see langword="null"/> 时所有帧都走下载路径。</para>
+    /// </value>
+    public Action<VaDmaBufVideoFrame>? DmabufFrameCallback { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether decoded frames are exported as DRM PRIME layers when a
+    /// <see cref="DmabufFrameCallback"/> is registered. Initialized from
+    /// <see cref="VideoDecoderOptions.VaApiPreferGpuExport"/>; presenters clear it at runtime to fall
+    /// back to the NV12 download path after an import failure. Written from any thread.
+    /// <para>获取或设置在登记了 <see cref="DmabufFrameCallback"/> 时是否把解码帧导出为 DRM PRIME 层。
+    /// 初始值来自 <see cref="VideoDecoderOptions.VaApiPreferGpuExport"/>；呈现器可在导入失败后的运行期清除它，
+    /// 以回退到 NV12 下载路径。可在任意线程写入。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> while the export path is preferred.
+    /// <para>导出路径被优先使用时为 <see langword="true"/>。</para>
+    /// </value>
+    public bool GpuExportEnabled
+    {
+        get => _exportEnabled;
+        set => _exportEnabled = value;
+    }
 
     /// <summary>
     /// Checks native codec and driver VLD capability; stream-specific profile support still needs decoding.
@@ -122,7 +160,9 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
         _thread = Environment.CurrentManagedThreadId;
         _codec = codec;
         _sequence = 0;
-        _faulted = _ended = false;
+        _faulted = _ended = _exportFailed = false;
+        _exportEnabled = _options.VaApiPreferGpuExport;
+        _generation++;
         _session = _open(codec, _options.VaApiRenderNode);
         _callback = frameCallback;
     }
@@ -196,8 +236,27 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
             if (status == 2)
             {
                 ReadFrames(out int frames);
-                if (frames == 0) throw new InvalidDataException("VA-API decoder made no progress before retry.");
                 status = _session.Send(accessUnit, timestampTicks);
+                if (status == 2 && ExportActive)
+                {
+                    long deadline = Environment.TickCount64 + 5000;
+                    while (status == 2)
+                    {
+                        if (Environment.TickCount64 >= deadline)
+                            throw new InvalidDataException("VA-API decoder stalled behind an unreleased export frame for five seconds.");
+                        Thread.Sleep(1);
+                        ReadFrames(out frames);
+                        status = _session.Send(accessUnit, timestampTicks);
+                    }
+                }
+                else if (status == 2 && frames == 0)
+                {
+                    throw new InvalidDataException("VA-API decoder made no progress before retry.");
+                }
+                else if (status == 2)
+                {
+                    ReadFrames(out _);
+                }
             }
             if (status != 0) throw new InvalidDataException("VA-API decoder did not accept the access unit.");
             ReadFrames(out _);
@@ -238,7 +297,23 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
         try
         {
             int status = _session!.Send([], 0);
-            if (status == 2) { ReadFrames(out _); status = _session.Send([], 0); }
+            if (status == 2)
+            {
+                ReadFrames(out _);
+                status = _session.Send([], 0);
+                if (status == 2 && ExportActive)
+                {
+                    long deadline = Environment.TickCount64 + 5000;
+                    while (status == 2)
+                    {
+                        if (Environment.TickCount64 >= deadline)
+                            throw new InvalidDataException("VA-API decoder stalled behind an unreleased export frame for five seconds.");
+                        Thread.Sleep(1);
+                        ReadFrames(out _);
+                        status = _session.Send([], 0);
+                    }
+                }
+            }
             if (status is not (0 or 3)) throw new InvalidDataException("VA-API decoder rejected EOS.");
             if (ReadFrames(out _) != 3) throw new InvalidDataException("VA-API decoder did not finish draining.");
             _configuration = null;
@@ -247,13 +322,54 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
         catch { _faulted = true; throw; }
     }
 
+    private bool ExportActive => _exportEnabled && !_exportFailed && DmabufFrameCallback is not null;
+
+    /// <summary>
+    /// Delivers the held surface as a DMA-BUF frame. On failure the surface stays held and the export
+    /// path is disabled, so the caller downloads this same frame instead of losing it.
+    /// <para>把持有的表面作为 DMA-BUF 帧交付。失败时表面仍被持有且导出路径被禁用，由调用方把这一帧改为下载，而不是丢弃。</para>
+    /// </summary>
+    private bool TryDeliverExport(in VaFrameInfo info)
+    {
+        int status = _session!.Export(out VaDmaBufFrame raw);
+        if (status != 0)
+        {
+            _exportFailed = true;
+            return false;
+        }
+        var surface = new DmaBufSurface(new DmaBufDescriptor
+        {
+            Format = raw.Format,
+            Width = raw.Width,
+            Height = raw.Height,
+            ObjectCount = raw.ObjectCount,
+            Objects = raw.Objects,
+            LayerCount = raw.LayerCount,
+            Layers = raw.Layers,
+        });
+        var frame = new VaDmaBufVideoFrame(surface, info.Width, info.Height,
+            _options.ColorMatrix != VideoColorMatrix.Auto ? _options.ColorMatrix : (VideoColorMatrix)raw.Matrix,
+            _options.ColorRange != VideoColorRange.Auto ? _options.ColorRange : (VideoColorRange)raw.Range,
+            info.Timestamp, ReleaseGeneration, _generation);
+        try { DmabufFrameCallback!(frame); }
+        catch { frame.Dispose(); throw; }
+        return true;
+    }
+
+    private void ReleaseGeneration(int generation)
+    {
+        if (generation == Volatile.Read(ref _generation)) _session?.ReleaseFrame();
+    }
+
     private int ReadFrames(out int count)
     {
         for (count = 0; count < 4096; count++)
         {
             int status = _session!.Receive(out VaFrameInfo info);
+            if (status == 2) return 0;
             if (status is 0 or 3) return status;
             if (status != 1) throw new InvalidDataException("Unexpected VA-API receive status.");
+            if (_exportEnabled && !_exportFailed && DmabufFrameCallback is not null && TryDeliverExport(in info)) continue;
             int length = VideoFrameLimits.Nv12Length(info.Width, info.Height, info.Stride);
             if (info.Length != length || info.Matrix is < 0 or > 2 || info.Range is < 0 or > 2)
                 throw new InvalidDataException("Invalid VA-API output layout or color metadata.");
@@ -284,9 +400,10 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
     {
         CheckReady(allowFault: true);
         _session!.Reset();
-        _faulted = _ended = false;
+        _faulted = _ended = _exportFailed = false;
         _configuration = null;
         _sequence = 0;
+        _generation++;
     }
 
     private void CheckReady(bool allowFault = false)
@@ -313,6 +430,7 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
     {
         if (_disposed) return;
         CheckThread();
+        _generation++;
         _session?.Dispose();
         _session = null;
         _callback = null;

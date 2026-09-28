@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -8,6 +9,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Comm.Protocols.Adb;
+using UotanStudio.Media.Acceleration.Linux;
 using UotanStudio.Media.Audio;
 using UotanStudio.Media.Decoding;
 using UotanStudio.Services.Mirroring;
@@ -353,6 +355,7 @@ public partial class ScreenMirrorViewModel : Document
             };
             using var decoder = VideoDecoderFactory.Create(codec, ActiveDecoderOptions);
             decoder.Initialize(codec, metadata.Width, metadata.Height, OnDecodedFrame);
+            if (decoder is VaApiVideoDecoder vaApi && OperatingSystem.IsLinux()) EnableVaApiZeroCopy(vaApi);
             _decoderBackend = VideoDecoderFactory.GetBackendName(decoder);
             if (VideoDecoderFactory.GetFallbackReason(decoder) is { } reason)
                 UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Warn,
@@ -408,14 +411,7 @@ public partial class ScreenMirrorViewModel : Document
         if (_disposed) return;
         if (GpuPresenter.IsAvailable && GpuPresenter.Publish(frame, _activeSettings.ScreenMirrorColorMatrix, _activeSettings.ScreenMirrorColorRange))
         {
-            lock (_frameLock)
-            {
-                if (!_renderScheduled && !_disposed)
-                {
-                    _renderScheduled = true;
-                    Dispatcher.UIThread.Post(RenderPendingFrame, DispatcherPriority.Render);
-                }
-            }
+            ScheduleRender();
             return;
         }
         Views.Editors.ScreenMirrorPixelBuffer next;
@@ -429,6 +425,50 @@ public partial class ScreenMirrorViewModel : Document
             else _spareFrame = null;
         }
         next.Update(frame, _activeSettings.ScreenMirrorColorMatrix, _activeSettings.ScreenMirrorColorRange);
+        ScheduleRenderLocked(next);
+    }
+
+    /// <summary>Routes exported VA surfaces to the GPU presenter; the presenter clears the flag when it cannot present them.</summary>
+    /// <summary>把导出的 VA 表面路由到 GPU 呈现器；呈现器在无法呈现时会清除该标志。</summary>
+    [SupportedOSPlatform("linux")]
+    private void EnableVaApiZeroCopy(VaApiVideoDecoder decoder)
+    {
+        decoder.DmabufFrameCallback = frame => PublishDmabufFrame(frame, decoder);
+        decoder.GpuExportEnabled = true;
+    }
+
+    /// <summary>Hands a zero-copy exported surface to the GPU presenter, disabling export when it cannot be presented.</summary>
+    /// <summary>把零拷贝导出表面交给 GPU 呈现器；无法呈现时禁用导出路径。</summary>
+    [SupportedOSPlatform("linux")]
+    private void PublishDmabufFrame(VaDmaBufVideoFrame frame, VaApiVideoDecoder decoder)
+    {
+        Interlocked.Increment(ref _decodedFrames);
+        if (_disposed) { frame.Dispose(); return; }
+        if (!GpuPresenter.PublishDmabuf(frame))
+        {
+            // A presenter failure here means the surface cannot be presented; fall back to the
+            // NV12 download path for subsequent frames instead of dropping them all.
+            decoder.GpuExportEnabled = false;
+            frame.Dispose();
+            return;
+        }
+        ScheduleRender();
+    }
+
+    private void ScheduleRender()
+    {
+        lock (_frameLock)
+        {
+            if (!_renderScheduled && !_disposed)
+            {
+                _renderScheduled = true;
+                Dispatcher.UIThread.Post(RenderPendingFrame, DispatcherPriority.Render);
+            }
+        }
+    }
+
+    private void ScheduleRenderLocked(Views.Editors.ScreenMirrorPixelBuffer next)
+    {
         lock (_frameLock)
         {
             if (_disposed) return;

@@ -14,6 +14,7 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
 {
     private static readonly object LifetimeLock = new();
     private static int _leases;
+    private readonly VideoDecoderOptions _options;
     private nint _transform;
     private Action<DecodedVideoFrame>? _callback;
     private int _width, _height, _stride;
@@ -21,6 +22,28 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
     private bool _comOwned, _mfOwned, _disposed;
     private long _sequence;
     private bool _inCallback;
+
+    /// <summary>
+    /// Creates a synchronous Media Foundation decoder that follows stream color metadata.
+    /// <para>创建遵循码流色彩元数据的同步 Media Foundation 解码器。</para>
+    /// </summary>
+    public MediaFoundationVideoDecoder() : this(new VideoDecoderOptions()) { }
+
+    /// <summary>
+    /// Creates a synchronous Media Foundation decoder with per-session color overrides applied to the
+    /// negotiated NV12 output type; overrides the MFT rejects fall back to stream metadata.
+    /// <para>创建带会话色彩覆盖的同步 Media Foundation 解码器，覆盖会写入协商的 NV12 输出类型；
+    /// 被解码器拒绝的覆盖回退为码流元数据。</para>
+    /// </summary>
+    /// <param name="options">
+    /// Session choices; must not be <see langword="null"/>. Color overrides are forwarded to the output
+    /// type; other fields are ignored by this backend.
+    /// <para>会话选择；不得为 <see langword="null"/>。色彩覆盖写入输出类型；其他字段被此后端忽略。</para>
+    /// </param>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <see langword="null"/>.
+    /// <para><paramref name="options"/> 为 <see langword="null"/> 时抛出。</para></exception>
+    public MediaFoundationVideoDecoder(VideoDecoderOptions options)
+        => _options = options ?? throw new ArgumentNullException(nameof(options));
 
     /// <summary>
     /// Whether a synchronous media transform is currently configured.
@@ -114,7 +137,8 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
                 for (int i = 0; i < count; i++)
                 {
                     nint activate = Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size));
-                    int hr = MfCom.Activate(activate, MfInterop.IidImfTransform, out nint transform);
+                    nint transform = 0;
+                    int hr = MfCom.Activate(activate, MfInterop.IidImfTransform, out transform);
                     if (hr < 0) { MfCom.Release(transform); continue; }
                     _transform = transform;
                     if (MfCom.SetType(transform, input, true) >= 0 && SelectOutputType())
@@ -290,7 +314,16 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
     private VideoColorMatrix _colorMatrix;
     private VideoColorRange _colorRange;
 
-    private bool SelectOutputType()
+    /// <summary>Gets the color metadata negotiated on the output type; Auto while uninitialized.</summary>
+    /// <summary>获取输出类型上协商出的色彩元数据；未初始化时为 Auto。</summary>
+    internal VideoColorMatrix NegotiatedColorMatrix => _colorMatrix;
+    /// <summary>Gets the nominal range negotiated on the output type; Auto while uninitialized.</summary>
+    /// <summary>获取输出类型上协商出的数值范围；未初始化时为 Auto。</summary>
+    internal VideoColorRange NegotiatedColorRange => _colorRange;
+
+    private bool SelectOutputType() => SelectOutputType(applyOverrides: true) || SelectOutputType(applyOverrides: false);
+
+    private bool SelectOutputType(bool applyOverrides)
     {
         for (uint index = 0; index < 256; index++)
         {
@@ -299,10 +332,11 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
             try
             {
                 if (MfCom.GetGuid(type, MfInterop.MtSubtype, out Guid subtype) < 0 || subtype != MfInterop.VideoFormatNv12) continue;
+                if (applyOverrides && !ApplyColorOverrides(type, _options.ColorMatrix, _options.ColorRange)) continue;
                 if (MfCom.SetType(_transform, type, false) < 0) continue;
                 Check(MfCom.GetUInt64(type, MfInterop.MtFrameSize, out ulong size), "output dimensions");
-                _ = MfCom.GetUInt32(type, new Guid("c21b8ee5-b956-4071-8daf-325edf5cab11"), out uint range);
-                _ = MfCom.GetUInt32(type, new Guid("3e23d450-2c75-4d25-a00e-b91670d12327"), out uint matrix);
+                _ = MfCom.GetUInt32(type, MfInterop.MtVideoNominalRange, out uint range);
+                _ = MfCom.GetUInt32(type, MfInterop.MtYuvMatrix, out uint matrix);
                 _colorMatrix = matrix switch { 1 => VideoColorMatrix.Bt709, 2 => VideoColorMatrix.Bt601, _ => VideoColorMatrix.Auto };
                 _colorRange = range switch { 1 => VideoColorRange.Full, 2 => VideoColorRange.Limited, _ => VideoColorRange.Auto };
                 _width = checked((int)(size >> 32));
@@ -316,6 +350,17 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
             finally { MfCom.Release(type); }
         }
         return false;
+    }
+
+    /// <summary>Writes the session color overrides onto a candidate output type; fails when the MFT rejects them.</summary>
+    /// <summary>把会话色彩覆盖写入候选输出类型；MFT 拒绝时失败。</summary>
+    internal static bool ApplyColorOverrides(nint type, VideoColorMatrix matrix, VideoColorRange range)
+    {
+        if (matrix != VideoColorMatrix.Auto
+            && MfCom.SetUInt32(type, MfInterop.MtYuvMatrix, matrix == VideoColorMatrix.Bt709 ? 1u : 2u) < 0) return false;
+        if (range != VideoColorRange.Auto
+            && MfCom.SetUInt32(type, MfInterop.MtVideoNominalRange, range == VideoColorRange.Full ? 1u : 2u) < 0) return false;
+        return true;
     }
 
     private void DrainOutput()

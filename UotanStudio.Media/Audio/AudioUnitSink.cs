@@ -29,7 +29,9 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
     private const uint ScopeInput = 1;
     private const uint ElementOutput = 0;
     private const uint PropertyStreamFormat = 8;
-    private const uint PropertyRenderCallback = 11;
+    /// <summary>kAudioUnitProperty_SetRenderCallback (AudioUnitProperties.h); 11 is ElementCount.</summary>
+    /// <summary>kAudioUnitProperty_SetRenderCallback（AudioUnitProperties.h）；11 是 ElementCount。</summary>
+    private const uint PropertyRenderCallback = 23;
     private const uint FormatIdPcm = 0x6C70636D;
     private nint _unit;
     private AudioPcmRingBuffer? _staging;
@@ -292,6 +294,5 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
     [LibraryImport(Au)] private static partial int AudioOutputUnitStart(nint unit);
     [LibraryImport(Au)] private static partial int AudioOutputUnitStop(nint unit);
     [LibraryImport(Au)] private static partial int AudioUnitSetProperty(nint unit, uint propertyId, uint scope, uint element, void* data, uint size);
-    [LibraryImport(Au)] private static partial int AudioUnitSetParameter(nint unit, uint parameterId, uint scope, uint element, float value, uint bufferOffsetInFrames);
 
 }

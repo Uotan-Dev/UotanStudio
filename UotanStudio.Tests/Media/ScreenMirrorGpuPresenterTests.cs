@@ -27,7 +27,7 @@ public sealed class ScreenMirrorGpuPresenterTests
             frame.Dispose();
             var info = new SKImageInfo(5, 3, SKColorType.Bgra8888, SKAlphaType.Opaque);
             using var surface = SKSurface.Create(info);
-            image.Draw(surface.Canvas, new Rect(0, 0, 5, 3));
+            image.Draw(surface.Canvas, new Rect(0, 0, 5, 3), 1.0, null);
             using var actual = new SKBitmap(info);
             Assert.True(surface.ReadPixels(info, actual.GetPixels(), actual.RowBytes, 0, 0));
             var bytes = actual.Bytes;

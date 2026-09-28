@@ -141,4 +141,18 @@ public sealed record VideoDecoderOptions
     /// <para><see cref="VideoDecoderBackend.VaApi"/> 使用的渲染节点；<see langword="null"/> 表示自动探测。</para>
     /// </value>
     public string? VaApiRenderNode { get; init; }
+    /// <summary>
+    /// Prefer exporting decoded Linux VA surfaces as DRM PRIME layers for zero-copy presentation
+    /// instead of downloading NV12. Presentation must consume <see cref="Acceleration.Linux.VaDmaBufVideoFrame"/>
+    /// through <see cref="Acceleration.Linux.VaApiVideoDecoder.DmabufFrameCallback"/>, and the decoder
+    /// falls back to the download path when an export fails.
+    /// <para>优先把解码后的 Linux VA 表面导出为 DRM PRIME 层以供零拷贝呈现，而非下载 NV12。呈现必须经
+    /// <see cref="Acceleration.Linux.VaApiVideoDecoder.DmabufFrameCallback"/> 消费
+    /// <see cref="Acceleration.Linux.VaDmaBufVideoFrame"/>；导出失败时解码器回退到下载路径。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> to request GPU export on the VA-API backend; other backends ignore it.
+    /// <para>为 <see langword="true"/> 时 VA-API 后端请求 GPU 导出；其他后端忽略该值。</para>
+    /// </value>
+    public bool VaApiPreferGpuExport { get; init; }
 }

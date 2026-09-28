@@ -128,14 +128,11 @@ public sealed class GStreamerAudioSink(bool alsa = false) : IAudioSink
         try
         {
             pcm.CopyTo(bytes);
-            if (_volume != 1)
+            Span<byte> samples = bytes.AsSpan(0, pcm.Length);
+            for (int i = 0; i < samples.Length; i += _bits / 8)
             {
-                Span<byte> samples = bytes.AsSpan(0, pcm.Length);
-                for (int i = 0; i < samples.Length; i += _bits / 8)
-                {
-                    if (_bits == 16) BinaryPrimitives.WriteInt16LittleEndian(samples[i..], (short)(BinaryPrimitives.ReadInt16LittleEndian(samples[i..]) * _volume));
-                    else BinaryPrimitives.WriteSingleLittleEndian(samples[i..], BinaryPrimitives.ReadSingleLittleEndian(samples[i..]) * _volume);
-                }
+                if (_bits == 16) BinaryPrimitives.WriteInt16LittleEndian(samples[i..], (short)(BinaryPrimitives.ReadInt16LittleEndian(samples[i..]) * _volume));
+                else BinaryPrimitives.WriteSingleLittleEndian(samples[i..], BinaryPrimitives.ReadSingleLittleEndian(samples[i..]) * _volume);
             }
             _pipeline.Push(bytes.AsSpan(0, pcm.Length), checked(_samples * 10_000_000 / SampleRate));
             _samples += pcm.Length / align;

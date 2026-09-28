@@ -25,7 +25,11 @@
   `VideoFrameLimits` 相同。Drain 完成后须 Reset；Reset 清空待输出帧并保留原生参数集。
 - 通过 `av_hwframe_transfer_data` 完成驱动同步与平面读回，再对下载帧精确裁剪并复制到
   池化 NV12。不会把 tiled/compressed DMA-BUF 当线性像素。颜色来自输出 metadata，
-  用户显式覆盖优先；回调返回后帧释放。不属于零拷贝呈现。
+  用户显式覆盖优先；回调返回后帧释放。复制路径不属于零拷贝呈现。
+- ABI 2 起零拷贝呈现可用：`uv_receive` 只持有 VA 表面（延迟下载），`uv_export` 以
+  只读 SEPARATE_LAYERS DRM PRIME 导出未裁剪帧，导出前经 `vaSyncSurface` 同步一次；
+  `uv_release_frame` 从呈现线程归还表面（桥内互斥锁串行化全部入口）。裁剪帧必须走
+  `uv_copy`。导出的文件描述符由托管快照关闭；持有帧未归还前 `uv_receive` 返回 2。
 - `VaApiSession` 和 `EglDmaBufImage` 是独立原语，不承担 codec 参数序列化。
 
 ## 构建与部署
@@ -52,8 +56,9 @@ FFmpeg 默认许可证为 LGPL 2.1+，启用 GPL 等组件会改变其许可条�
 
 ## 验证
 
-CPU-only CTest 测试实际桥接代码的 ABI、禁止软件格式、10-bit 拒绝、带 stride 的裁剪/
-复制、奇数可见尺寸、缓冲区边界与错误返回。它不证明 VA 硬件解码。
+CPU-only CTest 测试实际桥接代码的 ABI（2）、禁止软件格式、10-bit 拒绝、带 stride 的裁剪/
+复制、奇数可见尺寸、持有帧描述、缓冲区边界与错误返回；`black-64x64.h264` 夹具缺失时该
+用例以退出码 77 跳过。它不证明 VA 硬件解码或零拷贝导出。
 
 无需构建 Avalonia 应用的托管侧契约测试位于 `UotanStudio.Tests`，按命名空间定向运行：
 

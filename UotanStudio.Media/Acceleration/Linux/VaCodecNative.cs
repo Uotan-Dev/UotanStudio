@@ -16,6 +16,8 @@ internal interface IVaCodecSession : IDisposable
     int Send(ReadOnlySpan<byte> packet, long timestamp);
     int Receive(out VaFrameInfo info);
     void Copy(Span<byte> destination);
+    int Export(out VaDmaBufFrame frame);
+    void ReleaseFrame();
     void Reset();
 }
 
@@ -33,7 +35,7 @@ internal sealed unsafe partial class VaCodecNative(VaCodecHandle handle) : IVaCo
     internal static IVaCodecSession Open(VideoCodecId codec, string? renderNode)
     {
         if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("VA-API requires Linux.");
-        if (AbiVersion() != 1) throw new NotSupportedException("Incompatible VA-API bridge ABI (expected 1).");
+        if (AbiVersion() != 2) throw new NotSupportedException("Incompatible VA-API bridge ABI (expected 2).");
         string[] nodes = renderNode is not null ? [renderNode] : VaApiSession.RenderNodes();
         var errors = new List<string>();
         byte* errorBuffer = stackalloc byte[ErrorBytes];
@@ -88,6 +90,14 @@ internal sealed unsafe partial class VaCodecNative(VaCodecHandle handle) : IVaCo
             Check(CopyNative(handle, data, destination.Length, error), error);
     }
 
+    public int Export(out VaDmaBufFrame frame)
+    {
+        byte* error = stackalloc byte[ErrorBytes];
+        return Check(ExportNative(handle, out frame, error), error);
+    }
+
+    public void ReleaseFrame() => ReleaseFrameNative(handle);
+
     public void Reset() => ResetNative(handle);
     public void Dispose() => handle.Dispose();
     private static int Check(int status, byte* error) => status >= 0 ? status : throw new InvalidDataException(ReadError(error));
@@ -105,5 +115,7 @@ internal sealed unsafe partial class VaCodecNative(VaCodecHandle handle) : IVaCo
     [LibraryImport(Library, EntryPoint = "uv_send")] private static partial int SendNative(VaCodecHandle handle, byte* data, int length, long pts, byte* error);
     [LibraryImport(Library, EntryPoint = "uv_receive")] private static partial int ReceiveNative(VaCodecHandle handle, out VaFrameInfo info, byte* error);
     [LibraryImport(Library, EntryPoint = "uv_copy")] private static partial int CopyNative(VaCodecHandle handle, byte* data, int length, byte* error);
+    [LibraryImport(Library, EntryPoint = "uv_export")] private static partial int ExportNative(VaCodecHandle handle, out VaDmaBufFrame frame, byte* error);
+    [LibraryImport(Library, EntryPoint = "uv_release_frame")] private static partial void ReleaseFrameNative(VaCodecHandle handle);
     [LibraryImport(Library, EntryPoint = "uv_reset")] private static partial void ResetNative(VaCodecHandle handle);
 }

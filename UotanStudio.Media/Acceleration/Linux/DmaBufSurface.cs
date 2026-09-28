@@ -21,6 +21,23 @@ internal struct DmaBufDescriptor
 }
 
 /// <summary>
+/// Managed mirror of the bridge's <c>uv_dmabuf_frame</c>: a VADRMPRIMESurfaceDescriptor-compatible
+/// prefix followed by color metadata. Field offsets are asserted by bridge and managed tests;
+/// the flat layout keeps matrix/range at C offsets 308/312 and pts at 320.
+/// <para>桥接 <c>uv_dmabuf_frame</c> 的托管镜像：VADRMPRIMESurfaceDescriptor 兼容前缀加色彩元数据。字段偏移由桥接与托管测试共同断言；平铺布局保证 matrix/range 位于 C 侧偏移 308/312、pts 位于 320。</para>
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct VaDmaBufFrame
+{
+    public uint Format, Width, Height, ObjectCount;
+    public DmaBufObjects Objects;
+    public uint LayerCount;
+    public DmaBufLayers Layers;
+    public int Matrix, Range;
+    public long Pts;
+}
+
+/// <summary>
 /// Owns the DMA-BUF file descriptors exported from a VA surface.
 /// <para>拥有从 VA 表面导出的 DMA-BUF 文件描述符。</para>
 /// </summary>
@@ -90,8 +107,8 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
     public nint Handle => _image != 0 ? _image : throw new ObjectDisposedException(nameof(EglDmaBufImage));
 
     /// <summary>
-    /// Imports a composed DRM layer, preserving per-object format modifiers.
-    /// <para>导入已合成的 DRM 层，并保留每个对象的格式修饰符（modifier）。</para>
+    /// Imports the requested DRM layer, preserving per-object format modifiers.
+    /// <para>导入指定的 DRM 层，并保留每个对象的格式修饰符（modifier）。</para>
     /// </summary>
     /// <param name="eglDisplay">
     /// An initialized EGL display on the caller's renderer thread.
@@ -99,8 +116,8 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
     /// </param>
     /// <param name="surface">The live DMA-BUF descriptor exported from a VA surface.
     /// <para>从 VA 表面导出的有效 DMA-BUF 描述符。</para></param>
-    /// <param name="layerIndex">Index of the composed layer to import; the descriptor must expose exactly one layer.
-    /// <para>要导入的合成层索引；描述符必须只暴露一个层。</para></param>
+    /// <param name="layerIndex">Index of the layer to import; separate-layer exports expose one layer per plane group.
+    /// <para>要导入的层索引；SEPARATE_LAYERS 导出按平面组各暴露一个层。</para></param>
     /// <returns>
     /// An owned EGLImage wrapper that must be disposed on the same renderer thread.
     /// <para>已拥有的 EGLImage 包装器，必须在同一渲染器线程上释放。</para>
@@ -113,9 +130,8 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
     /// <exception cref="ArgumentOutOfRangeException"><c>layerIndex</c> is outside the layer set.
     /// <para><c>layerIndex</c> 超出层集合范围。</para></exception>
     /// <exception cref="NotSupportedException">
-    /// EGL DMA-BUF or modifier import is unavailable, the descriptor is not a single composed layer,
-    /// or a layer has a plane count outside the supported 1 to 3 range.
-    /// <para>EGL 不支持 DMA-BUF 或 modifier 导入、描述符不是单个合成层，或层的平面数不在支持的 1 到 3 范围内。</para>
+    /// EGL DMA-BUF or modifier import is unavailable, or a layer has a plane count outside the supported 1 to 3 range.
+    /// <para>EGL 不支持 DMA-BUF 或 modifier 导入，或层的平面数不在支持的 1 到 3 范围内。</para>
     /// </exception>
     /// <exception cref="InvalidDataException">A DRM object index or plane is inconsistent.
     /// <para>DRM 对象索引或平面数据不一致。</para></exception>
@@ -134,7 +150,7 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
         if (!names.Contains("EGL_EXT_image_dma_buf_import")) throw new NotSupportedException("EGL DMA-BUF import is unavailable.");
         bool modifiers = names.Contains("EGL_EXT_image_dma_buf_import_modifiers");
         var descriptor = surface.Descriptor;
-        if (descriptor.LayerCount != 1) throw new NotSupportedException("Import requires a composed DRM layer; separate chroma layers need individual dimensions.");
+        if (descriptor.LayerCount is < 1 or > 4) throw new NotSupportedException("The descriptor exposes no importable DRM layer.");
         if ((uint)layerIndex >= descriptor.LayerCount) throw new ArgumentOutOfRangeException(nameof(layerIndex));
         DmaBufLayer layer = descriptor.Layers[layerIndex];
         if (layer.Planes is < 1 or > 3) throw new NotSupportedException("EGL import supports one to three planes.");
@@ -146,7 +162,7 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
             DmaBufObject obj = descriptor.Objects[(int)objectIndex];
             if (obj.Fd < 0 || layer.Pitches[i] == 0 || layer.Offsets[i] >= obj.Size) throw new InvalidDataException("Invalid DRM plane.");
             attributes.AddRange([0x3272 + i * 3, obj.Fd, 0x3273 + i * 3, checked((int)layer.Offsets[i]), 0x3274 + i * 3, checked((int)layer.Pitches[i])]);
-            if (modifiers && obj.Modifier != 0x00ffffffffffffff)
+            if (modifiers && obj.Modifier != 0 && obj.Modifier != 0x00ffffffffffffff)
                 attributes.AddRange([0x3443 + i * 2, unchecked((int)obj.Modifier), 0x3444 + i * 2, unchecked((int)(obj.Modifier >> 32))]);
             else if (obj.Modifier != 0 && obj.Modifier != 0x00ffffffffffffff)
                 throw new NotSupportedException("This surface requires EGL modifier import support.");
@@ -165,28 +181,93 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
     }
 
     /// <summary>
-    /// Binds this image to the currently bound GL_TEXTURE_EXTERNAL_OES texture in a current GLES context.
-    /// <para>在当前的 GLES 上下文中，将此图像绑定到当前绑定的 GL_TEXTURE_EXTERNAL_OES 纹理。</para>
+    /// Imports the requested DRM layer on the caller's current EGL display. The import itself binds
+    /// no context; the returned wrapper must be disposed on the renderer thread.
+    /// <para>在调用方当前的 EGL display 上导入指定 DRM 层。导入本身不绑定上下文；返回的包装器必须在渲染器线程上释放。</para>
     /// </summary>
+    /// <param name="surface">The live DMA-BUF descriptor exported from a VA surface.
+    /// <para>从 VA 表面导出的有效 DMA-BUF 描述符。</para></param>
+    /// <param name="layerIndex">Index of the layer to import.
+    /// <para>要导入的层索引。</para></param>
+    /// <returns>
+    /// An owned EGLImage wrapper that must be disposed on the same renderer thread.
+    /// <para>已拥有的 EGLImage 包装器，必须在同一渲染器线程上释放。</para>
+    /// </returns>
+    /// <exception cref="InvalidOperationException">No EGL display is current on this thread.
+    /// <para>该线程上没有当前的 EGL display。</para></exception>
+    /// <exception cref="NotSupportedException">EGL DMA-BUF import is unavailable.
+    /// <para>EGL 不支持 DMA-BUF 导入。</para></exception>
+    public static EglDmaBufImage Import(DmaBufSurface surface, int layerIndex = 0)
+    {
+        nint display = eglGetCurrentDisplay();
+        if (display == 0) throw new InvalidOperationException("No current EGL display is available on this thread.");
+        return Import(display, surface, layerIndex);
+    }
+
+    /// <summary>
+    /// Creates a GL texture in the current context, binds this image to it, and returns the binding
+    /// for Skia texture adoption. Desktop GL binds <c>GL_TEXTURE_2D</c>; GLES binds
+    /// <c>GL_TEXTURE_EXTERNAL_OES</c>. Linear filtering is configured on the new texture.
+    /// <para>在当前上下文中创建 GL 纹理并绑定此图像，返回供 Skia 纹理采纳的绑定。桌面 GL 绑定 <c>GL_TEXTURE_2D</c>；GLES 绑定 <c>GL_TEXTURE_EXTERNAL_OES</c>。新纹理配置为线性过滤。</para>
+    /// </summary>
+    /// <param name="externalOes">
+    /// <see langword="true"/> for a GLES <c>GL_TEXTURE_EXTERNAL_OES</c> binding; <see langword="false"/> for desktop GL <c>GL_TEXTURE_2D</c>.
+    /// <para>为 <see langword="true"/> 时使用 GLES 的 <c>GL_TEXTURE_EXTERNAL_OES</c>；为 <see langword="false"/> 时使用桌面 GL 的 <c>GL_TEXTURE_2D</c>。</para>
+    /// </param>
+    /// <param name="glFormat">
+    /// The GL internal format reported to the texture consumer, such as <c>GL_R8</c> for a luma layer.
+    /// <para>报告给纹理使用方的 GL 内部格式，例如亮度层使用 <c>GL_R8</c>。</para>
+    /// </param>
+    /// <returns>
+    /// The created texture object id and the bound target constant.
+    /// <para>新建的纹理对象 ID 与绑定的 target 常量。</para>
+    /// </returns>
     /// <exception cref="InvalidOperationException">
     /// The call comes from a thread other than the owning renderer thread.
     /// <para>调用来自除所属渲染器线程之外的其他线程。</para>
     /// </exception>
     /// <exception cref="NotSupportedException">
-    /// The current context lacks GL_OES_EGL_image_external or its entrypoint.
-    /// <para>当前上下文缺少 GL_OES_EGL_image_external 扩展或其入口点。</para>
+    /// The current context lacks the required EGL image extension or its entrypoints.
+    /// <para>当前上下文缺少所需的 EGL image 扩展或其入口点。</para>
     /// </exception>
-    /// <exception cref="ObjectDisposedException">The image was already destroyed. <para>图像已被销毁。</para></exception>
-    public void BindExternalTexture()
+    public (uint TextureId, uint Target) CreateBoundTexture(bool externalOes, uint glFormat)
     {
         CheckThread();
+        string extension = externalOes ? "GL_OES_EGL_image_external" : "GL_OES_EGL_image";
         var getString = (delegate* unmanaged<uint, nint>)eglGetProcAddress("glGetString");
         string extensions = getString == null ? "" : Marshal.PtrToStringUTF8(getString(0x1F03)) ?? "";
-        if (!extensions.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("GL_OES_EGL_image_external"))
-            throw new NotSupportedException("A current GLES context with GL_OES_EGL_image_external is required.");
+        if (!extensions.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains(extension))
+            throw new NotSupportedException($"A current context with {extension} is required.");
         var bind = (delegate* unmanaged<uint, nint, void>)eglGetProcAddress("glEGLImageTargetTexture2DOES");
-        if (bind == null) throw new NotSupportedException("GL_OES_EGL_image_external is unavailable.");
-        bind(0x8D65, Handle);
+        var generate = (delegate* unmanaged<uint, uint*, void>)eglGetProcAddress("glGenTextures");
+        var bindTexture = (delegate* unmanaged<uint, uint, void>)eglGetProcAddress("glBindTexture");
+        var parameter = (delegate* unmanaged<uint, uint, int, void>)eglGetProcAddress("glTexParameteri");
+        if (bind == null || generate == null || bindTexture == null || parameter == null)
+            throw new NotSupportedException("EGL image texture entrypoints are unavailable.");
+        uint target = externalOes ? 0x8D65u : 0x0DE1u;
+        uint texture = 0;
+        generate(1, &texture);
+        if (texture == 0) throw new InvalidOperationException("GL texture generation failed.");
+        bindTexture(target, texture);
+        bind(target, Handle);
+        parameter(target, 0x2800, 0x2600);
+        parameter(target, 0x2801, 0x2600);
+        bindTexture(target, 0);
+        return (texture, target);
+    }
+
+    /// <summary>
+    /// Deletes a texture previously created by <see cref="CreateBoundTexture"/>; must run with the
+    /// creating context current.
+    /// <para>删除先前由 <see cref="CreateBoundTexture"/> 创建的纹理；必须在创建它的上下文当前时执行。</para>
+    /// </summary>
+    /// <param name="textureId">The texture object id returned by <see cref="CreateBoundTexture"/>.
+    /// <para><see cref="CreateBoundTexture"/> 返回的纹理对象 ID。</para></param>
+    public static void DeleteTexture(uint textureId)
+    {
+        if (textureId == 0) return;
+        var delete = (delegate* unmanaged<uint, uint*, void>)eglGetProcAddress("glDeleteTextures");
+        if (delete != null) delete(1, &textureId);
     }
     /// <summary>
     /// Destroys the EGLImage on the owning renderer thread; calling an already-disposed instance is a no-op.
@@ -210,4 +291,5 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
     [LibraryImport("libEGL.so.1")] private static partial nint eglQueryString(nint display, int name);
     [LibraryImport("libEGL.so.1", StringMarshalling = StringMarshalling.Utf8)] private static partial nint eglGetProcAddress(string name);
     [LibraryImport("libEGL.so.1")] private static partial int eglGetError();
+    [LibraryImport("libEGL.so.1")] private static partial nint eglGetCurrentDisplay();
 }

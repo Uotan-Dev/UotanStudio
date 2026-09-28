@@ -392,7 +392,8 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             for (int i = 0; i < count; i++)
             {
                 nint activate = Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size));
-                int hr = MfCom.Activate(activate, MfInterop.IidImfTransform, out nint transform);
+                nint transform = 0;
+                int hr = MfCom.Activate(activate, MfInterop.IidImfTransform, out transform);
                 if (hr < 0) { failures.Add($"activate: 0x{hr:X8}"); MfCom.Release(transform); continue; }
                 _transform = transform;
                 try
@@ -466,8 +467,8 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
                 _width = checked((int)(size >> 32));
                 _height = checked((int)(size & uint.MaxValue));
                 VideoFrameLimits.ValidateDimensions(_width, _height);
-                _ = MfCom.GetUInt32(type, new Guid("c21b8ee5-b956-4071-8daf-325edf5cab11"), out uint range);
-                _ = MfCom.GetUInt32(type, new Guid("3e23d450-2c75-4d25-a00e-b91670d12327"), out uint matrix);
+                _ = MfCom.GetUInt32(type, MfInterop.MtVideoNominalRange, out uint range);
+                _ = MfCom.GetUInt32(type, MfInterop.MtYuvMatrix, out uint matrix);
                 if (_options.ColorRange != VideoColorRange.Auto) range = _options.ColorRange == VideoColorRange.Full ? 1u : 2u;
                 if (_options.ColorMatrix != VideoColorMatrix.Auto) matrix = _options.ColorMatrix == VideoColorMatrix.Bt709 ? 1u : 2u;
                 _inputColorSpace = ((range == 1 ? 2u : 1u) << 4) | (matrix == 1 ? 4u : 0u);

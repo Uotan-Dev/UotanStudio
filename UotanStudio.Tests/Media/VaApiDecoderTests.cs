@@ -1,10 +1,12 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using UotanStudio.Media.Acceleration.Linux;
 using UotanStudio.Media.Decoding;
 using Xunit;
 
 namespace UotanStudio.Tests.Media;
 
+[SupportedOSPlatform("linux")]
 public class VaApiDecoderTests
 {
     [Fact]
@@ -196,6 +198,12 @@ public class VaApiDecoderTests
         }
         public int Receive(out VaFrameInfo info) => Frames.TryDequeue(out info) ? 1 : _ended ? 3 : 0;
         public void Copy(Span<byte> destination) { Copies++; destination.Fill(128); }
+        public int Export(out VaDmaBufFrame frame)
+        {
+            frame = default;
+            throw new InvalidOperationException("Export is not exercised by the download-path tests.");
+        }
+        public void ReleaseFrame() { }
         public void Reset() { Resets++; _ended = false; Frames.Clear(); }
         public void Dispose() => Disposed = true;
     }

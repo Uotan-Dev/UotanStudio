@@ -7,12 +7,10 @@ namespace UotanStudio.Media.Decoding.GStreamer;
 /// Packetized GStreamer decoder using explicitly selected hardware or software plugins.
 /// <para>GStreamer 分包视频解码器，使用显式选择的硬件或软件插件。</para>
 /// </summary>
-/// <param name="hardware">
-/// When <see langword="true"/>, only hardware decoder candidate elements are accepted; software candidates otherwise.
-/// <para>为 <see langword="true"/> 时仅接受硬件解码器候选元素，否则接受软件候选元素。</para>
-/// </param>
-public sealed unsafe class GStreamerVideoDecoder(bool hardware) : IVideoDecoder
+public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
 {
+    private readonly VideoDecoderOptions _options;
+    private readonly bool _hardware;
     private GstPipeline? _pipeline;
     private Action<DecodedVideoFrame>? _callback;
     private VideoCodecId _codec;
@@ -20,6 +18,37 @@ public sealed unsafe class GStreamerVideoDecoder(bool hardware) : IVideoDecoder
     private long _sequence;
     private bool _disposed;
     private bool _inCallback;
+
+    /// <summary>
+    /// Creates a GStreamer decoder that follows stream color metadata.
+    /// <para>创建遵循码流色彩元数据的 GStreamer 解码器。</para>
+    /// </summary>
+    /// <param name="hardware">
+    /// When <see langword="true"/>, only hardware decoder candidate elements are accepted; software candidates otherwise.
+    /// <para>为 <see langword="true"/> 时仅接受硬件解码器候选元素，否则接受软件候选元素。</para>
+    /// </param>
+    public GStreamerVideoDecoder(bool hardware) : this(hardware, new VideoDecoderOptions()) { }
+
+    /// <summary>
+    /// Creates a GStreamer decoder with per-session color overrides forced onto the NV12 output caps.
+    /// <para>创建带会话色彩覆盖的 GStreamer 解码器，覆盖会强制写入 NV12 输出 caps。</para>
+    /// </summary>
+    /// <param name="hardware">
+    /// When <see langword="true"/>, only hardware decoder candidate elements are accepted; software candidates otherwise.
+    /// <para>为 <see langword="true"/> 时仅接受硬件解码器候选元素，否则接受软件候选元素。</para>
+    /// </param>
+    /// <param name="options">
+    /// Session choices; must not be <see langword="null"/>. Color overrides are forced onto the output
+    /// caps; other fields are ignored by this backend.
+    /// <para>会话选择；不得为 <see langword="null"/>。色彩覆盖强制写入输出 caps；其他字段被此后端忽略。</para>
+    /// </param>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <see langword="null"/>.
+    /// <para><paramref name="options"/> 为 <see langword="null"/> 时抛出。</para></exception>
+    public GStreamerVideoDecoder(bool hardware, VideoDecoderOptions options)
+    {
+        _hardware = hardware;
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+    }
     /// <summary>
     /// Selected native decoder element.
     /// <para>实际选用的原生解码器元素。</para>
@@ -37,7 +66,7 @@ public sealed unsafe class GStreamerVideoDecoder(bool hardware) : IVideoDecoder
     /// <see langword="true"/> when only hardware decoder candidates are accepted; fixed at construction.
     /// <para>为 <see langword="true"/> 时仅接受硬件解码器候选；该值在构造时固定。</para>
     /// </value>
-    public bool UsesHardware => hardware;
+    public bool UsesHardware => _hardware;
     /// <summary>
     /// Gets a value indicating whether a GStreamer pipeline is currently built.
     /// <para>获取一个值，该值指示当前是否已构建 GStreamer 管线。</para>
@@ -54,6 +83,29 @@ public sealed unsafe class GStreamerVideoDecoder(bool hardware) : IVideoDecoder
         if (OperatingSystem.IsWindows()) return [$"d3d11{name}dec", $"d3d12{name}dec", $"nv{name}dec"];
         if (OperatingSystem.IsMacOS()) return ["vtdec_hw"];
         return [$"va{name}dec", $"vaapi{name}dec", $"nv{name}dec", $"v4l2sl{name}dec"];
+    }
+
+    /// <summary>
+    /// Builds the numeric GStreamer colorimetry string ("range:matrix:transfer:primaries") for the
+    /// session overrides. A zero component keeps the stream value untouched, matching
+    /// <c>gst_video_colorimetry_from_string</c>; matrix values follow
+    /// <see cref="VideoColorMatrix"/>/GstVideoColorMatrix (BT.709 = 3, BT.601 = 4).
+    /// <para>按会话覆盖构建数值形式的 GStreamer colorimetry 串（"range:matrix:transfer:primaries"）。零分量保持码流值不变，
+    /// 与 <c>gst_video_colorimetry_from_string</c> 语义一致；矩阵取值遵循 <see cref="VideoColorMatrix"/>/GstVideoColorMatrix（BT.709 = 3，BT.601 = 4）。</para>
+    /// </summary>
+    /// <param name="matrix">Session matrix override. <para>会话矩阵覆盖。</para></param>
+    /// <param name="range">Session range override. <para>会话范围覆盖。</para></param>
+    /// <returns>
+    /// The colorimetry string for the output caps, or <see langword="null"/> when both overrides are Auto.
+    /// <para>输出 caps 的 colorimetry 串；两个覆盖均为 Auto 时返回 <see langword="null"/>。</para>
+    /// </returns>
+    internal static string? ColorimetryFor(VideoColorMatrix matrix, VideoColorRange range)
+    {
+        int r = range switch { VideoColorRange.Full => 1, VideoColorRange.Limited => 2, _ => 0 };
+        int m = matrix switch { VideoColorMatrix.Bt709 => 3, VideoColorMatrix.Bt601 => 4, _ => 0 };
+        if (r == 0 && m == 0) return null;
+        (int t, int p) = m switch { 3 => (5, 1), 4 => (4, 4), _ => (0, 0) };
+        return $"{r}:{m}:{t}:{p}";
     }
     /// <summary>
     /// Checks installed plugin registration; stream and device initialization may still fail.
@@ -109,18 +161,20 @@ public sealed unsafe class GStreamerVideoDecoder(bool hardware) : IVideoDecoder
         string name = codec switch { VideoCodecId.H264 => "h264", VideoCodecId.H265 => "h265", VideoCodecId.Av1 => "av1", _ => throw new ArgumentOutOfRangeException(nameof(codec)) };
         string format = codec == VideoCodecId.Av1 ? "obu-stream,alignment=tu" : "byte-stream,alignment=au";
         var errors = new List<string>();
-        foreach (string candidate in Candidates(codec, hardware))
+        string? colorimetry = ColorimetryFor(_options.ColorMatrix, _options.ColorRange);
+        string outputCaps = $"video/x-raw,format=NV12{(colorimetry is null ? "" : $",colorimetry={colorimetry}")}";
+        foreach (string candidate in Candidates(codec, _hardware))
         {
             if (!GstNative.HasElement(candidate)) continue;
             try
             {
-                _pipeline = new GstPipeline($"appsrc name=input is-live=true format=time block=false max-bytes={GstPipeline.MaximumQueuedBytes} caps=video/x-{name},stream-format={format},width={width},height={height} ! {name}parse ! {candidate} ! video/x-raw ! videoconvert ! video/x-raw,format=NV12 ! appsink name=output sync=false max-buffers=8 drop=false enable-last-sample=false");
+                _pipeline = new GstPipeline($"appsrc name=input is-live=true format=time block=false max-bytes={GstPipeline.MaximumQueuedBytes} caps=video/x-{name},stream-format={format},width={width},height={height} ! {name}parse ! {candidate} ! video/x-raw ! videoconvert ! {outputCaps} ! appsink name=output sync=false max-buffers=8 drop=false enable-last-sample=false");
                 DecoderElement = candidate;
                 return;
             }
             catch (Exception error) when (error is NotSupportedException or InvalidOperationException) { errors.Add($"{candidate}: {error.Message}"); }
         }
-        throw new NotSupportedException($"No GStreamer {(hardware ? "hardware" : "software")} decoder accepts {codec}. {string.Join("; ", errors)}");
+        throw new NotSupportedException($"No GStreamer {(_hardware ? "hardware" : "software")} decoder accepts {codec}. {string.Join("; ", errors)}");
     }
     /// <summary>
     /// Feeds one compressed access unit into the pipeline with a synthesized 60 fps presentation timestamp.

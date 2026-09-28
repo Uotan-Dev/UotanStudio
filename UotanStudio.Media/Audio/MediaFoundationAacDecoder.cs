@@ -207,7 +207,8 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
                 for (int i = 0; i < count; i++)
                 {
                     nint activate = Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size));
-                    int hr = MfCom.Activate(activate, MfInterop.IidImfTransform, out nint transform);
+                    nint transform = 0;
+                    int hr = MfCom.Activate(activate, MfInterop.IidImfTransform, out transform);
                     if (hr < 0) { MfCom.Release(transform); continue; }
                     _transform = transform;
                     if (MfCom.SetType(_transform, input, true) >= 0) break;
