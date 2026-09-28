@@ -12,12 +12,15 @@ namespace UotanStudio.Comm.Protocols.Fastboot;
 public sealed partial class FastbootSession
 {
     /// <summary>
-    /// Checks whether the specified partition has A/B slots.
-    /// <para>检查指定分区是否具有 A/B 槽位。</para>
+    /// Checks whether the specified partition has A/B slots. Only a confirmed <c>yes</c> is cached;
+    /// a transient failure (FAIL reply, timeout) leaves the entry uncached so a later call retries
+    /// instead of permanently resolving the partition to its slot-less name.
+    /// <para>检查指定分区是否具有 A/B 槽位。只有确认的 <c>yes</c> 才会缓存；瞬态失败（FAIL 应答、
+    /// 超时）不会写入缓存，后续调用会重试，而不会把分区永久解析为无槽位名称。</para>
     /// </summary>
     /// <param name="partition">Partition name to probe. <para>要探测的分区名。</para></param>
-    /// <returns><see langword="true"/> when the device reports <c>yes</c>; empty <paramref name="partition"/> returns <see langword="false"/>. Results are cached per partition.
-    /// <para>设备报告 <c>yes</c> 时返回 <see langword="true"/>；<paramref name="partition"/> 为空时返回 <see langword="false"/>。结果按分区缓存。</para></returns>
+    /// <returns><see langword="true"/> when the device reports <c>yes</c>; empty <paramref name="partition"/> returns <see langword="false"/>. Positive results are cached per partition.
+    /// <para>设备报告 <c>yes</c> 时返回 <see langword="true"/>；<paramref name="partition"/> 为空时返回 <see langword="false"/>。肯定结果按分区缓存。</para></returns>
     public bool HasSlot(string partition)
     {
         if (string.IsNullOrEmpty(partition))
@@ -30,9 +33,13 @@ public sealed partial class FastbootSession
             return has;
         }
 
-        has = GetVariable(FastbootConstants.VarHasSlotPrefix + partition) == "yes";
-        _hasSlotCache[partition] = has;
-        return has;
+        if (GetVariable(FastbootConstants.VarHasSlotPrefix + partition) == "yes")
+        {
+            _hasSlotCache[partition] = true;
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -110,8 +117,11 @@ public sealed partial class FastbootSession
 
     /// <summary>
     /// Gets the size of the specified partition in bytes (decimal or 0x-prefixed hex).
-    /// Returns 0 when the device does not report the partition size.
-    /// <para>以字节获取指定分区大小（十进制或 0x 前缀十六进制）。设备未报告时返回 0。</para>
+    /// Returns 0 when the device does not report the partition size or reports a malformed
+    /// value; device replies are untrusted, so a non-numeric answer never surfaces as a
+    /// parsing exception from a fetch or flash path.
+    /// <para>以字节获取指定分区大小（十进制或 0x 前缀十六进制）。设备未报告或报告畸形值时
+    /// 返回 0；设备应答不可信，非数字应答不会在取回或刷写路径上以解析异常的形式冒出。</para>
     /// </summary>
     /// <param name="partition">Partition name to size. <para>要获取大小的分区名。</para></param>
     /// <returns>The parsed size in bytes, or 0 when unavailable. <para>解析出的字节大小；不可用时为 0。</para></returns>
@@ -125,8 +135,8 @@ public sealed partial class FastbootSession
 
         value = value.Trim();
         return value.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
-            ? Convert.ToInt64(value, 16)
-            : Convert.ToInt64(value, CultureInfo.InvariantCulture);
+            ? long.TryParse(value[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hex) ? hex : 0
+            : long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dec) ? dec : 0;
     }
 
     /// <summary>

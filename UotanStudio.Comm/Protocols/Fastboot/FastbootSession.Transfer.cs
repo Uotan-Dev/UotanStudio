@@ -215,7 +215,8 @@ public sealed partial class FastbootSession
 
     /// <summary>
     /// Reads the exact payload size announced by a DATA frame into the output stream.
-    /// <para>将 DATA 帧声明的精确负载读取到输出流。</para>
+    /// <para>将 DATA 帧声明的精确负载读取到输出流。DATA 帧与负载在同一传输读取中合并送达时
+    /// （UDP 数据报等），帧解析保留在 <c>_pendingBytes</c> 中的超额字节会先于传输读取被消耗。</para>
     /// </summary>
     private void ReadDataPayload(long size, Stream output, IProgress<long>? progress, CancellationToken cancellationToken)
     {
@@ -227,7 +228,12 @@ public sealed partial class FastbootSession
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var toRead = (int)Math.Min(FastbootConstants.TransferChunkSize, size - bytesRead);
-                var read = Transport.Read(chunkBuffer, 0, toRead, _timeoutMs);
+                var read = TakePendingBytes(chunkBuffer, 0, toRead);
+                if (read < toRead)
+                {
+                    read += Transport.Read(chunkBuffer, read, toRead - read, _timeoutMs);
+                }
+
                 if (read <= 0)
                 {
                     throw new EndOfStreamException($"Device EOF at {bytesRead}/{size}");
@@ -242,6 +248,27 @@ public sealed partial class FastbootSession
         {
             ArrayPool<byte>.Shared.Return(chunkBuffer);
         }
+    }
+
+    /// <summary>
+    /// Consumes up to <paramref name="count"/> bytes previously retained by the response parser
+    /// (bytes the transport delivered past a terminal frame) into <paramref name="target"/>, so
+    /// coalesced payload bytes are never stranded in the pending buffer.
+    /// <para>把响应解析器此前保留的超额字节（传输在终止帧之后送达的部分）最多
+    /// <paramref name="count"/> 个移入 <paramref name="target"/>，合并送达的负载字节因此
+    /// 不会滞留在待解析缓冲区中。</para>
+    /// </summary>
+    private int TakePendingBytes(byte[] target, int offset, int count)
+    {
+        var take = Math.Min(count, _pendingBytes.Count);
+        if (take <= 0)
+        {
+            return 0;
+        }
+
+        _pendingBytes.CopyTo(0, target, offset, take);
+        _pendingBytes.RemoveRange(0, take);
+        return take;
     }
 
     /// <summary>

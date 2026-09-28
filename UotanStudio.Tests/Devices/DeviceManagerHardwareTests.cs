@@ -19,7 +19,8 @@ public sealed class DeviceManagerHardwareTests
             Assert.Skip("Set UOTAN_TEST_FASTBOOT_SERIAL to the only connected Fastboot target.");
 
         var manager = new HeadlessDeviceManagerGateway();
-        var reported = manager.RunFastboot(session => session.GetVariable("serialno", useCache: false));
+        var reported = manager.RunFastboot(serial,
+            session => session.GetVariable("serialno", useCache: false));
 
         Assert.Equal(serial, reported);
     }

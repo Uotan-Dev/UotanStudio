@@ -24,6 +24,22 @@ public sealed partial class FastbootSession : IProtocolSession
     private readonly Dictionary<string, bool> _hasSlotCache = new(StringComparer.Ordinal);
     private HashSet<string>? _logicalPartitionsFromMetadata;
     private long? _maxDownloadSize;
+
+    /// <summary>
+    /// Payload bytes received after a terminal frame of the previous response and not yet
+    /// consumed. Fastboot replies are packet-framed on the wire, so keeping the remainder
+    /// resynchronizes the stream instead of attributing stale bytes to the next command.
+    /// <para>上一次响应的终止帧之后收到且尚未消费的负载字节。fastboot 应答在线上是按包成帧的，
+    /// 保留余量可以让流重新同步，而不是把过期字节算到下一条命令头上。</para>
+    /// </summary>
+    private readonly List<byte> _pendingBytes = [];
+
+    /// <summary>Upper bound on bytes accumulated for one command's TEXT payload; a device flooding
+    /// TEXT frames beyond this fails the command instead of growing the buffer unboundedly.
+    /// <para>单条命令 TEXT 负载的累计字节上限；设备发送超过此上限的 TEXT 帧时命令失败，
+    /// 而不是无界增长缓冲。</para></summary>
+    private const int MaxTextBytes = 4 * 1024 * 1024;
+
     private bool _disposed;
 
     /// <summary>
