@@ -1,18 +1,16 @@
 using System.Text.Json.Nodes;
-using UotanStudio.Firmware.BoundedContexts.Archive;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.Archive;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.DeviceTree.Dt;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.FileSystem.Ext4;
+using UotanStudio.Firmware.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.FileSystem.F2fs;
+using UotanStudio.Firmware.VendorFirmware.Rockchip;
 using UotanStudio.Services.Firmware;
 using Xunit;
 
@@ -30,6 +28,7 @@ public sealed class RepackMetadataTests : IDisposable
 
     public RepackMetadataTests()
     {
+        FirmwareFormatRegistry.RegisterAll();
         Directory.CreateDirectory(Source);
         File.WriteAllText(Path.Combine(Source, "hello.txt"), "firmware metadata test");
     }
@@ -116,12 +115,12 @@ public sealed class RepackMetadataTests : IDisposable
             input.Position = 0;
             if (System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(magic) == 0xED26FF3A)
             {
-                using var sparse = UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO.SparseReader.FromStream(input);
-                using var logical = new UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO.SparseReadStream(sparse);
-                using var sparseParser = new UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser.Ext4Parser(logical);
+                using var sparse = UotanStudio.Firmware.BlockImage.Sparse.IO.SparseReader.FromStream(input);
+                using var logical = new UotanStudio.Firmware.BlockImage.Sparse.IO.SparseReadStream(sparse);
+                using var sparseParser = new UotanStudio.Firmware.FileSystem.Ext4.Ext4Parser(logical);
                 return sparseParser.ListEntriesWithRoot().Select(entry => entry.Path).ToArray();
             }
-            using var parser = new UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser.Ext4Parser(input);
+            using var parser = new UotanStudio.Firmware.FileSystem.Ext4.Ext4Parser(input);
             return parser.ListEntriesWithRoot().Select(entry => entry.Path).ToArray();
         }
         if (format == "EROFS")
@@ -129,7 +128,7 @@ public sealed class RepackMetadataTests : IDisposable
             using var parser = new ErofsParser(path);
             return parser.EnumerateEntries().Select(entry => entry.Path).ToArray();
         }
-        using var f2fs = new UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser.F2fsParser(path);
+        using var f2fs = new UotanStudio.Firmware.FileSystem.F2fs.F2fsParser(path);
         return f2fs.ListEntriesWithRoot().Select(entry => entry.Path).ToArray();
     }
 
@@ -164,8 +163,8 @@ public sealed class RepackMetadataTests : IDisposable
         var original = RepackMetadata.Read(Extracted)!.Configuration;
         var sparsePath = Path.Combine(_root, "sparse.img");
         var sparseOutput = Path.Combine(_root, "sparse-output");
-        UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion.SparseImageConverter.ConvertRawToSparse(Image, sparsePath);
-        var result = await new UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.SparseFormatHandler()
+        UotanStudio.Firmware.BlockImage.Sparse.SparseImageConverter.ConvertRawToSparse(Image, sparsePath);
+        var result = await new UotanStudio.Firmware.BlockImage.Sparse.SparseFormatHandler()
             .UnpackAsync(sparsePath, sparseOutput, cancellationToken: Cancellation);
         Assert.True(result.Success, result.Summary);
         var wrapped = RepackMetadata.Read(sparseOutput)!;

@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
+using UotanStudio.Firmware.OtaDelta.Payload;
 
 namespace UotanStudio.Services.Flash;
 

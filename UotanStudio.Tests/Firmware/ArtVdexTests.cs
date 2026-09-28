@@ -2,9 +2,9 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Art;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Instructions;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Smali;
+using UotanStudio.Firmware.AndroidMeta.Art;
+using UotanStudio.Firmware.AndroidMeta.Dex;
+using UotanStudio.Firmware.AndroidMeta.Dex.Smali;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

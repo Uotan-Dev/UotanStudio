@@ -1,6 +1,6 @@
 using System.IO.Compression;
-using UotanStudio.Firmware.BoundedContexts.Compression;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Files;
+using UotanStudio.Firmware.Compression;
+using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

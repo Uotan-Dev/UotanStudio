@@ -1,7 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -36,7 +35,7 @@ public class ErofsRebuildPreservationTests
         Assert.True(captured.SourceInodes is { Count: > 0 });
         Assert.All(captured.SourceInodes!.Values, inode => Assert.False(string.IsNullOrEmpty(inode.Path)));
 
-        var document = new UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.ErofsRebuildParameters();
+        var document = new UotanStudio.Firmware.FileSystem.Metadata.ErofsRebuildParameters();
         SetInodes(document, captured);
         var restored = Restore(document);
 
@@ -59,8 +58,8 @@ public class ErofsRebuildPreservationTests
     [Fact]
     public void Restore_LegacyDocumentWithoutPaths_FallsBackToNidTable()
     {
-        var document = new UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.ErofsRebuildParameters();
-        document.Inodes.Add(new UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.ErofsRebuildInode
+        var document = new UotanStudio.Firmware.FileSystem.Metadata.ErofsRebuildParameters();
+        document.Inodes.Add(new UotanStudio.Firmware.FileSystem.Metadata.ErofsRebuildInode
         {
             Nid = 7,
             Compressed = true,
@@ -96,8 +95,8 @@ public class ErofsRebuildPreservationTests
         {
             var options = parser.ReadRebuildOptions();
             var repacked = new ErofsBuilder().Build(extracted, options);
-            var superblock = UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models.ErofsSuperblock.FromImage(repacked);
-            Assert.Equal(UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models.ErofsSuperblock.IncompatLz4_0Padding,
+            var superblock = UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsSuperblock.FromImage(repacked);
+            Assert.Equal(UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsSuperblock.IncompatLz4_0Padding,
                 superblock.FeatureIncompat);
 
             using var verify = new ErofsParser(repacked);
@@ -106,11 +105,11 @@ public class ErofsRebuildPreservationTests
         }
     }
 
-    private static void SetInodes(UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.ErofsRebuildParameters document, ErofsOptions captured)
+    private static void SetInodes(UotanStudio.Firmware.FileSystem.Metadata.ErofsRebuildParameters document, ErofsOptions captured)
     {
         foreach (var inode in captured.SourceInodes!.OrderBy(pair => pair.Key))
         {
-            document.Inodes.Add(new UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.ErofsRebuildInode
+            document.Inodes.Add(new UotanStudio.Firmware.FileSystem.Metadata.ErofsRebuildInode
             {
                 Nid = inode.Key,
                 Path = inode.Value.Path,
@@ -126,9 +125,9 @@ public class ErofsRebuildPreservationTests
         }
     }
 
-    private static ErofsOptions Restore(UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.ErofsRebuildParameters document)
+    private static ErofsOptions Restore(UotanStudio.Firmware.FileSystem.Metadata.ErofsRebuildParameters document)
     {
-        var method = typeof(UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.ErofsRebuildMetadata)
+        var method = typeof(UotanStudio.Firmware.FileSystem.Erofs.ErofsRebuildMetadata)
             .GetMethod("Restore", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
         Assert.NotNull(method);
         return (ErofsOptions)method!.Invoke(null, [document])!;

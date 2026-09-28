@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
+using UotanStudio.Firmware.VendorFirmware.MediaTek;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
 namespace UotanStudio.Firmware.Application.Formats;
 
 /// <summary>
@@ -33,48 +33,48 @@ public static class FirmwareFormatRegistry
                 return;
             }
 
-            Register(new BoundedContexts.Archive.CpioFormatHandler());
-            Register(new BoundedContexts.Compression.CompressFormatHandler());
+            Register(new Archive.CpioFormatHandler());
+            Register(new Compression.CompressFormatHandler());
 
-            Register(new BoundedContexts.OtaDelta.Payload.PayloadFormatHandler());
-            Register(new BoundedContexts.OtaDelta.Dat.DatFormatHandler());
-            Register(new BoundedContexts.OtaDelta.Diff.DiffFormatHandler());
+            Register(new OtaDelta.Payload.PayloadFormatHandler());
+            Register(new OtaDelta.Dat.DatFormatHandler());
+            Register(new OtaDelta.Diff.DiffFormatHandler());
 
-            Register(new BoundedContexts.BlockImage.Lp.LpFormatHandler());
+            Register(new BlockImage.Lp.LpFormatHandler());
 
-            Register(new BoundedContexts.BlockImage.Sparse.SparseFormatHandler());
-            Register(new BoundedContexts.BlockImage.Gpt.GptFormatHandler());
-            Register(new BoundedContexts.FileSystem.Ext4.Ext4FormatHandler());
-            Register(new BoundedContexts.FileSystem.Erofs.ErofsFormatHandler());
-            Register(new BoundedContexts.FileSystem.F2fs.F2fsFormatHandler());
-            Register(new BoundedContexts.FileSystem.Romfs.RomfsFormatHandler());
-            Register(new BoundedContexts.FileSystem.Squashfs.SquashfsFormatHandler());
+            Register(new BlockImage.Sparse.SparseFormatHandler());
+            Register(new BlockImage.Gpt.GptFormatHandler());
+            Register(new FileSystem.Ext4.Ext4FormatHandler());
+            Register(new FileSystem.Erofs.ErofsFormatHandler());
+            Register(new FileSystem.F2fs.F2fsFormatHandler());
+            Register(new FileSystem.Romfs.RomfsFormatHandler());
+            Register(new FileSystem.Squashfs.SquashfsFormatHandler());
 
-            Register(new BoundedContexts.BootSecurity.Avb.AvbFormatHandler());
-            Register(new BoundedContexts.BootSecurity.BootImage.BootImageFormatHandler());
+            Register(new BootSecurity.Avb.AvbFormatHandler());
+            Register(new BootSecurity.BootImage.BootImageFormatHandler());
 
-            Register(new BoundedContexts.AndroidMeta.Dex.DexFormatHandler());
-            Register(new BoundedContexts.AndroidMeta.AXml.AXmlFormatHandler());
-            Register(new BoundedContexts.AndroidMeta.Arsc.ArscFormatHandler());
-            Register(new BoundedContexts.AndroidMeta.Apk.ApkFormatHandler());
+            Register(new AndroidMeta.Dex.DexFormatHandler());
+            Register(new AndroidMeta.AXml.AXmlFormatHandler());
+            Register(new AndroidMeta.Arsc.ArscFormatHandler());
+            Register(new AndroidMeta.Apk.ApkFormatHandler());
 
-            Register(new BoundedContexts.DeviceTree.Dt.DtFormatHandler());
+            Register(new DeviceTree.Dt.DtFormatHandler());
 
-            Register(new BoundedContexts.VendorFirmware.NTPi.NtpiFormatHandler());
-            Register(new BoundedContexts.VendorFirmware.Nb0.Nb0FormatHandler());
-            Register(new BoundedContexts.VendorFirmware.Oppo.OppoFormatHandler());
-            Register(new BoundedContexts.VendorFirmware.OnePlusOps.OnePlusOpsFormatHandler());
-            Register(new BoundedContexts.VendorFirmware.Pac.PacFormatHandler());
-            Register(new BoundedContexts.VendorFirmware.Dz.DzFormatHandler());
-            Register(new BoundedContexts.VendorFirmware.UpdateApp.UpdateAppFormatHandler());
-            Register(new BoundedContexts.VendorFirmware.Rockchip.RockchipFormatHandler());
-            Register(new BoundedContexts.VendorFirmware.Amlogic.AmlogicFormatHandler());
-            Register(new BoundedContexts.VendorFirmware.SonySin.SonySinFormatHandler());
-            Register(new BoundedContexts.VendorFirmware.Meizu.Mpk.MpkFormatHandler());
-            Register(new BoundedContexts.VendorFirmware.Lenovo.Qsb.QsbFormatHandler());
-            Register(new BoundedContexts.VendorFirmware.Allwinner.ImageWty.AllwinnerImageWtyFormatHandler());
-            Register(new BoundedContexts.VendorFirmware.MediaTek.MtkFormatHandler());
-            Register(new BoundedContexts.VendorFirmware.Oppo.Splash.OppoSplashFormatHandler());
+            Register(new VendorFirmware.NTPi.NtpiFormatHandler());
+            Register(new VendorFirmware.Nb0.Nb0FormatHandler());
+            Register(new VendorFirmware.Oppo.OppoFormatHandler());
+            Register(new VendorFirmware.OnePlusOps.OnePlusOpsFormatHandler());
+            Register(new VendorFirmware.Pac.PacFormatHandler());
+            Register(new VendorFirmware.Dz.DzFormatHandler());
+            Register(new VendorFirmware.UpdateApp.UpdateAppFormatHandler());
+            Register(new VendorFirmware.Rockchip.RockchipFormatHandler());
+            Register(new VendorFirmware.Amlogic.AmlogicFormatHandler());
+            Register(new VendorFirmware.SonySin.SonySinFormatHandler());
+            Register(new VendorFirmware.Meizu.Mpk.MpkFormatHandler());
+            Register(new VendorFirmware.Lenovo.Qsb.QsbFormatHandler());
+            Register(new VendorFirmware.Allwinner.ImageWty.AllwinnerImageWtyFormatHandler());
+            Register(new VendorFirmware.MediaTek.MtkFormatHandler());
+            Register(new VendorFirmware.Oppo.OppoSplashFormatHandler());
 
             IsRegistered = true;
         }

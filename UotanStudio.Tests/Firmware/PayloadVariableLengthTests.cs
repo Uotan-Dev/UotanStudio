@@ -1,10 +1,8 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Extraction;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
+using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Firmware.OtaDelta.Payload.Builder;
+using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

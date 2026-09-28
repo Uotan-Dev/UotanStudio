@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Extraction;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
+using UotanStudio.Firmware.VendorFirmware.Oppo;
+using UotanStudio.Firmware.VendorFirmware.Oppo.Models;
 
 namespace UotanStudio.Services.Flash;
 

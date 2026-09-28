@@ -1,11 +1,10 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.FileSystem.Ext4;
+using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

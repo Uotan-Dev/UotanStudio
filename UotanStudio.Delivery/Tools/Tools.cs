@@ -1,8 +1,8 @@
 using System.IO.Compression;
 using System.Net.Http;
 using System.Security.Cryptography;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Infrastructure.Downloads;
-using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -153,9 +153,9 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
 
     /// <summary>
     /// <para>取得（必要时下载并校验 SHA-256）指定工具包在缓存中的路径。源的选择与测速由
-    /// Firmware.SharedKernel 的 <c>HttpDownload</c> 负责，从快到慢依次尝试，SHA-256 校验兜底。</para>
+    /// Firmware.Core 的 <c>HttpDownload</c> 负责，从快到慢依次尝试，SHA-256 校验兜底。</para>
     /// Returns the cached path for a tool package, downloading and verifying its SHA-256 when needed. Source selection
-    /// and speed probing are handled by <c>HttpDownload</c> in Firmware.SharedKernel; sources are tried fastest-first
+    /// and speed probing are handled by <c>HttpDownload</c> in Firmware.Core; sources are tried fastest-first
     /// with a SHA-256 check as the final guard.
     /// </summary>
     internal async Task<string> AcquireAsync(DeliveryToolPackage package, IProgress<DeliveryProgress>? progress, CancellationToken token)

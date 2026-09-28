@@ -1,16 +1,14 @@
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Streams;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.BlockImage.Sparse.Models;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

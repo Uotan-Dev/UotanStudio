@@ -1,24 +1,31 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.Archive;
-using UotanStudio.Firmware.BoundedContexts.Archive.Editing;
-using UotanStudio.Firmware.BoundedContexts.Archive.Models;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Formats;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Archive;
+using UotanStudio.Firmware.Archive.Editing;
+using UotanStudio.Firmware.Archive.Models;
+using UotanStudio.Firmware.BootSecurity.BootImage;
+using UotanStudio.Firmware.BootSecurity.BootImage.Formats;
+using UotanStudio.Firmware.BootSecurity.BootImage.Models;
+using UotanStudio.Firmware.Core;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
 public sealed class BootImageSpecialFormatTests
 {
-    [Theory]
-    [InlineData("LOGO!!!!", ChromeOsTool.BootResourceType.Logo)]
-    [InlineData("SPLASH!!", ChromeOsTool.BootResourceType.Splash)]
-    [InlineData("RSCE", ChromeOsTool.BootResourceType.RockchipResource)]
-    public void StartupResourceMagic_IsClassifiedWithoutClaimingPayloadParsing(
-        string magic, ChromeOsTool.BootResourceType expected)
+    [Fact]
+    public void StartupResourceMagic_Logo_IsClassifiedWithoutClaimingPayloadParsing()
+        => AssertStartupResource("LOGO!!!!", ChromeOsTool.BootResourceType.Logo);
+
+    [Fact]
+    public void StartupResourceMagic_Splash_IsClassifiedWithoutClaimingPayloadParsing()
+        => AssertStartupResource("SPLASH!!", ChromeOsTool.BootResourceType.Splash);
+
+    [Fact]
+    public void StartupResourceMagic_RockchipResource_IsClassifiedWithoutClaimingPayloadParsing()
+        => AssertStartupResource("RSCE", ChromeOsTool.BootResourceType.RockchipResource);
+
+    private static void AssertStartupResource(string magic, ChromeOsTool.BootResourceType expected)
     {
         var data = new byte[64];
         Encoding.ASCII.GetBytes(magic).CopyTo(data, 0);

@@ -1,5 +1,5 @@
 using UotanStudio.Firmware.Application.Formats;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

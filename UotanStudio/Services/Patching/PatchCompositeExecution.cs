@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.Patching;
+using UotanStudio.Firmware.Patching;
 using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Services.Patching;

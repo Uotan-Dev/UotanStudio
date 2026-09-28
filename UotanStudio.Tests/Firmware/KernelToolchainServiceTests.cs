@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Kernel;
-using UotanStudio.Firmware.BoundedContexts.Executable.Elf;
+using UotanStudio.Firmware.BootSecurity.Kernel;
+using UotanStudio.Firmware.Executable.Elf;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -36,7 +36,7 @@ public sealed class KernelToolchainServiceTests : IDisposable
 
         var result = await KernelToolchainService.AnalyzeAsync(path, TestContext.Current.CancellationToken);
 
-        Assert.Equal(UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models.CompressionType.Gzip, result.Compression);
+        Assert.Equal(UotanStudio.Firmware.BootSecurity.BootImage.Models.CompressionType.Gzip, result.Compression);
         Assert.Equal("6.1.12-android14-11", result.Release);
         Assert.True(result.DecompressedLength > 0);
     }

@@ -2,8 +2,7 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz.Extraction;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz.Models;
+using UotanStudio.Firmware.VendorFirmware.Dz;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

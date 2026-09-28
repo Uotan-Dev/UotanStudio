@@ -1,10 +1,10 @@
 using System.Buffers.Binary;
 using System.IO.Hashing;
-using UotanStudio.Firmware.BoundedContexts.Compression;
-using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
-using UotanStudio.Firmware.BoundedContexts.Compression.Detection;
-using UotanStudio.Firmware.BoundedContexts.Compression.Files;
-using UotanStudio.Firmware.SharedKernel.Streams;
+using UotanStudio.Firmware.Compression;
+using UotanStudio.Firmware.Compression.Compressors;
+using UotanStudio.Firmware.Compression.Detection;
+using UotanStudio.Firmware.Compression.Files;
+using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

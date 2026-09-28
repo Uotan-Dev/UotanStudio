@@ -1,6 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Build;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Writing;
+using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Models;
 using UotanStudio.Services.Flash;
 using UotanStudio.ViewModels.Editors;

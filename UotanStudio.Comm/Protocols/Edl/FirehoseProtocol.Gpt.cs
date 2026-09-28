@@ -1,5 +1,5 @@
 using UotanStudio.Comm.Protocols.Common;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Gpt;
+using UotanStudio.Firmware.BlockImage.Gpt;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 

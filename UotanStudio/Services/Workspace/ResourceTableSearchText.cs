@@ -1,5 +1,5 @@
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Models;
+using UotanStudio.Firmware.AndroidMeta.Arsc;
 
 namespace UotanStudio.Services.Workspace;
 

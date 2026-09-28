@@ -1,8 +1,7 @@
 using System.IO.Compression;
 using UotanStudio.Comm.Protocols.Fastboot.Images;
 using UotanStudio.Firmware.Application.Containers;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
+using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -34,10 +33,10 @@ public sealed class ContainerStructureTests
         expected.CopyTo(image, checked((int)extent.TargetData * 512));
         File.WriteAllBytes(raw, image);
         var sparse = Path.Combine(temp.Path, "renamed.img");
-        UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion.SparseImageConverter.ConvertRawToSparse(raw, sparse);
+        UotanStudio.Firmware.BlockImage.Sparse.SparseImageConverter.ConvertRawToSparse(raw, sparse);
 
         UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
-        Assert.IsType<LpFormatHandler>(UotanStudio.Firmware.SharedKernel.FormatDetector.Detect(sparse));
+        Assert.IsType<LpFormatHandler>(UotanStudio.Firmware.Core.FormatDetector.Detect(sparse));
         Assert.Equal("super", ImageInputService.DetectFormat(sparse));
         Assert.Equal(ContainerKind.Super, ContainerStructureAnalyzer.Analyze(sparse).Kind);
         var sourceSettings = SourceContainerMetadataService.Capture(sparse, ContainerKind.Super);
@@ -157,7 +156,7 @@ public sealed class ContainerStructureTests
         using var temp = new TempDirectory();
         var source = temp.WriteBytes("boot.img", new byte[4096]);
         var payload = Path.Combine(temp.Path, "payload.bin");
-        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder.PayloadBuilder())
+        using (var builder = new UotanStudio.Firmware.OtaDelta.Payload.Builder.PayloadBuilder())
         {
             await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
         }
@@ -187,7 +186,7 @@ public sealed class ContainerStructureTests
         using var temp = new TempDirectory();
         var source = temp.WriteBytes("boot.img", new byte[4096]);
         var payload = Path.Combine(temp.Path, "payload.bin");
-        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder.PayloadBuilder())
+        using (var builder = new UotanStudio.Firmware.OtaDelta.Payload.Builder.PayloadBuilder())
         {
             await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
         }
@@ -261,7 +260,7 @@ public sealed class ContainerStructureTests
         using var temp = new TempDirectory();
         var source = temp.WriteBytes("boot.img", new byte[4096]);
         var payload = Path.Combine(temp.Path, "payload.bin");
-        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder.PayloadBuilder())
+        using (var builder = new UotanStudio.Firmware.OtaDelta.Payload.Builder.PayloadBuilder())
         {
             await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
         }
@@ -361,7 +360,7 @@ public sealed class ContainerStructureTests
         new Random(11).NextBytes(content);
         var source = temp.WriteBytes("boot.img", content);
         var payload = Path.Combine(temp.Path, "payload.bin");
-        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder.PayloadBuilder())
+        using (var builder = new UotanStudio.Firmware.OtaDelta.Payload.Builder.PayloadBuilder())
         {
             await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
         }
@@ -398,7 +397,7 @@ public sealed class ContainerStructureTests
         using var temp = new TempDirectory();
         var source = temp.WriteBytes("boot.img", new byte[4096]);
         var payload = Path.Combine(temp.Path, "payload.bin");
-        using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder.PayloadBuilder())
+        using (var builder = new UotanStudio.Firmware.OtaDelta.Payload.Builder.PayloadBuilder())
         {
             await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
         }

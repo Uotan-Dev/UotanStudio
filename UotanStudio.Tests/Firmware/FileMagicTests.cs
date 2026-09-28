@@ -1,5 +1,5 @@
 using System.Text;
-using UotanStudio.Firmware.SharedKernel.Magic;
+using UotanStudio.Firmware.Core.Magic;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

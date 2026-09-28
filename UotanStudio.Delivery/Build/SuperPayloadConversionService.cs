@@ -1,9 +1,7 @@
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Firmware.OtaDelta.Payload.Builder;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -28,10 +26,10 @@ public sealed record SuperPayloadConversionOptions
     /// names.
     /// <para>应用于 Payload 安装操作的压缩算法，会与构建器接受的模式名按忽略大小写匹配。</para>
     /// </summary>
-    /// <value><see cref="UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder.CompressionType.None"/>
+    /// <value><see cref="UotanStudio.Firmware.OtaDelta.Payload.Builder.CompressionType.None"/>
     /// by default; only <c>None</c>, <c>BZip2</c> and <c>Xz</c> pass the downstream plan validation.
     /// <para>默认为
-    /// <see cref="UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder.CompressionType.None"/>；
+    /// <see cref="UotanStudio.Firmware.OtaDelta.Payload.Builder.CompressionType.None"/>；
     /// 只有 <c>None</c>、<c>BZip2</c> 和 <c>Xz</c> 能通过下游的计划校验。</para></value>
     /// <returns>Converted to its name string for the delivery plan.
     /// <para>转换为名称字符串后写入交付计划。</para></returns>

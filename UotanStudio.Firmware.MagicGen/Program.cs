@@ -1,6 +1,6 @@
 using System.Text;
+using UotanStudio.Firmware.Core.Magic;
 using UotanStudio.Firmware.MagicGen;
-using UotanStudio.Firmware.SharedKernel.Magic;
 
 if (args.Length > 0 && args[0] == "--smoke")
 {
@@ -22,7 +22,7 @@ if (args.Length > 1 && args[0] == "--files")
 
 string repoRoot = FindRepoRoot() ?? Directory.GetCurrentDirectory();
 string corpusDir = args.Length > 0 ? args[0] : Path.Combine(repoRoot, "UotanStudio.Firmware.MagicGen", "corpus");
-string outputCs = args.Length > 1 ? args[1] : Path.Combine(repoRoot, "UotanStudio.Firmware", "SharedKernel", "Magic", "Generated", "CompiledMagicData.g.cs");
+string outputCs = args.Length > 1 ? args[1] : Path.Combine(repoRoot, "UotanStudio.Firmware", "Core", "Magic", "Generated", "CompiledMagicData.g.cs");
 
 string manifest = Path.Combine(corpusDir, "LOAD_ORDER.txt");
 if (!File.Exists(manifest))
@@ -68,7 +68,7 @@ sb.AppendLine("using System;");
 sb.AppendLine();
 sb.AppendLine("#nullable enable");
 sb.AppendLine();
-sb.AppendLine("namespace UotanStudio.Firmware.SharedKernel.Magic;");
+sb.AppendLine("namespace UotanStudio.Firmware.Core.Magic.Generated;");
 sb.AppendLine();
 sb.AppendLine("/// <summary>生成器产出的编译型规则表。</summary>");
 sb.AppendLine("public static partial class CompiledMagicData");

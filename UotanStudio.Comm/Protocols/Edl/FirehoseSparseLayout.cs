@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.BlockImage.Sparse.Models;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 

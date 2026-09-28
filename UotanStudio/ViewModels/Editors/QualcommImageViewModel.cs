@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.BoundedContexts.Executable.Qualcomm;
+using UotanStudio.Firmware.Executable.Qualcomm;
 using UotanStudio.Services;
 using UotanStudio.Services.Logging;
 

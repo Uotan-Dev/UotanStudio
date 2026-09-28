@@ -1,9 +1,8 @@
 using System.Security.Cryptography;
 using Google.Protobuf;
-using UotanStudio.Firmware.BoundedContexts.Compression;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Operations;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
+using UotanStudio.Firmware.Compression;
+using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

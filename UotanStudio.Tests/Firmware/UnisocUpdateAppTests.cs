@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.UpdateApp;
+using UotanStudio.Firmware.VendorFirmware.UpdateApp;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

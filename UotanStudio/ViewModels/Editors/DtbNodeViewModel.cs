@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
+using UotanStudio.Firmware.DeviceTree.Dt;
 
 namespace UotanStudio.ViewModels.Editors;
 

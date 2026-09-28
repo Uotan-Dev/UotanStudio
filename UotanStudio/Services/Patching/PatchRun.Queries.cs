@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.Patching;
+using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.Patching;
 
 namespace UotanStudio.Services.Patching;
 

@@ -1,11 +1,8 @@
 using System.Buffers.Binary;
 using System.Text.Json.Nodes;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.DeviceTree.Dt;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Firmware;

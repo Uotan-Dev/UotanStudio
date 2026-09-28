@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Transports.Serial;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
+using UotanStudio.Firmware.VendorFirmware.MediaTek;
 
 namespace UotanStudio.Services.Flash;
 

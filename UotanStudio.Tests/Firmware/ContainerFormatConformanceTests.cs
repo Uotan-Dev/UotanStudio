@@ -2,11 +2,11 @@ using System.Buffers.Binary;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.BootSecurity.Avb.Verification;
+using UotanStudio.Firmware.BootSecurity.BootImage;
+using UotanStudio.Firmware.BootSecurity.BootImage.Models;
+using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 

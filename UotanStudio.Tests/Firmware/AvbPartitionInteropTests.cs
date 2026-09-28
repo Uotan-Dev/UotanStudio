@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
+using UotanStudio.Firmware.BootSecurity.Avb;
+using UotanStudio.Firmware.BootSecurity.Avb.Signing;
+using UotanStudio.Firmware.BootSecurity.Avb.Verification;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 

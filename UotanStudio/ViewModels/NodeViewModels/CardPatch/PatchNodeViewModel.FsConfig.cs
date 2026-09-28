@@ -1,5 +1,5 @@
 using System.Globalization;
-using UotanStudio.Firmware.BoundedContexts.Patching;
+using UotanStudio.Firmware.Patching;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 

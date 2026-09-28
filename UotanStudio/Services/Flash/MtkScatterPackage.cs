@@ -1,8 +1,8 @@
 using System.Globalization;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Mtk.Profile;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.VendorFirmware.MediaTek;
 
 namespace UotanStudio.Services.Flash;
 

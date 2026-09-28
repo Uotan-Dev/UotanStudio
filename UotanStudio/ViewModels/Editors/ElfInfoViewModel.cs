@@ -3,7 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.BoundedContexts.Executable.Elf;
+using UotanStudio.Firmware.Executable.Elf;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Logging;

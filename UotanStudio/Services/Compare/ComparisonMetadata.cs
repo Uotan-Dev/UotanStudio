@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Services.Compare;
 

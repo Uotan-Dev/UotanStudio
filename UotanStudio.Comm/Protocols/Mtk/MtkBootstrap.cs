@@ -1,7 +1,7 @@
 using UotanStudio.Comm.Protocols.Mtk.Upload;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
+using UotanStudio.Firmware.VendorFirmware.MediaTek;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 

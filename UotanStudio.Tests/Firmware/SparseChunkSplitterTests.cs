@@ -1,7 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Split;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

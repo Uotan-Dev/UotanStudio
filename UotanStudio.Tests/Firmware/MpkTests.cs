@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Meizu.Mpk;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.VendorFirmware.Meizu.Mpk;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

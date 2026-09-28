@@ -24,7 +24,7 @@ public sealed class QualcommImageViewModelTests
     public async Task AnalyzeAsync_Sm7150Firehose_ExposesDeclaredMetadataAndAutomaticRouting()
     {
         var path = Environment.GetEnvironmentVariable("UOTAN_ELF_FIREHOSE_SAMPLE")!;
-        var header = UotanStudio.Firmware.SharedKernel.FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
+        var header = UotanStudio.Firmware.Core.FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
 
         Assert.Equal(EditorOpenMode.Qualcomm, FileOpenMode.ResolveMode(path, header));
         var report = await new QualcommWorkspaceAnalyzer().AnalyzeAsync(path, null, TestContext.Current.CancellationToken);

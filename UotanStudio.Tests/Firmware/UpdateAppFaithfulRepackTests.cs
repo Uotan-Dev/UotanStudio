@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.UpdateApp;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.VendorFirmware.UpdateApp;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

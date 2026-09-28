@@ -1,10 +1,10 @@
 using System.IO.Compression;
-using UotanStudio.Firmware.BoundedContexts.Archive;
-using UotanStudio.Firmware.BoundedContexts.Archive.Editing;
-using UotanStudio.Firmware.BoundedContexts.Archive.Models;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
+using UotanStudio.Firmware.Archive;
+using UotanStudio.Firmware.Archive.Editing;
+using UotanStudio.Firmware.Archive.Models;
+using UotanStudio.Firmware.BootSecurity.BootImage;
+using UotanStudio.Firmware.BootSecurity.BootImage.Models;
+using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
 using UotanStudio.Services.Flash;
 using Xunit;
 

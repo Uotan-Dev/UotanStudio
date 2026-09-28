@@ -5,9 +5,7 @@ using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Writing;
+using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Flash;
@@ -254,7 +252,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             try
             {
                 lp = await Task.Run(() =>
-                    new UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.LpFormatHandler().CanHandle(path)
+                    new UotanStudio.Firmware.BlockImage.Lp.LpFormatHandler().CanHandle(path)
                         ? MetadataReader.ReadFromImageFile(path)
                         : null, default).ConfigureAwait(true);
             }

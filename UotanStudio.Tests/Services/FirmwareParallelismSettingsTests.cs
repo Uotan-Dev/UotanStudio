@@ -1,5 +1,5 @@
 using System.Text.Json;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Services;
 using Xunit;
 

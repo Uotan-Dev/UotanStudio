@@ -1,8 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Threading;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Files;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Reader;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
+using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Workspace;

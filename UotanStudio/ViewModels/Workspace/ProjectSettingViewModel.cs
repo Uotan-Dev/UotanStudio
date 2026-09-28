@@ -1,9 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Ext4;
+using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Messages;
 using UotanStudio.Services.Projects;
 
@@ -180,7 +180,7 @@ internal partial class ProjectSettingViewModel : Tool
             throw new InvalidDataException($"Unsupported EXT4 capacity policy '{ext4Policy}'.");
         }
 
-        var blockSharingMode = global::UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Ext4BlockSharingMode.Independent;
+        var blockSharingMode = global::UotanStudio.Firmware.FileSystem.Ext4.Ext4BlockSharingMode.Independent;
         if (dto.Ext4BlockSharingMode is { } blockSharingValue
             && (!Enum.TryParse(blockSharingValue, ignoreCase: true, out blockSharingMode)
                 || !Enum.IsDefined(blockSharingMode)))

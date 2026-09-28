@@ -1,8 +1,7 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Instructions;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Smali;
+using UotanStudio.Firmware.AndroidMeta.Dex;
+using UotanStudio.Firmware.AndroidMeta.Dex.Models;
+using UotanStudio.Firmware.AndroidMeta.Dex.Smali;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -25,7 +24,7 @@ public sealed class DexInstructionEncodingTests
     [InlineData(0xfd, "invoke-custom/range", InstructionFormat.Format3rc)]
     [InlineData(0xfe, "const-method-handle", InstructionFormat.Format21c)]
     [InlineData(0xff, "const-method-type", InstructionFormat.Format21c)]
-    public void Get_StandardOpcode_UsesDexNumberAndFormat(int opcode, string name, InstructionFormat format)
+    internal void Get_StandardOpcode_UsesDexNumberAndFormat(int opcode, string name, InstructionFormat format)
     {
         var info = Assert.IsType<OpCodeInfo>(OpCodes.Get((byte)opcode));
         Assert.Equal(name, info.Mnemonic);

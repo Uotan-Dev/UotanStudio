@@ -1,9 +1,9 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Workspace;

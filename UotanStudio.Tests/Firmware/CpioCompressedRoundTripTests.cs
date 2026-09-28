@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.Archive;
-using UotanStudio.Firmware.BoundedContexts.Archive.Models;
-using UotanStudio.Firmware.BoundedContexts.Archive.Writing;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Archive;
+using UotanStudio.Firmware.Archive.Models;
+using UotanStudio.Firmware.Archive.Writing;
+using UotanStudio.Firmware.Core.Repacking;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

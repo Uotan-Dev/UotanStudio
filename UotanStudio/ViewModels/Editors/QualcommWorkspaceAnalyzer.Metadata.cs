@@ -1,5 +1,5 @@
 using System.Globalization;
-using UotanStudio.Firmware.BoundedContexts.Executable.Qualcomm;
+using UotanStudio.Firmware.Executable.Qualcomm;
 
 namespace UotanStudio.ViewModels.Editors;
 

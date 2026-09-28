@@ -1,5 +1,5 @@
 using UotanStudio.Firmware.Application.Formats;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Services.Firmware;
 
@@ -23,6 +23,6 @@ internal static class RegisteredFirmwareFormats
             return FirmwareOpResult.Fail(error);
         }
         var result = await writer.PackAsync(source, output, progress, cancellationToken).ConfigureAwait(false);
-        return new FirmwareOpResult { Success = result.Success, Summary = result.Summary };
+        return FirmwareOpResult.From(result);
     }
 }

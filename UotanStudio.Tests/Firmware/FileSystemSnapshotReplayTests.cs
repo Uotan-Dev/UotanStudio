@@ -3,22 +3,19 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Models;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.FileSystem.Ext4;
+using UotanStudio.Firmware.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.FileSystem.Ext4.Models;
+using UotanStudio.Firmware.FileSystem.F2fs;
+using UotanStudio.Firmware.FileSystem.F2fs.Models;
+using UotanStudio.Firmware.FileSystem.Metadata;
+using UotanStudio.Firmware.FileSystem.Rebuilding;
 using UotanStudio.Services.Firmware;
 using Xunit;
 
@@ -345,10 +342,10 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
     public void ErofsPrefixes_LengthPrefixedAlignedRecords_DecodeWithoutNullTerminators()
     {
         byte[] table = [4, 0, 1, (byte)'a', (byte)'b', (byte)'.', 0, 0, 3, 0, 6, (byte)'c', (byte)'.'];
-        var prefixes = UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models.ErofsXattr.ParsePrefixTable(table, 2);
+        var prefixes = UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattr.ParsePrefixTable(table, 2);
         Assert.Equal([(1, "ab."), (6, "c.")], prefixes.Select(prefix => ((int)prefix.BaseIndex, prefix.Infix)));
         Assert.Throws<InvalidDataException>(() =>
-            UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models.ErofsXattr.ParsePrefixTable(table[..^1], 2));
+            UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattr.ParsePrefixTable(table[..^1], 2));
     }
 
     [Fact]

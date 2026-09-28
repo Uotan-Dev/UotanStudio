@@ -5,8 +5,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
+using UotanStudio.Firmware.AndroidMeta.Apk;
+using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 
 namespace UotanStudio.Services.Keys;
 

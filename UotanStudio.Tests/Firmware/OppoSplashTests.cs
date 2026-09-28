@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Splash;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.VendorFirmware.Oppo;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
+using UotanStudio.Firmware.VendorFirmware.MediaTek;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

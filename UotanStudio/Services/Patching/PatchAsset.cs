@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.Patching;
+using UotanStudio.Firmware.Patching;
 using UotanStudio.Services.Projects;
 
 namespace UotanStudio.Services.Patching;

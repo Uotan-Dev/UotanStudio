@@ -1,5 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Models;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Serialization;
+using UotanStudio.Firmware.OtaDelta.Dat;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

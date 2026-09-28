@@ -1,18 +1,17 @@
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.FileSystem.Ext4;
+using UotanStudio.Firmware.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.FileSystem.Metadata;
 using Xunit;
-using F2fsFormatHandler = UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.F2fsFormatHandler;
+using F2fsFormatHandler = UotanStudio.Firmware.FileSystem.F2fs.F2fsFormatHandler;
 
 namespace UotanStudio.Tests.Firmware;
 
@@ -142,6 +141,7 @@ public sealed class MetadataJsonTests : IDisposable
     [Fact]
     public async Task SparseRebuild_PreservesInnerFormatAndSparseBlockSize()
     {
+        FirmwareFormatRegistry.RegisterAll();
         var source = Path.Combine(_root, "source");
         Directory.CreateDirectory(source);
         File.WriteAllText(Path.Combine(source, "data"), "json-sparse-content");
@@ -206,8 +206,8 @@ public sealed class MetadataJsonTests : IDisposable
                 break;
             default:
                 new F2fsFormatHandler();
-                UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder.F2fsBuilder.Build(source, image,
-                    new UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.F2fsOptions { FsConfigPath = cfg, FileContextsPath = ctx });
+                UotanStudio.Firmware.FileSystem.F2fs.F2fsBuilder.Build(source, image,
+                    new UotanStudio.Firmware.FileSystem.F2fs.F2fsOptions { FsConfigPath = cfg, FileContextsPath = ctx });
                 handler = new F2fsFormatHandler();
                 break;
         }
@@ -222,7 +222,7 @@ public sealed class MetadataJsonTests : IDisposable
         {
             case "EXT4": using (var parser = new Ext4Parser(image)) parser.ReadFile(path, output); break;
             case "EROFS": using (var parser = new ErofsParser(image)) parser.ReadFile(path, output); break;
-            default: using (var parser = new UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser.F2fsParser(image)) parser.ReadFile(path, output); break;
+            default: using (var parser = new UotanStudio.Firmware.FileSystem.F2fs.F2fsParser(image)) parser.ReadFile(path, output); break;
         }
         output.Position = 0;
         return new StreamReader(output).ReadToEnd();

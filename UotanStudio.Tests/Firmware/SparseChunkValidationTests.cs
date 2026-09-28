@@ -1,7 +1,7 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.BlockImage.Sparse.Models;
 using Xunit;
-using ChunkType = UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models.ChunkType;
+using ChunkType = UotanStudio.Firmware.BlockImage.Sparse.Models.ChunkType;
 
 namespace UotanStudio.Tests.Firmware;
 

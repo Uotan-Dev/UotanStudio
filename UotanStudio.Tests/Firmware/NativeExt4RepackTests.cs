@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Native;
+using UotanStudio.Firmware.FileSystem.Native;
 using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;

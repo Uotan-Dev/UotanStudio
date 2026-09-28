@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Allwinner.ImageWty;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.VendorFirmware.Allwinner.ImageWty;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

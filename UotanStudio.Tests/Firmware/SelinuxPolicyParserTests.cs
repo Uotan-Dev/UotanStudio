@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Selinux;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Selinux.Models;
+using UotanStudio.Firmware.BootSecurity.Selinux;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 

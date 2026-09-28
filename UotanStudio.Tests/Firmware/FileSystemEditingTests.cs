@@ -1,19 +1,16 @@
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.FileSystem.Ext4;
+using UotanStudio.Firmware.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.FileSystem.F2fs;
+using UotanStudio.Firmware.FileSystem.Rebuilding;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -126,6 +123,7 @@ public sealed class FileSystemEditingTests : IDisposable
     [InlineData("F2FS", true)]
     public async Task EditsInheritSourceAttributesAndReachImage(string format, bool sparse)
     {
+        FirmwareFormatRegistry.RegisterAll();
         using var scope = RepackMetadata.UseContext(RepackMetadataContext.LocalDirectory);
         var source = Path.Combine(root, "source");
         Directory.CreateDirectory(Path.Combine(source, "bin"));

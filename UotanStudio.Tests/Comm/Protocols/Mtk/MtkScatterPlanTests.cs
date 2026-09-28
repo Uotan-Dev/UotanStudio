@@ -1,6 +1,6 @@
 using System.Text;
 using UotanStudio.Comm.Protocols.Mtk;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
+using UotanStudio.Firmware.VendorFirmware.MediaTek;
 using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.Tests.Firmware;
 using Xunit;

@@ -1,12 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
-using UotanStudio.Firmware.BoundedContexts.Patching;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.FileSystem.Ext4;
+using UotanStudio.Firmware.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.FileSystem.Rebuilding;
+using UotanStudio.Firmware.Patching;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -169,11 +169,11 @@ public sealed class ImageConfigurationEditorTests : IDisposable
         var source = Path.Combine(_root, "source.img");
         new ErofsBuilder().Build(tree, source, new ErofsOptions
         {
-            FsConfig = new Dictionary<string, UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata.FsConfigEntry>
+            FsConfig = new Dictionary<string, UotanStudio.Firmware.FileSystem.Metadata.FsConfigEntry>
             {
                 ["build.prop"] = new(0, 0, 0x1FF)
             },
-            FileXattrs = new Dictionary<string, IReadOnlyList<UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models.ErofsXattrEntry>>
+            FileXattrs = new Dictionary<string, IReadOnlyList<UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattrEntry>>
             {
                 [""] = [new() { Name = "system.posix_acl_default", Value = acl }],
                 ["build.prop"] = [new() { Name = "system.posix_acl_access", Value = acl }, new() { Name = "user.note", Value = [1, 2, 3] }]
@@ -210,9 +210,9 @@ public sealed class ImageConfigurationEditorTests : IDisposable
         {
             new ErofsBuilder().Build(tree, output, new ErofsOptions
             {
-                FileXattrs = new Dictionary<string, IReadOnlyList<UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models.ErofsXattrEntry>>
+                FileXattrs = new Dictionary<string, IReadOnlyList<UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattrEntry>>
                 {
-                    ["build.prop"] = [.. attributes.Select(pair => new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models.ErofsXattrEntry { Name = pair.Key, Value = pair.Value })]
+                    ["build.prop"] = [.. attributes.Select(pair => new UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattrEntry { Name = pair.Key, Value = pair.Value })]
                 }
             });
         }

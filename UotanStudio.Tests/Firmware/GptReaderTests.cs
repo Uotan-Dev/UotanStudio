@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Hashing;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Gpt;
+using UotanStudio.Firmware.BlockImage.Gpt;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

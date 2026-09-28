@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Workflow;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.VendorFirmware.Workflow;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

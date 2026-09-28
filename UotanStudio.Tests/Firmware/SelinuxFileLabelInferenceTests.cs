@@ -1,7 +1,7 @@
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.FileSystem.Metadata;
+using UotanStudio.Firmware.FileSystem.Rebuilding;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

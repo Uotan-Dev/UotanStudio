@@ -1,6 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Extraction;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Parsing;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi;
+using UotanStudio.Firmware.VendorFirmware.Nb0;
+using UotanStudio.Firmware.VendorFirmware.NTPi;
 
 namespace UotanStudio.Services.Flash;
 

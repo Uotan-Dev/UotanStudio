@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using Google.Protobuf;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Extraction;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

@@ -1,8 +1,7 @@
 using System.IO.Compression;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Containers;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Models;
+using UotanStudio.Firmware.AndroidMeta.Dex;
+using UotanStudio.Firmware.AndroidMeta.Dex.Models;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Keys;
 using UotanStudio.Views.Controls;
@@ -195,7 +194,7 @@ public class JarDexContainerTests : IDisposable
         var key = library.Generate("sign test", ManagedKeyKind.Jar, 2048);
 
         var output = Path.Combine(_root, "signed.jar");
-        var result = await DexService.Instance.SignJarAsync(jar, output, library.PrivatePath(key), library.EnsureCertificate(key), new UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningOptions
+        var result = await DexService.Instance.SignJarAsync(jar, output, library.PrivatePath(key), library.EnsureCertificate(key), new UotanStudio.Firmware.AndroidMeta.Apk.Signing.ApkSigningOptions
         {
             EnableV1 = true,
             EnableV2 = false,

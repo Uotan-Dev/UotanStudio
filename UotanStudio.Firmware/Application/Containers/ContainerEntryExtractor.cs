@@ -1,6 +1,6 @@
 using System.IO.Compression;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Firmware.Application.Containers;
 
@@ -174,7 +174,7 @@ public static class ContainerEntryExtractor
         IProgress<double>? progress, IProgress<(long Processed, long Total)>? byteProgress = null)
     {
         var outputDir = outputDirectory;
-        await UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser.PayloadParser.ExtractAsync(
+        await UotanStudio.Firmware.OtaDelta.Payload.PayloadParser.ExtractAsync(
             containerPath, [.. partitionNames], outputDir, cancellationToken, byteProgress: new CallbackProgress<(long Processed, long Total)>(sample =>
             {
                 progress?.Report(sample.Total > 0 ? sample.Processed * 100.0 / sample.Total : 0);
@@ -309,11 +309,6 @@ public static class ContainerEntryExtractor
                 lastReport = Environment.TickCount64;
             }
         }
-    }
-
-    private sealed class CallbackProgress<T>(Action<T> report) : IProgress<T>
-    {
-        public void Report(T value) => report(value);
     }
 
     /// <summary>Replaces invalid filename characters in an internal entry name.</summary>

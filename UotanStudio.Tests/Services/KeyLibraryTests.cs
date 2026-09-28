@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using UotanStudio.Comm.Protocols.Hdc;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
+using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Services.Keys;
 using Xunit;
 

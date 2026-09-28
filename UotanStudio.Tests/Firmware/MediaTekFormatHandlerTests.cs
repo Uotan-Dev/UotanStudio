@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.VendorFirmware.MediaTek;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.Patching;
+using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.Patching;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

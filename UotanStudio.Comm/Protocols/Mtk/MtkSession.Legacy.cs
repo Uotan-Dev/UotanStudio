@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Protocols.Mtk.Profile;
 using UotanStudio.Comm.Protocols.Mtk.Storage;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
+using UotanStudio.Firmware.VendorFirmware.MediaTek;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 

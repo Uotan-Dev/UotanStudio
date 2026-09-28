@@ -1,17 +1,15 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Extraction;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.FileSystem.Ext4;
+using UotanStudio.Firmware.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.FileSystem.Extraction;
+using UotanStudio.Firmware.FileSystem.F2fs;
+using UotanStudio.Firmware.FileSystem.Rebuilding;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -96,6 +94,7 @@ public sealed class FileSystemPreservationTests : IDisposable
     [Fact]
     public async Task TryRestore_F2fsSparseWithinPartitionCapacity_PublishesValidatedOutput()
     {
+        FirmwareFormatRegistry.RegisterAll();
         var (_, _, extracted) = await ExtractAsync("F2FS");
         await File.WriteAllTextAsync(Path.Combine(extracted, "data"), "patched-content", Token);
         using var overrides = RepackMetadata.UsePackingOverrides(new Dictionary<string, string>
@@ -176,7 +175,7 @@ public sealed class FileSystemPreservationTests : IDisposable
             xattrEdits: [new("/data", "user.patch", [0, 255, 128], true)]));
         using (var image = File.OpenRead(output))
         {
-            Assert.Equal(new byte[] { 0, 255, 128 }, UotanStudio.Firmware.BoundedContexts.Patching.ImageAttributeReader.ReadXattr(
+            Assert.Equal(new byte[] { 0, 255, 128 }, UotanStudio.Firmware.Patching.ImageAttributeReader.ReadXattr(
                 image, format, "/data", "user.patch", Token));
         }
         var secondTree = Path.Combine(_root, "second");
@@ -185,7 +184,7 @@ public sealed class FileSystemPreservationTests : IDisposable
         Assert.True(FileSystemPreservation.TryRestore(secondTree, removed, format, Token,
             xattrEdits: [new("/data", "user.patch", null, true, [0, 255, 128])]));
         using var result = File.OpenRead(removed);
-        Assert.Null(UotanStudio.Firmware.BoundedContexts.Patching.ImageAttributeReader.ReadXattr(result, format, "/data", "user.patch", Token));
+        Assert.Null(UotanStudio.Firmware.Patching.ImageAttributeReader.ReadXattr(result, format, "/data", "user.patch", Token));
         Assert.Equal("original-content", ReadImageFile(format, removed, "data"));
     }
 

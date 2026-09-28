@@ -11,7 +11,16 @@ namespace UotanStudio.Media.Decoding.VideoToolbox;
 /// <para>VideoToolbox 的 H.264/H.265 Annex-B 解码器，强制使用硬件加速并回读 NV12。</para>
 /// <para>macOS 硬件解码后端，接收独立 VPS/SPS/PPS 配置包并在参数变化时重建会话。</para>
 /// </summary>
-/// <remarks>Calls belong to one thread; decoded frames are delivered synchronously from Decode.</remarks>
+/// <remarks>
+/// Calls belong to one thread; decoded frames are delivered synchronously from Decode.
+/// <see cref="VideoDecoderOptions.ColorMatrix"/> and <see cref="VideoDecoderOptions.ColorRange"/>
+/// are ignored by this backend: VideoToolbox always converts to fixed video-range NV12 and exposes
+/// no managed hook to force other colorimetry, so the reported metadata stays truthful.
+/// <para>所有调用属于单一线程；解码帧在 Decode 内同步交付。本后端忽略
+/// <see cref="VideoDecoderOptions.ColorMatrix"/> 与 <see cref="VideoDecoderOptions.ColorRange"/>：
+/// VideoToolbox 总是转换为固定的 video-range NV12，且没有托管侧可强制其他色彩空间的入口，
+/// 因此元数据保持如实报告。</para>
+/// </remarks>
 [SupportedOSPlatform("macos")]
 public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
 {

@@ -2,8 +2,8 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 using K4os.Compression.LZ4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Squashfs;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.FileSystem.Squashfs;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

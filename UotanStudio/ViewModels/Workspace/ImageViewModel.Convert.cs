@@ -1,7 +1,7 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
-using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.Compression.Compressors;
+using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;

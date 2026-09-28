@@ -1,8 +1,6 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
+using UotanStudio.Firmware.FileSystem.F2fs;
+using UotanStudio.Firmware.FileSystem.F2fs.Models;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

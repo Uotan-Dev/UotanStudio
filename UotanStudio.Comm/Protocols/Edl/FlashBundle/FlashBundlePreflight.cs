@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
+using UotanStudio.Firmware.BlockImage.Sparse;
 
 namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 

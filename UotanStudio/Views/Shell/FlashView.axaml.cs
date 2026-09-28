@@ -10,7 +10,7 @@ using Avalonia.Threading;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Transports.Serial;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
+using UotanStudio.Firmware.VendorFirmware.MediaTek;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
@@ -421,7 +421,7 @@ public partial class FlashView : UserControl
                     return;
                 }
                 if (path.EndsWith(".img", StringComparison.OrdinalIgnoreCase) &&
-                    await Task.Run(() => new UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.LpFormatHandler().CanHandle(path)))
+                    await Task.Run(() => new UotanStudio.Firmware.BlockImage.Lp.LpFormatHandler().CanHandle(path)))
                 {
                     var partitions = await FlashSuperService.ListAsync(path, CancellationToken.None);
                     _superPath = path;
@@ -731,7 +731,7 @@ public partial class FlashView : UserControl
         _rootPackagePath = null;
         try
         {
-            var detection = await new UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.BootPatchService()
+            var detection = await new UotanStudio.Firmware.BootSecurity.Patcher.BootPatchService()
                 .DetectAsync(path);
             if (!FlashRootImage.IsSupportedPackage(detection))
             {

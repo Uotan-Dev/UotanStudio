@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.BlockImage.Sparse.Models;
 
 namespace UotanStudio.Services.Flash;
 

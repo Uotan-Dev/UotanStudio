@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using UotanStudio.Firmware.BoundedContexts.Executable.Qualcomm;
+using UotanStudio.Firmware.Executable.Qualcomm;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

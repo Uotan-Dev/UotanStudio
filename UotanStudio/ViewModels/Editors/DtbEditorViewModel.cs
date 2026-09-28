@@ -3,10 +3,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dts;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
+using UotanStudio.Firmware.DeviceTree.Dt;
 using UotanStudio.Messages;
 using UotanStudio.Services.Workspace;
 

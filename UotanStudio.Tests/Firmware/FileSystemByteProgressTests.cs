@@ -1,13 +1,12 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Ext4;
+using UotanStudio.Firmware.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.FileSystem.F2fs;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -28,6 +27,7 @@ public sealed class FileSystemByteProgressTests : IDisposable
     [InlineData("F2FS", true)]
     public async Task ExtractionReportsActualSizesRatherThanImageOrFileCounts(string format, bool sparse)
     {
+        FirmwareFormatRegistry.RegisterAll();
         using var context = RepackMetadata.UseContext(RepackMetadataContext.LocalDirectory);
         var source = Path.Combine(root, "source");
         Directory.CreateDirectory(Path.Combine(source, "empty"));

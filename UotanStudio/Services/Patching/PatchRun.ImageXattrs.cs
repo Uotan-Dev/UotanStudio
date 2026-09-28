@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
-using UotanStudio.Firmware.BoundedContexts.Patching;
+using UotanStudio.Firmware.FileSystem.Rebuilding;
+using UotanStudio.Firmware.Patching;
 
 namespace UotanStudio.Services.Patching;
 

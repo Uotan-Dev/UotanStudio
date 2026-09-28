@@ -1,5 +1,5 @@
 using System.IO.Compression;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
+using UotanStudio.Firmware.BlockImage.Sparse.Models;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 using UotanStudio.Tests.Comm.TestDoubles;

@@ -29,11 +29,11 @@ public sealed class PatchNodeTests : IDisposable
         var image = Path.Combine(_root, "system.img");
         if (format == "EXT4")
         {
-            UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder.Ext4Builder.Build(source, image);
+            UotanStudio.Firmware.FileSystem.Ext4.Builder.Ext4Builder.Build(source, image);
         }
         else
         {
-            new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image);
+            new UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image);
         }
         var read = PatchNodeViewModel.Create("Image.Text.Read");
         Set(read, "Path", image);
@@ -69,11 +69,11 @@ public sealed class PatchNodeTests : IDisposable
         var image = Path.Combine(_root, "system.img");
         if (format == "EXT4")
         {
-            UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder.Ext4Builder.Build(source, image);
+            UotanStudio.Firmware.FileSystem.Ext4.Builder.Ext4Builder.Build(source, image);
         }
         else
         {
-            new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image);
+            new UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image);
         }
         var write = PatchNodeViewModel.Create(batch ? "Image.Edit.Apply" : "Image.Text.Stage");
         Set(write, "Path", image);
@@ -107,8 +107,8 @@ public sealed class PatchNodeTests : IDisposable
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(Path.Combine(source, "build.prop"), "original", token);
         var image = Path.Combine(_root, "system.img");
-        if (format == "EXT4") { UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder.Ext4Builder.Build(source, image); }
-        else { new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image); }
+        if (format == "EXT4") { UotanStudio.Firmware.FileSystem.Ext4.Builder.Ext4Builder.Build(source, image); }
+        else { new UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image); }
         await using var observer = new PatchRun();
         var original = await observer.ReadImageAttributesAsync(image, format, "/build.prop", token);
         var edit = PatchNodeViewModel.Create("Image.File.SetAttributes");
@@ -145,10 +145,10 @@ public sealed class PatchNodeTests : IDisposable
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(Path.Combine(source, "build.prop"), "original", TestContext.Current.CancellationToken);
         var image = Path.Combine(_root, "system.img");
-        new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image,
-            new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.ErofsOptions
+        new UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image,
+            new UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions
             {
-                FileXattrs = new Dictionary<string, IReadOnlyList<UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Models.ErofsXattrEntry>>
+                FileXattrs = new Dictionary<string, IReadOnlyList<UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattrEntry>>
                 {
                     ["build.prop"] = [new() { Name = "user.binary", Value = [0, 255] }, new() { Name = "user.empty", Value = [] }]
                 }
@@ -176,8 +176,8 @@ public sealed class PatchNodeTests : IDisposable
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(Path.Combine(source, "build.prop"), "original", token);
         var image = Path.Combine(_root, "system.img");
-        if (format == "EXT4") { UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder.Ext4Builder.Build(source, image); }
-        else { new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image); }
+        if (format == "EXT4") { UotanStudio.Firmware.FileSystem.Ext4.Builder.Ext4Builder.Build(source, image); }
+        else { new UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image); }
         var edit = PatchNodeViewModel.Create("Image.Xattr.Set");
         var read = PatchNodeViewModel.Create("Image.Xattr.Read");
         foreach (var node in new[] { edit, read })
@@ -214,12 +214,12 @@ public sealed class PatchNodeTests : IDisposable
         Directory.CreateDirectory(source);
         await File.WriteAllTextAsync(Path.Combine(source, "build.prop"), "original", token);
         var image = Path.Combine(_root, "system.img");
-        if (format == "EXT4") { UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder.Ext4Builder.Build(source, image); }
-        else { new UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image); }
+        if (format == "EXT4") { UotanStudio.Firmware.FileSystem.Ext4.Builder.Ext4Builder.Build(source, image); }
+        else { new UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuilder().Build(source, image); }
         await using (var seed = new PatchRun())
         {
             Assert.True(await seed.StageImageXattrAsync(image, format,
-                new UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemXattrEdit("/build.prop", "user.patch", []),
+                new UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemXattrEdit("/build.prop", "user.patch", []),
                 64 * 1024 * 1024, 1024 * 1024, token));
             await seed.CompleteAsync(true, token);
         }

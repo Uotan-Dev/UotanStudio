@@ -1,9 +1,8 @@
 using System.Globalization;
 using UotanStudio.Firmware.Application.Formats;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -275,7 +274,7 @@ public class DatFormatHandlerTests
         var raw = BuildPattern(24 * DatWriter.BlockSize, 4);
         var rawPath = temp.WriteBytes("cache.img", raw);
         var sparsePath = Path.Combine(temp.Path, "cache.simg");
-        UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion.SparseImageConverter
+        UotanStudio.Firmware.BlockImage.Sparse.SparseImageConverter
             .ConvertRawToSparse(rawPath, sparsePath);
 
         var outputDir = Path.Combine(temp.Path, "pair");

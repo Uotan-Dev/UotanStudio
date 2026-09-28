@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Workflow;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Amlogic;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.SonySin;
+using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
+using UotanStudio.Firmware.BootSecurity.Workflow;
+using UotanStudio.Firmware.VendorFirmware.Amlogic;
+using UotanStudio.Firmware.VendorFirmware.SonySin;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -321,7 +321,7 @@ public sealed class VendorFormatBoundaryTests : IDisposable
         Assert.Throws<FileNotFoundException>(() => new SelinuxSwitchService().CreatePlan(path, SelinuxSwitchMode.Permissive));
     }
 
-    private async Task<UotanStudio.Firmware.SharedKernel.FirmwareOpResult> ReadSonyMetadataAsync(
+    private async Task<UotanStudio.Firmware.Core.FirmwareOpResult> ReadSonyMetadataAsync(
         string fileName,
         byte[] bytes)
     {

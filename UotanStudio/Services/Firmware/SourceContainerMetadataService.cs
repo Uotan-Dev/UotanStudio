@@ -5,8 +5,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Google.Protobuf;
 using UotanStudio.Firmware.Application.Containers;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Projects;
 
@@ -58,7 +58,7 @@ internal static class SourceContainerMetadataService
         if (kind == ContainerKind.Super)
         {
             var metadata = MetadataReader.ReadFromImageFile(source);
-            var header = UotanStudio.Firmware.SharedKernel.FormatDetector.ReadHeader(source, 4);
+            var header = UotanStudio.Firmware.Core.FormatDetector.ReadHeader(source, 4);
             return new DeliverySourceContainerSettings
             {
                 SourceName = Path.GetFileName(source),

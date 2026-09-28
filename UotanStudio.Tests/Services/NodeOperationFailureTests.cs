@@ -2,10 +2,10 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
-using UotanStudio.Firmware.BoundedContexts.Archive;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Archive;
+using UotanStudio.Firmware.BootSecurity.Avb;
+using UotanStudio.Firmware.BootSecurity.Avb.Signing;
+using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Projects.Interactions;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
@@ -190,7 +190,7 @@ public sealed class NodeOperationFailureTests
             expected[0] = 42;
             await File.WriteAllBytesAsync(source, expected, TestContext.Current.CancellationToken);
             var payload = Path.Combine(directory, "payload.bin");
-            using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder.PayloadBuilder())
+            using (var builder = new UotanStudio.Firmware.OtaDelta.Payload.Builder.PayloadBuilder())
             {
                 await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
             }
@@ -231,7 +231,7 @@ public sealed class NodeOperationFailureTests
             expected[3] = 17;
             await File.WriteAllBytesAsync(source, expected, TestContext.Current.CancellationToken);
             var payload = Path.Combine(directory, "payload.bin");
-            using (var builder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder.PayloadBuilder())
+            using (var builder = new UotanStudio.Firmware.OtaDelta.Payload.Builder.PayloadBuilder())
             {
                 await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
             }

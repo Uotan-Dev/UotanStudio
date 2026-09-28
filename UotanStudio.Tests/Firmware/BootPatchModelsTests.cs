@@ -1,7 +1,6 @@
 using System.IO.Compression;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.Kernel;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.Models;
+using UotanStudio.Firmware.BootSecurity.Patcher;
+using UotanStudio.Firmware.BootSecurity.Patcher.Kernel;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -214,9 +213,9 @@ public sealed class BootPatchModelsTests
 
             var result = await new BootPatchService().PatchAsync(packagePath, bootPath, outputPath, cancellationToken: TestContext.Current.CancellationToken);
 
-            using var parser = new UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser.BootImageParser();
+            using var parser = new UotanStudio.Firmware.BootSecurity.BootImage.Parser.BootImageParser();
             parser.Parse(File.ReadAllBytes(outputPath));
-            var editor = new UotanStudio.Firmware.BoundedContexts.Archive.Editing.CpioArchiveEditor();
+            var editor = new UotanStudio.Firmware.Archive.Editing.CpioArchiveEditor();
             using var ramdiskStream = new MemoryStream(parser.Ramdisk);
             editor.Load(ramdiskStream);
             Assert.Equal(ksuinit, editor.Find("init")!.Data);
@@ -261,29 +260,29 @@ public sealed class BootPatchModelsTests
 
     private static byte[] BuildCpio(params (string Name, byte[] Data)[] entries)
     {
-        var archive = new UotanStudio.Firmware.BoundedContexts.Archive.CpioArchive();
+        var archive = new UotanStudio.Firmware.Archive.CpioArchive();
         using var stream = new MemoryStream();
-        archive.SaveAll(stream, [.. entries.Select(e => new UotanStudio.Firmware.BoundedContexts.Archive.Models.ArchiveEntry
+        archive.SaveAll(stream, [.. entries.Select(e => new UotanStudio.Firmware.Archive.Models.ArchiveEntry
         {
             Name = e.Name,
             Data = e.Data,
-            Metadata = new UotanStudio.Firmware.BoundedContexts.Archive.Models.ArchiveEntryMetadata
+            Metadata = new UotanStudio.Firmware.Archive.Models.ArchiveEntryMetadata
             {
-                FileType = UotanStudio.Firmware.BoundedContexts.Archive.Models.CpioFileType.Regular,
+                FileType = UotanStudio.Firmware.Archive.Models.CpioFileType.Regular,
                 UnixPermissions = 0x81ED,
                 LinkCount = 1
             }
-        })], UotanStudio.Firmware.BoundedContexts.Archive.Models.ArchiveFormat.NewAscii);
+        })], UotanStudio.Firmware.Archive.Models.ArchiveFormat.NewAscii);
         return stream.ToArray();
     }
 
     private static byte[] PackBootImage(byte[] kernel, byte[] ramdisk)
     {
-        var packer = new UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer.BootImagePacker
+        var packer = new UotanStudio.Firmware.BootSecurity.BootImage.BootImagePacker
         {
-            Header = new UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models.BootImageHeader
+            Header = new UotanStudio.Firmware.BootSecurity.BootImage.Models.BootImageHeader
             {
-                HeaderVersion = UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models.BootImageVersion.V3,
+                HeaderVersion = UotanStudio.Firmware.BootSecurity.BootImage.Models.BootImageVersion.V3,
                 HeaderSize = 1580,
                 OsVersion = 0x01030000,
                 CommandLine = "androidboot.slot_suffix=_a",

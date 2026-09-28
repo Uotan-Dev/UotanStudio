@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 using Google.Protobuf;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
+using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Firmware;
 using UotanStudio.ViewModels.Shell;

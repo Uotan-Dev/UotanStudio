@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Smali;
+using UotanStudio.Firmware.AndroidMeta.Dex;
+using UotanStudio.Firmware.AndroidMeta.Dex.Smali;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

@@ -1,5 +1,5 @@
 using System.IO.Compression;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk;
+using UotanStudio.Firmware.AndroidMeta.Apk;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

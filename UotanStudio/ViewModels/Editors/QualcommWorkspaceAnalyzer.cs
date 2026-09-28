@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using UotanStudio.Firmware.BoundedContexts.Executable.Qualcomm;
+using UotanStudio.Firmware.Executable.Qualcomm;
 
 namespace UotanStudio.ViewModels.Editors;
 

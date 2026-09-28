@@ -1,9 +1,6 @@
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Writing;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

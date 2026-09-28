@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.Compression.Codecs.Lzo;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
+using UotanStudio.Firmware.Compression.Codecs.Lzo;
+using UotanStudio.Firmware.FileSystem.F2fs;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

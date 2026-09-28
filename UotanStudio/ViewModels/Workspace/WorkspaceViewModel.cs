@@ -4,7 +4,7 @@ using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Application.Formats;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Compare;
@@ -198,7 +198,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             byte[]? header = null;
             try
             {
-                header = UotanStudio.Firmware.SharedKernel.FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
+                header = UotanStudio.Firmware.Core.FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
             }
             catch
             {

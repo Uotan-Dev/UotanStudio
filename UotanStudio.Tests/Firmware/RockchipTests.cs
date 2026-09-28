@@ -2,9 +2,8 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Application.Formats;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip.Extraction;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.VendorFirmware.Rockchip;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

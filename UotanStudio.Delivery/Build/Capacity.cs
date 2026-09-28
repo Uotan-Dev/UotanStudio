@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
+using UotanStudio.Firmware.BlockImage.Lp;
 
 namespace UotanStudio.Services.Delivery;
 

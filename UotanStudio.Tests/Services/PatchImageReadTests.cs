@@ -1,7 +1,7 @@
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using UotanStudio.Services.Patching;
 using Xunit;
 
@@ -237,7 +237,7 @@ public sealed class PatchImageReadTests : IDisposable
         var image = await BuildImageAsync(format);
         await using var run = new PatchRun(preview);
         var before = await run.ReadImageAttributesAsync(image, format, "/build.prop", token);
-        var edit = new UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemAttributeEdit(
+        var edit = new UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemAttributeEdit(
             "/build.prop", 1234, 2345, 0x1ED);
         Assert.True(await run.StageImageAttributesAsync(image, format, edit, 64 * 1024 * 1024, 1024 * 1024, token));
         var staged = await run.ReadImageAttributesAsync(image, format, "/build.prop", token);
@@ -264,7 +264,7 @@ public sealed class PatchImageReadTests : IDisposable
         var image = await BuildImageAsync(format);
         await using var run = new PatchRun();
         var before = await run.ReadImageAttributesAsync(image, format, "/build.prop", token);
-        var edit = new UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemAttributeEdit(
+        var edit = new UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemAttributeEdit(
             "/build.prop", 1234, 2345, 0x1ED, ExpectedUid: before.Uid ^ 1);
         await Assert.ThrowsAsync<PatchConflictException>(() => run.StageImageAttributesAsync(image, format, edit,
             64 * 1024 * 1024, 1024 * 1024, token));
@@ -304,7 +304,7 @@ public sealed class PatchImageReadTests : IDisposable
         var token = TestContext.Current.CancellationToken;
         var image = await BuildImageAsync(format);
         await using var run = new PatchRun(preview);
-        var edit = new UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding.FileSystemXattrEdit("/build.prop", "user.patch", []);
+        var edit = new UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemXattrEdit("/build.prop", "user.patch", []);
         Assert.True(await run.StageImageXattrAsync(image, format, edit, 64 * 1024 * 1024, 1024 * 1024, token));
         Assert.Empty(Assert.IsType<byte[]>(await run.ReadImageXattrAsync(image, format, "/build.prop", "user.patch", token)));
         Assert.False(await run.StageImageXattrAsync(image, format, edit, 64 * 1024 * 1024, 1024 * 1024, token));

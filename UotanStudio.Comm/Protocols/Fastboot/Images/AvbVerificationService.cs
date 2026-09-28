@@ -1,18 +1,18 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
-using FirmwareAvbVerifier = UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification.AvbSignatureVerifier;
+using UotanStudio.Firmware.BootSecurity.Avb;
+using FirmwareAvbVerifier = UotanStudio.Firmware.BootSecurity.Avb.Verification.AvbSignatureVerifier;
 
 namespace UotanStudio.Comm.Protocols.Fastboot.Images;
 
 /// <summary>
 /// Comm-side AVB hash descriptor model, parsed from descriptors embedded in a vbmeta auxiliary data block.
 /// It is distinct from Firmware's signing model
-/// <see cref="UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models.AvbHashDescriptor"/>.
+/// <see cref="UotanStudio.Firmware.BootSecurity.Avb.AvbHashDescriptor"/>.
 /// <para>Comm 侧 AVB 哈希描述符模型，从 vbmeta 辅助数据块中内嵌的描述符解析得到。
 /// 与 Firmware 的签名模型
-/// <see cref="UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models.AvbHashDescriptor"/>不同。</para>
+/// <see cref="UotanStudio.Firmware.BootSecurity.Avb.AvbHashDescriptor"/>不同。</para>
 /// </summary>
 /// <param name="tag">Descriptor tag identifying the descriptor kind; hash descriptors use 0.
 /// <para>描述符标签，用于标识描述符类型；哈希描述符为 0。</para></param>

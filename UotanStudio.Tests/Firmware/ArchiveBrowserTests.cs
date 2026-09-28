@@ -1,9 +1,9 @@
 using System.Formats.Tar;
 using System.IO.Compression;
-using UotanStudio.Firmware.BoundedContexts.Archive;
-using UotanStudio.Firmware.BoundedContexts.Archive.Browsing;
-using UotanStudio.Firmware.BoundedContexts.Archive.Models;
-using UotanStudio.Firmware.BoundedContexts.Compression;
+using UotanStudio.Firmware.Archive;
+using UotanStudio.Firmware.Archive.Browsing;
+using UotanStudio.Firmware.Archive.Models;
+using UotanStudio.Firmware.Compression;
 using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.Views.Controls;
 using Xunit;

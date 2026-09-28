@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

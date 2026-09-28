@@ -1,9 +1,7 @@
 using System.Text;
 using UotanStudio.Comm.Protocols.Fastboot;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Writing;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;

@@ -1,5 +1,5 @@
 using System.Globalization;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.MediaTek;
+using UotanStudio.Firmware.VendorFirmware.MediaTek;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 

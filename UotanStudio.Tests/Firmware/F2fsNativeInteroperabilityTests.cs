@@ -1,9 +1,8 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.FileSystem.F2fs;
+using UotanStudio.Firmware.FileSystem.F2fs.Models;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 using UotanStudio.Tests.Comm.TestDoubles;

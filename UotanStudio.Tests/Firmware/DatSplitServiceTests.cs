@@ -1,8 +1,6 @@
 using System.Formats.Tar;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Files;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Reader;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
+using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Services.Firmware;
 using Xunit;
 

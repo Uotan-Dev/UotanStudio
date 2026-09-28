@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher;
+using UotanStudio.Firmware.Patching;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

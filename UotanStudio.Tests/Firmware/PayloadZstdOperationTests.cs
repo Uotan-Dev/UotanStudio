@@ -1,12 +1,11 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Google.Protobuf;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Models;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Operations;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Firmware.OtaDelta.Payload.Builder;
+using UotanStudio.Firmware.OtaDelta.Payload.Models;
+using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -23,6 +22,26 @@ public sealed class PayloadZstdOperationTests
     public void ReplaceZstd_UsesExtensionOperationValueWithoutClaimingBuilderCompatibility()
     {
         Assert.Equal(14, (int)InstallOperation.Types.Type.ReplaceZstd);
+    }
+
+    [Fact]
+    public void Build_ZstdPartition_RaisesMinorVersionToTenAndRoundTrips()
+    {
+        using var temp = new TempDirectory();
+        var expected = Pattern(8192);
+        var image = temp.WriteBytes("source.img", expected);
+        var payload = Path.Combine(temp.Path, "payload.bin");
+        using (var builder = new PayloadBuilder()) builder.AddPartitionZstd("system", image).Build(payload);
+
+        using (var stream = File.OpenRead(payload))
+        {
+            var header = new byte[24]; stream.ReadExactly(header);
+            var manifestData = new byte[checked((int)BinaryPrimitives.ReadUInt64BigEndian(header.AsSpan(12)))]; stream.ReadExactly(manifestData);
+            Assert.Equal(10U, DeltaArchiveManifest.Parser.ParseFrom(manifestData).MinorVersion);
+        }
+
+        PayloadParser.Extract(payload, ["system"], temp.Path);
+        Assert.Equal(expected, File.ReadAllBytes(Path.Combine(temp.Path, "system.img")));
     }
 
     [Fact]

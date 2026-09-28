@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Workflow;
+using UotanStudio.Firmware.BootSecurity.Avb.Signing;
+using UotanStudio.Firmware.BootSecurity.Workflow;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

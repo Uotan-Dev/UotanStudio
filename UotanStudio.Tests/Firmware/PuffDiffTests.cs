@@ -1,6 +1,6 @@
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.PuffDiff;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Operations;
+using UotanStudio.Firmware.OtaDelta.Diff;
+using UotanStudio.Firmware.OtaDelta.Payload;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

@@ -1,9 +1,9 @@
 using System.IO.Compression;
-using UotanStudio.Firmware.BoundedContexts.Compression;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Workflow;
+using UotanStudio.Firmware.Compression;
+using UotanStudio.Firmware.OtaDelta.Dat;
+using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Firmware.OtaDelta.Payload.Builder;
+using UotanStudio.Firmware.VendorFirmware.Workflow;
 using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
@@ -101,7 +101,7 @@ public class SamsungIncrementalMergeTests
         superSource.WriteBytes("system.img", OldSystem);
         superSource.WriteBytes("vendor.img", BlockPattern(0x90, 2));
         var superPath = Path.Combine(temp.Path, "super.img");
-        var packed = await new UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.LpFormatHandler()
+        var packed = await new UotanStudio.Firmware.BlockImage.Lp.LpFormatHandler()
             .PackAsync(superSource.Path, superPath, TestContext.Current.CancellationToken);
         Assert.True(packed.Success, packed.Summary);
         var lz4Path = temp.WriteBytes("super.img.lz4",

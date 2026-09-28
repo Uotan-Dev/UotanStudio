@@ -1,8 +1,6 @@
 using System.IO.Compression;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Firmware.Application.Containers;
 
@@ -24,28 +22,6 @@ public static class ContainerStructureAnalyzer
     private const string PayloadMarker = "payload.bin";
 
     /// <summary>
-    /// <para>检查头部指定偏移处是否为指定 ASCII 字符串。</para>
-    /// Whether the header carries the given ASCII string at the offset.
-    /// </summary>
-    private static bool IsAscii(byte[] header, int offset, string expected)
-    {
-        if (header.Length < offset + expected.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < expected.Length; i++)
-        {
-            if (header[offset + i] != (byte)expected[i])
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>
     /// <para>按魔数识别容器类型并枚举内部条目；失败（IO/格式错误）返回 <see cref="ContainerStructure.Empty"/>。</para>
     /// Detects the container kind by magic and enumerates inner entries; failures (IO/format) return
     /// <see cref="ContainerStructure.Empty"/>.
@@ -62,7 +38,7 @@ public static class ContainerStructureAnalyzer
         try
         {
             var header = FormatDetector.ReadHeader(filePath, 4100);
-            if (header.Length >= 4 && IsAscii(header, 0, "CrAU"))
+            if (header.Length >= 4 && FormatDetector.HasMagic(header, 0, "CrAU"))
             {
                 return AnalyzePayload(filePath);
             }
@@ -91,7 +67,7 @@ public static class ContainerStructureAnalyzer
     /// </summary>
     private static ContainerStructure AnalyzePayload(string filePath)
     {
-        var info = UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser.PayloadParser.GetPartitionInfo(filePath);
+        var info = UotanStudio.Firmware.OtaDelta.Payload.PayloadParser.GetPartitionInfo(filePath);
         var entries = info.Select(p => new ContainerEntry(p.Name, "payload", (long)p.SizeBytes, FromPayload: true))
             .ToList();
         return new ContainerStructure(ContainerKind.Payload, entries);
@@ -155,7 +131,7 @@ public static class ContainerStructureAnalyzer
 
         if (hasPayload)
         {
-            var info = UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser.PayloadParser.GetPartitionInfo(filePath);
+            var info = UotanStudio.Firmware.OtaDelta.Payload.PayloadParser.GetPartitionInfo(filePath);
             entries.AddRange(info.Select(p => new ContainerEntry(p.Name, "payload", (long)p.SizeBytes, FromPayload: true)
             { PayloadMemberPath = payloadMemberPath }));
         }

@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.PuffDiff;
+using UotanStudio.Firmware.OtaDelta.Diff;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -31,7 +31,7 @@ public class PuffDiffUpstreamTests
     {
         var patch = Convert.FromHexString("505546310000000C080112061881808080011A00");
         var before = GC.GetAllocatedBytesForCurrentThread();
-        Assert.Throws<UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions.PayloadException>(() => PuffDiffApplier.Apply(patch, Array.Empty<byte>()));
+        Assert.Throws<UotanStudio.Firmware.OtaDelta.Payload.PayloadException>(() => PuffDiffApplier.Apply(patch, Array.Empty<byte>()));
         Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - before, 0, 1024 * 1024);
     }
     private const string Old = "1122636462666105003303006304004455";

@@ -1,8 +1,8 @@
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
+using UotanStudio.Firmware.BootSecurity.BootImage;
+using UotanStudio.Firmware.BootSecurity.BootImage.Components;
+using UotanStudio.Firmware.BootSecurity.BootImage.Models;
+using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

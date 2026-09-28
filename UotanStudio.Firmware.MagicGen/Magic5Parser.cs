@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Text;
-using UotanStudio.Firmware.SharedKernel.Magic;
+using UotanStudio.Firmware.Core.Magic;
 
 namespace UotanStudio.Firmware.MagicGen;
 

@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.Compression;
-using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
-using UotanStudio.Firmware.BoundedContexts.Compression.Detection;
+using UotanStudio.Firmware.Compression;
+using UotanStudio.Firmware.Compression.Compressors;
+using UotanStudio.Firmware.Compression.Detection;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

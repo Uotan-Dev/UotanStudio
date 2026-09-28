@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.IO;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
+using UotanStudio.Firmware.OtaDelta.Payload.IO;
+using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

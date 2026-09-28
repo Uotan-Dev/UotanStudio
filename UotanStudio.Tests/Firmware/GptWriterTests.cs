@@ -1,6 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Gpt;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Gpt.Repair;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Gpt.Writing;
+using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

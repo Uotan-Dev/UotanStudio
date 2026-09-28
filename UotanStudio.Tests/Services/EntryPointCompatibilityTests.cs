@@ -2,7 +2,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Models;
+using UotanStudio.Firmware.BlockImage.Sparse.Models;
 using UotanStudio.Messages;
 using UotanStudio.Services.Projects;
 using UotanStudio.Tests.Comm.TestDoubles;

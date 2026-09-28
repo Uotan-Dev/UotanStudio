@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
+using UotanStudio.Firmware.BootSecurity.Avb.Signing;
+using UotanStudio.Firmware.BootSecurity.Avb.Verification;
 using UotanStudio.Services.Firmware;
 using Xunit;
 

@@ -1,7 +1,7 @@
 using System.IO.Enumeration;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.Patching;
+using UotanStudio.Firmware.Patching;
 
 namespace UotanStudio.Services.Patching;
 

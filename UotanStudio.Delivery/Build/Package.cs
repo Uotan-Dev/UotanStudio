@@ -8,8 +8,8 @@ using System.Text;
 using SharpCompress.Common;
 using SharpCompress.Writers;
 using SharpCompress.Writers.Zip;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Files;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.OtaDelta.Dat;
 
 namespace UotanStudio.Services.Delivery;
 

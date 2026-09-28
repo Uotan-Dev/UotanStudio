@@ -1,8 +1,6 @@
 using UotanStudio.Firmware.Application.Formats;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtbo;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.DeviceTree.Dt;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

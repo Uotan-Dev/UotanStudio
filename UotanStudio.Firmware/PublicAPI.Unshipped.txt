@@ -1,0 +1,38 @@
+#nullable enable
+UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport
+UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.ByteEquivalence.get -> UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState
+UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.ByteEquivalence.init -> void
+const UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.ByteEquivalenceKey = "EquivalentBytes" -> string!
+const UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.CapacityEquivalenceKey = "FitsSourceFilesystemSize" -> string!
+UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.CapacityEquivalence.get -> UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState
+UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.CapacityEquivalence.init -> void
+static UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.AllNotEvaluated.get -> UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport!
+static UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.EvaluateByteEquivalence(System.IO.Stream! producedImage, string! expectedSha256Hex, long expectedLength, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState
+const UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.ContentEquivalenceKey = "EquivalentContent" -> string!
+UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.ContentEquivalence.get -> UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState
+UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.ContentEquivalence.init -> void
+UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.Details.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.Details.init -> void
+static UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.FromMetadata(System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata) -> UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport!
+static UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.FromOperationResult(UotanStudio.Firmware.Core.FirmwareOpResult? result) -> UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport!
+UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.FilesystemEquivalenceReport() -> void
+const UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.StructureEquivalenceKey = "EquivalentStructure" -> string!
+UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.StructureEquivalence.get -> UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState
+UotanStudio.Firmware.Application.Equivalence.FilesystemEquivalenceReport.StructureEquivalence.init -> void
+UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState
+UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState.Equivalent = 1 -> UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState
+UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState.NotEquivalent = 2 -> UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState
+UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState.NotEvaluated = 0 -> UotanStudio.Firmware.Application.Equivalence.FirmwareEquivalenceState
+UotanStudio.Firmware.BootSecurity.Avb.AvbVBMetaImageHeader.ToBytes() -> byte[]!
+UotanStudio.Firmware.BootSecurity.Avb.AvbVBMetaImageHeader.WriteTo(System.Span<byte> destination) -> void
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt16LE(System.IO.Stream! stream) -> ushort
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt16LE(byte[]! buffer, int offset) -> ushort
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32LE(System.IO.Stream! stream) -> uint
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32LE(byte[]! buffer, int offset) -> uint
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64LE(System.IO.Stream! stream) -> ulong
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64LE(byte[]! buffer, int offset) -> ulong
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32BE(byte[]! buffer, int offset) -> uint
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64BE(byte[]! buffer, int offset) -> ulong
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32BEAsync(System.IO.Stream! stream, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<uint>!
+static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64BEAsync(System.IO.Stream! stream, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<ulong>!
+static UotanStudio.Firmware.Core.FormatDetector.HasMagic(byte[]! header, int offset, string! magic) -> bool

@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
+using UotanStudio.Firmware.FileSystem.Rebuilding;
 using UotanStudio.Services.Execution;
 
 namespace UotanStudio.ViewModels.NodeViewModels;

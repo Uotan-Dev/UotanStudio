@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

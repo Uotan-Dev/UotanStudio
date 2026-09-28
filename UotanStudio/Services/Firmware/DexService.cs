@@ -1,18 +1,17 @@
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Containers;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Decompile;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Smali;
+using UotanStudio.Firmware.AndroidMeta.Apk;
+using UotanStudio.Firmware.AndroidMeta.Apk.Signing;
+using UotanStudio.Firmware.AndroidMeta.Dex;
+using UotanStudio.Firmware.AndroidMeta.Dex.Decompile;
+using UotanStudio.Firmware.AndroidMeta.Dex.Smali;
 
 namespace UotanStudio.Services.Firmware;
 
 /// <summary>
-/// <para>DEX 综合服务，封装 DEX 文件解析、反汇编（Smali 文本）与重建写入功能，基于 UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex 生态。
+/// <para>DEX 综合服务，封装 DEX 文件解析、反汇编（Smali 文本）与重建写入功能，基于 UotanStudio.Firmware.AndroidMeta.Dex 生态。
 /// 支持直接读取 DEX 文件或 JAR/APK 容器内的 classes*.dex 条目。</para>
 /// Dex integrated service, wrapping DEX file parsing, disassembly (Smali text) and rebuild-write capabilities,
-/// built on the UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex ecosystem. Supports plain DEX files as
+/// built on the UotanStudio.Firmware.AndroidMeta.Dex ecosystem. Supports plain DEX files as
 /// well as classes*.dex entries inside JAR/APK containers.
 /// </summary>
 public sealed class DexService
@@ -39,14 +38,14 @@ public sealed class DexService
     /// </param>
     /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
     /// <returns>操作结果；成功时 Summary 为文件描述，失败时 Summary 为异常信息。</returns>
-    public Task<UotanStudio.Firmware.SharedKernel.FirmwareOpResult> ParseDexAsync(string path, string? entryName = null, CancellationToken ct = default)
+    public Task<UotanStudio.Firmware.Core.FirmwareOpResult> ParseDexAsync(string path, string? entryName = null, CancellationToken ct = default)
     {
         try
         {
             ct.ThrowIfCancellationRequested();
             var dex = LoadDex(path, entryName);
             var summary = dex.Describe();
-            return Task.FromResult(UotanStudio.Firmware.SharedKernel.FirmwareOpResult.Ok(summary));
+            return Task.FromResult(UotanStudio.Firmware.Core.FirmwareOpResult.Ok(summary));
         }
         catch (OperationCanceledException)
         {
@@ -54,7 +53,7 @@ public sealed class DexService
         }
         catch (Exception ex)
         {
-            return Task.FromResult(UotanStudio.Firmware.SharedKernel.FirmwareOpResult.Fail(ex.Message));
+            return Task.FromResult(UotanStudio.Firmware.Core.FirmwareOpResult.Fail(ex.Message));
         }
     }
 
@@ -69,7 +68,7 @@ public sealed class DexService
     /// <param name="entryName">容器内 DEX 条目名；为空时取第一个 DEX 条目，非容器路径忽略。<para>Container DEX entry name; empty picks the first DEX entry, ignored for plain files.</para></param>
     /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
     /// <returns>操作结果；Summary 含输出文件路径。</returns>
-    public async Task<UotanStudio.Firmware.SharedKernel.FirmwareOpResult> DisassembleDexAsync(string path, string? outputDirectory, string? entryName = null, CancellationToken ct = default)
+    public async Task<UotanStudio.Firmware.Core.FirmwareOpResult> DisassembleDexAsync(string path, string? outputDirectory, string? entryName = null, CancellationToken ct = default)
     {
         try
         {
@@ -88,7 +87,7 @@ public sealed class DexService
             await File.WriteAllTextAsync(smaliPath, smali, Encoding.UTF8, ct).ConfigureAwait(false);
 
             var summary = $"Disassembled DEX to {smaliPath} ({Encoding.UTF8.GetByteCount(smali)} bytes)";
-            return UotanStudio.Firmware.SharedKernel.FirmwareOpResult.Ok(summary, [smaliPath]);
+            return UotanStudio.Firmware.Core.FirmwareOpResult.Ok(summary, [smaliPath]);
         }
         catch (OperationCanceledException)
         {
@@ -96,7 +95,7 @@ public sealed class DexService
         }
         catch (Exception ex)
         {
-            return UotanStudio.Firmware.SharedKernel.FirmwareOpResult.Fail(ex.Message);
+            return UotanStudio.Firmware.Core.FirmwareOpResult.Fail(ex.Message);
         }
     }
 
@@ -113,7 +112,7 @@ public sealed class DexService
     /// </param>
     /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
     /// <returns>操作结果；Summary 含输出路径。</returns>
-    public Task<UotanStudio.Firmware.SharedKernel.FirmwareOpResult> RebuildDexAsync(string path, string outputPath, string? entryName = null, CancellationToken ct = default)
+    public Task<UotanStudio.Firmware.Core.FirmwareOpResult> RebuildDexAsync(string path, string outputPath, string? entryName = null, CancellationToken ct = default)
     {
         try
         {
@@ -122,13 +121,13 @@ public sealed class DexService
             {
                 var containerEntry = ResolveEntryName(path, entryName);
                 JarDexContainer.WriteBack(path, containerEntry, LoadDex(path, containerEntry).ToArray(), ct);
-                return Task.FromResult(UotanStudio.Firmware.SharedKernel.FirmwareOpResult.Ok(
+                return Task.FromResult(UotanStudio.Firmware.Core.FirmwareOpResult.Ok(
                     $"Rebuilt {containerEntry} written back to {path}", [path]));
             }
 
             var dex = DexFile.Load(path);
             dex.Write(outputPath);
-            return Task.FromResult(UotanStudio.Firmware.SharedKernel.FirmwareOpResult.Ok($"Rebuilt DEX written to {outputPath}", [outputPath]));
+            return Task.FromResult(UotanStudio.Firmware.Core.FirmwareOpResult.Ok($"Rebuilt DEX written to {outputPath}", [outputPath]));
         }
         catch (OperationCanceledException)
         {
@@ -136,7 +135,7 @@ public sealed class DexService
         }
         catch (Exception ex)
         {
-            return Task.FromResult(UotanStudio.Firmware.SharedKernel.FirmwareOpResult.Fail(ex.Message));
+            return Task.FromResult(UotanStudio.Firmware.Core.FirmwareOpResult.Fail(ex.Message));
         }
     }
 
@@ -153,7 +152,7 @@ public sealed class DexService
     /// <param name="options">反编译选项；<c>null</c> 用默认值。<para>Decompiler options; <c>null</c> for defaults.</para></param>
     /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
     /// <returns>操作结果；Summary 含输出文件路径与字节数。</returns>
-    public async Task<UotanStudio.Firmware.SharedKernel.FirmwareOpResult> DecompileDexAsync(string path, string? outputPath, string? entryName = null, DecompileOptions? options = null, CancellationToken ct = default)
+    public async Task<UotanStudio.Firmware.Core.FirmwareOpResult> DecompileDexAsync(string path, string? outputPath, string? entryName = null, DecompileOptions? options = null, CancellationToken ct = default)
     {
         try
         {
@@ -173,7 +172,7 @@ public sealed class DexService
             await File.WriteAllTextAsync(outputPath, java, Encoding.UTF8, ct).ConfigureAwait(false);
 
             var summary = $"Decompiled DEX to {outputPath} ({Encoding.UTF8.GetByteCount(java)} bytes)";
-            return UotanStudio.Firmware.SharedKernel.FirmwareOpResult.Ok(summary, [outputPath]);
+            return UotanStudio.Firmware.Core.FirmwareOpResult.Ok(summary, [outputPath]);
         }
         catch (OperationCanceledException)
         {
@@ -181,7 +180,7 @@ public sealed class DexService
         }
         catch (Exception ex)
         {
-            return UotanStudio.Firmware.SharedKernel.FirmwareOpResult.Fail(ex.Message);
+            return UotanStudio.Firmware.Core.FirmwareOpResult.Fail(ex.Message);
         }
     }
 
@@ -199,14 +198,14 @@ public sealed class DexService
     /// <param name="options">签名选项；<c>null</c> 用默认值（v1+v2+v3、剥离旧签名）。<para>Signing options; <c>null</c> for defaults (v1+v2+v3, strip old signatures).</para></param>
     /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
     /// <returns>操作结果；Summary 含输出路径。</returns>
-    public Task<UotanStudio.Firmware.SharedKernel.FirmwareOpResult> SignJarAsync(
+    public Task<UotanStudio.Firmware.Core.FirmwareOpResult> SignJarAsync(
         string inputPath, string outputPath, string keyPath, string certPath, ApkSigningOptions? options = null, CancellationToken ct = default)
     {
         try
         {
             ct.ThrowIfCancellationRequested();
             ApkSigner.Sign(inputPath, outputPath, ApkSignerKeyMaterial.Load(keyPath, null, certPath, null), options, ct);
-            return Task.FromResult(UotanStudio.Firmware.SharedKernel.FirmwareOpResult.Ok($"Signed JAR written to {outputPath}", [outputPath]));
+            return Task.FromResult(UotanStudio.Firmware.Core.FirmwareOpResult.Ok($"Signed JAR written to {outputPath}", [outputPath]));
         }
         catch (OperationCanceledException)
         {
@@ -214,7 +213,7 @@ public sealed class DexService
         }
         catch (Exception ex)
         {
-            return Task.FromResult(UotanStudio.Firmware.SharedKernel.FirmwareOpResult.Fail(ex.Message));
+            return Task.FromResult(UotanStudio.Firmware.Core.FirmwareOpResult.Fail(ex.Message));
         }
     }
 

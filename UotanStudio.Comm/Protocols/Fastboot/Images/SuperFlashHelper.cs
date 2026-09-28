@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Writing;
+using UotanStudio.Firmware.BlockImage.Lp;
 
 namespace UotanStudio.Comm.Protocols.Fastboot.Images;
 

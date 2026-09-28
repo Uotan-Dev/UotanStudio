@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using ICSharpCode.SharpZipLib.BZip2;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
+using UotanStudio.Firmware.OtaDelta.Payload.Builder;
+using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

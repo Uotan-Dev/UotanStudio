@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp;
+using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Services.Flash;
 using Xunit;
 

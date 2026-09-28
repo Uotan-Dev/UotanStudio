@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
+using UotanStudio.Firmware.BootSecurity.BootImage.Components;
+using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

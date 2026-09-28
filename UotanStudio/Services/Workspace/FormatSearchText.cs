@@ -1,11 +1,9 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Parsing;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Smali;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dtb;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Dts;
-using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models;
+using UotanStudio.Firmware.AndroidMeta.Arsc;
+using UotanStudio.Firmware.AndroidMeta.AXml;
+using UotanStudio.Firmware.AndroidMeta.Dex;
+using UotanStudio.Firmware.AndroidMeta.Dex.Smali;
+using UotanStudio.Firmware.DeviceTree.Dt;
 using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Services.Workspace;
@@ -73,7 +71,7 @@ internal static class FormatSearchText
         byte[] header;
         try
         {
-            header = UotanStudio.Firmware.SharedKernel.FormatDetector.ReadHeader(path, ArscHeaderLength);
+            header = UotanStudio.Firmware.Core.FormatDetector.ReadHeader(path, ArscHeaderLength);
         }
         catch
         {

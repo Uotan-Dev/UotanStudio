@@ -1,11 +1,11 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Ext4;
+using UotanStudio.Firmware.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 using UotanStudio.Tests.Comm.TestDoubles;
@@ -96,7 +96,7 @@ public sealed class PackingOptionPropagationTests
 
         Assert.True(result.Success, result.Summary);
         Assert.True(File.Exists(output));
-        using var parser = new UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser.Ext4Parser(output);
+        using var parser = new UotanStudio.Firmware.FileSystem.Ext4.Ext4Parser(output);
         Assert.Equal(new FileInfo(output).Length, parser.PartitionSize);
     }
 
@@ -106,6 +106,7 @@ public sealed class PackingOptionPropagationTests
     [InlineData("Android Sparse Image (simg)")]
     public async Task BuildImage_PreservedExtractionFromAnotherFormat_RebuildsAsExt4(string sourceFormat)
     {
+        FirmwareFormatRegistry.RegisterAll();
         using var temp = new TempDirectory();
         var source = Path.Combine(temp.Path, "source");
         var image = Path.Combine(temp.Path, "source.img");
@@ -183,7 +184,7 @@ public sealed class PackingOptionPropagationTests
         var extracted = Path.Combine(temp.Path, "extracted");
         Directory.CreateDirectory(source);
         File.WriteAllText(Path.Combine(source, "file"), "content");
-        var handler = new UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Ext4FormatHandler();
+        var handler = new UotanStudio.Firmware.FileSystem.Ext4.Ext4FormatHandler();
         Assert.True((await handler.PackAsync(source, image, TestContext.Current.CancellationToken)).Success);
         Assert.True((await handler.UnpackAsync(image, extracted,
             cancellationToken: TestContext.Current.CancellationToken)).Success);

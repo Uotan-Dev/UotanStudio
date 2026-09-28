@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.Executable.Elf;
+using UotanStudio.Firmware.Executable.Elf;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 

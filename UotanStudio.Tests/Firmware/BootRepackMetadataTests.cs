@@ -1,9 +1,8 @@
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Packer;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.BootSecurity.BootImage;
+using UotanStudio.Firmware.BootSecurity.BootImage.Models;
+using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Services.Firmware;
 using UotanStudio.ViewModels.Workspace;
 using Xunit;

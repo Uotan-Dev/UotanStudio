@@ -1,9 +1,8 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
+using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Firmware.OtaDelta.Payload.Builder;
+using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -71,6 +70,32 @@ public class PayloadBuilderTests
             var partition = Assert.Single(manifest.Partitions); Assert.Equal(2, partition.Operations.Count);
             Assert.All(partition.Operations, operation => { Assert.Equal(operationType, (int)operation.Type); Assert.InRange(operation.DstLength, 1UL, 1024UL * 1024); });
         }
+        PayloadParser.Extract(payload, ["zero"], temp.Path);
+        Assert.Equal(new byte[length], File.ReadAllBytes(Path.Combine(temp.Path, "zero.img")));
+    }
+
+    [Theory]
+    [InlineData(1U)]
+    [InlineData(11U)]
+    public void WithMinorVersion_DeprecatedOrUnknownValues_AreRejected(uint minorVersion)
+    {
+        using var builder = new PayloadBuilder();
+        Assert.Throws<ArgumentOutOfRangeException>(() => builder.WithMinorVersion(minorVersion));
+    }
+
+    [Fact]
+    public void Build_MinorVersionTen_RoundTripsThroughParser()
+    {
+        using var temp = new TempDirectory(); var payload = Path.Combine(temp.Path, "payload.bin");
+        const int length = 8192;
+        using (var builder = new PayloadBuilder()) builder.WithMinorVersion(10).AddZeroPartition("zero", length).Build(payload);
+        using (var stream = File.OpenRead(payload))
+        {
+            var header = new byte[24]; stream.ReadExactly(header);
+            var manifestData = new byte[checked((int)BinaryPrimitives.ReadUInt64BigEndian(header.AsSpan(12)))]; stream.ReadExactly(manifestData);
+            Assert.Equal(10U, DeltaArchiveManifest.Parser.ParseFrom(manifestData).MinorVersion);
+        }
+
         PayloadParser.Extract(payload, ["zero"], temp.Path);
         Assert.Equal(new byte[length], File.ReadAllBytes(Path.Combine(temp.Path, "zero.img")));
     }

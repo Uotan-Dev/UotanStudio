@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using Google.Protobuf;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
+using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Firmware;
 using Xunit;

@@ -1,5 +1,4 @@
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.Models;
+using UotanStudio.Firmware.BootSecurity.Patcher;
 
 namespace UotanStudio.Services.Flash;
 

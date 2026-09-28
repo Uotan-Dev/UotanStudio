@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Metadata;
-using UotanStudio.Firmware.BoundedContexts.Patching;
+using UotanStudio.Firmware.FileSystem.Metadata;
+using UotanStudio.Firmware.Patching;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

@@ -1,10 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Extraction;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Models;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Packing;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Parsing;
+using UotanStudio.Firmware.VendorFirmware.Nb0;
+using UotanStudio.Firmware.VendorFirmware.Nb0.Models;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

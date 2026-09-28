@@ -1,5 +1,5 @@
 using System.Text;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Services.Compare;
 using Xunit;
 

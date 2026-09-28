@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0.Packing;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi;
+using UotanStudio.Firmware.VendorFirmware.Nb0;
+using UotanStudio.Firmware.VendorFirmware.NTPi;
 using UotanStudio.Services.Flash;
 using Xunit;
 

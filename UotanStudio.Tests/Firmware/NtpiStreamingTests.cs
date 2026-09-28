@@ -1,11 +1,8 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Compression;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Crypto;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Exceptions;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Models;
-using UotanStudio.Firmware.SharedKernel.Streams;
+using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Firmware.VendorFirmware.NTPi;
+using UotanStudio.Firmware.VendorFirmware.NTPi.Models;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

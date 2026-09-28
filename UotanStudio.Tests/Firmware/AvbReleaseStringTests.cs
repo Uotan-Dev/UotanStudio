@@ -2,8 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
+using UotanStudio.Firmware.BootSecurity.Avb;
+using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
@@ -40,5 +40,22 @@ public sealed class AvbReleaseStringTests
         var vbmeta = await File.ReadAllBytesAsync(outputPath, TestContext.Current.CancellationToken);
         var raw = Encoding.ASCII.GetString(vbmeta, ReleaseStringOffset, ReleaseStringSize).TrimEnd('\0');
         Assert.Equal("avbtool 1.3.0", raw);
+    }
+
+    [Fact]
+    public void WriteTo_ReleaseStringAtCapacity_IsPreservedWithTrailingNul()
+    {
+        var header = new AvbVBMetaImageHeader { Magic = "AVB0", ReleaseString = new string('a', 47) };
+        var buffer = new byte[AvbVBMetaImageHeader.Size];
+        header.WriteTo(buffer);
+        Assert.Equal(new string('a', 47), Encoding.ASCII.GetString(buffer, ReleaseStringOffset, ReleaseStringSize).TrimEnd('\0'));
+        Assert.Equal(0, buffer[ReleaseStringOffset + 47]);
+    }
+
+    [Fact]
+    public void WriteTo_ReleaseStringBeyondCapacity_IsRejectedInsteadOfTruncated()
+    {
+        var header = new AvbVBMetaImageHeader { Magic = "AVB0", ReleaseString = new string('a', 48) };
+        Assert.Throws<ArgumentException>(() => header.WriteTo(new byte[AvbVBMetaImageHeader.Size]));
     }
 }

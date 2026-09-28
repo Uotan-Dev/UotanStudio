@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.Compression.Compressors;
-using UotanStudio.Firmware.SharedKernel.Streams;
+using UotanStudio.Firmware.Compression.Compressors;
+using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Services.Flash;
 

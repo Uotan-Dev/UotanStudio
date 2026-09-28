@@ -1,6 +1,6 @@
 using UotanStudio.Firmware;
 using UotanStudio.Firmware.Application.Formats;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Views.Controls;
 using Xunit;
 
@@ -163,7 +163,7 @@ public class FileOpenModeTests
         var path = WriteTempFile("ordinary.bin", [0x01, 0x02, 0x03, 0x04]);
         try
         {
-            Assert.False(new UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadFormatHandler().CanHandle(path));
+            Assert.False(new UotanStudio.Firmware.OtaDelta.Payload.PayloadFormatHandler().CanHandle(path));
         }
         finally
         {

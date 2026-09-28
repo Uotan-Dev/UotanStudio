@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.BoundedContexts.Patching;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Workflow;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Patching;
+using UotanStudio.Firmware.VendorFirmware.Workflow;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

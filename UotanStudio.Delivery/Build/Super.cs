@@ -1,9 +1,8 @@
 using System.Text;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Build;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Writing;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
-using UotanStudio.Firmware.SharedKernel.Streams;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Services.Delivery;
 

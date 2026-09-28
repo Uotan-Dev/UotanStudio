@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.Archive.Extraction;
-using UotanStudio.Firmware.BoundedContexts.Archive.Models;
+using UotanStudio.Firmware.Archive.Extraction;
+using UotanStudio.Firmware.Archive.Models;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

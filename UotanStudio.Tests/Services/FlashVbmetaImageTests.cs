@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
+using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Services.Flash;
 using Xunit;
 

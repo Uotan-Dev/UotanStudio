@@ -6,7 +6,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Composition;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
@@ -157,7 +157,7 @@ public partial class App : Application
         // 1) 后台读取持久化设置（文件 I/O 不应阻塞 UI 线程）。
         var settings = await Task.Run(() => SettingsPersistenceService.Instance.LoadSettings()).ConfigureAwait(true);
         global::UotanStudio.Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
-        global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers = settings.FirmwareParallelism;
+        global::UotanStudio.Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
 
         // 2) 先应用持久化主题与语言（须在主窗口创建前完成，使主窗口拿到正确的语言/主题；
         //    此时启动窗已显示，DynamicResource 会自动刷新启动窗文案），随后的状态文本

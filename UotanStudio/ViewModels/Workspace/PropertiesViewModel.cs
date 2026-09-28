@@ -2,8 +2,8 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Magic;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Magic;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
@@ -925,13 +925,13 @@ internal partial class PropertiesViewModel : Tool
 
         switch (node.Payload)
         {
-            case UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Models.ResPackage pkg:
+            case UotanStudio.Firmware.AndroidMeta.Arsc.ResPackage pkg:
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNode", pkg.Name));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeKind", $"0x{pkg.Id:x2}"));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeChildren", pkg.Types.Count.ToString("N0")));
                 break;
 
-            case UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Models.ResType type:
+            case UotanStudio.Firmware.AndroidMeta.Arsc.ResType type:
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNode", $"0x{type.Id:x2}"));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeKind", "type"));
                 Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeDetail", type.ConfigDescription));

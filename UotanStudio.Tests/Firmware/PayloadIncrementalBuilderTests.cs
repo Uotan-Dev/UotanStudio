@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Builder;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
+using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Firmware.OtaDelta.Payload.Builder;
+using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -247,7 +247,7 @@ public class PayloadIncrementalBuilderTests
         Directory.CreateDirectory(output);
         var existing = new byte[] { 1, 2, 3 };
         File.WriteAllBytes(Path.Combine(output, "system.img"), existing);
-        await Assert.ThrowsAsync<UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions.PartitionExtractionException>(() => PayloadParser.ExtractAsync(payload, ["system"], output,
+        await Assert.ThrowsAsync<UotanStudio.Firmware.OtaDelta.Payload.PartitionExtractionException>(() => PayloadParser.ExtractAsync(payload, ["system"], output,
             cancellationToken: TestContext.Current.CancellationToken,
             sourceImages: new Dictionary<string, string> { ["system"] = sourcePath }));
         Assert.Equal(existing, File.ReadAllBytes(Path.Combine(output, "system.img")));
@@ -263,7 +263,7 @@ public class PayloadIncrementalBuilderTests
         var payload = temp.WriteBytes("payload.bin", [1, 2, 3]);
         using var builder = new PayloadBuilder().WithBlockSize(BlockSize);
         builder.AddPartitionIncremental("system", shortTarget, sourcePath);
-        Assert.Throws<UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions.PayloadGenerationException>(() =>
+        Assert.Throws<UotanStudio.Firmware.OtaDelta.Payload.PayloadGenerationException>(() =>
             builder.Build(payload));
         Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(payload));
         Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp-*"));

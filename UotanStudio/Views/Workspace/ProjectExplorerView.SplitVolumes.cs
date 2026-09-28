@@ -4,7 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Platform.Storage;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Files;
+using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.ViewModels.Workspace;

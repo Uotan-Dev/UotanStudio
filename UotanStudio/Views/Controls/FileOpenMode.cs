@@ -1,13 +1,13 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Application.Formats;
-using UotanStudio.Firmware.BoundedContexts.Archive.Browsing;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
-using UotanStudio.Firmware.BoundedContexts.Executable.Elf;
-using UotanStudio.Firmware.BoundedContexts.Executable.Qualcomm;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Magic;
+using UotanStudio.Firmware.Archive.Browsing;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Magic;
+using UotanStudio.Firmware.Executable.Elf;
+using UotanStudio.Firmware.Executable.Qualcomm;
 using UotanStudio.Services.Logging;
 
 namespace UotanStudio.Views.Controls;
@@ -298,7 +298,7 @@ public static class FileOpenMode
         // AXML content sniffing first: binary XML files such as AndroidManifest.xml carry a .xml
         // extension (which the text route would claim), so the AXML magic must win to avoid opening
         // them as mangled UTF-8 text.
-        if (header is not null && UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.Parsing.AXmlParser.IsAxml(header))
+        if (header is not null && UotanStudio.Firmware.AndroidMeta.AXml.AXmlParser.IsAxml(header))
         {
             return EditorOpenMode.Axml;
         }
@@ -409,7 +409,7 @@ public static class FileOpenMode
 
         // ARSC 内容探测：resources.arsc 为 0x0002 表头。
         // ARSC content sniffing: resources.arsc carries the 0x0002 table header.
-        if (header is not null && UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.Parsing.ArscParser.IsArsc(header))
+        if (header is not null && UotanStudio.Firmware.AndroidMeta.Arsc.ArscParser.IsArsc(header))
         {
             return EditorOpenMode.Arsc;
         }
@@ -662,8 +662,8 @@ public static class FileOpenMode
         }
 
         var magic = BinaryPrimitives.ReadUInt32BigEndian(header);
-        return magic == UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.FdtConstants.FdtMagic
-            || magic == UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.Models.FdtConstants.DtboMagic;
+        return magic == UotanStudio.Firmware.DeviceTree.Dt.FdtConstants.FdtMagic
+            || magic == UotanStudio.Firmware.DeviceTree.Dt.FdtConstants.DtboMagic;
     }
 
     /// <summary>
@@ -769,7 +769,7 @@ public static class FileOpenMode
     public static bool IsLpMetadataMagic(ReadOnlySpan<byte> header) =>
         header.Length >= LpMetadataHeaderLength
         && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(4096, 4))
-            == UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models.MetadataFormat.LP_METADATA_GEOMETRY_MAGIC;
+            == UotanStudio.Firmware.BlockImage.Lp.MetadataFormat.LP_METADATA_GEOMETRY_MAGIC;
 
     /// <summary>
     /// <para>判断头部字节是否为 Rockchip parameter 文本：内容须为可打印 ASCII/文本控制字符

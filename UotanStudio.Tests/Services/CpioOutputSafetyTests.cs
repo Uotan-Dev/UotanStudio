@@ -1,7 +1,7 @@
-using UotanStudio.Firmware.BoundedContexts.Archive;
-using UotanStudio.Firmware.BoundedContexts.Archive.Extraction;
-using UotanStudio.Firmware.BoundedContexts.Archive.Models;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Archive;
+using UotanStudio.Firmware.Archive.Extraction;
+using UotanStudio.Firmware.Archive.Models;
+using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Services.Firmware;
 using Xunit;
 

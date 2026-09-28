@@ -1,6 +1,6 @@
 using System.Globalization;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Models;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 
 namespace UotanStudio.Services.Delivery;
 
