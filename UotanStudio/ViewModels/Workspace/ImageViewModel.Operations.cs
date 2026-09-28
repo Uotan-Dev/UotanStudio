@@ -1,11 +1,11 @@
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
-using FormatDetector = UotanStudio.Firmware.SharedKernel.FormatDetector;
+using FormatDetector = UotanStudio.Firmware.Core.FormatDetector;
 
 namespace UotanStudio.ViewModels.Workspace;
 
@@ -82,6 +82,7 @@ internal partial class ImageViewModel
         var succeeded = 0;
         var failed = 0;
         var skipped = 0;
+        var equivalenceBlocks = new List<string>();
         ProgressPercent = 0;
         ReportItemStatistics(0, requests.Length);
         try
@@ -130,6 +131,15 @@ internal partial class ImageViewModel
                         if (result.Success) succeeded++;
                         else failed++;
                         LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Images", result.Summary);
+                        if (operation == "img" && result.Success)
+                        {
+                            var lines = FormatEquivalenceLines(entry.DisplayName, result).ToArray();
+                            foreach (var line in lines)
+                            {
+                                LogService.Instance.Write(LogLevel.Info, "Images", line);
+                            }
+                            equivalenceBlocks.Add(string.Join(Environment.NewLine, lines));
+                        }
                         if (result.Success && conflicts.Length == 0)
                         {
                             var kind = operation switch
@@ -163,8 +173,30 @@ internal partial class ImageViewModel
                 }
             }
             StatusText = string.Format(LanguageService.Instance.GetString("Image_OperationSummary"), succeeded, failed, skipped);
+            EquivalenceReport = FirmwareEquivalencePresenter.FormatVisibleReport(equivalenceBlocks, LanguageService.Instance.GetString);
         }
         finally { IsOperating = false; }
+    }
+
+    /// <summary>
+    /// <para>按现有结果呈现方式，把一个构建结果的四维度等价报告展开为标题加四行本地化文本。只有文件系统镜像的
+    /// 构建结果才会进入这里：dat/br 产出的是 DAT 与压缩流而非镜像，报告其等价性只会误述产物；未被库评估的维度
+    /// 保持“未评估”。每个条目的全部维度行都写入统一日志，可见结果区只保留最后一项，批量构建不会拉长底部状态区。</para>
+    /// Expands one build result's four-dimension equivalence report into the heading plus four localized lines used
+    /// by the existing result surface. Only a filesystem image build reaches this helper, because DAT and Brotli
+    /// outputs are streams rather than images and reporting equivalence for them would misdescribe the artifact, and
+    /// a dimension the library never evaluated stays "not evaluated". Every entry's dimension lines are written to
+    /// the unified log while the visible result area keeps only the last entry, so a batch build cannot stretch the
+    /// footer without bound.
+    /// </summary>
+    private static IEnumerable<string> FormatEquivalenceLines(string entryName, FirmwareOpResult result)
+    {
+        var language = LanguageService.Instance;
+        yield return FirmwareEquivalencePresenter.FormatHeader(language.GetString, entryName);
+        foreach (var line in FirmwareEquivalencePresenter.FormatLines(result.Equivalence, language.GetString))
+        {
+            yield return line;
+        }
     }
 
     /// <summary>Maps item progress into a batch slice, preserving the dynamic queue's completion cap.</summary>
@@ -199,7 +231,7 @@ internal partial class ImageViewModel
     {
         paths.ValidateExtraction();
         var targetDirectory = ResolveUnpackTargetDirectory(paths);
-        using var metadataScope = UotanStudio.Firmware.SharedKernel.Repacking.RepackMetadata.UseContext(
+        using var metadataScope = UotanStudio.Firmware.Core.Repacking.RepackMetadata.UseContext(
             ProjectContextService.Instance.CaptureMetadataContext(targetDirectory));
         UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
         var handler = FormatDetector.Detect(paths.Source)
@@ -228,10 +260,10 @@ internal partial class ImageViewModel
                 byteProgress: byteProgress, erofsExtraDevicePaths: erofsDevices, cancellationToken: cancellationToken),
             _ => await Task.Run(async () =>
             {
-                var options = new UotanStudio.Firmware.SharedKernel.UnpackOptions { FileSystemProgress = byteProgress };
+                var options = new UotanStudio.Firmware.Core.UnpackOptions { FileSystemProgress = byteProgress };
                 if (itemProgress is not null) options.Progress = new FirmwareItemProgress(itemProgress);
                 var unpacked = await handler.UnpackAsync(paths.Source, targetDirectory, options, cancellationToken);
-                return new FirmwareOpResult { Success = unpacked.Success, Summary = unpacked.Summary };
+                return FirmwareOpResult.From(unpacked);
             })
         });
         LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Images", result.Summary);

@@ -1,8 +1,8 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO;
-using UotanStudio.Firmware.BoundedContexts.Compression.Files;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.Compression.Files;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.OtaDelta.Dat;
 
 namespace UotanStudio.Services.Firmware;
 
@@ -23,6 +23,12 @@ internal static class ImageOutputService
         _ => []
     };
 
+    /// <summary>
+    /// <para>构建 img/dat/br 产物。img 路径直接返回打包服务的结果，因此受保留重建产出的等价元数据得以保留；
+    /// dat/br 路径的最终产物是 DAT 与压缩流，不是文件系统镜像，所以如实返回全不评估的结果。</para>
+    /// Builds the img, DAT or Brotli output. The img path returns the packing result directly so the equivalence
+    /// metadata of a preserved rebuild survives; the DAT and Brotli paths publish a DAT stream rather than a
+    /// filesystem image, so they honestly return an all-unevaluated result.</summary>
     internal static FirmwareOpResult Build(ImageOperationPaths paths, string operation, int brotliLevel, IProgress<FileSystemByteProgress>? progress = null)
     {
         if (operation is not ("img" or "dat" or "br")) throw new ArgumentOutOfRangeException(nameof(operation));
@@ -30,8 +36,7 @@ internal static class ImageOutputService
         if (operation == "img")
         {
             if (!Directory.Exists(paths.UnpackedDirectory)) throw new DirectoryNotFoundException(paths.UnpackedDirectory);
-            var built = PackingService.BuildImage(paths.UnpackedDirectory, Path.Combine(paths.OutputRoot, paths.Name + ".img"), progress: progress);
-            return new FirmwareOpResult { Success = built.Success, Summary = built.Summary };
+            return PackingService.BuildImage(paths.UnpackedDirectory, Path.Combine(paths.OutputRoot, paths.Name + ".img"), progress: progress);
         }
 
         // Intermediate images stay on disk; no whole-image byte arrays.
@@ -45,7 +50,7 @@ internal static class ImageOutputService
             {
                 input = Path.Combine(staging, "image.img");
                 var built = PackingService.BuildImage(paths.UnpackedDirectory, input, progress: progress);
-                if (!built.Success) return FirmwareOpResult.Fail(built.Summary);
+                if (!built.Success) return built;
             }
             if (new SparseFormatHandler().CanHandle(input))
             {
@@ -64,7 +69,7 @@ internal static class ImageOutputService
             {
                 var compressed = dat + ".br";
                 CompressionFile.CompressFile(dat, compressed,
-                    UotanStudio.Firmware.BoundedContexts.Compression.CompressionFormat.Brotli,
+                    UotanStudio.Firmware.Compression.CompressionFormat.Brotli,
                     new() { Level = brotliLevel },
                     FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.Compressing));
                 dat = compressed;

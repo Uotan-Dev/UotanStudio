@@ -205,6 +205,16 @@
 
     <!-- ImageView -->
     <x:String x:Key="Image_OperationSummary">Succeeded: {0}; failed: {1}; skipped: {2}. See the log for details.</x:String>
+    <x:String x:Key="Image_EquivalenceReportHeader">Equivalence of the built image: {0}</x:String>
+    <x:String x:Key="Image_EquivalenceLine">{0}: {1}</x:String>
+    <x:String x:Key="Image_EquivalenceDimensionByte">Byte identity</x:String>
+    <x:String x:Key="Image_EquivalenceDimensionStructure">Inode structure</x:String>
+    <x:String x:Key="Image_EquivalenceDimensionContent">File content</x:String>
+    <x:String x:Key="Image_EquivalenceDimensionCapacity">Capacity</x:String>
+    <x:String x:Key="Image_EquivalenceStateEquivalent">Equivalent</x:String>
+    <x:String x:Key="Image_EquivalenceStateNotEquivalent">Not equivalent</x:String>
+    <x:String x:Key="Image_EquivalenceStateNotEvaluated">Not evaluated by the library</x:String>
+    <x:String x:Key="Image_EquivalenceMoreInLog">Equivalence of {0} earlier image(s) is recorded in the log.</x:String>
     <x:String x:Key="Dialog_UnsavedTitle">Unsaved Changes</x:String>
     <x:String x:Key="Dialog_UnsavedMessage">Save changes to '{0}' before closing?</x:String>
     <x:String x:Key="Dialog_DiscardChanges">Discard</x:String>
@@ -512,6 +522,7 @@
     <x:String x:Key="Delivery_ProgressDownload">Downloading flashing tools</x:String>
     <x:String x:Key="Delivery_ProgressPackage">Packaging ZIP</x:String>
     <x:String x:Key="Delivery_ProgressVerify">Verifying output</x:String>
+    <x:String x:Key="Delivery_ProgressEquivalence">Verifying image equivalence</x:String>
     <x:String x:Key="Delivery_ProgressDone">Output complete</x:String>
     <x:String x:Key="Progress_Stats">{0} / {1} · Speed {2} · {3} left</x:String>
     <x:String x:Key="Progress_StatsNoEta">{0} / {1} · Speed {2}</x:String>

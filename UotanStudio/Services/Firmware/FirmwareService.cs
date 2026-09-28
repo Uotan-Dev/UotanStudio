@@ -1,39 +1,31 @@
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Firmware.AndroidMeta.Apk;
+using UotanStudio.Firmware.Application.Equivalence;
 using UotanStudio.Firmware.Application.Formats;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys;
-using UotanStudio.Firmware.BoundedContexts.Archive;
-using UotanStudio.Firmware.BoundedContexts.Archive.Extraction;
-using UotanStudio.Firmware.BoundedContexts.Archive.Models;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Build;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Lp.Reading;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Models;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Signing;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb.Verification;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Components;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Parser;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher.Models;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Rebuilding;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Files;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat.Writer;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Parser;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Extraction;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.Archive;
+using UotanStudio.Firmware.Archive.Extraction;
+using UotanStudio.Firmware.Archive.Models;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.BootSecurity.Avb;
+using UotanStudio.Firmware.BootSecurity.Avb.Signing;
+using UotanStudio.Firmware.BootSecurity.Avb.Verification;
+using UotanStudio.Firmware.BootSecurity.BootImage;
+using UotanStudio.Firmware.BootSecurity.BootImage.Components;
+using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
+using UotanStudio.Firmware.BootSecurity.Patcher;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Parser;
+using UotanStudio.Firmware.FileSystem.Ext4;
+using UotanStudio.Firmware.FileSystem.F2fs;
+using UotanStudio.Firmware.FileSystem.Rebuilding;
+using UotanStudio.Firmware.OtaDelta.Dat;
+using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Firmware.VendorFirmware.Oppo;
+using UotanStudio.Firmware.VendorFirmware.Oppo.Models;
 
 namespace UotanStudio.Services.Firmware;
 
@@ -62,11 +54,46 @@ public sealed class FirmwareOpResult
     public IReadOnlyList<string> Entries { get; init; } = [];
 
     /// <summary>
+    /// Gets the library-side key/value facts carried by the operation, including the filesystem
+    /// equivalence flags; mapping a library result onto this type is the only way those flags reach the host.
+    /// <para>获取操作携带的库侧键值信息，其中包含文件系统等价标记；把库结果映射到本类型是这些标记抵达宿主的唯一途径。</para>
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>
+    /// Gets the four-dimension equivalence report parsed from <see cref="Metadata"/>. A dimension whose flag is
+    /// absent or unparsable stays <see cref="FirmwareEquivalenceState.NotEvaluated"/>; this property never turns a
+    /// missing check into an equivalence claim.
+    /// <para>获取依据 <see cref="Metadata"/> 解析出的四维度等价报告。标记缺失或无法解析的维度保持为不评估；
+    /// 本属性绝不会把未执行的检查变成等价声明。</para>
+    /// </summary>
+    public FilesystemEquivalenceReport Equivalence => FilesystemEquivalenceReport.FromMetadata(Metadata);
+
+    /// <summary>
     /// Creates a failed operation result.
     /// <para>创建失败的操作结果。</para>
     /// </summary>
     /// <param name="summary">Failure summary. <para>失败摘要。</para></param>
     public static FirmwareOpResult Fail(string summary) => new() { Success = false, Summary = summary };
+
+    /// <summary>
+    /// The single library-result to host-result conversion. Host code must use this instead of building a host
+    /// result field by field, because an ad-hoc conversion silently drops <see cref="Metadata"/> and with it the
+    /// equivalence report the filesystem rebuild produced.
+    /// <para>库结果到宿主结果的唯一转换入口。宿主代码必须使用本方法而不是逐字段自建宿主结果，因为临时编写的
+    /// 转换会悄悄丢弃 <see cref="Metadata"/>，连带丢掉文件系统重建产出的等价报告。</para>
+    /// </summary>
+    /// <param name="result">Library result to mirror. <para>待映射的库结果。</para></param>
+    /// <returns>A host result carrying the same success flag, summary, entries and metadata.
+    /// <para>携带相同成功标志、摘要、明细行与元数据的宿主结果。</para></returns>
+    public static FirmwareOpResult From(UotanStudio.Firmware.Core.FirmwareOpResult result)
+        => new()
+        {
+            Success = result.Success,
+            Summary = result.Summary,
+            Entries = result.Entries,
+            Metadata = result.Metadata,
+        };
 }
 
 /// <summary>
@@ -224,12 +251,7 @@ public sealed class FirmwareService
         {
             File.Delete(Path.Combine(outputDirectory, RepackMetadata.FileName));
         }
-        return new FirmwareOpResult
-        {
-            Success = result.Success,
-            Summary = result.Summary,
-            Entries = result.Entries
-        };
+        return FirmwareOpResult.From(result);
     }
 
     /// <summary>
@@ -245,12 +267,7 @@ public sealed class FirmwareService
         using var scope = RepackMetadata.UseContext(CaptureOperationContext(inputDirectory));
         var result = await new CpioFormatHandler().PackAsync(inputDirectory, outputArchivePath, cancellationToken)
             .ConfigureAwait(false);
-        return new FirmwareOpResult
-        {
-            Success = result.Success,
-            Summary = result.Summary,
-            Entries = result.Entries
-        };
+        return FirmwareOpResult.From(result);
     }
 
     /// <summary>
@@ -462,15 +479,15 @@ public sealed class FirmwareService
         {
             return await Task.Run(() =>
             {
-                using var keyMaterial = UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Keys.ApkSignerKeyMaterial.Load(
+                using var keyMaterial = UotanStudio.Firmware.AndroidMeta.Apk.ApkSignerKeyMaterial.Load(
                     keyPath, keyPassword, certPath, certPassword);
-                var options = new UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningOptions
+                var options = new UotanStudio.Firmware.AndroidMeta.Apk.Signing.ApkSigningOptions
                 {
                     EnableV1 = enableV1,
                     EnableV2 = enableV2,
                     EnableV3 = enableV3,
                 };
-                UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigner.Sign(
+                UotanStudio.Firmware.AndroidMeta.Apk.Signing.ApkSigner.Sign(
                     inputApk, outputApk, keyMaterial, options, cancellationToken);
 
                 var schemes = new List<string>();
@@ -762,12 +779,12 @@ public sealed class FirmwareService
         RepackMetadataContext context)
     {
         var result = await new BootImageFormatHandler().PackAsync(inputDirectory, outputPath, cancellationToken, context.Capture()).ConfigureAwait(false);
-        return new FirmwareOpResult { Success = result.Success, Summary = result.Summary };
+        return FirmwareOpResult.From(result);
     }
 
-    private static byte[] DecompressRamdisk(byte[] raw, UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models.CompressionType compression)
+    private static byte[] DecompressRamdisk(byte[] raw, UotanStudio.Firmware.BootSecurity.BootImage.Models.CompressionType compression)
     {
-        return compression == UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.Models.CompressionType.None || raw.Length == 0
+        return compression == UotanStudio.Firmware.BootSecurity.BootImage.Models.CompressionType.None || raw.Length == 0
             ? raw
             : BootCompressor.TryDecompress(raw, compression) ?? raw;
     }
@@ -937,7 +954,7 @@ public sealed class FirmwareService
     {
         var result = await Task.Run(() => new LpFormatHandler().UnpackAsync(superPath, outputDirectory,
             cancellationToken: cancellationToken), cancellationToken).ConfigureAwait(false);
-        return new FirmwareOpResult { Success = result.Success, Summary = result.Summary, Entries = result.Entries };
+        return FirmwareOpResult.From(result);
     }
 
     /// <summary>
@@ -1053,12 +1070,7 @@ public sealed class FirmwareService
     {
         using var metadataScope = RepackMetadata.UseContext(CaptureOperationContext(outputDirectory));
         var result = await new SparseFormatHandler().UnpackAsync(sparsePath, outputDirectory, new UnpackOptions { FileSystemProgress = byteProgress }, cancellationToken: cancellationToken).ConfigureAwait(false);
-        return new FirmwareOpResult
-        {
-            Success = result.Success,
-            Summary = result.Summary,
-            Entries = result.Entries,
-        };
+        return FirmwareOpResult.From(result);
     }
 
     /// <summary>
@@ -1087,10 +1099,10 @@ public sealed class FirmwareService
             async frozen =>
             {
                 var extracted = await UnpackFileSystemImageCoreAsync(frozen, outputDirectory, progress, cancellationToken, byteProgress).ConfigureAwait(false);
-                return extracted.Success ? UotanStudio.Firmware.SharedKernel.FirmwareOpResult.Ok(extracted.Summary)
-                    : UotanStudio.Firmware.SharedKernel.FirmwareOpResult.Fail(extracted.Summary);
+                return extracted.Success ? UotanStudio.Firmware.Core.FirmwareOpResult.Ok(extracted.Summary)
+                    : UotanStudio.Firmware.Core.FirmwareOpResult.Fail(extracted.Summary);
             }).ConfigureAwait(false);
-        return new FirmwareOpResult { Success = result.Success, Summary = result.Summary, Entries = result.Entries };
+        return FirmwareOpResult.From(result);
     }
 
     private async Task<FirmwareOpResult> UnpackFileSystemImageCoreAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default, IProgress<FileSystemByteProgress>? byteProgress = null)

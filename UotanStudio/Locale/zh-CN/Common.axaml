@@ -211,6 +211,16 @@
     <x:String x:Key="Dialog_SaveIncomplete">仍有未保存的修改，请检查文档后重试。</x:String>
     <x:String x:Key="ImageView_UnpackMode">解包</x:String>
     <x:String x:Key="Image_OperationSummary">成功 {0} 项，失败 {1} 项，跳过 {2} 项。详情见日志。</x:String>
+    <x:String x:Key="Image_EquivalenceReportHeader">产出镜像的等价性：{0}</x:String>
+    <x:String x:Key="Image_EquivalenceLine">{0}：{1}</x:String>
+    <x:String x:Key="Image_EquivalenceDimensionByte">字节一致</x:String>
+    <x:String x:Key="Image_EquivalenceDimensionStructure">结构</x:String>
+    <x:String x:Key="Image_EquivalenceDimensionContent">文件内容</x:String>
+    <x:String x:Key="Image_EquivalenceDimensionCapacity">容量</x:String>
+    <x:String x:Key="Image_EquivalenceStateEquivalent">等价</x:String>
+    <x:String x:Key="Image_EquivalenceStateNotEquivalent">不等价</x:String>
+    <x:String x:Key="Image_EquivalenceStateNotEvaluated">库未执行评估</x:String>
+    <x:String x:Key="Image_EquivalenceMoreInLog">另有 {0} 项镜像的等价性已记录在日志中。</x:String>
     <x:String x:Key="ImageView_PackMode">打包</x:String>
     <x:String x:Key="ImageView_OutputMode">输出</x:String>
     <x:String x:Key="ImageView_Processing">正在处理…</x:String>
@@ -512,6 +522,7 @@
     <x:String x:Key="Delivery_ProgressDownload">正在下载刷写工具</x:String>
     <x:String x:Key="Delivery_ProgressPackage">正在打包 ZIP</x:String>
     <x:String x:Key="Delivery_ProgressVerify">正在校验输出</x:String>
+    <x:String x:Key="Delivery_ProgressEquivalence">正在校验镜像等价性</x:String>
     <x:String x:Key="Delivery_ProgressDone">输出完成</x:String>
     <x:String x:Key="Progress_Stats">{0} / {1} · 速度 {2} · 剩余 {3}</x:String>
     <x:String x:Key="Progress_StatsNoEta">{0} / {1} · 速度 {2}</x:String>

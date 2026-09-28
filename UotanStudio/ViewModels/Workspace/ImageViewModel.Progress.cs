@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Workspace;
@@ -80,6 +80,7 @@ internal partial class ImageViewModel
             _hideReportCts = null;
             _meter.Reset();
             ProgressStats = string.Empty;
+            EquivalenceReport = string.Empty;
             ProgressPercent = -1;
             return;
         }
