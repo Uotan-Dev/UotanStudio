@@ -489,7 +489,7 @@ public sealed partial class FlashBundleOrchestrator
         {
             Span<byte> magic = stackalloc byte[4];
             return stream.Read(magic) == 4 && BinaryPrimitives.ReadUInt32LittleEndian(magic)
-                == UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.SparseFormat.SparseHeaderMagic;
+                == UotanStudio.Firmware.BlockImage.Sparse.SparseFormat.SparseHeaderMagic;
         }
         finally
         {

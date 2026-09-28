@@ -1,12 +1,10 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Models;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Parser;
+using UotanStudio.Firmware.Application.Equivalence;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.F2fs;
+using UotanStudio.Firmware.FileSystem.F2fs.Models;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Workspace;
@@ -78,6 +76,34 @@ public sealed class PackingServiceF2fsTests : IDisposable
         Assert.True(result.Success, result.Summary);
         using var parser = new F2fsParser(output);
         Assert.Contains(parser.ListFiles(), entry => entry.Path == "build.prop");
+    }
+
+    [Fact]
+    public void BuildImage_FreshDirectoryBuild_ReportsEveryEquivalenceDimensionAsNotEvaluated()
+    {
+        var source = Path.Combine(_root, "equivalence-source");
+        var output = Path.Combine(_root, "equivalence.img");
+        Directory.CreateDirectory(source);
+        File.WriteAllText(Path.Combine(source, "build.prop"), "ro.product=test\n");
+        var settings = new ProjectSettingViewModel();
+        settings.ApplyFromDto(new ProjectSettingsDto { ImageType = "F2FS", ImageFormat = "RAW" });
+
+        var result = PackingService.BuildImage(source, output, settings);
+
+        Assert.True(result.Success, result.Summary);
+        Assert.Equal(
+            [
+                FirmwareEquivalenceState.NotEvaluated,
+                FirmwareEquivalenceState.NotEvaluated,
+                FirmwareEquivalenceState.NotEvaluated,
+                FirmwareEquivalenceState.NotEvaluated,
+            ],
+            [
+                result.Equivalence.ByteEquivalence,
+                result.Equivalence.StructureEquivalence,
+                result.Equivalence.ContentEquivalence,
+                result.Equivalence.CapacityEquivalence,
+            ]);
     }
 
     [Theory]

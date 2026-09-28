@@ -1,14 +1,11 @@
-using UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.Conversion;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Compression;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Builder;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs.Compression;
-using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Firmware.SharedKernel.Repacking;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
+using UotanStudio.Firmware.FileSystem.Ext4;
+using UotanStudio.Firmware.FileSystem.Ext4.Builder;
+using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Workspace;
 
@@ -23,10 +20,13 @@ namespace UotanStudio.Services.Firmware;
 internal static class PackingService
 {
     /// <summary>
-    /// Builds an image using directory metadata, or project settings when metadata is absent.
-    /// <para>按目录元数据构建镜像；无元数据时使用项目打包设置。</para>
+    /// Builds an image using directory metadata, or project settings when metadata is absent. The returned
+    /// host result keeps the library metadata, so the equivalence report of a preserved filesystem rebuild
+    /// survives into the caller instead of being flattened into a summary string.
+    /// <para>按目录元数据构建镜像；无元数据时使用项目打包设置。返回的宿主结果保留库侧元数据，因此受保留
+    /// 文件系统重建的等价报告能抵达调用方，而不会被压成一段摘要文本。</para>
     /// </summary>
-    public static (bool Success, string Summary) BuildImage(
+    public static FirmwareOpResult BuildImage(
         string sourceDirectory,
         string outputPath,
         ProjectSettingViewModel? settings = null,
@@ -46,7 +46,7 @@ internal static class PackingService
             var imageProgress = FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
             if (metadata is not null)
             {
-                if (!metadata.CanPackDirectory) return (false, metadata.PackingNotes);
+                if (!metadata.CanPackDirectory) return FirmwareOpResult.Fail(metadata.PackingNotes);
                 // 打包设置面板的稀疏/压缩等参数覆盖解包产出的元数据（仅文件系统镜像）。
                 // Let the packing-settings panel override the unpacked metadata for filesystem images.
                 var estimated = EstimateSourceBytes(sourceDirectory);
@@ -72,26 +72,26 @@ internal static class PackingService
                         var preserved = RegisteredFirmwareFormats.PackDirectoryAsync(metadata.FormatName, sourceDirectory, outputPath, progress: progress)
                             .GetAwaiter().GetResult();
                         imageProgress.Report((estimated, estimated));
-                        return (preserved.Success, preserved.Summary);
+                        return preserved;
                     }
 
                     using var overrides = RepackMetadata.UsePackingOverrides(BuildOverrideOptions(settings, targetFormat));
                     var overridden = RegisteredFirmwareFormats.PackDirectoryAsync(targetFormat, sourceDirectory, outputPath, progress: progress)
                         .GetAwaiter().GetResult();
                     imageProgress.Report((estimated, estimated));
-                    return (overridden.Success, overridden.Summary);
+                    return overridden;
                 }
 
                 var result = RegisteredFirmwareFormats.PackDirectoryAsync(metadata.FormatName, sourceDirectory, outputPath, progress: progress)
                     .GetAwaiter().GetResult();
                 imageProgress.Report((estimated, estimated));
-                return (result.Success, result.Summary);
+                return result;
             }
 
             settings ??= ProjectSettingViewModel.Instance;
             if (settings is null)
             {
-                return (false, "Packing settings not available  打包设置不可用");
+                return FirmwareOpResult.Fail("Packing settings not available  打包设置不可用");
             }
 
             if (settings.TypeEXT4)
@@ -108,7 +108,7 @@ internal static class PackingService
         }
         catch (Exception ex)
         {
-            return (false, $"Build failed: {ex.Message}  构建失败：{ex.Message}");
+            return FirmwareOpResult.Fail($"Build failed: {ex.Message}  构建失败：{ex.Message}");
         }
     }
 
@@ -160,7 +160,7 @@ internal static class PackingService
         };
     }
 
-    private static (bool Success, string Summary) BuildExt4(
+    private static FirmwareOpResult BuildExt4(
         string sourceDirectory,
         string outputPath,
         ProjectSettingViewModel settings,
@@ -197,10 +197,10 @@ internal static class PackingService
         var summary = $"EXT4 image built: {outputPath} ({size:N0} bytes, {sw.Elapsed.TotalSeconds:F1}s)  " +
                       $"EXT4 镜像已构建：{outputPath}（{size:N0} 字节，{sw.Elapsed.TotalSeconds:F1} 秒）";
         LogService.Instance.Write(LogLevel.Info, "Packing", summary);
-        return (true, summary);
+        return new FirmwareOpResult { Success = true, Summary = summary };
     }
 
-    private static (bool Success, string Summary) BuildErofs(
+    private static FirmwareOpResult BuildErofs(
         string sourceDirectory,
         string outputPath,
         ProjectSettingViewModel settings,
@@ -213,7 +213,7 @@ internal static class PackingService
             // and on change) so both the packing panel and repack honor the same user choice.
             // legacy 布局跟随应用层设置（启动与变更时同步到共享默认值），使打包面板与重打包
             // 遵循同一用户选择。
-            LegacyCompatibility = UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility,
+            LegacyCompatibility = UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility,
             // The panel selects the codec and, for LZ4, the block encoder through the shared selector
             // vocabulary so the picker drives the builder directly.
             // 面板通过共享的选择器词表选择编解码器，并在 LZ4 下选择块编码器，使下拉框直接驱动构建器。
@@ -243,10 +243,10 @@ internal static class PackingService
         var summary = $"EROFS image built: {outputPath} ({size:N0} bytes, {sw.Elapsed.TotalSeconds:F1}s)  " +
                       $"EROFS 镜像已构建：{outputPath}（{size:N0} 字节，{sw.Elapsed.TotalSeconds:F1} 秒）";
         LogService.Instance.Write(LogLevel.Info, "Packing", summary);
-        return (true, summary);
+        return new FirmwareOpResult { Success = true, Summary = summary };
     }
 
-    private static (bool Success, string Summary) BuildF2fs(
+    private static FirmwareOpResult BuildF2fs(
         string sourceDirectory,
         string outputPath,
         ProjectSettingViewModel settings,
@@ -288,7 +288,7 @@ internal static class PackingService
 
         var summary = $"F2FS image built: {outputPath} ({size:N0} bytes, {sw.Elapsed.TotalSeconds:F1}s)";
         LogService.Instance.Write(LogLevel.Info, "Packing", summary);
-        return (true, summary);
+        return new FirmwareOpResult { Success = true, Summary = summary };
     }
 
     private static CompressionAlgorithm ParseF2fsCompressionAlgorithm(string value)
