@@ -14,6 +14,7 @@
     <x:String x:Key="Delivery_UseProjectSuperSettings">Use project Super settings</x:String>
     <x:String x:Key="Delivery_UseProjectPayloadSettings">Use project Payload settings</x:String>
     <x:String x:Key="Delivery_SelectProject">Select project</x:String>
+    <x:String x:Key="Delivery_NoProjectSourceSettings">No project configuration is readable for the current mode; using project settings was cleared.</x:String>
     <x:String x:Key="Delivery_SourceProject">Source project</x:String>
     <x:String x:Key="Delivery_DeviceType">Device type</x:String>
     <x:String x:Key="Delivery_SuperDeviceName">Name</x:String>
@@ -26,7 +27,7 @@
     <x:String x:Key="Delivery_MaxTimestamp">Maximum timestamp</x:String>
     <x:String x:Key="Delivery_SecurityPatch">Security patch date</x:String>
     <x:String x:Key="Delivery_InvalidParameter">Invalid parameter: {0}</x:String>
-    <x:String x:Key="Delivery_InvalidSuperSize">Invalid Super size.</x:String>
+    <x:String x:Key="Delivery_InvalidSuperSize">Enter the device Super size; read it with fastboot getvar super-partition-size.</x:String>
     <x:String x:Key="Delivery_InvalidPayloadVersion">Invalid Payload version.</x:String>
     <x:String x:Key="Delivery_EditedScriptsNeedReview">Configuration changed. Review edited scripts before output.</x:String>
     <x:String x:Key="Delivery_OpenProjectToSave">Open a project to save the delivery plan.</x:String>
@@ -104,6 +105,10 @@
     <x:String x:Key="Delivery_Script_EraseFailed">Erase failed.</x:String>
     <x:String x:Key="Delivery_Script_RebootFailed">Reboot failed.</x:String>
     <x:String x:Key="Delivery_Script_Completed">Completed.</x:String>
+    <x:String x:Key="Delivery_Script_UnlockedRequired">An unlocked bootloader is required. Images verified by AVB also need matching patched vbmeta, otherwise the device may refuse to boot.</x:String>
+    <x:String x:Key="Delivery_Script_CustomRecoveryRequired">This package runs its own update-binary and needs a custom recovery; stock recovery rejects packages it cannot verify.</x:String>
+    <x:String x:Key="Delivery_Script_SuperSizeMismatch">The Super image was built for a {0}-byte super but the device reports {1} bytes; rebuild the delivery with the device size.</x:String>
+    <x:String x:Key="Delivery_Script_SuperSizeUnknown">Device does not report super-partition-size; the Super size was not verified.</x:String>
     <x:String x:Key="Delivery_Script_DeliveryFailed">Delivery failed. Check device, images and tools.</x:String>
     <x:String x:Key="Delivery_Script_ChecksumFailed">Checksum verification failed. Nothing was flashed.</x:String>
     <x:String x:Key="Delivery_Script_DeviceChanged">Device changed.</x:String>

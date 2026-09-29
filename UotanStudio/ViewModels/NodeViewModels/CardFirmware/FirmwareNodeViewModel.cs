@@ -1,4 +1,5 @@
 using Avalonia;
+using UotanStudio.Firmware.BootSecurity.Workflow;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.DeviceTree.Dt;
@@ -39,6 +40,13 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
             TypeKey = "Firmware.Container.Unpack"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Firmware Path", PortType = NodePortType.Path });
+        node.Input.Add(new NodeConnectorViewModel
+        {
+            Title = "Metadata Only",
+            PortType = NodePortType.Boolean,
+            InitialValue = "false",
+            DisplayResourceKey = "Node_Conn_MetadataOnly"
+        });
         node.Output.Add(new NodeConnectorViewModel { Title = "Output Dir", PortType = NodePortType.Path });
         node.Output.Add(new NodeConnectorViewModel { Title = "Partitions", PortType = NodePortType.Text });
         return node;
@@ -64,6 +72,38 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         });
         node.Input.Add(new NodeConnectorViewModel { Title = "Output Path", PortType = NodePortType.Path });
         node.Output.Add(new NodeConnectorViewModel { Title = "Firmware", PortType = NodePortType.Path });
+        return node;
+    }
+
+    /// <summary>
+    /// <para>创建 boot 内核命令行编辑节点。</para>
+    /// Creates the boot kernel command line edit node.
+    /// </summary>
+    /// <returns>配置好输入输出端口与默认参数的命令行编辑节点。
+    /// The configured command line edit node with its ports and defaults.</returns>
+    public static FirmwareNodeViewModel CreateCmdlineEditNode()
+    {
+        var node = new FirmwareNodeViewModel("Boot Cmdline")
+        {
+            Location = new Point(100, 100),
+            TypeKey = "Boot.CommandLine.Edit"
+        };
+        node.Input.Add(new NodeConnectorViewModel { Title = "Image", PortType = NodePortType.Path });
+        node.Input.Add(new NodeConnectorViewModel
+        {
+            Title = "Parameter",
+            PortType = NodePortType.Text,
+            InitialValue = "androidboot.selinux"
+        });
+        node.Input.Add(new NodeConnectorViewModel
+        {
+            Title = "Value",
+            PortType = NodePortType.Text,
+            InitialValue = "permissive"
+        });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Output Path", PortType = NodePortType.Path });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Boot Image", PortType = NodePortType.Path });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Report", PortType = NodePortType.Text });
         return node;
     }
 
@@ -132,6 +172,9 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
                 case "Firmware.Container.Pack":
                     await ExecutePackAsync(context).ConfigureAwait(false);
                     break;
+                case "Boot.CommandLine.Edit":
+                    await ExecuteCmdlineEditAsync(context).ConfigureAwait(false);
+                    break;
                 case "Validation.Signature.Verify":
                     await ExecuteVerifyAsync(context).ConfigureAwait(false);
                     break;
@@ -165,6 +208,12 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         var outputDir = DeriveOutputDir(path);
         using var metadataScope = RepackMetadata.UseContext(
             UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(outputDir));
+        if (IsMetadataOnlyRequested())
+        {
+            await ExecuteMetadataOnlyUnpackAsync(context, path, outputDir).ConfigureAwait(false);
+            return;
+        }
+
         var dt = new DtFormatHandler();
         if (dt.CanHandle(path))
         {
@@ -197,6 +246,55 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         WriteOutput("Output Dir", outputDir);
         WriteOutput("Partitions", boot.Entries);
         context.Log.Write(LogLevel.Info, Title, $"{boot.Summary}  已解包。");
+    }
+
+    private bool IsMetadataOnlyRequested() => ReadInput("Metadata Only") switch
+    {
+        bool value => value,
+        string text when bool.TryParse(text, out var value) => value,
+        _ => false
+    };
+
+    private async Task ExecuteMetadataOnlyUnpackAsync(INodeExecutionContext context, string path, string outputDir)
+    {
+        UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
+        var handler = FormatDetector.Detect(path)
+            ?? throw new InvalidDataException("No format handler can read this container, so repack metadata cannot be exported alone.");
+        var result = await handler.UnpackAsync(path, outputDir,
+            new UnpackOptions { MetadataOnly = true }, context.CancellationToken).ConfigureAwait(false);
+        if (!result.Success)
+        {
+            throw new InvalidDataException(result.Summary);
+        }
+
+        WriteOutput("Output Dir", outputDir);
+        WriteOutput("Partitions", result.Entries);
+        context.Log.Write(LogLevel.Info, Title, result.Summary);
+    }
+
+    private async Task ExecuteCmdlineEditAsync(INodeExecutionContext context)
+    {
+        var path = PathText(ReadInput("Image"));
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            throw new FileNotFoundException("Boot image input was not found.", path);
+        }
+
+        var output = PathText(ReadInput("Output Path"));
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            throw new ArgumentException("Output Path is required so the source boot image is never overwritten.");
+        }
+
+        var parameter = ReadInput("Parameter")?.ToString();
+        var value = ReadInput("Value")?.ToString();
+        var service = new BootCmdlineService();
+        var plan = service.CreatePlan(path, parameter ?? string.Empty, string.IsNullOrWhiteSpace(value) ? null : value.Trim());
+        await service.ApplyAsync(plan, output, context.CancellationToken).ConfigureAwait(false);
+        var report = $"{plan.Key}={(plan.Value is null ? "<removed>" : plan.Value)}  {plan.OriginalCommandLine}  ->  {plan.UpdatedCommandLine}";
+        WriteOutput("Boot Image", output);
+        WriteOutput("Report", report);
+        context.Log.Write(LogLevel.Info, Title, report);
     }
 
     private async Task ExecutePackAsync(INodeExecutionContext context)

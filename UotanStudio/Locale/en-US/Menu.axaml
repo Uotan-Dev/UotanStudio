@@ -52,9 +52,16 @@
     <x:String x:Key="Menu_OpenFile">Open File...</x:String>
     <x:String x:Key="Menu_SelectCreationDirectory">Select where to create the item</x:String>
     <x:String x:Key="Menu_OpenFailed">Unable to open</x:String>
+    <x:String x:Key="Menu_OpenProjectMissing">The project file could not be found: {0}</x:String>
+    <x:String x:Key="Menu_OpenSolutionUnsupported">The solution file carries format version {1}, which this build cannot read. It may come from a different UotanStudio version: {0}</x:String>
+    <x:String x:Key="Menu_OpenSolutionUnreadable">The solution file is invalid or unreadable: {0}</x:String>
+    <x:String x:Key="Menu_OpenNodeProjectUnsupported">A node project of this solution carries workflow format version {1}, which this build cannot read. It may come from a different UotanStudio version: {0}</x:String>
+    <x:String x:Key="Menu_OpenNodeProjectUnreadable">A node project of this solution is invalid or unreadable: {0}</x:String>
     <x:String x:Key="Menu_OpenRecent">Open Recent</x:String>
     <x:String x:Key="Menu_Save">Save</x:String>
     <x:String x:Key="Menu_SaveAs">Save As...</x:String>
+    <x:String x:Key="Menu_NewNodeProject">New Node Project</x:String>
+    <x:String x:Key="Menu_CreateNodeProjectNoProject">Open a solution before creating a node project.</x:String>
     <x:String x:Key="Menu_ImportImage">Import Image...</x:String>
     <x:String x:Key="Menu_ExportImage">Export Image...</x:String>
     <x:String x:Key="Menu_Export">Export...</x:String>
@@ -104,6 +111,7 @@
     <x:String x:Key="Menu_FirmwareTools">Firmware Tools</x:String>
     <x:String x:Key="Menu_DeviceManager">Device Manager</x:String>
     <x:String x:Key="Menu_LogWindow">Log Window</x:String>
+    <x:String x:Key="Menu_UsbTreeWindow">USB Tree View</x:String>
 
     <!-- Bottom tabs -->
     <x:String x:Key="Tab_Device">Device</x:String>

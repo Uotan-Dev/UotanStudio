@@ -14,24 +14,17 @@ public sealed partial class DeviceMonitorService
     /// <summary>Provides the USB inventory to an embedded MCP host.</summary>
     public IReadOnlyList<UsbDeviceInfo> ListUsbDevices() => _controller.EnumerateUsb();
 
-    /// <summary>Excludes only USB debug interfaces owned by a running bridge server.</summary>
+    /// <summary>Lists the direct-USB interfaces left in the snapshot; debug bridge servers own their
+    /// protocol's interfaces, and discovery already removed those endpoints.</summary>
     public IReadOnlyList<UsbDeviceInfo> ListRoutableUsbDevices()
     {
         var snapshot = _controller.RefreshAsync().GetAwaiter().GetResult();
-        var hdcServer = DebugBridgeRoute.UseHdcServer();
         return snapshot.Endpoints.Where(endpoint =>
             endpoint.Source == UotanStudio.Comm.Devices.Discovery.UsbDiscoverySource.SourceName &&
-            endpoint.Route == "direct-usb" && endpoint.UsbInfo is not null &&
-            !(endpoint.Protocol == "adb" && ServerOwnsAdb(snapshot, endpoint.UsbInfo.SerialNumber)) &&
-            !(endpoint.Protocol == "hdc" && hdcServer))
+            endpoint.Route == "direct-usb" && endpoint.UsbInfo is not null)
             .Select(endpoint => endpoint.UsbInfo!)
             .ToArray();
     }
-
-    private static bool ServerOwnsAdb(DeviceSnapshot snapshot, string? serial) =>
-        snapshot.Endpoints.Any(endpoint => endpoint.Protocol == "adb" && endpoint.Route == "server" &&
-            (string.IsNullOrWhiteSpace(serial) ||
-                string.Equals(endpoint.Serial ?? endpoint.Address, serial, StringComparison.Ordinal)));
 
     /// <summary>Lists the routed server and direct USB targets.</summary>
     public IReadOnlyList<(string Serial, string State)> ListAdbTargets()

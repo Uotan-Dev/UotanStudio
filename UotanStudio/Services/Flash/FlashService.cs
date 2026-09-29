@@ -467,9 +467,20 @@ public sealed class FlashService : IFlashService
     /// <remarks>
     /// <paramref name="partition"/> must already be slot-resolved (see
     /// <see cref="PrepareFlashTarget"/>), because every piece is flashed with
-    /// <c>resolveSlot: false</c>.
+    /// <c>resolveSlot: false</c>. Both flash calls narrow the session preflight to what this method has
+    /// not already established: the single-image path uses
+    /// <see cref="FlashPartitionOptions.PreparedTarget"/> (slot, <c>is-logical</c> and logical resize were
+    /// paid by <see cref="PrepareFlashTarget"/>, the download limit is already cached in the session, and
+    /// the <c>partition-size</c> comparison is one the host never makes), and the resparse path uses
+    /// <see cref="FlashPartitionOptions.PreparedSparseChunks"/>, which also skips the capacity comparison
+    /// because a sparse chunk's file length says nothing about the bytes it expands to.
     /// <para><paramref name="partition"/> 必须已由 <see cref="PrepareFlashTarget"/> 完成槽位解析，
-    /// 因为每个分片都以 <c>resolveSlot: false</c> 刷写。</para>
+    /// 因为每个分片都以 <c>resolveSlot: false</c> 刷写。两处刷写都把会话预检收窄到本方法尚未确立的部分：
+    /// 单镜像路径使用 <see cref="FlashPartitionOptions.PreparedTarget"/>（槽位、<c>is-logical</c> 与逻辑
+    /// 分区调整已由 <see cref="PrepareFlashTarget"/> 付过，下载上限已在会话内缓存，而
+    /// <c>partition-size</c> 对照是宿主从未做过的一项）；重新分片路径使用
+    /// <see cref="FlashPartitionOptions.PreparedSparseChunks"/>，它额外跳过容量对照，因为稀疏分片的文件
+    /// 长度不能说明它将展开成多少字节。</para>
     /// </remarks>
     private static string FlashImageChunked(
         FastbootSession session, string partition, string imagePath,
@@ -491,7 +502,8 @@ public sealed class FlashService : IFlashService
             Report(progress, partition, 5, "Uploading image... 正在上传镜像...");
             var byteProgress = new Progress<long>(written =>
                 Report(progress, partition, imageLength > 0 ? (int)Math.Min(100, written * 100L / imageLength) : 0, "Uploading image... 正在上传镜像..."));
-            var response = session.FlashPartition(partition, image, imageLength, byteProgress, ct, resolveSlot: false);
+            var response = session.FlashPartition(partition, image, imageLength, byteProgress, ct, resolveSlot: false,
+                options: FlashPartitionOptions.PreparedTarget);
             response.ThrowIfFailed();
             return $"Flashed {partition} ({imageLength} bytes) via fastboot.";
         }
@@ -532,7 +544,8 @@ public sealed class FlashService : IFlashService
                 var chunkProgress = new Progress<long>(written =>
                     Report(progress, partition, totalBytes > 0 ? (int)Math.Min(100, (bytesDone + written) * 100L / totalBytes) : 0,
                         $"Uploading chunk {index + 1}/{chunks.Length}... 正在上传分片..."));
-                var chunkResponse = session.FlashPartition(partition, chunk, chunkLength, chunkProgress, ct, resolveSlot: false);
+                var chunkResponse = session.FlashPartition(partition, chunk, chunkLength, chunkProgress, ct, resolveSlot: false,
+                    options: FlashPartitionOptions.PreparedSparseChunks);
                 chunkResponse.ThrowIfFailed();
                 bytesDone += chunkLength;
             }

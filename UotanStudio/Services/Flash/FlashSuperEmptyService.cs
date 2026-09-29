@@ -101,7 +101,8 @@ public static class FlashSuperEmptyService
                 ct.ThrowIfCancellationRequested();
                 using var input = File.OpenRead(chunk);
                 session.FlashPartition("super", input, input.Length,
-                    cancellationToken: ct, resolveSlot: false).ThrowIfFailed();
+                    cancellationToken: ct, resolveSlot: false,
+                    options: FlashPartitionOptions.NoPreflight).ThrowIfFailed();
             }
         }
         finally

@@ -4,7 +4,6 @@ using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Hdc;
-using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -17,13 +16,13 @@ namespace UotanStudio.Services.Devices;
 public sealed partial class DeviceMonitorService
 {
     /// <summary>
-    /// <para>全量扫描：枚举所有 USB 设备并按接口类/VID-PID 分类为 ADB/Fastboot/EDL/RKDL，
-    /// 并合并 adb server 中的网络设备。结果缓存至下一次设备变更（启动窗的首次扫描结果
-    /// 可直接供设备管理器复用，避免重复枚举）。</para>
-    /// Full scan: enumerates all USB devices, classifies them as ADB/Fastboot/EDL/RKDL by
-    /// interface class or VID/PID, and merges network devices from the adb server. The result
-    /// is cached until the next device change (the splash's initial scan is reused by the
-    /// device manager, avoiding a duplicate enumeration).
+    /// <para>全量扫描：直连 USB 端点由 Comm 的发现层提供（某协议的调试桥 server 在监听时，该协议的
+    /// 直连端点已不在端点清单内），再把 adb 与 HDC server 的目标并入结果。结果缓存至下一次设备变更
+    /// （启动窗的首次扫描结果可直接供设备管理器复用，避免重复枚举）。</para>
+    /// Full scan: consumes the direct-USB endpoints Comm's discovery layer reports (once a protocol's
+    /// debug bridge server is listening, that protocol's direct endpoints are already absent) and appends
+    /// the adb and HDC server targets. The result is cached until the next device change (the splash's
+    /// initial scan is reused by the device manager, avoiding a duplicate enumeration).
     /// </summary>
     public IReadOnlyList<DetectedDevice> Scan()
     {
@@ -61,17 +60,6 @@ public sealed partial class DeviceMonitorService
                 continue;
             }
 
-            var physicalId = PhysicalUsbId(info, info.SerialNumber);
-            if (protocol == DeviceProtocolKind.Adb &&
-                (adbDevices.Any(target =>
-                    string.Equals(target.Serial, info.SerialNumber, StringComparison.Ordinal) ||
-                    physicalId is not null && string.Equals(physicalId,
-                        FindServerUsbIdentity(usbInfos, target.Address, DeviceProtocolKind.Adb),
-                        StringComparison.Ordinal)) ||
-                    string.IsNullOrWhiteSpace(info.SerialNumber) && adbDevices.Length != 0))
-                continue;
-            if (protocol == DeviceProtocolKind.Hdc && (hdcTargets.Length != 0 || DebugBridgeRoute.UseHdcServer()))
-                continue;
             var serial = info.SerialNumber;
             if (protocol == DeviceProtocolKind.Fastboot && string.IsNullOrWhiteSpace(serial))
                 serial = ReadFastbootSerial(info);

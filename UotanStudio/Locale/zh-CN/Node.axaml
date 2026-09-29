@@ -12,6 +12,7 @@
     <x:String x:Key="Node_ZoomIn">放大</x:String>
     <x:String x:Key="Node_ZoomOut">缩小</x:String>
     <x:String x:Key="Node_ResetZoom">重置缩放</x:String>
+    <x:String x:Key="Node_CloseTab">在编辑器中关闭该节点项目</x:String>
     <x:String x:Key="Node_Undo">撤销</x:String>
     <x:String x:Key="Node_Redo">重做</x:String>
     <x:String x:Key="Node_FitAll">适应全部节点</x:String>
@@ -62,6 +63,7 @@
     <x:String x:Key="Node_Firmware_Container_Unpack">解包固件</x:String>
     <x:String x:Key="Node_Firmware_Container_Pack">打包固件</x:String>
     <x:String x:Key="Node_Validation_Signature_Verify">断言 AVB vbmeta 签名有效</x:String>
+    <x:String x:Key="Node_Boot_CommandLine_Edit">编辑 boot 命令行</x:String>
     <x:String x:Key="Node_Firmware_Container_Extract">提取分区</x:String>
     <x:String x:Key="Node_Build_Ota_CreateDelta">OTA 差分</x:String>
     <x:String x:Key="Node_Build_Signature_Merge">不支持的签名字节拼接</x:String>
@@ -185,6 +187,8 @@
     <x:String x:Key="Node_Conn_TransferList">传输列表</x:String>
     <x:String x:Key="Node_Conn_True">是</x:String>
     <x:String x:Key="Node_Conn_Value">值</x:String>
+    <x:String x:Key="Node_Conn_Parameter">参数名</x:String>
+    <x:String x:Key="Node_Conn_BootImage">boot 镜像</x:String>
     <x:String x:Key="Node_Conn_Command">命令</x:String>
     <x:String x:Key="Node_Conn_LocalPath">本地路径</x:String>
     <x:String x:Key="Node_Conn_RemotePath">远程路径</x:String>
@@ -568,6 +572,7 @@
     <x:String x:Key="Node_Config_FileContexts_Query">查询 file_contexts 规则</x:String>
     <x:String x:Key="Node_Config_FileContexts_Edit">编辑 file_contexts 标签</x:String>
     <x:String x:Key="Node_Conn_PathExpression">精确路径表达式</x:String>
+    <x:String x:Key="Node_Conn_MetadataOnly">仅导出重打包元数据</x:String>
     <x:String x:Key="Node_Conn_FileKind">文件类型限定</x:String>
     <x:String x:Key="Node_Conn_Context">SELinux 上下文</x:String>
     <x:String x:Key="Node_Choice_Any">未限定类型的规则</x:String>

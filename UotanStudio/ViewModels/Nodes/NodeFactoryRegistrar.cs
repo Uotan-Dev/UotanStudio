@@ -74,6 +74,7 @@ public static class NodeFactoryRegistrar
         D("Firmware.Container.Unpack", "Node_Firmware_Container_Unpack", NodeToolboxGroup.FirmwareContainer, () => FirmwareNodeViewModel.CreateUnpackNode()),
         D("Firmware.Container.Pack", "Node_Firmware_Container_Pack", NodeToolboxGroup.FirmwareContainer, () => FirmwareNodeViewModel.CreatePackNode()),
         D("Validation.Signature.Verify", "Node_Validation_Signature_Verify", NodeToolboxGroup.Android, () => FirmwareNodeViewModel.CreateVerifyNode()),
+        D("Boot.CommandLine.Edit", "Node_Boot_CommandLine_Edit", NodeToolboxGroup.Android, () => FirmwareNodeViewModel.CreateCmdlineEditNode()),
         D("Build.Apk.Sign", "Node_Build_Apk_Sign", NodeToolboxGroup.Android, () => new ApkSignNodeViewModel()),
         D("Firmware.Container.Extract", "Node_Firmware_Container_Extract", NodeToolboxGroup.FirmwareContainer, () => FirmwareNodeViewModel.CreateExtractNode()),
         D("Build.Ota.CreateDelta", "Node_Build_Ota_CreateDelta", NodeToolboxGroup.Delivery, () => ExtendedFirmwareNodeViewModel.CreateOtaDeltaNode()),

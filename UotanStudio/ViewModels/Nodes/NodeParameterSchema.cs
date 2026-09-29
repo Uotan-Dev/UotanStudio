@@ -12,6 +12,7 @@ internal static class NodeParameterSchema
             "Firmware.Container.Unpack" => ["Firmware Path"],
             "Firmware.Container.Pack" or "Firmware.Cpio.Pack" => ["Input Dir"],
             "Firmware.Container.Extract" or "Validation.Signature.Verify" => ["Firmware"],
+            "Boot.CommandLine.Edit" => ["Image", "Parameter", "Output Path"],
             "Firmware.Cpio.Unpack" => ["Archive Path"],
             "Build.Apk.Sign" => ["APK Path", "Output Path", "Private Key", "Certificate"],
             "Image.Super.Unpack" => ["Super Path"],

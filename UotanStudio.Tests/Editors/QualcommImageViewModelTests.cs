@@ -60,6 +60,19 @@ public sealed class QualcommImageViewModelTests
     }
 
     [Theory]
+    [InlineData("libskel.so")]
+    [InlineData("skel")]
+    public void ResolveMode_HashSegmentInSharedObject_RoutesToElfPanel(string name)
+    {
+        using var temp = new TempDirectory();
+        var data = QualcommMetadataFixture.CreateElf(new byte[16],
+            QualcommMetadataFixture.CreateMbn(6, 0, 120), withDynamicSegment: true);
+        var path = temp.WriteBytes(name, data);
+
+        Assert.Equal(EditorOpenMode.Elf, FileOpenMode.ResolveMode(path, data[..64]));
+    }
+
+    [Theory]
     [InlineData(EditorOpenMode.Text)]
     [InlineData(EditorOpenMode.Hex)]
     public async Task OpenDocumentAsync_QualcommElfExplicitMode_PreservesUserChoice(EditorOpenMode mode)

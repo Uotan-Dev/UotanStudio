@@ -52,9 +52,16 @@
     <x:String x:Key="Menu_OpenFile">打开文件...</x:String>
     <x:String x:Key="Menu_SelectCreationDirectory">选择新建位置</x:String>
     <x:String x:Key="Menu_OpenFailed">打开失败</x:String>
+    <x:String x:Key="Menu_OpenProjectMissing">找不到工程文件：{0}</x:String>
+    <x:String x:Key="Menu_OpenSolutionUnsupported">解决方案文件记录的格式版本为 {1}，当前版本无法读取。它可能出自其他版本的 UotanStudio：{0}</x:String>
+    <x:String x:Key="Menu_OpenSolutionUnreadable">解决方案文件损坏或无法读取：{0}</x:String>
+    <x:String x:Key="Menu_OpenNodeProjectUnsupported">该解决方案的节点项目文件记录的流程格式版本为 {1}，当前版本无法读取。它可能出自其他版本的 UotanStudio：{0}</x:String>
+    <x:String x:Key="Menu_OpenNodeProjectUnreadable">该解决方案的节点项目文件损坏或无法读取：{0}</x:String>
     <x:String x:Key="Menu_OpenRecent">最近打开</x:String>
     <x:String x:Key="Menu_Save">保存</x:String>
     <x:String x:Key="Menu_SaveAs">另存为...</x:String>
+    <x:String x:Key="Menu_NewNodeProject">新建节点项目</x:String>
+    <x:String x:Key="Menu_CreateNodeProjectNoProject">请先打开解决方案，再创建节点项目。</x:String>
     <x:String x:Key="Menu_ImportImage">导入镜像...</x:String>
     <x:String x:Key="Menu_ExportImage">导出镜像...</x:String>
     <x:String x:Key="Menu_Export">导出...</x:String>
@@ -104,6 +111,7 @@
     <x:String x:Key="Menu_FirmwareTools">固件工具</x:String>
     <x:String x:Key="Menu_DeviceManager">设备管理器</x:String>
     <x:String x:Key="Menu_LogWindow">日志窗口</x:String>
+    <x:String x:Key="Menu_UsbTreeWindow">USB 树视图</x:String>
 
     <!-- 底部选项卡 -->
     <x:String x:Key="Tab_Device">设备</x:String>

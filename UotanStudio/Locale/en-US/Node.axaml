@@ -12,6 +12,7 @@
     <x:String x:Key="Node_ZoomIn">Zoom In</x:String>
     <x:String x:Key="Node_ZoomOut">Zoom Out</x:String>
     <x:String x:Key="Node_ResetZoom">Reset Zoom</x:String>
+    <x:String x:Key="Node_CloseTab">Close this node project in the editor</x:String>
     <x:String x:Key="Node_Undo">Undo</x:String>
     <x:String x:Key="Node_Redo">Redo</x:String>
     <x:String x:Key="Node_FitAll">Fit all nodes</x:String>
@@ -62,6 +63,7 @@
     <x:String x:Key="Node_Firmware_Container_Unpack">Unpack Firmware</x:String>
     <x:String x:Key="Node_Firmware_Container_Pack">Pack Firmware</x:String>
     <x:String x:Key="Node_Validation_Signature_Verify">Assert AVB vbmeta signature</x:String>
+    <x:String x:Key="Node_Boot_CommandLine_Edit">Boot Cmdline Edit</x:String>
     <x:String x:Key="Node_Firmware_Container_Extract">Extract Partition</x:String>
     <x:String x:Key="Node_Build_Ota_CreateDelta">OTA Delta</x:String>
     <x:String x:Key="Node_Build_Signature_Merge">Unsupported signature append</x:String>
@@ -185,6 +187,8 @@
     <x:String x:Key="Node_Conn_TransferList">Transfer List</x:String>
     <x:String x:Key="Node_Conn_True">True</x:String>
     <x:String x:Key="Node_Conn_Value">Value</x:String>
+    <x:String x:Key="Node_Conn_Parameter">Parameter</x:String>
+    <x:String x:Key="Node_Conn_BootImage">Boot image</x:String>
     <x:String x:Key="Node_Conn_Command">Command</x:String>
     <x:String x:Key="Node_Conn_LocalPath">Local Path</x:String>
     <x:String x:Key="Node_Conn_RemotePath">Remote Path</x:String>
@@ -568,6 +572,7 @@
     <x:String x:Key="Node_Config_FileContexts_Query">Query file_contexts rule</x:String>
     <x:String x:Key="Node_Config_FileContexts_Edit">Edit file_contexts label</x:String>
     <x:String x:Key="Node_Conn_PathExpression">Exact path expression</x:String>
+    <x:String x:Key="Node_Conn_MetadataOnly">Metadata only</x:String>
     <x:String x:Key="Node_Conn_FileKind">File kind qualifier</x:String>
     <x:String x:Key="Node_Conn_Context">SELinux context</x:String>
     <x:String x:Key="Node_Choice_Any">Unqualified rule</x:String>

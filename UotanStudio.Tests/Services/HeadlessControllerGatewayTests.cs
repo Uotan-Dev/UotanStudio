@@ -76,7 +76,7 @@ public sealed class HeadlessControllerGatewayTests
         var other = OtherUsb();
         var gateway = Gateway([Server, other], opener);
 
-        Assert.Throws<InvalidOperationException>(() => gateway.RunAdbService("other", "shell:id", _ => true));
+        Assert.Throws<InvalidOperationException>(() => gateway.RunAdbService("other", "shell:id", _ => true, TestContext.Current.CancellationToken));
         Assert.Equal(other.Id, opener.LastEndpoint?.Id);
         Assert.True(opener.Transport.Disposed);
     }
@@ -87,7 +87,7 @@ public sealed class HeadlessControllerGatewayTests
         var opener = new RecordingOpener { ReturnTransport = true };
         var gateway = Gateway([Usb, Server with { State = "unauthorized" }], opener);
 
-        Assert.Throws<InvalidOperationException>(() => gateway.RunAdbService("serial", "shell:id", _ => true));
+        Assert.Throws<InvalidOperationException>(() => gateway.RunAdbService("serial", "shell:id", _ => true, TestContext.Current.CancellationToken));
         Assert.Equal(Server.Id, opener.LastEndpoint?.Id);
         Assert.True(opener.Transport.Disposed);
     }
@@ -100,7 +100,7 @@ public sealed class HeadlessControllerGatewayTests
             [new Source("usb", [Usb]), new FailingSource()], opener);
         var gateway = new HeadlessDeviceManagerGateway(controller, () => false);
 
-        Assert.Throws<IOException>(() => gateway.RunAdbService("serial", "shell:id", _ => true));
+        Assert.Throws<IOException>(() => gateway.RunAdbService("serial", "shell:id", _ => true, TestContext.Current.CancellationToken));
         Assert.Equal(0, opener.Calls);
     }
 
@@ -122,7 +122,7 @@ public sealed class HeadlessControllerGatewayTests
         var opener = new RecordingOpener();
         var gateway = Gateway([Usb, Usb with { Address = "other-key", Transport = "LibUsbDotNet" }], opener);
 
-        Assert.Throws<IOException>(() => gateway.RunAdbService("serial", "shell:id", _ => true));
+        Assert.Throws<IOException>(() => gateway.RunAdbService("serial", "shell:id", _ => true, TestContext.Current.CancellationToken));
         Assert.Equal(0, opener.Calls);
     }
 
@@ -134,7 +134,7 @@ public sealed class HeadlessControllerGatewayTests
             new DeviceController([new Source("adb-server@127.0.0.1:5037", [Server])], opener),
             () => false);
 
-        Assert.Throws<InvalidOperationException>(() => gateway.RunAdbService("serial", "shell:id", _ => true));
+        Assert.Throws<InvalidOperationException>(() => gateway.RunAdbService("serial", "shell:id", _ => true, TestContext.Current.CancellationToken));
         Assert.True(opener.Transport.Disposed);
         Assert.Equal(1, opener.Calls);
     }

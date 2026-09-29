@@ -40,6 +40,36 @@ public sealed class UserErrorLocalizationTests(NodeEditorUiFixture fixture)
     }
 
     [Fact]
+    public async Task Resources_BothLanguages_OpenFailureKeysMatchAndFormatArgumentsAlign()
+    {
+        var token = TestContext.Current.CancellationToken;
+        Task pending;
+        using (ExecutionContext.SuppressFlow())
+        {
+            pending = fixture.Session.Dispatch(() =>
+            {
+                var english = new UotanStudio.Locale.EnUs.Menu();
+                var chinese = new UotanStudio.Locale.ZhCn.Menu();
+                var keys = english.Keys.OfType<string>().Where(key => key.StartsWith("Menu_Open", StringComparison.Ordinal)).Order().ToArray();
+                Assert.Contains("Menu_OpenProjectMissing", keys);
+                Assert.Contains("Menu_OpenSolutionUnsupported", keys);
+                Assert.Contains("Menu_OpenNodeProjectUnsupported", keys);
+                Assert.Equal(keys, chinese.Keys.OfType<string>().Where(key => key.StartsWith("Menu_Open", StringComparison.Ordinal)).Order());
+                foreach (var key in keys)
+                {
+                    var en = Assert.IsType<string>(english[key]);
+                    var zh = Assert.IsType<string>(chinese[key]);
+                    Assert.False(string.IsNullOrWhiteSpace(en));
+                    Assert.False(string.IsNullOrWhiteSpace(zh));
+                    Assert.NotEqual(en, zh);
+                    Assert.Equal(CompositeFormat.Parse(en).MinimumArgumentCount, CompositeFormat.Parse(zh).MinimumArgumentCount);
+                }
+            }, token);
+        }
+        await pending.WaitAsync(TimeSpan.FromSeconds(30), token);
+    }
+
+    [Fact]
     public async Task Resources_BothLanguages_FlashKeysMatchAndFormatArgumentsAlign()
     {
         var token = TestContext.Current.CancellationToken;

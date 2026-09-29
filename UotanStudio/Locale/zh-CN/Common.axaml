@@ -14,6 +14,7 @@
     <x:String x:Key="Delivery_UseProjectSuperSettings">使用项目Super设置</x:String>
     <x:String x:Key="Delivery_UseProjectPayloadSettings">使用项目Payload设置</x:String>
     <x:String x:Key="Delivery_SelectProject">选择项目</x:String>
+    <x:String x:Key="Delivery_NoProjectSourceSettings">当前模式没有可读取的项目配置，已取消使用项目设置。</x:String>
     <x:String x:Key="Delivery_SourceProject">来源项目</x:String>
     <x:String x:Key="Delivery_DeviceType">设备类型</x:String>
     <x:String x:Key="Delivery_SuperDeviceName">名称</x:String>
@@ -26,7 +27,7 @@
     <x:String x:Key="Delivery_MaxTimestamp">最大时间戳</x:String>
     <x:String x:Key="Delivery_SecurityPatch">安全补丁日期</x:String>
     <x:String x:Key="Delivery_InvalidParameter">参数无效：{0}</x:String>
-    <x:String x:Key="Delivery_InvalidSuperSize">Super 大小无效。</x:String>
+    <x:String x:Key="Delivery_InvalidSuperSize">请填写设备 Super 大小；用 fastboot getvar super-partition-size 读取。</x:String>
     <x:String x:Key="Delivery_InvalidPayloadVersion">Payload 版本无效。</x:String>
     <x:String x:Key="Delivery_EditedScriptsNeedReview">配置已变化，输出前需处理已修改的脚本。</x:String>
     <x:String x:Key="Delivery_OpenProjectToSave">请先打开工程再保存交付计划。</x:String>
@@ -104,6 +105,10 @@
     <x:String x:Key="Delivery_Script_EraseFailed">擦除失败。</x:String>
     <x:String x:Key="Delivery_Script_RebootFailed">重启失败。</x:String>
     <x:String x:Key="Delivery_Script_Completed">已完成。</x:String>
+    <x:String x:Key="Delivery_Script_UnlockedRequired">需要已解锁的 bootloader。受 AVB 校验的镜像还需配套的 patched vbmeta，否则设备可能拒绝启动。</x:String>
+    <x:String x:Key="Delivery_Script_CustomRecoveryRequired">此安装包自带 update-binary，需要第三方 recovery；原厂 recovery 会拒绝它无法验证的包。</x:String>
+    <x:String x:Key="Delivery_Script_SuperSizeMismatch">Super 镜像按 {0} 字节的 super 构建，设备实际报告 {1} 字节；请按设备大小重新生成交付。</x:String>
+    <x:String x:Key="Delivery_Script_SuperSizeUnknown">设备未报告 super-partition-size，Super 大小未经校验。</x:String>
     <x:String x:Key="Delivery_Script_DeliveryFailed">交付失败。请检查设备、镜像与工具。</x:String>
     <x:String x:Key="Delivery_Script_ChecksumFailed">校验和验证失败，未刷写任何内容。</x:String>
     <x:String x:Key="Delivery_Script_DeviceChanged">设备已变更。</x:String>

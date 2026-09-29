@@ -1,0 +1,195 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:UotanStudio.ViewModels.Shell"
+        Title="{DynamicResource Menu_UsbTreeWindow}"
+        Width="1040" Height="640"
+        MinWidth="760" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="32"
+        WindowDecorations="Full"
+        Icon="/Assets/UotanToolbox.png"
+        x:Class="UotanStudio.Views.Shell.UsbTreeWindow"
+        x:DataType="vm:UsbTreeViewModel">
+  <Window.Styles>
+    <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
+      <Setter Property="Background">
+        <ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" />
+      </Setter>
+    </Style>
+    <Style Selector="WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
+      <Setter Property="Margin" Value="40,0,136,0" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+    <Style Selector="TextBlock.toolbar-label">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.toolbar-action">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Height" Value="26" />
+      <Setter Property="MinHeight" Value="26" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="CheckBox.toolbar-action">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.node-title">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+    <Style Selector="TextBlock.node-meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontFamily" Value="Consolas,monospace" />
+      <Setter Property="Opacity" Value="0.8" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.protocol-badge">
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="5,1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.protocol-badge">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontFamily" Value="Consolas,monospace" />
+    </Style>
+    <Style Selector="TextBlock.detail-title">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.detail-label">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Opacity" Value="0.72" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Margin" Value="0,1,10,0" />
+    </Style>
+    <Style Selector="TextBlock.detail-value">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontFamily" Value="Consolas,monospace" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.detail-warning">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{DynamicResource LogErrorBrush}" />
+    </Style>
+  </Window.Styles>
+  <Grid RowDefinitions="Auto,*,Auto" Margin="0,32,0,0">
+    <!-- 工具栏：刷新、后端选择、过滤、展开折叠与文本导出 -->
+    <Border Grid.Row="0" Padding="8,5" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Classes="toolbar-action" Name="RefreshUsbTreeButton"
+                Command="{Binding RefreshCommand}"
+                Content="{DynamicResource UsbTree_Refresh}" />
+        <TextBlock Classes="toolbar-label" Text="{DynamicResource UsbTree_Backend}" Margin="6,0,0,0" />
+        <ComboBox Name="UsbTreeBackendSelector" MinWidth="150" Height="26" MinHeight="26" Padding="8,0"
+                  VerticalAlignment="Center" FontSize="12"
+                  ItemsSource="{Binding Backends}"
+                  SelectedItem="{Binding SelectedBackend, Mode=TwoWay}"
+                  ToolTip.Tip="{Binding SelectedBackend.Description}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate DataType="vm:UsbTreeViewModel+UsbTreeBackendOption">
+              <TextBlock Text="{Binding Display}" FontSize="12" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <CheckBox Classes="toolbar-action" Name="OnlyAndroidCheckBox" Content="{DynamicResource UsbTree_OnlyAndroid}"
+                  IsChecked="{Binding OnlyAndroid, Mode=TwoWay}" />
+        <Button Classes="toolbar-action" Name="ExpandAllButton" Command="{Binding ExpandAllCommand}"
+                Content="{DynamicResource UsbTree_ExpandAll}" />
+        <Button Classes="toolbar-action" Name="CollapseAllButton" Command="{Binding CollapseAllCommand}"
+                Content="{DynamicResource UsbTree_CollapseAll}" />
+        <Button Classes="toolbar-action" Name="CopyTreeButton" Click="OnCopyTextClick"
+                Content="{DynamicResource UsbTree_CopyText}" />
+      </StackPanel>
+    </Border>
+    <Grid Grid.Row="1" ColumnDefinitions="*,340">
+      <Grid Grid.Column="0">
+        <TreeView Name="UsbTopologyTreeView" Margin="4,4,4,0"
+                  ItemsSource="{Binding Roots}"
+                  SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
+          <TreeView.ItemContainerTheme>
+            <ControlTheme TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+              <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay, x:DataType=vm:UsbTreeNodeViewModel}" />
+            </ControlTheme>
+          </TreeView.ItemContainerTheme>
+          <TreeView.ItemTemplate>
+            <TreeDataTemplate x:DataType="vm:UsbTreeNodeViewModel" ItemsSource="{Binding Children}">
+              <StackPanel Orientation="Vertical" Spacing="1">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                  <TextBlock Classes="node-title" Text="{Binding DisplayText}" />
+                  <TextBlock Grid.Column="1" Classes="node-meta" Text="{Binding MetaText}"
+                             IsVisible="{Binding HasMeta}" />
+                  <Border Grid.Column="2" Classes="protocol-badge" IsVisible="{Binding HasProtocol}">
+                    <TextBlock Classes="protocol-badge" Text="{Binding ProtocolText}" />
+                  </Border>
+                </Grid>
+                <TextBlock Classes="node-meta" Text="{Binding DiagnosticsText}"
+                           IsVisible="{Binding HasDiagnostics}" />
+              </StackPanel>
+            </TreeDataTemplate>
+          </TreeView.ItemTemplate>
+        </TreeView>
+        <TextBlock Name="UsbTreeUnsupportedMessage" IsVisible="{Binding !IsTopologySupported}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12"
+                   Text="{Binding UnsupportedMessage}" />
+      </Grid>
+      <Border Grid.Column="1" Padding="10,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
+        <StackPanel Spacing="5">
+          <TextBlock Classes="detail-title" Text="{DynamicResource UsbTree_DetailTitle}" />
+          <TextBlock FontSize="11" Opacity="0.72" TextWrapping="Wrap"
+                     IsVisible="{Binding !HasSelection}" Text="{DynamicResource UsbTree_NoSelection}" />
+          <StackPanel IsVisible="{Binding HasSelection}" Spacing="5">
+            <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                  ColumnSpacing="6" RowSpacing="4">
+              <TextBlock Grid.Row="0" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_InstanceId}" />
+              <TextBlock Grid.Row="0" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.InstanceIdText}" />
+              <TextBlock Grid.Row="1" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Parent}" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.ParentInstanceIdText}" />
+              <TextBlock Grid.Row="2" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Kind}" />
+              <TextBlock Grid.Row="2" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.KindText}" />
+              <TextBlock Grid.Row="3" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Vendor}" />
+              <TextBlock Grid.Row="3" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.VendorText}" />
+              <TextBlock Grid.Row="4" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Speed}" />
+              <TextBlock Grid.Row="4" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.SpeedDetailText}" />
+              <TextBlock Grid.Row="5" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Class}" />
+              <TextBlock Grid.Row="5" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.ClassNameText}" />
+              <TextBlock Grid.Row="6" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_ClassGuid}" />
+              <TextBlock Grid.Row="6" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.ClassGuidText}" />
+              <TextBlock Grid.Row="7" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_DriverService}" />
+              <TextBlock Grid.Row="7" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.DriverServiceText}" />
+              <TextBlock Grid.Row="8" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_DriverInf}" />
+              <TextBlock Grid.Row="8" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.DriverInfText}" />
+              <TextBlock Grid.Row="9" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Interface}" />
+              <TextBlock Grid.Row="9" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.InterfaceDetailText}" />
+              <TextBlock Grid.Row="10" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Problem}" />
+              <TextBlock Grid.Row="10" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.ProblemCodeText}" />
+              <TextBlock Grid.Row="11" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Container}" />
+              <TextBlock Grid.Row="11" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.ContainerIdText}" />
+              <TextBlock Grid.Row="12" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Location}" />
+              <TextBlock Grid.Row="12" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.LocationPathsText}" />
+              <TextBlock Grid.Row="13" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_HardwareIds}" />
+              <TextBlock Grid.Row="13" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.HardwareIdsText}" />
+              <TextBlock Grid.Row="14" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_CompatibleIds}" />
+              <TextBlock Grid.Row="14" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.CompatibleIdsText}" />
+              <TextBlock Grid.Row="15" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_InterfaceGuids}" />
+              <TextBlock Grid.Row="15" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.DeviceInterfaceGuidsText}" />
+            </Grid>
+            <TextBlock Classes="detail-warning" IsVisible="{Binding SelectedNode.HasAdbWarning}"
+                       Text="{Binding SelectedNode.AdbWarningText}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Grid>
+    <Border Grid.Row="2" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <TextBlock Name="UsbTreeStatusText" FontSize="11" Opacity="0.85"
+                 TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                 Text="{Binding StatusText}" />
+    </Border>
+  </Grid>
+</Window>
