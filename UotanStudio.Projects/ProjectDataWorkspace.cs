@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace UotanStudio.Services.Projects;
 
 /// <summary>
@@ -8,12 +10,12 @@ public sealed class ProjectDataWorkspace : IProjectWorkspace
 {
     private string? _documentRoot;
     /// <summary>
-    /// Current workflow snapshot, including unknown node type keys.
-    /// <para>当前工作流快照，包含未知节点类型键。</para>
+    /// Open node project documents keyed by node project name, including unknown node type keys.
+    /// <para>按节点项目名索引的打开文档集合，包含未知节点类型键。</para>
     /// </summary>
-    /// <value>Read/write; defaults to an empty <see cref="NodeProjectSnapshot"/>.
-    /// <para>可读写；默认为空 <see cref="NodeProjectSnapshot"/>。</para></value>
-    public NodeProjectSnapshot Workflow { get; set; } = new();
+    /// <value>Read/write dictionary; empty by default. A solution with no registered node project leaves it
+    /// empty. <para>可读写字典；默认为空。未登记节点项目的解决方案保持为空。</para></value>
+    public Dictionary<string, NodeProjectSnapshot> Workflows { get; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>
     /// Current image entries, relative to the solution data directory.
     /// <para>当前镜像条目，相对于解决方案数据目录。</para>
@@ -74,10 +76,14 @@ public sealed class ProjectDataWorkspace : IProjectWorkspace
         else { Documents.Clear(); Settings = new(); _documentRoot = null; }
     }
     /// <summary>
-    /// Replaces the workflow with a fresh empty snapshot.
-    /// <para>将工作流替换为全新的空快照。</para>
+    /// Discards every open node project document and forgets the active one.
+    /// <para>丢弃全部打开的节点项目文档并遗忘活动项。</para>
     /// </summary>
-    public void ClearNodes() => Workflow = new();
+    public void ClearNodes()
+    {
+        Workflows.Clear();
+        ActiveWorkflowName = null;
+    }
     /// <summary>
     /// Removes every image entry from the current list.
     /// <para>移除当前列表中的全部镜像条目。</para>
@@ -109,39 +115,91 @@ public sealed class ProjectDataWorkspace : IProjectWorkspace
         return Task.CompletedTask;
     }
     /// <summary>
-    /// Validates the snapshot through <see cref="NodeProjectSnapshot.EnsureSupportedVersion"/> and adopts
-    /// it by reference; performs no I/O.
-    /// <para>先经 <see cref="NodeProjectSnapshot.EnsureSupportedVersion"/> 校验快照，再按引用接收；不执行任何 I/O。</para>
+    /// The open node project names, in insertion order.
+    /// <para>打开的节点项目名称，按插入顺序。</para>
     /// </summary>
+    /// <value>Keys of <see cref="Workflows"/>. <para>即 <see cref="Workflows"/> 的键。</para></value>
+    public IReadOnlyList<string> OpenWorkflowNames => Workflows.Keys.ToArray();
+
+    /// <summary>
+    /// The node project name this host presents as active; <see langword="null"/> when nothing is open.
+    /// <para>本宿主呈现为活动的节点项目名；没有打开项时为 <see langword="null"/>。</para>
+    /// </summary>
+    /// <value>Read/write for data-only hosts; assigning a name that is not open keeps it reported as
+    /// active until the next <see cref="ClearNodes"/>. <para>纯数据宿主可读写；赋值为未打开的名称会一直保持
+    /// 该名称，直到下一次 <see cref="ClearNodes"/>。</para></value>
+    public string? ActiveWorkflowName { get; set; }
+
+    /// <summary>
+    /// Presents an open node project as active; an unknown name is ignored.
+    /// <para>将一个已打开的节点项目设为活动；未知名称被忽略。</para>
+    /// </summary>
+    /// <param name="name">Node project name. <para>节点项目名称。</para></param>
+    public void ActivateWorkflow(string name)
+    {
+        if (Workflows.ContainsKey(name)) ActiveWorkflowName = name;
+    }
+
+    /// <summary>
+    /// Discards one node project document without deleting its file; the next open document becomes active
+    /// when the discarded one was active.
+    /// <para>丢弃单个节点项目文档且不删除其文件；被丢弃者为活动项时，下一个打开的文档成为活动项。</para>
+    /// </summary>
+    /// <param name="name">Node project name. <para>节点项目名称。</para></param>
+    public void CloseWorkflow(string name)
+    {
+        var wasActive = string.Equals(ActiveWorkflowName, name, StringComparison.OrdinalIgnoreCase);
+        Workflows.Remove(name);
+        if (wasActive) ActiveWorkflowName = Workflows.Keys.FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Validates the snapshot through <see cref="NodeProjectSnapshot.EnsureSupportedVersion"/> and stores it
+    /// under the given node project name; performs no I/O.
+    /// <para>先经 <see cref="NodeProjectSnapshot.EnsureSupportedVersion"/> 校验快照，再按给定节点项目名存储；
+    /// 不执行任何 I/O。</para>
+    /// </summary>
+    /// <param name="name">Node project name identifying the document. <para>标识文档的节点项目名称。</para></param>
     /// <param name="snapshot">Snapshot to validate and store. <para>待校验并存储的快照。</para></param>
     /// <returns>A completed task when the snapshot is accepted. <para>快照通过校验时已完成的任务。</para></returns>
     /// <exception cref="InvalidDataException">
     /// The snapshot uses an unsupported format version or describes an invalid graph.
     /// <para>快照使用了不受支持的格式版本或描述了无效的图。</para>
     /// </exception>
-    public Task RestoreWorkflowAsync(NodeProjectSnapshot snapshot)
+    public Task RestoreWorkflowAsync(string name, NodeProjectSnapshot snapshot)
     {
         snapshot.EnsureSupportedVersion();
-        Workflow = snapshot;
+        Workflows[name] = snapshot;
+        ActiveWorkflowName ??= name;
         return Task.CompletedTask;
     }
+
     /// <summary>
-    /// Captures the current workflow as a new snapshot that keeps the stored format version and
+    /// Captures the named node project document as a new snapshot that keeps the stored format version and
     /// shallow-copies the node and connection lists.
-    /// <para>将当前工作流捕获为新快照：保留已存储的格式版本，并对节点与连接列表进行浅拷贝。</para>
+    /// <para>按名称捕获节点项目文档为新快照：保留已存储的格式版本，并对节点与连接列表进行浅拷贝。</para>
     /// </summary>
-    /// <param name="projectName">Project name written into the returned snapshot. <para>写入返回快照的项目名。</para></param>
-    /// <returns>
-    /// A new snapshot whose lists are copies; the entries inside them are shared with the current workflow.
-    /// <para>新快照；其列表为拷贝，列表内条目与当前工作流共享。</para>
-    /// </returns>
-    public NodeProjectSnapshot CaptureWorkflow(string projectName) => new()
+    /// <param name="name">Node project name identifying the document. <para>标识文档的节点项目名称。</para></param>
+    /// <param name="snapshot">The captured snapshot when the name is open; a fresh empty snapshot otherwise.
+    /// <para>名称处于打开状态时为捕获到的快照；否则为全新的空快照。</para></param>
+    /// <returns><see langword="true"/> when a document of that name exists.
+    /// <para>存在该名称的文档时返回 <see langword="true"/>。</para></returns>
+    public bool TryCaptureWorkflow(string name, [NotNullWhen(true)] out NodeProjectSnapshot? snapshot)
     {
-        FormatVersion = Workflow.FormatVersion,
-        ProjectName = projectName,
-        Nodes = Workflow.Nodes.ToList(),
-        Connections = Workflow.Connections.ToList()
-    };
+        if (!Workflows.TryGetValue(name, out var workflow))
+        {
+            snapshot = null;
+            return false;
+        }
+        snapshot = new NodeProjectSnapshot
+        {
+            FormatVersion = workflow.FormatVersion,
+            ProjectName = name,
+            Nodes = workflow.Nodes.ToList(),
+            Connections = workflow.Connections.ToList()
+        };
+        return true;
+    }
     /// <summary>
     /// Captures the image list as an independent copy.
     /// <para>将镜像列表捕获为独立拷贝。</para>

@@ -72,7 +72,11 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                 .Append(window.Position.X).Append(':').Append(window.Position.Y).Append(':').Append((int)window.WindowState);
         if (_projects.NodeEditorVM is { } nodes)
         {
-            sb.Append('|').Append(nodes.Nodes.Count).Append(':').Append(nodes.Connections.Count)
+            sb.Append('|').Append(nodes.OpenDocuments.Count);
+            foreach (var document in nodes.OpenDocuments)
+                sb.Append(':').Append(document.Name).Append('=').Append(document.Nodes.Count)
+                    .Append(',').Append(document.Connections.Count);
+            sb.Append(':').Append(nodes.Nodes.Count).Append(',').Append(nodes.Connections.Count)
                 .Append(':').Append(nodes.Zoom.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
                 .Append(':').Append(nodes.ShowMinimap ? '1' : '0');
         }

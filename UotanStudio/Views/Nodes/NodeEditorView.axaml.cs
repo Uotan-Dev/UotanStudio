@@ -872,4 +872,25 @@ public partial class NodeEditorView : UserControl
     {
         Patterns = ["*.uotanplugin", "*.uotanplugin.json", "*.json"]
     };
+
+    /// <summary>
+    /// <para>节点项目标签条：点击标签把同名节点项目设为活动画布。</para>
+    /// Node project tab strip: clicking a tab makes that node project the active canvas.
+    /// </summary>
+    private async void OnNodeTabSelected(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string name }) return;
+        await ProjectOperationsService.Instance.SetActiveNodeProjectAsync(name);
+    }
+
+    /// <summary>
+    /// <para>节点项目标签条：关闭按钮丢弃该画布文档，解决方案仍保留登记与磁盘文件。</para>
+    /// Node project tab strip: the close button discards the canvas document while the solution keeps the
+    /// registration and the file on disk.
+    /// </summary>
+    private async void OnNodeTabClosed(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string name }) return;
+        await ProjectOperationsService.Instance.CloseNodeProjectAsync(name);
+    }
 }

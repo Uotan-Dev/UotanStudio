@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using UotanStudio.Services.Projects;
 using Xunit;
 
@@ -25,15 +26,65 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         var oldProject = Path.Combine(_root, "legacy.uotan");
         var other = new ProjectSession(new ProjectDataWorkspace());
         await other.CreateNewSolutionAsync(oldProject, cancellationToken: token);
-        await File.WriteAllTextAsync(other.Context.NodeProjectPath!,
-            "{\"FormatVersion\":1,\"ProjectName\":\"legacy\",\"Nodes\":[],\"Connections\":[]}", token);
+        Assert.True(await other.CreateNodeProjectAsync("legacy", token));
+        var nodePath = other.Context.ResolveNodeProjectPath(other.Context.NodeProjects.Single())!;
+        await File.WriteAllTextAsync(nodePath,
+            "{\"FormatVersion\":2,\"ProjectName\":\"legacy\",\"Nodes\":[],\"Connections\":[]}", token);
         _workspace.Events.Clear();
 
         Assert.False(await _projects.OpenProjectFromPathAsync(oldProject, cancellationToken: token));
 
         Assert.Equal(original, _projects.CurrentProjectPath);
         Assert.Empty(_workspace.Events);
-        Assert.Contains("\"FormatVersion\":1", await File.ReadAllTextAsync(other.Context.NodeProjectPath!, token));
+        Assert.Equal(ProjectOpenFailure.InvalidNodeProject, _projects.OpenFailure);
+        Assert.Equal(2, _projects.OpenFailureStoredVersion);
+        Assert.Equal(nodePath, _projects.OpenFailurePath);
+        Assert.Contains("\"FormatVersion\":2", await File.ReadAllTextAsync(nodePath, token));
+    }
+
+    [Fact]
+    public async Task OpenProject_NewerSolutionFormat_ReportsInvalidSolutionWithStoredVersion()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var path = Path.Combine(_root, "future.uotan");
+        await File.WriteAllTextAsync(path,
+            "{\"FormatVersion\":2,\"SolutionName\":\"future\",\"SubProjects\":null,\"NodeProjects\":null}", token);
+        var before = _projects.CurrentProjectPath;
+
+        Assert.False(await _projects.OpenProjectFromPathAsync(path, cancellationToken: token));
+
+        Assert.Equal(ProjectOpenFailure.InvalidSolution, _projects.OpenFailure);
+        Assert.Equal(2, _projects.OpenFailureStoredVersion);
+        Assert.Equal(path, _projects.OpenFailurePath);
+        Assert.Equal(before, _projects.CurrentProjectPath);
+    }
+
+    [Fact]
+    public async Task OpenProject_MissingFile_ReportsMissingFileWithoutStoredVersion()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var path = Path.Combine(_root, "absent.uotan");
+
+        Assert.False(await _projects.OpenProjectFromPathAsync(path, cancellationToken: token));
+
+        Assert.Equal(ProjectOpenFailure.MissingFile, _projects.OpenFailure);
+        Assert.Null(_projects.OpenFailureStoredVersion);
+        Assert.Equal(path, _projects.OpenFailurePath);
+    }
+
+    [Fact]
+    public async Task OpenProject_Succeeds_OpenFailureIsCleared()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var path = Path.Combine(_root, "clean.uotan");
+        await _projects.CreateNewSolutionAsync(path, cancellationToken: token);
+        Assert.False(await _projects.OpenProjectFromPathAsync(Path.Combine(_root, "absent.uotan"), cancellationToken: token));
+
+        Assert.True(await _projects.OpenProjectFromPathAsync(path, cancellationToken: token));
+
+        Assert.Equal(ProjectOpenFailure.None, _projects.OpenFailure);
+        Assert.Null(_projects.OpenFailureStoredVersion);
+        Assert.Null(_projects.OpenFailurePath);
     }
 
     [Fact]
@@ -44,7 +95,7 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         Assert.True(await SolutionPersistenceService.SaveNodeProjectAsync(path, new NodeProjectSnapshot(), token));
         var previous = await File.ReadAllBytesAsync(path, token);
 
-        Assert.False(await SolutionPersistenceService.SaveNodeProjectAsync(path, new NodeProjectSnapshot { FormatVersion = 1 }, token));
+        Assert.False(await SolutionPersistenceService.SaveNodeProjectAsync(path, new NodeProjectSnapshot { FormatVersion = 2 }, token));
 
         Assert.Equal(previous, await File.ReadAllBytesAsync(path, token));
         Assert.Equal(NodeProjectSnapshot.CurrentFormatVersion,
@@ -86,6 +137,7 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         var path = Path.Combine(_root, "sample.uotan");
         await _projects.CreateNewSolutionAsync(path, cancellationToken: TestContext.Current.CancellationToken);
         var context = _projects.Context;
+        Assert.True(await _projects.CreateNodeProjectAsync("flow", TestContext.Current.CancellationToken));
         var imagePath = Path.Combine(context.EnsureImagesDirectory(), "boot.img");
         await File.WriteAllBytesAsync(imagePath, [1, 2, 3], TestContext.Current.CancellationToken);
         var relative = Path.GetRelativePath(context.RootDirectory!, imagePath);
@@ -210,6 +262,7 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
     {
         var source = Path.Combine(_root, "original.uotan");
         await _projects.CreateNewSolutionAsync(source, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(await _projects.CreateNodeProjectAsync("flow", TestContext.Current.CancellationToken));
         var context = _projects.Context;
         var oldRoot = context.RootDirectory;
         var oldActive = context.ActiveSubProject;
@@ -222,7 +275,7 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         var marker = Path.Combine(destination, "keep.txt");
         File.WriteAllText(marker, "untouched");
         if (commitFailure) Directory.CreateDirectory(target);
-        else Directory.CreateDirectory(Path.Combine(destination, "original", "copy.uotannode"));
+        else Directory.CreateDirectory(Path.Combine(destination, "nodes", "flow.uotannode"));
 
         var error = await Record.ExceptionAsync(() => _projects.SaveAsAsync(target, cancellationToken: TestContext.Current.CancellationToken));
         Assert.True(error is IOException or UnauthorizedAccessException, $"Unexpected error: {error}");
@@ -427,11 +480,20 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         Assert.Single(context.SubProjects);
         Assert.Equal(Path.Combine(_root, "flat"), context.SubProjects[0].RootPath);
         Assert.True(File.Exists(Path.Combine(_root, "flat", "flat.uotanfw")));
-        Assert.True(File.Exists(Path.Combine(_root, "flat", "flat.uotannode")));
+        Assert.Empty(context.NodeProjects);
+        Assert.False(Directory.Exists(Path.Combine(_root, "nodes")));
+        Assert.False(File.Exists(Path.Combine(_root, "flat", "flat.uotannode")));
         Assert.True(Directory.Exists(Path.Combine(_root, "flat", "images")));
         Assert.True(Directory.Exists(Path.Combine(_root, "flat", "output")));
         Assert.True(File.Exists(solution));
-        Assert.Equal(Path.Combine(_root, "flat"), Path.GetDirectoryName(context.NodeProjectPath));
+
+        Assert.True(await _projects.CreateNodeProjectAsync("flow", TestContext.Current.CancellationToken));
+        var node = Assert.Single(context.NodeProjects);
+        Assert.Equal("flow", node.Name);
+        Assert.Equal("nodes/flow.uotannode", node.RelativePath);
+        Assert.Equal(Path.Combine(_root, "nodes"), context.NodeProjectsDirectory);
+        Assert.Equal(Path.Combine(_root, "nodes", "flow.uotannode"), context.ResolveNodeProjectPath(node));
+        Assert.True(File.Exists(context.ResolveNodeProjectPath(node)));
     }
 
     [Fact]
@@ -469,7 +531,8 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
             Assert.True(Directory.Exists(Path.Combine(sub.RootPath!, "output")));
         }
 
-        Assert.Equal(Path.Combine(_root, "sample"), Path.GetDirectoryName(context.NodeProjectPath));
+        Assert.Empty(context.NodeProjects);
+        Assert.False(Directory.Exists(Path.Combine(_root, "nodes")));
 
         context.CloseProject();
         Assert.True(await _projects.OpenProjectFromPathAsync(solution, cancellationToken: TestContext.Current.CancellationToken));
@@ -515,13 +578,14 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
 
     private sealed class TestWorkspace : IProjectWorkspace
     {
+        private readonly NodeWorkflowRecorder _workflows = new();
         public List<string> Events { get; } = [];
         public List<ImageEntryDto> Images { get; } = [];
         public List<OpenDocumentDto> Documents { get; } = [];
         public Func<Task> SaveDocuments { get; set; } = () => Task.CompletedTask;
         public bool IsImageOperationRunning { get; set; }
         public bool HasNodeEditor => true;
-        public void ClearNodes() => Events.Add("clear-nodes");
+        public void ClearNodes() { Events.Add("clear-nodes"); _workflows.Clear(); }
         public void ClearImages() { Events.Add("clear-images"); Images.Clear(); }
         public void ApplySettings(ProjectSettingsDto settings) => Events.Add("settings");
         public void RestoreImages(IEnumerable<ImageEntryDto> images) { Events.Add("images"); Images.AddRange(images); }
@@ -532,8 +596,18 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
             Documents.AddRange(documents);
             return Task.CompletedTask;
         }
-        public Task RestoreWorkflowAsync(NodeProjectSnapshot snapshot) { Events.Add("workflow"); return Task.CompletedTask; }
-        public NodeProjectSnapshot CaptureWorkflow(string projectName) => new() { ProjectName = projectName };
+        public Task RestoreWorkflowAsync(string name, NodeProjectSnapshot snapshot)
+        {
+            Events.Add("workflow");
+            _workflows.Restore(name, snapshot);
+            return Task.CompletedTask;
+        }
+        public bool TryCaptureWorkflow(string name, [NotNullWhen(true)] out NodeProjectSnapshot? snapshot)
+            => _workflows.TryCapture(name, out snapshot);
+        public IReadOnlyList<string> OpenWorkflowNames => _workflows.OpenWorkflowNames;
+        public string? ActiveWorkflowName => _workflows.ActiveWorkflowName;
+        public void ActivateWorkflow(string name) => _workflows.ActivateWorkflow(name);
+        public void CloseWorkflow(string name) => _workflows.CloseWorkflow(name);
         public List<ImageEntryDto> CaptureImages() => [.. Images];
         public ProjectSettingsDto CaptureSettings() => new();
         public List<OpenDocumentDto> CaptureDocuments(string rootDirectory) { Events.Add("capture-documents"); return [.. Documents]; }

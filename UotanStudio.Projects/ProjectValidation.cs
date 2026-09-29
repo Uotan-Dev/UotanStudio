@@ -9,10 +9,10 @@ public static class ProjectValidation
     /// <summary>
     /// Decides whether a directory may own project state: it must resolve outside the solution root and
     /// no path segment below the root may be a reserved data folder (<c>images</c>, <c>output</c>,
-    /// <c>delivery</c>, <c>.uotan</c>, <c>.deleted</c>, <c>.git</c>, case-insensitive).
+    /// <c>delivery</c>, <c>nodes</c>, <c>.uotan</c>, <c>.deleted</c>, <c>.git</c>, case-insensitive).
     /// <para>判定目录能否持有工程状态：解析后必须位于解决方案根之外，且根以下的任一路径段都不得是保留
-    /// 数据目录（<c>images</c>、<c>output</c>、<c>delivery</c>、<c>.uotan</c>、<c>.deleted</c>、
-    /// <c>.git</c>，大小写不敏感）。</para>
+    /// 数据目录（<c>images</c>、<c>output</c>、<c>delivery</c>、<c>nodes</c>、<c>.uotan</c>、
+    /// <c>.deleted</c>、<c>.git</c>，大小写不敏感）。</para>
     /// </summary>
     /// <param name="solutionRoot">Solution root directory used as the comparison base.
     /// <para>作为比较基准的解决方案根目录。</para></param>
@@ -26,7 +26,7 @@ public static class ProjectValidation
     {
         var relative = Path.GetRelativePath(Path.GetFullPath(solutionRoot), Path.GetFullPath(directory));
         if (relative == ".") return false;
-        var reserved = new[] { "images", "output", "delivery", ".uotan", ".deleted", ".git" };
+        var reserved = new[] { "images", "output", "delivery", "nodes", ".uotan", ".deleted", ".git" };
         return !relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar])
             .Any(part => reserved.Contains(part, StringComparer.OrdinalIgnoreCase));
     }
@@ -55,35 +55,71 @@ public static class ProjectValidation
             .Any(part => part.Length > 0);
     }
     /// <summary>
-    /// Rejects unsupported versions and ambiguous sub-project identities before context publication.
-    /// A snapshot without sub-project references only needs the version check.
-    /// <para>在发布上下文之前拒绝不支持的版本与有歧义的子项目标识。不含子项目引用的快照只需通过
+    /// Rejects unsupported versions and ambiguous sub-project or node-project identities before context
+    /// publication. A snapshot without references only needs the version check.
+    /// <para>在发布上下文之前拒绝不支持的版本与有歧义的子项目、节点项目标识。不含引用的快照只需通过
     /// 版本检查。</para>
     /// </summary>
     /// <param name="snapshot">Solution snapshot to validate. <para>待校验的解决方案快照。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is <see langword="null"/>.
     /// <para><paramref name="snapshot"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidDataException">The format version is not 2, there are more than 10000
-    /// sub-projects, a reference is <see langword="null"/>, two names collide case-insensitively, or a
-    /// relative path is blank. <para>格式版本不是 2、子项目超过 10000 个、引用为
-    /// <see langword="null"/>、按大小写不敏感存在重名，或相对路径为空。</para></exception>
-    /// <exception cref="ArgumentException">A sub-project name fails <see cref="ValidateName"/>.
-    /// <para>某个子项目名称未通过 <see cref="ValidateName"/>。</para></exception>
+    /// <exception cref="InvalidDataException">The format version is not 1, there are more than 10000
+    /// sub-projects or more than 1000 node projects, a reference is <see langword="null"/>, two names collide
+    /// case-insensitively, a relative path is blank or escapes the solution root, or more than one node
+    /// project is active without being open.
+    /// <para>格式版本不是 1、子项目超过 10000 个或节点项目超过 1000 个、引用为
+    /// <see langword="null"/>、按大小写不敏感存在重名、相对路径为空或逃出解决方案根，或存在多个活动节点
+    /// 项目/活动项未打开。</para></exception>
+    /// <exception cref="ArgumentException">A sub-project or node-project name fails <see cref="ValidateName"/>.
+    /// <para>某个子项目或节点项目名称未通过 <see cref="ValidateName"/>。</para></exception>
     public static void ValidateSolution(SolutionSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        if (snapshot.FormatVersion != 2) throw new InvalidDataException("Unsupported solution format version.");
-        if (snapshot.SubProjects is not { } projects) return;
-        if (projects.Count > 10000) throw new InvalidDataException("Too many sub-projects.");
-        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var project in projects)
+        if (snapshot.FormatVersion != 1) throw new InvalidDataException("Unsupported solution format version.");
+        if (snapshot.SubProjects is { } projects)
         {
-            if (project is null) throw new InvalidDataException("Null sub-project reference.");
-            ValidateName(project.Name);
-            if (!names.Add(project.Name)) throw new InvalidDataException("Duplicate sub-project name.");
-            if (string.IsNullOrWhiteSpace(project.RelativePath)) throw new InvalidDataException("Empty sub-project path.");
+            if (projects.Count > 10000) throw new InvalidDataException("Too many sub-projects.");
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var project in projects)
+            {
+                if (project is null) throw new InvalidDataException("Null sub-project reference.");
+                ValidateName(project.Name);
+                if (!names.Add(project.Name)) throw new InvalidDataException("Duplicate sub-project name.");
+                if (string.IsNullOrWhiteSpace(project.RelativePath)) throw new InvalidDataException("Empty sub-project path.");
+            }
         }
+
+        if (snapshot.NodeProjects is not { } nodeProjects) return;
+        if (nodeProjects.Count > 1000) throw new InvalidDataException("Too many node projects.");
+        var nodeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var activeCount = 0;
+        foreach (var node in nodeProjects)
+        {
+            if (node is null) throw new InvalidDataException("Null node project reference.");
+            ValidateName(node.Name);
+            if (!nodeNames.Add(node.Name)) throw new InvalidDataException("Duplicate node project name.");
+            if (string.IsNullOrWhiteSpace(node.RelativePath)) throw new InvalidDataException("Empty node project path.");
+            if (!IsRelativePathWithinRoot(node.RelativePath)) throw new InvalidDataException("Node project path escapes the solution root.");
+            if (!node.IsActive) continue;
+            if (!node.IsOpen) throw new InvalidDataException("An active node project must be open.");
+            activeCount++;
+        }
+        if (activeCount > 1) throw new InvalidDataException("More than one active node project.");
     }
+
+    /// <summary>
+    /// Checks that a stored <c>/</c>-separated relative path stays below the solution root.
+    /// <para>校验存储的以 <c>/</c> 分隔的相对路径始终位于解决方案根之下。</para>
+    /// </summary>
+    /// <param name="relativePath">Path as stored in the solution file. <para>解决方案文件中存储的路径。</para></param>
+    /// <returns><see langword="false"/> for a rooted path, an empty segment sequence, or any <c>..</c>
+    /// segment; otherwise <see langword="true"/>.
+    /// <para>绝对路径、空的路径序列或包含任一段 <c>..</c> 时返回 <see langword="false"/>，否则返回
+    /// <see langword="true"/>。</para></returns>
+    public static bool IsRelativePathWithinRoot(string relativePath)
+        => relativePath.Length > 0
+            && !Path.IsPathRooted(relativePath)
+            && !relativePath.Split(['/', '\\']).Any(segment => segment == "..");
 
     /// <summary>
     /// Validates a display name; renaming a reference does not rename its files.

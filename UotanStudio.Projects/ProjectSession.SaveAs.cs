@@ -31,8 +31,13 @@ public sealed partial class ProjectSession
         }
 
         var destinationDirectory = Path.GetDirectoryName(fullPath)!;
-        var node = _workspace.CaptureWorkflow(destinationName);
-        node.EnsureSupportedVersion();
+        var nodeProjects = new List<(string Name, NodeProjectSnapshot Snapshot)>();
+        foreach (var name in _workspace.OpenWorkflowNames)
+        {
+            if (!_workspace.TryCaptureWorkflow(name, out var snapshot)) continue;
+            snapshot.EnsureSupportedVersion();
+            nodeProjects.Add((name, snapshot));
+        }
         var images = _workspace.CaptureImages();
         var packing = _workspace.CaptureSettings();
         var documents = _workspace.CaptureDocuments(destinationDirectory);
@@ -44,7 +49,7 @@ public sealed partial class ProjectSession
         {
             var fresh = new SubProjectDto { Name = destinationName, RelativePath = $"{destinationName}/{destinationName}.uotanfw" };
             var freshSettings = new SolutionSettings { RecentDocuments = documents.Select(d => d.RelativePath).Where(p => p.Length > 0).ToList() };
-            await PublishCopyAsync(fullPath, destinationDirectory, destinationName, [fresh], fresh, node, images, packing, documents, freshSettings, history, cancellationToken);
+            await PublishCopyAsync(fullPath, destinationDirectory, [fresh], fresh, nodeProjects, images, packing, documents, freshSettings, history, cancellationToken);
             return;
         }
 
@@ -66,20 +71,24 @@ public sealed partial class ProjectSession
                 ?? (File.Exists(sourceSettingsPath) ? throw new InvalidDataException("Cannot read the source project settings.") : new SolutionSettings());
         settings.RecentDocuments = documents.Select(d => d.RelativePath).Where(p => p.Length > 0).ToList();
 
-        await PublishCopyAsync(fullPath, destinationDirectory, destinationName, references, active, node, images, packing, documents, settings, history, cancellationToken);
+        await PublishCopyAsync(fullPath, destinationDirectory, references, active, nodeProjects, images, packing, documents, settings, history, cancellationToken);
     }
 
     /// <summary>
-    /// <para>把源子项目文件夹复制为目标目录的直接子级，并写入固件/节点/状态与解决方案文件，随后打开新工程。
+    /// <para>把源子项目文件夹复制为目标目录的直接子级，把打开的节点项目文档写入目标 <c>nodes/</c>
+    /// 目录（未打开但已登记的节点项目按其源文件复制），并写入固件/状态与解决方案文件，随后打开新工程。
     /// 目标子项目与源子项目为同一文件夹时不复制（同目录另存即引用源子项目）。</para>
-    /// Copies source sub-project folders as direct children of the destination directory, writes the firmware /
-    /// node / state and solution files, then opens the published project. A destination sub-project that already
-    /// is the source sub-project folder is not copied (same-directory Save As references the source sub-project).
+    /// Copies source sub-project folders as direct children of the destination directory, writes open node
+    /// project documents into the destination <c>nodes/</c> directory (registered-but-closed node projects are
+    /// copied from their source files), writes the firmware / state and solution files, then opens the
+    /// published project. A destination sub-project that already is the source sub-project folder is not
+    /// copied (same-directory Save As references the source sub-project).
     /// </summary>
     private async Task PublishCopyAsync(
-        string fullPath, string destinationDirectory, string destinationName,
+        string fullPath, string destinationDirectory,
         IReadOnlyList<SubProjectDto> references, SubProjectDto active,
-        NodeProjectSnapshot node, List<ImageEntryDto> images, ProjectSettingsDto packing, List<OpenDocumentDto> documents,
+        IReadOnlyList<(string Name, NodeProjectSnapshot Snapshot)> nodeProjects,
+        List<ImageEntryDto> images, ProjectSettingsDto packing, List<OpenDocumentDto> documents,
         SolutionSettings settings, List<HistoryOperationDto> history, CancellationToken cancellationToken)
     {
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
@@ -105,16 +114,50 @@ public sealed partial class ProjectSession
             Settings = packing,
             OpenDocuments = documents.Count > 0 ? documents : null
         }, SolutionJsonContext.Default.FirmwareProjectSnapshot, cancellationToken);
-        await AtomicJsonFile.WriteIfChangedAsync(Path.Combine(activeFolder, destinationName + ".uotannode"), node,
-            SolutionJsonContext.Default.NodeProjectSnapshot, cancellationToken);
+
+        var capturedWorkflows = nodeProjects.ToDictionary(item => item.Name, item => item.Snapshot, StringComparer.OrdinalIgnoreCase);
+        var nodeDirectory = Path.Combine(destinationDirectory, "nodes");
+        var nodeReferences = new List<NodeProjectDto>();
+        var nodeNames = Context.NodeProjects.Select(descriptor => descriptor.Name)
+            .Concat(capturedWorkflows.Keys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        foreach (var name in nodeNames)
+        {
+            ProjectValidation.ValidateName(name);
+            var isOpen = capturedWorkflows.TryGetValue(name, out var captured);
+            var sourcePath = Context.NodeProjects.FirstOrDefault(descriptor =>
+                string.Equals(descriptor.Name, name, StringComparison.OrdinalIgnoreCase)) is { } descriptor
+                    ? Context.ResolveNodeProjectPath(descriptor) : null;
+            if (!isOpen && (sourcePath is null || !File.Exists(sourcePath))) continue;
+            Directory.CreateDirectory(nodeDirectory);
+            var targetPath = Path.Combine(nodeDirectory, name + ".uotannode");
+            if (isOpen)
+                await AtomicJsonFile.WriteIfChangedAsync(targetPath, captured!, SolutionJsonContext.Default.NodeProjectSnapshot, cancellationToken);
+            else
+                CopyFileContents(sourcePath!, targetPath, cancellationToken);
+            nodeReferences.Add(new NodeProjectDto
+            {
+                Name = name,
+                RelativePath = $"nodes/{name}.uotannode",
+                IsOpen = isOpen
+            });
+        }
+
+        var activeNodeName = nodeReferences.FirstOrDefault(dto => dto.IsOpen
+            && string.Equals(dto.Name, Context.ActiveNodeProject?.Name, StringComparison.OrdinalIgnoreCase))?.Name
+            ?? nodeReferences.FirstOrDefault(dto => dto.IsOpen)?.Name;
+        foreach (var dto in nodeReferences)
+            dto.IsActive = string.Equals(dto.Name, activeNodeName, StringComparison.OrdinalIgnoreCase);
+
         await AtomicJsonFile.WriteIfChangedAsync(Path.Combine(activeFolder, ".uotan", "settings.json"), settings,
             SolutionSettingsJsonContext.Default.SolutionSettings, cancellationToken);
         await AtomicJsonFile.WriteIfChangedAsync(Path.Combine(activeFolder, ".uotan", "history.json"), history,
             HistoryJsonContext.Default.ListHistoryOperationDto, cancellationToken);
         var solution = new SolutionSnapshot
         {
-            SolutionName = destinationName,
-            NodeProjectPath = $"{active.Name}/{destinationName}.uotannode",
+            SolutionName = Path.GetFileNameWithoutExtension(fullPath),
+            NodeProjects = nodeReferences.Count > 0 ? nodeReferences : null,
             SubProjects = [.. references],
             State = CaptureState?.Invoke()
         };
@@ -126,6 +169,19 @@ public sealed partial class ProjectSession
         CurrentProjectPath = fullPath;
         _workspace.ChangeProjectRoot(Context.RootDirectory!, preserveDocuments: true);
         Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// <para>复制单个文件并拒绝符号链接/联接。</para>
+    /// Copies one file, rejecting symbolic links and junctions.
+    /// </summary>
+    private static void CopyFileContents(string source, string destination, CancellationToken cancellationToken)
+    {
+        RejectLink(source);
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        using var input = File.OpenRead(source);
+        using var output = File.Create(destination);
+        input.CopyTo(output);
     }
 
     /// <summary>

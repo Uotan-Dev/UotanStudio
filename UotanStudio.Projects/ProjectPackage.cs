@@ -117,11 +117,14 @@ public static class ProjectPackage
                 if (await SolutionPersistenceService.LoadFirmwareProjectAsync(path, cancellationToken) is null)
                     throw new InvalidDataException("Invalid packaged sub-project.");
             }
-            var nodeRelative = snapshot.NodeProjectPath ?? Path.GetFileName(root) + ".uotannode";
-            var nodePath = Path.GetFullPath(Path.Combine(root, nodeRelative.Replace('/', Path.DirectorySeparatorChar)));
-            if (!ProjectSaveAsTransaction.IsWithin(root, nodePath)
-                || await SolutionPersistenceService.LoadNodeProjectAsync(nodePath, cancellationToken) is null)
-                throw new InvalidDataException("Missing or invalid packaged workflow.");
+            foreach (var node in snapshot.NodeProjects ?? [])
+            {
+                var nodePath = Path.GetFullPath(Path.Combine(root, node.RelativePath.Replace('/', Path.DirectorySeparatorChar)));
+                if (!ProjectSaveAsTransaction.IsWithin(root, nodePath)
+                    || !File.Exists(nodePath)
+                    || await SolutionPersistenceService.LoadNodeProjectAsync(nodePath, cancellationToken) is null)
+                    throw new InvalidDataException("Missing or invalid packaged workflow.");
+            }
             foreach (var project in snapshot.SubProjects ?? [])
             {
                 var subRoot = Path.GetDirectoryName(Path.GetFullPath(Path.Combine(root, project.RelativePath)))!;

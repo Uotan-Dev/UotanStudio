@@ -360,7 +360,10 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
 
     [Theory]
     [InlineData(480)]
+    [InlineData(640)]
     [InlineData(800)]
+    [InlineData(900)]
+    [InlineData(1024)]
     [InlineData(1200)]
     [InlineData(1600)]
     public Task Layout_ViewportWidths_KeepToolbarAndCanvasWithinWindow(int width) => OnUiAsync(() =>
@@ -406,6 +409,61 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
             window.Close();
         }
     });
+
+    [Theory]
+    [InlineData(1200)]
+    [InlineData(1600)]
+    public Task Layout_WideToolbar_SplitsControlsIntoThreeFunctionalColumns(int width) => OnUiAsync(() =>
+    {
+        using var editor = new NodeEditorViewModel();
+        var view = new NodeEditorView { DataContext = editor };
+        var window = new Window { Content = view, Width = width, Height = 800 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var toolbar = view.FindControl<Grid>("EditorToolbar")!;
+            var editGroup = view.FindControl<WrapPanel>("ToolbarEditGroup")!;
+            var runGroup = view.FindControl<WrapPanel>("ToolbarRunGroup")!;
+            var viewGroup = view.FindControl<WrapPanel>("ToolbarViewGroup")!;
+            var toolbarLeft = toolbar.TranslatePoint(default, view)!.Value.X;
+            var toolbarRight = toolbarLeft + toolbar.Bounds.Width;
+            var editLeft = editGroup.TranslatePoint(default, view)!.Value.X;
+            var editRight = editLeft + editGroup.Bounds.Width;
+            var runLeft = runGroup.TranslatePoint(default, view)!.Value.X;
+            var runRight = runLeft + runGroup.Bounds.Width;
+            var viewLeft = viewGroup.TranslatePoint(default, view)!.Value.X;
+            var viewRight = viewLeft + viewGroup.Bounds.Width;
+            Assert.InRange(editLeft - toolbarLeft, -1, 9);
+            Assert.True(editRight <= runLeft + 1, $"edit group ends at {editRight}, run group starts at {runLeft}");
+            Assert.True(runRight <= viewLeft + 1, $"run group ends at {runRight}, view group starts at {viewLeft}");
+            Assert.InRange((runLeft + runRight) / 2 - (toolbarLeft + toolbarRight) / 2, -2, 2);
+            Assert.InRange(toolbarRight - viewRight, -1, 9);
+            var deleteButton = view.FindControl<Button>("DeleteSelectedButton")!;
+            var deleteLeft = deleteButton.TranslatePoint(default, view)!.Value.X;
+            Assert.InRange(toolbarRight - (deleteLeft + deleteButton.Bounds.Width), -1, 9);
+            Assert.True(deleteLeft >= viewLeft, $"delete button at {deleteLeft} is left of the view group at {viewLeft}");
+            Assert.True(viewLeft > editRight + width * 0.1, $"view group starts at {viewLeft}, edit ends at {editRight}");
+            Assert.Equal(1, CountToolbarGroupRows(editGroup));
+            Assert.Equal(1, CountToolbarGroupRows(runGroup));
+            Assert.Equal(1, CountToolbarGroupRows(viewGroup));
+        }
+        finally
+        {
+            window.Close();
+        }
+    });
+
+    private static int CountToolbarGroupRows(WrapPanel group)
+    {
+        var rows = new SortedSet<int>();
+        foreach (var child in group.GetVisualChildren().OfType<Control>().Where(child => child.IsEffectivelyVisible))
+        {
+            rows.Add((int)Math.Round(child.TranslatePoint(default, group)!.Value.Y));
+        }
+        return rows.Count;
+    }
 
     [Fact]
     public Task Navigation_DistantNodes_FitsFocusesAndInsertsInsideViewport() => OnUiAsync(() =>
@@ -560,4 +618,74 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
     {
         public override Task ExecuteAsync(INodeExecutionContext context) => action(context);
     }
+
+    [Fact]
+    public Task OpenDocuments_SwitchingActiveCanvas_KeepsEachNodeSetSeparate() => OnUiAsync(() =>
+    {
+        using var editor = new NodeEditorViewModel();
+        var alpha = new NodeProjectDocument("alpha");
+        editor.OpenDocument(alpha);
+        var node = NodeTypeRegistry.Create("Data.Value.Constant")!;
+        editor.AddNode(node);
+
+        editor.OpenDocument(new NodeProjectDocument("beta"));
+
+        Assert.Empty(editor.Nodes);
+        Assert.Same(node, Assert.Single(alpha.Nodes));
+        Assert.Equal(2, editor.OpenDocuments.Count);
+        Assert.Equal("beta", editor.ActiveDocumentName);
+        Assert.True(editor.HasOpenNodeProjects);
+
+        Assert.True(editor.ActivateDocument("alpha"));
+        Assert.Same(node, Assert.Single(editor.Nodes));
+        Assert.False(editor.ActivateDocument("missing"));
+        Assert.Equal("alpha", editor.ActiveDocumentName);
+
+        Assert.True(editor.CloseDocument("alpha"));
+        Assert.Equal("beta", editor.ActiveDocumentName);
+        Assert.Single(editor.OpenDocuments);
+        Assert.Same(node, Assert.Single(alpha.Nodes));
+    });
+
+    [Fact]
+    public Task OpenDocuments_EditorCommandHistoryFollowsEachDocument() => OnUiAsync(() =>
+    {
+        using var editor = new NodeEditorViewModel();
+        editor.OpenDocument(new NodeProjectDocument("alpha"));
+        editor.AddNode(NodeTypeRegistry.Create("Data.Value.Constant")!);
+        Assert.True(editor.CanUndo);
+
+        editor.OpenDocument(new NodeProjectDocument("beta"));
+        Assert.False(editor.CanUndo);
+
+        editor.ActivateDocument("alpha");
+        Assert.True(editor.CanUndo);
+        Assert.Single(editor.Nodes);
+        Assert.Empty(editor.FindDocument("beta")!.Nodes);
+
+        editor.Undo();
+        Assert.Empty(editor.Nodes);
+        Assert.True(editor.CanRedo);
+        editor.ActivateDocument("beta");
+        Assert.False(editor.CanRedo);
+    });
+
+    [Fact]
+    public Task CloseAllDocuments_ResetsCanvasToBlankDraft() => OnUiAsync(() =>
+    {
+        using var editor = new NodeEditorViewModel();
+        editor.OpenDocument(new NodeProjectDocument("alpha"));
+        editor.AddNode(NodeTypeRegistry.Create("Data.Value.Constant")!);
+        editor.OpenDocument(new NodeProjectDocument("beta"));
+
+        editor.CloseAllDocuments();
+
+        Assert.Empty(editor.OpenDocuments);
+        Assert.Empty(editor.Nodes);
+        Assert.Empty(editor.Connections);
+        Assert.False(editor.HasOpenNodeProjects);
+        Assert.Equal(string.Empty, editor.ActiveDocumentName);
+        Assert.False(editor.CanUndo);
+        Assert.Null(editor.FindDocument("alpha"));
+    });
 }

@@ -568,8 +568,113 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     public async Task<bool> OpenProjectFromPathAsync(string path)
     {
         var result = await _projectOps.OpenProjectFromPathAsync(path);
-        if (result) RecordRecentProject(path);
-        return result;
+        if (result)
+        {
+            RecordRecentProject(path);
+            return true;
+        }
+        await ReportOpenFailureAsync();
+        return false;
+    }
+
+    /// <summary>
+    /// <para>把打开失败的会话原因转成显式错误弹窗：文件缺失、解决方案版本不可读、节点项目损坏各有独立文案，
+    /// 版本不匹配时附上磁盘上的格式版本以便判断是否需要用旧版工具迁移。无窗口宿主（测试）只写日志。</para>
+    /// Turns the session's open-failure reason into an explicit error dialog: a missing file, an unreadable
+    /// solution and a corrupt node project each get their own wording, and a version mismatch reports the stored
+    /// format version so the user can tell whether an older build is needed for migration. Hosts without a
+    /// window (tests) only log.
+    /// </summary>
+    private async Task ReportOpenFailureAsync()
+    {
+        var language = LanguageService.Instance;
+        var failure = _projectOps.OpenFailure;
+        var target = _projectOps.OpenFailurePath;
+        var version = _projectOps.OpenFailureStoredVersion;
+        var message = (failure, version) switch
+        {
+            (ProjectOpenFailure.MissingFile, _) => string.Format(language.GetString("Menu_OpenProjectMissing"), target),
+            (ProjectOpenFailure.InvalidSolution, { } stored) => string.Format(
+                language.GetString("Menu_OpenSolutionUnsupported"), target, stored),
+            (ProjectOpenFailure.InvalidSolution, _) => string.Format(language.GetString("Menu_OpenSolutionUnreadable"), target),
+            (ProjectOpenFailure.InvalidNodeProject, { } stored) => string.Format(
+                language.GetString("Menu_OpenNodeProjectUnsupported"), target, stored),
+            (ProjectOpenFailure.InvalidNodeProject, _) => string.Format(
+                language.GetString("Menu_OpenNodeProjectUnreadable"), target),
+            _ => string.Format(language.GetString("Menu_OpenSolutionUnreadable"), target)
+        };
+        LogService.Instance.Write(LogLevel.Error, "Project", $"Open failed: {target} ({message})");
+        var owner = DialogService.GetOwnerWindow();
+        if (owner is not null)
+            await DialogService.ShowAsync(owner, language.GetString("Menu_OpenFailed"), message,
+                Ursa.Controls.MessageBoxIcon.Error);
+    }
+
+    /// <summary>
+    /// <para>把解决方案登记的节点项目载入画布并切到节点编辑器选项卡（供资源管理器双击与标签条共用）。
+    /// 返回是否成功。</para>
+    /// Loads a registered node project into the canvas and switches to the Node Editor tab (shared by the
+    /// explorer double-click and the canvas tab strip). Returns whether the open succeeded.
+    /// </summary>
+    public async Task<bool> OpenNodeProjectAsync(string name)
+    {
+        if (!await _projectOps.OpenNodeProjectAsync(name)) return false;
+        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.NodeEditor));
+        return true;
+    }
+
+    /// <summary>
+    /// <para>切换活动节点项目画布。</para>
+    /// Switches the active node project canvas.
+    /// </summary>
+    public Task<bool> SetActiveNodeProjectAsync(string name) => _projectOps.SetActiveNodeProjectAsync(name);
+
+    /// <summary>
+    /// <para>关闭活动节点项目的画布文档，保留解决方案登记与磁盘文件。</para>
+    /// Closes the canvas document of a node project, keeping its solution registration and file on disk.
+    /// </summary>
+    public Task<bool> CloseNodeProjectAsync(string name) => _projectOps.CloseNodeProjectAsync(name);
+
+    /// <summary>
+    /// <para>在当前解决方案中新建一个空白节点项目：名称自动取下一个未占用的 <c>NodeN</c>，写入
+    /// <c>nodes/&lt;name&gt;.uotannode</c> 并成为活动画布。未打开解决方案时给出提示并跳过。</para>
+    /// Creates an empty node project in the open solution: the name is the next unused <c>NodeN</c>, the file
+    /// is written to <c>nodes/&lt;name&gt;.uotannode</c>, and it becomes the active canvas. Without an open
+    /// solution it reports and skips.
+    /// </summary>
+    [RelayCommand]
+    private async Task CreateNodeProjectAsync()
+    {
+        var context = ProjectContextService.Instance;
+        var owner = DialogService.GetOwnerWindow();
+        if (!context.IsProjectOpen)
+        {
+            if (owner is not null)
+                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Explorer_NodeProject"),
+                    LanguageService.Instance.GetString("Menu_CreateNodeProjectNoProject"),
+                    Ursa.Controls.MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            if (!await _projectOps.CreateNodeProjectAsync(NextNodeProjectName(context))) return;
+            WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.NodeEditor));
+        }
+        catch (Exception ex)
+        {
+            if (owner is not null)
+                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Explorer_NodeProject"),
+                    global::UotanStudio.Services.UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+        }
+    }
+
+    private static string NextNodeProjectName(ProjectContextService context)
+    {
+        var index = 1;
+        while (context.NodeProjects.Any(node => string.Equals(node.Name, $"Node{index}", StringComparison.OrdinalIgnoreCase)))
+            index++;
+        return $"Node{index}";
     }
 
     /// <summary>
@@ -1154,6 +1259,16 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// <para>打开 USB 树视图窗口；窗口已打开时前置聚焦。</para>
+    /// Opens the USB tree-view window, bringing it to the foreground if already open.
+    /// </summary>
+    [RelayCommand]
+    private void OpenUsbTree()
+    {
+        ShowWindow(ref _usbTreeWindow, () => new UsbTreeWindow());
+    }
+
+    /// <summary>
     /// <para>当前已打开的设备管理器窗口引用，用于单例前置与生命周期释放。</para>
     /// Reference to the currently open device manager window, used for singleton focusing and lifecycle release.
     /// </summary>
@@ -1164,6 +1279,13 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// Reference to the currently open global log window, used for singleton focusing and lifecycle release.
     /// </summary>
     private static Window? _logWindow;
+
+    /// <summary>
+    /// <para>当前已打开的 USB 树视图窗口引用，用于单例前置与生命周期释放。</para>
+    /// Reference to the currently open USB tree-view window, used for singleton focusing and lifecycle
+    /// release.
+    /// </summary>
+    private static Window? _usbTreeWindow;
 
     private static Window? _keyManagerWindow;
     private static Window? _visualPluginManagerWindow;

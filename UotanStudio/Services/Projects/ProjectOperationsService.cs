@@ -127,6 +127,9 @@ public sealed class ProjectOperationsService
     public Task CreateNewSolutionAsync(string path, CancellationToken cancellationToken = default)
         => _session.CreateNewSolutionAsync(path, cancellationToken);
     public Task<bool> OpenProjectFromPathAsync(string path) => _session.OpenProjectFromPathAsync(path);
+    internal ProjectOpenFailure OpenFailure => _session.OpenFailure;
+    internal int? OpenFailureStoredVersion => _session.OpenFailureStoredVersion;
+    internal string? OpenFailurePath => _session.OpenFailurePath;
     public Task<bool> SaveAsync(bool saveActiveDocument = true) => _session.SaveAsync(saveActiveDocument);
     public Task SaveAsAsync(string path) => _session.SaveAsAsync(path);
     public Task ImportFilesAsync(string[] paths) => _session.ImportFilesAsync(paths);
@@ -144,6 +147,16 @@ public sealed class ProjectOperationsService
         => _session.RenameSubProjectAsync(name, newName, cancellationToken);
     public Task<bool> RemoveSubProjectAsync(string name, CancellationToken cancellationToken = default)
         => _session.RemoveSubProjectAsync(name, cancellationToken);
+    public Task<bool> CreateNodeProjectAsync(string name, CancellationToken cancellationToken = default)
+        => _session.CreateNodeProjectAsync(name, cancellationToken);
+    public Task<bool> OpenNodeProjectAsync(string name, CancellationToken cancellationToken = default)
+        => _session.OpenNodeProjectAsync(name, cancellationToken);
+    public Task<bool> CloseNodeProjectAsync(string name, CancellationToken cancellationToken = default)
+        => _session.CloseNodeProjectAsync(name, cancellationToken);
+    public Task<bool> RemoveNodeProjectAsync(string name, CancellationToken cancellationToken = default)
+        => _session.RemoveNodeProjectAsync(name, cancellationToken);
+    public Task<bool> SetActiveNodeProjectAsync(string name, CancellationToken cancellationToken = default)
+        => _session.SetActiveNodeProjectAsync(name, cancellationToken);
     public Task ExportPackageAsync(string output, CancellationToken cancellationToken = default)
         => _session.ExportPackageAsync(output, cancellationToken);
     public Task<bool> ImportPackageAsync(string archive, string destination, CancellationToken cancellationToken = default)

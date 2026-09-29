@@ -19,10 +19,10 @@ public sealed class SolutionPersistenceTests
         var path = Path.Combine(temp.Path, "proj.uotan");
         var solution = new SolutionSnapshot
         {
-            FormatVersion = 2,
+            FormatVersion = 1,
             SolutionName = "TestProj",
             SubProjects = [new() { Name = "TestProj", RelativePath = "TestProj/TestProj.uotanfw" }],
-            NodeProjectPath = "TestProj/TestProj.uotannode"
+            NodeProjects = [new NodeProjectDto { Name = "Flow", RelativePath = "nodes/Flow.uotannode", IsOpen = true, IsActive = true }]
         };
 
         var ok = await SolutionPersistenceService.SaveSolutionAsync(path, solution, TestContext.Current.CancellationToken);
@@ -30,10 +30,14 @@ public sealed class SolutionPersistenceTests
 
         var loaded = await SolutionPersistenceService.LoadSolutionAsync(path, TestContext.Current.CancellationToken);
         Assert.NotNull(loaded);
-        Assert.Equal(2, loaded!.FormatVersion);
+        Assert.Equal(1, loaded!.FormatVersion);
         Assert.Equal("TestProj", loaded.SolutionName);
         Assert.Equal("TestProj/TestProj.uotanfw", Assert.Single(loaded.SubProjects!).RelativePath);
-        Assert.Equal("TestProj/TestProj.uotannode", loaded.NodeProjectPath);
+        var nodeProject = Assert.Single(loaded.NodeProjects!);
+        Assert.Equal("Flow", nodeProject.Name);
+        Assert.Equal("nodes/Flow.uotannode", nodeProject.RelativePath);
+        Assert.True(nodeProject.IsOpen);
+        Assert.True(nodeProject.IsActive);
     }
 
     [Fact]

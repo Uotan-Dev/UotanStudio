@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace UotanStudio.Services.Projects;
 
 /// <summary>
@@ -56,8 +58,8 @@ public interface IProjectDataHost
     /// <para>宿主提供节点编辑器时为 <see langword="true"/>。</para></value>
     bool HasNodeEditor { get; }
     /// <summary>
-    /// Clears the host workflow representation.
-    /// <para>清空宿主的工作流表示。</para>
+    /// Clears every node project document the host holds open.
+    /// <para>清空宿主打开的全部节点项目文档。</para>
     /// </summary>
     void ClearNodes();
     /// <summary>
@@ -93,23 +95,55 @@ public interface IProjectDataHost
     /// <para>宿主重新打开文档或决定忽略后完成的任务。</para></returns>
     Task RestoreDocumentsAsync(List<OpenDocumentDto> documents, string rootDirectory);
     /// <summary>
-    /// Restores the workflow snapshot; the host decides unknown-node handling.
-    /// <para>还原工作流快照；未知节点的处理方式由宿主决定。</para>
+    /// Restores one node project snapshot into a host document keyed by <paramref name="name"/>; the host
+    /// decides unknown-node handling.
+    /// <para>按 <paramref name="name"/> 键把单个节点项目快照还原到宿主文档；未知节点的处理方式由宿主决定。</para>
     /// </summary>
+    /// <param name="name">Node project name identifying the host document.
+    /// <para>标识宿主节点项目文档的名称。</para></param>
     /// <param name="snapshot">Stored workflow snapshot, which may still carry unrecognized node type keys.
     /// <para>存储的工作流快照，其中可能仍包含无法识别的节点类型键。</para></param>
-    /// <returns>A task that completes when the host has rebuilt its workflow state.
-    /// <para>宿主完成工作流状态重建后返回的任务。</para></returns>
-    Task RestoreWorkflowAsync(NodeProjectSnapshot snapshot);
+    /// <returns>A task that completes when the host has rebuilt its document state.
+    /// <para>宿主完成文档状态重建后返回的任务。</para></returns>
+    Task RestoreWorkflowAsync(string name, NodeProjectSnapshot snapshot);
     /// <summary>
-    /// Captures a workflow snapshot without exposing editor objects.
-    /// <para>捕获工作流快照，且不暴露编辑器对象。</para>
+    /// Captures the host document for one node project without exposing editor objects.
+    /// <para>捕获宿主中某个节点项目的文档，且不暴露编辑器对象。</para>
     /// </summary>
-    /// <param name="projectName">Name to record in the snapshot, matching the solution being written.
-    /// <para>写入快照的名称，与正在写出的解决方案一致。</para></param>
-    /// <returns>A detached snapshot holding node, connection and version data safe to serialize.
-    /// <para>脱离编辑器的快照，包含可安全序列化的节点、连接和版本数据。</para></returns>
-    NodeProjectSnapshot CaptureWorkflow(string projectName);
+    /// <param name="name">Node project name identifying the host document.
+    /// <para>标识宿主节点项目文档的名称。</para></param>
+    /// <param name="snapshot">When the method returns <see langword="true"/>, the detached snapshot holding
+    /// node, connection and version data safe to serialize.
+    /// <para>方法返回 <see langword="true"/> 时，脱离编辑器的快照，包含可安全序列化的节点、连接与版本数据。</para></param>
+    /// <returns><see langword="false"/> when the host holds no document of that name.
+    /// <para>宿主没有该名称的文档时返回 <see langword="false"/>。</para></returns>
+    bool TryCaptureWorkflow(string name, [NotNullWhen(true)] out NodeProjectSnapshot? snapshot);
+    /// <summary>
+    /// The node project names the host currently holds open, in editor order.
+    /// <para>宿主当前打开的节点项目名称，按编辑器顺序。</para>
+    /// </summary>
+    /// <value>Empty while no document is open; entries not listed here are never rewritten by a save.
+    /// <para>没有打开文档时为空；未列出的节点项目在保存时不会被重写。</para></value>
+    IReadOnlyList<string> OpenWorkflowNames { get; }
+    /// <summary>
+    /// The node project name the host presents as active; <see langword="null"/> when no document is open.
+    /// <para>宿主呈现为活动的节点项目名；没有打开文档时为 <see langword="null"/>。</para>
+    /// </summary>
+    /// <value>Follows <see cref="ActivateWorkflow"/> and the host's own tab changes.
+    /// <para>随 <see cref="ActivateWorkflow"/> 以及宿主自身的标签切换变更。</para></value>
+    string? ActiveWorkflowName { get; }
+    /// <summary>
+    /// Presents the named host document as active; an unknown name is ignored.
+    /// <para>将指定名称的宿主文档设为活动；未知名称被忽略。</para>
+    /// </summary>
+    /// <param name="name">Node project name. <para>节点项目名称。</para></param>
+    void ActivateWorkflow(string name);
+    /// <summary>
+    /// Discards the named host document without deleting its file.
+    /// <para>丢弃指定名称的宿主文档，但不删除其文件。</para>
+    /// </summary>
+    /// <param name="name">Node project name. <para>节点项目名称。</para></param>
+    void CloseWorkflow(string name);
     /// <summary>
     /// Captures the current image list.
     /// <para>捕获当前的镜像列表。</para>

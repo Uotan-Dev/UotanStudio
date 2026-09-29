@@ -311,8 +311,10 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
         var solution = new SolutionSnapshot
         {
             SolutionName = "test",
-            SubProjects = [new() { Name = "first", RelativePath = "first/first.uotanfw" }, new() { Name = "second", RelativePath = "second/second.uotanfw" }]
+            SubProjects = [new() { Name = "first", RelativePath = "first/first.uotanfw" }, new() { Name = "second", RelativePath = "second/second.uotanfw" }],
+            NodeProjects = [new NodeProjectDto { Name = "flow", RelativePath = "nodes/flow.uotannode", IsOpen = true, IsActive = true }]
         };
+        Assert.True(await SolutionPersistenceService.SaveSolutionAsync(solutionPath, solution, Cancellation));
         ProjectContextService.Instance.OpenSolution(solutionPath, solution);
         var images = ImageViewModel.EnsureInstance();
         using var workspace = new WorkspaceViewModel(new TestWorkspaceFactory());
@@ -321,6 +323,7 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
         {
             images.Images.Clear();
             images.Images.Add(new() { RelativePath = "first/images/boot.img", Format = "Boot", SizeBytes = 100 });
+            nodes.OpenDocument(new NodeProjectDocument("flow"));
             var node = DataNodeViewModel.CreateFileReadNode();
             node.Input[0].InitialValue = "boot.img";
             nodes.Nodes.Add(node);
@@ -334,17 +337,19 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
             await workspace.OpenDocumentAsync(otherPath, EditorOpenMode.Text);
             var operations = new ProjectOperationsService { CurrentProjectPath = solutionPath, WorkspaceVM = workspace, NodeEditorVM = nodes };
             var originalProject = File.ReadAllBytes(firstProject);
+            var originalSolution = File.ReadAllBytes(solutionPath);
             await operations.AutoSaveAsync(persistProject: false);
             Assert.False(edited.IsDirty);
             Assert.Equal(originalProject, File.ReadAllBytes(firstProject));
-            Assert.False(File.Exists(solutionPath));
+            Assert.Equal(originalSolution, File.ReadAllBytes(solutionPath));
             await operations.AutoSaveAsync(persistPageState: false);
             Assert.Null((await SolutionPersistenceService.LoadFirmwareProjectAsync(firstProject, Cancellation))!.OpenDocuments);
             await operations.AutoSaveAsync();
             Assert.False(edited.IsDirty);
             Assert.Equal("edited", File.ReadAllText(textPath));
             Assert.Equal(untouched, File.ReadAllBytes(secondProject));
-            var saved = await SolutionPersistenceService.LoadNodeProjectAsync(ProjectContextService.Instance.NodeProjectPath!, Cancellation);
+            var saved = await SolutionPersistenceService.LoadNodeProjectAsync(
+                ProjectContextService.Instance.ResolveNodeProjectPath(Assert.Single(ProjectContextService.Instance.NodeProjects))!, Cancellation);
             Assert.Equal("boot.img", Assert.Single(saved!.Nodes).InputInitialValues!["Path"]);
             var firmware = await SolutionPersistenceService.LoadFirmwareProjectAsync(firstProject, Cancellation);
             Assert.Equal(2, firmware!.OpenDocuments!.Count);

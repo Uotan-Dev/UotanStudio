@@ -71,7 +71,7 @@ public sealed class CompositeEditorTests(NodeEditorUiFixture fixture)
             using var editor = new NodeEditorViewModel();
             var existing = NodeTypeRegistry.Create("Data.Value.Constant")!;
             editor.AddNode(existing);
-            await Assert.ThrowsAsync<InvalidDataException>(() => editor.LoadFromAsync(new WorkflowSnapshot { FormatVersion = 1 }));
+            await Assert.ThrowsAsync<InvalidDataException>(() => editor.LoadFromAsync(new WorkflowSnapshot { FormatVersion = 2 }));
             Assert.Same(existing, Assert.Single(editor.Nodes));
         });
     }

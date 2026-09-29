@@ -58,6 +58,38 @@ public sealed partial class ProjectSession
     public Dictionary<string, JsonElement>? SolutionState { get; private set; }
 
     /// <summary>
+    /// <para>最近一次打开尝试的失败原因；成功后为 <see cref="ProjectOpenFailure.None"/>。宿主据此弹出
+    /// 明确的失败提示，而不是只写日志。</para>
+    /// The failure reason of the most recent open attempt, or <see cref="ProjectOpenFailure.None"/> after a
+    /// successful open; hosts surface an explicit dialog from it instead of relying on log output alone.
+    /// </summary>
+    /// <value>Set by <see cref="OpenProjectFromPathAsync"/> and cleared on success.
+    /// <para>由 <see cref="OpenProjectFromPathAsync"/> 设置，成功时清除。</para></value>
+    public ProjectOpenFailure OpenFailure { get; private set; }
+
+    /// <summary>
+    /// <para>最近一次打开失败时，磁盘文件里读到的 <c>FormatVersion</c>；文件不可解析或非格式版本问题时为
+    /// <see langword="null"/>。</para>
+    /// The <c>FormatVersion</c> read from the offending file when the most recent open failed, or
+    /// <see langword="null"/> when the file is unparseable or the failure is not a version mismatch.
+    /// </summary>
+    /// <value>Populated for <see cref="ProjectOpenFailure.InvalidSolution"/> and
+    /// <see cref="ProjectOpenFailure.InvalidNodeProject"/> when the stored version can be read.
+    /// <para>在 <see cref="ProjectOpenFailure.InvalidSolution"/> 与
+    /// <see cref="ProjectOpenFailure.InvalidNodeProject"/> 且能读到存储版本时填充。</para></value>
+    public int? OpenFailureStoredVersion { get; private set; }
+
+    /// <summary>
+    /// <para>最近一次打开失败时真正读不到的那个文件：解决方案文件或节点项目文件；缺失文件类失败为发起打开的
+    /// 路径。</para>
+    /// The file that actually could not be read during the most recent failed open — the solution file or a
+    /// node project file — or the requested path for a missing-file failure.
+    /// </summary>
+    /// <value>Set alongside <see cref="OpenFailure"/>; <see langword="null"/> before the first attempt.
+    /// <para>与 <see cref="OpenFailure"/> 一同设置；首次尝试之前为 <see langword="null"/>。</para></value>
+    public string? OpenFailurePath { get; private set; }
+
+    /// <summary>
     /// <para>仅重写解决方案文件以保存扩展状态（不动 <c>.uotanfw</c>/<c>.uotannode</c>）；经既有会话操作门串行化。</para>
     /// Rewrites only the solution file to persist extension state (leaving <c>.uotanfw</c>/<c>.uotannode</c>
     /// untouched); serialized through the existing session operation gate.
@@ -203,9 +235,10 @@ public sealed partial class ProjectSession
     public string? CurrentProjectPath { get => Context.CurrentSolutionPath; internal set => Context.SetCompatibilitySolutionPath(value); }
 
     /// <summary>
-    /// <para>在指定路径创建并持久化一个空解决方案（固件项目 + 节点项目 + 状态目录）。</para>
-    /// Creates and persists an empty solution (firmware project + node project + state directory) at the
-    /// specified path.
+    /// <para>在指定路径创建并持久化一个空解决方案（固件项目 + 状态目录）。节点项目不会被自动创建，
+    /// 需要时经 <see cref="CreateNodeProjectAsync"/> 显式登记。</para>
+    /// Creates and persists an empty solution (firmware project + state directory) at the specified path.
+    /// No node project is created; register one with <see cref="CreateNodeProjectAsync"/> when needed.
     /// </summary>
     /// <param name="path">Solution file path to create; missing parent directories are created.
     /// <para>要创建的解决方案文件路径；缺失的父目录会被创建。</para></param>
@@ -226,8 +259,6 @@ public sealed partial class ProjectSession
         var rootDir = target.RootDirectory
             ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName);
         var subProjectDir = Path.Combine(rootDir, solutionName);
-        var nodePath = target.NodeProjectPath
-            ?? Path.Combine(subProjectDir, solutionName + ".uotannode");
         var stateDir = Path.Combine(subProjectDir, ".uotan");
         var subImagesDir = Path.Combine(subProjectDir, "images");
         var subOutputDir = Path.Combine(subProjectDir, "output");
@@ -243,18 +274,10 @@ public sealed partial class ProjectSession
             Images = [],
             Settings = _workspace.CaptureSettings()
         };
-        var node = new NodeProjectSnapshot
-        {
-            FormatVersion = NodeProjectSnapshot.CurrentFormatVersion,
-            ProjectName = solutionName,
-            Nodes = [],
-            Connections = []
-        };
         var solution = new SolutionSnapshot
         {
-            FormatVersion = 2,
+            FormatVersion = 1,
             SolutionName = solutionName,
-            NodeProjectPath = $"{solutionName}/{solutionName}.uotannode",
             SubProjects =
             [
                 new SubProjectDto { Name = solutionName, RelativePath = $"{solutionName}/{solutionName}.uotanfw" }
@@ -262,7 +285,6 @@ public sealed partial class ProjectSession
         };
 
         await transaction.StageAsync(firmwarePath, firmware, SolutionJsonContext.Default.FirmwareProjectSnapshot, cancellationToken);
-        await transaction.StageAsync(nodePath, node, SolutionJsonContext.Default.NodeProjectSnapshot, cancellationToken);
         await transaction.StageAsync(path, solution, SolutionJsonContext.Default.SolutionSnapshot, cancellationToken);
         await transaction.StageAsync(Path.Combine(stateDir, "history.json"), new List<HistoryOperationDto>(), HistoryJsonContext.Default.ListHistoryOperationDto, cancellationToken);
         await transaction.StageAsync(Path.Combine(stateDir, "settings.json"), new SolutionSettings(), SolutionSettingsJsonContext.Default.SolutionSettings, cancellationToken);
@@ -301,8 +323,13 @@ public sealed partial class ProjectSession
 
     private async Task<bool> OpenProjectFromPathCoreAsync(string path, CancellationToken cancellationToken)
     {
+        OpenFailure = ProjectOpenFailure.None;
+        OpenFailureStoredVersion = null;
+        OpenFailurePath = null;
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
+            OpenFailure = ProjectOpenFailure.MissingFile;
+            OpenFailurePath = path;
             ProjectDiagnostics.Write(ProjectLogLevel.Warn, "Menu", $"Open aborted: missing file '{path}'");
             return false;
         }
@@ -310,19 +337,47 @@ public sealed partial class ProjectSession
         var solution = await SolutionPersistenceService.LoadSolutionAsync(path, cancellationToken);
         if (solution is null)
         {
+            OpenFailure = ProjectOpenFailure.InvalidSolution;
+            OpenFailureStoredVersion = ReadStoredFormatVersion(path);
+            OpenFailurePath = path;
             ProjectDiagnostics.Write(ProjectLogLevel.Error, "Menu", $"Open aborted: failed to load solution '{path}'");
             return false;
         }
 
         var target = new ProjectContext();
-        target.OpenSolution(path, solution);
+        try
+        {
+            target.OpenSolution(path, solution);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            OpenFailure = ProjectOpenFailure.InvalidSolution;
+            OpenFailureStoredVersion = ReadStoredFormatVersion(path);
+            OpenFailurePath = path;
+            ProjectDiagnostics.Write(ProjectLogLevel.Error, "Menu", $"Open aborted: invalid solution '{path}': {ex.Message}");
+            return false;
+        }
         var firmware = target.FirmwareProjectPath is { } firmwarePath
             ? await SolutionPersistenceService.LoadFirmwareProjectAsync(firmwarePath, cancellationToken) : null;
-        var node = await SolutionPersistenceService.LoadNodeProjectAsync(target.NodeProjectPath!, cancellationToken);
-        if (node is null && File.Exists(target.NodeProjectPath))
+        var openedNodeProjects = new List<(string Name, NodeProjectSnapshot Snapshot)>();
+        foreach (var descriptor in target.NodeProjects.Where(project => project.IsOpen))
         {
-            ProjectDiagnostics.Write(ProjectLogLevel.Error, "Menu", "Open aborted: invalid or unsupported node project.");
-            return false;
+            if (target.ResolveNodeProjectPath(descriptor) is not { } nodePath) continue;
+            var node = await SolutionPersistenceService.LoadNodeProjectAsync(nodePath, cancellationToken);
+            if (node is null)
+            {
+                if (File.Exists(nodePath))
+                {
+                    OpenFailure = ProjectOpenFailure.InvalidNodeProject;
+                    OpenFailureStoredVersion = ReadStoredFormatVersion(nodePath);
+                    OpenFailurePath = nodePath;
+                    ProjectDiagnostics.Write(ProjectLogLevel.Error, "Menu", $"Open aborted: unreadable node project '{nodePath}'.");
+                    return false;
+                }
+                ProjectDiagnostics.Write(ProjectLogLevel.Warn, "Menu", $"Node project file is missing: {nodePath}");
+                continue;
+            }
+            openedNodeProjects.Add((descriptor.Name, node));
         }
         var history = new ProjectHistory();
         if (target.StateDirectory is { } stateDirectory)
@@ -361,10 +416,10 @@ public sealed partial class ProjectSession
 
         _workspace.ClearNodes();
 
-        if (node is not null)
-        {
-            await _workspace.RestoreWorkflowAsync(node);
-        }
+        foreach (var (name, snapshot) in openedNodeProjects)
+            await _workspace.RestoreWorkflowAsync(name, snapshot);
+        if (Context.ActiveNodeProject is { } activeNodeProject)
+            _workspace.ActivateWorkflow(activeNodeProject.Name);
 
         History.CopyFrom(history);
 
@@ -580,7 +635,7 @@ public sealed partial class ProjectSession
         var root = context.RootDirectory ?? throw new InvalidOperationException("No solution directory is available.");
         var snapshot = await SolutionPersistenceService.LoadSolutionAsync(path, cancellationToken)
             ?? throw new InvalidDataException("Cannot read the current solution.");
-        snapshot.FormatVersion = 2;
+        snapshot.FormatVersion = 1;
         snapshot.SubProjects ??= [];
         foreach (var project in context.SubProjects)
             if (!snapshot.SubProjects.Any(sp => string.Equals(sp.Name, project.Name, StringComparison.OrdinalIgnoreCase)))
@@ -653,8 +708,6 @@ public sealed partial class ProjectSession
         var rootDir = context.RootDirectory
             ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName);
 
-        var node = _workspace.CaptureWorkflow(solutionName);
-
         var openDocs = persistPageState ? _workspace.CaptureDocuments(rootDir) : [];
 
         var subProjectDtos = new List<SubProjectDto>();
@@ -680,20 +733,26 @@ public sealed partial class ProjectSession
             await transaction.StageAsync(sp.FwProjectPath, firmware, SolutionJsonContext.Default.FirmwareProjectSnapshot, cancellationToken);
         }
 
-        var nodePath = context.NodeProjectPath
-            ?? Path.Combine(rootDir, solutionName, solutionName + ".uotannode");
+        var nodeProjectDtos = NodeProjectReferences();
+        foreach (var descriptor in context.NodeProjects)
+        {
+            if (!IsWorkflowOpen(_workspace.OpenWorkflowNames, descriptor.Name)) continue;
+            if (context.ResolveNodeProjectPath(descriptor) is not { } nodePath) continue;
+            if (!_workspace.TryCaptureWorkflow(descriptor.Name, out var snapshot)) continue;
+            await transaction.StageAsync(nodePath, snapshot, SolutionJsonContext.Default.NodeProjectSnapshot, cancellationToken);
+        }
+
         var stateDir = context.StateDirectory;
 
         var solution = new SolutionSnapshot
         {
-            FormatVersion = 2,
+            FormatVersion = 1,
             SolutionName = solutionName,
-            NodeProjectPath = Path.GetRelativePath(rootDir, nodePath).Replace(Path.DirectorySeparatorChar, '/'),
+            NodeProjects = nodeProjectDtos.Count > 0 ? nodeProjectDtos : null,
             SubProjects = subProjectDtos.Count > 0 ? subProjectDtos : null,
             State = CaptureState?.Invoke()
         };
 
-        await transaction.StageAsync(nodePath, node, SolutionJsonContext.Default.NodeProjectSnapshot, cancellationToken);
         await transaction.StageAsync(path, solution, SolutionJsonContext.Default.SolutionSnapshot, cancellationToken);
         if (stateDir is not null)
         {
@@ -705,6 +764,43 @@ public sealed partial class ProjectSession
             await transaction.StageAsync(settingsPath, solutionSettings, SolutionSettingsJsonContext.Default.SolutionSettings, cancellationToken);
         }
         transaction.Commit(cancellationToken);
+    }
+
+    /// <summary>
+    /// Whether the host keeps a node project document open under the given name.
+    /// <para>宿主是否以给定名称保持节点项目文档打开。</para>
+    /// </summary>
+    /// <param name="openNames">Names reported by the host. <para>宿主报告的名称列表。</para></param>
+    /// <param name="name">Node project name to look for. <para>待查找的节点项目名称。</para></param>
+    /// <returns><see langword="true"/> when a name matches case-insensitively.
+    /// <para>按大小写不敏感匹配到名称时返回 <see langword="true"/>。</para></returns>
+    private static bool IsWorkflowOpen(IReadOnlyList<string> openNames, string name)
+        => openNames.Any(open => string.Equals(open, name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// <para>只读取磁盘文件里的 <c>FormatVersion</c> 数值，用于在打开失败时给出可判读的迁移提示；解析失败
+    /// 返回 null，不抛出异常。</para>
+    /// Reads only the <c>FormatVersion</c> number from a file on disk so a failed open can report an
+    /// actionable migration hint; returns null when the file cannot be parsed and never throws.
+    /// </summary>
+    /// <param name="path">Candidate project file. <para>待判读的工程文件。</para></param>
+    /// <returns>The stored version, or <see langword="null"/> when the file is absent, larger than 32 MiB,
+    /// or not a JSON object carrying the field. <para>存储的版本号；文件缺失、超过 32 MiB 或不是携带该字段的
+    /// JSON 对象时为 <see langword="null"/>。</para></returns>
+    private static int? ReadStoredFormatVersion(string path)
+    {
+        try
+        {
+            if (!File.Exists(path) || new FileInfo(path).Length > 32 * 1024 * 1024) return null;
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("FormatVersion", out var version)
+                && version.TryGetInt32(out var value) ? value : null;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
 }

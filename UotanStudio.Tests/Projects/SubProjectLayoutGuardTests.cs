@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using UotanStudio.Services.Projects;
 using Xunit;
 
@@ -24,7 +25,7 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
         var context = new ProjectContext();
         context.OpenSolution(solution, new SolutionSnapshot
         {
-            FormatVersion = 2,
+            FormatVersion = 1,
             SolutionName = "sol",
             SubProjects = [new() { Name = "flat", RelativePath = "flat.uotanfw" }]
         });
@@ -42,7 +43,7 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
         var context = new ProjectContext();
         context.OpenSolution(solution, new SolutionSnapshot
         {
-            FormatVersion = 2,
+            FormatVersion = 1,
             SolutionName = "sol",
             SubProjects = [new() { Name = "nested", RelativePath = "nested/nested.uotanfw" }]
         });
@@ -59,7 +60,7 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
         var context = new ProjectContext();
         Assert.Throws<InvalidDataException>(() => context.OpenSolution(solution, new SolutionSnapshot
         {
-            FormatVersion = 1,
+            FormatVersion = 2,
             SolutionName = "sol"
         }));
     }
@@ -125,6 +126,85 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
         Assert.Equal("second", session.Context.SubProjects[1].Name);
     }
 
+    private static SolutionSnapshot NodeSolution(params NodeProjectDto[] nodes) => new()
+    {
+        FormatVersion = 1,
+        SolutionName = "sol",
+        NodeProjects = [.. nodes]
+    };
+
+    [Fact]
+    public void ValidateSolution_RegisteredOpenAndClosedNodeProjects_IsAccepted()
+    {
+        var snapshot = NodeSolution(
+            new NodeProjectDto { Name = "flow", RelativePath = "nodes/flow.uotannode", IsOpen = true, IsActive = true },
+            new NodeProjectDto { Name = "idle", RelativePath = "nodes/idle.uotannode" });
+
+        ProjectValidation.ValidateSolution(snapshot);
+    }
+
+    [Fact]
+    public void ValidateSolution_DuplicateNodeProjectName_IsRejected()
+    {
+        var snapshot = NodeSolution(
+            new NodeProjectDto { Name = "flow", RelativePath = "nodes/flow.uotannode", IsOpen = true, IsActive = true },
+            new NodeProjectDto { Name = "FLOW", RelativePath = "nodes/other.uotannode" });
+
+        Assert.Equal("Duplicate node project name.",
+            Assert.Throws<InvalidDataException>(() => ProjectValidation.ValidateSolution(snapshot)).Message);
+    }
+
+    [Fact]
+    public void ValidateSolution_BlankNodeProjectPath_IsRejected()
+    {
+        var snapshot = NodeSolution(new NodeProjectDto { Name = "flow", RelativePath = " ", IsOpen = true, IsActive = true });
+
+        Assert.Equal("Empty node project path.",
+            Assert.Throws<InvalidDataException>(() => ProjectValidation.ValidateSolution(snapshot)).Message);
+    }
+
+    [Fact]
+    public void ValidateSolution_NodeProjectPathEscapingRoot_IsRejected()
+    {
+        var snapshot = NodeSolution(new NodeProjectDto { Name = "flow", RelativePath = "../escape.uotannode", IsOpen = true, IsActive = true });
+
+        Assert.Equal("Node project path escapes the solution root.",
+            Assert.Throws<InvalidDataException>(() => ProjectValidation.ValidateSolution(snapshot)).Message);
+    }
+
+    [Fact]
+    public void ValidateSolution_ActiveNodeProjectWithoutOpen_IsRejected()
+    {
+        var snapshot = NodeSolution(new NodeProjectDto { Name = "flow", RelativePath = "nodes/flow.uotannode", IsActive = true });
+
+        Assert.Equal("An active node project must be open.",
+            Assert.Throws<InvalidDataException>(() => ProjectValidation.ValidateSolution(snapshot)).Message);
+    }
+
+    [Fact]
+    public void ValidateSolution_MoreThanOneActiveNodeProject_IsRejected()
+    {
+        var snapshot = NodeSolution(
+            new NodeProjectDto { Name = "alpha", RelativePath = "nodes/alpha.uotannode", IsOpen = true, IsActive = true },
+            new NodeProjectDto { Name = "beta", RelativePath = "nodes/beta.uotannode", IsOpen = true, IsActive = true });
+
+        Assert.Equal("More than one active node project.",
+            Assert.Throws<InvalidDataException>(() => ProjectValidation.ValidateSolution(snapshot)).Message);
+    }
+
+    [Fact]
+    public void OpenSolution_SnapshotWithRejectedNodeList_KeepsPreviousContextPublished()
+    {
+        var context = new ProjectContext();
+        context.OpenSolution(Path.Combine(_root, "first.uotan"));
+        var snapshot = NodeSolution(new NodeProjectDto { Name = "flow", RelativePath = "nodes/flow.uotannode", IsActive = true });
+
+        Assert.Throws<InvalidDataException>(() => context.OpenSolution(Path.Combine(_root, "second.uotan"), snapshot));
+
+        Assert.Equal("first", context.SolutionName);
+        Assert.Empty(context.NodeProjects);
+    }
+
     private ProjectSession CreateSession(out TestWorkspace workspace)
     {
         workspace = new TestWorkspace();
@@ -139,19 +219,29 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
 
     private sealed class TestWorkspace : IProjectWorkspace
     {
+        private readonly NodeWorkflowRecorder _workflows = new();
         public List<string> Events { get; } = [];
         public List<ImageEntryDto> Images { get; } = [];
         public List<OpenDocumentDto> Documents { get; } = [];
         public Func<Task> SaveDocuments { get; set; } = () => Task.CompletedTask;
         public bool IsImageOperationRunning { get; set; }
         public bool HasNodeEditor => true;
-        public void ClearNodes() => Events.Add("clear-nodes");
+        public void ClearNodes() { Events.Add("clear-nodes"); _workflows.Clear(); }
         public void ClearImages() { Events.Add("clear-images"); Images.Clear(); }
         public void ApplySettings(ProjectSettingsDto settings) => Events.Add("settings");
         public void RestoreImages(IEnumerable<ImageEntryDto> images) { Events.Add("images"); Images.AddRange(images); }
         public Task RestoreDocumentsAsync(List<OpenDocumentDto> documents, string rootDirectory) => Task.CompletedTask;
-        public Task RestoreWorkflowAsync(NodeProjectSnapshot snapshot) => Task.CompletedTask;
-        public NodeProjectSnapshot CaptureWorkflow(string projectName) => new() { ProjectName = projectName };
+        public Task RestoreWorkflowAsync(string name, NodeProjectSnapshot snapshot)
+        {
+            _workflows.Restore(name, snapshot);
+            return Task.CompletedTask;
+        }
+        public bool TryCaptureWorkflow(string name, [NotNullWhen(true)] out NodeProjectSnapshot? snapshot)
+            => _workflows.TryCapture(name, out snapshot);
+        public IReadOnlyList<string> OpenWorkflowNames => _workflows.OpenWorkflowNames;
+        public string? ActiveWorkflowName => _workflows.ActiveWorkflowName;
+        public void ActivateWorkflow(string name) => _workflows.ActivateWorkflow(name);
+        public void CloseWorkflow(string name) => _workflows.CloseWorkflow(name);
         public List<ImageEntryDto> CaptureImages() => [.. Images];
         public ProjectSettingsDto CaptureSettings() => new();
         public List<OpenDocumentDto> CaptureDocuments(string rootDirectory) => [];

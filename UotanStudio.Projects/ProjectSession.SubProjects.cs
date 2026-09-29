@@ -63,7 +63,7 @@ public sealed partial class ProjectSession
                 throw new InvalidOperationException("The sub-project name already exists.");
             var solution = await SolutionPersistenceService.LoadSolutionAsync(path, token)
                 ?? throw new InvalidDataException("Cannot read the current solution.");
-            solution.FormatVersion = 2;
+            solution.FormatVersion = 1;
             solution.SubProjects = Context.SubProjects.Where(p => newName is not null || p != project).Select(p => new SubProjectDto
             {
                 Name = p == project ? newName! : p.Name,

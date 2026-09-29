@@ -121,6 +121,7 @@ public partial class App : Application
         WeakReferenceMessenger.Default.Register<LanguageChangedMessage>(this, OnLanguageChanged);
         WeakReferenceMessenger.Default.Register<ExitApplicationMessage>(this, OnExitApplication);
         WeakReferenceMessenger.Default.Register<OpenDocumentRequestMessage>(this, OnOpenDocument);
+        WeakReferenceMessenger.Default.Register<OpenNodeProjectRequestMessage>(this, OnOpenNodeProject);
         WeakReferenceMessenger.Default.Register<OpenCompareRequestMessage>(this, OnOpenCompare);
         WeakReferenceMessenger.Default.Register<OpenScreenMirrorRequestMessage>(this, OnOpenScreenMirror);
         WeakReferenceMessenger.Default.Register<AddSubProjectRequestMessage>(this, OnAddSubProject);
@@ -276,6 +277,14 @@ public partial class App : Application
     /// </summary>
     private async void OnOpenDocument(object recipient, OpenDocumentRequestMessage message)
         => await RunMainRequestAsync("Open document failed", main => main.WorkspaceVM.OpenDocumentAsync(message.Path, message.Mode));
+
+    /// <summary>
+    /// <para>响应打开节点项目请求消息：把解决方案登记的节点项目载入节点编辑器画布并切到该选项卡。</para>
+    /// Responds to open-node-project requests by loading a solution-registered node project into the node
+    /// editor canvas and switching to that tab.
+    /// </summary>
+    private async void OnOpenNodeProject(object recipient, OpenNodeProjectRequestMessage message)
+        => await RunMainRequestAsync("Open node project failed", main => main.MenuVM.OpenNodeProjectAsync(message.NodeProjectName));
 
     /// <summary>
     /// <para>打开或聚焦工作区对比文档，并将右键选中的路径加入比较。</para>

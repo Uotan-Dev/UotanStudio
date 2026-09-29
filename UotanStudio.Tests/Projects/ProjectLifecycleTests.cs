@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
 using UotanStudio.Services.Projects;
 using Xunit;
@@ -22,17 +23,18 @@ public sealed class ProjectLifecycleTests : IDisposable
         Assert.NotSame(first.Context, second.Context);
         Assert.NotSame(first.History, second.History);
         var data = Assert.IsType<ProjectDataWorkspace>(first.Workspace);
-        data.Workflow.Nodes.Add(new() { InstanceId = "unknown-instance", TypeKey = "Vendor.Unknown", InputInitialValues = new() { ["Input"] = "opaque" } });
+        Assert.True(await first.CreateNodeProjectAsync("flow", Token));
+        data.Workflows["flow"].Nodes.Add(new() { InstanceId = "unknown-instance", TypeKey = "Vendor.Unknown", InputInitialValues = new() { ["Input"] = "opaque" } });
         data.Settings.ErofsCompLevel = 7;
         first.History.Record("record", new() { Description = "record" }, () => { }, () => { });
         Assert.True(await first.SaveAsync(cancellationToken: Token));
         Assert.True(await first.CloseAsync(cancellationToken: Token));
         Assert.False(first.Context.IsProjectOpen);
         Assert.Null(first.CurrentProjectPath);
-        Assert.Empty(data.Workflow.Nodes);
+        Assert.Empty(data.Workflows);
         Assert.Equal(secondPath, second.Context.CurrentSolutionPath);
         Assert.True(await first.OpenProjectFromPathAsync(firstPath, Token));
-        Assert.Equal("Vendor.Unknown", Assert.Single(data.Workflow.Nodes).TypeKey);
+        Assert.Equal("Vendor.Unknown", Assert.Single(data.Workflows["flow"].Nodes).TypeKey);
         Assert.Equal(7, data.Settings.ErofsCompLevel);
         Assert.Equal("record", Assert.Single(first.History.CaptureSnapshot()).Description);
         Assert.False(first.History.CanUndo);
@@ -110,14 +112,20 @@ public sealed class ProjectLifecycleTests : IDisposable
     }
 
     [Fact]
-    public async Task NoNodeEditor_SaveStillPersistsProvidedSnapshots()
+    public async Task CreateNewSolution_RegistersNoNodeProject()
     {
         var workspace = new WaitingWorkspace(new(), new());
         Assert.False(workspace.HasNodeEditor);
         var session = new ProjectSession(workspace);
-        await session.CreateNewSolutionAsync(Path.Combine(_root, "headless.uotan"), Token);
+        var solution = Path.Combine(_root, "headless.uotan");
+        await session.CreateNewSolutionAsync(solution, Token);
+
+        Assert.Empty(session.Context.NodeProjects);
+        Assert.Null(session.Context.ActiveNodeProject);
+        Assert.False(Directory.Exists(session.Context.NodeProjectsDirectory));
+        Assert.False(File.Exists(Path.Combine(_root, "headless", "headless.uotannode")));
         Assert.True(await session.SaveAsync(cancellationToken: Token));
-        Assert.NotNull(await SolutionPersistenceService.LoadNodeProjectAsync(session.Context.NodeProjectPath!, Token));
+        Assert.Null((await SolutionPersistenceService.LoadSolutionAsync(solution, Token))!.NodeProjects);
     }
 
     [Fact]
@@ -145,13 +153,14 @@ public sealed class ProjectLifecycleTests : IDisposable
         var source = Path.Combine(_root, "source.uotan");
         await session.CreateNewSolutionAsync(source, Token);
         var data = Assert.IsType<ProjectDataWorkspace>(session.Workspace);
-        data.Workflow.Nodes.Add(new() { TypeKey = "keep" });
+        Assert.True(await session.CreateNodeProjectAsync("canvas", Token));
+        data.Workflows["canvas"].Nodes.Add(new() { TypeKey = "keep" });
         var target = Path.Combine(_root, "blocked.uotan");
         Directory.CreateDirectory(Path.Combine(_root, "blocked", "blocked.uotanfw"));
         await Assert.ThrowsAsync<IOException>(() => session.CreateNewSolutionAsync(target, Token));
         Assert.Equal(source, session.CurrentProjectPath);
         Assert.Equal(source, session.Context.CurrentSolutionPath);
-        Assert.Equal("keep", Assert.Single(data.Workflow.Nodes).TypeKey);
+        Assert.Equal("keep", Assert.Single(data.Workflows["canvas"].Nodes).TypeKey);
         Assert.False(session.IsBusy);
     }
 
@@ -180,17 +189,193 @@ public sealed class ProjectLifecycleTests : IDisposable
         Assert.Equal(targetPath, executedPath);
     }
 
+    [Fact]
+    public async Task TwoNodeProjects_SaveAndReopen_RestoresBothDocumentsWithOneActive()
+    {
+        var session = new ProjectSession();
+        var solution = Path.Combine(_root, "canvas.uotan");
+        await session.CreateNewSolutionAsync(solution, Token);
+        Assert.True(await session.CreateNodeProjectAsync("alpha", Token));
+        Assert.True(await session.CreateNodeProjectAsync("beta", Token));
+        var data = Assert.IsType<ProjectDataWorkspace>(session.Workspace);
+        data.Workflows["alpha"].Nodes.Add(new() { InstanceId = "a1", TypeKey = "Alpha.Node" });
+        data.Workflows["beta"].Nodes.Add(new() { InstanceId = "b1", TypeKey = "Beta.Node" });
+        Assert.True(await session.SaveAsync(cancellationToken: Token));
+
+        var reopened = new ProjectSession();
+        Assert.True(await reopened.OpenProjectFromPathAsync(solution, Token));
+        var reopenedData = Assert.IsType<ProjectDataWorkspace>(reopened.Workspace);
+
+        Assert.Equal(["alpha", "beta"], reopened.Context.NodeProjects.Select(node => node.Name).ToArray());
+        Assert.Equal("Alpha.Node", Assert.Single(reopenedData.Workflows["alpha"].Nodes).TypeKey);
+        Assert.Equal("Beta.Node", Assert.Single(reopenedData.Workflows["beta"].Nodes).TypeKey);
+        Assert.Equal(2, reopened.Context.NodeProjects.Count(node => node.IsOpen));
+        Assert.Equal("beta", Assert.Single(reopened.Context.NodeProjects, node => node.IsActive).Name);
+        Assert.Equal("beta", reopened.Context.ActiveNodeProject!.Name);
+        Assert.Equal("beta", reopenedData.ActiveWorkflowName);
+        var stored = (await SolutionPersistenceService.LoadSolutionAsync(solution, Token))!.NodeProjects!;
+        Assert.Equal(1, stored.Count(node => node.IsActive));
+        Assert.Equal(2, stored.Count(node => node.IsOpen));
+    }
+
+    [Fact]
+    public async Task CloseNodeProject_KeepsRegistrationAndFile_AndSaveRewritesOnlyOpenDocuments()
+    {
+        var session = new ProjectSession();
+        await session.CreateNewSolutionAsync(Path.Combine(_root, "closed.uotan"), Token);
+        Assert.True(await session.CreateNodeProjectAsync("flow", Token));
+        Assert.True(await session.CloseNodeProjectAsync("flow", Token));
+        var nodePath = session.Context.ResolveNodeProjectPath(session.Context.NodeProjects.Single())!;
+        Assert.True(await SolutionPersistenceService.SaveNodeProjectAsync(nodePath, new NodeProjectSnapshot
+        {
+            ProjectName = "flow",
+            Nodes = [new() { InstanceId = "sentinel", TypeKey = "Sentinel.Node" }]
+        }, Token));
+        var sentinelBytes = await File.ReadAllBytesAsync(nodePath, Token);
+        var data = Assert.IsType<ProjectDataWorkspace>(session.Workspace);
+
+        Assert.True(await session.SaveAsync(cancellationToken: Token));
+
+        Assert.Equal(sentinelBytes, await File.ReadAllBytesAsync(nodePath, Token));
+        Assert.Equal("Sentinel.Node", Assert.Single((await SolutionPersistenceService.LoadNodeProjectAsync(nodePath, Token))!.Nodes).TypeKey);
+        Assert.Empty(data.Workflows);
+        var registration = Assert.Single(session.Context.NodeProjects);
+        Assert.False(registration.IsOpen);
+        Assert.False(registration.IsActive);
+        var stored = Assert.Single((await SolutionPersistenceService.LoadSolutionAsync(session.CurrentProjectPath!, Token))!.NodeProjects!);
+        Assert.False(stored.IsOpen);
+        Assert.False(stored.IsActive);
+    }
+
+    [Fact]
+    public async Task RemoveNodeProject_UnregistersAndLeavesTheFileOnDiskUnowned()
+    {
+        var session = new ProjectSession();
+        var solution = Path.Combine(_root, "removed.uotan");
+        await session.CreateNewSolutionAsync(solution, Token);
+        Assert.True(await session.CreateNodeProjectAsync("flow", Token));
+        var nodePath = session.Context.ResolveNodeProjectPath(session.Context.NodeProjects.Single())!;
+
+        Assert.True(await session.RemoveNodeProjectAsync("flow", Token));
+
+        Assert.Empty(session.Context.NodeProjects);
+        Assert.True(File.Exists(nodePath));
+        var reopened = new ProjectSession();
+        Assert.True(await reopened.OpenProjectFromPathAsync(solution, Token));
+        Assert.Empty(reopened.Context.NodeProjects);
+        Assert.Empty(Assert.IsType<ProjectDataWorkspace>(reopened.Workspace).Workflows);
+        Assert.True(File.Exists(nodePath));
+    }
+
+    [Fact]
+    public async Task Open_CorruptRegisteredNodeProject_AbortsAndPreservesLiveSession()
+    {
+        var session = new ProjectSession();
+        await session.CreateNewSolutionAsync(Path.Combine(_root, "live.uotan"), Token);
+        var legacySolution = Path.Combine(_root, "legacy", "legacy.uotan");
+        var author = new ProjectSession();
+        await author.CreateNewSolutionAsync(legacySolution, Token);
+        Assert.True(await author.CreateNodeProjectAsync("flow", Token));
+        var nodePath = author.Context.ResolveNodeProjectPath(author.Context.NodeProjects.Single())!;
+        await File.WriteAllTextAsync(nodePath,
+            "{\"FormatVersion\":2,\"ProjectName\":\"flow\",\"Nodes\":[],\"Connections\":[]}", Token);
+        var livePath = session.CurrentProjectPath;
+        var notifications = 0;
+        session.Changed += () => notifications++;
+
+        Assert.False(await session.OpenProjectFromPathAsync(legacySolution, Token));
+
+        Assert.Equal(livePath, session.CurrentProjectPath);
+        Assert.Equal(0, notifications);
+        Assert.Empty(session.Context.NodeProjects);
+        Assert.Empty(Assert.IsType<ProjectDataWorkspace>(session.Workspace).Workflows);
+        Assert.Contains("\"FormatVersion\":2", await File.ReadAllTextAsync(nodePath, Token));
+    }
+
+    [Fact]
+    public async Task Open_RegisteredNodeProjectFileMissing_WarnsAndOpensWithoutDocument()
+    {
+        var author = new ProjectSession();
+        var solution = Path.Combine(_root, "partial", "partial.uotan");
+        await author.CreateNewSolutionAsync(solution, Token);
+        Assert.True(await author.CreateNodeProjectAsync("flow", Token));
+        var nodePath = author.Context.ResolveNodeProjectPath(author.Context.NodeProjects.Single())!;
+        File.Delete(nodePath);
+        var warnings = new List<string>();
+        void OnDiagnostic(ProjectLogLevel level, string source, string message)
+        {
+            if (level == ProjectLogLevel.Warn && source == "Menu" && message.Contains(nodePath, StringComparison.Ordinal))
+                warnings.Add(message);
+        }
+        ProjectDiagnostics.Message += OnDiagnostic;
+        try
+        {
+            var session = new ProjectSession();
+
+            Assert.True(await session.OpenProjectFromPathAsync(solution, Token));
+
+            Assert.Equal("flow", Assert.Single(session.Context.NodeProjects).Name);
+            var data = Assert.IsType<ProjectDataWorkspace>(session.Workspace);
+            Assert.Empty(data.Workflows);
+            Assert.Null(data.ActiveWorkflowName);
+            Assert.Contains("Node project file is missing", Assert.Single(warnings));
+        }
+        finally
+        {
+            ProjectDiagnostics.Message -= OnDiagnostic;
+        }
+    }
+
+    [Fact]
+    public async Task SaveAs_TwoOpenNodeProjects_WritesBothIntoDestinationNodesAndReopensThem()
+    {
+        var session = new ProjectSession();
+        await session.CreateNewSolutionAsync(Path.Combine(_root, "source.uotan"), Token);
+        Assert.True(await session.CreateNodeProjectAsync("alpha", Token));
+        Assert.True(await session.CreateNodeProjectAsync("beta", Token));
+        var data = Assert.IsType<ProjectDataWorkspace>(session.Workspace);
+        data.Workflows["alpha"].Nodes.Add(new() { TypeKey = "Alpha.Node" });
+        data.Workflows["beta"].Nodes.Add(new() { TypeKey = "Beta.Node" });
+        var destination = Path.Combine(_root, "destination");
+        var target = Path.Combine(destination, "copy.uotan");
+
+        await session.SaveAsAsync(target, Token);
+
+        Assert.Equal(target, session.CurrentProjectPath);
+        Assert.Equal(destination, session.Context.RootDirectory);
+        Assert.True(File.Exists(Path.Combine(destination, "nodes", "alpha.uotannode")));
+        Assert.True(File.Exists(Path.Combine(destination, "nodes", "beta.uotannode")));
+        Assert.Equal(["alpha", "beta"], session.Context.NodeProjects.Select(node => node.Name).ToArray());
+        Assert.All(session.Context.NodeProjects, node => Assert.True(node.IsOpen));
+        Assert.Equal("beta", session.Context.ActiveNodeProject!.Name);
+        var reopened = new ProjectSession();
+        Assert.True(await reopened.OpenProjectFromPathAsync(target, Token));
+        var reopenedData = Assert.IsType<ProjectDataWorkspace>(reopened.Workspace);
+        Assert.Equal("Alpha.Node", Assert.Single(reopenedData.Workflows["alpha"].Nodes).TypeKey);
+        Assert.Equal("Beta.Node", Assert.Single(reopenedData.Workflows["beta"].Nodes).TypeKey);
+    }
+
     private sealed class WaitingWorkspace(TaskCompletionSource entered, TaskCompletionSource release) : IProjectWorkspace
     {
+        private readonly NodeWorkflowRecorder _workflows = new();
         public bool IsImageOperationRunning => false;
         public bool HasNodeEditor => false;
-        public void ClearNodes() { }
+        public void ClearNodes() => _workflows.Clear();
         public void ClearImages() { }
         public void ApplySettings(ProjectSettingsDto settings) { }
         public void RestoreImages(IEnumerable<ImageEntryDto> images) { }
         public Task RestoreDocumentsAsync(List<OpenDocumentDto> documents, string rootDirectory) => Task.CompletedTask;
-        public Task RestoreWorkflowAsync(NodeProjectSnapshot snapshot) => Task.CompletedTask;
-        public NodeProjectSnapshot CaptureWorkflow(string projectName) => new() { ProjectName = projectName };
+        public Task RestoreWorkflowAsync(string name, NodeProjectSnapshot snapshot)
+        {
+            _workflows.Restore(name, snapshot);
+            return Task.CompletedTask;
+        }
+        public bool TryCaptureWorkflow(string name, [NotNullWhen(true)] out NodeProjectSnapshot? snapshot)
+            => _workflows.TryCapture(name, out snapshot);
+        public IReadOnlyList<string> OpenWorkflowNames => _workflows.OpenWorkflowNames;
+        public string? ActiveWorkflowName => _workflows.ActiveWorkflowName;
+        public void ActivateWorkflow(string name) => _workflows.ActivateWorkflow(name);
+        public void CloseWorkflow(string name) => _workflows.CloseWorkflow(name);
         public List<ImageEntryDto> CaptureImages() => [];
         public ProjectSettingsDto CaptureSettings() => new();
         public List<OpenDocumentDto> CaptureDocuments(string rootDirectory) => [];

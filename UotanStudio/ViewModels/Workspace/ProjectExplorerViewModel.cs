@@ -130,8 +130,7 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
 
             if (TreeViewContent.FirstOrDefault() is { } existing
                 && string.Equals(existing.Path, svc.RootDirectory, OperatingSystem.IsWindows()
-                    ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
-                && TreeViewContent.LastOrDefault(node => !ReferenceEquals(node, _openedFolder))?.AssociatedProjectPath == svc.NodeProjectPath)
+                    ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
             {
                 ApplyFileSystemChanges();
                 return;
@@ -144,24 +143,6 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
             // Eagerly load root children so subsequent FileSystemWatcher-triggered refreshes work.
             if (TreeViewContent.FirstOrDefault() is { IsDirectory: true } root)
                 root.EnsureChildrenLoaded();
-
-            // 节点项目顶层文件夹：与解决方案根目录同级，双击打开 .uotannode。
-            // Node project top-level folder: sibling of the solution root, double-click opens .uotannode.
-            // 清空 Children 使其不可展开（纯点击项，非目录浏览）。
-            // Clear Children to make it non-expandable (a clickable item, not a directory browser).
-            if (svc.NodeProjectPath is not null)
-            {
-                var nodeProject = new ExplorerNode(
-                    svc.RootDirectory,
-                    isDirectory: true,
-                    isProjectFolder: true,
-                    associatedProjectPath: svc.NodeProjectPath)
-                {
-                    Name = LanguageService.Instance.GetString("Explorer_NodeProject")
-                };
-                nodeProject.Children.Clear();
-                TreeViewContent.Add(nodeProject);
-            }
         }
         else
         {
@@ -343,16 +324,11 @@ public sealed partial class ExplorerNode : ObservableObject
     internal static HashSet<string> ProjectFolderPaths { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// <para>获取是否为项目文件夹（双击时打开关联的项目配置文件而非展开目录）。</para>
-    /// Gets whether this node is a project folder (double-clicking opens the associated project config file instead of expanding).
+    /// <para>获取是否为项目文件夹（子项目或解决方案根，双击时打开其项目配置文件而非展开目录）。</para>
+    /// Gets whether this node is a project folder (a sub-project or the solution root; double-clicking opens
+    /// its project config file instead of expanding).
     /// </summary>
     public bool IsProjectFolder { get; }
-
-    /// <summary>
-    /// <para>获取关联的项目配置文件路径（如 .uotannode），双击项目文件夹时优先打开此路径。</para>
-    /// Gets the associated project config file path (e.g. .uotannode), opened directly on double-click.
-    /// </summary>
-    public string? AssociatedProjectPath { get; }
 
     /// <summary>
     /// <para>获取或设置节点显示名称。</para>
@@ -415,14 +391,12 @@ public sealed partial class ExplorerNode : ObservableObject
     /// <param name="isDirectory"><para>是否为目录。</para>Whether the node is a directory.</param>
     /// <param name="isPlaceholder"><para>是否为占位节点。</para>Whether the node is a placeholder.</param>
     /// <param name="isProjectFolder"><para>是否为项目文件夹。</para>Whether the node is a project folder.</param>
-    /// <param name="associatedProjectPath"><para>关联的项目配置文件路径。</para>The associated project config file path.</param>
-    public ExplorerNode(string path, bool isDirectory, bool isPlaceholder = false, bool isProjectFolder = false, string? associatedProjectPath = null)
+    public ExplorerNode(string path, bool isDirectory, bool isPlaceholder = false, bool isProjectFolder = false)
     {
         Path = path;
         IsDirectory = isDirectory;
         IsPlaceholder = isPlaceholder;
         IsProjectFolder = isProjectFolder;
-        AssociatedProjectPath = associatedProjectPath;
         _name = isPlaceholder ? string.Empty : GetDisplayName(path);
         if (isDirectory && !isPlaceholder)
         {
@@ -456,12 +430,13 @@ public sealed partial class ExplorerNode : ObservableObject
 
             foreach (var file in Directory.EnumerateFiles(Path))
             {
-                // 隐藏项目配置文件（.uotan/.uotanfw/.uotannode），仿 VS 解决方案资源管理器行为。
-                // Hide project config files (.uotan/.uotanfw/.uotannode), mimicking VS Solution Explorer behavior.
+                // 隐藏解决方案与子项目的身份文件（.uotan/.uotanfw），仿 VS 解决方案资源管理器行为。
+                // 节点项目文件（.uotannode）是用户一等文档，随 nodes/ 目录正常显示。
+                // Hide the solution and sub-project identity files (.uotan/.uotanfw), mimicking VS Solution
+                // Explorer. Node project files (.uotannode) are first-class user documents and stay visible.
                 var ext = System.IO.Path.GetExtension(file);
                 if (string.Equals(ext, ".uotan", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(ext, ".uotanfw", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(ext, ".uotannode", StringComparison.OrdinalIgnoreCase))
+                    string.Equals(ext, ".uotanfw", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }

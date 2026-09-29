@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using UotanStudio.Services.Projects;
+using UotanStudio.Tests.Projects;
 using UotanStudio.ViewModels.Workspace;
 using Xunit;
 
@@ -42,6 +44,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
         var path = Path.Combine(_root, "sample.uotan");
         await _projects.CreateNewSolutionAsync(path, TestContext.Current.CancellationToken);
         var context = ProjectContextService.Instance;
+        Assert.True(await _projects.CreateNodeProjectAsync("flow", TestContext.Current.CancellationToken));
         var imagePath = Path.Combine(context.EnsureImagesDirectory(), "boot.img");
         await File.WriteAllBytesAsync(imagePath, [1, 2, 3], TestContext.Current.CancellationToken);
         var relative = Path.GetRelativePath(context.RootDirectory!, imagePath);
@@ -166,6 +169,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
     {
         var source = Path.Combine(_root, "original.uotan");
         await _projects.CreateNewSolutionAsync(source, TestContext.Current.CancellationToken);
+        Assert.True(await _projects.CreateNodeProjectAsync("flow", TestContext.Current.CancellationToken));
         var context = ProjectContextService.Instance;
         var oldRoot = context.RootDirectory;
         var oldActive = context.ActiveSubProject;
@@ -178,7 +182,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
         var marker = Path.Combine(destination, "keep.txt");
         File.WriteAllText(marker, "untouched");
         if (commitFailure) Directory.CreateDirectory(target);
-        else Directory.CreateDirectory(Path.Combine(destination, "original", "copy.uotannode"));
+        else Directory.CreateDirectory(Path.Combine(destination, "nodes", "flow.uotannode"));
 
         var error = await Record.ExceptionAsync(() => _projects.SaveAsAsync(target));
         Assert.True(error is IOException or UnauthorizedAccessException, $"Unexpected error: {error}");
@@ -392,13 +396,14 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
 
     private sealed class TestWorkspace : IProjectWorkspace
     {
+        private readonly NodeWorkflowRecorder _workflows = new();
         public List<string> Events { get; } = [];
         public List<ImageEntryDto> Images { get; } = [];
         public List<OpenDocumentDto> Documents { get; } = [];
         public Func<Task> SaveDocuments { get; set; } = () => Task.CompletedTask;
         public bool IsImageOperationRunning { get; set; }
         public bool HasNodeEditor => true;
-        public void ClearNodes() => Events.Add("clear-nodes");
+        public void ClearNodes() { Events.Add("clear-nodes"); _workflows.Clear(); }
         public void ClearImages() { Events.Add("clear-images"); Images.Clear(); }
         public void ApplySettings(ProjectSettingsDto settings) => Events.Add("settings");
         public void RestoreImages(IEnumerable<ImageEntryDto> images) { Events.Add("images"); Images.AddRange(images); }
@@ -409,8 +414,18 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
             Documents.AddRange(documents);
             return Task.CompletedTask;
         }
-        public Task RestoreWorkflowAsync(NodeProjectSnapshot snapshot) { Events.Add("workflow"); return Task.CompletedTask; }
-        public NodeProjectSnapshot CaptureWorkflow(string projectName) => new() { ProjectName = projectName };
+        public Task RestoreWorkflowAsync(string name, NodeProjectSnapshot snapshot)
+        {
+            Events.Add("workflow");
+            _workflows.Restore(name, snapshot);
+            return Task.CompletedTask;
+        }
+        public bool TryCaptureWorkflow(string name, [NotNullWhen(true)] out NodeProjectSnapshot? snapshot)
+            => _workflows.TryCapture(name, out snapshot);
+        public IReadOnlyList<string> OpenWorkflowNames => _workflows.OpenWorkflowNames;
+        public string? ActiveWorkflowName => _workflows.ActiveWorkflowName;
+        public void ActivateWorkflow(string name) => _workflows.ActivateWorkflow(name);
+        public void CloseWorkflow(string name) => _workflows.CloseWorkflow(name);
         public List<ImageEntryDto> CaptureImages() => [.. Images];
         public ProjectSettingsDto CaptureSettings() => new();
         public List<OpenDocumentDto> CaptureDocuments(string rootDirectory) { Events.Add("capture-documents"); return [.. Documents]; }

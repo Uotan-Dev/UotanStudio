@@ -10,7 +10,11 @@ public sealed class ProjectContextService
     public string? SolutionName => Core.SolutionName;
     public string? RootDirectory => Core.RootDirectory;
     public string? FirmwareProjectPath => Core.FirmwareProjectPath;
-    public string? NodeProjectPath => Core.NodeProjectPath;
+    public IReadOnlyList<NodeProjectContext> NodeProjects => Core.NodeProjects;
+    public NodeProjectContext? ActiveNodeProject => Core.ActiveNodeProject;
+    public string? NodeProjectsDirectory => Core.NodeProjectsDirectory;
+    public string? ResolveNodeProjectPath(NodeProjectContext nodeProject) => Core.ResolveNodeProjectPath(nodeProject);
+    public bool SetActiveNodeProject(string name) => Core.SetActiveNodeProject(name);
     public string? StateDirectory => Core.StateDirectory;
     public IReadOnlyList<SubProjectContext> SubProjects => Core.SubProjects;
     public SubProjectContext? ActiveSubProject => Core.ActiveSubProject;

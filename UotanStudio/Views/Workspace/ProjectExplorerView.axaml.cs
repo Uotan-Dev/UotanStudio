@@ -59,8 +59,8 @@ public partial class ProjectExplorerView : UserControl
             return;
         }
 
-        // 项目文件夹（子项目 / 节点项目）：双击打开关联的项目配置文件。
-        // Project folders (sub-project / node project): double-click opens the associated config file.
+        // 项目文件夹（子项目 / 解决方案根）：双击打开其项目配置文件。
+        // Project folders (sub-project / solution root): double-click opens their config file.
         if (node.IsDirectory && node.IsProjectFolder)
         {
             OpenProjectFileForFolder(node);
@@ -69,25 +69,23 @@ public partial class ProjectExplorerView : UserControl
 
         if (!node.IsDirectory)
         {
-            WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(node.Path));
+            // 节点项目文件进入画布编辑器，其他文件进入文档工作区。
+            // Node project files open in the canvas editor; every other file goes to the document workspace.
+            if (string.Equals(System.IO.Path.GetExtension(node.Path), ".uotannode", StringComparison.OrdinalIgnoreCase))
+                WeakReferenceMessenger.Default.Send(new OpenNodeProjectRequestMessage(
+                    System.IO.Path.GetFileNameWithoutExtension(node.Path)));
+            else
+                WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(node.Path));
         }
     }
 
     /// <summary>
-    /// <para>双击项目文件夹时查找并打开关联的项目配置文件：顶层目录打开 .uotan，子项目目录打开 .uotanfw，节点项目打开 .uotannode。</para>
-    /// Finds and opens the associated project config file when a project folder is double-clicked:
-    /// root directory opens .uotan, sub-project directory opens .uotanfw, node project opens .uotannode.
+    /// <para>双击项目文件夹时查找并打开其项目配置文件：子项目目录打开 .uotanfw，顶层目录打开 .uotan。</para>
+    /// Finds and opens the project config file when a project folder is double-clicked: a sub-project
+    /// directory opens its .uotanfw, the root directory opens its .uotan.
     /// </summary>
     private static void OpenProjectFileForFolder(ExplorerNode node)
     {
-        // 有关联项目路径的节点（如节点项目文件夹）：直接打开。
-        // Nodes with an associated project path (e.g. node project folder): open directly.
-        if (node.AssociatedProjectPath is not null && System.IO.File.Exists(node.AssociatedProjectPath))
-        {
-            WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(node.AssociatedProjectPath));
-            return;
-        }
-
         // 子项目文件夹：在目录内查找 .uotanfw 文件。
         // Sub-project folder: find the .uotanfw file inside the directory.
         if (System.IO.Directory.Exists(node.Path))

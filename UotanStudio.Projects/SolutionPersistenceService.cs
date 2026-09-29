@@ -241,19 +241,19 @@ public static class SolutionPersistenceService
 
 /// <summary>
 /// Solution snapshot, carrying the <c>.uotan</c> solution file structure: solution name, sub-project
-/// list, and the node project file it references (relative to the solution file's directory).
-/// <para>解决方案快照，承载 <c>.uotan</c> 解决方案文件结构：解决方案名、子项目列表及引用的节点项目文件
+/// list, and the node projects it references (relative to the solution file's directory).
+/// <para>解决方案快照，承载 <c>.uotan</c> 解决方案文件结构：解决方案名、子项目列表及其引用的节点项目
 /// （相对解决方案文件目录）。</para>
 /// </summary>
 public sealed class SolutionSnapshot
 {
     /// <summary>
-    /// Solution file format version (currently 2).
-    /// <para>解决方案文件格式版本（当前为 2）。</para>
+    /// Solution file format version (currently 1).
+    /// <para>解决方案文件格式版本（当前为 1）。</para>
     /// </summary>
-    /// <value>The version tag written to disk; loading rejects any value other than 2.
-    /// <para>写入磁盘的版本标记；加载时除 2 外一律拒绝。</para></value>
-    public int FormatVersion { get; set; } = 2;
+    /// <value>The version tag written to disk; loading rejects any value other than 1.
+    /// <para>写入磁盘的版本标记；加载时除 1 外一律拒绝。</para></value>
+    public int FormatVersion { get; set; } = 1;
 
     /// <summary>
     /// Solution name (without extension).
@@ -264,12 +264,14 @@ public sealed class SolutionSnapshot
     public string SolutionName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Node project file path relative to the solution file's directory.
-    /// <para>节点项目文件路径（相对解决方案文件目录）。</para>
+    /// Node project files this solution references, in registration order.
+    /// <para>本解决方案引用的节点项目文件清单，按登记顺序排列。</para>
     /// </summary>
-    /// <value>The referenced <c>.uotannode</c> path; empty when the solution references no node project.
-    /// <para>引用的 <c>.uotannode</c> 路径；解决方案未引用节点项目时为空。</para></value>
-    public string NodeProjectPath { get; set; } = string.Empty;
+    /// <value>The node project references, or <see langword="null"/> when the solution references none. A
+    /// freshly created solution stores no node project until one is created explicitly.
+    /// <para>节点项目引用；解决方案未引用任何节点项目时为 <see langword="null"/>。新建的解决方案在显式
+    /// 创建节点项目之前不引用任何节点项目。</para></value>
+    public List<NodeProjectDto>? NodeProjects { get; set; }
 
     /// <summary>
     /// References to independently stored sub-projects.
@@ -314,6 +316,50 @@ public sealed class SubProjectDto
     /// <value>The stored project-file location; validation rejects a blank value.
     /// <para>已保存的项目文件位置；校验会拒绝空白值。</para></value>
     public string RelativePath { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Node project reference DTO, carrying the display name, the relative path of its <c>.uotannode</c> file,
+/// and whether the editor keeps it open and active.
+/// <para>节点项目引用 DTO，承载显示名称、其 <c>.uotannode</c> 文件的相对路径，以及编辑器是否将其保持打开
+/// 与活动。</para>
+/// </summary>
+public sealed class NodeProjectDto
+{
+    /// <summary>
+    /// Node project display name, also the base name of its file.
+    /// <para>节点项目显示名称，同时作为其文件的基本名。</para>
+    /// </summary>
+    /// <value>The name shown in the UI; unique per solution case-insensitively and constrained by
+    /// <see cref="ProjectValidation.ValidateName"/>. <para>界面显示名称；在同一解决方案内按大小写不敏感
+    /// 唯一，并受 <see cref="ProjectValidation.ValidateName"/> 约束。</para></value>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Relative path to the <c>.uotannode</c> file (relative to the solution file's directory, using
+    /// <c>/</c> separators).
+    /// <para>指向 <c>.uotannode</c> 文件的相对路径（相对解决方案文件目录，使用 <c>/</c> 分隔）。</para>
+    /// </summary>
+    /// <value>The stored node project file location; validation rejects a blank value or a path escaping
+    /// the solution data root. <para>已保存的节点项目文件位置；校验会拒绝空白值以及逃出解决方案数据根目录
+    /// 的路径。</para></value>
+    public string RelativePath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether the editor restores this node project into an open canvas when the solution is opened.
+    /// <para>打开解决方案时编辑器是否把该节点项目还原为打开的画布。</para>
+    /// </summary>
+    /// <value><see langword="true"/> for node projects the user keeps open in the editor.
+    /// <para>用户在编辑器中保持打开的节点项目为 <see langword="true"/>。</para></value>
+    public bool IsOpen { get; set; }
+
+    /// <summary>
+    /// Whether this node project is the one the editor presents as active.
+    /// <para>该节点项目是否为编辑器当前呈现为活动的画布。</para>
+    /// </summary>
+    /// <value>At most one reference per solution is active, and an active reference must also be open.
+    /// <para>每个解决方案至多一个引用为活动，且活动引用必须同时处于打开状态。</para></value>
+    public bool IsActive { get; set; }
 }
 
 /// <summary>

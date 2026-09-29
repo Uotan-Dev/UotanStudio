@@ -26,7 +26,7 @@ public sealed class WorkflowSnapshot
     /// Workflow schema using the redesigned node contract.
     /// <para>采用重新设计节点契约的工作流格式版本。</para>
     /// </summary>
-    public const int CurrentFormatVersion = 2;
+    public const int CurrentFormatVersion = 1;
     /// <summary>
     /// <para>工程文件格式版本。</para>
     /// Project file format version.

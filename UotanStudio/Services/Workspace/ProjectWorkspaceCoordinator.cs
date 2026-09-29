@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Nodes;
@@ -13,7 +14,13 @@ internal sealed class ProjectWorkspaceCoordinator : IProjectWorkspace
 
     public bool IsImageOperationRunning => ImageViewModel.Instance.IsOperating;
     public bool HasNodeEditor => NodeEditor is not null;
-    public void ClearNodes() => NodeEditor?.Clear();
+    public void ClearNodes() => NodeEditor?.CloseAllDocuments();
+    public void ActivateWorkflow(string name) => NodeEditor?.ActivateDocument(name);
+    public void CloseWorkflow(string name) => NodeEditor?.CloseDocument(name);
+    public IReadOnlyList<string> OpenWorkflowNames
+        => NodeEditor?.OpenDocuments.Select(document => document.Name).ToArray() ?? [];
+    public string? ActiveWorkflowName
+        => NodeEditor is { } editor && editor.ActiveDocumentName.Length > 0 ? editor.ActiveDocumentName : null;
     public void ClearImages() => ImageViewModel.EnsureInstance().Images.Clear();
     public void ApplySettings(ProjectSettingsDto settings) => ProjectSettingViewModel.EnsureInstance().ApplyFromDto(settings);
 
@@ -47,24 +54,33 @@ internal sealed class ProjectWorkspaceCoordinator : IProjectWorkspace
     public Task RestoreDocumentsAsync(List<OpenDocumentDto> documents, string rootDirectory)
         => Workspace?.RestoreDocumentsAsync(documents, rootDirectory) ?? Task.CompletedTask;
 
-    public Task RestoreWorkflowAsync(NodeProjectSnapshot snapshot)
-        => NodeEditor?.LoadFromAsync(new WorkflowSnapshot
+    public Task RestoreWorkflowAsync(string name, NodeProjectSnapshot snapshot)
+    {
+        var editor = NodeEditor ?? throw new InvalidOperationException("No node editor is bound.");
+        editor.OpenDocument(new NodeProjectDocument(name));
+        return editor.LoadFromAsync(new WorkflowSnapshot
         {
             FormatVersion = snapshot.FormatVersion,
             Nodes = snapshot.Nodes,
             Connections = snapshot.Connections
-        }) ?? Task.CompletedTask;
+        });
+    }
 
-    public NodeProjectSnapshot CaptureWorkflow(string projectName)
+    public bool TryCaptureWorkflow(string name, [NotNullWhen(true)] out NodeProjectSnapshot? snapshot)
     {
-        var nodes = NodeEditor ?? throw new InvalidOperationException("No node editor is bound.");
-        return new NodeProjectSnapshot
+        if (NodeEditor?.FindDocument(name) is not { } document)
+        {
+            snapshot = null;
+            return false;
+        }
+        snapshot = new NodeProjectSnapshot
         {
             FormatVersion = NodeProjectSnapshot.CurrentFormatVersion,
-            ProjectName = projectName,
-            Nodes = WorkflowPersistenceService.BuildNodeDtos(nodes.Nodes),
-            Connections = WorkflowPersistenceService.BuildConnectionDtos(nodes.Nodes, nodes.Connections)
+            ProjectName = name,
+            Nodes = WorkflowPersistenceService.BuildNodeDtos(document.Nodes),
+            Connections = WorkflowPersistenceService.BuildConnectionDtos(document.Nodes, document.Connections)
         };
+        return true;
     }
 
     public List<ImageEntryDto> CaptureImages() => ImageViewModel.EnsureInstance().Images

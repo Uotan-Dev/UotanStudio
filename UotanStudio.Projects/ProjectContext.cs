@@ -44,11 +44,23 @@ public sealed record SubProjectContext(
 }
 
 /// <summary>
+/// Per-node-project context: a registered <c>.uotannode</c> file of the current solution.
+/// <para>单个节点项目的上下文：当前解决方案中已登记的 <c>.uotannode</c> 文件。</para>
+/// </summary>
+/// <param name="Name">Node project display name. <para>节点项目显示名称。</para></param>
+/// <param name="RelativePath">Path of the <c>.uotannode</c> file, relative to the solution data root and
+/// <c>/</c>-separated. <para><c>.uotannode</c> 文件相对解决方案数据根的路径，以 <c>/</c> 分隔。</para></param>
+/// <param name="IsOpen">Whether the editor keeps this node project open. <para>编辑器是否保持该节点项目打开。</para></param>
+/// <param name="IsActive">Whether this node project is the editor's active canvas.
+/// <para>该节点项目是否为编辑器的活动画布。</para></param>
+public sealed record NodeProjectContext(string Name, string RelativePath, bool IsOpen, bool IsActive);
+
+/// <summary>
 /// Independent solution context, holding the state and directory layout of the opened
-/// <c>.uotan</c> solution: data root, sub-projects, node project file, active sub-project state directory
+/// <c>.uotan</c> solution: data root, sub-projects, node projects, active sub-project state directory
 /// <c>.uotan/</c>, and relative/absolute path conversion.
 /// <para>独立解决方案上下文，承载已打开 <c>.uotan</c> 解决方案的状态与目录布局：
-/// 数据根目录、子项目列表、节点项目文件、活动子项目状态目录 <c>.uotan/</c> 及相对/绝对路径转换。</para>
+/// 数据根目录、子项目列表、节点项目列表、活动子项目状态目录 <c>.uotan/</c> 及相对/绝对路径转换。</para>
 /// </summary>
 public sealed class ProjectContext
 {
@@ -86,8 +98,8 @@ public sealed class ProjectContext
     /// Solution name (without extension); <c>null</c> when no solution is open.
     /// <para>解决方案名（不含扩展名）；未打开解决方案时为 <c>null</c>。</para>
     /// </summary>
-    /// <value>The base name used for sub-project matching, node project file names and script metadata.
-    /// <para>用于子项目匹配、节点项目文件名以及脚本元数据的基名。</para></value>
+    /// <value>The base name used for sub-project matching and script metadata.
+    /// <para>用于子项目匹配与脚本元数据的基名。</para></value>
     public string? SolutionName { get; private set; }
 
     /// <summary>
@@ -112,14 +124,35 @@ public sealed class ProjectContext
 
 
     /// <summary>
-    /// Node project file path — lives inside the sub-project whose name equals the solution name,
-    /// falling back to the first sub-project; <c>null</c> when no sub-project exists.
-    /// <para>节点项目文件路径——位于「名为解决方案名的子项目，否则第一个子项目」文件夹内；
-    /// 无子项目时为 <c>null</c>。</para>
+    /// Node projects registered by the current solution, in registration order.
+    /// <para>当前解决方案已登记的节点项目清单，按登记顺序排列。</para>
     /// </summary>
-    /// <value>Absolute <c>&lt;SolutionName&gt;.uotannode</c> path; the file is not created by this context.
-    /// <para>绝对的 <c>&lt;SolutionName&gt;.uotannode</c> 路径；本上下文不会创建该文件。</para></value>
-    public string? NodeProjectPath { get; private set; }
+    /// <value>A read-only list, empty while no solution is open or the solution registers none. Paths come
+    /// from the solution file and are never inferred from the sub-project layout; a <c>.uotannode</c> file
+    /// on disk that the solution does not register stays unowned.
+    /// <para>只读列表；未打开解决方案或解决方案未登记节点项目时为空。路径全部来自解决方案文件，不再由子项目
+    /// 布局推断；磁盘上未被登记的 <c>.uotannode</c> 文件不属于本上下文。</para></value>
+    public IReadOnlyList<NodeProjectContext> NodeProjects { get; private set; } = [];
+
+    /// <summary>
+    /// The node project the editor presents as active; <c>null</c> when the solution registers none as active.
+    /// <para>编辑器呈现为活动的节点项目；没有活动项时为 <c>null</c>。</para>
+    /// </summary>
+    /// <value>An entry of <see cref="NodeProjects"/> whose <c>IsActive</c> is set; it always follows
+    /// <see cref="SetActiveNodeProject"/>. <para><see cref="NodeProjects"/> 中 <c>IsActive</c> 为真的条目；
+    /// 随 <see cref="SetActiveNodeProject"/> 变更。</para></value>
+    public NodeProjectContext? ActiveNodeProject
+        => NodeProjects.FirstOrDefault(node => node.IsActive);
+
+    /// <summary>
+    /// Absolute path of the solution's <c>nodes/</c> directory, where node project files live.
+    /// <para>解决方案 <c>nodes/</c> 目录的绝对路径，节点项目文件存放于此。</para>
+    /// </summary>
+    /// <value>Absolute path under <see cref="RootDirectory"/>, or <c>null</c> when no solution is open. The
+    /// directory is created when the first node project is written.
+    /// <para><see cref="RootDirectory"/> 之下的绝对路径；未打开解决方案时为 <c>null</c>。目录在写入首个节点
+    /// 项目时创建。</para></value>
+    public string? NodeProjectsDirectory => RootDirectory is null ? null : Path.Combine(RootDirectory, "nodes");
 
     /// <summary>
     /// State directory of the active sub-project; null when no sub-project is active.
@@ -173,6 +206,106 @@ public sealed class ProjectContext
     }
 
     /// <summary>
+    /// Makes the named node project the editor's active canvas, provided it is registered and open.
+    /// <para>把指定节点项目设为编辑器的活动画布，要求其已登记且处于打开状态。</para>
+    /// </summary>
+    /// <param name="name">Node project name. <para>节点项目名称。</para></param>
+    /// <returns><c>true</c> when the project was found and activated; <c>false</c> otherwise.
+    /// <para>找到并激活该节点项目时返回 <c>true</c>，否则返回 <c>false</c>。</para></returns>
+    public bool SetActiveNodeProject(string name)
+    {
+        var projects = NodeProjects.ToList();
+        var index = projects.FindIndex(node =>
+            string.Equals(node.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (index < 0 || !projects[index].IsOpen) return false;
+        for (var position = 0; position < projects.Count; position++)
+            projects[position] = projects[position] with { IsActive = position == index };
+        NodeProjects = projects.ToArray();
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>
+    /// Registers a node project, replacing an existing registration of the same name.
+    /// <para>登记一个节点项目，同名既有登记会被替换。</para>
+    /// </summary>
+    /// <param name="nodeProject">Registration to store. <para>要存储的登记项。</para></param>
+    /// <remarks>The first registration of a solution becomes the active canvas.</remarks>
+    internal void AddNodeProject(NodeProjectContext nodeProject)
+    {
+        var projects = NodeProjects.ToList();
+        projects.RemoveAll(existing =>
+            string.Equals(existing.Name, nodeProject.Name, StringComparison.OrdinalIgnoreCase));
+        var registration = projects.Count == 0 && nodeProject.IsOpen
+            ? nodeProject with { IsActive = true }
+            : nodeProject;
+        if (registration.IsActive)
+            for (var position = 0; position < projects.Count; position++)
+                if (projects[position].IsActive)
+                    projects[position] = projects[position] with { IsActive = false };
+        projects.Add(registration);
+        NodeProjects = projects.ToArray();
+        Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Unregisters a node project without touching its file on disk.
+    /// <para>注销一个节点项目，但不改动其磁盘文件。</para>
+    /// </summary>
+    /// <param name="name">Node project name. <para>节点项目名称。</para></param>
+    /// <returns><c>true</c> when a registration was removed. <para>确实移除了登记项时返回 <c>true</c>。</para></returns>
+    /// <remarks>When the removed entry was active, the first remaining open entry takes over.</remarks>
+    internal bool RemoveNodeProject(string name)
+    {
+        var projects = NodeProjects.ToList();
+        var index = projects.FindIndex(node =>
+            string.Equals(node.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return false;
+        var wasActive = projects[index].IsActive;
+        projects.RemoveAt(index);
+        if (wasActive && projects.FindIndex(node => node.IsOpen) is >= 0 and var nextIndex)
+            projects[nextIndex] = projects[nextIndex] with { IsActive = true };
+        NodeProjects = projects.ToArray();
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>
+    /// Updates a registration's open and active flags.
+    /// <para>更新某个登记项的打开与活动标记。</para>
+    /// </summary>
+    /// <param name="name">Node project name. <para>节点项目名称。</para></param>
+    /// <param name="isOpen">New open state. <para>新的打开状态。</para></param>
+    /// <param name="isActive">New active state. <para>新的活动状态。</para></param>
+    /// <returns><c>true</c> when the registration was found. <para>找到登记项时返回 <c>true</c>。</para></returns>
+    internal bool UpdateNodeProject(string name, bool isOpen, bool isActive)
+    {
+        var projects = NodeProjects.ToList();
+        var index = projects.FindIndex(node =>
+            string.Equals(node.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return false;
+        projects[index] = projects[index] with { IsOpen = isOpen, IsActive = isActive && isOpen };
+        if (isActive && isOpen)
+            for (var position = 0; position < projects.Count; position++)
+                if (position != index && projects[position].IsActive)
+                    projects[position] = projects[position] with { IsActive = false };
+        NodeProjects = projects.ToArray();
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves a node project registration to an absolute path inside the solution data root.
+    /// <para>把节点项目登记项解析为解决方案数据根内的绝对路径。</para>
+    /// </summary>
+    /// <param name="nodeProject">Registration to resolve. <para>待解析的登记项。</para></param>
+    /// <returns>The absolute file path, or <c>null</c> when no solution is open.
+    /// <para>绝对文件路径；未打开解决方案时为 <c>null</c>。</para></returns>
+    public string? ResolveNodeProjectPath(NodeProjectContext nodeProject)
+        => RootDirectory is null ? null : Path.Combine(RootDirectory,
+            nodeProject.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+
+    /// <summary>
     /// Opens the specified solution: sets the solution path/name and directory layout, scans for
     /// sub-projects (<c>*.uotanfw</c> files). State belongs to each sub-project.
     /// <para>打开指定解决方案：设置解决方案路径/名称与目录布局，扫描子项目（<c>*.uotanfw</c> 文件），
@@ -196,7 +329,7 @@ public sealed class ProjectContext
         CurrentSolutionPath = candidate.CurrentSolutionPath;
         SolutionName = candidate.SolutionName;
         RootDirectory = candidate.RootDirectory;
-        NodeProjectPath = candidate.NodeProjectPath;
+        NodeProjects = candidate.NodeProjects;
         SubProjects = Array.AsReadOnly(candidate.SubProjects.ToArray());
         ActiveSubProject = candidate.ActiveSubProject;
         Changed?.Invoke();
@@ -250,9 +383,9 @@ public sealed class ProjectContext
 
         SubProjects = subProjects;
         ActiveSubProject = subProjects.FirstOrDefault();
-        var nodeOwnerRoot = subProjects.FirstOrDefault(s => string.Equals(s.Name, SolutionName, StringComparison.OrdinalIgnoreCase))?.RootPath
-            ?? subProjects.FirstOrDefault()?.RootPath;
-        NodeProjectPath = nodeOwnerRoot is null ? null : Path.Combine(nodeOwnerRoot, SolutionName + ".uotannode");
+        NodeProjects = (snapshot?.NodeProjects ?? [])
+            .Select(node => new NodeProjectContext(node.Name, node.RelativePath, node.IsOpen, node.IsActive))
+            .ToArray();
         Changed?.Invoke();
     }
 
@@ -266,7 +399,7 @@ public sealed class ProjectContext
     }
 
     private static bool IsReservedDirectory(string path)
-        => new[] { "images", "output", "delivery", ".uotan", ".deleted", ".git" }.Contains(Path.GetFileName(path), StringComparer.OrdinalIgnoreCase);
+        => new[] { "images", "output", "delivery", "nodes", ".uotan", ".deleted", ".git" }.Contains(Path.GetFileName(path), StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Closes the current solution, clearing all state.
@@ -277,7 +410,7 @@ public sealed class ProjectContext
         CurrentSolutionPath = null;
         SolutionName = null;
         RootDirectory = null;
-        NodeProjectPath = null;
+        NodeProjects = [];
         SubProjects = [];
         ActiveSubProject = null;
         Changed?.Invoke();

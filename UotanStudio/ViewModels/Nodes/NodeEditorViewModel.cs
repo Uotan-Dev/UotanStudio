@@ -97,9 +97,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     public string PatchOutcomeText => LanguageService.Instance.GetString("Node_PatchOutcome_" + _patchOutcome);
     private VisualPluginRegistration? _selectedVisualPlugin;
 
-    // ---- 撤销/重做命令栈 ----
-    private readonly Stack<IEditorCommand> _undoStack = [];
-    private readonly Stack<IEditorCommand> _redoStack = [];
+    // ---- 撤销/重做命令栈（随活动节点项目文档切换而替换） ----
+    private Stack<IEditorCommand> _undoStack = [];
+    private Stack<IEditorCommand> _redoStack = [];
     private const int MaxUndoDepth = 100;
     private readonly Dictionary<(object Target, string Property), object?> _trackedPropertyValues = [];
     private readonly Dictionary<object, PropertyChangedEventHandler> _propertyHandlers = [];
@@ -410,6 +410,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     {
         ShowVisualPluginWorkspace = showVisualPluginWorkspace;
         SelectedNodes = new ReadOnlyObservableCollection<NodeViewModels.FlowNodeViewModel>(_selectedNodes);
+        _draftDocument = new NodeProjectDocument(string.Empty, _nodes, _connections);
+        _activeDocument = _draftDocument;
         _connections.CollectionChanged += OnConnectionsChanged;
         _nodes.CollectionChanged += OnNodesChanged;
         BatchInputs = new ReadOnlyObservableCollection<NodeViewModels.BatchNodeInputViewModel>(_batchInputs);
