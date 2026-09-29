@@ -4,6 +4,7 @@ using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Mcp.Tools;
@@ -128,7 +129,42 @@ internal static class FirmwareToolFactory
                 Destructive = false
             });
 
-        return [list, detect, metadata, unpack, pack, extract];
+        var mergeSparseChunks = McpServerTool.Create(
+            ([Description("Any numbered member of a *.sparsechunk.NN set; siblings are resolved from its name.")] string selectedChunkPath,
+             [Description("Destination image path. Must stay inside the sandbox.")] string outputPath,
+             CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
+                token => FirmwareToolHandlers.MergeSparseChunksAsync(sandbox, selectedChunkPath, outputPath, token),
+                cancellationToken),
+            new McpServerToolCreateOptions
+            {
+                Name = "merge_sparse_chunks",
+                Description = "Merge a *.sparsechunk.NN flash set (raw slices or self-contained sparse pieces) "
+                    + "into one image, publishing through a temporary file and honoring cancellation.",
+                ReadOnly = false,
+                Idempotent = false,
+                OpenWorld = false,
+                Destructive = false
+            });
+
+        var splitSparseChunks = McpServerTool.Create(
+            ([Description("Raw image path inside the sandbox; sparse containers are rejected.")] string inputPath,
+             [Description("Piece name prefix; the two-digit index is appended after .sparsechunk.")] string basePath,
+             [Description("Physical bytes per piece except the final remainder.")] long chunkSizeBytes,
+             CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
+                token => FirmwareToolHandlers.SplitSparseChunksAsync(sandbox, inputPath, basePath, chunkSizeBytes, token),
+                cancellationToken),
+            new McpServerToolCreateOptions
+            {
+                Name = "split_sparse_chunks",
+                Description = "Split a raw image into fixed-size *.sparsechunk.NN pieces, each published atomically. "
+                    + "Self-contained sparse inputs are rejected; re-split them through the sparse converter.",
+                ReadOnly = false,
+                Idempotent = false,
+                OpenWorld = false,
+                Destructive = false
+            });
+
+        return [list, detect, metadata, unpack, pack, extract, mergeSparseChunks, splitSparseChunks];
     }
 }
 
@@ -236,6 +272,32 @@ internal static class FirmwareToolHandlers
         return new ToolResult(true,
             $"Extracted {result.Entries.Count} entry(ies) from {structure.Kind}.",
             ToolJson.Data(new ContainerExtractionPayload(structure.Kind.ToString(), result.Entries, result.OutputPaths)));
+    }
+
+    public static async Task<ToolResult> MergeSparseChunksAsync(
+        PathSandbox sandbox, string selectedChunkPath, string outputPath, CancellationToken cancellationToken)
+    {
+        var resolvedInput = sandbox.Resolve(selectedChunkPath, mustExist: true);
+        var resolvedOutput = sandbox.ResolveOutput(outputPath);
+        var set = await SparseChunkSplitter.MergeAsync(resolvedInput, resolvedOutput,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        return ToolResult.From(FirmwareOpResult.Ok(
+            $"Merged {set.Parts.Count} sparsechunk piece(s) into '{resolvedOutput}'.",
+            [.. set.Parts.Select(path => Path.GetFileName(path) ?? path)],
+            new Dictionary<string, string> { ["variant"] = set.Variant.ToString() }));
+    }
+
+    public static async Task<ToolResult> SplitSparseChunksAsync(
+        PathSandbox sandbox, string inputPath, string basePath, long chunkSizeBytes,
+        CancellationToken cancellationToken)
+    {
+        var resolvedInput = sandbox.Resolve(inputPath, mustExist: true);
+        var resolvedBase = sandbox.ResolveOutput(basePath);
+        var pieces = await SparseChunkSplitter.SplitRawAsync(resolvedInput, resolvedBase, chunkSizeBytes,
+            cancellationToken).ConfigureAwait(false);
+        return ToolResult.From(FirmwareOpResult.Ok(
+            $"Split '{resolvedInput}' into {pieces.Count} sparsechunk piece(s).",
+            [.. pieces.Select(path => Path.GetFileName(path) ?? path)]));
     }
 
     /// <summary>

@@ -44,6 +44,8 @@ public sealed class McpToolCatalogTests : IDisposable
         "unpack_firmware",
         "pack_firmware",
         "extract_container_entries",
+        "merge_sparse_chunks",
+        "split_sparse_chunks",
         "list_compression_algorithms",
         "compress_file",
         "decompress_file",

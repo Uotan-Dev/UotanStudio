@@ -1055,6 +1055,88 @@ public sealed class FirmwareService
     }
 
     /// <summary>
+    /// Restores a <c>*.sparsechunk.NN</c> flash set into one image. Raw slices are concatenated and
+    /// self-contained sparse pieces keep their absolute chunk addresses while gap chunks are re-emitted.
+    /// The destination is published atomically; sources are deleted only when
+    /// <paramref name="deleteSources"/> is set and the merge already succeeded.
+    /// </summary>
+    /// <param name="selectedChunkPath">Any numbered member of the set; siblings are resolved from its name.</param>
+    /// <param name="outputPath">Destination image path.</param>
+    /// <param name="deleteSources">When true, removes the input pieces after a successful merge.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Operation result; <c>Entries</c> lists the merged piece file names in merge order.</returns>
+    public async Task<FirmwareOpResult> RestoreSparseChunksAsync(string selectedChunkPath, string outputPath,
+        bool deleteSources = false, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(selectedChunkPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        try
+        {
+            var destination = Path.GetFullPath(outputPath);
+            var set = await SparseChunkSplitter.MergeAsync(selectedChunkPath, destination,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (deleteSources)
+            {
+                foreach (var part in set.Parts)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    File.Delete(part);
+                }
+            }
+
+            return new FirmwareOpResult
+            {
+                Success = true,
+                Summary = $"Merged {set.Parts.Count} sparsechunk piece(s) into '{destination}'.",
+                Entries = [.. set.Parts.Select(path => Path.GetFileName(path) ?? path)],
+                Metadata = new Dictionary<string, string> { ["variant"] = set.Variant.ToString() }
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return FirmwareOpResult.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Splits a raw image into fixed-size <c>&lt;basePath&gt;.sparsechunk.NN</c> pieces, each published
+    /// atomically. Self-contained sparse inputs are rejected by the library and must be re-split through
+    /// the sparse converter so every piece keeps the full logical geometry.
+    /// </summary>
+    /// <param name="inputPath">Raw image to slice.</param>
+    /// <param name="basePath">Piece name prefix; the two-digit index is appended after <c>.sparsechunk.</c>.</param>
+    /// <param name="chunkSizeBytes">Physical bytes per piece except the final remainder; must be at least 1.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Operation result; <c>Entries</c> lists the produced piece file names in merge order.</returns>
+    public async Task<FirmwareOpResult> SplitSparseChunksAsync(string inputPath, string basePath,
+        long chunkSizeBytes, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var pieces = await SparseChunkSplitter.SplitRawAsync(inputPath, basePath, chunkSizeBytes,
+                cancellationToken).ConfigureAwait(false);
+            return new FirmwareOpResult
+            {
+                Success = true,
+                Summary = $"Split '{inputPath}' into {pieces.Count} sparsechunk piece(s).",
+                Entries = [.. pieces.Select(path => Path.GetFileName(path) ?? path)]
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return FirmwareOpResult.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Unpacks an Android sparse image to a directory: when the inner content is a filesystem
     /// (ext4/erofs/f2fs) it is cascade-unpacked via the corresponding streaming parser, otherwise
     /// it falls back to a plain raw conversion. A thin wrapper over
