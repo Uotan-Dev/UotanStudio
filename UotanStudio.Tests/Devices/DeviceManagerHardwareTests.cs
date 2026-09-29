@@ -20,7 +20,8 @@ public sealed class DeviceManagerHardwareTests
 
         var manager = new HeadlessDeviceManagerGateway();
         var reported = manager.RunFastboot(serial,
-            session => session.GetVariable("serialno", useCache: false));
+            session => session.GetVariable("serialno", useCache: false),
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(serial, reported);
     }
@@ -240,7 +241,7 @@ public sealed class DeviceManagerHardwareTests
         {
             using var reader = new StreamReader(stream, leaveOpen: true);
             return reader.ReadToEnd();
-        });
+        }, TestContext.Current.CancellationToken);
         Assert.False(string.IsNullOrWhiteSpace(output));
     }
 
@@ -259,7 +260,7 @@ public sealed class DeviceManagerHardwareTests
         {
             using var reader = new StreamReader(stream, leaveOpen: true);
             return reader.ReadToEnd();
-        });
+        }, TestContext.Current.CancellationToken);
         Assert.False(string.IsNullOrWhiteSpace(output));
     }
 
@@ -336,7 +337,7 @@ public sealed class DeviceManagerHardwareTests
             {
                 using var reader = new StreamReader(stream, leaveOpen: true);
                 return reader.ReadToEnd();
-            });
+            }, TestContext.Current.CancellationToken);
             Assert.False(string.IsNullOrWhiteSpace(model));
         }
     }

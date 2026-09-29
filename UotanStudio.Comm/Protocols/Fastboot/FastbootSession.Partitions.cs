@@ -126,8 +126,18 @@ public sealed partial class FastbootSession
     /// <param name="partition">Partition name to size. <para>要获取大小的分区名。</para></param>
     /// <returns>The parsed size in bytes, or 0 when unavailable. <para>解析出的字节大小；不可用时为 0。</para></returns>
     public long GetPartitionSizeLong(string partition)
+        => ParseDeviceSize(GetVariable(FastbootConstants.VarPartitionSizePrefix + partition));
+
+    /// <summary>
+    /// Parses a byte count reported by the device, accepting a decimal value or a
+    /// <c>0x</c>-prefixed hexadecimal one.
+    /// <para>解析设备上报的字节数，接受十进制值或 <c>0x</c> 前缀的十六进制值。</para>
+    /// </summary>
+    /// <param name="value">Raw getvar payload; device replies are untrusted. <para>原始 getvar 负载；设备应答不可信。</para></param>
+    /// <returns>The parsed byte count, or 0 when the value is empty, whitespace or not a number.
+    /// <para>解析出的字节数；值为空、全空白或非数字时为 0。</para></returns>
+    internal static long ParseDeviceSize(string value)
     {
-        var value = GetVariable(FastbootConstants.VarPartitionSizePrefix + partition);
         if (string.IsNullOrWhiteSpace(value))
         {
             return 0;
@@ -261,14 +271,26 @@ public sealed partial class FastbootSession
         => TryGetVar(FastbootConstants.VarIsLogicalPrefix + partition, out var v) && v == "yes";
 
     /// <summary>
-    /// Checks whether a partition is logical, using preloaded metadata if available,
-    /// otherwise querying the device.
-    /// <para>检查分区是否为逻辑分区，优先使用预加载的元数据，否则查询设备。</para>
+    /// Checks whether a partition is logical, using preloaded metadata when it carries evidence,
+    /// otherwise querying the device. A preloaded set that is null <em>or empty</em> is treated as
+    /// "no evidence": super metadata parsing swallows every recognized failure into an empty result
+    /// (see <see cref="SuperImageBuilder.GetLogicalPartitions(string, int)"/>), so an empty set
+    /// cannot distinguish "this super has no logical partitions" from "the image could not be
+    /// parsed". Trusting it would classify every logical partition as physical and suppress the
+    /// <c>is-logical</c> query permanently.
+    /// <para>检查分区是否为逻辑分区：预加载元数据含有证据时使用它，否则查询设备。预加载集合为 null
+    /// <em>或空</em> 时都按“无证据”处理：super 元数据解析会把所有可识别的失败吞成空结果
+    /// （见 <see cref="SuperImageBuilder.GetLogicalPartitions(string, int)"/>），因此空集合无法区分
+    /// “该 super 没有逻辑分区”与“镜像无法解析”。信任它会把所有逻辑分区判为物理分区，并永久抑制
+    /// <c>is-logical</c> 查询。</para>
     /// </summary>
     /// <param name="partition">Partition name to probe. <para>要探测的分区名。</para></param>
-    /// <returns><see langword="true"/> when the partition is known logical. <para>该分区为已知逻辑分区时返回 <see langword="true"/>。</para></returns>
+    /// <returns><see langword="true"/> when the partition is known logical, answered from a non-empty preloaded set or, absent one, from a fresh <c>is-logical</c> query.
+    /// <para>该分区为已知逻辑分区时返回 <see langword="true"/>；答案来自非空预加载集合，缺少此类集合时来自一次新的 <c>is-logical</c> 查询。</para></returns>
     public bool IsLogicalOptimized(string partition)
-        => _logicalPartitionsFromMetadata?.Contains(partition) ?? IsLogical(partition);
+        => _logicalPartitionsFromMetadata is { Count: > 0 } preloaded
+            ? preloaded.Contains(partition)
+            : IsLogical(partition);
 
     /// <summary>
     /// Loads logical partition names from a super image metadata file for optimized flashing.

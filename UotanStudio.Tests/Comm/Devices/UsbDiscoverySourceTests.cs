@@ -75,6 +75,36 @@ public sealed class UsbDiscoverySourceTests
         Assert.Equal(expected, endpoint.Protocol);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task DiscoverAsync_ServerListening_SuppressesWholeProtocolWithoutTargetList(
+        bool adbLive, bool hdcLive)
+    {
+        var kit = DispatchProxy.Create<ICommKit, UsbKitProxy>();
+        ((UsbKitProxy)(object)kit).Devices =
+        [
+            Node(0xFF, 0x42, 1, "adb-unlisted"),
+            Node(0xFF, 0x50, 1, "hdc-unlisted"),
+            Node(0xFF, 0x42, 3, "fb-serial")
+        ];
+
+        var endpoints = await new UsbDiscoverySource(kit, UsbApiKind.Native,
+            serverProbeOverride: name => name == "adb" ? adbLive : hdcLive)
+            .DiscoverAsync(TestContext.Current.CancellationToken);
+
+        var expected = new List<string> { "fastboot" };
+        if (!adbLive)
+            expected.Add("adb");
+        if (!hdcLive)
+            expected.Add("hdc");
+        Assert.All(endpoints, endpoint => Assert.Equal("direct-usb", endpoint.Route));
+        Assert.Equal(expected.Order(StringComparer.Ordinal),
+            endpoints.Select(endpoint => endpoint.Protocol).Order(StringComparer.Ordinal));
+    }
+
     public class UsbKitProxy : DispatchProxy
     {
         public IReadOnlyList<UsbDeviceInfo> Devices { get; set; } = [];
@@ -89,4 +119,19 @@ public sealed class UsbDiscoverySourceTests
             throw new InvalidOperationException("Unexpected CommKit call.");
         }
     }
+
+    private static UsbDeviceInfo Node(byte cls, byte sub, byte protocol, string serial) => new()
+    {
+        ApiName = "native",
+        SourceApiKind = UsbApiKind.Native,
+        DevicePath = "physical-path",
+        DeviceKey = $"native|Native|18D1|4EE7|{cls:X2}|{sub:X2}|{protocol:X2}|{serial}|physical-path",
+        VendorId = 0x18D1,
+        ProductId = 0x4EE7,
+        SerialNumber = serial,
+        InterfaceClass = cls,
+        InterfaceSubClass = sub,
+        InterfaceProtocol = protocol,
+        InterfaceMetadataObserved = true
+    };
 }

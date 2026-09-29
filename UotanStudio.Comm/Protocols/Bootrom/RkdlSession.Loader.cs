@@ -13,6 +13,14 @@ public sealed partial class RkdlSession
     /// </summary>
     /// <param name="loaderImage">The loader image bytes (RKBOOT .bin). <para>loader 镜像字节（RKBOOT .bin）。</para></param>
     /// <returns>The total number of bytes transferred. <para>实际传输的字节总数。</para></returns>
+    /// <exception cref="RkdlException">The device is not in maskrom mode, the image fails to parse,
+    /// the image sets the RC4 flag, or a vendor request was short. An RC4 encrypted loader is
+    /// rejected outright because entry payloads are sent verbatim: this implementation has no RC4
+    /// segment decryption, so sending the ciphertext would leave the device booting garbage while
+    /// still reporting a positive byte count.
+    /// <para>设备不处于 maskrom 模式、镜像解析失败、镜像置位 RC4 标志，或 vendor 请求写入过短。
+    /// RC4 加密的 loader 会被直接拒绝，因为条目负载是原样发送的：本实现没有 RC4 段解密能力，
+    /// 发送密文会让设备加载垃圾数据，却仍然上报一个正字节数。</para></exception>
     public int DownloadBootLoader(byte[] loaderImage)
     {
         ArgumentNullException.ThrowIfNull(loaderImage);
@@ -22,6 +30,12 @@ public sealed partial class RkdlSession
         }
 
         var image = RkBootImage.Parse(loaderImage);
+        if (image.Rc4Enabled)
+        {
+            throw new RkdlException(RkdlError.NotSupported,
+                "Loader image is RC4 encrypted (ucRc4Flag set); this implementation does not decrypt RC4 loader segments and refuses to send them as ciphertext.");
+        }
+
         var total = 0;
 
         foreach (var entry in image.Entries471)

@@ -71,8 +71,17 @@ public static class RkdlConstants
     public const int DefaultTimeoutMs = 30000;
 
     /// <summary>
-    /// Sector size in bytes used by the rockusb LBA protocol.
-    /// <para>rockusb LBA 协议使用的扇区大小（字节）。</para>
+    /// Sector size in bytes the rockusb LBA protocol addresses by. This is a protocol constant, not
+    /// a device-reported value: <c>READ_LBA</c>/<c>WRITE_LBA</c>/<c>ERASE_LBA</c> carry a
+    /// <c>cbwcb.dwAddress</c> logical block address and a 16-bit <c>cbwcb.usLength</c> sector count
+    /// that upstream rkdeveloptool also computes in 512-byte units. The erase/write granularity a
+    /// device reports (upstream <c>usBlockSize</c>/<c>usPageSize</c>) is a property of the media, not
+    /// of LBA addressing, so no LBA arithmetic in this protocol may be scaled by it.
+    /// <para>rockusb LBA 协议据以寻址的扇区大小（字节）。这是协议常量而非设备报告值：
+    /// <c>READ_LBA</c>/<c>WRITE_LBA</c>/<c>ERASE_LBA</c> 携带 <c>cbwcb.dwAddress</c> 逻辑块地址与
+    /// 16 位 <c>cbwcb.usLength</c> 扇区计数，上游 rkdeveloptool 同样按 512 字节单位计算。设备报告的
+    /// 擦写粒度（上游 <c>usBlockSize</c>/<c>usPageSize</c>）属于介质属性而非 LBA 寻址属性，
+    /// 因此本协议的任何 LBA 算术都不得按它缩放。</para>
     /// </summary>
     public const int SectorSize = 512;
 
@@ -87,6 +96,39 @@ public static class RkdlConstants
     /// <para>每条 ERASE_NORMAL/ERASE_FORCE 命令的最大块数（MAX_ERASE_BLOCKS）。</para>
     /// </summary>
     public const int MaxEraseBlocksPerCommand = 16;
+
+    /// <summary>
+    /// Upper bound, in milliseconds, accepted for the <c>dwDataDelay</c> field of an RKBOOT loader
+    /// entry. The field is read from a loader file, which is untrusted input, and upstream entry
+    /// tables use it as a short settle window between loader stages; the bound exists so a crafted
+    /// file cannot pin the download path for days (a raw <c>uint</c> would allow roughly 24.8 days)
+    /// and cannot wrap negative when converted to a signed wait.
+    /// <para>RKBOOT loader 条目 <c>dwDataDelay</c> 字段可接受的毫秒上界。该字段读自 loader 文件，
+    /// 属于不受信输入；上游条目表把它用作 loader 阶段之间的短暂稳定窗口。设置上界是为了让伪造文件
+    /// 既无法把下载路径挂住数天（裸 <c>uint</c> 允许约 24.8 天），也无法在转换为有符号等待值时回绕为负。</para>
+    /// </summary>
+    public const int MaxLoaderDataDelayMs = 60000;
+
+    /// <summary>
+    /// The settle window, in milliseconds, waited after the last loader entry was transferred. The
+    /// device re-enumerates on a different USB product ID during this window; the wait is a settle
+    /// delay only and its completion is not evidence that the device reached loader mode, because
+    /// <see cref="RkdlSession.IsRockusbMode"/> is derived from a device-info snapshot taken when the
+    /// session was opened and can never observe the change.
+    /// <para>传出最后一个 loader 条目后等待的稳定窗口（毫秒）。设备在该窗口内会以不同的 USB 产品 ID
+    /// 重新枚举；这段等待仅是稳定延时，其结束并不能证明设备已进入 loader 模式，因为
+    /// <see cref="RkdlSession.IsRockusbMode"/> 派生自会话打开时的设备信息快照，永远观测不到该变化。</para>
+    /// </summary>
+    public const int LoaderReenumerationSettleMs = 1000;
+
+    /// <summary>
+    /// Default budget, in milliseconds, a caller should grant the device layer to observe the
+    /// replacement endpoint after a loader download. It matches the controller bound of
+    /// 1 millisecond through 24 hours.
+    /// <para>调用方应授予设备层去观测 loader 下载后替代端点的默认预算（毫秒）。它符合控制器
+    /// 1 毫秒至 24 小时的约束。</para>
+    /// </summary>
+    public const int LoaderRelinkTimeoutMs = 30000;
 
     /// <summary>
     /// Product IDs of devices already in rockusb (loader) mode, from the upstream
@@ -344,28 +386,56 @@ internal class RkChipInfo
 }
 
 /// <summary>
-/// RKDL flash info structure.
-/// <para>RKDL 闪存信息结构。</para>
+/// RKDL flash info as reported by READ_FLASH_INFO. Only the leading DWORD of the response is
+/// parsed, because it is the only field whose offset this repository can verify; the remaining
+/// bytes of the packed upstream <c>STRUCT_FLASHINFO_CMD</c> (media geometry such as block and page
+/// size) are kept verbatim in <see cref="RawResponse"/> instead of being decoded from guessed
+/// offsets.
+/// <para>READ_FLASH_INFO 报告的 RKDL 闪存信息。只解析响应的首个 DWORD，因为它是本仓库唯一能核对偏移
+/// 的字段；上游紧凑 <c>STRUCT_FLASHINFO_CMD</c> 的其余字节（块大小、页大小等介质几何）原样保留在
+/// <see cref="RawResponse"/> 中，而不按猜测的偏移解码。</para>
 /// </summary>
-internal class RkFlashInfo
+internal sealed class RkFlashInfo
 {
     /// <summary>
-    /// Gets or sets the total flash size in bytes.
-    /// <para>获取或设置闪存总大小（字节）。</para>
+    /// Gets the total sector count reported by the device, widened from the leading little-endian
+    /// DWORD of the response.
+    /// <para>获取设备报告的总扇区数，由响应首个小端 DWORD 加宽而来。</para>
     /// </summary>
-    public long Size { get; set; }
+    /// <value>The device-reported count in <see cref="SectorSize"/>-byte sectors; <c>0</c> means the
+    /// device reported no usable geometry. <para>以 <see cref="SectorSize"/> 字节扇区计的设备报告值；
+    /// <c>0</c> 表示设备未报告可用几何。</para></value>
+    public required long SectorCount { get; init; }
 
     /// <summary>
-    /// Gets or sets the sector size in bytes.
-    /// <para>获取或设置扇区大小（字节）。</para>
+    /// Gets the complete READ_FLASH_INFO data phase exactly as the device returned it.
+    /// <para>获取设备原样返回的完整 READ_FLASH_INFO 数据阶段。</para>
     /// </summary>
-    public int SectorSize { get; set; }
+    /// <value>The verbatim response bytes, at least four long; unparsed fields beyond the leading
+    /// DWORD are present but undecoded. <para>逐字节的响应，至少 4 字节；首个 DWORD 之后的未解析字段
+    /// 存在但未解码。</para></value>
+    public required byte[] RawResponse { get; init; }
 
     /// <summary>
-    /// Gets the total sector count.
-    /// <para>获取扇区总数。</para>
+    /// Gets the sector size the rockusb LBA protocol addresses by.
+    /// <para>获取 rockusb LBA 协议据以寻址的扇区大小。</para>
     /// </summary>
-    public long SectorCount => SectorSize > 0 ? Size / SectorSize : 0;
+    /// <value>Always <see cref="RkdlConstants.SectorSize"/> (512). This is the protocol-defined LBA
+    /// granularity and not a device-reported value: the media block or page size a device may report
+    /// in the unparsed tail of the response describes erase/write granularity, so it must never be
+    /// substituted for LBA addressing.
+    /// <para>恒为 <see cref="RkdlConstants.SectorSize"/>（512）。这是协议规定的 LBA 粒度而非设备报告值：
+    /// 设备可能在响应未解析尾部报告的介质块大小或页大小描述的是擦写粒度，因此绝不能用它替代 LBA 寻址。</para></value>
+    public int SectorSize => RkdlConstants.SectorSize;
+
+    /// <summary>
+    /// Gets the total flash size in bytes implied by the device-reported sector count.
+    /// <para>获取由设备报告扇区数推得的闪存总字节数。</para>
+    /// </summary>
+    /// <value><see cref="SectorCount"/> scaled by the protocol LBA granularity
+    /// <see cref="SectorSize"/>. <para><see cref="SectorCount"/> 按协议 LBA 粒度
+    /// <see cref="SectorSize"/> 缩放的结果。</para></value>
+    public long Size => SectorCount * SectorSize;
 }
 
 /// <summary>

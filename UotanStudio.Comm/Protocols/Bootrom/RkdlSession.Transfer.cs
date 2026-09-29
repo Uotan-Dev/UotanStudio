@@ -16,6 +16,14 @@ public sealed partial class RkdlSession
     /// <param name="gptData">The GPT image bytes. <para>GPT 镜像字节。</para></param>
     /// <param name="progress">Optional progress callback (bytes written). <para>可选进度回调（已写入字节数）。</para></param>
     /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
+    /// <exception cref="RkdlException">The image is smaller than the 34-sector primary table, the
+    /// device-reported sector count is not greater than <see cref="RkdlGpt.BackupSectors"/> or
+    /// exceeds <see cref="uint.MaxValue"/>, or a WRITE_LBA transaction failed. The sector count is
+    /// validated as a <see cref="long"/> before the unsigned cast, so a malformed device response
+    /// is rejected instead of wrapping into an LBA that would overwrite user data.
+    /// <para>镜像小于 34 扇区主表、设备报告的扇区数未大于 <see cref="RkdlGpt.BackupSectors"/>
+    /// 或超过 <see cref="uint.MaxValue"/>，或 WRITE_LBA 事务失败。扇区数在无符号转型前按
+    /// <see cref="long"/> 校验，因此畸形设备响应会被拒绝，而不会回绕成一个覆盖用户数据的 LBA。</para></exception>
     public void WriteGPT(byte[] gptData, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -24,11 +32,14 @@ public sealed partial class RkdlSession
             throw new RkdlException(RkdlError.InvalidParameter, "GPT image must span at least 34 sectors.");
         }
 
-        var totalSectors = (uint)ReadFlashInfo().SectorCount;
-        if (totalSectors <= RkdlGpt.BackupSectors)
+        var sectorCount = RequireFlashGeometry().SectorCount;
+        if (sectorCount <= RkdlGpt.BackupSectors || sectorCount > uint.MaxValue)
         {
-            throw new RkdlException(RkdlError.FlashInfoFailed, $"Invalid flash sector count: {totalSectors}.");
+            throw new RkdlException(RkdlError.FlashInfoFailed,
+                $"Invalid flash sector count: {sectorCount} (must be greater than {RkdlGpt.BackupSectors} and at most {uint.MaxValue}).");
         }
+
+        var totalSectors = (uint)sectorCount;
 
         var masterLen = RkdlConstants.SectorSize * RkdlGpt.PrimarySectors;
         var master = new byte[masterLen];
@@ -60,9 +71,16 @@ public sealed partial class RkdlSession
     /// <summary>
     /// Writes data to flash at the specified LBA address (in 512-byte sectors) using
     /// WRITE_LBA (0x15) CBW/CSW transactions, chunked by
-    /// <see cref="RkdlConstants.TransferChunkSize"/>. Partial final sectors are zero padded.
+    /// <see cref="RkdlConstants.TransferChunkSize"/>. Each chunk is filled from the stream with a
+    /// read loop, so a short <see cref="Stream.Read(byte[], int, int)"/> never truncates a chunk,
+    /// never repeats source bytes and never writes zero padding into the middle of the image; only
+    /// the final chunk of a non sector-multiple <paramref name="length"/> is zero padded up to a
+    /// sector boundary.
     /// <para>使用 WRITE_LBA（0x15）CBW/CSW 事务，将数据写入指定 LBA 地址（512 字节扇区），
-    /// 按 <see cref="RkdlConstants.TransferChunkSize"/> 分块。最后一个不完整扇区补零。</para>
+    /// 按 <see cref="RkdlConstants.TransferChunkSize"/> 分块。每个分块都用读循环从流中填满，
+    /// 因此 <see cref="Stream.Read(byte[], int, int)"/> 的短读既不会截断分块，也不会重复源字节或把补零写进镜像
+    /// 中段；只有当 <paramref name="length"/> 不是扇区整数倍时，最后一个分块才会向上补零到扇区
+    /// 边界。</para>
     /// </summary>
     /// <param name="address">The start LBA; must fit in an unsigned 32-bit value.
     /// <para>起始 LBA；必须能容纳于无符号 32 位值。</para></param>
@@ -106,17 +124,28 @@ public sealed partial class RkdlSession
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var toRead = (int)Math.Min(RkdlConstants.TransferChunkSize, length - totalWritten);
-                var n = dataStream.Read(buffer, 0, toRead);
-                if (n == 0)
+
+                var n = 0;
+                while (n < toRead)
                 {
-                    throw new EndOfStreamException($"Stream ended at {totalWritten}/{length}");
+                    var read = dataStream.Read(buffer, n, toRead - n);
+                    if (read <= 0)
+                    {
+                        throw new EndOfStreamException($"Stream ended at {totalWritten + n}/{length}");
+                    }
+
+                    n += read;
                 }
 
-                var sectorBytes = (n + RkdlConstants.SectorSize - 1) / RkdlConstants.SectorSize * RkdlConstants.SectorSize;
+                var isFinalChunk = totalWritten + n == length;
+                var sectorBytes = isFinalChunk
+                    ? ((n + RkdlConstants.SectorSize - 1) / RkdlConstants.SectorSize) * RkdlConstants.SectorSize
+                    : n;
                 if (sectorBytes > n)
                 {
                     Array.Clear(buffer, n, sectorBytes - n);
                 }
+
                 var sectorCount = sectorBytes / RkdlConstants.SectorSize;
 
                 var cbw = new RkdlCbw(RkdlCommand.WriteLba, RkdlFrame.DirectionOut, (uint)sectorBytes,

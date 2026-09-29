@@ -168,7 +168,8 @@ public class FastbootLogicalPartitionFlashTests
         var transport = new FakeCommTransport();
         transport.Enqueue("OKAYyes");
         transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");
+        transport.Enqueue("OKAY0x10000");
+        transport.Enqueue("OKAY0x10000");
         transport.Enqueue("DATA00002000");
         transport.Enqueue("OKAY");
         transport.Enqueue("OKAY");
@@ -180,7 +181,8 @@ public class FastbootLogicalPartitionFlashTests
         {
             session.FlashPartition(
                 target, image, image.Length, progress: null,
-                TestContext.Current.CancellationToken, resolveSlot: false).ThrowIfFailed();
+                TestContext.Current.CancellationToken, resolveSlot: false,
+                options: FlashPartitionOptions.PreparedTarget).ThrowIfFailed();
         }
 
         var commands = Commands(transport)
@@ -195,6 +197,7 @@ public class FastbootLogicalPartitionFlashTests
                 "getvar:is-logical:product_a",
                 "resize-logical-partition:product_a:8192",
                 "getvar:max-download-size",
+                "getvar:partition-size:product_a",
                 "download:00002000",
                 "flash:product_a"
             ],

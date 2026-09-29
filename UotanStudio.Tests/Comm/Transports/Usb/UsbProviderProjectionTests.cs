@@ -14,6 +14,9 @@ namespace UotanStudio.Tests.Comm.Transports.Usb;
 /// </summary>
 public class UsbProviderProjectionTests
 {
+    private static string LibUsbKey(string serial, string path, string protocol = "01", string interfaceClass = "FF", string interfaceSubClass = "50")
+        => $"libusb|LibUsbDotNet|12D1|5000|{interfaceClass}|{interfaceSubClass}|{protocol}|{serial}|{path}";
+
     [Theory]
     [InlineData("", "serial", "path1", "path1", "01", true)]
     [InlineData("serial", "other", "path1", "path1", "01", false)]
@@ -23,8 +26,35 @@ public class UsbProviderProjectionTests
     public void OpenIdentity_AllowsSerialEnrichmentOnlyOnSamePhysicalInterface(string beforeSerial, string afterSerial,
         string beforePath, string afterPath, string protocol, bool matches)
         => Assert.Equal(matches, UsbDeviceIdentity.MatchesOpenedKey(
-            $"libusb|LibUsbDotNet|12D1|5000|FF|50|01|{beforeSerial}|{beforePath}",
-            $"libusb|LibUsbDotNet|12D1|5000|FF|50|{protocol}|{afterSerial}|{afterPath}"));
+            LibUsbKey(beforeSerial, beforePath),
+            LibUsbKey(afterSerial, afterPath, protocol)));
+
+    [Theory]
+    [InlineData("path1", "path1", "01", "FF", "50", true)]
+    [InlineData("path1", "path1", "02", "FF", "50", false)]
+    [InlineData("path1", "path1", "01", "FE", "50", false)]
+    [InlineData("path1", "path1", "01", "FF", "51", false)]
+    [InlineData("path1", "path2", "01", "FF", "50", false)]
+    public void OpenIdentity_SerialAbsentOnBothSides_MatchesOnlyOnSamePhysicalInterface(string beforePath, string afterPath,
+        string protocol, string interfaceClass, string interfaceSubClass, bool matches)
+        => Assert.Equal(matches, UsbDeviceIdentity.MatchesOpenedKey(
+            LibUsbKey("", beforePath),
+            LibUsbKey("", afterPath, protocol, interfaceClass, interfaceSubClass)));
+
+    [Fact]
+    public void OpenIdentity_UnlabelledDeviceKeyWithoutDevicePath_MatchesOnlyItself()
+    {
+        var pathless = LibUsbKey("", "");
+        Assert.True(UsbDeviceIdentity.MatchesOpenedKey(pathless, pathless));
+        Assert.False(UsbDeviceIdentity.MatchesOpenedKey(pathless, LibUsbKey("serial", "")));
+        Assert.False(UsbDeviceIdentity.MatchesOpenedKey(pathless, LibUsbKey("", "path1")));
+    }
+
+    [Fact]
+    public void OpenIdentity_SerialPresentOnBothSides_MatchesIgnoringDescriptorCasing()
+        => Assert.True(UsbDeviceIdentity.MatchesOpenedKey(
+            LibUsbKey("0123456789ABCDEF", "path1"),
+            LibUsbKey("0123456789abcdef", "path1")));
 
     private sealed class FakeUsbDevice : UsbDevice
     {

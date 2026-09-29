@@ -5,12 +5,11 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 namespace UotanStudio.Comm.Devices.Discovery;
 
 /// <summary>
-/// Projects exact CommKit USB keys without merging backends or serials. When a debug-bridge
-/// server owns its protocol, the corresponding direct-USB endpoints are suppressed entirely:
-/// the server's target list is the only inventory for that protocol (full server takeover).
-/// <para>按精确 CommKit USB 键投影端点，不合并后端或序列号。当调试桥 server 接管其协议时，
-/// 对应协议的 direct-usb 端点被完全抑制：该协议的设备清单只来自 server 目标列表
-/// （server 完全让位）。</para>
+/// Projects exact CommKit USB keys without merging backends or serials. While a debug-bridge
+/// server is listening, every direct-USB endpoint of that protocol is suppressed: the server's
+/// target list is the only inventory for that protocol (full server takeover).
+/// <para>按精确 CommKit USB 键投影端点，不合并后端或序列号。调试桥 server 处于监听状态时，该协议的
+/// direct-usb 端点被完全抑制：该协议的设备清单只来自 server 目标列表（server 完全让位）。</para>
 /// </summary>
 public sealed class UsbDiscoverySource : IDeviceDiscoverySource
 {
@@ -40,11 +39,11 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
     /// classifying its protocol and completing missing fastboot serials via <c>getvar serialno</c>.
     /// <para>枚举后端的 USB 设备并把每个设备投影为 <c>direct-usb</c> 端点，分类其协议，并经
     /// <c>getvar serialno</c> 补全缺失的 fastboot 序列号。</para>
-    /// While a debug-bridge server owns its protocol, adb/hdc endpoints for serials present in that
-    /// server's target list (and serialless adb endpoints) are suppressed; other protocols are never
-    /// filtered by server state.
-    /// <para>当调试桥 server 接管其协议时，该 server 目标列表中有序列号对应的 adb/hdc 端点（以及无序列号
-    /// 的 adb 端点）会被抑制；其他协议从不受 server 状态影响。</para>
+    /// While a debug-bridge server is listening, every adb or hdc endpoint of that protocol is
+    /// suppressed without consulting the server's target list; other protocols are never filtered
+    /// by server state.
+    /// <para>调试桥 server 处于监听状态时，该协议的全部 adb 或 hdc 端点被抑制，且不再查询 server 的
+    /// 目标列表；其他协议从不受 server 状态影响。</para>
     /// </summary>
     /// <param name="cancellationToken">
     /// Cancels USB enumeration; it is re-checked once enumeration completes.
@@ -63,13 +62,6 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
         using var probeScope = DebugBridgeRoute.BeginProbeScope();
         var adbServerLive = ProbeQuietly(() => _serverProbeOverride?.Invoke("adb") ?? DebugBridgeRoute.UseAdbServer());
         var hdcServerLive = ProbeQuietly(() => _serverProbeOverride?.Invoke("hdc") ?? DebugBridgeRoute.UseHdcServer());
-        var adbTargetSerials = adbServerLive ? TryFetchSerials(() =>
-            new UotanStudio.Comm.Protocols.Adb.AdbServerServices(string.Empty,
-                UotanStudio.Comm.Routing.DebugBridgeEndpoints.ServerHost,
-                UotanStudio.Comm.Routing.DebugBridgeEndpoints.AdbServerPort).ListTargets()
-                .Select(target => target.Serial).ToList()) : null;
-        var hdcTargetSerials = hdcServerLive ? TryFetchSerials(() =>
-            new UotanStudio.Comm.Protocols.Hdc.HdcServerClient().ListTargets()) : null;
 
         var devices = await _kit.EnumerateUsbDevicesAsync(_backend, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
@@ -102,29 +94,16 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
                     device.InterfaceClass, device.InterfaceSubClass, device.InterfaceProtocol)
             };
         })
-        .Where(endpoint => !IsServerOwned(endpoint.Protocol, endpoint.Serial, adbServerLive, adbTargetSerials, hdcServerLive, hdcTargetSerials))
+        .Where(endpoint => !IsServerOwned(endpoint.Protocol, adbServerLive, hdcServerLive))
         .ToArray();
     }
 
-    private static HashSet<string>? TryFetchSerials(Func<IReadOnlyList<string>> fetch)
+    private static bool IsServerOwned(string? protocol, bool adbLive, bool hdcLive) => protocol switch
     {
-        try
-        {
-            return [.. fetch()];
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return null;
-        }
-    }
-
-    private static bool IsServerOwned(string? protocol, string? serial, bool adbLive, HashSet<string>? adbSerials,
-        bool hdcLive, HashSet<string>? hdcSerials) => protocol switch
-        {
-            "adb" when adbLive => adbSerials is not { } list || serial is null || list.Contains(serial),
-            "hdc" when hdcLive => hdcSerials is not { } list || serial is null || list.Contains(serial),
-            _ => false
-        };
+        "adb" => adbLive,
+        "hdc" => hdcLive,
+        _ => false
+    };
 
     private static bool ProbeQuietly(Func<bool> probe)
     {

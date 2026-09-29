@@ -15,16 +15,35 @@ namespace UotanStudio.Comm.Protocols.Bootrom;
 internal static class RkdlFrame
 {
     /// <summary>
-    /// CBW signature bytes "USBC" (dwCBWSignature = 0x43425355, little-endian storage order).
-    /// <para>CBW 签名字节 "USBC"（dwCBWSignature = 0x43425355，小端存储顺序）。</para>
+    /// CBW signature bytes in transmission order: the DWORD constant <c>0x43425355</c> declared by
+    /// rkdeveloptool <c>RKComm.h</c> (<c>CBW_SIGN 0x43425355 /* "USBC" */</c>) stored little-endian,
+    /// which puts the least significant byte first on the wire and therefore emits
+    /// <c>55 53 42 43</c> = ASCII "USBC". The USB Mass Storage Bulk-Only Transport specification
+    /// requires the same order (dCBWSignature = 0x43425355, transmitted LSB first), as do
+    /// rkflashtool <c>memcpy(cmd, "USBC", 4)</c> and u-boot rockusb
+    /// <c>USB_BULK_CB_SIG 0x43425355 /* Spells out USBC */</c>.
+    /// <para>CBW 签名的传输顺序字节：rkdeveloptool <c>RKComm.h</c> 声明的 DWORD 常量
+    /// <c>0x43425355</c>（<c>CBW_SIGN 0x43425355 /* "USBC" */</c>）按小端存储，最低有效字节先到线上，
+    /// 因此发出 <c>55 53 42 43</c> = ASCII "USBC"。USB 大容量存储 Bulk-Only 传输规范要求同一顺序
+    /// （dCBWSignature = 0x43425355，按 LSB 先发送），rkflashtool 的
+    /// <c>memcpy(cmd, "USBC", 4)</c> 与 u-boot rockusb 的
+    /// <c>USB_BULK_CB_SIG 0x43425355 /* Spells out USBC */</c> 亦如此。</para>
     /// </summary>
-    public static readonly byte[] CbwSignature = [0x43, 0x42, 0x53, 0x55];
+    public static readonly byte[] CbwSignature = [0x55, 0x53, 0x42, 0x43];
 
     /// <summary>
-    /// CSW signature bytes "USBS" (dwCSWSignature = 0x53425355, little-endian storage order).
-    /// <para>CSW 签名字节 "USBS"（dwCSWSignature = 0x53425355，小端存储顺序）。</para>
+    /// CSW signature bytes in transmission order: the DWORD constant <c>0x53425355</c> declared by
+    /// rkdeveloptool <c>RKComm.h</c> (<c>CSW_SIGN 0x53425355 /* "USBS" */</c>) stored little-endian,
+    /// which emits <c>55 53 42 53</c> = ASCII "USBS". This is the byte sequence a real rockusb device
+    /// returns and the one <c>UFI_CHECK_SIGN</c> compares against; u-boot rockusb produces it with
+    /// <c>csw-&gt;signature = cpu_to_le32(USB_BULK_CS_SIG)</c>.
+    /// <para>CSW 签名的传输顺序字节：rkdeveloptool <c>RKComm.h</c> 声明的 DWORD 常量
+    /// <c>0x53425355</c>（<c>CSW_SIGN 0x53425355 /* "USBS" */</c>）按小端存储，发出
+    /// <c>55 53 42 53</c> = ASCII "USBS"。这是真实 rockusb 设备返回的字节序列，也是
+    /// <c>UFI_CHECK_SIGN</c> 据以比较的序列；u-boot rockusb 用
+    /// <c>csw-&gt;signature = cpu_to_le32(USB_BULK_CS_SIG)</c> 产生它。</para>
     /// </summary>
-    public static readonly byte[] CswSignature = [0x53, 0x42, 0x53, 0x55];
+    public static readonly byte[] CswSignature = [0x55, 0x53, 0x42, 0x53];
 
     /// <summary>
     /// CBW flags: device-to-host (IN) direction.

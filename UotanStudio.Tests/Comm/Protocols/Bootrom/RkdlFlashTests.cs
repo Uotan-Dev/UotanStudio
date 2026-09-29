@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Comm.TestDoubles;
@@ -60,10 +61,7 @@ public class RkdlFlashTests
     [Fact]
     public void FlashRkdlPartition_WritesImageAtPartitionLba()
     {
-        var transport = new FakeCommTransport
-        {
-            OnWrite = bytes => BuildCswResponse(bytes)
-        };
+        var transport = new FakeRkdlDeviceTransport();
         using var session = new RkdlSession(transport);
 
         var imageBytes = new byte[4096];
@@ -79,29 +77,18 @@ public class RkdlFlashTests
         var result = FlashService.FlashRkdlPartition(session, partition, imagePath, progress: null, CancellationToken.None);
 
         Assert.True(result.Success, result.Summary);
-        Assert.True(transport.Writes.Count >= 2);
+        Assert.Equal(2, transport.Writes.Count);
 
-        var cbw = transport.Writes[0];
-        Assert.Equal(31, cbw.Length);
-        Assert.Equal(RkdlFrame.CbwSignature, cbw[..4]);
-        Assert.Equal((byte)RkdlCommand.WriteLba, cbw[15]);
-        Assert.Equal(0x00, cbw[17]);
-        Assert.Equal(0x00, cbw[18]);
-        Assert.Equal(0x60, cbw[19]);
-        Assert.Equal(0x00, cbw[20]);
+        var cbw = Assert.Single(transport.Cbws);
+        Assert.Equal(31, cbw.RawBytes.Length);
+        Assert.Equal((byte)0x15, cbw.Opcode);
+        Assert.Equal(0x00, cbw.Flags);
+        Assert.Equal(0x0A, cbw.CbwcbLength);
+        Assert.Equal(0x6000u, cbw.Address);
+        Assert.Equal(8, cbw.SectorLength);
+        Assert.Equal((uint)imageBytes.Length, cbw.TransferLength);
+        Assert.Equal(cbw.Tag, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[0].AsSpan(4)));
 
         Assert.Equal(imageBytes, transport.Writes[1]);
-    }
-
-    private static IEnumerable<byte[]> BuildCswResponse(byte[] data)
-    {
-        if (data.Length == RkdlFrame.CbwLength && data[..4].SequenceEqual(RkdlFrame.CbwSignature))
-        {
-            var csw = new byte[RkdlFrame.CswLength];
-            RkdlFrame.CswSignature.CopyTo(csw, 0);
-            var tag = BitConverter.ToUInt32(data, 4);
-            BitConverter.GetBytes(tag).CopyTo(csw, 4);
-            yield return csw;
-        }
     }
 }

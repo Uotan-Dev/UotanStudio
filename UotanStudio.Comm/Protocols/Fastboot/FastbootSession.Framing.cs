@@ -14,6 +14,20 @@ public sealed partial class FastbootSession
     private const int MaxInfoLines = 10000;
 
     /// <summary>
+    /// Upper bound, in milliseconds, on the pause inserted between two consecutive zero-length
+    /// transport reads. Transports are allowed to report "no data yet" as a bare 0 (a USB read that
+    /// timed out, a TCP frame whose payload has not arrived, a UDP datagram that carried no bytes),
+    /// and a loop that retries such a read without pausing burns a core for the whole response
+    /// deadline. The pause grows linearly with the consecutive zero-read count up to this cap, so the
+    /// deadline still bounds wall time while CPU stays bounded.
+    /// <para>两次连续零长度传输读取之间插入的暂停上限（毫秒）。传输允许把“暂无数据”报告为裸 0
+    /// （超时的 USB 读取、负载尚未到达的 TCP 帧、未携带字节的 UDP 数据报），而不加暂停就重试这种读取的
+    /// 循环会在整个响应截止时间内烧满一个核心。暂停随连续零读次数线性增长至该上限，因此截止时间仍然约束
+    /// 墙上时间，同时 CPU 保持有界。</para>
+    /// </summary>
+    private const int MaxZeroReadBackoffMs = 5;
+
+    /// <summary>
     /// Sends a raw command string to the device (UTF-8 encoded, max 4096 bytes).
     /// <para>向设备发送原始命令字符串（UTF-8 编码，最大 4096 字节）。</para>
     /// </summary>
@@ -76,6 +90,7 @@ public sealed partial class FastbootSession
         var buffer = ArrayPool<byte>.Shared.Rent(FastbootConstants.ResponseBufferSize);
         try
         {
+            var zeroReads = 0;
             while (true)
             {
                 var offset = 0;
@@ -88,6 +103,7 @@ public sealed partial class FastbootSession
                     }
 
                     offset += consumed;
+                    zeroReads = 0;
                     if (response.State is FastbootResponseState.Success
                         or FastbootResponseState.Fail
                         or FastbootResponseState.Data
@@ -109,14 +125,25 @@ public sealed partial class FastbootSession
                     break;
                 }
 
+                if (!Transport.IsConnected)
+                {
+                    response.State = FastbootResponseState.Fail;
+                    response.Text = "transport disconnected while waiting for a response";
+                    return response;
+                }
+
                 var readTimeoutMs = Math.Max(1, (int)Math.Min(int.MaxValue,
                     ((remainingTicks * 1000) + Stopwatch.Frequency - 1) / Stopwatch.Frequency));
                 var readLen = Transport.Read(buffer, 0, FastbootConstants.ResponseBufferSize, readTimeoutMs);
                 if (readLen <= 0)
                 {
+                    zeroReads++;
+                    var backoffMs = Math.Min(MaxZeroReadBackoffMs, zeroReads);
+                    Thread.Sleep(backoffMs);
                     continue;
                 }
 
+                zeroReads = 0;
                 for (var i = 0; i < readLen; i++)
                 {
                     _pendingBytes.Add(buffer[i]);
@@ -136,9 +163,17 @@ public sealed partial class FastbootSession
     /// <summary>
     /// Consumes one wire frame from the pending byte buffer starting at <paramref name="offset"/>.
     /// Returns 0 when more bytes are needed. Terminal frames (OKAY/FAIL/DATA) and an unknown prefix
-    /// complete the response; INFO/TEXT frames are accumulated and parsing continues.
-    /// <para>从待解析字节缓冲区的 <paramref name="offset"/> 处消费一帧。字节不足时返回 0。
-    /// 终止帧（OKAY/FAIL/DATA）与未知前缀会完成响应；INFO/TEXT 帧被累积后继续解析。</para>
+    /// complete the response; INFO/TEXT frames are accumulated, recorded on
+    /// <see cref="FastbootResponse.State"/> as the non-terminal Info/Text marker and parsing continues.
+    /// Recording that marker is what keeps the caller from mistaking an accumulated INFO frame for a
+    /// completed response: <see cref="FastbootResponseState.Success"/> is the enum's default member, so a
+    /// frame that leaves the state untouched reads as a terminal OKAY and truncates every reply that
+    /// carries more than one INFO line (getvar:all, snapshot-update hints).
+    /// <para>从待解析字节缓冲区的 <paramref name="offset"/> 处消费一帧。字节不足时返回 0。终止帧
+    /// （OKAY/FAIL/DATA）与未知前缀会完成响应；INFO/TEXT 帧被累积，并以非终止的 Info/Text 标记记录到
+    /// <see cref="FastbootResponse.State"/> 后继续解析。记录该标记正是阻止调用方把已累积的 INFO 帧误认为
+    /// 已完成响应的关键：<see cref="FastbootResponseState.Success"/> 是枚举的默认成员，因此不触碰状态的帧
+    /// 会被读成终止的 OKAY，从而截断所有携带多于一行 INFO 的应答（getvar:all、snapshot-update 提示）。</para>
     /// </summary>
     /// <param name="pending">Session-held pending byte buffer. 会话持有的待解析字节缓冲区。</param>
     /// <param name="offset">Parse position inside <paramref name="pending"/>. <paramref name="pending"/> 内的解析位置。</param>
@@ -212,6 +247,8 @@ public sealed partial class FastbootSession
                 textBuffer ??= new StringBuilder();
                 textBuffer.Append(content);
             }
+
+            response.State = isInfo ? FastbootResponseState.Info : FastbootResponseState.Text;
 
             var next = endIdx;
             while (next < pending.Count && (pending[next] == '\0' || pending[next] == '\r' || pending[next] == '\n'))

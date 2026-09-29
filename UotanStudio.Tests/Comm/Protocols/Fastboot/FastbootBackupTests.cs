@@ -17,45 +17,75 @@ public class FastbootBackupTests
 {
     private const long PartitionSize = 0x20000;
 
+    private static byte[] Utf8(string text) => Encoding.UTF8.GetBytes(text);
+
+    private static ScriptedCommTransport BootloaderDevice(
+        string? hasSlot = null, string? currentSlot = null, string? partitionSize = null,
+        bool userspace = false, string? isLogical = "no", long maxDownloadSize = 16 * 1024 * 1024,
+        byte[]? fetchPayload = null)
+    {
+        var transport = new ScriptedCommTransport();
+        transport.OnWrite = data =>
+        {
+            var text = Encoding.UTF8.GetString(data);
+            if (text.StartsWith("getvar:", StringComparison.Ordinal))
+            {
+                var key = text["getvar:".Length..];
+                var value = key switch
+                {
+                    FastbootConstants.VarIsUserspace => userspace ? "yes" : "no",
+                    FastbootConstants.VarMaxDownloadSize => "0x" + maxDownloadSize.ToString("x"),
+                    FastbootConstants.VarCurrentSlot => currentSlot,
+                    _ when key.StartsWith(FastbootConstants.VarHasSlotPrefix, StringComparison.Ordinal) => hasSlot,
+                    _ when key.StartsWith(FastbootConstants.VarPartitionSizePrefix, StringComparison.Ordinal) => partitionSize,
+                    _ when key.StartsWith(FastbootConstants.VarIsLogicalPrefix, StringComparison.Ordinal) => isLogical,
+                    _ => null
+                };
+                return [Utf8(value is null ? "FAILunknown variable" : "OKAY" + value)];
+            }
+
+            if (text.StartsWith("fetch:", StringComparison.Ordinal))
+            {
+                var payload = fetchPayload ?? [];
+                return [Utf8($"DATA{payload.Length:x8}"), payload, Utf8("OKAY")];
+            }
+
+            if (text.StartsWith("download:", StringComparison.Ordinal))
+            {
+                return [Utf8("DATA" + text["download:".Length..]), Utf8("OKAY")];
+            }
+
+            return [Utf8("OKAY")];
+        };
+        return transport;
+    }
+
     [Fact]
     public void BackupFastbootPartition_WritesExactDevicePayload()
     {
         var partitionBytes = new byte[PartitionSize];
         Random.Shared.NextBytes(partitionBytes);
 
-        var transport = new FakeCommTransport();
-        transport.Enqueue("OKAY0x00020000");
-        transport.Enqueue("OKAYno");
-        transport.Enqueue("OKAY");
-        transport.Enqueue("DATA00020000");
-        transport.Enqueue(partitionBytes);
-        transport.Enqueue("OKAY");
+        var transport = BootloaderDevice(hasSlot: "no", partitionSize: "0x00020000", fetchPayload: partitionBytes);
 
-        var session = new FastbootSession(transport);
+        using var session = new FastbootSession(transport);
         using var dir = new TempDirectory();
         var outPath = Path.Combine(dir.Path, "boot-backup.img");
 
-        try
-        {
-            var result = BackupService.BackupFastbootPartition(session, "boot", outPath, progress: null, CancellationToken.None);
+        var result = BackupService.BackupFastbootPartition(session, "boot", outPath, progress: null, CancellationToken.None);
 
-            Assert.True(result.Success, result.Summary);
-            Assert.Equal(PartitionSize, result.Bytes);
+        Assert.True(result.Success, result.Summary);
+        Assert.Equal(PartitionSize, result.Bytes);
 
-            var written = File.ReadAllBytes(outPath);
-            Assert.Equal(partitionBytes, written);
-            Assert.Equal(Sha256Hex(partitionBytes), Sha256Hex(written));
+        var written = File.ReadAllBytes(outPath);
+        Assert.Equal(partitionBytes, written);
+        Assert.Equal(Sha256Hex(partitionBytes), Sha256Hex(written));
 
-            var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
-            Assert.Contains("getvar:has-slot:boot", commands);
-            Assert.Contains("getvar:partition-size:boot", commands);
-            Assert.Contains("getvar:max-fetch-size", commands);
-            Assert.Contains("fetch:boot:0:20000", commands);
-        }
-        finally
-        {
-            session.Dispose();
-        }
+        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        Assert.Contains("getvar:has-slot:boot", commands);
+        Assert.Contains("getvar:partition-size:boot", commands);
+        Assert.Contains("getvar:max-fetch-size", commands);
+        Assert.Contains("fetch:boot:0:20000", commands);
     }
 
     [Fact]
@@ -64,30 +94,52 @@ public class FastbootBackupTests
         var imageBytes = new byte[16384];
         Random.Shared.NextBytes(imageBytes);
 
-        var transport = new FakeCommTransport();
-        transport.Enqueue("OKAY");
-        transport.Enqueue($"DATA{imageBytes.Length:x8}");
-        transport.Enqueue("OKAY");
-        transport.Enqueue("OKAYno");
-        transport.Enqueue("OKAY");
+        var transport = BootloaderDevice(hasSlot: "no", partitionSize: "0x00020000");
 
-        var session = new FastbootSession(transport);
+        using var session = new FastbootSession(transport);
         using var dir = new TempDirectory();
         var imagePath = dir.WriteBytes("boot.img", imageBytes);
 
-        try
-        {
-            var result = BackupService.RestoreFastbootPartition(session, "boot", imagePath, progress: null, CancellationToken.None);
+        var result = BackupService.RestoreFastbootPartition(session, "boot", imagePath, progress: null, CancellationToken.None);
 
-            Assert.True(result.Success, result.Summary);
-            var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
-            Assert.Contains(commands, c => c.StartsWith("download:", StringComparison.Ordinal));
-            Assert.Contains("flash:boot", commands);
-        }
-        finally
-        {
-            session.Dispose();
-        }
+        Assert.True(result.Success, result.Summary);
+        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        Assert.Contains(commands, c => c.StartsWith("download:", StringComparison.Ordinal));
+        Assert.Contains("flash:boot", commands);
+    }
+
+    [Fact]
+    public void RestoreFastbootPartition_PartitionAbsent_RejectsBeforeAnyDownload()
+    {
+        var transport = BootloaderDevice(hasSlot: "no", partitionSize: "0", userspace: true);
+
+        using var session = new FastbootSession(transport);
+        using var dir = new TempDirectory();
+        var imagePath = dir.WriteBytes("boot.img", new byte[4096]);
+
+        Assert.Throws<FastbootException>(() =>
+            BackupService.RestoreFastbootPartition(session, "boot", imagePath, progress: null, CancellationToken.None));
+
+        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        Assert.DoesNotContain(commands, c => c.StartsWith("download:", StringComparison.Ordinal));
+        Assert.DoesNotContain(commands, c => c.StartsWith("flash:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void RestoreFastbootPartition_ImageLargerThanPartition_RejectsBeforeAnyDownload()
+    {
+        var transport = BootloaderDevice(hasSlot: "no", partitionSize: "0x400", userspace: true);
+
+        using var session = new FastbootSession(transport);
+        using var dir = new TempDirectory();
+        var imagePath = dir.WriteBytes("boot.img", new byte[4096]);
+
+        Assert.Throws<FastbootException>(() =>
+            BackupService.RestoreFastbootPartition(session, "boot", imagePath, progress: null, CancellationToken.None));
+
+        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        Assert.DoesNotContain(commands, c => c.StartsWith("download:", StringComparison.Ordinal));
+        Assert.DoesNotContain(commands, c => c.StartsWith("flash:", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -96,13 +148,7 @@ public class FastbootBackupTests
         var imageBytes = new byte[4096];
         Random.Shared.NextBytes(imageBytes);
 
-        var transport = new FakeCommTransport();
-        transport.Enqueue("OKAY");
-        transport.Enqueue($"DATA{imageBytes.Length:x8}");
-        transport.Enqueue("OKAY");
-        transport.Enqueue("OKAYyes");
-        transport.Enqueue("OKAYa");
-        transport.Enqueue("OKAY");
+        var transport = BootloaderDevice(hasSlot: "yes", currentSlot: "a", partitionSize: "0x00020000");
 
         using var session = new FastbootSession(transport);
         using var ms = new MemoryStream(imageBytes);
@@ -121,11 +167,7 @@ public class FastbootBackupTests
         var imageBytes = new byte[4096];
         Random.Shared.NextBytes(imageBytes);
 
-        var transport = new FakeCommTransport();
-        transport.Enqueue("OKAY");
-        transport.Enqueue($"DATA{imageBytes.Length:x8}");
-        transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");
+        var transport = BootloaderDevice(hasSlot: "yes", currentSlot: "a", partitionSize: "0x00020000");
 
         using var session = new FastbootSession(transport);
         using var ms = new MemoryStream(imageBytes);
@@ -143,11 +185,7 @@ public class FastbootBackupTests
         var imageBytes = new byte[4096];
         Random.Shared.NextBytes(imageBytes);
 
-        var transport = new FakeCommTransport();
-        transport.Enqueue("OKAY");
-        transport.Enqueue($"DATA{imageBytes.Length:x8}");
-        transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");
+        var transport = BootloaderDevice(hasSlot: "yes", currentSlot: "a", partitionSize: "0x00020000");
 
         using var session = new FastbootSession(transport);
         using var ms = new MemoryStream(imageBytes);
@@ -166,11 +204,7 @@ public class FastbootBackupTests
         var imageBytes = new byte[4096];
         Random.Shared.NextBytes(imageBytes);
 
-        var transport = new FakeCommTransport();
-        transport.Enqueue("OKAY");
-        transport.Enqueue($"DATA{imageBytes.Length:x8}");
-        transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");
+        var transport = BootloaderDevice(hasSlot: "yes", currentSlot: "a", partitionSize: "0x00020000");
 
         using var session = new FastbootSession(transport);
         using var ms = new MemoryStream(imageBytes);

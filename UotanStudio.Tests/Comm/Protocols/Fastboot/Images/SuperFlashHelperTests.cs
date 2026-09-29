@@ -54,6 +54,31 @@ public class SuperFlashHelperTests
         return result;
     }
 
+    private const long FixtureDeviceSize = 8 * 1024 * 1024;
+
+    private static ScriptedCommTransport FlashableDevice(long superSize = FixtureDeviceSize, long maxDownloadSize = 16 * 1024 * 1024)
+        => new()
+        {
+            OnWrite = data =>
+            {
+                var text = Text(data);
+                var reply = text switch
+                {
+                    "getvar:partition-size:super" => "OKAY0x" + superSize.ToString("x"),
+                    "getvar:max-download-size" => "OKAY0x" + maxDownloadSize.ToString("x"),
+                    _ when text.StartsWith("download:", StringComparison.Ordinal) => "DATA" + text["download:".Length..],
+                    _ => "OKAY"
+                };
+                return [Encoding.UTF8.GetBytes(reply)];
+            }
+        };
+
+    private static List<string> MutatingCommands(ScriptedCommTransport transport)
+        => [.. transport.Writes.Select(Text).Where(w =>
+            w.StartsWith("download:", StringComparison.Ordinal)
+            || w.StartsWith("update-super:", StringComparison.Ordinal)
+            || w.StartsWith("flash:", StringComparison.Ordinal))];
+
     [Fact]
     public void UpdateSuperMetadata_IssuesDownloadThenUpdateSuper()
     {
@@ -128,77 +153,105 @@ public class SuperFlashHelperTests
         var (image, metadata) = BuildFixture();
         using var dir = new TempDirectory();
         var superPath = dir.WriteBytes("super.img", image);
-        var transport = new ScriptedCommTransport();
+        var transport = FlashableDevice();
 
         var metadataImageLength = checked(4096 + (int)metadata.MetadataSize);
         var systemExtent = metadata.Extents[0];
         var vendorExtent = metadata.Extents[1];
 
-        transport.Enqueue("OKAY");
-        transport.Enqueue($"DATA{metadataImageLength:x8}");
-        transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");
-        transport.Enqueue($"DATA{systemExtent.NumSectors * SuperImageBuilder.LpSectorSize:x8}");
-        transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");
-        transport.Enqueue($"DATA{vendorExtent.NumSectors * SuperImageBuilder.LpSectorSize:x8}");
-        transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");
-
         using var session = NewSession(transport);
         var helper = new SuperFlashHelper(session);
         helper.FlashSuper(superPath, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(10, transport.Writes.Count);
-        Assert.Equal("getvar:max-download-size", Text(transport.Writes[0]));
-        Assert.Equal($"download:{metadataImageLength:x8}", Text(transport.Writes[1]));
-        var metadataPayload = transport.Writes[2];
+        Assert.Equal(11, transport.Writes.Count);
+        Assert.Equal("getvar:partition-size:super", Text(transport.Writes[0]));
+        Assert.Equal("getvar:max-download-size", Text(transport.Writes[1]));
+        Assert.Equal($"download:{metadataImageLength:x8}", Text(transport.Writes[2]));
+        var metadataPayload = transport.Writes[3];
         Assert.Equal(image[4096..8192], metadataPayload[..4096]);
         Assert.Equal(image.AsSpan(12288, (int)metadata.MetadataSize).ToArray(), metadataPayload[4096..]);
         Assert.Equal(0x616c4467u, BinaryPrimitives.ReadUInt32LittleEndian(metadataPayload));
         Assert.Equal(0x414c5030u, BinaryPrimitives.ReadUInt32LittleEndian(metadataPayload.AsSpan(4096)));
-        Assert.Equal("update-super:super", Text(transport.Writes[3]));
+        Assert.Equal("update-super:super", Text(transport.Writes[4]));
 
         var systemPayload = Slice(image, (long)(systemExtent.TargetData * SuperImageBuilder.LpSectorSize), (int)(systemExtent.NumSectors * SuperImageBuilder.LpSectorSize));
         var vendorPayload = Slice(image, (long)(vendorExtent.TargetData * SuperImageBuilder.LpSectorSize), (int)(vendorExtent.NumSectors * SuperImageBuilder.LpSectorSize));
 
-        Assert.Equal($"download:{systemPayload.Length:x8}", Text(transport.Writes[4]));
-        Assert.Equal(systemPayload, transport.Writes[5]);
-        Assert.Equal("flash:system", Text(transport.Writes[6]));
-        Assert.Equal($"download:{vendorPayload.Length:x8}", Text(transport.Writes[7]));
-        Assert.Equal(vendorPayload, transport.Writes[8]);
-        Assert.Equal("flash:vendor", Text(transport.Writes[9]));
+        Assert.Equal($"download:{systemPayload.Length:x8}", Text(transport.Writes[5]));
+        Assert.Equal(systemPayload, transport.Writes[6]);
+        Assert.Equal("flash:system", Text(transport.Writes[7]));
+        Assert.Equal($"download:{vendorPayload.Length:x8}", Text(transport.Writes[8]));
+        Assert.Equal(vendorPayload, transport.Writes[9]);
+        Assert.Equal("flash:vendor", Text(transport.Writes[10]));
     }
 
     [Fact]
     public void FlashSuper_Wipe_AppendsWipeSuffixToUpdateSuper()
     {
-        var (image, metadata) = BuildFixture();
+        var (image, _) = BuildFixture();
         using var dir = new TempDirectory();
         var superPath = dir.WriteBytes("super.img", image);
-        var transport = new ScriptedCommTransport();
-
-        var metadataImageLength = checked(4096 + (int)metadata.MetadataSize);
-        var systemSize = (int)(metadata.Extents[0].NumSectors * SuperImageBuilder.LpSectorSize);
-        var vendorSize = (int)(metadata.Extents[1].NumSectors * SuperImageBuilder.LpSectorSize);
-
-        transport.Enqueue("OKAY");
-        transport.Enqueue($"DATA{metadataImageLength:x8}");
-        transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");
-        transport.Enqueue($"DATA{systemSize:x8}");
-        transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");
-        transport.Enqueue($"DATA{vendorSize:x8}");
-        transport.Enqueue("OKAY");
-        transport.Enqueue("OKAY");
+        var transport = FlashableDevice();
 
         using var session = NewSession(transport);
         new SuperFlashHelper(session).FlashSuper(superPath, wipe: true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains(transport.Writes, w => Text(w) == "update-super:super:wipe");
-        Assert.Equal("flash:system", Text(transport.Writes[6]));
-        Assert.Equal("flash:vendor", Text(transport.Writes[9]));
+        Assert.Equal("flash:system", Text(transport.Writes[7]));
+        Assert.Equal("flash:vendor", Text(transport.Writes[10]));
+    }
+
+    [Fact]
+    public void FlashSuper_LogicalPartitionLargerThanMaxDownloadSize_RejectsBeforeUpdatingSuper()
+    {
+        var (image, metadata) = BuildFixture();
+        using var dir = new TempDirectory();
+        var superPath = dir.WriteBytes("super.img", image);
+        var largest = metadata.Extents.Max(e => (long)e.NumSectors * SuperImageBuilder.LpSectorSize);
+        var transport = FlashableDevice(maxDownloadSize: largest - 1);
+
+        using var session = NewSession(transport);
+        Assert.Throws<FastbootException>(() => new SuperFlashHelper(session)
+            .FlashSuper(superPath, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Empty(MutatingCommands(transport));
+        Assert.Equal(
+            ["getvar:partition-size:super", "getvar:max-download-size"],
+            [.. transport.Writes.Select(Text)]);
+    }
+
+    [Fact]
+    public void FlashSuper_DeviceSuperSizeMismatch_RejectsBeforeUpdatingSuper()
+    {
+        var (image, _) = BuildFixture();
+        using var dir = new TempDirectory();
+        var superPath = dir.WriteBytes("super.img", image);
+        var transport = FlashableDevice(superSize: FixtureDeviceSize * 2);
+
+        using var session = NewSession(transport);
+        Assert.Throws<InvalidDataException>(() => new SuperFlashHelper(session)
+            .FlashSuper(superPath, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Empty(MutatingCommands(transport));
+        Assert.Equal(["getvar:partition-size:super"], [.. transport.Writes.Select(Text)]);
+    }
+
+    [Fact]
+    public void FlashSuper_DeviceReportsNoSuperSize_RejectsBeforeUpdatingSuper()
+    {
+        var (image, _) = BuildFixture();
+        using var dir = new TempDirectory();
+        var superPath = dir.WriteBytes("super.img", image);
+        var transport = new ScriptedCommTransport
+        {
+            OnWrite = _ => [Encoding.UTF8.GetBytes("FAILunknown variable")]
+        };
+
+        using var session = NewSession(transport);
+        Assert.Throws<InvalidDataException>(() => new SuperFlashHelper(session)
+            .FlashSuper(superPath, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Empty(MutatingCommands(transport));
     }
 
     [Fact]

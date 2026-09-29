@@ -22,6 +22,14 @@ public enum FastbootResponseState
     /// The device sent a TEXT frame.
     /// <para>设备发送了 TEXT 帧。</para>
     /// </summary>
+    /// <remarks>
+    /// Non-terminal marker: a response whose parsing ended on a TEXT frame is still incomplete, so
+    /// <see cref="FastbootSession.ReceiveResponse(int?)"/> keeps accumulating until a terminal frame
+    /// arrives and never hands this state to a caller.
+    /// <para>非终止标记：解析停在 TEXT 帧上的响应尚未完成，因此
+    /// <see cref="FastbootSession.ReceiveResponse(int?)"/> 会继续累积直到终止帧到达，绝不会把该状态交给
+    /// 调用方。</para>
+    /// </remarks>
     Text,
 
     /// <summary>
@@ -34,6 +42,17 @@ public enum FastbootResponseState
     /// The device sent an INFO frame.
     /// <para>设备发送了 INFO 帧。</para>
     /// </summary>
+    /// <remarks>
+    /// Non-terminal marker: a response whose parsing ended on an INFO frame is still incomplete, so
+    /// <see cref="FastbootSession.ReceiveResponse(int?)"/> keeps accumulating until a terminal frame
+    /// arrives and never hands this state to a caller. Leaving the state at the default
+    /// <see cref="Success"/> here instead would make the parser return after the first INFO line and
+    /// truncate every multi-line reply (<c>getvar:all</c> above all).
+    /// <para>非终止标记：解析停在 INFO 帧上的响应尚未完成，因此
+    /// <see cref="FastbootSession.ReceiveResponse(int?)"/> 会继续累积直到终止帧到达，绝不会把该状态交给
+    /// 调用方。若此处把状态留在默认的 <see cref="Success"/>，解析器会在第一行 INFO 之后就返回，从而截断
+    /// 所有多行应答（尤其是 <c>getvar:all</c>）。</para>
+    /// </remarks>
     Info,
 
     /// <summary>
@@ -55,6 +74,12 @@ public enum FastbootResponseState
 /// </summary>
 public class FastbootResponse
 {
+    /// <summary>
+    /// Substring a bootloader uses to ask the host for a fastbootd reboot.
+    /// <para>bootloader 用于请求宿主重启到 fastbootd 的子串。</para>
+    /// </summary>
+    private const string FastbootRebootHint = "reboot fastboot";
+
     /// <summary>
     /// Gets or sets the result state.
     /// <para>获取或设置结果状态。</para>
@@ -132,6 +157,25 @@ public class FastbootResponse
     /// <para>当且仅当 <see cref="State"/> 为 <see cref="FastbootResponseState.Success"/> 时为
     /// <see langword="true"/>。</para></value>
     public bool IsSuccess => State == FastbootResponseState.Success;
+
+    /// <summary>
+    /// Gets whether the device asked the host to reboot into fastbootd before the requested action
+    /// can complete. Bootloaders report this as free-form text ("Fastboot doesn't support updating
+    /// super partition metadata", "reboot fastboot"), so the hint is exposed for the caller to act
+    /// on instead of being honored inside the session: rebooting is a device-visible side effect the
+    /// caller must own, and a value inferred from untrusted reply text must never trigger it on its
+    /// own.
+    /// <para>获取设备是否要求宿主先重启进入 fastbootd 才能完成所请求的操作。bootloader 以自由文本上报
+    /// 该请求（如 "Fastboot doesn't support updating super partition metadata"、"reboot fastboot"），
+    /// 因此该提示暴露给调用方自行处置，而不是在会话内部被执行：重启是调用方必须自己承担的设备可见
+    /// 副作用，且由不可信应答文本推断出的取值绝不能单独触发重启。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when the terminal payload or any INFO/TEXT line carries the reboot hint (case-insensitive); <see langword="false"/> otherwise.
+    /// <para>终止负载或任一 INFO/TEXT 行带有重启提示（不区分大小写）时为 <see langword="true"/>；其余情况为 <see langword="false"/>。</para></value>
+    public bool RequestsFastbootReboot
+        => Info.Contains(FastbootRebootHint, StringComparison.OrdinalIgnoreCase)
+           || Text.Contains(FastbootRebootHint, StringComparison.OrdinalIgnoreCase)
+           || InfoLines.Exists(line => line.Contains(FastbootRebootHint, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Throws a <see cref="FastbootException"/> unless the response is a confirmed OKAY. Only

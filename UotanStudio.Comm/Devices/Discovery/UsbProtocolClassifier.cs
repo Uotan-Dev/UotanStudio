@@ -26,30 +26,87 @@ public static class UsbProtocolClassifier
     /// <para>协议名；没有任何已知协议特征时返回 <see langword="null"/>。</para></returns>
     public static string? Classify(UsbDeviceInfo device)
     {
-        if (device.VendorId == 0x05C6 && device.ProductId is 0x9008 or 0x9006 or 0x900E or 0x901D or 0x9307)
-            return "edl";
-        if (device.VendorId == 0x0E8D && device.ProductId is 0x0003 or 0x2000 or 0x2001)
-            return "mtk";
-        if (device.VendorId == RkdlConstants.RockchipVid &&
-            ((device.ProductId >> 8) != 0 || RkdlConstants.KnownLoaderProductIds.Contains(device.ProductId)))
-            return "rkdl";
+        var bootrom = ClassifyBootrom(device.VendorId, device.ProductId);
+        if (bootrom is not null)
+            return bootrom;
 
         foreach (var iface in device.Interfaces)
         {
-            var protocol = FromInterface(iface.Class, iface.SubClass, iface.Protocol);
+            var protocol = ClassifyInterface(iface.Class, iface.SubClass, iface.Protocol);
             if (protocol is not null) return protocol;
         }
         return device.InterfaceMetadataObserved
-            ? FromInterface(device.InterfaceClass, device.InterfaceSubClass, device.InterfaceProtocol)
+            ? ClassifyInterface(device.InterfaceClass, device.InterfaceSubClass, device.InterfaceProtocol)
             : null;
     }
 
-    private static string? FromInterface(byte? cls, byte? sub, byte? protocol) =>
-        (cls, sub, protocol) switch
+    /// <summary>
+    /// Classifies from an explicit VID/PID pair and one interface triple, using the same rules as
+    /// <see cref="Classify(UsbDeviceInfo)"/>, so topology nodes and endpoint inventory never disagree.
+    /// <para>按显式 VID/PID 与单个接口三元组分类，规则与 <see cref="Classify(UsbDeviceInfo)"/> 完全一致，
+    /// 因此拓扑节点与端点清单的结论永不分歧。</para>
+    /// </summary>
+    /// <param name="vendorId">
+    /// USB vendor id. <para>USB 厂商 ID。</para>
+    /// </param>
+    /// <param name="productId">
+    /// USB product id, or null when the node carries none. <para>USB 产品 ID；节点未携带时为 null。</para>
+    /// </param>
+    /// <param name="interfaceClass">
+    /// bInterfaceClass, or null when unknown. <para>bInterfaceClass；未知时为 null。</para>
+    /// </param>
+    /// <param name="interfaceSubClass">
+    /// bInterfaceSubClass, or null when unknown. <para>bInterfaceSubClass；未知时为 null。</para>
+    /// </param>
+    /// <param name="interfaceProtocol">
+    /// bInterfaceProtocol, or null when unknown. <para>bInterfaceProtocol；未知时为 null。</para>
+    /// </param>
+    /// <returns>
+    /// The protocol name, or <see langword="null"/> when nothing identifies a known protocol.
+    /// <para>协议名；没有任何已知协议特征时返回 <see langword="null"/>。</para>
+    /// </returns>
+    public static string? Classify(ushort vendorId, ushort? productId, byte? interfaceClass,
+        byte? interfaceSubClass, byte? interfaceProtocol)
+        => ClassifyBootrom(vendorId, productId) ?? ClassifyInterface(interfaceClass, interfaceSubClass,
+            interfaceProtocol);
+
+    /// <summary>
+    /// Maps one interface triple to a debug-bridge protocol name.
+    /// <para>把单个接口三元组映射到调试桥协议名。</para>
+    /// </summary>
+    /// <param name="interfaceClass">
+    /// bInterfaceClass. <para>bInterfaceClass。</para>
+    /// </param>
+    /// <param name="interfaceSubClass">
+    /// bInterfaceSubClass. <para>bInterfaceSubClass。</para>
+    /// </param>
+    /// <param name="interfaceProtocol">
+    /// bInterfaceProtocol. <para>bInterfaceProtocol。</para>
+    /// </param>
+    /// <returns>
+    /// <c>hdc</c>, <c>adb</c> or <c>fastboot</c>, or <see langword="null"/> for any other triple.
+    /// <para><c>hdc</c>、<c>adb</c> 或 <c>fastboot</c>；其它三元组返回 <see langword="null"/>。</para>
+    /// </returns>
+    public static string? ClassifyInterface(byte? interfaceClass, byte? interfaceSubClass,
+        byte? interfaceProtocol) =>
+        (interfaceClass, interfaceSubClass, interfaceProtocol) switch
         {
             (0xff, 0x50, 1) => "hdc",
             (0xff, 0x42, 1) => "adb",
             (0xff, 0x42, 3) => "fastboot",
             _ => null
         };
+
+    private static string? ClassifyBootrom(ushort vendorId, ushort? productId)
+    {
+        var product = productId ?? 0;
+        if (vendorId == 0x05C6 && product is 0x9008 or 0x9006 or 0x900E or 0x901D or 0x9307)
+            return "edl";
+        if (vendorId == 0x0E8D && product is 0x0003 or 0x2000 or 0x2001)
+            return "mtk";
+        if (vendorId == RkdlConstants.RockchipVid &&
+            ((product >> 8) != 0 || RkdlConstants.KnownLoaderProductIds.Contains(product)))
+            return "rkdl";
+        return null;
+    }
 }

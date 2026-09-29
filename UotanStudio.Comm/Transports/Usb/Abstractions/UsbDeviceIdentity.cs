@@ -9,29 +9,78 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 internal static class UsbDeviceIdentity
 {
     /// <summary>
+    /// Index of the serial segment in a <see cref="BuildKey"/>-produced key.
+    /// <para><see cref="BuildKey"/> 生成的键中序列号段的下标。</para>
+    /// </summary>
+    private const int SerialSegmentIndex = 7;
+
+    /// <summary>
+    /// Index of the device-path segment in a <see cref="BuildKey"/>-produced key.
+    /// <para><see cref="BuildKey"/> 生成的键中设备路径段的下标。</para>
+    /// </summary>
+    private const int DevicePathSegmentIndex = 8;
+
+    /// <summary>
+    /// Number of segments in a <see cref="BuildKey"/>-produced key.
+    /// <para><see cref="BuildKey"/> 生成的键的分段数。</para>
+    /// </summary>
+    private const int SegmentCount = 9;
+
+    /// <summary>
     /// Matches a discovery key against the key of an opened session. The serial segment may
     /// differ in casing (Windows registry/device-instance casing vs the USB descriptor casing
-    /// of the same serial — verified on real hardware) and a discovery key with an absent
-    /// serial is allowed to match an opened session that enriched it; every other segment,
-    /// including the exact device path, must be identical.
+    /// of the same serial — verified on real hardware), and a discovery key with an absent
+    /// serial matches an opened session whether that session left the serial absent or
+    /// enriched it (Linux usbfs never reads the serial at discovery time; it is only read by
+    /// a control transfer inside <c>CreateHandle</c>, so a device with no serial string
+    /// descriptor stays absent on both sides). Every other segment, including the exact
+    /// device path, must be identical.
     /// <para>匹配发现键与已打开会话的键。序列号段允许大小写差异（Windows 注册表大小写与
-    /// USB 描述符大小写不同——真机验证），且发现时缺序列号、打开后被补全的键允许匹配；
-    /// 其余各段（含精确设备路径）必须完全一致。</para>
+    /// USB 描述符大小写不同——真机验证），且发现时缺序列号的键与已打开会话匹配时，
+    /// 该会话的序列号既允许仍为空、也允许已被补全（Linux usbfs 在发现期从不读序列号，
+    /// 只在 <c>CreateHandle</c> 内经控制传输读出，因此没有序列号字符串描述符的设备
+    /// 在两侧都为空）。其余各段（含精确设备路径）必须完全一致。</para>
+    /// Identity basis while the serial is absent: with no serial on either side the device
+    /// path segment is the sole evidence that the opened handle is the enumerated device, so
+    /// a discovery key that also lacks a device path matches nothing except a byte-identical
+    /// key. Byte-identical keys are accepted by an ordinal short-circuit before any segment
+    /// inspection, which is what keeps a backend that reports neither serial nor path usable.
+    /// <para>序列号缺失时的身份依据：两侧都无序列号时，设备路径段是"已打开句柄就是被枚举
+    /// 设备"的唯一证据，因此同时缺设备路径的发现键除逐字节相同的键之外不匹配任何键。
+    /// 逐字节相同的键在检查任何分段之前由序数相等短路接受，这正是既不报序列号也不报路径
+    /// 的后端仍可用的原因。</para>
+    /// Residual risk: device paths are recycled by the operating system — Linux usbfs uses
+    /// <c>/dev/bus/usb/BBB/DDD</c> and libusb uses <c>Bus X Device Y: VVVV:PPPP</c>, both of
+    /// which the kernel reassigns after an unplug/replug or re-enumeration. While the serial
+    /// is absent this matcher therefore cannot distinguish "same device" from "a different
+    /// device now sitting on the recycled path"; the risk is inherent to path-based matching
+    /// and is not introduced by accepting an absent serial, but an absent serial removes the
+    /// only corroborating segment. The complete fix is to corroborate with best-evidence
+    /// physical identity (container id first, physical port chain second, never VID/PID or
+    /// enumeration order), which lives in the device-discovery layer above this transport
+    /// abstraction and so is deliberately not referenced here.
+    /// <para>残留风险：设备路径会被操作系统回收复用——Linux usbfs 使用
+    /// <c>/dev/bus/usb/BBB/DDD</c>，libusb 使用 <c>Bus X Device Y: VVVV:PPPP</c>，
+    /// 两者在拔插或重新枚举后都会被内核重新分配。因此序列号缺失时本匹配器无法区分
+    /// "同一台设备"与"另一台设备恰好占用了被回收的路径"；该风险源自基于路径的匹配本身，
+    /// 并非由接受空序列号引入，但空序列号移除了唯一可作佐证的段。彻底解法是用最优证据
+    /// 物理身份（容器 ID 优先、物理端口链次之，绝不使用 VID/PID 或枚举顺序）加以佐证，
+    /// 该原语位于本传输抽象之上的设备发现层，故此处有意不予引用。</para>
     /// </summary>
+    /// <param name="requested">A discovery key produced by <see cref="BuildKey"/>. <para>由 <see cref="BuildKey"/> 生成的发现键。</para></param>
+    /// <param name="opened">The key of an opened session, also produced by <see cref="BuildKey"/>. <para>已打开会话的键，同样由 <see cref="BuildKey"/> 生成。</para></param>
+    /// <returns><see langword="true"/> when both keys denote the same device on the same physical path. <para>两键指向同一路径上的同一设备时返回 <see langword="true"/>。</para></returns>
     internal static bool MatchesOpenedKey(string requested, string opened)
     {
         if (string.Equals(requested, opened, StringComparison.Ordinal)) return true;
-        var before = requested.Split('|', 9);
-        var after = opened.Split('|', 9);
-        if (before.Length != 9 || after.Length != 9) return false;
-        for (var i = 0; i < 9; i++)
+        var before = requested.Split('|', SegmentCount);
+        var after = opened.Split('|', SegmentCount);
+        if (before.Length != SegmentCount || after.Length != SegmentCount) return false;
+        for (var i = 0; i < SegmentCount; i++)
         {
-            if (i == 7)
+            if (i == SerialSegmentIndex)
             {
-                var serialMatches = before[7].Length == 0
-                    ? after[7].Length != 0 && before[8].Length != 0
-                    : string.Equals(before[7], after[7], StringComparison.OrdinalIgnoreCase);
-                if (!serialMatches) return false;
+                if (!SerialSegmentsMatch(before, after)) return false;
             }
             else if (!string.Equals(before[i], after[i], StringComparison.Ordinal))
             {
@@ -40,6 +89,33 @@ internal static class UsbDeviceIdentity
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Compares the serial segments of two keys. A serial present at discovery must be
+    /// re-found on the opened session, ignoring the casing difference between the Windows
+    /// device-instance spelling and the USB descriptor spelling of the same serial. A serial
+    /// absent at discovery accepts either state on the opened session, provided the discovery
+    /// key carried a device path to anchor the identity; without that path there is no
+    /// remaining evidence, so only the byte-identical short-circuit in
+    /// <see cref="MatchesOpenedKey"/> can match.
+    /// <para>比较两个键的序列号段。发现时存在的序列号必须在已打开会话上重新找到，
+    /// 并忽略同一序列号在 Windows 设备实例拼写与 USB 描述符拼写之间的大小写差异。
+    /// 发现时缺失的序列号接受已打开会话上的任一状态，前提是发现键携带了用于锚定身份的
+    /// 设备路径；缺少该路径时已无任何剩余证据，只有 <see cref="MatchesOpenedKey"/>
+    /// 中逐字节相同的短路才能匹配。</para>
+    /// </summary>
+    /// <param name="before">The discovery key segments. <para>发现键的分段。</para></param>
+    /// <param name="after">The opened-session key segments. <para>已打开会话键的分段。</para></param>
+    /// <returns><see langword="true"/> when the serial segments are consistent with one physical device. <para>序列号段与同一台物理设备一致时返回 <see langword="true"/>。</para></returns>
+    private static bool SerialSegmentsMatch(string[] before, string[] after)
+    {
+        if (before[SerialSegmentIndex].Length != 0)
+        {
+            return string.Equals(before[SerialSegmentIndex], after[SerialSegmentIndex], StringComparison.OrdinalIgnoreCase);
+        }
+
+        return before[DevicePathSegmentIndex].Length != 0;
     }
 
     /// <summary>

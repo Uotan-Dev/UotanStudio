@@ -220,29 +220,21 @@ public sealed partial class FastbootSession
 
     /// <summary>
     /// Performs a snapshot update action on the device. Common actions include "cancel" to
-    /// abort an in-progress update. If the device requests a reboot to fastbootd to complete
-    /// the action, a reboot-fastboot is issued.
-    /// <para>在设备上执行快照更新操作。常见操作包括 "cancel" 以中止正在进行的更新。
-    /// 如果设备请求重启到 fastbootd 以完成操作，则发送 reboot-fastboot。</para>
+    /// abort an in-progress update. A bootloader that can only complete the action from fastbootd says
+    /// so in free-form reply text; that request is reported on
+    /// <see cref="FastbootResponse.RequestsFastbootReboot"/> and deliberately not acted on here,
+    /// because a reboot invalidates the caller's session and the hint comes from untrusted text.
+    /// <para>在设备上执行快照更新操作。常见操作包括 "cancel" 以中止正在进行的更新。只能在 fastbootd 中
+    /// 完成该操作的 bootloader 会以自由文本应答说明这一点；该请求通过
+    /// <see cref="FastbootResponse.RequestsFastbootReboot"/> 上报，并且刻意不在此处执行，因为重启会使
+    /// 调用方的会话失效，而该提示来自不可信文本。</para>
     /// </summary>
     /// <param name="action">Snapshot-update action sent after the <c>snapshot-update:</c> prefix; defaults to <c>cancel</c>.
     /// <para>追加在 <c>snapshot-update:</c> 前缀之后的操作；默认为 <c>cancel</c>。</para></param>
-    /// <returns>The parsed snapshot-update response; the reboot side effect is not reflected in it.
-    /// <para>解析后的 snapshot-update 响应；重启副作用不体现在该响应中。</para></returns>
+    /// <returns>The parsed snapshot-update response. <para>解析后的 snapshot-update 响应。</para></returns>
+    /// <exception cref="ObjectDisposedException">The session has been disposed. <para>会话已释放。</para></exception>
     public FastbootResponse SnapshotUpdate(string action = "cancel")
-    {
-        var response = ExecuteCommand(FastbootConstants.CommandSnapshotUpdate + action);
-        var requestsReboot =
-            response.Info.Contains("reboot fastboot", StringComparison.OrdinalIgnoreCase) ||
-            response.Text.Contains("reboot fastboot", StringComparison.OrdinalIgnoreCase) ||
-            response.InfoLines.Any(line => line.Contains("reboot fastboot", StringComparison.OrdinalIgnoreCase));
-        if (requestsReboot)
-        {
-            Reboot("fastboot");
-        }
-
-        return response;
-    }
+        => ExecuteCommand(FastbootConstants.CommandSnapshotUpdate + action);
 
     /// <summary>
     /// Sends an OEM-specific command to the device. INFO/TEXT frames emitted by the command
@@ -316,8 +308,13 @@ public sealed partial class FastbootSession
         => ExecuteCommand(FastbootConstants.CommandShutdown);
 
     /// <summary>
-    /// Flashes a partition with data from a stream.
-    /// <para>用流中的数据刷写分区。</para>
+    /// Flashes a partition with data from a stream. Before any payload is transferred the target is
+    /// validated against the device through the read-only queries selected by
+    /// <paramref name="options"/> (see <see cref="FlashPartitionPreflight"/>), so a rejected flash
+    /// leaves the device untouched instead of failing after a full image transfer.
+    /// <para>用流中的数据刷写分区。在传输任何负载之前，先通过 <paramref name="options"/> 选定的只读查询
+    /// 对照设备校验目标（见 <see cref="FlashPartitionPreflight"/>），因此被拒绝的刷写不会改动设备，
+    /// 而不是在整镜像传完之后才失败。</para>
     /// </summary>
     /// <param name="partition">Target partition name; resolved against A/B slots unless <paramref name="resolveSlot"/> is <see langword="false"/>.
     /// <para>目标分区名；除 <paramref name="resolveSlot"/> 为 <see langword="false"/> 外，按 A/B 槽位解析。</para></param>
@@ -327,16 +324,28 @@ public sealed partial class FastbootSession
     /// <para>要下载的精确字节长度；必须为正且不超过协商的最大下载大小。</para></param>
     /// <param name="progress">Receives the cumulative downloaded byte count; may be <see langword="null"/>.
     /// <para>接收累计已下载字节数；可为 <see langword="null"/>。</para></param>
-    /// <param name="cancellationToken">Cancels the download between chunks. <para>在分块下载的各块之间取消。</para></param>
-    /// <param name="resolveSlot">When <see langword="true"/>, the partition name is slot-resolved before flashing.
-    /// <para>为 <see langword="true"/> 时，刷写前先对分区名做槽位解析。</para></param>
+    /// <param name="cancellationToken">Cancels before the preflight queries and between download chunks. <para>在预检查询之前以及下载各分块之间取消。</para></param>
+    /// <param name="resolveSlot">When <see langword="true"/>, the partition name is slot-resolved before the preflight and the flash.
+    /// <para>为 <see langword="true"/> 时，预检与刷写前先对分区名做槽位解析。</para></param>
+    /// <param name="options">Preflight policy; <see langword="null"/> means <see cref="FlashPartitionOptions.Default"/>, which enables every check.
+    /// Callers that already validated the target pass a narrowed policy (or
+    /// <see cref="FlashPartitionOptions.NoPreflight"/>) instead of paying duplicate getvar round trips.
+    /// <para>预检策略；<see langword="null"/> 表示 <see cref="FlashPartitionOptions.Default"/>，即启用全部检查。
+    /// 已自行校验目标的调用方应传入收窄后的策略（或 <see cref="FlashPartitionOptions.NoPreflight"/>），
+    /// 而不是重复支付 getvar 往返。</para></param>
     /// <returns>The parsed flash response. <para>解析后的 flash 响应。</para></returns>
+    /// <exception cref="FastbootException">An enabled preflight check was not satisfied, the payload exceeds the negotiated max-download-size, or the device rejected the download or the flash.
+    /// <para>某项已启用的预检未通过、负载超过协商的 max-download-size，或设备拒绝了下载或刷写。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled. <para><paramref name="cancellationToken"/> 被取消。</para></exception>
     /// <exception cref="ObjectDisposedException">The session has been disposed. <para>会话已释放。</para></exception>
-    public FastbootResponse FlashPartition(string partition, Stream stream, long length, IProgress<long>? progress = null, CancellationToken cancellationToken = default, bool resolveSlot = true)
+    public FastbootResponse FlashPartition(string partition, Stream stream, long length, IProgress<long>? progress = null,
+        CancellationToken cancellationToken = default, bool resolveSlot = true, FlashPartitionOptions? options = null)
     {
         ThrowIfDisposed();
+        var target = resolveSlot ? ResolvePartitionWithSlot(partition) : partition;
+        FlashPartitionPreflight.Validate(this, target, length, options ?? FlashPartitionOptions.Default, cancellationToken);
         DownloadData(stream, length, progress, cancellationToken).ThrowIfFailed();
-        return ExecuteCommand(FastbootConstants.CommandFlash + (resolveSlot ? ResolvePartitionWithSlot(partition) : partition));
+        return ExecuteCommand(FastbootConstants.CommandFlash + target);
     }
 
     /// <summary>

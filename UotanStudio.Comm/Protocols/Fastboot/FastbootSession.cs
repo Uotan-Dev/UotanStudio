@@ -26,6 +26,25 @@ public sealed partial class FastbootSession : IProtocolSession
     private long? _maxDownloadSize;
 
     /// <summary>
+    /// Bytes the device accepted for the download currently in flight, or 0 while no download is
+    /// pending. Set when a DATA frame is accepted and cleared at the terminal frame, so an abandoned
+    /// download can be drained with exactly the byte count the bootloader still expects.
+    /// <para>设备为当前进行中下载所接受的字节数；无下载待处理时为 0。在接受 DATA 帧时置位，在终止帧处
+    /// 清零，使被弃单的下载能按 bootloader 仍在等待的确切字节数排空。</para>
+    /// </summary>
+    private long _pendingDownloadBytes;
+
+    /// <summary>
+    /// Wall-clock budget for the trailing terminal frame drained after an abandoned download. It is
+    /// deliberately shorter than the command timeout: the zero padding that precedes it already told
+    /// the bootloader the download is complete, so a device that stays silent is treated as lost and
+    /// the transport is reset instead of blocking the caller for a full command timeout.
+    /// <para>弃单下载后排空尾部终止帧的墙上时间预算。刻意短于命令超时：其前的零填充已经告诉 bootloader
+    /// 下载完成，此时仍沉默的设备按丢失处理并重置传输，而不是让调用方阻塞整个命令超时。</para>
+    /// </summary>
+    private const int AbortDrainTimeoutMs = 5000;
+
+    /// <summary>
     /// Payload bytes received after a terminal frame of the previous response and not yet
     /// consumed. Fastboot replies are packet-framed on the wire, so keeping the remainder
     /// resynchronizes the stream instead of attributing stale bytes to the next command.

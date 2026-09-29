@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using System.Runtime.ExceptionServices;
 using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Fastboot.Transport;
@@ -17,7 +18,7 @@ internal sealed class FastbootTcpTransport : ICommTransport
     private readonly SemaphoreSlim _ioLock = new(1, 1);
     private readonly FastbootTcpFrames _frames = new();
 
-    private TcpClient _client = new();
+    private TcpClient _client = CreateClient();
     private NetworkStream? _stream;
     private bool _disposed;
 
@@ -37,7 +38,57 @@ internal sealed class FastbootTcpTransport : ICommTransport
     /// Gets a value indicating whether the transport is currently connected.
     /// <para>获取传输当前是否已连接。</para>
     /// </summary>
-    public bool IsConnected => !_disposed && _stream is not null;
+    /// <value>
+    /// <see langword="true"/> while the transport is not disposed, a network stream is held and the
+    /// socket still reports its peer as connected. The socket probe matters because a fastboot target
+    /// that reboots away closes its end without this side noticing until the next read, and callers use
+    /// this property to decide whether a response can still arrive.
+    /// <para>传输未释放、持有网络流且套接字仍报告对端已连接时为 <see langword="true"/>。套接字探测很关键：
+    /// 重启离开的 fastboot 目标会关闭自己那一端，而本端要到下一次读取才会察觉；调用方用该属性判断是否
+    /// 仍可能收到响应。</para>
+    /// </value>
+    public bool IsConnected
+    {
+        get
+        {
+            var stream = _stream;
+            var client = _client;
+            if (_disposed || stream is null || client is null)
+            {
+                return false;
+            }
+
+            try
+            {
+                var socket = client.Client;
+                if (socket is null || !client.Connected)
+                {
+                    return false;
+                }
+
+                return !socket.Poll(0, SelectMode.SelectRead) || socket.Available > 0;
+            }
+            catch (SocketException)
+            {
+                return false;
+            }
+            catch (ObjectDisposedException)
+            {
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets whether Nagle's algorithm is disabled on the underlying socket.
+    /// <para>获取底层套接字是否已禁用 Nagle 算法。</para>
+    /// </summary>
+    /// <value><see langword="true"/> while the socket sends every write immediately instead of coalescing
+    /// small writes. Fastboot frames write an 8-byte length prefix and its payload as two separate stream
+    /// writes, so a delayed second write costs one extra round trip per command.
+    /// <para>套接字立即发送每次写入而不是合并小写入时为 <see langword="true"/>。fastboot 帧把 8 字节长度
+    /// 前缀与其负载分两次流写入，因此第二次写入被延迟会让每条命令多付一次往返。</para></value>
+    internal bool NoDelay => _client.NoDelay;
 
     /// <summary>
     /// Initializes a new <see cref="FastbootTcpTransport"/> and performs the fastboot TCP handshake.
@@ -83,7 +134,7 @@ internal sealed class FastbootTcpTransport : ICommTransport
                 return;
             }
 
-            _client = new TcpClient();
+            _client = CreateClient();
             InitializeProtocol(HandshakeTimeoutMs);
         }
         finally
@@ -109,7 +160,7 @@ internal sealed class FastbootTcpTransport : ICommTransport
             _stream?.Dispose();
             _client.Dispose();
             _stream = null;
-            _client = new TcpClient();
+            _client = CreateClient();
             _frames.Reset();
         }
         finally
@@ -311,16 +362,7 @@ internal sealed class FastbootTcpTransport : ICommTransport
         _client.SendTimeout = DefaultIoTimeoutMs;
         try
         {
-            var connectTask = _client.ConnectAsync(Host, Port);
-            if (!connectTask.Wait(connectTimeoutMs))
-            {
-                throw new TimeoutException($"Fastboot TCP handshake failed: connect timeout after {connectTimeoutMs} ms.");
-            }
-
-            if (connectTask.IsFaulted)
-            {
-                throw connectTask.Exception?.GetBaseException() ?? new SocketException((int)SocketError.ConnectionRefused);
-            }
+            ConnectSocket(connectTimeoutMs);
 
             var stream = _client.GetStream();
             _stream = stream;
@@ -332,11 +374,55 @@ internal sealed class FastbootTcpTransport : ICommTransport
         catch
         {
             _client.Dispose();
-            _client = new TcpClient();
+            _client = CreateClient();
             _stream = null;
             throw;
         }
     }
+
+    /// <summary>
+    /// Establishes the TCP connection within <paramref name="connectTimeoutMs"/>, reporting a timeout
+    /// and a connect failure as two distinct outcomes. The failure is rethrown unwrapped so callers can
+    /// inspect its type: a refused connection means nothing is listening on the port, which the debug
+    /// bridge routing rules treat as "no server here", while a timeout means a host answered nothing and
+    /// must not be read the same way. <c>Task.Wait(int)</c> cannot express that distinction because it
+    /// rethrows the fault as an <see cref="AggregateException"/> and the faulted branch after it is
+    /// unreachable.
+    /// <para>在 <paramref name="connectTimeoutMs"/> 内建立 TCP 连接，并把超时与连接失败报告为两种不同的
+    /// 结果。失败以未包裹的形式重抛，以便调用方检查其类型：连接被拒绝意味着端口上没有监听者，调试桥路由
+    /// 规则据此判定“此处没有 server”；而超时意味着主机毫无应答，两者不可混同。<c>Task.Wait(int)</c> 无法
+    /// 表达该区分，因为它把故障重抛为 <see cref="AggregateException"/>，其后判断故障的分支永远不可达。</para>
+    /// </summary>
+    /// <param name="connectTimeoutMs">Connect deadline in milliseconds. <para>连接截止时间（毫秒）。</para></param>
+    /// <exception cref="TimeoutException">The peer did not complete the TCP handshake in time. <para>对端未在时限内完成 TCP 握手。</para></exception>
+    /// <exception cref="SocketException">The connect failed, with <see cref="SocketException.SocketErrorCode"/> naming the cause.
+    /// <para>连接失败，<see cref="SocketException.SocketErrorCode"/> 指出原因。</para></exception>
+    private void ConnectSocket(int connectTimeoutMs)
+    {
+        var connectTask = _client.ConnectAsync(Host, Port);
+        try
+        {
+            if (!connectTask.Wait(connectTimeoutMs))
+            {
+                _ = connectTask.ContinueWith(static task => _ = task.Exception,
+                    CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                throw new TimeoutException($"Fastboot TCP handshake failed: connect timeout after {connectTimeoutMs} ms.");
+            }
+        }
+        catch (AggregateException ex)
+        {
+            ExceptionDispatchInfo.Capture(ex.GetBaseException()).Throw();
+        }
+    }
+
+    /// <summary>
+    /// Creates a TCP client with Nagle's algorithm disabled. Fastboot frames write an 8-byte length
+    /// prefix and its payload as two separate stream writes, so Nagle delays the second until the first
+    /// is acknowledged and every command costs an extra round trip.
+    /// <para>创建禁用 Nagle 算法的 TCP 客户端。fastboot 帧把 8 字节长度前缀与其负载分两次流写入，
+    /// 因此 Nagle 会把第二次写入推迟到第一次被确认之后，每条命令都多付一次往返。</para>
+    /// </summary>
+    private static TcpClient CreateClient() => new() { NoDelay = true };
 
     private NetworkStream GetConnectedStream()
     {

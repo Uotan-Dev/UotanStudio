@@ -92,8 +92,18 @@ internal sealed class RkBootImage
     public uint SupportChip { get; private set; }
 
     /// <summary>
-    /// Gets whether the image is RC4 encrypted (ucRc4Flag). <para>获取镜像是否 RC4 加密（ucRc4Flag）。</para>
+    /// Gets whether the image is RC4 encrypted (ucRc4Flag). Callers must treat a set flag as fatal:
+    /// no RC4 segment decryption exists in this repository, and entry payloads are transmitted
+    /// verbatim, so <see cref="RkdlSession.DownloadBootLoader"/> rejects such an image instead of
+    /// sending ciphertext that the device would boot as garbage.
+    /// <para>获取镜像是否 RC4 加密（ucRc4Flag）。调用方必须把置位的标志视为致命错误：本仓库没有
+    /// 任何 RC4 段解密实现，且条目负载是原样传输的，因此 <see cref="RkdlSession.DownloadBootLoader"/>
+    /// 会拒绝这类镜像，而不是发送设备会当成垃圾启动的密文。</para>
     /// </summary>
+    /// <value><c>true</c> when ucRc4Flag (byte 44 of the loader header) is non-zero; such images are
+    /// rejected by the download path rather than decrypted.
+    /// <para>当 ucRc4Flag（loader 头第 44 字节）非零时为 <c>true</c>；此类镜像在下载路径被拒绝，
+    /// 而不是被解密。</para></value>
     public bool Rc4Enabled { get; private set; }
 
     /// <summary>
