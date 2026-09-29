@@ -104,8 +104,8 @@ public static class ElfTool
         public ushort ProgramHeaderCount { get; set; }
 
         /// <summary>
-        /// Section header count read from offset 46 for 32-bit and offset 58 for 64-bit images.
-        /// <para>节头数量：32 位取偏移 46，64 位取偏移 58。</para>
+        /// Section header count read from offset 48 for 32-bit and offset 60 for 64-bit images.
+        /// <para>节头数量：32 位取偏移 48，64 位取偏移 60。</para>
         /// </summary>
         /// <value>
         /// Count as recorded in the header; it bounds the enumeration performed by
@@ -275,13 +275,13 @@ public static class ElfTool
             {
                 result.EntryPoint = ReadUInt32LE(data, 24);
                 result.ProgramHeaderCount = ReadUInt16LE(data, 44);
-                result.SectionHeaderCount = ReadUInt16LE(data, 46);
+                result.SectionHeaderCount = ReadUInt16LE(data, 48);
             }
             else
             {
                 result.EntryPoint = ReadUInt64LE(data, 24);
                 result.ProgramHeaderCount = ReadUInt16LE(data, 56);
-                result.SectionHeaderCount = ReadUInt16LE(data, 58);
+                result.SectionHeaderCount = ReadUInt16LE(data, 60);
             }
 
             result.IsValid = true;

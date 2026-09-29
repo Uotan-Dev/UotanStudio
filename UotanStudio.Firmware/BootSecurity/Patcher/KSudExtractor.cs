@@ -500,14 +500,19 @@ public static partial class Extractor
     }
 
     /// <summary>
-    /// <para>净化资源名称：把反斜杠归一化为正斜杠、去掉路径前缀并移除无效字符。</para>
-    /// Sanitizes an asset name by normalizing backslashes to forward slashes, stripping path prefixes and removing invalid characters.
+    /// <para>净化资源名称：把反斜杠归一化为正斜杠、去掉前导分隔符，再把其余分隔符与非法字符压平为下划线。</para>
+    /// Sanitizes an asset name by normalizing backslashes to forward slashes, stripping leading separators, then
+    /// flattening every remaining separator together with the other invalid characters into underscores.
     /// </summary>
     /// <param name="name">Raw asset name as stored in the table entry.
     /// <para>表中记录的资源原始名称。</para></param>
-    /// <returns>The name with forward slashes, no leading path separator, and every character outside
-    /// <c>A-Za-z0-9._+@%-</c> replaced by <c>_</c>.
-    /// <para>使用正斜杠、去掉前导分隔符，并将 <c>A-Za-z0-9._+@%-</c> 之外的字符替换为 <c>_</c> 后的名称。</para></returns>
+    /// <returns>A single flat file name: leading separators are removed and every remaining character outside
+    /// <c>A-Za-z0-9._+@%-</c>, including any directory separator, is replaced by <c>_</c>. Because no separator
+    /// survives, the result can name a file inside one directory but can never address a path outside it; the dots of
+    /// a <c>..</c> segment are kept and simply lose their separators.
+    /// <para>一个扁平的文件名：去掉前导分隔符，其余每个不在 <c>A-Za-z0-9._+@%-</c> 内的字符（含任何目录分隔符）
+    /// 替换为 <c>_</c>。由于没有分隔符得以保留，结果只能命名某个目录内的文件，绝不能指向该目录之外的路径；
+    /// <c>..</c> 段中的点会被保留，只是失去其分隔符。</para></returns>
     public static string SanitizeName(string name)
     {
         name = name.Replace('\\', '/').TrimStart('/');

@@ -11,19 +11,25 @@ public static partial class FstabVerificationEditor
     /// <para>以不区分大小写的匹配从 fstab 文本中移除 verity 与强制加密挂载标记。</para>
     /// </summary>
     /// <param name="text">Full fstab text to patch. <para>要打补丁的完整 fstab 文本。</para></param>
-    /// <param name="disableVerity">When <see langword="true"/>, a first pass removes <c>avb</c> and
-    /// <c>verify</c> flags (with their values) while keeping the delimiter, then a second pass strips
-    /// <c>,avb_keys=…</c> options.
-    /// <para>为 <see langword="true"/> 时，先移除 <c>avb</c> 与 <c>verify</c> 标记（含其取值）并保留分隔符，
-    /// 再由第二遍剥离 <c>,avb_keys=…</c> 选项。</para></param>
+    /// <param name="disableVerity">When <see langword="true"/>, a first pass removes whole
+    /// <c>,avb_keys=…</c> options, then a second pass removes <c>avb</c> and <c>verify</c> flags with their values.
+    /// The key option is removed first so the generic <c>avb</c> rule cannot consume only its <c>avb</c> prefix and
+    /// strand <c>_keys=…</c>.
+    /// <para>为 <see langword="true"/> 时，先整段移除 <c>,avb_keys=…</c> 选项，再移除 <c>avb</c> 与
+    /// <c>verify</c> 标记（含其取值）。键选项先移除，通用 <c>avb</c> 规则才不会只吃掉它的 <c>avb</c> 前缀
+    /// 而把 <c>_keys=…</c> 残留下来。</para></param>
     /// <param name="disableForceEncryption">When <see langword="true"/>, removes <c>forceencrypt</c>,
     /// <c>fileencryption</c> and <c>forcefdeorfbe</c> flags with their values.
     /// <para>为 <see langword="true"/> 时移除 <c>forceencrypt</c>、<c>fileencryption</c> 与
     /// <c>forcefdeorfbe</c> 标记及其取值。</para></param>
     /// <returns>
-    /// The patched text; flag removal keeps the surrounding field delimiter, and unflagged content is
-    /// returned unchanged.
-    /// <para>打补丁后的文本；移除标记时保留周围的字段分隔符，未含标记的内容原样返回。</para>
+    /// The patched text. Only whole <c>,</c>- or whitespace-delimited tokens whose name is exactly one of the target
+    /// flags are removed, so unrelated flags such as <c>avbsomething=1</c>, <c>fileencryptionmode=x</c> or
+    /// <c>verifyatboot</c> survive untouched; the delimiter that preceded a removed flag is kept, and a record
+    /// separator is never swallowed, so the line structure of the fstab is preserved.
+    /// <para>打补丁后的文本。只有名称恰好等于目标标记、且以 <c>,</c> 或空白分隔的完整 token 会被移除，
+    /// 因此 <c>avbsomething=1</c>、<c>fileencryptionmode=x</c>、<c>verifyatboot</c> 这类无关标记原样保留；
+    /// 被移除标记前的分隔符得以保留，记录分隔符绝不会被吞掉，因此 fstab 的行结构不变。</para>
     /// </returns>
     /// <exception cref="ArgumentNullException">The text is <see langword="null"/>.
     /// <para>文本为 <see langword="null"/>。</para></exception>
@@ -33,8 +39,8 @@ public static partial class FstabVerificationEditor
         var updated = text;
         if (disableVerity)
         {
-            updated = VerityFlagRegex().Replace(updated, "$1");
             updated = AvbKeysRegex().Replace(updated, string.Empty);
+            updated = VerityFlagRegex().Replace(updated, "$1");
         }
         if (disableForceEncryption)
         {
@@ -43,12 +49,12 @@ public static partial class FstabVerificationEditor
         return updated;
     }
 
-    [GeneratedRegex(@"(?i)([, ]|^)(avb|verify)(=[^, ]+)?")]
+    [GeneratedRegex(@"(?i)([,\s]|^)(avb|verify)(=[^,\s]*)?(?=[,\s]|$)")]
     private static partial Regex VerityFlagRegex();
 
-    [GeneratedRegex(@"(?i),avb_keys=[^, ]+")]
+    [GeneratedRegex(@"(?i),avb_keys=[^,\s]*")]
     private static partial Regex AvbKeysRegex();
 
-    [GeneratedRegex(@"(?i)([, ]|^)(forceencrypt|fileencryption|forcefdeorfbe)(=[^, ]+)?")]
+    [GeneratedRegex(@"(?i)([,\s]|^)(forceencrypt|fileencryption|forcefdeorfbe)(=[^,\s]*)?(?=[,\s]|$)")]
     private static partial Regex EncryptionFlagRegex();
 }

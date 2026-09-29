@@ -47,4 +47,15 @@ public interface IRepackMetadataProvider
     /// </returns>
     Task CaptureRepackMetadataAsync(RepackMetadata metadata, string sourcePath, string outputDirectory,
         string metadataDirectory, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    /// <summary>
+    /// Gets whether the format captures its rebuild configuration from the source container alone, so that
+    /// <see cref="UnpackOptions.MetadataOnly"/> can publish metadata without writing partition files.
+    /// Formats whose capture reads the already extracted directory keep the default <see langword="false"/>.
+    /// <para>获取该格式是否只依赖来源容器即可完成重建配置捕获，从而允许 <see cref="UnpackOptions.MetadataOnly"/>
+    /// 在不写出分区文件的情况下发布元数据。捕获过程会读取已解出目录的格式保持默认的 <see langword="false"/>。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when a metadata-only unpack is complete and truthful, <see langword="false"/> otherwise.
+    /// <para>仅元数据解包既完整又属实时为 <see langword="true"/>，否则为 <see langword="false"/>。</para></value>
+    bool SupportsMetadataOnlyUnpack => false;
 }

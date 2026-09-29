@@ -4655,10 +4655,6 @@ UotanStudio.Firmware.VendorFirmware.NTPi.NtpiFormatHandler.UnpackAsync(string! f
 UotanStudio.Firmware.VendorFirmware.NTPi.NtpiReader
 UotanStudio.Firmware.VendorFirmware.NTPi.NtpiReader.Dispose() -> void
 UotanStudio.Firmware.VendorFirmware.NTPi.NtpiReader.NtpiReader(UotanStudio.Firmware.VendorFirmware.NTPi.ICryptoProvider! cryptoProvider, UotanStudio.Firmware.VendorFirmware.NTPi.ILzma2Compressor! compressor) -> void
-UotanStudio.Firmware.VendorFirmware.NTPi.NtpiReader.Parse(string! filePath) -> UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiParsedFile!
-UotanStudio.Firmware.VendorFirmware.NTPi.NtpiReader.ReadInfo(string! filePath) -> UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiFileInfo!
-UotanStudio.Firmware.VendorFirmware.NTPi.NtpiReader.Unpack(string! filePath, string! outputDir, System.IProgress<UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiExtractionProgress!>? progress = null, System.Func<string!, bool>? fileFilter = null) -> void
-UotanStudio.Firmware.VendorFirmware.NTPi.NtpiReader.Unpack(string! filePath, string! outputDir, UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiUnpackOptions! options, System.IProgress<UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiExtractionProgress!>? progress = null, System.Func<string!, bool>? fileFilter = null) -> void
 UotanStudio.Firmware.VendorFirmware.NTPi.UnsupportedVersionException
 UotanStudio.Firmware.VendorFirmware.NTPi.UnsupportedVersionException.UnsupportedVersionException(ulong major, ulong minor, ulong patch) -> void
 UotanStudio.Firmware.VendorFirmware.NTPi.VersionKeyProvider

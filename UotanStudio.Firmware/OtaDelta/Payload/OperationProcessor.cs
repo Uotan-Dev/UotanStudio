@@ -1,5 +1,6 @@
 using System.Buffers;
 using UotanStudio.Firmware.Compression;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Diff;
 using UotanStudio.Firmware.OtaDelta.Diff.Zucchini;
@@ -11,16 +12,65 @@ namespace UotanStudio.Firmware.OtaDelta.Payload;
 
 internal static class OperationProcessor
 {
+    /// <summary>
+    /// Applies one source-dependent delta operation: it maps the operation's source extents over
+    /// <paramref name="source"/>, verifies the operation's data blob, decodes the codec named by
+    /// <paramref name="op"/> and writes the result into the destination extents of <paramref name="target"/>.
+    /// <para>应用一个源依赖的差分操作：把操作的源 extent 映射到 <paramref name="source"/> 上，校验操作的数据块，
+    /// 按 <paramref name="op"/> 指定的编解码器解码，并把结果写入 <paramref name="target"/> 的目标 extent。</para>
+    /// </summary>
+    /// <param name="op">Manifest entry naming the codec, the source and destination extents and both SHA-256 digests.
+    /// <para>清单项，指明编解码器、源与目标 extent 以及两个 SHA-256 摘要。</para></param>
+    /// <param name="source">Base image the source extents address; it is read, never written.
+    /// <para>源 extent 所指向的基座镜像；只读取，不写入。</para></param>
+    /// <param name="target">Temporary output file the destination extents are written into; the caller publishes it.
+    /// <para>写入目标 extent 的临时输出文件；由调用方负责发布。</para></param>
+    /// <param name="payload">Payload stream holding the operation's compressed blob at
+    /// <c><paramref name="baseOffset"/> + <see cref="InstallOperation.DataOffset"/></c>.
+    /// <para>载荷流，其压缩数据块位于 <c><paramref name="baseOffset"/> + <see cref="InstallOperation.DataOffset"/></c>。</para></param>
+    /// <param name="baseOffset">Absolute byte offset in <paramref name="payload"/> where operation data begins.
+    /// <para><paramref name="payload"/> 中操作数据起始的绝对字节偏移。</para></param>
+    /// <param name="blockSize">Manifest block size converting extent blocks to bytes; it must be nonzero.
+    /// <para>清单块大小，用于把 extent 块数换算为字节；必须非零。</para></param>
+    /// <param name="ct">Checked between codec chunks and inside the copy loops.
+    /// <para>在编解码块之间与复制循环内部检查。</para></param>
+    /// <param name="sourceAlreadyVerified">
+    /// <see langword="true"/> when the caller has already proven every byte of <paramref name="source"/> against
+    /// <see cref="PartitionInfo.Hash"/>, so the per-operation source digest pass is redundant and is skipped; the
+    /// operation's own data-blob digest and the partition-level destination digest are enforced either way.
+    /// <see langword="false"/> keeps that pass, which then reads each source extent an extra time. When both source
+    /// digests are present and disagree, this flag makes the whole-partition digest authoritative.
+    /// <para>当调用方已用 <see cref="PartitionInfo.Hash"/> 证明 <paramref name="source"/> 的每个字节时为
+    /// <see langword="true"/>，此时逐操作的源摘要趟是冗余的，会被跳过；无论取值如何，操作自身的数据块摘要与分区级
+    /// 目标摘要仍会被强制校验。为 <see langword="false"/> 时保留该趟，于是每个源 extent 会多读一遍。
+    /// 两个源摘要同时存在且不一致时，该标记使整分区摘要具有权威性。</para>
+    /// </param>
+    /// <param name="byteProgress">Optional per-partition byte progress sink fed by the destination extent writer.
+    /// <para>可选的分区级字节进度回调，由目标 extent 写入器投喂。</para></param>
+    /// <exception cref="InvalidDataException">A source extent leaves the base image, a binary patch declares invalid
+    /// lengths, or a non-bsdiff codec exceeds its 256 MiB operation ceiling.
+    /// <para>某个源 extent 越出基座镜像、二进制补丁声明的长度非法，或非 bsdiff 编解码器超出其 256 MiB 操作上限。</para></exception>
+    /// <exception cref="PartitionExtractionException">The operation's data blob is truncated or its SHA-256 digest
+    /// disagrees with the manifest. <para>操作的数据块被截断，或其 SHA-256 摘要与清单不一致。</para></exception>
+    /// <exception cref="PayloadUnsupportedOperationException">The operation names a codec this processor cannot apply.
+    /// <para>操作指定了本处理器无法应用的编解码器。</para></exception>
+    /// <exception cref="ZucchiniException">A Zucchini container is malformed, fails either CRC check, or declares an
+    /// executable type other than NoOp. <para>Zucchini 容器畸形、任一 CRC 校验失败，或声明了 NoOp 之外的可执行类型。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="ct"/> was cancelled.
+    /// <para><paramref name="ct"/> 已被取消。</para></exception>
     internal static void ProcessDeltaOperation(InstallOperation op, Stream source, FileStream target,
-        Stream payload, ulong baseOffset, uint blockSize, CancellationToken ct, PartitionByteProgress? byteProgress = null)
+        Stream payload, ulong baseOffset, uint blockSize, CancellationToken ct,
+        bool sourceAlreadyVerified = false, PartitionByteProgress? byteProgress = null)
     {
         using var oldData = new ExtentReadStream(source, op.SrcExtents, blockSize);
-        using (var hash = new VerifyingReadStream(oldData, op.SrcSha256Hash.ToByteArray()))
+        if (!sourceAlreadyVerified)
         {
-            UotanStudio.Firmware.OtaDelta.Diff.BinaryDeltaPatch.CopyExactly(hash, Stream.Null, oldData.Length, ct);
-            hash.Complete();
+            using var sourceHash = new VerifyingReadStream(oldData, op.SrcSha256Hash.ToByteArray());
+            UotanStudio.Firmware.OtaDelta.Diff.BinaryDeltaPatch.CopyExactly(sourceHash, Stream.Null, oldData.Length, ct);
+            sourceHash.Complete();
+            oldData.Position = 0;
         }
-        oldData.Position = 0;
+
         using var output = new ExtentWriteStream(target, op.DstExtents, blockSize, requireExactLength: true, byteProgress: byteProgress);
         if (op.Type is InstallOperation.Types.Type.SourceCopy or InstallOperation.Types.Type.Move)
         {

@@ -268,6 +268,18 @@ public sealed class QualcommMetadataTests
     }
 
     [Fact]
+    public void IsQualcommElf_StaticImageWithValidHashSegment_AcceptsAndSharedObjectRejects()
+    {
+        var mbn = QualcommMetadataFixture.CreateMbn(6, 0, 120);
+        using var staticImage = new MemoryStream(QualcommMetadataFixture.CreateElf(new byte[16], mbn));
+        using var sharedObject = new MemoryStream(
+            QualcommMetadataFixture.CreateElf(new byte[16], mbn, withDynamicSegment: true));
+
+        Assert.True(QualcommImageProbe.IsQualcommElf(staticImage, TestContext.Current.CancellationToken));
+        Assert.False(QualcommImageProbe.IsQualcommElf(sharedObject, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public void IsQualcommElf_ValidAndTruncatedHashSegment_RestoresPositionAndRejectsTruncation()
     {
         var data = QualcommMetadataFixture.CreateElf(new byte[16], QualcommMetadataFixture.CreateMbn(6, 0, 120));
@@ -395,7 +407,7 @@ internal static class QualcommMetadataFixture
         }
     }
 
-    internal static byte[] CreateElf(byte[] payload, byte[]? mbn = null)
+    internal static byte[] CreateElf(byte[] payload, byte[]? mbn = null, bool withDynamicSegment = false)
     {
         var hashOffset = 512 + payload.Length;
         var data = new byte[hashOffset + (mbn?.Length ?? 0)];
@@ -408,7 +420,8 @@ internal static class QualcommMetadataFixture
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(32), 64);
         BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(52), 64);
         BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(54), 56);
-        BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(56), mbn is null ? (ushort)1 : (ushort)2);
+        BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(56),
+            (ushort)(1 + (mbn is null ? 0 : 1) + (withDynamicSegment ? 1 : 0)));
         Word(data, 64, 1);
         Word(data, 68, 5);
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(72), 512);
@@ -423,6 +436,16 @@ internal static class QualcommMetadataFixture
             BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(128), (ulong)hashOffset);
             BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(152), (ulong)mbn.Length);
             mbn.CopyTo(data, hashOffset);
+        }
+        if (withDynamicSegment)
+        {
+            var entry = 64 + 56 * (mbn is null ? 1 : 2);
+            Word(data, entry, 2);
+            Word(data, entry + 4, 6);
+            BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(entry + 8), 512);
+            BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(entry + 32), (ulong)payload.Length);
+            BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(entry + 40), (ulong)payload.Length);
+            BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(entry + 48), 8);
         }
         return data;
     }

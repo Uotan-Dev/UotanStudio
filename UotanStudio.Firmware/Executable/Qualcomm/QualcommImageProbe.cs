@@ -6,8 +6,12 @@ namespace UotanStudio.Firmware.Executable.Qualcomm;
 /// <para>识别 Qualcomm ELF 元数据，不计算载荷摘要或访问设备。</para></summary>
 public static class QualcommImageProbe
 {
-    /// <summary>Checks for a bounded ELF containing exactly one structurally valid MI_PBT hash segment.
-    /// <para>检查有界 ELF 是否包含恰好一个结构有效的 MI_PBT 哈希段。</para></summary>
+    private const uint ProgramDynamicSegment = 2;
+    private const uint ProgramInterpreterSegment = 3;
+
+    /// <summary>Checks for a bounded, statically linked ELF containing exactly one structurally valid MI_PBT
+    /// hash segment; program images that declare a dynamic table or interpreter are rejected.
+    /// <para>检查有界、静态链接的 ELF 是否包含恰好一个结构有效的 MI_PBT 哈希段；声明动态表或解释器的程序镜像会被拒绝。</para></summary>
     /// <param name="stream">Readable seekable stream; its position is restored. <para>可读可寻址流；恢复原位置。</para></param>
     /// <param name="cancellationToken">Cancels metadata reads. <para>取消元数据读取。</para></param>
     /// <returns>True for recognized Qualcomm structure, not verified signatures.
@@ -24,6 +28,10 @@ public static class QualcommImageProbe
         {
             var elf = ElfReader.Read(stream, cancellationToken);
             if (!elf.Header.IsLittleEndian)
+            {
+                return false;
+            }
+            if (elf.Segments.Any(segment => segment.Type is ProgramDynamicSegment or ProgramInterpreterSegment))
             {
                 return false;
             }

@@ -1,7 +1,10 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Diff;
+using UotanStudio.Firmware.OtaDelta.Diff.Zucchini;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
@@ -11,6 +14,10 @@ namespace UotanStudio.Firmware.OtaDelta.Payload;
 internal class PayloadExtractor
 {
     internal const long DefaultMaximumPartitionBytes = 64L * 1024 * 1024 * 1024;
+
+    /// <summary>Buffer size in bytes for the file streams created during partition extraction.</summary>
+    /// <para>分区提取期间创建的文件流所用的缓冲区大小（字节）。</para>
+    private const int CopyBufferSize = 81920;
 
     private readonly long maximumPartitionBytes;
 
@@ -42,6 +49,26 @@ internal class PayloadExtractor
         InstallOperation.Types.Type.Lz4diffBsdiff,
         InstallOperation.Types.Type.Lz4diffPuffdiff
     ];
+
+    /// <summary>
+    /// Dedicated lock objects keyed by the shared payload stream, so partitions extracting concurrently from one stream serialize on a gate that is never the stream itself.
+    /// <para>以共享载荷流为键的专用锁对象，使并发提取同一流的分区在绝非流本身的门锁上串行化。</para>
+    /// </summary>
+    private static readonly ConditionalWeakTable<Stream, object> SharedPayloadGates = new();
+
+    /// <summary>
+    /// Returns the dedicated lock object shared by all partitions extracting from the given shared payload stream.
+    /// <para>返回由从给定共享载荷流提取的所有分区共享的专用锁对象。</para>
+    /// </summary>
+    /// <param name="stream">
+    /// Shared payload stream the gate is keyed by.
+    /// <para>作为门锁键的共享载荷流。</para>
+    /// </param>
+    /// <returns>
+    /// The lock object shared for this stream.
+    /// <para>该流共享的锁对象。</para>
+    /// </returns>
+    private static object GetSharedPayloadGate(Stream stream) => SharedPayloadGates.GetValue(stream, static _ => new object());
 
     /// <summary>
     /// Extracts a single partition from the payload stream to an output file.
@@ -83,8 +110,55 @@ internal class PayloadExtractor
     /// </param>
     /// <param name="operationWorkers">Optional cap on concurrently processed operations within this partition; when absent, the shared worker count applies.
     /// <para>可选的本分区内并发操作数上限；未提供时采用共享的工作者数量。</para></param>
+    /// <remarks>
+    /// The operation-type classification and the Zucchini executable-type preflight both run before the temporary
+    /// output is created, so an operation this library cannot apply never leaves a partial image behind. The preflight
+    /// re-reads and re-decodes each Zucchini blob once, a bounded cost paid to fail the whole partition before any
+    /// destination byte exists; a non-seekable payload stream skips it and the applying path still rejects a non-NoOp
+    /// element later. The base image is opened for random access because a source extent is read once sequentially by
+    /// the verifying pass and then re-read at arbitrary offsets by the binary-patch control tuples. When the manifest
+    /// carries a whole-partition source digest and it verified, the per-operation source digest pass is skipped as
+    /// redundant.
+    /// <para>操作类型分类与 Zucchini 可执行类型预扫描都在临时输出创建之前运行，因此本库无法应用的操作绝不会留下半成品
+    /// 镜像。预扫描会把每个 Zucchini 数据块多读取并多解码一次，这是为了在产生任何目标字节之前就让整个分区失败而付出的
+    /// 有界代价；不可定位的载荷流会跳过预扫描，此时应用路径仍会在稍后拒绝非 NoOp 元素。基座镜像以随机访问方式打开，
+    /// 因为源 extent 先被校验趟顺序读一遍，随后又被二进制补丁的控制元组以任意偏移重读。当清单携带整分区源摘要且校验
+    /// 通过时，逐操作的源摘要趟作为冗余项被跳过。</para>
+    /// </remarks>
     private void ExtractPartition(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize, CancellationToken cancellationToken, IReadOnlyDictionary<string, string>? sourceImages, IProgress<(long Processed, long Total)>? byteProgress = null, Func<Stream>? openPayloadStream = null, int? operationWorkers = null)
+        => ExtractPartitionCore(new PartitionExtractionRequest(
+            partition,
+            outFilename,
+            stream,
+            baseOffset,
+            blockSize,
+            cancellationToken,
+            sourceImages,
+            byteProgress,
+            openPayloadStream,
+            operationWorkers));
+
+    /// <summary>
+    /// Runs a partition extraction from the bundled request.
+    /// <para>基于打包的提取请求执行分区提取。</para>
+    /// </summary>
+    /// <param name="request">
+    /// Bundled inputs of one partition extraction.
+    /// <para>单次分区提取的打包输入。</para>
+    /// </param>
+    private void ExtractPartitionCore(PartitionExtractionRequest request)
     {
+        var partition = request.Partition;
+        var outFilename = request.OutFilename;
+        var stream = request.Stream;
+        var baseOffset = request.BaseOffset;
+        var blockSize = request.BlockSize;
+        var cancellationToken = request.CancellationToken;
+        var sourceImages = request.SourceImages;
+        var byteProgress = request.ByteProgress;
+        var openPayloadStream = request.OpenPayloadStream;
+        var operationWorkers = request.OperationWorkers;
+
         ArgumentNullException.ThrowIfNull(partition);
         ArgumentNullException.ThrowIfNull(outFilename);
         if (stream is null && openPayloadStream is null)
@@ -102,10 +176,51 @@ internal class PayloadExtractor
         var totalSize = GetValidatedPartitionSize(partition, blockSize);
         var fullOutputPath = Path.GetFullPath(outFilename);
         Directory.CreateDirectory(Path.GetDirectoryName(fullOutputPath)!);
-        var tempPath = fullOutputPath + ".tmp-" + Guid.NewGuid().ToString("N");
+
+        var ownPayload = openPayloadStream is not null;
+        var streamLock = ownPayload ? new object() : GetSharedPayloadGate(stream!);
+
+        var parallelOps = new List<InstallOperation>();
+        var sequentialOps = new List<InstallOperation>();
+
+        foreach (var op in partition.Operations)
+        {
+            if (SequentialTypes.Contains(op.Type))
+            {
+                sequentialOps.Add(op);
+            }
+            else if (ParallelizableTypes.Contains(op.Type))
+            {
+                parallelOps.Add(op);
+            }
+            else throw new PayloadUnsupportedOperationException($"Unsupported operation type: {op.Type}", op.Type.ToString());
+        }
+
+        var needsBase = partition.Operations.Any(op => IsSourceDependent(op.Type));
+        string? baseImagePath = null;
+        if (sourceImages != null && sourceImages.TryGetValue(partition.PartitionName, out var path) && !string.IsNullOrWhiteSpace(path))
+        {
+            baseImagePath = path;
+        }
+
+        if (needsBase && baseImagePath == null)
+        {
+            throw new PartitionExtractionException(
+                $"Partition '{partition.PartitionName}' contains source-dependent operations but no base image was provided. " +
+                "Provide a source payload or base image via sourcePayloadPath/sourceImages.",
+                partition.PartitionName);
+        }
+
+        if (ZucchiniExecutableTypeScanner.HasZucchiniOperation(sequentialOps) && (ownPayload || stream!.CanSeek))
+        {
+            using var preflightStream = ownPayload ? openPayloadStream!() : new IndependentReadStream(stream!, streamLock);
+            ZucchiniExecutableTypeScanner.ScanOperations(preflightStream, sequentialOps, baseOffset, cancellationToken);
+        }
+
+        var tempPath = TempFileHelper.CreateAdjacentPath(fullOutputPath);
         try
         {
-            using (var outFile = new FileStream(tempPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920))
+            using (var outFile = new FileStream(tempPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, CopyBufferSize))
             {
                 if (totalSize > 0)
                 {
@@ -116,26 +231,11 @@ internal class PayloadExtractor
                     ? null
                     : new PartitionByteProgress(byteProgress, totalSize);
 
-                var needsBase = partition.Operations.Any(op => IsSourceDependent(op.Type));
-                string? baseImagePath = null;
-                if (sourceImages != null && sourceImages.TryGetValue(partition.PartitionName, out var path) && !string.IsNullOrWhiteSpace(path))
-                {
-                    baseImagePath = path;
-                }
-
-                if (needsBase && baseImagePath == null)
-                {
-                    throw new PartitionExtractionException(
-                        $"Partition '{partition.PartitionName}' contains source-dependent operations but no base image was provided. " +
-                        "Provide a source payload or base image via sourcePayloadPath/sourceImages. " +
-                        $"分区 '{partition.PartitionName}' 包含源依赖操作但未提供基座镜像；请通过 sourcePayloadPath 或 sourceImages 提供基座。",
-                        partition.PartitionName);
-                }
-
                 using var baseStream = baseImagePath is null
                     ? null
-                    : new FileStream(baseImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
+                    : new FileStream(baseImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferSize, FileOptions.RandomAccess);
 
+                var sourceAlreadyVerified = false;
                 if (baseStream is not null)
                 {
                     baseStream.Position = 0;
@@ -155,6 +255,7 @@ internal class PayloadExtractor
                         BinaryDeltaPatch.CopyExactly(hash, outFile, Math.Min(baseStream.Length, totalSize), cancellationToken);
                         BinaryDeltaPatch.CopyExactly(hash, Stream.Null, baseStream.Length - Math.Min(baseStream.Length, totalSize), cancellationToken);
                         hash.Complete();
+                        sourceAlreadyVerified = sourceInfo.Hash.Length > 0;
                     }
                     else
                     {
@@ -164,24 +265,6 @@ internal class PayloadExtractor
                 }
 
                 object writeLock = new();
-                var ownPayload = openPayloadStream is not null;
-                object streamLock = ownPayload ? new object() : stream!;
-
-                var parallelOps = new List<InstallOperation>();
-                var sequentialOps = new List<InstallOperation>();
-
-                foreach (var op in partition.Operations)
-                {
-                    if (SequentialTypes.Contains(op.Type))
-                    {
-                        sequentialOps.Add(op);
-                    }
-                    else if (ParallelizableTypes.Contains(op.Type))
-                    {
-                        parallelOps.Add(op);
-                    }
-                    else throw new PayloadUnsupportedOperationException($"Unsupported operation type: {op.Type}", op.Type.ToString());
-                }
 
                 if (ownPayload)
                 {
@@ -200,7 +283,7 @@ internal class PayloadExtractor
                     foreach (var op in sequentialOps)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        OperationProcessor.ProcessDeltaOperation(op, baseStream!, outFile, opStream, baseOffset, blockSize, cancellationToken, progressTracker);
+                        OperationProcessor.ProcessDeltaOperation(op, baseStream!, outFile, opStream, baseOffset, blockSize, cancellationToken, sourceAlreadyVerified, progressTracker);
                     }
                 }
                 else
@@ -218,7 +301,7 @@ internal class PayloadExtractor
                     foreach (var op in sequentialOps)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        OperationProcessor.ProcessDeltaOperation(op, baseStream!, outFile, deltaPayload, baseOffset, blockSize, cancellationToken, progressTracker);
+                        OperationProcessor.ProcessDeltaOperation(op, baseStream!, outFile, deltaPayload, baseOffset, blockSize, cancellationToken, sourceAlreadyVerified, progressTracker);
                     }
                 }
 
@@ -248,6 +331,10 @@ internal class PayloadExtractor
         {
             throw;
         }
+        catch (ZucchiniException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             throw new PartitionExtractionException(
@@ -260,6 +347,62 @@ internal class PayloadExtractor
             File.Delete(tempPath);
         }
     }
+
+    /// <summary>
+    /// Bundles the inputs of a single partition extraction so the internal extraction chain carries one request object.
+    /// <para>打包单次分区提取的全部输入，使内部提取链只携带一个请求对象。</para>
+    /// </summary>
+    /// <param name="Partition">
+    /// Manifest entry describing the partition's operations, block extents and hash metadata.
+    /// <para>描述该分区的操作、块 extent 与哈希元数据的清单项。</para>
+    /// </param>
+    /// <param name="OutFilename">
+    /// Destination image path; its directory is created on demand and the file is published only after the temporary output is complete.
+    /// <para>目标镜像路径；按需创建其目录，并且仅在临时输出完成后发布该文件。</para>
+    /// </param>
+    /// <param name="Stream">
+    /// Payload data stream holding the operation blobs; may be <see langword="null"/> when a payload factory is supplied.
+    /// <para>承载操作数据块的载荷流；提供载荷工厂时可为 <see langword="null"/>。</para>
+    /// </param>
+    /// <param name="BaseOffset">
+    /// Absolute byte offset in the payload stream where operation data begins.
+    /// <para>载荷流中操作数据起始的绝对字节偏移。</para>
+    /// </param>
+    /// <param name="BlockSize">
+    /// Block size declared by the manifest, in bytes; it must be nonzero.
+    /// <para>清单声明的块大小（字节），必须非零。</para>
+    /// </param>
+    /// <param name="CancellationToken">
+    /// Token checked before the run, around every operation and while copying the base image.
+    /// <para>在执行前、每个操作前后以及复制基座镜像时检查的令牌。</para>
+    /// </param>
+    /// <param name="SourceImages">
+    /// Base image path per partition name, used by source-dependent operations.
+    /// <para>按分区名索引的基座镜像路径，供源依赖操作使用。</para>
+    /// </param>
+    /// <param name="ByteProgress">
+    /// Optional per-partition byte progress sink reporting processed bytes against the validated partition total.
+    /// <para>可选的分区级字节进度回调，按已校验的分区总量上报已处理字节。</para>
+    /// </param>
+    /// <param name="OpenPayloadStream">
+    /// Optional factory opening a partition-exclusive read-only payload stream (disposed before return).
+    /// <para>可选的工厂，用于打开分区专属只读载荷流（返回前释放）。</para>
+    /// </param>
+    /// <param name="OperationWorkers">
+    /// Optional cap on concurrently processed operations within this partition.
+    /// <para>可选的本分区内并发操作数上限。</para>
+    /// </param>
+    private sealed record PartitionExtractionRequest(
+        PartitionUpdate Partition,
+        string OutFilename,
+        Stream Stream,
+        ulong BaseOffset,
+        uint BlockSize,
+        CancellationToken CancellationToken,
+        IReadOnlyDictionary<string, string>? SourceImages,
+        IProgress<(long Processed, long Total)>? ByteProgress,
+        Func<Stream>? OpenPayloadStream,
+        int? OperationWorkers);
 
     private long GetValidatedPartitionSize(PartitionUpdate partition, uint blockSize)
     {

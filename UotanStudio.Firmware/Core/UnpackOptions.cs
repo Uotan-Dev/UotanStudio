@@ -38,6 +38,17 @@ public sealed class UnpackOptions
     /// <para>为 <see langword="true"/> 时要求记录的校验和必须一致，为 <see langword="false"/> 时跳过检查。</para></value>
     public bool VerifyChecksums { get; set; }
 
+    /// <summary>Gets or sets whether unpacking publishes only the repack metadata and writes no partition files.
+    /// The mode is rejected instead of ignored when the handler reports no support through
+    /// <see cref="Repacking.IRepackMetadataProvider.SupportsMetadataOnlyUnpack"/>, because the caller would
+    /// otherwise receive files it did not ask for.
+    /// <para>获取或设置解包时是否只发布重打包元数据、不写出任何分区文件。当处理器未通过
+    /// <see cref="Repacking.IRepackMetadataProvider.SupportsMetadataOnlyUnpack"/> 声明支持时，该模式会被拒绝而非忽略，
+    /// 否则调用方会收到它并未要求的文件。</para></summary>
+    /// <value><see langword="true"/> to skip partition files, <see langword="false"/> to extract normally.
+    /// <para>为 <see langword="true"/> 时跳过分区文件写出，为 <see langword="false"/> 时按常规解包。</para></value>
+    public bool MetadataOnly { get; set; }
+
     /// <summary>
     /// Gets or sets the sink that receives percentage progress reports emitted while unpacking.
     /// <para>获取或设置接收解包过程百分比进度上报的回调对象。</para>

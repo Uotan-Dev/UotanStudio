@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.Core.Repacking;
 
@@ -496,8 +497,12 @@ public sealed class RepackMetadata
     /// </param>
     /// <param name="options">
     /// Unpack options; when <c>Overwrite</c> is disabled an existing metadata file fails the operation
-    /// before extraction, otherwise a pre-existing file must already be recognized metadata.
-    /// <para>解包选项；<c>Overwrite</c> 关闭时已存在的元数据文件会在解包前使操作失败，否则已存在文件必须本身是可识别的元数据。</para>
+    /// before extraction, otherwise a pre-existing file must already be recognized metadata. When
+    /// <c>MetadataOnly</c> is set and the handler supports that mode, <paramref name="unpack"/> is never
+    /// invoked and only the metadata is published; unsupported handlers fail instead of extracting files.
+    /// <para>解包选项；<c>Overwrite</c> 关闭时已存在的元数据文件会在解包前使操作失败，否则已存在文件必须本身是可识别的元数据。
+    /// 设置 <c>MetadataOnly</c> 且处理器支持该模式时不会调用 <paramref name="unpack"/>，仅发布元数据；
+    /// 不支持的处理器会直接失败而不是写出文件。</para>
     /// </param>
     /// <param name="cancellationToken">
     /// Checked before extraction; cancellation is rethrown to the caller and never converted to a failure result.
@@ -547,8 +552,12 @@ public sealed class RepackMetadata
     /// </param>
     /// <param name="options">
     /// Unpack options; when <c>Overwrite</c> is disabled an existing metadata file fails the operation
-    /// before extraction, otherwise a pre-existing file must already be recognized metadata.
-    /// <para>解包选项；<c>Overwrite</c> 关闭时已存在的元数据文件会在解包前使操作失败，否则已存在文件必须本身是可识别的元数据。</para>
+    /// before extraction, otherwise a pre-existing file must already be recognized metadata. When
+    /// <c>MetadataOnly</c> is set and the handler supports that mode, <paramref name="unpack"/> is never
+    /// invoked and only the metadata is published; unsupported handlers fail instead of extracting files.
+    /// <para>解包选项；<c>Overwrite</c> 关闭时已存在的元数据文件会在解包前使操作失败，否则已存在文件必须本身是可识别的元数据。
+    /// 设置 <c>MetadataOnly</c> 且处理器支持该模式时不会调用 <paramref name="unpack"/>，仅发布元数据；
+    /// 不支持的处理器会直接失败而不是写出文件。</para>
     /// </param>
     /// <param name="cancellationToken">
     /// Checked before extraction; cancellation is rethrown to the caller and never converted to a failure result.
@@ -583,13 +592,25 @@ public sealed class RepackMetadata
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var metadataOnly = options?.MetadataOnly ?? false;
+            if (metadataOnly && handler is not IRepackMetadataProvider { SupportsMetadataOnlyUnpack: true })
+            {
+                return FirmwareOpResult.Fail($"{handler.FormatName} cannot publish repack metadata without extracting its partition files.");
+            }
+
             var metadataPath = Path.Combine(outputDirectory, FileName);
             if (File.Exists(metadataPath) && (options is { Overwrite: false } || !IsMetadataFile(metadataPath)))
                 throw new IOException($"Repack metadata output already exists: {metadataPath}");
-            var result = await unpack().ConfigureAwait(false);
-            if (!result.Success) return result;
-            await WriteAsync(handler, sourcePath, outputDirectory, context, cancellationToken, result.Metadata, metadataRoot).ConfigureAwait(false);
-            return result;
+            if (!metadataOnly)
+            {
+                var result = await unpack().ConfigureAwait(false);
+                if (!result.Success) return result;
+                await WriteAsync(handler, sourcePath, outputDirectory, context, cancellationToken, result.Metadata, metadataRoot).ConfigureAwait(false);
+                return result;
+            }
+
+            await WriteAsync(handler, sourcePath, outputDirectory, context, cancellationToken, null, metadataRoot).ConfigureAwait(false);
+            return FirmwareOpResult.Ok($"Published repack metadata for {Path.GetFileName(sourcePath)} without extracting partition files.");
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { return FirmwareOpResult.Fail(ex.Message); }
@@ -788,7 +809,7 @@ public sealed class RepackMetadata
         if (File.Exists(path) && !IsMetadataFile(path))
             throw new IOException("The output contains a file reserved for repack metadata.");
         Directory.CreateDirectory(outputDirectory);
-        var temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(path);
         try
         {
             await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))

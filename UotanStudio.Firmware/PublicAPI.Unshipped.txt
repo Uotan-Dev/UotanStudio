@@ -35,4 +35,177 @@ static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32BE(byte[]! buffer
 static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64BE(byte[]! buffer, int offset) -> ulong
 static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt32BEAsync(System.IO.Stream! stream, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<uint>!
 static UotanStudio.Firmware.Core.BinaryReaderHelpers.ReadUInt64BEAsync(System.IO.Stream! stream, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<ulong>!
+UotanStudio.Firmware.Core.UnpackOptions.MetadataOnly.get -> bool
+UotanStudio.Firmware.Core.UnpackOptions.MetadataOnly.set -> void
+UotanStudio.Firmware.Core.Repacking.IRepackMetadataProvider.SupportsMetadataOnlyUnpack.get -> bool
 static UotanStudio.Firmware.Core.FormatDetector.HasMagic(byte[]! header, int offset, string! magic) -> bool
+UotanStudio.Firmware.OtaDelta.CareMap.CareMap
+UotanStudio.Firmware.OtaDelta.CareMap.CareMap.CalculateSize() -> int
+UotanStudio.Firmware.OtaDelta.CareMap.CareMap.CareMap() -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMap.Clone() -> UotanStudio.Firmware.OtaDelta.CareMap.CareMap!
+UotanStudio.Firmware.OtaDelta.CareMap.CareMap.Equals(UotanStudio.Firmware.OtaDelta.CareMap.CareMap? other) -> bool
+UotanStudio.Firmware.OtaDelta.CareMap.CareMap.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMap.MergeFrom(UotanStudio.Firmware.OtaDelta.CareMap.CareMap? other) -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMap.Partitions.get -> Google.Protobuf.Collections.RepeatedField<UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo!>!
+UotanStudio.Firmware.OtaDelta.CareMap.CareMap.ToBytes() -> byte[]!
+UotanStudio.Firmware.OtaDelta.CareMap.CareMap.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMap.WriteTo(System.IO.Stream! output) -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapBuilder
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.CalculateSize() -> int
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.CareMapPartitionInfo() -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.Clone() -> UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo!
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.Equals(UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo? other) -> bool
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.Fingerprint.get -> string!
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.Fingerprint.set -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.MergeFrom(UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo? other) -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.Name.get -> string!
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.Name.set -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.ParseRanges() -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange>!
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.PropertyId.get -> string!
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.PropertyId.set -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.Ranges.get -> string!
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.Ranges.set -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange.CareMapRange() -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange.CareMapRange(long Start, long End) -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange.Count.get -> long
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange.Deconstruct(out long Start, out long End) -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange.End.get -> long
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange.End.init -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange.Equals(UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange other) -> bool
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange.Start.get -> long
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange.Start.init -> void
+UotanStudio.Firmware.OtaDelta.CareMap.CareMapRanges
+const UotanStudio.Firmware.OtaDelta.CareMap.CareMap.BlockSize = 4096 -> int
+const UotanStudio.Firmware.OtaDelta.CareMap.CareMap.MaximumPartitionCount = 256 -> int
+const UotanStudio.Firmware.OtaDelta.CareMap.CareMap.TargetFilesEntryName = "META/care_map.pb" -> string!
+const UotanStudio.Firmware.OtaDelta.CareMap.CareMap.ZipEntryName = "care_map.pb" -> string!
+const UotanStudio.Firmware.OtaDelta.CareMap.CareMapBuilder.MaximumChunks = 65536 -> int
+const UotanStudio.Firmware.OtaDelta.CareMap.CareMapRanges.MaximumRangeCount = 65536 -> int
+override UotanStudio.Firmware.OtaDelta.CareMap.CareMap.Equals(object? obj) -> bool
+override UotanStudio.Firmware.OtaDelta.CareMap.CareMap.GetHashCode() -> int
+override UotanStudio.Firmware.OtaDelta.CareMap.CareMap.ToString() -> string!
+override UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.Equals(object? obj) -> bool
+override UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.GetHashCode() -> int
+override UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.ToString() -> string!
+override UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange.GetHashCode() -> int
+override UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange.ToString() -> string!
+static UotanStudio.Firmware.OtaDelta.CareMap.CareMap.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static UotanStudio.Firmware.OtaDelta.CareMap.CareMap.Parser.get -> Google.Protobuf.MessageParser<UotanStudio.Firmware.OtaDelta.CareMap.CareMap!>!
+static UotanStudio.Firmware.OtaDelta.CareMap.CareMapBuilder.IsSupportedPartition(string? partitionName) -> bool
+static UotanStudio.Firmware.OtaDelta.CareMap.CareMapBuilder.SupportedPartitions.get -> System.Collections.Generic.IReadOnlyList<string!>!
+static UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo.Parser.get -> Google.Protobuf.MessageParser<UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo!>!
+static UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange.operator !=(UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange left, UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange right) -> bool
+static UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange.operator ==(UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange left, UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange right) -> bool
+static UotanStudio.Firmware.OtaDelta.CareMap.CareMapRanges.Format(System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange>! ranges) -> string!
+static UotanStudio.Firmware.OtaDelta.CareMap.CareMapRanges.Intersect(System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange>! left, System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange>! right) -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange>!
+static UotanStudio.Firmware.OtaDelta.CareMap.CareMapRanges.Normalize(System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange>! ranges) -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange>!
+static UotanStudio.Firmware.OtaDelta.CareMap.CareMapRanges.Parse(string! text) -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange>!
+~override UotanStudio.Firmware.OtaDelta.CareMap.CareMapRange.Equals(object obj) -> bool
+static UotanStudio.Firmware.OtaDelta.CareMap.CareMap.FromBytes(byte[]! bytes) -> UotanStudio.Firmware.OtaDelta.CareMap.CareMap!
+UotanStudio.Firmware.BootSecurity.Avb.AvbImageFootprint
+static UotanStudio.Firmware.BootSecurity.Avb.AvbImageFootprint.TryRead(string! imagePath, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> long?
+static UotanStudio.Firmware.OtaDelta.CareMap.CareMapBuilder.TryBuildFromImage(string! partitionName, string! imagePath, long verifiedImageBytes, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> UotanStudio.Firmware.OtaDelta.CareMap.CareMapPartitionInfo?
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.<Clone>$() -> UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan!
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.BootCmdlinePlan(string! BootPath, string! Key, string? Value, string! OriginalCommandLine, string! UpdatedCommandLine, System.Collections.Generic.IReadOnlyList<string!>! Limitations) -> void
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.BootPath.get -> string!
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.BootPath.init -> void
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.Deconstruct(out string! BootPath, out string! Key, out string? Value, out string! OriginalCommandLine, out string! UpdatedCommandLine, out System.Collections.Generic.IReadOnlyList<string!>! Limitations) -> void
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.Equals(UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan? other) -> bool
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.Key.get -> string!
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.Key.init -> void
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.Limitations.get -> System.Collections.Generic.IReadOnlyList<string!>!
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.Limitations.init -> void
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.OriginalCommandLine.get -> string!
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.OriginalCommandLine.init -> void
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.UpdatedCommandLine.get -> string!
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.UpdatedCommandLine.init -> void
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.Value.get -> string?
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.Value.init -> void
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlineService
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlineService.ApplyAsync(UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan! plan, string! outputPath, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlineService.BootCmdlineService() -> void
+UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlineService.CreatePlan(string! bootPath, string! key, string? value) -> UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan!
+const UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlineService.MaximumKeyLength = 256 -> int
+const UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlineService.MaximumValueLength = 1024 -> int
+override UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.Equals(object? obj) -> bool
+override UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.GetHashCode() -> int
+override UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.ToString() -> string!
+static UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.operator !=(UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan? left, UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan? right) -> bool
+static UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan.operator ==(UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan? left, UotanStudio.Firmware.BootSecurity.Workflow.BootCmdlinePlan? right) -> bool
+UotanStudio.Firmware.VendorFirmware.NTPi.NtpiReader.Parse(string! filePath, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiParsedFile!
+UotanStudio.Firmware.VendorFirmware.NTPi.NtpiReader.ReadInfo(string! filePath, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiFileInfo!
+UotanStudio.Firmware.VendorFirmware.NTPi.NtpiReader.Unpack(string! filePath, string! outputDir, System.IProgress<UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiExtractionProgress!>? progress = null, System.Func<string!, bool>? fileFilter = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+UotanStudio.Firmware.VendorFirmware.NTPi.NtpiReader.Unpack(string! filePath, string! outputDir, UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiUnpackOptions! options, System.IProgress<UotanStudio.Firmware.VendorFirmware.NTPi.Models.NtpiExtractionProgress!>? progress = null, System.Func<string!, bool>? fileFilter = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage
+static UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.BuildRockchipResource(string! inputDirectory, string! outputPath, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> int
+static UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.DetectResource(byte[]? data) -> UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.BootResourceType
+static UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.ExtractRockchipResource(string! sourcePath, string! outputDirectory, System.Collections.Generic.IReadOnlySet<string!>? selectedEntries = null, bool overwrite = true, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> int
+static UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.ParseRockchipResource(System.ReadOnlySpan<byte> data) -> UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceMetadata!
+static UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.ReadRockchipResourceMetadata(string! sourcePath) -> UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceMetadata!
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceEntry
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.BootResourceType
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.BootResourceType.Logo = 1 -> UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.BootResourceType
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.BootResourceType.RockchipResource = 3 -> UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.BootResourceType
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.BootResourceType.Splash = 2 -> UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.BootResourceType
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.BootResourceType.Unknown = 0 -> UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.BootResourceType
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceEntry.Name.get -> string!
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceEntry.Name.init -> void
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceEntry.Offset.get -> long
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceEntry.Offset.init -> void
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceEntry.RockchipResourceEntry() -> void
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceEntry.Size.get -> long
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceEntry.Size.init -> void
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceMetadata
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceMetadata.Entries.get -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceEntry!>!
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceMetadata.Entries.init -> void
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceMetadata.FileCount.get -> uint
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceMetadata.FileCount.init -> void
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceMetadata.FileTableVersion.get -> ushort
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceMetadata.FileTableVersion.init -> void
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceMetadata.IntegrityStatus.get -> string!
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceMetadata.RockchipResourceMetadata() -> void
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceMetadata.Version.get -> ushort
+UotanStudio.Firmware.BootSecurity.BootImage.Formats.RockchipResourceImage.RockchipResourceMetadata.Version.init -> void
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.<Clone>$() -> UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet!
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.Deconstruct(out UotanStudio.Firmware.BlockImage.Sparse.SparseChunkVariant Variant, out System.Collections.Generic.IReadOnlyList<string!>! Parts, out long TotalInputBytes) -> void
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.Equals(UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet? other) -> bool
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.Parts.get -> System.Collections.Generic.IReadOnlyList<string!>!
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.Parts.init -> void
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.SparseChunkSet(UotanStudio.Firmware.BlockImage.Sparse.SparseChunkVariant Variant, System.Collections.Generic.IReadOnlyList<string!>! Parts, long TotalInputBytes) -> void
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.TotalInputBytes.get -> long
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.TotalInputBytes.init -> void
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.Variant.get -> UotanStudio.Firmware.BlockImage.Sparse.SparseChunkVariant
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.Variant.init -> void
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSplitter
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkVariant
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkVariant.RawStream = 0 -> UotanStudio.Firmware.BlockImage.Sparse.SparseChunkVariant
+UotanStudio.Firmware.BlockImage.Sparse.SparseChunkVariant.SelfContainedSparse = 1 -> UotanStudio.Firmware.BlockImage.Sparse.SparseChunkVariant
+override UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.Equals(object? obj) -> bool
+override UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.GetHashCode() -> int
+override UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.ToString() -> string!
+static UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.operator !=(UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet? left, UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet? right) -> bool
+static UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet.operator ==(UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet? left, UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet? right) -> bool
+static UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSplitter.Inspect(string! selectedPath) -> UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet!
+static UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSplitter.MergeAsync(string! selectedPath, string! outputPath, System.IProgress<(long Processed, long Total)>? progress = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSet!>!
+static UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSplitter.SplitRawAsync(string! inputPath, string! basePath, long chunkSizeBytes, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<string!>!>!
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.CancellationToken.get -> System.Threading.CancellationToken
+UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.CancellationToken.set -> void
+static UotanStudio.Firmware.DeviceTree.Dt.DtboFormat.UnpackAsync(string! inputPath, string! outputDirectory, UotanStudio.Firmware.Core.UnpackOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<string!>!>
+static UotanStudio.Firmware.FileSystem.F2fs.F2fsBuilder.BuildAsync(string! sourceDirectory, string! outputPath, UotanStudio.Firmware.FileSystem.F2fs.F2fsOptions? options = null) -> System.Threading.Tasks.Task
+UotanStudio.Firmware.FileSystem.Native.NativeFileSystemTools.PathForToolAsync(string! path, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<string!>
+UotanStudio.Firmware.FileSystem.FileSystemCorruptedException
+UotanStudio.Firmware.FileSystem.FileSystemCorruptedException.FileSystemCorruptedException(string! message) -> void
+UotanStudio.Firmware.FileSystem.FileSystemCorruptedException.FileSystemCorruptedException(string! message, System.Exception? innerException) -> void
+UotanStudio.Firmware.FileSystem.FileSystemException
+UotanStudio.Firmware.FileSystem.FileSystemException.FileSystemException(string! message) -> void
+UotanStudio.Firmware.FileSystem.FileSystemException.FileSystemException(string! message, System.Exception? innerException) -> void
+UotanStudio.Firmware.FileSystem.FileSystemUnsupportedFeatureException
+UotanStudio.Firmware.FileSystem.FileSystemUnsupportedFeatureException.FileSystemUnsupportedFeatureException(string! message) -> void
+UotanStudio.Firmware.FileSystem.FileSystemUnsupportedFeatureException.FileSystemUnsupportedFeatureException(string! message, System.Exception? innerException) -> void
