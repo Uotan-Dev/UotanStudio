@@ -33,6 +33,23 @@ public sealed partial class Ext4Builder
 
     private const uint FeatureCompatHasJournal = 0x0004;
     private const uint FeatureRoCompatSharedBlocks = 0x4000;
+    private const uint FeatureIncompatEaInode = 0x0400;
+    private const uint FeatureRoCompatProject = 0x2000;
+
+    private const int SbFeatureIncompat = 0x60;
+    private const int SbFeatureRoCompat = 0x64;
+
+    /// <summary>
+    /// Maximum filesystem block count representable by the 32-bit on-disk superblock block counters; it is also the growth target used to size the reserved group descriptor table once the image approaches that limit.
+    /// <para>磁盘超级块 32 位块计数字段可表示的最大文件系统块数；镜像接近该上限时，也作为保留组描述符表的扩容目标。</para>
+    /// </summary>
+    private const long Max32BitBlockCount = 0xFFFF_FFFFL;
+
+    /// <summary>
+    /// Filesystem block counts below this threshold size the reserved group descriptor table for growth to the current count times 1024 (which still fits the 32-bit block counter) instead of the absolute 32-bit maximum.
+    /// <para>文件系统块数低于该阈值时，保留组描述符表按“当前块数 × 1024”（仍落在 32 位块计数之内）预留扩容空间，而不是按绝对 32 位上限预留。</para>
+    /// </summary>
+    private const long GrowthExpansionThresholdBlocks = (1L << 32) / 1024;
 
     private const ushort Ext4ExtraIsize = 32;
 
@@ -81,7 +98,7 @@ public sealed partial class Ext4Builder
         public ushort LinkCount = 1;
         public uint SemanticFlags;
         public uint DeviceId;
-        public bool IsSpecial => (Mode & 0xF000) is 0x1000 or 0x2000 or 0x6000 or 0xC000;
+        public bool IsSpecial => (Mode & InodeTypeBits.FormatMask) is InodeTypeBits.Fifo or InodeTypeBits.CharDevice or InodeTypeBits.BlockDevice or InodeTypeBits.Socket;
         public uint Inode { get; set; }
         public ushort Mode { get; set; }
         public uint Uid { get; set; }
@@ -108,6 +125,47 @@ public sealed partial class Ext4Builder
     }
 
     private readonly record struct BlockAllocationResult(bool Success, long JournalStart, bool SharedBlocks);
+
+    /// <summary>
+    /// Carries the planned filesystem tree through the BuildCore planning stage: the root tree, its flattened node list, the highest assigned inode number, and the shared-block plan.
+    /// <para>在 BuildCore 规划阶段承载规划得到的文件系统树：根树、扁平化节点列表、已分配的最大 inode 号，以及相同块共享计划。</para>
+    /// </summary>
+    private sealed class TreePlan
+    {
+        public required Node Root { get; init; }
+        public required List<Node> Nodes { get; init; }
+        public required uint MaxInode { get; init; }
+        public required SharedBlockPlan? SharedPlan { get; init; }
+    }
+
+    /// <summary>
+    /// Carries the block-group geometry computed from the planned tree: per-group inode and block sizing, group descriptor table sizing, journal block count, and the derived block totals consumed by the group construction and write stages.
+    /// <para>承载由规划树计算得到的块组几何：每组 inode 与块规模、组描述符表大小、日志块数，以及组构建与写出阶段使用的块总量。</para>
+    /// </summary>
+    private sealed class GroupGeometry
+    {
+        public int InodesPerGroup { get; init; }
+        public int InodeTableBlocks { get; init; }
+        public int BlocksPerGroup { get; init; }
+        public int GroupCount { get; init; }
+        public long GdtBlocks { get; init; }
+        public int ReservedGdtBlocks { get; init; }
+        public int JournalBlocks { get; init; }
+        public bool IncludeJournal { get; init; }
+        public long TotalBlocks { get; set; }
+        public long UsedBlocks { get; set; }
+        public long? RequestedBlocks { get; init; }
+    }
+
+    /// <summary>
+    /// Carries the reserved group descriptor table size and the metadata reservation totals recomputed from a final group count.
+    /// <para>承载按最终组数重算的保留组描述符表大小与元数据预留总量。</para>
+    /// </summary>
+    /// <param name="ReservedGdtBlocks">Reserved group descriptor table block count. <para>保留组描述符表块数。</para></param>
+    /// <param name="BackupGroupCount">Number of backup superblock groups. <para>备份超级块所在组的数量。</para></param>
+    /// <param name="Group0Metadata">Metadata block demand of group zero. <para>组 0 的元数据块需求。</para></param>
+    /// <param name="TotalBlocksNeeded">Total block demand of metadata and content. <para>元数据与内容的总块需求。</para></param>
+    private readonly record struct GroupReservation(int ReservedGdtBlocks, int BackupGroupCount, long Group0Metadata, long TotalBlocksNeeded);
 
     /// <summary>
     /// Builds an ext4 image from sourceDirectory and returns it as a byte array.
@@ -272,7 +330,7 @@ public sealed partial class Ext4Builder
             && plan.Entries.Values.Any(entry => (entry.Flags & 0x40000000) != 0)
             && options.CasefoldEncoding is null)
         {
-            throw new InvalidDataException("EXT4 casefold directory requires its source encoding.");
+            throw new FileSystemCorruptedException("EXT4 casefold directory requires its source encoding.");
         }
         var blockSize = options.BlockSize;
         var inodeSize = options.InodeSize;
@@ -329,8 +387,8 @@ public sealed partial class Ext4Builder
             {
                 node.Uid = entry.Uid;
                 node.Gid = entry.Gid;
-                var type = (node.Mode & 0xF000) is var sourceType && sourceType != 0
-                    ? sourceType : node.IsDirectory ? 0x4000 : node.IsSymlink ? 0xA000 : 0x8000;
+                var type = (node.Mode & InodeTypeBits.FormatMask) is var sourceType && sourceType != 0
+                    ? sourceType : node.IsDirectory ? InodeTypeBits.Directory : node.IsSymlink ? InodeTypeBits.SymbolicLink : InodeTypeBits.RegularFile;
                 node.Mode = (ushort)(type | (entry.Mode & 0x0FFF));
             }
 
@@ -351,6 +409,65 @@ public sealed partial class Ext4Builder
         var uuid = options.Uuid is { Length: 16 } ? options.Uuid : FixedUuid;
         var enableMetadataCsum = options.EnableMetadataCsum;
 
+        var tree = PlanTree(sourceDirectory, options, blockSize, inodeSize, uuid, enableMetadataCsum, excludedFiles, plannedRoot);
+        using var sharedPlan = tree.SharedPlan;
+        var geometry = ComputeGroupGeometry(tree.Nodes, options, tree.MaxInode, tree.SharedPlan, blockSize, inodeSize, minimumGroupCount);
+        var (groups, backupGroups, resizeDindirBlock) = CreateGroups(geometry);
+
+        var allocation = options.BlockSharingMode == Ext4BlockSharingMode.ShareDuplicateData
+            ? AllocateSharedDataBlocksMultiGroup(tree.Nodes, groups, geometry.BlocksPerGroup, blockSize, geometry.JournalBlocks,
+                sharedPlan!, options.CancellationToken)
+            : AllocateDataBlocksMultiGroup(tree.Nodes, groups, geometry.BlocksPerGroup, blockSize, geometry.JournalBlocks, out var independentJournalStart)
+                ? new BlockAllocationResult(true, independentJournalStart, false)
+                : new BlockAllocationResult(false, independentJournalStart, false);
+        var journalStart = allocation.JournalStart;
+        if (!allocation.Success)
+        {
+            if (geometry.RequestedBlocks is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Requested EXT4 capacity {options.TargetSizeBytes} bytes is too small after extent allocation.");
+            }
+            BuildCore(sourceDirectory, output, options, baseOffset, freshDestination, excludedFiles, tree.Root, checked(geometry.GroupCount + 1));
+            return;
+        }
+        geometry.UsedBlocks = groups.Sum(group => group.FirstDataBlock - (long)group.GroupIndex * geometry.BlocksPerGroup + group.UsedBlocks);
+        if (options.CapacityMode == Ext4CapacityMode.Minimize)
+        {
+            geometry.TotalBlocks = groups.Max(static group => group.FirstDataBlock + group.UsedBlocks);
+            var lastGroup = groups[^1];
+            var lastGroupStart = (long)lastGroup.GroupIndex * geometry.BlocksPerGroup;
+            lastGroup.BlocksInGroup = geometry.TotalBlocks - lastGroupStart;
+            if (lastGroup.BlocksInGroup <= 0)
+            {
+                throw new InvalidOperationException("EXT4 minimum-capacity planning produced an empty final block group.");
+            }
+        }
+        if (geometry.IncludeJournal)
+        {
+
+            groups[0].UsedInodes++;
+        }
+
+        WriteImage(output, baseOffset, options, freshDestination, tree.Nodes, groups, backupGroups, geometry, uuid, journalStart,
+            allocation.SharedBlocks, sharedPlan, resizeDindirBlock);
+    }
+
+    /// <summary>
+    /// Plans the filesystem tree: builds or reuses the root tree, assigns inodes, applies metadata overrides, plans xattrs and data blocks, creates the shared-block plan, and finalizes extent tree block counts.
+    /// <para>规划文件系统树：构建或复用根树、分配 inode、应用元数据覆盖、规划 xattr 与数据块、创建相同块共享计划，并确定 extent 树块数。</para>
+    /// </summary>
+    /// <param name="sourceDirectory">Host directory packed into the image when no preplanned root exists. <para>不存在预规划根树时被打包的主机目录。</para></param>
+    /// <param name="options">Build options supplying metadata overrides, sparse detection, and block sharing mode. <para>提供元数据覆盖、稀疏检测与相同块共享模式的构建选项。</para></param>
+    /// <param name="blockSize">Filesystem block size in bytes. <para>文件系统块大小（字节）。</para></param>
+    /// <param name="inodeSize">Inode size in bytes. <para>inode 大小（字节）。</para></param>
+    /// <param name="uuid">Filesystem UUID used as the planning hash seed. <para>作为规划哈希种子使用的文件系统 UUID。</para></param>
+    /// <param name="enableMetadataCsum">Whether directory block metadata checksums are enabled. <para>是否启用目录块元数据校验和。</para></param>
+    /// <param name="excludedFiles">Full paths excluded from the scanned tree. <para>扫描树时排除的完整路径。</para></param>
+    /// <param name="plannedRoot">Previously built tree reused instead of rescanning sourceDirectory. <para>复用的既有树；提供时不再重新扫描 sourceDirectory。</para></param>
+    /// <returns>The planned tree with its node list, highest inode number, and shared-block plan. <para>包含节点列表、最大 inode 号与相同块共享计划的规划结果。</para></returns>
+    private static TreePlan PlanTree(string sourceDirectory, Ext4Options options, int blockSize, int inodeSize, byte[] uuid, bool enableMetadataCsum, IReadOnlyCollection<string> excludedFiles, Node? plannedRoot)
+    {
         var root = plannedRoot ?? BuildTree(Path.GetFullPath(sourceDirectory), excludedFiles);
         var nodes = new List<Node>();
         var maxInode = AssignInodes(root, nodes);
@@ -364,7 +481,7 @@ public sealed partial class Ext4Builder
 
         PlanDirectoryBlocks(nodes, blockSize, uuid, enableMetadataCsum);
         PlanDataBlocks(nodes, blockSize, options.EnableSparse);
-        using var sharedPlan = options.BlockSharingMode == Ext4BlockSharingMode.ShareDuplicateData
+        var sharedPlan = options.BlockSharingMode == Ext4BlockSharingMode.ShareDuplicateData
             ? SharedBlockPlan.Create(nodes, blockSize, options)
             : null;
         if (sharedPlan is not null)
@@ -373,6 +490,29 @@ public sealed partial class Ext4Builder
         }
         PlanLeafBlocks(nodes, blockSize);
 
+        return new TreePlan
+        {
+            Root = root,
+            Nodes = nodes,
+            MaxInode = maxInode,
+            SharedPlan = sharedPlan,
+        };
+    }
+
+    /// <summary>
+    /// Computes the block group geometry: per-group inode and block sizing, the group count with its growth recomputation, the group descriptor table size with its reserved growth space, and the total block demand.
+    /// <para>计算块组几何：每组 inode 与块规模、组数及其增长重算、含保留扩容空间的组描述符表大小，以及总块需求。</para>
+    /// </summary>
+    /// <param name="nodes">Planned nodes whose block demand drives the geometry. <para>其块需求驱动几何计算的已规划节点。</para></param>
+    /// <param name="options">Build options supplying the journal preference, target size, and capacity mode. <para>提供日志偏好、目标容量与容量模式的构建选项。</para></param>
+    /// <param name="maxInode">Highest assigned inode number. <para>已分配的最大 inode 号。</para></param>
+    /// <param name="sharedPlan">Active shared-block plan, or <see langword="null"/> when duplicate sharing is disabled. <para>生效的相同块共享计划；未启用共享时为 <see langword="null"/>。</para></param>
+    /// <param name="blockSize">Filesystem block size in bytes. <para>文件系统块大小（字节）。</para></param>
+    /// <param name="inodeSize">Inode size in bytes. <para>inode 大小（字节）。</para></param>
+    /// <param name="minimumGroupCount">Lower bound on the group count carried through recursive retries. <para>递归重试传递的组数下限。</para></param>
+    /// <returns>The computed group geometry. <para>计算得到的块组几何。</para></returns>
+    private static GroupGeometry ComputeGroupGeometry(List<Node> nodes, Ext4Options options, uint maxInode, SharedBlockPlan? sharedPlan, int blockSize, int inodeSize, int minimumGroupCount)
+    {
         var inodesPerInodeBlock = blockSize / inodeSize;
 
         var inodesPerGroup = (int)RoundUpPowerOfTwo(Math.Max(maxInode, 16));
@@ -421,15 +561,11 @@ public sealed partial class Ext4Builder
         gdtBlocks = Math.Max(1, (long)Math.Ceiling(groupCount * 64.0 / blockSize));
 
         var descsPerGdtBlock = blockSize / 64;
-        var fsBlocks = requestedBlocks ?? (long)groupCount * blocksPerGroup;
-        var maxGrowthBlocks = fsBlocks < ((1L << 32) / 1024) ? fsBlocks * 1024 : 0xFFFF_FFFFL;
-        var reservedGroups = (maxGrowthBlocks + blocksPerGroup - 1) / blocksPerGroup;
-        var reservedGdtBlocks = (int)Math.Min(blockSize / 4, (reservedGroups + descsPerGdtBlock - 1) / descsPerGdtBlock);
-
-        var backupGroupCount = BackupSuperblockGroups(groupCount).Count();
-        var group0Metadata = 1L + gdtBlocks + reservedGdtBlocks + metaPerGroup;
-        var totalBlocksNeeded = group0Metadata + totalDataBlocks + journalBlocks
-            + (groupCount - 1) * metaPerGroup + backupGroupCount * (1 + gdtBlocks + reservedGdtBlocks);
+        var reservation = ComputeGroupReservation(groupCount, blocksPerGroup, gdtBlocks, metaPerGroup, totalDataBlocks, journalBlocks, descsPerGdtBlock, blockSize, requestedBlocks);
+        var reservedGdtBlocks = reservation.ReservedGdtBlocks;
+        var backupGroupCount = reservation.BackupGroupCount;
+        var group0Metadata = reservation.Group0Metadata;
+        var totalBlocksNeeded = reservation.TotalBlocksNeeded;
 
         if (totalBlocksNeeded > (long)groupCount * blocksPerGroup)
         {
@@ -440,14 +576,11 @@ public sealed partial class Ext4Builder
             }
             groupCount = (int)((totalBlocksNeeded + blocksPerGroup - 1) / blocksPerGroup);
             gdtBlocks = Math.Max(1, (long)Math.Ceiling(groupCount * 64.0 / blockSize));
-            fsBlocks = (long)groupCount * blocksPerGroup;
-            maxGrowthBlocks = fsBlocks < ((1L << 32) / 1024) ? fsBlocks * 1024 : 0xFFFF_FFFFL;
-            reservedGroups = (maxGrowthBlocks + blocksPerGroup - 1) / blocksPerGroup;
-            reservedGdtBlocks = (int)Math.Min(blockSize / 4, (reservedGroups + descsPerGdtBlock - 1) / descsPerGdtBlock);
-            backupGroupCount = BackupSuperblockGroups(groupCount).Count();
-            group0Metadata = 1L + gdtBlocks + reservedGdtBlocks + metaPerGroup;
-            totalBlocksNeeded = group0Metadata + totalDataBlocks + journalBlocks
-                + (groupCount - 1) * metaPerGroup + backupGroupCount * (1 + gdtBlocks + reservedGdtBlocks);
+            reservation = ComputeGroupReservation(groupCount, blocksPerGroup, gdtBlocks, metaPerGroup, totalDataBlocks, journalBlocks, descsPerGdtBlock, blockSize, requestedBlocks);
+            reservedGdtBlocks = reservation.ReservedGdtBlocks;
+            backupGroupCount = reservation.BackupGroupCount;
+            group0Metadata = reservation.Group0Metadata;
+            totalBlocksNeeded = reservation.TotalBlocksNeeded;
         }
 
         var totalBlocks = requestedBlocks ?? (long)groupCount * blocksPerGroup;
@@ -457,6 +590,67 @@ public sealed partial class Ext4Builder
                 $"Requested EXT4 capacity {options.TargetSizeBytes} bytes is too small for filesystem metadata and content.");
         }
         var usedBlocks = totalBlocksNeeded;
+
+        return new GroupGeometry
+        {
+            InodesPerGroup = inodesPerGroup,
+            InodeTableBlocks = inodeTableBlocks,
+            BlocksPerGroup = blocksPerGroup,
+            GroupCount = groupCount,
+            GdtBlocks = gdtBlocks,
+            ReservedGdtBlocks = reservedGdtBlocks,
+            JournalBlocks = journalBlocks,
+            IncludeJournal = includeJournal,
+            TotalBlocks = totalBlocks,
+            UsedBlocks = usedBlocks,
+            RequestedBlocks = requestedBlocks,
+        };
+    }
+
+    /// <summary>
+    /// Computes the reserved group descriptor table size and the metadata reservation totals for a final group count; the initial geometry pass and the growth recomputation share this formula.
+    /// <para>按最终组数计算保留组描述符表大小与元数据预留总量；初始几何计算与增长重算两个分支共用该公式。</para>
+    /// </summary>
+    /// <param name="groupCount">Final block group count. <para>最终块组数量。</para></param>
+    /// <param name="blocksPerGroup">Blocks per group. <para>每块组块数。</para></param>
+    /// <param name="gdtBlocks">Primary group descriptor table block count. <para>主组描述符表块数。</para></param>
+    /// <param name="metaPerGroup">Per-group metadata block demand outside group zero. <para>除组 0 外每组的元数据块需求。</para></param>
+    /// <param name="totalDataBlocks">Total planned data block demand. <para>规划的数据块总需求。</para></param>
+    /// <param name="journalBlocks">Journal block count. <para>日志块数。</para></param>
+    /// <param name="descsPerGdtBlock">Group descriptors per descriptor table block. <para>每个描述符表块容纳的组描述符数量。</para></param>
+    /// <param name="blockSize">Filesystem block size in bytes. <para>文件系统块大小（字节）。</para></param>
+    /// <param name="requestedBlocks">Explicitly requested capacity in blocks, or <see langword="null"/> when the capacity is derived. <para>显式请求的容量（块数）；容量为派生值时为 <see langword="null"/>。</para></param>
+    /// <returns>The reserved GDT size and the reservation totals derived from the final group count. <para>由最终组数推导的保留 GDT 大小与预留总量。</para></returns>
+    private static GroupReservation ComputeGroupReservation(int groupCount, int blocksPerGroup, long gdtBlocks, long metaPerGroup, long totalDataBlocks, int journalBlocks, int descsPerGdtBlock, int blockSize, long? requestedBlocks)
+    {
+        var fsBlocks = requestedBlocks ?? (long)groupCount * blocksPerGroup;
+        var maxGrowthBlocks = fsBlocks < GrowthExpansionThresholdBlocks ? fsBlocks * 1024 : Max32BitBlockCount;
+        var reservedGroups = (maxGrowthBlocks + blocksPerGroup - 1) / blocksPerGroup;
+        var reservedGdtBlocks = (int)Math.Min(blockSize / 4, (reservedGroups + descsPerGdtBlock - 1) / descsPerGdtBlock);
+
+        var backupGroupCount = BackupSuperblockGroups(groupCount).Count();
+        var group0Metadata = 1L + gdtBlocks + reservedGdtBlocks + metaPerGroup;
+        var totalBlocksNeeded = group0Metadata + totalDataBlocks + journalBlocks
+            + (groupCount - 1) * metaPerGroup + backupGroupCount * (1 + gdtBlocks + reservedGdtBlocks);
+
+        return new GroupReservation(reservedGdtBlocks, backupGroupCount, group0Metadata, totalBlocksNeeded);
+    }
+
+    /// <summary>
+    /// Builds the block group list with per-group metadata block placement for group zero, backup groups, and ordinary groups, and reserves the resize inode double-indirect block in group zero.
+    /// <para>构建块组列表（含组 0、备份组与普通组三种元数据布局分支），并在组 0 中为 resize inode 的二级间接块预留位置。</para>
+    /// </summary>
+    /// <param name="geometry">Computed group geometry driving the layout. <para>驱动布局的块组几何。</para></param>
+    /// <returns>The group list, the backup superblock group set, and the reserved double-indirect block number (-1 when no reserved GDT exists). <para>块组列表、备份超级块组集合，以及预留的二级间接块号（无保留 GDT 时为 -1）。</para></returns>
+    private static (List<GroupInfo> Groups, HashSet<int> BackupGroups, long ResizeDindirBlock) CreateGroups(GroupGeometry geometry)
+    {
+        var blocksPerGroup = geometry.BlocksPerGroup;
+        var groupCount = geometry.GroupCount;
+        var gdtBlocks = geometry.GdtBlocks;
+        var reservedGdtBlocks = geometry.ReservedGdtBlocks;
+        var inodeTableBlocks = geometry.InodeTableBlocks;
+        var inodesPerGroup = geometry.InodesPerGroup;
+        var totalBlocks = geometry.TotalBlocks;
 
         var groups = new List<GroupInfo>();
         var backupGroups = new HashSet<int>(BackupSuperblockGroups(groupCount));
@@ -505,43 +699,33 @@ public sealed partial class Ext4Builder
             groups[0].ExtraUsedBlocks.Add(resizeDindirBlock);
             groups[0].FirstDataBlock++;
 
-            usedBlocks++;
+            geometry.UsedBlocks++;
         }
 
-        var allocation = options.BlockSharingMode == Ext4BlockSharingMode.ShareDuplicateData
-            ? AllocateSharedDataBlocksMultiGroup(nodes, groups, blocksPerGroup, blockSize, journalBlocks,
-                sharedPlan!, options.CancellationToken)
-            : AllocateDataBlocksMultiGroup(nodes, groups, blocksPerGroup, blockSize, journalBlocks, out var independentJournalStart)
-                ? new BlockAllocationResult(true, independentJournalStart, false)
-                : new BlockAllocationResult(false, independentJournalStart, false);
-        var journalStart = allocation.JournalStart;
-        if (!allocation.Success)
-        {
-            if (requestedBlocks is not null)
-            {
-                throw new InvalidOperationException(
-                    $"Requested EXT4 capacity {options.TargetSizeBytes} bytes is too small after extent allocation.");
-            }
-            BuildCore(sourceDirectory, output, options, baseOffset, freshDestination, excludedFiles, root, checked(groupCount + 1));
-            return;
-        }
-        usedBlocks = groups.Sum(group => group.FirstDataBlock - (long)group.GroupIndex * blocksPerGroup + group.UsedBlocks);
-        if (options.CapacityMode == Ext4CapacityMode.Minimize)
-        {
-            totalBlocks = groups.Max(static group => group.FirstDataBlock + group.UsedBlocks);
-            var lastGroup = groups[^1];
-            var lastGroupStart = (long)lastGroup.GroupIndex * blocksPerGroup;
-            lastGroup.BlocksInGroup = totalBlocks - lastGroupStart;
-            if (lastGroup.BlocksInGroup <= 0)
-            {
-                throw new InvalidOperationException("EXT4 minimum-capacity planning produced an empty final block group.");
-            }
-        }
-        if (includeJournal)
-        {
+        return (groups, backupGroups, resizeDindirBlock);
+    }
 
-            groups[0].UsedInodes++;
-        }
+    /// <summary>
+    /// Writes the fully planned image: sizes and clears the output region, writes group metadata, then writes inodes and data, and finally positions the stream at the image end.
+    /// <para>写出完整规划的镜像：调整并清零输出区域，写出组元数据，再写出 inode 与数据，最后把流定位到镜像末尾。</para>
+    /// </summary>
+    /// <param name="output">Writable stream receiving the image. <para>接收镜像的可写流。</para></param>
+    /// <param name="baseOffset">Stream offset the image starts at. <para>镜像起始的流偏移。</para></param>
+    /// <param name="options">Build options supplying sizes, checksum, and superblock fields. <para>提供大小、校验和与超级块字段的构建选项。</para></param>
+    /// <param name="freshDestination">Whether the destination region may be resized without preserving prior content. <para>目标区域是否可以不保留既有内容地调整长度。</para></param>
+    /// <param name="nodes">Planned nodes written as inodes and data. <para>作为 inode 与数据写出的已规划节点。</para></param>
+    /// <param name="groups">Constructed block groups. <para>已构建的块组。</para></param>
+    /// <param name="backupGroups">Backup superblock group set. <para>备份超级块组集合。</para></param>
+    /// <param name="geometry">Computed group geometry. <para>计算得到的块组几何。</para></param>
+    /// <param name="uuid">Filesystem UUID. <para>文件系统 UUID。</para></param>
+    /// <param name="journalStart">First block of the journal area. <para>日志区域起始块。</para></param>
+    /// <param name="sharedBlocks">Whether the read-only shared-blocks feature is active. <para>只读相同块共享特性是否生效。</para></param>
+    /// <param name="sharedPlan">Active shared-block plan, or <see langword="null"/> when duplicate sharing is disabled. <para>生效的相同块共享计划；未启用共享时为 <see langword="null"/>。</para></param>
+    /// <param name="resizeDindirBlock">Reserved resize inode double-indirect block number. <para>预留的 resize inode 二级间接块号。</para></param>
+    private static void WriteImage(Stream output, long baseOffset, Ext4Options options, bool freshDestination, List<Node> nodes, List<GroupInfo> groups, HashSet<int> backupGroups, GroupGeometry geometry, byte[] uuid, long journalStart, bool sharedBlocks, SharedBlockPlan? sharedPlan, long resizeDindirBlock)
+    {
+        var blockSize = options.BlockSize;
+        var totalBlocks = geometry.TotalBlocks;
 
         var finalSize = checked(totalBlocks * blockSize);
         var requiredEnd = checked(baseOffset + finalSize);
@@ -556,6 +740,44 @@ public sealed partial class Ext4Builder
             var overlapLength = Math.Max(0, Math.Min(oldLength, requiredEnd) - baseOffset);
             ZeroRegion(output, baseOffset, overlapLength);
         }
+
+        WriteGroupMetadata(output, baseOffset, options, nodes, groups, backupGroups, geometry, uuid, journalStart,
+            sharedBlocks, resizeDindirBlock);
+        WriteInodesAndData(output, baseOffset, options, nodes, groups, geometry, uuid, journalStart, sharedPlan);
+
+        output.Position = checked(baseOffset + finalSize);
+    }
+
+    /// <summary>
+    /// Writes the per-group bitmaps and descriptors, the superblock with its feature patches and checksum, the backup superblock copies, the group descriptor table with its backups, and the resize inode metadata.
+    /// <para>写出各组位图与组描述符、带特性位修补和校验和的超级块、超级块备份副本、组描述符表及其备份，以及 resize inode 元数据。</para>
+    /// </summary>
+    /// <param name="output">Writable stream receiving the image. <para>接收镜像的可写流。</para></param>
+    /// <param name="baseOffset">Stream offset the image starts at. <para>镜像起始的流偏移。</para></param>
+    /// <param name="options">Build options supplying sizes, checksum, and superblock fields. <para>提供大小、校验和与超级块字段的构建选项。</para></param>
+    /// <param name="nodes">Planned nodes whose xattr and project usage patch superblock features. <para>其 xattr 与 project 用量会修补超级块特性位的已规划节点。</para></param>
+    /// <param name="groups">Constructed block groups. <para>已构建的块组。</para></param>
+    /// <param name="backupGroups">Backup superblock group set. <para>备份超级块组集合。</para></param>
+    /// <param name="geometry">Computed group geometry. <para>计算得到的块组几何。</para></param>
+    /// <param name="uuid">Filesystem UUID. <para>文件系统 UUID。</para></param>
+    /// <param name="journalStart">First block of the journal area. <para>日志区域起始块。</para></param>
+    /// <param name="sharedBlocks">Whether the read-only shared-blocks feature is active. <para>只读相同块共享特性是否生效。</para></param>
+    /// <param name="resizeDindirBlock">Reserved resize inode double-indirect block number. <para>预留的 resize inode 二级间接块号。</para></param>
+    private static void WriteGroupMetadata(Stream output, long baseOffset, Ext4Options options, List<Node> nodes, List<GroupInfo> groups, HashSet<int> backupGroups, GroupGeometry geometry, byte[] uuid, long journalStart, bool sharedBlocks, long resizeDindirBlock)
+    {
+        var blockSize = options.BlockSize;
+        var inodeSize = options.InodeSize;
+        var enableMetadataCsum = options.EnableMetadataCsum;
+        var blocksPerGroup = geometry.BlocksPerGroup;
+        var groupCount = geometry.GroupCount;
+        var gdtBlocks = geometry.GdtBlocks;
+        var reservedGdtBlocks = geometry.ReservedGdtBlocks;
+        var inodeTableBlocks = geometry.InodeTableBlocks;
+        var inodesPerGroup = geometry.InodesPerGroup;
+        var journalBlocks = geometry.JournalBlocks;
+        var includeJournal = geometry.IncludeJournal;
+        var totalBlocks = geometry.TotalBlocks;
+        var usedBlocks = geometry.UsedBlocks;
 
         var bitmaps = new List<(byte[] Block, byte[] Inode)>(groupCount);
         var gdtBuffer = new byte[checked((int)(gdtBlocks * blockSize))];
@@ -589,22 +811,22 @@ public sealed partial class Ext4Builder
         WriteSuperblock(superblock, blockSize, inodeSize, (uint)inodesPerGroup, totalBlocks, usedBlocks,
             (int)Math.Max(0, totalInodes - totalFreeInodes), uuid, blocksPerGroup, options.EnableMetadataCsum,
             includeJournal ? JournalInodeNumber : 0u, includeJournal, reservedGdtBlocks, journalIBlock, journalSize, options.VolumeName,
-            options.ReadOnly, allocation.SharedBlocks, options.CasefoldEncoding, options.CasefoldEncodingFlags);
+            options.ReadOnly, sharedBlocks, options.CasefoldEncoding, options.CasefoldEncodingFlags);
         if (nodes.Any(static node => node.AttributeValue is not null))
         {
-            WriteU32(superblock, 0x60, BinaryPrimitives.ReadUInt32LittleEndian(superblock.AsSpan(0x60)) | 0x400u);
+            WriteU32(superblock, SbFeatureIncompat, BinaryPrimitives.ReadUInt32LittleEndian(superblock.AsSpan(SbFeatureIncompat)) | FeatureIncompatEaInode);
         }
         if (nodes.Any(static node => node.SourceMetadata?.ProjectId is > 0))
         {
-            WriteU32(superblock, 0x64, BinaryPrimitives.ReadUInt32LittleEndian(superblock.AsSpan(0x64)) | 0x2000u);
+            WriteU32(superblock, SbFeatureRoCompat, BinaryPrimitives.ReadUInt32LittleEndian(superblock.AsSpan(SbFeatureRoCompat)) | FeatureRoCompatProject);
         }
-        WriteU32(superblock, 0x3FC, ComputeCrc32(superblock.AsSpan(0, 0x3FC), uint.MaxValue));
+        WriteU32(superblock, SbChecksum, ComputeCrc32(superblock.AsSpan(0, SbChecksum), uint.MaxValue));
         WriteAt(output, baseOffset, 1024, superblock, superblock.Length);
 
         foreach (var bg in BackupSuperblockGroups(groupCount))
         {
-            WriteU16(superblock, 0x5A, checked((ushort)bg));
-            WriteU32(superblock, 0x3FC, ComputeCrc32(superblock.AsSpan(0, 0x3FC), 0xFFFF_FFFF));
+            WriteU16(superblock, SbBlockGroupNr, checked((ushort)bg));
+            WriteU32(superblock, SbChecksum, ComputeCrc32(superblock.AsSpan(0, SbChecksum), 0xFFFF_FFFF));
             WriteAt(output, baseOffset, (long)bg * blocksPerGroup * blockSize, superblock, superblock.Length);
         }
 
@@ -629,6 +851,28 @@ public sealed partial class Ext4Builder
             WriteAt(output, baseOffset, group.BlockBitmapBlock * blockSize, blockBitmap, blockBitmap.Length);
             WriteAt(output, baseOffset, group.InodeBitmapBlock * blockSize, inodeBitmap, inodeBitmap.Length);
         }
+    }
+
+    /// <summary>
+    /// Writes the inode table entries, the journal area and its inode, the shared unique blocks, and the node data blocks.
+    /// <para>写出 inode 表项、日志区域及其 inode、共享的唯一块，以及各节点的数据块。</para>
+    /// </summary>
+    /// <param name="output">Writable stream receiving the image. <para>接收镜像的可写流。</para></param>
+    /// <param name="baseOffset">Stream offset the image starts at. <para>镜像起始的流偏移。</para></param>
+    /// <param name="options">Build options supplying sizes and checksum settings. <para>提供大小与校验和设置的构建选项。</para></param>
+    /// <param name="nodes">Planned nodes written as inodes and data. <para>作为 inode 与数据写出的已规划节点。</para></param>
+    /// <param name="groups">Constructed block groups. <para>已构建的块组。</para></param>
+    /// <param name="geometry">Computed group geometry. <para>计算得到的块组几何。</para></param>
+    /// <param name="uuid">Filesystem UUID. <para>文件系统 UUID。</para></param>
+    /// <param name="journalStart">First block of the journal area. <para>日志区域起始块。</para></param>
+    /// <param name="sharedPlan">Active shared-block plan, or <see langword="null"/> when duplicate sharing is disabled. <para>生效的相同块共享计划；未启用共享时为 <see langword="null"/>。</para></param>
+    private static void WriteInodesAndData(Stream output, long baseOffset, Ext4Options options, List<Node> nodes, List<GroupInfo> groups, GroupGeometry geometry, byte[] uuid, long journalStart, SharedBlockPlan? sharedPlan)
+    {
+        var blockSize = options.BlockSize;
+        var inodeSize = options.InodeSize;
+        var inodesPerGroup = geometry.InodesPerGroup;
+        var journalBlocks = geometry.JournalBlocks;
+        var includeJournal = geometry.IncludeJournal;
 
         foreach (var node in nodes)
         {
@@ -655,8 +899,6 @@ public sealed partial class Ext4Builder
                 WriteNodeData(output, baseOffset, node, blockSize);
             }
         }
-
-        output.Position = checked(baseOffset + finalSize);
     }
 
     /// <summary>
@@ -823,7 +1065,7 @@ public sealed partial class Ext4Builder
             {
                 child.SymlinkTarget = new FileInfo(childPath).LinkTarget ?? string.Empty;
                 child.Size = Encoding.UTF8.GetByteCount(child.SymlinkTarget);
-                child.Mode = 0xA1FF;
+                child.Mode = ModeSymbolicLink;
                 child.Mtime = ToUnixSeconds(File.GetLastWriteTimeUtc(childPath));
                 child.Ctime = ToUnixSeconds(File.GetCreationTimeUtc(childPath));
             }
@@ -1231,11 +1473,11 @@ public sealed partial class Ext4Builder
         WriteU16(block, 0x52, 0);
         WriteU32(block, 0x54, FirstUsableInode);
         WriteU16(block, 0x58, (ushort)inodeSize);
-        WriteU16(block, 0x5A, 0);
+        WriteU16(block, SbBlockGroupNr, 0);
 
         WriteU32(block, 0x5C, 0x0038u | (hasJournal ? FeatureCompatHasJournal : 0u));
-        WriteU32(block, 0x60, 0x02C2u | (casefoldEncoding is not null ? 0x20000u : 0u));
-        WriteU32(block, 0x64, 0x006Bu | (enableMetadataCsum ? 0x0400u : 0u)
+        WriteU32(block, SbFeatureIncompat, 0x02C2u | (casefoldEncoding is not null ? 0x20000u : 0u));
+        WriteU32(block, SbFeatureRoCompat, 0x006Bu | (enableMetadataCsum ? 0x0400u : 0u)
             | (readOnly ? 0x1000u : 0u) | (sharedBlocks ? FeatureRoCompatSharedBlocks : 0u));
         Encoding.UTF8.GetBytes(volumeName, block[0x78..0x88]);
         uuid.AsSpan().CopyTo(block[0x68..0x78]);
@@ -1273,8 +1515,8 @@ public sealed partial class Ext4Builder
             WriteU16(block, 0x27E, casefoldEncodingFlags);
         }
 
-        var crc = ComputeCrc32(block[..0x3FC], 0xFFFF_FFFF);
-        WriteU32(block, 0x3FC, crc);
+        var crc = ComputeCrc32(block[..SbChecksum], 0xFFFF_FFFF);
+        WriteU32(block, SbChecksum, crc);
     }
 
     /// <summary>

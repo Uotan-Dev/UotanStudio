@@ -12,6 +12,7 @@ using UotanStudio.Firmware.Archive.Writing;
 using UotanStudio.Firmware.Compression;
 using UotanStudio.Firmware.Compression.Compressors;
 using UotanStudio.Firmware.Compression.Detection;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Metadata;
@@ -147,7 +148,7 @@ public sealed partial class CpioFormatHandler
     }
 
     private static FileStream CreateScratch() => new(
-        Path.Combine(Path.GetTempPath(), $"uotan-cpio-{Guid.NewGuid():N}.tmp"),
+        TempFileHelper.CreateScratchPath("uotan-cpio"),
         FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920,
         FileOptions.SequentialScan | FileOptions.DeleteOnClose);
 

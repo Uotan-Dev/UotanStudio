@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -81,7 +82,7 @@ public sealed class Ext4SparseSuper2Tests
     {
         var image = BuildSparseSuper2Image(backup2: Groups);
         using var stream = new MemoryStream(image, writable: false);
-        var ex = Assert.Throws<InvalidDataException>(() => new Ext4Parser(stream));
+        var ex = Assert.Throws<FileSystemCorruptedException>(() => new Ext4Parser(stream));
         Assert.Contains("backup group", ex.Message, StringComparison.Ordinal);
     }
 
@@ -90,7 +91,7 @@ public sealed class Ext4SparseSuper2Tests
     {
         var image = BuildSparseSuper2Image(firstDataBlock: 1);
         using var stream = new MemoryStream(image, writable: false);
-        var ex = Assert.Throws<InvalidDataException>(() => new Ext4Parser(stream));
+        var ex = Assert.Throws<FileSystemCorruptedException>(() => new Ext4Parser(stream));
         Assert.Contains("first_data_block", ex.Message, StringComparison.Ordinal);
     }
 

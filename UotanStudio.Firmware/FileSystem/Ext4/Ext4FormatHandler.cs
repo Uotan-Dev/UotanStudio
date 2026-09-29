@@ -346,7 +346,7 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider,
         return Enum.TryParse<Ext4PackingCapacityPolicy>(value, ignoreCase: true, out var policy)
             && Enum.IsDefined(policy)
                 ? policy
-                : throw new InvalidDataException($"Unsupported EXT4 capacity policy '{value}'.");
+                : throw new FileSystemUnsupportedFeatureException($"Unsupported EXT4 capacity policy '{value}'.");
     }
 
     private static Ext4BlockSharingMode ParseBlockSharingMode(IReadOnlyDictionary<string, string> options)
@@ -359,7 +359,7 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider,
         return Enum.TryParse<Ext4BlockSharingMode>(value, ignoreCase: true, out var mode)
             && Enum.IsDefined(mode)
                 ? mode
-                : throw new InvalidDataException($"Unsupported EXT4 block sharing mode '{value}'.");
+                : throw new FileSystemUnsupportedFeatureException($"Unsupported EXT4 block sharing mode '{value}'.");
     }
 
     private enum Ext4PackingCapacityPolicy

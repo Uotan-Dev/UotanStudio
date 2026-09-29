@@ -287,7 +287,7 @@ public sealed partial class Ext4Builder
         var length = (int)Math.Min(stream.Length, 2048);
         if (length < 1024 + 256)
         {
-            throw new InvalidDataException("Image is too small to contain an ext4 superblock.");
+            throw new FileSystemCorruptedException("Image is too small to contain an ext4 superblock.");
         }
 
         var buffer = new byte[2048];

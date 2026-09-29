@@ -58,7 +58,7 @@ internal static class ErofsCompression
         var count = (size - 1) / (ulong)clusterSize + 1;
         if (count > int.MaxValue)
         {
-            throw new InvalidDataException($"Pcluster count {count} exceeds the supported limit of {int.MaxValue}.");
+            throw new FileSystemCorruptedException($"Pcluster count {count} exceeds the supported limit of {int.MaxValue}.");
         }
 
         return (int)count;
@@ -182,7 +182,7 @@ internal static class ErofsCompression
     /// <para>区域超出缓冲区、<paramref name="algorithm"/> 未知，或 <paramref name="dictSize"/>/<paramref name="windowBits"/> 超出编解码上限。</para></exception>
     /// <exception cref="InvalidOperationException">DEFLATE or ZSTD output exceeds the destination buffer, or the
     /// LZMA encoder misbehaves. <para>DEFLATE 或 ZSTD 输出超出目标缓冲区，或 LZMA 编码器行为异常。</para></exception>
-    /// <exception cref="InvalidDataException">The LZMA payload does not fit the destination buffer.
+    /// <exception cref="FileSystemCorruptedException">The LZMA payload does not fit the destination buffer.
     /// <para>LZMA 压缩数据放不进目标缓冲区。</para></exception>
     public static int AlgorithmCompress(
         ErofsAlgorithm algorithm,
@@ -356,7 +356,7 @@ internal static class ErofsCompression
         var room = targetLength - (int)output.Position;
         if (payload > room)
         {
-            throw new InvalidDataException("LZMA compressed data exceeds the destination buffer.");
+            throw new FileSystemCorruptedException("LZMA compressed data exceeds the destination buffer.");
         }
 
         output.Write(rawBytes, 1, checked((int)payload));
@@ -383,7 +383,7 @@ internal static class ErofsCompression
 
         if (sourceLength < 1)
         {
-            throw new InvalidDataException("LZMA compressed data is empty.");
+            throw new FileSystemCorruptedException("LZMA compressed data is empty.");
         }
 
         var propertyByte = (byte)~(source[sourceIndex] & 0xFF);
@@ -411,7 +411,7 @@ internal static class ErofsCompression
         decoder.Code(input, output, sourceLength, targetLength, null);
         if (output.Position != targetLength)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"LZMA stream produced {output.Position} bytes, expected {targetLength}.");
         }
 
@@ -514,7 +514,7 @@ internal static class ErofsCompression
         }
         catch (ICSharpCode.SharpZipLib.SharpZipBaseException exception)
         {
-            throw new InvalidDataException("EROFS DEFLATE compressed cluster data is invalid.", exception);
+            throw new FileSystemCorruptedException("EROFS DEFLATE compressed cluster data is invalid.", exception);
         }
     }
 
@@ -543,10 +543,10 @@ internal static class ErofsCompression
 
                 if (inflater.IsNeedingInput)
                 {
-                    throw new InvalidDataException("DEFLATE compressed data is truncated.");
+                    throw new FileSystemCorruptedException("DEFLATE compressed data is truncated.");
                 }
 
-                throw new InvalidDataException("DEFLATE decompressed output exceeds the destination buffer.");
+                throw new FileSystemCorruptedException("DEFLATE decompressed output exceeds the destination buffer.");
             }
 
             var n = inflater.Inflate(target, targetIndex + written, targetLength - written);
@@ -563,10 +563,10 @@ internal static class ErofsCompression
 
             if (inflater.IsNeedingInput)
             {
-                throw new InvalidDataException("DEFLATE compressed data is truncated.");
+                throw new FileSystemCorruptedException("DEFLATE compressed data is truncated.");
             }
 
-            throw new InvalidDataException("DEFLATE decompressor made no progress (corrupt stream).");
+            throw new FileSystemCorruptedException("DEFLATE decompressor made no progress (corrupt stream).");
         }
 
         return written;
@@ -646,7 +646,7 @@ internal static class ErofsCompression
         }
         catch (ZstdException ex)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 "ZSTD decompression failed: the compressed data is corrupt or the destination buffer is too small.", ex);
         }
     }

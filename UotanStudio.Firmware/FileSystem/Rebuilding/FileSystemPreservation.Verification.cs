@@ -21,13 +21,13 @@ public static partial class FileSystemPreservation
             "EXT4" => FileSystemEditPlan.Ext4SemanticFlagMask | 0x102C1000u,
             "F2FS" => FileSystemEditPlan.F2fsSemanticFlagMask | 0x4u,
             "EROFS" => 0u,
-            _ => throw new InvalidDataException($"Unknown filesystem format '{format}'.")
+            _ => throw new FileSystemCorruptedException($"Unknown filesystem format '{format}'.")
         };
         foreach (var entry in entries)
         {
             if (format == "EXT4" && (entry.Flags & 0x40000000) != 0 && (entry.Mode & 0xF000) != 0x4000)
             {
-                throw new InvalidDataException($"EXT4 casefold flag belongs only on directories: '{entry.Path}'.");
+                throw new FileSystemCorruptedException($"EXT4 casefold flag belongs only on directories: '{entry.Path}'.");
             }
             var unsupported = entry.Flags & ~supported;
             if (unsupported != 0)
@@ -65,7 +65,7 @@ public static partial class FileSystemPreservation
         }
         if (actual.Count != plan.Entries.Count)
         {
-            throw new InvalidDataException("Rebuilt filesystem entry count differs from the edit plan.");
+            throw new FileSystemCorruptedException("Rebuilt filesystem entry count differs from the edit plan.");
         }
         var sourceLinks = new Dictionary<ulong, ulong>();
         var outputLinks = new Dictionary<ulong, ulong>();
@@ -84,14 +84,14 @@ public static partial class FileSystemPreservation
                 || expected.SymlinkTarget != found.SymlinkTarget
                 || (expected.Mode & 0xF000) is 0x2000 or 0x6000 && expected.DeviceId != found.DeviceId)
             {
-                throw new InvalidDataException($"Rebuilt inode attributes differ for '{path}'.");
+                throw new FileSystemCorruptedException($"Rebuilt inode attributes differ for '{path}'.");
             }
             var xattrs = expected.Xattrs?.Where(pair => pair.Key != "system.data").ToArray() ?? [];
             var actualXattrs = found.Xattrs?.Where(pair => pair.Key != "system.data").ToDictionary(StringComparer.Ordinal) ?? [];
             if (xattrs.Length != actualXattrs.Count || xattrs.Any(pair =>
                     !actualXattrs.TryGetValue(pair.Key, out var value) || !pair.Value.AsSpan().SequenceEqual(value)))
             {
-                throw new InvalidDataException($"Rebuilt extended attributes differ for '{path}'.");
+                throw new FileSystemCorruptedException($"Rebuilt extended attributes differ for '{path}'.");
             }
             VerifyInodeMetadata(expected.Metadata, found.Metadata, path);
             if (expected.Inode != 0 && (expected.Mode & 0xF000) != 0x4000)
@@ -99,7 +99,7 @@ public static partial class FileSystemPreservation
                 if (sourceLinks.TryGetValue(expected.Inode, out var target) && target != found.Inode
                     || outputLinks.TryGetValue(found.Inode, out var original) && original != expected.Inode)
                 {
-                    throw new InvalidDataException($"Rebuilt hardlink relationships differ for '{path}'.");
+                    throw new FileSystemCorruptedException($"Rebuilt hardlink relationships differ for '{path}'.");
                 }
                 sourceLinks[expected.Inode] = found.Inode;
                 outputLinks[found.Inode] = expected.Inode;
@@ -132,7 +132,7 @@ public static partial class FileSystemPreservation
                 }
                 break;
             default:
-                throw new InvalidDataException("Rebuilt filesystem format is not recognized.");
+                throw new FileSystemCorruptedException("Rebuilt filesystem format is not recognized.");
         }
     }
 
@@ -160,7 +160,7 @@ public static partial class FileSystemPreservation
                 var host = manifest.ImagePaths.GetValueOrDefault(entry.Path, entry.Path);
                 if (!manifest.Projection.TryGetValue(host, out var projection))
                 {
-                    throw new InvalidDataException($"Extracted file is missing from the snapshot: '{entry.Path}'.");
+                    throw new FileSystemCorruptedException($"Extracted file is missing from the snapshot: '{entry.Path}'.");
                 }
                 using var hash = new HashingWriteStream(Stream.Null, leaveOpen: true);
                 using var bounded = new CountingWriteStream(hash, entry.Size,
@@ -168,7 +168,7 @@ public static partial class FileSystemPreservation
                 read(entry.Path, bounded);
                 if (!string.Equals("file:" + hash.GetHashHex(), ProjectionIdentity(projection), StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new InvalidDataException($"Extracted content does not match the source image: '{entry.Path}'.");
+                    throw new FileSystemCorruptedException($"Extracted content does not match the source image: '{entry.Path}'.");
                 }
             }
         }, token);
@@ -191,7 +191,7 @@ public static partial class FileSystemPreservation
             || expected.F2fsAdvise != actual.F2fsAdvise
             || expected.F2fsCompression != actual.F2fsCompression)
         {
-            throw new InvalidDataException($"Rebuilt inode timestamps or identity differ for '{path}'.");
+            throw new FileSystemCorruptedException($"Rebuilt inode timestamps or identity differ for '{path}'.");
         }
     }
 
@@ -210,7 +210,7 @@ public static partial class FileSystemPreservation
             read(entry.Path, bounded);
             if (!string.Equals(hash.GetHashHex(), HashFile(source, token), StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidDataException($"Rebuilt file content differs for '{entry.Path}'.");
+                throw new FileSystemCorruptedException($"Rebuilt file content differs for '{entry.Path}'.");
             }
         }
     }

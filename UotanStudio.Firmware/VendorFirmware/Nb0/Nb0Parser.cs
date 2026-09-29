@@ -133,7 +133,7 @@ public static class Nb0Parser
         ArgumentNullException.ThrowIfNull(stream);
 
         using var reader = new BinaryReader(stream, Encoding.ASCII, leaveOpen: true);
-        return ParseCore(reader, stream);
+        return ParseCore(reader);
     }
 
     /// <summary>
@@ -212,8 +212,9 @@ public static class Nb0Parser
         return metadata;
     }
 
-    internal static Nb0Metadata ParseCore(BinaryReader reader, Stream stream)
+    internal static Nb0Metadata ParseCore(BinaryReader reader)
     {
+        var stream = reader.BaseStream;
         var countBytes = reader.ReadBytes(4);
         var rawCount = BitConverter.ToUInt32(countBytes, 0);
         if (rawCount > int.MaxValue)

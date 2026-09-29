@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
@@ -23,7 +24,7 @@ public sealed class ErofsPatchReadLimitsTests : IDisposable
         new ErofsBuilder().Build(source, image, new ErofsOptions { Compress = false });
         using var input = File.OpenRead(image);
         using var parser = new ErofsParser(input, entries, characters, TestContext.Current.CancellationToken);
-        Assert.Throws<InvalidDataException>(() => parser.EnumerateFiles());
+        Assert.Throws<FileSystemCorruptedException>(() => parser.EnumerateFiles());
     }
 
     [Theory]

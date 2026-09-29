@@ -2,6 +2,7 @@ using System.Formats.Tar;
 using System.Globalization;
 using System.IO.Compression;
 using UotanStudio.Firmware.Compression;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Firmware.OtaDelta.Diff;
@@ -237,7 +238,7 @@ public static class DatSplitImporter
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-        var temporary = destination + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(destination);
         try
         {
             await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write,

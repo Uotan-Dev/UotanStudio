@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
@@ -291,7 +292,7 @@ public class ErofsTests
 
         var truncated = image[..Math.Max(1, image.Length - 20_000)].ToArray();
         using var parser = new ErofsParser(truncated);
-        Assert.Throws<InvalidDataException>(() => parser.ReadFileBytes("large.txt"));
+        Assert.Throws<FileSystemCorruptedException>(() => parser.ReadFileBytes("large.txt"));
     }
 
     [Fact]
@@ -308,7 +309,7 @@ public class ErofsTests
         var outDir = System.IO.Path.Combine(temp.Path, "out");
 
         using var parser = new ErofsParser(imagePath);
-        Assert.Throws<InvalidDataException>(() => parser.ExtractToDirectory(outDir));
+        Assert.Throws<FileSystemCorruptedException>(() => parser.ExtractToDirectory(outDir));
         Assert.Empty(Directory.GetFiles(outDir, "*.tmp-*", SearchOption.AllDirectories));
     }
 
@@ -421,7 +422,7 @@ public class ErofsTests
     }
 
     [Fact]
-    public void Parser_UnsupportedDataLayout_ThrowsInvalidDataException()
+    public void Parser_UnsupportedDataLayout_ThrowsFileSystemUnsupportedFeatureException()
     {
         const int blockSize = 4096;
         var image = new byte[blockSize * 3];
@@ -460,7 +461,7 @@ public class ErofsTests
         using var parser = new ErofsParser(image);
         var entry = parser.EnumerateFiles().Single();
         Assert.Equal("x", entry.Path);
-        Assert.Throws<InvalidDataException>(() => parser.ReadFileBytes("x"));
+        Assert.Throws<FileSystemUnsupportedFeatureException>(() => parser.ReadFileBytes("x"));
     }
 
     [Fact]

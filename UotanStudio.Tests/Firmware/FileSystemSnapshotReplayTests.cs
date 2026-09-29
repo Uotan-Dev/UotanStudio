@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
@@ -175,7 +176,7 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
         }
         else
         {
-            Assert.Throws<InvalidDataException>(() => FileSystemPreservation.ReplaySnapshot(captured, output, Token));
+            Assert.Throws<FileSystemCorruptedException>(() => FileSystemPreservation.ReplaySnapshot(captured, output, Token));
         }
 
         Assert.Equal("keep-existing-output", await File.ReadAllTextAsync(output, Token));
@@ -269,7 +270,7 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
         var output = Path.Combine(root, "replayed.img");
         await File.WriteAllTextAsync(output, "keep-existing-output", Token);
 
-        Assert.Throws<InvalidDataException>(() => FileSystemPreservation.ReplaySnapshot(captured, output, Token));
+        Assert.Throws<FileSystemUnsupportedFeatureException>(() => FileSystemPreservation.ReplaySnapshot(captured, output, Token));
 
         Assert.Equal("keep-existing-output", await File.ReadAllTextAsync(output, Token));
     }
@@ -344,7 +345,7 @@ public sealed class FileSystemSnapshotReplayTests : IDisposable
         byte[] table = [4, 0, 1, (byte)'a', (byte)'b', (byte)'.', 0, 0, 3, 0, 6, (byte)'c', (byte)'.'];
         var prefixes = UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattr.ParsePrefixTable(table, 2);
         Assert.Equal([(1, "ab."), (6, "c.")], prefixes.Select(prefix => ((int)prefix.BaseIndex, prefix.Infix)));
-        Assert.Throws<InvalidDataException>(() =>
+        Assert.Throws<FileSystemCorruptedException>(() =>
             UotanStudio.Firmware.FileSystem.Erofs.Models.ErofsXattr.ParsePrefixTable(table[..^1], 2));
     }
 

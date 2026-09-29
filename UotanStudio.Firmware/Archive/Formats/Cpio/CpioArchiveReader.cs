@@ -1,6 +1,7 @@
 using System.Text;
 using UotanStudio.Firmware.Archive.Models;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.Archive.Formats.Cpio;
@@ -121,7 +122,7 @@ internal sealed class CpioArchiveReader
         }
         if (!stream.CanSeek)
         {
-            var temporaryPath = Path.Combine(Path.GetTempPath(), "uotan-cpio-" + Guid.NewGuid().ToString("N"));
+            var temporaryPath = TempFileHelper.CreateScratchPath("uotan-cpio", "");
             using var temporary = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.ReadWrite,
                 FileShare.None, 65536, FileOptions.DeleteOnClose);
             using (var bounded = new CountingWriteStream(temporary, maximumSpoolBytes,

@@ -1,6 +1,6 @@
 using System.IO.Compression;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.OtaDelta.Payload;
-using UotanStudio.Firmware.OtaDelta.Payload.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.Models;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 
@@ -132,16 +132,16 @@ public static partial class PayloadParser
         }
     }
 
-    private static string ExtractPayloadFromZip(string filepath)
+    private static string ExtractPayloadFromZip(string filePath)
     {
-        using var zr = ZipFile.OpenRead(filepath);
-        var zf = FindPayloadEntry(zr)
+        using var archive = ZipFile.OpenRead(filePath);
+        var payloadEntry = FindPayloadEntry(archive)
             ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
         var tempPath = TempFileHelper.CreateTempFile();
         using (var outFile = File.Create(tempPath))
-        using (var zfStream = zf.Open())
+        using (var entryStream = payloadEntry.Open())
         {
-            zfStream.CopyTo(outFile);
+            entryStream.CopyTo(outFile);
         }
 
         return tempPath;

@@ -28,11 +28,11 @@ internal static class JksKeyStoreReader
     public static IReadOnlyList<JksEntry> Read(byte[] data, string password)
     {
         var offset = 0;
-        if (ReadInt32(data, ref offset) != unchecked((int)0xFEEDFEED)) throw new InvalidDataException("不是 JKS 密钥库（magic 不匹配）。");
+        if (ReadInt32(data, ref offset) != JksKeyStoreWriter.Magic) throw new InvalidDataException("Not a JKS keystore (magic mismatch).");
         var version = ReadInt32(data, ref offset);
-        if (version is not (1 or 2)) throw new InvalidDataException($"不支持的 JKS 版本：{version}。");
+        if (version is not (1 or 2)) throw new InvalidDataException($"Unsupported JKS version: {version}.");
         var count = ReadInt32(data, ref offset);
-        if (count < 0 || count > 1_000_000) throw new InvalidDataException("JKS 条目数超出范围。");
+        if (count < 0 || count > 1_000_000) throw new InvalidDataException("JKS entry count is out of range.");
 
         var digest = IntegrityDigest(password);
         var bodyStart = offset;
@@ -47,7 +47,7 @@ internal static class JksKeyStoreReader
                 case 1:
                     var protectedKey = ReadBounded(data, ref offset);
                     var certCount = ReadInt32(data, ref offset);
-                    if (certCount is < 0 or > 16) throw new InvalidDataException("JKS 证书链长度超出范围。");
+                    if (certCount is < 0 or > 16) throw new InvalidDataException("JKS certificate chain length is out of range.");
                     var chain = new List<byte[]>(certCount);
                     for (var c = 0; c < certCount; c++)
                     {
@@ -62,16 +62,16 @@ internal static class JksKeyStoreReader
                     entries.Add(new JksEntry(tag, alias, creation, null, [certificate]));
                     break;
                 default:
-                    throw new InvalidDataException($"未识别的 JKS 条目类型：{tag}。");
+                    throw new InvalidDataException($"Unrecognized JKS entry type: {tag}.");
             }
         }
 
         digest.AppendData(data, bodyStart, offset - bodyStart);
         var computed = digest.GetHashAndReset();
-        if (offset + computed.Length != data.Length) throw new InvalidDataException("JKS 尾部长度不符，密钥库已损坏。");
+        if (offset + computed.Length != data.Length) throw new InvalidDataException("JKS trailer length mismatch; the keystore is corrupted.");
         for (var i = 0; i < computed.Length; i++)
         {
-            if (computed[i] != data[offset + i]) throw new InvalidDataException("密码错误或密钥库已被篡改。");
+            if (computed[i] != data[offset + i]) throw new InvalidDataException("Wrong password or the keystore has been tampered with.");
         }
         return entries;
     }
@@ -94,7 +94,7 @@ internal static class JksKeyStoreReader
         const int digestLength = 20;
         ArgumentNullException.ThrowIfNull(protectedKey);
         if (protectedKey.Length < saltLength + digestLength + 1)
-            throw new InvalidDataException("JKS 受保护私钥长度不合法。");
+            throw new InvalidDataException("Invalid JKS protected private key length.");
         var keyLength = protectedKey.Length - saltLength - digestLength;
         var passwordBytes = EncodePassword(password);
         try
@@ -119,7 +119,7 @@ internal static class JksKeyStoreReader
             if (!computed.AsSpan().SequenceEqual(protectedKey.AsSpan(saltLength + keyLength, digestLength)))
             {
                 CryptographicOperations.ZeroMemory(plainKey);
-                throw new InvalidDataException("密码错误或私钥条目已被篡改。");
+                throw new InvalidDataException("Wrong password or the private key entry has been tampered with.");
             }
             return plainKey;
         }
@@ -154,7 +154,7 @@ internal static class JksKeyStoreReader
     private static int ReadInt32(byte[] data, ref int offset)
     {
         const int size = 4;
-        if (offset > data.Length - size) throw new EndOfStreamException("JKS 数据提前结束。");
+        if (offset > data.Length - size) throw new EndOfStreamException("JKS data ended prematurely.");
         var value = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
         offset += size;
         return value;
@@ -163,7 +163,7 @@ internal static class JksKeyStoreReader
     private static long ReadInt64(byte[] data, ref int offset)
     {
         const int size = 8;
-        if (offset > data.Length - size) throw new EndOfStreamException("JKS 数据提前结束。");
+        if (offset > data.Length - size) throw new EndOfStreamException("JKS data ended prematurely.");
         long value = 0;
         for (var i = 0; i < size; i++) value = (value << 8) | data[offset + i];
         offset += size;
@@ -173,7 +173,7 @@ internal static class JksKeyStoreReader
     private static int ReadInt16(byte[] data, ref int offset)
     {
         const int size = 2;
-        if (offset > data.Length - size) throw new EndOfStreamException("JKS 数据提前结束。");
+        if (offset > data.Length - size) throw new EndOfStreamException("JKS data ended prematurely.");
         var value = (data[offset] << 8) | data[offset + 1];
         offset += size;
         return value;
@@ -182,7 +182,7 @@ internal static class JksKeyStoreReader
     private static byte[] ReadBounded(byte[] data, ref int offset)
     {
         var length = ReadInt32(data, ref offset);
-        if (length < 0 || length > data.Length - offset) throw new InvalidDataException("JKS 块长度越界。");
+        if (length < 0 || length > data.Length - offset) throw new InvalidDataException("JKS block length is out of bounds.");
         var bytes = new byte[length];
         Array.Copy(data, offset, bytes, 0, length);
         offset += length;
@@ -194,7 +194,7 @@ internal static class JksKeyStoreReader
     private static string ReadModifiedUtf(byte[] data, ref int offset)
     {
         var length = ReadInt16(data, ref offset);
-        if (length > data.Length - offset) throw new InvalidDataException("JKS 字符串长度越界。");
+        if (length > data.Length - offset) throw new InvalidDataException("JKS string length is out of bounds.");
         var chars = new List<char>(length);
         for (var i = 0; i < length;)
         {
@@ -206,17 +206,17 @@ internal static class JksKeyStoreReader
             }
             else if ((a & 0xE0) == 0xC0)
             {
-                if (i + 1 >= length) throw new InvalidDataException("JKS 字符串截断。");
+                if (i + 1 >= length) throw new InvalidDataException("JKS string is truncated.");
                 chars.Add((char)(((a & 0x1F) << 6) | (data[offset + i + 1] & 0x3F)));
                 i += 2;
             }
             else if ((a & 0xF0) == 0xE0)
             {
-                if (i + 2 >= length) throw new InvalidDataException("JKS 字符串截断。");
+                if (i + 2 >= length) throw new InvalidDataException("JKS string is truncated.");
                 chars.Add((char)(((a & 0x0F) << 12) | ((data[offset + i + 1] & 0x3F) << 6) | (data[offset + i + 2] & 0x3F)));
                 i += 3;
             }
-            else throw new InvalidDataException("JKS 字符串编码非法。");
+            else throw new InvalidDataException("Invalid JKS string encoding.");
         }
         offset += length;
         return new string(chars.ToArray());
@@ -232,7 +232,9 @@ internal static class JksKeyStoreReader
 /// </summary>
 public static class JksKeyStoreWriter
 {
-    private const int Magic = unchecked((int)0xFEEDFEED);
+    /// <summary>JKS v1 magic shared by the writer and the reader's magic check.</summary>
+    /// <para>JKS v1 魔数，供写出方与读取方的魔数校验共用。</para>
+    internal const int Magic = unchecked((int)0xFEEDFEED);
     private const int Version = 1;
     private const int PrivateKeyTag = 1;
     private const int SaltLength = 20;
@@ -252,13 +254,13 @@ public static class JksKeyStoreWriter
     /// <exception cref="ArgumentException">The alias is empty or longer than 255 characters (or exceeds 65535 modified UTF-8 bytes), the password is empty, the private key is empty, or the chain is empty or holds a certificate of zero bytes or more than 4 MiB. <para>别名为空或超过 255 个字符（或修改版 UTF-8 超过 65535 字节）、密码为空、私钥为空，或证书链为空、包含 0 字节或超过 4 MiB 的证书。</para></exception>
     public static byte[] Build(string alias, byte[] pkcs8PrivateKey, IReadOnlyList<byte[]> certificateChain, string password, DateTimeOffset? creation = null)
     {
-        if (string.IsNullOrEmpty(alias) || alias.Length > 255) throw new ArgumentException("别名须为 1–255 个字符。");
-        if (string.IsNullOrEmpty(password)) throw new ArgumentException("必须提供密钥库密码。");
-        if (pkcs8PrivateKey.Length == 0) throw new ArgumentException("私钥内容为空。");
-        if (certificateChain.Count == 0) throw new ArgumentException("证书链不能为空。");
+        if (string.IsNullOrEmpty(alias) || alias.Length > 255) throw new ArgumentException("Alias must be 1–255 characters.");
+        if (string.IsNullOrEmpty(password)) throw new ArgumentException("A keystore password must be provided.");
+        if (pkcs8PrivateKey.Length == 0) throw new ArgumentException("The private key is empty.");
+        if (certificateChain.Count == 0) throw new ArgumentException("The certificate chain cannot be empty.");
         foreach (var certificate in certificateChain)
         {
-            if (certificate.Length == 0 || certificate.Length > 1 << 22) throw new ArgumentException("证书大小超出范围。");
+            if (certificate.Length == 0 || certificate.Length > 1 << 22) throw new ArgumentException("Certificate size is out of range.");
         }
 
         var protectedKey = Protect(pkcs8PrivateKey, password);
@@ -398,7 +400,7 @@ public static class JksKeyStoreWriter
     {
         var length = 0;
         foreach (var ch in value) length += ch switch { '\0' => 2, <= '\u007F' => 1, <= '\u07FF' => 2, _ => 3 };
-        if (length > 0xFFFF) throw new ArgumentException("别名过长（修改版 UTF-8 超过 65535 字节）。");
+        if (length > 0xFFFF) throw new ArgumentException("Alias is too long (modified UTF-8 exceeds 65535 bytes).");
         var bytes = new byte[length];
         var offset = 0;
         foreach (var ch in value)

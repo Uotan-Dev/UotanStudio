@@ -156,7 +156,7 @@ internal static class F2fsCompression
         var decoded = LZ4Codec.Decode(compressed, result);
         if (decoded < 0)
         {
-            throw new InvalidDataException("LZ4 decompression failed.  LZ4 解压失败。");
+            throw new FileSystemCorruptedException("LZ4 decompression failed.  LZ4 解压失败。");
         }
 
         return decoded == expectedSize ? result : result.AsSpan(0, Math.Min(decoded, expectedSize)).ToArray();

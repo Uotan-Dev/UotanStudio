@@ -15,8 +15,8 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
     private const int MaximumOutputChars = 16 * 1024;
 
     /// <summary>
-    /// Translates a host path into the form the native tools see: plain full-path resolution outside Windows, a blocking <c>wslpath</c> invocation inside the configured WSL distribution on Windows.
-    /// <para>将主机路径转换为本机工具可见的形式：非 Windows 平台直接解析完整路径；Windows 在已配置的 WSL 发行版内阻塞调用 <c>wslpath</c>。</para>
+    /// Translates a host path into the form the native tools see: plain full-path resolution outside Windows, a synchronous one-shot <c>wslpath</c> process inside the configured WSL distribution on Windows. Asynchronous callers on Windows should prefer <see cref="PathForToolAsync"/> so the WSL round trip does not occupy a thread.
+    /// <para>将主机路径转换为本机工具可见的形式：非 Windows 平台直接解析完整路径；Windows 在已配置的 WSL 发行版内以一次性同步进程运行 <c>wslpath</c>。Windows 上的异步调用方应优先使用 <see cref="PathForToolAsync"/>，避免 WSL 往返占用线程。</para>
     /// </summary>
     /// <param name="path">Host path resolved with <c>Path.GetFullPath</c> before translation.
     /// <para>转换前先经 <c>Path.GetFullPath</c> 解析的主机路径。</para></param>
@@ -45,7 +45,7 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
             throw new PlatformNotSupportedException("Native filesystem tools on Windows require an explicit WSL distribution.");
         }
 
-        var result = RunAsync("wslpath", [fullPath.Replace('\\', '/')], cancellationToken).GetAwaiter().GetResult();
+        var result = RunWslPathSync(fullPath.Replace('\\', '/'), cancellationToken);
         RequireSuccess("wslpath", result);
         var translated = result.Output.Trim();
         if (!translated.StartsWith('/'))
@@ -54,6 +54,114 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
         }
 
         return translated;
+    }
+
+    /// <summary>
+    /// Translates a host path into the form the native tools see: plain full-path resolution outside Windows, an awaited <c>wslpath</c> run through <see cref="RunAsync"/> inside the configured WSL distribution on Windows.
+    /// <para>将主机路径转换为本机工具可见的形式：非 Windows 平台直接解析完整路径；Windows 在已配置的 WSL 发行版内经由 <see cref="RunAsync"/> 等待运行 <c>wslpath</c>。</para>
+    /// </summary>
+    /// <param name="path">Host path resolved with <c>Path.GetFullPath</c> before translation.
+    /// <para>转换前先经 <c>Path.GetFullPath</c> 解析的主机路径。</para></param>
+    /// <param name="cancellationToken">Cancels the <c>wslpath</c> process and kills its tree.
+    /// <para>取消 <c>wslpath</c> 进程并终止其进程树。</para></param>
+    /// <returns>A task carrying the absolute path as seen by tools running in the WSL distribution.
+    /// <para>携带在 WSL 发行版中运行的工具所见绝对路径的任务。</para></returns>
+    /// <exception cref="PlatformNotSupportedException">Windows without a configured WSL distribution.
+    /// <para>Windows 下未配置 WSL 发行版。</para></exception>
+    /// <exception cref="InvalidDataException"><c>wslpath</c> exited with a non-zero code.
+    /// <para><c>wslpath</c> 以非零退出码结束。</para></exception>
+    /// <exception cref="IOException">The process could not start, or <c>wslpath</c> returned a path that does not begin with <c>/</c>.
+    /// <para>无法启动进程，或 <c>wslpath</c> 返回了不以 <c>/</c> 开头的路径。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌被取消。</para></exception>
+    public async Task<string> PathForToolAsync(string path, CancellationToken cancellationToken = default)
+    {
+        var fullPath = Path.GetFullPath(path);
+        if (!OperatingSystem.IsWindows())
+        {
+            return fullPath;
+        }
+
+        if (string.IsNullOrWhiteSpace(wslDistribution))
+        {
+            throw new PlatformNotSupportedException("Native filesystem tools on Windows require an explicit WSL distribution.");
+        }
+
+        var result = await RunAsync("wslpath", [fullPath.Replace('\\', '/')], cancellationToken).ConfigureAwait(false);
+        RequireSuccess("wslpath", result);
+        var translated = result.Output.Trim();
+        if (!translated.StartsWith('/'))
+        {
+            throw new IOException("WSL did not return an absolute path.");
+        }
+
+        return translated;
+    }
+
+    /// <summary>
+    /// Runs <c>wslpath</c> once as a synchronous process: stderr is drained through the event API so a full error pipe cannot deadlock the synchronous stdout read, cancellation kills the process tree, and the merged capture stays bounded at <see cref="MaximumOutputChars"/> characters.
+    /// <para>以同步进程方式运行一次 <c>wslpath</c>：stderr 经事件 API 排空，错误管道写满也不会让同步的 stdout 读取死锁；取消时终止进程树，合并捕获上限为 <see cref="MaximumOutputChars"/> 字符。</para>
+    /// </summary>
+    private NativeToolResult RunWslPathSync(string toolPath, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var info = new ProcessStartInfo
+        {
+            FileName = "wsl.exe",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        info.ArgumentList.Add("-d");
+        info.ArgumentList.Add(wslDistribution!);
+        info.ArgumentList.Add("--");
+        info.ArgumentList.Add("wslpath");
+        info.ArgumentList.Add(toolPath);
+
+        using var process = new Process { StartInfo = info };
+        if (!process.Start())
+        {
+            throw new IOException("Could not start wslpath.");
+        }
+
+        using var registration = cancellationToken.Register(() =>
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { }
+        });
+        var output = new StringBuilder();
+        process.ErrorDataReceived += (_, args) =>
+        {
+            if (args.Data is null)
+            {
+                return;
+            }
+
+            lock (output)
+            {
+                var remaining = MaximumOutputChars - output.Length;
+                if (remaining > 0)
+                {
+                    output.Append(args.Data, 0, Math.Min(args.Data.Length, remaining));
+                    output.Append('\n');
+                }
+            }
+        };
+        process.BeginErrorReadLine();
+        var stdout = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (output)
+        {
+            var remaining = MaximumOutputChars - output.Length;
+            if (remaining > 0)
+            {
+                output.Append(stdout, 0, Math.Min(stdout.Length, remaining));
+            }
+        }
+
+        return new NativeToolResult(process.ExitCode, output.ToString());
     }
 
     /// <summary>
@@ -244,12 +352,12 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
             if (options.FsConfigPath is not null)
             {
                 arguments.Add("-f");
-                arguments.Add(PathForTool(options.FsConfigPath, cancellationToken));
+                arguments.Add(await PathForToolAsync(options.FsConfigPath, cancellationToken).ConfigureAwait(false));
             }
             if (options.FileContextsPath is not null)
             {
                 arguments.Add("-S");
-                arguments.Add(PathForTool(options.FileContextsPath, cancellationToken));
+                arguments.Add(await PathForToolAsync(options.FileContextsPath, cancellationToken).ConfigureAwait(false));
             }
             if (options.Label is { } label)
             {
@@ -261,8 +369,8 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
                 arguments.Add("-s");
                 arguments.Add(partitionSize.ToString(CultureInfo.InvariantCulture));
             }
-            arguments.Add(PathForTool(temporary, cancellationToken));
-            arguments.Add(PathForTool(source, cancellationToken));
+            arguments.Add(await PathForToolAsync(temporary, cancellationToken).ConfigureAwait(false));
+            arguments.Add(await PathForToolAsync(source, cancellationToken).ConfigureAwait(false));
 
             var result = await RunAsync("make_ext4fs", arguments, cancellationToken).ConfigureAwait(false);
             RequireSuccess("make_ext4fs", result);
@@ -361,7 +469,7 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
             throw new FileNotFoundException("Android file_contexts file was not found.", fileContexts);
         }
         RejectOutputInsideSource(source, destination);
-        var fsConfigToolPath = fsConfigIsBuiltin ? options.FsConfig : PathForTool(options.FsConfig, cancellationToken);
+        var fsConfigToolPath = fsConfigIsBuiltin ? options.FsConfig : await PathForToolAsync(options.FsConfig, cancellationToken).ConfigureAwait(false);
 
         var directory = Path.GetDirectoryName(destination)!;
         Directory.CreateDirectory(directory);
@@ -373,7 +481,7 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
                 image.SetLength(options.ImageSizeBytes);
             }
 
-            var imagePath = PathForTool(temporary, cancellationToken);
+            var imagePath = await PathForToolAsync(temporary, cancellationToken).ConfigureAwait(false);
             var mkfsArguments = new List<string>
             {
                 "-F", "-q", "-t", options.MkfsType, "-T", options.MkfsProfile,
@@ -391,7 +499,7 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
             if (options.FileContextsPath is not null)
             {
                 droidArguments.Add("-S");
-                droidArguments.Add(PathForTool(options.FileContextsPath, cancellationToken));
+                droidArguments.Add(await PathForToolAsync(options.FileContextsPath, cancellationToken).ConfigureAwait(false));
             }
             droidArguments.Add("-a");
             droidArguments.Add(options.MountPoint);
@@ -409,7 +517,7 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
             {
                 droidArguments.Add("-u");
             }
-            droidArguments.Add(PathForTool(source, cancellationToken));
+            droidArguments.Add(await PathForToolAsync(source, cancellationToken).ConfigureAwait(false));
             droidArguments.Add(imagePath);
 
             var result = await RunAsync("e2fsdroid", droidArguments, cancellationToken).ConfigureAwait(false);

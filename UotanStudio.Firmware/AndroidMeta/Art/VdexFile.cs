@@ -1,3 +1,5 @@
+using UotanStudio.Firmware.Core.IO;
+
 namespace UotanStudio.Firmware.AndroidMeta.Art;
 
 /// <summary>
@@ -59,7 +61,7 @@ internal static partial class VdexFile
         {
             throw new NotSupportedException("This VDEX contains no exportable DEX section.");
         }
-        var temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        var temporary = TempFileHelper.CreateAdjacentPath(destination);
         Directory.CreateDirectory(temporary);
         try
         {
@@ -143,7 +145,7 @@ internal static partial class VdexFile
             throw new InvalidDataException("Replacement count differs from the template.");
         }
         var destination = Path.GetFullPath(outputPath);
-        var temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        var temporary = TempFileHelper.CreateAdjacentPath(destination);
         try
         {
             using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite))

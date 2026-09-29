@@ -12,6 +12,25 @@ namespace UotanStudio.Firmware.FileSystem.Ext4.Builder;
 /// </summary>
 public sealed partial class Ext4Builder
 {
+    private const int InodeModeOffset = 0;
+    private const int InodeUidLowOffset = 2;
+    private const int InodeSizeLowOffset = 4;
+    private const int InodeGidLowOffset = 24;
+    private const int InodeChecksumLowOffset = 124;
+    private const int InodeChecksumHighOffset = 130;
+
+    /// <summary>
+    /// Offset of the slot holding a device node's device number as written by this builder (the second direct-block slot, matching the parser's first-nonzero-slot read).
+    /// <para>本构建器写入设备号的槽位偏移（第二个直接块槽，与解析器“首个非零槽”的读取方式对应）。</para>
+    /// </summary>
+    private const int InodeDeviceIdOffset = 44;
+
+    /// <summary>
+    /// Start of the inline xattr area inside the inode: the base inode size plus <see cref="Ext4ExtraIsize"/>, where the xattr header magic begins.
+    /// <para>inode 内联 xattr 区的起始偏移：基础 inode 大小加 <see cref="Ext4ExtraIsize"/>，即 xattr 头部幻数所在位置。</para>
+    /// </summary>
+    private const int InodeInlineXattrHeaderOffset = 128 + Ext4ExtraIsize;
+
     /// <summary>
     /// Writes the journal area: a journal superblock at journalStart, with the remaining blocks zeroed out.
     /// <para>写出日志区域：在 journalStart 处写入日志超级块，剩余块清零。</para>
@@ -45,14 +64,14 @@ public sealed partial class Ext4Builder
         var size = checked((long)journalBlocks * blockSize);
         var sectorBlocks = (ulong)journalBlocks * ((ulong)blockSize / 512);
 
-        WriteU16(inode, 0, ModeJournalFile);
-        WriteU16(inode, 2, 0);
-        WriteU32(inode, 4, (uint)(size & 0xFFFFFFFF));
+        WriteU16(inode, InodeModeOffset, ModeJournalFile);
+        WriteU16(inode, InodeUidLowOffset, 0);
+        WriteU32(inode, InodeSizeLowOffset, (uint)(size & 0xFFFFFFFF));
         WriteU32(inode, 8, FixedTimestamp);
         WriteU32(inode, 12, FixedTimestamp);
         WriteU32(inode, 16, FixedTimestamp);
         WriteU32(inode, 20, 0);
-        WriteU16(inode, 24, 0);
+        WriteU16(inode, InodeGidLowOffset, 0);
         WriteU16(inode, 26, 1);
         WriteU32(inode, 28, (uint)sectorBlocks);
         WriteU32(inode, 32, FlagExtents);
@@ -97,7 +116,7 @@ public sealed partial class Ext4Builder
         if (node.IsSpecial)
         {
             flags = 0;
-            if ((node.Mode & 0xF000) is 0x2000 or 0x6000) WriteU32(inode, 44, node.DeviceId);
+            if ((node.Mode & 0xF000) is 0x2000 or 0x6000) WriteU32(inode, InodeDeviceIdOffset, node.DeviceId);
         }
         else if (isFastSymlink)
         {
@@ -109,10 +128,10 @@ public sealed partial class Ext4Builder
             flags = FlagInlineData;
 
             var fi = new FileInfo(node.FullPath);
-            const int xattrEntry = 128 + Ext4ExtraIsize + 4;
+            const int xattrEntry = InodeInlineXattrHeaderOffset + 4;
             var maxLen = 60 + Math.Max(0, inodeSize - xattrEntry - 24);
             if (fi.Length > maxLen || inodeSize < xattrEntry + 24)
-                throw new InvalidDataException("EXT4 inline data does not fit its system.data xattr.");
+                throw new FileSystemCorruptedException("EXT4 inline data does not fit its system.data xattr.");
             var readLen = checked((int)fi.Length);
             var content = new byte[readLen];
             using (var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -125,7 +144,7 @@ public sealed partial class Ext4Builder
                 content.AsSpan(0, iBlockLen).CopyTo(inode.AsSpan(40));
             }
             WriteU16(inode, 128, Ext4ExtraIsize);
-            WriteU32(inode, xattrEntry - 4, 0xEA020000);
+            WriteU32(inode, InodeInlineXattrHeaderOffset, Ext4Xattr.Magic);
             inode[xattrEntry] = 4;
             inode[xattrEntry + 1] = 7;
             "data"u8.CopyTo(inode.AsSpan(xattrEntry + 16));
@@ -149,14 +168,14 @@ public sealed partial class Ext4Builder
             flags |= Ext4Htree.FlagIndex;
         }
 
-        WriteU16(inode, 0, mode);
-        WriteU16(inode, 2, (ushort)(node.Uid & 0xFFFF));
-        WriteU32(inode, 4, (uint)(node.Size & 0xFFFFFFFF));
+        WriteU16(inode, InodeModeOffset, mode);
+        WriteU16(inode, InodeUidLowOffset, (ushort)(node.Uid & 0xFFFF));
+        WriteU32(inode, InodeSizeLowOffset, (uint)(node.Size & 0xFFFFFFFF));
         WriteU32(inode, 8, node.Mtime != 0 ? node.Mtime : FixedTimestamp);
         WriteU32(inode, 12, node.Ctime != 0 ? node.Ctime : FixedTimestamp);
         WriteU32(inode, 16, node.Mtime != 0 ? node.Mtime : FixedTimestamp);
         WriteU32(inode, 20, 0);
-        WriteU16(inode, 24, (ushort)(node.Gid & 0xFFFF));
+        WriteU16(inode, InodeGidLowOffset, (ushort)(node.Gid & 0xFFFF));
         WriteU16(inode, 120, (ushort)(node.Uid >> 16));
         WriteU16(inode, 122, (ushort)(node.Gid >> 16));
         WriteU16(inode, 26, node.IsDirectory ? (ushort)(2 + node.Children.Count(static c => c.IsDirectory)) : node.LinkCount);
@@ -253,18 +272,18 @@ public sealed partial class Ext4Builder
         var extraIsize = inode.Length > 128 ? BinaryPrimitives.ReadUInt16LittleEndian(inode.AsSpan(128, 2)) : (ushort)0;
         var hasHigh = inode.Length > 128 && extraIsize >= Ext4InodeChecksumHiExtraEnd;
 
-        BinaryPrimitives.WriteUInt16LittleEndian(inode.AsSpan(124, 2), 0);
+        BinaryPrimitives.WriteUInt16LittleEndian(inode.AsSpan(InodeChecksumLowOffset, 2), 0);
         if (hasHigh)
         {
-            BinaryPrimitives.WriteUInt16LittleEndian(inode.AsSpan(130, 2), 0);
+            BinaryPrimitives.WriteUInt16LittleEndian(inode.AsSpan(InodeChecksumHighOffset, 2), 0);
         }
 
         crc = ComputeCrc32Continue(crc, inode);
 
-        WriteU16(inode, 124, (ushort)(crc & 0xFFFF));
+        WriteU16(inode, InodeChecksumLowOffset, (ushort)(crc & 0xFFFF));
         if (hasHigh)
         {
-            WriteU16(inode, 130, (ushort)(crc >> 16));
+            WriteU16(inode, InodeChecksumHighOffset, (ushort)(crc >> 16));
         }
     }
 
@@ -276,11 +295,11 @@ public sealed partial class Ext4Builder
     {
 
         const int extraIsiz = Ext4ExtraIsize;
-        var xattrStart = 128 + extraIsiz;
+        var xattrStart = InodeInlineXattrHeaderOffset;
         var available = inodeSize - xattrStart - 4;
         if (available < 8)
         {
-            throw new InvalidDataException("EXT4 inode has no room for extended attributes.");
+            throw new FileSystemCorruptedException("EXT4 inode has no room for extended attributes.");
         }
 
         var entries = new List<(string Name, byte NameIndex, byte[] Value)>();
@@ -290,7 +309,7 @@ public sealed partial class Ext4Builder
             {
                 entries.Add((shortName, nameIndex, kv.Value));
             }
-            else throw new InvalidDataException($"Unsupported EXT4 xattr namespace: {kv.Key}");
+            else throw new FileSystemUnsupportedFeatureException($"Unsupported EXT4 xattr namespace: {kv.Key}");
         }
 
         if (entries.Count == 0)
@@ -308,12 +327,12 @@ public sealed partial class Ext4Builder
         }
 
         if (entrySectionSize + totalValueSize > available)
-            throw new InvalidDataException("EXT4 inode xattrs exceed available capacity; no attributes were discarded.");
+            throw new FileSystemCorruptedException("EXT4 inode xattrs exceed available capacity; no attributes were discarded.");
 
         WriteU16(inode, 128, extraIsiz);
 
         var hdrOff = xattrStart;
-        WriteU32(inode, hdrOff, 0xEA020000);
+        WriteU32(inode, hdrOff, Ext4Xattr.Magic);
 
         var pos = xattrStart + 4;
         var valueOff = entrySectionSize;

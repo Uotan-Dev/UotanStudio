@@ -1,5 +1,3 @@
-using System.Buffers.Binary;
-using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
 using UotanStudio.Firmware.Core;
@@ -117,7 +115,7 @@ public sealed partial class ErofsBuilder
                        FileOptions.SequentialScan))
             {
                 var counter = progress is null ? null
-                    : new UotanStudio.Firmware.Core.ExtractionByteCounter(EstimateSourceBytes(directoryPath), progress);
+                    : new UotanStudio.Firmware.Core.ExtractionByteCounter(EstimateSourceBytes(directoryPath, effective.CancellationToken), progress);
                 Stream sink = temporary;
                 if (counter is not null) sink = counter.Wrap(temporary);
                 BuildImage(root, effective, sink, 0, freshDestination: true);
@@ -134,11 +132,12 @@ public sealed partial class ErofsBuilder
         }
     }
 
-    private static long EstimateSourceBytes(string directoryPath)
+    private static long EstimateSourceBytes(string directoryPath, CancellationToken token)
     {
         long total = 0;
         foreach (var file in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories))
         {
+            token.ThrowIfCancellationRequested();
             try { total += new FileInfo(file).Length; }
             catch (IOException) { }
         }
@@ -241,7 +240,7 @@ public sealed partial class ErofsBuilder
             : new HashSet<string>(
                 excludedPaths.Select(Path.GetFullPath),
                 OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-        root = CollectNodes(directoryPath, exclusions);
+        root = CollectNodes(directoryPath, exclusions, effective.CancellationToken);
         ApplyMetadataOverrides(root, effective);
         return effective;
     }
@@ -287,10 +286,10 @@ public sealed partial class ErofsBuilder
         }
     }
 
-    private static BuildNode CollectNodes(string directoryPath, HashSet<string>? excludedPaths)
+    private static BuildNode CollectNodes(string directoryPath, HashSet<string>? excludedPaths, CancellationToken token)
     {
         var rootFull = Path.GetFullPath(directoryPath);
-        return CollectNode(rootFull, isRoot: true, excludedPaths);
+        return CollectNode(rootFull, isRoot: true, excludedPaths, token);
     }
 
     /// <summary>
@@ -341,8 +340,9 @@ public sealed partial class ErofsBuilder
         }
     }
 
-    private static BuildNode CollectNode(string fullPath, bool isRoot, HashSet<string>? excludedPaths)
+    private static BuildNode CollectNode(string fullPath, bool isRoot, HashSet<string>? excludedPaths, CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
         var attributes = File.GetAttributes(fullPath);
         var name = isRoot ? string.Empty : Path.GetFileName(fullPath);
 
@@ -407,7 +407,7 @@ public sealed partial class ErofsBuilder
                     continue;
                 }
 
-                node.Children.Add(CollectNode(childFullPath, isRoot: false, excludedPaths));
+                node.Children.Add(CollectNode(childFullPath, isRoot: false, excludedPaths, token));
             }
 
             return node;
@@ -569,524 +569,31 @@ public sealed partial class ErofsBuilder
     private static void BuildImage(BuildNode root, ErofsOptions options, Stream destination, long baseOffset, bool freshDestination)
     {
         using var output = new OffsetStream(destination, baseOffset);
-        var blockSize = options.BlockSize;
-        var now = options.BuildTime ?? (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var context = ImageBuildContext.Create(root, options, output);
 
-        output.CaptureWindow(ErofsSuperblock.SuperblockOffset,
-            blockSize > ErofsSuperblock.SuperblockOffset ? blockSize - ErofsSuperblock.SuperblockOffset : blockSize);
+        context.CollectOrderedNodes();
+        context.MergeHardlinks();
+        context.PlanNodePayloads();
+        context.PlanNodeLayouts();
+        context.CreatePackedNode();
+        context.PlanMetabox();
+        var metaOff = context.AssignInodeOffsets();
+        var totalBlocks = context.AssignDataAddresses(metaOff);
 
-        var extraDevices = options.ExtraDeviceCount;
-        var compressionConfiguration = BuildCompressionConfiguration(options);
-        var compressionConfigurationOffset = InodeTableStart + (options.Metabox ? ErofsSuperblock.ExtSlotSize : 0);
-        long inodeTableStart;
-        long devtOffset;
-        ushort devtSlotOff;
-        if (extraDevices > 0)
-        {
-
-            devtOffset = blockSize;
-            var devtSlotCount = extraDevices;
-            var devtTableSize = (long)devtSlotCount * ErofsDeviceSlot.Size;
-            inodeTableStart = AlignUp(devtOffset + devtTableSize, blockSize);
-            devtSlotOff = checked((ushort)(devtOffset / ErofsDeviceSlot.Size));
-        }
-        else
-        {
-
-            inodeTableStart = AlignUp(compressionConfigurationOffset + compressionConfiguration.Length,
-                ErofsSuperblock.CompactInodeSize);
-            devtOffset = 0;
-            devtSlotOff = 0;
-        }
-
-        var ordered = new List<BuildNode>();
-        CollectPreOrder(root, ordered);
-        BindXattrs(ordered, options);
-        if (UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemEditPlan.Current is { } editPlan)
-            foreach (var node in ordered)
-            {
-                var entry = editPlan.Get(node.FullPath);
-                node.OriginalInode = entry.Inode;
-                node.SourceInode = options.SourceInodes?.GetValueOrDefault(entry.Inode);
-                if (entry.Metadata?.ModificationTime is { } time)
-                {
-                    node.SourceInode = node.SourceInode is { } sourceInode
-                        ? sourceInode with { Mtime = checked((ulong)time.Seconds), MtimeNanoseconds = time.Nanoseconds }
-                        : new ErofsSourceInode(checked((ulong)time.Seconds), time.Nanoseconds, true,
-                            options.Compress, options.Algorithm, options.UseCompactedIndexes, false, blockSize, entry.Path);
-                }
-                if ((entry.Mode & 0xF000) == 0x8000) { node.FullPath = editPlan.ContentSource(node.FullPath); node.Size = new FileInfo(node.FullPath).Length; }
-                node.Name = UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemEditPlan.Name(entry.Path);
-                node.Uid = entry.Uid;
-                node.Gid = entry.Gid;
-                node.ModeOverride = entry.Mode;
-                node.HasModeOverride = true;
-                node.IsSymlink = (entry.Mode & 0xF000) == 0xA000;
-                if (node.IsSymlink) { node.SymlinkTarget = entry.SymlinkTarget ?? ""; node.Size = Encoding.UTF8.GetByteCount(node.SymlinkTarget); }
-                node.IsDevice = (entry.Mode & 0xF000) is 0x1000 or 0x2000 or 0x6000 or 0xC000;
-                node.DeviceMode = entry.Mode;
-                node.DeviceRdev = entry.DeviceId;
-                if (node.IsDevice) node.Size = 0;
-                node.XattrIbody = entry.Xattrs is { Count: > 0 } ? ErofsXattr.EncodeInline(entry.Xattrs.Select(p => new ErofsXattrEntry { Name = p.Key, Value = p.Value }).ToList()) : [];
-            }
-        else if (options.SourceInodesByPath is { Count: > 0 } byPath)
-            foreach (var node in ordered)
-            {
-                if (node.SourceInode is not null) continue;
-                var imagePath = BuildImagePath(node);
-                if (byPath.TryGetValue(imagePath, out var record)) node.SourceInode = record;
-            }
-
-        foreach (var node in ordered)
-        {
-            var timestamp = node.SourceInode?.Mtime ?? (node.Mtime > 0 ? (ulong)node.Mtime : now);
-            node.RequiresExtendedTime = timestamp < now || timestamp - now > uint.MaxValue;
-        }
-
-        var hardlinks = new List<(BuildNode Alias, BuildNode Canonical)>();
-        var canonicalInodes = new Dictionary<ulong, BuildNode>();
-        ordered.RemoveAll(node =>
-        {
-            if (node.IsDirectory || node.OriginalInode == 0) return false;
-            if (canonicalInodes.TryAdd(node.OriginalInode, node)) return false;
-            var canonical = canonicalInodes[node.OriginalInode];
-            canonical.LinkCount++;
-            hardlinks.Add((node, canonical));
-            return true;
-        });
-        var packedFragments = new List<PackedFragment>();
-        long packedEnd = 0;
-
-        var dedupFlat = new Dictionary<string, BuildNode>();
-        var dedupFragments = new Dictionary<string, BuildNode>();
-
-        Core.FirmwareParallelism.ForEach(ordered, node =>
-        {
-            if (node.IsDirectory || node.IsSymlink || node.IsDevice || node.Size <= 0) return;
-            if (!node.IsSymlink && !node.IsDevice && options.Dedup)
-                node.ContentHash = HashFile(node);
-            node.CompressionOptions = node.SourceInode is { Compressed: true } original
-                ? options.SourceCompressionOptions?.GetValueOrDefault(original.Algorithm) ?? options : options;
-            node.LogicalClusterSize = node.SourceInode?.LogicalClusterSize ?? blockSize;
-            if (node.SourceInode?.Compressed ?? options.Compress)
-                node.Pclusters = TryPlanCompressed(node, blockSize, node.CompressionOptions);
-        });
-
-        foreach (var node in ordered)
-        {
-            if (node.IsDirectory)
-            {
-
-                var payloadLength = EstimateDirPayloadLength(node);
-                if (payloadLength <= blockSize)
-                {
-                    node.DirBlocks = 1;
-                    node.DirPayloadSize = payloadLength;
-                }
-                else
-                {
-                    var layout = MeasureDirLayout(BuildDirEntries(node), blockSize);
-                    node.DirBlocks = layout.Blocks;
-                    node.DirPayloadSize = layout.Size;
-                }
-
-                node.DirectoryInline = payloadLength + GetInodeHeaderSize(node) + node.XattrIbody.Length <= blockSize;
-                continue;
-            }
-
-            var isDataFile = !node.IsSymlink && !node.IsDevice;
-            if (node.IsSymlink)
-            {
-                node.InlineData = Encoding.UTF8.GetBytes(node.SymlinkTarget);
-                continue;
-            }
-            if (node.Size <= 0)
-            {
-                continue;
-            }
-
-            if (node.SourceInode?.Compressed ?? options.Compress)
-            {
-                if (node.Pclusters is not null)
-                {
-                    node.CompressedBlocks = (uint)node.Pclusters.Sum(p => CeilDiv(p.CompressedLength, blockSize));
-                    node.ClusterCount = (uint)CeilDiv(node.Size, node.LogicalClusterSize);
-                    node.CompactedIndexes = node.SourceInode?.CompactIndexes ?? options.UseCompactedIndexes;
-
-                    node.BigPcluster = !options.LegacyCompatibility
-                        && (node.CompressionOptions!.Algorithm != ErofsCompressionAlgorithm.Lz4
-                            || node.Pclusters.Any(p => p.CompressedLength > blockSize));
-                    var tailLength = node.Pclusters[^1].CompressedLength;
-                    if (options.CompressedTailPacking && !node.Pclusters[^1].Plain && tailLength < blockSize
-                        && GetInodeRecordSize(node, blockSize) % blockSize + tailLength <= blockSize)
-                    {
-                        node.InlineCompressedTail = true;
-                        node.CompressedBlocks--;
-                    }
-                    continue;
-                }
-            }
-
-            var wholeBlocks = node.Size / blockSize;
-
-            if (isDataFile && options.Fragments && wholeBlocks == 0)
-            {
-
-                node.IsFragment = true;
-                var hashKey = options.Dedup && node.ContentHash is not null
-                    ? Convert.ToHexString(node.ContentHash)
-                    : null;
-                if (hashKey is not null && dedupFragments.TryGetValue(hashKey, out var existing))
-                {
-
-                    node.FragmentOffset = existing.FragmentOffset;
-                    continue;
-                }
-
-                node.FragmentOffset = AlignFragmentStart(packedEnd);
-                packedFragments.Add(new PackedFragment { Owner = node, Offset = node.FragmentOffset, Length = node.Size });
-                packedEnd = node.FragmentOffset + node.Size;
-                if (hashKey is not null)
-                {
-                    dedupFragments[hashKey] = node;
-                }
-
-                continue;
-            }
-
-            var remainder = node.Size % blockSize;
-            var inlineFallback = options.SourceInodes is { Count: > 0 } ? false : options.TailPacking;
-            if (node.SourceInode?.InlineData ?? inlineFallback)
-            {
-
-                node.FlatBlocks = wholeBlocks;
-                if (remainder > 0)
-                {
-                    using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                    fs.Position = wholeBlocks * blockSize;
-                    var tail = new byte[remainder];
-                    fs.ReadExactly(tail);
-                    node.InlineData = tail;
-                    if (GetInodeHeaderSize(node) + node.XattrIbody.Length + tail.Length > blockSize)
-                    {
-                        node.FlatBlocks++;
-                        node.InlineData = [];
-                    }
-                }
-            }
-            else
-            {
-
-                node.FlatBlocks = remainder > 0 ? wholeBlocks + 1 : wholeBlocks;
-            }
-
-            if (isDataFile && options.Dedup && node.ContentHash is not null && node.FlatBlocks > 0)
-            {
-                var hashKey = Convert.ToHexString(node.ContentHash);
-                if (dedupFlat.TryGetValue(hashKey, out var source) && source.FlatBlocks == node.FlatBlocks)
-                {
-                    node.DedupSource = source;
-                    node.FlatBlocks = source.FlatBlocks;
-                }
-                else
-                {
-                    dedupFlat[hashKey] = node;
-                }
-            }
-        }
-
-        BuildNode? packedNode = null;
-        if (packedFragments.Count > 0)
-        {
-            packedNode = new BuildNode
-            {
-                IsPacked = true,
-                Size = packedEnd,
-                FlatBlocks = CeilDiv(packedEnd, blockSize),
-                PackedFragments = packedFragments,
-            };
-            ordered.Add(packedNode);
-        }
-
-        List<BuildNode>? metaboxResident = null;
-        BuildNode? metaboxNode = null;
-        if (options.Metabox)
-        {
-            metaboxResident = ordered.Where(node => IsMetaboxEligible(node, blockSize)).ToList();
-            if (metaboxResident.Count > 0)
-            {
-                var metaboxLength = 0L;
-                foreach (var resident in metaboxResident)
-                {
-                    var recordSize = GetInodeRecordSize(resident, blockSize);
-                    if (metaboxLength % blockSize + recordSize > blockSize)
-                    {
-                        metaboxLength = AlignUp(metaboxLength, blockSize);
-                    }
-                    resident.MetaboxSlot = metaboxLength / ErofsSuperblock.CompactInodeSize;
-                    resident.IsMetaboxResident = true;
-                    metaboxLength = checked(metaboxLength + AlignUp(recordSize, ErofsSuperblock.CompactInodeSize));
-                }
-
-                metaboxNode = new BuildNode
-                {
-                    IsMetaboxContainer = true,
-                    Size = metaboxLength,
-                    FlatBlocks = CeilDiv(metaboxLength, blockSize),
-                };
-                ordered.Add(metaboxNode);
-            }
-        }
-
-        var metaOff = inodeTableStart;
-        if (metaboxResident is not null)
-        {
-            foreach (var resident in metaboxResident)
-            {
-                resident.MetaOffset = -1;
-                resident.Nid = NidMetaboxFlag | checked((uint)resident.MetaboxSlot);
-            }
-        }
-
-        foreach (var node in ordered)
-        {
-            if (node.IsMetaboxResident)
-            {
-                continue;
-            }
-
-            var recordSize = GetInodeRecordSize(node, blockSize);
-            if (metaOff % blockSize + recordSize > blockSize)
-            {
-                metaOff = AlignUp(metaOff, blockSize);
-            }
-
-            node.MetaOffset = metaOff;
-            node.Nid = (ulong)(metaOff / 32);
-            metaOff += AlignUp(recordSize, 32);
-        }
-
-        var dataBlock = AlignUp(metaOff, blockSize) / blockSize;
-        foreach (var node in ordered)
-        {
-            if (node.IsDirectory)
-            {
-                if (!node.DirectoryInline)
-                {
-                    node.DirBlockAddr = dataBlock;
-                    dataBlock += node.DirBlocks;
-                }
-            }
-            else if (node.Pclusters is not null)
-            {
-                foreach (var p in node.Pclusters)
-                {
-                    p.BlockAddress = (uint)dataBlock;
-                    if (!node.InlineCompressedTail || !ReferenceEquals(p, node.Pclusters[^1]))
-                        dataBlock += CeilDiv(p.CompressedLength, blockSize);
-                }
-            }
-            else if (node.FlatBlocks > 0)
-            {
-
-                if (node.DedupSource is not null)
-                {
-                    node.FlatBlockAddr = node.DedupSource.FlatBlockAddr;
-                }
-                else
-                {
-                    node.FlatBlockAddr = dataBlock;
-                    dataBlock += node.FlatBlocks;
-                }
-            }
-        }
-        var totalBlocks = dataBlock;
-        ErofsSuperblock.ValidateBlockCountField(totalBlocks);
-
-        foreach (var (alias, canonical) in hardlinks) alias.Nid = canonical.Nid;
-        ErofsSuperblock.ValidateRootNidField(root.Nid);
-
-        var finalSize = checked(totalBlocks * blockSize);
+        var finalSize = checked(totalBlocks * context.BlockSize);
         var oldLength = output.Length;
         output.SetLength(finalSize);
         if (!freshDestination)
         {
-
-            ZeroImage(output, Math.Min(oldLength, finalSize));
+            ZeroImage(output, Math.Min(oldLength, finalSize), options.CancellationToken);
         }
 
-        var featureIncompat = options.Compress
-            ? ErofsSuperblock.IncompatLz4_0Padding | (options.LegacyCompatibility ? 0u : ErofsSuperblock.IncompatBigPcluster)
-            : 0;
-
-        if (extraDevices > 0)
-        {
-            featureIncompat |= ErofsSuperblock.IncompatDeviceTable;
-        }
-
-        if (packedNode is not null)
-        {
-            if (options.LegacyCompatibility)
-            {
-                throw new NotSupportedException(
-                    "LegacyCompatibility images cannot contain fragment or metabox packed nodes.");
-            }
-            featureIncompat |= ErofsSuperblock.IncompatFragments;
-        }
-        if (options.CompressedTailPacking) featureIncompat |= ErofsSuperblock.IncompatZtailpacking;
-
-        if (metaboxNode is not null)
-        {
-            if (options.LegacyCompatibility)
-            {
-                throw new NotSupportedException(
-                    "LegacyCompatibility images cannot contain fragment or metabox packed nodes.");
-            }
-            featureIncompat |= ErofsSuperblock.IncompatMetabox;
-        }
-
-        var superblock = new ErofsSuperblock
-        {
-            MagicValue = ErofsSuperblock.Magic,
-            BlockSizeBits = (byte)BitOperations.Log2((uint)blockSize),
-            RootNid = (ushort)root.Nid,
-            Inos = (ulong)ordered.Count,
-            BuildTime = now,
-            BuildTimeNsec = options.BuildTimeNanoseconds,
-            BuildTime32 = options.BuildTimeOffset,
-            Blocks = (uint)totalBlocks,
-            MetaBlkAddr = 0,
-            AvailableComprAlgs = CompressedAlgorithmsField(options),
-            FeatureCompat = (options.SuperblockChecksum ? ErofsSuperblock.CompatSbChecksum : 0u)
-                | (options.SourceMtimeFeature ? ErofsSuperblock.CompatMtime : 0u)
-                | (options.SourceXattrFilterFeature ? ErofsSuperblock.CompatXattrFilter : 0u),
-            FeatureIncompat = featureIncompat,
-            ExtraDevices = (ushort)extraDevices,
-            DevtSlotoff = devtSlotOff,
-            PackedNid = packedNode?.Nid ?? 0,
-            SbExtSlots = metaboxNode is not null ? (byte)1 : (byte)0,
-            MetaBoxNid = metaboxNode?.Nid ?? 0,
-            Uuid = options.Uuid is { Length: 16 } ? options.Uuid : Guid.NewGuid().ToByteArray(),
-            VolumeName = options.VolumeName,
-            VolumeNameBytes = options.SourceVolumeNameBytes ?? [],
-
-            DirBlkBits = 0,
-        };
-
-        var superblockBuffer = new byte[metaboxNode is not null
-            ? ErofsSuperblock.SuperblockSize + ErofsSuperblock.ExtSlotSize
-            : ErofsSuperblock.SuperblockSize];
-        superblock.WriteTo(superblockBuffer);
-
-        WriteAt(output, ErofsSuperblock.SuperblockOffset, superblockBuffer, superblockBuffer.Length);
-        if (compressionConfiguration.Length > 0)
-        {
-            WriteAt(output, ErofsSuperblock.SuperblockOffset + superblockBuffer.Length,
-                compressionConfiguration, compressionConfiguration.Length);
-        }
-
-        if (extraDevices > 0)
-        {
-            var descriptors = options.ExtraDeviceImages
-                ?? throw new NotSupportedException("EROFS multi-device output requires ExtraDeviceImages descriptors.");
-            var slotBuffer = new byte[ErofsDeviceSlot.Size];
-            var uniAddr = (ulong)totalBlocks;
-            for (var i = 0; i < extraDevices; i++)
-            {
-                var descriptor = descriptors[i];
-                var blocks = (ulong)(descriptor.SizeBytes / blockSize);
-                var tag = new byte[ErofsDeviceSlot.TagSize];
-                System.Text.Encoding.UTF8.GetBytes(descriptor.Tag, tag);
-                var slot = new ErofsDeviceSlot { Tag = tag, Blocks = blocks, UniAddr = uniAddr };
-                slot.WriteTo(slotBuffer);
-                WriteAt(output, devtOffset + i * ErofsDeviceSlot.Size, slotBuffer, slotBuffer.Length);
-                uniAddr += blocks;
-            }
-        }
-
-        foreach (var node in ordered)
-        {
-            if (node.IsDirectory)
-            {
-                if (node.DirBlockAddr >= 0)
-                {
-                    WriteDirBlocks(output, node, blockSize);
-                }
-            }
-            else if (node.IsPacked)
-            {
-
-                WritePackedData(output, node, blockSize);
-            }
-            else if (node.Pclusters is not null)
-            {
-                WriteCompressedData(output, node, blockSize, node.CompressionOptions!);
-            }
-            else if (node.IsMetaboxContainer)
-            {
-
-                WriteMetaboxContainer(output, node, blockSize, now, metaboxResident!, options.LegacyCompatibility);
-            }
-            else if (node.FlatBlockAddr >= 0 && node.FlatBlocks > 0 && node.DedupSource is null)
-            {
-
-                var copyLen = Math.Min(node.FlatBlocks * blockSize, node.Size);
-                CopyFileRange(output, node, 0, copyLen, node.FlatBlockAddr * blockSize);
-            }
-        }
-
-        foreach (var node in ordered)
-        {
-            if (node.IsMetaboxResident)
-            {
-                continue;
-            }
-
-            var inode = BuildInode(node, blockSize, now, options.LegacyCompatibility);
-            var inodeBuffer = new byte[inode.OnDiskSize];
-            inode.WriteTo(inodeBuffer);
-            WriteAt(output, node.MetaOffset, inodeBuffer, inodeBuffer.Length);
-
-            if (node.XattrIbody.Length > 0)
-            {
-                WriteAt(output, node.MetaOffset + inode.OnDiskSize, node.XattrIbody, node.XattrIbody.Length);
-            }
-
-            var cursor = node.MetaOffset + inode.OnDiskSize + inode.XattrTotalSize;
-
-            if (node.IsDirectory)
-            {
-
-                if (node.DirectoryInline)
-                {
-                    WriteAt(output, cursor, BuildDirPayload(node), (int)EstimateDirPayloadLength(node));
-                }
-            }
-            else if (node.IsFragment)
-            {
-
-                WriteFragmentHeader(output, node, inode, options);
-            }
-            else if (node.Pclusters is not null)
-            {
-                WriteCompressedIndexes(output, AlignUp(cursor, 8), node, blockSize, node.CompressionOptions!);
-            }
-            else if (node.InlineData.Length > 0)
-            {
-
-                WriteAt(output, cursor, node.InlineData, node.InlineData.Length);
-            }
-        }
-
-        if (options.SuperblockChecksum)
-        {
-            var crcRegion = output.CapturedWindow ?? throw new InvalidOperationException("Superblock checksum window was not captured.");
-            var finalCrc = ComputeCrc32C(crcRegion.AsSpan(8), ErofsSuperblockChecksumSeed);
-            Span<byte> crcLe = stackalloc byte[4];
-            BinaryPrimitives.WriteUInt32LittleEndian(crcLe, finalCrc);
-            output.Position = ErofsSuperblock.SuperblockOffset + 4;
-            output.Write(crcLe);
-        }
+        var featureIncompat = context.ComputeFeatureIncompat();
+        var superblock = context.BuildSuperblock(totalBlocks, featureIncompat);
+        context.WriteSuperblockAndDevices(output, superblock, totalBlocks);
+        context.WriteNodeData(output);
+        context.WriteInodes(output);
+        context.WriteSuperblockChecksum(output);
 
         output.Position = finalSize;
     }

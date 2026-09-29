@@ -313,7 +313,7 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider,
         return Enum.TryParse<CompressionAlgorithm>(value, ignoreCase: true, out var algorithm)
             && Enum.IsDefined(algorithm)
             ? algorithm
-            : throw new InvalidDataException($"Unsupported F2FS compression algorithm '{value}'.");
+            : throw new FileSystemUnsupportedFeatureException($"Unsupported F2FS compression algorithm '{value}'.");
     }
 
     private static bool IsTrue(string value)

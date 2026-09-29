@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Hashing;
 using System.Text;
 using UotanStudio.Firmware.AndroidMeta.Apk.Signing;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.AndroidMeta.Apk;
 
@@ -67,7 +68,7 @@ public static class ApkEntryStripper
             Directory.CreateDirectory(directory);
         }
 
-        var tempPath = outputApk + ".tmp";
+        var tempPath = TempFileHelper.CreateAdjacentPath(outputApk);
         try
         {
             using var input = new FileStream(inputApk, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);

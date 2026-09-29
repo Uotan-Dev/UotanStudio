@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.AndroidMeta.Apk;
 
@@ -169,9 +170,9 @@ public static class ApkSigningKeyGenerator
 
     private static void Commit(string keyPem, string certPem, byte[]? pfxBytes, string keyPath, string certPath, string? pfxPath, string? keyPassword)
     {
-        var keyTemporary = Path.Combine(Path.GetDirectoryName(keyPath)!, Guid.NewGuid().ToString("N") + ".tmp");
-        var certTemporary = Path.Combine(Path.GetDirectoryName(certPath)!, Guid.NewGuid().ToString("N") + ".tmp");
-        var pfxTemporary = pfxPath is null ? null : Path.Combine(Path.GetDirectoryName(pfxPath)!, Guid.NewGuid().ToString("N") + ".tmp");
+        var keyTemporary = TempFileHelper.CreateAdjacentPath(keyPath);
+        var certTemporary = TempFileHelper.CreateAdjacentPath(certPath);
+        var pfxTemporary = pfxPath is null ? null : TempFileHelper.CreateAdjacentPath(pfxPath);
         try
         {
             WriteAtomicIfAbsent(keyTemporary, Encoding.ASCII.GetBytes(keyPem));

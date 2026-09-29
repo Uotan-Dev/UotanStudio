@@ -131,7 +131,7 @@ internal static class ErofsXattr
             ArgumentNullException.ThrowIfNull(entry);
             if (!TrySplitShortName(entry.Name, out var nameIndex, out var shortName))
             {
-                throw new InvalidDataException(
+                throw new FileSystemUnsupportedFeatureException(
                     $"EROFS xattr name '{entry.Name}' does not match a built-in short prefix " +
                     "(user./trusted./security./system. etc.); long-prefix tables are not supported by the writer.");
             }
@@ -139,13 +139,13 @@ internal static class ErofsXattr
             var nameBytes = Encoding.UTF8.GetBytes(shortName);
             if (nameBytes.Length > byte.MaxValue)
             {
-                throw new InvalidDataException($"EROFS xattr name '{entry.Name}' exceeds 255 bytes.");
+                throw new FileSystemCorruptedException($"EROFS xattr name '{entry.Name}' exceeds 255 bytes.");
             }
 
             var value = entry.Value ?? [];
             if (value.Length > ushort.MaxValue)
             {
-                throw new InvalidDataException($"EROFS xattr value for '{entry.Name}' exceeds 65535 bytes.");
+                throw new FileSystemCorruptedException($"EROFS xattr value for '{entry.Name}' exceeds 65535 bytes.");
             }
 
             var start = body.Count;
@@ -166,7 +166,7 @@ internal static class ErofsXattr
 
         if (ibody.Length % 4 != 0)
         {
-            throw new InvalidDataException("EROFS xattr ibody must be 4-byte aligned.");
+            throw new FileSystemCorruptedException("EROFS xattr ibody must be 4-byte aligned.");
         }
 
         return ibody;
@@ -188,7 +188,7 @@ internal static class ErofsXattr
     {
         if (prefixCount is < 0 or > 128)
         {
-            throw new InvalidDataException("EROFS xattr prefix count exceeds its seven-bit index.");
+            throw new FileSystemCorruptedException("EROFS xattr prefix count exceeds its seven-bit index.");
         }
         var result = new List<(byte BaseIndex, string Infix)>(Math.Max(0, prefixCount));
         var position = 0;
@@ -196,12 +196,12 @@ internal static class ErofsXattr
         {
             if (position > tableBytes.Length - 2)
             {
-                throw new InvalidDataException("Truncated EROFS xattr prefix record.");
+                throw new FileSystemCorruptedException("Truncated EROFS xattr prefix record.");
             }
             var length = BinaryPrimitives.ReadUInt16LittleEndian(tableBytes[position..]);
             if (length is < 1 or > 256 || length > tableBytes.Length - position - 2)
             {
-                throw new InvalidDataException("Invalid EROFS xattr prefix record length.");
+                throw new FileSystemCorruptedException("Invalid EROFS xattr prefix record length.");
             }
             var baseIndex = tableBytes[position + 2];
             var infix = Extraction.PortableExtractionPaths.NameEncoding.GetString(tableBytes.Slice(position + 3, length - 1));
@@ -275,11 +275,11 @@ internal static class ErofsXattr
                 return infix + name;
             }
 
-            throw new InvalidDataException("EROFS xattr refers to an unknown long prefix.");
+            throw new FileSystemCorruptedException("EROFS xattr refers to an unknown long prefix.");
         }
 
         return TryGetDefaultPrefix(nameIndex, out var prefix)
-            ? prefix + name : throw new InvalidDataException("EROFS xattr refers to an unknown namespace.");
+            ? prefix + name : throw new FileSystemCorruptedException("EROFS xattr refers to an unknown namespace.");
     }
 
     /// <summary>
@@ -360,7 +360,7 @@ internal static class ErofsXattr
             if (!TryReadEntry(ibody, position, prefixTable, out var entry, out var entrySize)
                 || entrySize > ibodySize - position)
             {
-                throw new InvalidDataException("Truncated EROFS inline extended attribute.");
+                throw new FileSystemCorruptedException("Truncated EROFS inline extended attribute.");
             }
             result.Add(entry);
             position += entrySize;

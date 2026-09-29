@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using Xunit;
 
@@ -166,10 +167,10 @@ public class F2fsTests
             var image = F2fsBuilder.Build(root);
 
             var tiny = new MemoryStream(image, 0, 2000, writable: false);
-            Assert.Throws<InvalidDataException>(() => new F2fsParser(tiny));
+            Assert.Throws<FileSystemCorruptedException>(() => new F2fsParser(tiny));
 
             var half = new MemoryStream(image, 0, image.Length / 2, writable: false);
-            Assert.Throws<InvalidDataException>(() => new F2fsParser(half));
+            Assert.Throws<FileSystemCorruptedException>(() => new F2fsParser(half));
         }
         finally
         {
@@ -189,7 +190,7 @@ public class F2fsTests
             File.WriteAllText(Path.Combine(root, "a.txt"), "alpha");
             var image = F2fsBuilder.Build(root);
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(1024 + 96, 4), 0);
-            Assert.Throws<InvalidDataException>(() => new F2fsParser(new MemoryStream(image, writable: false)));
+            Assert.Throws<FileSystemCorruptedException>(() => new F2fsParser(new MemoryStream(image, writable: false)));
         }
         finally
         {
@@ -211,7 +212,7 @@ public class F2fsTests
             BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan((int)rootInodeOffset, 8), 0x0000_0200_0000_0000UL);
 
             using var parser = new F2fsParser(new MemoryStream(image, writable: false));
-            Assert.Throws<InvalidDataException>(() => parser.ListFiles());
+            Assert.Throws<FileSystemCorruptedException>(() => parser.ListFiles());
         }
         finally
         {

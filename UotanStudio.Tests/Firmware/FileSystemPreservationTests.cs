@@ -2,6 +2,7 @@ using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
@@ -55,7 +56,7 @@ public sealed class FileSystemPreservationTests : IDisposable
         Assert.True(restored.Success, restored.Summary);
         Assert.Equal("original-content", ReadImageFile(format, output, "data"));
 
-        Assert.Throws<InvalidDataException>(() =>
+        Assert.Throws<FileSystemUnsupportedFeatureException>(() =>
         {
             if (format == "EXT4") Ext4Builder.Build(extracted, output);
             else if (format == "EROFS") new ErofsBuilder().Build(extracted, output);

@@ -93,7 +93,7 @@ internal sealed class Ext4Superblock
     {
         if (data.Length < SuperblockOffset + 360)
         {
-            throw new InvalidDataException($"Image too small to hold an ext4 superblock (need {SuperblockOffset + 360} bytes, got {data.Length}).");
+            throw new FileSystemCorruptedException($"Image too small to hold an ext4 superblock (need {SuperblockOffset + 360} bytes, got {data.Length}).");
         }
 
         var span = data[SuperblockOffset..];
@@ -139,11 +139,11 @@ internal sealed class Ext4Superblock
         };
         if (!result.IsValid)
         {
-            throw new InvalidDataException($"Invalid ext4 superblock magic 0x{result.Magic:X4} (expected 0xEF53).");
+            throw new FileSystemCorruptedException($"Invalid ext4 superblock magic 0x{result.Magic:X4} (expected 0xEF53).");
         }
         if (result.BlocksPerGroup == 0 || result.InodesPerGroup == 0)
         {
-            throw new InvalidDataException("ext4 superblock has a zero blocks/inodes-per-group count.");
+            throw new FileSystemCorruptedException("ext4 superblock has a zero blocks/inodes-per-group count.");
         }
         return result;
     }

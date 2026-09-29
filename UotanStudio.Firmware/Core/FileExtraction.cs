@@ -1,3 +1,5 @@
+using UotanStudio.Firmware.Core.IO;
+
 namespace UotanStudio.Firmware.Core;
 
 /// <summary>
@@ -35,7 +37,7 @@ internal static class FileExtraction
         RejectLinks(target);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         RejectLinks(target);
-        var temporary = target + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(target);
         try
         {
             using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920))
@@ -65,7 +67,7 @@ internal static class FileExtraction
         RejectLinks(target);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         RejectLinks(target);
-        var temporary = target + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(target);
         try
         {
             await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite,

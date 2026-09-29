@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Archive.Models;
 using UotanStudio.Firmware.Archive.Writing;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.Archive.Formats.Cpio;
@@ -485,7 +486,7 @@ public sealed class CpioArchiveWriter
 
     private static FileStream CreatePayloadSpool(Stream source, long length, string entryName, bool probeEof)
     {
-        var path = Path.Combine(Path.GetTempPath(), $"uotan-cpio-{Guid.NewGuid():N}.tmp");
+        var path = TempFileHelper.CreateScratchPath("uotan-cpio");
         try
         {
             var spool = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920, FileOptions.SequentialScan | FileOptions.DeleteOnClose);

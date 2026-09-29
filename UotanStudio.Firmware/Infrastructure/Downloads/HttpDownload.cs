@@ -223,7 +223,7 @@ public static class HttpDownload
                 errors.Add(source.Host + ": " + ex.Message);
             }
         }
-        throw new IOException("无法下载 / Download failed: " + url + "\n" + string.Join("\n", errors));
+        throw new IOException("Download failed: " + url + "\n" + string.Join("\n", errors));
     }
 
     /// <summary><para>从单个源下载（支持范围并行的镜像同样走此路径），目标文件以原子替换提交。</para>

@@ -139,12 +139,12 @@ internal static class ErofsRebuildMetadata
         if (parameters.SourceDevices is { Count: > 0 } devices)
         {
             if (devices.Count > ushort.MaxValue)
-                throw new InvalidDataException("EROFS source device table exceeds the on-disk limit.");
+                throw new FileSystemCorruptedException("EROFS source device table exceeds the on-disk limit.");
             options.SourceDeviceTable = devices.Select(device =>
             {
                 if (device is null || device.Tag is not { Length: ErofsDeviceSlot.TagSize }
                     || device.Blocks == 0 || device.Blocks >= 1UL << 48 || device.UniAddr >= 1UL << 48)
-                    throw new InvalidDataException("Invalid EROFS source device descriptor.");
+                    throw new FileSystemCorruptedException("Invalid EROFS source device descriptor.");
                 return new ErofsSourceDevice(device.Tag.ToArray(), device.Blocks, device.UniAddr);
             }).ToArray();
         }
@@ -212,5 +212,5 @@ internal static class ErofsRebuildMetadata
     private static ErofsCompressionAlgorithm ParseAlgorithm(string? name)
         => Enum.TryParse<ErofsCompressionAlgorithm>(name, ignoreCase: false, out var algorithm) && Enum.IsDefined(algorithm)
             ? algorithm
-            : throw new InvalidDataException($"Unknown EROFS compression algorithm '{name}' in preserved metadata.");
+            : throw new FileSystemCorruptedException($"Unknown EROFS compression algorithm '{name}' in preserved metadata.");
 }

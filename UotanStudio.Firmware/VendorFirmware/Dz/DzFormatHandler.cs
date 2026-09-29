@@ -20,6 +20,12 @@ internal sealed partial class DzFormatHandler : IFormatHandler, IRepackMetadataP
     /// <para><c>dz</c>、<c>kdz</c> 与 <c>bin</c>；扩展名不同的路径在魔数匹配时仍可被接受。</para></value>
     public IReadOnlyList<string> FileExtensions => ["dz", "kdz", "bin"];
 
+    /// <summary>DZ and KDZ rebuild configuration is captured from the container alone, so metadata can be
+    /// published without writing any partition file.
+    /// <para>DZ/KDZ 的重建配置只从容器本身捕获，因此可以在不写出分区文件的情况下发布元数据。</para></summary>
+    /// <value>Always <see langword="true"/>. <para>恒为 <see langword="true"/>。</para></value>
+    bool IRepackMetadataProvider.SupportsMetadataOnlyUnpack => true;
+
     /// <summary>
     /// Determines whether the file matches this format.
     /// <para>判断文件是否匹配此格式。</para>

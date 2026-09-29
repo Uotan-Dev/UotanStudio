@@ -1,4 +1,5 @@
 using System.Globalization;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Builder;
@@ -73,7 +74,7 @@ internal static class ErofsRebuildOptimizer
     }
 
     private static FileStream TemporaryImage() => new(
-        Path.Combine(Path.GetTempPath(), "uotan-erofs-candidate-" + Guid.NewGuid().ToString("N")),
+        TempFileHelper.CreateScratchPath("uotan-erofs-candidate", ""),
         FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.DeleteOnClose);
 
     private static void Copy(Stream source, Stream destination, CancellationToken token)

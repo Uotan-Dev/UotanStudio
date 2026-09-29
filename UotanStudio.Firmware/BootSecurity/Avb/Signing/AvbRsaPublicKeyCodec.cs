@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Numerics;
 using System.Security.Cryptography;
 using Org.BouncyCastle.Crypto.Parameters;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
 
@@ -159,7 +160,7 @@ public static class AvbRsaPublicKeyCodec
         var blob = Export(key);
         var output = Path.GetFullPath(outputPath);
         Directory.CreateDirectory(Path.GetDirectoryName(output)!);
-        var temporary = output + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(output);
         try
         {
             await File.WriteAllBytesAsync(temporary, blob, cancellationToken).ConfigureAwait(false);

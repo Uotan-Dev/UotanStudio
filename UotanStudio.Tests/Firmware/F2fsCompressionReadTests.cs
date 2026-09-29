@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.F2fs.Models;
 using Xunit;
@@ -50,7 +51,7 @@ public class F2fsCompressionReadTests
     {
         var node = new byte[4096];
         BinaryPrimitives.WriteUInt32LittleEndian(node.AsSpan(80), 4);
-        Assert.Throws<InvalidDataException>(() => F2fsInode.FromBytes(node));
+        Assert.Throws<FileSystemCorruptedException>(() => F2fsInode.FromBytes(node));
     }
 
     [Fact]

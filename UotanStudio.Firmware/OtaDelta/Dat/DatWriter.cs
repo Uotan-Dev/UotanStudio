@@ -199,6 +199,13 @@ public static class DatWriter
     /// 区段按位置比较，故移动的块被重新发出而非以 <c>move</c>/<c>stash</c> 引用。若目标无差异非零块（仅归零或完全
     /// 相同），而 recovery 读取器无法从不消费的源预置，则回退为全量 <c>new</c> 镜像。</para>
     /// </summary>
+    /// <remarks>
+    /// A dataset without source-dependent commands (<c>imgdiff</c>, <c>diff</c>, <c>move</c> or <c>stash</c>)
+    /// cannot be seeded from the base image by the recovery reader, so the writer ships the target as a plain
+    /// full image instead.
+    /// <para>不含源依赖命令（<c>imgdiff</c>、<c>diff</c>、<c>move</c> 或 <c>stash</c>）的数据集无法由 recovery
+    /// 读取器从基座镜像预置，因此此时把目标作为普通全量镜像发布。</para>
+    /// </remarks>
     /// <param name="sourceImagePath">Base image the updater seeds the target from; the file must exist. <para>updater 用于预置目标的基座镜像；文件必须存在。</para></param>
     /// <param name="targetImagePath">Desired image compared block by block against the source; the file must exist. <para>与源逐块比较的目标镜像；文件必须存在。</para></param>
     /// <param name="outputDatPath">
@@ -355,8 +362,6 @@ public static class DatWriter
         if (!commands.Any(command => command.Kind is TransferListCommandKind.Imgdiff or TransferListCommandKind.Diff
             or TransferListCommandKind.Move or TransferListCommandKind.Stash))
         {
-            // A dataset without source-dependent commands cannot be seeded from the base image by the
-            // recovery reader, so ship the target as a plain full image instead.
             File.WriteAllBytes(outputPatchDatPath, []);
             Write(targetImagePath, outputDatPath, outputTransferListPath, options, null, cancellationToken);
             return;

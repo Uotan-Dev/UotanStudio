@@ -396,178 +396,156 @@ internal sealed class SquashfsParser
         var rawType = U16(baseFields, 0);
         var mode = U16(baseFields, 2);
         var uid = U16(baseFields, 4);
-        var guid = U16(baseFields, 6);
+        var gidIndex = U16(baseFields, 6);
         var mtime = U32(baseFields, 8);
         var inodeNumber = U32(baseFields, 12);
-        if (uid >= _superblock.IdCount || guid >= _superblock.IdCount)
+        if (uid >= _superblock.IdCount || gidIndex >= _superblock.IdCount)
         {
-            throw new InvalidDataException($"The SquashFS inode {inodeNumber} references id slot {Math.Max(uid, guid)} beyond the table of length {_superblock.IdCount}.");
+            throw new InvalidDataException($"The SquashFS inode {inodeNumber} references id slot {Math.Max(uid, gidIndex)} beyond the table of length {_superblock.IdCount}.");
         }
 
         var kind = MapKind(rawType, out var extended);
-        switch (kind)
+        var inode = new SquashfsInode
         {
-            case SquashfsEntryKind.Directory:
-                {
-                    var body = cursor.ReadBytes(extended ? 24 : 16);
-                    if (!extended)
-                    {
-                        return new SquashfsInode
-                        {
-                            Kind = kind,
-                            RawType = rawType,
-                            Mode = mode,
-                            UidIndex = uid,
-                            GuidIndex = guid,
-                            ModifiedTime = mtime,
-                            InodeNumber = inodeNumber,
-                            DirectoryBlock = U32(body, 0),
-                            DirectorySize = U16(body, 8) + 3L,
-                            DirectoryOffset = U16(body, 10),
-                            ParentInode = U32(body, 12),
-                        };
-                    }
+            Kind = kind,
+            RawType = rawType,
+            Mode = mode,
+            UidIndex = uid,
+            GidIndex = gidIndex,
+            ModifiedTime = mtime,
+            InodeNumber = inodeNumber,
+        };
+        return kind switch
+        {
+            SquashfsEntryKind.Directory => ReadDirectoryInode(cursor, inode, extended),
+            SquashfsEntryKind.RegularFile => ReadFileInode(cursor, inode, extended),
+            SquashfsEntryKind.SymbolicLink => ReadSymlinkInode(cursor, inode, extended),
+            _ => ReadSpecialInode(cursor, inode, kind, extended)
+        };
+    }
 
-                    return new SquashfsInode
-                    {
-                        Kind = kind,
-                        RawType = rawType,
-                        Mode = mode,
-                        UidIndex = uid,
-                        GuidIndex = guid,
-                        ModifiedTime = mtime,
-                        InodeNumber = inodeNumber,
-                        XattrIndex = InvalidIfSentinel(U32(body, 20)),
-                        DirectorySize = U32(body, 4),
-                        DirectoryBlock = U32(body, 8),
-                        ParentInode = U32(body, 12),
-                        DirectoryOffset = U16(body, 18),
-                    };
-                }
-
-            case SquashfsEntryKind.RegularFile:
-                {
-                    long start;
-                    long size;
-                    uint fragment;
-                    int fragmentOffset;
-                    bool sparse = false;
-                    long xattr = -1;
-                    if (!extended)
-                    {
-                        var body = cursor.ReadBytes(16);
-                        start = U32(body, 0);
-                        fragment = U32(body, 4);
-                        fragmentOffset = (int)U32(body, 8);
-                        size = U32(body, 12);
-                    }
-                    else
-                    {
-                        var body = cursor.ReadBytes(40);
-                        start = (long)U64(body, 0);
-                        size = unchecked((long)U64(body, 8));
-                        sparse = U64(body, 16) != 0;
-                        fragment = U32(body, 28);
-                        fragmentOffset = (int)U32(body, 32);
-                        xattr = InvalidIfSentinel(U32(body, 36));
-                    }
-
-                    if (size < 0 || size > 1L << 52)
-                    {
-                        throw new InvalidDataException($"The SquashFS file inode {inodeNumber} declares the impossible size {size}.");
-                    }
-
-                    var blockCount = ComputeBlockCount(size, fragment);
-                    var blocks = new uint[blockCount];
-                    var blockBytes = cursor.ReadBytes(blockCount * 4);
-                    for (var i = 0; i < blockCount; i++)
-                    {
-                        blocks[i] = U32(blockBytes, i * 4);
-                    }
-
-                    return new SquashfsInode
-                    {
-                        Kind = kind,
-                        RawType = rawType,
-                        Mode = mode,
-                        UidIndex = uid,
-                        GuidIndex = guid,
-                        ModifiedTime = mtime,
-                        InodeNumber = inodeNumber,
-                        XattrIndex = xattr,
-                        DataStart = (ulong)start,
-                        Size = size,
-                        BlockSizes = blocks,
-                        FragmentIndex = InvalidIfSentinel(fragment),
-                        FragmentOffset = fragmentOffset,
-                        Sparse = sparse,
-                    };
-                }
-
-            case SquashfsEntryKind.SymbolicLink:
-                {
-                    var body = cursor.ReadBytes(8);
-                    var targetLength = U32(body, 4);
-                    if (targetLength > 4096)
-                    {
-                        throw new InvalidDataException($"The SquashFS symlink inode {inodeNumber} declares an oversized target.");
-                    }
-
-                    var target = cursor.ReadBytes((int)targetLength);
-                    long xattr = -1;
-                    if (extended)
-                    {
-                        xattr = InvalidIfSentinel(U32(cursor.ReadBytes(4), 0));
-                    }
-
-                    return new SquashfsInode
-                    {
-                        Kind = kind,
-                        RawType = rawType,
-                        Mode = mode,
-                        UidIndex = uid,
-                        GuidIndex = guid,
-                        ModifiedTime = mtime,
-                        InodeNumber = inodeNumber,
-                        XattrIndex = xattr,
-                        Target = target,
-                        Size = target.LongLength,
-                    };
-                }
-
-            default:
-                {
-                    var body = cursor.ReadBytes(kind is SquashfsEntryKind.Fifo or SquashfsEntryKind.Socket
-                        ? (extended ? 8 : 4)
-                        : (extended ? 12 : 8));
-                    var xattrReadOffset = 0;
-                    uint device = 0;
-                    if (kind is SquashfsEntryKind.BlockDevice or SquashfsEntryKind.CharDevice)
-                    {
-                        device = U32(body, 4);
-                        xattrReadOffset = 8;
-                    }
-
-                    long xattr = -1;
-                    if (extended)
-                    {
-                        xattr = InvalidIfSentinel(U32(body, xattrReadOffset));
-                    }
-
-                    return new SquashfsInode
-                    {
-                        Kind = kind,
-                        RawType = rawType,
-                        Mode = mode,
-                        UidIndex = uid,
-                        GuidIndex = guid,
-                        ModifiedTime = mtime,
-                        InodeNumber = inodeNumber,
-                        XattrIndex = xattr,
-                        DeviceNumber = device,
-                    };
-                }
+    /// <summary>
+    /// Completes a directory inode from its compact or extended body layout.
+    /// <para>按紧凑或扩展的目录 inode 布局补全基础 inode。</para>
+    /// </summary>
+    private SquashfsInode ReadDirectoryInode(SquashfsMetadataStream.Cursor cursor, SquashfsInode inode, bool extended)
+    {
+        var body = cursor.ReadBytes(extended ? 24 : 16);
+        if (extended)
+        {
+            inode.DirectorySize = U32(body, 4);
+            inode.DirectoryBlock = U32(body, 8);
+            inode.ParentInode = U32(body, 12);
+            inode.DirectoryOffset = U16(body, 18);
+            inode.XattrIndex = InvalidIfSentinel(U32(body, 20));
         }
+        else
+        {
+            inode.DirectoryBlock = U32(body, 0);
+            inode.DirectorySize = U16(body, 8) + 3L;
+            inode.DirectoryOffset = U16(body, 10);
+            inode.ParentInode = U32(body, 12);
+        }
+        return inode;
+    }
+
+    /// <summary>
+    /// Completes a regular-file inode with its block list and fragment layout, rejecting impossible sizes.
+    /// <para>以块列表与 fragment 布局补全常规文件 inode，并拒绝不可能的大小声明。</para>
+    /// </summary>
+    private SquashfsInode ReadFileInode(SquashfsMetadataStream.Cursor cursor, SquashfsInode inode, bool extended)
+    {
+        long start;
+        long size;
+        uint fragment;
+        int fragmentOffset;
+        bool sparse = false;
+        long xattr = -1;
+        if (!extended)
+        {
+            var body = cursor.ReadBytes(16);
+            start = U32(body, 0);
+            fragment = U32(body, 4);
+            fragmentOffset = (int)U32(body, 8);
+            size = U32(body, 12);
+        }
+        else
+        {
+            var body = cursor.ReadBytes(40);
+            start = (long)U64(body, 0);
+            size = unchecked((long)U64(body, 8));
+            sparse = U64(body, 16) != 0;
+            fragment = U32(body, 28);
+            fragmentOffset = (int)U32(body, 32);
+            xattr = InvalidIfSentinel(U32(body, 36));
+        }
+
+        if (size < 0 || size > 1L << 52)
+        {
+            throw new InvalidDataException($"The SquashFS file inode {inode.InodeNumber} declares the impossible size {size}.");
+        }
+
+        var blockCount = ComputeBlockCount(size, fragment);
+        var blocks = new uint[blockCount];
+        var blockBytes = cursor.ReadBytes(blockCount * 4);
+        for (var i = 0; i < blockCount; i++)
+        {
+            blocks[i] = U32(blockBytes, i * 4);
+        }
+
+        inode.XattrIndex = xattr;
+        inode.DataStart = (ulong)start;
+        inode.Size = size;
+        inode.BlockSizes = blocks;
+        inode.FragmentIndex = InvalidIfSentinel(fragment);
+        inode.FragmentOffset = fragmentOffset;
+        inode.Sparse = sparse;
+        return inode;
+    }
+
+    /// <summary>
+    /// Completes a symbolic-link inode with its bounded target bytes.
+    /// <para>以有界的目标字节补全符号链接 inode。</para>
+    /// </summary>
+    private SquashfsInode ReadSymlinkInode(SquashfsMetadataStream.Cursor cursor, SquashfsInode inode, bool extended)
+    {
+        var body = cursor.ReadBytes(8);
+        var targetLength = U32(body, 4);
+        if (targetLength > 4096)
+        {
+            throw new InvalidDataException($"The SquashFS symlink inode {inode.InodeNumber} declares an oversized target.");
+        }
+
+        inode.Target = cursor.ReadBytes((int)targetLength);
+        inode.Size = inode.Target.LongLength;
+        if (extended)
+        {
+            inode.XattrIndex = InvalidIfSentinel(U32(cursor.ReadBytes(4), 0));
+        }
+        return inode;
+    }
+
+    /// <summary>
+    /// Completes FIFO, socket and device inodes; only device nodes carry a device number.
+    /// <para>补全 FIFO、socket 与设备 inode；仅设备节点携带设备号。</para>
+    /// </summary>
+    private SquashfsInode ReadSpecialInode(SquashfsMetadataStream.Cursor cursor, SquashfsInode inode, SquashfsEntryKind kind, bool extended)
+    {
+        var body = cursor.ReadBytes(kind is SquashfsEntryKind.Fifo or SquashfsEntryKind.Socket
+            ? (extended ? 8 : 4)
+            : (extended ? 12 : 8));
+        var xattrReadOffset = 0;
+        if (kind is SquashfsEntryKind.BlockDevice or SquashfsEntryKind.CharDevice)
+        {
+            inode.DeviceNumber = U32(body, 4);
+            xattrReadOffset = 8;
+        }
+
+        if (extended)
+        {
+            inode.XattrIndex = InvalidIfSentinel(U32(body, xattrReadOffset));
+        }
+        return inode;
     }
 
     private int ComputeBlockCount(long size, uint fragment)

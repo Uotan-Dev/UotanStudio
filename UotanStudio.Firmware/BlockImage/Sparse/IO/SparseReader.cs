@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 using System.IO.Hashing;
 using UotanStudio.Firmware.BlockImage.Sparse.DataProviders;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.BlockImage.Sparse.IO;
 
@@ -194,7 +195,7 @@ public static class SparseReader
                         {
 
 
-                            var tempPath = Path.Combine(Path.GetTempPath(), $"uotan-sparse-{Guid.NewGuid():N}.tmp");
+                            var tempPath = TempFileHelper.CreateScratchPath("uotan-sparse");
                             try
                             {
                                 using (var temp = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))

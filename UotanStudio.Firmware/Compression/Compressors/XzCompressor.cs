@@ -1,5 +1,6 @@
 using SharpCompress.Compressors.Xz;
 using UotanStudio.Firmware.Compression.Internal;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.Compression.Compressors;
 
@@ -95,7 +96,7 @@ internal static class XzCompressor
 
         try
         {
-            using var lzma2 = new FileStream(Path.Combine(Path.GetTempPath(), $"uotan-xz-{Guid.NewGuid():N}.tmp"),
+            using var lzma2 = new FileStream(TempFileHelper.CreateScratchPath("uotan-xz"),
                 FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536,
                 FileOptions.DeleteOnClose | FileOptions.SequentialScan);
 

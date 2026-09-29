@@ -165,20 +165,20 @@ internal sealed class JournalSuperblock
     {
         if (data.Length < MinimumSize)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"JBD2 journal superblock is truncated: need at least {MinimumSize} bytes, got {data.Length}.");
         }
 
         var magic = BinaryPrimitives.ReadUInt32BigEndian(data[0..4]);
         if (magic != Magic)
         {
-            throw new InvalidDataException($"Invalid JBD2 magic: 0x{magic:X8} (expected 0x{Magic:X8}).");
+            throw new FileSystemCorruptedException($"Invalid JBD2 magic: 0x{magic:X8} (expected 0x{Magic:X8}).");
         }
 
         var blockType = BinaryPrimitives.ReadUInt32BigEndian(data[4..8]);
         if (blockType is not (3 or 4))
         {
-            throw new InvalidDataException($"Invalid JBD2 superblock block type: {blockType} (expected 3 or 4).");
+            throw new FileSystemCorruptedException($"Invalid JBD2 superblock block type: {blockType} (expected 3 or 4).");
         }
 
         var checksumType = data.Length > 0x50 ? data[0x50] : (byte)0;

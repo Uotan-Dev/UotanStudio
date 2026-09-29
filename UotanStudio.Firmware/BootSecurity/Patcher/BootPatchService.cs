@@ -11,6 +11,7 @@ using UotanStudio.Firmware.BootSecurity.Patcher;
 using UotanStudio.Firmware.BootSecurity.Patcher.Kernel;
 using UotanStudio.Firmware.BootSecurity.Workflow;
 using UotanStudio.Firmware.Compression;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.BootSecurity.Patcher;
 
@@ -200,7 +201,7 @@ public sealed class BootPatchService
         options.Progress?.Report(.65d);
         var packed = BootImagePacker.Repack(parser, kernel: patchedKernel, ramdisk: compressed);
         options.Progress?.Report(.85d);
-        var temp = outputPath + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temp = TempFileHelper.CreateAdjacentPath(outputPath);
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);

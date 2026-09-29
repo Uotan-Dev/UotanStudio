@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Google.Protobuf;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.Models;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
@@ -596,7 +597,7 @@ public sealed partial class PayloadBuilder : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
         var destination = Path.GetFullPath(outputPath);
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-        var temporary = destination + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(destination);
         try
         {
             using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))

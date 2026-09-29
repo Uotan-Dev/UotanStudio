@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.BlockImage.Sparse;
 
@@ -11,7 +12,7 @@ namespace UotanStudio.Firmware.BlockImage.Sparse;
 /// Distinguishes the two on-disk shapes of <c>*.sparsechunk.NN</c> sets.
 /// <para>区分 <c>*.sparsechunk.NN</c> 集合的两种磁盘形态。</para>
 /// </summary>
-internal enum SparseChunkVariant
+public enum SparseChunkVariant
 {
     /// <summary>Plain byte slices of one raw image; concatenation reproduces the original bytes. <para>单个原始镜像的纯字节切片；拼接即可还原原始字节。</para></summary>
     RawStream,
@@ -32,7 +33,7 @@ internal enum SparseChunkVariant
 /// <param name="TotalInputBytes">
 /// Sum of physical input lengths. <para>输入卷的物理长度总和。</para>
 /// </param>
-internal sealed record SparseChunkSet(SparseChunkVariant Variant, IReadOnlyList<string> Parts, long TotalInputBytes);
+public sealed record SparseChunkSet(SparseChunkVariant Variant, IReadOnlyList<string> Parts, long TotalInputBytes);
 
 /// <summary>
 /// Merges and splits <c>super.img.sparsechunk.NN</c> flash sets, mirroring the grouping discipline of
@@ -55,7 +56,7 @@ internal sealed record SparseChunkSet(SparseChunkVariant Variant, IReadOnlyList<
 /// <c>SparseImageConverter.ResparseImage</c> 生成，因为对稀疏容器做字节切片会破坏本合并器所校验的自包含几何。
 /// 合并会丢弃各片末尾的 CRC32 块与头部镜像校验和：合并体由块数据重建，而格式本身没有跨片校验和语义。</para>
 /// </remarks>
-internal static class SparseChunkSplitter
+public static class SparseChunkSplitter
 {
     private const int BufferSize = 1024 * 1024;
     private const int MaximumParts = 4096;
@@ -223,7 +224,7 @@ internal static class SparseChunkSplitter
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-        var temporary = destination + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(destination);
         try
         {
             if (set.Variant == SparseChunkVariant.RawStream)

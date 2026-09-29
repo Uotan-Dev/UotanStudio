@@ -173,7 +173,7 @@ public sealed partial class ErofsBuilder
                 options, raw, 0, p.SourceLength, compressed, 0, compressed.Length);
             if (outLen != p.CompressedLength)
             {
-                throw new InvalidDataException(
+                throw new FileSystemCorruptedException(
                     $"Compressed length mismatch for '{node.FullPath}': {outLen} != {p.CompressedLength}.");
             }
 
@@ -257,7 +257,7 @@ public sealed partial class ErofsBuilder
                     var compressedBlocks = CeilDiv(plan.CompressedLength, blockSize);
                     if (compressedBlocks >= ZErofsLclusterIndex.LiD0CblkCnt)
                     {
-                        throw new InvalidDataException(
+                        throw new FileSystemCorruptedException(
                             $"Pcluster block count {compressedBlocks} exceeds the CBLKCNT limit for '{node.FullPath}'.");
                     }
 
@@ -339,7 +339,7 @@ public sealed partial class ErofsBuilder
                             blkaddr++;
                             if (blkaddr != plan.BlockAddress)
                             {
-                                throw new InvalidDataException(
+                                throw new FileSystemCorruptedException(
                                     $"Compacted index blkaddr {blkaddr} != planned block {plan.BlockAddress} for '{node.FullPath}'.");
                             }
                         }
@@ -356,7 +356,7 @@ public sealed partial class ErofsBuilder
                             var compressedBlocks = CeilDiv(plan.CompressedLength, blockSize);
                             if (compressedBlocks >= ZErofsLclusterIndex.LiD0CblkCnt)
                             {
-                                throw new InvalidDataException(
+                                throw new FileSystemCorruptedException(
                                     $"Pcluster block count {compressedBlocks} exceeds the CBLKCNT limit for '{node.FullPath}'.");
                             }
 
@@ -365,7 +365,7 @@ public sealed partial class ErofsBuilder
                             dummyHead = false;
                             if (pclusterIndex + 1 < pclusters.Length && blkaddr != pclusters[pclusterIndex + 1].BlockAddress)
                             {
-                                throw new InvalidDataException(
+                                throw new FileSystemCorruptedException(
                                     $"Compacted index running blkaddr {blkaddr} != planned block {pclusters[pclusterIndex + 1].BlockAddress} for '{node.FullPath}'.");
                             }
                         }
@@ -433,12 +433,13 @@ public sealed partial class ErofsBuilder
     /// Writes the packed inode's fragment data area: each fragment slot's source bytes are streamed to its offset inside the packed region (unwritten gaps stay zeroed by the image's preallocation).
     /// <para>写出 packed inode 的碎片数据区：把每个碎片槽位按文件内偏移写入数据区对应位置 （槽位之间未写的空白由镜像预分配/置零保证为零）。</para>
     /// </summary>
-    private static void WritePackedData(Stream output, BuildNode packedNode, int blockSize)
+    private static void WritePackedData(Stream output, BuildNode packedNode, int blockSize, CancellationToken token)
     {
         var baseOffset = packedNode.FlatBlockAddr * blockSize;
         foreach (var slot in packedNode.PackedFragments!)
         {
-            CopyFileRange(output, slot.Owner, 0, slot.Length, baseOffset + slot.Offset);
+            token.ThrowIfCancellationRequested();
+            CopyFileRange(output, slot.Owner, 0, slot.Length, baseOffset + slot.Offset, token);
         }
     }
 
@@ -497,7 +498,7 @@ public sealed partial class ErofsBuilder
     /// Streams a whole file through SHA-256 via IncrementalHash in chunks without loading the file wholly into memory.
     /// <para>流式计算整文件 SHA-256（IncrementalHash，分块读取，不整读大文件）。</para>
     /// </summary>
-    private static byte[] HashFile(BuildNode node)
+    private static byte[] HashFile(BuildNode node, CancellationToken token)
     {
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -505,6 +506,7 @@ public sealed partial class ErofsBuilder
         var remaining = node.Size;
         while (remaining > 0)
         {
+            token.ThrowIfCancellationRequested();
             var count = (int)Math.Min(buffer.Length, remaining);
             fs.ReadExactly(buffer, 0, count);
             hash.AppendData(buffer, 0, count);
@@ -520,7 +522,7 @@ public sealed partial class ErofsBuilder
     private static long AlignFragmentStart(long cursor)
         => cursor;
 
-    private static void CopyFileRange(Stream output, BuildNode node, long sourceOffset, long length, long targetOffset)
+    private static void CopyFileRange(Stream output, BuildNode node, long sourceOffset, long length, long targetOffset, CancellationToken token)
     {
         if (length <= 0)
         {
@@ -534,6 +536,7 @@ public sealed partial class ErofsBuilder
         var pos = targetOffset;
         while (remaining > 0)
         {
+            token.ThrowIfCancellationRequested();
             var count = (int)Math.Min(buffer.Length, remaining);
             source.ReadExactly(buffer, 0, count);
             WriteAt(output, pos, buffer, count);
@@ -546,12 +549,13 @@ public sealed partial class ErofsBuilder
 
     private static long AlignUp(long value, long alignment) => (value + alignment - 1) / alignment * alignment;
 
-    private static void ZeroImage(Stream output, long length)
+    private static void ZeroImage(Stream output, long length, CancellationToken token)
     {
         output.Position = 0;
         var zeroes = new byte[1 << 16];
         while (length > 0)
         {
+            token.ThrowIfCancellationRequested();
             var count = (int)Math.Min(zeroes.Length, length);
             output.Write(zeroes, 0, count);
             length -= count;

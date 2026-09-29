@@ -10,6 +10,7 @@ using Org.BouncyCastle.Security;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Verification;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
 
@@ -109,7 +110,7 @@ public static partial class AvbSigner
             flags |= VbmetaFlagHashtreeDisabled | VbmetaFlagVerificationDisabled;
             BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(120), flags);
 
-            var tempPath = outputPath + ".tmp";
+            var tempPath = TempFileHelper.CreateAdjacentPath(outputPath);
             try
             {
                 await using (var output = new FileStream(

@@ -55,7 +55,7 @@ internal static class AndroidF2fsImageBuilder
     /// <paramref name="outputPath"/> lies inside <paramref name="sourceDirectory"/>.
     /// <para><paramref name="mountPoint"/> 不是安全的绝对路径，或 <paramref name="outputPath"/> 位于
     /// <paramref name="sourceDirectory"/> 之内。</para></exception>
-    /// <exception cref="InvalidDataException">A native tool failed or the produced image lacks the required Android feature bits.
+    /// <exception cref="FileSystemCorruptedException">A native tool failed or the produced image lacks the required Android feature bits.
     /// <para>原生工具失败，或产出的镜像缺少必需的 Android 特性位。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
     /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
@@ -108,8 +108,8 @@ internal static class AndroidF2fsImageBuilder
             {
                 image.SetLength(imageSizeBytes);
             }
-            var imagePath = tools.PathForTool(temporary, cancellationToken);
-            var sourcePath = tools.PathForTool(source, cancellationToken);
+            var imagePath = await tools.PathForToolAsync(temporary, cancellationToken).ConfigureAwait(false);
+            var sourcePath = await tools.PathForToolAsync(source, cancellationToken).ConfigureAwait(false);
             var mkfs = await tools.RunAsync("mkfs.f2fs",
                 ["-f", "-t", "0", "-g", "android", "-O",
                     enableCompression ? "extra_attr,project_quota,ro,compression" : "extra_attr,project_quota,ro", imagePath],
@@ -120,12 +120,12 @@ internal static class AndroidF2fsImageBuilder
             if (fsConfigPath is not null)
             {
                 args.Add("-C");
-                args.Add(tools.PathForTool(fsConfigPath, cancellationToken));
+                args.Add(await tools.PathForToolAsync(fsConfigPath, cancellationToken).ConfigureAwait(false));
             }
             if (fileContextsPath is not null)
             {
                 args.Add("-s");
-                args.Add(tools.PathForTool(fileContextsPath, cancellationToken));
+                args.Add(await tools.PathForToolAsync(fileContextsPath, cancellationToken).ConfigureAwait(false));
             }
             if (enableCompression)
             {
@@ -145,7 +145,7 @@ internal static class AndroidF2fsImageBuilder
                 var required = 0x0008u | 0x0010u | 0x4000u | (enableCompression ? 0x2000u : 0);
                 if ((features & required) != required)
                 {
-                    throw new InvalidDataException($"Native F2FS image lacks required Android features (0x{features:X8}).");
+                    throw new FileSystemCorruptedException($"Native F2FS image lacks required Android features (0x{features:X8}).");
                 }
                 image.Flush(flushToDisk: true);
             }

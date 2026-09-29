@@ -48,13 +48,13 @@ internal static class PayloadPropertiesParser
     /// Parses a payload_properties.txt file from disk.
     /// <para>从磁盘解析 payload_properties.txt 文件。</para>
     /// </summary>
-    internal static Models.PayloadProperties ParseFile(string filepath)
+    internal static Models.PayloadProperties ParseFile(string filePath)
     {
-        return filepath is null
-            ? throw new ArgumentNullException(nameof(filepath))
-            : string.IsNullOrWhiteSpace(filepath)
-            ? throw new ArgumentException("File path cannot be empty or whitespace.", nameof(filepath))
-            : Parse(File.ReadAllText(filepath));
+        return filePath is null
+            ? throw new ArgumentNullException(nameof(filePath))
+            : string.IsNullOrWhiteSpace(filePath)
+            ? throw new ArgumentException("File path cannot be empty or whitespace.", nameof(filePath))
+            : Parse(File.ReadAllText(filePath));
     }
 
     /// <summary>

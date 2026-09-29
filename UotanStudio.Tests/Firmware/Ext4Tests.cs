@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using Xunit;
@@ -184,7 +185,7 @@ public class Ext4Tests
     }
 
     [Fact]
-    public void Parser_TruncatedImage_ThrowsInvalidDataException()
+    public void Parser_TruncatedImage_ThrowsFileSystemCorruptedException()
     {
         var root = CreateTempDirectory();
         try
@@ -210,7 +211,7 @@ public class Ext4Tests
             Assert.InRange(metadataBytes, 1, image.Length);
             var truncated = image[..metadataBytes].ToArray();
 
-            Assert.Throws<InvalidDataException>(() =>
+            Assert.Throws<FileSystemCorruptedException>(() =>
             {
                 using var parser = new Ext4Parser(new MemoryStream(truncated, writable: false));
                 _ = parser.ListFiles();
@@ -223,7 +224,7 @@ public class Ext4Tests
     }
 
     [Fact]
-    public void Parser_DirectoryCycle_ThrowsInvalidDataExceptionInsteadOfHanging()
+    public void Parser_DirectoryCycle_ThrowsFileSystemCorruptedExceptionInsteadOfHanging()
     {
         var root = CreateTempDirectory();
         try
@@ -265,7 +266,7 @@ public class Ext4Tests
             Assert.True(patched, "Test setup failed: 'subdir' directory entry not found.");
 
             using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
-            Assert.Throws<InvalidDataException>(() => parser.ListFiles());
+            Assert.Throws<FileSystemCorruptedException>(() => parser.ListFiles());
         }
         finally
         {

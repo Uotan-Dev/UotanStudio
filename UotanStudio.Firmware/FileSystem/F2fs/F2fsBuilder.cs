@@ -102,6 +102,15 @@ public sealed partial class F2fsBuilder
     /// <para>源目录不存在。</para></exception>
     /// <exception cref="OperationCanceledException"><c>options.CancellationToken</c> is cancelled before or during the build.
     /// <para><c>options.CancellationToken</c> 在构建前或构建中被取消。</para></exception>
+    /// <remarks>
+    /// This is the explicit synchronous boundary of the F2FS build. The managed pipeline is synchronous code; the
+    /// AndroidNativeProfile branch waits on the WSL native-tool asynchronous pipeline at this synchronous boundary
+    /// because the native builder only exposes an asynchronous implementation. Asynchronous callers should use
+    /// <see cref="BuildAsync"/> instead.
+    /// <para>本方法是 F2FS 构建的显式同步边界。托管管线本身是同步代码；由于原生构建器只提供异步实现，
+    /// AndroidNativeProfile 分支在该同步边界上等待经由 WSL 原生工具的异步管线。异步调用方应改用
+    /// <see cref="BuildAsync"/>。</para>
+    /// </remarks>
     public static void Build(string sourceDirectory, string outputPath, F2fsOptions? options = null)
     {
         FileSystemPreservation.RejectLossyDirectoryRebuild(sourceDirectory);
@@ -117,6 +126,58 @@ public sealed partial class F2fsBuilder
                 cancellationToken: options.CancellationToken).GetAwaiter().GetResult();
             return;
         }
+        BuildManaged(sourceDirectory, outputPath, options);
+    }
+
+    /// <summary>
+    /// Builds an F2FS image from sourceDirectory and atomically writes it to outputPath.
+    /// <para>从 sourceDirectory 构建 f2fs 镜像并原子写入 outputPath。</para>
+    /// </summary>
+    /// <param name="sourceDirectory">Source directory tree to embed; the destination and staging files are excluded from the scan.
+    /// <para>要嵌入的源目录树；目标文件与暂存文件会在扫描时排除。</para></param>
+    /// <param name="outputPath">Destination image path; its parent directory is created and an existing file is replaced.
+    /// With <c>AndroidNativeProfile</c> the native tool chain writes this path instead of the staged build.
+    /// <para>目标镜像路径；会自动创建父目录并覆盖已有文件。启用 <c>AndroidNativeProfile</c> 时改由原生工具
+    /// 写入该路径。</para></param>
+    /// <param name="options">Layout, sparse and compression options; <see langword="null"/> applies the defaults.
+    /// <para>布局、稀疏与压缩选项；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <returns>A task that completes once the image has been published to <paramref name="outputPath"/>.
+    /// <para>任务在镜像发布到 <paramref name="outputPath"/> 后完成。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="sourceDirectory"/> is blank.
+    /// <para><paramref name="sourceDirectory"/> 为空白字符串。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="outputPath"/> is <see langword="null"/>.
+    /// <para><paramref name="outputPath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="DirectoryNotFoundException">The source directory does not exist.
+    /// <para>源目录不存在。</para></exception>
+    /// <exception cref="OperationCanceledException"><c>options.CancellationToken</c> is cancelled before or during the build.
+    /// <para><c>options.CancellationToken</c> 在构建前或构建中被取消。</para></exception>
+    /// <remarks>
+    /// The AndroidNativeProfile branch directly awaits the WSL native-tool pipeline; the managed pipeline is
+    /// synchronous CPU and file I/O work executed by this method before the task completes.
+    /// <para>AndroidNativeProfile 分支直接等待经由 WSL 原生工具的管线；托管管线是同步的 CPU 与文件 I/O 工作，
+    /// 由本方法在任务完成前执行。</para>
+    /// </remarks>
+    public static async Task BuildAsync(string sourceDirectory, string outputPath, F2fsOptions? options = null)
+    {
+        FileSystemPreservation.RejectLossyDirectoryRebuild(sourceDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceDirectory);
+        ArgumentNullException.ThrowIfNull(outputPath);
+        if (options?.AndroidNativeProfile == true)
+        {
+            options.Validate();
+            await AndroidF2fsImageBuilder.BuildAsync(sourceDirectory, outputPath, options.AndroidImageSizeBytes!.Value,
+                new NativeFileSystemTools(options.NativeWslDistribution), fsConfigPath: options.FsConfigPath,
+                fileContextsPath: options.FileContextsPath, enableCompression: options.EnableCompression,
+                compressionAlgorithm: options.CompressionAlgorithm,
+                cancellationToken: options.CancellationToken).ConfigureAwait(false);
+            return;
+        }
+        BuildManaged(sourceDirectory, outputPath, options);
+    }
+
+    /// <summary>Managed (non-native) F2FS build path shared by <see cref="Build(string, string, F2fsOptions?)"/> and <see cref="BuildAsync"/>.</summary>
+    private static void BuildManaged(string sourceDirectory, string outputPath, F2fsOptions? options)
+    {
         var fullOutputPath = Path.GetFullPath(outputPath);
         var outputDirectory = Path.GetDirectoryName(fullOutputPath)!;
         var temporaryPath = Path.Combine(outputDirectory, $".{Path.GetFileName(fullOutputPath)}.{Guid.NewGuid():N}.tmp");
@@ -246,7 +307,7 @@ public sealed partial class F2fsBuilder
             if (!FileSystemMetadataOverrides.TryGetFsConfig(fsConfig, relative, out var entry)) continue;
             node.Uid = entry.Uid;
             node.Gid = entry.Gid;
-            node.Mode = (ushort)((node.Mode & 0xF000) | (entry.Mode & 0xFFF));
+            node.Mode = (ushort)((node.Mode & InodeTypeBits.FormatMask) | (entry.Mode & 0xFFF));
         }
     }
 
@@ -285,12 +346,12 @@ public sealed partial class F2fsBuilder
                 node.SourceMetadata = entry.Metadata;
                 node.OriginalInode = entry.Inode;
                 node.SemanticFlags = entry.Flags & FileSystemEditPlan.F2fsSemanticFlagMask;
-                if ((entry.Mode & 0xF000) == 0x8000) { node.FullPath = editPlan.ContentSource(node.FullPath); node.Size = new FileInfo(node.FullPath).Length; }
+                if ((entry.Mode & InodeTypeBits.FormatMask) == InodeTypeBits.RegularFile) { node.FullPath = editPlan.ContentSource(node.FullPath); node.Size = new FileInfo(node.FullPath).Length; }
                 node.Name = FileSystemEditPlan.Name(entry.Path);
                 node.Mode = entry.Mode;
                 node.Uid = entry.Uid;
                 node.Gid = entry.Gid;
-                node.IsSymlink = (entry.Mode & 0xF000) == 0xA000;
+                node.IsSymlink = (entry.Mode & InodeTypeBits.FormatMask) == InodeTypeBits.SymbolicLink;
                 if (node.IsSymlink) { node.SymlinkTarget = entry.SymlinkTarget ?? ""; node.Size = Encoding.UTF8.GetByteCount(node.SymlinkTarget); }
                 node.DeviceId = entry.DeviceId;
                 if (node.IsSpecial) node.Size = 0;
@@ -881,7 +942,7 @@ public sealed partial class F2fsBuilder
 
             var type = child.IsDirectory ? F2fsDirectoryEntry.TypeDirectory
                 : child.IsSymlink ? F2fsDirectoryEntry.TypeSymlink
-                : (byte)((child.Mode & 0xF000) switch { 0x2000 => 3, 0x6000 => 4, 0x1000 => 5, 0xC000 => 6, _ => 1 });
+                : (byte)((child.Mode & InodeTypeBits.FormatMask) switch { InodeTypeBits.CharDevice => 3, InodeTypeBits.BlockDevice => 4, InodeTypeBits.Fifo => 5, InodeTypeBits.Socket => 6, _ => 1 });
             var entry = new F2fsDirectoryEntry
             {
                 HashCode = ComputeDentryHash(child.Name),
@@ -1403,7 +1464,7 @@ public sealed partial class F2fsBuilder
         public uint LinkCount = 1;
         public uint SemanticFlags;
         public uint DeviceId;
-        public bool IsSpecial => (Mode & 0xF000) is 0x1000 or 0x2000 or 0x6000 or 0xC000;
+        public bool IsSpecial => (Mode & InodeTypeBits.FormatMask) is InodeTypeBits.Fifo or InodeTypeBits.CharDevice or InodeTypeBits.BlockDevice or InodeTypeBits.Socket;
         public uint XattrNid;
         public uint XattrBlock;
         public byte[] XattrBytes = [];

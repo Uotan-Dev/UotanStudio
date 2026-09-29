@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb;
 
@@ -110,7 +111,7 @@ public sealed class AvbHashtreeResult : IDisposable
         {
             if (length <= thresholdBytes) return new TreeStore(new byte[(int)length], null, length, copyBufferSize);
 
-            var path = Path.Combine(Path.GetTempPath(), $"uotan-avb-tree-{Guid.NewGuid():N}.bin");
+            var path = TempFileHelper.CreateScratchPath("uotan-avb-tree", ".bin");
             var file = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None,
                 copyBufferSize, FileOptions.DeleteOnClose | FileOptions.RandomAccess);
             try

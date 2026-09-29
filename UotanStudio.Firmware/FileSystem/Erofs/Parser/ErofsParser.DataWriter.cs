@@ -17,7 +17,7 @@ public sealed partial class ErofsParser
     {
         if (offset < 0 || length < 0 || offset > _imageSize || length > _imageSize - offset)
         {
-            throw new InvalidDataException($"{what} exceeds the image bounds.");
+            throw new FileSystemCorruptedException($"{what} exceeds the image bounds.");
         }
     }
 
@@ -31,7 +31,7 @@ public sealed partial class ErofsParser
         if (IsSpecialFile(inode))
         {
 
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"Inode nid {nid} is a special file (mode 0x{inode.Mode:X4}) with no data content.");
         }
 
@@ -53,7 +53,7 @@ public sealed partial class ErofsParser
                 break;
             default:
 
-                throw new InvalidDataException($"Unsupported EROFS data layout {inode.DataLayout} for inode nid {nid}.");
+                throw new FileSystemUnsupportedFeatureException($"Unsupported EROFS data layout {inode.DataLayout} for inode nid {nid}.");
         }
     }
 
@@ -119,7 +119,7 @@ public sealed partial class ErofsParser
         var chunkSize = (long)_blockSize << chunkBlkBits;
         if ((inode.ChunkFormat & ~0x7F) != 0 || (inode.Chunk48Bit && !inode.UsesChunkIndexes))
         {
-            throw new InvalidDataException($"Invalid chunk size (blkbits {chunkBlkBits}) for nid {nid}.");
+            throw new FileSystemCorruptedException($"Invalid chunk size (blkbits {chunkBlkBits}) for nid {nid}.");
         }
 
         var chunkCount = (length - 1) / chunkSize + 1;
@@ -131,7 +131,7 @@ public sealed partial class ErofsParser
             : checked(chunkCount * 4L);
         if (indexBytes > MaxMetadataComponentSize)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"Chunk index table size {indexBytes} exceeds the limit of {MaxMetadataComponentSize} bytes.");
         }
 
@@ -210,6 +210,18 @@ public sealed partial class ErofsParser
     private const int FullIndexStartPad = 8;
 
     /// <summary>
+    /// Byte size of one compact-index slot in the 4-byte (non-amortized) form.
+    /// <para>紧凑索引 4 字节（非摊薄）形式的槽位字节大小。</para>
+    /// </summary>
+    private const int CompactIndexSlotSize = 4;
+
+    /// <summary>
+    /// Extra bytes the compact-index read window reserves beyond the index entries themselves, covering the aligned index packs (up to 32 bytes) read while decoding compact indexes.
+    /// <para>紧凑索引读取窗口在索引条目本身之外额外预留的字节数，用于覆盖解码紧凑索引时按对齐索引包（最多 32 字节）的读取。</para>
+    /// </summary>
+    private const int CompactIndexWindowPadding = 64;
+
+    /// <summary>
     /// Reads compressed file data through compact or full EROFS cluster indexes, including LZ4SC and
     /// ZLIB4C semi-compressed pclusters: a PLAIN head lcluster followed by NONHEAD lclusters decodes as
     /// one raw logical cluster (the head, stored verbatim at the pcluster start) plus the remaining
@@ -226,35 +238,19 @@ public sealed partial class ErofsParser
     private void WriteCompressedData(ulong nid, ErofsInode inode, Stream output,
         CompressionObserver? observer = null, CancellationToken cancellationToken = default)
     {
-        var inodeLoc = InodeOffset(nid);
-
-        var headerOffset = AlignUp(inodeLoc + inode.OnDiskSize + inode.XattrTotalSize, 8);
-        var headerBytes = ReadInodeMetadata(nid, headerOffset, ZErofsMapHeader.Size, "compressed map header");
-        var header = ZErofsMapHeader.FromBytes(headerBytes);
-
-        if (header.IsFragmentInode)
+        if (TryWriteNonLclusterLayout(nid, inode, output, observer, cancellationToken,
+            out var header, out var headerOffset))
         {
-            if (observer is not null) return;
-            var fragmentOff = BinaryPrimitives.ReadUInt64LittleEndian(headerBytes) & ~(1UL << 63);
-            WritePackedData(fragmentOff, checked((long)inode.Size), output);
             return;
         }
 
         var advise = header.Advise;
         var algorithmHead1 = header.Algorithm;
-
-        if (inode.DataLayout == ErofsInode.DataLayoutCompressed && header.HasExtents)
-        {
-            if (observer is not null) return;
-            WriteExtentsData(nid, inode, header, headerBytes, headerOffset, output, cancellationToken);
-            return;
-        }
-
         var algorithmHead2 = (ErofsAlgorithm)((header.AlgorithmType >> 4) & ZErofsMapHeader.AlgorithmTypeMask);
         var lclusterBits = _superblock.BlockSizeBits + (header.ClusterBits & ZErofsMapHeader.LclusterBitsMask);
-        if (lclusterBits > 14)
+        if (lclusterBits > CompactIndexMaxLclusterBits)
         {
-            throw new InvalidDataException($"Logical cluster size shift {lclusterBits} exceeds the limit of 14.");
+            throw new FileSystemCorruptedException($"Logical cluster size shift {lclusterBits} exceeds the limit of {CompactIndexMaxLclusterBits}.");
         }
 
         var lclusterSize = 1 << lclusterBits;
@@ -268,264 +264,495 @@ public sealed partial class ErofsParser
         var bigPcluster2 = (advise & ZErofsMapHeader.AdviseBigPcluster2) != 0;
         var tailPacking = (advise & ZErofsMapHeader.AdviseInlinePcluster) != 0;
         var fragmentPcluster = (advise & ZErofsMapHeader.AdviseFragmentPcluster) != 0;
-
         var interlaced = (advise & ZErofsMapHeader.AdviseInterlacedPcluster) != 0;
 
         var indexBase = headerOffset + ZErofsMapHeader.Size;
         var indexLength = inode.DataLayout == ErofsInode.DataLayoutCompactIndexes
-            ? checked((long)totalIdx * 4 + 64)
+            ? checked((long)totalIdx * CompactIndexSlotSize + CompactIndexWindowPadding)
             : checked((long)totalIdx * ZErofsLclusterIndex.Size + FullIndexStartPad);
         var cachedIndex = new IndexReadWindow(this, nid, indexBase,
             Math.Min(indexLength, InodeMetadataLength(nid) - indexBase));
 
-        var compressed = ArrayPool<byte>.Shared.Rent(_blockSize * 2);
-        var decoded = ArrayPool<byte>.Shared.Rent(Math.Max(lclusterSize, _blockSize));
+        var context = new CompressedWriteContext
+        {
+            Nid = nid,
+            Inode = inode,
+            Header = header,
+            HeaderOffset = headerOffset,
+            Advise = advise,
+            AlgorithmHead1 = algorithmHead1,
+            AlgorithmHead2 = algorithmHead2,
+            LclusterBits = lclusterBits,
+            LclusterSize = lclusterSize,
+            TotalIdx = totalIdx,
+            CachedIndex = cachedIndex,
+            Interlaced = interlaced,
+            BigPcluster1 = bigPcluster1,
+            BigPcluster2 = bigPcluster2,
+            TailPacking = tailPacking,
+            FragmentPcluster = fragmentPcluster,
+            Output = output,
+            Observer = observer,
+            Compressed = ArrayPool<byte>.Shared.Rent(_blockSize * 2),
+            Decoded = ArrayPool<byte>.Shared.Rent(Math.Max(lclusterSize, _blockSize)),
+        };
         try
         {
             long lcn = 0;
-            while (lcn < totalIdx)
+            while (lcn < context.TotalIdx)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var lc = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn, out var ebase, out var compacted4bInitial, out var compacted2b, cachedIndex);
+                var lc = LoadLcluster(context, lcn);
                 if (lc.Type == LclusterTypeNonHead)
                 {
-
                     lcn++;
                     continue;
                 }
 
-                var mLa = lcn * lclusterSize + lc.ClusterOfs;
-                if (mLa >= (long)inode.Size)
+                if (!WriteCompressedClusterRange(context, lc, lcn, out var nextLcn))
                 {
-                    lcn++;
-                    continue;
+                    return;
                 }
 
-                var nextLcn = lcn + 1;
-                while (nextLcn < totalIdx)
-                {
-                    var candidate = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits,
-                        totalIdx, nextLcn, out _, out _, out _, cachedIndex);
-                    if (candidate.Type != LclusterTypeNonHead) break;
-                    nextLcn++;
-                }
-                long nextMLa;
-                if (nextLcn < 0)
-                {
-                    nextMLa = (long)inode.Size;
-                }
-                else if (nextLcn >= totalIdx)
-                {
-                    nextMLa = (long)inode.Size;
-                    nextLcn = totalIdx;
-                }
-                else
-                {
-                    var t2 = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, nextLcn, out _, out _, out _, cachedIndex);
-                    nextMLa = nextLcn * lclusterSize + t2.ClusterOfs;
-                }
-
-                var kernelExpectedOutputSize = checked((int)(Math.Max((long)nextLcn << lclusterBits,
-                    Math.Min(nextMLa, (long)inode.Size)) - mLa));
-
-                var llen = Math.Min(nextMLa, (long)inode.Size) - mLa;
-                if (llen <= 0)
-                {
-                    lcn = nextLcn;
-                    continue;
-                }
-
-                if (llen > ErofsCompression.MaxPclusterDecompressedSize)
-                {
-                    throw new InvalidDataException(
-                        $"Pcluster decompressed size {llen} exceeds the limit of {ErofsCompression.MaxPclusterDecompressedSize} bytes.");
-                }
-
-                var isLastExtent = nextMLa >= (long)inode.Size;
-                var isTailPacked = tailPacking && isLastExtent;
-
-                var semiRawLength = 0;
-                var isSemiPcluster = lc.Type == LclusterTypePlain && !interlaced && !isTailPacked
-                    && lc.ClusterOfs == 0 && nextLcn > lcn + 1 && llen > lclusterSize
-                    && algorithmHead1 is ErofsAlgorithm.Lz4 or ErofsAlgorithm.Deflate;
-                if (isSemiPcluster)
-                {
-                    semiRawLength = lclusterSize;
-                }
-                if (observer is not null && (llen > 1 << 20 || lc.Type == LclusterTypePlain || fragmentPcluster && isLastExtent))
-                {
-                    lcn = nextLcn;
-                    continue;
-                }
-                if (fragmentPcluster && isLastExtent)
-                {
-                    var fragmentOffset = (ulong)header.FragmentOff;
-                    if (inode.DataLayout == ErofsInode.DataLayoutCompressed) fragmentOffset |= (ulong)lc.Pblk << 32;
-                    WritePackedData(fragmentOffset, llen, output);
-                    lcn = nextLcn;
-                    continue;
-                }
-
-                if (lc.Type == LclusterTypePlain && !isSemiPcluster)
-                {
-
-                    var dataStart = isTailPacked ? CompressedIndexEnd(nid, inode, headerOffset, totalIdx, lclusterBits) : checked(lc.Pblk * _blockSize);
-                    if (!interlaced)
-                    {
-                        if (isTailPacked && IsMetaboxInode(nid))
-                        {
-                            output.Write(ReadMetaboxBytes(dataStart, checked((int)llen), "Plain lcluster data"));
-                        }
-                        else
-                        {
-                            CheckRange(dataStart, llen, "Plain lcluster data");
-                            CopyFromSource(output, dataStart, llen);
-                        }
-                        lcn = nextLcn;
-                        continue;
-                    }
-
-                    if (llen > _blockSize || llen < 0)
-                    {
-                        throw new InvalidDataException(
-                            $"Interlaced plain pcluster {lcn} of nid {nid} has length {llen} > block size {_blockSize}.");
-                    }
-
-                    var skip = (int)(mLa & (_blockSize - 1));
-                    var rawBlock = isTailPacked && IsMetaboxInode(nid)
-                        ? ReadMetaboxBytes(dataStart, _blockSize, "Interlaced plain lcluster block")
-                        : ReadBytes(dataStart, _blockSize, "Interlaced plain lcluster block");
-                    var rightpart = Math.Min(_blockSize - skip, (int)llen);
-                    output.Write(rawBlock, skip, rightpart);
-                    if (llen > rightpart)
-                    {
-                        output.Write(rawBlock, 0, (int)llen - rightpart);
-                    }
-
-                    lcn = nextLcn;
-                    continue;
-                }
-
-                var compressedBlocks = 1;
-                var headType = lc.Type;
-                var head1NotBig = headType == LclusterTypeHead1 && !bigPcluster1;
-                var plainOrHead2NotBig = (headType == LclusterTypePlain || headType == LclusterTypeHead2) && !bigPcluster2;
-                var atEof = (lcn << lclusterBits) >= (long)inode.Size;
-                if (!isTailPacked && !head1NotBig && !plainOrHead2NotBig && !atEof && lcn + 1 < totalIdx)
-                {
-
-                    var next = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn + 1, out _, out _, out _, cachedIndex);
-                    if (next.Type != LclusterTypeNonHead)
-                    {
-
-                        compressedBlocks = 1;
-                    }
-                    else
-                    {
-
-                        if (next.Delta0 != 1 || next.CompressedBlocks == 0)
-                        {
-                            throw new InvalidDataException(
-                                $"Bogus CBLKCNT @ lcn {lcn + 1} of nid {nid}.");
-                        }
-
-                        compressedBlocks = next.CompressedBlocks;
-                    }
-                }
-
-                var compressedByteLen = isTailPacked ? header.IdataSize : checked(compressedBlocks * _blockSize);
-                if (compressedByteLen <= 0 || !isTailPacked && lc.Pblk < 0 || compressedByteLen > ErofsCompression.MaxPclusterSize)
-                {
-                    throw new InvalidDataException($"Invalid compressed pcluster for nid {nid}.");
-                }
-
-                if (isSemiPcluster && compressedByteLen <= semiRawLength)
-                {
-                    throw new InvalidDataException(
-                        $"Semi-compressed pcluster {lcn} of nid {nid} has no encoded tail after its raw head cluster ({compressedByteLen} disk bytes, {semiRawLength} raw bytes).");
-                }
-
-                var pblkStart = isTailPacked ? CompressedIndexEnd(nid, inode, headerOffset, totalIdx, lclusterBits) : checked(lc.Pblk * _blockSize);
-                if (compressedByteLen > compressed.Length)
-                {
-                    ArrayPool<byte>.Shared.Return(compressed);
-                    compressed = ArrayPool<byte>.Shared.Rent(compressedByteLen);
-                }
-
-                if (llen > decoded.Length)
-                {
-                    ArrayPool<byte>.Shared.Return(decoded);
-                    decoded = ArrayPool<byte>.Shared.Rent((int)llen);
-                }
-
-                if (isTailPacked && IsMetaboxInode(nid))
-                {
-                    ReadMetaboxBytes(pblkStart, compressedByteLen, "Compressed pcluster data")
-                        .CopyTo(compressed, 0);
-                }
-                else
-                {
-                    CheckRange(pblkStart, compressedByteLen, "Compressed pcluster data");
-                    lock (_streamLock)
-                    {
-                        _stream.Position = checked(_baseOffset + pblkStart);
-                        _stream.ReadExactly(compressed, 0, compressedByteLen);
-                    }
-                }
-
-                var inputMargin = semiRawLength;
-                while (!isTailPacked && inputMargin < compressedByteLen && compressed[inputMargin] == 0)
-                {
-                    inputMargin++;
-                }
-
-                if (inputMargin >= compressedByteLen)
-                {
-                    throw new InvalidDataException(
-                        $"Pcluster {lcn} of nid {nid} is entirely zero-padded (no compressed data).");
-                }
-
-                var algorithm = headType == LclusterTypeHead2 ? algorithmHead2 : algorithmHead1;
-                var decodedTarget = (int)llen - semiRawLength;
-                int decodedLen;
-                try
-                {
-                    decodedLen = ErofsCompression.AlgorithmDecompress(
-                        algorithm, compressed, inputMargin, compressedByteLen - inputMargin, decoded, 0, decodedTarget);
-                }
-                catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or ArgumentException)
-                {
-                    throw new InvalidDataException(
-                        $"Pcluster {lcn} of nid {nid} failed to decompress ({algorithm}): {ex.Message}");
-                }
-
-                if (decodedLen != decodedTarget)
-                {
-                    throw new InvalidDataException(
-                        $"Pcluster {lcn} decoded to {decodedLen} bytes, expected {decodedTarget}.");
-                }
-
-                if (observer is not null)
-                {
-                    if (!observer((ErofsCompressionAlgorithm)algorithm,
-                        compressed.AsSpan(inputMargin, compressedByteLen - inputMargin), decoded.AsSpan(0, decodedTarget), lc.ClusterOfs, kernelExpectedOutputSize)) return;
-                }
-                else
-                {
-                    if (semiRawLength > 0)
-                    {
-                        output.Write(compressed, 0, semiRawLength);
-                    }
-                    output.Write(decoded, 0, decodedTarget);
-                }
                 lcn = nextLcn;
             }
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(compressed);
-            ArrayPool<byte>.Shared.Return(decoded);
+            ArrayPool<byte>.Shared.Return(context.Compressed);
+            ArrayPool<byte>.Shared.Return(context.Decoded);
         }
+    }
+
+    /// <summary>
+    /// Decodes the compressed map header and serves the two layouts that bypass the lcluster loop:
+    /// fragment inodes read from the packed inode, and extent-bearing compressed inodes handled by
+    /// the extent walker. Returns true when one of these layouts consumed the request.
+    /// <para>解码压缩映射头并处理两类绕过 lcluster 循环的布局：fragment inode 从 packed inode 读取，
+    /// 携带 extent 的压缩 inode 交给 extent 遍历处理。返回 true 表示其中一种布局已消费本次请求。</para>
+    /// </summary>
+    private bool TryWriteNonLclusterLayout(ulong nid, ErofsInode inode, Stream output,
+        CompressionObserver? observer, CancellationToken cancellationToken,
+        out ZErofsMapHeader header, out long headerOffset)
+    {
+        var inodeLoc = InodeOffset(nid);
+
+        headerOffset = AlignUp(inodeLoc + inode.OnDiskSize + inode.XattrTotalSize, 8);
+        var headerBytes = ReadInodeMetadata(nid, headerOffset, ZErofsMapHeader.Size, "compressed map header");
+        header = ZErofsMapHeader.FromBytes(headerBytes);
+
+        if (header.IsFragmentInode)
+        {
+            if (observer is not null)
+            {
+                return true;
+            }
+
+            var fragmentOff = BinaryPrimitives.ReadUInt64LittleEndian(headerBytes) & ~(1UL << 63);
+            WritePackedData(fragmentOff, checked((long)inode.Size), output);
+            return true;
+        }
+
+        if (inode.DataLayout == ErofsInode.DataLayoutCompressed && header.HasExtents)
+        {
+            if (observer is not null)
+            {
+                return true;
+            }
+
+            WriteExtentsData(nid, inode, header, headerBytes, headerOffset, output, cancellationToken);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Writes one run of logical clusters headed by the lcluster at <paramref name="lcn"/>: it maps
+    /// the run's logical offset window, classifies it (observer probe, fragment pcluster, plain,
+    /// interlaced plain or encoded pcluster), dispatches to the matching writer, and reports the
+    /// cursor for the next loop iteration.
+    /// <para>写出以 <paramref name="lcn"/> 处 lcluster 为首的一段逻辑簇：映射该段的逻辑偏移窗口并判定
+    /// 类型（observer 探测、fragment pcluster、plain、interlaced plain 或压缩 pcluster），分派到对应的
+    /// 写出方法，并给出下一次循环迭代的游标。</para>
+    /// </summary>
+    /// <returns>True when the loop should continue from <paramref name="nextLcn"/>; false when the
+    /// observer stopped the whole write and no further cluster should be processed.
+    /// <para>返回 true 表示循环应从 <paramref name="nextLcn"/> 继续；返回 false 表示 observer 已终止
+    /// 整个写出过程，不再处理后续逻辑簇。</para>
+    /// </returns>
+    private bool WriteCompressedClusterRange(CompressedWriteContext context, LclusterEntry lc, long lcn, out long nextLcn)
+    {
+        var inode = context.Inode;
+        var mappedLogicalOffset = lcn * context.LclusterSize + lc.ClusterOfs;
+        if (mappedLogicalOffset >= (long)inode.Size)
+        {
+            nextLcn = lcn + 1;
+            return true;
+        }
+
+        nextLcn = FindNextHeadLcluster(context, lcn, out var nextMappedLogicalOffset);
+        var kernelExpectedOutputSize = checked((int)(Math.Max((long)nextLcn << context.LclusterBits,
+            Math.Min(nextMappedLogicalOffset, (long)inode.Size)) - mappedLogicalOffset));
+
+        var llen = Math.Min(nextMappedLogicalOffset, (long)inode.Size) - mappedLogicalOffset;
+        if (llen <= 0)
+        {
+            return true;
+        }
+
+        if (llen > ErofsCompression.MaxPclusterDecompressedSize)
+        {
+            throw new FileSystemCorruptedException(
+                $"Pcluster decompressed size {llen} exceeds the limit of {ErofsCompression.MaxPclusterDecompressedSize} bytes.");
+        }
+
+        var isLastExtent = nextMappedLogicalOffset >= (long)inode.Size;
+        var isTailPacked = context.TailPacking && isLastExtent;
+
+        var semiRawLength = 0;
+        var isSemiPcluster = lc.Type == LclusterTypePlain && !context.Interlaced && !isTailPacked
+            && lc.ClusterOfs == 0 && nextLcn > lcn + 1 && llen > context.LclusterSize
+            && context.AlgorithmHead1 is ErofsAlgorithm.Lz4 or ErofsAlgorithm.Deflate;
+        if (isSemiPcluster)
+        {
+            semiRawLength = context.LclusterSize;
+        }
+        if (context.Observer is not null && (llen > 1 << 20 || lc.Type == LclusterTypePlain || context.FragmentPcluster && isLastExtent))
+        {
+            return true;
+        }
+        if (context.FragmentPcluster && isLastExtent)
+        {
+            var fragmentOffset = (ulong)context.Header.FragmentOff;
+            if (inode.DataLayout == ErofsInode.DataLayoutCompressed)
+            {
+                fragmentOffset |= (ulong)lc.Pblk << 32;
+            }
+
+            WritePackedData(fragmentOffset, llen, context.Output);
+            return true;
+        }
+
+        var iteration = new ClusterIteration
+        {
+            Head = lc,
+            Lcn = lcn,
+            NextLcn = nextLcn,
+            MappedLogicalOffset = mappedLogicalOffset,
+            Llen = llen,
+            KernelExpectedOutputSize = kernelExpectedOutputSize,
+            IsLastExtent = isLastExtent,
+            IsTailPacked = isTailPacked,
+            IsSemiPcluster = isSemiPcluster,
+            SemiRawLength = semiRawLength,
+        };
+
+        if (lc.Type == LclusterTypePlain && !isSemiPcluster)
+        {
+            WritePlainLcluster(context, iteration);
+            return true;
+        }
+
+        return WriteEncodedPcluster(context, iteration);
+    }
+
+    /// <summary>
+    /// Scans forward from <paramref name="lcn"/> to the next head lcluster, skipping NONHEAD entries,
+    /// and reports the logical offset where that head starts, clamped to the file size at the end of
+    /// the index.
+    /// <para>从 <paramref name="lcn"/> 向前扫描到下一个 head lcluster（跳过 NONHEAD 条目），并给出该
+    /// head 的逻辑起始偏移；索引末尾处按文件大小截断。</para>
+    /// </summary>
+    private long FindNextHeadLcluster(CompressedWriteContext context, long lcn, out long nextMappedLogicalOffset)
+    {
+        var nextLcn = lcn + 1;
+        while (nextLcn < context.TotalIdx)
+        {
+            var candidate = LoadLcluster(context, nextLcn);
+            if (candidate.Type != LclusterTypeNonHead)
+            {
+                break;
+            }
+
+            nextLcn++;
+        }
+        if (nextLcn < 0)
+        {
+            nextMappedLogicalOffset = (long)context.Inode.Size;
+        }
+        else if (nextLcn >= context.TotalIdx)
+        {
+            nextMappedLogicalOffset = (long)context.Inode.Size;
+            nextLcn = context.TotalIdx;
+        }
+        else
+        {
+            var nextEntry = LoadLcluster(context, nextLcn);
+            nextMappedLogicalOffset = nextLcn * context.LclusterSize + nextEntry.ClusterOfs;
+        }
+
+        return nextLcn;
+    }
+
+    /// <summary>
+    /// Loads a logical cluster entry for the inode described by the compressed write context.
+    /// <para>按压缩写出上下文所描述的 inode 加载一个逻辑簇条目。</para>
+    /// </summary>
+    private LclusterEntry LoadLcluster(CompressedWriteContext context, long lcn)
+        => LoadLcluster(context.Nid, context.Inode, context.HeaderOffset, context.Advise, context.LclusterBits,
+            context.TotalIdx, lcn, out _, out _, out _, context.CachedIndex);
+
+    /// <summary>
+    /// Writes a run whose head lcluster is PLAIN and not semi-compressed, dispatching between the
+    /// sequential (non-interlaced) copy and the byte-granular interlaced copy.
+    /// <para>写出 head lcluster 为 PLAIN 且非半压缩的区段，在按顺序（非 interlaced）复制与按字节粒度的
+    /// interlaced 复制之间分派。</para>
+    /// </summary>
+    private void WritePlainLcluster(CompressedWriteContext context, ClusterIteration iteration)
+    {
+        var dataStart = iteration.IsTailPacked
+            ? CompressedIndexEnd(context.Nid, context.Inode, context.HeaderOffset, context.TotalIdx, context.LclusterBits)
+            : checked(iteration.Head.Pblk * _blockSize);
+        if (!context.Interlaced)
+        {
+            WriteSequentialPlainLcluster(context, iteration, dataStart);
+            return;
+        }
+
+        WriteInterlacedPlainLcluster(context, iteration, dataStart);
+    }
+
+    /// <summary>
+    /// Copies a non-interlaced plain run verbatim, either from the metabox or from the image range
+    /// checked against the image bounds.
+    /// <para>按原样复制非 interlaced 的 plain 区段：metabox inode 从 metabox 读取，其余经镜像边界校验
+    /// 后从镜像复制。</para>
+    /// </summary>
+    private void WriteSequentialPlainLcluster(CompressedWriteContext context, ClusterIteration iteration, long dataStart)
+    {
+        if (iteration.IsTailPacked && IsMetaboxInode(context.Nid))
+        {
+            context.Output.Write(ReadMetaboxBytes(dataStart, checked((int)iteration.Llen), "Plain lcluster data"));
+        }
+        else
+        {
+            CheckRange(dataStart, iteration.Llen, "Plain lcluster data");
+            CopyFromSource(context.Output, dataStart, iteration.Llen);
+        }
+    }
+
+    /// <summary>
+    /// Writes an interlaced plain run: the stored block spans one physical block and the logical
+    /// window starts at <c>mappedLogicalOffset</c> modulo the block size, wrapping around the block
+    /// end.
+    /// <para>写出 interlaced 的 plain 区段：存储块占用一个物理块，逻辑窗口从 <c>mappedLogicalOffset</c>
+    /// 对块大小取模的位置开始，并在块尾回绕。</para>
+    /// </summary>
+    private void WriteInterlacedPlainLcluster(CompressedWriteContext context, ClusterIteration iteration, long dataStart)
+    {
+        var llen = iteration.Llen;
+        if (llen > _blockSize || llen < 0)
+        {
+            throw new FileSystemCorruptedException(
+                $"Interlaced plain pcluster {iteration.Lcn} of nid {context.Nid} has length {llen} > block size {_blockSize}.");
+        }
+
+        var skip = (int)(iteration.MappedLogicalOffset & (_blockSize - 1));
+        var rawBlock = iteration.IsTailPacked && IsMetaboxInode(context.Nid)
+            ? ReadMetaboxBytes(dataStart, _blockSize, "Interlaced plain lcluster block")
+            : ReadBytes(dataStart, _blockSize, "Interlaced plain lcluster block");
+        var rightpart = Math.Min(_blockSize - skip, (int)llen);
+        context.Output.Write(rawBlock, skip, rightpart);
+        if (llen > rightpart)
+        {
+            context.Output.Write(rawBlock, 0, (int)llen - rightpart);
+        }
+    }
+
+    /// <summary>
+    /// Decompresses and writes one encoded pcluster run: it reads the CBLKCNT big-pcluster marker,
+    /// validates the encoded length, decompresses with the head lcluster's algorithm, and either
+    /// feeds the observer or writes the semi raw head cluster plus the decoded tail to the output.
+    /// <para>解压并写出一段编码 pcluster：读取 CBLKCNT big-pcluster 标记，校验编码长度，按 head
+    /// lcluster 的算法解压，并将结果交给 observer，或把半压缩的原始头簇与解码尾部写入输出。</para>
+    /// </summary>
+    /// <returns>True when the caller should continue with the next run; false when the observer
+    /// stopped the whole write.
+    /// <para>返回 true 表示调用方应继续处理下一段；返回 false 表示 observer 已终止整个写出。</para>
+    /// </returns>
+    private bool WriteEncodedPcluster(CompressedWriteContext context, ClusterIteration iteration)
+    {
+        var lc = iteration.Head;
+        var lcn = iteration.Lcn;
+        var llen = iteration.Llen;
+        var compressedBlocks = 1;
+        var headType = lc.Type;
+        var head1NotBig = headType == LclusterTypeHead1 && !context.BigPcluster1;
+        var plainOrHead2NotBig = (headType == LclusterTypePlain || headType == LclusterTypeHead2) && !context.BigPcluster2;
+        var atEof = (lcn << context.LclusterBits) >= (long)context.Inode.Size;
+        if (!iteration.IsTailPacked && !head1NotBig && !plainOrHead2NotBig && !atEof && lcn + 1 < context.TotalIdx)
+        {
+            var next = LoadLcluster(context, lcn + 1);
+            if (next.Type != LclusterTypeNonHead)
+            {
+                compressedBlocks = 1;
+            }
+            else
+            {
+                if (next.Delta0 != 1 || next.CompressedBlocks == 0)
+                {
+                    throw new FileSystemCorruptedException(
+                        $"Bogus CBLKCNT @ lcn {lcn + 1} of nid {context.Nid}.");
+                }
+
+                compressedBlocks = next.CompressedBlocks;
+            }
+        }
+
+        var compressedByteLen = iteration.IsTailPacked ? context.Header.IdataSize : checked(compressedBlocks * _blockSize);
+        if (compressedByteLen <= 0 || !iteration.IsTailPacked && lc.Pblk < 0 || compressedByteLen > ErofsCompression.MaxPclusterSize)
+        {
+            throw new FileSystemCorruptedException($"Invalid compressed pcluster for nid {context.Nid}.");
+        }
+
+        if (iteration.IsSemiPcluster && compressedByteLen <= iteration.SemiRawLength)
+        {
+            throw new FileSystemCorruptedException(
+                $"Semi-compressed pcluster {lcn} of nid {context.Nid} has no encoded tail after its raw head cluster ({compressedByteLen} disk bytes, {iteration.SemiRawLength} raw bytes).");
+        }
+
+        var pblkStart = iteration.IsTailPacked
+            ? CompressedIndexEnd(context.Nid, context.Inode, context.HeaderOffset, context.TotalIdx, context.LclusterBits)
+            : checked(lc.Pblk * _blockSize);
+        if (compressedByteLen > context.Compressed.Length)
+        {
+            ArrayPool<byte>.Shared.Return(context.Compressed);
+            context.Compressed = ArrayPool<byte>.Shared.Rent(compressedByteLen);
+        }
+
+        if (llen > context.Decoded.Length)
+        {
+            ArrayPool<byte>.Shared.Return(context.Decoded);
+            context.Decoded = ArrayPool<byte>.Shared.Rent((int)llen);
+        }
+
+        if (iteration.IsTailPacked && IsMetaboxInode(context.Nid))
+        {
+            ReadMetaboxBytes(pblkStart, compressedByteLen, "Compressed pcluster data")
+                .CopyTo(context.Compressed, 0);
+        }
+        else
+        {
+            CheckRange(pblkStart, compressedByteLen, "Compressed pcluster data");
+            lock (_streamLock)
+            {
+                _stream.Position = checked(_baseOffset + pblkStart);
+                _stream.ReadExactly(context.Compressed, 0, compressedByteLen);
+            }
+        }
+
+        var inputMargin = iteration.SemiRawLength;
+        while (!iteration.IsTailPacked && inputMargin < compressedByteLen && context.Compressed[inputMargin] == 0)
+        {
+            inputMargin++;
+        }
+
+        if (inputMargin >= compressedByteLen)
+        {
+            throw new FileSystemCorruptedException(
+                $"Pcluster {lcn} of nid {context.Nid} is entirely zero-padded (no compressed data).");
+        }
+
+        var algorithm = headType == LclusterTypeHead2 ? context.AlgorithmHead2 : context.AlgorithmHead1;
+        var decodedTarget = (int)llen - iteration.SemiRawLength;
+        int decodedLen;
+        try
+        {
+            decodedLen = ErofsCompression.AlgorithmDecompress(
+                algorithm, context.Compressed, inputMargin, compressedByteLen - inputMargin, context.Decoded, 0, decodedTarget);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or FileSystemException or InvalidOperationException or ArgumentException)
+        {
+            throw new FileSystemCorruptedException(
+                $"Pcluster {lcn} of nid {context.Nid} failed to decompress ({algorithm}): {ex.Message}");
+        }
+
+        if (decodedLen != decodedTarget)
+        {
+            throw new FileSystemCorruptedException(
+                $"Pcluster {lcn} of nid {context.Nid} decoded to {decodedLen} bytes, expected {decodedTarget}.");
+        }
+
+        if (context.Observer is not null)
+        {
+            return context.Observer((ErofsCompressionAlgorithm)algorithm,
+                context.Compressed.AsSpan(inputMargin, compressedByteLen - inputMargin), context.Decoded.AsSpan(0, decodedTarget), lc.ClusterOfs, iteration.KernelExpectedOutputSize);
+        }
+
+        if (iteration.SemiRawLength > 0)
+        {
+            context.Output.Write(context.Compressed, 0, iteration.SemiRawLength);
+        }
+        context.Output.Write(context.Decoded, 0, decodedTarget);
+        return true;
+    }
+
+    /// <summary>
+    /// Per-call state shared by the compressed write loop and its branch writers: inode identity,
+    /// map header fields, index geometry, advise flags, the output sink and the pooled scratch
+    /// buffers.
+    /// <para>压缩写出循环及其分支写出方法共享的每次调用状态：inode 标识、映射头字段、索引几何参数、
+    /// advise 标志、输出流与池化临时缓冲。</para>
+    /// </summary>
+    private sealed class CompressedWriteContext
+    {
+        public required ulong Nid { get; init; }
+        public required ErofsInode Inode { get; init; }
+        public required ZErofsMapHeader Header { get; init; }
+        public required long HeaderOffset { get; init; }
+        public required ushort Advise { get; init; }
+        public required ErofsAlgorithm AlgorithmHead1 { get; init; }
+        public required ErofsAlgorithm AlgorithmHead2 { get; init; }
+        public required int LclusterBits { get; init; }
+        public required int LclusterSize { get; init; }
+        public required int TotalIdx { get; init; }
+        public required IndexReadWindow CachedIndex { get; init; }
+        public required bool Interlaced { get; init; }
+        public required bool BigPcluster1 { get; init; }
+        public required bool BigPcluster2 { get; init; }
+        public required bool TailPacking { get; init; }
+        public required bool FragmentPcluster { get; init; }
+        public required Stream Output { get; init; }
+        public required CompressionObserver? Observer { get; init; }
+
+        /// <summary>Pooled encoded-input buffer, grown in place by the encoded pcluster writer.
+        /// <para>池化的压缩输入缓冲，由压缩 pcluster 写出方法按需就地扩容。</para></summary>
+        public required byte[] Compressed { get; set; }
+
+        /// <summary>Pooled decoded-output buffer, grown in place by the encoded pcluster writer.
+        /// <para>池化的解码输出缓冲，由压缩 pcluster 写出方法按需就地扩容。</para></summary>
+        public required byte[] Decoded { get; set; }
+    }
+
+    /// <summary>
+    /// Per-iteration state of one logical cluster run inside the compressed write loop, shared by
+    /// the plain, interlaced and encoded pcluster writers.
+    /// <para>压缩写出循环中单个逻辑簇区段的每次迭代状态，供 plain、interlaced 与压缩 pcluster 写出
+    /// 方法共享。</para>
+    /// </summary>
+    private sealed class ClusterIteration
+    {
+        public required LclusterEntry Head { get; init; }
+        public required long Lcn { get; init; }
+        public required long NextLcn { get; init; }
+        public required long MappedLogicalOffset { get; init; }
+        public required long Llen { get; init; }
+        public required int KernelExpectedOutputSize { get; init; }
+        public required bool IsLastExtent { get; init; }
+        public required bool IsTailPacked { get; init; }
+        public required bool IsSemiPcluster { get; init; }
+        public required int SemiRawLength { get; init; }
     }
 
     /// <summary>
@@ -709,17 +936,17 @@ public sealed partial class ErofsParser
             {
                 return;
             }
-            throw new InvalidDataException($"EROFS extent count is zero for nonempty inode {nid}.");
+            throw new FileSystemCorruptedException($"EROFS extent count is zero for nonempty inode {nid}.");
         }
         if (recSize < 8)
         {
-            throw new InvalidDataException($"EROFS extent record size {recSize} is too small.");
+            throw new FileSystemCorruptedException($"EROFS extent record size {recSize} is too small.");
         }
 
         const int maxExtents = 1 << 24;
         if (extentCount > (ulong)maxExtents)
         {
-            throw new InvalidDataException($"EROFS extent count {extentCount} exceeds the limit of {maxExtents}.");
+            throw new FileSystemCorruptedException($"EROFS extent count {extentCount} exceeds the limit of {maxExtents}.");
         }
 
         var logicalOffset = 0L;
@@ -734,7 +961,7 @@ public sealed partial class ErofsParser
 
             if (logicalStart != logicalOffset)
             {
-                throw new InvalidDataException($"EROFS extent {i} of nid {nid} is not sorted.");
+                throw new FileSystemCorruptedException($"EROFS extent {i} of nid {nid} is not sorted.");
             }
 
             var logicalEnd = i + 1 < (long)extentCount
@@ -742,7 +969,7 @@ public sealed partial class ErofsParser
                 : checked((long)inode.Size);
             if (logicalEnd <= logicalStart || logicalEnd > (long)inode.Size)
             {
-                throw new InvalidDataException($"EROFS extent {i} of nid {nid} has an invalid logical range.");
+                throw new FileSystemCorruptedException($"EROFS extent {i} of nid {nid} has an invalid logical range.");
             }
             var logicalLength = logicalEnd - logicalStart;
             var physicalLength = plenRaw & ZErofsMapHeader.ExtentPlenMask;
@@ -751,7 +978,7 @@ public sealed partial class ErofsParser
                 | (ulong)BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(8)) << 32));
             if (fmt > (uint)ErofsAlgorithm.Zstd + 1)
             {
-                throw new InvalidDataException($"EROFS extent {i} of nid {nid} uses unknown algorithm {fmt - 1}.");
+                throw new FileSystemCorruptedException($"EROFS extent {i} of nid {nid} uses unknown algorithm {fmt - 1}.");
             }
 
             if (i == (long)extentCount - 1
@@ -778,7 +1005,7 @@ public sealed partial class ErofsParser
 
         if (logicalOffset != (long)inode.Size)
         {
-            throw new InvalidDataException($"EROFS extents of nid {nid} do not cover the file.");
+            throw new FileSystemCorruptedException($"EROFS extents of nid {nid} do not cover the file.");
         }
     }
 
@@ -799,17 +1026,17 @@ public sealed partial class ErofsParser
         var clusterBits = _superblock.BlockSizeBits + (header.ClusterBits & ZErofsMapHeader.LclusterBitsMask);
         if (clusterBits > 23)
         {
-            throw new InvalidDataException($"EROFS extent cluster size shift {clusterBits} exceeds the supported limit.");
+            throw new FileSystemCorruptedException($"EROFS extent cluster size shift {clusterBits} exceeds the supported limit.");
         }
         var clusterSize = 1L << clusterBits;
         if (clusterSize > ErofsCompression.MaxPclusterDecompressedSize)
         {
-            throw new InvalidDataException("EROFS short extent exceeds the decompression budget.");
+            throw new FileSystemCorruptedException("EROFS short extent exceeds the decompression budget.");
         }
         var count = checked(((long)inode.Size - 1) / clusterSize + 1);
         if (count > 1 << 24)
         {
-            throw new InvalidDataException("EROFS short extent count exceeds the supported limit.");
+            throw new FileSystemCorruptedException("EROFS short extent count exceeds the supported limit.");
         }
         var physical = recordSize == 4
             ? checked((long)BinaryPrimitives.ReadUInt64LittleEndian(
@@ -841,7 +1068,7 @@ public sealed partial class ErofsParser
             {
                 if (physicalLength < logicalLength)
                 {
-                    throw new InvalidDataException("EROFS plain short extent is smaller than its logical cluster.");
+                    throw new FileSystemCorruptedException("EROFS plain short extent is smaller than its logical cluster.");
                 }
                 CheckRange(physical, logicalLength, "Plain short extent");
                 CopyFromSource(output, physical, logicalLength);
@@ -850,7 +1077,7 @@ public sealed partial class ErofsParser
             {
                 if (format > (uint)ErofsAlgorithm.Zstd + 1)
                 {
-                    throw new InvalidDataException($"Unknown EROFS short extent compression algorithm {format - 1}.");
+                    throw new FileSystemCorruptedException($"Unknown EROFS short extent compression algorithm {format - 1}.");
                 }
                 WriteCompressedExtent(nid, inode, record, recordSize, i * clusterSize, logicalLength,
                     (ErofsAlgorithm)(format - 1), output, cancellationToken, physical);
@@ -871,7 +1098,7 @@ public sealed partial class ErofsParser
         }
         if ((BinaryPrimitives.ReadUInt32LittleEndian(record) & ZErofsMapHeader.ExtentPlenMask) < logicalLength)
         {
-            throw new InvalidDataException("EROFS plain extent is smaller than its logical range.");
+            throw new FileSystemCorruptedException("EROFS plain extent is smaller than its logical range.");
         }
         long source;
         if (recSize > 8)
@@ -897,7 +1124,7 @@ public sealed partial class ErofsParser
         }
         if (logicalLength > ErofsCompression.MaxPclusterDecompressedSize)
         {
-            throw new InvalidDataException("EROFS compressed extent exceeds the decompression budget.");
+            throw new FileSystemCorruptedException("EROFS compressed extent exceeds the decompression budget.");
         }
 
         long pstart;
@@ -913,14 +1140,14 @@ public sealed partial class ErofsParser
         }
         else
         {
-            throw new InvalidDataException($"EROFS compressed extent of nid {nid} lacks a physical start.");
+            throw new FileSystemCorruptedException($"EROFS compressed extent of nid {nid} lacks a physical start.");
         }
 
         var plenRaw = BinaryPrimitives.ReadUInt32LittleEndian(record);
         var compressedLength = (int)(plenRaw & ZErofsMapHeader.ExtentPlenMask);
         if (compressedLength <= 0 || compressedLength > ErofsCompression.MaxPclusterSize)
         {
-            throw new InvalidDataException($"EROFS extent of nid {nid} has invalid encoded length {compressedLength}.");
+            throw new FileSystemCorruptedException($"EROFS extent of nid {nid} has invalid encoded length {compressedLength}.");
         }
 
         CheckRange(pstart, compressedLength, "Compressed extent data");
@@ -948,20 +1175,20 @@ public sealed partial class ErofsParser
                 }
                 if (inputMargin == compressedLength)
                 {
-                    throw new InvalidDataException("EROFS compressed extent is entirely zero-padded.");
+                    throw new FileSystemCorruptedException("EROFS compressed extent is entirely zero-padded.");
                 }
                 decodedLength = ErofsCompression.AlgorithmDecompress(
                     algorithm, compressed, inputMargin, compressedLength - inputMargin, decoded, 0, (int)logicalLength);
             }
-            catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or ArgumentException)
+            catch (Exception ex) when (ex is InvalidDataException or FileSystemException or InvalidOperationException or ArgumentException)
             {
-                throw new InvalidDataException(
+                throw new FileSystemCorruptedException(
                     $"Extent of nid {nid} failed to decompress ({algorithm}): {ex.Message}");
             }
 
             if (decodedLength != (int)logicalLength)
             {
-                throw new InvalidDataException(
+                throw new FileSystemCorruptedException(
                     $"Extent of nid {nid} decoded to {decodedLength} bytes, expected {logicalLength}; " +
                     $"algorithm={algorithm}, physical={pstart}, encoded={compressedLength}, prefix={Convert.ToHexString(compressed.AsSpan(0, Math.Min(16, compressedLength)))}.");
             }
@@ -1002,7 +1229,7 @@ public sealed partial class ErofsParser
         var packedNid = _superblock.PackedNid;
         if (packedNid == 0)
         {
-            throw new InvalidDataException("Fragment inode without a packed inode (s_packed_nid == 0).");
+            throw new FileSystemCorruptedException("Fragment inode without a packed inode (s_packed_nid == 0).");
         }
 
         ErofsInode packed;
@@ -1013,7 +1240,7 @@ public sealed partial class ErofsParser
         }
         if (!packed.IsRegularFile && !packed.IsDirectory)
         {
-            throw new InvalidDataException($"Packed inode nid {packedNid} is not a regular file.");
+            throw new FileSystemCorruptedException($"Packed inode nid {packedNid} is not a regular file.");
         }
 
         if (length == 0)
@@ -1024,7 +1251,7 @@ public sealed partial class ErofsParser
         var packedSize = (long)packed.Size;
         if (fragmentOff >= (ulong)packedSize || length > packedSize - (long)fragmentOff)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"Packed fragment offset {fragmentOff} and length {length} exceed the packed inode size {packedSize}.");
         }
 
@@ -1062,7 +1289,7 @@ public sealed partial class ErofsParser
 
         if (packed.DataLayout != ErofsInode.DataLayoutFlat)
         {
-            throw new InvalidDataException($"Unsupported packed inode layout {packed.DataLayout} for nid {packedNid}.");
+            throw new FileSystemUnsupportedFeatureException($"Unsupported packed inode layout {packed.DataLayout} for nid {packedNid}.");
         }
 
         WritePackedRange((long)fragmentOff, length, packedSize, packed, packedNid, inlineStartIsFlat: true, output);
@@ -1097,17 +1324,17 @@ public sealed partial class ErofsParser
     {
         lock (_streamLock)
         {
-            if (_loadingPackedData) throw new InvalidDataException("Recursive EROFS packed inode reference.");
+            if (_loadingPackedData) throw new FileSystemCorruptedException("Recursive EROFS packed inode reference.");
             if (_packedData is null)
             {
-                if (inode.Size > 64UL << 30) throw new InvalidDataException("EROFS packed inode exceeds the 64 GiB staging limit.");
+                if (inode.Size > 64UL << 30) throw new FileSystemCorruptedException("EROFS packed inode exceeds the 64 GiB staging limit.");
                 var temporary = new FileStream(Path.Combine(Path.GetTempPath(), "uotan-erofs-packed-" + Guid.NewGuid().ToString("N")),
                     FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.DeleteOnClose);
                 _loadingPackedData = true;
                 try
                 {
                     WriteCompressedData(nid, inode, temporary);
-                    if (temporary.Length != (long)inode.Size) throw new InvalidDataException("EROFS packed inode length mismatch.");
+                    if (temporary.Length != (long)inode.Size) throw new FileSystemCorruptedException("EROFS packed inode length mismatch.");
                     _packedData = temporary;
                 }
                 catch { temporary.Dispose(); throw; }
@@ -1166,7 +1393,7 @@ public sealed partial class ErofsParser
 
             if (pos < flatLength)
             {
-                throw new InvalidDataException("Packed fragment straddles the flat/inline boundary unexpectedly.");
+                throw new FileSystemCorruptedException("Packed fragment straddles the flat/inline boundary unexpectedly.");
             }
 
             inlineStart += pos - flatLength;
@@ -1176,7 +1403,7 @@ public sealed partial class ErofsParser
 
             if (pos >= flatLength)
             {
-                throw new InvalidDataException("Packed fragment extends beyond a pure-flat packed inode.");
+                throw new FileSystemCorruptedException("Packed fragment extends beyond a pure-flat packed inode.");
             }
         }
 

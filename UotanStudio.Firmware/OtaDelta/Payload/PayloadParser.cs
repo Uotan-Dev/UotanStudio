@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.Models;
@@ -17,7 +18,6 @@ namespace UotanStudio.Firmware.OtaDelta.Payload;
 /// </summary>
 public static partial class PayloadParser
 {
-    #region File Type Detection
 
     private static readonly byte[] ZipMagicBytes = [0x50, 0x4B];
     private static readonly byte[] PayloadMagicBytes = [0x43, 0x72, 0x41, 0x55];
@@ -26,10 +26,10 @@ public static partial class PayloadParser
     /// Determines the payload type of a local file by reading its magic bytes.
     /// <para>通过读取魔术字节确定本地文件的载荷类型。</para>
     /// </summary>
-    internal static PayloadType DetectPayloadType(string filepath)
+    internal static PayloadType DetectPayloadType(string filePath)
     {
-        using var f = File.OpenRead(filepath);
-        return DetectPayloadTypeFromStream(f);
+        using var stream = File.OpenRead(filePath);
+        return DetectPayloadTypeFromStream(stream);
     }
 
     /// <summary>
@@ -59,9 +59,7 @@ public static partial class PayloadParser
             : PayloadType.Unknown;
     }
 
-    #endregion
 
-    #region Manifest Reading
 
     private static async Task<int> ReadExactAsync(Stream stream, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
@@ -183,33 +181,14 @@ public static partial class PayloadParser
         return totalRead;
     }
 
-    private static async Task<(DeltaArchiveManifest Manifest, PayloadHeader Header)> OpenAndReadManifestAsync(string filepath, CancellationToken cancellationToken = default)
+    private static async Task<(DeltaArchiveManifest Manifest, PayloadHeader Header)> OpenAndReadManifestAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        var payloadType = DetectPayloadType(filepath);
-        switch (payloadType)
+        var (payloadStream, owner) = OpenPayloadStream(filePath);
+        using (owner)
+        using (payloadStream)
         {
-            case PayloadType.ZipArchive:
-                using (var zr = ZipFile.OpenRead(filepath))
-                {
-                    var zf = FindPayloadEntry(zr)
-                        ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
-                    using var zfStream = zf.Open();
-                    return await ReadManifestAsync(zfStream, cancellationToken).ConfigureAwait(false);
-                }
-
-            case PayloadType.RawPayload:
-                using (var f = File.OpenRead(filepath))
-                {
-                    return await ReadManifestAsync(f, cancellationToken).ConfigureAwait(false);
-                }
-
-            case PayloadType.Unknown:
-                break;
-            default:
-                throw new InvalidPayloadMagicException($"File does not appear to be a payload or ZIP archive: {filepath}");
+            return await ReadManifestAsync(payloadStream, cancellationToken).ConfigureAwait(false);
         }
-
-        throw new InvalidPayloadMagicException($"Unrecognized payload type: {payloadType}");
     }
 
     private static ZipArchiveEntry? FindPayloadEntry(ZipArchive archive)
@@ -220,11 +199,11 @@ public static partial class PayloadParser
             return entry;
         }
 
-        foreach (var e in archive.Entries)
+        foreach (var candidate in archive.Entries)
         {
-            if (string.Equals(e.Name, PayloadConstants.PayloadFilename, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(candidate.Name, PayloadConstants.PayloadFilename, StringComparison.OrdinalIgnoreCase))
             {
-                return e;
+                return candidate;
             }
         }
 
@@ -232,27 +211,65 @@ public static partial class PayloadParser
     }
 
     /// <summary>
+    /// Opens the payload bytes of a local payload file or ZIP update package. ZIP packages return the
+    /// payload entry stream together with the owning archive, which the caller must dispose after the
+    /// entry stream; raw payloads return the file stream with a <see langword="null"/> owner.
+    /// <para>打开本地载荷文件或 ZIP 升级包的载荷字节。ZIP 包返回载荷条目流及其所属归档，调用方须在
+    /// 条目流之后释放归档；原始载荷返回文件流，所有者为 <see langword="null"/>。</para>
+    /// </summary>
+    private static (Stream PayloadStream, ZipArchive? Owner) OpenPayloadStream(string filePath)
+    {
+        var payloadType = DetectPayloadType(filePath);
+        switch (payloadType)
+        {
+            case PayloadType.ZipArchive:
+                {
+                    var archive = ZipFile.OpenRead(filePath);
+                    try
+                    {
+                        var payloadEntry = FindPayloadEntry(archive)
+                            ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
+                        return (payloadEntry.Open(), archive);
+                    }
+                    catch
+                    {
+                        archive.Dispose();
+                        throw;
+                    }
+                }
+
+            case PayloadType.RawPayload:
+                return (File.OpenRead(filePath), null);
+
+            case PayloadType.Unknown:
+                throw new InvalidPayloadMagicException($"Unrecognized payload type: {payloadType}");
+            default:
+                throw new InvalidPayloadMagicException($"File does not appear to be a payload or ZIP archive: {filePath}");
+        }
+    }
+
+    /// <summary>
     /// Materializes the ZIP-embedded payload to a temporary file (fallback for compressed entries),
     /// reporting decompressed bytes against <paramref name="totalBytes"/> as progress.
     /// <para>把 ZIP 内嵌的 payload 物化到临时文件（压缩条目的回退路径），并按解压字节逐块上报进度。</para>
     /// </summary>
-    private static async Task<string> ExtractPayloadFromZipAsync(string filepath, CancellationToken cancellationToken,
+    private static async Task<string> ExtractPayloadFromZipAsync(string filePath, CancellationToken cancellationToken,
         IProgress<(long Processed, long Total)>? byteProgress, long totalBytes)
     {
         var tempPath = TempFileHelper.CreateTempFile();
         var buffer = new byte[1 << 20];
-        using (var zr = ZipFile.OpenRead(filepath))
+        using (var archive = ZipFile.OpenRead(filePath))
         {
-            var zf = FindPayloadEntry(zr)
+            var payloadEntry = FindPayloadEntry(archive)
                 ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
-            using var zfStream = zf.Open();
+            using var entryStream = payloadEntry.Open();
             using var outFile = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, buffer.Length, FileOptions.SequentialScan);
             byteProgress?.Report((0, totalBytes));
             long processed = 0;
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var read = await zfStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+                var read = await entryStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
                 if (read == 0)
                 {
                     break;
@@ -267,78 +284,56 @@ public static partial class PayloadParser
         return tempPath;
     }
 
-    #endregion
 
-    #region Public API
 
     /// <summary>
     /// Reads payload metadata from a local file, handling both raw payload.bin and ZIP-wrapped payloads.
     /// <para>从本地文件读取载荷元数据，支持原始 payload.bin 和 ZIP 包裹的载荷。</para>
     /// </summary>
-    /// <param name="filepath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
+    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
     /// <returns>Block size, manifest/signature geometry, base offset, parsed manifest, max timestamp, dynamic
     /// partition metadata (empty when absent), signature fields and the list of non-empty partition names.
     /// <para>块大小、清单/签名几何、基准偏移、已解析清单、最大时间戳、动态分区元数据（缺失时为空对象）、
     /// 签名字段以及非空分区名列表。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="filepath"/> is <see langword="null"/>. <para><paramref name="filepath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="filepath"/> is blank. <para><paramref name="filepath"/> 为空白。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>. <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank. <para><paramref name="filePath"/> 为空白。</para></exception>
     /// <exception cref="InvalidPayloadMagicException">The file magic is neither a ZIP header nor the payload <c>CrAU</c> magic.
     /// <para>文件魔数既非 ZIP 头也非载荷 <c>CrAU</c> 魔数。</para></exception>
     /// <exception cref="InvalidManifestException">The ZIP lacks a payload entry, or the manifest/signature bytes are truncated.
     /// <para>ZIP 缺少载荷条目，或清单/签名字节被截断。</para></exception>
     /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
-    public static PayloadMetadata GetPayloadMetadata(string filepath)
+    public static PayloadMetadata GetPayloadMetadata(string filePath)
     {
-        Guard.ThrowIfNull(filepath);
-        Guard.ThrowIfNullOrWhiteSpace(filepath);
+        Guard.ThrowIfNull(filePath);
+        Guard.ThrowIfNullOrWhiteSpace(filePath);
 
-        var payloadType = DetectPayloadType(filepath);
-        switch (payloadType)
+        var (payloadStream, owner) = OpenPayloadStream(filePath);
+        using (owner)
+        using (payloadStream)
         {
-            case PayloadType.ZipArchive:
-                using (var zr = ZipFile.OpenRead(filepath))
-                {
-                    var zf = FindPayloadEntry(zr)
-                        ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
-                    using var zfStream = zf.Open();
-                    var (manifest, header) = ReadManifest(zfStream);
-                    return BuildMetadata(manifest, header);
-                }
-
-            case PayloadType.RawPayload:
-                using (var f = File.OpenRead(filepath))
-                {
-                    var (manifest, header) = ReadManifest(f);
-                    return BuildMetadata(manifest, header);
-                }
-
-            case PayloadType.Unknown:
-                break;
-            default:
-                throw new InvalidPayloadMagicException($"File does not appear to be a payload or ZIP archive: {filepath}");
+            var (manifest, header) = ReadManifest(payloadStream);
+            return BuildMetadata(manifest, header);
         }
-
-        throw new InvalidPayloadMagicException($"Unrecognized payload type: {payloadType}");
     }
 
     /// <summary>
     /// Asynchronously reads payload metadata from a local file.
     /// <para>从本地文件异步读取载荷元数据。</para>
     /// </summary>
-    /// <param name="filepath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
+    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
     /// <param name="cancellationToken">Cancels metadata reads and ZIP materialization. <para>取消元数据读取与 ZIP 物化。</para></param>
     /// <returns>The same metadata shape as <see cref="GetPayloadMetadata(string)"/>. <para>与 <see cref="GetPayloadMetadata(string)"/> 相同的元数据形态。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="filepath"/> is <see langword="null"/>. <para><paramref name="filepath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="filepath"/> is blank. <para><paramref name="filepath"/> 为空白。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>. <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank. <para><paramref name="filePath"/> 为空白。</para></exception>
     /// <exception cref="InvalidPayloadMagicException">The file is neither a payload nor a ZIP archive. <para>文件既不是载荷也不是 ZIP 归档。</para></exception>
     /// <exception cref="InvalidManifestException">The payload entry is missing or the manifest is truncated. <para>载荷条目缺失或清单被截断。</para></exception>
     /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
-    public static async Task<PayloadMetadata> GetPayloadMetadataAsync(string filepath, CancellationToken cancellationToken = default)
+    public static async Task<PayloadMetadata> GetPayloadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        Guard.ThrowIfNull(filepath);
-        Guard.ThrowIfNullOrWhiteSpace(filepath);
-        var (manifest, header) = await OpenAndReadManifestAsync(filepath, cancellationToken).ConfigureAwait(false);
+        Guard.ThrowIfNull(filePath);
+        Guard.ThrowIfNullOrWhiteSpace(filePath);
+        var (manifest, header) = await OpenAndReadManifestAsync(filePath, cancellationToken).ConfigureAwait(false);
         return BuildMetadata(manifest, header);
     }
 
@@ -407,18 +402,18 @@ public static partial class PayloadParser
     /// Gets partition size information from a local payload file.
     /// <para>从本地载荷文件获取分区大小信息。</para>
     /// </summary>
-    /// <param name="filepath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
+    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
     /// <returns>One entry per manifest partition with its name and computed size. <para>每个清单分区一条记录，含分区名与计算大小。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="filepath"/> is <see langword="null"/>. <para><paramref name="filepath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="filepath"/> is blank. <para><paramref name="filepath"/> 为空白。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>. <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank. <para><paramref name="filePath"/> 为空白。</para></exception>
     /// <exception cref="InvalidPayloadMagicException">The file is neither a payload nor a ZIP archive. <para>文件既不是载荷也不是 ZIP 归档。</para></exception>
     /// <exception cref="InvalidManifestException">The payload entry is missing or the manifest is truncated. <para>载荷条目缺失或清单被截断。</para></exception>
     /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
-    public static List<PartitionInfoData> GetPartitionInfo(string filepath)
+    public static List<PartitionInfoData> GetPartitionInfo(string filePath)
     {
-        Guard.ThrowIfNull(filepath);
-        Guard.ThrowIfNullOrWhiteSpace(filepath);
-        var metadata = GetPayloadMetadata(filepath);
+        Guard.ThrowIfNull(filePath);
+        Guard.ThrowIfNullOrWhiteSpace(filePath);
+        var metadata = GetPayloadMetadata(filePath);
         return PartitionInfoHelper.ComputePartitionInfo(metadata.Manifest);
     }
 
@@ -426,19 +421,19 @@ public static partial class PayloadParser
     /// Asynchronously gets partition size information from a local payload file.
     /// <para>从本地载荷文件异步获取分区大小信息。</para>
     /// </summary>
-    /// <param name="filepath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
+    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
     /// <param name="cancellationToken">Cancels the manifest read. <para>取消清单读取。</para></param>
     /// <returns>One entry per manifest partition with its name and computed size. <para>每个清单分区一条记录，含分区名与计算大小。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="filepath"/> is <see langword="null"/>. <para><paramref name="filepath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="filepath"/> is blank. <para><paramref name="filepath"/> 为空白。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>. <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank. <para><paramref name="filePath"/> 为空白。</para></exception>
     /// <exception cref="InvalidManifestException">The payload entry is missing or the manifest is truncated. <para>载荷条目缺失或清单被截断。</para></exception>
     /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
-    public static async Task<List<PartitionInfoData>> GetPartitionInfoAsync(string filepath, CancellationToken cancellationToken = default)
+    public static async Task<List<PartitionInfoData>> GetPartitionInfoAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        Guard.ThrowIfNull(filepath);
-        Guard.ThrowIfNullOrWhiteSpace(filepath);
-        var metadata = await GetPayloadMetadataAsync(filepath, cancellationToken).ConfigureAwait(false);
+        Guard.ThrowIfNull(filePath);
+        Guard.ThrowIfNullOrWhiteSpace(filePath);
+        var metadata = await GetPayloadMetadataAsync(filePath, cancellationToken).ConfigureAwait(false);
         return PartitionInfoHelper.ComputePartitionInfo(metadata.Manifest);
     }
 
@@ -447,7 +442,7 @@ public static partial class PayloadParser
     /// embedded payload.bin to a temporary file, then extract from that file.
     /// <para>从本地载荷文件中提取分区。ZIP 包裹的载荷先把内嵌 payload.bin 物化到临时文件，再从该文件提取。</para>
     /// </summary>
-    /// <param name="filepath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
+    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
     /// <param name="extractFiles">Partition names to extract; <see langword="null"/> or empty extracts every named partition in the manifest.
     /// <para>要提取的分区名；为 <see langword="null"/> 或空时提取清单中全部有名字分区。</para></param>
     /// <param name="outputDir">Destination directory for <c>{partition}.img</c> files; <see langword="null"/> or empty
@@ -459,25 +454,27 @@ public static partial class PayloadParser
     /// <para>按分区预先提供的基座镜像路径；对某分区优先于 <paramref name="sourcePayloadPath"/>。</para></param>
     /// <param name="maximumPartitionBytes">Upper bound on one partition's output bytes, enforced before writing; must be positive.
     /// <para>单分区输出字节上限，写入前校验；必须为正数。</para></param>
-    /// <exception cref="ArgumentNullException"><paramref name="filepath"/> is <see langword="null"/>. <para><paramref name="filepath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="filepath"/> is blank. <para><paramref name="filepath"/> 为空白。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>. <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank. <para><paramref name="filePath"/> 为空白。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumPartitionBytes"/> is zero or negative. <para><paramref name="maximumPartitionBytes"/> 为零或负数。</para></exception>
     /// <exception cref="InvalidPayloadMagicException">The file is neither a payload nor a ZIP archive. <para>文件既不是载荷也不是 ZIP 归档。</para></exception>
     /// <exception cref="InvalidManifestException">The payload entry is missing or the manifest is truncated. <para>载荷条目缺失或清单被截断。</para></exception>
     /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
     /// <exception cref="PartitionExtractionException">A partition escapes the output directory, exceeds the byte cap, or lacks its required base image.
     /// <para>分区逃逸输出目录、超出字节上限，或缺少所需的基座镜像。</para></exception>
-    public static void Extract(string filepath, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
+    /// <exception cref="UotanStudio.Firmware.OtaDelta.Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
+    /// <para>Zucchini 操作数据块无法解码，或声明了本库无法应用的可执行类型；该异常在创建任何分区输出之前抛出。</para></exception>
+    public static void Extract(string filePath, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
     {
-        Guard.ThrowIfNull(filepath);
-        Guard.ThrowIfNullOrWhiteSpace(filepath);
+        Guard.ThrowIfNull(filePath);
+        Guard.ThrowIfNullOrWhiteSpace(filePath);
         extractFiles ??= [];
 
         string? tempPath = null;
         var tempSourceFiles = new List<string>();
         try
         {
-            using var plan = BuildExtractPlan(filepath, ref tempPath);
+            using var plan = BuildExtractPlan(filePath, ref tempPath);
             var resolvedSourceImages = ResolveSourceImages(plan.Manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
             new PayloadExtractor(maximumPartitionBytes).ExtractPartitions(
                 plan.Manifest, plan.OuterStream, plan.Header.BaseOffset, extractFiles, outputDir ?? string.Empty, resolvedSourceImages,
@@ -490,9 +487,9 @@ public static partial class PayloadParser
                 TempFileHelper.SafeDelete(tempPath);
             }
 
-            foreach (var f in tempSourceFiles)
+            foreach (var tempFile in tempSourceFiles)
             {
-                TempFileHelper.SafeDelete(f);
+                TempFileHelper.SafeDelete(tempFile);
             }
         }
     }
@@ -504,7 +501,7 @@ public static partial class PayloadParser
     /// <para>从本地载荷文件中异步提取分区。ZIP 包裹的载荷先把内嵌 payload.bin 物化到临时文件并上报字节进度，
     /// 再从该文件提取。</para>
     /// </summary>
-    /// <param name="filepath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
+    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
     /// <param name="extractFiles">Partition names to extract; <see langword="null"/> or empty extracts every named partition in the manifest.
     /// <para>要提取的分区名；为 <see langword="null"/> 或空时提取清单中全部有名字分区。</para></param>
     /// <param name="outputDir">Destination directory for <c>{partition}.img</c> files; <see langword="null"/> or empty
@@ -528,8 +525,8 @@ public static partial class PayloadParser
     /// 阶段边界与最终各上报一次 (total, total)。无可靠总量时 Total 为 0。</para>
     /// </param>
     /// <returns>A task that completes when all selected partitions are extracted. <para>在全部所选分区提取完成后结束的任务。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="filepath"/> is <see langword="null"/>. <para><paramref name="filepath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="filepath"/> is blank. <para><paramref name="filepath"/> 为空白。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>. <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank. <para><paramref name="filePath"/> 为空白。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumPartitionBytes"/> is zero or negative. <para><paramref name="maximumPartitionBytes"/> 为零或负数。</para></exception>
     /// <exception cref="InvalidPayloadMagicException">The file is neither a payload nor a ZIP archive. <para>文件既不是载荷也不是 ZIP 归档。</para></exception>
     /// <exception cref="InvalidManifestException">The payload entry is missing, the manifest is truncated, or sizes exceed the supported range.
@@ -537,18 +534,20 @@ public static partial class PayloadParser
     /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
     /// <exception cref="PartitionExtractionException">A partition escapes the output directory, exceeds the byte cap, or lacks its required base image.
     /// <para>分区逃逸输出目录、超出字节上限，或缺少所需的基座镜像。</para></exception>
+    /// <exception cref="UotanStudio.Firmware.OtaDelta.Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
+    /// <para>Zucchini 操作数据块无法解码，或声明了本库无法应用的可执行类型；该异常在创建任何分区输出之前抛出。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
-    public static async Task ExtractAsync(string filepath, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
+    public static async Task ExtractAsync(string filePath, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
     {
-        Guard.ThrowIfNull(filepath);
-        Guard.ThrowIfNullOrWhiteSpace(filepath);
+        Guard.ThrowIfNull(filePath);
+        Guard.ThrowIfNullOrWhiteSpace(filePath);
         extractFiles ??= [];
 
         string? tempPath = null;
         var tempSourceFiles = new List<string>();
         try
         {
-            var (plan, planTempPath) = await BuildExtractPlanAsync(filepath, cancellationToken, byteProgress).ConfigureAwait(false);
+            var (plan, planTempPath) = await BuildExtractPlanAsync(filePath, cancellationToken, byteProgress).ConfigureAwait(false);
             tempPath = planTempPath;
             using var planDisposable = plan;
             var resolvedSourceImages = ResolveSourceImages(plan.Manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
@@ -571,9 +570,9 @@ public static partial class PayloadParser
                 TempFileHelper.SafeDelete(tempPath);
             }
 
-            foreach (var f in tempSourceFiles)
+            foreach (var tempFile in tempSourceFiles)
             {
-                TempFileHelper.SafeDelete(f);
+                TempFileHelper.SafeDelete(tempFile);
             }
         }
     }
@@ -602,6 +601,8 @@ public static partial class PayloadParser
     /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
     /// <exception cref="PartitionExtractionException">A partition escapes the output directory, exceeds the byte cap, or lacks its required base image.
     /// <para>分区逃逸输出目录、超出字节上限，或缺少所需的基座镜像。</para></exception>
+    /// <exception cref="UotanStudio.Firmware.OtaDelta.Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
+    /// <para>Zucchini 操作数据块无法解码，或声明了本库无法应用的可执行类型；该异常在创建任何分区输出之前抛出。</para></exception>
     public static void Extract(Stream stream, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
     {
         Guard.ThrowIfNull(stream, nameof(stream));
@@ -615,9 +616,9 @@ public static partial class PayloadParser
         }
         finally
         {
-            foreach (var f in tempSourceFiles)
+            foreach (var tempFile in tempSourceFiles)
             {
-                TempFileHelper.SafeDelete(f);
+                TempFileHelper.SafeDelete(tempFile);
             }
         }
     }
@@ -655,6 +656,8 @@ public static partial class PayloadParser
     /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
     /// <exception cref="PartitionExtractionException">A partition escapes the output directory, exceeds the byte cap, or lacks its required base image.
     /// <para>分区逃逸输出目录、超出字节上限，或缺少所需的基座镜像。</para></exception>
+    /// <exception cref="UotanStudio.Firmware.OtaDelta.Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
+    /// <para>Zucchini 操作数据块无法解码，或声明了本库无法应用的可执行类型；该异常在创建任何分区输出之前抛出。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
     public static async Task ExtractAsync(Stream stream, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
     {
@@ -670,9 +673,9 @@ public static partial class PayloadParser
         }
         finally
         {
-            foreach (var f in tempSourceFiles)
+            foreach (var tempFile in tempSourceFiles)
             {
-                TempFileHelper.SafeDelete(f);
+                TempFileHelper.SafeDelete(tempFile);
             }
         }
     }
@@ -681,23 +684,21 @@ public static partial class PayloadParser
     /// Parses a payload_properties.txt file and returns the properties.
     /// <para>解析 payload_properties.txt 文件并返回属性。</para>
     /// </summary>
-    /// <param name="filepath">Properties file path; must be non-blank and exist on disk. <para>属性文件路径；不得为空白且必须存在于磁盘上。</para></param>
+    /// <param name="filePath">Properties file path; must be non-blank and exist on disk. <para>属性文件路径；不得为空白且必须存在于磁盘上。</para></param>
     /// <returns>Parsed hashes and sizes plus the complete case-insensitive key/value map; absent keys yield empty
     /// strings and zero sizes rather than failure.
     /// <para>解析出的摘要与大小，以及完整的不区分大小写键值映射；缺失键返回空字符串或零大小，而非失败。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="filepath"/> is <see langword="null"/>. <para><paramref name="filepath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="filepath"/> is blank. <para><paramref name="filepath"/> 为空白。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>. <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank. <para><paramref name="filePath"/> 为空白。</para></exception>
     /// <exception cref="FileNotFoundException">The properties file does not exist. <para>属性文件不存在。</para></exception>
-    public static PayloadProperties ParsePayloadProperties(string filepath)
+    public static PayloadProperties ParsePayloadProperties(string filePath)
     {
-        Guard.ThrowIfNull(filepath);
-        Guard.ThrowIfNullOrWhiteSpace(filepath);
-        return PayloadPropertiesParser.ParseFile(filepath);
+        Guard.ThrowIfNull(filePath);
+        Guard.ThrowIfNullOrWhiteSpace(filePath);
+        return PayloadPropertiesParser.ParseFile(filePath);
     }
 
-    #endregion
 
-    #region Extract Plan
 
     /// <summary>
     /// Builds a synchronous extract plan (manifest, header, outer stream, per-partition payload
@@ -706,20 +707,18 @@ public static partial class PayloadParser
     /// <para>构建同步提取计划（清单、头、外层流、每分区载荷句柄），一次性解析载荷来源。ZIP 载荷总是把
     /// 内嵌 payload.bin 物化到临时副本并记录到 <paramref name="tempPath"/>。</para>
     /// </summary>
-    private static ExtractPlan BuildExtractPlan(string filepath, ref string? tempPath)
+    private static ExtractPlan BuildExtractPlan(string filePath, ref string? tempPath)
     {
-        var payloadType = DetectPayloadType(filepath);
+        var payloadType = DetectPayloadType(filePath);
         switch (payloadType)
         {
             case PayloadType.RawPayload:
                 {
-                    var outer = File.OpenRead(filepath);
+                    var outer = File.OpenRead(filePath);
                     try
                     {
                         var (manifest, header) = ReadManifest(outer);
-                        var raw = filepath;
-                        return new ExtractPlan(manifest, header, outer,
-                            () => new FileStream(raw, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 81920, FileOptions.RandomAccess),
+                        return new ExtractPlan(manifest, header, outer, RandomAccessOpener(filePath),
                             0, ExtractTotalBytes(manifest));
                     }
                     catch
@@ -731,48 +730,22 @@ public static partial class PayloadParser
 
             case PayloadType.ZipArchive:
                 {
+                    var (entryStream, owner) = OpenPayloadStream(filePath);
                     DeltaArchiveManifest manifest;
                     PayloadHeader header;
-                    using (var zr = ZipFile.OpenRead(filepath))
+                    using (owner)
+                    using (entryStream)
                     {
-                        var zf = FindPayloadEntry(zr)
-                            ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
-                        using var zfStream = zf.Open();
-                        (manifest, header) = ReadManifest(zfStream);
+                        (manifest, header) = ReadManifest(entryStream);
                     }
 
-                    var extractionTotal = ExtractTotalBytes(manifest);
-
-                    if (TryGetStoredPayloadLocation(filepath, out var dataStart, out var payloadLength))
+                    if (TryGetStoredPayloadLocation(filePath, out var dataStart, out var payloadLength))
                     {
-                        var outer = File.OpenRead(filepath);
-                        try
-                        {
-                            return new ExtractPlan(manifest, header, outer,
-                                () => new StoredZipEntryStream(filepath, dataStart, payloadLength),
-                                0, extractionTotal);
-                        }
-                        catch
-                        {
-                            outer.Dispose();
-                            throw;
-                        }
+                        return BuildStoredZipPlan(filePath, manifest, header, dataStart, payloadLength);
                     }
 
-                    tempPath = ExtractPayloadFromZip(filepath);
-                    var tempFile = tempPath;
-                    var containerOuter = File.OpenRead(tempFile);
-                    try
-                    {
-                        return new ExtractPlan(manifest, header, containerOuter,
-                            () => new FileStream(tempFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 81920, FileOptions.RandomAccess),
-                            PayloadEntryUncompressedLength(filepath), extractionTotal);
-                    }
-                    catch
-                    {
-                        containerOuter.Dispose();
-                        throw;
-                    }
+                    tempPath = ExtractPayloadFromZip(filePath);
+                    return BuildMaterializedZipPlan(tempPath, manifest, header, PayloadEntryUncompressedLength(filePath));
                 }
 
             default:
@@ -787,21 +760,19 @@ public static partial class PayloadParser
     /// <para>异步构建提取计划（依赖 <see cref="BuildExtractPlan"/>），并同时返回物化产生的临时载荷
     /// 路径。存在容器阶段时通过 <paramref name="byteProgress"/> 上报 ZIP 物化字节。</para>
     /// </summary>
-    private static async Task<(ExtractPlan Plan, string? TempPath)> BuildExtractPlanAsync(string filepath, CancellationToken cancellationToken,
+    private static async Task<(ExtractPlan Plan, string? TempPath)> BuildExtractPlanAsync(string filePath, CancellationToken cancellationToken,
         IProgress<(long Processed, long Total)>? byteProgress)
     {
-        var payloadType = DetectPayloadType(filepath);
+        var payloadType = DetectPayloadType(filePath);
         switch (payloadType)
         {
             case PayloadType.RawPayload:
                 {
-                    var outer = File.OpenRead(filepath);
+                    var outer = File.OpenRead(filePath);
                     try
                     {
                         var (manifest, header) = await ReadManifestAsync(outer, cancellationToken).ConfigureAwait(false);
-                        var raw = filepath;
-                        return (new ExtractPlan(manifest, header, outer,
-                            () => new FileStream(raw, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 81920, FileOptions.RandomAccess),
+                        return (new ExtractPlan(manifest, header, outer, RandomAccessOpener(filePath),
                             0, ExtractTotalBytes(manifest)), null);
                     }
                     catch
@@ -813,62 +784,90 @@ public static partial class PayloadParser
 
             case PayloadType.ZipArchive:
                 {
+                    var (entryStream, owner) = OpenPayloadStream(filePath);
                     DeltaArchiveManifest manifest;
                     PayloadHeader header;
-                    using (var zr = ZipFile.OpenRead(filepath))
+                    using (owner)
+                    using (entryStream)
                     {
-                        var zf = FindPayloadEntry(zr)
-                            ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
-                        using var zfStream = zf.Open();
-                        (manifest, header) = await ReadManifestAsync(zfStream, cancellationToken).ConfigureAwait(false);
+                        (manifest, header) = await ReadManifestAsync(entryStream, cancellationToken).ConfigureAwait(false);
                     }
 
-                    var extractionTotal = ExtractTotalBytes(manifest);
-
-                    if (TryGetStoredPayloadLocation(filepath, out var dataStart, out var payloadLength))
+                    if (TryGetStoredPayloadLocation(filePath, out var dataStart, out var payloadLength))
                     {
-                        var outer = File.OpenRead(filepath);
-                        try
-                        {
-                            return (new ExtractPlan(manifest, header, outer,
-                                () => new StoredZipEntryStream(filepath, dataStart, payloadLength),
-                                0, extractionTotal), null);
-                        }
-                        catch
-                        {
-                            outer.Dispose();
-                            throw;
-                        }
+                        return (BuildStoredZipPlan(filePath, manifest, header, dataStart, payloadLength), null);
                     }
 
-                    var containerTotal = PayloadEntryUncompressedLength(filepath);
+                    var containerTotal = PayloadEntryUncompressedLength(filePath);
                     long totalBytes;
                     try
                     {
-                        totalBytes = checked(containerTotal + extractionTotal);
+                        totalBytes = checked(containerTotal + ExtractTotalBytes(manifest));
                     }
                     catch (OverflowException ex)
                     {
                         throw new InvalidManifestException("Payload and extraction sizes exceed the supported range.", ex);
                     }
 
-                    var tempFile = await ExtractPayloadFromZipAsync(filepath, cancellationToken, byteProgress, totalBytes).ConfigureAwait(false);
-                    var containerOuter = File.OpenRead(tempFile);
-                    try
-                    {
-                        return (new ExtractPlan(manifest, header, containerOuter,
-                            () => new FileStream(tempFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 81920, FileOptions.RandomAccess),
-                            containerTotal, extractionTotal), tempFile);
-                    }
-                    catch
-                    {
-                        containerOuter.Dispose();
-                        throw;
-                    }
+                    var tempFile = await ExtractPayloadFromZipAsync(filePath, cancellationToken, byteProgress, totalBytes).ConfigureAwait(false);
+                    return (BuildMaterializedZipPlan(tempFile, manifest, header, containerTotal), tempFile);
                 }
 
             default:
                 throw new InvalidPayloadMagicException($"Unrecognized payload type: {payloadType}");
+        }
+    }
+
+    /// <summary>
+    /// Buffer size used when reopening payload files for the random-access reads performed during extraction.
+    /// <para>提取期间以随机访问方式重新打开载荷文件时使用的缓冲区大小。</para>
+    /// </summary>
+    private const int PlanStreamBufferSize = 81920;
+
+    private static Func<Stream> RandomAccessOpener(string path)
+        => () => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, PlanStreamBufferSize, FileOptions.RandomAccess);
+
+    /// <summary>
+    /// Builds the extract plan for a ZIP package whose payload stays stored inside the archive; the outer
+    /// stream is the package file and per-partition streams decode the stored entry directly.
+    /// <para>为载荷仍以存储方式驻留归档内的 ZIP 包构建提取计划；外层流是包文件本身，分区流直接解码存储条目。</para>
+    /// </summary>
+    private static ExtractPlan BuildStoredZipPlan(string filePath, DeltaArchiveManifest manifest, PayloadHeader header,
+        long dataStart, long payloadLength)
+    {
+        var outer = File.OpenRead(filePath);
+        try
+        {
+            return new ExtractPlan(manifest, header, outer, () => new StoredZipEntryStream(filePath, dataStart, payloadLength),
+                0, ExtractTotalBytes(manifest));
+        }
+        catch
+        {
+            outer.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Builds the extract plan over a materialized standalone payload file (an extracted raw payload or the
+    /// ZIP-embedded payload.bin copied to a temporary file), reporting <paramref name="containerOffset"/> as the
+    /// leading container byte count.
+    /// <para>基于已物化的独立载荷文件（解出的原始载荷或复制到临时文件的 ZIP 内嵌 payload.bin）构建提取计划，
+    /// 并把 <paramref name="containerOffset"/> 作为前置容器字节量上报。</para>
+    /// </summary>
+    private static ExtractPlan BuildMaterializedZipPlan(string payloadPath, DeltaArchiveManifest manifest, PayloadHeader header,
+        long containerOffset)
+    {
+        var outer = File.OpenRead(payloadPath);
+        try
+        {
+            return new ExtractPlan(manifest, header, outer, RandomAccessOpener(payloadPath), containerOffset,
+                ExtractTotalBytes(manifest));
+        }
+        catch
+        {
+            outer.Dispose();
+            throw;
         }
     }
 
@@ -896,28 +895,28 @@ public static partial class PayloadParser
     /// Reads the uncompressed length of the payload entry within a ZIP archive.
     /// <para>读取 ZIP 归档内 payload 条目的未压缩长度。</para>
     /// </summary>
-    private static long PayloadEntryUncompressedLength(string filepath)
+    private static long PayloadEntryUncompressedLength(string filePath)
     {
-        using var zr = ZipFile.OpenRead(filepath);
-        var zf = FindPayloadEntry(zr)
+        using var archive = ZipFile.OpenRead(filePath);
+        var payloadEntry = FindPayloadEntry(archive)
             ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
-        return zf.Length;
+        return payloadEntry.Length;
     }
 
     /// <summary>
     /// Locates a STORED (uncompressed) payload.bin entry inside a ZIP archive so extraction can read it
     /// in place. Returns whether the entry is STORED; when true, <paramref name="dataStart"/> is the
-    /// absolute byte offset of the entry data within <paramref name="filepath"/> and
+    /// absolute byte offset of the entry data within <paramref name="filePath"/> and
     /// <paramref name="length"/> is the payload byte count.
     /// <para>在 ZIP 归档中定位 STORED（未压缩）的 payload.bin 条目，以便解包原址直读。返回是否为
-    /// STORED 条目；为 true 时 <paramref name="dataStart"/> 是条目数据在 <paramref name="filepath"/>
+    /// STORED 条目；为 true 时 <paramref name="dataStart"/> 是条目数据在 <paramref name="filePath"/>
     /// 内的绝对字节偏移，<paramref name="length"/> 为载荷字节数。</para>
     /// </summary>
-    private static bool TryGetStoredPayloadLocation(string filepath, out long dataStart, out long length)
+    private static bool TryGetStoredPayloadLocation(string filePath, out long dataStart, out long length)
     {
         dataStart = 0;
         length = 0;
-        using var zip = new SharpZipZipFile(filepath);
+        using var zip = new SharpZipZipFile(filePath);
         var entry = zip.GetEntry(PayloadConstants.PayloadFilename);
         if (entry is null || entry.CompressionMethod != SharpZipCompressionMethod.Stored || entry.Size < 0 || entry.Offset < 0)
         {
@@ -925,7 +924,7 @@ public static partial class PayloadParser
         }
 
         length = entry.Size;
-        using var fs = File.OpenRead(filepath);
+        using var fs = File.OpenRead(filePath);
         if (entry.Offset + 30 > fs.Length)
         {
             return false;
@@ -1011,5 +1010,4 @@ public static partial class PayloadParser
         public void Dispose() => OuterStream.Dispose();
     }
 
-    #endregion
 }

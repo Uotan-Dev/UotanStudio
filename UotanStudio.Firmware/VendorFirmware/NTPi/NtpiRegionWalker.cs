@@ -94,14 +94,19 @@ internal class NtpiRegionWalker(ICryptoProvider cryptoProvider)
     /// Walks the region chain from a stream (streaming, avoids full load).
     /// <para>从流中遍历区域链(流式读取,避免全量加载)。</para>
     /// </summary>
+    /// <param name="cancellationToken">
+    /// Token observed between regions; the default (none) token cannot cancel.
+    /// <para>在区域之间检查的取消令牌；默认（无）令牌不可取消。</para>
+    /// </param>
     public void WalkRegionChainStreaming(Stream stream, NtpiHeader header, IKeyProvider keyProvider,
-        Action<RegionType, long, byte[]> onRegion, Action<long, long> onRegion6Offset)
+        Action<RegionType, long, byte[]> onRegion, Action<long, long> onRegion6Offset, CancellationToken cancellationToken = default)
     {
         long currentOffset = NtpiHeader.Size;
         var currentRegion = header.FirstRegionHeader;
 
         while (currentRegion.RegionSize > 0 || currentRegion.RegionType == (ulong)RegionType.Region6)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var regionType = (RegionType)currentRegion.RegionType;
             var regionSize = (long)currentRegion.RegionSize;
 

@@ -21,7 +21,7 @@ public static class Ext4ImageMaintenance
     /// <param name="cancellationToken">Cancels the copy, the checks and the native tool runs; the destination is left untouched. <para>取消复制、检查与原生工具运行；目标文件保持不变。</para></param>
     /// <returns>A task that completes once the minimized image has been published to outputPath. <para>最小化后的镜像发布到 outputPath 后完成的任务。</para></returns>
     /// <exception cref="ArgumentException">The tools provider is <see langword="null"/>, or the input and output paths denote the same file. <para>tools 提供方为 <see langword="null"/>，或输入与输出为同一文件。</para></exception>
-    /// <exception cref="InvalidDataException">The image is too small, lacks the EXT4 magic at offset 1080, or an e2fsck/resize2fs run fails. <para>镜像过小、偏移 1080 处缺少 EXT4 魔数，或 e2fsck/resize2fs 执行失败。</para></exception>
+    /// <exception cref="FileSystemCorruptedException">The image is too small, lacks the EXT4 magic at offset 1080, or an e2fsck/resize2fs run fails. <para>镜像过小、偏移 1080 处缺少 EXT4 魔数，或 e2fsck/resize2fs 执行失败。</para></exception>
     public static async Task MinimizeAsync(string inputPath, string outputPath, NativeFileSystemTools tools,
         bool repairBeforeResize = false, CancellationToken cancellationToken = default)
     {
@@ -39,7 +39,7 @@ public static class Ext4ImageMaintenance
         {
             if (input.Length < 4)
             {
-                throw new InvalidDataException("Image is too small.");
+                throw new FileSystemCorruptedException("Image is too small.");
             }
             var magic = new byte[4];
             await input.ReadExactlyAsync(magic, cancellationToken).ConfigureAwait(false);
@@ -67,24 +67,24 @@ public static class Ext4ImageMaintenance
             {
                 if (staged.Length < 2048)
                 {
-                    throw new InvalidDataException("EXT4 image is too small.");
+                    throw new FileSystemCorruptedException("EXT4 image is too small.");
                 }
                 staged.Position = 1024 + 56;
                 var magic = new byte[2];
                 await staged.ReadExactlyAsync(magic, cancellationToken).ConfigureAwait(false);
                 if (BinaryPrimitives.ReadUInt16LittleEndian(magic) != 0xEF53)
                 {
-                    throw new InvalidDataException("Input does not contain a raw EXT4 filesystem.");
+                    throw new FileSystemCorruptedException("Input does not contain a raw EXT4 filesystem.");
                 }
             }
 
-            var image = tools.PathForTool(temporary, cancellationToken);
+            var image = await tools.PathForToolAsync(temporary, cancellationToken).ConfigureAwait(false);
             if (repairBeforeResize)
             {
                 var repaired = await tools.RunAsync("e2fsck", ["-fy", image], cancellationToken).ConfigureAwait(false);
                 if (repaired.ExitCode is not (0 or 1))
                 {
-                    throw new InvalidDataException($"e2fsck repair failed ({repaired.ExitCode}): {repaired.Output}");
+                    throw new FileSystemCorruptedException($"e2fsck repair failed ({repaired.ExitCode}): {repaired.Output}");
                 }
             }
 

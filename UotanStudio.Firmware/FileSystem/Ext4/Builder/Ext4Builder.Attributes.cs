@@ -30,7 +30,7 @@ public sealed partial class Ext4Builder
         }
         else if (metadata.ProjectId is not null || metadata.Version > uint.MaxValue)
         {
-            throw new InvalidDataException("EXT4 inode cannot represent the preserved extended identity.");
+            throw new FileSystemUnsupportedFeatureException("EXT4 inode cannot represent the preserved extended identity.");
         }
     }
 
@@ -42,14 +42,14 @@ public sealed partial class Ext4Builder
         }
         if (offset + 4 > inode.Length)
         {
-            throw new InvalidDataException("EXT4 inode cannot represent the preserved timestamp.");
+            throw new FileSystemUnsupportedFeatureException("EXT4 inode cannot represent the preserved timestamp.");
         }
         var low = unchecked((int)timestamp.Seconds);
         var epoch = (timestamp.Seconds - low) >> 32;
         var extended = extraOffset + 4 <= inode.Length && inode.Length >= 128 + Ext4ExtraIsize;
         if (epoch is < 0 or > 3 || !extended && (epoch != 0 || timestamp.Nanoseconds != 0))
         {
-            throw new InvalidDataException("EXT4 timestamp is outside the selected inode's range.");
+            throw new FileSystemUnsupportedFeatureException("EXT4 timestamp is outside the selected inode's range.");
         }
         BinaryPrimitives.WriteInt32LittleEndian(inode.AsSpan(offset), low);
         if (extended)
@@ -72,7 +72,7 @@ public sealed partial class Ext4Builder
             {
                 if (!TryMapXattrName(name, out _, out var suffix) || Encoding.UTF8.GetByteCount(suffix) > 255)
                 {
-                    throw new InvalidDataException($"Unsupported EXT4 xattr name: {name}");
+                    throw new FileSystemUnsupportedFeatureException($"Unsupported EXT4 xattr name: {name}");
                 }
                 length += ((16 + Encoding.UTF8.GetByteCount(suffix) + 3) & ~3) + ((value.LongLength + 3) & ~3L);
             }
@@ -89,7 +89,7 @@ public sealed partial class Ext4Builder
                 }
                 if (pair.Value.Length is 0 or > 65536)
                 {
-                    throw new InvalidDataException("EXT4 EA inode value is empty or exceeds 64 KiB.");
+                    throw new FileSystemCorruptedException("EXT4 EA inode value is empty or exceeds 64 KiB.");
                 }
                 var inode = new Node
                 {
@@ -112,10 +112,10 @@ public sealed partial class Ext4Builder
             }
             if (length > blockSize - 32)
             {
-                throw new InvalidDataException("EXT4 xattr names exceed a single external block.");
+                throw new FileSystemCorruptedException("EXT4 xattr names exceed a single external block.");
             }
             var block = new byte[blockSize];
-            WriteU32(block, 0, 0xEA020000);
+            WriteU32(block, 0, Ext4Xattr.Magic);
             WriteU32(block, 4, 1);
             WriteU32(block, 8, 1);
             var position = 32;

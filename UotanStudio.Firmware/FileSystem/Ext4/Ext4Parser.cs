@@ -56,7 +56,6 @@ public sealed class Ext4Parser : IDisposable
 
     private const int SuperblockReadLength = 1024 + 1024;
     private const uint RootInodeNumber = 2;
-    private const uint Ext4XattrMagic = 0xEA020000;
     private const int MaxExtentLeafPointers = 12;
     private const long MaximumGroupDescriptorTableSize = 512L * 1024 * 1024;
     private const int MaxDirectoryDepth = 256;
@@ -147,8 +146,8 @@ public sealed class Ext4Parser : IDisposable
     /// <para>可读且可寻址的流；所有权转移并由 <see cref="Dispose"/> 关闭。流不可读或不可寻址时抛出 <see cref="ArgumentException"/>。</para>
     /// </param>
     /// <param name="maximumEntries">
-    /// Positive upper bound on visited directory entries; exceeding it during a walk throws <see cref="InvalidDataException"/>.
-    /// <para>已访问目录条目数的正整数上限；遍历中超出时抛出 <see cref="InvalidDataException"/>。</para>
+    /// Positive upper bound on visited directory entries; exceeding it during a walk throws <see cref="FileSystemCorruptedException"/>.
+    /// <para>已访问目录条目数的正整数上限；遍历中超出时抛出 <see cref="FileSystemCorruptedException"/>。</para>
     /// </param>
     /// <param name="maximumPathCharacters">
     /// Positive upper bound on the accumulated total of all entry path lengths.
@@ -264,7 +263,7 @@ public sealed class Ext4Parser : IDisposable
         _blockSize = checked((int)_superblock.BlockSize);
         if (_blockSize is not (1024 or 2048 or 4096 or 8192 or 16384 or 32768 or 65536))
         {
-            throw new InvalidDataException($"Unsupported ext4 block size {_blockSize}.");
+            throw new FileSystemUnsupportedFeatureException($"Unsupported ext4 block size {_blockSize}.");
         }
 
         const uint supportedIncompat = 0x0001 | 0x0002 | 0x0004
@@ -274,7 +273,7 @@ public sealed class Ext4Parser : IDisposable
         var unsupportedIncompat = _superblock.FeatureIncompat & ~supportedIncompat;
         if (unsupportedIncompat != 0)
         {
-            throw new InvalidDataException($"ext4 image has unsupported incompatible features: 0x{unsupportedIncompat:X8}.");
+            throw new FileSystemUnsupportedFeatureException($"ext4 image has unsupported incompatible features: 0x{unsupportedIncompat:X8}.");
         }
         if ((_superblock.FeatureIncompat & 0x20000) != 0 && _superblock.Encoding != 1)
         {
@@ -287,7 +286,7 @@ public sealed class Ext4Parser : IDisposable
         var groupCount = checked((int)((_superblock.BlocksCount + _superblock.BlocksPerGroup - 1) / _superblock.BlocksPerGroup));
         if (groupCount <= 0)
         {
-            throw new InvalidDataException("ext4 image has no block groups.");
+            throw new FileSystemCorruptedException("ext4 image has no block groups.");
         }
 
         var gdtLength = checked((long)groupCount * descSize);
@@ -296,13 +295,13 @@ public sealed class Ext4Parser : IDisposable
         {
             if (_superblock.FirstDataBlock != 0)
             {
-                throw new InvalidDataException(
+                throw new FileSystemCorruptedException(
                     $"ext4 sparse_super2 requires s_first_data_block to be 0, found {_superblock.FirstDataBlock}.");
             }
 
             if (_superblock.BackupGroup1 >= groupCount || _superblock.BackupGroup2 >= groupCount)
             {
-                throw new InvalidDataException(
+                throw new FileSystemCorruptedException(
                     $"ext4 sparse_super2 backup group ids {_superblock.BackupGroup1} and {_superblock.BackupGroup2} exceed the {groupCount} block groups of the image.");
             }
         }
@@ -310,7 +309,7 @@ public sealed class Ext4Parser : IDisposable
         var gdtOffset = checked((_superblock.FirstDataBlock + 1) * _blockSize);
         if (gdtLength > MaximumGroupDescriptorTableSize || gdtLength > _stream.Length - gdtOffset)
         {
-            throw new InvalidDataException("ext4 group descriptor table exceeds the image bounds or supported metadata limit.");
+            throw new FileSystemCorruptedException("ext4 group descriptor table exceeds the image bounds or supported metadata limit.");
         }
         _groups = new Ext4BlockGroup[groupCount];
         var descriptorsPerRead = Math.Min(groupCount, Math.Max(1, 65536 / descSize));
@@ -327,7 +326,7 @@ public sealed class Ext4Parser : IDisposable
         _inodeTableOffset = checked((long)_groups[0].InodeTable * _blockSize);
         if (_inodeTableOffset < 0 || _inodeTableOffset >= _stream.Length)
         {
-            throw new InvalidDataException("ext4 inode table lies outside the image bounds.");
+            throw new FileSystemCorruptedException("ext4 inode table lies outside the image bounds.");
         }
 
         if ((_superblock.FeatureCompat & 0x4) != 0 && (_superblock.FeatureIncompat & 0x4) != 0)
@@ -570,13 +569,13 @@ public sealed class Ext4Parser : IDisposable
 
         if (depth > MaxDirectoryDepth)
         {
-            throw new InvalidDataException($"ext4 directory tree exceeds the maximum depth of {MaxDirectoryDepth}.");
+            throw new FileSystemCorruptedException($"ext4 directory tree exceeds the maximum depth of {MaxDirectoryDepth}.");
         }
 
         if (!visitedDirectories.Add(dirInode))
         {
 
-            throw new InvalidDataException($"ext4 directory cycle detected at inode {dirInode}.");
+            throw new FileSystemCorruptedException($"ext4 directory cycle detected at inode {dirInode}.");
         }
 
         var inode = ReadInode(dirInode);
@@ -615,7 +614,7 @@ public sealed class Ext4Parser : IDisposable
                 var childPath = prefix.Length == 0 ? entry.Name : prefix + "/" + entry.Name;
                 if (_visitedEntries >= _maximumEntries || childPath.Length > _maximumPathCharacters - _pathCharacters)
                 {
-                    throw new InvalidDataException("ext4 directory enumeration exceeds its entry or path budget.");
+                    throw new FileSystemCorruptedException("ext4 directory enumeration exceeds its entry or path budget.");
                 }
                 _visitedEntries++;
                 _pathCharacters += childPath.Length;
@@ -667,7 +666,7 @@ public sealed class Ext4Parser : IDisposable
 
         var xattrStart = 128 + extraIsiz;
         var magic = BinaryPrimitives.ReadUInt32LittleEndian(inodeRaw.AsSpan(xattrStart, 4));
-        if (magic != Ext4XattrMagic)
+        if (magic != Ext4Xattr.Magic)
         {
             return null;
         }
@@ -703,7 +702,7 @@ public sealed class Ext4Parser : IDisposable
             {
                 if (!merged.TryAdd(kv.Key, kv.Value))
                 {
-                    throw new InvalidDataException($"Duplicate EXT4 xattr: {kv.Key}");
+                    throw new FileSystemCorruptedException($"Duplicate EXT4 xattr: {kv.Key}");
                 }
             }
         }
@@ -725,14 +724,14 @@ public sealed class Ext4Parser : IDisposable
         var block = ReadBlock(inode.FileAcl);
 
         var magic = BinaryPrimitives.ReadUInt32LittleEndian(block.AsSpan(0, 4));
-        if (magic != Ext4XattrMagic)
+        if (magic != Ext4Xattr.Magic)
         {
-            throw new InvalidDataException("Invalid EXT4 external xattr magic.");
+            throw new FileSystemCorruptedException("Invalid EXT4 external xattr magic.");
         }
         if (BinaryPrimitives.ReadUInt32LittleEndian(block.AsSpan(8)) != 1
             || BinaryPrimitives.ReadUInt32LittleEndian(block.AsSpan(4)) == 0)
         {
-            throw new InvalidDataException("Invalid EXT4 external xattr block header.");
+            throw new FileSystemCorruptedException("Invalid EXT4 external xattr block header.");
         }
         return ReadXattrEntries(block, 32, 0);
     }
@@ -749,19 +748,19 @@ public sealed class Ext4Parser : IDisposable
             {
                 if (position + 4 > firstValue)
                 {
-                    throw new InvalidDataException("EXT4 xattr entries overlap their values.");
+                    throw new FileSystemCorruptedException("EXT4 xattr entries overlap their values.");
                 }
                 return result.Count == 0 ? null : result;
             }
             if (position > bytes.Length - 16)
             {
-                throw new InvalidDataException("Truncated EXT4 xattr entry.");
+                throw new FileSystemCorruptedException("Truncated EXT4 xattr entry.");
             }
             var nameLength = bytes[position];
             var entryLength = (16 + nameLength + 3) & ~3;
             if (entryLength > bytes.Length - position)
             {
-                throw new InvalidDataException("Truncated EXT4 xattr name.");
+                throw new FileSystemCorruptedException("Truncated EXT4 xattr name.");
             }
             var name = ResolveXattrName(bytes[position + 1], Encoding.UTF8.GetString(bytes, position + 16, nameLength));
             var offset = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(position + 2));
@@ -769,14 +768,14 @@ public sealed class Ext4Parser : IDisposable
             var size = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(position + 8));
             if (size > MaxXattrValueSize)
             {
-                throw new InvalidDataException("EXT4 xattr value exceeds the supported 64 KiB limit.");
+                throw new FileSystemCorruptedException("EXT4 xattr value exceeds the supported 64 KiB limit.");
             }
             byte[] value;
             if (inode != 0)
             {
                 if ((_superblock.FeatureIncompat & FeatureIncompatEaInode) == 0 || offset != 0)
                 {
-                    throw new InvalidDataException("Invalid EXT4 EA inode reference.");
+                    throw new FileSystemCorruptedException("Invalid EXT4 EA inode reference.");
                 }
                 value = ReadEaInodeValue(inode, size);
             }
@@ -785,7 +784,7 @@ public sealed class Ext4Parser : IDisposable
                 var absolute = valueBase + offset;
                 if (size != 0 && (absolute < first || absolute > bytes.Length || size > bytes.Length - absolute))
                 {
-                    throw new InvalidDataException("EXT4 xattr value exceeds its container.");
+                    throw new FileSystemCorruptedException("EXT4 xattr value exceeds its container.");
                 }
                 if (size != 0)
                 {
@@ -795,11 +794,11 @@ public sealed class Ext4Parser : IDisposable
             }
             if (!result.TryAdd(name, value))
             {
-                throw new InvalidDataException($"Duplicate EXT4 xattr: {name}");
+                throw new FileSystemCorruptedException($"Duplicate EXT4 xattr: {name}");
             }
             position += entryLength;
         }
-        throw new InvalidDataException("Missing EXT4 xattr entry terminator.");
+        throw new FileSystemCorruptedException("Missing EXT4 xattr entry terminator.");
     }
 
     /// <summary>
@@ -831,14 +830,14 @@ public sealed class Ext4Parser : IDisposable
     {
         if (eaInodeNumber == 0)
         {
-            throw new InvalidDataException("Invalid EXT4 EA inode number.");
+            throw new FileSystemCorruptedException("Invalid EXT4 EA inode number.");
         }
 
         var eaInode = ReadInode(eaInodeNumber);
         if (eaInode.Size != expectedSize || eaInode.Size > MaxXattrValueSize
             || (eaInode.Flags & 0x0020_0000) == 0)
         {
-            throw new InvalidDataException("Invalid EXT4 EA inode size or flags.");
+            throw new FileSystemCorruptedException("Invalid EXT4 EA inode size or flags.");
         }
         var size = checked((int)eaInode.Size);
         if (size <= 0)
@@ -907,7 +906,7 @@ public sealed class Ext4Parser : IDisposable
     {
         if (inodeNumber == 0 || inodeNumber > _superblock.InodesCount)
         {
-            throw new InvalidDataException($"ext4 inode number {inodeNumber} is out of range (1..{_superblock.InodesCount}).");
+            throw new FileSystemCorruptedException($"ext4 inode number {inodeNumber} is out of range (1..{_superblock.InodesCount}).");
         }
 
         var offset = checked(_inodeTableOffset + ((long)inodeNumber - 1) * _inodeSize);
@@ -950,7 +949,7 @@ public sealed class Ext4Parser : IDisposable
         _readCancellation.ThrowIfCancellationRequested();
         if (offset < 0 || offset > _stream.Length || buffer.Length > _stream.Length - offset)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"ext4 read range at {offset} of {buffer.Length} bytes lies outside the image (length {_stream.Length}).");
         }
 

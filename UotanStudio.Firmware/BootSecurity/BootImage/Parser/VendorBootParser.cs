@@ -216,19 +216,19 @@ public class VendorBootParser : IDisposable
     {
         if (!stream.CanSeek || !stream.CanRead)
         {
-            throw new ImageParseException("Vendor Boot 输入流必须可读且可定位");
+            throw new ImageParseException("The vendor boot input stream must be readable and seekable.");
         }
 
         if (stream.Length < 12)
         {
-            throw new ImageParseException($"文件太小，无法读取 Vendor Boot 基本头: {stream.Length} 字节");
+            throw new ImageParseException($"The file is too small to read the vendor boot base header: {stream.Length} bytes.");
         }
 
-        var prefix = ReadRange(stream, 0, 12, "Vendor Boot 基本头");
+        var prefix = ReadRange(stream, 0, 12, "vendor boot base header");
         var magic = Encoding.ASCII.GetString(prefix, 0, 8);
         if (magic != VendorBootMagic)
         {
-            throw new ImageParseException($"无效的 Vendor Boot 镜像 magic: {magic}");
+            throw new ImageParseException($"Invalid vendor boot image magic: {magic}");
         }
 
         Header.HeaderVersion = BinaryReaderHelpers.ReadUInt32LE(prefix, 8);
@@ -236,9 +236,9 @@ public class VendorBootParser : IDisposable
         {
             3 => V3HeaderSize,
             4 => V4HeaderSize,
-            _ => throw new ImageParseException($"不支持的 Vendor Boot 镜像版本: {Header.HeaderVersion}")
+            _ => throw new ImageParseException($"Unsupported vendor boot image header version: {Header.HeaderVersion}")
         };
-        var header = ReadRange(stream, 0, minimumHeaderSize, $"V{Header.HeaderVersion} Vendor Boot 头部");
+        var header = ReadRange(stream, 0, minimumHeaderSize, $"V{Header.HeaderVersion} vendor boot header");
         ParseHeader(header, minimumHeaderSize);
         ExtractComponents(stream);
         if (Header.HeaderVersion == 4)
@@ -267,11 +267,11 @@ public class VendorBootParser : IDisposable
 
         if (Header.PageSize == 0 || (Header.PageSize & (Header.PageSize - 1)) != 0)
         {
-            throw new ImageParseException($"无效的 Vendor Boot 页大小: {Header.PageSize}");
+            throw new ImageParseException($"Invalid vendor boot page size: {Header.PageSize}");
         }
         if (Header.VendorHeaderSize < minimumHeaderSize)
         {
-            throw new ImageParseException($"Vendor Boot 头部大小过小: {Header.VendorHeaderSize}");
+            throw new ImageParseException($"Vendor boot header size is too small: {Header.VendorHeaderSize}");
         }
 
         if (Header.HeaderVersion == 4)
@@ -305,7 +305,7 @@ public class VendorBootParser : IDisposable
             var tableOffset = AlignToPage(CheckedAdd(dtbOffset, Header.DtbSize), Header.PageSize);
             if (tableOffset > uint.MaxValue)
             {
-                throw new ImageParseException("Vendor ramdisk 表偏移超出支持范围");
+                throw new ImageParseException("The vendor ramdisk table offset is out of the supported range.");
             }
             Header.VendorRamdiskTableOffset = (uint)tableOffset;
         }
@@ -315,7 +315,7 @@ public class VendorBootParser : IDisposable
     {
         if (Header.VendorRamdiskTableSize > MaximumRamdiskTableSize)
         {
-            throw new ImageParseException($"Vendor ramdisk 表元数据超过上限: {Header.VendorRamdiskTableSize}");
+            throw new ImageParseException($"Vendor ramdisk table metadata exceeds the limit: {Header.VendorRamdiskTableSize}");
         }
         if (Header.VendorRamdiskTableEntryNum == 0)
         {
@@ -325,19 +325,19 @@ public class VendorBootParser : IDisposable
         }
         if (Header.VendorRamdiskTableEntryNum > MaximumRamdiskTableEntries)
         {
-            throw new ImageParseException($"Vendor ramdisk 表条目数超过上限: {Header.VendorRamdiskTableEntryNum}");
+            throw new ImageParseException($"Vendor ramdisk table entry count exceeds the limit: {Header.VendorRamdiskTableEntryNum}");
         }
         if (Header.VendorRamdiskTableEntrySize != RamdiskTableEntryMinSize)
         {
             throw new InvalidDataException(
                 $"Vendor ramdisk table entry size must equal {RamdiskTableEntryMinSize} bytes for header version 4; " +
                 $"this is the fixed size of the AOSP boot_image.h vendor_ramdisk_table_entry_v4 record. Found " +
-                $"{Header.VendorRamdiskTableEntrySize}. vendor ramdisk 表条目大小必须为 {RamdiskTableEntryMinSize} 字节。");
+                $"{Header.VendorRamdiskTableEntrySize}.");
         }
         var required = checked((ulong)Header.VendorRamdiskTableEntryNum * Header.VendorRamdiskTableEntrySize);
         if (required > Header.VendorRamdiskTableSize)
         {
-            throw new ImageParseException("Vendor ramdisk 表字段范围不一致");
+            throw new ImageParseException("Vendor ramdisk table field ranges are inconsistent.");
         }
     }
 
@@ -345,7 +345,7 @@ public class VendorBootParser : IDisposable
     {
 
 
-        ValidateRange(stream, Header.VendorRamdiskTableOffset, Header.VendorRamdiskTableSize, "vendor ramdisk 表");
+        ValidateRange(stream, Header.VendorRamdiskTableOffset, Header.VendorRamdiskTableSize, "vendor ramdisk table");
         if (Header.VendorRamdiskTableEntryNum == 0)
         {
             return;
@@ -357,7 +357,7 @@ public class VendorBootParser : IDisposable
                 checked((long)i * Header.VendorRamdiskTableEntrySize));
 
 
-            var data = ReadRange(stream, entryOffset, RamdiskTableEntryMinSize, $"vendor ramdisk 表条目 {i}");
+            var data = ReadRange(stream, entryOffset, RamdiskTableEntryMinSize, $"vendor ramdisk table entry {i}");
             var entry = new VendorRamdiskTableEntry
             {
                 RamdiskSize = BinaryReaderHelpers.ReadUInt32LE(data, 0),
@@ -367,7 +367,7 @@ public class VendorBootParser : IDisposable
             };
             if ((ulong)entry.RamdiskOffset + entry.RamdiskSize > _vendorRamdiskSize)
             {
-                throw new ImageParseException($"Vendor ramdisk 表条目 {i} 超出 ramdisk 范围");
+                throw new ImageParseException($"Vendor ramdisk table entry {i} is outside the ramdisk range.");
             }
             for (var j = 0; j < RamdiskBoardIdCount; j++)
             {
@@ -546,7 +546,7 @@ public class VendorBootParser : IDisposable
             if (entry.RamdiskOffset > _vendorRamdiskSize ||
                 entry.RamdiskSize > _vendorRamdiskSize - entry.RamdiskOffset)
             {
-                throw new ImageParseException("Vendor ramdisk 表条目超出 ramdisk 范围");
+                throw new ImageParseException("The vendor ramdisk table entry is outside the ramdisk range.");
             }
             long offset;
             try
@@ -555,11 +555,11 @@ public class VendorBootParser : IDisposable
             }
             catch (OverflowException ex)
             {
-                throw new ImageParseException("Vendor ramdisk 表条目偏移溢出", ex);
+                throw new ImageParseException("The vendor ramdisk table entry offset overflows.", ex);
             }
             var size = (long)entry.RamdiskSize;
             var source = _sourceStream!;
-            ValidateRange(source, offset, size, "vendor ramdisk 表条目");
+            ValidateRange(source, offset, size, "vendor ramdisk table entry");
             return new Core.Streams.BoundedReadStream(source, offset, size, leaveOpen: true, syncRoot: _sourceLock);
         }
     }
@@ -606,7 +606,7 @@ public class VendorBootParser : IDisposable
         ThrowIfDisposed();
         if (_sourceStream is null)
         {
-            throw new InvalidOperationException("尚未解析任何 Vendor Boot 镜像");
+            throw new InvalidOperationException("No vendor boot image has been parsed yet.");
         }
     }
 
@@ -634,7 +634,7 @@ public class VendorBootParser : IDisposable
     {
         if (size > MaximumComponentSize)
         {
-            throw new ImageParseException($"{component} 超过单组件上限 {MaximumComponentSize} 字节，无法安全读取");
+            throw new ImageParseException($"{component} exceeds the single-component limit of {MaximumComponentSize} bytes and cannot be read safely.");
         }
         return ReadRange(stream, offset, checked((int)size), component);
     }
@@ -663,7 +663,7 @@ public class VendorBootParser : IDisposable
         }
         catch (InvalidDataException)
         {
-            throw new ImageParseException($"{component} 范围超出或文件被截断");
+            throw new ImageParseException($"{component} range is out of bounds or the file is truncated.");
         }
     }
 
@@ -673,7 +673,7 @@ public class VendorBootParser : IDisposable
     private static long CheckedAdd(long left, long right)
     {
         try { return checked(left + right); }
-        catch (OverflowException ex) { throw new ImageParseException("Vendor Boot 组件偏移溢出", ex); }
+        catch (OverflowException ex) { throw new ImageParseException("The vendor boot component offset overflows.", ex); }
     }
 
     private static long AlignToPage(long offset, uint pageSize)

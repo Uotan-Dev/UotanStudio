@@ -45,7 +45,7 @@ internal sealed record Ext4BlockGroup
         var size = Math.Max(descSize, 32);
         if (data.Length < size)
         {
-            throw new InvalidDataException($"Block group descriptor is truncated (need {size} bytes, got {data.Length}).");
+            throw new FileSystemCorruptedException($"Block group descriptor is truncated (need {size} bytes, got {data.Length}).");
         }
 
         var result = new Ext4BlockGroup

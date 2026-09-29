@@ -124,7 +124,15 @@ public sealed class ErofsOptions
     internal bool SourceMetaboxCompressed { get; set; }
     internal IReadOnlyList<ErofsSourceDevice>? SourceDeviceTable { get; set; }
     internal byte[]? SourceVolumeNameBytes { get; set; }
-    internal CancellationToken CancellationToken { get; set; }
+    /// <summary>
+    /// Token observed throughout image construction, including node collection, compression planning and data writes.
+    /// <para>贯穿镜像构建全程（节点收集、压缩规划与数据写出）监视的取消令牌。</para>
+    /// </summary>
+    /// <value>The default (none) token makes a build non-cancellable; cancellation surfaces as
+    /// <see cref="OperationCanceledException"/> and the destination file is not replaced.
+    /// <para>默认（无）令牌使构建不可取消；取消时抛出 <see cref="OperationCanceledException"/>，目标文件不会被替换。</para></value>
+    public CancellationToken CancellationToken { get; set; }
+
     internal bool OptimizeCompression { get; set; }
 
     /// <summary>Whether compressed files use the compacted (bitfield) index format.

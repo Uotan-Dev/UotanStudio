@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Google.Protobuf;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.Models;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 
@@ -78,7 +79,7 @@ internal static class PayloadSigner
 
         var destination = Path.GetFullPath(outputPath);
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-        var temporary = destination + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(destination);
         try
         {
             using (var input = File.OpenRead(payloadPath))

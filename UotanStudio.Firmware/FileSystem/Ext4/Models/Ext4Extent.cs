@@ -35,7 +35,7 @@ internal static class Ext4Extent
         var depth = BinaryPrimitives.ReadUInt16LittleEndian(extentBytes[6..8]);
         if (depth > remainingDepth)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"ext4 extent tree depth {depth} exceeds the supported maximum of {MaxExtentDepth}.");
         }
 

@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Buffers.Binary;
 using UotanStudio.Firmware.Core.Checksums;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 
@@ -163,7 +164,7 @@ public sealed partial class ErofsParser : IDisposable
     /// <para><paramref name="image"/> 为 null。</para></exception>
     /// <exception cref="FormatException">The superblock magic, geometry, features or checksum is invalid.
     /// <para>超级块魔数、几何信息、特性或校验和非法。</para></exception>
-    /// <exception cref="InvalidDataException">A metadata read exceeds the image bounds or the device table mismatches.
+    /// <exception cref="FileSystemCorruptedException">A metadata read exceeds the image bounds or the device table mismatches.
     /// <para>元数据读取超出镜像边界，或设备表不一致。</para></exception>
     public ErofsParser(byte[] image)
         : this(CreateMemorySource(image), ownsStream: false)
@@ -182,7 +183,7 @@ public sealed partial class ErofsParser : IDisposable
     /// </param>
     /// <exception cref="ArgumentException"><paramref name="stream"/> is not readable.
     /// <para><paramref name="stream"/> 不可读。</para></exception>
-    /// <exception cref="InvalidDataException">The stream position exceeds its length.
+    /// <exception cref="FileSystemCorruptedException">The stream position exceeds its length.
     /// <para>流的 position 超出其长度。</para></exception>
     /// <exception cref="FormatException">The superblock magic, geometry, features or checksum is invalid.
     /// <para>超级块魔数、几何信息、特性或校验和非法。</para></exception>
@@ -212,7 +213,7 @@ public sealed partial class ErofsParser : IDisposable
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     /// <exception cref="FormatException">The superblock magic, geometry, features or checksum is invalid.
     /// <para>超级块魔数、几何信息、特性或校验和非法。</para></exception>
-    /// <exception cref="InvalidDataException">A metadata read exceeds the image bounds or the device table mismatches.
+    /// <exception cref="FileSystemCorruptedException">A metadata read exceeds the image bounds or the device table mismatches.
     /// <para>元数据读取超出镜像边界，或设备表不一致。</para></exception>
     public ErofsParser(Stream stream, int maximumEntries, long maximumPathCharacters, CancellationToken cancellationToken)
         : this(RequireSeekable(stream), false, maximumEntries, maximumPathCharacters, cancellationToken)
@@ -238,7 +239,7 @@ public sealed partial class ErofsParser : IDisposable
     /// <para>该路径上不存在文件。</para></exception>
     /// <exception cref="FormatException">The superblock magic, geometry, features or checksum is invalid.
     /// <para>超级块魔数、几何信息、特性或校验和非法。</para></exception>
-    /// <exception cref="InvalidDataException">A metadata read exceeds the image bounds.
+    /// <exception cref="FileSystemCorruptedException">A metadata read exceeds the image bounds.
     /// <para>元数据读取超出镜像边界。</para></exception>
     public ErofsParser(string filePath)
         : this(OpenFileSource(filePath), ownsStream: true)
@@ -266,7 +267,7 @@ public sealed partial class ErofsParser : IDisposable
     /// <para><paramref name="deviceStreams"/> 或其某个元素为 null。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="deviceStreams"/> is empty.
     /// <para><paramref name="deviceStreams"/> 为空。</para></exception>
-    /// <exception cref="InvalidDataException">The stream count differs from the on-disk device table.
+    /// <exception cref="FileSystemCorruptedException">The stream count differs from the on-disk device table.
     /// <para>流数量与磁盘设备表不一致。</para></exception>
     public ErofsParser(IReadOnlyList<Stream> deviceStreams)
         : this(deviceStreams, int.MaxValue, long.MaxValue, default)
@@ -301,7 +302,7 @@ public sealed partial class ErofsParser : IDisposable
     /// <para>预算参数不是正数。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was already signalled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
-    /// <exception cref="InvalidDataException">The stream count differs from the on-disk device table.
+    /// <exception cref="FileSystemCorruptedException">The stream count differs from the on-disk device table.
     /// <para>流数量与磁盘设备表不一致。</para></exception>
     public ErofsParser(IReadOnlyList<Stream> deviceStreams, int maximumEntries,
         long maximumPathCharacters, CancellationToken cancellationToken)
@@ -348,7 +349,7 @@ public sealed partial class ErofsParser : IDisposable
                     var sourceLength = stream.Length;
                     if (_baseOffset < 0 || sourceLength < _baseOffset)
                     {
-                        throw new InvalidDataException("The source stream position must be within its length.");
+                        throw new FileSystemCorruptedException("The source stream position must be within its length.");
                     }
 
                     _imageSize = sourceLength - _baseOffset;
@@ -417,7 +418,7 @@ public sealed partial class ErofsParser : IDisposable
             _blockSize = _superblock.BlockSize;
 
             if (deviceStreams is not null && deviceStreams.Count != _superblock.ExtraDevices + 1)
-                throw new InvalidDataException("EROFS device stream count differs from the device table.");
+                throw new FileSystemCorruptedException("EROFS device stream count differs from the device table.");
 
             if (_superblock.HasDeviceTable && _superblock.ExtraDevices > 0)
             {
@@ -511,7 +512,7 @@ public sealed partial class ErofsParser : IDisposable
     /// <para>按遍历顺序的目录条目在前，文件清单在后。</para></returns>
     /// <exception cref="OperationCanceledException">The parser's cancellation token was signalled.
     /// <para>解析器的取消令牌已被触发。</para></exception>
-    /// <exception cref="InvalidDataException">The entry or path budget is exhausted or metadata is malformed.
+    /// <exception cref="FileSystemCorruptedException">The entry or path budget is exhausted or metadata is malformed.
     /// <para>条目/路径预算耗尽或元数据非法。</para></exception>
     public IReadOnlyList<ErofsFileEntry> EnumerateEntries()
     {
@@ -527,7 +528,7 @@ public sealed partial class ErofsParser : IDisposable
     /// <para>已缓存的文件表；首次调用遍历目录树，其后调用复用结果。</para></returns>
     /// <exception cref="OperationCanceledException">The parser's cancellation token was signalled.
     /// <para>解析器的取消令牌已被触发。</para></exception>
-    /// <exception cref="InvalidDataException">The entry or path budget is exhausted or metadata is malformed.
+    /// <exception cref="FileSystemCorruptedException">The entry or path budget is exhausted or metadata is malformed.
     /// <para>条目/路径预算耗尽或元数据非法。</para></exception>
     public IReadOnlyList<ErofsFileEntry> EnumerateFiles()
     {
@@ -548,7 +549,7 @@ public sealed partial class ErofsParser : IDisposable
     /// <para><paramref name="path"/> 为 null。</para></exception>
     /// <exception cref="FileNotFoundException">No file has that exact path.
     /// <para>不存在与该路径逐字匹配的文件。</para></exception>
-    /// <exception cref="InvalidDataException">The file's metadata or data blocks are malformed.
+    /// <exception cref="FileSystemCorruptedException">The file's metadata or data blocks are malformed.
     /// <para>文件的元数据或数据块非法。</para></exception>
     public byte[] ReadFileBytes(string path)
     {
@@ -570,7 +571,7 @@ public sealed partial class ErofsParser : IDisposable
     /// <para><paramref name="path"/> 或 <paramref name="outputStream"/> 为 null。</para></exception>
     /// <exception cref="FileNotFoundException">No file has that exact path.
     /// <para>不存在与该路径逐字匹配的文件。</para></exception>
-    /// <exception cref="InvalidDataException">The file's metadata or data blocks are malformed.
+    /// <exception cref="FileSystemCorruptedException">The file's metadata or data blocks are malformed.
     /// <para>文件的元数据或数据块非法。</para></exception>
     public void ReadFile(string path, Stream outputStream)
     {
@@ -739,19 +740,19 @@ public sealed partial class ErofsParser : IDisposable
     {
         var metaboxOffset = _superblock.GetInodeOffset(metaboxNid);
         if (metaboxOffset < 0 || metaboxOffset > _imageSize - 2)
-            throw new InvalidDataException($"METABOX inode nid {metaboxNid} is out of range.");
+            throw new FileSystemCorruptedException($"METABOX inode nid {metaboxNid} is out of range.");
 
         var advise = BinaryPrimitives.ReadUInt16LittleEndian(
             ReadBytes(metaboxOffset, 2, "METABOX inode advise"));
         var inodeSize = (advise & ErofsInode.FlagExtended) != 0 ? ErofsInode.ExtendedSize : ErofsInode.CompactSize;
         if (metaboxOffset > _imageSize - inodeSize)
-            throw new InvalidDataException("METABOX inode exceeds the image bounds.");
+            throw new FileSystemCorruptedException("METABOX inode exceeds the image bounds.");
 
         var inode = ErofsInode.FromBytes(ReadBytes(metaboxOffset, inodeSize, "METABOX inode"));
         var dataSize = (long)inode.Size;
         if (dataSize <= 0) return [];
         if (dataSize > MaxMetadataComponentSize)
-            throw new InvalidDataException($"METABOX inode data size {dataSize} exceeds the limit of {MaxMetadataComponentSize}.");
+            throw new FileSystemCorruptedException($"METABOX inode data size {dataSize} exceeds the limit of {MaxMetadataComponentSize}.");
 
         using var buffer = new MemoryStream();
         switch (inode.DataLayout)
@@ -776,11 +777,11 @@ public sealed partial class ErofsParser : IDisposable
                     using var bounded = new CountingWriteStream(buffer, dataSize, leaveOpen: true, _readCancellation);
                     WriteCompressedData(metaboxNid, inode, bounded, cancellationToken: _readCancellation);
                     if (bounded.BytesWritten != dataSize)
-                        throw new InvalidDataException("METABOX decompressed length differs from its inode size.");
+                        throw new FileSystemCorruptedException("METABOX decompressed length differs from its inode size.");
                     break;
                 }
             default:
-                throw new InvalidDataException($"Unsupported METABOX inode data layout {inode.DataLayout}.");
+                throw new FileSystemUnsupportedFeatureException($"Unsupported METABOX inode data layout {inode.DataLayout}.");
         }
 
         return buffer.ToArray();
@@ -789,24 +790,24 @@ public sealed partial class ErofsParser : IDisposable
     private void CopyFromDevice(Stream output, int deviceId, long offset, long length, string what)
     {
         if (offset < 0 || length < 0)
-            throw new InvalidDataException($"{what} has invalid offset/length.");
+            throw new FileSystemCorruptedException($"{what} has invalid offset/length.");
         if (deviceId <= 0 || _deviceSlots is null || deviceId >= _deviceSlots.Length)
-            throw new InvalidDataException($"{what} references an invalid device id {deviceId}.");
+            throw new FileSystemCorruptedException($"{what} references an invalid device id {deviceId}.");
         var slot = _deviceSlots[deviceId];
         var deviceLength = checked((long)slot.Blocks * _blockSize);
         if (offset > deviceLength || length > deviceLength - offset)
-            throw new InvalidDataException($"{what} exceeds device {deviceId} bounds.");
+            throw new FileSystemCorruptedException($"{what} exceeds device {deviceId} bounds.");
         if (_deviceStreams?[deviceId] is not { } device)
         {
             if (!_flatDevice || slot.UniAddr == 0)
-                throw new InvalidDataException($"{what} requires missing EROFS device {deviceId}.");
+                throw new FileSystemCorruptedException($"{what} requires missing EROFS device {deviceId}.");
             var mappedOffset = checked((long)slot.UniAddr * _blockSize + offset);
             CheckRange(mappedOffset, length, what);
             CopyFromSource(output, mappedOffset, length);
             return;
         }
         if (offset > device.Length || length > device.Length - offset)
-            throw new InvalidDataException($"{what} exceeds device {deviceId} stream bounds.");
+            throw new FileSystemCorruptedException($"{what} exceeds device {deviceId} stream bounds.");
 
         var buffer = ArrayPool<byte>.Shared.Rent(CopyBufferSize);
         try
@@ -835,7 +836,7 @@ public sealed partial class ErofsParser : IDisposable
         _readCancellation.ThrowIfCancellationRequested();
         if (offset < 0 || length < 0 || offset > _imageSize || length > _imageSize - offset)
         {
-            throw new InvalidDataException($"{what} exceeds the image bounds.");
+            throw new FileSystemCorruptedException($"{what} exceeds the image bounds.");
         }
 
         var buffer = new byte[length];
@@ -878,7 +879,7 @@ public sealed partial class ErofsParser : IDisposable
 
     private void ExtractFileAtomic(string target, ulong nid, bool overwrite, Core.ExtractionByteCounter bytes)
     {
-        var tempPath = target + ".tmp-" + Guid.NewGuid().ToString("N");
+        var tempPath = TempFileHelper.CreateAdjacentPath(target);
         try
         {
             using (var output = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -923,7 +924,7 @@ public sealed partial class ErofsParser : IDisposable
         {
             if (RequireCompleteMetadata)
             {
-                throw new InvalidDataException("EROFS directory aliases or cycles cannot be captured losslessly.");
+                throw new FileSystemCorruptedException("EROFS directory aliases or cycles cannot be captured losslessly.");
             }
             return;
         }
@@ -952,7 +953,7 @@ public sealed partial class ErofsParser : IDisposable
             var candidatePath = JoinPath(prefix, entry.Name);
             if (_visitedEntries >= _maximumEntries || candidatePath.Length > _maximumPathCharacters - _pathCharacters)
             {
-                throw new InvalidDataException("EROFS directory enumeration exceeds its entry or path budget.");
+                throw new FileSystemCorruptedException("EROFS directory enumeration exceeds its entry or path budget.");
             }
             _visitedEntries++;
             _pathCharacters += candidatePath.Length;
@@ -997,7 +998,7 @@ public sealed partial class ErofsParser : IDisposable
                         WriteFileData(entry.Nid, fileInode, buffer);
                         fileEntry = fileEntry with { SymlinkTarget = ReadSymlinkTarget(buffer) };
                     }
-                    catch (Exception ex) when (!RequireCompleteMetadata && ex is InvalidDataException or FormatException)
+                    catch (Exception ex) when (!RequireCompleteMetadata && ex is InvalidDataException or FileSystemException or FormatException)
                     {
                         fileEntry = fileEntry with { SymlinkTarget = null };
                     }
@@ -1060,7 +1061,7 @@ public sealed partial class ErofsParser : IDisposable
                     MaxMetadataComponentSize);
                 if (sharedLength <= 0)
                 {
-                    throw new InvalidDataException("EROFS shared xattr area exceeds the image.");
+                    throw new FileSystemCorruptedException("EROFS shared xattr area exceeds the image.");
                 }
                 if (sharedLength > 0)
                 {
@@ -1069,7 +1070,7 @@ public sealed partial class ErofsParser : IDisposable
                         var relativeOffset = ErofsXattr.GetSharedXattrByteOffset(id);
                         if (relativeOffset > sharedLength - ErofsXattr.EntryHeaderSize)
                         {
-                            throw new InvalidDataException("EROFS shared xattr offset exceeds the image.");
+                            throw new FileSystemCorruptedException("EROFS shared xattr offset exceeds the image.");
                         }
                         var entryOffset = checked(sharedStart + relativeOffset);
                         var header = sharedInMetabox
@@ -1079,7 +1080,7 @@ public sealed partial class ErofsParser : IDisposable
                             BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(2));
                         if (size > sharedLength - relativeOffset)
                         {
-                            throw new InvalidDataException("EROFS shared xattr value exceeds the image.");
+                            throw new FileSystemCorruptedException("EROFS shared xattr value exceeds the image.");
                         }
                         var entryBytes = sharedInMetabox
                             ? ReadMetaboxBytes(entryOffset, size, "shared xattr entry")
@@ -1090,20 +1091,20 @@ public sealed partial class ErofsParser : IDisposable
                         }
                         else
                         {
-                            throw new InvalidDataException("Invalid EROFS shared xattr.");
+                            throw new FileSystemCorruptedException("Invalid EROFS shared xattr.");
                         }
                     }
                 }
             }
         }
-        catch (Exception ex) when (!RequireCompleteMetadata && ex is InvalidDataException or FormatException)
+        catch (Exception ex) when (!RequireCompleteMetadata && ex is InvalidDataException or FileSystemException or FormatException)
         {
 
         }
 
         if (RequireCompleteMetadata && result.GroupBy(entry => entry.Name, StringComparer.Ordinal).Any(group => group.Count() > 1))
         {
-            throw new InvalidDataException("Duplicate EROFS extended attribute.");
+            throw new FileSystemCorruptedException("Duplicate EROFS extended attribute.");
         }
         return result;
     }
@@ -1145,7 +1146,7 @@ public sealed partial class ErofsParser : IDisposable
         {
             if (_metaboxData is null || tableOffset > _metaboxData.Length)
             {
-                throw new InvalidDataException("EROFS xattr prefixes exceed metabox metadata.");
+                throw new FileSystemCorruptedException("EROFS xattr prefixes exceed metabox metadata.");
             }
             table = _metaboxData.AsSpan((int)tableOffset, (int)Math.Min(maximumLength, _metaboxData.Length - tableOffset)).ToArray();
         }
@@ -1154,7 +1155,7 @@ public sealed partial class ErofsParser : IDisposable
             var packed = ReadInode(_superblock.PackedNid);
             if ((ulong)tableOffset > packed.Size)
             {
-                throw new InvalidDataException("EROFS xattr prefixes exceed the packed inode.");
+                throw new FileSystemCorruptedException("EROFS xattr prefixes exceed the packed inode.");
             }
             var length = (int)Math.Min((ulong)maximumLength, packed.Size - (ulong)tableOffset);
             using var buffer = new MemoryStream(length);
@@ -1165,7 +1166,7 @@ public sealed partial class ErofsParser : IDisposable
         {
             if (tableOffset < 0 || tableOffset > _imageSize)
             {
-                throw new InvalidDataException("EROFS xattr prefix table exceeds the image.");
+                throw new FileSystemCorruptedException("EROFS xattr prefix table exceeds the image.");
             }
             table = ReadBytes(tableOffset, (int)Math.Min(_imageSize - tableOffset, maximumLength), "xattr prefix table");
         }
@@ -1191,20 +1192,20 @@ public sealed partial class ErofsParser : IDisposable
         if (_hasMetabox && (nid & NidMetaboxFlag) != 0)
         {
             if (_metaboxData is null || _metaboxData.Length == 0)
-                throw new InvalidDataException(
+                throw new FileSystemCorruptedException(
                     $"Inode nid 0x{nid:X16} references the METABOX data stream, but no METABOX data was cached.");
 
             var slotIndex = nid & ~NidMetaboxFlag;
             var slotOffset = MetaboxOffset(nid);
             if (slotOffset < 0 || slotOffset > _metaboxData.Length - 2)
-                throw new InvalidDataException(
+                throw new FileSystemCorruptedException(
                     $"METABOX slot index {slotIndex} (offset {slotOffset}) is out of range (metabox data size {_metaboxData.Length}).");
 
             var metaboxAdvise = BinaryPrimitives.ReadUInt16LittleEndian(_metaboxData.AsSpan((int)slotOffset, 2));
             var metaboxInodeSize = (metaboxAdvise & ErofsInode.FlagExtended) != 0
                 ? ErofsInode.ExtendedSize : ErofsInode.CompactSize;
             if (slotOffset > _metaboxData.Length - metaboxInodeSize)
-                throw new InvalidDataException($"METABOX inode nid 0x{nid:X16} exceeds its data stream.");
+                throw new FileSystemCorruptedException($"METABOX inode nid 0x{nid:X16} exceeds its data stream.");
             return ResolveTimestamp(ErofsInode.FromBytes(
                 _metaboxData.AsSpan((int)slotOffset, metaboxInodeSize)));
         }
@@ -1212,7 +1213,7 @@ public sealed partial class ErofsParser : IDisposable
         var offset = _superblock.GetInodeOffset(nid);
         if (offset < 0 || offset > _imageSize - 2)
         {
-            throw new InvalidDataException($"Inode nid {nid} is out of range.");
+            throw new FileSystemCorruptedException($"Inode nid {nid} is out of range.");
         }
 
         var available = (int)Math.Min(ErofsInode.ExtendedSize, _imageSize - offset);
@@ -1221,7 +1222,7 @@ public sealed partial class ErofsParser : IDisposable
         var inodeSize = (advise & ErofsInode.FlagExtended) != 0 ? ErofsInode.ExtendedSize : ErofsInode.CompactSize;
         if (inodeSize > data.Length)
         {
-            throw new InvalidDataException($"Inode nid {nid} exceeds the image bounds.");
+            throw new FileSystemCorruptedException($"Inode nid {nid} exceeds the image bounds.");
         }
 
         return ResolveTimestamp(ErofsInode.FromBytes(data.AsSpan(0, inodeSize)));
@@ -1247,7 +1248,7 @@ public sealed partial class ErofsParser : IDisposable
         if (_metaboxData is null || offset < 0 || length < 0
             || offset > _metaboxData.Length || length > _metaboxData.Length - offset)
         {
-            throw new InvalidDataException($"{what} exceeds the METABOX data stream.");
+            throw new FileSystemCorruptedException($"{what} exceeds the METABOX data stream.");
         }
         return _metaboxData.AsSpan((int)offset, length).ToArray();
     }
@@ -1260,7 +1261,7 @@ public sealed partial class ErofsParser : IDisposable
         if (inode.DataLayout is not (ErofsInode.DataLayoutFlat or ErofsInode.DataLayoutInline))
         {
 
-            throw new InvalidDataException($"Unsupported directory data layout {inode.DataLayout} for nid {nid}.");
+            throw new FileSystemUnsupportedFeatureException($"Unsupported directory data layout {inode.DataLayout} for nid {nid}.");
         }
 
         var flatStart = checked(inode.RawBlockAddress * _blockSize);
@@ -1270,7 +1271,7 @@ public sealed partial class ErofsParser : IDisposable
         if (flatLength > 0) CheckRange(flatStart, flatLength, "Directory data");
         if (length > MaxMetadataComponentSize)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"Directory data size {length} exceeds the limit of {MaxMetadataComponentSize} bytes.");
         }
 
@@ -1291,7 +1292,7 @@ public sealed partial class ErofsParser : IDisposable
                 _readCancellation.ThrowIfCancellationRequested();
                 if ((long)result.Count >= (long)_maximumEntries + 2)
                 {
-                    throw new InvalidDataException("EROFS directory block entries exceed the configured budget.");
+                    throw new FileSystemCorruptedException("EROFS directory block entries exceed the configured budget.");
                 }
                 result.Add(entry);
             }

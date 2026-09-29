@@ -4,6 +4,7 @@ using UotanStudio.Firmware.Archive.Extraction;
 using UotanStudio.Firmware.Archive.Models;
 using UotanStudio.Firmware.Compression;
 using UotanStudio.Firmware.Compression.Detection;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.Archive.Browsing;
 
@@ -203,7 +204,7 @@ public sealed class ArchiveBrowser : IDisposable
             var memberName = Path.GetFileName(path);
             if (compression != CompressionFormat.None)
             {
-                var scratch = new FileStream(Path.Combine(Path.GetTempPath(), $"uotan-browser-{Guid.NewGuid():N}.tmp"),
+                var scratch = new FileStream(TempFileHelper.CreateScratchPath("uotan-browser"),
                     FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.DeleteOnClose);
                 try { CompressionService.Decompress(source, scratch, compression, maximumExpandedBytes, cancellationToken); }
                 catch { scratch.Dispose(); throw; }

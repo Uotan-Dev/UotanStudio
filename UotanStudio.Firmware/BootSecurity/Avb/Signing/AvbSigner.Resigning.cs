@@ -3,6 +3,7 @@ using Org.BouncyCastle.Crypto.Parameters;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Verification;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
@@ -140,7 +141,7 @@ public static partial class AvbSigner
                 if (fecSize != 0)
                 {
                     output.SetLength(fecOffset);
-                    var parityPath = Path.Combine(Path.GetTempPath(), $"uotan-avb-fec-{Guid.NewGuid():N}.bin");
+                    var parityPath = TempFileHelper.CreateScratchPath("uotan-avb-fec", ".bin");
                     await using var parity = new FileStream(parityPath, FileMode.CreateNew, FileAccess.ReadWrite,
                         FileShare.None, 65536, FileOptions.Asynchronous | FileOptions.DeleteOnClose);
                     await AvbFecCodec.WriteParityAsync(output, parity, fecOffset, options.FecNumRoots,

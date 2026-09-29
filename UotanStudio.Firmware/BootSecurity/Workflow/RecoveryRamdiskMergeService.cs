@@ -4,6 +4,7 @@ using UotanStudio.Firmware.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.Compression;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.BootSecurity.Workflow;
 
@@ -61,7 +62,7 @@ public sealed class RecoveryRamdiskMergeService
         var compressed = Compress(merged, source.Header.RamdiskCompression);
         var packed = BootImagePacker.Repack(source, ramdisk: compressed);
 
-        var temporary = outputPath + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(outputPath);
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);

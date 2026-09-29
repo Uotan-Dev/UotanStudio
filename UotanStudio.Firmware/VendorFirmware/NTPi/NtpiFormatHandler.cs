@@ -67,8 +67,8 @@ public sealed class NtpiFormatHandler : IFormatHandler, IRepackMetadataProvider
     /// <para>待检查的 NTPI 包；文件缺失或格式错误时返回失败结果，而不是抛出异常。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// Accepted for interface uniformity; the underlying <see cref="NtpiReader"/> is synchronous, so the read runs to completion and the token is never observed.
-    /// <para>仅为保持接口一致而保留；底层 <see cref="NtpiReader"/> 是同步实现，读取会执行到底且不会检查该令牌。</para>
+    /// Observed by the synchronous reader between regions; the call itself still runs synchronously on the caller.
+    /// <para>由同步读取器在区域之间检查；调用本身仍在调用方线程上同步执行。</para>
     /// </param>
     /// <returns>
     /// A completed task. Success carries a <c>NTPI v&amp;lt;major&amp;gt;.&amp;lt;minor&amp;gt;.&amp;lt;patch&amp;gt;</c> summary, the file-entry names in <see cref="FirmwareOpResult.Entries"/>, and the keys <c>MajorVersion</c>, <c>MinorVersion</c>, <c>PatchVersion</c>, <c>RegionCount</c> and <c>FileCount</c> in <see cref="FirmwareOpResult.Metadata"/>; any thrown error becomes a failure result whose summary is the exception message.
@@ -79,7 +79,7 @@ public sealed class NtpiFormatHandler : IFormatHandler, IRepackMetadataProvider
         try
         {
             using var reader = NtpiReader.CreateDefault();
-            var info = reader.ReadInfo(filePath);
+            var info = reader.ReadInfo(filePath, cancellationToken);
             var summary = $"NTPI v{info.MajorVersion}.{info.MinorVersion}.{info.PatchVersion}: " +
                           $"{info.Regions.Count} regions, {info.FileEntries.Count} files";
             return Task.FromResult(FirmwareOpResult.Ok(summary,
@@ -116,8 +116,8 @@ public sealed class NtpiFormatHandler : IFormatHandler, IRepackMetadataProvider
     /// <para>解包参数；传 <see langword="null"/> 时使用默认值。只有 <see cref="UnpackOptions.Progress"/> 会被使用，其收到按已完成文件数换算的百分比。不支持条目筛选，所有文件都会被解出。<see cref="UnpackOptions.Overwrite"/> 只作用于随后写入的重打包元数据文件——为 <see langword="false"/> 且该文件已存在时，操作在任何解包之前就失败。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// Checked before extraction and rethrown to the caller; cancellation is never converted into a failure result. The synchronous reader does not poll the token mid-file.
-    /// <para>在解包前检查并会重新抛给调用方；取消绝不转换为失败结果。同步读取器不会在单个文件处理过程中轮询该令牌。</para>
+    /// Observed by the synchronous reader between files and extraction blocks; cancellation surfaces as a failure result via the caught <see cref="OperationCanceledException"/>.
+    /// <para>由同步读取器在文件之间与解压块之间检查；取消会经由捕获的 <see cref="OperationCanceledException"/> 转为失败结果。</para>
     /// </param>
     /// <returns>
     /// A task whose result reports the recursive count of files in <paramref name="outputDirectory"/> after extraction, including files that were already there. On success the repack metadata for the package is written into the same directory; reader faults such as a missing Region6 or an exceeded output limit become a failure result carrying the exception message.
@@ -138,7 +138,7 @@ public sealed class NtpiFormatHandler : IFormatHandler, IRepackMetadataProvider
             Directory.CreateDirectory(outputDirectory);
             using var reader = NtpiReader.CreateDefault();
             var progress = options?.Progress is null ? null : new Progress<NtpiExtractionProgress>(p => options.Progress.Report(p.CompletedFiles * 100.0 / Math.Max(1, p.TotalFiles), p.CurrentFileName));
-            reader.Unpack(filePath, outputDirectory, progress, fileFilter: null);
+            reader.Unpack(filePath, outputDirectory, progress, fileFilter: null, cancellationToken);
             var count = Directory.EnumerateFiles(outputDirectory, "*", SearchOption.AllDirectories).Count();
             return Task.FromResult(FirmwareOpResult.Ok($"Extracted {count} files to {outputDirectory}"));
         }

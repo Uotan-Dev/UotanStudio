@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
@@ -67,7 +68,7 @@ public sealed class ErofsLz4ScTests
         var payload = Payload();
         var image = RewriteAsSemiClusters(BuildBaseImage(payload, ErofsCompressionAlgorithm.Lz4), ErofsAlgorithm.Lz4, bigPcluster2: false);
         using var parser = new ErofsParser(image);
-        var ex = Assert.Throws<InvalidDataException>(() => parser.ReadFileBytes("data.bin"));
+        var ex = Assert.Throws<FileSystemCorruptedException>(() => parser.ReadFileBytes("data.bin"));
         Assert.Contains("no encoded tail", ex.Message, StringComparison.Ordinal);
     }
 
@@ -78,7 +79,7 @@ public sealed class ErofsLz4ScTests
         var image = RewriteAsSemiClusters(BuildBaseImage(payload, ErofsCompressionAlgorithm.Lz4), ErofsAlgorithm.Lz4,
             bigPcluster2: true, corruptStream: true);
         using var parser = new ErofsParser(image);
-        Assert.Throws<InvalidDataException>(() => parser.ReadFileBytes("data.bin"));
+        Assert.Throws<FileSystemCorruptedException>(() => parser.ReadFileBytes("data.bin"));
     }
 
     [Fact]

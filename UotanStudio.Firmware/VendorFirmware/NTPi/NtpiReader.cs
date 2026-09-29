@@ -1,4 +1,5 @@
-﻿using UotanStudio.Firmware.VendorFirmware.NTPi;
+﻿using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Firmware.VendorFirmware.NTPi;
 using UotanStudio.Firmware.VendorFirmware.NTPi.Models;
 
 namespace UotanStudio.Firmware.VendorFirmware.NTPi;
@@ -10,11 +11,13 @@ namespace UotanStudio.Firmware.VendorFirmware.NTPi;
 /// <remarks>
 /// The instance holds no per-operation state: each call opens its own read-only <see cref="FileStream"/> on the
 /// package and closes it before returning. After <see cref="Dispose"/> the instance is not reusable and every
-/// operation throws <see cref="ObjectDisposedException"/>. None of the operations accept a
-/// <see cref="CancellationToken"/>; they run to completion or fail.
+/// operation throws <see cref="ObjectDisposedException"/>. The I/O operations accept an optional
+/// <see cref="CancellationToken"/> that is observed between regions, files and extraction blocks; cancellation
+/// surfaces as <see cref="OperationCanceledException"/>.
 /// <para>实例不保存单次操作的状态：每次调用都会自行以只读方式打开包的 <see cref="FileStream"/> 并在返回前关闭。
 /// 调用 <see cref="Dispose"/> 后实例不可复用，之后每次操作都会抛出 <see cref="ObjectDisposedException"/>。
-/// 所有操作都不接受 <see cref="CancellationToken"/>，只会执行完成或失败。</para>
+/// 各 I/O 操作接受可选的 <see cref="CancellationToken"/>，在区域、文件与解压块之间进行检查；取消时抛出
+/// <see cref="OperationCanceledException"/>。</para>
 /// </remarks>
 public sealed class NtpiReader : IDisposable
 {
@@ -68,6 +71,10 @@ public sealed class NtpiReader : IDisposable
     /// Package to inspect; region payloads are walked with the streaming size caps of the region walker and Region6 contributes only its size.
     /// <para>待检查的包；区域载荷按区域遍历器的流式大小上限遍历，Region6 只记录长度。</para>
     /// </param>
+    /// <param name="cancellationToken">
+    /// Token observed between regions during the walk; the default (none) token cannot cancel.
+    /// <para>遍历期间在区域之间检查的取消令牌；默认（无）令牌不可取消。</para>
+    /// </param>
     /// <returns>
     /// The version triple, one <c>(type, size)</c> record per region — Region6 is reported by size only — and the parsed
     /// <see cref="FileEntry"/> list when a FileIndex region is present; otherwise <see cref="NtpiFileInfo.FileEntries"/> stays empty.
@@ -94,7 +101,7 @@ public sealed class NtpiReader : IDisposable
     /// Console.WriteLine($"{info.MajorVersion}.{info.MinorVersion}.{info.PatchVersion}: {info.FileEntries.Count} files");
     /// </code>
     /// </example>
-    public NtpiFileInfo ReadInfo(string filePath)
+    public NtpiFileInfo ReadInfo(string filePath, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(filePath);
@@ -105,7 +112,7 @@ public sealed class NtpiReader : IDisposable
         }
 
         using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, DefaultBufferSize, FileOptions.SequentialScan);
-        return ReadInfoCore(stream);
+        return ReadInfoCore(stream, cancellationToken);
     }
 
     /// <summary>
@@ -128,13 +135,17 @@ public sealed class NtpiReader : IDisposable
     /// <see langword="null"/> value unpacks every entry.
     /// <para>作用于归档内条目名的谓词；返回 <see langword="false"/> 时跳过该文件且不写入，传 <see langword="null"/> 时解出全部条目。</para>
     /// </param>
+    /// <param name="cancellationToken">
+    /// Token observed between files and extraction blocks; the default (none) token cannot cancel.
+    /// <para>在文件之间与解压块之间检查的取消令牌；默认（无）令牌不可取消。</para>
+    /// </param>
     /// <remarks>
-    /// Equivalent to the five-argument overload with a default <see cref="NtpiUnpackOptions"/>, so the declared
+    /// Equivalent to the six-argument overload with a default <see cref="NtpiUnpackOptions"/>, so the declared
     /// output of every file stays bounded by the default per-file and total limits.
-    /// <para>等同于使用默认 <see cref="NtpiUnpackOptions"/> 的五参数重载，因此每个文件声明的输出仍受默认单文件与总长度上限约束。</para>
+    /// <para>等同于使用默认 <see cref="NtpiUnpackOptions"/> 的六参数重载，因此每个文件声明的输出仍受默认单文件与总长度上限约束。</para>
     /// </remarks>
-    public void Unpack(string filePath, string outputDir, IProgress<NtpiExtractionProgress>? progress = null, Func<string, bool>? fileFilter = null)
-        => Unpack(filePath, outputDir, new NtpiUnpackOptions(), progress, fileFilter);
+    public void Unpack(string filePath, string outputDir, IProgress<NtpiExtractionProgress>? progress = null, Func<string, bool>? fileFilter = null, CancellationToken cancellationToken = default)
+        => Unpack(filePath, outputDir, new NtpiUnpackOptions(), progress, fileFilter, cancellationToken);
 
     /// <summary>
     /// Unpacks an NTPI firmware package using trusted output limits.
@@ -163,6 +174,10 @@ public sealed class NtpiReader : IDisposable
     /// Predicate over the archive entry name; <see langword="null"/> unpacks every entry. Filtered-out files are still
     /// counted as completed.
     /// <para>作用于条目名的谓词；传 <see langword="null"/> 时解出全部条目。被过滤掉的条目仍计入已完成数。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Token observed between files and extraction blocks; the default (none) token cannot cancel.
+    /// <para>在文件之间与解压块之间检查的取消令牌；默认（无）令牌不可取消。</para>
     /// </param>
     /// <remarks>
     /// Each file is written to a temporary path and moved into place with overwrite enabled, so a failed file leaves no
@@ -194,13 +209,17 @@ public sealed class NtpiReader : IDisposable
     /// The SHA-256 recorded for a file does not match the extracted bytes.
     /// <para>文件记录的 SHA-256 与解出的字节不一致。</para>
     /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was canceled before or during the extraction.
+    /// <para><paramref name="cancellationToken"/> 在解包开始前或进行中被取消。</para>
+    /// </exception>
     /// <example>
     /// <code>
     /// using var reader = NtpiReader.CreateDefault();
     /// reader.Unpack(@"C:\firmware\package.ntpi", @"C:\out", new NtpiUnpackOptions { MaxTotalOutputBytes = 4L * 1024 * 1024 * 1024 });
     /// </code>
     /// </example>
-    public void Unpack(string filePath, string outputDir, NtpiUnpackOptions options, IProgress<NtpiExtractionProgress>? progress = null, Func<string, bool>? fileFilter = null)
+    public void Unpack(string filePath, string outputDir, NtpiUnpackOptions options, IProgress<NtpiExtractionProgress>? progress = null, Func<string, bool>? fileFilter = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(filePath);
@@ -219,12 +238,13 @@ public sealed class NtpiReader : IDisposable
         }
 
         using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, DefaultBufferSize, FileOptions.RandomAccess);
-        var layout = WalkLayout(stream);
+        var layout = WalkLayout(stream, cancellationToken);
 
 
         long declaredTotal = 0;
         foreach (var entry in layout.FileEntries)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (entry.OriginalLength < 0)
             {
                 throw new InvalidFormatException($"File entry '{entry.Name}' has a negative original length.");
@@ -265,6 +285,7 @@ public sealed class NtpiReader : IDisposable
 
         foreach (var entry in layout.FileEntries)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (fileFilter is not null && !fileFilter(entry.Name))
             {
                 completed++;
@@ -273,13 +294,13 @@ public sealed class NtpiReader : IDisposable
 
             var safeName = Path.GetFileName(entry.Name);
             var outPath = Path.Combine(outputDir, safeName);
-            var tempPath = outPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            var tempPath = TempFileHelper.CreateAdjacentPath(outPath);
             try
             {
                 using (var output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, DefaultBufferSize, FileOptions.SequentialScan))
                 {
                     var trustedFileLimit = Math.Min(entry.OriginalLength, trustedRemaining);
-                    _fileExtractor.ExtractFileToStream(stream, layout.Region6Offset, layout.Region6Length, keyMapProvider, entry, output, trustedFileLimit);
+                    _fileExtractor.ExtractFileToStream(stream, layout.Region6Offset, layout.Region6Length, keyMapProvider, entry, output, trustedFileLimit, cancellationToken);
                 }
                 File.Move(tempPath, outPath, overwrite: true);
                 trustedRemaining -= entry.OriginalLength;
@@ -314,6 +335,10 @@ public sealed class NtpiReader : IDisposable
     /// <see cref="NtpiUnpackOptions"/> applies to this path.
     /// <para>待解析的包；整个 Region6 与每个解密后的文件会同时驻留内存，此路径不受 <see cref="NtpiUnpackOptions"/> 的输出限制约束。</para>
     /// </param>
+    /// <param name="cancellationToken">
+    /// Token observed between regions and extracted files; the default (none) token cannot cancel.
+    /// <para>在区域与文件提取之间检查的取消令牌；默认（无）令牌不可取消。</para>
+    /// </param>
     /// <returns>
     /// The header, a payload entry per region type (Region6 keyed by <see cref="RegionType.Region6"/> holds its raw
     /// bytes when present), the FileIndex entries, and <see cref="NtpiParsedFile.ExtractedFiles"/> keyed by the archive
@@ -341,7 +366,11 @@ public sealed class NtpiReader : IDisposable
     /// <exception cref="EndOfStreamException">
     /// The file ends before the recorded Region6 length can be read. <para>文件在读完记录的 Region6 长度之前就结束。</para>
     /// </exception>
-    public NtpiParsedFile Parse(string filePath)
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was canceled before or during parsing.
+    /// <para><paramref name="cancellationToken"/> 在解析开始前或进行中被取消。</para>
+    /// </exception>
+    public NtpiParsedFile Parse(string filePath, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(filePath);
@@ -352,10 +381,10 @@ public sealed class NtpiReader : IDisposable
         }
 
         using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, DefaultBufferSize, FileOptions.RandomAccess);
-        return ParseCore(stream);
+        return ParseCore(stream, cancellationToken);
     }
 
-    private NtpiFileInfo ReadInfoCore(Stream stream)
+    private NtpiFileInfo ReadInfoCore(Stream stream, CancellationToken cancellationToken)
     {
         var header = NtpiRegionWalker.ReadHeaderFromStream(stream);
         var keyProvider = new VersionKeyProvider(header.VersionMajor, header.VersionMinor, header.VersionPatch);
@@ -376,14 +405,15 @@ public sealed class NtpiReader : IDisposable
                     result.FileEntries = NtpiRegionWalker.ParseFileEntries(payload);
                 }
             },
-            onRegion6Offset: (offset, size) => result.Regions.Add((RegionType.Region6, size)));
+            onRegion6Offset: (offset, size) => result.Regions.Add((RegionType.Region6, size)),
+            cancellationToken);
 
         return result;
     }
 
-    private NtpiParsedFile ParseCore(Stream stream)
+    private NtpiParsedFile ParseCore(Stream stream, CancellationToken cancellationToken)
     {
-        var layout = WalkLayout(stream);
+        var layout = WalkLayout(stream, cancellationToken);
 
         var result = new NtpiParsedFile { Header = layout.Header };
         foreach (var (type, payload) in layout.Regions)
@@ -415,7 +445,8 @@ public sealed class NtpiReader : IDisposable
 
             foreach (var entry in layout.FileEntries)
             {
-                var data = _fileExtractor.ExtractFileToMemory(stream, layout.Region6Offset, layout.Region6Length, keyMapProvider, entry);
+                cancellationToken.ThrowIfCancellationRequested();
+                var data = _fileExtractor.ExtractFileToMemory(stream, layout.Region6Offset, layout.Region6Length, keyMapProvider, entry, cancellationToken);
                 result.ExtractedFiles[entry.Name] = data;
             }
         }
@@ -427,7 +458,7 @@ public sealed class NtpiReader : IDisposable
     /// The parse phase records only region/file offsets, lengths, and decryption/compression parameters without loading Region6 data.
     /// <para>解析阶段仅记录区域与文件的 offset、length 以及解密/压缩参数,不加载 Region6 数据。</para>
     /// </summary>
-    private ParsedLayout WalkLayout(Stream stream)
+    private ParsedLayout WalkLayout(Stream stream, CancellationToken cancellationToken)
     {
         var header = NtpiRegionWalker.ReadHeaderFromStream(stream);
         var keyProvider = new VersionKeyProvider(header.VersionMajor, header.VersionMinor, header.VersionPatch);
@@ -452,7 +483,8 @@ public sealed class NtpiReader : IDisposable
                 hasRegion6 = true;
                 region6Offset = offset;
                 region6Length = size;
-            });
+            },
+            cancellationToken);
 
         var keyMap = regions.TryGetValue(RegionType.KeyMap, out var km) ? km : [];
         var keyMapProvider = keyMap.Length > 0 ? new KeyMapKeyProvider(keyMap) : null;

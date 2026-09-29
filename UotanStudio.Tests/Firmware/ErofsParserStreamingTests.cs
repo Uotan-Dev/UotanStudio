@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
@@ -159,8 +160,8 @@ public class ErofsParserStreamingTests
     [Fact]
     public void PclusterCount_OverflowingSize_ThrowsInsteadOfWrapping()
     {
-        Assert.Throws<InvalidDataException>(() => ErofsCompression.PclusterCount(ulong.MaxValue, 4096));
-        Assert.Throws<InvalidDataException>(() => ErofsCompression.PclusterCount((ulong)int.MaxValue * 4096 + 1, 4096));
+        Assert.Throws<FileSystemCorruptedException>(() => ErofsCompression.PclusterCount(ulong.MaxValue, 4096));
+        Assert.Throws<FileSystemCorruptedException>(() => ErofsCompression.PclusterCount((ulong)int.MaxValue * 4096 + 1, 4096));
         Assert.Equal(0, ErofsCompression.PclusterCount(0, 4096));
         Assert.Equal(1, ErofsCompression.PclusterCount(1, 4096));
         Assert.Equal(2, ErofsCompression.PclusterCount(4097, 4096));

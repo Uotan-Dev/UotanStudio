@@ -25,7 +25,7 @@ internal sealed class ErofsCompressionEstimate(ErofsOptions options)
             var length = ErofsCompression.AlgorithmCompress((ErofsAlgorithm)Options.Algorithm,
                 source, 0, source.Length, target, 0, target.Length, candidate.Level, candidate.HighCompression,
                 Options.DictionarySize, Options.WindowBits);
-            if (length <= 0) throw new InvalidDataException("EROFS compression inference made no progress.");
+            if (length <= 0) throw new FileSystemCorruptedException("EROFS compression inference made no progress.");
             candidate.Bytes += length;
             candidate.Error += Math.Abs((double)length - encoded.Length) / encoded.Length;
             if (encoded.SequenceEqual(target.AsSpan(0, length))) candidate.ExactMatches++;
@@ -83,10 +83,7 @@ public sealed partial class ErofsParser
                     return ++samples < 2;
                 }, token);
             }
-            catch (InvalidDataException)
-            {
-            }
-            catch (NotSupportedException)
+            catch (Exception ex) when (ex is InvalidDataException or FileSystemException or NotSupportedException)
             {
             }
         }

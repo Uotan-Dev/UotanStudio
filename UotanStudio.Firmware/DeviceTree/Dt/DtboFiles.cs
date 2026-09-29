@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.DeviceTree.Dt;
@@ -99,6 +100,12 @@ public static partial class DtboFormat
     /// replaced, or a reserved metadata name collides. <para>提取会覆盖输入、已存在的输出拒绝被替换，或保留的
     /// 元数据文件名发生冲突。</para></exception>
     /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <remarks>
+    /// This is an explicit synchronous boundary: the repack metadata layer only offers an asynchronous writer, so
+    /// this method waits on it at the boundary. Asynchronous callers should use <see cref="UnpackAsync"/> instead.
+    /// <para>本方法是显式同步边界：重打包元数据层只提供异步写入器，因此本方法在该边界上等待它。
+    /// 异步调用方应改用 <see cref="UnpackAsync"/>。</para>
+    /// </remarks>
     public static IReadOnlyList<string> Unpack(string inputPath, string outputDirectory,
         UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -106,6 +113,73 @@ public static partial class DtboFormat
         ArgumentOutOfRangeException.ThrowIfNegative(options.MaximumOutputBytes);
         cancellationToken.ThrowIfCancellationRequested();
         var destination = Path.GetFullPath(outputDirectory);
+        var (names, staging) = StageBlobs(inputPath, destination, options, cancellationToken);
+        try
+        {
+            RepackMetadata.WriteAsync(new DtFormatHandler(), inputPath, staging, cancellationToken).GetAwaiter().GetResult();
+            return PublishStaged(names, staging, destination, options, cancellationToken);
+        }
+        finally
+        {
+            Directory.Delete(staging, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Extracts overlays, their configuration and an original image for lossless unchanged repacking.
+    /// <para>提取 overlay、配置和原始镜像，支持未修改时无损重打包。</para>
+    /// </summary>
+    /// <param name="inputPath">DTBO image file to extract. <para>要提取的 DTBO 镜像文件。</para></param>
+    /// <param name="outputDirectory">Destination directory; files are staged in a temporary folder and moved
+    /// only after the whole extraction succeeds. <para>目标目录；文件先写入临时暂存目录，仅在整体提取成功后移动。</para></param>
+    /// <param name="options">Output-size limit per blob, overwrite policy and progress sink; <see langword="null"/>
+    /// uses defaults. <para>逐数据块输出上限、覆盖策略与进度回调；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <param name="cancellationToken">Cancels decoding, copying and metadata publication; a canceled run publishes
+    /// nothing into the destination. <para>取消解码、复制与元数据发布；被取消的运行不会向目标发布任何文件。</para></param>
+    /// <returns>A task whose result holds absolute paths of every written file: each overlay DTB, the original
+    /// image and the repack manifest. <para>任务结果为所有已写文件的绝对路径：各 overlay DTB、原始镜像与重打包清单。</para></returns>
+    /// <exception cref="FileNotFoundException">The input image cannot be opened. <para>无法打开输入镜像。</para></exception>
+    /// <exception cref="InvalidDataException">The table is malformed or a blob exceeds the output limit.
+    /// <para>表结构无效，或某数据块超出输出上限。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="UnpackOptions.MaximumOutputBytes"/> is negative.
+    /// <para><see cref="UnpackOptions.MaximumOutputBytes"/> 为负数。</para></exception>
+    /// <exception cref="IOException">Extraction would overwrite the input, an existing output refuses to be
+    /// replaced, or a reserved metadata name collides. <para>提取会覆盖输入、已存在的输出拒绝被替换，或保留的
+    /// 元数据文件名发生冲突。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    public static Task<IReadOnlyList<string>> UnpackAsync(string inputPath, string outputDirectory,
+        UnpackOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        options ??= new UnpackOptions();
+        ArgumentOutOfRangeException.ThrowIfNegative(options.MaximumOutputBytes);
+        cancellationToken.ThrowIfCancellationRequested();
+        var destination = Path.GetFullPath(outputDirectory);
+        var (names, staging) = StageBlobs(inputPath, destination, options, cancellationToken);
+        return UnpackCoreAsync(inputPath, destination, names, staging, options, cancellationToken);
+    }
+
+    /// <summary>Metadata publication and staged publication for <see cref="UnpackAsync"/>.</summary>
+    private static async Task<IReadOnlyList<string>> UnpackCoreAsync(string inputPath, string destination,
+        string[] names, string staging, UnpackOptions options, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await RepackMetadata.WriteAsync(new DtFormatHandler(), inputPath, staging, cancellationToken).ConfigureAwait(false);
+            return PublishStaged(names, staging, destination, options, cancellationToken);
+        }
+        finally
+        {
+            Directory.Delete(staging, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Validates the extraction targets and streams every overlay blob plus the original image into the staging directory.
+    /// <para>校验提取目标，并把每个 overlay 数据块与原始镜像流式写入暂存目录。</para>
+    /// </summary>
+    private static (string[] Names, string Staging) StageBlobs(string inputPath, string destination,
+        UnpackOptions options, CancellationToken cancellationToken)
+    {
         Directory.CreateDirectory(destination);
         using var input = File.OpenRead(inputPath);
         var (header, entries) = ReadTable(input);
@@ -140,17 +214,24 @@ public static partial class DtboFormat
                 input.Position = 0;
                 StreamCopy.CopyExactly(input, original, input.Length, cancellationToken);
             }
-            RepackMetadata.WriteAsync(new DtFormatHandler(), inputPath, staging, cancellationToken).GetAwaiter().GetResult();
-            cancellationToken.ThrowIfCancellationRequested();
-            foreach (var name in names)
-                File.Move(Path.Combine(staging, name), LocalFile(destination, name), options.Overwrite);
-            options.Progress?.Report(100, "DTBO overlays and manifest extracted.");
-            return names.Select(name => Path.Combine(destination, name)).ToArray();
         }
-        finally
+        catch
         {
             Directory.Delete(staging, recursive: true);
+            throw;
         }
+        return (names, staging);
+    }
+
+    /// <summary>Moves staged files to their destination names and reports completion.</summary>
+    private static IReadOnlyList<string> PublishStaged(string[] names, string staging, string destination,
+        UnpackOptions options, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        foreach (var name in names)
+            File.Move(Path.Combine(staging, name), LocalFile(destination, name), options.Overwrite);
+        options.Progress?.Report(100, "DTBO overlays and manifest extracted.");
+        return names.Select(name => Path.Combine(destination, name)).ToArray();
     }
 
     /// <summary>
@@ -421,7 +502,7 @@ public static partial class DtboFormat
     {
         var path = Path.GetFullPath(outputPath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(path);
         try
         {
             cancellationToken.ThrowIfCancellationRequested();

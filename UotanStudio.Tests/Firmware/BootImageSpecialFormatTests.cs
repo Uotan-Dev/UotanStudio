@@ -15,28 +15,28 @@ public sealed class BootImageSpecialFormatTests
 {
     [Fact]
     public void StartupResourceMagic_Logo_IsClassifiedWithoutClaimingPayloadParsing()
-        => AssertStartupResource("LOGO!!!!", ChromeOsTool.BootResourceType.Logo);
+        => AssertStartupResource("LOGO!!!!", RockchipResourceImage.BootResourceType.Logo);
 
     [Fact]
     public void StartupResourceMagic_Splash_IsClassifiedWithoutClaimingPayloadParsing()
-        => AssertStartupResource("SPLASH!!", ChromeOsTool.BootResourceType.Splash);
+        => AssertStartupResource("SPLASH!!", RockchipResourceImage.BootResourceType.Splash);
 
     [Fact]
     public void StartupResourceMagic_RockchipResource_IsClassifiedWithoutClaimingPayloadParsing()
-        => AssertStartupResource("RSCE", ChromeOsTool.BootResourceType.RockchipResource);
+        => AssertStartupResource("RSCE", RockchipResourceImage.BootResourceType.RockchipResource);
 
-    private static void AssertStartupResource(string magic, ChromeOsTool.BootResourceType expected)
+    private static void AssertStartupResource(string magic, RockchipResourceImage.BootResourceType expected)
     {
         var data = new byte[64];
         Encoding.ASCII.GetBytes(magic).CopyTo(data, 0);
 
-        Assert.Equal(expected, ChromeOsTool.DetectResource(data));
+        Assert.Equal(expected, RockchipResourceImage.DetectResource(data));
     }
 
     [Fact]
     public void StartupResourceTruncatedMagic_IsNotRecognized()
     {
-        Assert.Equal(ChromeOsTool.BootResourceType.Unknown, ChromeOsTool.DetectResource("RS"u8.ToArray()));
+        Assert.Equal(RockchipResourceImage.BootResourceType.Unknown, RockchipResourceImage.DetectResource("RS"u8.ToArray()));
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public sealed class BootImageSpecialFormatTests
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(776), 4);
         data.AsSpan(1536, 4).Fill(0xA5);
 
-        var parsed = ChromeOsTool.ParseRockchipResource(data);
+        var parsed = RockchipResourceImage.ParseRockchipResource(data);
 
         var entry = Assert.Single(parsed.Entries);
         Assert.Equal((ushort)1, parsed.Version);
@@ -70,7 +70,7 @@ public sealed class BootImageSpecialFormatTests
         "RSCE"u8.CopyTo(data);
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(12), 1);
 
-        Assert.Throws<InvalidDataException>(() => ChromeOsTool.ParseRockchipResource(data));
+        Assert.Throws<InvalidDataException>(() => RockchipResourceImage.ParseRockchipResource(data));
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public sealed class BootImageSpecialFormatTests
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(772), 2);
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(776), 1);
 
-        Assert.Throws<InvalidDataException>(() => ChromeOsTool.ParseRockchipResource(data));
+        Assert.Throws<InvalidDataException>(() => RockchipResourceImage.ParseRockchipResource(data));
     }
 
     [Fact]
@@ -106,11 +106,11 @@ public sealed class BootImageSpecialFormatTests
             var source = Path.Combine(root, "resource.img");
             await File.WriteAllBytesAsync(source, data, TestContext.Current.CancellationToken);
 
-            var metadata = ChromeOsTool.ReadRockchipResourceMetadata(source);
+            var metadata = RockchipResourceImage.ReadRockchipResourceMetadata(source);
             Assert.Equal(["logo.bin", "splash.bin"], metadata.Entries.Select(entry => entry.Name));
 
             var output = Path.Combine(root, "out");
-            var count = ChromeOsTool.ExtractRockchipResource(
+            var count = RockchipResourceImage.ExtractRockchipResource(
                 source, output, new HashSet<string>(["splash.bin"], StringComparer.OrdinalIgnoreCase),
                 cancellationToken: TestContext.Current.CancellationToken);
 
@@ -131,7 +131,7 @@ public sealed class BootImageSpecialFormatTests
             var repackResult = await new BootImageFormatHandler().PackAsync(
                 handlerOutput, repacked, TestContext.Current.CancellationToken);
             Assert.True(repackResult.Success, repackResult.Summary);
-            Assert.Single(ChromeOsTool.ReadRockchipResourceMetadata(repacked).Entries);
+            Assert.Single(RockchipResourceImage.ReadRockchipResourceMetadata(repacked).Entries);
         }
         finally
         {
@@ -153,10 +153,10 @@ public sealed class BootImageSpecialFormatTests
                 TestContext.Current.CancellationToken);
             var package = Path.Combine(root, "resource.img");
 
-            Assert.Equal(2, ChromeOsTool.BuildRockchipResource(
+            Assert.Equal(2, RockchipResourceImage.BuildRockchipResource(
                 source, package, TestContext.Current.CancellationToken));
             var output = Path.Combine(root, "out");
-            Assert.Equal(2, ChromeOsTool.ExtractRockchipResource(
+            Assert.Equal(2, RockchipResourceImage.ExtractRockchipResource(
                 package, output, cancellationToken: TestContext.Current.CancellationToken));
             Assert.Equal([1, 2, 3], File.ReadAllBytes(Path.Combine(output, "logo.bin")));
             Assert.Equal([4, 5, 6, 7], File.ReadAllBytes(Path.Combine(output, "splash.bin")));

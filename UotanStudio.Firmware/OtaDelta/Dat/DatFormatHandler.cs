@@ -213,7 +213,7 @@ internal sealed class DatFormatHandler : IFormatHandler
         {
             try
             {
-                DatReader.Unpack(transferListPath, dataPath, outputImagePath, brotliCompressed, progress);
+                DatReader.Unpack(transferListPath, dataPath, outputImagePath, brotliCompressed, progress, cancellationToken);
                 var bytes = new FileInfo(outputImagePath).Length;
                 return FirmwareOpResult.Ok(
                     $"Reconstructed {outputName}.img ({bytes} bytes) from DAT transfer list v{transferList.Version}. " +

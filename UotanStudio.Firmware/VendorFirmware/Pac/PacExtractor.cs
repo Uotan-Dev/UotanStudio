@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.VendorFirmware.Pac;
 namespace UotanStudio.Firmware.VendorFirmware.Pac;
 
@@ -170,7 +171,7 @@ internal static class PacExtractor
             var parentDirectory = Path.GetDirectoryName(fullPath)
                 ?? throw new InvalidDataException($"PAC entry has no output directory: {fileName}");
             Directory.CreateDirectory(parentDirectory);
-            var tempPath = fullPath + ".tmp-" + Guid.NewGuid().ToString("N");
+            var tempPath = TempFileHelper.CreateAdjacentPath(fullPath);
             try
             {
                 using (var fo = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))

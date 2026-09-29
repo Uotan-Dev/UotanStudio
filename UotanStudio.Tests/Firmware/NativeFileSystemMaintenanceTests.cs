@@ -34,7 +34,8 @@ public sealed class NativeFileSystemMaintenanceTests
         var data = new byte[4];
         await input.ReadExactlyAsync(data, TestContext.Current.CancellationToken);
         Assert.Equal(0x4018u, BinaryPrimitives.ReadUInt32LittleEndian(data) & 0x4018u);
-        var tree = await tools.RunAsync("fsck.f2fs", ["-t", tools.PathForTool(output, TestContext.Current.CancellationToken)],
+        var outputPath = await tools.PathForToolAsync(output, TestContext.Current.CancellationToken);
+        var tree = await tools.RunAsync("fsck.f2fs", ["-t", outputPath],
             TestContext.Current.CancellationToken);
         NativeFileSystemTools.RequireSuccess("fsck.f2fs", tree);
         Assert.Contains("build.prop", tree.Output, StringComparison.Ordinal);
@@ -126,8 +127,9 @@ public sealed class NativeFileSystemMaintenanceTests
 
         Assert.True(new FileInfo(destination).Length < new FileInfo(source).Length);
         Assert.Equal(hash, await HashAsync(source));
+        var destinationPath = await tools.PathForToolAsync(destination, TestContext.Current.CancellationToken);
         NativeFileSystemTools.RequireSuccess("e2fsck", await tools.RunAsync(
-            "e2fsck", ["-fn", tools.PathForTool(destination, TestContext.Current.CancellationToken)], TestContext.Current.CancellationToken));
+            "e2fsck", ["-fn", destinationPath], TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -147,8 +149,9 @@ public sealed class NativeFileSystemMaintenanceTests
 
         Assert.Equal(original, await HashAsync(source));
         Assert.True(new FileInfo(output).Length < new FileInfo(raw).Length);
+        var outputToolPath = await tools.PathForToolAsync(output, TestContext.Current.CancellationToken);
         NativeFileSystemTools.RequireSuccess("e2fsck", await tools.RunAsync("e2fsck",
-            ["-fn", tools.PathForTool(output, TestContext.Current.CancellationToken)], TestContext.Current.CancellationToken));
+            ["-fn", outputToolPath], TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -193,8 +196,9 @@ public sealed class NativeFileSystemMaintenanceTests
 
         Assert.Equal(original, await HashAsync(source));
         Assert.True(new FileInfo(destination).Length < new FileInfo(source).Length);
+        var repairedPath = await tools.PathForToolAsync(destination, TestContext.Current.CancellationToken);
         NativeFileSystemTools.RequireSuccess("e2fsck", await tools.RunAsync("e2fsck",
-            ["-fn", tools.PathForTool(destination, TestContext.Current.CancellationToken)], TestContext.Current.CancellationToken));
+            ["-fn", repairedPath], TestContext.Current.CancellationToken));
     }
 
     private static async Task<NativeFileSystemTools> AvailableToolsAsync(string name)
@@ -225,8 +229,9 @@ public sealed class NativeFileSystemMaintenanceTests
         {
             stream.SetLength(128L * 1024 * 1024);
         }
+        var toolPath = await tools.PathForToolAsync(path, TestContext.Current.CancellationToken);
         NativeFileSystemTools.RequireSuccess("mke2fs", await tools.RunAsync("mke2fs",
-            ["-F", "-t", "ext4", tools.PathForTool(path, TestContext.Current.CancellationToken)], TestContext.Current.CancellationToken));
+            ["-F", "-t", "ext4", toolPath], TestContext.Current.CancellationToken));
     }
 
     private static async Task<byte[]> HashAsync(string path)

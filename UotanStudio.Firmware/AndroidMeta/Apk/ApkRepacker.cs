@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.IO.Hashing;
 using System.Text;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.AndroidMeta.Apk;
 
@@ -98,7 +99,7 @@ internal static class ApkRepacker
             Directory.CreateDirectory(directory);
         }
 
-        var tempPath = outputPath + ".tmp";
+        var tempPath = TempFileHelper.CreateAdjacentPath(outputPath);
         try
         {
             using (var output = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, FileOptions.SequentialScan))

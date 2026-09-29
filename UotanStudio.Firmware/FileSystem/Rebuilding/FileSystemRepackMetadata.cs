@@ -109,7 +109,7 @@ internal static class FileSystemRepackMetadata
                     break;
             }
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or FileSystemException or NotSupportedException)
         {
             System.Diagnostics.Debug.WriteLine($"Failed to generate filesystem metadata: {ex.Message}");
         }

@@ -69,7 +69,7 @@ public sealed partial class OppReader
             }
 
             var outputPath = Path.Combine(outputDir, sanitized);
-            ValidateOutputPath(outputDir, outputPath);
+            OppOutputPathGuard.Validate(outputDir, outputPath);
 
             if (File.Exists(outputPath) && !overwrite)
             {

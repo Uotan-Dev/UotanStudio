@@ -287,486 +287,704 @@ internal static class RegisterAnalyzer
     private static LinearItem Process(Instruction insn, MethodContext ctx, State state, MethodResolver? resolver, DecompileOptions options)
     {
         var item = new LinearItem(insn);
-        var m = insn.Mnemonic;
-        var ops = insn.Operands;
+        var mnemonic = insn.Mnemonic;
 
-
-        if (m is "const/4" or "const/16" or "const" or "const/high16"
+        if (mnemonic is "const/4" or "const/16" or "const" or "const/high16"
             or "const-wide/16" or "const-wide/32" or "const-wide" or "const-wide/high16")
         {
-            var a = IntAt(ops, 0);
-            var lit = LiteralAt(ops, 1);
-            if (a is int ra && lit is not null)
-            {
-                SetReg(state, ra, new LiteralExpr(lit.Value));
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessConstFamily(insn, state, options, item);
         }
 
-        if (m is "const-string" or "const-string/jumbo")
+        if (mnemonic is "const-string" or "const-string/jumbo")
         {
-            var a = IntAt(ops, 0);
-            var value = ops.Count > 1 ? ops[1] as string : null;
-            if (a is int ra)
-            {
-                SetReg(state, ra, new StringExpr(value ?? string.Empty));
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessConstString(insn, state, options, item);
         }
 
-        if (m == "const-class")
+        if (mnemonic == "const-class")
         {
-            var a = IntAt(ops, 0);
-            var t = TypeRefAt(ops, 1);
-            if (a is int ra && t is not null)
-            {
-                SetReg(state, ra, new ClassLiteralExpr(DexFile.FormatDescriptor(t.Descriptor)));
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessConstClass(insn, state, options, item);
         }
 
-
-        if (m is "move-result" or "move-result-wide" or "move-result-object")
+        if (mnemonic is "move-result" or "move-result-wide" or "move-result-object")
         {
-            var a = IntAt(ops, 0);
-            if (a is int ra && state.PendingResult is not null)
-            {
-                SetReg(state, ra, state.PendingResult);
-                if (m == "move-result-wide") state.Regs.Remove(ra + 1);
-                state.PendingResult = null;
-            }
-
-            return item;
+            return ProcessMoveResult(insn, state, item);
         }
 
-        if (m == "move-exception")
+        if (mnemonic == "move-exception")
         {
-            var a = IntAt(ops, 0);
-            if (a is int ra)
-            {
-                SetReg(state, ra, new LocalExpr(RegisterName(ctx, ra), "java.lang.Throwable"));
-            }
-
-            item.Stmt = new RawCommentStmt(FormatRaw(insn)) { Offset = insn.Offset };
-            return item;
+            return ProcessMoveException(insn, ctx, state, item);
         }
 
-
-        if (m == "move" || m == "move/from16" || m == "move/16"
-            || m == "move-wide" || m == "move-wide/from16" || m == "move-wide/16"
-            || m == "move-object" || m == "move-object/from16" || m == "move-object/16")
+        if (mnemonic == "move" || mnemonic == "move/from16" || mnemonic == "move/16"
+            || mnemonic == "move-wide" || mnemonic == "move-wide/from16" || mnemonic == "move-wide/16"
+            || mnemonic == "move-object" || mnemonic == "move-object/from16" || mnemonic == "move-object/16")
         {
-            var a = IntAt(ops, 0);
-            var b = IntAt(ops, 1);
-            if (a is int ra && b is int rb)
-            {
-                var value = RegValue(state, ctx, rb);
-                SetReg(state, ra, value);
-                if (m.StartsWith("move-wide", System.StringComparison.Ordinal)) state.Regs.Remove(ra + 1);
-                item.Stmt = new AssignStmt(new LocalExpr(RegisterName(ctx, ra)), value) { Offset = insn.Offset };
-            }
-
-            return item;
+            return ProcessMove(insn, ctx, state, item);
         }
 
-
-        if (m.StartsWith("iget", System.StringComparison.Ordinal) || m.StartsWith("sget", System.StringComparison.Ordinal))
+        if (mnemonic.StartsWith("iget", System.StringComparison.Ordinal) || mnemonic.StartsWith("sget", System.StringComparison.Ordinal))
         {
-            var isStatic = m.StartsWith("sget", System.StringComparison.Ordinal);
-            var f = FieldRefAt(ops, isStatic ? 1 : 2);
-            if (f is null)
-            {
-                item.Stmt = new RawCommentStmt(FormatRaw(insn)) { Offset = insn.Offset };
-                return item;
-            }
-
-            var a = IntAt(ops, 0);
-            var b = isStatic ? null : IntAt(ops, 1);
-            if (a is int ra)
-            {
-                var target = isStatic ? null : RegValue(state, ctx, b ?? 0);
-                SetReg(state, ra, new FieldExpr(target, f.OwnerClass, f.Name, f.Type, isStatic));
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessFieldGet(insn, ctx, state, options, item);
         }
 
-
-        if (m.StartsWith("iput", System.StringComparison.Ordinal) || m.StartsWith("sput", System.StringComparison.Ordinal))
+        if (mnemonic.StartsWith("iput", System.StringComparison.Ordinal) || mnemonic.StartsWith("sput", System.StringComparison.Ordinal))
         {
-            var isStatic = m.StartsWith("sput", System.StringComparison.Ordinal);
-            var f = FieldRefAt(ops, isStatic ? 1 : 2);
-            if (f is null)
-            {
-                item.Stmt = new RawCommentStmt(FormatRaw(insn)) { Offset = insn.Offset };
-                return item;
-            }
-
-            var a = IntAt(ops, 0);
-            var b = isStatic ? null : IntAt(ops, 1);
-            if (a is int ra)
-            {
-                var target = new FieldExpr(isStatic ? null : RegValue(state, ctx, b ?? 0), f.OwnerClass, f.Name, f.Type, isStatic);
-                item.Stmt = new AssignStmt(target, RegValue(state, ctx, ra)) { Offset = insn.Offset };
-            }
-
-            return item;
+            return ProcessFieldPut(insn, ctx, state, item);
         }
 
-
-        if (m.StartsWith("aget", System.StringComparison.Ordinal))
+        if (mnemonic.StartsWith("aget", System.StringComparison.Ordinal))
         {
-            var a = IntAt(ops, 0);
-            var b = IntAt(ops, 1);
-            var c = IntAt(ops, 2);
-            if (a is int ra && b is int rb && c is int rc)
-            {
-                SetReg(state, ra, new ArrayAccessExpr(ElementTypeOf(m), RegValue(state, ctx, rb), RegValue(state, ctx, rc)));
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessArrayGet(insn, ctx, state, options, item);
         }
 
-        if (m.StartsWith("aput", System.StringComparison.Ordinal))
+        if (mnemonic.StartsWith("aput", System.StringComparison.Ordinal))
         {
-            var a = IntAt(ops, 0);
-            var b = IntAt(ops, 1);
-            var c = IntAt(ops, 2);
-            if (a is int ra && b is int rb && c is int rc)
-            {
-                item.Stmt = new AssignStmt(
-                    new ArrayAccessExpr(ElementTypeOf(m), RegValue(state, ctx, rb), RegValue(state, ctx, rc)),
-                    RegValue(state, ctx, ra))
-                { Offset = insn.Offset };
-            }
-
-            return item;
+            return ProcessArrayPut(insn, ctx, state, item);
         }
 
-        if (m == "array-length")
+        if (mnemonic == "array-length")
         {
-            var a = IntAt(ops, 0);
-            var b = IntAt(ops, 1);
-            if (a is int ra && b is int rb)
-            {
-                SetReg(state, ra, new FieldExpr(RegValue(state, ctx, rb), string.Empty, "length", "int", isStatic: false));
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessArrayLength(insn, ctx, state, options, item);
         }
 
-
-        if (m == "new-instance")
+        if (mnemonic == "new-instance")
         {
-            var a = IntAt(ops, 0);
-            var t = TypeRefAt(ops, 1);
-            if (a is int ra && t is not null)
-            {
-                var created = new NewInstanceExpr(DexFile.FormatDescriptor(t.Descriptor));
-                SetReg(state, ra, created);
-                state.PendingNew = created;
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessNewInstance(insn, state, options, item);
         }
 
-        if (m == "new-array")
+        if (mnemonic == "new-array")
         {
-            var a = IntAt(ops, 0);
-            var t = TypeRefAt(ops, 1);
-            if (a is int ra && t is not null)
-            {
-                state.PendingResult = new NewArrayExpr(DexFile.FormatDescriptor(t.Descriptor), RegValue(state, ctx, ra));
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessNewArray(insn, ctx, state, options, item);
         }
 
-        if (m is "filled-new-array" or "filled-new-array/range")
+        if (mnemonic is "filled-new-array" or "filled-new-array/range")
         {
-            var regs = RegsAt(ops, 0);
-            var t = TypeRefAt(ops, 1);
-            if (regs is not null && t is not null)
-            {
-                var formatted = DexFile.FormatDescriptor(t.Descriptor);
-                var elementType = formatted.EndsWith("[]", System.StringComparison.Ordinal) ? formatted[..^2] : formatted;
-                var created = new NewArrayExpr(elementType, size: null);
-                foreach (var r in regs)
-                {
-                    created.Initializers.Add(RegValue(state, ctx, r));
-                }
-
-                state.PendingResult = created;
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessFilledNewArray(insn, ctx, state, options, item);
         }
 
-        if (m == "fill-array-data")
+        if (mnemonic == "fill-array-data")
         {
-            item.Stmt = new RawCommentStmt(FormatRaw(insn)) { Offset = insn.Offset };
-            return item;
+            return ProcessFillArrayData(insn, item);
         }
 
-
-        if (m.StartsWith("invoke-", System.StringComparison.Ordinal)
-            && !m.Contains("polymorphic", System.StringComparison.Ordinal)
-            && !m.Contains("custom", System.StringComparison.Ordinal)
-            && !m.Contains("object-init", System.StringComparison.Ordinal))
+        if (mnemonic.StartsWith("invoke-", System.StringComparison.Ordinal)
+            && !mnemonic.Contains("polymorphic", System.StringComparison.Ordinal)
+            && !mnemonic.Contains("custom", System.StringComparison.Ordinal)
+            && !mnemonic.Contains("object-init", System.StringComparison.Ordinal))
         {
-            var regs = RegsAt(ops, 0);
-            var methodRef = MethodRefAt(ops, 1);
-            if (regs is null || methodRef is null)
-            {
-                item.Stmt = new RawCommentStmt(FormatRaw(insn)) { Offset = insn.Offset };
-                return item;
-            }
-
-            var isStatic = m.Contains("static", System.StringComparison.Ordinal);
-            var isSuper = m.Contains("super", System.StringComparison.Ordinal);
-            var isInit = methodRef.Name == "<init>";
-            var receiver = regs.Length > 0 ? RegValue(state, ctx, regs[0]) : null;
-            var argStart = isStatic ? 0 : 1;
-
-            if (isInit)
-            {
-                if (receiver is NewInstanceExpr pending && ReferenceEquals(state.PendingNew, pending))
-                {
-
-
-                    pending.Args = ResolveArgs(regs, argStart, methodRef, state, ctx, resolver);
-                    state.PendingNew = null;
-                }
-                else if (receiver is LocalExpr { Name: "this" })
-                {
-                    var isThisCall = ctx.ClassName == methodRef.OwnerClass;
-                    item.Stmt = new ExprStmt(new ConstructorCallExpr(isThisCall, ResolveArgs(regs, argStart, methodRef, state, ctx, resolver)))
-                    {
-                        Offset = insn.Offset
-                    };
-                }
-                else
-                {
-                    item.Stmt = new RawCommentStmt(FormatRaw(insn)) { Offset = insn.Offset };
-                }
-
-                return item;
-            }
-
-            var call = new MethodCallExpr(
-                isStatic ? null : receiver,
-                methodRef.OwnerClass,
-                methodRef.Name,
-                methodRef.ReturnType,
-                ResolveArgs(regs, argStart, methodRef, state, ctx, resolver),
-                isStatic,
-                isSuperCall: isSuper && receiver is LocalExpr { Name: "this" });
-            item.Stmt = new ExprStmt(call) { Offset = insn.Offset };
-            if (methodRef.ReturnType != "void") state.PendingResult = call;
-            return item;
+            return ProcessInvoke(insn, ctx, state, resolver, item);
         }
 
-
-        if (m == "return-void")
+        if (mnemonic == "return-void")
         {
-            item.Stmt = new ReturnStmt(null) { Offset = insn.Offset };
-            return item;
+            return ProcessReturnVoid(insn, item);
         }
 
-        if (m is "return" or "return-wide" or "return-object")
+        if (mnemonic is "return" or "return-wide" or "return-object")
         {
-            var a = IntAt(ops, 0);
-            item.Stmt = new ReturnStmt(a is int ra ? RegValue(state, ctx, ra) : null) { Offset = insn.Offset };
-            return item;
+            return ProcessReturn(insn, ctx, state, item);
         }
 
-        if (m == "throw")
+        if (mnemonic == "throw")
         {
-            var a = IntAt(ops, 0);
-            item.Stmt = new ThrowStmt(a is int ra ? RegValue(state, ctx, ra) : new UnknownExpr("?")) { Offset = insn.Offset };
-            return item;
+            return ProcessThrow(insn, ctx, state, item);
         }
 
-
-        if (m.StartsWith("if-", System.StringComparison.Ordinal))
+        if (mnemonic.StartsWith("if-", System.StringComparison.Ordinal))
         {
-            if (m.EndsWith("z", System.StringComparison.Ordinal))
-            {
-                var a = IntAt(ops, 0);
-                if (a is int ra)
-                {
-                    item.IfCondition = new BinaryExpr(IfOpZ(m), RegValue(state, ctx, ra), new LiteralExpr(0));
-                }
-            }
-            else
-            {
-                var a = IntAt(ops, 0);
-                var b = IntAt(ops, 1);
-                if (a is int ra && b is int rb)
-                {
-                    item.IfCondition = new BinaryExpr(IfOp(m), RegValue(state, ctx, ra), RegValue(state, ctx, rb));
-                }
-            }
-
-            return item;
+            return ProcessIf(insn, ctx, state, item);
         }
 
-        if (m is "packed-switch" or "sparse-switch")
+        if (mnemonic is "packed-switch" or "sparse-switch")
         {
-            var a = IntAt(ops, 0);
-            if (a is int ra)
-            {
-                item.SwitchValue = RegValue(state, ctx, ra);
-            }
-
-            return item;
+            return ProcessSwitch(insn, ctx, state, item);
         }
 
-
-        var op = ArithOp(m);
-        if (op is not null)
+        var operatorSymbol = ArithOp(mnemonic);
+        if (operatorSymbol is not null)
         {
-            var a = IntAt(ops, 0);
-            var b = IntAt(ops, 1);
-            JavaExpr left;
-            JavaExpr right;
-            if (m.Contains("/lit8", System.StringComparison.Ordinal) || m.Contains("/lit16", System.StringComparison.Ordinal))
-            {
-                var lit = LiteralAt(ops, 2);
-                left = b is int rb ? RegValue(state, ctx, rb) : new UnknownExpr("?");
-                right = lit is not null ? new LiteralExpr(lit.Value) : new UnknownExpr("?");
-            }
-            else if (m.Contains("/2addr", System.StringComparison.Ordinal))
-            {
-                left = a is int ra ? RegValue(state, ctx, ra) : new UnknownExpr("?");
-                right = b is int rb ? RegValue(state, ctx, rb) : new UnknownExpr("?");
-            }
-            else
-            {
-                var c = IntAt(ops, 2);
-                left = b is int rb ? RegValue(state, ctx, rb) : new UnknownExpr("?");
-                right = c is int rc ? RegValue(state, ctx, rc) : new UnknownExpr("?");
-            }
-
-            if (a is int raSet)
-            {
-                SetReg(state, raSet, new BinaryExpr(op, left, right));
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessArith(insn, ctx, state, operatorSymbol, options, item);
         }
 
-        if (m is "rsub-int" or "rsub-int/lit8")
+        if (mnemonic is "rsub-int" or "rsub-int/lit8")
         {
-            var a = IntAt(ops, 0);
-            var b = IntAt(ops, 1);
-            var lit = LiteralAt(ops, 2);
-            if (a is int ra && lit is not null)
-            {
-                SetReg(state, ra, new BinaryExpr("-", new LiteralExpr(lit.Value), b is int rb ? RegValue(state, ctx, rb) : new UnknownExpr("?")));
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessReverseSubtract(insn, ctx, state, options, item);
         }
 
-
-        if (m is "neg-int" or "neg-long" or "neg-float" or "neg-double" or "not-int" or "not-long")
+        if (mnemonic is "neg-int" or "neg-long" or "neg-float" or "neg-double" or "not-int" or "not-long")
         {
-            var a = IntAt(ops, 0);
-            var b = IntAt(ops, 1);
-            if (a is int ra && b is int rb)
-            {
-                SetReg(state, ra, new UnaryExpr(m.StartsWith("not", System.StringComparison.Ordinal) ? "~" : "-", RegValue(state, ctx, rb)));
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessUnary(insn, ctx, state, options, item);
         }
 
-
-        if (m.Contains("-to-", System.StringComparison.Ordinal))
+        if (mnemonic.Contains("-to-", System.StringComparison.Ordinal))
         {
-            var a = IntAt(ops, 0);
-            var b = IntAt(ops, 1);
-            if (a is int ra && b is int rb)
-            {
-                var target = m[(m.IndexOf("-to-", System.StringComparison.Ordinal) + 4)..];
-                SetReg(state, ra, new CastExpr(target, RegValue(state, ctx, rb)));
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessNumericCast(insn, ctx, state, options, item);
         }
 
-
-        if (m is "cmp-long" or "cmpl-float" or "cmpg-float" or "cmpl-double" or "cmpg-double")
+        if (mnemonic is "cmp-long" or "cmpl-float" or "cmpg-float" or "cmpl-double" or "cmpg-double")
         {
-            var a = IntAt(ops, 0);
-            var b = IntAt(ops, 1);
-            var c = IntAt(ops, 2);
-            if (a is int ra && b is int rb && c is int rc)
-            {
-                var owner = m.Contains("long", System.StringComparison.Ordinal) ? "java.lang.Long"
-                    : m.Contains("float", System.StringComparison.Ordinal) ? "java.lang.Float"
-                    : "java.lang.Double";
-                var compare = new MethodCallExpr(null, owner, "compare", "int",
-                    [RegValue(state, ctx, rb), RegValue(state, ctx, rc)], isStatic: true);
-                SetReg(state, ra, compare);
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessCompare(insn, ctx, state, options, item);
         }
 
-
-        if (m == "check-cast")
+        if (mnemonic == "check-cast")
         {
-            var a = IntAt(ops, 0);
-            var t = TypeRefAt(ops, 1);
-            if (a is int ra && t is not null)
-            {
-                SetReg(state, ra, new CastExpr(DexFile.FormatDescriptor(t.Descriptor), RegValue(state, ctx, ra)));
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessCheckCast(insn, ctx, state, options, item);
         }
 
-        if (m == "instance-of")
+        if (mnemonic == "instance-of")
         {
-            var a = IntAt(ops, 0);
-            var b = IntAt(ops, 1);
-            var t = TypeRefAt(ops, 2);
-            if (a is int ra && b is int rb && t is not null)
-            {
-                SetReg(state, ra, new InstanceOfExpr(RegValue(state, ctx, rb), DexFile.FormatDescriptor(t.Descriptor)));
-            }
-
-            item.Stmt = GuideComment(insn, options);
-            return item;
+            return ProcessInstanceOf(insn, ctx, state, options, item);
         }
 
-
-        if (m == "goto" || m == "goto/16" || m == "goto/32" || m == "nop")
+        if (mnemonic == "goto" || mnemonic == "goto/16" || mnemonic == "goto/32" || mnemonic == "nop")
         {
             return item;
         }
 
         item.Stmt = new RawCommentStmt(FormatRaw(insn)) { Offset = insn.Offset };
+        return item;
+    }
+
+    /// <summary>Stores a const or const-wide literal into its destination register.
+    /// <para>把 const 或 const-wide 字面量存入目标寄存器。</para></summary>
+    private static LinearItem ProcessConstFamily(Instruction insn, State state, DecompileOptions options, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var literal = LiteralAt(operands, 1);
+        if (dest is int targetRegister && literal is not null)
+        {
+            SetReg(state, targetRegister, new LiteralExpr(literal.Value));
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Stores a const-string literal into its destination register.
+    /// <para>把 const-string 字符串常量存入目标寄存器。</para></summary>
+    private static LinearItem ProcessConstString(Instruction insn, State state, DecompileOptions options, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var stringValue = operands.Count > 1 ? operands[1] as string : null;
+        if (dest is int targetRegister)
+        {
+            SetReg(state, targetRegister, new StringExpr(stringValue ?? string.Empty));
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Stores a const-class class literal into its destination register.
+    /// <para>把 const-class 的类字面量存入目标寄存器。</para></summary>
+    private static LinearItem ProcessConstClass(Instruction insn, State state, DecompileOptions options, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var typeRef = TypeRefAt(operands, 1);
+        if (dest is int targetRegister && typeRef is not null)
+        {
+            SetReg(state, targetRegister, new ClassLiteralExpr(DexFile.FormatDescriptor(typeRef.Descriptor)));
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Consumes the pending invoke result into the destination register of a move-result instruction.
+    /// <para>把待用的调用结果消费到 move-result 指令的目标寄存器。</para></summary>
+    private static LinearItem ProcessMoveResult(Instruction insn, State state, LinearItem item)
+    {
+        var dest = IntAt(insn.Operands, 0);
+        if (dest is int targetRegister && state.PendingResult is not null)
+        {
+            SetReg(state, targetRegister, state.PendingResult);
+            if (insn.Mnemonic == "move-result-wide")
+            {
+                state.Regs.Remove(targetRegister + 1);
+            }
+
+            state.PendingResult = null;
+        }
+
+        return item;
+    }
+
+    /// <summary>Binds the caught throwable to the destination register of move-exception.
+    /// <para>把捕获的异常对象绑定到 move-exception 的目标寄存器。</para></summary>
+    private static LinearItem ProcessMoveException(Instruction insn, MethodContext ctx, State state, LinearItem item)
+    {
+        var dest = IntAt(insn.Operands, 0);
+        if (dest is int targetRegister)
+        {
+            SetReg(state, targetRegister, new LocalExpr(RegisterName(ctx, targetRegister), "java.lang.Throwable"));
+        }
+
+        item.Stmt = new RawCommentStmt(FormatRaw(insn)) { Offset = insn.Offset };
+        return item;
+    }
+
+    /// <summary>Copies a source register into the destination register for the move families.
+    /// <para>对 move 族指令把源寄存器复制到目标寄存器。</para></summary>
+    private static LinearItem ProcessMove(Instruction insn, MethodContext ctx, State state, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var source = IntAt(operands, 1);
+        if (dest is int targetRegister && source is int sourceRegister)
+        {
+            var value = RegValue(state, ctx, sourceRegister);
+            SetReg(state, targetRegister, value);
+            if (insn.Mnemonic.StartsWith("move-wide", System.StringComparison.Ordinal))
+            {
+                state.Regs.Remove(targetRegister + 1);
+            }
+
+            item.Stmt = new AssignStmt(new LocalExpr(RegisterName(ctx, targetRegister)), value) { Offset = insn.Offset };
+        }
+
+        return item;
+    }
+
+    /// <summary>Reads an instance or static field into the destination register for the iget/sget families.
+    /// <para>对 iget/sget 族指令把实例或静态字段读入目标寄存器。</para></summary>
+    private static LinearItem ProcessFieldGet(Instruction insn, MethodContext ctx, State state, DecompileOptions options, LinearItem item)
+    {
+        var mnemonic = insn.Mnemonic;
+        var operands = insn.Operands;
+        var isStatic = mnemonic.StartsWith("sget", System.StringComparison.Ordinal);
+        var fieldRef = FieldRefAt(operands, isStatic ? 1 : 2);
+        if (fieldRef is null)
+        {
+            item.Stmt = new RawCommentStmt(FormatRaw(insn)) { Offset = insn.Offset };
+            return item;
+        }
+
+        var dest = IntAt(operands, 0);
+        var objectRegister = isStatic ? null : IntAt(operands, 1);
+        if (dest is int targetRegister)
+        {
+            var receiver = isStatic ? null : RegValue(state, ctx, objectRegister ?? 0);
+            SetReg(state, targetRegister, new FieldExpr(receiver, fieldRef.OwnerClass, fieldRef.Name, fieldRef.Type, isStatic));
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Stores a register value into an instance or static field for the iput/sput families.
+    /// <para>对 iput/sput 族指令把寄存器值存入实例或静态字段。</para></summary>
+    private static LinearItem ProcessFieldPut(Instruction insn, MethodContext ctx, State state, LinearItem item)
+    {
+        var mnemonic = insn.Mnemonic;
+        var operands = insn.Operands;
+        var isStatic = mnemonic.StartsWith("sput", System.StringComparison.Ordinal);
+        var fieldRef = FieldRefAt(operands, isStatic ? 1 : 2);
+        if (fieldRef is null)
+        {
+            item.Stmt = new RawCommentStmt(FormatRaw(insn)) { Offset = insn.Offset };
+            return item;
+        }
+
+        var value = IntAt(operands, 0);
+        var objectRegister = isStatic ? null : IntAt(operands, 1);
+        if (value is int valueRegister)
+        {
+            var target = new FieldExpr(isStatic ? null : RegValue(state, ctx, objectRegister ?? 0), fieldRef.OwnerClass, fieldRef.Name, fieldRef.Type, isStatic);
+            item.Stmt = new AssignStmt(target, RegValue(state, ctx, valueRegister)) { Offset = insn.Offset };
+        }
+
+        return item;
+    }
+
+    /// <summary>Reads an array element into the destination register for the aget family.
+    /// <para>对 aget 族指令把数组元素读入目标寄存器。</para></summary>
+    private static LinearItem ProcessArrayGet(Instruction insn, MethodContext ctx, State state, DecompileOptions options, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var array = IntAt(operands, 1);
+        var index = IntAt(operands, 2);
+        if (dest is int targetRegister && array is int arrayRegister && index is int indexRegister)
+        {
+            SetReg(state, targetRegister, new ArrayAccessExpr(ElementTypeOf(insn.Mnemonic), RegValue(state, ctx, arrayRegister), RegValue(state, ctx, indexRegister)));
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Stores a register value into an array element for the aput family.
+    /// <para>对 aput 族指令把寄存器值存入数组元素。</para></summary>
+    private static LinearItem ProcessArrayPut(Instruction insn, MethodContext ctx, State state, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var value = IntAt(operands, 0);
+        var array = IntAt(operands, 1);
+        var index = IntAt(operands, 2);
+        if (value is int valueRegister && array is int arrayRegister && index is int indexRegister)
+        {
+            item.Stmt = new AssignStmt(
+                new ArrayAccessExpr(ElementTypeOf(insn.Mnemonic), RegValue(state, ctx, arrayRegister), RegValue(state, ctx, indexRegister)),
+                RegValue(state, ctx, valueRegister))
+            { Offset = insn.Offset };
+        }
+
+        return item;
+    }
+
+    /// <summary>Records the array length access of array-length into the destination register.
+    /// <para>把 array-length 的数组长度访问记录到目标寄存器。</para></summary>
+    private static LinearItem ProcessArrayLength(Instruction insn, MethodContext ctx, State state, DecompileOptions options, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var array = IntAt(operands, 1);
+        if (dest is int targetRegister && array is int arrayRegister)
+        {
+            SetReg(state, targetRegister, new FieldExpr(RegValue(state, ctx, arrayRegister), string.Empty, "length", "int", isStatic: false));
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Records a new-instance object and marks it as the pending constructor receiver.
+    /// <para>记录 new-instance 对象并标记为待用的构造器接收者。</para></summary>
+    private static LinearItem ProcessNewInstance(Instruction insn, State state, DecompileOptions options, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var typeRef = TypeRefAt(operands, 1);
+        if (dest is int targetRegister && typeRef is not null)
+        {
+            var created = new NewInstanceExpr(DexFile.FormatDescriptor(typeRef.Descriptor));
+            SetReg(state, targetRegister, created);
+            state.PendingNew = created;
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Parks a new-array expression as the pending result.
+    /// <para>把 new-array 表达式暂存为待用结果。</para></summary>
+    private static LinearItem ProcessNewArray(Instruction insn, MethodContext ctx, State state, DecompileOptions options, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var typeRef = TypeRefAt(operands, 1);
+        if (dest is int targetRegister && typeRef is not null)
+        {
+            state.PendingResult = new NewArrayExpr(DexFile.FormatDescriptor(typeRef.Descriptor), RegValue(state, ctx, targetRegister));
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Builds a filled-new-array initializer list and parks it as the pending result.
+    /// <para>构建 filled-new-array 的初始化列表并暂存为待用结果。</para></summary>
+    private static LinearItem ProcessFilledNewArray(Instruction insn, MethodContext ctx, State state, DecompileOptions options, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var registers = RegsAt(operands, 0);
+        var typeRef = TypeRefAt(operands, 1);
+        if (registers is not null && typeRef is not null)
+        {
+            var formatted = DexFile.FormatDescriptor(typeRef.Descriptor);
+            var elementType = formatted.EndsWith("[]", System.StringComparison.Ordinal) ? formatted[..^2] : formatted;
+            var created = new NewArrayExpr(elementType, size: null);
+            foreach (var register in registers)
+            {
+                created.Initializers.Add(RegValue(state, ctx, register));
+            }
+
+            state.PendingResult = created;
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Emits fill-array-data as a raw smali comment.
+    /// <para>把 fill-array-data 输出为原始 smali 注释。</para></summary>
+    private static LinearItem ProcessFillArrayData(Instruction insn, LinearItem item)
+    {
+        item.Stmt = new RawCommentStmt(FormatRaw(insn)) { Offset = insn.Offset };
+        return item;
+    }
+
+    /// <summary>Rebuilds an invoke instruction into a method or constructor call and parks non-void results.
+    /// <para>把 invoke 指令重建为方法或构造器调用，并把非 void 结果暂存。</para></summary>
+    private static LinearItem ProcessInvoke(Instruction insn, MethodContext ctx, State state, MethodResolver? resolver, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var argRegisters = RegsAt(operands, 0);
+        var methodRef = MethodRefAt(operands, 1);
+        if (argRegisters is null || methodRef is null)
+        {
+            item.Stmt = new RawCommentStmt(FormatRaw(insn)) { Offset = insn.Offset };
+            return item;
+        }
+
+        var mnemonic = insn.Mnemonic;
+        var isStatic = mnemonic.Contains("static", System.StringComparison.Ordinal);
+        var isSuper = mnemonic.Contains("super", System.StringComparison.Ordinal);
+        var isInit = methodRef.Name == "<init>";
+        var receiver = argRegisters.Length > 0 ? RegValue(state, ctx, argRegisters[0]) : null;
+        var argStart = isStatic ? 0 : 1;
+
+        if (isInit)
+        {
+            if (receiver is NewInstanceExpr pending && ReferenceEquals(state.PendingNew, pending))
+            {
+                pending.Args = ResolveArgs(argRegisters, argStart, methodRef, state, ctx, resolver);
+                state.PendingNew = null;
+            }
+            else if (receiver is LocalExpr { Name: "this" })
+            {
+                var isThisCall = ctx.ClassName == methodRef.OwnerClass;
+                item.Stmt = new ExprStmt(new ConstructorCallExpr(isThisCall, ResolveArgs(argRegisters, argStart, methodRef, state, ctx, resolver)))
+                {
+                    Offset = insn.Offset
+                };
+            }
+            else
+            {
+                item.Stmt = new RawCommentStmt(FormatRaw(insn)) { Offset = insn.Offset };
+            }
+
+            return item;
+        }
+
+        var call = new MethodCallExpr(
+            isStatic ? null : receiver,
+            methodRef.OwnerClass,
+            methodRef.Name,
+            methodRef.ReturnType,
+            ResolveArgs(argRegisters, argStart, methodRef, state, ctx, resolver),
+            isStatic,
+            isSuperCall: isSuper && receiver is LocalExpr { Name: "this" });
+        item.Stmt = new ExprStmt(call) { Offset = insn.Offset };
+        if (methodRef.ReturnType != "void")
+        {
+            state.PendingResult = call;
+        }
+
+        return item;
+    }
+
+    /// <summary>Emits a return statement without a value for return-void.
+    /// <para>为 return-void 生成不带值的 return 语句。</para></summary>
+    private static LinearItem ProcessReturnVoid(Instruction insn, LinearItem item)
+    {
+        item.Stmt = new ReturnStmt(null) { Offset = insn.Offset };
+        return item;
+    }
+
+    /// <summary>Emits a return statement carrying the source register for the return families.
+    /// <para>对 return 族指令生成携带源寄存器的 return 语句。</para></summary>
+    private static LinearItem ProcessReturn(Instruction insn, MethodContext ctx, State state, LinearItem item)
+    {
+        var source = IntAt(insn.Operands, 0);
+        item.Stmt = new ReturnStmt(source is int sourceRegister ? RegValue(state, ctx, sourceRegister) : null) { Offset = insn.Offset };
+        return item;
+    }
+
+    /// <summary>Emits a throw statement for the exception object register.
+    /// <para>为异常对象寄存器生成 throw 语句。</para></summary>
+    private static LinearItem ProcessThrow(Instruction insn, MethodContext ctx, State state, LinearItem item)
+    {
+        var source = IntAt(insn.Operands, 0);
+        item.Stmt = new ThrowStmt(source is int sourceRegister ? RegValue(state, ctx, sourceRegister) : new UnknownExpr("?")) { Offset = insn.Offset };
+        return item;
+    }
+
+    /// <summary>Rebuilds the comparison condition of an if or if-eqz style branch.
+    /// <para>为 if 或 if-eqz 风格分支重建比较条件。</para></summary>
+    private static LinearItem ProcessIf(Instruction insn, MethodContext ctx, State state, LinearItem item)
+    {
+        var mnemonic = insn.Mnemonic;
+        var operands = insn.Operands;
+        if (mnemonic.EndsWith("z", System.StringComparison.Ordinal))
+        {
+            var test = IntAt(operands, 0);
+            if (test is int testRegister)
+            {
+                item.IfCondition = new BinaryExpr(IfOpZ(mnemonic), RegValue(state, ctx, testRegister), new LiteralExpr(0));
+            }
+        }
+        else
+        {
+            var left = IntAt(operands, 0);
+            var right = IntAt(operands, 1);
+            if (left is int leftRegister && right is int rightRegister)
+            {
+                item.IfCondition = new BinaryExpr(IfOp(mnemonic), RegValue(state, ctx, leftRegister), RegValue(state, ctx, rightRegister));
+            }
+        }
+
+        return item;
+    }
+
+    /// <summary>Records the selector register value of a packed- or sparse-switch.
+    /// <para>记录 packed/sparse-switch 的选择子寄存器值。</para></summary>
+    private static LinearItem ProcessSwitch(Instruction insn, MethodContext ctx, State state, LinearItem item)
+    {
+        var selector = IntAt(insn.Operands, 0);
+        if (selector is int selectorRegister)
+        {
+            item.SwitchValue = RegValue(state, ctx, selectorRegister);
+        }
+
+        return item;
+    }
+
+    /// <summary>Rebuilds an arithmetic or bitwise operation, including its literal and two-address forms.
+    /// <para>重建算术或位运算，包括其字面量与双地址形式。</para></summary>
+    private static LinearItem ProcessArith(Instruction insn, MethodContext ctx, State state, string operatorSymbol, DecompileOptions options, LinearItem item)
+    {
+        var mnemonic = insn.Mnemonic;
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var first = IntAt(operands, 1);
+        JavaExpr left;
+        JavaExpr right;
+        if (mnemonic.Contains("/lit8", System.StringComparison.Ordinal) || mnemonic.Contains("/lit16", System.StringComparison.Ordinal))
+        {
+            var literal = LiteralAt(operands, 2);
+            left = first is int sourceRegister ? RegValue(state, ctx, sourceRegister) : new UnknownExpr("?");
+            right = literal is not null ? new LiteralExpr(literal.Value) : new UnknownExpr("?");
+        }
+        else if (mnemonic.Contains("/2addr", System.StringComparison.Ordinal))
+        {
+            left = dest is int leftRegister ? RegValue(state, ctx, leftRegister) : new UnknownExpr("?");
+            right = first is int sourceRegister ? RegValue(state, ctx, sourceRegister) : new UnknownExpr("?");
+        }
+        else
+        {
+            var second = IntAt(operands, 2);
+            left = first is int sourceRegister ? RegValue(state, ctx, sourceRegister) : new UnknownExpr("?");
+            right = second is int secondRegister ? RegValue(state, ctx, secondRegister) : new UnknownExpr("?");
+        }
+
+        if (dest is int destRegister)
+        {
+            SetReg(state, destRegister, new BinaryExpr(operatorSymbol, left, right));
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Rebuilds rsub-int where the literal is the left operand.
+    /// <para>重建字面量作为左操作数的 rsub-int。</para></summary>
+    private static LinearItem ProcessReverseSubtract(Instruction insn, MethodContext ctx, State state, DecompileOptions options, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var source = IntAt(operands, 1);
+        var literal = LiteralAt(operands, 2);
+        if (dest is int targetRegister && literal is not null)
+        {
+            SetReg(state, targetRegister, new BinaryExpr("-", new LiteralExpr(literal.Value), source is int sourceRegister ? RegValue(state, ctx, sourceRegister) : new UnknownExpr("?")));
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Rebuilds a negation or bitwise-not operation.
+    /// <para>重建取负或按位取反运算。</para></summary>
+    private static LinearItem ProcessUnary(Instruction insn, MethodContext ctx, State state, DecompileOptions options, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var source = IntAt(operands, 1);
+        if (dest is int targetRegister && source is int sourceRegister)
+        {
+            var operatorSymbol = insn.Mnemonic.StartsWith("not", System.StringComparison.Ordinal) ? "~" : "-";
+            SetReg(state, targetRegister, new UnaryExpr(operatorSymbol, RegValue(state, ctx, sourceRegister)));
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Rebuilds a numeric conversion such as int-to-long as a cast.
+    /// <para>把 int-to-long 之类的数值转换重建为转型。</para></summary>
+    private static LinearItem ProcessNumericCast(Instruction insn, MethodContext ctx, State state, DecompileOptions options, LinearItem item)
+    {
+        var mnemonic = insn.Mnemonic;
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var source = IntAt(operands, 1);
+        if (dest is int targetRegister && source is int sourceRegister)
+        {
+            var targetType = mnemonic[(mnemonic.IndexOf("-to-", System.StringComparison.Ordinal) + 4)..];
+            SetReg(state, targetRegister, new CastExpr(targetType, RegValue(state, ctx, sourceRegister)));
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Rebuilds a cmp-style comparison as a static boxed compare call.
+    /// <para>把 cmp 风格的比较重建为静态的装箱 compare 调用。</para></summary>
+    private static LinearItem ProcessCompare(Instruction insn, MethodContext ctx, State state, DecompileOptions options, LinearItem item)
+    {
+        var mnemonic = insn.Mnemonic;
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var first = IntAt(operands, 1);
+        var second = IntAt(operands, 2);
+        if (dest is int targetRegister && first is int firstRegister && second is int secondRegister)
+        {
+            var owner = mnemonic.Contains("long", System.StringComparison.Ordinal) ? "java.lang.Long"
+                : mnemonic.Contains("float", System.StringComparison.Ordinal) ? "java.lang.Float"
+                : "java.lang.Double";
+            var compare = new MethodCallExpr(null, owner, "compare", "int",
+                [RegValue(state, ctx, firstRegister), RegValue(state, ctx, secondRegister)], isStatic: true);
+            SetReg(state, targetRegister, compare);
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Wraps the destination register value in a cast for check-cast.
+    /// <para>对 check-cast 把目标寄存器的值包上一层转型。</para></summary>
+    private static LinearItem ProcessCheckCast(Instruction insn, MethodContext ctx, State state, DecompileOptions options, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var typeRef = TypeRefAt(operands, 1);
+        if (dest is int targetRegister && typeRef is not null)
+        {
+            SetReg(state, targetRegister, new CastExpr(DexFile.FormatDescriptor(typeRef.Descriptor), RegValue(state, ctx, targetRegister)));
+        }
+
+        item.Stmt = GuideComment(insn, options);
+        return item;
+    }
+
+    /// <summary>Records an instanceof test into the destination register.
+    /// <para>把 instanceof 判定结果记录到目标寄存器。</para></summary>
+    private static LinearItem ProcessInstanceOf(Instruction insn, MethodContext ctx, State state, DecompileOptions options, LinearItem item)
+    {
+        var operands = insn.Operands;
+        var dest = IntAt(operands, 0);
+        var source = IntAt(operands, 1);
+        var typeRef = TypeRefAt(operands, 2);
+        if (dest is int targetRegister && source is int sourceRegister && typeRef is not null)
+        {
+            SetReg(state, targetRegister, new InstanceOfExpr(RegValue(state, ctx, sourceRegister), DexFile.FormatDescriptor(typeRef.Descriptor)));
+        }
+
+        item.Stmt = GuideComment(insn, options);
         return item;
     }
 

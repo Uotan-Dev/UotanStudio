@@ -27,7 +27,7 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
     /// </param>
     /// <returns>The extra-device count from the superblock; <c>0</c> for a single-device image.
     /// <para>超级块中的外部设备数；单设备镜像为 <c>0</c>。</para></returns>
-    /// <exception cref="InvalidDataException">The superblock is invalid, or it declares extra devices
+    /// <exception cref="FileSystemCorruptedException">The superblock is invalid, or it declares extra devices
     /// without a device table. <para>超级块无效，或声明了外部设备却缺少设备表。</para></exception>
     /// <exception cref="EndOfStreamException">The file is shorter than the superblock window.
     /// <para>文件短于超级块窗口。</para></exception>
@@ -40,7 +40,7 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
         var parsed = ErofsSuperblock.FromBytes(superblock);
         if (parsed.ExtraDevices > 0 && !parsed.HasDeviceTable)
         {
-            throw new InvalidDataException("EROFS declares extra devices without a device table.");
+            throw new FileSystemCorruptedException("EROFS declares extra devices without a device table.");
         }
         return parsed.ExtraDevices;
     }
@@ -307,8 +307,8 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
     /// <para>已解包的目录树；若存在为其保留的重建参数，会优先走原镜像重建路径。</para></param>
     /// <param name="outputPath">Destination image file, overwritten by a successful build.
     /// <para>目标镜像文件；构建成功后被覆盖。</para></param>
-    /// <param name="cancellationToken">Token checked at task start and throughout preserved-image restoration.
-    /// <para>在任务开始与保留镜像重建全程检查的令牌。</para></param>
+    /// <param name="cancellationToken">Token checked at task start, throughout preserved-image restoration and during the image build.
+    /// <para>在任务开始、保留镜像重建与镜像构建全程检查的令牌。</para></param>
     /// <returns>An <c>Ok</c> result on success, possibly carrying rebuild-report metadata; a <c>Fail</c>
     /// result when the input is not a directory or the build fails.
     /// <para>成功时返回 <c>Ok</c> 结果（可能带有重建报告元数据）；输入不是目录或构建失败时返回 <c>Fail</c> 结果。</para></returns>
@@ -328,8 +328,8 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
     /// <para>目标镜像文件；构建成功后被覆盖。</para></param>
     /// <param name="progress">Reporter receiving byte progress for the building stage; <see langword="null"/>
     /// reports nothing. <para>接收构建阶段字节进度的回调；为 <see langword="null"/> 时不报告。</para></param>
-    /// <param name="cancellationToken">Token checked at task start and throughout preserved-image restoration.
-    /// <para>在任务开始与保留镜像重建全程检查的令牌。</para></param>
+    /// <param name="cancellationToken">Token checked at task start, throughout preserved-image restoration and during the image build.
+    /// <para>在任务开始、保留镜像重建与镜像构建全程检查的令牌。</para></param>
     /// <returns>An <c>Ok</c> result on success, possibly carrying rebuild-report metadata; a <c>Fail</c>
     /// result when the input is not a directory or the build fails.
     /// <para>成功时返回 <c>Ok</c> 结果（可能带有重建报告元数据）；输入不是目录或构建失败时返回 <c>Fail</c> 结果。</para></returns>
@@ -381,6 +381,7 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
                     Lz4HighCompression = lz4HighCompression,
                     CompressionLevel = compressionLevel,
                     LegacyCompatibility = legacyCompatibility,
+                    CancellationToken = cancellationToken,
                 }, progressSink);
 
                 return FirmwareOpResult.Ok($"Packed '{inputPath}' into '{outputPath}' (EROFS).");

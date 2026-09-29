@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.OtaDelta.Diff;
 namespace UotanStudio.Firmware.OtaDelta.Diff;
 
@@ -74,7 +75,7 @@ public static class DeltaEngine
             ct.ThrowIfCancellationRequested();
             var destination = Path.GetFullPath(outputPath);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            temporaryPath = destination + ".tmp-" + Guid.NewGuid().ToString("N");
+            temporaryPath = TempFileHelper.CreateAdjacentPath(destination);
             long sourceLength;
             long patchLength;
             using (var source = File.OpenRead(sourcePath))

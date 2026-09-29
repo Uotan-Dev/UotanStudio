@@ -1,5 +1,6 @@
 using UotanStudio.Firmware.BootSecurity.BootImage;
 using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.BootSecurity.Workflow;
 
@@ -77,7 +78,7 @@ internal sealed class SelinuxSwitchService
         parser.ParseFile(plan.BootPath);
         parser.Header.CommandLine = plan.UpdatedCommandLine;
         var bytes = BootImagePacker.Repack(parser);
-        var temp = outputPath + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temp = TempFileHelper.CreateAdjacentPath(outputPath);
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);

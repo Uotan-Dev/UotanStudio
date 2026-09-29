@@ -134,7 +134,7 @@ public sealed class DtFormatHandler : IFormatHandler, IRepackMetadataProvider
         => UotanStudio.Firmware.Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
-    private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
+    private async Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -144,8 +144,8 @@ public sealed class DtFormatHandler : IFormatHandler, IRepackMetadataProvider
 
             if (isDtbo)
             {
-                var written = DtboFormat.Unpack(filePath, outputDirectory, options, cancellationToken);
-                return Task.FromResult(FirmwareOpResult.Ok($"Extracted DTBO overlays and repack configuration to {outputDirectory}", entries: written));
+                var written = await DtboFormat.UnpackAsync(filePath, outputDirectory, options, cancellationToken).ConfigureAwait(false);
+                return FirmwareOpResult.Ok($"Extracted DTBO overlays and repack configuration to {outputDirectory}", entries: written);
             }
 
 
@@ -155,11 +155,11 @@ public sealed class DtFormatHandler : IFormatHandler, IRepackMetadataProvider
             File.WriteAllText(dtsPath, SerializeDts(tree));
             var summaryPath = Path.Combine(outputDirectory, Path.GetFileNameWithoutExtension(filePath) + ".fdt.txt");
             File.WriteAllText(summaryPath, Describe(tree));
-            return Task.FromResult(FirmwareOpResult.Ok($"Extracted DTS to {outputDirectory}", entries: [dtsPath, summaryPath]));
+            return FirmwareOpResult.Ok($"Extracted DTS to {outputDirectory}", entries: [dtsPath, summaryPath]);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
+            return FirmwareOpResult.Fail(ex.Message);
         }
     }
 

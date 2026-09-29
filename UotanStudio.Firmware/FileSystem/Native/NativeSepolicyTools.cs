@@ -64,7 +64,7 @@ internal sealed class NativeSepolicyTools(NativeFileSystemTools tools)
         AppendSelector(arguments, "-t", query?.TargetType);
         AppendSelector(arguments, "-c", query?.ObjectClass);
         AppendSelector(arguments, "-x", query?.Permission);
-        arguments.Add(tools.PathForTool(policyPath, cancellationToken));
+        arguments.Add(await tools.PathForToolAsync(policyPath, cancellationToken).ConfigureAwait(false));
 
         var result = await tools.RunAsync("sesearch", arguments, cancellationToken).ConfigureAwait(false);
         NativeFileSystemTools.RequireSuccess("sesearch", result);
@@ -116,7 +116,7 @@ internal sealed class NativeSepolicyTools(NativeFileSystemTools tools)
         {
             throw new FileNotFoundException("SELinux policy file was not found.", policyPath);
         }
-        var imagePath = tools.PathForTool(policyPath, cancellationToken);
+        var imagePath = await tools.PathForToolAsync(policyPath, cancellationToken).ConfigureAwait(false);
         var result = await tools.RunAsync("seinfo", ["-a", imagePath], cancellationToken).ConfigureAwait(false);
         NativeFileSystemTools.RequireSuccess("seinfo", result);
         return result;

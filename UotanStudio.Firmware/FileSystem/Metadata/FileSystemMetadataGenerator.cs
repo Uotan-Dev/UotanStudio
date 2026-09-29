@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
@@ -324,7 +325,7 @@ internal static class FileSystemMetadataGenerator
 
     private static void WriteAtomic(string path, string content)
     {
-        var temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(path);
         try
         {
             File.WriteAllText(temporary, content, Encoding.UTF8);

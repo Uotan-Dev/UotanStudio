@@ -177,12 +177,12 @@ internal sealed record F2fsInode
         var advise = node[OffsetAdvise];
         var extraSize = (node[OffsetInline] & ExtraAttrFlag) != 0 ? BinaryPrimitives.ReadUInt16LittleEndian(node[OffsetExtraIsize..]) : 0;
         if (extraSize % 4 != 0 || extraSize > F2fsNode.DefAddrsPerInode * 4)
-            throw new InvalidDataException("Invalid F2FS extra inode attribute size.");
+            throw new FileSystemCorruptedException("Invalid F2FS extra inode attribute size.");
         var compressed = (BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetFlags..]) & ComprFlag) != 0;
         if (compressed && extraSize < 36)
-            throw new InvalidDataException("F2FS compressed inode lacks compression extra attributes.");
+            throw new FileSystemCorruptedException("F2FS compressed inode lacks compression extra attributes.");
         if (compressed && node[393] is < 2 or > 8)
-            throw new InvalidDataException("Invalid F2FS compression cluster size.");
+            throw new FileSystemCorruptedException("Invalid F2FS compression cluster size.");
 
         return new F2fsInode
         {
@@ -301,7 +301,7 @@ internal sealed record F2fsInode
         var length = Math.Min((ulong)MaxInlineData, size);
         if (offset < 0 || offset > F2fsNode.InodeEndOffset || (long)length > F2fsNode.InodeEndOffset - offset)
         {
-            throw new InvalidDataException("F2FS inline data exceeds the inode bounds.");
+            throw new FileSystemCorruptedException("F2FS inline data exceeds the inode bounds.");
         }
 
         return node.Slice(offset, (int)length).ToArray();

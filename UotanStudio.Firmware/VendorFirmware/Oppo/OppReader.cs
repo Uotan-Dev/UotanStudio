@@ -17,10 +17,9 @@ public sealed partial class OppReader
 {
     private const int DefaultBufferSize = 81920;
 
-    internal const string ZipPassword = "flash@realme$50E7F7D847732396F1582CD62DD385ED7ABB0897";
-
     private readonly IOppCryptoProvider? _cryptoProvider;
     private readonly IOppLogger _logger;
+    private readonly ZipWrappedOfpPackage _zipWrappedOfpPackage;
 
     /// <summary>
     /// Initializes a new instance of the OppReader class.
@@ -38,6 +37,7 @@ public sealed partial class OppReader
     {
         _cryptoProvider = cryptoProvider;
         _logger = logger ?? NullOppLogger.Instance;
+        _zipWrappedOfpPackage = new ZipWrappedOfpPackage(_cryptoProvider, _logger);
         OppoInitializer.EnsureInitialized();
     }
 
@@ -73,13 +73,7 @@ public sealed partial class OppReader
     {
         Guard.ThrowIfNullOrWhiteSpace(filePath);
 
-        using var stream = new FileStream(
-            filePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            DefaultBufferSize,
-            FileOptions.SequentialScan);
+        using var stream = OpenPackageStream(filePath, async: false);
 
         return ReadMetadataFromStream(stream);
     }
@@ -124,13 +118,7 @@ public sealed partial class OppReader
     {
         Guard.ThrowIfNullOrWhiteSpace(filePath);
 
-        using var stream = new FileStream(
-            filePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            DefaultBufferSize,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        using var stream = OpenPackageStream(filePath, async: true);
 
         return await ReadMetadataFromStreamAsync(stream, cancellationToken).ConfigureAwait(false);
     }
@@ -163,9 +151,9 @@ public sealed partial class OppReader
         var fileSize = stream.Length;
 
 
-        if (format == OppFormat.OfpQc && IsZipFile(stream))
+        if (format == OppFormat.OfpQc && ZipWrappedOfpPackage.IsZipFile(stream))
         {
-            return ReadMetadataFromZipWrappedOfp(stream, fileSize);
+            return _zipWrappedOfpPackage.ReadMetadataFromZipWrappedOfp(stream, fileSize);
         }
 
 
@@ -243,13 +231,7 @@ public sealed partial class OppReader
     {
         Guard.ThrowIfNullOrWhiteSpace(filePath);
 
-        using var stream = new FileStream(
-            filePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            DefaultBufferSize,
-            FileOptions.SequentialScan);
+        using var stream = OpenPackageStream(filePath, async: false);
 
         return ParseFromStream(stream);
     }
@@ -294,13 +276,7 @@ public sealed partial class OppReader
     {
         Guard.ThrowIfNullOrWhiteSpace(filePath);
 
-        using var stream = new FileStream(
-            filePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            DefaultBufferSize,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        using var stream = OpenPackageStream(filePath, async: true);
 
         return await ParseFromStreamAsync(stream, cancellationToken).ConfigureAwait(false);
     }
@@ -334,7 +310,7 @@ public sealed partial class OppReader
 
         if (metadata.IsZipWrapped)
         {
-            return ParseZipWrappedArchive(stream, metadata);
+            return _zipWrappedOfpPackage.ParseZipWrappedArchive(stream, metadata);
         }
 
         var entries = ParseEntriesFromStream(stream, metadata);
@@ -438,13 +414,7 @@ public sealed partial class OppReader
         Guard.ThrowIfNullOrWhiteSpace(filePath);
         Guard.ThrowIfNullOrWhiteSpace(outputDir);
 
-        using var stream = new FileStream(
-            filePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            DefaultBufferSize,
-            FileOptions.SequentialScan);
+        using var stream = OpenPackageStream(filePath, async: false);
 
         return ExtractFromStream(stream, outputDir, options, progress);
     }
@@ -507,13 +477,7 @@ public sealed partial class OppReader
         Guard.ThrowIfNullOrWhiteSpace(filePath);
         Guard.ThrowIfNullOrWhiteSpace(outputDir);
 
-        using var stream = new FileStream(
-            filePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            DefaultBufferSize,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        using var stream = OpenPackageStream(filePath, async: true);
 
         return await ExtractFromStreamAsync(stream, outputDir, options, progress, cancellationToken).ConfigureAwait(false);
     }
@@ -627,8 +591,6 @@ public sealed partial class OppReader
         return Task.FromResult(result);
     }
 
-    #region Internal Core Implementation
-
     private IReadOnlyList<OppEntry> ParseEntriesFromStream(Stream stream, OppMetadata metadata)
     {
         var format = metadata.Format;
@@ -683,44 +645,19 @@ public sealed partial class OppReader
         HashSet<string>? selected,
         IProgress<OppExtractProgress>? progress, CancellationToken cancellationToken)
     {
-        var tempDir = Path.Combine(Path.GetTempPath(), $"UotanStudio.Oppo.Ofp.{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
+        var tempDir = ZipWrappedOfpPackage.CreateTemporaryDirectory();
 
         try
         {
-            ExtractZipToDirectory(stream, tempDir, cancellationToken);
+            ZipWrappedOfpPackage.ExtractZipToDirectory(stream, tempDir, cancellationToken);
 
-            var innerFiles = Directory.GetFiles(tempDir, "*.ofp", SearchOption.AllDirectories);
-            if (innerFiles.Length == 0)
-            {
-                innerFiles = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories);
-            }
-
-            if (innerFiles.Length == 0)
-            {
-                throw new InvalidOppFormatException("ZIP-wrapped OFP contains no inner firmware file.");
-            }
-
-            using var innerStream = new FileStream(
-                innerFiles[0],
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                DefaultBufferSize,
-                FileOptions.SequentialScan);
+            using var innerStream = ZipWrappedOfpPackage.OpenInnerOfpStream(tempDir);
 
             return ExtractEntriesCore(innerStream, archive, outputDir, overwrite, keyId, selected, progress, cancellationToken);
         }
         finally
         {
-            try
-            {
-                Directory.Delete(tempDir, true);
-            }
-            catch
-            {
-
-            }
+            ZipWrappedOfpPackage.DeleteTemporaryDirectory(tempDir);
         }
     }
 
@@ -759,7 +696,7 @@ public sealed partial class OppReader
             }
 
             var outputPath = FileExtraction.ResolvePath(outputDir, sanitized);
-            ValidateOutputPath(outputDir, outputPath);
+            OppOutputPathGuard.Validate(outputDir, outputPath);
 
             if (File.Exists(outputPath) && !overwrite)
             {
@@ -858,225 +795,6 @@ public sealed partial class OppReader
         }
     }
 
-    #endregion
-
-    #region ZIP-wrapped OFP support
-
-    /// <summary>
-    /// Checks if the stream is a ZIP file.
-    /// <para>检查流是否为 ZIP 文件。</para>
-    /// </summary>
-    private static bool IsZipFile(Stream stream)
-    {
-        if (stream.Length < 2)
-        {
-            return false;
-        }
-
-        var originalPosition = stream.Position;
-        try
-        {
-            stream.Position = 0;
-            var header = new byte[2];
-            var bytesRead = stream.Read(header, 0, 2);
-            return bytesRead == 2 && header[0] == 0x50 && header[1] == 0x4B;
-        }
-        finally
-        {
-            stream.Position = originalPosition;
-        }
-    }
-
-    /// <summary>
-    /// Reads metadata from a ZIP-wrapped OFP file.
-    /// <para>从 ZIP 包裹的 OFP 文件中读取元信息。</para>
-    /// </summary>
-    private OppMetadata ReadMetadataFromZipWrappedOfp(Stream stream, long fileSize)
-    {
-        _logger.Information("Detected ZIP-wrapped OFP file, extracting inner OFP...");
-
-
-        var tempDir = Path.Combine(Path.GetTempPath(), $"UotanStudio.Oppo.Ofp.{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
-
-        try
-        {
-            ExtractZipToDirectory(stream, tempDir);
-
-
-            var innerFiles = Directory.GetFiles(tempDir, "*.ofp", SearchOption.AllDirectories);
-            if (innerFiles.Length == 0)
-            {
-
-                innerFiles = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories);
-            }
-
-            if (innerFiles.Length == 0)
-            {
-                throw new InvalidOppFormatException("ZIP-wrapped OFP contains no inner firmware file.");
-            }
-
-
-            using var innerStream = new FileStream(
-                innerFiles[0],
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                DefaultBufferSize,
-                FileOptions.SequentialScan);
-
-            var innerFormat = OppFormatDetector.DetectFormatFromStream(innerStream);
-            var parser = ParserRegistry.GetParser(innerFormat);
-            var metadata = parser.ParseMetadata(innerStream, innerStream.Length, _cryptoProvider);
-
-
-            return new OppMetadata
-            {
-                FormatName = metadata.FormatName,
-                Format = metadata.Format,
-                FormatVersion = metadata.FormatVersion,
-                FileSize = fileSize,
-                EntryCount = metadata.EntryCount,
-                ProjectName = metadata.ProjectName,
-                CpuModel = metadata.CpuModel,
-                FlashType = metadata.FlashType,
-                FirmwareName = metadata.FirmwareName,
-                ProjectId = metadata.ProjectId,
-                IsZipWrapped = true,
-                KeyId = metadata.KeyId
-            };
-        }
-        finally
-        {
-            try
-            {
-                Directory.Delete(tempDir, true);
-            }
-            catch
-            {
-
-            }
-        }
-    }
-
-    /// <summary>
-    /// Extracts a ZIP stream to the specified directory using the fixed password.
-    /// <para>使用固定密码将 ZIP 流解压到指定目录。</para>
-    /// </summary>
-    private static void ExtractZipToDirectory(Stream stream, string outputDir, CancellationToken cancellationToken = default)
-    {
-        stream.Position = 0;
-
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-
-        foreach (var entry in archive.Entries)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var isDirectory = entry.FullName.EndsWith('/');
-            var outputPath = FileExtraction.ResolvePath(outputDir, isDirectory ? entry.FullName.TrimEnd('/') : entry.FullName);
-            if (isDirectory)
-            {
-                Directory.CreateDirectory(outputPath);
-                continue;
-            }
-
-            var entryDir = Path.GetDirectoryName(outputPath);
-            if (!string.IsNullOrEmpty(entryDir) && !Directory.Exists(entryDir))
-            {
-                Directory.CreateDirectory(entryDir);
-            }
-
-            try
-            {
-                FileExtraction.WriteAtomic(outputPath, output =>
-                {
-                    using var entryStream = entry.Open();
-                    StreamCopy.CopyExactly(entryStream, output, entry.Length, cancellationToken);
-                    if (entryStream.ReadByte() != -1)
-                        throw new InvalidDataException("ZIP entry exceeds its declared length.");
-                    cancellationToken.ThrowIfCancellationRequested();
-                });
-            }
-            catch (InvalidDataException ex)
-            {
-                throw new InvalidOppFormatException(
-                    "The OFP file is wrapped in a password-protected ZIP archive that could not be decrypted " +
-                    "with the built-in password. Please extract the ZIP file manually and then load the inner OFP file directly.",
-                    ex);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Fully parses an archive (metadata + entries) from a ZIP-wrapped OFP file.
-    /// <para>从 ZIP 包裹的 OFP 文件中完整解析归档（元数据 + 条目）。</para>
-    /// </summary>
-    private OppArchive ParseZipWrappedArchive(Stream stream, OppMetadata metadata)
-    {
-        _logger.Information("Parsing entries from ZIP-wrapped OFP file...");
-
-        var tempDir = Path.Combine(Path.GetTempPath(), $"UotanStudio.Oppo.Ofp.{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
-
-        try
-        {
-            ExtractZipToDirectory(stream, tempDir);
-
-            var innerFiles = Directory.GetFiles(tempDir, "*.ofp", SearchOption.AllDirectories);
-            if (innerFiles.Length == 0)
-            {
-                innerFiles = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories);
-            }
-
-            if (innerFiles.Length == 0)
-            {
-                throw new InvalidOppFormatException("ZIP-wrapped OFP contains no inner firmware file.");
-            }
-
-            using var innerStream = new FileStream(
-                innerFiles[0],
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                DefaultBufferSize,
-                FileOptions.SequentialScan);
-
-            var entries = ParseEntriesFromStream(innerStream, metadata);
-
-            return new OppArchive
-            {
-                Metadata = metadata,
-                Entries = entries
-            };
-        }
-        finally
-        {
-            try
-            {
-                Directory.Delete(tempDir, true);
-            }
-            catch
-            {
-
-            }
-        }
-    }
-
-    #endregion
-
-    #region Helpers
-
-    private static void ValidateOutputPath(string outputDir, string filePath)
-    {
-        var fullOutputDir = Path.GetFullPath(outputDir);
-        var fullFilePath = Path.GetFullPath(filePath);
-        if (!fullFilePath.StartsWith(fullOutputDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
-            !fullFilePath.Equals(fullOutputDir, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOppFormatException($"Entry path '{filePath}' attempts to write outside the output directory.");
-        }
-    }
-
     private static readonly HashSet<char> InvalidFileNameChars = [.. Path.GetInvalidFileNameChars()];
 
     /// <summary>
@@ -1094,5 +812,28 @@ public sealed partial class OppReader
         return result.ToString();
     }
 
-    #endregion
+    /// <summary>
+    /// Opens the package file for reading with the parameter block shared by all path-based entries.
+    /// <para>以所有按路径入口共享的参数块打开固件包文件以进行读取。</para>
+    /// </summary>
+    /// <param name="filePath">
+    /// Path to the package file.
+    /// <para>固件包文件路径。</para>
+    /// </param>
+    /// <param name="async">
+    /// Indicates whether the handle is opened for asynchronous I/O.
+    /// <para>指示是否以异步 I/O 方式打开句柄。</para>
+    /// </param>
+    /// <returns>
+    /// The opened read-only package stream.
+    /// <para>已打开的只读包流。</para>
+    /// </returns>
+    private static FileStream OpenPackageStream(string filePath, bool async) =>
+        new(
+            filePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            DefaultBufferSize,
+            (async ? FileOptions.Asynchronous : FileOptions.None) | FileOptions.SequentialScan);
 }

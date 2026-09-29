@@ -10,6 +10,12 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Parser;
 public sealed partial class ErofsParser
 {
     /// <summary>
+    /// Upper bound of the logical cluster size shift supported by the compact index: with at most this many bits, a 4-byte slot still encodes two logical clusters.
+    /// <para>紧凑索引支持的逻辑簇位数上限：不超过该位数时，一个 4 字节槽位仍能编码两个逻辑簇。</para>
+    /// </summary>
+    private const int CompactIndexMaxLclusterBits = 14;
+
+    /// <summary>
     /// Loads a logical cluster entry from compact or full indexes.
     /// <para>从紧凑或完整索引加载逻辑簇条目。</para>
     /// </summary>
@@ -21,10 +27,10 @@ public sealed partial class ErofsParser
         int lclusterBits,
         int totalIdx,
         long lcn,
-        out long ebase,
+        out long indexBase,
         out int compacted4bInitial,
         out int compacted2b)
-        => LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn, out ebase, out compacted4bInitial, out compacted2b, cachedIndex: null);
+        => LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn, out indexBase, out compacted4bInitial, out compacted2b, cachedIndex: null);
 
     /// <summary>
     /// Loads a logical cluster entry from compact or full indexes, with an optional bounded
@@ -39,16 +45,16 @@ public sealed partial class ErofsParser
         int lclusterBits,
         int totalIdx,
         long lcn,
-        out long ebase,
+        out long indexBase,
         out int compacted4bInitial,
         out int compacted2b,
         IndexReadWindow? cachedIndex)
     {
 
-        ebase = headerOffset + ZErofsMapHeader.Size;
+        indexBase = headerOffset + ZErofsMapHeader.Size;
         if (inode.DataLayout == ErofsInode.DataLayoutCompactIndexes)
         {
-            compacted4bInitial = (int)(((32 - ebase % 32) / 4) & 7);
+            compacted4bInitial = (int)(((32 - indexBase % 32) / 4) & 7);
             compacted2b = 0;
             if ((advise & ZErofsMapHeader.AdviseCompacted2B) != 0 && compacted4bInitial < totalIdx)
             {
@@ -101,7 +107,7 @@ public sealed partial class ErofsParser
         pos += l * (1 << amortizedShift);
 
         int vcnt;
-        if ((1 << amortizedShift) == 4 && lclusterBits <= 14)
+        if ((1 << amortizedShift) == 4 && lclusterBits <= CompactIndexMaxLclusterBits)
         {
             vcnt = 2;
         }
@@ -111,7 +117,7 @@ public sealed partial class ErofsParser
         }
         else
         {
-            throw new InvalidDataException(
+            throw new FileSystemUnsupportedFeatureException(
                 $"Unsupported compact index layout (shift {amortizedShift}, lcluster bits {lclusterBits}).");
         }
 
@@ -121,10 +127,10 @@ public sealed partial class ErofsParser
         var packStartRel = (int)(pos - (headerOffset + ZErofsMapHeader.Size) - bytesInPack);
         if (packStartRel < 0)
         {
-            throw new InvalidDataException("Compact index pack exceeds the image bounds.");
+            throw new FileSystemCorruptedException("Compact index pack exceeds the image bounds.");
         }
 
-        var ebase = headerOffset + ZErofsMapHeader.Size;
+        var indexBase = headerOffset + ZErofsMapHeader.Size;
         byte[] index;
         if (cachedIndex is not null)
         {
@@ -132,7 +138,7 @@ public sealed partial class ErofsParser
         }
         else
         {
-            index = ReadInodeMetadata(nid, checked(ebase + packStartRel), packSize, "compact index pack");
+            index = ReadInodeMetadata(nid, checked(indexBase + packStartRel), packSize, "compact index pack");
             packStartRel = 0;
         }
 
@@ -208,7 +214,7 @@ public sealed partial class ErofsParser
 
                     if (prevLo3 <= 1)
                     {
-                        throw new InvalidDataException($"Corrupt big-pcluster delta for nid {nid}.");
+                        throw new FileSystemCorruptedException($"Corrupt big-pcluster delta for nid {nid}.");
                     }
 
                     j -= (int)prevLo3 - 2;
@@ -233,7 +239,7 @@ public sealed partial class ErofsParser
         var indexOffset = headerOffset + ZErofsMapHeader.Size + FullIndexStartPad + lcn * ZErofsLclusterIndex.Size;
         if (indexOffset < 0 || indexOffset > InodeMetadataLength(nid) - ZErofsLclusterIndex.Size)
         {
-            throw new InvalidDataException($"Full index entry {lcn} exceeds the image bounds.");
+            throw new FileSystemCorruptedException($"Full index entry {lcn} exceeds the image bounds.");
         }
 
         var relative = 0;
@@ -270,7 +276,7 @@ public sealed partial class ErofsParser
         var byteOffset = packStartRel + (bitPos >> 3);
         if (byteOffset + 4 > index.Length)
         {
-            throw new InvalidDataException("Compact index bits exceed the image bounds.");
+            throw new FileSystemCorruptedException("Compact index bits exceed the image bounds.");
         }
 
         var v = BinaryPrimitives.ReadUInt32LittleEndian(index.AsSpan(byteOffset, 4)) >> (bitPos & 7);

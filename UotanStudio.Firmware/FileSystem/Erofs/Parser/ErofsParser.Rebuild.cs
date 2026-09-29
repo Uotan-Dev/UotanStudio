@@ -125,14 +125,14 @@ public sealed partial class ErofsParser
             var header = ZErofsMapHeader.FromBytes(ReadInodeMetadata(entry.Nid, offset, ZErofsMapHeader.Size, "rebuild compression header"));
             if (header.IsFragmentInode)
             {
-                if (_superblock.PackedNid == 0) throw new InvalidDataException("Missing EROFS packed inode.");
+                if (_superblock.PackedNid == 0) throw new FileSystemCorruptedException("Missing EROFS packed inode.");
                 var packed = ReadInode(_superblock.PackedNid);
                 isCompressed = packed.IsCompressed;
                 if (isCompressed)
                 {
                     var packedOffset = AlignUp(InodeOffset(_superblock.PackedNid) + packed.InlineDataOffset, 8);
                     header = ZErofsMapHeader.FromBytes(ReadInodeMetadata(_superblock.PackedNid, packedOffset, ZErofsMapHeader.Size, "packed compression header"));
-                    if (header.IsFragmentInode) throw new InvalidDataException("Recursive EROFS packed inode.");
+                    if (header.IsFragmentInode) throw new FileSystemCorruptedException("Recursive EROFS packed inode.");
                 }
             }
             if (isCompressed)
@@ -164,7 +164,7 @@ public sealed partial class ErofsParser
                     algorithm = (ErofsCompressionAlgorithm)header.Algorithm;
                 }
                 if (!codecs.ContainsKey(algorithm))
-                    throw new InvalidDataException($"Undeclared EROFS compression algorithm {algorithm} for '{entry.Path}'.");
+                    throw new FileSystemCorruptedException($"Undeclared EROFS compression algorithm {algorithm} for '{entry.Path}'.");
                 if (!(inode.DataLayout == ErofsInode.DataLayoutCompressed && header.HasExtents))
                 {
                     var logicalBits = _superblock.BlockSizeBits + (header.ClusterBits & ZErofsMapHeader.LclusterBitsMask);
@@ -203,7 +203,7 @@ public sealed partial class ErofsParser
             var length = BinaryPrimitives.ReadUInt16LittleEndian(ReadBytes(offset, 2, "compression configuration length"));
             var expected = id < 2 ? 14 : 6;
             if (length != expected)
-                throw new InvalidDataException($"Invalid EROFS compression configuration length for algorithm {id}: {length} (expected {expected}).");
+                throw new FileSystemCorruptedException($"Invalid EROFS compression configuration length for algorithm {id}: {length} (expected {expected}).");
             var bytes = ReadBytes(offset + 2, length, "compression configuration");
             var options = new ErofsOptions { Algorithm = (ErofsCompressionAlgorithm)id, BlockSize = _blockSize, MaxPclusterSize = _blockSize };
             switch (options.Algorithm)

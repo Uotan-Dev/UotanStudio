@@ -154,12 +154,13 @@ public sealed partial class ErofsBuilder
     /// Writes sorted directory entries into blocks with separate entry and name areas.
     /// <para>将排序后的目录条目按块写入，每块包含独立的条目区与名称区。</para>
     /// </summary>
-    private static void WriteDirBlocks(Stream output, BuildNode node, int blockSize)
+    private static void WriteDirBlocks(Stream output, BuildNode node, int blockSize, CancellationToken token)
     {
         var sorted = BuildDirEntries(node);
         var index = 0;
         for (var block = 0L; block < node.DirBlocks; block++)
         {
+            token.ThrowIfCancellationRequested();
             if (index >= sorted.Count)
             {
                 break;

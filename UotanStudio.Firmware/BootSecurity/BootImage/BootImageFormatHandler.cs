@@ -17,8 +17,8 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
     void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
     {
         if (File.Exists(sourcePath) &&
-            ChromeOsTool.DetectResource(ReadPrefix(sourcePath, 4096)) ==
-            ChromeOsTool.BootResourceType.RockchipResource)
+            RockchipResourceImage.DetectResource(ReadPrefix(sourcePath, 4096)) ==
+            RockchipResourceImage.BootResourceType.RockchipResource)
         {
             metadata.CanPackDirectory = true;
             metadata.Configuration["resource"] = "RSCE";
@@ -84,7 +84,7 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
                 && header[6] == (byte)'O' && header[7] == (byte)'T';
             var chromeOs = DetectChromeOsFile(filePath).IsChromeOs;
             return read >= 8 && (isAndroid || isVendor || chromeOs ||
-                ChromeOsTool.DetectResource(header[..read].ToArray()) != ChromeOsTool.BootResourceType.Unknown ||
+                RockchipResourceImage.DetectResource(header[..read].ToArray()) != RockchipResourceImage.BootResourceType.Unknown ||
                 TegraBlobTool.IsTegraBlob(header[..read]) ||
                 ZImageTool.IsZImage(header[..read]));
         }
@@ -115,177 +115,244 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var magic = ReadMagic(filePath);
-                if (magic == BootMagic)
-                {
-                    var h = BootImageParser.ReadHeaderFile(filePath);
-                    var role = BootImageRoleResolver.Detect(h.HeaderVersion, h.KernelSize, h.RamdiskSize,
-                        RepackMetadata.DetectPartitionName(Path.GetFileName(filePath)));
-                    var summary = $"Boot image v{(int)h.HeaderVersion} parsed.\n" +
-                                  $"Page size: {h.PageSize}\nKernel: {h.KernelSize} bytes\n" +
-                                  $"Ramdisk: {h.RamdiskSize} bytes\nCmdline: {h.CommandLine}";
-                    return FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
-                    {
-                        ["Type"] = "boot",
-                        ["Role"] = role.ToString(),
-                        ["HeaderVersion"] = ((int)h.HeaderVersion).ToString(),
-                        ["PageSize"] = h.PageSize.ToString(),
-                        ["HeaderSize"] = h.HeaderSize.ToString(),
-                        ["ProductName"] = h.ProductName,
-                        ["KernelSize"] = h.KernelSize.ToString(),
-                        ["RamdiskSize"] = h.RamdiskSize.ToString(),
-                        ["SecondSize"] = h.SecondSize.ToString(),
-                        ["DtbSize"] = h.DtbSize.ToString(),
-                        ["OsVersion"] = h.OsVersionString,
-                        ["CommandLine"] = h.CommandLine,
-                        ["KernelCompression"] = h.KernelCompression.ToString(),
-                        ["RamdiskCompression"] = h.RamdiskCompression.ToString(),
-                        ["OsVersionRaw"] = $"0x{h.OsVersion:X8}"
-                    }, components:
-                    [
-                        FirmwareComponent.Of("kernel", h.KernelSize),
-                        FirmwareComponent.Of("ramdisk", h.RamdiskSize),
-                        FirmwareComponent.Of("second", h.SecondSize),
-                        FirmwareComponent.Of("dtb", h.DtbSize)
-                    ]);
-                }
-
-                if (magic == VendorBootMagic)
-                {
-                    using var parser = new VendorBootParser();
-                    parser.ParseFile(filePath);
-                    var h = parser.Header;
-                    var summary = $"Vendor boot image v{h.HeaderVersion} parsed.\n" +
-                                  $"Vendor ramdisk: {h.VendorRamdiskSize} bytes\n" +
-                                  $"DTB: {h.DtbSize} bytes\nRamdisk entries: {parser.RamdiskTable.Count}";
-                    return FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
-                    {
-                        ["Type"] = "vendor_boot",
-                        ["HeaderVersion"] = h.HeaderVersion.ToString(),
-                        ["PageSize"] = h.PageSize.ToString(),
-                        ["VendorRamdiskSize"] = h.VendorRamdiskSize.ToString(),
-                        ["DtbSize"] = h.DtbSize.ToString(),
-                        ["RamdiskTableEntryCount"] = parser.RamdiskTable.Count.ToString(),
-                        ["VendorCmdline"] = h.VendorCmdline,
-                        ["VendorName"] = h.VendorName,
-                        ["HeaderSize"] = h.VendorHeaderSize.ToString(),
-                        ["KernelLoadAddress"] = $"0x{h.KernelLoadAddress:X8}",
-                        ["RamdiskLoadAddress"] = $"0x{h.RamdiskLoadAddress:X8}",
-                        ["TagsLoadAddress"] = $"0x{h.TagsLoadAddress:X8}",
-                        ["DtbAddress"] = $"0x{h.DtbAddress:X16}"
-                    });
-                }
-
-                var prefix = ReadPrefix(filePath, 4096);
-                var chrome = DetectChromeOsFile(filePath);
-                if (chrome.IsChromeOs)
-                {
-                    var chromeMetadata = new Dictionary<string, string>
-                    {
-                        ["Type"] = chrome.ImageType.ToString(),
-                        ["StructureSize"] = chrome.StructureSize.ToString(),
-                        ["SignatureValidation"] = "not-implemented",
-                        ["KernelExtraction"] = "not-implemented"
-                    };
-                    if (chrome.ImageType is ChromeOsTool.ChromeOsImageType.Keyblock
-                        or ChromeOsTool.ChromeOsImageType.Vblock
-                        or ChromeOsTool.ChromeOsImageType.Kernel)
-                    {
-                        var data = File.ReadAllBytes(filePath);
-                        var keyblock = ChromeOsTool.ParseKeyblock(data);
-                        chromeMetadata["KeyblockVersion"] =
-                            $"{keyblock.HeaderVersionMajor}.{keyblock.HeaderVersionMinor}";
-                        chromeMetadata["KeyblockSize"] = keyblock.KeyblockSize.ToString();
-                        chromeMetadata["DataKeyOffset"] = keyblock.DataKey.Offset.ToString();
-                        chromeMetadata["DataKeySize"] = keyblock.DataKey.Size.ToString();
-                        if (chrome.ImageType is ChromeOsTool.ChromeOsImageType.Vblock
-                            or ChromeOsTool.ChromeOsImageType.Kernel)
-                        {
-                            var vblock = ChromeOsTool.ParseVblock(data);
-                            chromeMetadata["PreambleVersion"] =
-                                $"{vblock.PreambleVersionMajor}.{vblock.PreambleVersionMinor}";
-                            chromeMetadata["PreambleOffset"] = vblock.PreambleOffset.ToString();
-                            chromeMetadata["PreambleSize"] = vblock.PreambleSize.ToString();
-                            chromeMetadata["BodySize"] = vblock.BodySignature.DataSize.ToString();
-                            chromeMetadata["BodyPresent"] =
-                                (chrome.ImageType == ChromeOsTool.ChromeOsImageType.Kernel).ToString();
-                        }
-                    }
-
-                    return FirmwareOpResult.Ok(chrome.Description,
-                        metadata: chromeMetadata);
-                }
-
-                var resource = ChromeOsTool.DetectResource(prefix);
-                if (resource != ChromeOsTool.BootResourceType.Unknown)
-                {
-                    if (resource == ChromeOsTool.BootResourceType.RockchipResource)
-                    {
-                        var rsce = ChromeOsTool.ReadRockchipResourceMetadata(filePath);
-                        return FirmwareOpResult.Ok(
-                            $"RSCE resource container with {rsce.Entries.Count} entries.",
-                            entries: [.. rsce.Entries.Select(entry => entry.Name)],
-                            metadata: new Dictionary<string, string>
-                            {
-                                ["Type"] = resource.ToString(),
-                                ["FileCount"] = rsce.FileCount.ToString(),
-                                ["PayloadParsing"] = "directory-only"
-                            });
-                    }
-
-                    return FirmwareOpResult.Ok(
-                        $"{resource} boot resource signature recognized; payload format is not parsed.",
-                        metadata: new Dictionary<string, string>
-                        {
-                            ["Type"] = resource.ToString(),
-                            ["PayloadParsing"] = "not-implemented",
-                            ["Extraction"] = "not-implemented"
-                        });
-                }
-
-                if (TegraBlobTool.IsTegraBlob(prefix))
-                {
-                    var parsed = TegraBlobTool.Parse(File.ReadAllBytes(filePath));
-                    if (!parsed.IsValid)
-                        return FirmwareOpResult.Fail(parsed.ErrorMessage ?? "Invalid Tegra blob.");
-                    return FirmwareOpResult.Ok($"Tegra blob v{parsed.Header!.Version} parsed.\n" +
-                        $"Kernel: {parsed.Header.KernelSize} bytes ({parsed.Header.CompressionType})\n" +
-                        $"Ramdisk: {parsed.Header.RamdiskSize} bytes", metadata: new Dictionary<string, string>
-                        {
-                            ["Type"] = "tegra",
-                            ["Version"] = parsed.Header.Version.ToString(),
-                            ["KernelSize"] = parsed.Header.KernelSize.ToString(),
-                            ["RamdiskSize"] = parsed.Header.RamdiskSize.ToString(),
-                            ["CompressionType"] = parsed.Header.CompressionType.ToString()
-                        }, components:
-                    [
-                        FirmwareComponent.Of("kernel", parsed.Header.KernelSize),
-                        FirmwareComponent.Of("ramdisk", parsed.Header.RamdiskSize)
-                    ]);
-                }
-
-                if (ZImageTool.IsZImage(prefix))
-                {
-                    var parsed = ZImageTool.Parse(File.ReadAllBytes(filePath));
-                    if (!parsed.IsValid)
-                        return FirmwareOpResult.Fail(parsed.ErrorMessage ?? "Invalid zImage.");
-                    return FirmwareOpResult.Ok($"ARM zImage parsed.\nCompressed payload: {parsed.CompressedSize} bytes\n" +
-                        $"Compression: {parsed.CompressionType}", metadata: new Dictionary<string, string>
-                        {
-                            ["Type"] = "zimage",
-                            ["CompressedOffset"] = parsed.CompressedOffset.ToString(),
-                            ["CompressedSize"] = parsed.CompressedSize.ToString(),
-                            ["Compression"] = parsed.CompressionType.ToString()
-                        }, components: [FirmwareComponent.Of("kernel", parsed.CompressedSize)]);
-                }
-
-                return FirmwareOpResult.Fail($"Not a boot image (magic: {magic ?? "<none>"}).");
+                return ReadMetadataCore(filePath);
             }
             catch (Exception ex)
             {
                 return FirmwareOpResult.Fail(ex.Message);
             }
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Dispatches a boot image file to the metadata reader for its concrete format, ordered by the
+    /// authoritative magic values and then by prefix probes for container and kernel layouts.
+    /// <para>把启动镜像文件分派到对应格式的元数据读取器：先按权威魔数判定，再按前缀探测容器与内核布局。</para>
+    /// </summary>
+    private static FirmwareOpResult ReadMetadataCore(string filePath)
+    {
+        var magic = ReadMagic(filePath);
+        if (magic == BootMagic)
+        {
+            return ReadBootImageMetadata(filePath);
+        }
+
+        if (magic == VendorBootMagic)
+        {
+            return ReadVendorBootMetadata(filePath);
+        }
+
+        var prefix = ReadPrefix(filePath, 4096);
+        var chrome = DetectChromeOsFile(filePath);
+        if (chrome.IsChromeOs)
+        {
+            return ReadChromeOsMetadata(filePath, chrome);
+        }
+
+        var resource = RockchipResourceImage.DetectResource(prefix);
+        if (resource != RockchipResourceImage.BootResourceType.Unknown)
+        {
+            return ReadBootResourceMetadata(filePath, resource);
+        }
+
+        if (TegraBlobTool.IsTegraBlob(prefix))
+        {
+            return ReadTegraBlobMetadata(filePath);
+        }
+
+        if (ZImageTool.IsZImage(prefix))
+        {
+            return ReadZImageMetadata(filePath);
+        }
+
+        return FirmwareOpResult.Fail($"Not a boot image (magic: {magic ?? "<none>"}).");
+    }
+
+    /// <summary>
+    /// Reads Android boot image v0-v4 metadata, including the detected boot role and component sizes.
+    /// <para>读取 Android boot 镜像 v0-v4 元数据，含探测出的启动角色与组件大小。</para>
+    /// </summary>
+    private static FirmwareOpResult ReadBootImageMetadata(string filePath)
+    {
+        var bootHeader = BootImageParser.ReadHeaderFile(filePath);
+        var role = BootImageRoleResolver.Detect(bootHeader.HeaderVersion, bootHeader.KernelSize, bootHeader.RamdiskSize,
+            RepackMetadata.DetectPartitionName(Path.GetFileName(filePath)));
+        var summary = $"Boot image v{(int)bootHeader.HeaderVersion} parsed.\n" +
+                      $"Page size: {bootHeader.PageSize}\nKernel: {bootHeader.KernelSize} bytes\n" +
+                      $"Ramdisk: {bootHeader.RamdiskSize} bytes\nCmdline: {bootHeader.CommandLine}";
+        return FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
+        {
+            ["Type"] = "boot",
+            ["Role"] = role.ToString(),
+            ["HeaderVersion"] = ((int)bootHeader.HeaderVersion).ToString(),
+            ["PageSize"] = bootHeader.PageSize.ToString(),
+            ["HeaderSize"] = bootHeader.HeaderSize.ToString(),
+            ["ProductName"] = bootHeader.ProductName,
+            ["KernelSize"] = bootHeader.KernelSize.ToString(),
+            ["RamdiskSize"] = bootHeader.RamdiskSize.ToString(),
+            ["SecondSize"] = bootHeader.SecondSize.ToString(),
+            ["DtbSize"] = bootHeader.DtbSize.ToString(),
+            ["OsVersion"] = bootHeader.OsVersionString,
+            ["CommandLine"] = bootHeader.CommandLine,
+            ["KernelCompression"] = bootHeader.KernelCompression.ToString(),
+            ["RamdiskCompression"] = bootHeader.RamdiskCompression.ToString(),
+            ["OsVersionRaw"] = $"0x{bootHeader.OsVersion:X8}"
+        }, components:
+        [
+            FirmwareComponent.Of("kernel", bootHeader.KernelSize),
+            FirmwareComponent.Of("ramdisk", bootHeader.RamdiskSize),
+            FirmwareComponent.Of("second", bootHeader.SecondSize),
+            FirmwareComponent.Of("dtb", bootHeader.DtbSize)
+        ]);
+    }
+
+    /// <summary>
+    /// Reads vendor boot image metadata, including the vendor ramdisk table entry count.
+    /// <para>读取 vendor boot 镜像元数据，含 vendor ramdisk 表的条目数。</para>
+    /// </summary>
+    private static FirmwareOpResult ReadVendorBootMetadata(string filePath)
+    {
+        using var parser = new VendorBootParser();
+        parser.ParseFile(filePath);
+        var vendorHeader = parser.Header;
+        var summary = $"Vendor boot image v{vendorHeader.HeaderVersion} parsed.\n" +
+                      $"Vendor ramdisk: {vendorHeader.VendorRamdiskSize} bytes\n" +
+                      $"DTB: {vendorHeader.DtbSize} bytes\nRamdisk entries: {parser.RamdiskTable.Count}";
+        return FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
+        {
+            ["Type"] = "vendor_boot",
+            ["HeaderVersion"] = vendorHeader.HeaderVersion.ToString(),
+            ["PageSize"] = vendorHeader.PageSize.ToString(),
+            ["VendorRamdiskSize"] = vendorHeader.VendorRamdiskSize.ToString(),
+            ["DtbSize"] = vendorHeader.DtbSize.ToString(),
+            ["RamdiskTableEntryCount"] = parser.RamdiskTable.Count.ToString(),
+            ["VendorCmdline"] = vendorHeader.VendorCmdline,
+            ["VendorName"] = vendorHeader.VendorName,
+            ["HeaderSize"] = vendorHeader.VendorHeaderSize.ToString(),
+            ["KernelLoadAddress"] = $"0x{vendorHeader.KernelLoadAddress:X8}",
+            ["RamdiskLoadAddress"] = $"0x{vendorHeader.RamdiskLoadAddress:X8}",
+            ["TagsLoadAddress"] = $"0x{vendorHeader.TagsLoadAddress:X8}",
+            ["DtbAddress"] = $"0x{vendorHeader.DtbAddress:X16}"
+        });
+    }
+
+    /// <summary>
+    /// Reads ChromeOS keyblock/vboot metadata; signature validation and kernel extraction stay unimplemented
+    /// and are reported as such in the metadata dictionary.
+    /// <para>读取 ChromeOS keyblock/vboot 元数据；签名校验与内核提取尚未实现，并在元数据字典中如实标注。</para>
+    /// </summary>
+    private static FirmwareOpResult ReadChromeOsMetadata(string filePath, ChromeOsTool.ChromeOsDetectionResult chrome)
+    {
+        var chromeMetadata = new Dictionary<string, string>
+        {
+            ["Type"] = chrome.ImageType.ToString(),
+            ["StructureSize"] = chrome.StructureSize.ToString(),
+            ["SignatureValidation"] = "not-implemented",
+            ["KernelExtraction"] = "not-implemented"
+        };
+        if (chrome.ImageType is ChromeOsTool.ChromeOsImageType.Keyblock
+            or ChromeOsTool.ChromeOsImageType.Vblock
+            or ChromeOsTool.ChromeOsImageType.Kernel)
+        {
+            var data = File.ReadAllBytes(filePath);
+            var keyblock = ChromeOsTool.ParseKeyblock(data);
+            chromeMetadata["KeyblockVersion"] =
+                $"{keyblock.HeaderVersionMajor}.{keyblock.HeaderVersionMinor}";
+            chromeMetadata["KeyblockSize"] = keyblock.KeyblockSize.ToString();
+            chromeMetadata["DataKeyOffset"] = keyblock.DataKey.Offset.ToString();
+            chromeMetadata["DataKeySize"] = keyblock.DataKey.Size.ToString();
+            if (chrome.ImageType is ChromeOsTool.ChromeOsImageType.Vblock
+                or ChromeOsTool.ChromeOsImageType.Kernel)
+            {
+                var vblock = ChromeOsTool.ParseVblock(data);
+                chromeMetadata["PreambleVersion"] =
+                    $"{vblock.PreambleVersionMajor}.{vblock.PreambleVersionMinor}";
+                chromeMetadata["PreambleOffset"] = vblock.PreambleOffset.ToString();
+                chromeMetadata["PreambleSize"] = vblock.PreambleSize.ToString();
+                chromeMetadata["BodySize"] = vblock.BodySignature.DataSize.ToString();
+                chromeMetadata["BodyPresent"] =
+                    (chrome.ImageType == ChromeOsTool.ChromeOsImageType.Kernel).ToString();
+            }
+        }
+
+        return FirmwareOpResult.Ok(chrome.Description,
+            metadata: chromeMetadata);
+    }
+
+    /// <summary>
+    /// Reads boot resource container metadata; only the Rockchip RSCE directory payload is parsed,
+    /// other recognized resource signatures report their payload format as unparsed.
+    /// <para>读取启动资源容器的元数据；仅解析 Rockchip RSCE 目录负载，其余已识别的资源签名如实
+    /// 报告其负载格式未解析。</para>
+    /// </summary>
+    private static FirmwareOpResult ReadBootResourceMetadata(string filePath, RockchipResourceImage.BootResourceType resource)
+    {
+        if (resource == RockchipResourceImage.BootResourceType.RockchipResource)
+        {
+            var rsce = RockchipResourceImage.ReadRockchipResourceMetadata(filePath);
+            return FirmwareOpResult.Ok(
+                $"RSCE resource container with {rsce.Entries.Count} entries.",
+                entries: [.. rsce.Entries.Select(entry => entry.Name)],
+                metadata: new Dictionary<string, string>
+                {
+                    ["Type"] = resource.ToString(),
+                    ["FileCount"] = rsce.FileCount.ToString(),
+                    ["PayloadParsing"] = "directory-only"
+                });
+        }
+
+        return FirmwareOpResult.Ok(
+            $"{resource} boot resource signature recognized; payload format is not parsed.",
+            metadata: new Dictionary<string, string>
+            {
+                ["Type"] = resource.ToString(),
+                ["PayloadParsing"] = "not-implemented",
+                ["Extraction"] = "not-implemented"
+            });
+    }
+
+    /// <summary>
+    /// Reads Tegra blob header metadata with kernel and ramdisk component sizes.
+    /// <para>读取 Tegra blob 头元数据，含内核与 ramdisk 组件大小。</para>
+    /// </summary>
+    private static FirmwareOpResult ReadTegraBlobMetadata(string filePath)
+    {
+        var parsed = TegraBlobTool.Parse(File.ReadAllBytes(filePath));
+        if (!parsed.IsValid)
+            return FirmwareOpResult.Fail(parsed.ErrorMessage ?? "Invalid Tegra blob.");
+        return FirmwareOpResult.Ok($"Tegra blob v{parsed.Header!.Version} parsed.\n" +
+            $"Kernel: {parsed.Header.KernelSize} bytes ({parsed.Header.CompressionType})\n" +
+            $"Ramdisk: {parsed.Header.RamdiskSize} bytes", metadata: new Dictionary<string, string>
+            {
+                ["Type"] = "tegra",
+                ["Version"] = parsed.Header.Version.ToString(),
+                ["KernelSize"] = parsed.Header.KernelSize.ToString(),
+                ["RamdiskSize"] = parsed.Header.RamdiskSize.ToString(),
+                ["CompressionType"] = parsed.Header.CompressionType.ToString()
+            }, components:
+        [
+            FirmwareComponent.Of("kernel", parsed.Header.KernelSize),
+            FirmwareComponent.Of("ramdisk", parsed.Header.RamdiskSize)
+        ]);
+    }
+
+    /// <summary>
+    /// Reads ARM zImage metadata with the compressed payload location and detected compressor.
+    /// <para>读取 ARM zImage 元数据，含压缩负载位置与探测出的压缩器。</para>
+    /// </summary>
+    private static FirmwareOpResult ReadZImageMetadata(string filePath)
+    {
+        var parsed = ZImageTool.Parse(File.ReadAllBytes(filePath));
+        if (!parsed.IsValid)
+            return FirmwareOpResult.Fail(parsed.ErrorMessage ?? "Invalid zImage.");
+        return FirmwareOpResult.Ok($"ARM zImage parsed.\nCompressed payload: {parsed.CompressedSize} bytes\n" +
+            $"Compression: {parsed.CompressionType}", metadata: new Dictionary<string, string>
+            {
+                ["Type"] = "zimage",
+                ["CompressedOffset"] = parsed.CompressedOffset.ToString(),
+                ["CompressedSize"] = parsed.CompressedSize.ToString(),
+                ["Compression"] = parsed.CompressionType.ToString()
+            }, components: [FirmwareComponent.Of("kernel", parsed.CompressedSize)]);
     }
 
     /// <summary>
@@ -323,23 +390,23 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
                 if (magic == VendorBootMagic)
                     return UnpackVendorBoot(filePath, outputDirectory);
 
-                var resource = ChromeOsTool.DetectResource(ReadPrefix(filePath, 4096));
+                var resource = RockchipResourceImage.DetectResource(ReadPrefix(filePath, 4096));
                 if (magic == ChromeOsMagic)
                 {
                     return FirmwareOpResult.Fail(
                         "ChromeOS boot/signature extraction is not supported.");
                 }
 
-                if (resource == ChromeOsTool.BootResourceType.RockchipResource)
+                if (resource == RockchipResourceImage.BootResourceType.RockchipResource)
                 {
                     var selected = options?.CreateSelectedEntrySet();
-                    var count = ChromeOsTool.ExtractRockchipResource(
+                    var count = RockchipResourceImage.ExtractRockchipResource(
                         filePath, outputDirectory, selected, options?.Overwrite ?? true, cancellationToken);
                     return FirmwareOpResult.Ok(
                         $"Unpacked RSCE resource container ({count} files) to {outputDirectory}.");
                 }
 
-                if (resource != ChromeOsTool.BootResourceType.Unknown)
+                if (resource != RockchipResourceImage.BootResourceType.Unknown)
                 {
                     return FirmwareOpResult.Fail(
                         "This startup resource format is recognized but extraction is not supported.");
@@ -432,7 +499,7 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
                     var metadata = RepackMetadata.Read(inputPath, context);
                     if (metadata?.Configuration["resource"]?.GetValue<string>() == "RSCE")
                     {
-                        var count = ChromeOsTool.BuildRockchipResource(inputPath, outputPath, cancellationToken);
+                        var count = RockchipResourceImage.BuildRockchipResource(inputPath, outputPath, cancellationToken);
                         return FirmwareOpResult.Ok(
                             $"Packed {count} RSCE resources to {outputPath} (canonical unsigned).");
                     }
@@ -462,7 +529,7 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
 
         using var parser = new BootImageParser();
         parser.ParseFile(filePath);
-        var h = parser.Header;
+        var header = parser.Header;
 
         var entries = new List<string>();
 
@@ -474,7 +541,7 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
         WriteIfNonEmpty(outputDirectory, "signature", parser.Signature, entries);
 
         return FirmwareOpResult.Ok(
-            $"Unpacked boot image v{(int)h.HeaderVersion} ({entries.Count} files) to {outputDirectory}",
+            $"Unpacked boot image v{(int)header.HeaderVersion} ({entries.Count} files) to {outputDirectory}",
             entries: entries);
     }
 
@@ -484,7 +551,7 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
 
         using var parser = new VendorBootParser();
         parser.ParseFile(filePath);
-        var h = parser.Header;
+        var header = parser.Header;
 
         var entries = new List<string>();
         WriteIfNonEmpty(outputDirectory, "vendor_ramdisk", parser.VendorRamdisk, entries);
@@ -522,7 +589,7 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
         }
 
         return FirmwareOpResult.Ok(
-            $"Unpacked vendor boot image v{h.HeaderVersion} ({entries.Count} files) to {outputDirectory}",
+            $"Unpacked vendor boot image v{header.HeaderVersion} ({entries.Count} files) to {outputDirectory}",
             entries: entries);
     }
 

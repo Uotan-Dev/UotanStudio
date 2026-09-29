@@ -34,35 +34,35 @@ internal enum SquashfsEntryKind
 /// </summary>
 internal sealed class SquashfsInode
 {
-    internal SquashfsEntryKind Kind { get; init; }
-    internal ushort RawType { get; init; }
-    internal ushort Mode { get; init; }
-    internal ushort UidIndex { get; init; }
-    internal ushort GuidIndex { get; init; }
-    internal uint ModifiedTime { get; init; }
-    internal uint InodeNumber { get; init; }
-    internal long XattrIndex { get; init; } = -1;
+    internal SquashfsEntryKind Kind { get; set; }
+    internal ushort RawType { get; set; }
+    internal ushort Mode { get; set; }
+    internal ushort UidIndex { get; set; }
+    internal ushort GidIndex { get; set; }
+    internal uint ModifiedTime { get; set; }
+    internal uint InodeNumber { get; set; }
+    internal long XattrIndex { get; set; } = -1;
 
     /// <summary>Absolute image offset of the first data block; unused when every block is fragment-backed.
     /// <para>首个数据块的绝对镜像偏移；所有块由 fragment 承载时未使用。</para></summary>
-    internal ulong DataStart { get; init; }
+    internal ulong DataStart { get; set; }
 
     /// <summary>Compressed block sizes with the version 4 non-compression bit retained.
     /// <para>保留版本 4 “未压缩”标志位的压缩块大小序列。</para></summary>
-    internal uint[] BlockSizes { get; init; } = [];
+    internal uint[] BlockSizes { get; set; } = [];
 
-    internal long Size { get; init; }
-    internal int FragmentIndex { get; init; } = -1;
-    internal int FragmentOffset { get; init; }
-    internal bool Sparse { get; init; }
+    internal long Size { get; set; }
+    internal int FragmentIndex { get; set; } = -1;
+    internal int FragmentOffset { get; set; }
+    internal bool Sparse { get; set; }
 
-    internal long DirectoryBlock { get; init; }
-    internal int DirectoryOffset { get; init; }
-    internal long DirectorySize { get; init; }
-    internal uint ParentInode { get; init; }
+    internal long DirectoryBlock { get; set; }
+    internal int DirectoryOffset { get; set; }
+    internal long DirectorySize { get; set; }
+    internal uint ParentInode { get; set; }
 
-    internal byte[]? Target { get; init; }
-    internal uint DeviceNumber { get; init; }
+    internal byte[]? Target { get; set; }
+    internal uint DeviceNumber { get; set; }
 }
 
 /// <summary>

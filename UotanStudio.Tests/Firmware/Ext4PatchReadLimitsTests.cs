@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using Xunit;
@@ -22,7 +23,7 @@ public sealed class Ext4PatchReadLimitsTests : IDisposable
         var image = Path.Combine(_root, "test.img");
         Ext4Builder.Build(source, image);
         using var parser = new Ext4Parser(File.OpenRead(image), entries, characters, TestContext.Current.CancellationToken);
-        Assert.Throws<InvalidDataException>(() => parser.ListFiles());
+        Assert.Throws<FileSystemCorruptedException>(() => parser.ListFiles());
     }
 
     [Fact]

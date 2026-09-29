@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.F2fs.Models;
 using UotanStudio.Tests.Comm.TestDoubles;
@@ -75,7 +76,7 @@ public class F2fsCheckpointTests
         image[(int)sb.CpBlkaddr * 4096] ^= 1;
         using (var parser = new F2fsParser(new MemoryStream(image))) Assert.Single(parser.ListFiles());
         image[(int)(sb.CpBlkaddr + 512) * 4096] ^= 1;
-        Assert.Throws<InvalidDataException>(() => new F2fsParser(new MemoryStream(image)));
+        Assert.Throws<FileSystemCorruptedException>(() => new F2fsParser(new MemoryStream(image)));
     }
 
     [Fact]

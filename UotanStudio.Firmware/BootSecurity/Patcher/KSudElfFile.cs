@@ -45,11 +45,11 @@ public sealed class ElfFile
     {
         if (data.Length < 64 || data[0] != 0x7F || data[1] != (byte)'E' ||
             data[2] != (byte)'L' || data[3] != (byte)'F')
-            throw new InvalidDataException("不是有效的 ELF 文件");
+            throw new InvalidDataException("Not a valid ELF file.");
         if (data[4] != 2)
-            throw new InvalidDataException("仅支持 ELF64");
+            throw new InvalidDataException("Only ELF64 is supported.");
         if (data[5] != 1)
-            throw new InvalidDataException("仅支持小端 ELF");
+            throw new InvalidDataException("Only little-endian ELF is supported.");
         Data = data;
         Machine = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(18));
         ulong phoff = BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(32));

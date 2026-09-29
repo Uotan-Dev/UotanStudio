@@ -22,7 +22,7 @@ public sealed partial class ErofsParser
             if (start < 0 || length < 0 || start > parser.InodeMetadataLength(nid)
                 || length > parser.InodeMetadataLength(nid) - start)
             {
-                throw new InvalidDataException("Compressed index exceeds the inode metadata stream.");
+                throw new FileSystemCorruptedException("Compressed index exceeds the inode metadata stream.");
             }
             _parser = parser;
             _nid = nid;
@@ -34,7 +34,7 @@ public sealed partial class ErofsParser
         internal byte[] Get(long offset, int count, out int relative)
         {
             if (offset < 0 || count < 0 || offset > _length || count > _length - offset || count > _buffer.Length)
-                throw new InvalidDataException("Compressed index entry exceeds the image bounds.");
+                throw new FileSystemCorruptedException("Compressed index entry exceeds the image bounds.");
             if (_offset < 0 || offset < _offset || offset - _offset > _count - count)
             {
                 _offset = offset;

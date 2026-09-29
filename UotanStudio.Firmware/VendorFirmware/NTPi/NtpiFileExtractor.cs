@@ -15,12 +15,16 @@ internal class NtpiFileExtractor(ICryptoProvider cryptoProvider, ILzma2Compresso
     /// Extracts the raw data for the specified file entry into an in-memory byte array.
     /// <para>将指定文件条目的原始数据提取为内存字节数组。</para>
     /// </summary>
-    public byte[] ExtractFileToMemory(Stream source, long region6Offset, long region6Length, KeyMapKeyProvider keyMapProvider, FileEntry entry)
+    /// <param name="cancellationToken">
+    /// Token observed between extraction blocks; the default (none) token cannot cancel.
+    /// <para>在解压块之间检查的取消令牌；默认（无）令牌不可取消。</para>
+    /// </param>
+    public byte[] ExtractFileToMemory(Stream source, long region6Offset, long region6Length, KeyMapKeyProvider keyMapProvider, FileEntry entry, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
         var initialCapacity = (int)Math.Min(Math.Max(entry.OriginalLength, 0), 64 * 1024);
         using var output = new MemoryStream(initialCapacity);
-        ExtractFileToStream(source, region6Offset, region6Length, keyMapProvider, entry, output);
+        ExtractFileToStream(source, region6Offset, region6Length, keyMapProvider, entry, output, cancellationToken: cancellationToken);
         return output.ToArray();
     }
 
@@ -28,7 +32,11 @@ internal class NtpiFileExtractor(ICryptoProvider cryptoProvider, ILzma2Compresso
     /// Streams a file from Region6 block by block: FileStream→decrypt stream→bounded decoder→output stream.
     /// <para>按块从 Region6 流式提取文件:FileStream→解密流→有界解码→输出流。</para>
     /// </summary>
-    public void ExtractFileToStream(Stream source, long region6Offset, long region6Length, KeyMapKeyProvider keyMapProvider, FileEntry entry, Stream output, long trustedOutputLimit = long.MaxValue)
+    /// <param name="cancellationToken">
+    /// Token observed between extraction blocks; the default (none) token cannot cancel.
+    /// <para>在解压块之间检查的取消令牌；默认（无）令牌不可取消。</para>
+    /// </param>
+    public void ExtractFileToStream(Stream source, long region6Offset, long region6Length, KeyMapKeyProvider keyMapProvider, FileEntry entry, Stream output, long trustedOutputLimit = long.MaxValue, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(keyMapProvider);
@@ -80,6 +88,7 @@ internal class NtpiFileExtractor(ICryptoProvider cryptoProvider, ILzma2Compresso
 
         while (blockPos < entry.Length)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var blockStart = checked(region6Offset + entry.Offset + blockPos);
             if (blockStart > entryEnd || NtEncodeHeaderSize > Math.Min(region6End, entryEnd) - blockStart)
             {

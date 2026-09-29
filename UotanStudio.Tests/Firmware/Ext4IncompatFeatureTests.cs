@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using Xunit;
@@ -39,7 +40,7 @@ public class Ext4IncompatFeatureTests
     {
         var image = BuildImage();
         SetIncompat(image, FeatureIncompat.MetaBg);
-        Assert.Throws<InvalidDataException>(() => Parse(image));
+        Assert.Throws<FileSystemUnsupportedFeatureException>(() => Parse(image));
     }
 
     [Fact]
@@ -47,7 +48,7 @@ public class Ext4IncompatFeatureTests
     {
         var image = BuildImage();
         SetIncompat(image, 0x8000_0000u);
-        Assert.Throws<InvalidDataException>(() => Parse(image));
+        Assert.Throws<FileSystemUnsupportedFeatureException>(() => Parse(image));
     }
 
     private static byte[] BuildImage()

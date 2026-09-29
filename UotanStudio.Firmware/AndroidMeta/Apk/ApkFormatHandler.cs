@@ -107,14 +107,14 @@ internal sealed class ApkFormatHandler : IFormatHandler
         => UotanStudio.Firmware.Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
-    private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
+    private async Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(outputDirectory))
             {
-                return Task.FromResult(FirmwareOpResult.Fail("Output directory is empty"));
+                return FirmwareOpResult.Fail("Output directory is empty");
             }
 
             var info = ApkParser.Analyze(filePath);
@@ -127,7 +127,7 @@ internal sealed class ApkFormatHandler : IFormatHandler
             var overwrite = options?.Overwrite ?? true;
             if (File.Exists(metadataPath) && !overwrite)
             {
-                return Task.FromResult(FirmwareOpResult.Fail($"Output exists and overwrite is disabled: {metadataPath}"));
+                return FirmwareOpResult.Fail($"Output exists and overwrite is disabled: {metadataPath}");
             }
 
             var maximumOutputBytes = options?.MaximumOutputBytes ?? new UnpackOptions().MaximumOutputBytes;
@@ -154,7 +154,7 @@ internal sealed class ApkFormatHandler : IFormatHandler
                             $"APK entry '{entry.FullName}' exceeds the remaining output budget ({maximumOutputBytes - totalBytes} bytes left, declared {length}).");
                     }
 
-                    FileExtraction.WriteAtomicAsync(target, async output =>
+                    await FileExtraction.WriteAtomicAsync(target, async output =>
                     {
                         await using var counting = new CountingWriteStream(output, length, leaveOpen: true, cancellationToken);
                         await using var entryStream = entry.Open();
@@ -164,7 +164,7 @@ internal sealed class ApkFormatHandler : IFormatHandler
                             throw new InvalidDataException(
                                 $"APK entry '{entry.FullName}' produced {counting.BytesWritten} bytes; expected {length}.");
                         }
-                    }, overwrite, cancellationToken).GetAwaiter().GetResult();
+                    }, overwrite, cancellationToken).ConfigureAwait(false);
 
                     totalBytes += length;
                     extractedFiles.Add(target);
@@ -173,9 +173,9 @@ internal sealed class ApkFormatHandler : IFormatHandler
 
             System.IO.File.WriteAllText(metadataPath, FormatInfo(info));
             extractedFiles.Insert(0, metadataPath);
-            return Task.FromResult(FirmwareOpResult.Ok(
+            return FirmwareOpResult.Ok(
                 $"APK unpacked to {outputDirectory} ({extractedFiles.Count} files)",
-                [.. extractedFiles]));
+                [.. extractedFiles]);
         }
         catch (OperationCanceledException)
         {
@@ -183,7 +183,7 @@ internal sealed class ApkFormatHandler : IFormatHandler
         }
         catch (Exception ex)
         {
-            return Task.FromResult(FirmwareOpResult.Fail($"APK unpack failed: {ex.Message}"));
+            return FirmwareOpResult.Fail($"APK unpack failed: {ex.Message}");
         }
     }
 

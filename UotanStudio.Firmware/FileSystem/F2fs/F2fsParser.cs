@@ -126,7 +126,7 @@ public sealed class F2fsParser : IDisposable
     /// <exception cref="ArgumentException"><paramref name="imagePath"/> is <see langword="null"/>, empty, or whitespace.
     /// <para><paramref name="imagePath"/> 为 <see langword="null"/>、空字符串或仅含空白。</para></exception>
     /// <exception cref="FileNotFoundException">The file does not exist. <para>文件不存在。</para></exception>
-    /// <exception cref="InvalidDataException">The file is not a structurally valid F2FS image.
+    /// <exception cref="FileSystemException">The file is not a structurally valid F2FS image.
     /// <para>该文件不是结构有效的 F2FS 镜像。</para></exception>
     public F2fsParser(string imagePath)
     {
@@ -156,7 +156,7 @@ public sealed class F2fsParser : IDisposable
     /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException">The stream cannot be read or cannot seek.
     /// <para>流不可读或不可寻址。</para></exception>
-    /// <exception cref="InvalidDataException">The stream is not a structurally valid F2FS image.
+    /// <exception cref="FileSystemException">The stream is not a structurally valid F2FS image.
     /// <para>该流不是结构有效的 F2FS 镜像。</para></exception>
     public F2fsParser(Stream stream)
     {
@@ -274,13 +274,13 @@ public sealed class F2fsParser : IDisposable
         _blockSize = _superblock.BlockSize;
         if (_blockSize != F2fsNode.NodeSize)
         {
-            throw new InvalidDataException($"Unsupported f2fs block size {_blockSize} (only 4096 is supported).");
+            throw new FileSystemUnsupportedFeatureException($"Unsupported f2fs block size {_blockSize} (only 4096 is supported).");
         }
 
         _blocksPerSeg = _superblock.BlocksPerSeg;
         if (_blocksPerSeg <= 0 || !IsPowerOfTwo(_blocksPerSeg))
         {
-            throw new InvalidDataException($"Invalid f2fs blocks-per-segment {_blocksPerSeg}.");
+            throw new FileSystemCorruptedException($"Invalid f2fs blocks-per-segment {_blocksPerSeg}.");
         }
 
         if (_superblock.SegmentCount == 0
@@ -292,21 +292,21 @@ public sealed class F2fsParser : IDisposable
             || _superblock.MainBlkaddr <= _superblock.SsaBlkaddr
             || _superblock.RootIno < F2fsNode.ReservedNodeCount)
         {
-            throw new InvalidDataException("F2FS superblock metadata-area layout is inconsistent.");
+            throw new FileSystemCorruptedException("F2FS superblock metadata-area layout is inconsistent.");
         }
 
         var declaredImageBlocks = checked(_superblock.SegmentCount * _blocksPerSeg + _superblock.Segment0Blkaddr);
         var declaredImageSize = checked(declaredImageBlocks * _blockSize);
         if (_imageSize < declaredImageSize)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"F2FS image is truncated: {_imageSize} bytes, but the superblock declares {declaredImageSize} bytes.");
         }
 
         _checkpoint = ReadCheckpoint();
         if (_checkpoint.ValidNodeCount == 0 && _checkpoint.ValidInodeCount == 0)
         {
-            throw new InvalidDataException("F2FS checkpoint reports an empty filesystem.");
+            throw new FileSystemCorruptedException("F2FS checkpoint reports an empty filesystem.");
         }
 
         ValidateSuperblockChecksum();
@@ -324,7 +324,7 @@ public sealed class F2fsParser : IDisposable
         var computed = ComputeCrc32(F2fsSuperblock.Magic, raw.AsSpan(0, F2fsSuperblock.SuperblockSize - 4));
         if (computed != storedCrc)
         {
-            throw new InvalidDataException($"F2FS superblock CRC mismatch: stored=0x{storedCrc:X8}, computed=0x{computed:X8}.");
+            throw new FileSystemCorruptedException($"F2FS superblock CRC mismatch: stored=0x{storedCrc:X8}, computed=0x{computed:X8}.");
         }
     }
 
@@ -337,7 +337,7 @@ public sealed class F2fsParser : IDisposable
     /// <returns>A snapshot list of every walked entry; the root directory itself is not included
     /// until <see cref="ListEntriesWithRoot"/> is used. Repeated calls return the same cached walk.
     /// <para>全部已遍历条目的快照列表；不含根目录本身（需根节点请用 <see cref="ListEntriesWithRoot"/>）。重复调用复用同一份遍历缓存。</para></returns>
-    /// <exception cref="InvalidDataException">The directory tree contains a cycle, an out-of-bounds
+    /// <exception cref="FileSystemCorruptedException">The directory tree contains a cycle, an out-of-bounds
     /// block address, or a dentry layout that exceeds the format limits.
     /// <para>目录树存在环、越界块地址，或 dentry 布局超出格式限制。</para></exception>
     public IReadOnlyList<F2fsFileEntry> ListFiles()
@@ -357,7 +357,7 @@ public sealed class F2fsParser : IDisposable
     /// <returns>A list whose first element is the root entry under the path <c>"."</c>, followed by
     /// all entries from <see cref="ListFiles"/>.
     /// <para>首个元素为路径 <c>"."</c> 的根条目，其后依次是 <see cref="ListFiles"/> 的全部条目。</para></returns>
-    /// <exception cref="InvalidDataException">The root inode or the directory walk is structurally invalid.
+    /// <exception cref="FileSystemCorruptedException">The root inode or the directory walk is structurally invalid.
     /// <para>根 inode 或目录遍历存在结构错误。</para></exception>
     public IReadOnlyList<F2fsFileEntry> ListEntriesWithRoot()
     {
@@ -401,7 +401,7 @@ public sealed class F2fsParser : IDisposable
     /// <para>镜像内不存在该路径的条目。</para></exception>
     /// <exception cref="InvalidOperationException"><paramref name="path"/> names a directory.
     /// <para><paramref name="path"/> 指向目录。</para></exception>
-    /// <exception cref="InvalidDataException">The file's node chain, compression clusters or block
+    /// <exception cref="FileSystemCorruptedException">The file's node chain, compression clusters or block
     /// addresses are corrupt.
     /// <para>文件的节点链、压缩簇或块地址已损坏。</para></exception>
     public void ReadFile(string path, Stream output)
@@ -431,7 +431,7 @@ public sealed class F2fsParser : IDisposable
     /// <para>每处理完一个条目上报（已处理数, 总数）；为 <see langword="null"/> 时不上报。</para></param>
     /// <exception cref="ArgumentException"><paramref name="outputDirectory"/> is <see langword="null"/> or whitespace.
     /// <para><paramref name="outputDirectory"/> 为 <see langword="null"/> 或仅含空白。</para></exception>
-    /// <exception cref="InvalidDataException">A tree entry is corrupt while being read.
+    /// <exception cref="FileSystemCorruptedException">A tree entry is corrupt while being read.
     /// <para>读取过程中发现树条目损坏。</para></exception>
     public void ExtractToDirectory(string outputDirectory, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
         => ExtractToDirectory(outputDirectory, null, CancellationToken.None, overwrite, progress);
@@ -456,7 +456,7 @@ public sealed class F2fsParser : IDisposable
     /// <para><paramref name="outputDirectory"/> 为 <see langword="null"/> 或仅含空白。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled mid-extraction.
     /// <para>提取过程中令牌被取消。</para></exception>
-    /// <exception cref="InvalidDataException">A tree entry is corrupt while being read.
+    /// <exception cref="FileSystemCorruptedException">A tree entry is corrupt while being read.
     /// <para>读取过程中发现树条目损坏。</para></exception>
     public void ExtractToDirectory(string outputDirectory, IProgress<(long Processed, long Total)>? byteProgress,
         CancellationToken cancellationToken, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
@@ -544,7 +544,7 @@ public sealed class F2fsParser : IDisposable
     {
         if (!visited.Add(ino))
         {
-            throw new InvalidDataException($"Directory cycle detected at inode {ino}.");
+            throw new FileSystemCorruptedException($"Directory cycle detected at inode {ino}.");
         }
 
         var inode = ReadInode(ino);
@@ -615,7 +615,7 @@ public sealed class F2fsParser : IDisposable
                 || inlineData < 0
                 || inlineData > F2fsNode.InodeEndOffset - inode.InlineDataOffset)
             {
-                throw new InvalidDataException("F2FS inline directory layout exceeds the inode bounds.");
+                throw new FileSystemCorruptedException("F2FS inline directory layout exceeds the inode bounds.");
             }
 
             var node = ReadInodeNode(ino);
@@ -626,7 +626,7 @@ public sealed class F2fsParser : IDisposable
         var dataLength = (long)inode.Size;
         if (inode.Size > MaxDirectoryDataSize || dataLength < 0)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"Directory data size {inode.Size} exceeds the limit of {MaxDirectoryDataSize} bytes.");
         }
 
@@ -658,11 +658,11 @@ public sealed class F2fsParser : IDisposable
         var secondBlock = checked((ulong)_superblock.CpBlkaddr + (uint)_blocksPerSeg);
         var second = TryReadCheckpointPack(secondBlock);
         var useSecond = second is not null && (first is null || unchecked((long)(second.CheckpointVer - first.CheckpointVer)) > 0);
-        var checkpoint = (useSecond ? second : first) ?? throw new InvalidDataException("Neither F2FS checkpoint pack is valid.");
+        var checkpoint = (useSecond ? second : first) ?? throw new FileSystemCorruptedException("Neither F2FS checkpoint pack is valid.");
         _checkpointBlock = useSecond ? secondBlock : _superblock.CpBlkaddr;
         if (_superblock.CpPayload >= _blocksPerSeg - 2 || checkpoint.CpPackStartSum <= _superblock.CpPayload
             || checkpoint.CpPackStartSum >= checkpoint.CpPackTotalBlockCount - 1)
-            throw new InvalidDataException("Invalid F2FS checkpoint payload or summary range.");
+            throw new FileSystemCorruptedException("Invalid F2FS checkpoint payload or summary range.");
         var bitmapOffset = checkpoint.VersionBitmapOffset;
         if ((checkpoint.CkptFlags & 0x400) != 0) bitmapOffset += 4;
         else if (_superblock.CpPayload == 0) bitmapOffset = checked(bitmapOffset + (int)checkpoint.SitVerBitmapBytesize);
@@ -670,18 +670,18 @@ public sealed class F2fsParser : IDisposable
         var expectedNatBytes = checked((long)_superblock.SegmentCountNat / 2 * _blocksPerSeg / 8);
         if (checkpoint.NatVerBitmapBytesize != expectedNatBytes || bitmapOffset > payloadBytes
             || checkpoint.NatVerBitmapBytesize > payloadBytes - bitmapOffset)
-            throw new InvalidDataException("F2FS NAT version bitmap exceeds the checkpoint payload.");
+            throw new FileSystemCorruptedException("F2FS NAT version bitmap exceeds the checkpoint payload.");
         _natVersionBitmap = ReadBytes(checked((long)_checkpointBlock * _blockSize + bitmapOffset), checked((int)checkpoint.NatVerBitmapBytesize), "NAT version bitmap");
         var summary = ReadBlockChecked(_checkpointBlock + checkpoint.CpPackStartSum, "Checkpoint NAT journal");
         var journalOffset = (checkpoint.CkptFlags & F2fsCheckpoint.FlagCompactSum) != 0 ? 0 : 512 * 7;
         var count = BinaryPrimitives.ReadUInt16LittleEndian(summary.AsSpan(journalOffset));
-        if (count > 38) throw new InvalidDataException("F2FS NAT journal exceeds the summary block.");
+        if (count > 38) throw new FileSystemCorruptedException("F2FS NAT journal exceeds the summary block.");
         for (var i = 0; i < count; i++)
         {
             var entry = summary.AsSpan(journalOffset + 2 + i * 13, 13);
             var nid = BinaryPrimitives.ReadUInt32LittleEndian(entry);
             if (!_natJournal.TryAdd(nid, BinaryPrimitives.ReadUInt32LittleEndian(entry[9..])))
-                throw new InvalidDataException("Duplicate F2FS NAT journal entry.");
+                throw new FileSystemCorruptedException("Duplicate F2FS NAT journal entry.");
         }
         return checkpoint;
     }
@@ -697,7 +697,7 @@ public sealed class F2fsParser : IDisposable
             var trailer = ReadBlockChecked(block + checkpoint.CpPackTotalBlockCount - 1, "Checkpoint pack trailer");
             return HasValidCheckpointChecksum(trailer) && BinaryPrimitives.ReadUInt64LittleEndian(trailer) == checkpoint.CheckpointVer ? checkpoint : null;
         }
-        catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException) { return null; }
+        catch (Exception ex) when (ex is InvalidDataException or FileSystemException or EndOfStreamException) { return null; }
     }
 
     private static bool HasValidCheckpointChecksum(ReadOnlySpan<byte> block)
@@ -721,7 +721,7 @@ public sealed class F2fsParser : IDisposable
         {
             var node = ReadNodeBlockCached(inode.XattrNid, "xattr node");
             var footer = F2fsNodeFooter.FromBytes(node);
-            if (footer.Nid != inode.XattrNid || footer.Ino != nid) throw new InvalidDataException("Invalid F2FS xattr owner.");
+            if (footer.Nid != inode.XattrNid || footer.Ino != nid) throw new FileSystemCorruptedException("Invalid F2FS xattr owner.");
             attributes.Write(node.AsSpan(0, F2fsNode.NodeSize - 24));
         }
         return F2fsXattrs.Decode(attributes.GetBuffer().AsSpan(0, (int)attributes.Length));
@@ -740,7 +740,7 @@ public sealed class F2fsParser : IDisposable
         var footer = F2fsNodeFooter.FromBytes(node);
         if (!footer.IsInode)
         {
-            throw new InvalidDataException($"Node nid {nid} is not an inode node (nid={footer.Nid}, ino={footer.Ino}).");
+            throw new FileSystemCorruptedException($"Node nid {nid} is not an inode node (nid={footer.Nid}, ino={footer.Ino}).");
         }
 
         return node;
@@ -750,14 +750,14 @@ public sealed class F2fsParser : IDisposable
     {
         if (nid < F2fsNode.ReservedNodeCount)
         {
-            throw new InvalidDataException($"Invalid reserved nid {nid}.");
+            throw new FileSystemCorruptedException($"Invalid reserved nid {nid}.");
         }
 
         if (!_natJournal.TryGetValue(nid, out var blockAddress))
         {
             var natBlockIndex = nid / F2fsNode.NatEntryPerBlock;
             if (natBlockIndex >= (ulong)_natVersionBitmap.Length * 8)
-                throw new InvalidDataException("F2FS nid exceeds the NAT area.");
+                throw new FileSystemCorruptedException("F2FS nid exceeds the NAT area.");
             var segOff = natBlockIndex / (uint)_blocksPerSeg;
             var inSeg = natBlockIndex % (uint)_blocksPerSeg;
             var secondCopy = (_natVersionBitmap[natBlockIndex / 8] & (0x80 >> (int)(natBlockIndex % 8))) != 0;
@@ -776,7 +776,7 @@ public sealed class F2fsParser : IDisposable
         }
         if (blockAddress < _superblock.MainBlkaddr || blockAddress >= _superblock.BlockCount)
         {
-            throw new InvalidDataException($"NAT entry for nid {nid} is missing.");
+            throw new FileSystemCorruptedException($"NAT entry for nid {nid} is missing.");
         }
 
         return blockAddress;
@@ -949,7 +949,7 @@ public sealed class F2fsParser : IDisposable
         var maxSupportedSize = checked(maxSupportedBlocks * _blockSize);
         if (inode.Size > (ulong)maxSupportedSize)
         {
-            throw new InvalidDataException("F2FS file data exceeds the supported block-mapping depth.");
+            throw new FileSystemCorruptedException("F2FS file data exceeds the supported block-mapping depth.");
         }
 
         Core.Streams.MappedBlockCopy.Copy(_stream, output, checked((long)inode.Size), _blockSize,
@@ -966,7 +966,7 @@ public sealed class F2fsParser : IDisposable
         var logShift = inode.LogClusterSize + 12;
         if (logShift is < 14 or > 20)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"F2FS compressed cluster log size {inode.LogClusterSize} is out of range.");
         }
 
@@ -974,7 +974,7 @@ public sealed class F2fsParser : IDisposable
         var clusterPages = clusterSize / _blockSize;
         if (clusterPages <= 0)
         {
-            throw new InvalidDataException("F2FS compressed cluster has non-positive page count.");
+            throw new FileSystemCorruptedException("F2FS compressed cluster has non-positive page count.");
         }
 
         var blockSize = _blockSize;
@@ -996,12 +996,12 @@ public sealed class F2fsParser : IDisposable
             {
                 var firstAddress = MapBlock(inode, logical + 1);
                 if (firstAddress is null or <= 0 or >= uint.MaxValue - 1)
-                    throw new InvalidDataException("F2FS compressed cluster has no payload block.");
+                    throw new FileSystemCorruptedException("F2FS compressed cluster has no payload block.");
                 var firstBlock = ReadBlockChecked((ulong)firstAddress, "Compressed cluster header");
                 var header = F2fsCompressedCluster.FromBytes(firstBlock);
                 var compressedBytes = header.CompressedSize;
                 if (compressedBytes <= 0 || compressedBytes > (clusterPages - 1) * blockSize - F2fsCompressedCluster.HeaderSize)
-                    throw new InvalidDataException("F2FS compressed cluster length exceeds its reserved blocks.");
+                    throw new FileSystemCorruptedException("F2FS compressed cluster length exceeds its reserved blocks.");
                 var compressed = new byte[compressedBytes];
                 var copied = 0;
                 var blocksToRead = (F2fsCompressedCluster.HeaderSize + compressedBytes + blockSize - 1) / blockSize;
@@ -1016,7 +1016,7 @@ public sealed class F2fsParser : IDisposable
                     {
                         var blkAddr = MapBlock(inode, logical + 1 + (uint)b);
                         if (blkAddr is null or <= 0 or >= uint.MaxValue - 1)
-                            throw new InvalidDataException("F2FS compressed payload block is missing.");
+                            throw new FileSystemCorruptedException("F2FS compressed payload block is missing.");
 
                         blockData = ReadBlockChecked((ulong)blkAddr, $"Compressed cluster block {b} (logical {logical + (uint)b})");
                     }
@@ -1035,12 +1035,12 @@ public sealed class F2fsParser : IDisposable
 
                 if (copied < compressedBytes)
                 {
-                    throw new InvalidDataException(
+                    throw new FileSystemCorruptedException(
                         $"F2FS compressed cluster at logical block {logical} was truncated ({copied}/{compressedBytes} bytes).");
                 }
 
                 if ((inode.CompressFlags & 1) != 0 && ComputeCrc32(F2fsSuperblock.Magic, compressed) != header.Checksum)
-                    throw new InvalidDataException("F2FS compressed cluster checksum mismatch.");
+                    throw new FileSystemCorruptedException("F2FS compressed cluster checksum mismatch.");
                 var decompressed = F2fsCompression.DecompressCluster(
                     compressed,
                     algorithm,
@@ -1048,7 +1048,7 @@ public sealed class F2fsParser : IDisposable
                     clusterSize);
 
                 if (decompressed.Length != clusterSize)
-                    throw new InvalidDataException("F2FS compressed cluster has an incorrect decompressed length.");
+                    throw new FileSystemCorruptedException("F2FS compressed cluster has an incorrect decompressed length.");
                 output.Write(decompressed, 0, writeLength);
 
                 remaining -= writeLength;
@@ -1087,7 +1087,7 @@ public sealed class F2fsParser : IDisposable
             2 => CompressionAlgorithm.Zstd,
 
             0 or 3 => CompressionAlgorithm.Lzo,
-            _ => throw new InvalidDataException(
+            _ => throw new FileSystemCorruptedException(
                 $"Unknown F2FS compression algorithm id {kernelAlgorithmId}."),
         };
 
@@ -1132,7 +1132,7 @@ public sealed class F2fsParser : IDisposable
     {
         if (offset < 0 || length < 0 || offset > _imageSize || length > _imageSize - offset)
         {
-            throw new InvalidDataException($"{what} exceeds the image bounds.");
+            throw new FileSystemCorruptedException($"{what} exceeds the image bounds.");
         }
 
         var buffer = new byte[length];
