@@ -6,32 +6,34 @@
 
 | 上下文 | 职责 |
 | --- | --- |
-| `BoundedContexts/AndroidMeta` | APK、DEX、AXML、ARSC 等 Android 包与元数据 |
-| `BoundedContexts/Archive` | 归档成员、路径、元数据、浏览、提取与写入；CPIO 和 TAR 格式读写 |
-| `BoundedContexts/Compression` | 压缩格式识别、参数、流式压缩/解压、文件操作及底层编码器 |
-| `BoundedContexts/BootSecurity` | 启动镜像、AVB 签名与验证、启动补丁 |
-| `BoundedContexts/DeviceTree` | 设备树解析与构建 |
-| `BoundedContexts/FileSystem` | EXT4、EROFS、F2FS 的目录、inode、数据簇及重建 |
-| `BoundedContexts/BlockImage` | Sparse 块映射、原始镜像转换、LP/Super 元数据与逻辑分区布局 |
-| `BoundedContexts/OtaDelta` | Payload、DAT、增量操作与差分应用 |
-| `BoundedContexts/VendorFirmware` | 厂商固件容器与对应封装协议 |
-| `SharedKernel` | 通用格式契约、基于处理器的识别、进度、流与范围校验等共享基础能力 |
-| `SharedKernel/Repacking` | 通用重打包元数据、显式上下文、原子 JSON 保存和格式扩展契约 |
+| `AndroidMeta` | APK、DEX、AXML、ARSC 等 Android 包与元数据 |
+| `Archive` | 归档成员、路径、元数据、浏览、提取与写入；CPIO 和 TAR 格式读写 |
+| `Compression` | 压缩格式识别、参数、流式压缩/解压、文件操作及底层编码器 |
+| `BootSecurity` | 启动镜像、AVB 签名与验证、启动补丁 |
+| `DeviceTree` | 设备树解析与构建 |
+| `FileSystem` | EXT4、EROFS、F2FS 的目录、inode、数据簇及重建 |
+| `BlockImage` | Sparse 块映射、原始镜像转换、LP/Super 元数据与逻辑分区布局 |
+| `OtaDelta` | Payload、DAT、增量操作与差分应用 |
+| `VendorFirmware` | 厂商固件容器与对应封装协议 |
+| `Executable` | ELF 可执行文件读取与 Qualcomm 镜像分析、认证与元数据解析 |
+| `Patching` | 针对 fstab、init.rc、property、INI、JSON、XML、fs_config 等镜像配置与文本内容的补丁应用 |
+| `Core` | 流包装、校验和、格式探测契约、Magic 识别引擎、通用格式契约、基于处理器的识别、进度与范围校验等共享基础能力 |
+| `Core/Repacking` | 通用重打包元数据、显式上下文、原子 JSON 保存和格式扩展契约 |
 | `Application/Formats` | 内置格式处理器的注册与组装 |
 | `Application/Containers` | 组合 ZIP、Payload、LP/Super 能力，分析容器结构并提取选定成员 |
 | `Infrastructure/Downloads` | HTTP 下载、GitHub 镜像选择与网络传输 |
 
 通用压缩是供其他上下文调用的支撑上下文。它拥有算法选择、压缩参数与压缩流语义，不能依赖归档、文件系统、OTA、启动镜像或宿主。归档上下文拥有成员列表和成员提取语义，可以调用压缩上下文处理外层压缩。文件系统簇、Payload 操作和启动镜像 ramdisk 的专有封装仍由各自上下文解析，通用编码器不负责解释这些领域结构。
 
-`Application/Formats/FirmwareFormatRegistry` 是内置处理器的组装入口，集中注册上下文处理器。`SharedKernel/FormatDetector` 只面向已注册的 `IReadonlyFormatHandler`，不构造具体格式实现。
+`Application/Formats/FirmwareFormatRegistry` 是内置处理器的组装入口，集中注册上下文处理器。`Core/FormatDetector` 只面向已注册的 `IReadonlyFormatHandler`，不构造具体格式实现。
 
-依赖方向为：宿主、CLI、MCP 调用应用编排或上下文入口；应用编排调用上下文；上下文使用共享契约和基础能力。`SharedKernel` 不引用 `BoundedContexts`、`Application` 或 `Infrastructure`；上下文不引用 `Application`、`Infrastructure` 或宿主。下载基础设施由需要网络的调用方显式使用。
+依赖方向为：宿主、CLI、MCP 调用应用编排或上下文入口；应用编排调用上下文；上下文使用共享契约和基础能力。`Core` 不引用其他模块、`Application` 或 `Infrastructure`；各模块不引用 `Application`、`Infrastructure` 或宿主。下载基础设施由需要网络的调用方显式使用。
 
 这些边界位于同一个程序集内，按实际格式职责组织，不统一增加 `Entity`、`Repository`、事件总线或多层转发。现有上下文之间仍有明确的格式组合，例如 Sparse 的文件系统提取与文件系统重建的 Sparse 输出；这类跨上下文依赖保持在同一程序集内。
 
 ## 重打包与文件系统元数据
 
-`SharedKernel/Repacking/RepackMetadata` 负责通用来源信息、元数据路径和操作上下文、解包后的保存顺序及有界原子发布。`IRepackMetadataProvider` 由需要重建信息的格式处理器实现：配置阶段提供该格式的配置、选项和目录打包能力，捕获阶段在 JSON 发布前完成附属数据保存。新增格式通过该契约接入，不在共享层增加具体格式类型判断。目录重建能力只来自该契约：未实现契约的处理器仍保存通用来源信息，但不声明重建能力，仅 `FormatName` 与内置格式相同的自定义处理器也不会获得对应格式的重建策略。元数据文件名、JSON schema、版本和字段构成当前持久化契约。
+`Core/Repacking/RepackMetadata` 负责通用来源信息、元数据路径和操作上下文、解包后的保存顺序及有界原子发布。`IRepackMetadataProvider` 由需要重建信息的格式处理器实现：配置阶段提供该格式的配置、选项和目录打包能力，捕获阶段在 JSON 发布前完成附属数据保存。新增格式通过该契约接入，不在共享层增加具体格式类型判断。目录重建能力只来自该契约：未实现契约的处理器仍保存通用来源信息，但不声明重建能力，仅 `FormatName` 与内置格式相同的自定义处理器也不会获得对应格式的重建策略。元数据文件名、JSON schema、版本和字段构成当前持久化契约。
 
 | 目录 | 职责 |
 | --- | --- |
@@ -76,7 +78,7 @@ CPIO 和 TAR 是归档格式，描述文件成员及其元数据；它们本身�
 
 ## 内部职责分类
 
-目录决定命名空间，例如 `BlockImage/Sparse/IO/SparseReader.cs` 使用 `UotanStudio.Firmware.BoundedContexts.BlockImage.Sparse.IO`。同一类型的 partial 文件放在同一职责目录，保持相同命名空间。与格式状态紧密相关的私有方法留在所属类型中，不为每个方法建立转发类。
+目录决定命名空间，例如 `BlockImage/Sparse/IO/SparseReader.cs` 使用 `UotanStudio.Firmware.BlockImage.Sparse.IO`。同一类型的 partial 文件放在同一职责目录，保持相同命名空间。与格式状态紧密相关的私有方法留在所属类型中，不为每个方法建立转发类。
 
 | 范围 | 职责归属 |
 | --- | --- |
@@ -101,6 +103,6 @@ NTPi 的 `Compression/Lzma2Compressor` 实际还处理 `NTDECOMP` 头部、长�
 
 ## 命名空间与调用入口
 
-命名空间由目录决定：压缩上下文为 `UotanStudio.Firmware.BoundedContexts.Compression`（LZO 块实现在其 `Codecs`），归档上下文为 `UotanStudio.Firmware.BoundedContexts.Archive`，Sparse 与 LP 位于 `BoundedContexts.BlockImage`，容器组合与内置处理器注册位于 `Application.Containers` 与 `Application.Formats`，HTTP 下载与 GitHub 镜像选择位于 `Infrastructure.Downloads`，重打包元数据位于 `SharedKernel.Repacking`。
+命名空间由目录决定：压缩模块为 `UotanStudio.Firmware.Compression`（LZO 块实现在其 `Codecs`），归档模块为 `UotanStudio.Firmware.Archive`，Sparse 与 LP 位于 `BlockImage`，容器组合与内置处理器注册位于 `Application.Containers` 与 `Application.Formats`，HTTP 下载与 GitHub 镜像选择位于 `Infrastructure.Downloads`，重打包元数据位于 `Core.Repacking`。
 
 文件操作入口是 `CompressionFile.CompressFile`、`DecompressFile`、`DecompressFileAuto`、`DetectFile`；头部识别入口是 `CompressionDetector.Detect`；字节数组与流重载入口是 `CompressionService.Compress`、`Decompress`。程序集不携带其它命名空间的类型转发，外部调用方只能按当前命名空间引用公开类型。

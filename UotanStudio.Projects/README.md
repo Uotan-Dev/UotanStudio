@@ -14,7 +14,8 @@ await session.CreateNewSolutionAsync(solutionPath, cancellationToken);
 
 var data = (ProjectDataWorkspace)session.Workspace;
 data.Settings.ErofsCompLevel = 6;
-data.Workflow.Nodes.Add(new NodeDto { InstanceId = "node-1", TypeKey = "Data.FileRead" });
+await session.CreateNodeProjectAsync("Flow", cancellationToken);
+data.Workflows["Flow"].Nodes.Add(new NodeDto { InstanceId = "node-1", TypeKey = "Data.FileRead" });
 await session.SaveAsync(cancellationToken: cancellationToken);
 
 await session.AddSubProjectAsync(subProjectPath, cancellationToken);
@@ -24,7 +25,9 @@ await session.ExportAsync(archivePath, cancellationToken);
 await session.CloseAsync(cancellationToken: cancellationToken);
 ```
 
-每个会话默认独立持有 `ProjectContext`、`ProjectHistory` 和 `ProjectDataWorkspace`。数据主机无需节点编辑器，保存／重新读取时保留未知节点 DTO 和缺失镜像的描述；固件检测、文件导入和实际编辑器保存需要宿主提供 `IProjectWorkspace`。数据主机的 `ImportFilesAsync` 明确拒绝未经定义的导入，而不是假定文件格式。
+新建解决方案不会自动创建节点项目；需要时调用 `CreateNodeProjectAsync`，节点项目文件落在解决方案根的 `nodes/<name>.uotannode`，并在解决方案文件里按登记项（名称、相对路径、是否打开、是否活动）记录。保存只重写宿主 `OpenWorkflowNames` 报告的打开文档，未打开的登记项保持磁盘原样。
+
+每个会话默认独立持有 `ProjectContext`、`ProjectHistory` 和 `ProjectDataWorkspace`。数据主机无需图形节点编辑器，保存／重新读取时保留未知节点 DTO 和缺失镜像的描述；固件检测、文件导入和实际编辑器保存需要宿主提供 `IProjectWorkspace`。数据主机的 `ImportFilesAsync` 明确拒绝未经定义的导入，而不是假定文件格式。
 
 应在会话空闲时编辑数据，然后等待生命周期方法完成；不要在操作过程中直接修改上下文或 DTO 集合。库没有后台线程、定时器或文件监听器。它不主动恢复上一次桌面工程。
 
