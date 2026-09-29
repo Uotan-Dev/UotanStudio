@@ -40,6 +40,7 @@ internal static class DeliverySuperBuilder
         IProgress<DeliveryProgress>? detailProgress = null) => Task.Run(() =>
     {
         if (options.DeviceSize > long.MaxValue) throw new InvalidDataException("Super size exceeds stream limits.");
+        DeliverySuperCapacity.ValidateDeviceSize(options);
         var partitions = ExpandPartitions(files, options);
         var builder = MetadataBuilder.New(options.DeviceSize, options.MetadataSize, options.Slots, options.BlockSize);
         var groups = DeliveryGroups.Parse(DeliveryGroups.Format(options.Groups));

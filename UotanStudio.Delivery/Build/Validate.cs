@@ -35,6 +35,8 @@ internal static class DeliveryValidation
     /// 仅生成 Super_Empty 时 Empty 与 Zstd 互斥，且唯一生成条目是 super_empty.img；便携 Zstd 只作可选覆盖，
     /// 提供时路径必须存在，缺失时由工具服务自动下载钉住版本兜底。</para>
     /// Validates the plan's output mode, image membership, container, scripts, and generated entries.
+    /// Super size must be entered explicitly because no guessed default can match every device: the value is baked into
+    /// the LP geometry and the generated scripts compare it against the device reading.
     /// With Super_Empty only, Empty excludes Zstd and the sole generated entry is super_empty.img; a portable
     /// Zstd is an optional override whose provided paths must exist, otherwise the tool service downloads the
     /// pinned release.
@@ -74,6 +76,7 @@ internal static class DeliveryValidation
         if (plan.PackPayload) DeliveryPayloadBuilder.Validate(plan);
         DeliveryPackageBuilder.Validate(plan);
         if (sources && DeliveryPackageBuilder.HasDat(plan)) DeliveryRecoveryUpdater.Resolve(plan);
+        if (plan.PackSuper) DeliverySuperCapacity.ValidateDeviceSize(plan.Super);
         if (plan.PackSuper && plan.Super.Empty && plan.Super.Zstd)
             throw new InvalidDataException("仅生成Super_Empty 与压缩为ZST 不能同时选择 / Super_Empty only excludes ZST compression.");
         if (plan.Super.ZstdLevel is < 0 or > 22)

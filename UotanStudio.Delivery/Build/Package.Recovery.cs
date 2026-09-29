@@ -70,6 +70,8 @@ internal static partial class DeliveryPackageBuilder
         script.Append('\n');
         foreach (var line in DeliveryScriptGenerator.BannerLines(plan, localize))
             script.AppendLine("ui_print " + DeliveryScriptGenerator.QuoteShell(line));
+        foreach (var line in DeliveryScriptGenerator.PrerequisiteLines(localize, true))
+            script.AppendLine("ui_print " + DeliveryScriptGenerator.QuoteShell(line));
         script.AppendLine("""
             for tool in unzip sha256sum blockdev dd wc getprop readlink mkfifo mktemp awk rm cat chmod sync; do
               command -v "$tool" >/dev/null || fail "Missing $tool"
@@ -190,6 +192,8 @@ internal static partial class DeliveryPackageBuilder
         var images = RecoveryImages(plan);
         var script = new StringBuilder("# Executed by the native updater at META-INF/com/google/android/update-binary.\n");
         foreach (var line in DeliveryScriptGenerator.BannerLines(plan, localize))
+            script.AppendLine("ui_print(" + DeliveryScriptGenerator.QuoteEdify(line) + ");");
+        foreach (var line in DeliveryScriptGenerator.PrerequisiteLines(localize, true))
             script.AppendLine("ui_print(" + DeliveryScriptGenerator.QuoteEdify(line) + ");");
         string Target(int i)
         {

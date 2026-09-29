@@ -362,7 +362,7 @@ public partial class DeliveryView
             _deliveryGroups = plan.Super.Groups;
             OutputDirectoryBox.Text = plan.OutputDirectory;
             SuperDeviceNameBox.Text = plan.PackPayload ? "payload.bin" : plan.Super.DeviceName; SuperGroupNameBox.Text = plan.Super.Group;
-            SuperSizeBox.Text = plan.Super.DeviceSize.ToString(CultureInfo.InvariantCulture);
+            SuperSizeBox.Text = plan.Super.DeviceSize == 0 ? "" : plan.Super.DeviceSize.ToString(CultureInfo.InvariantCulture);
             SuperMetadataSizeBox.Text = plan.Super.MetadataSize.ToString(CultureInfo.InvariantCulture);
             SuperBlockSizeBox.Text = (plan.PackPayload ? plan.Payload.BlockSize : plan.Super.BlockSize).ToString(CultureInfo.InvariantCulture);
             var deviceType = plan.Super.DeviceType.Length > 0 ? plan.Super.DeviceType : plan.Super.VirtualAb ? "VAB" : plan.Super.AutoZero ? "AB" : "AOnly";

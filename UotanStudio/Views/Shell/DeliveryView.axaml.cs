@@ -54,7 +54,7 @@ public partial class DeliveryView : UserControl
         };
         SuperVabBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
         SuperAbBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
-        SuperSettingsProjectBox.SelectionChanged += (_, _) => ApplySourceSettings();
+        SuperSettingsProjectBox.SelectionChanged += (_, _) => UpdateProjectSuperSelector();
         SuperAOnlyBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
         ImageSelection.SelectedImagesChanged += (_, _) => UpdateCompositionImages();
         ImageSelection.LayoutChanged += (_, _) => UpdateImagesLayout();
@@ -293,33 +293,71 @@ public partial class DeliveryView : UserControl
 
     private void UpdateProjectSuperSelector()
     {
-        // 勾选使用项目 Super/Payload 设置且存在可选项目时，仅禁用由项目配置驱动的表单字段，避免用户覆盖项目；
-        // 底部镜像选项（压缩为ZST、生成Super_Empty）不属于项目配置驱动字段，保持可交互。
-        // While a source configuration is applied, only the fields it drives are disabled so the project values
-        // cannot be overridden; the image options (ZST, Super_Empty) are not project-driven and stay interactive.
-        var applied = UseProjectSuperSettingsBox.IsChecked == true && SuperSettingsProjectBox.Items.Count > 0;
+        var source = ResolveSourceSettings();
+        if (source is null && UseProjectSuperSettingsBox.IsChecked == true)
+        {
+            // 勾选后当前模式读不到来源配置（没有候选子项目、项目被移除或配置损坏）时立刻取消勾选并提示，
+            // 否则界面会停留在“使用项目配置”而输出仍按手工值进行。
+            // Clear the tick and report when the current mode has no readable source configuration (no candidate
+            // sub-project, the project went away, or the configuration is unreadable); otherwise the form keeps
+            // claiming the project drives the values while the plan still uses hand-entered ones.
+            UseProjectSuperSettingsBox.IsChecked = false;
+            _ = ShowDeliveryMessageAsync(LanguageService.Instance.GetString("Delivery_NoProjectSourceSettings"), false);
+            return;
+        }
+
+        if (source is { } chosen) ApplySourceSettings(chosen.RootPath, chosen.Settings);
+        // 勾选来源配置后只禁用由项目驱动且确实取到值的表单字段，避免用户覆盖项目值，也避免禁用的文本框
+        // 把未被回填的用户旧值冒充项目值写进计划；底部镜像选项（压缩为 ZST、生成 Super_Empty）不属于
+        // 项目配置驱动字段，保持可交互。
+        // While a source configuration is applied, only the fields it actually supplies are disabled: the project
+        // values must not be overridden, and a greyed box must never present an unfilled stale user value as a
+        // project value. The image options (ZST, Super_Empty) are not project-driven and stay interactive.
+        var settings = source?.Settings;
+        var applied = settings is not null;
+        var drivesSuperGeometry = settings is { Kind: "super" };
+        var drivesPayloadMetadata = settings is { Kind: "payload" };
+        var sourceGroupName = applied ? SourceGroupName(settings!) : "";
         SuperSettingsProjectBox.IsEnabled = applied;
-        SuperFormatOptions.IsEnabled = !applied;
-        SuperDeviceTypeOptions.IsEnabled = !applied;
-        SuperDeviceNameField.IsEnabled = !applied;
+        // ZIP 直出会强制 RAW，格式此时由输出模式而不是来源决定，因此保持可见可交互，只由 SPARSE 自身的
+        // 禁用态表达约束。
+        // ZIP delivery forces RAW, so the format is decided by the output mode rather than the source; keep the
+        // group interactive and let SPARSE's own disabled state express the constraint.
+        SuperFormatOptions.IsEnabled = !(drivesSuperGeometry && DirectOutputBox.IsChecked != true);
+        SuperDeviceTypeOptions.IsEnabled = settings is not { DeviceType: "VAB" or "AB" or "AOnly" };
+        SuperDeviceNameField.IsEnabled = !drivesPayloadMetadata && settings is not { DeviceName.Length: > 0 };
         SuperBlockSizeField.IsEnabled = !applied;
-        SuperMetadataSizeField.IsEnabled = !applied;
-        SuperSizeField.IsEnabled = !applied;
-        SuperGroupNameField.IsEnabled = !applied;
-        SuperMetadataSlotsField.IsEnabled = !applied;
-        PayloadTimestampBox.IsEnabled = !applied;
-        PayloadSecurityPatchBox.IsEnabled = !applied;
-        // 使用项目 Payload 设置时，Payload 元数据字段由来源容器决定，一并禁用以免被手工覆盖；
-        // 签名下拉与 Postinstall 仍由作者按当前交付选择，保持可用。
-        // With project Payload settings applied, the Payload metadata fields come from the source container and
-        // are disabled so they cannot be overridden; the signing dropdown and Postinstall stay author-selectable.
-        PayloadVersionBox.IsEnabled = !applied;
-        PayloadMinorVersionBox.IsEnabled = !applied;
-        PayloadBuildFingerprintBox.IsEnabled = !applied;
-        PayloadIncrementalBox.IsEnabled = !applied;
-        PayloadSdkLevelBox.IsEnabled = !applied;
-        ApplySourceSettings();
+        SuperMetadataSizeField.IsEnabled = !drivesSuperGeometry;
+        SuperSizeField.IsEnabled = !(drivesSuperGeometry && settings is { Size: > 0 });
+        SuperGroupNameField.IsEnabled = sourceGroupName.Length == 0;
+        SuperMetadataSlotsField.IsEnabled = !drivesSuperGeometry;
+        PayloadTimestampBox.IsEnabled = !drivesPayloadMetadata;
+        PayloadSecurityPatchBox.IsEnabled = !drivesPayloadMetadata;
+        // Payload 主版本由交付约束固定为 2，来源配置里没有该字段，所以保持只读可见而不标记为项目驱动。
+        // The Payload major version is pinned by the delivery contract instead of read from the configuration, so
+        // the read-only box stays enabled rather than being presented as project-driven.
+        PayloadVersionBox.IsEnabled = true;
+        PayloadMinorVersionBox.IsEnabled = !drivesPayloadMetadata;
+        PayloadBuildFingerprintBox.IsEnabled = !drivesPayloadMetadata;
+        PayloadIncrementalBox.IsEnabled = !drivesPayloadMetadata;
+        PayloadSdkLevelBox.IsEnabled = !drivesPayloadMetadata;
     }
+
+    private (string RootPath, DeliverySourceContainerSettings Settings)? ResolveSourceSettings()
+    {
+        if (UseProjectSuperSettingsBox.IsChecked != true) return null;
+        if (SuperSettingsProjectBox.SelectedItem is not string name) return null;
+        if (ProjectContextService.Instance.SubProjects.FirstOrDefault(project => project.Name == name)?.RootPath
+            is not { } root) return null;
+        if (ReadSourceSettings(root) is not { } settings) return null;
+        // 配置里的 Kind 与当前模式不一致时按不可用处理，避免把另一套字段当成项目值禁用。
+        // A configuration whose Kind disagrees with the current mode counts as unavailable, so the other mode's
+        // fields are never disabled as though they held project values.
+        return settings.Kind == (PackPayloadBox.IsChecked == true ? "payload" : "super") ? (root, settings) : null;
+    }
+
+    private static string SourceGroupName(DeliverySourceContainerSettings settings) =>
+        settings.GroupNames.FirstOrDefault(name => name != "default") ?? settings.GroupNames.FirstOrDefault() ?? "";
 
     private DeliverySourceContainerSettings? ReadSourceSettings(string root)
     {
@@ -343,13 +381,15 @@ public partial class DeliveryView : UserControl
         UpdateProjectSuperSelector();
     }
 
-    private void ApplySourceSettings()
+    private void ApplySourceSettings(string root, DeliverySourceContainerSettings settings)
     {
-        if (UseProjectSuperSettingsBox.IsChecked != true) return;
-        var project = ProjectContextService.Instance.SubProjects.FirstOrDefault(p => p.Name == SuperSettingsProjectBox.SelectedItem as string);
-        if (project is null || ReadSourceSettings(project.RootPath) is not { } settings) return;
-        var sourcePath = SourceContainerMetadataService.GetPath(project.RootPath, settings.Kind);
-        var identity = sourcePath + "|" + File.GetLastWriteTimeUtc(sourcePath).Ticks;
+        var sourcePath = SourceContainerMetadataService.GetPath(root, settings.Kind);
+        // ZIP 直出会强制 RAW，读到的 SPARSE 只在非直出时生效，因此把输出约束并入身份，
+        // 切换直出后重新回填，而不是留下先前被覆盖的格式值。
+        // ZIP output forces RAW, so a SPARSE reading only survives in non-ZIP mode; the output constraint is part
+        // of the identity so toggling ZIP re-applies the read format instead of keeping the overwritten value.
+        var identity = sourcePath + "|" + File.GetLastWriteTimeUtc(sourcePath).Ticks + "|" +
+            (DirectOutputBox.IsChecked == true ? "zip" : "dir");
         if (_appliedSourceSettings == identity) return;
         try
         {
@@ -366,12 +406,16 @@ public partial class DeliveryView : UserControl
         SuperVabBox.IsChecked = settings.DeviceType == "VAB";
         SuperAbBox.IsChecked = settings.DeviceType == "AB";
         SuperAOnlyBox.IsChecked = settings.DeviceType == "AOnly";
-        SuperGroupNameBox.Text = settings.GroupNames.FirstOrDefault(name => name != "default") ?? settings.GroupNames.FirstOrDefault() ?? "";
+        // 来源没有分组信息时保留用户填写的簇名，禁用态由 UpdateProjectSuperSelector 按“是否真的取到值”决定。
+        // Keep the user's group name when the source carries no groups; UpdateProjectSuperSelector disables the
+        // field only when a value was actually read.
+        var groupName = SourceGroupName(settings);
+        if (groupName.Length > 0) SuperGroupNameBox.Text = groupName;
         if (settings.Kind == "super")
         {
             SuperRawBox.IsChecked = settings.Storage == "RAW";
             SuperSparseBox.IsChecked = settings.Storage == "SPARSE";
-            SuperSizeBox.Text = settings.Size.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (settings.Size > 0) SuperSizeBox.Text = settings.Size.ToString(System.Globalization.CultureInfo.InvariantCulture);
             SuperMetadataSlotsBox.Text = settings.MetadataSlots.ToString(System.Globalization.CultureInfo.InvariantCulture);
             SuperMetadataSizeBox.Text = settings.MetadataMaxSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
             SuperBlockSizeBox.Text = settings.BlockSize.ToString(System.Globalization.CultureInfo.InvariantCulture);

@@ -54,8 +54,22 @@ internal static class DeliverySuperCapacity
     /// <para>在构建器分配任何 extent 前抛出可操作的错误。消息给出短缺字节数、保留区与精确的最小
     /// Super 大小，使交付面板能告诉作者要改什么，而不是抛出 LP 元数据的裸 <c>ArgumentException</c>。</para>
     /// </summary>
+    /// <summary>
+    /// Rejects an unset Super size before any LP geometry is built. The size is baked into the geometry and the
+    /// generated scripts compare it against the device reading, so a guessed default is worse than no value at all.
+    /// <para>在构建任何 LP 几何之前拒绝未填写的 Super 大小。该数值会被烘焙进几何信息，生成的脚本再拿它与设备读数
+    /// 比对，因此一个猜测的默认值比留空更糟。</para>
+    /// </summary>
+    /// <param name="options"><para>待校验的 Super 选项。/ The Super options to check.</para></param>
+    internal static void ValidateDeviceSize(DeliverySuperOptions options)
+    {
+        if (options.DeviceSize == 0)
+            throw new InvalidDataException("Super 大小必须按设备读数显式填写 / Super size must be entered explicitly; read the device with fastboot getvar super-partition-size.");
+    }
+
     internal static void Validate(IReadOnlyList<long> lengths, DeliverySuperOptions options)
     {
+        ValidateDeviceSize(options);
         if (options.BlockSize == 0)
             throw new InvalidDataException("Super 逻辑块大小必须大于 0 / Super logical block size must be positive.");
         var required = RequiredBytes(lengths, options.BlockSize);

@@ -105,6 +105,7 @@ internal static partial class DeliveryScriptGenerator
     {
         var b = new StringBuilder("#!/bin/bash\nset -eu\nROOT=\"$(cd -- \"$(dirname -- \"$0\")\" && pwd)\"\n");
         foreach (var line in BannerLines(plan, localize)) b.AppendLine($"printf '%s\\n' {Sh(line)}");
+        foreach (var line in PrerequisiteLines(localize, false)) b.AppendLine($"printf '%s\\n' {Sh(line)}");
         b.AppendLine($"TOOLS=\"$ROOT/bin/{platform}\"");
         b.AppendLine(ShellIntegrity(platform, plan, localize));
         b.AppendLine("die() { printf '%s\\n' \"$*\" >&2; exit 1; }");
@@ -132,7 +133,7 @@ internal static partial class DeliveryScriptGenerator
             .Select(x => $"    {x.f.FileName}) file=\"$ROOT/{x.path}\" ;;")) : string.Empty;
         b.AppendLine($"flash() {{\n  local target=\"$1\" name=\"$2\" file=\"$ROOT/{(plan.PackSuper ? "$2" : "images/$2")}\"\n  case \"$name\" in\n{flashRoot}\n    *.zst) file=\"$WORK/${{name%.zst}}.img\"; \"$ZSTD\" -d -o \"$file\" -- \"$ROOT/{(plan.PackSuper ? "$name" : "images/$name")}\" || die {Sh(T(localize, "DecompressionFailed", "Decompression failed."))} ;;\n  esac");
         b.AppendLine($"  if [ \"$target\" = super_empty ]; then\n    \"$TOOLS/fastboot\" wipe-super \"$file\" || die {Sh(T(localize, "WipeSuperFailed", "wipe-super failed."))}");
-        b.AppendLine($"  elif [ \"$target\" = super ]; then\n    \"$TOOLS/fastboot\" flash \"$target\" \"$file\" || die {Sh(T(localize, "SuperFlashFailed", "Super flash failed."))}\n  else");
+        b.AppendLine($"  elif [ \"$target\" = super ]; then\n{(plan.PackSuper ? ShellSuperSizeGuard(plan, localize) : "")}    \"$TOOLS/fastboot\" flash \"$target\" \"$file\" || die {Sh(T(localize, "SuperFlashFailed", "Super flash failed."))}\n  else");
         b.AppendLine($"    \"$TOOLS/fastboot\" {(plan.Slot.Length > 0 ? "--slot=" + plan.Slot + " " : "")}flash \"$target\" \"$file\" || die {Sh(T(localize, "FlashFailed", "Flash failed."))}\n  fi\n}}");
         b.AppendLine(ShellMode(localize));
         for (var i = 0; i < groups.Length; i++)
@@ -166,6 +167,7 @@ internal static partial class DeliveryScriptGenerator
     {
         var b = new StringBuilder("@echo off\r\nsetlocal DisableDelayedExpansion\r\nset \"WORK=\"\r\nchcp 65001 >nul\r\nset \"ROOT=%~dp0\"\r\nset \"TOOLS=%~dp0bin\\Windows\"\r\n");
         foreach (var line in BannerLines(plan, localize)) b.AppendLine(BatchEcho(line));
+        foreach (var line in PrerequisiteLines(localize, false)) b.AppendLine(BatchEcho(line));
         b.AppendLine(BatchIntegrity(plan));
         b.AppendLine("if not exist \"%TOOLS%\\fastboot.exe\" goto failed\nset \"WORK=%TEMP%\\uotan-flash-%RANDOM%-%RANDOM%\"\nif exist \"%WORK%\" exit /b 1\nmkdir \"%WORK%\" || exit /b 1");
         b.AppendLine("\"%TOOLS%\\fastboot.exe\" devices >\"%WORK%\\devices.txt\" 2>&1\nif errorlevel 1 goto failed\nset COUNT=0\nfor /f \"usebackq tokens=1\" %%D in (\"%WORK%\\devices.txt\") do set /a COUNT+=1 >nul\nif not \"%COUNT%\"==\"1\" goto failed");
@@ -203,8 +205,9 @@ internal static partial class DeliveryScriptGenerator
             .Where(x => x.path.Contains('/'))
             .Select(x => $"if /i \"%~2\"==\"{x.f.FileName}\" set \"IMAGE=%ROOT%{x.path.Replace('/', '\\')}\"")) : string.Empty;
         b.AppendLine($":flash\nset \"IMAGE=%ROOT%{(plan.PackSuper ? "%~2" : "images\\%~2")}\"\n{batchCases}\nif /i not \"%~x2\"==\".zst\" goto flash_ready\nset \"IMAGE=%WORK%\\%~n2.img\"\n\"%TOOLS%\\zstd.exe\" -d \"%ROOT%{(plan.PackSuper ? "%~2" : "images\\%~2")}\" -o \"%IMAGE%\"\nif errorlevel 1 exit /b 1\n:flash_ready\nif \"%~1\"==\"super_empty\" goto wipe_super\nif \"%~1\"==\"super\" goto flash_super");
-        b.AppendLine($"\"%TOOLS%\\fastboot.exe\" {(plan.Slot.Length > 0 ? "--slot=" + plan.Slot + " " : "")}flash %~1 \"%IMAGE%\"\nexit /b %ERRORLEVEL%\n:flash_super\n\"%TOOLS%\\fastboot.exe\" flash super \"%IMAGE%\"\nexit /b %ERRORLEVEL%\n:wipe_super\n\"%TOOLS%\\fastboot.exe\" wipe-super \"%IMAGE%\"\nexit /b %ERRORLEVEL%");
+        b.AppendLine($"\"%TOOLS%\\fastboot.exe\" {(plan.Slot.Length > 0 ? "--slot=" + plan.Slot + " " : "")}flash %~1 \"%IMAGE%\"\nexit /b %ERRORLEVEL%\n:flash_super\n{(plan.PackSuper ? "call :ensure_super_size\nif errorlevel 1 exit /b 1\n" : "")}\"%TOOLS%\\fastboot.exe\" flash super \"%IMAGE%\"\nexit /b %ERRORLEVEL%\n:wipe_super\n\"%TOOLS%\\fastboot.exe\" wipe-super \"%IMAGE%\"\nexit /b %ERRORLEVEL%");
         b.AppendLine(BatchMode());
+        if (plan.PackSuper) b.Append(BatchSuperSizeGuard(plan));
         return b.ToString().Replace("\r\n", "\n").Replace("\n", "\r\n");
     }
 }

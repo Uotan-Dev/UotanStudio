@@ -87,7 +87,15 @@ internal sealed record DeliverySuperOptions
     internal static int ResolveZstdLevel(DeliverySuperOptions options) =>
         options.ZstdLevel is >= 1 and <= 22 ? options.ZstdLevel : DefaultZstdLevel;
 
-    public ulong DeviceSize { get; init; } = 9_126_805_504;
+    /// <summary>
+    /// <para>Super 块设备大小（字节）。没有可用的默认值：LP 元数据里的这个数与设备实际 super 不一致时，
+    /// 大于实际值会让 liblp 拒绝加载元数据、动态分区整体不可用，小于实际值则会静默留下未分配的尾部空间并
+    /// 破坏后续 OTA 的快照分配。作者必须按设备读数（例如 <c>fastboot getvar super-partition-size</c>）显式填写。</para>
+    /// Super block-device size in bytes. There is no usable default: when this value disagrees with the device, a size
+    /// above the real partition makes liblp refuse the metadata and every dynamic partition becomes unavailable, while a
+    /// size below it silently leaves unallocated tail space and breaks later OTA snapshot allocation. The author must
+    /// enter the device reading, for example <c>fastboot getvar super-partition-size</c>.</summary>
+    public ulong DeviceSize { get; init; }
     public uint MetadataSize { get; init; } = 65536;
     public uint Slots { get; init; } = 3;
     public uint BlockSize { get; init; } = 4096;

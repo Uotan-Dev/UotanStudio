@@ -9,6 +9,8 @@ using SharpCompress.Common;
 using SharpCompress.Writers;
 using SharpCompress.Writers.Zip;
 using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.BootSecurity.Avb;
+using UotanStudio.Firmware.OtaDelta.CareMap;
 using UotanStudio.Firmware.OtaDelta.Dat;
 
 namespace UotanStudio.Services.Delivery;
@@ -69,7 +71,7 @@ internal static partial class DeliveryPackageBuilder
         Validate(plan);
         if (plan.PackPayload && plan.OrganizeDirectory)
         {
-            var path = Path.Combine(stage, "ota.zip");
+            var path = Path.Combine(stage, DeliveryOutputService.ZipFileName(plan, "ota.zip"));
             var metadata = "ota-type=AB\n";
             if (plan.DeviceCodename.Length > 0) metadata += $"pre-device={plan.DeviceCodename}\n";
             if (plan.Package.BuildFingerprint.Length > 0) metadata += $"post-build={plan.Package.BuildFingerprint}\n";
@@ -78,6 +80,7 @@ internal static partial class DeliveryPackageBuilder
             if (plan.Payload.SecurityPatchLevel.Length > 0) metadata += $"post-security-patch-level={plan.Payload.SecurityPatchLevel}\n";
             if (plan.Payload.MaxTimestamp > 0) metadata += $"post-timestamp={plan.Payload.MaxTimestamp}\n";
             string Properties(string streaming, string all) => "ota-streaming-property-files=" + streaming.PadRight(512) + "\nota-property-files=" + all.PadRight(512) + "\n";
+            var careMap = BuildCareMap(plan.Container, token);
             async Task WriteZip(string text)
             {
                 token.ThrowIfCancellationRequested();
@@ -85,6 +88,11 @@ internal static partial class DeliveryPackageBuilder
                 using var writer = WriterFactory.OpenWriter(output, ArchiveType.Zip, new ZipWriterOptions(CompressionType.None) { UseZip64 = true });
                 writer.Write("payload.bin", new FileInfo(Path.Combine(images, "payload.bin")));
                 writer.Write("payload_properties.txt", new FileInfo(Path.Combine(images, "payload_properties.txt")));
+                if (careMap is not null)
+                {
+                    writer.Write(CareMap.ZipEntryName, new MemoryStream(careMap));
+                }
+
                 writer.Write("META-INF/com/android/metadata", new MemoryStream(Encoding.UTF8.GetBytes(text)));
                 if (plan.Package.CertificatePath.Length > 0)
                 {
@@ -218,6 +226,49 @@ internal static partial class DeliveryPackageBuilder
     }
 
     private static DeliveryFile[] Selected(DeliveryPlan plan) => plan.Files.Where(f => !f.Optional || f.Default).ToArray();
+
+    /// <summary><para>为进入 Payload 的容器镜像生成 <c>care_map.pb</c> 字节；只收录受支持且带 AVB footer 的分区，
+    /// 没有任何可校验分区时返回 null，让包保持与不带 verity 时一致的成员集合。</para>
+    /// Builds the <c>care_map.pb</c> bytes for container images, recording only supported partitions that
+    /// carry an AVB footer; returns null when nothing is eligible so the member set matches a non-verity package.
+    /// The scan reads the same source files the payload consumed, so the recorded ranges describe the bytes
+    /// actually shipped rather than a staging copy.
+    /// 扫描读取的对象就是 Payload 消费过的那批源文件，因此记录到的区间描述的是实际交付的字节，而不是暂存副本。</summary>
+    /// <param name="container">Partitions staged for the payload. <para>已暂存进 Payload 的分区。</para></param>
+    /// <param name="token">Cancels the scan. <para>取消扫描。</para></param>
+    /// <returns>The serialized care map, or null. <para>序列化后的 care map，或 null。</para></returns>
+    private static byte[]? BuildCareMap(List<DeliveryFile> container, CancellationToken token)
+    {
+        var careMap = new CareMap();
+        foreach (var file in container)
+        {
+            token.ThrowIfCancellationRequested();
+            if (file.Partition.Length == 0 || !CareMapBuilder.IsSupportedPartition(file.Partition))
+            {
+                continue;
+            }
+
+            var imagePath = file.SourcePath;
+            if (!File.Exists(imagePath))
+            {
+                continue;
+            }
+
+            var verified = AvbImageFootprint.TryRead(imagePath, token);
+            if (verified is null)
+            {
+                continue;
+            }
+
+            var record = CareMapBuilder.TryBuildFromImage(file.Partition, imagePath, verified.Value, token);
+            if (record is not null)
+            {
+                careMap.Partitions.Add(record);
+            }
+        }
+
+        return careMap.Partitions.Count == 0 ? null : careMap.ToBytes();
+    }
 
     /// <summary><para>判断文件名是否为 DAT/BR 刷写工件（.transfer.list/.new.dat[.br]/.patch.dat[.br]）。</para>
     /// Determines whether a filename is a DAT/BR flashing artifact (.transfer.list/.new.dat[.br]/.patch.dat[.br]).</summary>

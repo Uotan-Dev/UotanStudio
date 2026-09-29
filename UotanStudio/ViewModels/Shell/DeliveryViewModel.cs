@@ -211,7 +211,7 @@ internal sealed partial class DeliveryViewModel : ObservableObject
             Output.Insert(0, Observe(new DeliveryImage(new DeliveryFile
             {
                 Generated = true,
-                FileName = plan.PackPayload ? "ota.zip" : DeliveryOutputService.ContainerFileName(plan),
+                FileName = DeliveryOutputService.ContainerFileName(plan),
                 Partition = plan.PackPayload ? "payload" : "super"
             })));
         Confirmed = true;

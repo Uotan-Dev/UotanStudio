@@ -289,11 +289,15 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                             | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
                 }
                 var payloadNotice = plan.Payload.SigningKeyPath.Length == 0 ? "Unsigned full payload. " : "RSA SHA-256 signed full payload. ";
-                var readme = (plan.PackPayload ? payloadNotice + "ota.zip is an A/B OTA package, not a Fastboot package. Unzipping payload.bin does not make it flashable with fastboot. Recovery must support A/B OTA and trust the Payload signing key; disabling ZIP verification does not disable Payload verification. Missing device/build metadata may require target-specific OTA integration. Standalone images are separate from this OTA.\n\n" : "") + "UotanStudio delivery\n\n" + plan.Information + "\n\nImages: " + (plan.PackSuper ? "./" : "images/") + "\nTools: bin/\n"
+                var selfInstaller = plan.Recovery && !plan.PackPayload && !plan.PackSuper || plan.PackSuper && !plan.Super.Empty;
+                var readme = (plan.PackPayload ? payloadNotice + ZipFileName(plan, "ota.zip") + " is an A/B OTA package, not a Fastboot package. Unzipping payload.bin does not make it flashable with fastboot. Recovery must support A/B OTA and trust the Payload signing key; disabling ZIP verification does not disable Payload verification. Missing device/build metadata may require target-specific OTA integration. Standalone images are separate from this OTA.\n\n" : "") + "UotanStudio delivery\n\n" + plan.Information + "\n\nImages: " + (plan.PackSuper ? "./" : "images/") + "\nTools: bin/\n"
                     + "Linux/macOS: chmod +x Flash*.sh bin/Linux/* bin/macOS/* before running when ZIP extraction loses executable permissions.\n"
                     + "TXT: select the intended complete variant. The legacy toolbox does not enforce alternative groups or device checks.\n"
                     + "Legacy TXT paths containing spaces may not work in the old toolbox.\n"
-                    + "Scripts target the partition names and slot policy selected by the author.\n";
+                    + "Scripts target the partition names and slot policy selected by the author.\n"
+                    + "An unlocked bootloader is required. Images verified by AVB also need matching patched vbmeta, otherwise the device may refuse to boot.\n"
+                    + (selfInstaller ? "The package carries its own update-binary and needs a custom recovery; stock recovery rejects packages it cannot verify.\n" : "")
+                    + (plan.PackSuper ? "The Super image is built with the Super size entered in the plan; the scripts compare it against the device reading before flashing super.\n" : "");
                 await File.WriteAllTextAsync(Path.Combine(stage, "README.txt"), readme, token).ConfigureAwait(false);
             }
             await DeliveryPackageBuilder.BuildAsync(plan, stage, imageDirectory, token, progress, signingKeys).ConfigureAwait(false);
@@ -588,7 +592,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         if (plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty)
             plannedNames = plannedNames.Concat(["META-INF/com/google/android/update-binary", "META-INF/com/google/android/updater-script"]);
         if (plan.Recovery && !plan.PackPayload && !plan.PackSuper) plannedNames = plannedNames.Append(ZipFileName(plan, "recovery.zip"));
-        return plannedNames.Select(name => Path.Combine(output, name));
+        return plannedNames.Distinct(StringComparer.Ordinal).Select(name => Path.Combine(output, name));
     }
 
     /// <summary><para>提前扫描输出目录，返回本次输出会覆盖的已存在目标文件（排序去重）。</para>
@@ -622,7 +626,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                         skipped.Add(file.Destination);
                         continue;
                     }
-                    var backup = Path.Combine(stage, ".uotan-original-" + Guid.NewGuid().ToString("N"));
+                    var backup = Path.Combine(parent, ".uotan-original-" + Guid.NewGuid().ToString("N"));
                     File.Move(file.Destination, backup, false);
                     backups.Add((backup, file.Destination));
                 }

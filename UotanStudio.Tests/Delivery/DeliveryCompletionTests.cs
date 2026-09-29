@@ -459,4 +459,108 @@ public sealed partial class DeliveryCompletionTests : IDisposable
         };
         Assert.Throws<InvalidDataException>(() => DeliveryValidation.Validate(plan));
     }
+
+    [Fact]
+    public async Task PayloadExportWithCustomArchiveNamePublishesThePlannedContainer()
+    {
+        var plan = new DeliveryPlan
+        {
+            PackPayload = true,
+            OrganizeDirectory = true,
+            ContainerConfirmed = true,
+            Txt = false,
+            ArchiveName = "custom_ota",
+            Container = [Image("boot")],
+            Files = [new() { Generated = true, Partition = "payload", FileName = "custom_ota.zip" }],
+            OutputDirectory = Path.Combine(_root, "custom-ota-out")
+        };
+        var planned = DeliveryOutputService.PlannedOutputPaths(plan).ToArray();
+        Assert.Equal(planned.Length, planned.Distinct(StringComparer.Ordinal).Count());
+        var published = await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token);
+        var container = Path.Combine(plan.OutputDirectory, "custom_ota.zip");
+        Assert.Contains(container, published);
+        Assert.True(File.Exists(container));
+        Assert.False(File.Exists(Path.Combine(plan.OutputDirectory, "ota.zip")));
+    }
+
+    [Fact]
+    public void SuperDeliveryWithoutExplicitDeviceSizeIsRejected()
+    {
+        var plan = new DeliveryPlan
+        {
+            OrganizeDirectory = false,
+            PackSuper = true,
+            ContainerConfirmed = true,
+            Container = [Image("system")],
+            Files = [new() { Generated = true, Partition = "super", FileName = "super.img" }],
+            OutputDirectory = Path.Combine(_root, "no-size-out")
+        };
+        var error = Assert.Throws<InvalidDataException>(() => DeliveryValidation.Validate(plan));
+        Assert.Contains("super-partition-size", error.Message, StringComparison.Ordinal);
+        Assert.Throws<InvalidDataException>(() => DeliveryValidation.Validate(plan with { Super = new() { Empty = true } }));
+    }
+
+    [Fact]
+    public async Task SuperBuilderWithoutExplicitDeviceSizePublishesNothing()
+    {
+        var output = Path.Combine(_root, "unset-size.img");
+        await Assert.ThrowsAsync<InvalidDataException>(() => DeliverySuperBuilder.BuildAsync(
+            [Image("system")], new() { }, output, token: Token));
+        Assert.False(File.Exists(output));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SuperScriptsCompareDeviceSuperSizeBeforeFlashingSuper(bool packSuper)
+    {
+        var plan = new DeliveryPlan
+        {
+            PackSuper = packSuper,
+            ContainerConfirmed = true,
+            Windows = true,
+            Linux = true,
+            MacOS = true,
+            Container = [Image("system")],
+            Super = new() { DeviceSize = 1234567890 },
+            Files = packSuper
+                ? [new() { Generated = true, Partition = "super", FileName = "super.zip" }, Image("boot")]
+                : [Image("boot")],
+            OutputDirectory = Path.Combine(_root, "super-guard-out")
+        };
+        var scripts = DeliveryScriptGenerator.Generate(plan);
+        foreach (var name in new[] { "FlashLinux.sh", "FlashMacOS.sh", "FlashWindows.bat" })
+        {
+            if (packSuper)
+            {
+                Assert.Contains("getvar super-partition-size", scripts[name], StringComparison.Ordinal);
+                Assert.Contains("1234567890", scripts[name], StringComparison.Ordinal);
+            }
+            else Assert.DoesNotContain("super-partition-size", scripts[name], StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void FastbootScriptsStateUnlockedBootloaderWithoutClaimingRecovery()
+    {
+        var plan = new DeliveryPlan { Windows = true, Linux = true, MacOS = true, Files = [Image("boot")] };
+        var scripts = DeliveryScriptGenerator.Generate(plan);
+        foreach (var name in new[] { "FlashWindows.bat", "FlashLinux.sh", "FlashMacOS.sh" })
+        {
+            Assert.Contains("unlocked bootloader", scripts[name], StringComparison.Ordinal);
+            Assert.DoesNotContain("custom recovery", scripts[name], StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task RecoveryInstallerAnnouncesUnlockedBootloaderAndCustomRecovery()
+    {
+        var plan = DatPlan();
+        await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token);
+        using var zip = ZipFile.OpenRead(Path.Combine(plan.OutputDirectory, "recovery.zip"));
+        using var reader = new StreamReader(zip.GetEntry(DeliveryRecoveryUpdater.ScriptPath)!.Open());
+        var text = await reader.ReadToEndAsync(Token);
+        Assert.Contains("unlocked bootloader", text, StringComparison.Ordinal);
+        Assert.Contains("custom recovery", text, StringComparison.Ordinal);
+    }
 }

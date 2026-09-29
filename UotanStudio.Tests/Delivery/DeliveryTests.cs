@@ -47,6 +47,7 @@ public sealed class DeliveryTests : IDisposable
             OrganizeDirectory = true,
             ContainerConfirmed = true,
             Container = [file with { IncludeInSuper = true }],
+            Super = new() { DeviceSize = 8 * 1024 * 1024 },
             Payload = new() { DynamicPartitionsFile = config },
             OutputDirectory = Path.Combine(_root, "payload-out"),
             Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }],
@@ -232,7 +233,7 @@ public sealed class DeliveryTests : IDisposable
         var model = new DeliveryViewModel();
         model.SetMode(true, true);
         model.SelectSources([system]);
-        model.Confirm(new DeliveryPlan { PackSuper = true, Container = [.. model.Container.Select(i => i.Snapshot())] });
+        model.Confirm(new DeliveryPlan { PackSuper = true, Super = new() { DeviceSize = 8 * 1024 * 1024 }, Container = [.. model.Container.Select(i => i.Snapshot())] });
         model.SelectSources([system, boot]);
         Assert.Single(model.Container);
         Assert.Equal(2, model.Output.Count);
@@ -268,7 +269,7 @@ public sealed class DeliveryTests : IDisposable
         if (super || payload)
         {
             if (super) model.AddZero("vendor");
-            model.Confirm(new DeliveryPlan { PackSuper = super, PackPayload = payload, Container = [.. model.Container.Select(i => i.Snapshot())] });
+            model.Confirm(new DeliveryPlan { PackSuper = super, PackPayload = payload, Super = new() { DeviceSize = 8 * 1024 * 1024 }, Container = [.. model.Container.Select(i => i.Snapshot())] });
         }
         model.SelectSources([system, boot]);
         var original = model.Container.Concat(model.Output).First(i => i.FilePath == system.SourcePath);

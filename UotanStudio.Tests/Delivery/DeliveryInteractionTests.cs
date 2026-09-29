@@ -121,7 +121,7 @@ public sealed class DeliveryInteractionTests : IDisposable
             PackSuper = true,
             ContainerConfirmed = true,
             Container = [empty],
-            Super = new() { AutoZero = true, DeviceType = "VAB" }
+            Super = new() { AutoZero = true, DeviceType = "VAB", DeviceSize = 8 * 1024 * 1024 }
         };
         DeliveryValidation.Validate(plan);
         Assert.Throws<InvalidDataException>(() => DeliveryValidation.Validate(plan with { Super = plan.Super with { AutoZero = false } }));

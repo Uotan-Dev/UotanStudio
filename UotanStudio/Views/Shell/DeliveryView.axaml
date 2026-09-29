@@ -155,7 +155,7 @@
                         </StackPanel>
                         <StackPanel Name="SuperSizeField" Spacing="6">
                             <TextBlock Classes="field-label" Text="{DynamicResource Delivery_SuperSize}" />
-                            <TextBox Name="SuperSizeBox" Text="9126805504"
+                            <TextBox Name="SuperSizeBox" Text=""
                                      AutomationProperties.Name="{DynamicResource Delivery_SuperSize}" />
                         </StackPanel>
                         <StackPanel Name="SuperGroupNameField" Spacing="6">
