@@ -80,14 +80,16 @@ internal sealed class ImageInputService
 
     /// <summary>
     /// <para>探测镜像格式：扩展名优先（cpio/oppo/sparse），随后读取 1082 字节头部按魔数判定
-    /// （Android sparse 0xED26FF3A、payload "CrAU"、boot "ANDROID!"/"VNDRBOOT"、ext4 0xEF53@1080、
-    /// erofs 0xE0F5E1E2@1024、f2fs 0xF2F52010@1024）；头部读取失败回退扩展名推断，
+    /// （Android sparse 0xED26FF3A、payload "CrAU"、boot "ANDROID!"/"VNDRBOOT"、ext4 超级块
+    /// 结构校验、erofs 0xE0F5E1E2@1024、f2fs 0xF2F52010@1024）；ELF 可执行文件一律返回
+    /// <c>unknown</c>，其段内数据可能偶然命中文件系统魔数；头部读取失败回退扩展名推断，
     /// 仍无法识别返回 "unknown"。只读文件头部，不做任何写入或调度。</para>
     /// Probes the image format: extensions first (cpio/oppo/sparse), then a 1082-byte header is read
     /// and matched by magic (Android sparse 0xED26FF3A, payload "CrAU", boot "ANDROID!"/"VNDRBOOT",
-    /// ext4 0xEF53@1080, erofs 0xE0F5E1E2@1024, f2fs 0xF2F52010@1024); header read failures fall back
-    /// to extension inference, and "unknown" is returned when nothing matches. Read-only header
-    /// access; no writes or dispatching.
+    /// a structural ext4 superblock check, erofs 0xE0F5E1E2@1024, f2fs 0xF2F52010@1024); ELF
+    /// executables always return <c>unknown</c> because their segment data can coincidentally match a
+    /// filesystem magic; header read failures fall back to extension inference, and "unknown" is
+    /// returned when nothing matches. Read-only header access; no writes or dispatching.
     /// </summary>
     internal static string DetectFormat(string filePath)
     {
@@ -115,6 +117,16 @@ internal sealed class ImageInputService
             // 读取 1082 字节头部：ext4 魔数 0xEF53 位于 1080、erofs/f2fs 魔数位于 1024。
             // Read a 1082-byte header: ext4 magic 0xEF53 at 1080, erofs/f2fs magic at 1024.
             var header = FormatDetector.ReadHeader(filePath, 1082);
+
+            // ELF 可执行文件不是镜像：其偏移 1024/1080 处的段内数据可能偶然命中文件系统魔数。
+            // An ELF executable is never an image: its segment data at offsets 1024/1080 can
+            // coincidentally match a filesystem magic.
+            if (header.Length >= 4 && header[0] == 0x7F && header[1] == (byte)'E'
+                && header[2] == (byte)'L' && header[3] == (byte)'F')
+            {
+                return "unknown";
+            }
+
             if (header.Length >= 4)
             {
                 // Android sparse 魔数 0xED26FF3A（小端）。
@@ -139,10 +151,9 @@ internal sealed class ImageInputService
                 }
             }
 
-            // ext4 文件系统镜像：魔数 0xEF53 位于偏移 1080。
-            // ext4 filesystem image: magic 0xEF53 at offset 1080.
-            if (header.Length >= 1082
-                && BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(1080, 2)) == 0xEF53)
+            // ext4 文件系统镜像：超级块结构校验（见 IsExt4Superblock）。
+            // ext4 filesystem image: structural superblock validation (see IsExt4Superblock).
+            if (IsExt4Superblock(header))
             {
                 return "ext4";
             }
@@ -178,18 +189,18 @@ internal sealed class ImageInputService
     }
 
     /// <summary>
-    /// <para>读取 1082 字节头部并探测 raw 镜像内的文件系统布局：ext4 魔数 0xEF53 位于 1080、
-    /// erofs/f2fs 魔数位于 1024。头部读取失败时异常原样抛出（与既有解包回退行为一致），
-    /// 未命中返回 null。</para>
-    /// Reads a 1082-byte header and probes the filesystem layout inside a raw image: ext4 magic
-    /// 0xEF53 at 1080, erofs/f2fs magic at 1024. Header read failures propagate unchanged (matching
-    /// the existing unpack fallback behavior); null when no magic matches.
+    /// <para>读取 1082 字节头部并探测 raw 镜像内的文件系统布局：ext4 超级块结构校验
+    /// （见 <see cref="IsExt4Superblock"/>）、erofs/f2fs 魔数位于 1024。头部读取失败时异常原样抛出
+    /// （与既有解包回退行为一致），未命中返回 null。</para>
+    /// Reads a 1082-byte header and probes the filesystem layout inside a raw image: a structural ext4
+    /// superblock check (see <see cref="IsExt4Superblock"/>), erofs/f2fs magic at 1024. Header read
+    /// failures propagate unchanged (matching the existing unpack fallback behavior); null when no
+    /// magic matches.
     /// </summary>
     internal static RawImageLayout? ProbeFilesystemHeader(string filePath)
     {
         var header = FormatDetector.ReadHeader(filePath, 1082);
-        if (header.Length >= 1082
-            && BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(1080, 2)) == 0xEF53)
+        if (IsExt4Superblock(header))
         {
             return RawImageLayout.Ext4;
         }
@@ -208,4 +219,22 @@ internal sealed class ImageInputService
 
         return null;
     }
+
+    /// <summary>
+    /// <para>ext4 超级块结构校验：仅比对偏移 1080 的 2 字节魔数 0xEF53 会把偶然落上
+    /// <c>53 EF</c> 的任意二进制（如 ELF 段数据）误判为镜像，因此同时要求魔数、
+    /// <c>s_inodes_count</c>（@1024）与 <c>s_blocks_count_lo</c>（@1028）非零，且
+    /// <c>s_log_block_size</c>（@1048）推导的块大小不超过 64 KiB。</para>
+    /// Structural ext4 superblock validation: matching only the 2-byte magic 0xEF53 at offset 1080
+    /// misclassifies arbitrary binaries (e.g. ELF segment data) whose bytes happen to be
+    /// <c>53 EF</c>, so the check additionally requires a nonzero <c>s_inodes_count</c> (@1024) and
+    /// <c>s_blocks_count_lo</c> (@1028) and a <c>s_log_block_size</c> (@1048) whose derived block
+    /// size stays within 64 KiB.
+    /// </summary>
+    private static bool IsExt4Superblock(ReadOnlySpan<byte> header) =>
+        header.Length >= 1082
+        && BinaryPrimitives.ReadUInt16LittleEndian(header.Slice(1080, 2)) == 0xEF53
+        && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(1024, 4)) != 0
+        && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(1028, 4)) != 0
+        && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(1048, 4)) <= 6;
 }

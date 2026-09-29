@@ -83,15 +83,46 @@ public sealed class ImageInputServiceTests
     }
 
     [Fact]
-    public void DetectFormat_Ext4MagicAt1080_ReturnsExt4()
+    public void DetectFormat_ValidExt4Superblock_ReturnsExt4()
     {
         using var temp = new TempDirectory();
-        var header = new byte[1082];
-        header[1080] = 0x53;
-        header[1081] = 0xEF;
-        var file = temp.WriteBytes("system.raw", header);
+        var file = temp.WriteBytes("system.raw", MakeExt4Superblock());
 
         Assert.Equal("ext4", ImageInputService.DetectFormat(file));
+    }
+
+    [Fact]
+    public void DetectFormat_BareExt4MagicWithoutSuperblockFields_ReturnsUnknown()
+    {
+        using var temp = new TempDirectory();
+        var header = MakeHeaderWithUint16(1080, 0xEF53, 1082);
+        var file = temp.WriteBytes("system.raw", header);
+
+        Assert.Equal("unknown", ImageInputService.DetectFormat(file));
+    }
+
+    [Fact]
+    public void DetectFormat_ElfWithExt4MagicBytesAtOffset1080_ReturnsUnknown()
+    {
+        using var temp = new TempDirectory();
+        var header = new byte[4096];
+        "\u007fELF"u8.CopyTo(header);
+        header[1080] = 0x53;
+        header[1081] = 0xEF;
+        var file = temp.WriteBytes("toybox", header);
+
+        Assert.Equal("unknown", ImageInputService.DetectFormat(file));
+    }
+
+    [Fact]
+    public void DetectFormat_ElfHeader_ReturnsUnknown()
+    {
+        using var temp = new TempDirectory();
+        var header = new byte[4096];
+        "\u007fELF"u8.CopyTo(header);
+        var file = temp.WriteBytes("toybox.img", header);
+
+        Assert.Equal("unknown", ImageInputService.DetectFormat(file));
     }
 
     [Fact]
@@ -172,14 +203,16 @@ public sealed class ImageInputServiceTests
     public void ProbeFilesystemHeader_FsMagics_MapToLayout()
     {
         using var temp = new TempDirectory();
-        var ext4 = temp.WriteBytes("a.raw", MakeHeaderWithUint16(1080, 0xEF53, 1082));
+        var ext4 = temp.WriteBytes("a.raw", MakeExt4Superblock());
         var erofs = temp.WriteBytes("b.raw", MakeHeaderWithUint32(1024, 0xE0F5E1E2, 1028));
         var f2fs = temp.WriteBytes("c.raw", MakeHeaderWithUint32(1024, 0xF2F52010, 1028));
-        var none = temp.WriteBytes("d.raw", [0x00, 0x01, 0x02, 0x03]);
+        var bareMagic = temp.WriteBytes("d.raw", MakeHeaderWithUint16(1080, 0xEF53, 1082));
+        var none = temp.WriteBytes("e.raw", [0x00, 0x01, 0x02, 0x03]);
 
         Assert.Equal(RawImageLayout.Ext4, ImageInputService.ProbeFilesystemHeader(ext4));
         Assert.Equal(RawImageLayout.Erofs, ImageInputService.ProbeFilesystemHeader(erofs));
         Assert.Equal(RawImageLayout.F2fs, ImageInputService.ProbeFilesystemHeader(f2fs));
+        Assert.Null(ImageInputService.ProbeFilesystemHeader(bareMagic));
         Assert.Null(ImageInputService.ProbeFilesystemHeader(none));
     }
 
@@ -242,6 +275,16 @@ public sealed class ImageInputServiceTests
         var file = temp.WriteBytes("boot.img", [1]);
         Assert.Null(service.ResolveSourcePath(file, isDirectory: true, operation: "img"));
         Assert.Single(warnings);
+    }
+
+    private static byte[] MakeExt4Superblock()
+    {
+        var header = new byte[2048];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(1024, 4), 16);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(1028, 4), 32);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(1048, 4), 2);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(1080, 2), 0xEF53);
+        return header;
     }
 
     private static byte[] MakeHeaderWithUint16(int offset, ushort value, int size)
