@@ -14,14 +14,6 @@ internal static class ChromeOsTool
     private const int SignatureDescriptorSize = 24;
     private const int PackedKeyHeaderSize = 32;
 
-    /// <summary>Legacy compatibility probe size retained for existing callers; it is not a format boundary.
-    /// <para>为现有调用方保留的兼容探测长度；它不是格式边界。</para></summary>
-    public const int SignatureBlockSize = 0x3000;
-
-    /// <summary>Legacy compatibility probe size retained for existing callers; it is not a vblock boundary.
-    /// <para>为现有调用方保留的兼容探测长度；它不是 vblock 边界。</para></summary>
-    public const int VblockSize = 0x2000;
-
     /// <summary>
     /// Parses a complete vboot2 keyblock and validates every declared range before publishing metadata.
     /// <para>解析完整的 vboot2 keyblock，并在发布元数据前校验所有声明范围。</para>
@@ -296,27 +288,11 @@ internal static class ChromeOsTool
     }
 
     /// <summary>
-    /// Checks whether the data is a ChromeOS image.
-    /// <para>检测数据是否为 ChromeOS 镜像。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Candidate bytes containing a complete keyblock, vblock or kernel image.
-    /// <para>包含完整 keyblock、vblock 或内核镜像的候选字节。</para>
-    /// </param>
-    /// <returns>
-    /// <see langword="true"/> when <paramref name="data"/> contains a bounded, structurally valid
-    /// legacy vboot keyblock or a following kernel preamble.
-    /// <para>当 <paramref name="data"/> 包含有界且结构有效的 legacy vboot keyblock 或后续内核
-    /// preamble 时返回 <see langword="true"/>。</para>
-    /// </returns>
-    public static bool IsChromeOs(byte[] data) => data is not null && Detect(data).IsChromeOs;
-
-    /// <summary>
     /// Detects a ChromeOS image.
     /// <para>检测 ChromeOS 镜像。</para>
     /// </summary>
     /// <param name="data">
-    /// Candidate bytes handed to <see cref="IsChromeOs"/>. <para>交给 <see cref="IsChromeOs"/> 的待检测字节。</para>
+    /// Candidate bytes to inspect. <para>待检查的候选字节。</para>
     /// </param>
     /// <returns>
     /// A populated result that is never <see langword="null"/>. A result is successful only after

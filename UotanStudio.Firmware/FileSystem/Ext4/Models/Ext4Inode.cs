@@ -5,11 +5,6 @@ namespace UotanStudio.Firmware.FileSystem.Ext4.Models;
 
 internal sealed record Ext4Inode
 {
-    private const ushort ModeFormatMask = 0xF000;
-    private const ushort ModeRegularFile = 0x8000;
-    private const ushort ModeDirectory = 0x4000;
-    private const ushort ModeSymbolicLink = 0xA000;
-
     private const uint FlagExtents = 0x0008_0000;
 
     private const uint FlagInlineData = 0x1000_0000;
@@ -60,11 +55,11 @@ internal sealed record Ext4Inode
 
     public byte[] InlineData { get; init; } = [];
 
-    public bool IsRegularFile => (Mode & ModeFormatMask) == ModeRegularFile;
+    public bool IsRegularFile => (Mode & InodeTypeBits.FormatMask) == InodeTypeBits.RegularFile;
 
-    public bool IsDirectory => (Mode & ModeFormatMask) == ModeDirectory;
+    public bool IsDirectory => (Mode & InodeTypeBits.FormatMask) == InodeTypeBits.Directory;
 
-    public bool IsSymlink => (Mode & ModeFormatMask) == ModeSymbolicLink;
+    public bool IsSymlink => (Mode & InodeTypeBits.FormatMask) == InodeTypeBits.SymbolicLink;
 
     /// <summary>
     /// Parses an inode from raw bytes. inodeSize must match the filesystem inode size; i_size_high is read unconditionally (offset 108 lies within every inode size of at least 128 bytes, matching the kernel's ext4_isize()).
@@ -94,7 +89,7 @@ internal sealed record Ext4Inode
             value.CopyTo(inlineData.AsSpan(60));
             var mode = BinaryPrimitives.ReadUInt16LittleEndian(data);
             var fileSize = ((ulong)BinaryPrimitives.ReadUInt32LittleEndian(data[108..]) << 32) | BinaryPrimitives.ReadUInt32LittleEndian(data[4..]);
-            if ((mode & ModeFormatMask) != ModeDirectory && fileSize > (ulong)inlineData.Length)
+            if ((mode & InodeTypeBits.FormatMask) != InodeTypeBits.Directory && fileSize > (ulong)inlineData.Length)
                 throw new FileSystemCorruptedException("EXT4 inline file size exceeds i_block and system.data.");
         }
 

@@ -15,7 +15,15 @@ namespace UotanStudio.Tests.Firmware;
 /// </summary>
 public class Ext4IncompatFeatureTests
 {
+    private const int FeatureCompatOffset = 1024 + 92;
     private const int FeatureIncompatOffset = 1024 + 96;
+    private const int FeatureRoCompatOffset = 1024 + 100;
+    private const uint FlexBgBit = 0x0200;
+    private const uint EaInodeBit = 0x0400;
+    private const uint CasefoldBit = 0x20000;
+    private const uint MetadataChecksumBit = 0x0400;
+    private const uint ReadOnlyBit = 0x1000;
+    private const uint SharedBlocksBit = 0x4000;
 
     [Fact]
     public void Parser_AcceptsFiletypeBit()
@@ -51,6 +59,128 @@ public class Ext4IncompatFeatureTests
         Assert.Throws<FileSystemUnsupportedFeatureException>(() => Parse(image));
     }
 
+    [Fact]
+    public void Build_MinimalLayout_WritesExactFeatureWords()
+    {
+        var image = BuildImage(new Ext4Options { IncludeJournal = false, EnableMetadataCsum = false });
+
+        AssertFeatureWords(image, 0x0038, 0x02C2, 0x006B);
+        Assert.Equal(FlexBgBit, ReadFeatureWord(image, FeatureIncompatOffset) & FlexBgBit);
+        Assert.Equal(0u, ReadFeatureWord(image, FeatureIncompatOffset) & EaInodeBit);
+    }
+
+    [Fact]
+    public void Build_WithJournal_WritesExactFeatureWords()
+    {
+        var image = BuildImage(new Ext4Options { IncludeJournal = true, EnableMetadataCsum = false });
+
+        AssertFeatureWords(image, 0x003C, 0x02C2, 0x006B);
+        Assert.Equal(FlexBgBit, ReadFeatureWord(image, FeatureIncompatOffset) & FlexBgBit);
+    }
+
+    [Fact]
+    public void Build_WithCasefold_WritesExactFeatureWordsWithoutEaInode()
+    {
+        var image = BuildImage(new Ext4Options
+        {
+            IncludeJournal = false,
+            EnableMetadataCsum = false,
+            CasefoldEncoding = 1,
+        });
+
+        AssertFeatureWords(image, 0x0038, 0x02C2 | CasefoldBit, 0x006B);
+        Assert.Equal(CasefoldBit, ReadFeatureWord(image, FeatureIncompatOffset) & CasefoldBit);
+        Assert.Equal(FlexBgBit, ReadFeatureWord(image, FeatureIncompatOffset) & FlexBgBit);
+        Assert.Equal(0u, ReadFeatureWord(image, FeatureIncompatOffset) & EaInodeBit);
+    }
+
+    [Fact]
+    public void Build_WithMetadataChecksum_WritesExactFeatureWords()
+    {
+        var image = BuildImage(new Ext4Options { IncludeJournal = false, EnableMetadataCsum = true });
+
+        AssertFeatureWords(image, 0x0038, 0x02C2, 0x006B | MetadataChecksumBit);
+        Assert.Equal(0u, ReadFeatureWord(image, FeatureIncompatOffset) & (MetadataChecksumBit | CasefoldBit));
+    }
+
+    [Fact]
+    public void Build_ReadOnly_WritesExactFeatureWords()
+    {
+        var image = BuildImage(new Ext4Options
+        {
+            IncludeJournal = false,
+            EnableMetadataCsum = false,
+            ReadOnly = true,
+        });
+
+        AssertFeatureWords(image, 0x0038, 0x02C2, 0x006B | ReadOnlyBit);
+        Assert.Equal(0u, ReadFeatureWord(image, FeatureIncompatOffset) & (ReadOnlyBit | SharedBlocksBit));
+    }
+
+    [Fact]
+    public void Build_WithSharedDuplicateBlocks_WritesExactFeatureWords()
+    {
+        var image = BuildImage(new Ext4Options
+        {
+            IncludeJournal = false,
+            EnableMetadataCsum = false,
+            ReadOnly = true,
+            BlockSharingMode = Ext4BlockSharingMode.ShareDuplicateData,
+        }, duplicateBlocks: true);
+
+        AssertFeatureWords(image, 0x0038, 0x02C2, 0x006B | ReadOnlyBit | SharedBlocksBit);
+        Assert.Equal(0u, ReadFeatureWord(image, FeatureIncompatOffset) & (EaInodeBit | MetadataChecksumBit));
+        Assert.Equal(FlexBgBit, ReadFeatureWord(image, FeatureIncompatOffset) & FlexBgBit);
+    }
+
+    private static void AssertFeatureWords(byte[] image, uint compat, uint incompat, uint roCompat)
+    {
+        Assert.Equal(compat, ReadFeatureWord(image, FeatureCompatOffset));
+        Assert.Equal(incompat, ReadFeatureWord(image, FeatureIncompatOffset));
+        Assert.Equal(roCompat, ReadFeatureWord(image, FeatureRoCompatOffset));
+    }
+
+    private static uint ReadFeatureWord(byte[] image, int offset)
+        => BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(offset, 4));
+
+    private static byte[] BuildImage(Ext4Options options, bool duplicateBlocks = false)
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"uotan-ext4-word-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            if (duplicateBlocks)
+            {
+                var payload = CreateDeterministicBlock();
+                File.WriteAllBytes(Path.Combine(root, "first.bin"), payload);
+                File.WriteAllBytes(Path.Combine(root, "second.bin"), payload);
+            }
+            else
+            {
+                File.WriteAllText(Path.Combine(root, "hello.txt"), "hello ext4\n");
+            }
+
+            using var image = new MemoryStream();
+            Ext4Builder.Build(root, image, options);
+            return image.ToArray();
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static byte[] CreateDeterministicBlock()
+    {
+        var payload = new byte[4096];
+        for (var index = 0; index < payload.Length; index++)
+        {
+            payload[index] = (byte)(index % 251);
+        }
+
+        return payload;
+    }
+
     private static byte[] BuildImage()
     {
         var root = Path.Combine(Path.GetTempPath(), $"uotan-ext4-feat-{Guid.NewGuid():N}");
@@ -74,8 +204,8 @@ public class Ext4IncompatFeatureTests
 
     private static void SetRoCompat(byte[] image, uint bits)
     {
-        var current = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(1024 + 100, 4));
-        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(1024 + 100, 4), current | bits);
+        var current = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(FeatureRoCompatOffset, 4));
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(FeatureRoCompatOffset, 4), current | bits);
     }
 
     private static Ext4Parser Parse(byte[] image) => new(new MemoryStream(image, writable: false));

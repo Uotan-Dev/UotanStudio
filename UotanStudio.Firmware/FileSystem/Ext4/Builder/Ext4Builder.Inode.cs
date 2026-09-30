@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Journal;
 
@@ -229,7 +230,7 @@ public sealed partial class Ext4Builder
         {
             if (enableMetadataCsum)
             {
-                var crc = ComputeCrc32(uuid, 0xFFFF_FFFF);
+                var crc = ComputeCrc32(uuid, Crc32c.InitialSeed);
                 var identity = new byte[8];
                 WriteU32(identity, 0, node.Inode);
                 WriteU32(identity, 4, node.SourceMetadata?.Generation ?? 0);
@@ -260,7 +261,7 @@ public sealed partial class Ext4Builder
     private static void WriteInodeChecksum(byte[] inode, uint inodeNumber, byte[] uuid)
     {
 
-        var crc = ComputeCrc32(uuid, 0xFFFF_FFFF);
+        var crc = ComputeCrc32(uuid, Crc32c.InitialSeed);
 
         Span<byte> le = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(le, inodeNumber);

@@ -523,7 +523,7 @@ internal static class Ext4Htree
         block[endCap + 6] = 0x00;
         block[endCap + 7] = 0xDE;
 
-        var crc = HtreeCrc32c(uuid ?? new byte[16], 0xFFFF_FFFF);
+        var crc = HtreeCrc32c(uuid ?? new byte[16], Crc32c.InitialSeed);
         Span<byte> le = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(le, directoryInode);
         crc = HtreeCrc32c(le, crc);
@@ -548,7 +548,7 @@ internal static class Ext4Htree
 
         block.AsSpan(tailOffset, DxTailSize).Clear();
 
-        var crc = HtreeCrc32c(uuid ?? new byte[16], 0xFFFF_FFFF);
+        var crc = HtreeCrc32c(uuid ?? new byte[16], Crc32c.InitialSeed);
 
         Span<byte> le4 = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(le4, directoryInode);

@@ -1,5 +1,3 @@
-using System.Buffers.Binary;
-using System.IO.Compression;
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
@@ -735,64 +733,6 @@ public sealed partial class OppReader
             OutputDirectory = outputDir,
             KeyId = keyId ?? archive.Metadata.KeyId
         };
-    }
-
-    /// <summary>
-    /// Manually extracts a ZIP entry by its local file header (LFH) offset: locates the PK\x03\x04 header, reads name/extra lengths and the compression method, skips the header, then decompresses store/deflate data.
-    /// <para>按本地文件头（LFH）偏移手动提取 zip 条目：定位 PK\x03\x04 头，读取文件名/extra 长度与压缩方法，跳过头部后按 store/deflate 解压数据。</para>
-    /// </summary>
-    private static void ExtractZipEntryByLocalHeader(Stream zip, OppEntry entry, Stream output)
-    {
-        zip.Position = entry.Offset;
-        Span<byte> lfh = stackalloc byte[30];
-        zip.ReadExactly(lfh);
-
-
-        if (lfh[0] != 0x50 || lfh[1] != 0x4B || lfh[2] != 0x03 || lfh[3] != 0x04)
-        {
-            throw new InvalidDataException($"Invalid local file header at offset {entry.Offset}.");
-        }
-
-        var method = BinaryPrimitives.ReadUInt16LittleEndian(lfh[8..]);
-        var nameLen = BinaryPrimitives.ReadUInt16LittleEndian(lfh[26..]);
-        var extraLen = BinaryPrimitives.ReadUInt16LittleEndian(lfh[28..]);
-
-
-        var compressedSize = entry.CompressedSize > 0
-            ? entry.CompressedSize
-            : BinaryPrimitives.ReadUInt32LittleEndian(lfh[18..]);
-        var uncompressedSize = entry.Size > 0
-            ? entry.Size
-            : BinaryPrimitives.ReadUInt32LittleEndian(lfh[22..]);
-
-        var dataStart = entry.Offset + 30L + nameLen + extraLen;
-        if (dataStart > zip.Length)
-        {
-            throw new InvalidDataException($"Local header of '{entry.Name}' points beyond the file end.");
-        }
-
-        zip.Position = dataStart;
-        using var bounded = new BoundedReadStream(zip, dataStart, compressedSize, leaveOpen: true);
-
-        switch (method)
-        {
-            case 0:
-
-                StreamCopy.CopyExactly(bounded, output, compressedSize);
-                break;
-
-            case 8:
-
-                using (var counting = new CountingWriteStream(output, uncompressedSize, leaveOpen: true))
-                using (var deflate = new DeflateStream(bounded, CompressionMode.Decompress, leaveOpen: true))
-                {
-                    deflate.CopyTo(counting);
-                }
-                break;
-
-            default:
-                throw new InvalidDataException($"Unsupported ZIP compression method {method} for '{entry.Name}'.");
-        }
     }
 
     private static readonly HashSet<char> InvalidFileNameChars = [.. Path.GetInvalidFileNameChars()];

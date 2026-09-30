@@ -5,11 +5,6 @@ namespace UotanStudio.Firmware.FileSystem.F2fs.Models;
 
 internal sealed record F2fsInode
 {
-    private const ushort ModeFormatMask = 0xF000;
-    private const ushort ModeRegularFile = 0x8000;
-    private const ushort ModeDirectory = 0x4000;
-    private const ushort ModeSymbolicLink = 0xA000;
-
     public const byte InlineXattrFlag = 0x01;
 
     public const byte InlineDataFlag = 0x02;
@@ -122,11 +117,11 @@ internal sealed record F2fsInode
 
     public bool IsCompressed => (Flags & ComprFlag) != 0;
 
-    public bool IsRegularFile => (Mode & ModeFormatMask) == ModeRegularFile;
+    public bool IsRegularFile => (Mode & InodeTypeBits.FormatMask) == InodeTypeBits.RegularFile;
 
-    public bool IsDirectory => (Mode & ModeFormatMask) == ModeDirectory;
+    public bool IsDirectory => (Mode & InodeTypeBits.FormatMask) == InodeTypeBits.Directory;
 
-    public bool IsSymlink => (Mode & ModeFormatMask) == ModeSymbolicLink;
+    public bool IsSymlink => (Mode & InodeTypeBits.FormatMask) == InodeTypeBits.SymbolicLink;
 
     public bool HasInlineData => (Inline & InlineDataFlag) != 0;
 

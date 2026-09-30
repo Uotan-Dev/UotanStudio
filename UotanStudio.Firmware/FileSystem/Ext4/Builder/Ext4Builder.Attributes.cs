@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.FileSystem.Metadata;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4.Builder;
@@ -152,7 +153,7 @@ public sealed partial class Ext4Builder
                 }
                 else
                 {
-                    hash = (hash << 16) ^ (hash >> 16) ^ ComputeCrc32(pair.Value, ComputeCrc32(uuid, uint.MaxValue));
+                    hash = (hash << 16) ^ (hash >> 16) ^ ComputeCrc32(pair.Value, ComputeCrc32(uuid, Crc32c.InitialSeed));
                 }
                 WriteU32(block, position + 12, hash);
                 position += (16 + pair.Name.Length + 3) & ~3;

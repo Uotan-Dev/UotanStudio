@@ -16,6 +16,18 @@ public sealed partial class ErofsParser
     private const int CompactIndexMaxLclusterBits = 14;
 
     /// <summary>
+    /// Upper bound of the logical cluster size shift supported by the dense 2-byte compact index slot: within the EROFS compact index rule a 2-byte slot amortizes one 16-bit dense pack, so it carries 16 logical clusters.
+    /// <para>稠密 2 字节紧凑索引槽支持的逻辑簇位数上限：按 EROFS 紧凑索引规则，一个 2 字节槽摊销为一个 16 位的稠密包，承载 16 个逻辑簇。</para>
+    /// </summary>
+    private const int CompactDenseTwoByteSlotLclusterBits = 12;
+
+    /// <summary>
+    /// Logical cluster count carried by one dense 2-byte compact index slot (the EROFS "2-byte slot = 16 clusters" rule).
+    /// <para>一个稠密 2 字节紧凑索引槽承载的逻辑簇数量（EROFS「2 字节槽 = 16 簇」规则）。</para>
+    /// </summary>
+    private const int CompactDenseVcount = 16;
+
+    /// <summary>
     /// Loads a logical cluster entry from compact or full indexes.
     /// <para>从紧凑或完整索引加载逻辑簇条目。</para>
     /// </summary>
@@ -111,9 +123,9 @@ public sealed partial class ErofsParser
         {
             vcnt = 2;
         }
-        else if ((1 << amortizedShift) == 2 && lclusterBits <= 12)
+        else if ((1 << amortizedShift) == 2 && lclusterBits <= CompactDenseTwoByteSlotLclusterBits)
         {
-            vcnt = 16;
+            vcnt = CompactDenseVcount;
         }
         else
         {

@@ -14,7 +14,7 @@ public sealed partial class Ext4Builder
     /// Computes the CRC32c checksum of the given data with the default seed 0xFFFFFFFF.
     /// <para>计算数据的 CRC32c 校验值（默认种子 0xFFFFFFFF）。</para>
     /// </summary>
-    private static uint ComputeCrc32(ReadOnlySpan<byte> data) => Crc32c.Compute(data, 0xFFFFFFFF);
+    private static uint ComputeCrc32(ReadOnlySpan<byte> data) => Crc32c.Compute(data, Crc32c.InitialSeed);
 
     /// <summary>
     /// Computes the CRC32c checksum of the given data with the specified seed.

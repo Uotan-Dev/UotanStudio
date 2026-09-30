@@ -138,7 +138,7 @@ public sealed class NtpiFormatHandler : IFormatHandler, IRepackMetadataProvider
             Directory.CreateDirectory(outputDirectory);
             using var reader = NtpiReader.CreateDefault();
             var progress = options?.Progress is null ? null : new Progress<NtpiExtractionProgress>(p => options.Progress.Report(p.CompletedFiles * 100.0 / Math.Max(1, p.TotalFiles), p.CurrentFileName));
-            reader.Unpack(filePath, outputDirectory, progress, fileFilter: null, cancellationToken);
+            reader.Unpack(filePath, outputDirectory, progress: progress, fileFilter: null, cancellationToken: cancellationToken);
             var count = Directory.EnumerateFiles(outputDirectory, "*", SearchOption.AllDirectories).Count();
             return Task.FromResult(FirmwareOpResult.Ok($"Extracted {count} files to {outputDirectory}"));
         }

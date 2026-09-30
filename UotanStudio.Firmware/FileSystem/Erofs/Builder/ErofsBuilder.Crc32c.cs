@@ -11,5 +11,5 @@ public sealed partial class ErofsBuilder
     /// <para>超级块 CRC32c 种子值，Linux 内核 EROFS 超级块校验与 erofs-utils 均使用该值。</para></summary>
     private const uint ErofsSuperblockChecksumSeed = 0x5045B54A;
 
-    private static uint ComputeCrc32C(ReadOnlySpan<byte> data, uint seed = 0xFFFF_FFFF) => Crc32c.Compute(data, seed);
+    private static uint ComputeCrc32C(ReadOnlySpan<byte> data, uint seed = Crc32c.InitialSeed) => Crc32c.Compute(data, seed);
 }

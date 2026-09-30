@@ -15,6 +15,26 @@ internal class NtpiFileExtractor(ICryptoProvider cryptoProvider, ILzma2Compresso
     /// Extracts the raw data for the specified file entry into an in-memory byte array.
     /// <para>将指定文件条目的原始数据提取为内存字节数组。</para>
     /// </summary>
+    /// <param name="source">
+    /// Seekable NTPI file stream supplying Region6 bytes; its position moves during extraction.
+    /// <para>提供 Region6 数据的可寻址 NTPI 文件流；提取过程中其位置会移动。</para>
+    /// </param>
+    /// <param name="region6Offset">
+    /// Absolute byte offset of Region6 inside <paramref name="source"/>.
+    /// <para>Region6 在 <paramref name="source"/> 内的绝对字节偏移。</para>
+    /// </param>
+    /// <param name="region6Length">
+    /// Byte length of the Region6 range inside <paramref name="source"/>.
+    /// <para>Region6 在 <paramref name="source"/> 内的字节长度。</para>
+    /// </param>
+    /// <param name="keyMapProvider">
+    /// Provider deriving per-block AES-256 keys from the key-map blob for <c>entry.KeyIndex</c> and the block index.
+    /// <para>按 <c>entry.KeyIndex</c> 与块索引从 KeyMap 数据派生每块 AES-256 密钥的提供者。</para>
+    /// </param>
+    /// <param name="entry">
+    /// File entry describing the Region6-relative offset, encrypted and original lengths, key index and SHA-256 hash.
+    /// <para>描述 Region6 内相对偏移、密文与原始长度、密钥索引及 SHA-256 哈希的文件条目。</para>
+    /// </param>
     /// <param name="cancellationToken">
     /// Token observed between extraction blocks; the default (none) token cannot cancel.
     /// <para>在解压块之间检查的取消令牌；默认（无）令牌不可取消。</para>
@@ -32,6 +52,34 @@ internal class NtpiFileExtractor(ICryptoProvider cryptoProvider, ILzma2Compresso
     /// Streams a file from Region6 block by block: FileStream→decrypt stream→bounded decoder→output stream.
     /// <para>按块从 Region6 流式提取文件:FileStream→解密流→有界解码→输出流。</para>
     /// </summary>
+    /// <param name="source">
+    /// Seekable NTPI file stream supplying Region6 bytes; its position moves during extraction.
+    /// <para>提供 Region6 数据的可寻址 NTPI 文件流；提取过程中其位置会移动。</para>
+    /// </param>
+    /// <param name="region6Offset">
+    /// Absolute byte offset of Region6 inside <paramref name="source"/>.
+    /// <para>Region6 在 <paramref name="source"/> 内的绝对字节偏移。</para>
+    /// </param>
+    /// <param name="region6Length">
+    /// Byte length of the Region6 range inside <paramref name="source"/>.
+    /// <para>Region6 在 <paramref name="source"/> 内的字节长度。</para>
+    /// </param>
+    /// <param name="keyMapProvider">
+    /// Provider deriving per-block AES-256 keys from the key-map blob for <c>entry.KeyIndex</c> and the block index.
+    /// <para>按 <c>entry.KeyIndex</c> 与块索引从 KeyMap 数据派生每块 AES-256 密钥的提供者。</para>
+    /// </param>
+    /// <param name="entry">
+    /// File entry describing the Region6-relative offset, encrypted and original lengths, key index and SHA-256 hash.
+    /// <para>描述 Region6 内相对偏移、密文与原始长度、密钥索引及 SHA-256 哈希的文件条目。</para>
+    /// </param>
+    /// <param name="output">
+    /// Destination stream receiving the decoded bytes; it stays open and its position advances with each written block.
+    /// <para>接收解码字节的输出流；保持打开，其位置随每个写入的块前进。</para>
+    /// </param>
+    /// <param name="trustedOutputLimit">
+    /// Maximum total bytes that may be written to <paramref name="output"/>, bounding untrusted declared lengths; the default allows any size.
+    /// <para>可写入 <paramref name="output"/> 的最大总字节数，用于约束不可信的声明长度；默认值表示不限制。</para>
+    /// </param>
     /// <param name="cancellationToken">
     /// Token observed between extraction blocks; the default (none) token cannot cancel.
     /// <para>在解压块之间检查的取消令牌；默认（无）令牌不可取消。</para>

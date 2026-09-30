@@ -8,6 +8,12 @@ namespace UotanStudio.Firmware.Core.Checksums;
 /// </summary>
 internal static class Crc32c
 {
+    /// <summary>
+    /// Register initial value (<c>~0</c>) used to start a fresh CRC32c checksum under the crc32c_le convention.
+    /// <para>crc32c_le 约定下开始一次全新 CRC32c 计算所用的寄存器初值（<c>~0</c>）。</para>
+    /// </summary>
+    internal const uint InitialSeed = 0xFFFF_FFFF;
+
     private static readonly uint[] Table = InitTable();
 
     /// <summary>
@@ -26,7 +32,7 @@ internal static class Crc32c
     /// The CRC32c register value after consuming the data.
     /// <para>消费完数据后的 CRC32c 寄存器值。</para>
     /// </returns>
-    public static uint Compute(ReadOnlySpan<byte> data, uint seed = 0xFFFF_FFFF)
+    public static uint Compute(ReadOnlySpan<byte> data, uint seed = InitialSeed)
     {
         var crc = seed;
         foreach (var b in data)

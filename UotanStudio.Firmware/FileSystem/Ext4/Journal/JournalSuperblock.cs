@@ -144,7 +144,7 @@ internal sealed class JournalSuperblock
         {
 
 
-            var crc = Crc32c(data.AsSpan(0, 0x204), 0xFFFF_FFFF);
+            var crc = Crc32c(data.AsSpan(0, 0x204), UotanStudio.Firmware.Core.Checksums.Crc32c.InitialSeed);
             BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(0x204, 4), crc);
         }
 

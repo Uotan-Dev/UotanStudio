@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.FileSystem.Ext4.Models;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4.Builder;
@@ -259,7 +260,7 @@ public sealed partial class Ext4Builder
         {
             var copy = (byte[])primary.Clone();
             WriteU16(copy, SbBlockGroupNr, checked((ushort)bg));
-            WriteU32(copy, SbChecksum, ComputeCrc32(copy.AsSpan(0, SbChecksum), 0xFFFF_FFFF));
+            WriteU32(copy, SbChecksum, ComputeCrc32(copy.AsSpan(0, SbChecksum), Crc32c.InitialSeed));
             var bgStart = (long)bg * blocksPerGroup * blockSize;
             WriteAt(output, 0, bgStart, copy, copy.Length);
             WriteAt(output, 0, bgStart + blockSize, gdtBuffer, gdtBuffer.Length);
@@ -279,7 +280,7 @@ public sealed partial class Ext4Builder
         WriteU32(sb, SbFreeInodesCount, checked((uint)Math.Min(Math.Max(freeInodes, 0), uint.MaxValue)));
         WriteU32(sb, SbRBlocksCountLo, (uint)reserved);
         WriteU32(sb, SbRBlocksCountHi, (uint)(reserved >> 32));
-        WriteU32(sb, SbChecksum, ComputeCrc32(sb.AsSpan(0, SbChecksum), 0xFFFF_FFFF));
+        WriteU32(sb, SbChecksum, ComputeCrc32(sb.AsSpan(0, SbChecksum), Crc32c.InitialSeed));
     }
 
     private static byte[] ReadBlock0(Stream stream)
