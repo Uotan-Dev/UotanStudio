@@ -11,14 +11,16 @@ namespace UotanStudio.Comm.Routing;
 /// 「连接被拒绝」结果不缓存（保持既有约定：仅连接被拒绝视为不存在，不缓存负结果），
 /// 但同一调用方在同一次扫描流程内可通过 <see cref="BeginProbeScope"/> 复用一次探测结论。
 /// server 归属判定与路由开启由上层 <c>Devices.Services.DebugBridgeSessionOpener</c> 提供，
-/// 本类型只回答「端口上是否有 server 在监听」。</para>
+/// 本类型只回答「端口上是否有 server 在监听」。需要区分「拒绝」与「无法得出结论」的调用方
+/// 使用 <see cref="TryProbeAsync"/>，未知结果必须保持上次状态。</para>
 /// <para>Positive results (server present) are cached for a short TTL so a single scan does not
 /// repeatedly connect to the same endpoint; a refused connection is never cached (existing
 /// contract: only a refused connection means absent, negative results are not cached). Callers
 /// running one scan pass can share a single probe via <see cref="BeginProbeScope"/>. Server
 /// ownership decisions and routed session opening live in the upper
 /// <c>Devices.Services.DebugBridgeSessionOpener</c>; this type only answers whether a server
-/// is listening on an endpoint.</para>
+/// is listening on an endpoint. Callers that must distinguish a refusal from an inconclusive
+/// probe use <see cref="TryProbeAsync"/>, where an unknown outcome keeps the last known state.</para>
 /// </remarks>
 public static class DebugBridgeRoute
 {
@@ -122,28 +124,11 @@ public static class DebugBridgeRoute
             PositiveCache.TryRemove(key, out _);
         }
 
-        using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-        using var args = new SocketAsyncEventArgs
+        var (error, linkedCancellationRequested) = await ConnectAsync(host, port, cancellationToken).ConfigureAwait(false);
+        if (linkedCancellationRequested)
         {
-            RemoteEndPoint = IPAddress.TryParse(host, out var address)
-                ? new IPEndPoint(address, port) : new DnsEndPoint(host, port)
-        };
-        var completion = new TaskCompletionSource<SocketError>(TaskCreationOptions.RunContinuationsAsynchronously);
-        args.Completed += (_, result) => completion.TrySetResult(result.SocketError);
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(3));
-        using var cancellation = timeout.Token.Register(() => Socket.CancelConnectAsync(args));
-        timeout.Token.ThrowIfCancellationRequested();
-        if (!socket.ConnectAsync(args))
-        {
-            completion.TrySetResult(args.SocketError);
+            throw new OperationCanceledException(cancellationToken);
         }
-        if (timeout.IsCancellationRequested)
-        {
-            Socket.CancelConnectAsync(args);
-        }
-        var error = await completion.Task.ConfigureAwait(false);
-        timeout.Token.ThrowIfCancellationRequested();
         if (error == SocketError.ConnectionRefused)
         {
             ReportState(host, port, key, false);
@@ -156,6 +141,120 @@ public static class DebugBridgeRoute
         PositiveCache[key] = new ProbeResult(true, Environment.TickCount64);
         ReportState(host, port, key, true);
         return true;
+    }
+
+    /// <summary>
+    /// <para>对端点做三态探测：监听、拒绝、未知。未知涵盖内部 3 秒截止时间到期、目标不可达、
+    /// DNS 解析失败与连接复位等非拒绝故障；调用方必须把未知解释为「维持上次已知状态」，
+    /// 只有拒绝才代表 server 不存在（协议错误不得自动回退 direct-USB）。</para>
+    /// Probes an endpoint with three outcomes: listening, refused, unknown. Unknown covers the
+    /// internal 3-second deadline, unreachable targets, DNS resolution failures and connect
+    /// resets, that is every non-refusal fault; callers must interpret unknown as "keep the
+    /// last known state", and only a refusal means the server is absent (a protocol or
+    /// transport error must never fall back to direct USB on its own).</summary>
+    /// <remarks>
+    /// <para>监听结果与 <see cref="IsListeningAsync"/> 共用同一正向 TTL 缓存；拒绝与未知都不缓存。
+    /// 未知不会向 <see cref="ServerAvailabilityChanged"/> 上报，因此不会翻转已上报状态。
+    /// 与二态 API 不同，本方法不会因非拒绝的 <see cref="SocketException"/> 抛出。</para>
+    /// <para>A listening result shares the same positive TTL cache as <see cref="IsListeningAsync"/>;
+    /// refusals and unknowns are never cached. An unknown outcome is not reported through
+    /// <see cref="ServerAvailabilityChanged"/>, so the last reported state cannot flip on unknown.
+    /// Unlike the two-state API, this method does not throw for non-refusal
+    /// <see cref="SocketException"/> failures.</para>
+    /// </remarks>
+    /// <param name="host">Server hostname or literal address; a non-parseable value is resolved as DNS.
+    /// <para>server 主机名或字面地址；无法解析的值将按 DNS 解析。</para></param>
+    /// <param name="port">Server TCP port number in [0, 65535].
+    /// <para>[0, 65535] 范围内的 server TCP 端口号。</para></param>
+    /// <param name="cancellationToken">Cancels the probe; the 3-second internal deadline instead
+    /// yields <see cref="DebugBridgeProbeOutcome.Unknown"/>.
+    /// <para>取消本次探测；内部 3 秒截止时间则返回 <see cref="DebugBridgeProbeOutcome.Unknown"/>。</para></param>
+    /// <returns>
+    /// <see cref="DebugBridgeProbeOutcome.Listening"/> when the TCP connect completed (also served
+    /// from the positive TTL cache), <see cref="DebugBridgeProbeOutcome.Refused"/> only when the
+    /// connection was refused, and <see cref="DebugBridgeProbeOutcome.Unknown"/> for every other
+    /// fault including the internal deadline.
+    /// <para>TCP 连接成功时返回 <see cref="DebugBridgeProbeOutcome.Listening"/>（正向结果由 TTL 缓存提供）；
+    /// 仅在连接被拒绝时返回 <see cref="DebugBridgeProbeOutcome.Refused"/>；
+    /// 其余故障（含内部 3 秒超时）均返回 <see cref="DebugBridgeProbeOutcome.Unknown"/>。</para>
+    /// </returns>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was signaled; caller cancellation is propagated instead
+    /// of being reported as unknown.
+    /// <para><paramref name="cancellationToken"/> 被触发；调用方取消会被传播，而不是报告为未知。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="port"/> is outside the range [0, 65535].
+    /// <para><paramref name="port"/> 不在 [0, 65535] 范围内。</para></exception>
+    public static async Task<DebugBridgeProbeOutcome> TryProbeAsync(string host, int port, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var key = string.Concat(host, ":", port.ToString(CultureInfo.InvariantCulture));
+        if (PositiveCache.TryGetValue(key, out var cached))
+        {
+            if (Environment.TickCount64 - cached.TimestampTicks < PositiveTtlMs)
+            {
+                ReportState(host, port, key, cached.Listening);
+                return cached.Listening
+                    ? DebugBridgeProbeOutcome.Listening
+                    : DebugBridgeProbeOutcome.Refused;
+            }
+            PositiveCache.TryRemove(key, out _);
+        }
+
+        var (error, linkedCancellationRequested) = await ConnectAsync(host, port, cancellationToken).ConfigureAwait(false);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+        if (linkedCancellationRequested)
+        {
+            return DebugBridgeProbeOutcome.Unknown;
+        }
+        if (error == SocketError.ConnectionRefused)
+        {
+            ReportState(host, port, key, false);
+            return DebugBridgeProbeOutcome.Refused;
+        }
+        if (error != SocketError.Success)
+        {
+            return DebugBridgeProbeOutcome.Unknown;
+        }
+        PositiveCache[key] = new ProbeResult(true, Environment.TickCount64);
+        ReportState(host, port, key, true);
+        return DebugBridgeProbeOutcome.Listening;
+    }
+
+    /// <summary>Connects once without translating failures: the raw socket error plus whether the
+    /// linked 3-second deadline or caller token fired.
+    /// <para>只建立一次连接且不翻译故障：返回原始 socket 错误，以及内部 3 秒截止时间或调用方令牌是否已触发。</para></summary>
+    private static async Task<(SocketError Error, bool LinkedCancellationRequested)> ConnectAsync(
+        string host, int port, CancellationToken cancellationToken)
+    {
+        using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+        using var args = new SocketAsyncEventArgs
+        {
+            RemoteEndPoint = IPAddress.TryParse(host, out var address)
+                ? new IPEndPoint(address, port) : new DnsEndPoint(host, port)
+        };
+        var completion = new TaskCompletionSource<SocketError>(TaskCreationOptions.RunContinuationsAsynchronously);
+        args.Completed += (_, result) => completion.TrySetResult(result.SocketError);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(3));
+        using var cancellation = timeout.Token.Register(() => Socket.CancelConnectAsync(args));
+        if (timeout.IsCancellationRequested)
+        {
+            return (SocketError.OperationAborted, true);
+        }
+        if (!socket.ConnectAsync(args))
+        {
+            completion.TrySetResult(args.SocketError);
+        }
+        if (timeout.IsCancellationRequested)
+        {
+            Socket.CancelConnectAsync(args);
+        }
+        var error = await completion.Task.ConfigureAwait(false);
+        return (error, timeout.IsCancellationRequested);
     }
 
     /// <summary>
@@ -235,4 +334,29 @@ public static class DebugBridgeRoute
             }
         }
     }
+}
+
+/// <summary>
+/// <para>调试桥 server 端点探测的三态结果。只有 <see cref="Refused"/> 表示 server 不存在；
+/// <see cref="Unknown"/> 表示探测未能得出结论（超时、不可达、DNS 失败、复位），
+/// 消费方必须据此维持上次已知状态，不得翻转为「无 server」。</para>
+/// Tri-state outcome of a debug bridge server endpoint probe. Only <see cref="Refused"/> means the
+/// server is absent; <see cref="Unknown"/> means the probe could not conclude (deadline elapsed,
+/// unreachable target, DNS failure, connect reset) and consumers must keep the last known state
+/// instead of flipping to "no server".
+/// </summary>
+public enum DebugBridgeProbeOutcome
+{
+    /// <summary>The TCP connect completed: a server is listening on the endpoint.
+    /// <para>TCP 连接成功建立：端点上有 server 正在监听。</para></summary>
+    Listening,
+
+    /// <summary>The connection was refused: the only outcome meaning the server is absent.
+    /// <para>连接被拒绝：唯一表示 server 不存在的结果。</para></summary>
+    Refused,
+
+    /// <summary>The probe failed to conclude: deadline, unreachable host, DNS failure or reset;
+    /// keep the previous state.
+    /// <para>探测未能得出结论：截止时间到期、主机不可达、DNS 解析失败或连接复位；应保持上次状态。</para></summary>
+    Unknown
 }
