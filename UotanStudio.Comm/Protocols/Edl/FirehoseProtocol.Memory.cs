@@ -334,6 +334,11 @@ public sealed partial class FirehoseProtocol
 
     /// <summary>
     /// Streams exactly the declared raw bytes. XML-looking payload is still partition data.
+    /// <para>精确流出声明的原始字节。看起来像 XML 的负载仍然是分区数据。</para>
+    /// Read requests never exceed the payload size the target negotiated for data travelling from
+    /// the target, so one transport read stays inside one target packet.
+    /// <para>读取请求不会超过目标设备为“自目标方向”协商的负载大小，因此单次传输读取保持在目标的
+    /// 一个数据包之内。</para>
     /// </summary>
     /// <param name="destination">The destination stream. 目标流。</param>
     /// <param name="totalBytes">The number of raw bytes to read. 待读取的原始字节数。</param>
@@ -344,7 +349,8 @@ public sealed partial class FirehoseProtocol
         IProgress<long>? progress = null)
     {
         long bytesRead = 0;
-        var rawBuffer = new byte[EdlConstants.RawReadChunkBytes];
+        var chunkBytes = GetRawReadChunkSize();
+        var rawBuffer = new byte[chunkBytes];
 
         while (bytesRead < totalBytes)
         {
@@ -359,7 +365,7 @@ public sealed partial class FirehoseProtocol
             }
             else
             {
-                var toRead = (int)Math.Min(EdlConstants.RawReadChunkBytes, totalBytes - bytesRead);
+                var toRead = (int)Math.Min(chunkBytes, totalBytes - bytesRead);
                 var n = await _transport.ReadAsync(rawBuffer, 0, toRead, _cmdTimeoutMs, cancellationToken).ConfigureAwait(false);
                 if (n <= 0 || n > toRead)
                 {
@@ -381,5 +387,22 @@ public sealed partial class FirehoseProtocol
             progress?.Report(bytesRead);
         }
 
+    }
+
+    /// <summary>
+    /// Resolves the raw payload read chunk: the <see cref="EdlConstants.RawReadChunkBytes"/> ceiling
+    /// narrowed to the payload size the target negotiated for data sent from itself. A non-positive
+    /// negotiation falls back to the ceiling rather than stalling one byte at a time.
+    /// <para>解析原始负载的读取块大小：以 <see cref="EdlConstants.RawReadChunkBytes"/> 为上界，
+    /// 并按目标设备为其自身发出数据所协商的负载大小收窄。协商值非正时回退到上界，而不是逐字节停滞。</para>
+    /// </summary>
+    /// <returns>The chunk size in bytes, between 1 and <see cref="EdlConstants.RawReadChunkBytes"/>.
+    /// <para>读取块字节数，介于 1 与 <see cref="EdlConstants.RawReadChunkBytes"/> 之间。</para></returns>
+    private int GetRawReadChunkSize()
+    {
+        var negotiated = Configuration.MaxPayloadSizeFromTarget;
+        return negotiated <= 0
+            ? EdlConstants.RawReadChunkBytes
+            : checked((int)Math.Clamp(negotiated, 1L, (long)EdlConstants.RawReadChunkBytes));
     }
 }

@@ -207,8 +207,9 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// <para>停止监视并释放资源。</para>
-    /// Stops monitoring and releases resources.
+    /// <para>停止监视并释放资源，包括设备控制器自身的移除监视、server 监视与未完成的租约。</para>
+    /// Stops monitoring and releases resources, including the device controller's own removal watch,
+    /// server-lifecycle watch and outstanding leases.
     /// </summary>
     public void Dispose()
     {
@@ -224,5 +225,6 @@ public sealed partial class DeviceMonitorService
             _debugBridgeMonitorLifetime = null;
             _started = false;
         }
+        _controller.Dispose();
     }
 }

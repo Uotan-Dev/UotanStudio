@@ -34,10 +34,13 @@ public sealed partial class FirehoseProtocol
 
     /// <summary>
     /// Resets the device (reboot into the system). A best-effort
-    /// &lt;setbootablestoragedrive&gt; (UFS→1, eMMC→0) is sent before the reset.
-    /// A NAK of that preparation is tolerated, but an uncertain response stops the sequence.
+    /// &lt;setbootablestoragedrive&gt; (UFS→1, eMMC→0) is sent before the reset, and only for the
+    /// storage types that own a bootable logical unit: NAND, SPI NOR and undetected storage skip the
+    /// preparation entirely. A NAK of that preparation is tolerated, but an uncertain response stops
+    /// the sequence.
     /// <para>复位设备（重启进入系统）。复位前会尽力发送 &lt;setbootablestoragedrive&gt;
-    /// （UFS→1，eMMC→0）。该准备命令返回 NAK 可以容忍，但结果不确定的响应会中止整个序列。</para>
+    /// （UFS→1，eMMC→0），且仅针对拥有可引导逻辑单元的存储类型：NAND、SPI NOR 与未探测到的存储
+    /// 完全跳过该准备命令。该准备命令返回 NAK 可以容忍，但结果不确定的响应会中止整个序列。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>
@@ -101,17 +104,25 @@ public sealed partial class FirehoseProtocol
 
         if (option == RebootOption.Reset)
         {
-            var bootableValue = Configuration.StorageType == FirehoseStorageType.Ufs ? 1 : 0;
-            var preparation = await SetBootableStorageDriveCoreAsync(bootableValue, cancellationToken);
-            if (preparation.IsRawMode || (!preparation.IsAck && !preparation.IsNak))
+            int? bootableValue = Configuration.StorageType switch
             {
-                _faulted = true;
-                throw new FirehoseException("Invalid response to boot-drive preparation; reset was not sent.");
-            }
+                FirehoseStorageType.Ufs => 1,
+                FirehoseStorageType.Emmc => 0,
+                _ => null
+            };
+            if (bootableValue is { } value)
+            {
+                var preparation = await SetBootableStorageDriveCoreAsync(value, cancellationToken).ConfigureAwait(false);
+                if (preparation.IsRawMode || (!preparation.IsAck && !preparation.IsNak))
+                {
+                    _faulted = true;
+                    throw new FirehoseException("Invalid response to boot-drive preparation; reset was not sent.");
+                }
 
-            if (preparation.IsNak)
-            {
-                Log("Target rejected boot-drive preparation; continuing with the requested reset.");
+                if (preparation.IsNak)
+                {
+                    Log("Target rejected boot-drive preparation; continuing with the requested reset.");
+                }
             }
         }
 

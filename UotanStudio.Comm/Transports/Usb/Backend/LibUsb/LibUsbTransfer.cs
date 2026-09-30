@@ -45,10 +45,32 @@ internal static partial class LibUsbTransfer
         return result;
     }
 
+    /// <summary>
+    /// Upper bound handed to libusb when the caller requests an infinite transfer.
+    /// libusb treats a native timeout of 0 as "never time out", which leaves the completion
+    /// callback uninvoked forever on a wedged device and leaks the pinned buffer, the
+    /// <see cref="GCHandle"/> instances and the safe-handle reference taken by the operation.
+    /// <para>调用方请求无限超时时的原生超时上限。libusb 将原生超时 0 视为“永不超时”，
+    /// 设备卡死时完成回调可能永不触发，从而永久泄漏固定缓冲区、<see cref="GCHandle"/>
+    /// 实例以及操作占用的安全句柄引用计数。</para>
+    /// </summary>
+    internal const int IndefiniteNativeTimeoutMs = 24 * 60 * 60 * 1000;
+
+    /// <summary>
+    /// Normalizes a caller timeout into the value written into the native transfer, never returning 0.
+    /// The infinite sentinel is remapped to <see cref="IndefiniteNativeTimeoutMs"/> so a stalled
+    /// device eventually delivers a completion callback and the operation releases its resources.
+    /// <para>将调用方超时归一化后写入原生传输，永不返回 0。无限哨兵被重映射为
+    /// <see cref="IndefiniteNativeTimeoutMs"/>，使卡死的设备最终交付完成回调并释放操作资源。</para>
+    /// </summary>
+    /// <param name="timeoutMs">The caller-supplied timeout in milliseconds.
+    /// <para>调用方提供的超时时间（毫秒）。</para></param>
+    /// <returns>The bounded native timeout in milliseconds.
+    /// <para>有界的原生超时时间（毫秒）。</para></returns>
     internal static int NativeTimeout(int timeoutMs)
     {
         var normalized = UsbTransferPolicies.NormalizeTimeout(timeoutMs, UsbTransferPolicies.DefaultTimeoutMs);
-        return normalized == UsbTransferPolicies.InfiniteTimeoutMs ? 0 : normalized;
+        return normalized == UsbTransferPolicies.InfiniteTimeoutMs ? IndefiniteNativeTimeoutMs : normalized;
     }
 
     internal static Error FromStatus(TransferStatus status) => status switch

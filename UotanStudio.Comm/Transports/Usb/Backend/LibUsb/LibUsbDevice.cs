@@ -10,6 +10,7 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 internal partial class LibUsbDevice : UsbDevice
 {
     private const int PlatformDefaultTimeoutMs = UsbTransferPolicies.DefaultTimeoutMs;
+    private const int DisposalGateTimeoutMs = UsbTransferPolicies.DefaultTimeoutMs;
 
     private byte[]? _readChunkBuffer;
     private byte[]? _writeChunkBuffer;
@@ -232,40 +233,124 @@ internal partial class LibUsbDevice : UsbDevice
         return 0;
     }
 
+    /// <summary>
+    /// Releases the device after bounded ownership of both chunk gates.
+    /// A chunk transfer holds its gate across a blocking native call whose own timeout can be
+    /// longer than any fixed wait, so disposal waits with a finite timeout instead of blocking
+    /// forever and, when it cannot take a gate, proceeds best-effort rather than leaking the
+    /// handle. Gates that were taken are released and disposed so later operations surface a
+    /// deterministic failure instead of racing against the nulled reader, writer and buffers;
+    /// a gate still held by an in-flight transfer is left undisposed so that transfer's finally
+    /// path cannot throw <see cref="ObjectDisposedException"/> on release. Repeat disposal is
+    /// safe because waiting on an already disposed gate is treated as not acquired.
+    /// <para>在有限期内取得两个分块闸后释放设备。分块传输在可阻塞的原生调用期间持有闸，
+    /// 该调用自身的超时可能长于任何固定等待，因此释放流程使用有限超时等待而非无限阻塞；
+    /// 取不到闸时尽力继续而非泄漏句柄。已取得的闸会被释放并处置，使后续操作呈现确定性
+    /// 失败，而不是与被置空的读写器和缓冲区竞争；仍被在途传输持有的闸保持未处置，避免该
+    /// 传输的 finally 释放路径抛出 <see cref="ObjectDisposedException"/>。重复释放是安全的，
+    /// 因为对已处置闸的等待会被视为未取得。</para>
+    /// </summary>
     public override void Dispose()
     {
-        if (_usbDevice != null)
+        var readGateAcquired = TryEnterChunkGate(_readChunkGate);
+        var writeGateAcquired = TryEnterChunkGate(_writeChunkGate);
+        if (!readGateAcquired || !writeGateAcquired)
         {
-            if (_interfaceClaimed)
-            {
-                RestoreEndpointHalt(ReadEndpointId);
-                RestoreEndpointHalt(WriteEndpointId);
-            }
-
-            try
-            {
-                if (_interfaceClaimed && _usbDevice is LibUsbDotNet.LibUsb.UsbDevice wholeUsbDevice)
-                {
-                    wholeUsbDevice.ReleaseInterface(InterfaceId);
-                }
-            }
-            catch (Exception ex)
-            {
-                UsbTrace.Log($"LibUsbDevice.ReleaseInterface ignored: {ex.GetType().Name}: {ex.Message}");
-            }
-
-            _usbDevice.Close();
-            (_usbDevice as IDisposable)?.Dispose();
-            _usbDevice = null;
+            UsbTrace.Log($"LibUsbDevice.Dispose proceeded without {(readGateAcquired ? "the write" : "the read")} chunk gate after {DisposalGateTimeoutMs} ms because a transfer still holds it.");
         }
 
-        _interfaceClaimed = false;
-        _reader = null;
-        _writer = null;
-        _context?.Dispose();
-        _context = null;
-        _readChunkBuffer = null;
-        _writeChunkBuffer = null;
+        try
+        {
+            if (_usbDevice != null)
+            {
+                if (_interfaceClaimed)
+                {
+                    RestoreEndpointHalt(ReadEndpointId);
+                    RestoreEndpointHalt(WriteEndpointId);
+                }
+
+                try
+                {
+                    if (_interfaceClaimed && _usbDevice is LibUsbDotNet.LibUsb.UsbDevice wholeUsbDevice)
+                    {
+                        wholeUsbDevice.ReleaseInterface(InterfaceId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    UsbTrace.Log($"LibUsbDevice.ReleaseInterface ignored: {ex.GetType().Name}: {ex.Message}");
+                }
+
+                _usbDevice.Close();
+                (_usbDevice as IDisposable)?.Dispose();
+                _usbDevice = null;
+            }
+
+            _interfaceClaimed = false;
+            _reader = null;
+            _writer = null;
+            _context?.Dispose();
+            _context = null;
+            _readChunkBuffer = null;
+            _writeChunkBuffer = null;
+        }
+        finally
+        {
+            ExitChunkGate(_readChunkGate, readGateAcquired);
+            ExitChunkGate(_writeChunkGate, writeGateAcquired);
+        }
+    }
+
+    /// <summary>
+    /// Takes a chunk gate for disposal with a bounded wait.
+    /// An already disposed gate, which is what a previous idle disposal leaves behind, counts as
+    /// not acquired so repeat disposal stays a safe no-op.
+    /// <para>以有限等待为释放流程取得分块闸。已被处置的闸（即先前空闲释放后的状态）
+    /// 视为未取得，使重复释放保持安全的空操作。</para>
+    /// </summary>
+    /// <param name="gate">The chunk gate to take. <para>要取得的分块闸。</para></param>
+    /// <returns>True when the gate is held by this call.
+    /// <para>本次调用持有该闸时为 true。</para></returns>
+    private static bool TryEnterChunkGate(SemaphoreSlim gate)
+    {
+        try
+        {
+            return gate.Wait(DisposalGateTimeoutMs);
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Returns and disposes a chunk gate that disposal had taken.
+    /// A concurrent second disposal can observe the gate as acquired and then find it disposed
+    /// by the first one, so the release is guarded and <see cref="SemaphoreSlim.Dispose()"/> is
+    /// idempotent.
+    /// <para>归还并处置释放流程此前取得的分块闸。并发的第二次释放可能在闸已被第一次释放
+    /// 处置后才发现自己曾取得该闸，因此归还带防护，且 <see cref="SemaphoreSlim.Dispose()"/>
+    /// 本身是幂等的。</para>
+    /// </summary>
+    /// <param name="gate">The chunk gate handed back. <para>要归还的分块闸。</para></param>
+    /// <param name="acquired">Whether disposal had taken this gate.
+    /// <para>释放流程此前是否取得了该闸。</para></param>
+    private static void ExitChunkGate(SemaphoreSlim gate, bool acquired)
+    {
+        if (!acquired)
+        {
+            return;
+        }
+
+        try
+        {
+            gate.Release();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        gate.Dispose();
     }
 
     public override int GetSerialNumber()

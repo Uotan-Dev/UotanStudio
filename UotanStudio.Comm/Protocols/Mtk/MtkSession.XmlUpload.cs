@@ -108,7 +108,7 @@ public sealed partial class MtkSession
     private static int ValidateXmlStageTwoRequest(MtkXmlMessage request, string sourceId, int length)
     {
         var packetLength = ValidateXmlDownloadRequest(request, sourceId, "2nd-DA");
-        if ((length - 1) / packetLength + 1 > 65536)
+        if ((length - 1) / packetLength + 1 > MaximumXmlSourcePackets)
         {
             throw new MtkProtocolException("The XML DA2 request exceeds the bounded packet count.");
         }

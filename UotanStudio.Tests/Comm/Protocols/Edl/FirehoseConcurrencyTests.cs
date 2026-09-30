@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Tests.Comm.TestDoubles;
@@ -165,6 +166,51 @@ public class FirehoseConcurrencyTests
         Assert.Single(transport.Writes);
     }
 
+    [Fact]
+    public void Dispose_IdleProtocol_ReleasesOperationGateAndStaysRepeatable()
+    {
+        using var transport = new ScriptedCommTransport();
+        var protocol = CreateProtocol(transport);
+
+        protocol.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => GetOperationGate(protocol).Wait(TimeSpan.Zero));
+        protocol.Dispose();
+    }
+
+    [Fact]
+    public async Task Dispose_WhileLeaseOutstanding_KeepsOperationGateUsable()
+    {
+        using var transport = new ScriptedCommTransport();
+        var protocol = CreateProtocol(transport);
+        var lease = await protocol.EnterOperationAsync(TestContext.Current.CancellationToken);
+
+        protocol.Dispose();
+        lease.Dispose();
+        var gate = GetOperationGate(protocol);
+
+        Assert.True(gate.Wait(TimeSpan.Zero));
+        gate.Release();
+        Assert.False(protocol.RequiresReconnect);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => protocol.NopAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Dispose_LeaseReturnedAfterTheFirstAttempt_RetiresOperationGateOnTheSecondAttempt()
+    {
+        using var transport = new ScriptedCommTransport();
+        var protocol = CreateProtocol(transport);
+        var lease = await protocol.EnterOperationAsync(TestContext.Current.CancellationToken);
+
+        protocol.Dispose();
+        var gate = GetOperationGate(protocol);
+        Assert.False(gate.Wait(TimeSpan.Zero));
+
+        lease.Dispose();
+        protocol.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => gate.Wait(TimeSpan.Zero));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => protocol.NopAsync(TestContext.Current.CancellationToken));
+    }
+
     [Theory]
     [InlineData("configure", 3)]
     [InlineData("ufs", 4)]
@@ -230,6 +276,9 @@ public class FirehoseConcurrencyTests
         ResponseTimeoutSeconds = 5,
         PowerResetVerifyTimeoutMs = 0
     }, timeoutMs: 10);
+
+    private static SemaphoreSlim GetOperationGate(FirehoseProtocol protocol) =>
+        (SemaphoreSlim)typeof(FirehoseProtocol).GetField("_operationGate", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(protocol)!;
 
     private static async Task RunCommandAsync(FirehoseProtocol protocol, string command, CancellationToken cancellationToken)
     {

@@ -1,18 +1,26 @@
 using System.Diagnostics.CodeAnalysis;
 using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Diagnostics;
 
 namespace UotanStudio.Comm.Devices.Services;
 
 /// <summary>
 /// Owns the opened transport (and the protocol session built on it) until disposed.
 /// <para>持有已打开的传输（及在其上构建的协议会话）直到被释放。</para>
-/// Disposal releases the endpoint reservation.
-/// <para>释放时同时归还端点占用。</para>
+/// Directly opened streaming resources register through <see cref="RegisterStream"/> and are closed
+/// before the session and transport, so a lease force-released during streaming ends those streams
+/// in an orderly way instead of pulling the session out from under them.
+/// <para>直开的流式资源经 <see cref="RegisterStream"/> 登记，并先于会话与传输被关闭，
+/// 因此流式工作进行中被强制释放的租约会先有序终结这些流，而不是把会话从流底下抽走。</para>
+/// Disposal releases the endpoint reservation exactly once, after every owned resource has been released.
+/// <para>释放仅在全部所持有资源归还之后执行一次端点占用释放。</para>
 /// </summary>
 public sealed class DeviceLease : IAsyncDisposable, IDisposable
 {
     private readonly Action _release;
-    private int _disposed;
+    private readonly object _lifecycleGate = new();
+    private readonly List<IAsyncDisposable> _streams = [];
+    private Task? _teardown;
 
     internal DeviceLease(DeviceEndpoint endpoint, IAsyncDisposable transport, object? session, Action release,
         TransportGeneration? generation = null)
@@ -85,24 +93,85 @@ public sealed class DeviceLease : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// Tears the lease down once: drains the command pool, disposes the session (async first, then
-    /// synchronous), the transport, and finally the endpoint reservation; later calls are no-ops.
-    /// <para>仅执行一次清理：排空指令池，释放会话（先按异步、再按同步方式）与传输，最后归还端点
-    /// 占用；重复调用无操作。</para>
+    /// Registers a directly opened streaming resource (logcat capture, screen mirroring) with this lease.
+    /// <para>把直开的流式资源（logcat 捕获、投屏）登记到本租约。</para>
+    /// Registered streams are disposed before the session and the transport when the lease tears down,
+    /// and registration after teardown has started fails, so a stream can never outlive the resources
+    /// it reads from.
+    /// <para>登记的流在租约清理时先于会话与传输被释放；清理已开始后登记会失败，
+    /// 因此流绝不会活得比它所读取的资源更久。</para>
+    /// </summary>
+    /// <param name="stream">
+    /// The stream to close together with the lease. <para>随租约一同关闭的流。</para>
+    /// </param>
+    /// <returns>A handle that removes the stream from the registry when it is disposed; disposing it
+    /// does not close the stream. <para>释放时把该流从登记表移除的句柄；释放该句柄不会关闭流本身。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ObjectDisposedException">Teardown of this lease has already started.
+    /// <para>本租约的清理已经开始。</para></exception>
+    public IDisposable RegisterStream(IAsyncDisposable stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        lock (_lifecycleGate)
+        {
+            if (_teardown is not null)
+            {
+                throw new ObjectDisposedException(nameof(DeviceLease), "The lease is already being torn down.");
+            }
+
+            _streams.Add(stream);
+        }
+
+        return new StreamRegistration(this, stream);
+    }
+
+    /// <summary>
+    /// Tears the lease down once: closes registered streams, drains the command pool, disposes the
+    /// session (async first, then synchronous) and the transport, and finally returns the endpoint
+    /// reservation. Concurrent and later calls await the same teardown instead of starting a second one.
+    /// <para>仅执行一次清理：关闭已登记的流、排空指令池、释放会话（先按异步、再按同步方式）
+    /// 与传输，最后归还端点占用。并发与后续调用等待同一次清理，而不会开启第二次。</para>
     /// </summary>
     /// <returns>A task that completes after the reservation has been returned.
     /// <para>占用登记归还后完成的任务。</para></returns>
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        Task teardown;
+        lock (_lifecycleGate)
         {
-            return;
+            _teardown ??= DisposeCoreAsync();
+            teardown = _teardown;
+        }
+
+        return new ValueTask(teardown);
+    }
+
+    private async Task DisposeCoreAsync()
+    {
+        List<IAsyncDisposable> streams;
+        lock (_lifecycleGate)
+        {
+            streams = [.. _streams];
+            _streams.Clear();
         }
 
         try
         {
             try
             {
+                foreach (var stream in streams)
+                {
+                    try
+                    {
+                        await stream.DisposeAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        UsbTrace.LogError($"Lease stream disposal failed: {ex.GetType().Name}: {ex.Message}");
+                    }
+                }
+
                 await Commands.DisposeAsync().ConfigureAwait(false);
                 switch (Session)
                 {
@@ -131,4 +200,21 @@ public sealed class DeviceLease : IAsyncDisposable, IDisposable
     /// </summary>
     public void Dispose()
         => DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+    private sealed class StreamRegistration(DeviceLease lease, IAsyncDisposable stream) : IDisposable
+    {
+        public void Dispose() => lease.UnregisterStream(stream);
+    }
+
+    private void UnregisterStream(IAsyncDisposable stream)
+    {
+        lock (_lifecycleGate)
+        {
+            var index = _streams.FindIndex(candidate => ReferenceEquals(candidate, stream));
+            if (index >= 0)
+            {
+                _streams.RemoveAt(index);
+            }
+        }
+    }
 }

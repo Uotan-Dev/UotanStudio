@@ -307,6 +307,67 @@ public class FlashBundlePreflightTests
         Assert.Equal(0, transport.ReadCount);
     }
 
+    [Theory]
+    [InlineData("CON", "reserved device name")]
+    [InlineData("nul.img", "reserved device name")]
+    [InlineData("nested/LPT9.bin", "reserved device name")]
+    [InlineData("aux", "reserved device name")]
+    [InlineData("trailing.", "not portable across hosts")]
+    [InlineData("trailing ", "not portable across hosts")]
+    [InlineData("control\tname", "not portable across hosts")]
+    [InlineData("nul\0name", "not portable across hosts")]
+    public void ResolveImage_UnsafeMemberName_RejectsBeforeTouchingDisk(string filename, string expected)
+    {
+        using var directory = new TempDirectory();
+
+        var error = Assert.Throws<EdlException>(() => FlashBundlePath.ResolveImage(directory.Path, filename));
+
+        Assert.Equal(EdlErrorCode.InvalidParameter, error.ErrorCode);
+        Assert.Contains(expected, error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("prog.img:backup")]
+    [InlineData("C:/windows/win.ini")]
+    [InlineData("\\\\?\\C:\\prog.img")]
+    [InlineData("/etc/passwd")]
+    public void ResolveImage_NonRelativeOrStreamedMember_Rejects(string filename)
+    {
+        using var directory = new TempDirectory();
+
+        var error = Assert.Throws<EdlException>(() => FlashBundlePath.ResolveImage(directory.Path, filename));
+
+        Assert.Equal(EdlErrorCode.InvalidParameter, error.ErrorCode);
+        Assert.Contains("relative to its firmware directory", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("../escape.img")]
+    [InlineData("nested/../escape.img")]
+    [InlineData("folder//name.img")]
+    public void ResolveImage_EscapingOrEmptyComponent_Rejects(string filename)
+    {
+        using var directory = new TempDirectory();
+
+        var error = Assert.Throws<EdlException>(() => FlashBundlePath.ResolveImage(directory.Path, filename));
+
+        Assert.Equal(EdlErrorCode.InvalidParameter, error.ErrorCode);
+        Assert.Contains("invalid path component", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("system.img")]
+    [InlineData("COM10.img")]
+    [InlineData("images/super.img")]
+    public void ResolveImage_PortableMemberName_ResolvesInsideTheFirmwareDirectory(string filename)
+    {
+        using var directory = new TempDirectory();
+
+        var resolved = FlashBundlePath.ResolveImage(directory.Path, filename);
+
+        Assert.Equal(Path.Combine(directory.Path, filename.Replace('/', Path.DirectorySeparatorChar)), resolved);
+    }
+
     private static EdlSession CreateSession(ScriptedCommTransport transport, long sectorSize) => new(transport, new FirehoseConfiguration
     {
         SectorSize = sectorSize,

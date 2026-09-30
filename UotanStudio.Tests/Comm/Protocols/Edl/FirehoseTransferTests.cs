@@ -225,6 +225,24 @@ public class FirehoseTransferTests
         Assert.Single(transport.Writes);
     }
 
+    [Fact]
+    public async Task ConfigureAsync_TransportTimeout_FailsInsideFirstAttemptWithoutRetryWrite()
+    {
+        using var transport = new ScriptedCommTransport();
+        using var protocol = CreateProtocol(transport);
+        protocol.Configuration.ConfigureFirstAttemptTimeoutMs = 5;
+        protocol.Configuration.ConfigureRetryIntervalMs = 0;
+
+        var error = await Assert.ThrowsAsync<EdlException>(() => protocol.ConfigureAsync(
+            maxRetries: 30, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(EdlErrorCode.ConnectionLost, error.ErrorCode);
+        Assert.Equal("Configure timed out; reconnect rather than reusing a potentially delayed acknowledgement.", error.Message);
+        var inner = Assert.IsType<EdlException>(error.InnerException);
+        Assert.Equal(EdlErrorCode.TransportTimeout, inner.ErrorCode);
+        Assert.Single(transport.Writes);
+    }
+
     [Theory]
     [InlineData("<!DOCTYPE data [<!ENTITY e 'ACK'>]><data><response value='&e;'/></data>")]
     [InlineData("<data><response value='ACK'/><response value='NAK'/></data>")]

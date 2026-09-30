@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using UotanStudio.Comm.Transports.Abstractions;
 
@@ -5,11 +6,14 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 /// <summary>
 /// Bounded XFlash framing for an exclusively owned transport. The enclosing DA session
-/// must serialize complete command exchanges, not just individual frames.
+/// must serialize complete command exchanges, not just individual frames. Stream payloads are
+/// chunked at a fixed width and staged through a pooled buffer that is returned once every
+/// awaited write has completed, so no frame byte outlives the call.
 /// </summary>
 internal sealed class MtkXFlashChannel
 {
     private const uint Magic = 0xFEEEEEEF;
+    private const int StreamChunkLength = 512;
     private readonly ICommTransport _transport;
     private readonly int _timeoutMs;
     private readonly int _maximumPayload;
@@ -36,15 +40,15 @@ internal sealed class MtkXFlashChannel
         BinaryPrimitives.WriteUInt32LittleEndian(header, Magic);
         BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(4), dataType);
         BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(8), (uint)length);
+        var buffer = ArrayPool<byte>.Shared.Rent(StreamChunkLength);
         try
         {
             await WriteAsync(header, Environment.TickCount64, cancellationToken).ConfigureAwait(false);
-            var buffer = new byte[512];
             var sent = 0;
             while (sent < length)
             {
                 RequireReady(cancellationToken);
-                var count = Math.Min(buffer.Length, length - sent);
+                var count = Math.Min(StreamChunkLength, length - sent);
                 await source.ReadExactlyAsync(buffer.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
                 await WriteAsync(buffer, count, Environment.TickCount64, cancellationToken).ConfigureAwait(false);
                 sent += count;
@@ -55,6 +59,10 @@ internal sealed class MtkXFlashChannel
         {
             IsFaulted = true;
             throw;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 

@@ -29,8 +29,39 @@ public sealed partial class MtkSession
         }
     } = 64 * 1024 * 1024;
 
+    private const int MaximumXmlHostFileTokenLength = 512;
+
     private static bool IsXmlFileRequest(MtkXmlMessage message) =>
         message.Command is "CMD:DOWNLOAD-FILE" or "CMD:UPLOAD-FILE" or "CMD:FILE-SYS-OPERATION";
+
+    /// <summary>
+    /// Rejects the traversal shapes a device-authored host file token must never carry before it
+    /// reaches <see cref="IMtkXmlHostFileStore"/>: rooted or absolute paths, drive letters,
+    /// NTFS alternate data streams and other scheme-like colons, back slashes, any <c>..</c>
+    /// segment, control characters and over-long names. The host store still owns the
+    /// authoritative containment decision; this only removes the obvious escaping forms from the
+    /// untrusted input.
+    /// <para>在设备提供的主机文件令牌到达 <see cref="IMtkXmlHostFileStore"/> 之前，拒绝它绝不应携带的
+    /// 越权形态：根路径或绝对路径、盘符、NTFS 备用数据流以及其他带冒号的协议式写法、反斜杠、任意
+    /// <c>..</c> 片段、控制字符以及超长名称。真正的包含式判定仍由主机存储负责；此处只从不可信输入中
+    /// 剔除明显的越界形式。</para>
+    /// </summary>
+    /// <param name="token">The device-authored file token. 设备提供的主机文件令牌。</param>
+    /// <exception cref="MtkProtocolException">The token is not a bounded relative file name.
+    /// <para>该令牌不是有界的相对文件名。</para></exception>
+    internal static void ValidateXmlHostFileToken(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token) || token.Length > MaximumXmlHostFileTokenLength
+            || token.Contains(':')
+            || token.Contains('\\')
+            || token.Contains("..", StringComparison.Ordinal)
+            || token.StartsWith('/')
+            || Path.IsPathRooted(token)
+            || token.Any(static value => char.IsControl(value)))
+        {
+            throw new MtkProtocolException("The XML DA host file token is not a bounded relative file name.");
+        }
+    }
 
     /// <summary>
     /// Services one device-initiated file request through <see cref="HostFileStore"/>, using
@@ -64,6 +95,7 @@ public sealed partial class MtkSession
                         throw new MtkProtocolException("Only the FILE-SIZE file-system operation is supported.");
                     }
 
+                    ValidateXmlHostFileToken(path);
                     var size = await store.GetSizeAsync(path, token).ConfigureAwait(false)
                         ?? throw new MtkProtocolException($"The host file store has no size for '{path}'.");
                     if (size < 0 || size > MaximumHostFileTransferBytes)
@@ -88,6 +120,7 @@ public sealed partial class MtkSession
                     var tokenName = arguments.TryGetValue("source_file", out var source) ? source
                         : arguments.TryGetValue("target_file", out var target) ? target
                         : throw new MtkProtocolException("The XML download request carries no file token.");
+                    ValidateXmlHostFileToken(tokenName);
                     var (content, length) = await store.OpenReadAsync(tokenName, token).ConfigureAwait(false)
                         ?? throw new MtkProtocolException($"The host file store refused '{tokenName}'.");
                     using (content)
@@ -117,12 +150,14 @@ public sealed partial class MtkSession
                         throw new MtkProtocolException("The XML upload request does not match the bounded transfer profile.");
                     }
 
+                    ValidateXmlHostFileToken(target);
                     await channel.AcknowledgeAsync(token).ConfigureAwait(false);
                     var declared = await channel.ReceiveTextAsync(token).ConfigureAwait(false);
                     if (!TryParseXmlDeclaredLength(declared, out var length) || length > MaximumHostFileTransferBytes)
                     {
                         throw new MtkProtocolException("The XML DA upload length is invalid or exceeds the selected transfer limit.");
                     }
+                    RequireBoundedXmlPacketCount(length, packetLength);
                     var sink = await store.OpenWriteAsync(target, length, token).ConfigureAwait(false)
                         ?? throw new MtkProtocolException($"The host file store refused the upload of '{target}'.");
                     using (sink)

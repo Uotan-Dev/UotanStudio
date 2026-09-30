@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Ports;
 using UotanStudio.Comm.Devices.Discovery;
@@ -21,6 +22,9 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 public sealed partial class MtkSession : IProtocolSession
 {
     private const int MaximumAgentLength = 64 * 1024 * 1024;
+    private const int AgentChunkLength = 1024;
+    internal const int MaximumBootReadLength = 1024 * 1024;
+    private const int MaximumXmlSourcePackets = 65536;
     private readonly SemaphoreSlim _operation = new(1, 1);
     private readonly List<ProtocolEvidence> _evidence = [];
     private readonly int _timeoutMs;
@@ -444,21 +448,28 @@ public sealed partial class MtkSession : IProtocolSession
                 }
 
                 NoteUploadStage(MtkDaUploadStage.DataTransferring);
-                var buffer = new byte[1024];
+                var buffer = ArrayPool<byte>.Shared.Rent(AgentChunkLength);
                 ushort checksum = 0;
-                var uploaded = 0;
-                while (uploaded < length)
+                try
                 {
-                    var count = Math.Min(buffer.Length, length - uploaded);
-                    await image.ReadExactlyAsync(buffer.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
-                    for (var offset = 0; offset < count; offset += 2)
+                    var uploaded = 0;
+                    while (uploaded < length)
                     {
-                        checksum ^= BinaryPrimitives.ReadUInt16LittleEndian(buffer.AsSpan(offset, 2));
-                    }
+                        var count = Math.Min(AgentChunkLength, length - uploaded);
+                        await image.ReadExactlyAsync(buffer.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
+                        for (var offset = 0; offset < count; offset += 2)
+                        {
+                            checksum ^= BinaryPrimitives.ReadUInt16LittleEndian(buffer.AsSpan(offset, 2));
+                        }
 
-                    await WriteAsync(buffer, count, _timeoutMs, cancellationToken).ConfigureAwait(false);
-                    uploaded += count;
-                    progress?.Report(uploaded);
+                        await WriteAsync(buffer, count, _timeoutMs, cancellationToken).ConfigureAwait(false);
+                        uploaded += count;
+                        progress?.Report(uploaded);
+                    }
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(buffer);
                 }
 
                 _uploadCompletionPending = true;
@@ -580,8 +591,26 @@ public sealed partial class MtkSession : IProtocolSession
         }
     }
 
+    /// <summary>
+    /// Bounds one boot-protocol receive before any buffer is allocated. Every length reaching the
+    /// boot readers originates from device-reported counts, so the ceiling is checked first and
+    /// matches the largest bounded agent or storage packet the protocol families negotiate.
+    /// 在分配任何缓冲区之前约束单次 boot 协议接收。到达 boot 读取器的长度都来自设备上报的计数，
+    /// 因此先校验上限，其值等于各协议族协商的最大有界代理或存储包。
+    /// </summary>
+    /// <param name="count">The requested byte count. 请求的字节数。</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="count"/> is negative or above
+    /// <see cref="MaximumBootReadLength"/>. <para><paramref name="count"/> 为负或超过
+    /// <see cref="MaximumBootReadLength"/>。</para></exception>
+    internal static void ValidateBootReadLength(int count)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(count, MaximumBootReadLength);
+    }
+
     private async Task<byte[]> ReadAsync(int count, int timeoutMs, CancellationToken cancellationToken)
     {
+        ValidateBootReadLength(count);
         var bytes = new byte[count];
         var position = 0;
         var started = Environment.TickCount64;

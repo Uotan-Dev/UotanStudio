@@ -98,6 +98,59 @@ public class DeviceCommunicationConfigurationTests
             DebugBridgeRoute.IsListeningAsync("127.0.0.1", -1, TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public void HdcServerPort_UnsetOverride_UsesDefaultPort()
+    {
+        WithHdcServerPortEnvironment(null, () => Assert.Equal(8710, DebugBridgeEndpoints.HdcServerPort));
+    }
+
+    [Theory]
+    [InlineData("not-a-port")]
+    [InlineData("0")]
+    [InlineData("70000")]
+    [InlineData("-1")]
+    [InlineData(" 8710")]
+    [InlineData("8710.5")]
+    public void HdcServerPort_MalformedOverride_FallsBackToDefaultPort(string value)
+    {
+        WithHdcServerPortEnvironment(value, () => Assert.Equal(8710, DebugBridgeEndpoints.HdcServerPort));
+    }
+
+    [Fact]
+    public void HdcServerPort_ValidOverride_CachesFirstResolutionUntilReset()
+    {
+        try
+        {
+            Environment.SetEnvironmentVariable("OHOS_HDC_SERVER_PORT", "8712");
+            DebugBridgeEndpoints.ResetHdcServerPortCache();
+            Assert.Equal(8712, DebugBridgeEndpoints.HdcServerPort);
+            Environment.SetEnvironmentVariable("OHOS_HDC_SERVER_PORT", "18712");
+            Assert.Equal(8712, DebugBridgeEndpoints.HdcServerPort);
+            DebugBridgeEndpoints.ResetHdcServerPortCache();
+            Assert.Equal(18712, DebugBridgeEndpoints.HdcServerPort);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OHOS_HDC_SERVER_PORT", null);
+            DebugBridgeEndpoints.ResetHdcServerPortCache();
+        }
+    }
+
+    private static void WithHdcServerPortEnvironment(string? value, Action assertion)
+    {
+        try
+        {
+            Environment.SetEnvironmentVariable("OHOS_HDC_SERVER_PORT", value);
+            DebugBridgeEndpoints.ResetHdcServerPortCache();
+            assertion();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OHOS_HDC_SERVER_PORT", null);
+            DebugBridgeEndpoints.ResetHdcServerPortCache();
+        }
+    }
+
     private sealed class RecordingProvider(string name, List<string> calls) : IUsbApiProvider
     {
         public string ApiName => name;

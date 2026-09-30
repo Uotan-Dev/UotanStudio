@@ -3,6 +3,7 @@ using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Devices.Services.Sessions;
 using UotanStudio.Comm.Protocols.Adb;
+using UotanStudio.Comm.Transports.Usb.Abstractions;
 using Xunit;
 
 namespace UotanStudio.Tests.Comm.Devices;
@@ -18,6 +19,98 @@ public sealed class DeviceControllerSessionTests
         Route = "server",
         Protocol = protocol
     };
+
+    private static UsbDeviceInfo UsbDetails() => new()
+    {
+        ApiName = "Native",
+        SourceApiKind = UsbApiKind.Native,
+        SourceDeviceType = "FakeUsbDevice",
+        DevicePath = @"\\?\usb#vid_18d1&pid_4ee7",
+        DeviceKey = "usb:bus-1:device-2",
+        SerialNumber = "serial-a",
+        ContainerId = Guid.Parse("11111111-2222-3333-4444-555555555555"),
+        PhysicalPortPath = "usb-port-1-2",
+        DeviceInstanceId = @"USB\VID_18D1&PID_4EE7\SERIAL-A",
+        VendorId = 0x18D1,
+        ProductId = 0x4EE7,
+        InterfaceClass = 0xFF,
+        InterfaceSubClass = 0x42,
+        InterfaceProtocol = 0x01,
+        InterfaceMetadataObserved = true,
+        Speed = UsbDeviceSpeed.High,
+        Interfaces =
+        [
+            new UsbInterfaceInfo
+            {
+                InterfaceNumber = 1,
+                Class = 0xFF,
+                SubClass = 0x42,
+                Protocol = 0x01,
+                Endpoints =
+                [
+                    new UsbEndpointInfo
+                    {
+                        EndpointAddress = 0x81,
+                        Attributes = 2,
+                        MaxPacketSize = 512,
+                        Interval = 0
+                    }
+                ]
+            }
+        ]
+    };
+
+    private static DeviceEndpoint UsbEndpoint(UsbDeviceInfo info) => new()
+    {
+        Source = "usb",
+        Transport = "Native",
+        Address = info.DeviceKey,
+        Serial = info.SerialNumber,
+        Route = "direct-usb",
+        Protocol = "adb",
+        Usb = new UsbEndpointDetails(info.SourceApiKind, info.DevicePath, info.VendorId,
+            info.ProductId, info.InterfaceClass, info.InterfaceSubClass, info.InterfaceProtocol),
+        UsbInfo = info
+    };
+
+    [Fact]
+    public void Equals_UsbInfoCopiedPerRead_EqualContentEndpointsStayEqualAndShareHash()
+    {
+        var left = UsbEndpoint(UsbDetails());
+        var right = UsbEndpoint(UsbDetails());
+
+        Assert.NotSame(left.UsbInfo!, right.UsbInfo!);
+        Assert.True(left.Equals(right));
+        Assert.True(left == right);
+        Assert.Equal(left, right);
+        Assert.Equal(left.GetHashCode(), right.GetHashCode());
+        Assert.Equal(left, left with { });
+
+        var leased = new Dictionary<DeviceEndpoint, string>();
+        leased[left] = "lease";
+        Assert.Equal("lease", leased[right]);
+    }
+
+    [Fact]
+    public void GetHashCode_RepeatedUsbInfoReads_HashSurvivesEveryFreshCopy()
+    {
+        var endpoint = UsbEndpoint(UsbDetails());
+
+        Assert.NotSame(endpoint.UsbInfo!, endpoint.UsbInfo!);
+        Assert.Equal(endpoint.GetHashCode(), endpoint.GetHashCode());
+    }
+
+    [Fact]
+    public void Equals_UsbDetailsDifferInNestedEndpoint_TreatsEndpointsAsUnequal()
+    {
+        var left = UsbEndpoint(UsbDetails());
+        var details = UsbDetails();
+        details.Interfaces[0].Endpoints[0].MaxPacketSize = 1024;
+        var right = UsbEndpoint(details);
+
+        Assert.False(left.Equals(right));
+        Assert.True(left != right);
+    }
 
     [Fact]
     public async Task OpenAsync_RegisteredKind_ExposesTypedSessionOnLease()

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -10,12 +11,35 @@ namespace UotanStudio.Comm.Devices.Discovery;
 /// target list is the only inventory for that protocol (full server takeover).
 /// <para>按精确 CommKit USB 键投影端点，不合并后端或序列号。调试桥 server 处于监听状态时，该协议的
 /// direct-usb 端点被完全抑制：该协议的设备清单只来自 server 目标列表（server 完全让位）。</para>
+/// Missing fastboot serials are probed at most a bounded number of times per physical identity and
+/// resolved serials are memoized under that identity, so interface renumbering of one device does
+/// not re-claim it every round and a permanently silent device does not burn a claim per refresh.
+/// <para>缺失的 fastboot 序列号按物理身份限次探测，成功读到的序列号按该身份记忆化，
+/// 因此同一设备接口重编号不会每轮重新认领，长期无响应的设备也不会每次刷新都占用一次认领。</para>
 /// </summary>
 public sealed class UsbDiscoverySource : IDeviceDiscoverySource
 {
+    /// <summary>
+    /// Upper bound on consecutive <c>getvar serialno</c> probe failures tolerated per physical
+    /// identity before probing that identity stops until the next successful value replaces it.
+    /// <para>每个物理身份可容忍的连续 <c>getvar serialno</c> 探测失败上限，达到上限后停止探测，
+    /// 直到下一个成功值将其替换。</para>
+    /// </summary>
+    private const int MaxSerialProbeFailuresPerIdentity = 3;
+
+    /// <summary>
+    /// Upper bound on memoized fastboot-serial identities and failure counters; discovery stays
+    /// best-effort beyond the bound instead of growing the dictionaries with recycled topology churn.
+    /// <para>记忆化的 fastboot 序列号身份与失败计数器的上限；超出上限时发现保持尽力而为，
+    /// 不让字典随拓扑回收噪声无界增长。</para>
+    /// </summary>
+    private const int MaxTrackedSerialIdentities = 128;
+
     private readonly ICommKit _kit;
     private readonly UsbApiKind _backend;
     private readonly Func<string, bool>? _serverProbeOverride;
+    private readonly ConcurrentDictionary<string, string> _serialByPhysicalIdentity = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, int> _serialProbeFailuresByPhysicalIdentity = new(StringComparer.Ordinal);
 
     internal UsbDiscoverySource(ICommKit kit, UsbApiKind backend, Func<string, bool>? serverProbeOverride = null)
     {
@@ -36,9 +60,10 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
 
     /// <summary>
     /// Enumerates the backend's USB devices and projects each into a <c>direct-usb</c> endpoint,
-    /// classifying its protocol and completing missing fastboot serials via <c>getvar serialno</c>.
-    /// <para>枚举后端的 USB 设备并把每个设备投影为 <c>direct-usb</c> 端点，分类其协议，并经
-    /// <c>getvar serialno</c> 补全缺失的 fastboot 序列号。</para>
+    /// classifying its protocol and completing missing fastboot serials via a memoized, failure-bounded
+    /// <c>getvar serialno</c> probe keyed by physical identity.
+    /// <para>枚举后端的 USB 设备并把每个设备投影为 <c>direct-usb</c> 端点，分类其协议，并按物理身份
+    /// 键控、记忆化且限次失败的 <c>getvar serialno</c> 探测补全缺失的 fastboot 序列号。</para>
     /// While a debug-bridge server is listening, every adb or hdc endpoint of that protocol is
     /// suppressed without consulting the server's target list; other protocols are never filtered
     /// by server state.
@@ -77,7 +102,7 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
             var protocol = UsbProtocolClassifier.Classify(device);
             if (protocol == "fastboot" && (string.IsNullOrWhiteSpace(serial) || serial == "UNKNOWN"))
             {
-                serial = FastbootSerialReader.Read(_kit, device) ?? serial;
+                serial = ProbeFastbootSerial(device) ?? serial;
             }
 
             return new DeviceEndpoint
@@ -104,6 +129,60 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
         "hdc" => hdcLive,
         _ => false
     };
+
+    /// <summary>
+    /// <para>按物理身份记忆化 fastboot <c>getvar serialno</c> 探测：键为
+    /// <see cref="PhysicalDeviceIdentity.From(UsbDeviceInfo)"/> 的身份键，
+    /// 身份不可推导时才退回精确设备键（稳定认领键，绝非会被回收的总线地址或设备路径）；
+    /// 只记忆化读取成功的值，失败按同一身份计数并在有界次数后停止认领，读到新值后计数清零。</para>
+    /// Memoizes the fastboot <c>getvar serialno</c> probe by physical identity: the key is the
+    /// <see cref="PhysicalDeviceIdentity"/> derived from the device, falling back to the exact stable
+    /// device key only when no identity can be derived (never a recycled bus address or device path);
+    /// only successful reads are cached, failures count per the same identity and stop claiming after
+    /// a bounded number of rounds, and a later success resets the counter.
+    /// </summary>
+    /// <param name="device">
+    /// The fastboot-mode device missing a descriptor serial. <para>描述符缺少序列号的 fastboot 模式设备。</para>
+    /// </param>
+    /// <returns>The cached or freshly probed serial, or <see langword="null"/> when the probe failed
+    /// or this identity already exhausted its bounded failure rounds.
+    /// <para>缓存或新探测到的序列号；探测失败或该身份已用尽有限次失败配额时返回 <see langword="null"/>。</para></returns>
+    private string? ProbeFastbootSerial(UsbDeviceInfo device)
+    {
+        var identityKey = PhysicalDeviceIdentity.From(device)?.Key ?? device.DeviceKey;
+        if (_serialByPhysicalIdentity.TryGetValue(identityKey, out var cached))
+        {
+            return cached;
+        }
+
+        if (_serialProbeFailuresByPhysicalIdentity.TryGetValue(identityKey, out var failures) &&
+            failures >= MaxSerialProbeFailuresPerIdentity)
+        {
+            return null;
+        }
+
+        var serial = FastbootSerialReader.Read(_kit, device);
+        if (serial is { } resolved)
+        {
+            if (_serialByPhysicalIdentity.Count < MaxTrackedSerialIdentities)
+            {
+                _serialByPhysicalIdentity[identityKey] = resolved;
+            }
+
+            _serialProbeFailuresByPhysicalIdentity.TryRemove(identityKey, out _);
+            return resolved;
+        }
+
+        if (_serialProbeFailuresByPhysicalIdentity.Count < MaxTrackedSerialIdentities)
+        {
+            _serialProbeFailuresByPhysicalIdentity.AddOrUpdate(
+                identityKey,
+                static _ => 1,
+                static (_, count) => count >= MaxSerialProbeFailuresPerIdentity ? count : count + 1);
+        }
+
+        return null;
+    }
 
     private static bool ProbeQuietly(Func<bool> probe)
     {

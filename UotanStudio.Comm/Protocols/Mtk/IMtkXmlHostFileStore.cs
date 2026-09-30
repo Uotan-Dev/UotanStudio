@@ -10,9 +10,14 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <para>XML 下载代理的主机侧文件回调。在硬件初始化前向 <see cref="MtkSession.HostFileStore"/>
 /// 附加存储时，会话声明 <c>CMD:DOWNLOAD-FILE</c>/<c>CMD:UPLOAD-FILE</c>/<c>CMD:FILE-SYS-OPERATION</c>
 /// 能力并严格经此存储服务设备发起的请求；未附加时不声明能力，意外请求仍使会话 fault（fail-closed）。</para>
-/// Tokens are opaque agent-provided identifiers; implementations must treat them as untrusted
-/// input, bound every transfer and honour cancellation.
-/// <para>令牌是代理提供的不透明标识；实现必须将其视为不可信输入，约束每次传输并响应取消。</para>
+/// Tokens are opaque agent-provided identifiers. The session first rejects rooted or absolute
+/// paths, drive letters, scheme-like colons, back slashes, <c>..</c> segments, control characters
+/// and over-long names, so a store only ever receives a bounded relative name; it must still treat
+/// that name as untrusted, resolve it inside its own containment root, bound every transfer and
+/// honour cancellation.
+/// <para>令牌是代理提供的不透明标识。会话会先拒绝根路径或绝对路径、盘符、冒号式协议写法、反斜杠、
+/// <c>..</c> 片段、控制字符与超长名称，因此存储只会收到有界的相对文件名；它仍须把该名称视为不可信输入，
+/// 在自己的包含根目录内解析它，约束每次传输并响应取消。</para>
 /// </summary>
 public interface IMtkXmlHostFileStore
 {

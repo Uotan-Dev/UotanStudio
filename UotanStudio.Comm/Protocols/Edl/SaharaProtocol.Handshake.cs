@@ -187,6 +187,7 @@ public sealed partial class SaharaProtocol
                         Log($"END_OF_IMAGE: ImageId={eoi.ImageId}, Status={eoi.Status}");
                         if (eoi.Status != 0)
                         {
+                            await TryAbandonImageTransferAsync(cancellationToken).ConfigureAwait(false);
                             throw new SaharaException($"END_OF_IMAGE with non-zero status: {eoi.Status} ({DescribeSaharaStatus(eoi.Status)})");
                         }
                         if (!images.ContainsKey(eoi.ImageId))
@@ -259,6 +260,28 @@ public sealed partial class SaharaProtocol
             MinVersion = EdlConstants.SaharaHostCompatibleVersion,
             Mode = SaharaMode.ImageTxPending
         }, token);
+    }
+
+    /// <summary>
+    /// Sends a best-effort DONE after the target rejected an image, so the device leaves the
+    /// image-transfer state instead of waiting for a host that already failed. Every cleanup failure
+    /// is logged and swallowed because the caller must surface the original Sahara error unchanged.
+    /// <para>在目标设备拒绝某个镜像后尽力发送 DONE，使设备离开镜像传输状态，而不是继续等待一个
+    /// 已经失败的主机。所有清理失败都只记录并被吞掉，因为调用方必须原样抛出原始的 Sahara 错误。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    private async Task TryAbandonImageTransferAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var done = new SaharaDonePacket { Command = SaharaCommand.Done, Length = (uint)Marshal.SizeOf<SaharaDonePacket>() };
+            await WriteStructAsync(done, cancellationToken).ConfigureAwait(false);
+            Log("Sent DONE to abandon the rejected image transfer.");
+        }
+        catch (Exception ex)
+        {
+            Log($"Cleanup DONE after a rejected image transfer failed: {ex.Message}");
+        }
     }
 
     private static void ValidateHello(SaharaHelloPacket hello)

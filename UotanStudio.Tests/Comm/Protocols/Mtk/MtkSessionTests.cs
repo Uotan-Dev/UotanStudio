@@ -141,6 +141,26 @@ public partial class MtkSessionTests
     }
 
     [Fact]
+    public async Task UploadDownloadAgentAsync_PooledStagingBuffer_SendsExactlyDeclaredChunkBytes()
+    {
+        using var transport = new ScriptedCommTransport();
+        EnqueueIdentity(transport);
+        using var session = new MtkSession(transport);
+        await session.InitializeAsync(TestContext.Current.CancellationToken);
+        transport.Enqueue([0xD7, 0, 0x20, 0, 0, 0, 0, 0x06, 0, 0, 0, 0, 0, 0, 0]);
+        transport.Enqueue([0, 0, 0, 0]);
+        using var image = new FragmentedSource([.. Enumerable.Repeat((byte)0x01, 1536)]);
+
+        await session.UploadDownloadAgentAsync(image, 0x200000, 1536, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(MtkSessionState.AgentUploaded, session.State);
+        Assert.Equal(1024, transport.Writes[^2].Length);
+        Assert.All(transport.Writes[^2], value => Assert.Equal(0x01, value));
+        Assert.Equal(512, transport.Writes[^1].Length);
+        Assert.All(transport.Writes[^1], value => Assert.Equal(0x01, value));
+    }
+
+    [Fact]
     public async Task InitializeAsync_PreCancelled_PreservesCreatedState()
     {
         using var transport = new ScriptedCommTransport();

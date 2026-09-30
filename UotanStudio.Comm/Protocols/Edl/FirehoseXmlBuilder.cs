@@ -170,31 +170,6 @@ public static partial class FirehoseXmlBuilder
     }
 
     /// <summary>
-    /// Builds a &lt;getsha256digest&gt; XML command to retrieve the SHA256 hash of a partition region
-    /// from the target.
-    /// <para>构建 &lt;getsha256digest&gt; XML 命令，从目标设备获取分区区域的 SHA256 哈希值。</para>
-    /// </summary>
-    /// <param name="sectorSizeInBytes">The sector size in bytes. <para>扇区大小（字节）。</para></param>
-    /// <param name="numPartitionSectors">The number of sectors to hash. <para>待哈希扇区数。</para></param>
-    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
-    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
-    /// <returns>The getsha256digest XML string. <para>getsha256digest XML 字符串。</para></returns>
-    public static string BuildGetSha256(long sectorSizeInBytes, long numPartitionSectors,
-        int physicalPartitionNumber, long startSector)
-    {
-        var sb = new StringBuilder();
-        sb.Append(EdlConstants.XmlHeader);
-        sb.Append(EdlConstants.DataOpen);
-        sb.Append($"<getsha256digest SECTOR_SIZE_IN_BYTES=\"{sectorSizeInBytes}\"");
-        sb.Append($" num_partition_sectors=\"{numPartitionSectors}\"");
-        sb.Append($" physical_partition_number=\"{physicalPartitionNumber}\"");
-        sb.Append($" start_sector=\"{startSector}\"");
-        sb.Append(" />\n");
-        sb.Append(EdlConstants.DataClose);
-        return sb.ToString();
-    }
-
-    /// <summary>
     /// Builds the &lt;read&gt; XML command.
     /// <para>构建 &lt;read&gt; XML 命令。</para>
     /// </summary>

@@ -244,6 +244,57 @@ public sealed class EdlStreamReadFacadeTests
         Assert.Equal(AbcSha256, session.Capabilities!.ResourceSha256Hex);
     }
 
+    [Fact]
+    public async Task ReadPartitionToStreamAsync_TargetCapsPayloadAtEightKiB_ReadsInEightKiBChunks()
+    {
+        var payload = new byte[16384];
+        new Random(131).NextBytes(payload);
+        using var transport = ReadTransport(payload);
+        using var protocol = Protocol(transport, 8192);
+        using var destination = new ChunkRecordingStream();
+
+        var result = await protocol.ReadPartitionToStreamAsync(destination, 0, 32,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(16384, result.BytesWritten);
+        Assert.Equal([8192, 8192], destination.WriteSizes.ToArray());
+        Assert.Equal(payload, destination.Totaled());
+    }
+
+    [Fact]
+    public async Task ReadPartitionToStreamAsync_TargetAdvertisesFourMiBPayload_StaysInsideOneMiBChunkCeiling()
+    {
+        var payload = new byte[2 * 1024 * 1024];
+        new Random(149).NextBytes(payload);
+        using var transport = ReadTransport(payload);
+        using var protocol = Protocol(transport, 4194304);
+        using var destination = new ChunkRecordingStream();
+
+        var result = await protocol.ReadPartitionToStreamAsync(destination, 0, 4096,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(2097152, result.BytesWritten);
+        Assert.Equal([1048576, 1048576], destination.WriteSizes.ToArray());
+        Assert.Equal(payload, destination.Totaled());
+    }
+
+    [Fact]
+    public async Task ReadPartitionToStreamAsync_TargetReportsNoPayloadBudget_KeepsChunkCeiling()
+    {
+        var payload = new byte[16384];
+        new Random(151).NextBytes(payload);
+        using var transport = ReadTransport(payload);
+        using var protocol = Protocol(transport, 0);
+        using var destination = new ChunkRecordingStream();
+
+        var result = await protocol.ReadPartitionToStreamAsync(destination, 0, 32,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(16384, result.BytesWritten);
+        Assert.Equal([16384], destination.WriteSizes.ToArray());
+        Assert.Equal(payload, destination.Totaled());
+    }
+
     private static ScriptedCommTransport ReadTransport(byte[] payload, int fragment = 0)
     {
         var transport = new ScriptedCommTransport();
@@ -266,6 +317,15 @@ public sealed class EdlStreamReadFacadeTests
 
     private static FirehoseProtocol Protocol(ScriptedCommTransport transport) => new(transport,
         new FirehoseConfiguration { SectorSize = 512, AutoDetectSectorSize = false, ResponseTimeoutSeconds = 1 }, 50);
+
+    private static FirehoseProtocol Protocol(ScriptedCommTransport transport, long maxPayloadSizeFromTarget) => new(transport,
+        new FirehoseConfiguration
+        {
+            SectorSize = 512,
+            AutoDetectSectorSize = false,
+            ResponseTimeoutSeconds = 1,
+            MaxPayloadSizeFromTarget = maxPayloadSizeFromTarget
+        }, 50);
 
     private sealed class CollectingProgress(List<long> sink) : IProgress<long>
     {

@@ -35,6 +35,8 @@ public sealed partial class DeviceController
     /// The endpoint is not present in the snapshot. <para>快照中不存在该端点。</para></exception>
     /// <exception cref="NotSupportedException">
     /// No session factory is registered for <paramref name="kind"/>. <para>未为 <paramref name="kind"/> 注册会话工厂。</para></exception>
+    /// <exception cref="ObjectDisposedException">
+    /// The controller has been disposed. <para>控制器已被释放。</para></exception>
     public async Task<DeviceLease> OpenAsync(DeviceSnapshot snapshot, DeviceEndpointId id,
         DeviceSessionKind kind, CancellationToken cancellationToken = default)
     {
@@ -98,10 +100,13 @@ public sealed partial class DeviceController
     /// <para>控制器没有通信套件，或未为 <paramref name="kind"/> 注册工厂。</para></exception>
     /// <exception cref="InvalidOperationException">
     /// The synthesized endpoint is already leased. <para>合成的端点已被租用。</para></exception>
+    /// <exception cref="ObjectDisposedException">
+    /// The controller has been disposed. <para>控制器已被释放。</para></exception>
     public async Task<DeviceLease?> OpenLeaseByKeyAsync(string deviceKey, DeviceSessionKind kind,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceKey);
+        ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
         if (_kit is null)
         {

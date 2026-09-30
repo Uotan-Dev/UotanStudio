@@ -15,6 +15,26 @@ internal sealed class CommDeviceTransportOpener(
 {
     private readonly int _hdcPort = hdcPort ?? HdcServerClient.DefaultServerPort;
 
+    /// <summary>
+    /// Opens exactly the endpoint's own transport without changing routes; the adb-server target
+    /// validation ends on completion or promptly on the caller's cancellation.
+    /// <para>只打开端点自身的传输且不改变路由；adb-server 目标校验要么正常完成，要么被调用方取消即时终止。</para>
+    /// </summary>
+    /// <param name="endpoint">The endpoint produced by discovery; anything unrecognized is rejected.
+    /// <para>发现层产出的端点；任何无法识别的输入都会被拒绝。</para></param>
+    /// <param name="cancellationToken">Cancels the open; a validation already in flight keeps its own
+    /// bounded socket timeouts and its late failure is observed instead of blocking this call.
+    /// <para>取消打开过程；已在执行的校验保留其自身有界的套接字超时，其迟到失败会被观察而不阻塞本调用。</para></param>
+    /// <returns>An owned transport bound to the exact endpoint.
+    /// <para>绑定到该精确端点的受管传输。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="endpoint"/> is <see langword="null"/>.
+    /// <para><paramref name="endpoint"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="IOException">The route precondition, the server probe, or the target
+    /// validation failed. <para>路由前置条件、server 探测或目标校验失败。</para></exception>
+    /// <exception cref="NotSupportedException">The endpoint matches none of the configured opener
+    /// routes. <para>端点不匹配任何已配置的开启器路由。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public async Task<IAsyncDisposable> OpenAsync(DeviceEndpoint endpoint, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
@@ -53,8 +73,20 @@ internal sealed class CommDeviceTransportOpener(
         {
             if (!await DebugBridgeRoute.IsListeningAsync(adbHost, adbPort, cancellationToken).ConfigureAwait(false))
                 throw new IOException("ADB server is unavailable.");
-            await Task.Run(() => new AdbServerServices(endpoint.Address, adbHost, adbPort).ValidateTarget(),
-                cancellationToken).ConfigureAwait(false);
+            var validation = Task.Run(() =>
+                new AdbServerServices(endpoint.Address, adbHost, adbPort).ValidateTarget());
+            try
+            {
+                await validation.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                _ = validation.ContinueWith(static task =>
+                {
+                    _ = task.Exception;
+                }, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                throw;
+            }
             cancellationToken.ThrowIfCancellationRequested();
             return new OwnedDeviceTransport<AdbSession>(
                 AdbSession.ForServer(endpoint.Address, adbHost, adbPort));

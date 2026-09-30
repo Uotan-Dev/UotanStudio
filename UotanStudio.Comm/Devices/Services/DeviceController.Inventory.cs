@@ -16,6 +16,7 @@ namespace UotanStudio.Comm.Devices.Services;
 /// </summary>
 public sealed partial class DeviceController
 {
+    private readonly object _watchGate = new();
     private IDisposable? _removalWatch;
 
     /// <summary>
@@ -59,6 +60,9 @@ public sealed partial class DeviceController
     /// <returns>A handle that stops monitoring when disposed. <para>释放即停止监视的句柄。</para></returns>
     /// <exception cref="NotSupportedException">
     /// The controller was composed without a communication kit. <para>该控制器组装时未提供通信套件。</para></exception>
+    /// <exception cref="ObjectDisposedException">
+    /// The controller has been disposed; a monitor started afterwards would never be released.
+    /// <para>控制器已被释放；此时启动的监视将永远不会被归还。</para></exception>
     public IDisposable WatchUsb(
         Action<IReadOnlyList<UsbDeviceChange>> onChanged,
         UsbApiKind apiKind = UsbApiKind.Auto,
@@ -66,7 +70,10 @@ public sealed partial class DeviceController
         TimeSpan? pollInterval = null,
         bool fireInitialSnapshot = false,
         Action<Exception>? onError = null)
-        => RequiredKit.MonitorUsbDevices(onChanged, apiKind, filter, pollInterval, fireInitialSnapshot, onError);
+    {
+        ThrowIfDisposed();
+        return RequiredKit.MonitorUsbDevices(onChanged, apiKind, filter, pollInterval, fireInitialSnapshot, onError);
+    }
 
     /// <summary>Reopens the physical device session matching the stable key. 按稳定设备键重开物理设备会话。</summary>
     internal IUsbDeviceSession? OpenUsbSessionByKey(string deviceKey) => RequiredKit.OpenUsbDeviceSessionByKey(deviceKey);
@@ -139,16 +146,31 @@ public sealed partial class DeviceController
     /// <param name="onError">
     /// Optional callback for monitor failures. <para>监视失败的可选回调。</para>
     /// </param>
+    /// <exception cref="ObjectDisposedException">
+    /// The controller has been disposed. <para>控制器已被释放。</para></exception>
+    /// <remarks>
+    /// The monitor is constructed outside the controller gate, serialized only by a dedicated watch
+    /// lock: a backend that synchronously delivers changes during construction can re-enter
+    /// <see cref="HandleDeviceRemoved"/> without self-locking, and the published handle stays reachable
+    /// for controller disposal. A watch constructed while disposal wins the race is disposed unpublished.
+    /// <para>监视器在控制器锁之外构造，仅由专用监视锁串行化：构造期间同步投递变化的后端可以重入
+    /// <see cref="HandleDeviceRemoved"/> 而不会自锁，且已发布的句柄仍可被控制器释放路径取得；
+    /// 若释放竞态先行发生，则构造出的监视器会被直接释放而不会发布。</para>
+    /// </remarks>
     public void StartRemovalWatch(Action<Exception>? onError = null)
     {
-        lock (_gate)
+        lock (_watchGate)
         {
-            if (_kit is null || _removalWatch is not null)
+            lock (_gate)
             {
-                return;
+                ThrowIfDisposed();
+                if (_kit is null || _removalWatch is not null)
+                {
+                    return;
+                }
             }
 
-            _removalWatch = _kit.MonitorUsbDevices(
+            var watch = _kit.MonitorUsbDevices(
                 changes =>
                 {
                     foreach (var change in changes)
@@ -164,6 +186,16 @@ public sealed partial class DeviceController
                     }
                 },
                 onError: onError);
+            lock (_gate)
+            {
+                if (Volatile.Read(ref _lifecycle) == 0 && _removalWatch is null)
+                {
+                    _removalWatch = watch;
+                    return;
+                }
+            }
+
+            watch.Dispose();
         }
     }
 }

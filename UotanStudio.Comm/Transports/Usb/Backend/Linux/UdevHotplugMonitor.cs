@@ -80,12 +80,12 @@ internal sealed class UdevHotplugMonitor : IDisposable
 
             if (received <= 0)
             {
-                if (Marshal.GetLastWin32Error() == 4)
+                if (!ShouldRetryAfterReceive(received, Marshal.GetLastWin32Error()))
                 {
-                    continue;
+                    break;
                 }
 
-                break;
+                continue;
             }
 
             if (!IsUsbDeviceUevent(buffer, received))
@@ -129,6 +129,24 @@ internal sealed class UdevHotplugMonitor : IDisposable
             return UdevLibcInterop.recvfrom(_socket, bufferPointer, buffer.Length, 0, ref source, ref sourceSize);
         }
     }
+
+    /// <summary>
+    /// Decides whether a non-positive recvfrom result keeps the uevent receive loop alive. A
+    /// return of <c>0</c> is a legitimate interrupted/no-data datagram receive on the netlink
+    /// socket and must not be reported as a socket failure, so it continues regardless of the
+    /// (possibly stale) errno value. A negative return with EINTR is the standard syscall-restart
+    /// case. Every other non-positive result is a real failure and ends the loop so the caller
+    /// can fall back to polling.
+    /// <para>判定非正的 recvfrom 结果是否让 uevent 接收循环继续存活：netlink 套接字上返回 <c>0</c>
+    /// 是合法的中断/无数据数据报接收，不得上报为套接字故障，因此无论 errno（可能已过期）为何值都继续。
+    /// 返回负值且 errno 为 EINTR 是标准的系统调用重启场景。其余非正结果都是真实故障，结束循环让
+    /// 调用方回退到轮询。</para>
+    /// </summary>
+    /// <param name="received">The recvfrom return value; only non-positive values are consulted here. <para>recvfrom 的返回值；此处仅判定非正值。</para></param>
+    /// <param name="lastError">The errno captured after the receive call. <para>接收调用后捕获的 errno。</para></param>
+    /// <returns><c>true</c> when the loop should wait for the next datagram instead of exiting. <para>循环应继续等待下一个数据报而非退出时为 <c>true</c>。</para></returns>
+    internal static bool ShouldRetryAfterReceive(int received, int lastError)
+        => received == 0 || received < 0 && lastError == LinuxUsbAPI.EINTR;
 
     private static bool IsUsbDeviceUevent(byte[] buffer, int length)
     {

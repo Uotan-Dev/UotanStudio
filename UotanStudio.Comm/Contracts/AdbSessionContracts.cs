@@ -1,4 +1,5 @@
-using UotanStudio.Comm.Protocols.Adb;
+using ShellResult = UotanStudio.Comm.Protocols.Adb.ShellResult;
+using SyncEntry = UotanStudio.Comm.Protocols.Adb.SyncEntry;
 
 namespace UotanStudio.Comm.Contracts;
 
@@ -7,6 +8,16 @@ namespace UotanStudio.Comm.Contracts;
 /// detail of the communication layer; callers only ever hold this façade.
 /// <para>面向宿主的 ADB 协议会话。具体协议实现是通信层的内部细节，调用方只持有此门面。</para>
 /// </summary>
+/// <remarks>
+/// The result carriers this façade returns (<see cref="ShellResult"/> and <see cref="SyncEntry"/>)
+/// still live in the protocol layer, so they are named here by explicit type alias. A namespace-wide
+/// import of <c>UotanStudio.Comm.Protocols.Adb</c> is deliberately absent: it would let any later
+/// protocol-layer type resolve silently inside the contract surface and widen the façade without a
+/// reviewable change.
+/// <para>本门面返回的结果类型（<see cref="ShellResult"/> 与 <see cref="SyncEntry"/>）仍位于协议层，
+/// 因此在此以显式类型别名引用。这里刻意不导入 <c>UotanStudio.Comm.Protocols.Adb</c> 整个命名空间：
+/// 一旦导入，后续任何协议层类型都可能在门面契约中悄然被解析出来，使门面在无可见改动的情况下被扩大。</para>
+/// </remarks>
 public interface IAdbDeviceSession : IDisposable
 {
     /// <summary>Gets the protocol name. <para>获取协议名称。</para></summary>

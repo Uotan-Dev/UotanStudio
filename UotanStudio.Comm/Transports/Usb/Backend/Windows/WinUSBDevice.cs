@@ -18,6 +18,7 @@ internal partial class WinUSBDevice : UsbDevice
     private const int ERROR_DEVICE_NOT_CONNECTED = 1167;
     private const int ERROR_NO_SUCH_DEVICE = 433;
     private const int ERROR_DEVICE_REMOVED = 1617;
+    private const int ERROR_NOT_FOUND = 122;
 
     /// <summary>
     /// Session tuning options applied when the handle is created; assigned by the finder
@@ -32,8 +33,12 @@ internal partial class WinUSBDevice : UsbDevice
     /// <summary>
     /// Whether the bulk IN pipe uses WinUSB RAW_IO (opt-in via
     /// <see cref="UsbSessionOptions.EnableRawIo"/> / <see cref="UsbSessionOptions.AllowPartialReads"/>).
+    /// RAW_IO is an IN-pipe-only WinUSB policy; it is never applied to the bulk OUT pipe because
+    /// the corresponding <c>WinUsb_SetPipePolicy</c> call would always fail there.
     /// <para>批量 IN 管道是否使用 WinUSB RAW_IO（通过
-    /// <see cref="UsbSessionOptions.EnableRawIo"/> / <see cref="UsbSessionOptions.AllowPartialReads"/> 开启）。</para>
+    /// <see cref="UsbSessionOptions.EnableRawIo"/> / <see cref="UsbSessionOptions.AllowPartialReads"/> 开启）。
+    /// RAW_IO 是 WinUSB 仅 IN 管道的策略；绝不应用到批量 OUT 管道，因为对应的
+    /// <c>WinUsb_SetPipePolicy</c> 调用在 OUT 管道上必然失败。</para>
     /// </summary>
     private bool RawIoEnabled =>
         SessionOptions?.EnableRawIo == true || SessionOptions?.AllowPartialReads == true;
@@ -195,21 +200,92 @@ internal partial class WinUSBDevice : UsbDevice
         byte bTrue = 1;
         byte bFalse = 0;
 
-        WinUsb_SetPipePolicy(_winUsbHandle.DangerousGetHandle(), _readBulkID, AUTO_CLEAR_STALL, 1, ref bTrue);
-        WinUsb_SetPipePolicy(_winUsbHandle.DangerousGetHandle(), _writeBulkID, AUTO_CLEAR_STALL, 1, ref bTrue);
+        if (!WinUsb_SetPipePolicy(_winUsbHandle.DangerousGetHandle(), _readBulkID, AUTO_CLEAR_STALL, 1, ref bTrue))
+        {
+            UsbTrace.Log($"WinUSB: AUTO_CLEAR_STALL policy on bulk IN pipe 0x{_readBulkID:X2} failed err={Marshal.GetLastWin32Error()}.");
+        }
+
+        if (!WinUsb_SetPipePolicy(_winUsbHandle.DangerousGetHandle(), _writeBulkID, AUTO_CLEAR_STALL, 1, ref bTrue))
+        {
+            UsbTrace.Log($"WinUSB: AUTO_CLEAR_STALL policy on bulk OUT pipe 0x{_writeBulkID:X2} failed err={Marshal.GetLastWin32Error()}.");
+        }
+
         SetReadPipeTimeout(SessionOptions?.ReadPipeTimeoutMs ?? DefaultTimeoutMs);
         SetWritePipeTimeout(SessionOptions?.WritePipeTimeoutMs ?? DefaultTimeoutMs);
 
         var readRawIo = RawIoEnabled ? bTrue : bFalse;
-        WinUsb_SetPipePolicy(_winUsbHandle.DangerousGetHandle(), _readBulkID, RAW_IO, 1, ref readRawIo);
-        WinUsb_SetPipePolicy(_winUsbHandle.DangerousGetHandle(), _writeBulkID, RAW_IO, 1, ref bFalse);
+        if (!WinUsb_SetPipePolicy(_winUsbHandle.DangerousGetHandle(), _readBulkID, RAW_IO, 1, ref readRawIo))
+        {
+            UsbTrace.Log($"WinUSB: RAW_IO policy on bulk IN pipe 0x{_readBulkID:X2} failed err={Marshal.GetLastWin32Error()}.");
+        }
 
-        WinUsb_SetPipePolicy(_winUsbHandle.DangerousGetHandle(), _writeBulkID, SHORT_PACKET_TERMINATE, 1, ref bFalse);
+        if (!WinUsb_SetPipePolicy(_winUsbHandle.DangerousGetHandle(), _writeBulkID, SHORT_PACKET_TERMINATE, 1, ref bFalse))
+        {
+            UsbTrace.Log($"WinUSB: SHORT_PACKET_TERMINATE policy on bulk OUT pipe 0x{_writeBulkID:X2} failed err={Marshal.GetLastWin32Error()}.");
+        }
 
         return 0;
     }
 
-    public IntPtr Handle => !_winUsbHandle.IsInvalid ? _winUsbHandle.DangerousGetHandle() : _fileHandle.DangerousGetHandle();
+    /// <summary>
+    /// Adds an explicit reference to the WinUSB interface handle and reports the raw pointer,
+    /// or returns <see langword="false"/> when the handle is already invalid or disposed. Every
+    /// successful acquisition must be paired with <see cref="ReleaseWinUsbHandle"/> in a finally
+    /// block so Dispose cannot free the interface while a synchronous native call is in flight.
+    /// <para>为 WinUSB 接口句柄显式加引用并报告裸指针；句柄已失效或已释放时返回
+    /// <see langword="false"/>。每次成功获取都必须在 finally 中与 <see cref="ReleaseWinUsbHandle"/>
+    /// 配对，使 Dispose 无法在同步原生调用进行中释放接口。</para>
+    /// </summary>
+    /// <param name="handle">The raw interface handle when the acquisition succeeded. <para>获取成功时的原生接口句柄。</para></param>
+    /// <returns><see langword="true"/> when a reference was taken. <para>成功取得引用时为 <see langword="true"/>。</para></returns>
+    private bool TryAcquireWinUsbHandle(out IntPtr handle)
+    {
+        var held = false;
+        try
+        {
+            _winUsbHandle.DangerousAddRef(ref held);
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException)
+        {
+            held = false;
+        }
+
+        if (held && !_winUsbHandle.IsInvalid)
+        {
+            handle = _winUsbHandle.DangerousGetHandle();
+            return true;
+        }
+
+        if (held)
+        {
+            _winUsbHandle.DangerousRelease();
+        }
+
+        handle = IntPtr.Zero;
+        return false;
+    }
+
+    /// <summary>
+    /// Acquires the WinUSB interface handle for a synchronous native call, converting the
+    /// check-then-use window against <see cref="Dispose"/> into an explicit failure instead of
+    /// dereferencing a freed interface pointer.
+    /// <para>为同步原生调用获取 WinUSB 接口句柄，把与 <see cref="Dispose"/> 之间的
+    /// check-then-use 窗口转为显式失败，而不是解引用已释放的接口指针。</para>
+    /// </summary>
+    /// <returns>The raw interface handle with a reference held. <para>已持有引用的原生接口句柄。</para></returns>
+    /// <exception cref="UsbDeviceHandleClosedException">The handle was disposed or became invalid before the reference could be taken. <para>句柄在取得引用前已释放或失效。</para></exception>
+    private IntPtr AcquireWinUsbHandle()
+        => TryAcquireWinUsbHandle(out var handle)
+            ? handle
+            : throw new UsbDeviceHandleClosedException("Device handle is closed.");
+
+    /// <summary>
+    /// Releases one reference previously taken by <see cref="TryAcquireWinUsbHandle"/> or
+    /// <see cref="AcquireWinUsbHandle"/>.
+    /// <para>释放此前由 <see cref="TryAcquireWinUsbHandle"/> 或 <see cref="AcquireWinUsbHandle"/>
+    /// 取得的一个引用。</para>
+    /// </summary>
+    private void ReleaseWinUsbHandle() => _winUsbHandle.DangerousRelease();
 
     /// <summary>
     /// Applies the PIPE_TRANSFER_TIMEOUT policy to the bulk IN pipe (cached per direction).
@@ -225,11 +301,6 @@ internal partial class WinUSBDevice : UsbDevice
 
     private void SetPipeTimeout(byte pipeId, int timeoutMs, ref int cache)
     {
-        if (_winUsbHandle.IsInvalid)
-        {
-            return;
-        }
-
         var effective = timeoutMs == UsbTransferPolicies.InfiniteTimeoutMs ? 0 : timeoutMs;
         if (effective < 0)
         {
@@ -241,9 +312,25 @@ internal partial class WinUSBDevice : UsbDevice
             return;
         }
 
-        var timeout = (uint)effective;
-        WinUsb_SetPipePolicy(_winUsbHandle.DangerousGetHandle(), pipeId, PIPE_TRANSFER_TIMEOUT, 4, ref timeout);
-        Volatile.Write(ref cache, effective);
+        if (!TryAcquireWinUsbHandle(out var usb))
+        {
+            return;
+        }
+
+        try
+        {
+            var timeout = (uint)effective;
+            if (!WinUsb_SetPipePolicy(usb, pipeId, PIPE_TRANSFER_TIMEOUT, 4, ref timeout))
+            {
+                UsbTrace.Log($"WinUSB: PIPE_TRANSFER_TIMEOUT on pipe 0x{pipeId:X2} ({effective} ms) failed err={Marshal.GetLastWin32Error()}.");
+            }
+
+            Volatile.Write(ref cache, effective);
+        }
+        finally
+        {
+            ReleaseWinUsbHandle();
+        }
     }
 
     public override void Reset()

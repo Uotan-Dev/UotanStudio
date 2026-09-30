@@ -132,7 +132,7 @@ internal static partial class WinUSBFinder
         }
     }
 
-    private delegate bool InterfaceEnumerator(uint index, ref Win32API.SpDeviceInterfaceData interfaceData);
+    internal delegate bool InterfaceEnumerator(uint index, ref Win32API.SpDeviceInterfaceData interfaceData);
 
     private static void EnumerateInterfaces(
         IntPtr devInfo,
@@ -151,7 +151,23 @@ internal static partial class WinUSBFinder
         EnumerateInterfacesCore(devInfo, Enumerate, filter, options, devices, uniqueKeys);
     }
 
-    private static void EnumerateInterfacesCore(
+    /// <summary>
+    /// Walks the device interfaces of an open SetupDi information set and opens or
+    /// metadata-materializes the ones matching the filter.
+    /// <para>遍历已打开 SetupDi 信息集中的设备接口，打开或按元数据构造匹配过滤器的接口。</para>
+    /// Internal for regression tests that drive it with a synthetic enumerator and an invalid
+    /// set handle to prove a failed size probe skips the interface instead of allocating from
+    /// an unvalidated reported size.
+    /// <para>为回归测试保留 internal：合成枚举器配合无效集合句柄，证明 size 探测失败时跳过该接口，
+    /// 而不是按未校验的上报长度分配。</para>
+    /// </summary>
+    /// <param name="devInfo">SetupDi information set handle. <para>SetupDi 信息集句柄。</para></param>
+    /// <param name="enumerator">Callback producing the next interface for the given index. <para>按索引产出下一个接口的回调。</para></param>
+    /// <param name="filter">Optional device filter. <para>可选设备过滤器。</para></param>
+    /// <param name="options">Optional session tuning options. <para>可选的会话调优选项。</para></param>
+    /// <param name="devices">Collected devices on return. <para>返回时已收集的设备。</para></param>
+    /// <param name="uniqueKeys">Dedup keys shared across GUID walks. <para>跨 GUID 遍历共享的去重键。</para></param>
+    internal static void EnumerateInterfacesCore(
         IntPtr devInfo,
         InterfaceEnumerator enumerator,
         UsbDeviceFilter? filter,
@@ -165,7 +181,21 @@ internal static partial class WinUSBFinder
 
         while (enumerator(index++, ref interfaceData))
         {
-            Win32API.SetupDiGetDeviceInterfaceDetailW(devInfo, ref interfaceData, IntPtr.Zero, 0, out var detailSize, IntPtr.Zero);
+            if (!Win32API.SetupDiGetDeviceInterfaceDetailW(devInfo, ref interfaceData, IntPtr.Zero, 0, out var detailSize, IntPtr.Zero))
+            {
+                var probeError = Marshal.GetLastWin32Error();
+                if (probeError != Win32API.ERROR_INSUFFICIENT_BUFFER)
+                {
+                    UsbTrace.LogError($"WinUSBFinder: interface detail size probe failed err={probeError}; skipping interface.");
+                    continue;
+                }
+            }
+
+            if (detailSize is 0 or > int.MaxValue)
+            {
+                UsbTrace.LogError($"WinUSBFinder: interface detail size probe reported unusable size {detailSize}; skipping interface.");
+                continue;
+            }
 
             var detailBuffer = Marshal.AllocHGlobal((int)detailSize);
             try

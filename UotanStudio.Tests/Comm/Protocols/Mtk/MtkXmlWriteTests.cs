@@ -87,7 +87,44 @@ public partial class MtkSessionTests
             "EMMC-USER", 0, length, source, cancellationToken: TestContext.Current.CancellationToken));
 
         var frames = DecodeXmlWriteFrames(transport.Writes.Skip(before));
-        Assert.Equal(2, frames.Count(frame => frame.SequenceEqual(Encoding.UTF8.GetBytes("OK@0x100000200\0"))));
+        Assert.Single(frames, frame => frame.SequenceEqual(Encoding.UTF8.GetBytes("OK@0x100000200\0")));
+        Assert.Equal(0, source.Position);
+        Assert.Equal(MtkSessionState.Faulted, session.State);
+    }
+
+    [Fact]
+    public async Task WriteXmlStorageAsync_NegotiatedPacketCountAboveBound_RejectsBeforeReadingSource()
+    {
+        using var transport = new ScriptedCommTransport();
+        using var session = await CreateXmlStorageSessionAsync(transport, capacity: 0x20000);
+        using var source = new MemoryStream(new byte[0x20000]);
+        EnqueueXmlWritePrefix(transport, 0x20000, 1);
+        var before = transport.Writes.Count;
+
+        await Assert.ThrowsAsync<MtkProtocolException>(() => session.WriteXmlStorageAsync(
+            "EMMC-USER", 0, 0x20000, source, cancellationToken: TestContext.Current.CancellationToken));
+
+        var frames = DecodeXmlWriteFrames(transport.Writes.Skip(before));
+        Assert.Single(frames, frame => frame.SequenceEqual(Encoding.UTF8.GetBytes("OK@0x20000\0")));
+        Assert.Equal(0, source.Position);
+        Assert.Equal(MtkSessionState.Faulted, session.State);
+    }
+
+    [Fact]
+    public async Task WriteXmlStorageAsync_NegotiatedPacketCountAtBound_AcknowledgesDeclaredLengthBeforeFailingPhase()
+    {
+        using var transport = new ScriptedCommTransport();
+        using var session = await CreateXmlStorageSessionAsync(transport, capacity: 0x10000);
+        using var source = new MemoryStream(new byte[0x10000]);
+        EnqueueXmlWritePrefix(transport, 0x10000, 1);
+        EnqueueXmlText(transport, "ERR!REJECTED");
+        var before = transport.Writes.Count;
+
+        await Assert.ThrowsAsync<MtkProtocolException>(() => session.WriteXmlStorageAsync(
+            "EMMC-USER", 0, 0x10000, source, cancellationToken: TestContext.Current.CancellationToken));
+
+        var frames = DecodeXmlWriteFrames(transport.Writes.Skip(before));
+        Assert.Equal(2, frames.Count(frame => frame.SequenceEqual(Encoding.UTF8.GetBytes("OK@0x10000\0"))));
         Assert.Equal(0, source.Position);
         Assert.Equal(MtkSessionState.Faulted, session.State);
     }

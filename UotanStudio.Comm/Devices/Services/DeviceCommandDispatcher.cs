@@ -56,19 +56,38 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
     /// </param>
     /// <returns>A task that completes with the command result, or faults or cancels with it.
     /// <para>随指令结果完成、或随之失败/取消的任务。</para></returns>
+    /// <remarks>
+    /// The returned task is reported as cancelled only when the command's own linked token is
+    /// cancelled (caller token or dispatcher lifetime). An <see cref="OperationCanceledException"/>
+    /// raised with an unrelated token, including a bare one from the device layer, is surfaced as a
+    /// fault carrying the original exception instead of being mistaken for user cancellation.
+    /// <para>仅当指令自身的链接标记被取消（调用方标记或调度器生命周期）时，返回的任务才报告为已取消。
+    /// 携带无关标记抛出的 <see cref="OperationCanceledException"/>（包括设备层抛出的裸异常）会以保留原异常的
+    /// 失败形式呈现，而不会被误当成用户取消。</para>
+    /// </remarks>
     /// <exception cref="ArgumentException">
     /// <paramref name="name"/> is null, empty, or whitespace. <para><paramref name="name"/> 为 null、空白或仅含空白字符。</para></exception>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="work"/> is null. <para><paramref name="work"/> 为 null。</para></exception>
     /// <exception cref="ObjectDisposedException">
-    /// The dispatcher has been disposed. <para>调度器已被释放。</para></exception>
+    /// The dispatcher has been disposed, including when disposal wins a concurrent race.
+    /// <para>调度器已被释放，包括并发竞争中释放先到达的情况。</para></exception>
     public Task<T> EnqueueAsync<T>(string name, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(work);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
-        var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
+        CancellationTokenSource linked;
+        try
+        {
+            linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
+        }
+        catch (ObjectDisposedException)
+        {
+            throw new ObjectDisposedException(nameof(DeviceCommandDispatcher));
+        }
+
         var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         async Task Run(CancellationToken token)
@@ -84,9 +103,9 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
                 var result = await work(token).ConfigureAwait(false);
                 completion.TrySetResult(result);
             }
-            catch (OperationCanceledException ex)
+            catch (OperationCanceledException ex) when (ex.CancellationToken == token || token.IsCancellationRequested)
             {
-                completion.TrySetCanceled(ex.CancellationToken);
+                completion.TrySetCanceled(token);
             }
             catch (Exception ex)
             {

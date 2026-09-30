@@ -74,4 +74,34 @@ public sealed class HdcDaemonTests
     [InlineData("4857010001000800000000")]
     public void InvalidHeaders_AreRejectedBeforeBodyAllocation(string hex)
         => Assert.Throws<InvalidDataException>(() => HdcDaemonCodec.ReadHeader(Convert.FromHexString(hex)));
+
+    [Theory]
+    [InlineData(11u, false)]
+    [InlineData(524299u, false)]
+    [InlineData(524300u, true)]
+    [InlineData(4294967295u, true)]
+    public void UsbBlockLimit_CoversHeaderMetadataAndPayloadCeiling(uint dataSize, bool rejected)
+        => Assert.Equal(rejected, HdcConnection.ExceedsUsbBlockLimit(dataSize));
+
+    [Fact]
+    public void StaleBlockDrain_ConsumesPendingBlocks_ReturnsWhenTransportIdles()
+    {
+        using var transport = new FakeCommTransport();
+        transport.Enqueue(new byte[4096]);
+        transport.Enqueue(new byte[17]);
+        HdcConnection.DrainStaleBlocks(transport, TestContext.Current.CancellationToken);
+        Assert.Equal(0, transport.Read(new byte[64], 0, 64, 0));
+    }
+
+    [Fact]
+    public void StaleBlockDrain_LeavesPendingBlocksUnconsumed_AfterCancellation()
+    {
+        using var transport = new FakeCommTransport();
+        transport.Enqueue(new byte[64]);
+        transport.Enqueue(new byte[128]);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        Assert.Throws<OperationCanceledException>(() => HdcConnection.DrainStaleBlocks(transport, cancelled.Token));
+        Assert.Equal(64, transport.Read(new byte[256], 0, 256, 0));
+    }
 }

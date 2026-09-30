@@ -112,4 +112,37 @@ public sealed class MtkRsaSlaTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => responder.CreateResponseAsync(
             Device, new byte[16], cancellation.Token));
     }
+
+    [Fact]
+    public void Dispose_OwnedKey_ReleasesTheKeyAndRejectsFurtherResponses()
+    {
+        var owned = RSA.Create(1024);
+        var responder = new MtkBootRomRsaSlaResponder(owned, Device, ownsKey: true);
+
+        responder.Dispose();
+        responder.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => owned.ExportParameters(true));
+    }
+
+    [Fact]
+    public void Dispose_BorrowedKey_LeavesTheCallerKeyAlive()
+    {
+        using var borrowed = RSA.Create(1024);
+        var responder = new MtkBootRomRsaSlaResponder(borrowed, Device);
+
+        responder.Dispose();
+
+        Assert.NotEmpty(borrowed.ExportParameters(false).Modulus!);
+    }
+
+    [Fact]
+    public void Constructor_UnsupportedOwnedKeyWidth_ReleasesTheKeyBeforeThrowing()
+    {
+        var owned = RSA.Create(1536);
+
+        Assert.Throws<ArgumentException>(() => new MtkBootRomRsaSlaResponder(owned, Device, ownsKey: true));
+
+        Assert.Throws<ObjectDisposedException>(() => owned.ExportParameters(true));
+    }
 }

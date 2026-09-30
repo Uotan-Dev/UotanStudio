@@ -284,6 +284,10 @@ public partial class MtkSessionTests
     private sealed class SlaResponder(
         Func<MtkDeviceInfo, ReadOnlyMemory<byte>, CancellationToken, Task<byte[]>> respond) : IMtkBootRomSlaResponder
     {
+        public void Dispose()
+        {
+        }
+
         public Task<byte[]> CreateResponseAsync(MtkDeviceInfo device, ReadOnlyMemory<byte> wireChallenge,
             CancellationToken cancellationToken) => respond(device, wireChallenge, cancellationToken);
     }

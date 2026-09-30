@@ -1,3 +1,4 @@
+using System.Buffers;
 using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
@@ -14,6 +15,40 @@ public sealed class HdcConnection : IDisposable
 
     /// <summary>Timeout for channel-open acknowledgment in milliseconds. 通道打开确认超时（毫秒）。</summary>
     private const int ChannelOpenTimeoutMs = 10000;
+
+    /// <summary>
+    /// Largest byte count one HDC USB block may announce. <see cref="HdcUsbHead.DataSize"/> covers the
+    /// whole daemon packet that follows the USB header, so the ceiling is the payload limit plus the
+    /// fixed daemon PayloadHead of <see cref="HdcConstants.HeaderSize"/> bytes plus
+    /// <see cref="HdcDaemonCodec.MaximumMetadataSize"/>, which is 1035 framing bytes on top of the payload limit.
+    /// Blocks above it can never satisfy <see cref="HdcDaemonCodec.Decode"/> and are rejected before their body is read.
+    /// <para>HDC 单个 USB 块可声明的最大字节数。<see cref="HdcUsbHead.DataSize"/> 覆盖 USB 头之后的完整守护进程报文，
+    /// 因此上限等于负载上限加上 <see cref="HdcConstants.HeaderSize"/> 字节的固定守护进程头与
+    /// <see cref="HdcDaemonCodec.MaximumMetadataSize"/>，即负载上限再加 1035 字节帧开销。
+    /// 超过该值的块无法满足 <see cref="HdcDaemonCodec.Decode"/>，会在读取其主体前被拒绝。</para>
+    /// </summary>
+    internal const int MaximumUsbBlockSize = HdcConstants.MaxPayloadSize + HdcConstants.HeaderSize + HdcDaemonCodec.MaximumMetadataSize;
+
+    /// <summary>
+    /// Capacity of the reusable buffer that absorbs one stale USB block during session setup. It is one
+    /// daemon payload limit plus slack for the USB framing, so a single read can drain the largest block
+    /// the peer may still be queued behind the reset marker.
+    /// <para>会话建立期间复用缓冲区的容量，用于吸收单个陈旧 USB 块。其大小为一个守护进程负载上限加上 USB 帧余量，
+    /// 因此一次读取即可排空对端在重置标记之后仍在排队的最大块。</para>
+    /// </summary>
+    private const int StaleBlockBufferSize = 513 * 1024;
+
+    /// <summary>
+    /// Overall budget for waiting until the USB peer reports an idle OUT pipe.
+    /// <para>等待 USB 对端 OUT 管道变为空闲的总预算（毫秒）。</para>
+    /// </summary>
+    private const int StaleBlockDrainTimeoutMs = 3000;
+
+    /// <summary>
+    /// Upper bound of one blocking read issued while draining stale USB blocks.
+    /// <para>排空陈旧 USB 块时单次阻塞读取的上限（毫秒）。</para>
+    /// </summary>
+    private const int StaleBlockReadTimeoutMs = 160;
 
     private readonly ICommTransport _transport;
     private readonly HdcAuthentication _authentication;
@@ -81,7 +116,7 @@ public sealed class HdcConnection : IDisposable
     /// Gets the peer protocol version.
     /// <para>获取对端协议版本。</para>
     /// </summary>
-    /// <value>The fixed constant assigned during the authentication handshake; 0 before <see cref="Connect"/> succeeds. <para>认证握手中赋值的固定常量；<see cref="Connect"/> 成功前为 0。</para></value>
+    /// <value>The fixed constant assigned during the authentication handshake; 0 before <see cref="Connect()"/> succeeds. <para>认证握手中赋值的固定常量；<see cref="Connect()"/> 成功前为 0。</para></value>
     public uint PeerVersion => _peerVersion;
 
     /// <summary>
@@ -121,7 +156,15 @@ public sealed class HdcConnection : IDisposable
     /// Connects to the HDC peer (sends session handshake and starts the message loop).
     /// <para>连接到 HDC 对端（发送会话握手并启动消息循环）。</para>
     /// </summary>
-    public void Connect()
+    public void Connect() => Connect(CancellationToken.None);
+
+    /// <summary>
+    /// Connects to the HDC peer, observing cancellation between bounded device waits.
+    /// <para>连接到 HDC 对端，并在有界的设备等待之间响应取消。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Cancels the stale-block drain and the authentication rounds; the caller breaks an already blocked device read by disposing the transport. <para>取消陈旧块排空与认证轮次；已被阻塞的设备读取由调用方释放传输来打断。</para></param>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled during setup. <para><paramref name="cancellationToken"/> 在建立期间被触发。</para></exception>
+    private void Connect(CancellationToken cancellationToken)
     {
         if (_transport is UsbDeviceTransport)
             UotanStudio.Comm.Transports.Usb.Core.UsbAccessPolicy.RequireDirect(0xff, 0x50, 1);
@@ -146,10 +189,7 @@ public sealed class HdcConnection : IDisposable
                 .FirstOrDefault(e => e.EndpointAddress == usbTransport.Session.EndpointOut)?.MaxPacketSize ?? 0;
 
             WriteExact([(byte)'U', (byte)'B', 2, 0, 0, 0, 0, 0, 0, 0, 0]);
-            var discard = new byte[513 * 1024];
-            var deadline = Environment.TickCount64 + 3000;
-            while (_transport.Read(discard, 0, discard.Length, 160) != 0)
-                if (Environment.TickCount64 >= deadline) throw new IOException("HDC USB session did not become idle.");
+            DrainStaleBlocks(_transport, cancellationToken);
         }
 
         Send(new HdcMessage(HdcCommand.Handshake, 0, _sessionId,
@@ -159,6 +199,7 @@ public sealed class HdcConnection : IDisposable
         var authDeadline = Environment.TickCount64 + 120000;
         for (var round = 0; round < 8;)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (Environment.TickCount64 >= authDeadline) throw new TimeoutException("HDC authentication deadline exceeded.");
             HdcMessage response;
             try { response = ReadMessage(); }
@@ -213,6 +254,7 @@ public sealed class HdcConnection : IDisposable
         var closeDeadline = Environment.TickCount64 + 10000;
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (Environment.TickCount64 >= closeDeadline)
                 throw new TimeoutException("HDC authentication channel did not close.");
             HdcMessage response;
@@ -227,7 +269,11 @@ public sealed class HdcConnection : IDisposable
             break;
         }
 
-        _connected = true;
+        lock (_streamsLock)
+        {
+            _connected = true;
+        }
+
         _peerReady.Set();
 
         _messageThread = new Thread(MessageLoop)
@@ -249,10 +295,58 @@ public sealed class HdcConnection : IDisposable
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var cancellation = cancellationToken.Register(() => _transport.Dispose());
-        try { await Task.Run(Connect, cancellationToken).ConfigureAwait(false); }
+        try { await Task.Run(() => Connect(cancellationToken), cancellationToken).ConfigureAwait(false); }
         catch (Exception) when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException(cancellationToken); }
         cancellationToken.ThrowIfCancellationRequested();
     }
+
+    /// <summary>
+    /// Discards USB blocks the peer still had queued when the session was reset, returning once the
+    /// OUT pipe reports idle. The drain buffer is rented from <see cref="ArrayPool{T}"/> because the
+    /// connection setup path otherwise commits a fresh half-megabyte for every physical session.
+    /// <para>丢弃会话重置时对端仍在排队的 USB 块，OUT 管道报告空闲即返回。排空缓冲区取自
+    /// <see cref="ArrayPool{T}"/>，否则每个物理会话的建立路径都要新分配半兆字节。</para>
+    /// </summary>
+    /// <param name="transport">The USB transport whose pending blocks are discarded. <para>需要丢弃待读块的 USB 传输。</para></param>
+    /// <param name="cancellationToken">Checked before every bounded wait; cancellation stops the drain without consuming further blocks. <para>在每次有界等待前检查；取消会停止排空且不再消费后续的块。</para></param>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled while blocks were still pending. <para>仍有待读块时 <paramref name="cancellationToken"/> 被触发。</para></exception>
+    /// <exception cref="IOException">The transport kept delivering data past <see cref="StaleBlockDrainTimeoutMs"/>. <para>传输在 <see cref="StaleBlockDrainTimeoutMs"/> 之后仍在持续交付数据。</para></exception>
+    internal static void DrainStaleBlocks(ICommTransport transport, CancellationToken cancellationToken)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(StaleBlockBufferSize);
+        var deadline = Environment.TickCount64 + StaleBlockDrainTimeoutMs;
+        try
+        {
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var remaining = deadline - Environment.TickCount64;
+                if (remaining <= 0)
+                {
+                    throw new IOException("HDC USB session did not become idle.");
+                }
+
+                if (transport.Read(buffer, 0, StaleBlockBufferSize, (int)Math.Min(remaining, StaleBlockReadTimeoutMs)) == 0)
+                {
+                    return;
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Reports whether an announced USB block size exceeds what the daemon framing can encode,
+    /// so the body is never allocated for a block that <see cref="HdcDaemonCodec.Decode"/> must reject.
+    /// <para>判断声明的 USB 块大小是否超出守护进程帧编码能力，从而避免为
+    /// <see cref="HdcDaemonCodec.Decode"/> 必然拒绝的块分配主体。</para>
+    /// </summary>
+    /// <param name="dataSize">The <see cref="HdcUsbHead.DataSize"/> value carried by the USB header. <para>USB 头部携带的 <see cref="HdcUsbHead.DataSize"/> 值。</para></param>
+    /// <returns><see langword="true"/> when the block is larger than <see cref="MaximumUsbBlockSize"/>. <para>块大于 <see cref="MaximumUsbBlockSize"/> 时为 <see langword="true"/>。</para></returns>
+    internal static bool ExceedsUsbBlockLimit(uint dataSize) => dataSize > MaximumUsbBlockSize;
 
     /// <summary>
     /// Opens a channel to a remote service (e.g. "shell:cmd", "file:sync", "forward:tcp:").
@@ -411,7 +505,7 @@ public sealed class HdcConnection : IDisposable
                     throw new InvalidDataException("Invalid HDC USB identity.");
                 if (!_connected && usb.SessionId != _sessionId)
                 {
-                    if (usb.DataSize > HdcConstants.MaxPayloadSize + 1035)
+                    if (ExceedsUsbBlockLimit(usb.DataSize))
                         throw new InvalidDataException("Invalid stale HDC USB block.");
                     if (usb.DataSize != 0) _ = ReadBody((int)usb.DataSize);
                     continue;
@@ -419,7 +513,7 @@ public sealed class HdcConnection : IDisposable
                 if (usb.SessionId != _sessionId) throw new InvalidDataException("Unexpected HDC USB session.");
                 if ((usb.Option & 2) != 0) throw new IOException("HDC USB session reset by peer.");
                 if (usb.Option == 0 && usb.DataSize == 0) continue;
-                if (usb.Option != 1 || usb.DataSize < 11 || usb.DataSize > HdcConstants.MaxPayloadSize + 1035)
+                if (usb.Option != 1 || usb.DataSize < HdcConstants.HeaderSize || ExceedsUsbBlockLimit(usb.DataSize))
                     throw new InvalidDataException("Invalid HDC USB block.");
                 return HdcDaemonCodec.Decode(ReadBody((int)usb.DataSize));
             }

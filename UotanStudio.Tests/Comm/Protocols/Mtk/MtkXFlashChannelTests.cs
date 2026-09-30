@@ -162,4 +162,52 @@ public class MtkXFlashChannelTests
         Assert.Empty(transport.Writes);
         Assert.False(channel.IsFaulted);
     }
+
+    [Fact]
+    public async Task SendStreamAsync_PooledStagingBuffer_PreservesFixed512ByteWireChunks()
+    {
+        using var transport = new ScriptedCommTransport();
+        var channel = new MtkXFlashChannel(transport);
+        var payload = BuildPattern(1025);
+        using var source = new MemoryStream(payload);
+
+        await channel.SendStreamAsync(1, source, payload.Length, null, TestContext.Current.CancellationToken);
+
+        Assert.Equal(Convert.FromHexString("EFEEEEFE0100000001040000"), transport.Writes[0]);
+        Assert.Equal(512, transport.Writes[1].Length);
+        Assert.Equal(payload.AsSpan(0, 512).ToArray(), transport.Writes[1]);
+        Assert.Equal(payload.AsSpan(512, 512).ToArray(), transport.Writes[2]);
+        Assert.Equal(payload[1024], Assert.Single(transport.Writes[3]));
+        Assert.Equal(4, transport.Writes.Count);
+    }
+
+    [Fact]
+    public async Task SendStreamAsync_ShorterCallAfterLongerCall_WritesNoResidueFromTheReusedBuffer()
+    {
+        using var transport = new ScriptedCommTransport();
+        var channel = new MtkXFlashChannel(transport);
+        using (var longSource = new MemoryStream(BuildPattern(1025)))
+        {
+            await channel.SendStreamAsync(1, longSource, 1025, null, TestContext.Current.CancellationToken);
+        }
+
+        var before = transport.Writes.Count;
+        using var shortSource = new MemoryStream([0x7A, 0x7B, 0x7C]);
+        await channel.SendStreamAsync(2, shortSource, 3, null, TestContext.Current.CancellationToken);
+
+        Assert.Equal(Convert.FromHexString("EFEEEEFE0200000003000000"), transport.Writes[before]);
+        Assert.Equal([0x7A, 0x7B, 0x7C], transport.Writes[before + 1]);
+        Assert.Equal(2, transport.Writes.Count - before);
+    }
+
+    private static byte[] BuildPattern(int length)
+    {
+        var seed = Convert.FromHexString("00112233445566778899AABBCCDDEEFF");
+        var payload = new byte[length];
+        for (var index = 0; index < length; index++)
+        {
+            payload[index] = (byte)(seed[index % seed.Length] ^ (byte)index);
+        }
+        return payload;
+    }
 }

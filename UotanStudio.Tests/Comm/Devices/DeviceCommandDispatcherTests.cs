@@ -96,6 +96,77 @@ public class DeviceCommandDispatcherTests
     }
 
     [Fact]
+    public async Task EnqueueAsync_BareOperationCanceledFromWork_FaultsWithOriginalException()
+    {
+        await using var dispatcher = new DeviceCommandDispatcher();
+        var cancellation = new OperationCanceledException("device layer aborted without a cancellable token");
+
+        var task = dispatcher.EnqueueAsync<string>("bare-cancel", _ => Task.FromException<string>(cancellation), TestContext.Current.CancellationToken);
+
+        var error = await Assert.ThrowsAsync<OperationCanceledException>(
+            () => task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        Assert.Same(cancellation, error);
+        Assert.False(task.IsCanceled);
+    }
+
+    [Fact]
+    public async Task EnqueueAsync_OperationCanceledWithForeignCancelledToken_FaultsWithOriginalException()
+    {
+        await using var dispatcher = new DeviceCommandDispatcher();
+        using var foreign = new CancellationTokenSource();
+        foreign.Cancel();
+        var cancellation = new OperationCanceledException(foreign.Token);
+
+        var task = dispatcher.EnqueueAsync<int>("foreign-cancel", _ => Task.FromException<int>(cancellation), TestContext.Current.CancellationToken);
+
+        var error = await Assert.ThrowsAsync<OperationCanceledException>(
+            () => task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        Assert.Same(cancellation, error);
+        Assert.False(task.IsCanceled);
+    }
+
+    [Fact]
+    public async Task EnqueueAsync_CommandCancelledThroughItsOwnToken_CancelsReturnedTask()
+    {
+        await using var dispatcher = new DeviceCommandDispatcher();
+        using var cancellation = new CancellationTokenSource();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var task = dispatcher.EnqueueAsync<string>("cooperative", async token =>
+        {
+            started.SetResult();
+            await Task.Delay(Timeout.Infinite, token);
+            return "never";
+        }, cancellation.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        Assert.True(task.IsCanceled);
+    }
+
+    [Fact]
+    public async Task EnqueueAsync_OperationCanceledBoundToInnerLinkedToken_CancelsReturnedTask()
+    {
+        await using var dispatcher = new DeviceCommandDispatcher();
+        using var cancellation = new CancellationTokenSource();
+
+        var task = dispatcher.EnqueueAsync<string>("inner-link", async token =>
+        {
+            using var inner = CancellationTokenSource.CreateLinkedTokenSource(token);
+            cancellation.Cancel();
+            await Task.Delay(Timeout.Infinite, inner.Token);
+            return "never";
+        }, cancellation.Token);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        Assert.True(task.IsCanceled);
+    }
+
+    [Fact]
     public async Task DisposeAsync_CancelsQueuedCommandsAndRejectsNewOnes()
     {
         var dispatcher = new DeviceCommandDispatcher();

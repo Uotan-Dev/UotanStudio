@@ -213,6 +213,58 @@ public sealed class HdcTransferTests
     }
 
     [Theory]
+    [InlineData(57344, "57408")]
+    [InlineData(61377, "61440,65")]
+    [InlineData(61440, "61440,128")]
+    public void SendStream_FramesEachChunkWithinStableCeiling(int sourceSize, string expectedEnvelopeLengths)
+    {
+        var input = RandomNumberGenerator.GetBytes(sourceSize);
+        var envelopeLengths = new List<int>();
+        using var received = new MemoryStream();
+        using var session = Session(message =>
+        {
+            if (message.Command == HdcCommand.FileCheck)
+                return [Reply(message, HdcCommand.FileBegin, [])];
+            if (message.Command == HdcCommand.FileData)
+            {
+                envelopeLengths.Add(message.Payload!.Length);
+                var chunk = HdcTransferCodec.DecodeChunk(message.Payload);
+                Assert.Equal(received.Length, chunk.Offset);
+                received.Write(chunk.Data);
+                if (received.Length == sourceSize) return [Reply(message, HdcCommand.FileFinish, [1])];
+            }
+            return [];
+        });
+        using var transfer = new HdcSyncClient(session.Connection);
+        transfer.SendStream(new MemoryStream(input), "/data/local/tmp/sample", sourceSize, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(expectedEnvelopeLengths.Split(','), envelopeLengths.Select(v => v.ToString()).ToArray());
+        Assert.Equal(input, received.ToArray());
+    }
+
+    [Fact]
+    public void SendStream_CancellationBetweenFrames_StopsBeforeNextChunk()
+    {
+        var input = new byte[65536];
+        var frames = 0;
+        using var cancelled = new CancellationTokenSource();
+        using var session = Session(message =>
+        {
+            if (message.Command == HdcCommand.FileCheck)
+                return [Reply(message, HdcCommand.FileBegin, [])];
+            if (message.Command == HdcCommand.FileData)
+            {
+                frames++;
+                cancelled.Cancel();
+            }
+            return [];
+        });
+        using var transfer = new HdcSyncClient(session.Connection);
+        Assert.ThrowsAny<OperationCanceledException>(() => transfer.SendStream(
+            new MemoryStream(input), "/data/local/tmp/sample", input.Length, cancellationToken: cancelled.Token));
+        Assert.Equal(1, frames);
+    }
+
+    [Theory]
     [InlineData(0, "install bundle successfully. ", true)]
     [InlineData(1, "installed", true)]
     [InlineData(0, "error: install bundle successfully. expected but failed", false)]

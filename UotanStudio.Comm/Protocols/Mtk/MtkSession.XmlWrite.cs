@@ -130,6 +130,7 @@ public sealed partial class MtkSession
     private static async Task SendXmlSourceOwnedAsync(MtkXmlChannel channel, Stream source, long length,
         int packetLength, IProgress<long>? progress, CancellationToken token)
     {
+        RequireBoundedXmlPacketCount(length, packetLength);
         await channel.AcknowledgeValueAsync((ulong)length, token).ConfigureAwait(false);
         await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
         long sent = 0;
@@ -143,6 +144,27 @@ public sealed partial class MtkSession
             await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
             sent += count;
             progress?.Report(sent);
+        }
+    }
+
+    /// <summary>
+    /// Bounds one device-negotiated XML file transfer by packet count before a single payload byte
+    /// moves, matching the ceiling the DA2 stage already applies. The packet length is
+    /// device-authored, so a tiny negotiated value cannot turn a bounded transfer into an
+    /// unbounded number of acknowledgement exchanges.
+    /// 在写出任何负载字节之前，按包数约束一次设备协商的 XML 文件传输，上限与 DA2 阶段既有上限一致。
+    /// 包长由设备决定，因此极小的协商值无法把有界传输变成无限次应答交换。
+    /// </summary>
+    /// <param name="length">The declared transfer byte count. 声明的传输字节数。</param>
+    /// <param name="packetLength">The negotiated packet length in bytes. 协商出的包长（字节）。</param>
+    /// <exception cref="MtkProtocolException">The negotiated packet count exceeds
+    /// <see cref="MaximumXmlSourcePackets"/>. <para>协商出的包数超过
+    /// <see cref="MaximumXmlSourcePackets"/>。</para></exception>
+    private static void RequireBoundedXmlPacketCount(long length, int packetLength)
+    {
+        if ((length - 1) / packetLength + 1 > MaximumXmlSourcePackets)
+        {
+            throw new MtkProtocolException("The XML file transfer exceeds the bounded packet count.");
         }
     }
 }

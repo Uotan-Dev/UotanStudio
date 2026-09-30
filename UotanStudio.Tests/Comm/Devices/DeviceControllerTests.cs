@@ -39,12 +39,14 @@ public sealed class DeviceControllerTests
         var source = new Source("adb", _ => Interlocked.Increment(ref calls) == 1
             ? pending.Task : Task.FromResult<IReadOnlyList<DeviceEndpoint>>([Second]));
         var controller = new DeviceController([source], new Opener());
-        var oldRefresh = controller.RefreshAsync(TestContext.Current.CancellationToken);
-        var newest = await controller.RefreshAsync(TestContext.Current.CancellationToken);
+        var older = controller.RefreshAsync(TestContext.Current.CancellationToken);
+        var queued = controller.RefreshAsync(TestContext.Current.CancellationToken);
         pending.SetResult([First]);
 
-        Assert.Same(newest, await oldRefresh);
-        Assert.Equal([Second], controller.Snapshot.Endpoints);
+        var committed = await older;
+        Assert.Same(committed, await queued);
+        Assert.Equal([First], controller.Snapshot.Endpoints);
+        Assert.Equal(1, calls);
     }
 
     [Fact]

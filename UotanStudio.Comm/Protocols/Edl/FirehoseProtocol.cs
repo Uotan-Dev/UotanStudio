@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Transports.Abstractions;
 
@@ -202,15 +203,6 @@ public class FirehoseConfiguration
     public int ConfigureFirstAttemptTimeoutMs { get; set; } = EdlConstants.ConfigureFirstAttemptTimeoutMs;
 
     /// <summary>
-    /// Gets or sets the maximum number of consecutive configure timeouts before failing fast
-    /// with ConnectionLost (0 = disabled, retry up to the attempt limit instead).
-    /// <para>获取或设置连续 configure 超时后立即以 ConnectionLost 失败的上限（0 = 禁用，
-    /// 按尝试次数上限重试）。</para>
-    /// </summary>
-    /// <value>The consecutive-timeout threshold; defaults to 3. <para>连续超时阈值；默认 3。</para></value>
-    public int ConfigureMaxConsecutiveTimeouts { get; set; } = 3;
-
-    /// <summary>
     /// Gets or sets the budget in milliseconds for observing transport disconnection after
     /// a power ACK (0 disables observation). Disconnection does not prove successful boot.
     /// <para>获取或设置在 power ACK 之后观察传输断开的预算时间（毫秒），0 表示禁用观察。断开不能证明启动成功。</para>
@@ -273,12 +265,15 @@ public class FirehoseConfiguration
 /// <param name="timeoutMs">Optional per-read command timeout in milliseconds. <para>可选的单次读取命令超时（毫秒）。</para></param>
 public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseConfiguration? config = null, int? timeoutMs = null) : IDisposable
 {
+    private const int DisposalGateTimeoutMs = 250;
+
     private readonly ICommTransport _transport = transport ?? throw new ArgumentNullException(nameof(transport));
     private readonly int _cmdTimeoutMs = timeoutMs ?? EdlConstants.DefaultCommandTimeoutMs;
     private readonly byte[] _rxBuffer = new byte[4 * 1024];
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     private int _rxBufferBytes;
     private volatile bool _disposed;
+    private volatile bool _operationGateRetired;
     private volatile bool _faulted;
     private volatile EdlFailureKind _lastFailureKind;
     private FirehoseCapabilitySnapshot? _capabilitySnapshot;
@@ -733,21 +728,52 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         }
         catch
         {
-            _operationGate.Release();
+            ReleaseGate(_operationGate);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Returns one permit to the operation gate, tolerating the window where the owning session was
+    /// disposed before the caller finished. A disposed gate has no remaining consumer, so dropping
+    /// the release cannot strand a permit or hide a protocol error.
+    /// <para>向操作门归还一个许可，并容忍所属会话在调用方结束前已被释放的窗口。已释放的门不再
+    /// 有任何使用者，因此丢弃归还不会滞留许可，也不会掩盖协议错误。</para>
+    /// </summary>
+    private static void ReleaseGate(SemaphoreSlim gate)
+    {
+        try
+        {
+            gate.Release();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Releases one transport transaction. The owning <see cref="FirehoseProtocol"/> disposes the
+    /// shared gate, so a lease that outlives the session returns its permit only while the gate is
+    /// still usable.
+    /// <para>归还一次传输事务。共享门由所属的 <see cref="FirehoseProtocol"/> 释放，因此晚于会话
+    /// 结束的租约仅在门仍可用时归还许可。</para>
+    /// </summary>
+    internal sealed class OperationLease(SemaphoreSlim gate) : IDisposable
+    {
+        private SemaphoreSlim? _gate = gate;
+
+        public void Dispose()
+        {
+            var released = Interlocked.Exchange(ref _gate, null);
+            if (released is not null)
+            {
+                ReleaseGate(released);
+            }
         }
     }
 
     /// <summary>Marks an uncertain initialization as unusable until the transport is reconnected.</summary>
     internal void Invalidate() => _faulted = true;
-
-    /// <summary>Releases one transport transaction without disposing a gate still used by waiters.</summary>
-    internal sealed class OperationLease(SemaphoreSlim gate) : IDisposable
-    {
-        private SemaphoreSlim? _gate = gate;
-
-        public void Dispose() => Interlocked.Exchange(ref _gate, null)?.Release();
-    }
 
     private long ValidateStorageRange(long startSector, long numSectors, int physicalPartition)
     {
@@ -784,8 +810,60 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     }
 
     /// <summary>
-    /// Disposes the protocol.
-    /// <para>释放协议。</para>
+    /// Disposes the protocol and retires the operation gate's wait handle.
+    /// The gate is taken with a bounded wait rather than by peeking its free-permit count: a holder
+    /// blocked inside a long native transfer cannot be outwaited here, and retiring a gate an
+    /// in-flight operation still owns would make that operation throw
+    /// <see cref="ObjectDisposedException"/> while it returns its permit. When the wait expires the
+    /// gate is deliberately left alive, trading one wait handle the garbage collector eventually
+    /// reclaims against a corrupted transfer. Every later call tries again until the gate really is
+    /// retired, so a lease that finishes after this call still lets a repeated
+    /// <see cref="Dispose()"/> reclaim the handle.
+    /// <para>释放协议并归还操作门的等待句柄。取闸使用有限等待，而不是查看空闲许可数：阻塞在长
+    /// 原生传输里的持有者不可能在这里等到，而处置一个仍被在途操作占用的门会让该操作在归还许可时
+    /// 抛出 <see cref="ObjectDisposedException"/>。等待到期时门被刻意保持存活，用一个终会被垃圾
+    /// 回收器收回的等待句柄换取一次不被破坏的传输。之后的每次调用都会重新尝试，直到门真正被归还，
+    /// 因此在本次调用之后才结束的租约仍能让重复的 <see cref="Dispose()"/> 回收该句柄。</para>
     /// </summary>
-    public void Dispose() => _disposed = true;
+    public void Dispose()
+    {
+        _disposed = true;
+        if (_operationGateRetired)
+        {
+            return;
+        }
+
+        if (!TryEnterOperationGateForDisposal())
+        {
+            UsbTrace.Log($"FirehoseProtocol.Dispose left the operation gate alive after {DisposalGateTimeoutMs} ms because an operation still holds it.");
+            return;
+        }
+
+        ReleaseGate(_operationGate);
+        _operationGate.Dispose();
+        _operationGateRetired = true;
+    }
+
+    /// <summary>
+    /// Takes the operation gate on behalf of <see cref="Dispose()"/> with a bounded wait, so
+    /// disposal can never deadlock behind a transfer whose own timeout is longer than any fixed
+    /// wait. An already retired gate, which is what a completed idle disposal leaves behind, counts
+    /// as not acquired so repeated disposal stays a safe no-op.
+    /// <para>代表 <see cref="Dispose()"/> 以有限等待取得操作门，使释放永远不会被某个自身超时
+    /// 长于任何固定等待的传输卡住。已经归还的门（即空闲释放完成后的状态）视为未取得，
+    /// 因此重复释放保持安全的空操作。</para>
+    /// </summary>
+    /// <returns><see langword="true"/> when this call holds the gate.
+    /// <para>本次调用取得该门时为 <see langword="true"/>。</para></returns>
+    private bool TryEnterOperationGateForDisposal()
+    {
+        try
+        {
+            return _operationGate.Wait(DisposalGateTimeoutMs);
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
+        }
+    }
 }

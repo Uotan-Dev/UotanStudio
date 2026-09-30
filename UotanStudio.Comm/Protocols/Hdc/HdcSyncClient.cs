@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
@@ -122,6 +123,15 @@ public sealed class TransferConfig
 /// </param>
 public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, UotanStudio.Comm.Contracts.IHdcSyncClient
 {
+    /// <summary>
+    /// Source bytes copied per transfer chunk. The stable daemon payload ceiling is 60 KiB and every
+    /// chunk reserves the 64-byte transfer metadata prefix, so one read fills a frame that stays within
+    /// that legacy limit; a smaller buffer would split the same file into more, shorter frames.
+    /// <para>每个传输块从源读取的字节数。守护进程稳定版负载上限为 60 KiB，而每个块都要预留 64 字节传输元数据前缀，
+    /// 因此一次读取填充的帧不会超过该较早协议上限；更小的缓冲区只会把同一个文件切成更多更短的帧。</para>
+    /// </summary>
+    internal const int ChunkSourceBufferSize = HdcConstants.MaxPayloadSizeStable - 64;
+
     private bool _disposed;
 
     /// <summary>
@@ -421,17 +431,24 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Uotan
 
     internal void SendData(HdcStream channel, Stream source, long length, HdcCommand command, CancellationToken ct)
     {
-        var buffer = new byte[48 * 1024];
+        var buffer = ArrayPool<byte>.Shared.Rent(ChunkSourceBufferSize);
         long offset = 0;
-        do
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            var count = (int)Math.Min(buffer.Length, length - offset);
-            source.ReadExactly(buffer.AsSpan(0, count));
-            channel.SendCommand(command, HdcTransferCodec.EncodeChunk(offset, buffer.AsSpan(0, count), Compress));
-            offset += count;
-            Progress?.Invoke(offset, length);
-        } while (offset < length);
+            do
+            {
+                ct.ThrowIfCancellationRequested();
+                var count = (int)Math.Min(ChunkSourceBufferSize, length - offset);
+                source.ReadExactly(buffer.AsSpan(0, count));
+                channel.SendCommand(command, HdcTransferCodec.EncodeChunk(offset, buffer.AsSpan(0, count), Compress));
+                offset += count;
+                Progress?.Invoke(offset, length);
+            } while (offset < length);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     internal static HdcMessage Expect(HdcStream channel, HdcCommand expected, CancellationToken ct, int timeoutMs = 30000, HdcCommand? alternative = null)

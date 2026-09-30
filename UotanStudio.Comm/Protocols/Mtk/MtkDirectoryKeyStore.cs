@@ -11,7 +11,10 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 public interface IMtkSlaKeyProvider
 {
     /// <summary>Gets a responder able to answer the SLA challenge of this device, or null.
-    /// <para>获取能应答该设备 SLA 挑战的响应器，无则返回 null。</para></summary>
+    /// The returned responder owns any key material it carries and is <see cref="IDisposable"/>;
+    /// release it once the exchange is finished.
+    /// <para>获取能应答该设备 SLA 挑战的响应器，无则返回 null。返回的响应器拥有其密钥材料并实现
+    /// <see cref="IDisposable"/>；交换结束后应释放它。</para></summary>
     /// <param name="device">Identity whose hardware code and subcode select the key material.
     /// <para>以其硬件代码与子代码选择密钥材料的身份。</para></param>
     /// <returns>A responder for this device, or <see langword="null"/> when no key material matches.
@@ -74,13 +77,23 @@ public sealed class MtkDirectoryKeyStore : IMtkSlaKeyProvider, IMtkDaaResourcePr
         _directory = directory;
     }
 
-    /// <summary>Resolves an SLA responder from a matching <c>sla_*.pem</c> key, loading it into a fresh RSA instance.
-    /// <para>从匹配的 <c>sla_*.pem</c> 密钥解析 SLA 响应器，并将其加载到新的 RSA 实例。</para></summary>
+    /// <summary>Resolves an SLA responder from a matching <c>sla_*.pem</c> key, loading it into an RSA
+    /// instance the returned responder owns.
+    /// <para>从匹配的 <c>sla_*.pem</c> 密钥解析 SLA 响应器，并把加载后的 RSA 实例所有权交给返回的响应器。</para></summary>
     /// <param name="device">Identity whose hardware code and subcode select the key file.
     /// <para>以其硬件代码与子代码选择密钥文件的身份。</para></param>
-    /// <returns>A responder backed by the imported key, or <see langword="null"/> when no file matches or the
-    /// key cannot be read or imported.
-    /// <para>由导入密钥支撑的响应器；无匹配文件或密钥无法读取/导入时返回 <see langword="null"/>。</para></returns>
+    /// <returns>A responder that owns the imported key, or <see langword="null"/> when no file matches or the
+    /// key file is missing, unreadable or cryptographically invalid. Releasing the responder with
+    /// <see cref="IDisposable.Dispose"/> releases that key, so discard the responder once the exchange
+    /// is finished. A PEM payload the RSA importer rejects outright, or a key outside the supported
+    /// widths, surfaces <see cref="ArgumentException"/> instead of a null result.
+    /// <para>拥有导入密钥所有权的响应器；无匹配文件，或密钥文件缺失、不可读、密码学上无效时返回
+    /// <see langword="null"/>。通过 <see cref="IDisposable.Dispose"/> 释放响应器即会释放该密钥，
+    /// 因此交换结束后应丢弃响应器。RSA 导入器直接拒绝的 PEM 内容，或不受支持宽度的密钥，
+    /// 会抛出 <see cref="ArgumentException"/> 而不是返回 null。</para></returns>
+    /// <exception cref="ArgumentException">The key file content is not a parseable PEM payload, or the
+    /// imported key is not 1024, 2048, 3072 or 4096 bits.
+    /// <para>密钥文件内容不是可解析的 PEM 载荷，或导入的密钥不是 1024、2048、3072 或 4096 位。</para></exception>
     public IMtkBootRomSlaResponder? ResolveSlaResponder(MtkDeviceInfo device)
     {
         var specific = KeyPath($"sla_{device.HardwareCode:x4}_{device.HardwareSubCode:x4}.pem");
@@ -91,15 +104,24 @@ public sealed class MtkDirectoryKeyStore : IMtkSlaKeyProvider, IMtkDaaResourcePr
             return null;
         }
 
+        RSA? rsa = null;
         try
         {
-            using var rsa = RSA.Create();
+            rsa = RSA.Create();
             rsa.ImportFromPem(File.ReadAllText(path));
-            return new MtkBootRomRsaSlaResponder(rsa, device);
+            var responder = new MtkBootRomRsaSlaResponder(rsa, device, ownsKey: true);
+            rsa = null;
+            return responder;
         }
         catch (Exception ex) when (ex is IOException or FormatException or CryptographicException)
         {
+            rsa?.Dispose();
             return null;
+        }
+        catch
+        {
+            rsa?.Dispose();
+            throw;
         }
     }
 

@@ -25,11 +25,6 @@ public enum DeviceSessionKind
     /// </summary>
     Fastboot,
     /// <summary>
-    /// Screen-mirroring session kind; the default factory set registers no builder for it.
-    /// <para>投屏会话类型；默认工厂集合没有为它注册构建器。</para>
-    /// </summary>
-    Scrcpy,
-    /// <summary>
     /// Qualcomm EDL session on a direct USB transport.
     /// <para>运行在直连 USB 传输上的高通 EDL 会话。</para>
     /// </summary>

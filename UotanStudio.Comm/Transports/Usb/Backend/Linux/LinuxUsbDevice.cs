@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using static UotanStudio.Comm.Transports.Usb.Backend.Linux.LinuxUsbAPI;
 
@@ -33,6 +34,16 @@ internal class LinuxUsbDevice : UsbDevice
 
     public override int DefaultTimeoutMs => PlatformDefaultTimeoutMs;
 
+    /// <summary>
+    /// Opens the usbfs node, anchors the physical port identity, and claims the requested
+    /// interfaces. When a claim fails, every interface already claimed by this call is released
+    /// explicitly before the descriptor is closed, and the returned errno is captured immediately
+    /// after the failed claim so it cannot be overwritten by close().
+    /// <para>打开 usbfs 节点、锚定物理端口身份并声明请求的接口。任一声明失败时，本次调用已声明成功的
+    /// 接口会在关闭描述符之前被显式释放；返回值取自失败声明之后立即捕获的 errno，以免被 close() 覆盖。</para>
+    /// </summary>
+    /// <returns><c>0</c> on success; otherwise the failed claim's errno or <c>-1</c>.
+    /// <para>成功返回 <c>0</c>；否则返回失败声明的 errno 或 <c>-1</c>。</para></returns>
     public override int CreateHandle()
     {
         var fd = open(DevicePath, O_RDWR | O_CLOEXEC);
@@ -66,8 +77,10 @@ internal class LinuxUsbDevice : UsbDevice
         {
             if (!ClaimInterface(ifcByte))
             {
+                var err = Marshal.GetLastWin32Error();
+                ReleaseClaimedInterfaces();
                 _fd.Dispose();
-                return Marshal.GetLastWin32Error();
+                return err;
             }
         }
 
@@ -114,16 +127,61 @@ internal class LinuxUsbDevice : UsbDevice
         return true;
     }
 
+    /// <summary>
+    /// Issues <c>USBDEVFS_RESET</c> and, only when the ioctl succeeds, drops the recorded
+    /// interface claims: the kernel revokes every interface claim held by this descriptor across a
+    /// reset, so keeping them would make <see cref="Dispose"/> release interfaces that may belong
+    /// to another process by then. A failed reset leaves both the handle and the claim records
+    /// untouched because the kernel-side claim state did not change.
+    /// <para>发送 <c>USBDEVFS_RESET</c>，且仅在 ioctl 成功时丢弃记录的接口声明：复位会使内核撤销本
+    /// 描述符持有的全部接口声明，继续保留会让 <see cref="Dispose"/> 释放届时可能已属于其他进程的接口。
+    /// 复位失败时内核侧声明状态未变，句柄与声明记录都保持原样。</para>
+    /// </summary>
     public override void Reset()
     {
-        if (!_fd.IsInvalid)
+        if (_fd.IsInvalid)
         {
-            ioctl(Fd, USBDEVFS_RESET, IntPtr.Zero);
+            return;
         }
+
+        if (ioctl(Fd, USBDEVFS_RESET, IntPtr.Zero) != 0)
+        {
+            var err = Marshal.GetLastWin32Error();
+            UsbTrace.Log($"LinuxUsbDevice: USBDEVFS_RESET failed on '{DevicePath}' (errno {err}); claimed interfaces are retained.");
+            return;
+        }
+
+        _claimedInterfaces.Clear();
     }
 
+    /// <summary>
+    /// Executes a control transfer through the usbfs control ioctl. The length bound is validated
+    /// before any handle inspection because <c>WLength</c> is a 16-bit setup field: a larger value
+    /// would otherwise be silently truncated and produce a partial transfer. This mirrors the
+    /// session-level control-transfer validation as defense in depth for callers that use the
+    /// device directly. The managed infinite-timeout sentinel is mapped to the kernel's zero
+    /// ("wait forever") encoding before it reaches the unsigned timeout field.
+    /// <para>通过 usbfs 控制 ioctl 执行控制传输。长度上限在任何句柄检查之前校验，因为 <c>WLength</c>
+    /// 是 16 位 setup 字段：更大的值会被静默截断并产生部分传输；这与会话层的控制传输校验一致，为直接
+    /// 使用设备的调用方提供纵深防御。托管的无限超时哨兵值在进入无符号超时字段前映射为内核的 0
+    /// （“永久等待”）编码。</para>
+    /// </summary>
+    /// <param name="setupPacket">The setup packet for the control request. <para>控制请求的 Setup 包。</para></param>
+    /// <param name="buffer">The data buffer, or <c>null</c> for zero-length transfers. <para>数据缓冲区；零长度传输时为 <c>null</c>。</para></param>
+    /// <param name="offset">The byte offset within the buffer. <para>缓冲区内的字节偏移量。</para></param>
+    /// <param name="length">The number of bytes to transfer, at most 65535. <para>要传输的字节数，最大 65535。</para></param>
+    /// <param name="timeoutMs">The timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
+    /// <returns>The number of bytes transferred. <para>已传输的字节数。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="length"/> exceeds the 16-bit <c>WLength</c> range. <para>当 <paramref name="length"/> 超过 16 位 <c>WLength</c> 范围时抛出。</para></exception>
+    /// <exception cref="UsbDeviceHandleClosedException">Thrown when the device handle is closed. <para>当设备句柄已关闭时抛出。</para></exception>
+    /// <exception cref="IOException">Thrown when the control ioctl fails. <para>当控制 ioctl 失败时抛出。</para></exception>
     public override int ControlTransfer(UsbSetupPacket setupPacket, byte[]? buffer, int offset, int length, int timeoutMs)
     {
+        if (length > ushort.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(nameof(length), "USB control transfers are limited to 65535 bytes (16-bit WLength).");
+        }
+
         if (_fd.IsInvalid)
         {
             throw new UsbDeviceHandleClosedException("Device handle is closed.");
@@ -146,7 +204,7 @@ internal class LinuxUsbDevice : UsbDevice
             WValue = setupPacket.Value,
             WIndex = setupPacket.Index,
             WLength = (ushort)length,
-            Timeout = (uint)effectiveTimeoutMs
+            Timeout = ConvertTimeoutMs(effectiveTimeoutMs)
         };
 
         var isInDirection = (setupPacket.RequestType & 0x80) != 0;
@@ -202,17 +260,45 @@ internal class LinuxUsbDevice : UsbDevice
         return zeroResult < 0 ? throw new IOException($"USB control transfer failed with error: {Marshal.GetLastWin32Error()}") : zeroResult;
     }
 
+    /// <summary>
+    /// Releases every interface this descriptor still records as claimed and clears the record.
+    /// Shared by <see cref="Dispose"/> and the <see cref="CreateHandle"/> rollback path so a
+    /// partially claimed device releases its claims explicitly instead of relying on the implicit
+    /// teardown performed by close().
+    /// <para>释放本描述符仍记录为已声明的全部接口并清空记录。<see cref="Dispose"/> 与
+    /// <see cref="CreateHandle"/> 的回滚路径共用，使部分声明失败的设备显式释放声明，而不是仅依赖
+    /// close() 的隐式拆卸。</para>
+    /// </summary>
+    private void ReleaseClaimedInterfaces()
+    {
+        foreach (var interfaceNumber in _claimedInterfaces)
+        {
+            int interfaceId = interfaceNumber;
+            ioctl(Fd, USBDEVFS_RELEASEINTERFACE, ref interfaceId);
+        }
+
+        _claimedInterfaces.Clear();
+    }
+
+    /// <summary>
+    /// Maps a managed timeout to the kernel usbfs timeout encoding used by the control and
+    /// synchronous bulk ioctl structures, where <c>0</c> means "wait forever". The managed
+    /// infinite sentinel must not be cast directly: <c>(uint)(-1)</c> would become roughly 49.7
+    /// days instead of an unbounded wait.
+    /// <para>将托管超时映射为控制与同步 bulk ioctl 结构使用的内核 usbfs 超时编码，其中 <c>0</c>
+    /// 表示“永久等待”。托管的无限超时哨兵值不得直接强转：<c>(uint)(-1)</c> 会变成约 49.7 天而不是
+    /// 无限等待。</para>
+    /// </summary>
+    /// <param name="timeoutMs">The timeout in milliseconds, or <see cref="UsbTransferPolicies.InfiniteTimeoutMs"/>. <para>毫秒超时，或 <see cref="UsbTransferPolicies.InfiniteTimeoutMs"/>。</para></param>
+    /// <returns><c>0</c> for the infinite sentinel; otherwise the value widened to unsigned. <para>无限哨兵返回 <c>0</c>；其余值拓宽为无符号数。</para></returns>
+    internal static uint ConvertTimeoutMs(int timeoutMs)
+        => timeoutMs == UsbTransferPolicies.InfiniteTimeoutMs ? 0u : (uint)timeoutMs;
+
     public override void Dispose()
     {
         if (!_fd.IsInvalid)
         {
-            foreach (var ifc in _claimedInterfaces)
-            {
-                int interfaceId = ifc;
-                ioctl(Fd, USBDEVFS_RELEASEINTERFACE, ref interfaceId);
-            }
-
-            _claimedInterfaces.Clear();
+            ReleaseClaimedInterfaces();
             _fd.Dispose();
         }
     }
@@ -328,7 +414,7 @@ internal class LinuxUsbDevice : UsbDevice
         {
             Ep = Ep_in,
             Len = (uint)length,
-            Timeout = timeoutMs == UsbTransferPolicies.InfiniteTimeoutMs ? 0 : (uint)timeoutMs,
+            Timeout = ConvertTimeoutMs(timeoutMs),
             Data = buffer
         };
 
@@ -377,7 +463,7 @@ internal class LinuxUsbDevice : UsbDevice
         {
             Ep = Ep_out,
             Len = (uint)length,
-            Timeout = timeoutMs == UsbTransferPolicies.InfiniteTimeoutMs ? 0 : (uint)timeoutMs,
+            Timeout = ConvertTimeoutMs(timeoutMs),
             Data = buffer
         };
 
@@ -433,7 +519,7 @@ internal class LinuxUsbDevice : UsbDevice
         {
             Ep = Ep_out,
             Len = 0,
-            Timeout = timeoutMs == UsbTransferPolicies.InfiniteTimeoutMs ? 0 : (uint)timeoutMs,
+            Timeout = ConvertTimeoutMs(timeoutMs),
             Data = IntPtr.Zero
         };
 

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Xml.Linq;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -236,6 +237,40 @@ public class FirehosePowerTests
         Assert.Equal(2, transport.Writes.Count);
     }
 
+    [Theory]
+    [InlineData(FirehoseStorageType.Ufs, "<setbootablestoragedrive value=\"1\" />")]
+    [InlineData(FirehoseStorageType.Emmc, "<setbootablestoragedrive value=\"0\" />")]
+    public async Task ResetAsync_StorageWithBootableUnit_SendsMappedPreparation(FirehoseStorageType storageType, string expected)
+    {
+        using var transport = new ScriptedCommTransport();
+        transport.OnWrite = _ => [Encoding.UTF8.GetBytes(Ack)];
+        using var protocol = CreateProtocol(transport, storageType);
+
+        var response = await protocol.ResetAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(response.IsAck);
+        Assert.Equal(2, transport.Writes.Count);
+        Assert.Equal(expected, ExtractElement(transport.Writes[0]));
+        Assert.Equal("<power value=\"reset\" />", ExtractElement(transport.Writes[1]));
+    }
+
+    [Theory]
+    [InlineData(FirehoseStorageType.Nand)]
+    [InlineData(FirehoseStorageType.Spinor)]
+    [InlineData(FirehoseStorageType.Unknown)]
+    public async Task ResetAsync_StorageWithoutBootableUnit_SendsOnlyPower(FirehoseStorageType storageType)
+    {
+        using var transport = new ScriptedCommTransport();
+        transport.OnWrite = _ => [Encoding.UTF8.GetBytes(Ack)];
+        using var protocol = CreateProtocol(transport, storageType);
+
+        var response = await protocol.ResetAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(response.IsAck);
+        Assert.Equal(FirehosePowerStatus.Acknowledged, protocol.LastPowerStatus);
+        Assert.Equal("<power value=\"reset\" />", ExtractElement(Assert.Single(transport.Writes)));
+    }
+
     [Fact]
     public async Task PowerAsync_InvalidOption_DoesNotSendAnyCommand()
     {
@@ -250,9 +285,23 @@ public class FirehosePowerTests
         Assert.Equal(FirehosePowerStatus.NotRequested, protocol.LastPowerStatus);
     }
 
+    private static string ExtractElement(byte[] write)
+    {
+        var document = XDocument.Parse(Encoding.UTF8.GetString(write));
+        return document.Root!.Elements().Single().ToString(SaveOptions.DisableFormatting);
+    }
+
     private static FirehoseProtocol CreateProtocol(ScriptedCommTransport transport) => new(transport, new FirehoseConfiguration
     {
         SectorSize = 512,
+        PowerResponseTimeoutMs = 20,
+        PowerResetVerifyTimeoutMs = 0
+    }, timeoutMs: 10);
+
+    private static FirehoseProtocol CreateProtocol(ScriptedCommTransport transport, FirehoseStorageType storageType) => new(transport, new FirehoseConfiguration
+    {
+        SectorSize = 512,
+        StorageType = storageType,
         PowerResponseTimeoutMs = 20,
         PowerResetVerifyTimeoutMs = 0
     }, timeoutMs: 10);

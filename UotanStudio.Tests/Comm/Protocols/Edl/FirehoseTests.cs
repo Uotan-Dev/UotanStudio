@@ -164,14 +164,6 @@ public class FirehoseTests
     }
 
     [Fact]
-    public void BuildGetSha256_EmitsSha256Attributes()
-    {
-        var xml = FirehoseXmlBuilder.BuildGetSha256(4096, 8, 0, 0x100);
-        Assert.Contains("<getsha256digest SECTOR_SIZE_IN_BYTES=\"4096\"", xml, StringComparison.Ordinal);
-        Assert.Contains("start_sector=\"256\"", xml, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void BuildSetActivePartition_ThrowsOnEmptySlot()
     {
         Assert.Throws<ArgumentException>(() => FirehoseXmlBuilder.BuildSetActivePartition(""));

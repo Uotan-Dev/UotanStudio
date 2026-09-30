@@ -45,29 +45,45 @@ internal partial class WinUSBDevice
 
     protected override UsbChunkResult ReadChunk(IntPtr buffer, int length, int timeoutMs)
     {
-        SetReadPipeTimeout(timeoutMs);
-        if (WinUsb_ReadPipe(_winUsbHandle.DangerousGetHandle(), _readBulkID, buffer, (uint)length, out var bytesRead, IntPtr.Zero))
+        var usb = AcquireWinUsbHandle();
+        try
         {
-            return UsbChunkResult.Success((int)bytesRead);
+            SetReadPipeTimeout(timeoutMs);
+            if (WinUsb_ReadPipe(usb, _readBulkID, buffer, (uint)length, out var bytesRead, IntPtr.Zero))
+            {
+                return UsbChunkResult.Success((int)bytesRead);
+            }
+
+            var err = Marshal.GetLastWin32Error();
+
+            return err == ERROR_NO_DATA && RawIoEnabled
+                ? UsbChunkResult.Success(0)
+                : err is ERROR_SEM_TIMEOUT or ERROR_TIMEOUT ? UsbChunkResult.Timeout(err) : UsbChunkResult.Fatal(err);
         }
-
-        var err = Marshal.GetLastWin32Error();
-
-        return err == ERROR_NO_DATA && RawIoEnabled
-            ? UsbChunkResult.Success(0)
-            : err is ERROR_SEM_TIMEOUT or ERROR_TIMEOUT ? UsbChunkResult.Timeout(err) : UsbChunkResult.Fatal(err);
+        finally
+        {
+            ReleaseWinUsbHandle();
+        }
     }
 
     protected override UsbChunkResult WriteChunk(IntPtr buffer, int length, int timeoutMs)
     {
-        SetWritePipeTimeout(timeoutMs);
-        if (WinUsb_WritePipe(_winUsbHandle.DangerousGetHandle(), _writeBulkID, buffer, (uint)length, out var bytesWritten, IntPtr.Zero))
+        var usb = AcquireWinUsbHandle();
+        try
         {
-            return UsbChunkResult.Success((int)bytesWritten);
-        }
+            SetWritePipeTimeout(timeoutMs);
+            if (WinUsb_WritePipe(usb, _writeBulkID, buffer, (uint)length, out var bytesWritten, IntPtr.Zero))
+            {
+                return UsbChunkResult.Success((int)bytesWritten);
+            }
 
-        var err = Marshal.GetLastWin32Error();
-        return err is ERROR_SEM_TIMEOUT or ERROR_TIMEOUT ? UsbChunkResult.Timeout(err) : UsbChunkResult.Fatal(err);
+            var err = Marshal.GetLastWin32Error();
+            return err is ERROR_SEM_TIMEOUT or ERROR_TIMEOUT ? UsbChunkResult.Timeout(err) : UsbChunkResult.Fatal(err);
+        }
+        finally
+        {
+            ReleaseWinUsbHandle();
+        }
     }
 
     protected override bool IsDisconnectionError(int nativeError)
@@ -96,78 +112,89 @@ internal partial class WinUSBDevice
 
     public override void WriteZlp(int timeoutMs)
     {
-        if (_winUsbHandle.IsInvalid)
+        var usb = AcquireWinUsbHandle();
+        try
         {
-            throw new UsbDeviceHandleClosedException("Device handle is closed.");
-        }
-
-        SetWritePipeTimeout(timeoutMs);
-        if (!WinUsb_WritePipe(_winUsbHandle.DangerousGetHandle(), _writeBulkID, IntPtr.Zero, 0, out _, IntPtr.Zero))
-        {
-            var err = Marshal.GetLastWin32Error();
-            if (err is not ERROR_SEM_TIMEOUT and not ERROR_TIMEOUT)
+            SetWritePipeTimeout(timeoutMs);
+            if (!WinUsb_WritePipe(usb, _writeBulkID, IntPtr.Zero, 0, out _, IntPtr.Zero))
             {
-                throw new Win32Exception(err);
+                var err = Marshal.GetLastWin32Error();
+                if (err is not ERROR_SEM_TIMEOUT and not ERROR_TIMEOUT)
+                {
+                    throw new Win32Exception(err);
+                }
             }
+        }
+        finally
+        {
+            ReleaseWinUsbHandle();
         }
     }
 
     public override UsbReadResult ReadInterrupt(byte endpointAddress, byte[] buffer, int offset, int length, int timeoutMs)
     {
-        if (_winUsbHandle.IsInvalid)
-        {
-            throw new UsbDeviceHandleClosedException("Device handle is closed.");
-        }
-        if (length <= 0)
-        {
-            return new UsbReadResult(0, false, false);
-        }
-
-        ValidateBufferRange(buffer, offset, length);
-
-        var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+        var usb = AcquireWinUsbHandle();
         try
         {
-            if (WinUsb_ReadPipe(_winUsbHandle.DangerousGetHandle(), endpointAddress,
-                new IntPtr(handle.AddrOfPinnedObject().ToInt64() + offset), (uint)length, out var bytesRead, IntPtr.Zero))
+            if (length <= 0)
             {
-                return new UsbReadResult((int)bytesRead, isTimeout: false, isShortPacket: bytesRead < length);
+                return new UsbReadResult(0, false, false);
             }
 
-            var err = Marshal.GetLastWin32Error();
-            return err is ERROR_SEM_TIMEOUT or ERROR_TIMEOUT
-                ? new UsbReadResult(0, isTimeout: true, isShortPacket: false)
-                : new UsbReadResult(0, isTimeout: false, isShortPacket: false);
+            ValidateBufferRange(buffer, offset, length);
+
+            var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                if (WinUsb_ReadPipe(usb, endpointAddress,
+                    new IntPtr(handle.AddrOfPinnedObject().ToInt64() + offset), (uint)length, out var bytesRead, IntPtr.Zero))
+                {
+                    return new UsbReadResult((int)bytesRead, isTimeout: false, isShortPacket: bytesRead < length);
+                }
+
+                var err = Marshal.GetLastWin32Error();
+                return err is ERROR_SEM_TIMEOUT or ERROR_TIMEOUT
+                    ? new UsbReadResult(0, isTimeout: true, isShortPacket: false)
+                    : new UsbReadResult(0, isTimeout: false, isShortPacket: false);
+            }
+            finally
+            {
+                handle.Free();
+            }
         }
         finally
         {
-            handle.Free();
+            ReleaseWinUsbHandle();
         }
     }
 
     public override long WriteInterrupt(byte endpointAddress, byte[] data, int offset, int length, int timeoutMs)
     {
-        if (_winUsbHandle.IsInvalid)
-        {
-            throw new UsbDeviceHandleClosedException("Device handle is closed.");
-        }
-        ValidateWriteData(data, offset, length);
-        if (length == 0)
-        {
-            return 0;
-        }
-
-        var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
+        var usb = AcquireWinUsbHandle();
         try
         {
-            return WinUsb_WritePipe(_winUsbHandle.DangerousGetHandle(), endpointAddress,
-                new IntPtr(handle.AddrOfPinnedObject().ToInt64() + offset), (uint)length, out var bytesWritten, IntPtr.Zero)
-                ? bytesWritten
-                : 0;
+            ValidateWriteData(data, offset, length);
+            if (length == 0)
+            {
+                return 0;
+            }
+
+            var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
+            try
+            {
+                return WinUsb_WritePipe(usb, endpointAddress,
+                    new IntPtr(handle.AddrOfPinnedObject().ToInt64() + offset), (uint)length, out var bytesWritten, IntPtr.Zero)
+                    ? bytesWritten
+                    : 0;
+            }
+            finally
+            {
+                handle.Free();
+            }
         }
         finally
         {
-            handle.Free();
+            ReleaseWinUsbHandle();
         }
     }
 

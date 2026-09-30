@@ -29,7 +29,7 @@ public partial class SaharaTests
         var mode = await sahara.HandshakeAsync(ImagesWithFirehose(), TestContext.Current.CancellationToken);
 
         Assert.Equal(SaharaMode.ImageTxPending, mode);
-        Assert.Equal(EdlConstants.DefaultMaxPacketLength, sahara.MaxPacketLength);
+        Assert.Equal(4096u, sahara.MaxPacketLength);
         Assert.False(sahara.FirehoseAlreadyRunning);
 
         var helloResponse = ParseHeader(transport.Writes[0]);
@@ -159,6 +159,40 @@ public partial class SaharaTests
         var exception = await Assert.ThrowsAsync<SaharaException>(
             () => sahara.HandshakeAsync(ImagesWithFirehose(), TestContext.Current.CancellationToken));
         Assert.Contains("non-zero status", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HandshakeAsync_EndOfImageRejected_SendsDoneBeforeThrowing()
+    {
+        var transport = new ScriptedCommTransport();
+        EnqueueHello(transport);
+        transport.Enqueue([0x04, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00]);
+
+        var sahara = new SaharaProtocol(transport);
+        var exception = await Assert.ThrowsAsync<SaharaException>(
+            () => sahara.HandshakeAsync(ImagesWithFirehose(), TestContext.Current.CancellationToken));
+
+        Assert.Equal("END_OF_IMAGE with non-zero status: 7 (invalid image received)", exception.Message);
+        Assert.Equal(2, transport.Writes.Count);
+        Assert.Equal([0x05, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00], transport.Writes[1]);
+    }
+
+    [Fact]
+    public async Task HandshakeAsync_EndOfImageRejectedAndCleanupWriteRefused_ThrowsOriginalStatusError()
+    {
+        var transport = new ScriptedCommTransport
+        {
+            RejectWrite = (_, _, length) => length == 8
+        };
+        EnqueueHello(transport);
+        transport.Enqueue([0x04, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00]);
+
+        var sahara = new SaharaProtocol(transport);
+        var exception = await Assert.ThrowsAsync<SaharaException>(
+            () => sahara.HandshakeAsync(ImagesWithFirehose(), TestContext.Current.CancellationToken));
+
+        Assert.Equal("END_OF_IMAGE with non-zero status: 2 (protocol mismatch between host and target)", exception.Message);
+        Assert.Single(transport.Writes);
     }
 
     [Fact]

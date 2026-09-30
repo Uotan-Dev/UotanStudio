@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Runtime.InteropServices;
 using LibUsbDotNet;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -10,11 +11,15 @@ public sealed class LibUsbTransferTests
 {
     [Theory]
     [InlineData(123, 123)]
-    [InlineData(-1, 0)]
+    [InlineData(-1, LibUsbTransfer.IndefiniteNativeTimeoutMs)]
     [InlineData(0, 5000)]
     [InlineData(-2, 5000)]
     public void Timeout_IsPerTransferAndUsesLibrarySentinels(int input, int native)
         => Assert.Equal(native, LibUsbTransfer.NativeTimeout(input));
+
+    [Fact]
+    public void NativeTimeout_InfiniteSentinel_NeverMapsToNativeNoTimeoutZero()
+        => Assert.NotEqual(0, LibUsbTransfer.NativeTimeout(-1));
 
     [Theory]
     [InlineData(Error.Success, 0, false, true)]
@@ -76,7 +81,7 @@ public sealed class LibUsbTransferTests
         var task = LibUsbTransfer.ExecuteAsync(handle, endpoint, type, new byte[16], -1, cancel.Token, native);
         Assert.Equal((byte)type, native.Type);
         Assert.Equal(endpoint, native.Endpoint);
-        Assert.Equal(0u, native.Timeout);
+        Assert.Equal((uint)LibUsbTransfer.IndefiniteNativeTimeoutMs, native.Timeout);
         handle.Dispose();
         await cancel.CancelAsync();
         Assert.Equal(1, native.Cancels);
@@ -139,6 +144,35 @@ public sealed class LibUsbTransferTests
             Assert.InRange(native.Cancels, 0, 1);
         }
     }
+
+    [Fact]
+    public async Task Dispose_ReadChunkGateHeld_WaitsUntilOwnerReleases()
+    {
+        var device = new LibUsbDevice();
+        var readGate = GetChunkGate(device, "_readChunkGate");
+        var writeGate = GetChunkGate(device, "_writeChunkGate");
+        Assert.True(await readGate.WaitAsync(0, TestContext.Current.CancellationToken));
+        var disposing = Task.Run(device.Dispose);
+        var completedFirst = await Task.WhenAny(disposing, Task.Delay(250, TestContext.Current.CancellationToken));
+        Assert.NotSame(disposing, completedFirst);
+        readGate.Release();
+        await disposing;
+        Assert.Throws<ObjectDisposedException>(() => { readGate.Wait(0); });
+        Assert.Throws<ObjectDisposedException>(() => { writeGate.Wait(0); });
+    }
+
+    [Fact]
+    public void Dispose_IdleDevice_DisposesChunkGatesAndStaysRepeatable()
+    {
+        var device = new LibUsbDevice();
+        device.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => { GetChunkGate(device, "_readChunkGate").Wait(0); });
+        Assert.Throws<ObjectDisposedException>(() => { GetChunkGate(device, "_writeChunkGate").Wait(0); });
+        device.Dispose();
+    }
+
+    private static SemaphoreSlim GetChunkGate(LibUsbDevice device, string fieldName) =>
+        (SemaphoreSlim)typeof(LibUsbDevice).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(device)!;
 
     private sealed class TestHandle : SafeHandle
     {
