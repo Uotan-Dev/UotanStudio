@@ -116,38 +116,6 @@ public sealed class NtpiReader : IDisposable
     }
 
     /// <summary>
-    /// Unpacks the NTPI firmware package to the specified directory (streams extraction per file).
-    /// <para>将 NTPI 固件包解包到指定目录(逐文件流式提取)。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Package to unpack. <para>待解包的固件包。</para>
-    /// </param>
-    /// <param name="outputDir">
-    /// Destination directory, created when absent. <para>目标目录，不存在时创建。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Sink notified after each handled file with the total, the completed count and the current entry name;
-    /// <see langword="null"/> reports nothing.
-    /// <para>每处理完一个文件后通知的回调，携带总数、已完成数和当前条目名；传 <see langword="null"/> 表示不上报。</para>
-    /// </param>
-    /// <param name="fileFilter">
-    /// Predicate over the archive entry name; <see langword="false"/> skips that file without writing it, and a
-    /// <see langword="null"/> value unpacks every entry.
-    /// <para>作用于归档内条目名的谓词；返回 <see langword="false"/> 时跳过该文件且不写入，传 <see langword="null"/> 时解出全部条目。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token observed between files and extraction blocks; the default (none) token cannot cancel.
-    /// <para>在文件之间与解压块之间检查的取消令牌；默认（无）令牌不可取消。</para>
-    /// </param>
-    /// <remarks>
-    /// Equivalent to the six-argument overload with a default <see cref="NtpiUnpackOptions"/>, so the declared
-    /// output of every file stays bounded by the default per-file and total limits.
-    /// <para>等同于使用默认 <see cref="NtpiUnpackOptions"/> 的六参数重载，因此每个文件声明的输出仍受默认单文件与总长度上限约束。</para>
-    /// </remarks>
-    public void Unpack(string filePath, string outputDir, IProgress<NtpiExtractionProgress>? progress = null, Func<string, bool>? fileFilter = null, CancellationToken cancellationToken = default)
-        => Unpack(filePath, outputDir, new NtpiUnpackOptions(), progress, fileFilter, cancellationToken);
-
-    /// <summary>
     /// Unpacks an NTPI firmware package using trusted output limits.
     /// <para>使用可信输出限制将 NTPI 固件包解包到指定目录。</para>
     /// </summary>
@@ -161,9 +129,10 @@ public sealed class NtpiReader : IDisposable
     /// <para>目标目录，不存在时创建。文件按条目名的 <see cref="Path.GetFileName(string)"/> 写入，因此仅目录部分不同的条目会相互覆盖。</para>
     /// </param>
     /// <param name="options">
-    /// Trusted output budget. Unless <see cref="NtpiUnpackOptions.DisableOutputLimits"/> is set, a negative limit is
+    /// Trusted output budget; <see langword="null"/> applies a default <see cref="NtpiUnpackOptions"/>, whose declared
+    /// output stays bounded by the default per-file and total limits. Unless <see cref="NtpiUnpackOptions.DisableOutputLimits"/> is set, a negative limit is
     /// rejected and the declared lengths are checked against the per-file and running totals before any file is written.
-    /// <para>可信输出预算。未设置 <see cref="NtpiUnpackOptions.DisableOutputLimits"/> 时，负数上限会被拒绝，并在写入任何文件之前
+    /// <para>可信输出预算；传 <see langword="null"/> 时使用默认 <see cref="NtpiUnpackOptions"/>，其声明输出仍受默认单文件与总长度上限约束。未设置 <see cref="NtpiUnpackOptions.DisableOutputLimits"/> 时，负数上限会被拒绝，并在写入任何文件之前
     /// 按单文件上限与累计总上限检查各条目声明的长度。</para>
     /// </param>
     /// <param name="progress">
@@ -216,15 +185,15 @@ public sealed class NtpiReader : IDisposable
     /// <example>
     /// <code>
     /// using var reader = NtpiReader.CreateDefault();
-    /// reader.Unpack(@"C:\firmware\package.ntpi", @"C:\out", new NtpiUnpackOptions { MaxTotalOutputBytes = 4L * 1024 * 1024 * 1024 });
+    /// reader.Unpack(@"C:\firmware\package.ntpi", @"C:\out", new NtpiUnpackOptions { MaxTotalOutputBytes = 4L * 1024 * 1024 * 1024 }, progress: null, fileFilter: null);
     /// </code>
     /// </example>
-    public void Unpack(string filePath, string outputDir, NtpiUnpackOptions options, IProgress<NtpiExtractionProgress>? progress = null, Func<string, bool>? fileFilter = null, CancellationToken cancellationToken = default)
+    public void Unpack(string filePath, string outputDir, NtpiUnpackOptions? options = null, IProgress<NtpiExtractionProgress>? progress = null, Func<string, bool>? fileFilter = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(filePath);
         ArgumentNullException.ThrowIfNull(outputDir);
-        ArgumentNullException.ThrowIfNull(options);
+        options ??= new NtpiUnpackOptions();
         if (!options.DisableOutputLimits && (options.MaxFileOutputBytes < 0 || options.MaxTotalOutputBytes < 0))
         {
             throw new ArgumentOutOfRangeException(nameof(options), "NTPI unpack output limits must be non-negative.");
@@ -302,7 +271,7 @@ public sealed class NtpiReader : IDisposable
                     var trustedFileLimit = Math.Min(entry.OriginalLength, trustedRemaining);
                     _fileExtractor.ExtractFileToStream(stream, layout.Region6Offset, layout.Region6Length, keyMapProvider, entry, output, trustedFileLimit, cancellationToken);
                 }
-                File.Move(tempPath, outPath, overwrite: true);
+                AtomicPublish.Publish(tempPath, outPath);
                 trustedRemaining -= entry.OriginalLength;
             }
             catch

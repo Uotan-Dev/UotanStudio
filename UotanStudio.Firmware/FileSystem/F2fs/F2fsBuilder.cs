@@ -1,5 +1,6 @@
 using System.Text;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.F2fs.Models;
 using UotanStudio.Firmware.FileSystem.Metadata;
@@ -198,7 +199,7 @@ public sealed partial class F2fsBuilder
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(temporaryPath, fullOutputPath, overwrite: true);
+            AtomicPublish.Publish(temporaryPath, fullOutputPath);
         }
         finally
         {
@@ -523,11 +524,11 @@ public sealed partial class F2fsBuilder
                     var permBits = (ushort)((int)unixMode & 0x0FFF);
                     if (isDir)
                     {
-                        node.Mode = (ushort)(0x4000 | permBits);
+                        node.Mode = (ushort)(InodeTypeBits.Directory | permBits);
                     }
                     else
                     {
-                        node.Mode = (ushort)(0x8000 | permBits);
+                        node.Mode = (ushort)(InodeTypeBits.RegularFile | permBits);
                     }
                 }
             }

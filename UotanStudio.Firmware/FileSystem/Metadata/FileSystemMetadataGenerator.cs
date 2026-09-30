@@ -329,7 +329,7 @@ internal static class FileSystemMetadataGenerator
         try
         {
             File.WriteAllText(temporary, content, Encoding.UTF8);
-            File.Move(temporary, path, overwrite: true);
+            AtomicPublish.Publish(temporary, path);
         }
         finally
         {

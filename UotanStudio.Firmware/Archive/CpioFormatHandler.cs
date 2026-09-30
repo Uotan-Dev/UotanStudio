@@ -3,6 +3,7 @@ using UotanStudio.Firmware.Archive.Extraction;
 using UotanStudio.Firmware.Archive.Formats.Cpio;
 using UotanStudio.Firmware.Archive.Models;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.FileSystem.Metadata;
 
@@ -312,7 +313,7 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
                     }
                     VerifyArchive(temporary, archiveFormat, compression, expectedHash, cancellationToken);
                     cancellationToken.ThrowIfCancellationRequested();
-                    File.Move(temporary, outputPath, overwrite: true);
+                    AtomicPublish.Publish(temporary, outputPath);
                 }
                 finally
                 {

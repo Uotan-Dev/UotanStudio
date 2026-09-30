@@ -603,7 +603,7 @@ public sealed partial class PayloadBuilder : IDisposable
             using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
                 BuildCore(stream, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(temporary, destination, overwrite: true);
+            AtomicPublish.Publish(temporary, destination);
         }
         finally { File.Delete(temporary); }
     }

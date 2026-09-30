@@ -4,6 +4,7 @@ using UotanStudio.Firmware.BlockImage.Sparse.DataProviders;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.BlockImage.Sparse;
@@ -146,7 +147,7 @@ public static class SparseImageConverter
                 outputStream.Flush(flushToDisk: true);
             }
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(temporary, destination, overwrite: true);
+            AtomicPublish.Publish(temporary, destination);
         }
         finally
         {

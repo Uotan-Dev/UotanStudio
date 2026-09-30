@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.Native;
 
@@ -150,7 +151,7 @@ internal static class AndroidF2fsImageBuilder
                 image.Flush(flushToDisk: true);
             }
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(temporary, destination, overwrite: true);
+            AtomicPublish.Publish(temporary, destination);
         }
         finally
         {

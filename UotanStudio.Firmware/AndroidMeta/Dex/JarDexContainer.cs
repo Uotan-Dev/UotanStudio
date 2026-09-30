@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.AndroidMeta.Dex;
 
@@ -326,7 +327,7 @@ public static class JarDexContainer
         try
         {
             File.WriteAllBytes(temporary, bytes);
-            File.Move(temporary, outputPath, overwrite: true);
+            AtomicPublish.Publish(temporary, outputPath);
         }
         finally
         {
@@ -419,7 +420,7 @@ public static class JarDexContainer
                     output.Write(content);
                 }
             }
-            File.Move(temporary, outputPath, overwrite: true);
+            AtomicPublish.Publish(temporary, outputPath);
         }
         finally
         {
@@ -524,7 +525,7 @@ public static class JarDexContainer
                     }
                 }
             }
-            File.Move(temporary, fullPath, overwrite: true);
+            AtomicPublish.Publish(temporary, fullPath);
         }
         finally
         {

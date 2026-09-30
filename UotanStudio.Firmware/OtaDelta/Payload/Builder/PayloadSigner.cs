@@ -89,7 +89,7 @@ internal static class PayloadSigner
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(temporary, destination, overwrite: true);
+            AtomicPublish.Publish(temporary, destination);
         }
         finally
         {

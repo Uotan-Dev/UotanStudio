@@ -317,7 +317,7 @@ internal class PayloadExtractor
                 progressTracker?.Complete();
             }
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(tempPath, fullOutputPath, true);
+            AtomicPublish.Publish(tempPath, fullOutputPath);
         }
         catch (OperationCanceledException)
         {

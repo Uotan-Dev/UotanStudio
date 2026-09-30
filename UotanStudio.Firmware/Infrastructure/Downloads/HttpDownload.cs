@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.Infrastructure.Downloads;
 
@@ -265,7 +266,7 @@ public static class HttpDownload
             else
                 await DownloadSequentialAsync(client, uri, temporary, length, progress, cancellationToken, requestHeaders).ConfigureAwait(false);
 
-            File.Move(temporary, destination, overwrite: true);
+            AtomicPublish.Publish(temporary, destination);
         }
         catch
         {

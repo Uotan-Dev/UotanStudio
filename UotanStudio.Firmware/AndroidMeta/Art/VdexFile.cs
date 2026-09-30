@@ -184,7 +184,7 @@ internal static partial class VdexFile
             }
             _ = Inspect(temporary, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(temporary, destination, true);
+            AtomicPublish.Publish(temporary, destination);
         }
         finally
         {

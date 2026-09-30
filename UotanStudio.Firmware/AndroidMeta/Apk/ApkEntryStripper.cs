@@ -81,7 +81,7 @@ public static class ApkEntryStripper
             throw;
         }
 
-        File.Move(tempPath, outputApk, overwrite: true);
+        AtomicPublish.Publish(tempPath, outputApk);
     }
 
     private static void RewriteCore(Stream input, Stream output, RewriteRequest request, CancellationToken cancellationToken)

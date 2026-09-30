@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using UotanStudio.Firmware.Compression.Detection;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.Compression.Files;
@@ -189,7 +190,7 @@ public static class CompressionFile
         try
         {
             write(tempPath);
-            File.Move(tempPath, fullPath, overwrite: true);
+            AtomicPublish.Publish(tempPath, fullPath);
         }
         finally
         {

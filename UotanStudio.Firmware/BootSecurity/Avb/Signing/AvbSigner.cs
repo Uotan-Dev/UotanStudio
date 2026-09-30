@@ -131,7 +131,7 @@ public static partial class AvbSigner
                     await source.CopyToAsync(output, cancellationToken).ConfigureAwait(false);
                 }
 
-                File.Move(tempPath, outputPath, overwrite: true);
+                AtomicPublish.Publish(tempPath, outputPath);
             }
             catch
             {

@@ -1,3 +1,5 @@
+using UotanStudio.Firmware.Core.IO;
+
 namespace UotanStudio.Firmware.BootSecurity.BootImage;
 
 /// <summary>
@@ -443,7 +445,7 @@ public static class ElfCleaner
         var result = CleanFile(filePath, temp, options);
         if (result.Success)
         {
-            File.Move(temp, filePath, overwrite: true);
+            AtomicPublish.Publish(temp, filePath);
         }
         else
         {

@@ -262,7 +262,7 @@ public static class DatSplitImporter
                 ValidateJoinedNewData(set, temporary, cancellationToken);
             }
 
-            File.Move(temporary, destination, overwrite: true);
+            AtomicPublish.Publish(temporary, destination);
             return set;
         }
         finally

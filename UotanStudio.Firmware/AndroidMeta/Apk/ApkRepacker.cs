@@ -107,7 +107,7 @@ internal static class ApkRepacker
                 WriteArchive(output, inputDirectory, entries, resolvedOptions, cancellationToken);
             }
 
-            File.Move(tempPath, outputPath, overwrite: true);
+            AtomicPublish.Publish(tempPath, outputPath);
         }
         catch
         {

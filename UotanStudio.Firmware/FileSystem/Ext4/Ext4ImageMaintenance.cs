@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.FileSystem.Native;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4;
@@ -97,7 +98,7 @@ public static class Ext4ImageMaintenance
             {
                 result.Flush(flushToDisk: true);
             }
-            File.Move(temporary, destination, overwrite: true);
+            AtomicPublish.Publish(temporary, destination);
         }
         finally
         {

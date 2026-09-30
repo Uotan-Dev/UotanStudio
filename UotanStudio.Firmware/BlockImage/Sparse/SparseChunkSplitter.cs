@@ -238,7 +238,7 @@ public static class SparseChunkSplitter
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(temporary, destination, overwrite: true);
+            AtomicPublish.Publish(temporary, destination);
         }
         finally
         {

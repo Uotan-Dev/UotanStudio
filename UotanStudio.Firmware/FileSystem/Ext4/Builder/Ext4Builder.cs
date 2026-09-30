@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Checksums;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Models;
@@ -35,6 +37,96 @@ public sealed partial class Ext4Builder
     private const uint FeatureRoCompatSharedBlocks = 0x4000;
     private const uint FeatureIncompatEaInode = 0x0400;
     private const uint FeatureRoCompatProject = 0x2000;
+
+    /// <summary>
+    /// EXT4 compatible feature bit <c>EXT2_FEATURE_COMPAT_EXT_ATTR</c>: extended attributes are stored in inode bodies.
+    /// <para>EXT4 兼容特性位 <c>EXT2_FEATURE_COMPAT_EXT_ATTR</c>：扩展属性存储于 inode 体内。</para>
+    /// </summary>
+    private const uint FeatureCompatExtAttr = 0x0008;
+
+    /// <summary>
+    /// EXT4 compatible feature bit <c>EXT2_FEATURE_COMPAT_RESIZE_INODE</c>: the resize inode and group descriptor backups are present.
+    /// <para>EXT4 兼容特性位 <c>EXT2_FEATURE_COMPAT_RESIZE_INODE</c>：存在 resize inode 与组描述符备份。</para>
+    /// </summary>
+    private const uint FeatureCompatResizeInodeBit = 0x0010;
+
+    /// <summary>
+    /// EXT4 compatible feature bit <c>EXT2_FEATURE_COMPAT_DIR_INDEX</c>: directories may use hashed b-tree (HTree) indexes.
+    /// <para>EXT4 兼容特性位 <c>EXT2_FEATURE_COMPAT_DIR_INDEX</c>：目录可使用哈希 B 树（HTree）索引。</para>
+    /// </summary>
+    private const uint FeatureCompatDirIndex = 0x0020;
+
+    /// <summary>
+    /// EXT4 incompatible feature bit <c>EXT2_FEATURE_INCOMPAT_FILETYPE</c>: directory entries carry an explicit file type byte.
+    /// <para>EXT4 不兼容特性位 <c>EXT2_FEATURE_INCOMPAT_FILETYPE</c>：目录项携带显式文件类型字节。</para>
+    /// </summary>
+    private const uint FeatureIncompatFileType = 0x0002;
+
+    /// <summary>
+    /// EXT4 incompatible feature bit <c>EXT3_FEATURE_INCOMPAT_EXTENTS</c>: inodes store extents instead of indirect blocks.
+    /// <para>EXT4 不兼容特性位 <c>EXT3_FEATURE_INCOMPAT_EXTENTS</c>：inode 使用 extent 树代替间接块。</para>
+    /// </summary>
+    private const uint FeatureIncompatExtents = 0x0040;
+
+    /// <summary>
+    /// EXT4 incompatible feature bit <c>EXT4_FEATURE_INCOMPAT_64BIT</c>: group descriptor block addresses are 64 bits wide.
+    /// <para>EXT4 不兼容特性位 <c>EXT4_FEATURE_INCOMPAT_64BIT</c>：组描述符块地址为 64 位宽。</para>
+    /// </summary>
+    private const uint FeatureIncompat64Bit = 0x0080;
+
+    /// <summary>
+    /// EXT4 incompatible feature bit <c>EXT4_FEATURE_INCOMPAT_FLEX_BG</c>: data, inode and bitmap blocks of adjacent groups may share one flexible block group.
+    /// <para>EXT4 不兼容特性位 <c>EXT4_FEATURE_INCOMPAT_FLEX_BG</c>：相邻组的元数据块可归属同一个弹性块组。</para>
+    /// </summary>
+    private const uint FeatureIncompatFlexBg = 0x0200;
+
+    /// <summary>
+    /// EXT4 incompatible feature bit <c>EXT4_FEATURE_INCOMPAT_CASEFOLD</c>: directory entries use filename case-insensitive hashing.
+    /// <para>EXT4 不兼容特性位 <c>EXT4_FEATURE_INCOMPAT_CASEFOLD</c>：目录项使用文件名大小写不敏感哈希。</para>
+    /// </summary>
+    private const uint FeatureIncompatCasefold = 0x20000;
+
+    /// <summary>
+    /// EXT4 read-only compatible feature bit <c>EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER</c>: superblock and group descriptors are backed up only in select block groups.
+    /// <para>EXT4 只读兼容特性位 <c>EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER</c>：超级块与组描述符仅在部分块组备份。</para>
+    /// </summary>
+    private const uint FeatureRoCompatSparseSuper = 0x0001;
+
+    /// <summary>
+    /// EXT4 read-only compatible feature bit <c>EXT2_FEATURE_RO_COMPAT_LARGE_FILE</c>: files larger than 2 GiB are supported.
+    /// <para>EXT4 只读兼容特性位 <c>EXT2_FEATURE_RO_COMPAT_LARGE_FILE</c>：支持超过 2 GiB 的文件。</para>
+    /// </summary>
+    private const uint FeatureRoCompatLargeFile = 0x0002;
+
+    /// <summary>
+    /// EXT4 read-only compatible feature bit <c>EXT4_FEATURE_RO_COMPAT_HUGE_FILE</c>: inode block counts are stored in 48-bit sector units.
+    /// <para>EXT4 只读兼容特性位 <c>EXT4_FEATURE_RO_COMPAT_HUGE_FILE</c>：inode 块计数以 48 位扇区单位存储。</para>
+    /// </summary>
+    private const uint FeatureRoCompatHugeFile = 0x0008;
+
+    /// <summary>
+    /// EXT4 read-only compatible feature bit <c>EXT4_FEATURE_RO_COMPAT_DIR_NLINK</c>: directory i_links_count is fixed at 1 instead of the entry count.
+    /// <para>EXT4 只读兼容特性位 <c>EXT4_FEATURE_RO_COMPAT_DIR_NLINK</c>：目录的 i_links_count 固定为 1 而非子目录数。</para>
+    /// </summary>
+    private const uint FeatureRoCompatDirNlink = 0x0020;
+
+    /// <summary>
+    /// EXT4 read-only compatible feature bit <c>EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE</c>: inodes carry extra on-disk fields beyond the 128-byte base.
+    /// <para>EXT4 只读兼容特性位 <c>EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE</c>：inode 在 128 字节基础布局之外携带额外磁盘字段。</para>
+    /// </summary>
+    private const uint FeatureRoCompatExtraIsize = 0x0040;
+
+    /// <summary>
+    /// EXT4 read-only compatible feature bit <c>EXT4_FEATURE_RO_COMPAT_METADATA_CSUM</c>: metadata blocks carry CRC32c checksums (implies gdt_csum and unshare_tables).
+    /// <para>EXT4 只读兼容特性位 <c>EXT4_FEATURE_RO_COMPAT_METADATA_CSUM</c>：元数据块携带 CRC32c 校验和（隐含 gdt_csum 与 unshare_tables）。</para>
+    /// </summary>
+    private const uint FeatureRoCompatMetadataChecksum = 0x0400;
+
+    /// <summary>
+    /// EXT4 read-only compatible feature bit <c>EXT4_FEATURE_RO_COMPAT_READONLY</c>: the filesystem must be mounted read-only.
+    /// <para>EXT4 只读兼容特性位 <c>EXT4_FEATURE_RO_COMPAT_READONLY</c>：文件系统必须以只读方式挂载。</para>
+    /// </summary>
+    private const uint FeatureRoCompatReadOnly = 0x1000;
 
     private const int SbFeatureIncompat = 0x60;
     private const int SbFeatureRoCompat = 0x64;
@@ -221,7 +313,7 @@ public sealed partial class Ext4Builder
                 sink.Dispose();
             }
 
-            File.Move(temporaryPath, fullOutputPath, overwrite: true);
+            AtomicPublish.Publish(temporaryPath, fullOutputPath);
         }
         finally
         {
@@ -820,13 +912,13 @@ public sealed partial class Ext4Builder
         {
             WriteU32(superblock, SbFeatureRoCompat, BinaryPrimitives.ReadUInt32LittleEndian(superblock.AsSpan(SbFeatureRoCompat)) | FeatureRoCompatProject);
         }
-        WriteU32(superblock, SbChecksum, ComputeCrc32(superblock.AsSpan(0, SbChecksum), uint.MaxValue));
+        WriteU32(superblock, SbChecksum, ComputeCrc32(superblock.AsSpan(0, SbChecksum), Crc32c.InitialSeed));
         WriteAt(output, baseOffset, 1024, superblock, superblock.Length);
 
         foreach (var bg in BackupSuperblockGroups(groupCount))
         {
             WriteU16(superblock, SbBlockGroupNr, checked((ushort)bg));
-            WriteU32(superblock, SbChecksum, ComputeCrc32(superblock.AsSpan(0, SbChecksum), 0xFFFF_FFFF));
+            WriteU32(superblock, SbChecksum, ComputeCrc32(superblock.AsSpan(0, SbChecksum), Crc32c.InitialSeed));
             WriteAt(output, baseOffset, (long)bg * blocksPerGroup * blockSize, superblock, superblock.Length);
         }
 
@@ -1423,7 +1515,7 @@ public sealed partial class Ext4Builder
         block[endCap + 6] = 0x00;
         block[endCap + 7] = 0xDE;
 
-        var crc = ComputeCrc32(uuid, 0xFFFF_FFFF);
+        var crc = ComputeCrc32(uuid, Crc32c.InitialSeed);
         Span<byte> le = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(le, dirInode);
         crc = ComputeCrc32Continue(crc, le);
@@ -1434,7 +1526,14 @@ public sealed partial class Ext4Builder
     }
 
     private static byte FileTypeOf(Node node)
-        => node.IsDirectory ? Ext4DirectoryEntry.TypeDirectory : node.IsSymlink ? Ext4DirectoryEntry.TypeSymlink : (byte)((node.Mode & 0xF000) switch { 0x2000 => 3, 0x6000 => 4, 0x1000 => 5, 0xC000 => 6, _ => Ext4DirectoryEntry.TypeRegular });
+        => node.IsDirectory ? Ext4DirectoryEntry.TypeDirectory : node.IsSymlink ? Ext4DirectoryEntry.TypeSymlink : (byte)((node.Mode & InodeTypeBits.FormatMask) switch
+        {
+            InodeTypeBits.CharDevice => 3,
+            InodeTypeBits.BlockDevice => 4,
+            InodeTypeBits.Fifo => 5,
+            InodeTypeBits.Socket => 6,
+            _ => Ext4DirectoryEntry.TypeRegular
+        });
 
     private static void WriteSuperblock(
         Span<byte> block, int blockSize, int inodeSize, uint inodesPerGroup, long totalBlocks, long usedBlocks, int usedInodes, byte[] uuid, int blocksPerGroup, bool enableMetadataCsum, uint journalInum, bool hasJournal,
@@ -1475,10 +1574,13 @@ public sealed partial class Ext4Builder
         WriteU16(block, 0x58, (ushort)inodeSize);
         WriteU16(block, SbBlockGroupNr, 0);
 
-        WriteU32(block, 0x5C, 0x0038u | (hasJournal ? FeatureCompatHasJournal : 0u));
-        WriteU32(block, SbFeatureIncompat, 0x02C2u | (casefoldEncoding is not null ? 0x20000u : 0u));
-        WriteU32(block, SbFeatureRoCompat, 0x006Bu | (enableMetadataCsum ? 0x0400u : 0u)
-            | (readOnly ? 0x1000u : 0u) | (sharedBlocks ? FeatureRoCompatSharedBlocks : 0u));
+        WriteU32(block, 0x5C, FeatureCompatExtAttr | FeatureCompatResizeInodeBit | FeatureCompatDirIndex | (hasJournal ? FeatureCompatHasJournal : 0u));
+        WriteU32(block, SbFeatureIncompat, FeatureIncompatFileType | FeatureIncompatExtents | FeatureIncompat64Bit | FeatureIncompatFlexBg
+            | (casefoldEncoding is not null ? FeatureIncompatCasefold : 0u));
+        WriteU32(block, SbFeatureRoCompat, FeatureRoCompatSparseSuper | FeatureRoCompatLargeFile | FeatureRoCompatHugeFile
+            | FeatureRoCompatDirNlink | FeatureRoCompatExtraIsize
+            | (enableMetadataCsum ? FeatureRoCompatMetadataChecksum : 0u)
+            | (readOnly ? FeatureRoCompatReadOnly : 0u) | (sharedBlocks ? FeatureRoCompatSharedBlocks : 0u));
         Encoding.UTF8.GetBytes(volumeName, block[0x78..0x88]);
         uuid.AsSpan().CopyTo(block[0x68..0x78]);
 
@@ -1515,7 +1617,7 @@ public sealed partial class Ext4Builder
             WriteU16(block, 0x27E, casefoldEncodingFlags);
         }
 
-        var crc = ComputeCrc32(block[..SbChecksum], 0xFFFF_FFFF);
+        var crc = ComputeCrc32(block[..SbChecksum], Crc32c.InitialSeed);
         WriteU32(block, SbChecksum, crc);
     }
 
@@ -1682,7 +1784,7 @@ public sealed partial class Ext4Builder
             return;
         }
 
-        var seed = ComputeCrc32(uuid, 0xFFFF_FFFF);
+        var seed = ComputeCrc32(uuid, Crc32c.InitialSeed);
         var inodeBitmapCsumLength = Math.Max(1, group.InodesInGroup / 8);
         var blockCsum = ComputeCrc32(blockBitmap.AsSpan(0, Math.Max(1, blocksPerGroup / 8)), seed);
         var inodeCsum = ComputeCrc32(inodeBitmap.AsSpan(0, inodeBitmapCsumLength), seed);

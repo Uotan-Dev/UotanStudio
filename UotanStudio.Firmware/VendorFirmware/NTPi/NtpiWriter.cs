@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.VendorFirmware.NTPi;
 using UotanStudio.Firmware.VendorFirmware.NTPi.Models;
 using UotanStudio.Firmware.VendorFirmware.NTPi.Writer;
@@ -388,7 +389,7 @@ internal sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compresso
                 outputStream.Flush(flushToDisk: true);
             }
 
-            File.Move(tempOutputPath, finalOutputPath, overwrite: true);
+            AtomicPublish.Publish(tempOutputPath, finalOutputPath);
         }
         catch
         {

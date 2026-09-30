@@ -818,7 +818,7 @@ public sealed class RepackMetadata
                 if (output.Length > MaximumBytes) throw new InvalidDataException("Repack metadata exceeds 32 MiB.");
             }
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(temporary, path, overwrite: true);
+            AtomicPublish.Publish(temporary, path);
         }
         finally { File.Delete(temporary); }
     }

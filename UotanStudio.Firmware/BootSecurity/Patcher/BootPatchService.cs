@@ -206,7 +206,7 @@ public sealed class BootPatchService
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
             await File.WriteAllBytesAsync(temp, packed, cancellationToken).ConfigureAwait(false);
-            File.Move(temp, outputPath, overwrite: true);
+            AtomicPublish.Publish(temp, outputPath);
         }
         finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
         options.Progress?.Report(1d);

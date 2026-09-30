@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.FileSystem.Native;
 
@@ -376,7 +377,7 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
             RequireSuccess("make_ext4fs", result);
             await RequireExt4Superblock(temporary, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(temporary, destination, overwrite: true);
+            AtomicPublish.Publish(temporary, destination);
             return result;
         }
         finally
@@ -524,7 +525,7 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
             RequireSuccess("e2fsdroid", result);
             await RequireExt4Superblock(temporary, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(temporary, destination, overwrite: true);
+            AtomicPublish.Publish(temporary, destination);
             return result;
         }
         finally

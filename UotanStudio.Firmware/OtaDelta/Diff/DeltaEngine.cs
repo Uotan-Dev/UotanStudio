@@ -88,7 +88,7 @@ public static class DeltaEngine
                 patchLength = generate ? output.Length : second.Length;
             }
             ct.ThrowIfCancellationRequested();
-            File.Move(temporaryPath, destination, overwrite: true);
+            AtomicPublish.Publish(temporaryPath, destination);
             return new DeltaResult(true, sourceLength, patchLength, null);
         }
         catch (OperationCanceledException) { throw; }

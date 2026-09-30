@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Checksums;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Metadata;
@@ -124,7 +125,7 @@ public sealed partial class ErofsBuilder
                 sink.Dispose();
             }
 
-            File.Move(temporaryPath, fullOutputPath, overwrite: true);
+            AtomicPublish.Publish(temporaryPath, fullOutputPath);
         }
         finally
         {

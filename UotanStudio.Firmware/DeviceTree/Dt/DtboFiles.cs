@@ -509,7 +509,7 @@ public static partial class DtboFormat
             using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
                 write(output);
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(temporary, path, overwrite: true);
+            AtomicPublish.Publish(temporary, path);
         }
         finally
         {

@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Security.Cryptography;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.VendorFirmware.Nb0;
 using UotanStudio.Firmware.VendorFirmware.Nb0.Models;
 
@@ -276,7 +277,7 @@ public sealed class Nb0Extractor(int bufferSize = Nb0Extractor.DefaultBufferSize
                 {
                     var md5 = ExtractEntryToFile(stream, entry, tempPath);
                     VerifyComputedMd5(entry, i, md5, metadata);
-                    File.Move(tempPath, outPath, overwrite: true);
+                    AtomicPublish.Publish(tempPath, outPath);
                     result.ExtractedFileCount++;
                 }
                 finally
@@ -378,7 +379,7 @@ public sealed class Nb0Extractor(int bufferSize = Nb0Extractor.DefaultBufferSize
                 {
                     var md5 = await ExtractEntryToFileAsync(stream, entry, tempPath, cancellationToken).ConfigureAwait(false);
                     VerifyComputedMd5(entry, i, md5, metadata);
-                    File.Move(tempPath, outPath, overwrite: true);
+                    AtomicPublish.Publish(tempPath, outPath);
                     result.ExtractedFileCount++;
                 }
                 finally

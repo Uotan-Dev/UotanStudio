@@ -78,7 +78,7 @@ internal static class DatReader
                 Execute(list, newData, patch, output, progress, cancellationToken);
             }
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(temporary, destination, overwrite: true);
+            AtomicPublish.Publish(temporary, destination);
         }
         finally { File.Delete(temporary); }
     }

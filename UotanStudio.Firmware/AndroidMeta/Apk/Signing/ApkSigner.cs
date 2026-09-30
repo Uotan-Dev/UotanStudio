@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using UotanStudio.Firmware.AndroidMeta.Apk;
+using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.AndroidMeta.Apk.Signing;
 
@@ -111,7 +112,7 @@ public static class ApkSigner
                 }
 
                 cancellationToken.ThrowIfCancellationRequested();
-                File.Move(tempPath, outputApk, overwrite: true);
+                AtomicPublish.Publish(tempPath, outputApk);
             }
             finally
             {
