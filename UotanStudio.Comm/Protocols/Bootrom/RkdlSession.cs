@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -19,6 +20,7 @@ namespace UotanStudio.Comm.Protocols.Bootrom;
 public sealed partial class RkdlSession : IProtocolSession
 {
     private readonly int _timeoutMs;
+    private readonly PhysicalDeviceIdentity? _physicalIdentity;
     private bool _disposed;
 
     /// <summary>
@@ -38,6 +40,9 @@ public sealed partial class RkdlSession : IProtocolSession
     {
         Transport = transport ?? throw new ArgumentNullException(nameof(transport));
         _timeoutMs = timeoutMs ?? RkdlConstants.DefaultTimeoutMs;
+        _physicalIdentity = UsbSession?.DeviceInfo is { } deviceInfo
+            ? PhysicalDeviceIdentity.From(deviceInfo)
+            : null;
     }
 
     /// <summary>

@@ -123,10 +123,12 @@ public static class RkdlConstants
 
     /// <summary>
     /// Default budget, in milliseconds, a caller should grant the device layer to observe the
-    /// replacement endpoint after a loader download. It matches the controller bound of
+    /// replacement endpoint after a loader download. It is the default
+    /// <c>Timeout</c> of <see cref="RkdlLoaderTransitionOffer"/> and matches the controller bound of
     /// 1 millisecond through 24 hours.
-    /// <para>调用方应授予设备层去观测 loader 下载后替代端点的默认预算（毫秒）。它符合控制器
-    /// 1 毫秒至 24 小时的约束。</para>
+    /// <para>调用方应授予设备层去观测 loader 下载后替代端点的默认预算（毫秒）。它是
+    /// <see cref="RkdlLoaderTransitionOffer"/> 的默认 <c>Timeout</c>，并符合控制器 1 毫秒至 24 小时的
+    /// 约束。</para>
     /// </summary>
     public const int LoaderRelinkTimeoutMs = 30000;
 

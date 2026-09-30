@@ -94,8 +94,13 @@ public sealed partial class RkdlSession
     /// in-flight synchronous bulk transfer. <para>每个分块前检查；令牌不会打断进行中的同步批量传输。</para></param>
     /// <returns>The number of source bytes transferred, equal to <paramref name="length"/> on success.
     /// <para>成功时转出的源字节数，等于 <paramref name="length"/>。</para></returns>
-    /// <exception cref="RkdlException">The address is out of range, a bulk write was short,
-    /// or a CSW reported failure. <para>地址越界、批量写入过短或 CSW 报告失败。</para></exception>
+    /// <exception cref="RkdlException">The address is out of range, the byte length rounded up to
+    /// 512-byte sectors leaves the addressed range beyond the device geometry, the device geometry
+    /// is unusable because READ_FLASH_INFO reported an invalid sector count
+    /// (<see cref="RkdlError.FlashInfoFailed"/>), a bulk write was short, or a CSW reported
+    /// failure. <para>地址越界、字节长度向上取整为 512 字节扇区后所寻址范围超出设备几何、因
+    /// READ_FLASH_INFO 报告无效扇区数导致设备几何不可用（<see cref="RkdlError.FlashInfoFailed"/>）、
+    /// 批量写入过短或 CSW 报告失败。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="dataStream"/> is <c>null</c>.
     /// <para><paramref name="dataStream"/> 为 <c>null</c>。</para></exception>
     /// <exception cref="EndOfStreamException">The stream ended before <paramref name="length"/> bytes were read.
@@ -114,6 +119,9 @@ public sealed partial class RkdlSession
         {
             throw new ArgumentNullException(nameof(dataStream));
         }
+
+        var requiredSectors = length <= 0 ? 0L : checked((length - 1) / RkdlConstants.SectorSize + 1);
+        ValidateLbaRange(address, requiredSectors);
 
         var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(RkdlConstants.TransferChunkSize);
         try
@@ -196,8 +204,13 @@ public sealed partial class RkdlSession
     /// <returns>The number of bytes written to <paramref name="outputStream"/>, equal to
     /// <paramref name="length"/> on success. <para>写入 <paramref name="outputStream"/> 的字节数，
     /// 成功时等于 <paramref name="length"/>。</para></returns>
-    /// <exception cref="RkdlException">The address is out of range, the device signaled EOF early,
-    /// or a CSW reported failure. <para>地址越界、设备提前报告 EOF 或 CSW 报告失败。</para></exception>
+    /// <exception cref="RkdlException">The address is out of range, the byte length rounded up to
+    /// 512-byte sectors leaves the addressed range beyond the device geometry, the device geometry
+    /// is unusable because READ_FLASH_INFO reported an invalid sector count
+    /// (<see cref="RkdlError.FlashInfoFailed"/>), the device signaled EOF early, or a CSW reported
+    /// failure. <para>地址越界、字节长度向上取整为 512 字节扇区后所寻址范围超出设备几何、因
+    /// READ_FLASH_INFO 报告无效扇区数导致设备几何不可用（<see cref="RkdlError.FlashInfoFailed"/>）、
+    /// 设备提前报告 EOF 或 CSW 报告失败。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="outputStream"/> is <c>null</c>.
     /// <para><paramref name="outputStream"/> 为 <c>null</c>。</para></exception>
     /// <exception cref="ObjectDisposedException">The session was disposed.
@@ -214,6 +227,9 @@ public sealed partial class RkdlSession
         {
             throw new ArgumentNullException(nameof(outputStream));
         }
+
+        var requiredSectors = length <= 0 ? 0L : checked((length - 1) / RkdlConstants.SectorSize + 1);
+        ValidateLbaRange(address, requiredSectors);
 
         var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(RkdlConstants.TransferChunkSize);
         try

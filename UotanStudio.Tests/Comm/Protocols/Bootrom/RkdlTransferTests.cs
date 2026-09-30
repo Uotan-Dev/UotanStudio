@@ -20,6 +20,10 @@ public class RkdlTransferTests
 
     private const byte OpcodeWriteLba = 0x15;
 
+    private const byte OpcodeReadLba = 0x14;
+
+    private const byte OpcodeEraseLba = 0x25;
+
     private const byte OpcodeEraseNormal = 0x06;
 
     private const byte OpcodeReadFlashInfo = 0x1A;
@@ -28,7 +32,7 @@ public class RkdlTransferTests
     public void WriteLba_ShortReadingSourceStream_DeliversExactImageBytesInOneChunk()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var transport = new FakeRkdlDeviceTransport();
+        var transport = new FakeRkdlDeviceTransport { FlashInfoSectorCount = 0x8000 };
         using var session = new RkdlSession(transport, timeoutMs: 5000);
         var image = BuildPatternedImage(4096);
         using var source = new ShortReadStream(image, maximumRead: 511);
@@ -39,8 +43,7 @@ public class RkdlTransferTests
         Assert.True(source.ReadCalls > image.Length / 511, $"expected repeated short reads, got {source.ReadCalls}");
         Assert.Equal(image, Assert.Single(transport.OutPayloads));
 
-        var cbw = Assert.Single(transport.Cbws);
-        Assert.Equal(OpcodeWriteLba, cbw.Opcode);
+        var cbw = Assert.Single(transport.Cbws, c => c.Opcode == OpcodeWriteLba);
         Assert.Equal(0x6000u, cbw.Address);
         Assert.Equal(8, cbw.SectorLength);
         Assert.Equal((uint)image.Length, cbw.TransferLength);
@@ -68,18 +71,19 @@ public class RkdlTransferTests
         Array.Copy(image, chunkSize, expectedFinalChunk, 0, 3000);
         Assert.Equal(expectedFinalChunk, transport.OutPayloads[1]);
 
-        Assert.Equal(2, transport.Cbws.Count);
-        Assert.Equal(0x10u, transport.Cbws[0].Address);
-        Assert.Equal(128, transport.Cbws[0].SectorLength);
-        Assert.Equal(0x10u + 128u, transport.Cbws[1].Address);
-        Assert.Equal(6, transport.Cbws[1].SectorLength);
+        var writes = transport.Cbws.Where(c => c.Opcode == OpcodeWriteLba).ToArray();
+        Assert.Equal(2, writes.Length);
+        Assert.Equal(0x10u, writes[0].Address);
+        Assert.Equal(128, writes[0].SectorLength);
+        Assert.Equal(0x10u + 128u, writes[1].Address);
+        Assert.Equal(6, writes[1].SectorLength);
     }
 
     [Fact]
     public void WriteLba_FullyAlignedSourceStream_BehavesAsOneSectorMultipleChunk()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var transport = new FakeRkdlDeviceTransport();
+        var transport = new FakeRkdlDeviceTransport { FlashInfoSectorCount = 0x8000 };
         using var session = new RkdlSession(transport, timeoutMs: 5000);
         var image = BuildPatternedImage(4096);
         using var source = new MemoryStream(image, writable: false);
@@ -90,7 +94,7 @@ public class RkdlTransferTests
         Assert.Equal(image.Length, written);
         Assert.Equal([4096L], progress.Reports);
         Assert.Equal(image, Assert.Single(transport.OutPayloads));
-        Assert.Equal(8, Assert.Single(transport.Cbws).SectorLength);
+        Assert.Equal(8, Assert.Single(transport.Cbws, c => c.Opcode == OpcodeWriteLba).SectorLength);
     }
 
     [Fact]
@@ -109,7 +113,7 @@ public class RkdlTransferTests
         Assert.Equal(2 * SectorSize, payload.Length);
         Assert.Equal(image, payload[..image.Length]);
         Assert.All(payload[image.Length..], b => Assert.Equal(0, b));
-        Assert.Equal(2, Assert.Single(transport.Cbws).SectorLength);
+        Assert.Equal(2, Assert.Single(transport.Cbws, c => c.Opcode == OpcodeWriteLba).SectorLength);
     }
 
     [Fact]
@@ -125,9 +129,8 @@ public class RkdlTransferTests
             () => session.WriteLBA(0, source, 4096, null, cancellationToken));
 
         Assert.Contains("2048/4096", exception.Message);
-        Assert.Empty(transport.Cbws);
+        Assert.DoesNotContain(transport.Cbws, c => c.Opcode == OpcodeWriteLba);
         Assert.Empty(transport.OutPayloads);
-        Assert.Empty(transport.Writes);
     }
 
     [Fact]
@@ -150,7 +153,7 @@ public class RkdlTransferTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var transport = new FakeRkdlDeviceTransport
         {
-            CswStatusResolver = cbw => cbw.Address == 0x10 ? (byte)0 : (byte)1
+            CswStatusResolver = cbw => cbw.Opcode != OpcodeWriteLba || cbw.Address == 0x10 ? (byte)0 : (byte)1
         };
         using var session = new RkdlSession(transport, timeoutMs: 5000);
         var image = BuildPatternedImage(RkdlConstants.TransferChunkSize + SectorSize);
@@ -160,7 +163,7 @@ public class RkdlTransferTests
             () => session.WriteLBA(0x10, source, image.Length, null, cancellationToken));
 
         Assert.Equal(RkdlError.WriteFailed, exception.ErrorCode);
-        Assert.Equal(2, transport.Cbws.Count);
+        Assert.Equal(2, transport.Cbws.Count(c => c.Opcode == OpcodeWriteLba));
         Assert.Equal(2, transport.OutPayloads.Count);
     }
 
@@ -205,8 +208,7 @@ public class RkdlTransferTests
 
         Assert.Equal(1000, read);
         Assert.Equal(flash.AsSpan(2 * SectorSize, 1000).ToArray(), output.ToArray());
-        var cbw = Assert.Single(transport.Cbws);
-        Assert.Equal(0x14, cbw.Opcode);
+        var cbw = Assert.Single(transport.Cbws, c => c.Opcode == OpcodeReadLba);
         Assert.Equal(2u, cbw.Address);
         Assert.Equal(2, cbw.SectorLength);
         Assert.Equal((uint)(2 * SectorSize), cbw.TransferLength);
@@ -411,6 +413,155 @@ public class RkdlTransferTests
         Assert.Equal((ushort)3, current);
         Assert.Equal((ushort)16, total);
         Assert.Equal(0x00, Assert.Single(transport.Cbws).Opcode);
+    }
+
+    [Fact]
+    public void WriteLba_RangeBeyondDeviceGeometry_ThrowsWithoutWriteLbaCommand()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var transport = new FakeRkdlDeviceTransport();
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+        using var source = new MemoryStream(BuildPatternedImage(8192), writable: false);
+
+        var exception = Assert.Throws<RkdlException>(
+            () => session.WriteLBA(0x1FF8, source, 8192, null, cancellationToken));
+
+        Assert.Equal(RkdlError.InvalidParameter, exception.ErrorCode);
+        Assert.DoesNotContain(transport.Cbws, c => c.Opcode == OpcodeWriteLba);
+        Assert.Empty(transport.OutPayloads);
+    }
+
+    [Fact]
+    public void ReadLba_RangeBeyondDeviceGeometry_ThrowsWithoutReadLbaCommand()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var transport = new FakeRkdlDeviceTransport { FlashContents = BuildPatternedImage(8192) };
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+        using var output = new MemoryStream();
+
+        var exception = Assert.Throws<RkdlException>(
+            () => session.ReadLBA(0x1FF8, output, 8192, null, cancellationToken));
+
+        Assert.Equal(RkdlError.InvalidParameter, exception.ErrorCode);
+        Assert.DoesNotContain(transport.Cbws, c => c.Opcode == OpcodeReadLba);
+        Assert.Empty(output.ToArray());
+    }
+
+    [Fact]
+    public void EraseLba_RangeBeyondDeviceGeometry_ThrowsWithoutEraseLbaCommand()
+    {
+        var transport = new FakeRkdlDeviceTransport();
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+
+        var exception = Assert.Throws<RkdlException>(() => session.EraseLBA(0x1FF0, 32));
+
+        Assert.Equal(RkdlError.InvalidParameter, exception.ErrorCode);
+        Assert.DoesNotContain(transport.Cbws, c => c.Opcode == OpcodeEraseLba);
+    }
+
+    [Fact]
+    public void WriteLba_UnusableFlashGeometry_FailsClosedWithFlashInfoFailed()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var transport = new FakeRkdlDeviceTransport { FlashInfoSectorCount = 0 };
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+        using var source = new MemoryStream(BuildPatternedImage(SectorSize), writable: false);
+
+        var exception = Assert.Throws<RkdlException>(
+            () => session.WriteLBA(0, source, SectorSize, null, cancellationToken));
+
+        Assert.Equal(RkdlError.FlashInfoFailed, exception.ErrorCode);
+        Assert.DoesNotContain(transport.Cbws, c => c.Opcode == OpcodeWriteLba);
+    }
+
+    [Fact]
+    public void ReadLba_UnusableFlashGeometry_FailsClosedWithFlashInfoFailed()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var transport = new FakeRkdlDeviceTransport { FlashInfoSectorCount = 0 };
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+        using var output = new MemoryStream();
+
+        var exception = Assert.Throws<RkdlException>(
+            () => session.ReadLBA(0, output, SectorSize, null, cancellationToken));
+
+        Assert.Equal(RkdlError.FlashInfoFailed, exception.ErrorCode);
+        Assert.DoesNotContain(transport.Cbws, c => c.Opcode == OpcodeReadLba);
+    }
+
+    [Fact]
+    public void EraseLba_UnusableFlashGeometry_FailsClosedWithFlashInfoFailed()
+    {
+        var transport = new FakeRkdlDeviceTransport { FlashInfoSectorCount = 0 };
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+
+        var exception = Assert.Throws<RkdlException>(() => session.EraseLBA(0, 1));
+
+        Assert.Equal(RkdlError.FlashInfoFailed, exception.ErrorCode);
+        Assert.DoesNotContain(transport.Cbws, c => c.Opcode == OpcodeEraseLba);
+    }
+
+    [Fact]
+    public void WriteLba_PartialTrailingSectorPastLastUsableSector_RoundsUpAndThrows()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var transport = new FakeRkdlDeviceTransport();
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+        using var source = new MemoryStream(BuildPatternedImage(7 * SectorSize + 1), writable: false);
+
+        var exception = Assert.Throws<RkdlException>(
+            () => session.WriteLBA(0x1FF9, source, 7 * SectorSize + 1, null, cancellationToken));
+
+        Assert.Equal(RkdlError.InvalidParameter, exception.ErrorCode);
+        Assert.DoesNotContain(transport.Cbws, c => c.Opcode == OpcodeWriteLba);
+    }
+
+    [Fact]
+    public void WriteLba_LengthEndingExactlyAtLastUsableSector_IsAccepted()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var transport = new FakeRkdlDeviceTransport();
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+        var image = BuildPatternedImage(7 * SectorSize);
+        using var source = new MemoryStream(image, writable: false);
+
+        var written = session.WriteLBA(0x1FF9, source, image.Length, null, cancellationToken);
+
+        Assert.Equal(image.Length, written);
+        var cbw = Assert.Single(transport.Cbws, c => c.Opcode == OpcodeWriteLba);
+        Assert.Equal(0x1FF9u, cbw.Address);
+        Assert.Equal(7, cbw.SectorLength);
+    }
+
+    [Fact]
+    public void ReadLba_PartialTrailingByteRoundsUpPastGeometry_ThrowsWithoutReadLbaCommand()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var transport = new FakeRkdlDeviceTransport { FlashContents = BuildPatternedImage(8192) };
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+        using var output = new MemoryStream();
+
+        var exception = Assert.Throws<RkdlException>(
+            () => session.ReadLBA(0x1FF9, output, 7 * SectorSize + 1, null, cancellationToken));
+
+        Assert.Equal(RkdlError.InvalidParameter, exception.ErrorCode);
+        Assert.DoesNotContain(transport.Cbws, c => c.Opcode == OpcodeReadLba);
+    }
+
+    [Fact]
+    public void WriteLba_ConsecutiveTransfers_QueryFlashGeometryOnce()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var transport = new FakeRkdlDeviceTransport();
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+        using var first = new MemoryStream(BuildPatternedImage(SectorSize), writable: false);
+        using var second = new MemoryStream(BuildPatternedImage(SectorSize), writable: false);
+
+        session.WriteLBA(0, first, SectorSize, null, cancellationToken);
+        session.WriteLBA(1, second, SectorSize, null, cancellationToken);
+
+        Assert.Equal(1, transport.Cbws.Count(c => c.Opcode == OpcodeReadFlashInfo));
+        Assert.Equal(2, transport.Cbws.Count(c => c.Opcode == OpcodeWriteLba));
     }
 
     private static byte[] BuildPatternedImage(int length)

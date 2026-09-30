@@ -1,3 +1,7 @@
+using UsbDeviceInfo = UotanStudio.Comm.Transports.Usb.Abstractions.UsbDeviceInfo;
+using UsbEndpointInfo = UotanStudio.Comm.Transports.Usb.Abstractions.UsbEndpointInfo;
+using UsbInterfaceInfo = UotanStudio.Comm.Transports.Usb.Abstractions.UsbInterfaceInfo;
+
 namespace UotanStudio.Comm.Contracts;
 
 /// <summary>
@@ -117,11 +121,14 @@ public sealed record DeviceEndpoint
     /// </summary>
     /// <value>
     /// A copy of the native USB device information, or <see langword="null"/>. Both reads and
-    /// inits copy, so the stored instance is never shared with the caller.
+    /// inits copy, so the stored instance is never shared with the caller. The copies still compare
+    /// by content through <see cref="Equals(DeviceEndpoint?)"/>, so the defensive copy cannot make
+    /// two otherwise identical endpoints unequal to each other.
     /// <para>原生 USB 设备信息的副本，或 <see langword="null"/>。读取与初始化都会复制，
-    /// 因此保存的实例不会与调用方共享。</para>
+    /// 因此保存的实例不会与调用方共享。这些副本仍经 <see cref="Equals(DeviceEndpoint?)"/>
+    /// 按内容比较，因此防御性副本不会使两个本应相同的端点互不相等。</para>
     /// </value>
-    public UotanStudio.Comm.Transports.Usb.Abstractions.UsbDeviceInfo? UsbInfo
+    public UsbDeviceInfo? UsbInfo
     {
         get => field is null ? null : UsbInfoCopy.Copy(field);
         init => field = value is null ? null : UsbInfoCopy.Copy(value);
@@ -138,6 +145,297 @@ public sealed record DeviceEndpoint
     /// <see cref="DeviceEndpointId"/>；相同的标识表示同一个可租用的端点。</para>
     /// </value>
     public DeviceEndpointId Id => new(Source, Transport, Address);
+
+    /// <summary>
+    /// Compares every recorded field by value, including the observed USB details.
+    /// <para>按值比较全部已记录字段，其中包含已观测的 USB 详细信息。</para>
+    /// </summary>
+    /// <remarks>
+    /// The compiler-generated record equality would compare <see cref="UsbInfo"/> by reference, and
+    /// because that property copies on both read and init two endpoints holding equal USB details
+    /// would never be equal. This implementation replaces it so that content, not object identity,
+    /// decides equivalence. Any new stored property must be added to this comparison and to
+    /// <see cref="GetHashCode"/>.
+    /// <para>编译器生成的 record 相等性会按引用比较 <see cref="UsbInfo"/>，而该属性在读取与初始化时
+    /// 都会复制，于是持有相同 USB 详细信息的两个端点永远不会相等。本实现取代了它，由内容而非对象标识
+    /// 决定等价性。任何新增的已存储字段都必须同时加入此比较以及 <see cref="GetHashCode"/>。</para>
+    /// </remarks>
+    /// <param name="other">
+    /// The endpoint to compare with this instance, or <see langword="null"/>.
+    /// <para>与本实例比较的端点，或 <see langword="null"/>。</para>
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when every recorded field of the two endpoints carries the same value;
+    /// otherwise <see langword="false"/>.
+    /// <para>两个端点的全部已记录字段取值都相同时为 <see langword="true"/>；否则为
+    /// <see langword="false"/>。</para>
+    /// </returns>
+    public bool Equals(DeviceEndpoint? other)
+    {
+        if (other is null)
+        {
+            return false;
+        }
+
+        return Source == other.Source
+            && Transport == other.Transport
+            && Address == other.Address
+            && DisplayName == other.DisplayName
+            && Protocol == other.Protocol
+            && Route == other.Route
+            && State == other.State
+            && Serial == other.Serial
+            && TargetTransport == other.TargetTransport
+            && Usb == other.Usb
+            && UsbInfoEquals(UsbInfo, other.UsbInfo);
+    }
+
+    /// <summary>
+    /// Hashes the recorded content so equal endpoints always share a hash.
+    /// <para>对已记录内容计算哈希，使相等的端点始终具有相同哈希。</para>
+    /// </summary>
+    /// <returns>
+    /// The hash of the same values compared by <see cref="Equals(DeviceEndpoint?)"/>, stable across
+    /// repeated reads of <see cref="UsbInfo"/>.
+    /// <para>由 <see cref="Equals(DeviceEndpoint?)"/> 所比较的相同值得到的哈希；重复读取
+    /// <see cref="UsbInfo"/> 也不会改变它。</para>
+    /// </returns>
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Source);
+        hash.Add(Transport);
+        hash.Add(Address);
+        hash.Add(DisplayName);
+        hash.Add(Protocol);
+        hash.Add(Route);
+        hash.Add(State);
+        hash.Add(Serial);
+        hash.Add(TargetTransport);
+        hash.Add(Usb);
+        hash.Add(UsbInfoHashCode(UsbInfo));
+        return hash.ToHashCode();
+    }
+
+    /// <summary>
+    /// Compares two observed USB details by content instead of by object identity.
+    /// <para>按内容而非对象标识比较两份已观测 USB 详细信息。</para>
+    /// </summary>
+    /// <param name="left">
+    /// The first copy, or <see langword="null"/>.
+    /// <para>第一份副本，或 <see langword="null"/>。</para>
+    /// </param>
+    /// <param name="right">
+    /// The second copy, or <see langword="null"/>.
+    /// <para>第二份副本，或 <see langword="null"/>。</para>
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when both are <see langword="null"/> or every field that
+    /// <see cref="UsbInfoCopy.Copy"/> preserves matches.
+    /// <para>两者均为 <see langword="null"/>，或 <see cref="UsbInfoCopy.Copy"/> 保留的每个字段都相同
+    /// 时为 <see langword="true"/>。</para>
+    /// </returns>
+    private static bool UsbInfoEquals(UsbDeviceInfo? left, UsbDeviceInfo? right)
+    {
+        if (left is null || right is null)
+        {
+            return left is null && right is null;
+        }
+
+        return left.ApiName == right.ApiName
+            && left.SourceApiKind == right.SourceApiKind
+            && left.SourceDeviceType == right.SourceDeviceType
+            && left.DevicePath == right.DevicePath
+            && left.DeviceKey == right.DeviceKey
+            && left.SerialNumber == right.SerialNumber
+            && left.ContainerId == right.ContainerId
+            && left.PhysicalPortPath == right.PhysicalPortPath
+            && left.DeviceInstanceId == right.DeviceInstanceId
+            && left.VendorId == right.VendorId
+            && left.ProductId == right.ProductId
+            && left.InterfaceClass == right.InterfaceClass
+            && left.InterfaceSubClass == right.InterfaceSubClass
+            && left.InterfaceProtocol == right.InterfaceProtocol
+            && left.InterfaceMetadataObserved == right.InterfaceMetadataObserved
+            && left.Speed == right.Speed
+            && InterfacesEqual(left.Interfaces, right.Interfaces);
+    }
+
+    /// <summary>
+    /// Compares interface tables element by element, keeping the discovery order significant.
+    /// <para>逐元素比较接口表，并保持发现顺序的意义。</para>
+    /// </summary>
+    /// <param name="left">
+    /// The interfaces recorded on one side.
+    /// <para>一侧记录的接口列表。</para>
+    /// </param>
+    /// <param name="right">
+    /// The interfaces recorded on the other side.
+    /// <para>另一侧记录的接口列表。</para>
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when both tables hold the same interfaces in the same order.
+    /// <para>两侧以相同顺序持有相同接口时为 <see langword="true"/>。</para>
+    /// </returns>
+    private static bool InterfacesEqual(IReadOnlyList<UsbInterfaceInfo> left,
+        IReadOnlyList<UsbInterfaceInfo> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < left.Count; index++)
+        {
+            var first = left[index];
+            var second = right[index];
+            if (first.InterfaceNumber != second.InterfaceNumber
+                || first.Class != second.Class
+                || first.SubClass != second.SubClass
+                || first.Protocol != second.Protocol
+                || !EndpointsEqual(first.Endpoints, second.Endpoints))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Compares the endpoint descriptors of one interface.
+    /// <para>比较单个接口的端点描述符。</para>
+    /// </summary>
+    /// <param name="left">
+    /// The endpoints recorded on one side.
+    /// <para>一侧记录的端点列表。</para>
+    /// </param>
+    /// <param name="right">
+    /// The endpoints recorded on the other side.
+    /// <para>另一侧记录的端点列表。</para>
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when both lists hold the same descriptors in the same order.
+    /// <para>两侧以相同顺序持有相同描述符时为 <see langword="true"/>。</para>
+    /// </returns>
+    private static bool EndpointsEqual(IReadOnlyList<UsbEndpointInfo> left,
+        IReadOnlyList<UsbEndpointInfo> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < left.Count; index++)
+        {
+            var first = left[index];
+            var second = right[index];
+            if (first.EndpointAddress != second.EndpointAddress
+                || first.Attributes != second.Attributes
+                || first.MaxPacketSize != second.MaxPacketSize
+                || first.Interval != second.Interval)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Hashes exactly the fields <see cref="UsbInfoEquals"/> compares.
+    /// <para>只对 <see cref="UsbInfoEquals"/> 所比较的字段计算哈希。</para>
+    /// </summary>
+    /// <param name="info">
+    /// The USB details of this endpoint, or <see langword="null"/>.
+    /// <para>本端点的 USB 详细信息，或 <see langword="null"/>。</para>
+    /// </param>
+    /// <returns>
+    /// A content hash that is identical for equal USB details.
+    /// <para>相同 USB 详细信息得到相同的内容哈希。</para>
+    /// </returns>
+    private static int UsbInfoHashCode(UsbDeviceInfo? info)
+    {
+        if (info is null)
+        {
+            return 0;
+        }
+
+        var hash = new HashCode();
+        hash.Add(info.ApiName);
+        hash.Add(info.SourceApiKind);
+        hash.Add(info.SourceDeviceType);
+        hash.Add(info.DevicePath);
+        hash.Add(info.DeviceKey);
+        hash.Add(info.SerialNumber);
+        hash.Add(info.ContainerId);
+        hash.Add(info.PhysicalPortPath);
+        hash.Add(info.DeviceInstanceId);
+        hash.Add(info.VendorId);
+        hash.Add(info.ProductId);
+        hash.Add(info.InterfaceClass);
+        hash.Add(info.InterfaceSubClass);
+        hash.Add(info.InterfaceProtocol);
+        hash.Add(info.InterfaceMetadataObserved);
+        hash.Add(info.Speed);
+        hash.Add(InterfacesHashCode(info.Interfaces));
+        return hash.ToHashCode();
+    }
+
+    /// <summary>
+    /// Hashes an interface table in discovery order.
+    /// <para>按发现顺序对接口表计算哈希。</para>
+    /// </summary>
+    /// <param name="interfaces">
+    /// The interfaces recorded for the device.
+    /// <para>该设备记录的接口列表。</para>
+    /// </param>
+    /// <returns>
+    /// A content hash that is identical for equal interface tables.
+    /// <para>相同的接口表得到相同的内容哈希。</para>
+    /// </returns>
+    private static int InterfacesHashCode(IReadOnlyList<UsbInterfaceInfo> interfaces)
+    {
+        var hash = new HashCode();
+        hash.Add(interfaces.Count);
+        foreach (var iface in interfaces)
+        {
+            hash.Add(iface.InterfaceNumber);
+            hash.Add(iface.Class);
+            hash.Add(iface.SubClass);
+            hash.Add(iface.Protocol);
+            hash.Add(EndpointsHashCode(iface.Endpoints));
+        }
+
+        return hash.ToHashCode();
+    }
+
+    /// <summary>
+    /// Hashes the endpoint descriptors of one interface in discovery order.
+    /// <para>按发现顺序对单个接口的端点描述符计算哈希。</para>
+    /// </summary>
+    /// <param name="endpoints">
+    /// The endpoints recorded for the interface.
+    /// <para>该接口记录的端点列表。</para>
+    /// </param>
+    /// <returns>
+    /// A content hash that is identical for equal endpoint lists.
+    /// <para>相同的端点列表得到相同的内容哈希。</para>
+    /// </returns>
+    private static int EndpointsHashCode(IReadOnlyList<UsbEndpointInfo> endpoints)
+    {
+        var hash = new HashCode();
+        hash.Add(endpoints.Count);
+        foreach (var endpoint in endpoints)
+        {
+            hash.Add(endpoint.EndpointAddress);
+            hash.Add(endpoint.Attributes);
+            hash.Add(endpoint.MaxPacketSize);
+            hash.Add(endpoint.Interval);
+        }
+
+        return hash.ToHashCode();
+    }
 }
 
 /// <summary>

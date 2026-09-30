@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Text;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Transports.Abstractions;
@@ -267,7 +268,172 @@ public class RkdlLoaderTests
         Assert.Equal([4096, 4096, 810], usbSession.ControlTransfers.Select(t => t.Setup.Length).ToArray());
     }
 
-    private static byte[] BuildLoaderImage(bool rc4Enabled)
+    [Fact]
+    public void DownloadBootLoader_DataDelayOneMillisecondAboveBound_ThrowsBeforeAnyDeviceRequest()
+    {
+        var usbSession = new FakeRkdlUsbSession();
+        var transport = new UsbDeviceTransport(usbSession);
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+        var image = BuildLoaderImage(rc4Enabled: false, dataDelay: 60_001u);
+
+        var exception = Assert.Throws<RkdlException>(() => session.DownloadBootLoader(image));
+
+        Assert.Equal(RkdlError.InvalidParameter, exception.ErrorCode);
+        Assert.Contains("60001", exception.Message);
+        Assert.Empty(usbSession.ControlTransfers);
+        Assert.Empty(usbSession.BulkWrites);
+    }
+
+    [Fact]
+    public void DownloadBootLoader_DataDelayRawUIntMaximum_ThrowsBeforeAnyDeviceRequest()
+    {
+        var usbSession = new FakeRkdlUsbSession();
+        var transport = new UsbDeviceTransport(usbSession);
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+        var image = BuildLoaderImage(rc4Enabled: false, dataDelay: uint.MaxValue);
+
+        var exception = Assert.Throws<RkdlException>(() => session.DownloadBootLoader(image));
+
+        Assert.Equal(RkdlError.InvalidParameter, exception.ErrorCode);
+        Assert.Contains("4294967295", exception.Message);
+        Assert.Empty(usbSession.ControlTransfers);
+    }
+
+    [Fact]
+    public void DownloadBootLoader_DataDelayJustAboveInt32Maximum_ThrowsRkdlExceptionNotArgumentOutOfRange()
+    {
+        var usbSession = new FakeRkdlUsbSession();
+        var transport = new UsbDeviceTransport(usbSession);
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+        var image = BuildLoaderImage(rc4Enabled: false, dataDelay: 2_147_483_648u);
+
+        var exception = Assert.Throws<RkdlException>(() => session.DownloadBootLoader(image));
+
+        Assert.Equal(RkdlError.InvalidParameter, exception.ErrorCode);
+        Assert.Contains("2147483648", exception.Message);
+        Assert.Empty(usbSession.ControlTransfers);
+    }
+
+    [Fact]
+    public void DownloadBootLoader_DataDelayZero_CompletesWithoutWaitingBeyondTheSettleWindow()
+    {
+        var usbSession = new FakeRkdlUsbSession();
+        var transport = new UsbDeviceTransport(usbSession);
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+        var image = BuildLoaderImage(rc4Enabled: false, dataDelay: 0u);
+
+        var stopwatch = Stopwatch.StartNew();
+        var total = session.DownloadBootLoader(image);
+        stopwatch.Stop();
+
+        Assert.Equal(34, total);
+        Assert.Single(usbSession.ControlTransfers);
+        Assert.True(stopwatch.Elapsed >= TimeSpan.FromMilliseconds(900), $"Only the settle window should have been waited, but the call returned after {stopwatch.ElapsedMilliseconds} ms.");
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(2500), $"A zero dwDataDelay must not add a wait beyond the settle window; elapsed was {stopwatch.ElapsedMilliseconds} ms.");
+    }
+
+    [Fact]
+    public async Task DownloadBootLoaderAsync_DataDelayEqualToBound_IsAcceptedAndAwaitedCancellably()
+    {
+        var usbSession = new FakeRkdlUsbSession();
+        var transport = new UsbDeviceTransport(usbSession);
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+        var image = BuildLoaderImage(rc4Enabled: false, dataDelay: 60_000u);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        var stopwatch = Stopwatch.StartNew();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => session.DownloadBootLoaderAsync(image, cancellation.Token));
+        stopwatch.Stop();
+
+        Assert.Single(usbSession.ControlTransfers);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5), $"The dwDataDelay equal to the bound must be awaited cancellably, not rejected or slept through; elapsed was {stopwatch.ElapsedMilliseconds} ms.");
+    }
+
+    [Fact]
+    public async Task DownloadBootLoaderAsync_CancellationDuringDataDelay_ThrowsWithinTheDelayWindow()
+    {
+        var usbSession = new FakeRkdlUsbSession();
+        var transport = new UsbDeviceTransport(usbSession);
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+        var image = BuildLoaderImage(rc4Enabled: false, dataDelay: 20_000u);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+
+        var stopwatch = Stopwatch.StartNew();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => session.DownloadBootLoaderAsync(image, cancellation.Token));
+        stopwatch.Stop();
+
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5), $"Cancellation must abort inside the 20000 ms delay window; elapsed was {stopwatch.ElapsedMilliseconds} ms.");
+        Assert.Single(usbSession.ControlTransfers);
+    }
+
+    [Fact]
+    public void CreateLoaderTransitionOffer_SerialBearingUsbDevice_CarriesPhysicalIdentityAndRelinkTimeout()
+    {
+        var usbSession = new FakeRkdlUsbSession
+        {
+            DeviceInfo = new()
+            {
+                VendorId = 0x2207,
+                ProductId = 0x350B,
+                ApiName = "fake-rkdl",
+                DevicePath = "fake://rkdl",
+                DeviceKey = "fake-rkdl-key",
+                SerialNumber = "RKLOADERTEST1",
+            }
+        };
+        var transport = new UsbDeviceTransport(usbSession);
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+
+        var offer = session.CreateLoaderTransitionOffer();
+
+        Assert.NotNull(offer.Identity);
+        Assert.Equal("usb:2207:350B:RKLOADERTEST1", offer.Identity.Key);
+        Assert.Null(offer.PreviousEndpoint);
+        Assert.Null(offer.ObservedGeneration);
+        Assert.Equal(TimeSpan.FromMilliseconds(30000), offer.Timeout);
+    }
+
+    [Fact]
+    public void CreateLoaderTransitionOffer_ContainerBearingUsbDevice_PrefersContainerIdentity()
+    {
+        var usbSession = new FakeRkdlUsbSession
+        {
+            DeviceInfo = new()
+            {
+                VendorId = 0x2207,
+                ProductId = 0x350B,
+                ApiName = "fake-rkdl",
+                DevicePath = "fake://rkdl",
+                DeviceKey = "fake-rkdl-key",
+                ContainerId = new Guid("0f8fad5b-d9cb-469f-a165-70867728950e"),
+            }
+        };
+        var transport = new UsbDeviceTransport(usbSession);
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+
+        var offer = session.CreateLoaderTransitionOffer();
+
+        Assert.NotNull(offer.Identity);
+        Assert.Equal(new Guid("0f8fad5b-d9cb-469f-a165-70867728950e"), offer.Identity.ContainerId);
+        Assert.Equal("usb-container:0f8fad5bd9cb469fa16570867728950e", offer.Identity.Key);
+    }
+
+    [Fact]
+    public void CreateLoaderTransitionOffer_NonUsbTransport_PublishesNoIdentity()
+    {
+        var transport = new FakeRkdlDeviceTransport();
+        using var session = new RkdlSession(transport, timeoutMs: 5000);
+
+        var offer = session.CreateLoaderTransitionOffer();
+
+        Assert.Null(offer.Identity);
+        Assert.Null(offer.PreviousEndpoint);
+        Assert.Equal(TimeSpan.FromMilliseconds(30000), offer.Timeout);
+    }
+
+    private static byte[] BuildLoaderImage(bool rc4Enabled, uint dataDelay = 0)
     {
         var image = new byte[1024];
         BinaryPrimitives.WriteUInt32LittleEndian(image, RkBootImage.TagBoot);
@@ -283,7 +449,7 @@ public class RkdlLoaderTests
         Encoding.Unicode.GetBytes("471").CopyTo(image.AsSpan(105, 40));
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(145), 200);
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(149), 32);
-        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(153), 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(153), dataDelay);
 
         for (var i = 0; i < 32; i++)
         {

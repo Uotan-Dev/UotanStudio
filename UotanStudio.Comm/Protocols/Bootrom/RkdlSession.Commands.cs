@@ -307,6 +307,13 @@ public sealed partial class RkdlSession
     /// </summary>
     /// <param name="address">The start LBA. <para>起始 LBA。</para></param>
     /// <param name="sectorCount">The number of sectors to erase. <para>要擦除的扇区数。</para></param>
+    /// <exception cref="RkdlException">The address or sector count is outside the unsigned wire
+    /// range, the erased sector span leaves the addressed range beyond the device geometry, the
+    /// device geometry is unusable because READ_FLASH_INFO reported an invalid sector count
+    /// (<see cref="RkdlError.FlashInfoFailed"/>), or a CSW reported failure.
+    /// <para>地址或扇区数超出无符号线上范围、被擦除扇区跨度使所寻址范围超出设备几何、因
+    /// READ_FLASH_INFO 报告无效扇区数导致设备几何不可用（<see cref="RkdlError.FlashInfoFailed"/>），
+    /// 或 CSW 报告失败。</para></exception>
     public void EraseLBA(long address, int sectorCount)
     {
         ThrowIfDisposed();
@@ -319,6 +326,8 @@ public sealed partial class RkdlSession
         {
             throw new RkdlException(RkdlError.InvalidParameter, $"Sector count out of range: {sectorCount}.");
         }
+
+        ValidateLbaRange(address, sectorCount);
 
         var cbw = new RkdlCbw(RkdlCommand.EraseLba, RkdlFrame.DirectionOut, 0,
             RkdlFrame.CbwcbLengthLong, address: (uint)address, sectorLength: (ushort)sectorCount);

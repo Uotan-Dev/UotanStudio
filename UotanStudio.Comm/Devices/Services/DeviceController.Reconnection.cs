@@ -7,8 +7,9 @@ namespace UotanStudio.Comm.Devices.Services;
 
 public sealed partial class DeviceController
 {
-    /// <summary>Waits for a released MTK, EDL or Fastboot USB endpoint to disappear and opens its uniquely matched replacement.
-    /// <para>等待已释放的 MTK、EDL 或 Fastboot USB 端点消失，并打开唯一匹配的替代端点。</para></summary>
+    /// <summary>Waits for a released MTK, EDL, Fastboot or Rockchip bootrom (RKDL) USB endpoint to
+    /// disappear and opens its uniquely matched replacement.
+    /// <para>等待已释放的 MTK、EDL、Fastboot 或 Rockchip bootrom（RKDL）USB 端点消失，并打开唯一匹配的替代端点。</para></summary>
     /// <remarks>The previous lease must be disposed before calling. This method never sends a reboot,
     /// changes USB speed, uploads an agent or replays a command. It requires a nonempty OS container ID,
     /// preserves the USB backend, and validates that identity again on the opened handle before creating
@@ -22,8 +23,8 @@ public sealed partial class DeviceController
     /// 返回的 MTK 会话未初始化；仅重连不会恢复运行中 DA 的协议状态。不得在旧租约的命令调度器内部调用。</para></remarks>
     /// <param name="previous">The endpoint captured from the previous lease, including observed USB container metadata.
     /// <para>从旧租约捕获的端点，包括已观测的 USB 容器元数据。</para></param>
-    /// <param name="kind">The explicitly expected MTK, EDL or Fastboot session kind.
-    /// <para>显式预期的 MTK、EDL 或 Fastboot 会话类型。</para></param>
+    /// <param name="kind">The explicitly expected MTK, EDL, Fastboot or Rockchip bootrom session kind.
+    /// <para>显式预期的 MTK、EDL、Fastboot 或 Rockchip bootrom 会话类型。</para></param>
     /// <param name="timeoutMs">The cooperative discovery and open deadline, from 1 ms to 24 hours.
     /// <para>发现与打开的协作式截止时间，范围为 1 毫秒至 24 小时。</para></param>
     /// <param name="cancellationToken">Cancellation for discovery, waiting and opening.
@@ -32,12 +33,15 @@ public sealed partial class DeviceController
     /// <para>由调用方持有的唯一识别替代端点租约。</para></returns>
     /// <exception cref="NotSupportedException">The endpoint lacks stable container evidence or the session kind is unsupported.
     /// <para>端点缺少稳定的容器证据或不支持该会话类型。</para></exception>
-    /// <exception cref="InvalidOperationException">The old lease is active, several endpoints match, or a snapshot is stale.
-    /// <para>旧租约仍活动、多个端点匹配或快照已过期。</para></exception>
+    /// <exception cref="InvalidOperationException">An open lease still holds the previous endpoint or any endpoint
+    /// of the same physical device, several endpoints match, or a snapshot is stale.
+    /// <para>仍有活动租约持有旧端点或同一物理设备上的任一端点、多个端点匹配或快照已过期。</para></exception>
     /// <exception cref="IOException">The opened USB handle does not match the selected endpoint and container.
     /// <para>已打开的 USB 句柄与所选端点和容器不匹配。</para></exception>
     /// <exception cref="TimeoutException">The cooperative deadline expired without returning a replacement.
     /// <para>协作式截止时间已到，未能返回替代端点。</para></exception>
+    /// <exception cref="ObjectDisposedException">The controller has been disposed.
+    /// <para>控制器已被释放。</para></exception>
     public Task<DeviceLease> WaitForUsbReconnectAsync(DeviceEndpoint previous, DeviceSessionKind kind,
         int timeoutMs = 30000, CancellationToken cancellationToken = default) =>
         WaitForUsbReconnectAsync(previous, kind, UsbReconnectIdentityPolicy.Container, timeoutMs, cancellationToken);
@@ -54,8 +58,8 @@ public sealed partial class DeviceController
     /// 必须释放旧租约并观测到旧端点消失，歧义匹配会被拒绝。创建会话前重新检查打开的句柄，不发送协议命令。</para></remarks>
     /// <param name="previous">The endpoint captured from the released lease.
     /// <para>从已释放租约捕获的端点。</para></param>
-    /// <param name="kind">The explicitly expected MTK, EDL or Fastboot session.
-    /// <para>显式预期的 MTK、EDL 或 Fastboot 会话。</para></param>
+    /// <param name="kind">The explicitly expected MTK, EDL, Fastboot or Rockchip bootrom session.
+    /// <para>显式预期的 MTK、EDL、Fastboot 或 Rockchip bootrom 会话。</para></param>
     /// <param name="identityPolicy">The required identity or connection-position evidence.
     /// <para>要求的身份或连接位置证据。</para></param>
     /// <param name="timeoutMs">The cooperative discovery and open deadline, from 1 ms through 24 hours.
@@ -79,11 +83,12 @@ public sealed partial class DeviceController
             DeviceSessionKind.Mtk => "mtk",
             DeviceSessionKind.Edl => "edl",
             DeviceSessionKind.Fastboot => "fastboot",
-            _ => throw new NotSupportedException("Only explicitly selected MTK, EDL and Fastboot USB transitions are supported.")
+            DeviceSessionKind.Bootrom => "rkdl",
+            _ => throw new NotSupportedException("Only explicitly selected MTK, EDL, Fastboot and Rockchip bootrom USB transitions are supported.")
         };
         var previousInfo = previous.UsbInfo;
         if (previous.Source != UsbDiscoverySource.SourceName || previous.Route != "direct-usb"
-            || previous.Protocol is not ("mtk" or "edl" or "fastboot")
+            || previous.Protocol is not ("mtk" or "edl" or "fastboot" or "rkdl")
             || previous.Usb is not { } usb || usb.Backend == UsbApiKind.Auto
             || previousInfo is null
             || previousInfo.SourceApiKind != usb.Backend || previous.Transport != usb.Backend.ToString()
@@ -105,7 +110,8 @@ public sealed partial class DeviceController
         cancellationToken.ThrowIfCancellationRequested();
         lock (_gate)
         {
-            if (_leased.Contains(previous.Id))
+            ThrowIfDisposed();
+            if (HasBlockingLeaseForLocked(previous))
             {
                 throw new InvalidOperationException("Release the previous endpoint lease before waiting for reconnection.");
             }
@@ -210,6 +216,50 @@ public sealed partial class DeviceController
 
     private static bool IsUsableUsbPortPath(string? path) =>
         path is { Length: > 0 and <= 1024 } && path.All(value => !char.IsWhiteSpace(value) && !char.IsControl(value));
+
+    /// <summary>
+    /// <para>判定是否仍有活动租约阻挡以该端点为旧端的 USB 重连等待：同一端点身份仍被占用即阻挡；
+    /// 否则按 <see cref="PhysicalDeviceIdentity.CorrelatesWith"/> 检查每个活动租约的端点，容器 ID 优先、
+    /// 物理端口链次之，防止同一物理设备在另一后端或另一端点身份下的租约形成双句柄；
+    /// 关联不确定时回退到 OS 设备路径相等（路径会被回收，仅作弱证据兜底）。</para>
+    /// Decides whether an open lease still blocks a USB reconnection wait for this previous endpoint:
+    /// the same endpoint identity being reserved blocks; otherwise every open lease's endpoint is
+    /// correlated through <see cref="PhysicalDeviceIdentity.CorrelatesWith"/> (container id first,
+    /// physical-port path second) so a lease on another backend or another endpoint id of the same
+    /// physical device cannot leave two handles alive; when correlation is indeterminate the check
+    /// falls back to equal OS device paths, weak evidence because paths are recycled.
+    /// </summary>
+    private bool HasBlockingLeaseForLocked(DeviceEndpoint previous)
+    {
+        if (_leased.Contains(previous.Id))
+        {
+            return true;
+        }
+
+        foreach (var lease in _openLeases.Values)
+        {
+            if (CorrelatePhysicalObservation(previous.UsbInfo, lease.Endpoint.UsbInfo) is { } correlated)
+            {
+                if (correlated)
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (IsSameUsbPath(previous.Usb, lease.Endpoint.Usb))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsSameUsbPath(UsbEndpointDetails? left, UsbEndpointDetails? right) =>
+        left is { Path.Length: > 0 } && right is { Path.Length: > 0 }
+        && string.Equals(left.Path, right.Path, StringComparison.OrdinalIgnoreCase);
 
     private static bool MatchesUsbReconnectEvidence(UsbDeviceInfo expected, UsbDeviceInfo? actual,
         UsbReconnectIdentityPolicy policy)

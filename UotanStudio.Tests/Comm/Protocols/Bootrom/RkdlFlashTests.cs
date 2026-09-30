@@ -61,7 +61,7 @@ public class RkdlFlashTests
     [Fact]
     public void FlashRkdlPartition_WritesImageAtPartitionLba()
     {
-        var transport = new FakeRkdlDeviceTransport();
+        var transport = new FakeRkdlDeviceTransport { FlashInfoSectorCount = 0x8000 };
         using var session = new RkdlSession(transport);
 
         var imageBytes = new byte[4096];
@@ -77,9 +77,9 @@ public class RkdlFlashTests
         var result = FlashService.FlashRkdlPartition(session, partition, imagePath, progress: null, CancellationToken.None);
 
         Assert.True(result.Success, result.Summary);
-        Assert.Equal(2, transport.Writes.Count);
 
-        var cbw = Assert.Single(transport.Cbws);
+        var commandWrite = Assert.Single(transport.Writes, w => w.Length == 31 && w[15] == 0x15);
+        var cbw = Assert.Single(transport.Cbws, c => c.Opcode == 0x15);
         Assert.Equal(31, cbw.RawBytes.Length);
         Assert.Equal((byte)0x15, cbw.Opcode);
         Assert.Equal(0x00, cbw.Flags);
@@ -87,8 +87,8 @@ public class RkdlFlashTests
         Assert.Equal(0x6000u, cbw.Address);
         Assert.Equal(8, cbw.SectorLength);
         Assert.Equal((uint)imageBytes.Length, cbw.TransferLength);
-        Assert.Equal(cbw.Tag, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[0].AsSpan(4)));
+        Assert.Equal(cbw.Tag, BinaryPrimitives.ReadUInt32LittleEndian(commandWrite.AsSpan(4)));
 
-        Assert.Equal(imageBytes, transport.Writes[1]);
+        Assert.Equal(imageBytes, Assert.Single(transport.Writes, w => w.Length == imageBytes.Length));
     }
 }
