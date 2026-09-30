@@ -197,9 +197,9 @@ static UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSplitter.MergeAsync(str
 static UotanStudio.Firmware.BlockImage.Sparse.SparseChunkSplitter.SplitRawAsync(string! inputPath, string! basePath, long chunkSizeBytes, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<string!>!>!
 UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.CancellationToken.get -> System.Threading.CancellationToken
 UotanStudio.Firmware.FileSystem.Erofs.ErofsOptions.CancellationToken.set -> void
-static UotanStudio.Firmware.DeviceTree.Dt.DtboFormat.UnpackAsync(string! inputPath, string! outputDirectory, UotanStudio.Firmware.Core.UnpackOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<string!>!>
-static UotanStudio.Firmware.FileSystem.F2fs.F2fsBuilder.BuildAsync(string! sourceDirectory, string! outputPath, UotanStudio.Firmware.FileSystem.F2fs.F2fsOptions? options = null) -> System.Threading.Tasks.Task
-UotanStudio.Firmware.FileSystem.Native.NativeFileSystemTools.PathForToolAsync(string! path, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<string!>
+static UotanStudio.Firmware.DeviceTree.Dt.DtboFormat.UnpackAsync(string! inputPath, string! outputDirectory, UotanStudio.Firmware.Core.UnpackOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<string!>!>!
+static UotanStudio.Firmware.FileSystem.F2fs.F2fsBuilder.BuildAsync(string! sourceDirectory, string! outputPath, UotanStudio.Firmware.FileSystem.F2fs.F2fsOptions? options = null) -> System.Threading.Tasks.Task!
+UotanStudio.Firmware.FileSystem.Native.NativeFileSystemTools.PathForToolAsync(string! path, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<string!>!
 UotanStudio.Firmware.FileSystem.FileSystemCorruptedException
 UotanStudio.Firmware.FileSystem.FileSystemCorruptedException.FileSystemCorruptedException(string! message) -> void
 UotanStudio.Firmware.FileSystem.FileSystemCorruptedException.FileSystemCorruptedException(string! message, System.Exception? innerException) -> void
