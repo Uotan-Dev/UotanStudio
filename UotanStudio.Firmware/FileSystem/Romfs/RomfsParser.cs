@@ -33,7 +33,8 @@ internal sealed class RomfsParser
     /// </summary>
     /// <param name="input">Seekable RomFS image; not closed by this class. <para>可定位的 RomFS 镜像；本类不会将其关闭。</para></param>
     /// <param name="cancellationToken">Token checked throughout the walk. <para>遍历全程检查的令牌。</para></param>
-    /// <exception cref="InvalidDataException">The magic, sizes, checksums, chain ordering or entry counts fail validation.
+    /// <exception cref="InvalidDataException">The input stream is not seekable. <para>输入流不可定位。</para></exception>
+    /// <exception cref="FileSystemCorruptedException">The magic, sizes, checksums, chain ordering or entry counts fail validation.
     /// <para>魔数、长度、校验和、链推进或条目数量校验失败时抛出。</para></exception>
     internal RomfsParser(Stream input, CancellationToken cancellationToken = default)
     {
@@ -47,7 +48,7 @@ internal sealed class RomfsParser
         cancellationToken.ThrowIfCancellationRequested();
         if (input.Length < SuperblockSize + 16)
         {
-            throw new InvalidDataException("The RomFS image is shorter than the superblock.");
+            throw new FileSystemCorruptedException("The RomFS image is shorter than the superblock.");
         }
 
         Span<byte> magic = stackalloc byte[8];
@@ -55,7 +56,7 @@ internal sealed class RomfsParser
         input.ReadExactly(magic);
         if (!magic.SequenceEqual(Magic.Span))
         {
-            throw new InvalidDataException("The RomFS magic '-rom1fs-' is missing.");
+            throw new FileSystemCorruptedException("The RomFS magic '-rom1fs-' is missing.");
         }
 
         Span<byte> volumeSizeBytes = stackalloc byte[4];
@@ -64,12 +65,12 @@ internal sealed class RomfsParser
         _volumeSize = BinaryPrimitives.ReadUInt32BigEndian(volumeSizeBytes);
         if (_volumeSize < SuperblockSize + 16 || _volumeSize > input.Length)
         {
-            throw new InvalidDataException($"The RomFS volume size {_volumeSize} is outside the image bounds.");
+            throw new FileSystemCorruptedException($"The RomFS volume size {_volumeSize} is outside the image bounds.");
         }
 
         if (_volumeSize % 4 != 0)
         {
-            throw new InvalidDataException("The RomFS volume size is not a multiple of four bytes.");
+            throw new FileSystemCorruptedException("The RomFS volume size is not a multiple of four bytes.");
         }
 
         var checksumRegion = (int)Math.Min(_volumeSize, ChecksumRegionBytes);
@@ -81,7 +82,7 @@ internal sealed class RomfsParser
 
         if (sum != 0)
         {
-            throw new InvalidDataException("The RomFS superblock checksum does not cover the first bytes of the volume.");
+            throw new FileSystemCorruptedException("The RomFS superblock checksum does not cover the first bytes of the volume.");
         }
 
         Name = ReadVolumeName();
@@ -89,7 +90,7 @@ internal sealed class RomfsParser
         Root = ReadEntry(rootHeaderOffset, "", 0, cancellationToken);
         if (Root.Kind != RomfsEntryKind.Directory)
         {
-            throw new InvalidDataException("The RomFS root entry is not a directory.");
+            throw new FileSystemCorruptedException("The RomFS root entry is not a directory.");
         }
 
         foreach (var leaf in EnumerateFiles())
@@ -142,7 +143,7 @@ internal sealed class RomfsParser
     /// <summary>Reads the raw data bytes of one entry; hard links follow their target.
     /// <para>读取单个条目的原始数据字节；硬链接会跟踪其目标。</para></summary>
     /// <param name="entry">Entry to read; directory entries yield empty arrays. <para>待读取条目；目录条目返回空数组。</para></param>
-    /// <exception cref="InvalidDataException">The data region lies outside the volume. <para>数据区超出卷边界。</para></exception>
+    /// <exception cref="FileSystemCorruptedException">The data region lies outside the volume. <para>数据区超出卷边界。</para></exception>
     internal byte[] ReadEntryBytes(RomfsEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -171,8 +172,10 @@ internal sealed class RomfsParser
     /// <param name="byteProgress">Receives cumulative processed/total bytes; may be <see langword="null"/>. <para>接收累计已处理/总字节数；可为 <see langword="null"/>。</para></param>
     /// <param name="cancellationToken">Token checked per entry and per chunk. <para>按条目和按块检查的令牌。</para></param>
     /// <returns>The image paths of the written files. <para>已写出文件的镜像路径列表。</para></returns>
-    /// <exception cref="InvalidDataException">An entry escapes the output directory or exceeds the budget.
-    /// <para>条目逃逸输出目录或超出预算时抛出。</para></exception>
+    /// <exception cref="InvalidDataException">An entry escapes the output directory.
+    /// <para>条目逃逸输出目录时抛出。</para></exception>
+    /// <exception cref="FileSystemCorruptedException">An entry exceeds the budget or ends before its declared size.
+    /// <para>条目超出预算或在声明大小前提前结束时抛出。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     internal IReadOnlyList<string> ExtractToDirectory(
@@ -217,7 +220,7 @@ internal sealed class RomfsParser
             var remaining = Math.Max(0, maximumOutputBytes - processed);
             if (size > remaining)
             {
-                throw new InvalidDataException(
+                throw new FileSystemCorruptedException(
                     $"RomFS extraction of '{entry.Path}' would exceed the {maximumOutputBytes}-byte output budget.");
             }
 
@@ -232,7 +235,7 @@ internal sealed class RomfsParser
                     var read = _input.Read(chunk, 0, (int)Math.Min(chunk.Length, size - written));
                     if (read <= 0)
                     {
-                        throw new InvalidDataException($"RomFS entry '{entry.Path}' ends before its declared size.");
+                        throw new FileSystemCorruptedException($"RomFS entry '{entry.Path}' ends before its declared size.");
                     }
 
                     stream.Write(chunk, 0, read);
@@ -256,17 +259,17 @@ internal sealed class RomfsParser
         cancellationToken.ThrowIfCancellationRequested();
         if (depth > MaximumDepth)
         {
-            throw new InvalidDataException("The RomFS directory tree exceeds the supported depth.");
+            throw new FileSystemCorruptedException("The RomFS directory tree exceeds the supported depth.");
         }
 
         if (_entriesByHeader.Count >= MaximumEntryCount)
         {
-            throw new InvalidDataException("The RomFS volume stores more entries than the supported limit.");
+            throw new FileSystemCorruptedException("The RomFS volume stores more entries than the supported limit.");
         }
 
         if (headerOffset % 16 != 0 || headerOffset + 16 > _volumeSize)
         {
-            throw new InvalidDataException($"The RomFS file header at {headerOffset} is outside the volume.");
+            throw new FileSystemCorruptedException($"The RomFS file header at {headerOffset} is outside the volume.");
         }
 
         var nextRaw = ReadUInt32BE(headerOffset);
@@ -330,7 +333,7 @@ internal sealed class RomfsParser
     {
         if (firstChildOffset <= directory.HeaderOffset || firstChildOffset + 16 > _volumeSize)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"The RomFS directory at {directory.HeaderOffset} has an invalid first-entry offset {firstChildOffset}.");
         }
 
@@ -341,7 +344,7 @@ internal sealed class RomfsParser
             var next = ReadUInt32BE(offset) & ~ModeMask;
             if (next != 0 && next <= offset)
             {
-                throw new InvalidDataException($"The RomFS entry chain at {offset} does not advance.");
+                throw new FileSystemCorruptedException($"The RomFS entry chain at {offset} does not advance.");
             }
 
             if (entry.Name is "." or "..")
@@ -361,13 +364,13 @@ internal sealed class RomfsParser
         var target = link.LinkTargetOffset;
         if (target % 16 != 0 || target + 16 > _volumeSize)
         {
-            throw new InvalidDataException($"The RomFS hard link '{link.Path}' points outside the volume.");
+            throw new FileSystemCorruptedException($"The RomFS hard link '{link.Path}' points outside the volume.");
         }
 
         var targetKind = ReadUInt32BE(target) & 0x0000_0007;
         if (targetKind is 0 or 1)
         {
-            throw new InvalidDataException($"The RomFS hard link '{link.Path}' points at an invalid target.");
+            throw new FileSystemCorruptedException($"The RomFS hard link '{link.Path}' points at an invalid target.");
         }
 
         if (!_entriesByHeader.TryGetValue(target, out var referenced))
@@ -381,7 +384,7 @@ internal sealed class RomfsParser
     {
         if (nameOffset >= _volumeSize)
         {
-            throw new InvalidDataException("The RomFS entry name starts outside the volume.");
+            throw new FileSystemCorruptedException("The RomFS entry name starts outside the volume.");
         }
 
         var collected = new List<byte>();
@@ -403,13 +406,13 @@ internal sealed class RomfsParser
             position += 16;
             if (collected.Count > MaximumNameBytes)
             {
-                throw new InvalidDataException("The RomFS entry name exceeds the supported length.");
+                throw new FileSystemCorruptedException("The RomFS entry name exceeds the supported length.");
             }
         }
 
         if (terminator < 0)
         {
-            throw new InvalidDataException("The RomFS entry name is not terminated inside the volume.");
+            throw new FileSystemCorruptedException("The RomFS entry name is not terminated inside the volume.");
         }
 
         nameRegionBytes = checked((int)RoundTo16((long)terminator + 1));
@@ -426,7 +429,7 @@ internal sealed class RomfsParser
 
         if (sum != 0)
         {
-            throw new InvalidDataException($"The RomFS metadata checksum at {regionOffset} is corrupt.");
+            throw new FileSystemCorruptedException($"The RomFS metadata checksum at {regionOffset} is corrupt.");
         }
     }
 
@@ -437,7 +440,7 @@ internal sealed class RomfsParser
     {
         if (offset < 0 || offset + 4 > _volumeSize)
         {
-            throw new InvalidDataException($"The RomFS read at {offset} exceeds the volume.");
+            throw new FileSystemCorruptedException($"The RomFS read at {offset} exceeds the volume.");
         }
 
         Span<byte> buffer = stackalloc byte[4];
@@ -468,11 +471,11 @@ internal sealed class RomfsParser
             collected.Add((byte)b);
             if (collected.Count > MaximumNameBytes)
             {
-                throw new InvalidDataException("The RomFS volume name exceeds the supported length.");
+                throw new FileSystemCorruptedException("The RomFS volume name exceeds the supported length.");
             }
         }
 
-        throw new InvalidDataException("The RomFS volume name is not terminated inside the volume.");
+        throw new FileSystemCorruptedException("The RomFS volume name is not terminated inside the volume.");
     }
 
     private static long RoundTo16(long value) => (value + 15) & ~15L;

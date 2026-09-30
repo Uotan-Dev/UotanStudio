@@ -55,7 +55,7 @@ public static class FsConfigPatch
         token.ThrowIfCancellationRequested();
         TextPatch.ValidateSize(text);
         if (text.Contains('\0'))
-            throw new InvalidDataException("Filesystem metadata source must not contain NUL.");
+            throw new PatchingCorruptedException("Filesystem metadata source must not contain NUL.");
         ArgumentException.ThrowIfNullOrWhiteSpace(partition);
         if (partition.Length > 64 || partition.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not '_' and not '-'))
             throw new InvalidDataException("Rebase partition name must use letters, digits, '_' or '-'.");
@@ -80,7 +80,7 @@ public static class FsConfigPatch
         {
             token.ThrowIfCancellationRequested();
             if (++lineNumber > 100000)
-                throw new InvalidDataException("Too many filesystem metadata lines.");
+                throw new PatchingCorruptedException("Too many filesystem metadata lines.");
             var end = text.IndexOf('\n', position);
             var lineEnd = end < 0 ? text.Length : end + 1;
             var contentEnd = end < 0 ? text.Length : end > position && text[end - 1] == '\r' ? end - 1 : end;
@@ -328,18 +328,18 @@ public static class FsConfigPatch
 
     private static uint ParseIdentity(string value)
         => uint.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var result)
-            ? result : throw new InvalidDataException("UID/GID must be unsigned decimal integers.");
+            ? result : throw new PatchingCorruptedException("UID/GID must be unsigned decimal integers.");
 
     private static ushort ParseMode(string value)
     {
         if (value.Length is < 1 or > 5 || value.Any(character => character is < '0' or > '9'))
         {
-            throw new InvalidDataException("Invalid filesystem permission mode.");
+            throw new PatchingCorruptedException("Invalid filesystem permission mode.");
         }
         var octal = value.Length > 1 && value[0] == '0';
-        if (octal && value.Any(character => character > '7')) { throw new InvalidDataException("Invalid octal mode."); }
+        if (octal && value.Any(character => character > '7')) { throw new PatchingCorruptedException("Invalid octal mode."); }
         var result = Convert.ToUInt32(value, octal ? 8 : 10);
-        return result <= 0xFFF ? (ushort)result : throw new InvalidDataException("Mode must contain only permission/special bits.");
+        return result <= 0xFFF ? (ushort)result : throw new PatchingCorruptedException("Mode must contain only permission/special bits.");
     }
 
     private static (int Start, int Length)[] Select(string text, string path, CancellationToken token, bool allowMissing = false)
@@ -358,7 +358,7 @@ public static class FsConfigPatch
         while (position < text.Length)
         {
             token.ThrowIfCancellationRequested();
-            if (++lines > 100000) { throw new InvalidDataException("Too many filesystem metadata lines."); }
+            if (++lines > 100000) { throw new PatchingCorruptedException("Too many filesystem metadata lines."); }
             var end = text.IndexOf('\n', position);
             if (end < 0) { end = text.Length; }
             var contentEnd = end > position && text[end - 1] == '\r' ? end - 1 : end;
@@ -372,7 +372,7 @@ public static class FsConfigPatch
                     while (cursor < contentEnd && text[cursor] == ' ') { cursor++; }
                     var start = cursor;
                     while (cursor < contentEnd && text[cursor] != ' ') { cursor++; }
-                    if (cursor == start) { throw new InvalidDataException("Metadata entries require path, uid, gid and mode."); }
+                    if (cursor == start) { throw new PatchingCorruptedException("Metadata entries require path, uid, gid and mode."); }
                     fields[index] = (start, cursor - start);
                 }
                 if (text.Substring(fields[0].Start, fields[0].Length).Trim('/') == target)

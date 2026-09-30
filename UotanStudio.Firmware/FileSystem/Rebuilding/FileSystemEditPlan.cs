@@ -45,7 +45,7 @@ internal sealed class FileSystemEditPlan
         foreach (var pair in projection.OrderBy(p => p.Key.Count(c => c == '/')).ThenBy(p => p.Key, StringComparer.Ordinal))
         {
             if (pair.Value.StartsWith("link:", StringComparison.Ordinal))
-                throw new InvalidDataException($"New host symbolic links are not supported: {pair.Key}");
+                throw new FileSystemUnsupportedFeatureException($"New host symbolic links are not supported: {pair.Key}");
             var host = pair.Key;
             var image = originalHosts.TryGetValue(host, out var mapped) ? mapped
                 : Join(hostPaths[Parent(host)], encodedNames.GetValueOrDefault(Name(host), Name(host)));
@@ -56,7 +56,7 @@ internal sealed class FileSystemEditPlan
                 selected = Copy(original, image, original.Mode);
                 if ((original.Mode & 0xF000) is not (0x4000 or 0x8000)
                     && (!manifest.Projection.TryGetValue(host, out var before) || before != pair.Value))
-                    throw new InvalidDataException($"Only regular files and directories can be edited: {image}");
+                    throw new FileSystemUnsupportedFeatureException($"Only regular files and directories can be edited: {image}");
             }
             else
             {
@@ -237,12 +237,12 @@ internal sealed class FileSystemEditPlan
     {
         entry.Metadata?.Validate();
         if ((entry.Flags & (0x800u | 0x100000u)) != 0)
-            throw new InvalidDataException($"Encrypted or verity inode requires a dedicated semantic writer: {entry.Path}");
+            throw new FileSystemUnsupportedFeatureException($"Encrypted or verity inode requires a dedicated semantic writer: {entry.Path}");
         if ((entry.Flags & 0x40000000u) != 0 && (entry.Mode & 0xF000) != 0x4000)
-            throw new InvalidDataException($"Casefold flag belongs only on directories: {entry.Path}");
+            throw new FileSystemCorruptedException($"Casefold flag belongs only on directories: {entry.Path}");
         entry.Xattrs?.Remove("system.data");
         if (entry.Xattrs?.Keys.Any(k => k is "security.ima" or "security.evm" or "security.fsverity" or "security.fscrypt" or "encryption.c") == true)
-            throw new InvalidDataException($"Content authentication/encryption attributes require a dedicated writer: {entry.Path}");
+            throw new FileSystemUnsupportedFeatureException($"Content authentication/encryption attributes require a dedicated writer: {entry.Path}");
     }
 
     private static bool IsExecutable(string path)
@@ -275,17 +275,17 @@ internal sealed class FileSystemEditPlan
 
     private static void AddAclExecuteBits(byte[] acl)
     {
-        if (acl.Length < 4) throw new InvalidDataException("Truncated executable ACL.");
+        if (acl.Length < 4) throw new FileSystemCorruptedException("Truncated executable ACL.");
         var version = BinaryPrimitives.ReadUInt32LittleEndian(acl);
-        if (version is not (1 or 2)) throw new InvalidDataException("Unsupported executable ACL version.");
+        if (version is not (1 or 2)) throw new FileSystemUnsupportedFeatureException("Unsupported executable ACL version.");
         for (var offset = 4; offset < acl.Length;)
         {
-            if (acl.Length - offset < 4) throw new InvalidDataException("Truncated executable ACL entry.");
+            if (acl.Length - offset < 4) throw new FileSystemCorruptedException("Truncated executable ACL entry.");
             var tag = BinaryPrimitives.ReadUInt16LittleEndian(acl.AsSpan(offset));
             var permissions = BinaryPrimitives.ReadUInt16LittleEndian(acl.AsSpan(offset + 2));
             BinaryPrimitives.WriteUInt16LittleEndian(acl.AsSpan(offset + 2), (ushort)(permissions | ((permissions & 4) >> 2)));
             var size = version == 2 || tag is 2 or 8 ? 8 : 4;
-            if (size > acl.Length - offset) throw new InvalidDataException("Truncated executable ACL identity.");
+            if (size > acl.Length - offset) throw new FileSystemCorruptedException("Truncated executable ACL identity.");
             offset += size;
         }
     }
@@ -296,23 +296,23 @@ internal sealed class FileSystemEditPlan
         if (attributes.TryGetValue("system.posix_acl_default", out var defaults))
             attributes["system.posix_acl_access"] = defaults.ToArray();
         if (!attributes.TryGetValue("system.posix_acl_access", out var acl)) return;
-        if (acl.Length < 4) throw new InvalidDataException("Truncated inherited POSIX ACL.");
+        if (acl.Length < 4) throw new FileSystemCorruptedException("Truncated inherited POSIX ACL.");
         var version = BinaryPrimitives.ReadUInt32LittleEndian(acl);
-        if (version is not (1 or 2)) throw new InvalidDataException("Unsupported inherited POSIX ACL version.");
+        if (version is not (1 or 2)) throw new FileSystemUnsupportedFeatureException("Unsupported inherited POSIX ACL version.");
         int? owner = null, group = null, mask = null, other = null;
         for (var offset = 4; offset < acl.Length;)
         {
-            if (acl.Length - offset < 4) throw new InvalidDataException("Truncated inherited ACL entry.");
+            if (acl.Length - offset < 4) throw new FileSystemCorruptedException("Truncated inherited ACL entry.");
             var tag = BinaryPrimitives.ReadUInt16LittleEndian(acl.AsSpan(offset));
             var permissions = BinaryPrimitives.ReadUInt16LittleEndian(acl.AsSpan(offset + 2));
             if (!directory && !executable) permissions &= 6;
             BinaryPrimitives.WriteUInt16LittleEndian(acl.AsSpan(offset + 2), permissions);
             switch (tag) { case 1: owner = permissions; break; case 4: group = permissions; break; case 16: mask = permissions; break; case 32: other = permissions; break; }
             var size = version == 2 || tag is 2 or 8 ? 8 : 4;
-            if (size > acl.Length - offset) throw new InvalidDataException("Truncated inherited ACL identity.");
+            if (size > acl.Length - offset) throw new FileSystemCorruptedException("Truncated inherited ACL identity.");
             offset += size;
         }
-        if (owner is null || group is null || other is null) throw new InvalidDataException("Inherited ACL lacks required owner/group/other entries.");
+        if (owner is null || group is null || other is null) throw new FileSystemCorruptedException("Inherited ACL lacks required owner/group/other entries.");
         entry.Mode = (ushort)((entry.Mode & 0xFE00) | (owner.Value << 6) | ((mask ?? group.Value) << 3) | other.Value);
     }
     private static PreservedInodeEntry Copy(PreservedInodeEntry source, string path, ushort mode) => new()

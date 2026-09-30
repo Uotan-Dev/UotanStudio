@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
 using Xunit;
 
@@ -23,7 +24,7 @@ public sealed class FileSystemAttributePlanTests
     public void ApplyAttributes_MalformedAccessAcl_RejectsPermissionChanges()
     {
         var plan = Create(true);
-        Assert.Throws<InvalidDataException>(() => plan.ApplyAttributes([new("a", 0, 0, 0x1ED)],
+        Assert.Throws<FileSystemCorruptedException>(() => plan.ApplyAttributes([new("a", 0, 0, 0x1ED)],
             TestContext.Current.CancellationToken));
     }
 

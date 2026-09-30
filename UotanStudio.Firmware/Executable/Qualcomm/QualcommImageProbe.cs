@@ -45,7 +45,7 @@ public static class QualcommImageProbe
             _ = QualcommMbnLayout.Read(stream, (long)segments[0].Offset, (long)segments[0].FileSize, cancellationToken);
             return true;
         }
-        catch (InvalidDataException)
+        catch (Exception exception) when (exception is InvalidDataException or ExecutableException)
         {
             return false;
         }

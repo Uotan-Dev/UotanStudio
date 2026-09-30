@@ -77,7 +77,7 @@ internal static class PrivAppPermissionsPatch
             entries.Add(entry);
             if (entries.Count > MaximumEntries)
             {
-                throw new InvalidDataException("The privapp-permissions document carries too many entries.");
+                throw new PatchingCorruptedException("The privapp-permissions document carries too many entries.");
             }
         }
         return entries;
@@ -203,10 +203,10 @@ internal static class PrivAppPermissionsPatch
 
     private static IEnumerable<PrivAppPermissionEntry> Enumerate(XDocument document)
     {
-        var root = document.Root ?? throw new InvalidDataException("The privapp-permissions document has no root element.");
+        var root = document.Root ?? throw new PatchingCorruptedException("The privapp-permissions document has no root element.");
         if (root.Name.LocalName != "permissions")
         {
-            throw new InvalidDataException("The privapp-permissions root element must be <permissions>.");
+            throw new PatchingCorruptedException("The privapp-permissions root element must be <permissions>.");
         }
         foreach (var element in root.Elements())
         {
@@ -256,14 +256,14 @@ internal static class PrivAppPermissionsPatch
         }
         catch (XmlException exception)
         {
-            throw new InvalidDataException($"The privapp-permissions document is not well-formed XML: {exception.Message}");
+            throw new PatchingCorruptedException($"The privapp-permissions document is not well-formed XML: {exception.Message}");
         }
     }
 
     private static string RequireAttribute(XElement element, string name, int maximum, string label)
     {
         var value = (string?)element.Attribute(name)
-            ?? throw new InvalidDataException($"A <{element.Name.LocalName}> entry is missing the '{name}' attribute.");
+            ?? throw new PatchingCorruptedException($"A <{element.Name.LocalName}> entry is missing the '{name}' attribute.");
         ValidateIdentifier(value, maximum, label);
         return value;
     }
@@ -272,7 +272,7 @@ internal static class PrivAppPermissionsPatch
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length > maximum || value.Any(char.IsControl))
         {
-            throw new InvalidDataException($"{label} must be 1 to {maximum} characters without control characters.");
+            throw new PatchingCorruptedException($"{label} must be 1 to {maximum} characters without control characters.");
         }
     }
 
@@ -288,7 +288,7 @@ internal static class PrivAppPermissionsPatch
             var end = original.IndexOf("?>", StringComparison.Ordinal);
             if (end < 0)
             {
-                throw new InvalidDataException("The XML declaration is not terminated.");
+                throw new PatchingCorruptedException("The XML declaration is not terminated.");
             }
             body = original[..(end + 2)] + body;
         }

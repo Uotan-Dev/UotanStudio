@@ -28,8 +28,10 @@ internal static class SquashfsDecompression
     /// <paramref name="expectedSize"/>。</para></param>
     /// <returns>The decoded bytes, at most <paramref name="expectedSize"/> in length.
     /// <para>解码后的字节，长度不超过 <paramref name="expectedSize"/>。</para></returns>
-    /// <exception cref="InvalidDataException">The compressor id is unsupported or the payload is corrupt.
-    /// <para>压缩器标识不受支持或载荷损坏时抛出。</para></exception>
+    /// <exception cref="FileSystemUnsupportedFeatureException">The compressor id is unsupported.
+    /// <para>压缩器标识不受支持时抛出。</para></exception>
+    /// <exception cref="FileSystemCorruptedException">The payload is corrupt.
+    /// <para>载荷损坏时抛出。</para></exception>
     internal static byte[] Decompress(int compression, byte[] payload, int expectedSize, bool exactOutput)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(expectedSize);
@@ -40,8 +42,8 @@ internal static class SquashfsDecompression
             4 => DecompressXz(payload, expectedSize, exactOutput),
             5 => DecompressLz4(payload, expectedSize, exactOutput),
             6 => DecompressZstd(payload, expectedSize, exactOutput),
-            2 => throw new InvalidDataException("SquashFS compressor 'lzma' (id 2) is not supported because it uses a legacy MicroLZMA-style header without kernel support."),
-            _ => throw new InvalidDataException($"SquashFS compressor id {compression} is not supported."),
+            2 => throw new FileSystemUnsupportedFeatureException("SquashFS compressor 'lzma' (id 2) is not supported because it uses a legacy MicroLZMA-style header without kernel support."),
+            _ => throw new FileSystemUnsupportedFeatureException($"SquashFS compressor id {compression} is not supported."),
         };
     }
 
@@ -73,11 +75,11 @@ internal static class SquashfsDecompression
         }
         catch (CompressionException ex)
         {
-            throw new InvalidDataException("The SquashFS gzip block is corrupt.", ex);
+            throw new FileSystemCorruptedException("The SquashFS gzip block is corrupt.", ex);
         }
         catch (IOException ex)
         {
-            throw new InvalidDataException($"The SquashFS gzip block expands beyond the expected {expectedSize} bytes.", ex);
+            throw new FileSystemCorruptedException($"The SquashFS gzip block expands beyond the expected {expectedSize} bytes.", ex);
         }
 
         return Finish(output.Length, exactOutput, expectedSize, () => output.ToArray());
@@ -89,12 +91,12 @@ internal static class SquashfsDecompression
         var status = Lzo1x.TryDecompress(payload, buffer, out var written);
         if (status != LzoStatus.Ok)
         {
-            throw new InvalidDataException($"The SquashFS LZO block failed to decode ({status}).");
+            throw new FileSystemCorruptedException($"The SquashFS LZO block failed to decode ({status}).");
         }
 
         if (exactOutput && written != expectedSize)
         {
-            throw new InvalidDataException($"The SquashFS LZO block produced {written} bytes but {expectedSize} were expected.");
+            throw new FileSystemCorruptedException($"The SquashFS LZO block produced {written} bytes but {expectedSize} were expected.");
         }
 
         return buffer.AsSpan(0, written).ToArray();
@@ -104,7 +106,7 @@ internal static class SquashfsDecompression
     {
         if (payload.Length < 6 || !XzCompressor.IsXzFormat(payload))
         {
-            throw new InvalidDataException(
+            throw new FileSystemUnsupportedFeatureException(
                 "SquashFS xz blocks are only supported in full .xz container framing; raw LZMA2 framing is not decoded.");
         }
 
@@ -117,11 +119,11 @@ internal static class SquashfsDecompression
         }
         catch (CompressionException ex)
         {
-            throw new InvalidDataException("The SquashFS xz block is corrupt.", ex);
+            throw new FileSystemCorruptedException("The SquashFS xz block is corrupt.", ex);
         }
         catch (IOException ex)
         {
-            throw new InvalidDataException($"The SquashFS xz block expands beyond the expected {expectedSize} bytes.", ex);
+            throw new FileSystemCorruptedException($"The SquashFS xz block expands beyond the expected {expectedSize} bytes.", ex);
         }
 
         return Finish(output.Length, exactOutput, expectedSize, () => output.ToArray());
@@ -133,7 +135,7 @@ internal static class SquashfsDecompression
         var written = LZ4Codec.Decode(payload, 0, payload.Length, buffer, 0, buffer.Length);
         if (written < 0)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 exactOutput
                     ? $"The SquashFS LZ4 block decodes larger than the expected {expectedSize} bytes."
                     : "The SquashFS LZ4 block is corrupt.");
@@ -141,7 +143,7 @@ internal static class SquashfsDecompression
 
         if (exactOutput && written != expectedSize)
         {
-            throw new InvalidDataException($"The SquashFS LZ4 block produced {written} bytes but {expectedSize} were expected.");
+            throw new FileSystemCorruptedException($"The SquashFS LZ4 block produced {written} bytes but {expectedSize} were expected.");
         }
 
         return buffer.AsSpan(0, written).ToArray();
@@ -151,7 +153,7 @@ internal static class SquashfsDecompression
     {
         if (payload.Length < 4 || !ZstdCompressor.IsZstdFormat(payload))
         {
-            throw new InvalidDataException("The SquashFS zstd block does not start with a zstd frame magic.");
+            throw new FileSystemCorruptedException("The SquashFS zstd block does not start with a zstd frame magic.");
         }
 
         using var input = new MemoryStream(payload, writable: false);
@@ -163,11 +165,11 @@ internal static class SquashfsDecompression
         }
         catch (CompressionException ex)
         {
-            throw new InvalidDataException("The SquashFS zstd block is corrupt.", ex);
+            throw new FileSystemCorruptedException("The SquashFS zstd block is corrupt.", ex);
         }
         catch (IOException ex)
         {
-            throw new InvalidDataException($"The SquashFS zstd block expands beyond the expected {expectedSize} bytes.", ex);
+            throw new FileSystemCorruptedException($"The SquashFS zstd block expands beyond the expected {expectedSize} bytes.", ex);
         }
 
         return Finish(output.Length, exactOutput, expectedSize, () => output.ToArray());
@@ -177,7 +179,7 @@ internal static class SquashfsDecompression
     {
         if (exactOutput && length != expectedSize)
         {
-            throw new InvalidDataException($"A SquashFS block produced {length} bytes but {expectedSize} were expected.");
+            throw new FileSystemCorruptedException($"A SquashFS block produced {length} bytes but {expectedSize} were expected.");
         }
 
         return snapshot();

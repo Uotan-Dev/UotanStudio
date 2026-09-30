@@ -23,11 +23,11 @@ internal sealed class PortableExtractionPaths
             var parent = "";
             foreach (var name in path.Split('/'))
             {
-                if (name is "" or "." or ".." || name.Contains('\0')) throw new InvalidDataException("Invalid image directory entry.");
+                if (name is "" or "." or ".." || name.Contains('\0')) throw new FileSystemCorruptedException("Invalid image directory entry.");
                 if (!children.TryGetValue(parent, out var names)) children.Add(parent, names = new(StringComparer.Ordinal));
                 names.Add(name);
                 parent = parent.Length == 0 ? name : parent + "/" + name;
-                if (children.Count > 100000) throw new InvalidDataException("Too many image directories.");
+                if (children.Count > 100000) throw new FileSystemCorruptedException("Too many image directories.");
             }
         }
         foreach (var (parent, names) in children.OrderBy(pair => pair.Key.Count(c => c == '/')).ThenBy(pair => pair.Key.Length))
@@ -46,7 +46,7 @@ internal sealed class PortableExtractionPaths
                 var host = encode ? Prefix + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(name))) : name;
                 var imagePath = parent.Length == 0 ? name : parent + "/" + name;
                 _paths.Add(imagePath, parent.Length == 0 ? host : _paths[parent] + "/" + host);
-                if (_paths.Count > 100000) throw new InvalidDataException("Too many image entries.");
+                if (_paths.Count > 100000) throw new FileSystemCorruptedException("Too many image entries.");
             }
         }
         FileSystemPreservation.RecordPaths(_paths);

@@ -66,7 +66,7 @@ public sealed partial class CpioFormatHandler
             return format is ArchiveFormat.NewAscii or ArchiveFormat.CrcAscii
                 or ArchiveFormat.OldAscii or ArchiveFormat.Binary;
         }
-        catch (InvalidDataException)
+        catch (Exception ex) when (ex is InvalidDataException or ArchiveException)
         {
             return false;
         }
@@ -110,12 +110,12 @@ public sealed partial class CpioFormatHandler
         {
             if (source.Length > MaximumArchiveBytes)
             {
-                throw new InvalidDataException("Compressed CPIO input exceeds the 8 GiB limit.");
+                throw new ArchiveCorruptedException("Compressed CPIO input exceeds the 8 GiB limit.");
             }
             var compression = DetectCpioCompression(source);
             if (compression == CompressionFormat.None)
             {
-                throw new InvalidDataException("Compressed CPIO framing is not recognized.");
+                throw new ArchiveCorruptedException("Compressed CPIO framing is not recognized.");
             }
 
             var scratch = CreateScratch();
@@ -168,12 +168,12 @@ public sealed partial class CpioFormatHandler
             var name = PathPatternMatcher.NormalizeArchivePath(entry.Name);
             if (names.Count >= MaximumEntries || name.Length > MaximumNameLength || !names.Add(name))
             {
-                throw new InvalidDataException("CPIO archive exceeds the entry limit or contains duplicate paths.");
+                throw new ArchiveCorruptedException("CPIO archive exceeds the entry limit or contains duplicate paths.");
             }
             expanded = checked(expanded + entry.DataLength);
             if (expanded > MaximumArchiveBytes)
             {
-                throw new InvalidDataException("CPIO entry payloads exceed the 8 GiB limit.");
+                throw new ArchiveCorruptedException("CPIO entry payloads exceed the 8 GiB limit.");
             }
         }
         source.Position = 0;
@@ -201,7 +201,7 @@ public sealed partial class CpioFormatHandler
         {
             if (entries.Count >= MaximumEntries || entry.Name.Length > MaximumNameLength)
             {
-                throw new InvalidDataException("CPIO metadata exceeds the entry or name limit.");
+                throw new ArchiveCorruptedException("CPIO metadata exceeds the entry or name limit.");
             }
 
             var header = entry.Metadata;
@@ -250,7 +250,7 @@ public sealed partial class CpioFormatHandler
             compressed.ReadExactly(header);
             if (!header[..3].SequenceEqual("BZh"u8) || header[3] is < (byte)'1' or > (byte)'9')
             {
-                throw new InvalidDataException("Invalid bzip2 block level.");
+                throw new ArchiveCorruptedException("Invalid bzip2 block level.");
             }
             metadata.Configuration["cpio"]!["blockLevel"] = header[3] - '0';
         }
@@ -263,7 +263,7 @@ public sealed partial class CpioFormatHandler
             var dictionary = BinaryPrimitives.ReadUInt32LittleEndian(header[1..5]);
             if (property >= 225 || dictionary is < 4096 or > 128 * 1024 * 1024)
             {
-                throw new InvalidDataException("Unsupported LZMA-alone coder properties.");
+                throw new ArchiveUnsupportedFeatureException("Unsupported LZMA-alone coder properties.");
             }
             metadata.Configuration["cpio"]!["lzmaProperty"] = property;
             metadata.Configuration["cpio"]!["dictionarySize"] = dictionary;
@@ -281,7 +281,7 @@ public sealed partial class CpioFormatHandler
         if (!Enum.TryParse<ArchiveFormat>((string?)config["format"], out var format)
             || format is not (ArchiveFormat.NewAscii or ArchiveFormat.CrcAscii or ArchiveFormat.OldAscii or ArchiveFormat.Binary))
         {
-            throw new InvalidDataException("The stored CPIO dialect is unsupported.");
+            throw new ArchiveUnsupportedFeatureException("The stored CPIO dialect is unsupported.");
         }
         return format;
     }
@@ -295,7 +295,7 @@ public sealed partial class CpioFormatHandler
                     or CompressionFormat.Zstd or CompressionFormat.Lz4 or CompressionFormat.Lz4Legacy
                     or CompressionFormat.Bzip2 or CompressionFormat.Lzma or CompressionFormat.Lzop))
             {
-                throw new InvalidDataException("The stored compression format is unsupported.");
+                throw new ArchiveUnsupportedFeatureException("The stored compression format is unsupported.");
             }
             return format;
         }
@@ -325,7 +325,7 @@ public sealed partial class CpioFormatHandler
         var files = EnumerateDirectoryEntries(inputPath, fsConfig, cancellationToken);
         if (files.Count > MaximumEntries || files.Any(entry => entry.Name.Length > MaximumNameLength))
         {
-            throw new InvalidDataException("CPIO directory exceeds the entry or name limit.");
+            throw new ArchiveCorruptedException("CPIO directory exceeds the entry or name limit.");
         }
         if (metadata?.Configuration["cpio"] is not JsonObject config)
         {
@@ -333,10 +333,10 @@ public sealed partial class CpioFormatHandler
         }
 
         var recorded = config["entries"] as JsonArray
-            ?? throw new InvalidDataException("CPIO entry metadata is missing.");
+            ?? throw new ArchiveCorruptedException("CPIO entry metadata is missing.");
         if (recorded.Count > MaximumEntries || files.Count > MaximumEntries)
         {
-            throw new InvalidDataException("CPIO entry limit exceeded.");
+            throw new ArchiveCorruptedException("CPIO entry limit exceeded.");
         }
 
         var available = files.ToDictionary(entry => entry.Name, StringComparer.Ordinal);
@@ -347,21 +347,21 @@ public sealed partial class CpioFormatHandler
             cancellationToken.ThrowIfCancellationRequested();
             if (item is not JsonObject header)
             {
-                throw new InvalidDataException("Invalid CPIO entry metadata.");
+                throw new ArchiveCorruptedException("Invalid CPIO entry metadata.");
             }
-            var name = (string?)header["name"] ?? throw new InvalidDataException("CPIO entry name is missing.");
+            var name = (string?)header["name"] ?? throw new ArchiveCorruptedException("CPIO entry name is missing.");
             var projection = (string?)header["projection"] ?? name;
             if (name.Length > MaximumNameLength || projection.Length > MaximumNameLength
                 || !seen.Add(projection))
             {
-                throw new InvalidDataException("Invalid or duplicate CPIO entry metadata.");
+                throw new ArchiveCorruptedException("Invalid or duplicate CPIO entry metadata.");
             }
             ArchiveEntry entry;
             if (projection == ".")
             {
                 if ((CpioFileType)header["type"]!.GetValue<int>() != CpioFileType.Directory)
                 {
-                    throw new InvalidDataException("CPIO root entry is not a directory.");
+                    throw new ArchiveCorruptedException("CPIO root entry is not a directory.");
                 }
                 var root = Path.GetFullPath(inputPath);
                 entry = BuildDirectoryEntry(root, root, fsConfig);
@@ -380,7 +380,7 @@ public sealed partial class CpioFormatHandler
                 && !(originalType is CpioFileType.CharacterDevice or CpioFileType.BlockDevice or CpioFileType.Fifo
                     && entry.Metadata.FileType == CpioFileType.Regular && entry.DataLength == 0))
             {
-                throw new InvalidDataException($"CPIO entry '{name}' changed type.");
+                throw new ArchiveCorruptedException($"CPIO entry '{name}' changed type.");
             }
 
             var linkName = entry.LinkName;
@@ -388,7 +388,7 @@ public sealed partial class CpioFormatHandler
             {
                 if (entry.DataLength > MaximumNameLength)
                 {
-                    throw new InvalidDataException($"Symbolic link '{name}' target exceeds the limit.");
+                    throw new ArchiveCorruptedException($"Symbolic link '{name}' target exceeds the limit.");
                 }
                 using var fallback = entry.DataStreamFactory!();
                 var bytes = new byte[checked((int)entry.DataLength)];
@@ -444,7 +444,7 @@ public sealed partial class CpioFormatHandler
                 var current = Convert.ToHexString(hasher.GetHashAndReset());
                 if (digest is not null && digest != current)
                 {
-                    throw new InvalidDataException($"Hardlink group '{entry.Name}' contains different payloads.");
+                    throw new ArchiveCorruptedException($"Hardlink group '{entry.Name}' contains different payloads.");
                 }
                 digest = current;
             }
@@ -477,10 +477,10 @@ public sealed partial class CpioFormatHandler
                 {
                     var dictionary = xz["dictionarySize"]!.GetValue<uint>();
                     var check = xz["checkType"]?.GetValue<byte>()
-                        ?? throw new InvalidDataException("Missing XZ check type.");
+                        ?? throw new ArchiveCorruptedException("Missing XZ check type.");
                     if (dictionary is < 4096 or > 128 * 1024 * 1024 || check is not (1 or 4))
                     {
-                        throw new InvalidDataException("Invalid stored XZ parameters.");
+                        throw new ArchiveCorruptedException("Invalid stored XZ parameters.");
                     }
                     XzCompressor.Compress(raw, bounded, dictionary, check);
                 }
@@ -490,7 +490,7 @@ public sealed partial class CpioFormatHandler
                     var blockLevel = bzip2["blockLevel"]!.GetValue<int>();
                     if (blockLevel is < 1 or > 9)
                     {
-                        throw new InvalidDataException("Invalid stored bzip2 block level.");
+                        throw new ArchiveCorruptedException("Invalid stored bzip2 block level.");
                     }
                     using var encoder = new BZip2OutputStream(bounded, blockLevel) { IsStreamOwner = false };
                     raw.CopyTo(encoder);
@@ -503,7 +503,7 @@ public sealed partial class CpioFormatHandler
                     var unknownSize = lzma["unknownSize"]!.GetValue<bool>();
                     if (property >= 225 || dictionary is < 4096 or > 128 * 1024 * 1024)
                     {
-                        throw new InvalidDataException("Invalid stored LZMA-alone properties.");
+                        throw new ArchiveCorruptedException("Invalid stored LZMA-alone properties.");
                     }
                     var encoder = new Encoder();
                     encoder.SetCoderProperties(
@@ -535,7 +535,7 @@ public sealed partial class CpioFormatHandler
             if (header.Length < 10 || header.Length > 65536
                 || header[0] != 0x1F || header[1] != 0x8B || header[2] != 8)
             {
-                throw new InvalidDataException("Invalid stored gzip header.");
+                throw new ArchiveCorruptedException("Invalid stored gzip header.");
             }
             encoded.Position = 10;
             using var bounded = new CountingWriteStream(destination, MaximumArchiveBytes,
@@ -559,12 +559,12 @@ public sealed partial class CpioFormatHandler
         raw.Position = 0;
         if (!HashStream(raw, cancellationToken).AsSpan().SequenceEqual(expectedHash))
         {
-            throw new InvalidDataException("Repacked CPIO payload differs from its encoded contents.");
+            throw new ArchiveCorruptedException("Repacked CPIO payload differs from its encoded contents.");
         }
         raw.Position = 0;
         if (_archive.DetectFormat(raw) != format)
         {
-            throw new InvalidDataException("Repacked CPIO dialect differs from the requested format.");
+            throw new ArchiveCorruptedException("Repacked CPIO dialect differs from the requested format.");
         }
         foreach (var _ in new CpioArchiveReader().ReadEntriesStreaming(raw, format,
             MaximumArchiveBytes, cancellationToken))
@@ -593,7 +593,7 @@ public sealed partial class CpioFormatHandler
         source.ReadExactly(header);
         if (header[0] != 0x1F || header[1] != 0x8B || header[2] != 8 || (header[3] & 0xE0) != 0)
         {
-            throw new InvalidDataException("Invalid gzip header.");
+            throw new ArchiveCorruptedException("Invalid gzip header.");
         }
         captured.Write(header);
         var flags = header[3];
@@ -628,7 +628,7 @@ public sealed partial class CpioFormatHandler
             {
                 if (captured.Length >= 65536)
                 {
-                    throw new InvalidDataException("Gzip header exceeds 64 KiB.");
+                    throw new ArchiveCorruptedException("Gzip header exceeds 64 KiB.");
                 }
                 var value = source.ReadByte();
                 if (value < 0)
@@ -651,13 +651,13 @@ public sealed partial class CpioFormatHandler
         if (!streamHeader[..6].SequenceEqual((ReadOnlySpan<byte>)[0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00])
             || streamHeader[6] != 0 || streamHeader[7] is not (1 or 4))
         {
-            throw new InvalidDataException("Unsupported XZ stream flags.");
+            throw new ArchiveUnsupportedFeatureException("Unsupported XZ stream flags.");
         }
 
         var headerSize = source.ReadByte();
         if (headerSize is < 1 or > 255)
         {
-            throw new InvalidDataException("Unsupported XZ block header.");
+            throw new ArchiveUnsupportedFeatureException("Unsupported XZ block header.");
         }
         var block = new byte[checked((headerSize + 1) * 4)];
         block[0] = (byte)headerSize;
@@ -665,7 +665,7 @@ public sealed partial class CpioFormatHandler
         var flags = block[1];
         if ((flags & 0x3F) != 0)
         {
-            throw new InvalidDataException("XZ filter chain cannot be preserved.");
+            throw new ArchiveUnsupportedFeatureException("XZ filter chain cannot be preserved.");
         }
         var cursor = 2;
         if ((flags & 0x40) != 0)
@@ -678,19 +678,19 @@ public sealed partial class CpioFormatHandler
         }
         if (ReadVli() != 0x21 || ReadVli() != 1 || cursor >= block.Length - 4)
         {
-            throw new InvalidDataException("Unsupported XZ LZMA2 filter.");
+            throw new ArchiveUnsupportedFeatureException("Unsupported XZ LZMA2 filter.");
         }
         var property = block[cursor];
         if (property > 40)
         {
-            throw new InvalidDataException("Invalid XZ dictionary property.");
+            throw new ArchiveCorruptedException("Invalid XZ dictionary property.");
         }
         var dictionary = property == 40
             ? uint.MaxValue
             : checked((uint)((ulong)(2 | (property & 1)) << ((property / 2) + 11)));
         if (dictionary > 128 * 1024 * 1024)
         {
-            throw new InvalidDataException("XZ dictionary exceeds the 128 MiB rebuild limit.");
+            throw new ArchiveCorruptedException("XZ dictionary exceeds the 128 MiB rebuild limit.");
         }
         return (dictionary, streamHeader[7]);
 
@@ -710,7 +710,7 @@ public sealed partial class CpioFormatHandler
                     return value;
                 }
             }
-            throw new InvalidDataException("Invalid XZ block integer.");
+            throw new ArchiveCorruptedException("Invalid XZ block integer.");
         }
     }
 }

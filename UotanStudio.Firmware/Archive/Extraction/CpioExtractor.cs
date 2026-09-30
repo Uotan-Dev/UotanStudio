@@ -43,12 +43,16 @@ public sealed class CpioExtractor
     /// <para><paramref name="entries"/> 或 <paramref name="destinationDirectory"/>
     /// 为 <see langword="null"/>。</para>
     /// </exception>
+    /// <exception cref="ArchiveCorruptedException">
+    /// An entry path escapes the destination, declares a negative or mismatched length, or is
+    /// absolute under <see cref="AbsolutePathPolicy.Reject"/>.
+    /// <para>条目路径逃出目标目录、声明长度为负或不匹配，或在 <see cref="AbsolutePathPolicy.Reject"/>
+    /// 策略下为绝对路径。</para>
+    /// </exception>
     /// <exception cref="InvalidDataException">
-    /// An entry path escapes the destination, traverses a symbolic link or reparse point, declares
-    /// a negative or mismatched length, or is absolute under
-    /// <see cref="AbsolutePathPolicy.Reject"/>.
-    /// <para>条目路径逃出目标目录、穿过符号链接或重解析点、声明长度为负或不匹配，
-    /// 或在 <see cref="AbsolutePathPolicy.Reject"/> 策略下为绝对路径。</para>
+    /// The destination has no filesystem root, or an extraction path traverses a symbolic link or
+    /// reparse point.
+    /// <para>目标目录没有文件系统根，或解包路径穿过符号链接或重解析点。</para>
     /// </exception>
     /// <exception cref="EndOfStreamException">
     /// A payload stream ends before its declared length.
@@ -159,7 +163,7 @@ public sealed class CpioExtractor
             payloadTarget = GetLinkText(entry, options.CancellationToken);
             if (entry.LinkName is not null && !string.Equals(entry.LinkName, payloadTarget, StringComparison.Ordinal))
             {
-                throw new InvalidDataException($"Symbolic link '{entry.Name}' target does not match its payload.");
+                throw new ArchiveCorruptedException($"Symbolic link '{entry.Name}' target does not match its payload.");
             }
         }
         var linkTarget = entry.LinkName ?? payloadTarget ?? string.Empty;
@@ -310,7 +314,7 @@ public sealed class CpioExtractor
         var combined = Path.GetFullPath(Path.Combine(destinationDirectory, relative));
         var root = Path.GetFullPath(destinationDirectory);
         return !IsPathWithinRoot(combined, root)
-            ? throw new InvalidDataException($"Entry '{entryName}' escapes destination directory.")
+            ? throw new ArchiveCorruptedException($"Entry '{entryName}' escapes destination directory.")
             : combined;
     }
 
@@ -392,7 +396,7 @@ public sealed class CpioExtractor
     {
         if (entry.DeclaredDataLength is { } declared && declared != entry.Data.LongLength)
         {
-            throw new InvalidDataException($"Entry '{entry.Name}' declared length {declared} does not match its data length {entry.Data.LongLength}.");
+            throw new ArchiveCorruptedException($"Entry '{entry.Name}' declared length {declared} does not match its data length {entry.Data.LongLength}.");
         }
     }
 
@@ -422,7 +426,7 @@ public sealed class CpioExtractor
 
         if (options.AbsolutePathPolicy == AbsolutePathPolicy.Reject)
         {
-            throw new InvalidDataException($"Entry '{entryName}' is absolute and AbsolutePathPolicy is Reject.");
+            throw new ArchiveCorruptedException($"Entry '{entryName}' is absolute and AbsolutePathPolicy is Reject.");
         }
 
         var stripped = entryName;
@@ -437,7 +441,7 @@ public sealed class CpioExtractor
 
         stripped = stripped.Replace('\\', '/').TrimStart('/');
         return stripped.Length == 0
-            ? throw new InvalidDataException($"Entry '{entryName}' resolves to an empty relative path after stripping root.")
+            ? throw new ArchiveCorruptedException($"Entry '{entryName}' resolves to an empty relative path after stripping root.")
             : PathPatternMatcher.NormalizeArchivePath(stripped);
     }
 

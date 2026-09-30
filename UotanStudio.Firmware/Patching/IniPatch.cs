@@ -139,14 +139,14 @@ public static class IniPatch
             token.ThrowIfCancellationRequested();
             if (++lines > 100_000)
             {
-                throw new InvalidDataException("INI exceeds the line limit.");
+                throw new PatchingCorruptedException("INI exceeds the line limit.");
             }
             var newline = text.IndexOf('\n', offset);
             var end = newline < 0 ? text.Length : newline + 1;
             var line = text.AsSpan(offset, end - offset).TrimEnd('\n').TrimEnd('\r');
             if (line.Contains('\r') || line.Contains('\0'))
             {
-                throw new InvalidDataException("INI contains an unsupported line separator or NUL.");
+                throw new PatchingUnsupportedFeatureException("INI contains an unsupported line separator or NUL.");
             }
             var trimmed = line.Trim();
             if (!trimmed.IsEmpty && trimmed[0] is not '#' and not ';')
@@ -155,7 +155,7 @@ public static class IniPatch
                 {
                     if (trimmed[^1] != ']')
                     {
-                        throw new InvalidDataException("Invalid INI section header.");
+                        throw new PatchingCorruptedException("Invalid INI section header.");
                     }
                     var next = trimmed[1..^1].Trim().ToString();
                     ValidateName(next, false);
@@ -176,7 +176,7 @@ public static class IniPatch
                     var equals = line.IndexOf('=');
                     if (equals < 0)
                     {
-                        throw new InvalidDataException("INI entries must be single-line key=value assignments.");
+                        throw new PatchingCorruptedException("INI entries must be single-line key=value assignments.");
                     }
                     var name = line[..equals].Trim().ToString();
                     ValidateName(name, false);

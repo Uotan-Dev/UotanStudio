@@ -62,7 +62,7 @@ public sealed class ImageConfigurationEditorTests : IDisposable
         }
         else
         {
-            await Assert.ThrowsAsync<InvalidDataException>(() => ImageConfigurationEditor.RebuildAsync(source, format,
+            await Assert.ThrowsAsync<PatchingCorruptedException>(() => ImageConfigurationEditor.RebuildAsync(source, format,
                 "/build.prop", replacement, output, 64 * 1024 * 1024, 1, Token));
         }
 

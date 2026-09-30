@@ -228,7 +228,7 @@ public sealed class FileSystemPreservationTests : IDisposable
         Assert.Equal(Path.Combine(_root, "ordinary"), paths.Resolve("ordinary"));
         foreach (var name in new[] { "CON", "a\\b", "trailing.", "x:y" })
             Assert.StartsWith("uotan-name-", Path.GetFileName(paths.Resolve(name)));
-        Assert.Throws<InvalidDataException>(() => new PortableExtractionPaths(_root, ["../escape"]));
+        Assert.Throws<FileSystemCorruptedException>(() => new PortableExtractionPaths(_root, ["../escape"]));
     }
 
     [Theory]

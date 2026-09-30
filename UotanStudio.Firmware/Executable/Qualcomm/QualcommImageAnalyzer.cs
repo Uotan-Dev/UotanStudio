@@ -250,7 +250,7 @@ public static class QualcommImageAnalyzer
             var analysis = AnalyzeElf(window, options, token);
             return (analysis, ComponentFailureStage(analysis), analysis.Diagnostics);
         }
-        catch (InvalidDataException error)
+        catch (Exception error) when (error is InvalidDataException or ExecutableException)
         {
             if (component.Offset + component.Length >= stream.Length)
             {
@@ -266,7 +266,7 @@ public static class QualcommImageAnalyzer
                     [.. retried.Diagnostics,
                         "A nested component boundary clipped this component's declared ranges, so the window was widened to the end of the input."]);
             }
-            catch (InvalidDataException widenedError)
+            catch (Exception widenedError) when (widenedError is InvalidDataException or ExecutableException)
             {
                 return (null, "ElfStructure", [widenedError.Message]);
             }
@@ -357,7 +357,7 @@ public static class QualcommImageAnalyzer
             layout = QualcommMbnLayout.Read(stream, checked((long)hashSegment.Offset),
                 checked((long)hashSegment.FileSize), token);
         }
-        catch (InvalidDataException error)
+        catch (Exception error) when (error is InvalidDataException or ExecutableException)
         {
             return new()
             {
@@ -411,7 +411,7 @@ public static class QualcommImageAnalyzer
                     .. authorities.Diagnostics]
             };
         }
-        catch (InvalidDataException error)
+        catch (Exception error) when (error is InvalidDataException or ExecutableException)
         {
             return new() { Diagnostics = [error.Message] };
         }
@@ -601,7 +601,7 @@ public static class QualcommImageAnalyzer
     {
         if (offset < 0 || length < 0 || offset > stream.Length || length > stream.Length - offset)
         {
-            throw new InvalidDataException("Qualcomm signed range exceeds the file.");
+            throw new ExecutableCorruptedException("Qualcomm signed range exceeds the file.");
         }
 
         var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(64 * 1024);

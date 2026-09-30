@@ -106,7 +106,7 @@ public sealed class ArchiveEntry
     /// <para>优先取 <see cref="DeclaredDataLength"/>；否则取可寻址 <see cref="DataStream"/> 的
     /// 长度；再否则取 <see cref="Data"/> 的大小。</para>
     /// </value>
-    /// <exception cref="InvalidDataException">
+    /// <exception cref="ArchiveCorruptedException">
     /// <see cref="DeclaredDataLength"/> is negative.
     /// <para><see cref="DeclaredDataLength"/> 为负数。</para>
     /// </exception>
@@ -120,7 +120,7 @@ public sealed class ArchiveEntry
         {
             if (DeclaredDataLength is < 0)
             {
-                throw new InvalidDataException($"Entry '{Name}' has a negative declared payload length.");
+                throw new ArchiveCorruptedException($"Entry '{Name}' has a negative declared payload length.");
             }
 
             return DeclaredDataLength ?? (DataStream is { CanSeek: true } stream

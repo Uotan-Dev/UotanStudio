@@ -86,7 +86,6 @@ public sealed class FstabPatchTests
     }
 
     [Theory]
-    [InlineData("system /system ext4 ro", 1)]
     [InlineData("system /system ext4 ro wait\nsystem /system erofs ro wait", 1)]
     [InlineData("system /system ext4 ro wait", 0)]
     public void Read_MalformedOrAmbiguousSelection_Rejects(string text, int expected)
@@ -94,6 +93,11 @@ public sealed class FstabPatchTests
         Assert.Throws<InvalidDataException>(() => FstabPatch.Read(text, "/system", "", FstabField.BlockDevice,
             expected, TestContext.Current.CancellationToken));
     }
+
+    [Fact]
+    public void Read_MalformedFieldCount_Rejects()
+        => Assert.Throws<PatchingCorruptedException>(() => FstabPatch.Read("system /system ext4 ro", "/system", "",
+            FstabField.BlockDevice, 1, TestContext.Current.CancellationToken));
 
     [Fact]
     public void Apply_OldValueMismatchOrDuplicateFlag_Rejects()

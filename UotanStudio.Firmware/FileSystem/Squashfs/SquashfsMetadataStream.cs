@@ -59,7 +59,7 @@ internal sealed class SquashfsMetadataStream
     /// <param name="relativeBlock">The chain offset recorded in an inode address pair.
     /// <para>inode 地址对中记录的链偏移。</para></param>
     /// <returns>The decoded window bytes (at most 8 KiB). <para>解码后的窗口字节（至多 8 KiB）。</para></returns>
-    /// <exception cref="InvalidDataException">The offset is past the chain end or a block is corrupt.
+    /// <exception cref="FileSystemCorruptedException">The offset is past the chain end or a block is corrupt.
     /// <para>偏移越过链尾或块损坏时抛出。</para></exception>
     internal byte[] WindowAt(long relativeBlock)
     {
@@ -77,7 +77,7 @@ internal sealed class SquashfsMetadataStream
             }
         }
 
-        throw new InvalidDataException(
+        throw new FileSystemCorruptedException(
             $"The SquashFS metadata block {relativeBlock} at table {TableStart} lies beyond the window chain.");
     }
 
@@ -85,7 +85,7 @@ internal sealed class SquashfsMetadataStream
     /// <para>按链位置定位窗口；若尚未加载则继续向前推进。</para></summary>
     /// <param name="relativeBlock">Table-relative chain offset. <para>表相对的链偏移。</para></param>
     /// <returns>The index into the chain order list. <para>链顺序列表中的下标。</para></returns>
-    /// <exception cref="InvalidDataException">The offset is not part of this chain.
+    /// <exception cref="FileSystemCorruptedException">The offset is not part of this chain.
     /// <para>偏移不属于本链时抛出。</para></exception>
     internal int IndexOfBlock(long relativeBlock)
     {
@@ -93,7 +93,7 @@ internal sealed class SquashfsMetadataStream
         var index = _chainOrder.IndexOf(relativeBlock);
         if (index < 0)
         {
-            throw new InvalidDataException($"The SquashFS metadata block {relativeBlock} lies beyond the window chain.");
+            throw new FileSystemCorruptedException($"The SquashFS metadata block {relativeBlock} lies beyond the window chain.");
         }
 
         return index;
@@ -104,14 +104,14 @@ internal sealed class SquashfsMetadataStream
     /// <param name="index">Chain index; must be the loaded range or exactly one past it.
     /// <para>链下标；必须落在已加载范围或恰好为其末尾之后。</para></param>
     /// <returns>The decoded window bytes. <para>解码后的窗口字节。</para></returns>
-    /// <exception cref="InvalidDataException">The chain ended before this index. <para>链在此下标之前已结束。</para></exception>
+    /// <exception cref="FileSystemCorruptedException">The chain ended before this index. <para>链在此下标之前已结束。</para></exception>
     internal byte[] WindowAtIndex(int index)
     {
         while (_chainOrder.Count <= index)
         {
             if (_endReached)
             {
-                throw new InvalidDataException("The SquashFS metadata table has no further window.");
+                throw new FileSystemCorruptedException("The SquashFS metadata table has no further window.");
             }
 
             ReadNextWindow();
@@ -135,13 +135,13 @@ internal sealed class SquashfsMetadataStream
         _cancellationToken.ThrowIfCancellationRequested();
         if (_chainOrder.Count >= MaximumWindows)
         {
-            throw new InvalidDataException("The SquashFS metadata table exceeds the supported window count.");
+            throw new FileSystemCorruptedException("The SquashFS metadata table exceeds the supported window count.");
         }
 
         var absolute = checked(TableStart + _nextBlockRelative);
         if (absolute + 2 > _bytesUsed)
         {
-            throw new InvalidDataException($"The SquashFS metadata block header at {absolute} exceeds the image.");
+            throw new FileSystemCorruptedException($"The SquashFS metadata block header at {absolute} exceeds the image.");
         }
 
         Span<byte> header = stackalloc byte[2];
@@ -154,7 +154,7 @@ internal sealed class SquashfsMetadataStream
         var size = raw & 0x7FFF;
         if (size == 0 || absolute + 2 + (long)size > _bytesUsed)
         {
-            throw new InvalidDataException($"The SquashFS metadata block at {absolute} declares an out-of-range size {size}.");
+            throw new FileSystemCorruptedException($"The SquashFS metadata block at {absolute} declares an out-of-range size {size}.");
         }
 
         var payload = new byte[size];
@@ -164,7 +164,7 @@ internal sealed class SquashfsMetadataStream
             : SquashfsDecompression.Decompress(_compression, payload, SquashfsSuperblock.MetadataWindowSize, exactOutput: false);
         if (decoded.Length is 0 or > SquashfsSuperblock.MetadataWindowSize)
         {
-            throw new InvalidDataException($"The SquashFS metadata block at {absolute} expands to {decoded.Length} bytes.");
+            throw new FileSystemCorruptedException($"The SquashFS metadata block at {absolute} expands to {decoded.Length} bytes.");
         }
 
         var relative = _nextBlockRelative;
@@ -195,7 +195,7 @@ internal sealed class SquashfsMetadataStream
             _window = table.WindowAtIndex(_index);
             if (offset < 0 || offset > _window.Length)
             {
-                throw new InvalidDataException($"The SquashFS window offset {offset} exceeds the decoded window.");
+                throw new FileSystemCorruptedException($"The SquashFS window offset {offset} exceeds the decoded window.");
             }
 
             _position = offset;
@@ -205,7 +205,7 @@ internal sealed class SquashfsMetadataStream
         /// <para>精确读取请求的字节数并返回新数组。</para></summary>
         /// <param name="count">Byte count to consume; may cross windows. <para>需消耗的字节数；可跨窗口。</para></param>
         /// <returns>The decoded table bytes. <para>解码后的表字节。</para></returns>
-        /// <exception cref="InvalidDataException">The window chain ended before <paramref name="count"/> bytes.
+        /// <exception cref="FileSystemCorruptedException">The window chain ended before <paramref name="count"/> bytes.
         /// <para>窗口链在读满前结束时抛出。</para></exception>
         internal byte[] ReadBytes(int count)
         {
@@ -227,7 +227,7 @@ internal sealed class SquashfsMetadataStream
         /// <summary>Skips forward through the table bytes.
         /// <para>在表字节中向前跳过。</para></summary>
         /// <param name="count">Byte count to skip; may cross windows. <para>需跳过的字节数；可跨窗口。</para></param>
-        /// <exception cref="InvalidDataException">The window chain ended first. <para>窗口链提前结束。</para></exception>
+        /// <exception cref="FileSystemCorruptedException">The window chain ended first. <para>窗口链提前结束。</para></exception>
         internal void Skip(int count)
         {
             ArgumentOutOfRangeException.ThrowIfNegative(count);
@@ -246,7 +246,7 @@ internal sealed class SquashfsMetadataStream
             {
                 if (_window.Length < SquashfsSuperblock.MetadataWindowSize)
                 {
-                    throw new InvalidDataException("The SquashFS metadata table ends before the requested span.");
+                    throw new FileSystemCorruptedException("The SquashFS metadata table ends before the requested span.");
                 }
 
                 _index++;

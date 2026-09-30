@@ -49,18 +49,18 @@ internal sealed class SelinuxFileLabelInference
             var fullPath = Path.Combine(root, hostPath.Replace('/', Path.DirectorySeparatorChar));
             using var stream = File.OpenRead(fullPath);
             budget -= stream.Length;
-            if (budget < 0) throw new InvalidDataException("SELinux text policies exceed the 8 MiB limit.");
+            if (budget < 0) throw new FileSystemCorruptedException("SELinux text policies exceed the 8 MiB limit.");
             using var reader = new StreamReader(stream, new UTF8Encoding(false, true), detectEncodingFromByteOrderMarks: false);
             var rules = new List<Rule>();
             while (reader.ReadLine() is { } line)
             {
-                if (line.Length > 16384) throw new InvalidDataException("SELinux rule exceeds the line limit.");
+                if (line.Length > 16384) throw new FileSystemCorruptedException("SELinux rule exceeds the line limit.");
                 line = line.Trim();
                 if (line.Length == 0 || line.StartsWith('#')) continue;
-                if (++count > 32768) throw new InvalidDataException("Too many SELinux path rules.");
+                if (++count > 32768) throw new FileSystemCorruptedException("Too many SELinux path rules.");
                 var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length is not (2 or 3) || !parts[0].StartsWith('/'))
-                    throw new InvalidDataException($"Invalid SELinux rule in {path}.");
+                    throw new FileSystemCorruptedException($"Invalid SELinux rule in {path}.");
                 var kind = parts.Length == 2 ? 0 : parts[1] switch
                 {
                     "--" => 0x8000,
@@ -70,17 +70,17 @@ internal sealed class SelinuxFileLabelInference
                     "-c" => 0x2000,
                     "-p" => 0x1000,
                     "-s" => 0xC000,
-                    _ => throw new InvalidDataException($"Invalid SELinux file kind in {path}.")
+                    _ => throw new FileSystemCorruptedException($"Invalid SELinux file kind in {path}.")
                 };
                 var label = parts[^1];
                 if (label != "<<none>>" && !IsObjectContext(label))
-                    throw new InvalidDataException($"Invalid SELinux file object context in {path}: {label}");
+                    throw new FileSystemCorruptedException($"Invalid SELinux file object context in {path}: {label}");
                 var pattern = parts[0];
                 var digest = pattern.Replace("\\d", "", StringComparison.Ordinal);
                 if (digest.Contains("(?", StringComparison.Ordinal) || digest.Contains("[[:", StringComparison.Ordinal)
                     || digest.Contains("&&", StringComparison.Ordinal) || digest.Contains("-[", StringComparison.Ordinal)
                     || Regex.IsMatch(digest, @"\\[a-zA-Z0-9]", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
-                    throw new InvalidDataException($"Unsupported SELinux regex in {path}: {pattern}");
+                    throw new FileSystemUnsupportedFeatureException($"Unsupported SELinux regex in {path}: {pattern}");
                 var literal = !Regex.IsMatch(pattern, @"(?<!\\)[.\^$?*+|\[({]", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
                 try
                 {
@@ -90,7 +90,7 @@ internal sealed class SelinuxFileLabelInference
                 }
                 catch (Exception error) when (error is ArgumentException or NotSupportedException)
                 {
-                    throw new InvalidDataException($"Unsupported SELinux regex in {path}: {pattern}", error);
+                    throw new FileSystemUnsupportedFeatureException($"Unsupported SELinux regex in {path}: {pattern}", error);
                 }
             }
             policies.Add(rules.ToArray());
@@ -109,7 +109,7 @@ internal sealed class SelinuxFileLabelInference
                 ?? policy.LastOrDefault(r => !r.Literal && (r.Kind == 0 || r.Kind == kind) && r.Pattern.IsMatch(key));
             if (match is not null) matches.Add(match.Label);
         }
-        if (matches.Count > 1) throw new InvalidDataException($"Conflicting SELinux policy sources for {runtimePath}.");
+        if (matches.Count > 1) throw new FileSystemCorruptedException($"Conflicting SELinux policy sources for {runtimePath}.");
         if (matches.Count == 1)
         {
             var label = matches.Single();

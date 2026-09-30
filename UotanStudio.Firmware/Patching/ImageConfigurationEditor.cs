@@ -144,7 +144,7 @@ public static class ImageConfigurationEditor
         {
             "EXT4" => new Ext4FormatHandler(),
             "EROFS" => new ErofsFormatHandler(),
-            _ => throw new InvalidDataException("Only raw EXT4 and EROFS configuration edits are supported.")
+            _ => throw new PatchingUnsupportedFeatureException("Only raw EXT4 and EROFS configuration edits are supported.")
         };
         token.ThrowIfCancellationRequested();
         var temporary = Path.Combine(Path.GetTempPath(), "uotan-image-edit-" + Guid.NewGuid().ToString("N"));
@@ -257,7 +257,7 @@ public static class ImageConfigurationEditor
             token.ThrowIfCancellationRequested();
             if (size < 0 || size > maximumBytes - total)
             {
-                throw new InvalidDataException("Image exceeds the extraction byte budget.");
+                throw new PatchingCorruptedException("Image exceeds the extraction byte budget.");
             }
             total += size;
             return path;

@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.Executable;
 using UotanStudio.Firmware.Executable.Elf;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
@@ -152,17 +153,101 @@ public sealed class ElfReaderTests
     [InlineData(40, ulong.MaxValue)]
     [InlineData(72, ulong.MaxValue)]
     [InlineData(96, ulong.MaxValue)]
-    [InlineData(104, 3UL)]
-    [InlineData(112, 3UL)]
     [InlineData(280, ulong.MaxValue)]
     [InlineData(288, ulong.MaxValue)]
-    public void Read_OutOfRangeOrInvalidMetadata_RejectsWithoutOverflow(int offset, ulong value)
+    public void Read_OutOfRangeTableOrSectionRange_RejectsViaSharedBoundsValidator(int offset, ulong value)
     {
         var data = ElfFixture.Create();
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(offset), value);
         using var stream = new MemoryStream(data);
 
         Assert.Throws<InvalidDataException>(() => ElfReader.Read(stream, TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData(104, 3UL, "ELF load-segment file size exceeds its memory size.")]
+    [InlineData(112, 3UL, "ELF alignment is not a power of two.")]
+    public void Read_CorruptSegmentFields_ReportTypedCorruption(int offset, ulong value, string message)
+    {
+        var data = ElfFixture.Create();
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(offset), value);
+        using var stream = new MemoryStream(data);
+
+        var error = Assert.Throws<ExecutableCorruptedException>(
+            () => ElfReader.Read(stream, TestContext.Current.CancellationToken));
+        Assert.Equal(message, error.Message);
+    }
+
+    [Fact]
+    public void Read_InvalidIdentification_ReportsTypedCorruption()
+    {
+        var data = ElfFixture.Create();
+        data[6] = 2;
+        using var stream = new MemoryStream(data);
+
+        var error = Assert.Throws<ExecutableCorruptedException>(
+            () => ElfReader.Read(stream, TestContext.Current.CancellationToken));
+        Assert.Equal("Invalid or truncated ELF header.", error.Message);
+    }
+
+    [Fact]
+    public void Read_NonNullSectionZero_ReportsTypedCorruption()
+    {
+        var data = ElfFixture.Create(extended: true);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(132), 1);
+        using var stream = new MemoryStream(data);
+
+        var error = Assert.Throws<ExecutableCorruptedException>(
+            () => ElfReader.Read(stream, TestContext.Current.CancellationToken));
+        Assert.Equal("ELF section zero must be SHT_NULL.", error.Message);
+    }
+
+    [Fact]
+    public void Read_ExtendedNameTableIndexOutOfRange_ReportsTypedCorruption()
+    {
+        var data = ElfFixture.Create(extended: true);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(168), 99);
+        using var stream = new MemoryStream(data);
+
+        var error = Assert.Throws<ExecutableCorruptedException>(
+            () => ElfReader.Read(stream, TestContext.Current.CancellationToken));
+        Assert.Equal("ELF section-name table index is out of range.", error.Message);
+    }
+
+    [Fact]
+    public void Read_SectionLinkOutOfRange_ReportsTypedCorruption()
+    {
+        var data = ElfFixture.Create();
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(296), 99);
+        using var stream = new MemoryStream(data);
+
+        var error = Assert.Throws<ExecutableCorruptedException>(
+            () => ElfReader.Read(stream, TestContext.Current.CancellationToken));
+        Assert.Equal("Invalid ELF section link or entry size.", error.Message);
+    }
+
+    [Fact]
+    public void Read_NameStringTableWrongType_ReportsTypedCorruption()
+    {
+        var data = ElfFixture.Create();
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(196), 1);
+        using var stream = new MemoryStream(data);
+
+        var error = Assert.Throws<ExecutableCorruptedException>(
+            () => ElfReader.Read(stream, TestContext.Current.CancellationToken));
+        Assert.Equal("Invalid or excessive ELF section-name string table.", error.Message);
+    }
+
+    [Fact]
+    public void Read_ExtendedSegmentCountAboveEntryLimit_RejectsBeforeAllocatingTable()
+    {
+        var data = ElfFixture.Create(extended: true);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(172), 200000);
+        using var stream = new MemoryStream(data);
+
+        var error = Assert.Throws<ExecutableCorruptedException>(
+            () => ElfReader.Read(stream, TestContext.Current.CancellationToken));
+        Assert.Equal("ELF table exceeds the metadata entry limit.", error.Message);
     }
 
     [Fact]
@@ -172,7 +257,9 @@ public sealed class ElfReaderTests
         BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(160), uint.MaxValue);
         using var stream = new MemoryStream(data);
 
-        Assert.Throws<InvalidDataException>(() => ElfReader.Read(stream, TestContext.Current.CancellationToken));
+        var error = Assert.Throws<ExecutableCorruptedException>(
+            () => ElfReader.Read(stream, TestContext.Current.CancellationToken));
+        Assert.Equal("Invalid or excessive ELF extended section count.", error.Message);
     }
 
     [Fact]
@@ -182,7 +269,9 @@ public sealed class ElfReaderTests
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(256), 100);
         using var stream = new MemoryStream(data);
 
-        Assert.Throws<InvalidDataException>(() => ElfReader.Read(stream, TestContext.Current.CancellationToken));
+        var error = Assert.Throws<ExecutableCorruptedException>(
+            () => ElfReader.Read(stream, TestContext.Current.CancellationToken));
+        Assert.Equal("ELF section name is outside the string table.", error.Message);
     }
 
     [Fact]
@@ -192,7 +281,9 @@ public sealed class ElfReaderTests
         data[438] = 1;
         using var stream = new MemoryStream(data);
 
-        Assert.Throws<InvalidDataException>(() => ElfReader.Read(stream, TestContext.Current.CancellationToken));
+        var error = Assert.Throws<ExecutableCorruptedException>(
+            () => ElfReader.Read(stream, TestContext.Current.CancellationToken));
+        Assert.Equal("ELF string table must start and end with NUL.", error.Message);
     }
 
     [Fact]

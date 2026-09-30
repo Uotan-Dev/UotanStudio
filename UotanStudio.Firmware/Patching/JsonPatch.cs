@@ -136,7 +136,7 @@ public static class JsonPatch
         }
         if (delete && segments.Length == 0)
         {
-            throw new InvalidDataException("Deleting the JSON document root is not supported.");
+            throw new PatchingUnsupportedFeatureException("Deleting the JSON document root is not supported.");
         }
         if (!exists && delete)
         {
@@ -210,7 +210,7 @@ public static class JsonPatch
         token.ThrowIfCancellationRequested();
         if (++count > MaxNodes)
         {
-            throw new InvalidDataException("JSON exceeds the node limit.");
+            throw new PatchingCorruptedException("JSON exceeds the node limit.");
         }
         if (element.ValueKind == JsonValueKind.Object)
         {

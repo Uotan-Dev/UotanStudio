@@ -204,7 +204,7 @@ internal static class QualcommAuthentication
 
                 if (certificates.Count == maximumCount)
                 {
-                    throw new InvalidDataException("Certificate count exceeds the limit.");
+                    throw new ExecutableCorruptedException("Certificate count exceeds the limit.");
                 }
 
                 var remaining = data[offset..];
@@ -215,12 +215,12 @@ internal static class QualcommAuthentication
 
             if (certificates.Count == 0)
             {
-                throw new InvalidDataException("Certificate package is empty.");
+                throw new ExecutableCorruptedException("Certificate package is empty.");
             }
 
             return true;
         }
-        catch (Exception exception) when (exception is AsnContentException or CryptographicException or InvalidDataException)
+        catch (Exception exception) when (exception is AsnContentException or CryptographicException or InvalidDataException or ExecutableException)
         {
             error = exception.Message;
             foreach (var certificate in certificates)
@@ -536,7 +536,7 @@ internal static class QualcommAuthentication
         foreach (var (offset, length) in masks.Where(mask => mask.Item2 > 0).OrderBy(mask => mask.Item1))
         {
             var start = baseOffset + offset;
-            if (start < cursor || start + length > signedEnd) throw new InvalidDataException("Signed-data mask is out of range.");
+            if (start < cursor || start + length > signedEnd) throw new ExecutableCorruptedException("Signed-data mask is out of range.");
             QualcommImageAnalyzer.AppendRange(hash, stream, cursor, start - cursor, token);
             for (var remaining = length; remaining > 0;) { var chunk = Math.Min(remaining, zeros.Length); hash.AppendData(zeros[..chunk]); remaining -= chunk; }
             cursor = start + length;

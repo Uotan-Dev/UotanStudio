@@ -83,7 +83,7 @@ public static partial class InitRcPatch
             if (!services.Add(name)) { ambiguous.Add(name); }
         }
         var external = externalServices.Split('\n');
-        if (external.Length > 100000) { throw new InvalidDataException("Too many external init services."); }
+        if (external.Length > 100000) { throw new PatchingCorruptedException("Too many external init services."); }
         foreach (var line in external)
         {
             token.ThrowIfCancellationRequested();
@@ -91,7 +91,7 @@ public static partial class InitRcPatch
             if (name.Length == 0) { continue; }
             if (name.Length > 16384 || name.Any(char.IsWhiteSpace) || name.Contains('\0') || name.Contains('$'))
             {
-                throw new InvalidDataException("External services must be literal names, one per line.");
+                throw new PatchingCorruptedException("External services must be literal names, one per line.");
             }
             services.Add(name);
         }

@@ -72,14 +72,14 @@ public sealed class ArchiveBrowser : IDisposable
         {
             if (entry.Name.Length == 0) continue;
             if (entry.DataLength > maximumMemberBytes)
-                throw new InvalidDataException($"Archive member '{entry.Name}' exceeds the browsing limit.");
+                throw new ArchiveCorruptedException($"Archive member '{entry.Name}' exceeds the browsing limit.");
             try { expandedBytes = checked(expandedBytes + entry.DataLength); }
-            catch (OverflowException) { throw new InvalidDataException("Archive contents exceed the browsing limit."); }
+            catch (OverflowException) { throw new ArchiveCorruptedException("Archive contents exceed the browsing limit."); }
             if (expandedBytes > maximumMemberBytes)
-                throw new InvalidDataException("Archive contents exceed the browsing limit.");
+                throw new ArchiveCorruptedException("Archive contents exceed the browsing limit.");
             nameCharacters += entry.Name.Length;
             if (members.Count >= 100_000 || nameCharacters > 8 * 1024 * 1024)
-                throw new InvalidDataException("Archive directory exceeds the browsing limit.");
+                throw new ArchiveCorruptedException("Archive directory exceeds the browsing limit.");
             members.Add(new(entry.Name, entry.DataLength, entry.Metadata.FileType));
         }
         Members = members;
@@ -179,7 +179,7 @@ public sealed class ArchiveBrowser : IDisposable
     /// An opened browser with the member list already enumerated.
     /// <para>已打开且完成条目枚举的浏览器实例。</para>
     /// </returns>
-    /// <exception cref="InvalidDataException">
+    /// <exception cref="ArchiveCorruptedException">
     /// The archive is malformed or unsupported, or a member or the whole directory exceeds the
     /// browsing limits.
     /// <para>归档损坏或不受支持，或单个条目与整体目录超出浏览上限。</para>
@@ -222,7 +222,7 @@ public sealed class ArchiveBrowser : IDisposable
                 source.Position = 0;
                 try { sharpArchive = ArchiveFactory.OpenArchive(source, new ReaderOptions { LeaveStreamOpen = true }); }
                 catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException or ArgumentException)
-                { throw new InvalidDataException("The archive is malformed or unsupported.", ex); }
+                { throw new ArchiveCorruptedException("The archive is malformed or unsupported.", ex); }
                 try
                 {
                     return new(source, archiveFormat: null, sharpArchive, memberName,
@@ -237,7 +237,7 @@ public sealed class ArchiveBrowser : IDisposable
 
             ArchiveFormat? format = null;
             try { format = new CpioArchive().DetectFormat(source); }
-            catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException)
+            catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException or ArchiveException)
             {
                 if (Path.GetExtension(memberName).Equals(".tar", StringComparison.OrdinalIgnoreCase))
                     format = ArchiveFormat.Tar;
@@ -269,7 +269,7 @@ public sealed class ArchiveBrowser : IDisposable
     /// Cancels entry enumeration during extraction.
     /// <para>取消解包期间的条目枚举。</para>
     /// </param>
-    /// <exception cref="InvalidDataException">
+    /// <exception cref="ArchiveCorruptedException">
     /// <paramref name="relativePath"/> is absolute or contains traversal, drive, or NUL segments.
     /// <para><paramref name="relativePath"/> 为绝对路径，或含上级回溯、盘符、NUL 等不安全片段。</para>
     /// </exception>
@@ -349,10 +349,10 @@ public sealed class ArchiveBrowser : IDisposable
         if (string.IsNullOrWhiteSpace(path) || path.StartsWith("/", StringComparison.Ordinal)
             || path.StartsWith("\\", StringComparison.Ordinal)
             || Path.IsPathFullyQualified(path))
-            throw new InvalidDataException($"Unsafe archive member path: '{path}'.");
+            throw new ArchiveCorruptedException($"Unsafe archive member path: '{path}'.");
         var parts = path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Any(part => part == ".." || part.Contains(':') || part.Contains('\0')))
-            throw new InvalidDataException($"Unsafe archive member path: '{path}'.");
+            throw new ArchiveCorruptedException($"Unsafe archive member path: '{path}'.");
         return string.Join('/', parts.Where(part => part != "."));
     }
 

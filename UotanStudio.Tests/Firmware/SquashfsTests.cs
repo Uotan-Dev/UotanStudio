@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Text;
 using K4os.Compression.LZ4;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Squashfs;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -80,52 +81,52 @@ public class SquashfsTests
     }
 
     [Fact]
-    public void Constructor_BadMagic_ThrowsInvalidData()
+    public void Constructor_BadMagic_ThrowsFileSystemCorruptedException()
     {
         var fixture = BuildImage();
         fixture.Image[0] = 0;
-        Assert.Throws<InvalidDataException>(() => new SquashfsParser(new MemoryStream(fixture.Image)));
+        Assert.Throws<FileSystemCorruptedException>(() => new SquashfsParser(new MemoryStream(fixture.Image)));
     }
 
     [Fact]
-    public void Constructor_MajorVersionThree_ThrowsInvalidData()
+    public void Constructor_MajorVersionThree_ThrowsUnsupportedFeature()
     {
         var fixture = BuildImage();
         BinaryPrimitives.WriteUInt16LittleEndian(fixture.Image.AsSpan(28), 3);
-        var ex = Assert.Throws<InvalidDataException>(() => new SquashfsParser(new MemoryStream(fixture.Image)));
+        var ex = Assert.Throws<FileSystemUnsupportedFeatureException>(() => new SquashfsParser(new MemoryStream(fixture.Image)));
         Assert.Contains("version", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void Constructor_EnormousInodeCount_ThrowsInvalidData()
+    public void Constructor_EnormousInodeCount_ThrowsFileSystemCorruptedException()
     {
         var fixture = BuildImage();
         BinaryPrimitives.WriteUInt32LittleEndian(fixture.Image.AsSpan(4), uint.MaxValue);
-        Assert.Throws<InvalidDataException>(() => new SquashfsParser(new MemoryStream(fixture.Image)));
+        Assert.Throws<FileSystemCorruptedException>(() => new SquashfsParser(new MemoryStream(fixture.Image)));
     }
 
     [Fact]
-    public void Constructor_TruncatedImage_ThrowsInvalidData()
+    public void Constructor_TruncatedImage_ThrowsFileSystemCorruptedException()
     {
         var fixture = BuildImage();
         var clipped = new byte[500];
         Array.Copy(fixture.Image, clipped, 500);
-        Assert.Throws<InvalidDataException>(() => new SquashfsParser(new MemoryStream(clipped)));
+        Assert.Throws<FileSystemCorruptedException>(() => new SquashfsParser(new MemoryStream(clipped)));
     }
 
     [Fact]
-    public void Constructor_MetadataBlockSizeBeyondImage_ThrowsInvalidData()
+    public void Constructor_MetadataBlockSizeBeyondImage_ThrowsFileSystemCorruptedException()
     {
         var fixture = BuildImage();
         BinaryPrimitives.WriteUInt16LittleEndian(fixture.Image.AsSpan(checked((int)fixture.InodeBlockAddress)), ushort.MaxValue);
-        Assert.Throws<InvalidDataException>(() => new SquashfsParser(new MemoryStream(fixture.Image)));
+        Assert.Throws<FileSystemCorruptedException>(() => new SquashfsParser(new MemoryStream(fixture.Image)));
     }
 
     [Fact]
-    public void Enumerate_OversizedDirectoryEntryName_ThrowsInvalidData()
+    public void Enumerate_OversizedDirectoryEntryName_ThrowsFileSystemCorruptedException()
     {
         var fixture = BuildImage(dirNameLength: 300);
-        Assert.Throws<InvalidDataException>(() =>
+        Assert.Throws<FileSystemCorruptedException>(() =>
         {
             var parser = new SquashfsParser(new MemoryStream(fixture.Image));
             parser.EnumerateEntries();
@@ -136,7 +137,7 @@ public class SquashfsTests
     public void Enumerate_LzmaCompressedWindows_ReportsUnsupportedCompressor()
     {
         var fixture = BuildImage(compressionId: 2, compressMetadata: true);
-        var ex = Assert.Throws<InvalidDataException>(() => new SquashfsParser(new MemoryStream(fixture.Image)));
+        var ex = Assert.Throws<FileSystemUnsupportedFeatureException>(() => new SquashfsParser(new MemoryStream(fixture.Image)));
         Assert.Contains("not supported", ex.Message, StringComparison.Ordinal);
     }
 

@@ -60,7 +60,7 @@ public static class FileContextPatch
         token.ThrowIfCancellationRequested();
         TextPatch.ValidateSize(text);
         if (text.Contains('\0'))
-            throw new InvalidDataException("File contexts source must not contain NUL.");
+            throw new PatchingCorruptedException("File contexts source must not contain NUL.");
         var prefix = BuildRebasePrefix(mountPrefix, partition);
         var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         var output = new System.Text.StringBuilder();
@@ -73,7 +73,7 @@ public static class FileContextPatch
         {
             token.ThrowIfCancellationRequested();
             if (++lineNumber > 100000)
-                throw new InvalidDataException("Too many file context lines.");
+                throw new PatchingCorruptedException("Too many file context lines.");
             var end = text.IndexOf('\n', position);
             var lineEnd = end < 0 ? text.Length : end + 1;
             var contentEnd = end < 0 ? text.Length : end > position && text[end - 1] == '\r' ? end - 1 : end;
@@ -104,7 +104,7 @@ public static class FileContextPatch
             {
                 warnings.Add($"line {lineNumber}: regex expression '{expression}' kept without a prefix rewrite");
                 if (warnings.Count > 10000)
-                    throw new InvalidDataException("Too many regex file context warnings.");
+                    throw new PatchingCorruptedException("Too many regex file context warnings.");
                 output.Append(text, position, lineEnd - position);
             }
             else
@@ -138,17 +138,17 @@ public static class FileContextPatch
                 cursor++;
             fields.Add((start, cursor - start));
             if (fields.Count > 3)
-                throw new InvalidDataException($"File context rule on line {lineNumber} requires two or three fields.");
+                throw new PatchingCorruptedException($"File context rule on line {lineNumber} requires two or three fields.");
             while (cursor < contentEnd && text[cursor] is ' ' or '\t')
                 cursor++;
         }
 
         if (fields.Count < 2)
-            throw new InvalidDataException($"File context rule on line {lineNumber} requires a context.");
+            throw new PatchingCorruptedException($"File context rule on line {lineNumber} requires a context.");
         ValidateKind(fields.Count == 3 ? text.Substring(fields[1].Start, fields[1].Length) : "");
         ValidateContext(text.Substring(fields[^1].Start, fields[^1].Length));
         if (!text.Substring(fields[0].Start, fields[0].Length).StartsWith('/'))
-            throw new InvalidDataException($"File context expression on line {lineNumber} must begin with a slash.");
+            throw new PatchingCorruptedException($"File context expression on line {lineNumber} must begin with a slash.");
         return [.. fields];
     }
 
@@ -363,11 +363,11 @@ public static class FileContextPatch
         while (position < text.Length)
         {
             token.ThrowIfCancellationRequested();
-            if (++lines > 100000) { throw new InvalidDataException("Too many file context lines."); }
+            if (++lines > 100000) { throw new PatchingCorruptedException("Too many file context lines."); }
             var end = text.IndexOf('\n', position);
             if (end < 0) { end = text.Length; }
             var contentEnd = end > position && text[end - 1] == '\r' ? end - 1 : end;
-            if (contentEnd - position > 16384) { throw new InvalidDataException("File context line exceeds the limit."); }
+            if (contentEnd - position > 16384) { throw new PatchingCorruptedException("File context line exceeds the limit."); }
             var cursor = position;
             while (cursor < contentEnd && text[cursor] is ' ' or '\t') { cursor++; }
             if (cursor < contentEnd && text[cursor] != '#')
@@ -378,15 +378,15 @@ public static class FileContextPatch
                     var start = cursor;
                     while (cursor < contentEnd && text[cursor] is not (' ' or '\t')) { cursor++; }
                     fields.Add((start, cursor - start));
-                    if (fields.Count > 3) { throw new InvalidDataException("File context rules require two or three fields."); }
+                    if (fields.Count > 3) { throw new PatchingCorruptedException("File context rules require two or three fields."); }
                     while (cursor < contentEnd && text[cursor] is ' ' or '\t') { cursor++; }
                 }
-                if (fields.Count < 2) { throw new InvalidDataException("File context rules require a context."); }
+                if (fields.Count < 2) { throw new PatchingCorruptedException("File context rules require a context."); }
                 string Field(int index) => text.Substring(fields[index].Start, fields[index].Length);
                 var kind = fields.Count == 3 ? Field(1) : "";
                 ValidateKind(kind);
                 ValidateContext(Field(fields.Count - 1));
-                if (!Field(0).StartsWith('/')) { throw new InvalidDataException("File context expression must begin with a slash."); }
+                if (!Field(0).StartsWith('/')) { throw new PatchingCorruptedException("File context expression must begin with a slash."); }
                 if (Field(0) == expression && kind == fileKind)
                 {
                     if (selected is not null) { throw new InvalidDataException("Duplicate file context rule identities are ambiguous."); }
@@ -402,7 +402,7 @@ public static class FileContextPatch
     {
         if (value is not ("" or "--" or "-d" or "-l" or "-b" or "-c" or "-p" or "-s"))
         {
-            throw new InvalidDataException("Unsupported file context kind qualifier.");
+            throw new PatchingUnsupportedFeatureException("Unsupported file context kind qualifier.");
         }
     }
 
@@ -411,13 +411,13 @@ public static class FileContextPatch
         if (value == "<<none>>") { return; }
         if (value.Length is < 1 or > 4096 || value.Any(char.IsWhiteSpace) || value.Contains('\0'))
         {
-            throw new InvalidDataException("Invalid SELinux context token.");
+            throw new PatchingCorruptedException("Invalid SELinux context token.");
         }
         var parts = value.Split(':', 4);
         if (parts.Length < 3 || parts.Any(part => part.Length == 0)
             || parts.Take(3).Any(part => part.Any(character => !char.IsAsciiLetterOrDigit(character) && character != '_')))
         {
-            throw new InvalidDataException("Context requires user:role:type and an optional nonempty range.");
+            throw new PatchingCorruptedException("Context requires user:role:type and an optional nonempty range.");
         }
     }
 }

@@ -92,13 +92,13 @@ public sealed class ImageInputServiceTests
     }
 
     [Fact]
-    public void DetectFormat_BareExt4MagicWithoutSuperblockFields_ReturnsUnknown()
+    public void DetectFormat_BareExt4MagicWithoutSuperblockFields_ReturnsRaw()
     {
         using var temp = new TempDirectory();
         var header = MakeHeaderWithUint16(1080, 0xEF53, 1082);
         var file = temp.WriteBytes("system.raw", header);
 
-        Assert.Equal("unknown", ImageInputService.DetectFormat(file));
+        Assert.Equal("raw", ImageInputService.DetectFormat(file));
     }
 
     [Fact]

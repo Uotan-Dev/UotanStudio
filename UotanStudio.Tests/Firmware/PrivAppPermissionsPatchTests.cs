@@ -188,38 +188,38 @@ public sealed class PrivAppPermissionsPatchTests
     [Fact]
     public void Parse_WrongRootElement_Rejects()
     {
-        Assert.Throws<InvalidDataException>(() => PrivAppPermissionsPatch.Parse("<config><permission name=\"a\" package=\"b\"/></config>"));
+        Assert.Throws<PatchingCorruptedException>(() => PrivAppPermissionsPatch.Parse("<config><permission name=\"a\" package=\"b\"/></config>"));
     }
 
     [Fact]
     public void Parse_MissingRequiredAttribute_Rejects()
     {
-        Assert.Throws<InvalidDataException>(() => PrivAppPermissionsPatch.Parse("<permissions><permission package=\"com.uotan.app\"/></permissions>"));
-        Assert.Throws<InvalidDataException>(() => PrivAppPermissionsPatch.Parse("<permissions><privapp-permissions><permission name=\"a\"/></privapp-permissions></permissions>"));
+        Assert.Throws<PatchingCorruptedException>(() => PrivAppPermissionsPatch.Parse("<permissions><permission package=\"com.uotan.app\"/></permissions>"));
+        Assert.Throws<PatchingCorruptedException>(() => PrivAppPermissionsPatch.Parse("<permissions><privapp-permissions><permission name=\"a\"/></privapp-permissions></permissions>"));
     }
 
     [Fact]
     public void Parse_BlankIdentifier_Rejects()
     {
-        Assert.Throws<InvalidDataException>(() => PrivAppPermissionsPatch.Parse("<permissions><permission name=\" \" package=\"com.uotan.app\"/></permissions>"));
+        Assert.Throws<PatchingCorruptedException>(() => PrivAppPermissionsPatch.Parse("<permissions><permission name=\" \" package=\"com.uotan.app\"/></permissions>"));
     }
 
     [Fact]
     public void Parse_DoctypeDeclaration_Rejects()
     {
-        Assert.Throws<InvalidDataException>(() => PrivAppPermissionsPatch.Parse(
+        Assert.Throws<PatchingCorruptedException>(() => PrivAppPermissionsPatch.Parse(
             "<!DOCTYPE permissions [<!ELEMENT permissions ANY>]><permissions/>"));
     }
 
     [Fact]
     public void Parse_NotXml_Rejects()
     {
-        Assert.Throws<InvalidDataException>(() => PrivAppPermissionsPatch.Parse("permissions"));
+        Assert.Throws<PatchingCorruptedException>(() => PrivAppPermissionsPatch.Parse("permissions"));
     }
 
     [Fact]
     public void Add_ControlCharacterIdentifier_Rejects()
     {
-        Assert.Throws<InvalidDataException>(() => PrivAppPermissionsPatch.Add(Whitelist, "com.uotan\u0007.app", "android.permission.DUMP"));
+        Assert.Throws<PatchingCorruptedException>(() => PrivAppPermissionsPatch.Add(Whitelist, "com.uotan\u0007.app", "android.permission.DUMP"));
     }
 }

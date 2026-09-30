@@ -294,6 +294,18 @@ public sealed class QualcommMetadataTests
     }
 
     [Fact]
+    public void IsQualcommElf_CorruptSegmentAlignment_RejectsThroughTypedCorruptionCatch()
+    {
+        var data = QualcommMetadataFixture.CreateElf(new byte[16], QualcommMetadataFixture.CreateMbn(6, 0, 120));
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(112), 3);
+        using var stream = new MemoryStream(data);
+        stream.Position = 5;
+
+        Assert.False(QualcommImageProbe.IsQualcommElf(stream, TestContext.Current.CancellationToken));
+        Assert.Equal(5, stream.Position);
+    }
+
+    [Fact]
     public void Analyze_CanceledMetadataRead_RestoresPositionWithoutPublishing()
     {
         using var stream = new MemoryStream(QualcommMetadataFixture.CreateMbn(6, 0, 120));

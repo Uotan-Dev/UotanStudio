@@ -42,7 +42,7 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
     /// <exception cref="ArgumentNullException">
     /// <paramref name="stream"/> is <see langword="null"/>. <para><paramref name="stream"/> 为 <see langword="null"/>。</para>
     /// </exception>
-    /// <exception cref="InvalidDataException">
+    /// <exception cref="ArchiveCorruptedException">
     /// The format is unknown or an entry exceeds the materialization limit.
     /// <para>格式未知，或条目超出物化上限。</para>
     /// </exception>
@@ -73,7 +73,7 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
     /// A lazy sequence whose payloads are copied out of the source as enumeration advances, capped at 256 MiB per entry.
     /// <para>惰性序列，其负载在枚举推进时从源中复制，单条目上限 256 MiB。</para>
     /// </returns>
-    /// <exception cref="InvalidDataException">
+    /// <exception cref="ArchiveCorruptedException">
     /// An entry exceeds the materialization limit or the archive is malformed.
     /// <para>条目超出物化上限，或归档格式非法。</para>
     /// </exception>
@@ -296,7 +296,7 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
     /// Fewer than six bytes remain at the current position.
     /// <para>当前位置剩余字节不足六个。</para>
     /// </exception>
-    /// <exception cref="InvalidDataException">
+    /// <exception cref="ArchiveCorruptedException">
     /// The probed bytes match no known CPIO or TAR layout.
     /// <para>探测字节不匹配任何已知 CPIO 或 TAR 布局。</para>
     /// </exception>
@@ -356,7 +356,7 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
 
             return read >= 512 && IsLikelyTarHeader(probe[..512])
                 ? ArchiveFormat.Tar
-                : throw new InvalidDataException("Unknown archive format.");
+                : throw new ArchiveCorruptedException("Unknown archive format.");
         }
         finally
         {
@@ -508,7 +508,7 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         }
 
         if (entry.DataLength > 256 * 1024 * 1024)
-            throw new InvalidDataException("Archive entry exceeds the 256 MiB materialization limit; use streaming access.");
+            throw new ArchiveCorruptedException("Archive entry exceeds the 256 MiB materialization limit; use streaming access.");
         var data = new byte[checked((int)entry.DataLength)];
         using var opened = entry.DataStream is null
             ? entry.DataStreamFactory?.Invoke() ?? throw new InvalidOperationException($"Entry '{entry.Name}' stream factory returned null.")

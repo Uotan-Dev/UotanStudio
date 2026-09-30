@@ -140,7 +140,7 @@ public sealed class ArchiveBrowserTests
         using (var archive = ZipFile.Open(path, ZipArchiveMode.Create))
         using (var stream = archive.CreateEntry("../escape").Open()) stream.WriteByte(1);
 
-        Assert.Throws<InvalidDataException>(() => ArchiveBrowser.Open(path, Cancellation));
+        Assert.Throws<ArchiveCorruptedException>(() => ArchiveBrowser.Open(path, Cancellation));
     }
 
     [Fact]
@@ -166,9 +166,20 @@ public sealed class ArchiveBrowserTests
         using (var output = File.Create(path))
         using (var writer = new TarWriter(output))
             writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "../escape") { DataStream = new MemoryStream([1]) });
-        Assert.Throws<InvalidDataException>(() => ArchiveBrowser.Open(path, Cancellation));
+        Assert.Throws<ArchiveCorruptedException>(() => ArchiveBrowser.Open(path, Cancellation));
         File.WriteAllText(path, "invalid");
         Assert.ThrowsAny<Exception>(() => ArchiveBrowser.Open(path, Cancellation));
+    }
+
+    [Fact]
+    public void TarExtension_UnrecognisedHeader_FallsBackToTarContainerListing()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "legacy.tar");
+        File.WriteAllBytes(path, new byte[512]);
+        using var browser = ArchiveBrowser.Open(path, Cancellation);
+        Assert.Equal("TAR", browser.FormatName);
+        Assert.Empty(browser.Members);
     }
 
     private static MemoryStream CreateTar()

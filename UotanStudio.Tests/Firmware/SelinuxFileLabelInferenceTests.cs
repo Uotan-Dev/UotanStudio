@@ -1,5 +1,6 @@
 using System.Text;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Metadata;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
 using Xunit;
@@ -77,19 +78,31 @@ public sealed class SelinuxFileLabelInferenceTests : IDisposable
     {
         Policy("/system/bin/new u:object_r:first_file:s0");
         Policy("/system/bin/new u:object_r:second_file:s0", "vendor_file_contexts");
+        Assert.Throws<FileSystemCorruptedException>(() => Infer("bin/new"));
+    }
+
+    [Fact]
+    public void ExplicitNoneExclusionCannotSilentlyFallBack()
+    {
+        Policy("/system/.* <<none>>");
         Assert.Throws<InvalidDataException>(() => Infer("bin/new"));
     }
 
+    [Fact]
+    public void NonObjectContextRuleIsRejectedAsCorruptPolicy()
+    {
+        Policy("/system/.* u:r:init:s0");
+        Assert.Throws<FileSystemCorruptedException>(() => Infer("bin/new"));
+    }
+
     [Theory]
-    [InlineData("/system/.* <<none>>")]
-    [InlineData("/system/.* u:r:init:s0")]
     [InlineData(@"/system/(?=bin).* u:object_r:system_file:s0")]
     [InlineData(@"/system/\w+ u:object_r:system_file:s0")]
     [InlineData("/system/[ u:object_r:system_file:s0")]
-    public void ExclusionsAndUnsupportedPoliciesCannotSilentlyFallBack(string rule)
+    public void UnsupportedRegexPoliciesCannotSilentlyFallBack(string rule)
     {
         Policy(rule);
-        Assert.Throws<InvalidDataException>(() => Infer("bin/new"));
+        Assert.Throws<FileSystemUnsupportedFeatureException>(() => Infer("bin/new"));
     }
 
     [Fact]
@@ -152,7 +165,7 @@ public sealed class SelinuxFileLabelInferenceTests : IDisposable
     public void OversizedPoliciesAreRejected(int length)
     {
         Policy(new string('x', length));
-        Assert.Throws<InvalidDataException>(() => Infer("bin/new"));
+        Assert.Throws<FileSystemCorruptedException>(() => Infer("bin/new"));
     }
 
     private void Policy(string text, string name = "plat_file_contexts")

@@ -53,20 +53,22 @@ internal sealed class SquashfsSuperblock
     /// <param name="imageLength">Total bytes of the source image used for range validation.
     /// <para>用于范围校验的源镜像总字节数。</para></param>
     /// <returns>The validated superblock model. <para>校验通过的超级块模型。</para></returns>
-    /// <exception cref="InvalidDataException">The magic, version, geometry, counts or table starts are invalid.
-    /// <para>魔数、版本、几何参数、计数或表起始位置无效时抛出。</para></exception>
+    /// <exception cref="FileSystemCorruptedException">The magic, geometry, counts or table starts are invalid.
+    /// <para>魔数、几何参数、计数或表起始位置无效时抛出。</para></exception>
+    /// <exception cref="FileSystemUnsupportedFeatureException">The image declares a version this parser does not read.
+    /// <para>镜像声明了本解析器不读取的版本时抛出。</para></exception>
     internal static SquashfsSuperblock Parse(ReadOnlySpan<byte> data, long imageLength)
     {
         if (data.Length < Size)
         {
-            throw new InvalidDataException("The SquashFS superblock is truncated.");
+            throw new FileSystemCorruptedException("The SquashFS superblock is truncated.");
         }
 
         var magicLe = BinaryPrimitives.ReadUInt32LittleEndian(data);
         var be = magicLe != MagicLittleEndian;
         if (be && BinaryPrimitives.ReadUInt32BigEndian(data) != MagicLittleEndian)
         {
-            throw new InvalidDataException("Neither the 'hsqs' nor the 'sqsh' SquashFS magic was found.");
+            throw new FileSystemCorruptedException("Neither the 'hsqs' nor the 'sqsh' SquashFS magic was found.");
         }
 
         var block = data[..Size].ToArray();
@@ -84,37 +86,37 @@ internal sealed class SquashfsSuperblock
         var blockSize = ReadU32(12);
         if (blockLog > MaximumBlockLog || blockSize != 1u << (int)blockLog || blockSize < 4096)
         {
-            throw new InvalidDataException($"The SquashFS block geometry (size {blockSize}, log {blockLog}) is invalid.");
+            throw new FileSystemCorruptedException($"The SquashFS block geometry (size {blockSize}, log {blockLog}) is invalid.");
         }
 
         var major = ReadU16(28);
         var minor = ReadU16(30);
         if (major != 4 || minor > 1)
         {
-            throw new InvalidDataException($"Unsupported SquashFS version {major}.{minor}; only 4.0 and 4.1 are parsed.");
+            throw new FileSystemUnsupportedFeatureException($"Unsupported SquashFS version {major}.{minor}; only 4.0 and 4.1 are parsed.");
         }
 
         var inodeCount = ReadU32(4);
         var fragmentCount = ReadU32(16);
         if (ReadU16(26) == 0)
         {
-            throw new InvalidDataException("The SquashFS id table is empty.");
+            throw new FileSystemCorruptedException("The SquashFS id table is empty.");
         }
 
         if (inodeCount is 0 or > 1 << 20)
         {
-            throw new InvalidDataException($"The SquashFS inode count {inodeCount} exceeds the supported limit.");
+            throw new FileSystemCorruptedException($"The SquashFS inode count {inodeCount} exceeds the supported limit.");
         }
 
         if (fragmentCount > 1 << 20)
         {
-            throw new InvalidDataException($"The SquashFS fragment count {fragmentCount} exceeds the supported limit.");
+            throw new FileSystemCorruptedException($"The SquashFS fragment count {fragmentCount} exceeds the supported limit.");
         }
 
         var bytesUsed = ReadU64(40);
         if (bytesUsed < Size || bytesUsed > (ulong)imageLength)
         {
-            throw new InvalidDataException($"The SquashFS bytes_used {bytesUsed} does not fit the image of {imageLength} bytes.");
+            throw new FileSystemCorruptedException($"The SquashFS bytes_used {bytesUsed} does not fit the image of {imageLength} bytes.");
         }
 
         var result = new SquashfsSuperblock
@@ -155,12 +157,12 @@ internal sealed class SquashfsSuperblock
     {
         if (start == ulong.MaxValue)
         {
-            throw new InvalidDataException($"The SquashFS {name} start is the invalid-block sentinel.");
+            throw new FileSystemCorruptedException($"The SquashFS {name} start is the invalid-block sentinel.");
         }
 
         if (start + 2 > BytesUsed)
         {
-            throw new InvalidDataException($"The SquashFS {name} start {start} lies beyond the used image bytes.");
+            throw new FileSystemCorruptedException($"The SquashFS {name} start {start} lies beyond the used image bytes.");
         }
     }
 }

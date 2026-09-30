@@ -27,7 +27,7 @@ internal static class QualcommMelfComponents
                 if (offsets.Count == 0 || offsets[^1] != offset)
                     offsets.Add(offset);
                 if (offsets.Count > MaximumComponents)
-                    throw new InvalidDataException("Qualcomm multi-ELF component count exceeds the supported limit.");
+                    throw new ExecutableCorruptedException("Qualcomm multi-ELF component count exceeds the supported limit.");
             }
 
             if (count < ScanChunkBytes)

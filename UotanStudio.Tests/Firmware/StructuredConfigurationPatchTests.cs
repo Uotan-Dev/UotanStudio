@@ -61,7 +61,7 @@ public sealed class StructuredConfigurationPatchTests
         var removed = JsonPatch.Apply(added.Text, "/a", "", true, true, "null", false, TestContext.Current.CancellationToken);
         Assert.Null(JsonPatch.Read(removed.Text, "/a", TestContext.Current.CancellationToken));
         Assert.False(JsonPatch.Apply(removed.Text, "/a", "", true, false, "", false, TestContext.Current.CancellationToken).Changed);
-        Assert.Throws<InvalidDataException>(() => JsonPatch.Apply("{}", "", "", true, false, "", false, TestContext.Current.CancellationToken));
+        Assert.Throws<PatchingUnsupportedFeatureException>(() => JsonPatch.Apply("{}", "", "", true, false, "", false, TestContext.Current.CancellationToken));
         Assert.Throws<InvalidDataException>(() => JsonPatch.Apply("[]", "/0", "1", false, false, "", true, TestContext.Current.CancellationToken));
     }
 
@@ -80,8 +80,8 @@ public sealed class StructuredConfigurationPatchTests
     public void Read_JsonResourceLimits_RejectsExcessiveDepthAndNodes()
     {
         Assert.ThrowsAny<JsonException>(() => JsonPatch.Read(new string('[', 65) + "0" + new string(']', 65), "", TestContext.Current.CancellationToken));
-        Assert.Throws<InvalidDataException>(() => JsonPatch.Read("[" + string.Join(',', Enumerable.Repeat("0", 100_000)) + "]", "", TestContext.Current.CancellationToken));
-        Assert.Throws<InvalidDataException>(() => JsonPatch.Read(new string(' ', TextPatch.MaxCharacters + 1), "", TestContext.Current.CancellationToken));
+        Assert.Throws<PatchingCorruptedException>(() => JsonPatch.Read("[" + string.Join(',', Enumerable.Repeat("0", 100_000)) + "]", "", TestContext.Current.CancellationToken));
+        Assert.Throws<PatchingCorruptedException>(() => JsonPatch.Read(new string(' ', TextPatch.MaxCharacters + 1), "", TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -89,9 +89,9 @@ public sealed class StructuredConfigurationPatchTests
     {
         var token = TestContext.Current.CancellationToken;
         var escaped = "\"" + new string('中', TextPatch.MaxCharacters / 5) + "\"";
-        Assert.Throws<InvalidDataException>(() => JsonPatch.Apply("{}", "/value", escaped, false, false, "", true, token));
+        Assert.Throws<PatchingCorruptedException>(() => JsonPatch.Apply("{}", "/value", escaped, false, false, "", true, token));
         var array = "[" + string.Join(',', Enumerable.Repeat("0", 50_000)) + "]";
-        Assert.Throws<InvalidDataException>(() => JsonPatch.Apply("{\"existing\":" + array + "}", "/new", array, false, false, "", true, token));
+        Assert.Throws<PatchingCorruptedException>(() => JsonPatch.Apply("{\"existing\":" + array + "}", "/new", array, false, false, "", true, token));
         var nested = new string('[', 40) + "null" + new string(']', 40);
         Assert.Throws<InvalidOperationException>(() => JsonPatch.Apply(nested, string.Concat(Enumerable.Repeat("/0", 40)), nested, false, false, "", false, token));
     }
@@ -134,20 +134,32 @@ public sealed class StructuredConfigurationPatchTests
     [Theory]
     [InlineData("x=1\nx=2")]
     [InlineData("[s]\nx=1\n[s]\ny=2")]
-    [InlineData("[s] ; unsupported header comment\nx=1")]
-    [InlineData("x:1")]
-    [InlineData("x=1\rnext=2")]
-    [InlineData("x=\0")]
     public void Read_AmbiguousOrUnsupportedIni_RejectsDocument(string text)
     {
         Assert.Throws<InvalidDataException>(() => IniPatch.Read(text, "", "x", TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("[s] ; unsupported header comment\nx=1")]
+    [InlineData("x:1")]
+    public void Read_MalformedIni_RejectsDocument(string text)
+    {
+        Assert.Throws<PatchingCorruptedException>(() => IniPatch.Read(text, "", "x", TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("x=1\rnext=2")]
+    [InlineData("x=\0")]
+    public void Read_UnsupportedIniLineEncoding_RejectsDocument(string text)
+    {
+        Assert.Throws<PatchingUnsupportedFeatureException>(() => IniPatch.Read(text, "", "x", TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public void Apply_IniLineLimit_RejectsGrowthBeyondLimit()
     {
         var original = string.Concat(Enumerable.Repeat(";\n", 100_000));
-        Assert.Throws<InvalidDataException>(() => IniPatch.Apply(original, "", "new", "1", false, false, "", true, TestContext.Current.CancellationToken));
+        Assert.Throws<PatchingCorruptedException>(() => IniPatch.Apply(original, "", "new", "1", false, false, "", true, TestContext.Current.CancellationToken));
     }
 
     [Fact]

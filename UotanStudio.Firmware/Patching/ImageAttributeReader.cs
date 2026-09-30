@@ -102,7 +102,7 @@ public static class ImageAttributeReader
             return (new(entry.Uid, entry.Gid, entry.Mode), attribute is null ? null
                 : CopyValue(entry.Xattrs?.SingleOrDefault(item => item.Name == attribute)?.Value));
         }
-        throw new InvalidDataException("Only raw EXT4 and EROFS attributes are supported.");
+        throw new PatchingUnsupportedFeatureException("Only raw EXT4 and EROFS attributes are supported.");
     }
 
     private static string NormalizeEntry(string path) => path == "." ? "" : path.Trim('/');
@@ -110,7 +110,7 @@ public static class ImageAttributeReader
     private static byte[]? CopyValue(byte[]? value)
     {
         if (value is null) { return null; }
-        if (value.Length > 65536) { throw new InvalidDataException("Extended attribute value exceeds 64 KiB."); }
+        if (value.Length > 65536) { throw new PatchingCorruptedException("Extended attribute value exceeds 64 KiB."); }
         return value.ToArray();
     }
 }

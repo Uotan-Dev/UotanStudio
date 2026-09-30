@@ -30,7 +30,7 @@ public sealed class TarArchiveWriter
     /// <exception cref="ArgumentException">
     /// <paramref name="stream"/> or <paramref name="entries"/> is <see langword="null"/>. <para><paramref name="stream"/> 或 <paramref name="entries"/> 为 <see langword="null"/>。</para>
     /// </exception>
-    /// <exception cref="InvalidDataException">
+    /// <exception cref="ArchiveCorruptedException">
     /// A declared length contradicts the entry data, or a source carries bytes beyond its declared length.
     /// <para>声明长度与条目数据不符，或源数据超出声明长度。</para>
     /// </exception>
@@ -127,7 +127,7 @@ public sealed class TarArchiveWriter
         if (entry.DataStream is null && entry.DataStreamFactory is null
             && entry.DeclaredDataLength.HasValue && payloadLength != entry.Data.LongLength)
         {
-            throw new InvalidDataException($"Entry '{entry.Name}' declared length {payloadLength} does not match its data length {entry.Data.LongLength}.");
+            throw new ArchiveCorruptedException($"Entry '{entry.Name}' declared length {payloadLength} does not match its data length {entry.Data.LongLength}.");
         }
     }
 

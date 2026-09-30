@@ -227,6 +227,6 @@ public static class XmlPatch
     {
         XElement element => element.Value,
         XAttribute attribute => attribute.Value,
-        _ => throw new InvalidDataException("Unsupported XML target.")
+        _ => throw new PatchingUnsupportedFeatureException("Unsupported XML target.")
     };
 }

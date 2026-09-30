@@ -32,8 +32,12 @@ internal sealed class SquashfsParser
     /// <summary>Parses the superblock and the referenced tables. <para>解析超级块与其引用的表。</para></summary>
     /// <param name="input">Seekable image stream; not closed by this class. <para>可定位的镜像流；本类不将其关闭。</para></param>
     /// <param name="cancellationToken">Token checked throughout the read. <para>全程检查的令牌。</para></param>
-    /// <exception cref="InvalidDataException">Any structural or bounds validation failure.
+    /// <exception cref="InvalidDataException">The input stream is not seekable.
+    /// <para>输入流不可定位时抛出。</para></exception>
+    /// <exception cref="FileSystemCorruptedException">Any structural or bounds validation failure.
     /// <para>任何结构或边界校验失败时抛出。</para></exception>
+    /// <exception cref="FileSystemUnsupportedFeatureException">The image selects a compressor this reader does not support.
+    /// <para>镜像选择本读取器不支持的压缩器时抛出。</para></exception>
     internal SquashfsParser(Stream input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -58,7 +62,7 @@ internal sealed class SquashfsParser
         Root = ReadInode((long)(_superblock.RootInodeAddress >> 16), (int)(_superblock.RootInodeAddress & 0xFFFF));
         if (Root.Kind != SquashfsEntryKind.Directory)
         {
-            throw new InvalidDataException("The SquashFS root inode is not a directory.");
+            throw new FileSystemCorruptedException("The SquashFS root inode is not a directory.");
         }
     }
 
@@ -76,8 +80,10 @@ internal sealed class SquashfsParser
 
     /// <summary>Walks the tree and yields every entry with its slash-separated image path.
     /// <para>遍历目录树并产出全部条目及其斜杠分隔镜像路径。</para></summary>
-    /// <exception cref="InvalidDataException">Caps are exceeded or the structure is corrupt.
+    /// <exception cref="FileSystemCorruptedException">Caps are exceeded or the structure is corrupt.
     /// <para>超出上限或结构损坏时抛出。</para></exception>
+    /// <exception cref="FileSystemUnsupportedFeatureException">A metadata window uses an unsupported compressor.
+    /// <para>元数据窗口使用不受支持的压缩器时抛出。</para></exception>
     /// <exception cref="OperationCanceledException">The stored token was signaled.
     /// <para>保存的令牌被触发。</para></exception>
     internal IReadOnlyList<SquashfsEntry> EnumerateEntries()
@@ -101,8 +107,12 @@ internal sealed class SquashfsParser
     /// <param name="byteProgress">Cumulative processed/total reporter; may be <see langword="null"/>.
     /// <para>累计已处理/总字节回报器；可为 <see langword="null"/>。</para></param>
     /// <returns>The image paths written. <para>已写出的镜像路径。</para></returns>
-    /// <exception cref="InvalidDataException">An entry escapes the output directory or exceeds a bound.
-    /// <para>条目逃逸输出目录或越界时抛出。</para></exception>
+    /// <exception cref="InvalidDataException">An entry escapes the output directory.
+    /// <para>条目逃逸输出目录时抛出。</para></exception>
+    /// <exception cref="FileSystemCorruptedException">A declared size exceeds a bound.
+    /// <para>声明大小越界时抛出。</para></exception>
+    /// <exception cref="FileSystemUnsupportedFeatureException">A data block uses an unsupported compressor or fragment layout.
+    /// <para>数据块使用不受支持的压缩器或 fragment 布局时抛出。</para></exception>
     /// <exception cref="OperationCanceledException">The stored token was signaled.
     /// <para>保存的令牌被触发。</para></exception>
     internal IReadOnlyList<string> ExtractToDirectory(
@@ -167,7 +177,7 @@ internal sealed class SquashfsParser
         var remaining = Math.Max(0, maximumOutputBytes - processed);
         if (size > remaining)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"SquashFS extraction of '{entry.Path}' would exceed the {maximumOutputBytes}-byte output budget.");
         }
 
@@ -211,7 +221,7 @@ internal sealed class SquashfsParser
             var length = word & (NonCompressionBit - 1);
             if (length == 0 || length > (uint)blockSize || word >> 25 != 0)
             {
-                throw new InvalidDataException($"SquashFS block word 0x{word:X8} declares an impossible length.");
+                throw new FileSystemCorruptedException($"SquashFS block word 0x{word:X8} declares an impossible length.");
             }
 
             FileExtraction.ValidateRange(address, length, (long)_superblock.BytesUsed, "SquashFS data block");
@@ -225,7 +235,7 @@ internal sealed class SquashfsParser
             {
                 if (length != expected)
                 {
-                    throw new InvalidDataException(
+                    throw new FileSystemCorruptedException(
                         $"A stored SquashFS data block holds {length} bytes but {expected} were expected.");
                 }
 
@@ -236,7 +246,7 @@ internal sealed class SquashfsParser
                 decoded = SquashfsDecompression.Decompress(_superblock.Compression, payload, blockSize, exactOutput: false);
                 if (decoded.LongLength != blockSize && decoded.LongLength != expected)
                 {
-                    throw new InvalidDataException(
+                    throw new FileSystemCorruptedException(
                         $"A SquashFS data block decoded to {decoded.LongLength} bytes; expected {blockSize} or {expected}.");
                 }
             }
@@ -254,7 +264,7 @@ internal sealed class SquashfsParser
 
         if (position != inode.Size)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"The SquashFS inode {inode.InodeNumber} produced {position} bytes but declares {inode.Size}.");
         }
     }
@@ -271,14 +281,14 @@ internal sealed class SquashfsParser
 
         if (inode.FragmentIndex >= _fragments.Length)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"The SquashFS inode {inode.InodeNumber} references fragment {inode.FragmentIndex} beyond the {_fragments.Length}-entry table.");
         }
 
         var fragment = _fragments[inode.FragmentIndex];
         if (fragment.Uncached != 0)
         {
-            throw new InvalidDataException(
+            throw new FileSystemUnsupportedFeatureException(
                 $"SquashFS uncached fragments (fragment {inode.FragmentIndex}) are not supported by this reader.");
         }
 
@@ -286,7 +296,7 @@ internal sealed class SquashfsParser
         var length = fragment.Size & (NonCompressionBit - 1);
         if (length == 0 || length > (uint)_superblock.BlockSize || fragment.Size >> 25 != 0)
         {
-            throw new InvalidDataException($"SquashFS fragment {inode.FragmentIndex} declares an impossible size.");
+            throw new FileSystemCorruptedException($"SquashFS fragment {inode.FragmentIndex} declares an impossible size.");
         }
 
         FileExtraction.ValidateRange((long)fragment.Start, length, (long)_superblock.BytesUsed, "SquashFS fragment block");
@@ -299,7 +309,7 @@ internal sealed class SquashfsParser
         var from = inode.FragmentOffset;
         if (from < 0 || from + tail > decoded.LongLength)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"The SquashFS fragment slice {from}..{from + tail} exceeds the decoded {decoded.LongLength}-byte block.");
         }
 
@@ -325,14 +335,14 @@ internal sealed class SquashfsParser
         cancellationToken.ThrowIfCancellationRequested();
         if (depth > MaximumDepth)
         {
-            throw new InvalidDataException("The SquashFS directory tree exceeds the supported depth.");
+            throw new FileSystemCorruptedException("The SquashFS directory tree exceeds the supported depth.");
         }
 
         foreach (var (name, inode) in ReadDirectoryEntries(directory))
         {
             if (--_entryBudget < 0)
             {
-                throw new InvalidDataException("The SquashFS image stores more entries than the supported limit.");
+                throw new FileSystemCorruptedException("The SquashFS image stores more entries than the supported limit.");
             }
 
             var path = parentPath.Length == 0 ? name : parentPath + "/" + name;
@@ -356,7 +366,7 @@ internal sealed class SquashfsParser
             var blockStart = (long)U32(header, 4);
             if (count > 255)
             {
-                throw new InvalidDataException($"The SquashFS directory header declares {count + 1} entries; the format allows at most 256.");
+                throw new FileSystemCorruptedException($"The SquashFS directory header declares {count + 1} entries; the format allows at most 256.");
             }
 
             for (var i = 0; i <= (int)count; i++)
@@ -368,7 +378,7 @@ internal sealed class SquashfsParser
                 var nameLength = U16(fixedPart, 6) + 1u;
                 if (nameLength > 256)
                 {
-                    throw new InvalidDataException($"The SquashFS directory entry name is {nameLength} bytes; the format allows at most 256.");
+                    throw new FileSystemCorruptedException($"The SquashFS directory entry name is {nameLength} bytes; the format allows at most 256.");
                 }
 
                 var nameBytes = cursor.ReadBytes((int)nameLength);
@@ -385,7 +395,7 @@ internal sealed class SquashfsParser
     {
         if (dirType is 0 or > 14)
         {
-            throw new InvalidDataException($"The SquashFS directory entry type {dirType} is unknown.");
+            throw new FileSystemCorruptedException($"The SquashFS directory entry type {dirType} is unknown.");
         }
     }
 
@@ -401,7 +411,7 @@ internal sealed class SquashfsParser
         var inodeNumber = U32(baseFields, 12);
         if (uid >= _superblock.IdCount || gidIndex >= _superblock.IdCount)
         {
-            throw new InvalidDataException($"The SquashFS inode {inodeNumber} references id slot {Math.Max(uid, gidIndex)} beyond the table of length {_superblock.IdCount}.");
+            throw new FileSystemCorruptedException($"The SquashFS inode {inodeNumber} references id slot {Math.Max(uid, gidIndex)} beyond the table of length {_superblock.IdCount}.");
         }
 
         var kind = MapKind(rawType, out var extended);
@@ -482,7 +492,7 @@ internal sealed class SquashfsParser
 
         if (size < 0 || size > 1L << 52)
         {
-            throw new InvalidDataException($"The SquashFS file inode {inode.InodeNumber} declares the impossible size {size}.");
+            throw new FileSystemCorruptedException($"The SquashFS file inode {inode.InodeNumber} declares the impossible size {size}.");
         }
 
         var blockCount = ComputeBlockCount(size, fragment);
@@ -513,7 +523,7 @@ internal sealed class SquashfsParser
         var targetLength = U32(body, 4);
         if (targetLength > 4096)
         {
-            throw new InvalidDataException($"The SquashFS symlink inode {inode.InodeNumber} declares an oversized target.");
+            throw new FileSystemCorruptedException($"The SquashFS symlink inode {inode.InodeNumber} declares an oversized target.");
         }
 
         inode.Target = cursor.ReadBytes((int)targetLength);
@@ -555,7 +565,7 @@ internal sealed class SquashfsParser
             var count = (size + _superblock.BlockSize - 1) >> _superblock.BlockLog;
             if (count > MaximumBlockCount)
             {
-                throw new InvalidDataException($"The SquashFS file declares {count} blocks, beyond the supported limit.");
+                throw new FileSystemCorruptedException($"The SquashFS file declares {count} blocks, beyond the supported limit.");
             }
 
             return (int)count;
@@ -564,7 +574,7 @@ internal sealed class SquashfsParser
         var whole = size >> _superblock.BlockLog;
         if (whole > MaximumBlockCount)
         {
-            throw new InvalidDataException($"The SquashFS file declares {whole} blocks, beyond the supported limit.");
+            throw new FileSystemCorruptedException($"The SquashFS file declares {whole} blocks, beyond the supported limit.");
         }
 
         return (int)whole;
@@ -585,7 +595,7 @@ internal sealed class SquashfsParser
         XattrIdCount = U32(header, 8);
         if (XattrIdCount > 1 << 20)
         {
-            throw new InvalidDataException($"The SquashFS xattr table declares {XattrIdCount} ids, beyond the supported limit.");
+            throw new FileSystemCorruptedException($"The SquashFS xattr table declares {XattrIdCount} ids, beyond the supported limit.");
         }
     }
 
@@ -640,7 +650,7 @@ internal sealed class SquashfsParser
 
         if (table.Length < uncompressedBytes)
         {
-            throw new InvalidDataException(
+            throw new FileSystemCorruptedException(
                 $"A SquashFS index-addressed table stores {table.Length} bytes but {uncompressedBytes} were expected.");
         }
 
@@ -659,7 +669,7 @@ internal sealed class SquashfsParser
         var size = raw & 0x7FFF;
         if (size == 0 || absolute + 2 + (long)size > (long)_superblock.BytesUsed)
         {
-            throw new InvalidDataException($"The SquashFS metadata block at {absolute} declares an out-of-range size {size}.");
+            throw new FileSystemCorruptedException($"The SquashFS metadata block at {absolute} declares an out-of-range size {size}.");
         }
 
         var payload = new byte[size];
@@ -674,7 +684,7 @@ internal sealed class SquashfsParser
         var text = PortableUtf8(nameBytes);
         if (text.Length == 0 || text.Contains('/') || text.Contains('\0'))
         {
-            throw new InvalidDataException($"The SquashFS entry name '{text}' cannot be mapped to a host path.");
+            throw new FileSystemCorruptedException($"The SquashFS entry name '{text}' cannot be mapped to a host path.");
         }
 
         return text;
@@ -698,7 +708,7 @@ internal sealed class SquashfsParser
             5 => SquashfsEntryKind.CharDevice,
             6 => SquashfsEntryKind.Fifo,
             7 => SquashfsEntryKind.Socket,
-            _ => throw new InvalidDataException($"The SquashFS inode type {rawType} is unknown."),
+            _ => throw new FileSystemCorruptedException($"The SquashFS inode type {rawType} is unknown."),
         };
     }
 

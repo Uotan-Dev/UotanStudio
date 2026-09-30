@@ -60,11 +60,19 @@ public sealed class FileContextPatchTests
 
     [Theory]
     [InlineData("/path u:object_r:a:s0\n/path u:object_r:b:s0")]
+    public void Read_DuplicateRules_Rejects(string text)
+        => Assert.Throws<InvalidDataException>(() => FileContextPatch.Read(text, "/path", "", TestContext.Current.CancellationToken));
+
+    [Theory]
     [InlineData("/path -x u:object_r:a:s0")]
+    public void Read_UnsupportedFileKindQualifier_Rejects(string text)
+        => Assert.Throws<PatchingUnsupportedFeatureException>(() => FileContextPatch.Read(text, "/path", "", TestContext.Current.CancellationToken));
+
+    [Theory]
     [InlineData("/path malformed")]
     [InlineData("/path u:object_r:a:s0 extra extra")]
-    public void Read_DuplicateOrMalformedRules_Rejects(string text)
-        => Assert.Throws<InvalidDataException>(() => FileContextPatch.Read(text, "/path", "", TestContext.Current.CancellationToken));
+    public void Read_MalformedRules_Rejects(string text)
+        => Assert.Throws<PatchingCorruptedException>(() => FileContextPatch.Read(text, "/path", "", TestContext.Current.CancellationToken));
 
     [Fact]
     public void Edit_OldValueMismatchOrInjectedLine_Rejects()
@@ -72,7 +80,7 @@ public sealed class FileContextPatchTests
         var token = TestContext.Current.CancellationToken;
         Assert.Throws<InvalidDataException>(() => FileContextPatch.Edit("/path u:object_r:a:s0", "/path", "",
             "u:object_r:b:s0", true, "u:object_r:c:s0", token));
-        Assert.Throws<InvalidDataException>(() => FileContextPatch.Edit("/path u:object_r:a:s0", "/path", "",
+        Assert.Throws<PatchingCorruptedException>(() => FileContextPatch.Edit("/path u:object_r:a:s0", "/path", "",
             "u:object_r:b:s0\n/injected u:object_r:b:s0", false, "", token));
     }
 }

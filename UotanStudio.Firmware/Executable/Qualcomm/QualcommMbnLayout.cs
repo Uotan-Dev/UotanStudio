@@ -14,7 +14,7 @@ internal readonly record struct QualcommMbnLayout(
     {
         if (available < 40)
         {
-            throw new InvalidDataException("Truncated Qualcomm MBN header.");
+            throw new ExecutableCorruptedException("Truncated Qualcomm MBN header.");
         }
 
         Span<byte> header = stackalloc byte[48];
@@ -22,13 +22,13 @@ internal readonly record struct QualcommMbnLayout(
         var version = Word(header, 4);
         if (version is not (3 or 5 or 6 or 7))
         {
-            throw new InvalidDataException("Unsupported Qualcomm MBN header version.");
+            throw new ExecutableUnsupportedFeatureException("Unsupported Qualcomm MBN header version.");
         }
 
         var headerSize = version == 6 ? 48 : 40;
         if (available < headerSize)
         {
-            throw new InvalidDataException("Truncated Qualcomm MBN header.");
+            throw new ExecutableCorruptedException("Truncated Qualcomm MBN header.");
         }
 
         ulong qtiMetadata = version == 6 ? Word(header, 40) : version == 7 ? Word(header, 12) : 0;
@@ -36,14 +36,14 @@ internal readonly record struct QualcommMbnLayout(
         ulong commonMetadata = version == 7 ? Word(header, 8) : 0;
         if (version == 7 && commonMetadata < 24)
         {
-            throw new InvalidDataException("Invalid MBN v7 common metadata length.");
+            throw new ExecutableCorruptedException("Invalid MBN v7 common metadata length.");
         }
 
         ulong metadata = qtiMetadata + oemMetadata + commonMetadata;
         ulong hashLength = Word(header, 20);
         if (hashLength == 0)
         {
-            throw new InvalidDataException("Qualcomm MBN hash table is empty.");
+            throw new ExecutableCorruptedException("Qualcomm MBN hash table is empty.");
         }
         ulong qtiSignature = version == 3 ? 0 : Word(header, version == 7 ? 24 : 8);
         ulong qtiCertificate = version == 3 ? 0 : Word(header, version == 7 ? 28 : 12);
@@ -58,7 +58,7 @@ internal readonly record struct QualcommMbnLayout(
             || qtiCertificate > 16UL * 1024 * 1024 || oemCertificate > 16UL * 1024 * 1024
             || qtiSignature > 8192 || oemSignature > 8192)
         {
-            throw new InvalidDataException("Qualcomm MBN length or authentication ranges are invalid.");
+            throw new ExecutableCorruptedException("Qualcomm MBN length or authentication ranges are invalid.");
         }
 
         var hash = checked((int)((ulong)headerSize + metadata));
@@ -114,7 +114,7 @@ internal readonly record struct QualcommMbnLayout(
             var oem = metadataFields.FirstOrDefault(value => value.Authority == "OEM");
             if (qti?.RootCertificateSlot > 63 || oem?.RootCertificateSlot > 63)
             {
-                throw new InvalidDataException("MBN root-certificate slot exceeds the supported limit.");
+                throw new ExecutableUnsupportedFeatureException("MBN root-certificate slot exceeds the supported limit.");
             }
             layout = layout with
             {
@@ -133,7 +133,7 @@ internal readonly record struct QualcommMbnLayout(
         var value = BinaryPrimitives.ReadUInt32LittleEndian(word);
         if (value > 63)
         {
-            throw new InvalidDataException("MBN root-certificate slot exceeds the supported limit.");
+            throw new ExecutableUnsupportedFeatureException("MBN root-certificate slot exceeds the supported limit.");
         }
 
         return (int)value;
@@ -146,7 +146,7 @@ internal readonly record struct QualcommMbnLayout(
         token.ThrowIfCancellationRequested();
         if (offset < 0 || offset > stream.Length || data.Length > stream.Length - offset)
         {
-            throw new InvalidDataException("Qualcomm data range exceeds the file.");
+            throw new ExecutableCorruptedException("Qualcomm data range exceeds the file.");
         }
 
         stream.Position = offset;

@@ -252,7 +252,7 @@ public static class FstabPatch
         var flags = old.Split(',').ToList();
         if (flags.Any(string.IsNullOrEmpty))
         {
-            throw new InvalidDataException("Empty fstab flag items are not supported.");
+            throw new PatchingUnsupportedFeatureException("Empty fstab flag items are not supported.");
         }
         var matches = flags.Select((item, index) => (item, index))
             .Where(pair => pair.item.Split('=')[0] == flag).Select(pair => pair.index).ToArray();
@@ -305,7 +305,7 @@ public static class FstabPatch
             token.ThrowIfCancellationRequested();
             if (++lines > 100000)
             {
-                throw new InvalidDataException("Fstab line limit exceeded.");
+                throw new PatchingCorruptedException("Fstab line limit exceeded.");
             }
             var end = text.IndexOf('\n', position);
             end = end < 0 ? text.Length : end;
@@ -322,7 +322,7 @@ public static class FstabPatch
                     while (cursor < contentEnd && text[cursor] is not ' ' and not '\t') { cursor++; }
                     if (cursor == start || text.AsSpan(start, cursor - start).Contains('\r'))
                     {
-                        throw new InvalidDataException("Android fstab entries require five whitespace-delimited fields.");
+                        throw new PatchingCorruptedException("Android fstab entries require five whitespace-delimited fields.");
                     }
                     fields[index] = (start, cursor - start);
                 }

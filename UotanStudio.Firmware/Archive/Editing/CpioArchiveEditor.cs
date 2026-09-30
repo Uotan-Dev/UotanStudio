@@ -197,10 +197,13 @@ internal sealed class CpioArchiveEditor
     /// Extraction behaviour; <see langword="null"/> uses the <see cref="ExtractOptions"/> defaults.
     /// <para>解包行为；为 <see langword="null"/> 时使用 <see cref="ExtractOptions"/> 默认值。</para>
     /// </param>
+    /// <exception cref="ArchiveCorruptedException">
+    /// An entry path escapes the destination or is absolute under a rejecting policy.
+    /// <para>条目路径逃出目标目录，或在拒绝策略下为绝对路径。</para>
+    /// </exception>
     /// <exception cref="InvalidDataException">
-    /// An entry path escapes the destination, traverses a symbolic link, or is absolute under a
-    /// rejecting policy.
-    /// <para>条目路径逃出目标目录、穿过符号链接，或在拒绝策略下为绝对路径。</para>
+    /// The destination has no filesystem root, or an extraction path traverses a symbolic link.
+    /// <para>目标目录没有文件系统根，或解包路径穿过符号链接。</para>
     /// </exception>
     public void ExtractToDirectory(string destinationDirectory, ExtractOptions? options = null)
         => new CpioExtractor().ExtractToDirectory(_entries, destinationDirectory, options);

@@ -82,8 +82,11 @@ public static class ElfReader
     /// <para>产生该文件已校验 <see cref="ElfInfo"/> 的任务。</para></returns>
     /// <exception cref="FileNotFoundException"><paramref name="path"/> does not exist.
     /// <para><paramref name="path"/> 不存在。</para></exception>
-    /// <exception cref="InvalidDataException">The file is not a valid ELF image. Surfaces as a faulted task.
+    /// <exception cref="ExecutableCorruptedException">The file is not a valid ELF image. Surfaces as a faulted task.
     /// <para>文件不是有效的 ELF 镜像；表现为失败任务。</para></exception>
+    /// <exception cref="InvalidDataException">An ELF table or segment range exceeds the shared input-bound
+    /// validator. Surfaces as a faulted task.
+    /// <para>ELF 表或段范围超出共享输入边界校验器；表现为失败任务。</para></exception>
     public static Task<ElfInfo> ReadAsync(string path, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.RandomAccess);
@@ -104,9 +107,12 @@ public static class ElfReader
     /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException">The stream cannot be read or cannot seek.
     /// <para>流不可读或不可寻址。</para></exception>
-    /// <exception cref="InvalidDataException">The header, tables, ranges, alignments or string table are
-    /// malformed, truncated, or exceed the bounded entry and name limits.
-    /// <para>头部、表、范围、对齐或字符串表格式错误、被截断，或超出条目与名称的有界上限。</para></exception>
+    /// <exception cref="ExecutableCorruptedException">The header, section links, ranges, alignments or string
+    /// table are malformed, truncated, or exceed the bounded entry and name limits.
+    /// <para>头部、节链接、范围、对齐或字符串表格式错误、被截断，或超出条目与名称的有界上限。</para></exception>
+    /// <exception cref="InvalidDataException">A program-header or section-header table or data range exceeds the
+    /// shared input-bound validator.
+    /// <para>程序头表、节头表或数据范围超出共享输入边界校验器。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public static ElfInfo Read(Stream stream, CancellationToken cancellationToken = default)
@@ -127,7 +133,7 @@ public static class ElfReader
             ReadAt(stream, 0, buffer[..headerLength], length, cancellationToken);
             if (!TryReadHeader(buffer[..headerLength], out var header))
             {
-                throw new InvalidDataException("Invalid or truncated ELF header.");
+                throw new ExecutableCorruptedException("Invalid or truncated ELF header.");
             }
 
             var sectionCount = header.SectionHeaderCount;
@@ -139,14 +145,14 @@ public static class ElfReader
                 var zero = ReadSection(buffer, 0, header);
                 if (zero.Type != 0)
                 {
-                    throw new InvalidDataException("ELF section zero must be SHT_NULL.");
+                    throw new ExecutableCorruptedException("ELF section zero must be SHT_NULL.");
                 }
 
                 if (sectionCount == 0)
                 {
                     if (zero.Size == 0 || zero.Size > MaxTableEntries)
                     {
-                        throw new InvalidDataException("Invalid or excessive ELF extended section count.");
+                        throw new ExecutableCorruptedException("Invalid or excessive ELF extended section count.");
                     }
 
                     sectionCount = (uint)zero.Size;
@@ -167,7 +173,7 @@ public static class ElfReader
             ValidateTable(header.SectionHeaderOffset, header.SectionHeaderEntrySize, sectionCount, length);
             if (namesIndex != 0 && namesIndex >= sectionCount)
             {
-                throw new InvalidDataException("ELF section-name table index is out of range.");
+                throw new ExecutableCorruptedException("ELF section-name table index is out of range.");
             }
 
             header = header with { ProgramHeaderCount = segmentCount, SectionHeaderCount = sectionCount, SectionNameTableIndex = namesIndex };
@@ -183,7 +189,7 @@ public static class ElfReader
                     ValidateAlignment(segment.Alignment);
                     if (segment.Type == 1 && segment.FileSize > segment.MemorySize)
                     {
-                        throw new InvalidDataException("ELF load-segment file size exceeds its memory size.");
+                        throw new ExecutableCorruptedException("ELF load-segment file size exceeds its memory size.");
                     }
                 }
 
@@ -206,7 +212,7 @@ public static class ElfReader
                     ValidateAlignment(section.Alignment);
                     if (section.Link >= sectionCount || section.EntrySize != 0 && section.Size % section.EntrySize != 0)
                     {
-                        throw new InvalidDataException("Invalid ELF section link or entry size.");
+                        throw new ExecutableCorruptedException("Invalid ELF section link or entry size.");
                     }
                 }
 
@@ -218,14 +224,14 @@ public static class ElfReader
                 var names = sections[(int)namesIndex];
                 if (names.Type != 3 || names.Size == 0 || names.Size > MaxStringTableBytes)
                 {
-                    throw new InvalidDataException("Invalid or excessive ELF section-name string table.");
+                    throw new ExecutableCorruptedException("Invalid or excessive ELF section-name string table.");
                 }
 
                 var strings = new byte[(int)names.Size];
                 ReadAt(stream, names.Offset, strings, length, cancellationToken);
                 if (strings[0] != 0 || strings[^1] != 0)
                 {
-                    throw new InvalidDataException("ELF string table must start and end with NUL.");
+                    throw new ExecutableCorruptedException("ELF string table must start and end with NUL.");
                 }
 
                 var remainingNameBytes = MaxTotalNameBytes;
@@ -235,14 +241,14 @@ public static class ElfReader
                     var nameOffset = sections[i].NameOffset;
                     if (nameOffset >= strings.Length)
                     {
-                        throw new InvalidDataException("ELF section name is outside the string table.");
+                        throw new ExecutableCorruptedException("ELF section name is outside the string table.");
                     }
 
                     var bytes = strings.AsSpan((int)nameOffset, Math.Min(MaxNameBytes + 1, strings.Length - (int)nameOffset));
                     var end = bytes.IndexOf((byte)0);
                     if (end < 0 || end > remainingNameBytes)
                     {
-                        throw new InvalidDataException("ELF section names exceed the metadata limit.");
+                        throw new ExecutableCorruptedException("ELF section names exceed the metadata limit.");
                     }
 
                     remainingNameBytes -= end;
@@ -282,7 +288,7 @@ public static class ElfReader
     {
         if (count > MaxTableEntries)
         {
-            throw new InvalidDataException("ELF table exceeds the metadata entry limit.");
+            throw new ExecutableCorruptedException("ELF table exceeds the metadata entry limit.");
         }
 
         if (count != 0)
@@ -307,7 +313,7 @@ public static class ElfReader
     {
         if (alignment != 0 && (alignment & (alignment - 1)) != 0)
         {
-            throw new InvalidDataException("ELF alignment is not a power of two.");
+            throw new ExecutableCorruptedException("ELF alignment is not a power of two.");
         }
     }
 

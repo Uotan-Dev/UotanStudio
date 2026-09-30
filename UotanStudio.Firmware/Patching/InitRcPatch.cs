@@ -346,7 +346,7 @@ public static partial class InitRcPatch
             throw new InvalidDataException("Supply one complete body statement and a valid number of identity arguments.");
         }
         var desired = supplied[0].Words;
-        if (!Enum.IsDefined(placement)) { throw new InvalidDataException("Unsupported init insertion placement."); }
+        if (!Enum.IsDefined(placement)) { throw new PatchingUnsupportedFeatureException("Unsupported init insertion placement."); }
         string[] anchorWords = [];
         if (placement != InitRcInsertion.End)
         {
@@ -592,14 +592,14 @@ public static partial class InitRcPatch
                 if (line.Words.Length < (line.Words[0] == "service" ? 3 : 2)
                     || line.Words[0] == "import" && line.Words.Length != 2)
                 {
-                    throw new InvalidDataException("Malformed init section header.");
+                    throw new PatchingCorruptedException("Malformed init section header.");
                 }
                 current = new Section(line, []);
                 sections.Add(current);
             }
             else if (current is null || current.Header.Words[0] == "import")
             {
-                throw new InvalidDataException("Init statement has no service or action section.");
+                throw new PatchingCorruptedException("Init statement has no service or action section.");
             }
             else
             {
@@ -613,7 +613,7 @@ public static partial class InitRcPatch
     {
         token.ThrowIfCancellationRequested();
         TextPatch.ValidateSize(text);
-        if (text.Contains('\0')) { throw new InvalidDataException("NUL is not permitted in init text."); }
+        if (text.Contains('\0')) { throw new PatchingCorruptedException("NUL is not permitted in init text."); }
         var result = new List<Statement>();
         var words = new List<string>();
         var ranges = new List<(int Start, int End)>();
@@ -655,12 +655,12 @@ public static partial class InitRcPatch
                         value.Append(text[position++]);
                         CheckToken();
                     }
-                    if (position == text.Length) { throw new InvalidDataException("Unterminated init quote."); }
+                    if (position == text.Length) { throw new PatchingCorruptedException("Unterminated init quote."); }
                     position++;
                 }
                 else if (character == '\\')
                 {
-                    if (position == text.Length) { throw new InvalidDataException("Dangling init escape."); }
+                    if (position == text.Length) { throw new PatchingCorruptedException("Dangling init escape."); }
                     character = text[position++];
                     if (character == '\r')
                     {
@@ -686,11 +686,11 @@ public static partial class InitRcPatch
             end = position;
             words.Add(value.ToString());
             ranges.Add((tokenStart, position));
-            if (words.Count > 1024) { throw new InvalidDataException("Too many init statement arguments."); }
+            if (words.Count > 1024) { throw new PatchingCorruptedException("Too many init statement arguments."); }
 
             void CheckToken()
             {
-                if (value.Length > 16384) { throw new InvalidDataException("Init token exceeds the limit."); }
+                if (value.Length > 16384) { throw new PatchingCorruptedException("Init token exceeds the limit."); }
             }
         }
         Finish();
@@ -698,7 +698,7 @@ public static partial class InitRcPatch
 
         void CountLine()
         {
-            if (++physicalLines > 100000) { throw new InvalidDataException("Too many init lines."); }
+            if (++physicalLines > 100000) { throw new PatchingCorruptedException("Too many init lines."); }
         }
 
         void Finish()

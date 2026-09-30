@@ -38,9 +38,17 @@ public sealed class CpioArchiveWriter
     /// <paramref name="stream"/> is not writable, or <paramref name="stream"/> or <paramref name="entries"/> is <see langword="null"/>.
     /// <para><paramref name="stream"/> 不可写，或 <paramref name="stream"/>、<paramref name="entries"/> 为 <see langword="null"/>。</para>
     /// </exception>
+    /// <exception cref="ArchiveCorruptedException">
+    /// A payload length is negative or mismatches its declaration, or an HP special device carries data.
+    /// <para>负载长度为负或与声明不符，或 HP 特殊设备包含数据。</para>
+    /// </exception>
+    /// <exception cref="ArchiveUnsupportedFeatureException">
+    /// A payload length is unrepresentable in the chosen format.
+    /// <para>负载长度无法被所选格式表示。</para>
+    /// </exception>
     /// <exception cref="InvalidDataException">
-    /// A payload length is negative, unrepresentable in the chosen format, mismatches its declaration, or an HP special device carries data.
-    /// <para>负载长度为负、无法被所选格式表示、与声明不符，或 HP 特殊设备包含数据。</para>
+    /// A CRC payload cannot be spooled to scratch storage.
+    /// <para>CRC 负载无法暂存到临时存储。</para>
     /// </exception>
     /// <exception cref="NotSupportedException">
     /// <paramref name="format"/> is a value outside the known archive formats.
@@ -273,7 +281,7 @@ public sealed class CpioArchiveWriter
             && entry.Metadata.FileType is CpioFileType.CharacterDevice or CpioFileType.BlockDevice;
         if (hpSpecial && payloadLength != 0)
         {
-            throw new InvalidDataException($"HP special-device entry '{entry.Name}' cannot contain payload data.");
+            throw new ArchiveCorruptedException($"HP special-device entry '{entry.Name}' cannot contain payload data.");
         }
 
         var fileSize = hpSpecial
@@ -327,7 +335,7 @@ public sealed class CpioArchiveWriter
             && entry.Metadata.FileType is CpioFileType.CharacterDevice or CpioFileType.BlockDevice;
         if (hpSpecial && payloadLength != 0)
         {
-            throw new InvalidDataException($"HP special-device entry '{entry.Name}' cannot contain payload data.");
+            throw new ArchiveCorruptedException($"HP special-device entry '{entry.Name}' cannot contain payload data.");
         }
 
         var size = hpSpecial
@@ -459,7 +467,7 @@ public sealed class CpioArchiveWriter
             StreamCopy.CopyExactly(source, stream, payloadLength);
             if (source.ReadByte() != -1)
             {
-                throw new InvalidDataException($"Entry '{entry.Name}' source contains data beyond its declared length {payloadLength}.");
+                throw new ArchiveCorruptedException($"Entry '{entry.Name}' source contains data beyond its declared length {payloadLength}.");
             }
             return;
         }
@@ -472,15 +480,15 @@ public sealed class CpioArchiveWriter
         if (entry.DataStream is null && entry.DataStreamFactory is null
             && entry.DeclaredDataLength.HasValue && payloadLength != entry.Data.LongLength)
         {
-            throw new InvalidDataException($"Entry '{entry.Name}' declared length {payloadLength} does not match its data length {entry.Data.LongLength}.");
+            throw new ArchiveCorruptedException($"Entry '{entry.Name}' declared length {payloadLength} does not match its data length {entry.Data.LongLength}.");
         }
         if (payloadLength < 0)
         {
-            throw new InvalidDataException($"Entry '{entry.Name}' has a negative payload length.");
+            throw new ArchiveCorruptedException($"Entry '{entry.Name}' has a negative payload length.");
         }
         if (payloadLength > maximum)
         {
-            throw new InvalidDataException($"Entry '{entry.Name}' payload length {payloadLength} cannot be represented by {format}.");
+            throw new ArchiveUnsupportedFeatureException($"Entry '{entry.Name}' payload length {payloadLength} cannot be represented by {format}.");
         }
     }
 
@@ -495,7 +503,7 @@ public sealed class CpioArchiveWriter
                 StreamCopy.CopyExactly(source, spool, length);
                 if (probeEof && source.ReadByte() != -1)
                 {
-                    throw new InvalidDataException($"Entry '{entryName}' source contains data beyond its declared length {length}.");
+                    throw new ArchiveCorruptedException($"Entry '{entryName}' source contains data beyond its declared length {length}.");
                 }
                 spool.Position = 0;
                 return spool;

@@ -138,7 +138,7 @@ public static class TextPatch
         ArgumentNullException.ThrowIfNull(text);
         if (text.Length > MaxCharacters)
         {
-            throw new InvalidDataException("Configuration text exceeds the patch size limit.");
+            throw new PatchingCorruptedException("Configuration text exceeds the patch size limit.");
         }
     }
 

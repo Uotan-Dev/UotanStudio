@@ -73,10 +73,14 @@ public sealed class FsConfigPatchTests
 
     [Theory]
     [InlineData("file 0 0 493\n/file 0 0 493")]
-    [InlineData("file 0 0 0999")]
-    [InlineData("file 0 0 65535")]
-    [InlineData("file -1 0 420")]
     [InlineData("file\t0 0 420")]
     public void Read_AmbiguousOrInvalidMetadata_Rejects(string text)
         => Assert.Throws<InvalidDataException>(() => FsConfigPatch.Read(text, "file", TestContext.Current.CancellationToken));
+
+    [Theory]
+    [InlineData("file 0 0 0999")]
+    [InlineData("file 0 0 65535")]
+    [InlineData("file -1 0 420")]
+    public void Read_CorruptFieldValues_Rejects(string text)
+        => Assert.Throws<PatchingCorruptedException>(() => FsConfigPatch.Read(text, "file", TestContext.Current.CancellationToken));
 }

@@ -5,6 +5,7 @@ using System.Xml;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
 using UotanStudio.Firmware.BootSecurity.Avb;
+using UotanStudio.Firmware.Executable;
 using UotanStudio.Firmware.Executable.Elf;
 using UotanStudio.Firmware.Patching;
 
@@ -129,7 +130,7 @@ public static class PatchFormatProbe
             }
         }
         catch (Exception error) when (error is InvalidDataException or EndOfStreamException or JsonException or XmlException
-            or DecoderFallbackException or OverflowException)
+            or DecoderFallbackException or OverflowException or PatchingException or ExecutableException)
         {
             cancellationToken.ThrowIfCancellationRequested();
             return new PatchFormatResult(kind, kind == PatchFormatKind.Unknown ? PatchFormatEvidence.Unknown : PatchFormatEvidence.Signature,

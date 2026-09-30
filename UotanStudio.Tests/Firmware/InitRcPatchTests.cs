@@ -139,10 +139,14 @@ public sealed class InitRcPatchTests
     [InlineData("on boot\n start a\n start b", "on boot\n start b\n start a")]
     [InlineData("service test /test\nservice test /test", "service test /test")]
     [InlineData("", "service test /test\nservice second /second")]
-    [InlineData("", "import /test\nuser root")]
     [InlineData("", "# no section")]
     public void AddSection_ConflictOrInvalidFragment_Rejects(string text, string section)
         => Assert.Throws<InvalidDataException>(() => InitRcPatch.AddSection(text, section, TestContext.Current.CancellationToken));
+
+    [Fact]
+    public void AddSection_BodyStatementWithoutSectionHeader_Rejects()
+        => Assert.Throws<PatchingCorruptedException>(() => InitRcPatch.AddSection("", "import /test\nuser root",
+            TestContext.Current.CancellationToken));
 
     [Theory]
     [InlineData("", "import /test\n")]
@@ -236,23 +240,33 @@ public sealed class InitRcPatchTests
     [Theory]
     [InlineData("service test /test\n    user root\nservice test /other\n    user root\n")]
     [InlineData("service test /test\n    user root\n    user system\n")]
+    public void Read_AmbiguousSelection_Rejects(string text)
+        => Assert.Throws<InvalidDataException>(() => InitRcPatch.Read(text, InitRcSection.Service,
+            "test", "user", 1, 1, TestContext.Current.CancellationToken));
+
+    [Theory]
     [InlineData("service test /test\n    user \"unterminated\n")]
     [InlineData("user root\n")]
     [InlineData("import /test\nuser root\n")]
     [InlineData("service test\n")]
     [InlineData("service test /test\nuser root\0\n")]
-    public void Read_AmbiguousOrMalformedInput_Rejects(string text)
-        => Assert.Throws<InvalidDataException>(() => InitRcPatch.Read(text, InitRcSection.Service,
+    public void Read_MalformedInput_Rejects(string text)
+        => Assert.Throws<PatchingCorruptedException>(() => InitRcPatch.Read(text, InitRcSection.Service,
             "test", "user", 1, 1, TestContext.Current.CancellationToken));
 
     [Theory]
     [InlineData("user system\nservice injected /bin/test")]
     [InlineData("user system # comment")]
     [InlineData("group system")]
-    [InlineData("user system\\")]
     public void Apply_InvalidReplacement_Rejects(string replacement)
         => Assert.Throws<InvalidDataException>(() => InitRcPatch.Apply("service test /test\n user root\n",
             InitRcSection.Service, "test", "user", InitRcOperation.Replace, replacement,
+            false, "", 1, 1, TestContext.Current.CancellationToken));
+
+    [Fact]
+    public void Apply_DanglingEscapeReplacement_Rejects()
+        => Assert.Throws<PatchingCorruptedException>(() => InitRcPatch.Apply("service test /test\n user root\n",
+            InitRcSection.Service, "test", "user", InitRcOperation.Replace, "user system\\",
             false, "", 1, 1, TestContext.Current.CancellationToken));
 
     [Fact]
@@ -283,9 +297,9 @@ public sealed class InitRcPatchTests
     public void Read_ExceededTokenAndLineLimits_Rejects()
     {
         var token = TestContext.Current.CancellationToken;
-        Assert.Throws<InvalidDataException>(() => InitRcPatch.Read("service test /" + new string('a', 16384),
+        Assert.Throws<PatchingCorruptedException>(() => InitRcPatch.Read("service test /" + new string('a', 16384),
             InitRcSection.Service, "test", "", 1, 1, token));
-        Assert.Throws<InvalidDataException>(() => InitRcPatch.Read(new string('\n', 100000),
+        Assert.Throws<PatchingCorruptedException>(() => InitRcPatch.Read(new string('\n', 100000),
             InitRcSection.Service, "test", "", 0, 0, token));
     }
 }

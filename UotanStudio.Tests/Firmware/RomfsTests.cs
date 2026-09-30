@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Romfs;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -62,63 +63,63 @@ public class RomfsTests
     }
 
     [Fact]
-    public void Constructor_BadMagic_ThrowsInvalidData()
+    public void Constructor_BadMagic_ThrowsFileSystemCorruptedException()
     {
         var root = new Node { Name = "", Type = 1, Children = [] };
         var volume = Build(root, "Vol");
         volume[3] = (byte)'X';
-        Assert.Throws<InvalidDataException>(() => new RomfsParser(new MemoryStream(volume)));
+        Assert.Throws<FileSystemCorruptedException>(() => new RomfsParser(new MemoryStream(volume)));
     }
 
     [Fact]
-    public void Constructor_BadSuperblockChecksum_ThrowsInvalidData()
+    public void Constructor_BadSuperblockChecksum_ThrowsFileSystemCorruptedException()
     {
         var hello = new Node { Name = "hello.txt", Type = 2, Data = "padding to move past five hundred bytes so the entry checksums stay valid while only the superblock sum breaks"u8.ToArray() };
         var root = new Node { Name = "", Type = 1, Children = [hello] };
         var volume = Build(root, "Vol");
         volume[400] ^= 0xFF;
-        Assert.Throws<InvalidDataException>(() => new RomfsParser(new MemoryStream(volume)));
+        Assert.Throws<FileSystemCorruptedException>(() => new RomfsParser(new MemoryStream(volume)));
     }
 
     [Fact]
-    public void Constructor_NonAdvancingChain_ThrowsInvalidData()
+    public void Constructor_NonAdvancingChain_ThrowsFileSystemCorruptedException()
     {
         var hello = new Node { Name = "hello.txt", Type = 2, Data = "x"u8.ToArray(), Next = NextMode.Self };
         var root = new Node { Name = "", Type = 1, Children = [hello] };
         var volume = Build(root, "Vol");
-        var ex = Assert.Throws<InvalidDataException>(() => new RomfsParser(new MemoryStream(volume)));
+        var ex = Assert.Throws<FileSystemCorruptedException>(() => new RomfsParser(new MemoryStream(volume)));
         Assert.Contains("does not advance", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Constructor_ChainBeyondVolume_ThrowsInvalidData()
+    public void Constructor_ChainBeyondVolume_ThrowsFileSystemCorruptedException()
     {
         var hello = new Node { Name = "hello.txt", Type = 2, Data = "x"u8.ToArray() };
         var tail = new Node { Name = "z", Type = 2, Data = "y"u8.ToArray(), Next = NextMode.BeyondVolume };
         var root = new Node { Name = "", Type = 1, Children = [hello, tail] };
         var volume = Build(root, "Vol");
-        Assert.Throws<InvalidDataException>(() => new RomfsParser(new MemoryStream(volume)));
+        Assert.Throws<FileSystemCorruptedException>(() => new RomfsParser(new MemoryStream(volume)));
     }
 
     [Fact]
-    public void Constructor_ChainedHardLinkTarget_ThrowsInvalidData()
+    public void Constructor_ChainedHardLinkTarget_ThrowsFileSystemCorruptedException()
     {
         var hello = new Node { Name = "hello.txt", Type = 2, Data = "x"u8.ToArray() };
         var first = new Node { Name = "a.lnk", Type = 0, Target = hello };
         var second = new Node { Name = "b.lnk", Type = 0, Target = first };
         var root = new Node { Name = "", Type = 1, Children = [hello, first, second] };
         var volume = Build(root, "Vol");
-        var ex = Assert.Throws<InvalidDataException>(() => new RomfsParser(new MemoryStream(volume)));
+        var ex = Assert.Throws<FileSystemCorruptedException>(() => new RomfsParser(new MemoryStream(volume)));
         Assert.Contains("invalid target", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Constructor_VolumeSizeBeyondStream_ThrowsInvalidData()
+    public void Constructor_VolumeSizeBeyondStream_ThrowsFileSystemCorruptedException()
     {
         var root = new Node { Name = "", Type = 1, Children = [] };
         var volume = Build(root, "Vol");
         BinaryPrimitives.WriteUInt32BigEndian(volume.AsSpan(8), (uint)(volume.Length + 4096));
-        Assert.Throws<InvalidDataException>(() => new RomfsParser(new MemoryStream(volume)));
+        Assert.Throws<FileSystemCorruptedException>(() => new RomfsParser(new MemoryStream(volume)));
     }
 
     [Fact]

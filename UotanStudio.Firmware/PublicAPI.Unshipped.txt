@@ -209,3 +209,30 @@ UotanStudio.Firmware.FileSystem.FileSystemException.FileSystemException(string! 
 UotanStudio.Firmware.FileSystem.FileSystemUnsupportedFeatureException
 UotanStudio.Firmware.FileSystem.FileSystemUnsupportedFeatureException.FileSystemUnsupportedFeatureException(string! message) -> void
 UotanStudio.Firmware.FileSystem.FileSystemUnsupportedFeatureException.FileSystemUnsupportedFeatureException(string! message, System.Exception? innerException) -> void
+UotanStudio.Firmware.Patching.PatchingCorruptedException
+UotanStudio.Firmware.Patching.PatchingCorruptedException.PatchingCorruptedException(string! message) -> void
+UotanStudio.Firmware.Patching.PatchingCorruptedException.PatchingCorruptedException(string! message, System.Exception? innerException) -> void
+UotanStudio.Firmware.Patching.PatchingException
+UotanStudio.Firmware.Patching.PatchingException.PatchingException(string! message) -> void
+UotanStudio.Firmware.Patching.PatchingException.PatchingException(string! message, System.Exception? innerException) -> void
+UotanStudio.Firmware.Patching.PatchingUnsupportedFeatureException
+UotanStudio.Firmware.Patching.PatchingUnsupportedFeatureException.PatchingUnsupportedFeatureException(string! message) -> void
+UotanStudio.Firmware.Patching.PatchingUnsupportedFeatureException.PatchingUnsupportedFeatureException(string! message, System.Exception? innerException) -> void
+UotanStudio.Firmware.Archive.ArchiveCorruptedException
+UotanStudio.Firmware.Archive.ArchiveCorruptedException.ArchiveCorruptedException(string! message) -> void
+UotanStudio.Firmware.Archive.ArchiveCorruptedException.ArchiveCorruptedException(string! message, System.Exception? innerException) -> void
+UotanStudio.Firmware.Archive.ArchiveException
+UotanStudio.Firmware.Archive.ArchiveException.ArchiveException(string! message) -> void
+UotanStudio.Firmware.Archive.ArchiveException.ArchiveException(string! message, System.Exception? innerException) -> void
+UotanStudio.Firmware.Archive.ArchiveUnsupportedFeatureException
+UotanStudio.Firmware.Archive.ArchiveUnsupportedFeatureException.ArchiveUnsupportedFeatureException(string! message) -> void
+UotanStudio.Firmware.Archive.ArchiveUnsupportedFeatureException.ArchiveUnsupportedFeatureException(string! message, System.Exception? innerException) -> void
+UotanStudio.Firmware.Executable.ExecutableCorruptedException
+UotanStudio.Firmware.Executable.ExecutableCorruptedException.ExecutableCorruptedException(string! message) -> void
+UotanStudio.Firmware.Executable.ExecutableCorruptedException.ExecutableCorruptedException(string! message, System.Exception? innerException) -> void
+UotanStudio.Firmware.Executable.ExecutableException
+UotanStudio.Firmware.Executable.ExecutableException.ExecutableException(string! message) -> void
+UotanStudio.Firmware.Executable.ExecutableException.ExecutableException(string! message, System.Exception? innerException) -> void
+UotanStudio.Firmware.Executable.ExecutableUnsupportedFeatureException
+UotanStudio.Firmware.Executable.ExecutableUnsupportedFeatureException.ExecutableUnsupportedFeatureException(string! message) -> void
+UotanStudio.Firmware.Executable.ExecutableUnsupportedFeatureException.ExecutableUnsupportedFeatureException(string! message, System.Exception? innerException) -> void

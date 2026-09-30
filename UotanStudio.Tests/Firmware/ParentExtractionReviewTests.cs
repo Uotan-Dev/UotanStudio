@@ -55,7 +55,7 @@ public sealed class ParentExtractionReviewTests : IDisposable
     public void CpioCrcRegularFile_RejectsIncorrectChecksum()
     {
         using var archive = NewcArchive(NewcEntry("file", "payload"u8.ToArray(), crc: true));
-        Assert.Throws<InvalidDataException>(() => new CpioArchive().ListEntries(archive, ArchiveFormat.CrcAscii));
+        Assert.Throws<ArchiveCorruptedException>(() => new CpioArchive().ListEntries(archive, ArchiveFormat.CrcAscii));
     }
 
     [Fact]

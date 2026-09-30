@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
 using Xunit;
 
@@ -28,12 +29,17 @@ public sealed class PosixAclPermissionsTests
 
     [Theory]
     [InlineData("0200000001000700")]
-    [InlineData("03000000")]
     [InlineData("01000000010008000400070020000700")]
     [InlineData("0100000001000700010007000400070020000700")]
     [InlineData("010000000100070002000600E80300000400070020000700")]
     public void Apply_MalformedAcl_Rejects(string value)
     {
-        Assert.Throws<InvalidDataException>(() => PosixAclPermissions.Apply(Convert.FromHexString(value), 0x1A0));
+        Assert.Throws<FileSystemCorruptedException>(() => PosixAclPermissions.Apply(Convert.FromHexString(value), 0x1A0));
+    }
+
+    [Fact]
+    public void Apply_UnknownAclVersion_RejectsAsUnsupported()
+    {
+        Assert.Throws<FileSystemUnsupportedFeatureException>(() => PosixAclPermissions.Apply(Convert.FromHexString("03000000"), 0x1A0));
     }
 }

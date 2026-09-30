@@ -78,17 +78,17 @@ public static class ImageConfigurationReader
                 }
                 break;
             default:
-                throw new InvalidDataException("Only raw EXT4 and EROFS image configuration reads are supported.");
+                throw new PatchingUnsupportedFeatureException("Only raw EXT4 and EROFS image configuration reads are supported.");
         }
         token.ThrowIfCancellationRequested();
-        if (limited.Written != size) { throw new InvalidDataException("Image file output does not match its declared size."); }
+        if (limited.Written != size) { throw new PatchingCorruptedException("Image file output does not match its declared size."); }
     }
 
     private static void Validate(ushort mode, long size)
     {
         if ((mode & 0xF000) != 0x8000 || size is < 0 or > 16 * 1024 * 1024)
         {
-            throw new InvalidDataException("Image configuration must be a regular file of at most 16 MiB.");
+            throw new PatchingCorruptedException("Image configuration must be a regular file of at most 16 MiB.");
         }
     }
 }

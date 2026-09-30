@@ -172,7 +172,7 @@ public sealed partial class CpioVariantRoundTripTests
     [Theory]
     [InlineData(ArchiveFormat.HpOldAscii)]
     [InlineData(ArchiveFormat.HpBinary)]
-    public void SaveAll_HpSpecialDeviceWithPayload_ThrowsInvalidData(ArchiveFormat format)
+    public void SaveAll_HpSpecialDeviceWithPayload_ThrowsCorruption(ArchiveFormat format)
     {
         var archive = new CpioArchive();
         var entries = new[]
@@ -192,7 +192,7 @@ public sealed partial class CpioVariantRoundTripTests
             },
         };
 
-        Assert.Throws<InvalidDataException>(() => Write(archive, entries, format));
+        Assert.Throws<ArchiveCorruptedException>(() => Write(archive, entries, format));
     }
 
     [Theory]

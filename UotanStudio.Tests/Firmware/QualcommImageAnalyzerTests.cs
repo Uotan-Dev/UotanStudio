@@ -3,6 +3,7 @@ using System.Formats.Asn1;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using UotanStudio.Firmware.Executable;
 using UotanStudio.Firmware.Executable.Qualcomm;
 using Xunit;
 
@@ -860,6 +861,87 @@ public sealed class QualcommImageAnalyzerTests
         Assert.Empty(result.ComponentAuthentication);
         Assert.Empty(result.MelfComponents);
         Assert.Equal(QualcommVerificationStatus.NotChecked, result.MelfAuthenticationStatus);
+    }
+
+    [Fact]
+    public void Analyze_ElfHashSegmentUnsupportedVersion_ReportsHashTableInvalid()
+    {
+        var image = (byte[])SignedImage.Create().Elf.Clone();
+        image[0x404] = 9;
+
+        var result = AnalyzeImage(image);
+
+        Assert.Equal(QualcommImageFormat.Elf, result.Format);
+        Assert.Equal(QualcommVerificationStatus.Invalid, result.HashStatus);
+        Assert.Contains(result.Diagnostics, value =>
+            value == "Unsupported Qualcomm MBN header version.");
+    }
+
+    [Fact]
+    public void Analyze_CertificatePackageWithoutCertificates_ReportsChainInvalidAsDiagnostic()
+    {
+        var fixture = SignedImage.Create();
+        var image = (byte[])fixture.Elf.Clone();
+        image.AsSpan(0x400 + 360).Fill(0xFF);
+
+        var result = AnalyzeImage(image);
+
+        Assert.Equal(QualcommImageFormat.Elf, result.Format);
+        Assert.Equal(QualcommVerificationStatus.Invalid, result.OemSignature.CertificateChainStatus);
+        Assert.Contains(result.Diagnostics, value =>
+            value.Contains("Certificate package is empty.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Analyze_CertificateCountAboveConfiguredBound_ReportsChainInvalidAsDiagnostic()
+    {
+        var fixture = SignedImage.Create();
+
+        var result = AnalyzeImage(fixture.Elf, fixture.Trust() with { MaximumCertificateCount = 1 });
+
+        Assert.Equal(QualcommVerificationStatus.Invalid, result.OemSignature.CertificateChainStatus);
+        Assert.Contains(result.Diagnostics, value =>
+            value.Contains("Certificate count exceeds the limit.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void MbnLayout_V6PackedRootSlotAboveSupportedBound_ReportsUnsupportedFeature()
+    {
+        var mbn = SignedImage.Create().WithHeaderVersion(6, rootSlot: 64).Mbn;
+        using var stream = new MemoryStream(mbn);
+
+        var error = Assert.Throws<ExecutableUnsupportedFeatureException>(
+            () => QualcommMbnLayout.Read(stream, 0, mbn.Length, TestContext.Current.CancellationToken));
+        Assert.Equal("MBN root-certificate slot exceeds the supported limit.", error.Message);
+    }
+
+    [Fact]
+    public void Analyze_ClippedComponentWithBadAlignment_RetriesWidenedWindowAndReportsElfStructure()
+    {
+        var fixture = SignedImage.Create();
+        var component = new byte[160];
+        "\u007fELF"u8.CopyTo(component);
+        component[4] = 2;
+        component[5] = component[6] = 1;
+        BinaryPrimitives.WriteUInt32LittleEndian(component.AsSpan(20), 1);
+        BinaryPrimitives.WriteUInt64LittleEndian(component.AsSpan(32), 64);
+        BinaryPrimitives.WriteUInt16LittleEndian(component.AsSpan(52), 64);
+        BinaryPrimitives.WriteUInt16LittleEndian(component.AsSpan(54), 56);
+        BinaryPrimitives.WriteUInt16LittleEndian(component.AsSpan(56), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(component.AsSpan(64), 1);
+        BinaryPrimitives.WriteUInt64LittleEndian(component.AsSpan(72), 128);
+        BinaryPrimitives.WriteUInt64LittleEndian(component.AsSpan(96), 16);
+        BinaryPrimitives.WriteUInt64LittleEndian(component.AsSpan(104), 16);
+        BinaryPrimitives.WriteUInt64LittleEndian(component.AsSpan(112), 3);
+
+        var result = AnalyzeImage([.. fixture.Elf, .. component, .. fixture.Elf]);
+
+        var clipped = Assert.Single(result.ComponentAuthentication,
+            entry => entry.Offset == fixture.Elf.Length);
+        Assert.Equal("ElfStructure", clipped.FailureStage);
+        Assert.Equal(QualcommVerificationStatus.NotChecked, clipped.SignatureStatus);
+        Assert.Contains(clipped.Diagnostics, value => value == "ELF alignment is not a power of two.");
+        Assert.Equal(3, result.ComponentAuthentication.Count);
     }
 
     private static QualcommAnalysisResult AnalyzeImage(byte[] image, QualcommAnalysisOptions? options = null)

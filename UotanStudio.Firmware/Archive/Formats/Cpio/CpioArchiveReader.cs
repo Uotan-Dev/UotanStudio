@@ -28,7 +28,7 @@ internal sealed class CpioArchiveReader
     /// A fully materialized list of entries; symlink targets are decoded into <c>LinkName</c>.
     /// <para>完全物化的条目列表；符号链接目标已解码到 <c>LinkName</c>。</para>
     /// </returns>
-    /// <exception cref="InvalidDataException">
+    /// <exception cref="ArchiveCorruptedException">
     /// The archive is malformed or a payload exceeds the 256 MiB materialization limit.
     /// <para>归档格式非法，或负载超出 256 MiB 物化上限。</para>
     /// </exception>
@@ -50,7 +50,7 @@ internal sealed class CpioArchiveReader
     /// A sequence whose entries copy payloads up to 256 MiB into memory as enumeration advances.
     /// <para>枚举推进时将不超过 256 MiB 的负载复制到内存的条目序列。</para>
     /// </returns>
-    /// <exception cref="InvalidDataException">
+    /// <exception cref="ArchiveCorruptedException">
     /// The archive is malformed or a payload exceeds the 256 MiB materialization limit.
     /// <para>归档格式非法，或负载超出 256 MiB 物化上限。</para>
     /// </exception>
@@ -60,7 +60,7 @@ internal sealed class CpioArchiveReader
         {
             if (entry.DataStreamFactory is null) { yield return entry; continue; }
             if (entry.DataLength > 256 * 1024 * 1024)
-                throw new InvalidDataException("CPIO entry exceeds the 256 MiB materialization limit; use streaming access.");
+                throw new ArchiveCorruptedException("CPIO entry exceeds the 256 MiB materialization limit; use streaming access.");
             using var data = entry.DataStreamFactory();
             yield return new ArchiveEntry
             {
@@ -90,7 +90,7 @@ internal sealed class CpioArchiveReader
     /// A single-pass sequence whose payload factories read from the (possibly spooled) source stream.
     /// <para>单遍序列，其负载工厂从（可能已暂存的）源流中读取。</para>
     /// </returns>
-    /// <exception cref="InvalidDataException">
+    /// <exception cref="ArchiveCorruptedException">
     /// The archive is malformed, a name or symlink exceeds its bound, or a CRC ASCII checksum mismatches.
     /// <para>归档非法、名称或符号链接超出上限，或 CRC ASCII 校验和不匹配。</para>
     /// </exception>
@@ -203,7 +203,7 @@ internal sealed class CpioArchiveReader
     /// Fewer than six bytes remain at the current position.
     /// <para>当前位置剩余字节不足六个。</para>
     /// </exception>
-    /// <exception cref="InvalidDataException">
+    /// <exception cref="ArchiveCorruptedException">
     /// The probed bytes match no known CPIO magic.
     /// <para>探测字节不匹配任何已知 CPIO 魔数。</para>
     /// </exception>
@@ -243,7 +243,7 @@ internal sealed class CpioArchiveReader
         var swapped = (ushort)((probe[1] << 8) | probe[0]);
         return binaryValue == CpioConstants.BinaryMagic || swapped == CpioConstants.BinaryMagic
             ? ArchiveFormat.Binary
-            : throw new InvalidDataException("Unable to detect CPIO archive format.");
+            : throw new ArchiveCorruptedException("Unable to detect CPIO archive format.");
     }
 
     private static ArchiveEntry? ReadNewAsciiLike(Stream stream, ArchiveFormat format)
@@ -261,7 +261,7 @@ internal sealed class CpioArchiveReader
         var magic = CpioFieldParser.ReadAsciiString(header[..6]);
         if (magic is not CpioConstants.NewAsciiMagic and not CpioConstants.CrcAsciiMagic)
         {
-            throw new InvalidDataException($"Invalid newc/crc magic: {magic}");
+            throw new ArchiveCorruptedException($"Invalid newc/crc magic: {magic}");
         }
 
         var inode = CpioFieldParser.ParseHex64(header.Slice(6, 8));
@@ -327,7 +327,7 @@ internal sealed class CpioArchiveReader
         var magic = CpioFieldParser.ReadAsciiString(header[..6]);
         if (magic != CpioConstants.OldAsciiMagic)
         {
-            throw new InvalidDataException($"Invalid old ASCII magic: {magic}");
+            throw new ArchiveCorruptedException($"Invalid old ASCII magic: {magic}");
         }
 
         var dev = CpioFieldParser.ParseOctal(header.Slice(6, 6));
@@ -394,7 +394,7 @@ internal sealed class CpioArchiveReader
         var magic = CpioFieldParser.ReadUInt16(header[..2], byteSwap);
         if (magic != CpioConstants.BinaryMagic)
         {
-            throw new InvalidDataException("Invalid binary magic.");
+            throw new ArchiveCorruptedException("Invalid binary magic.");
         }
 
         var dev = CpioFieldParser.ReadUInt16(header.Slice(2, 2), byteSwap);
@@ -457,7 +457,7 @@ internal sealed class CpioArchiveReader
         FileExtraction.ValidateRange(start, length, stream.Length, "CPIO payload");
         if (fileType == CpioFileType.SymbolicLink)
         {
-            if (length > 65536) throw new InvalidDataException("CPIO symlink target is too large.");
+            if (length > 65536) throw new ArchiveCorruptedException("CPIO symlink target is too large.");
             return (ReadExact(stream, checked((int)length)), null);
         }
         if (format == ArchiveFormat.CrcAscii)
@@ -473,7 +473,7 @@ internal sealed class CpioArchiveReader
                 remaining -= size;
             }
             if (actual != expected)
-                throw new InvalidDataException($"CRC ASCII checksum mismatch for '{name}': 0x{actual:X8} != 0x{expected:X8}");
+                throw new ArchiveCorruptedException($"CRC ASCII checksum mismatch for '{name}': 0x{actual:X8} != 0x{expected:X8}");
         }
         stream.Position = checked(start + length);
         return ([], () => new BoundedReadStream(stream, start, length, leaveOpen: true));
@@ -482,7 +482,7 @@ internal sealed class CpioArchiveReader
     private static byte[] ReadExact(Stream stream, int length)
     {
         if (length < 0 || length > 256 * 1024 * 1024)
-            throw new InvalidDataException("CPIO metadata or materialized payload exceeds its limit.");
+            throw new ArchiveCorruptedException("CPIO metadata or materialized payload exceeds its limit.");
         var buffer = new byte[length];
         stream.ReadExactly(buffer);
         return buffer;
@@ -491,10 +491,10 @@ internal sealed class CpioArchiveReader
     private static string ReadName(Stream stream, uint length)
     {
         if (length is 0 or > 65536)
-            throw new InvalidDataException("CPIO entry name exceeds the 64 KiB limit or has no terminator.");
+            throw new ArchiveCorruptedException("CPIO entry name exceeds the 64 KiB limit or has no terminator.");
         var data = ReadExact(stream, (int)length);
         if (data[^1] != 0 || data.AsSpan(0, data.Length - 1).Contains((byte)0))
-            throw new InvalidDataException("CPIO entry name has invalid NUL termination.");
+            throw new ArchiveCorruptedException("CPIO entry name has invalid NUL termination.");
         return Encoding.UTF8.GetString(data, 0, data.Length - 1);
     }
 
