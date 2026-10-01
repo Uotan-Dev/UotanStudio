@@ -205,7 +205,6 @@ internal static partial class WinUSBFinder
                 if (Win32API.SetupDiGetDeviceInterfaceDetailW(devInfo, ref interfaceData, detailBuffer, detailSize, out _, ref node))
                 {
                     var path = Marshal.PtrToStringUni(new IntPtr(detailBuffer.ToInt64() + pathOffset)) ?? "";
-                    var lowerPath = path.ToLower();
 
                     if (!PathMatchesFilter(path, filter))
                     {
@@ -217,7 +216,7 @@ internal static partial class WinUSBFinder
                         filter?.InterfaceSubClass is byte sub && identity.InterfaceSubClass != sub ||
                         filter?.InterfaceProtocol is byte protocol && identity.InterfaceProtocol != protocol)
                         continue;
-                    var isGoogleWinUsb = lowerPath.Contains(PreferWinUsbVidPid);
+                    var isGoogleWinUsb = path.Contains(PreferWinUsbVidPid, StringComparison.OrdinalIgnoreCase);
                     var instanceId = GetDeviceInstanceId(devInfo, ref node);
                     var separator = instanceId.LastIndexOf('\\');
                     var candidate = separator >= 0 ? instanceId[(separator + 1)..] : null;

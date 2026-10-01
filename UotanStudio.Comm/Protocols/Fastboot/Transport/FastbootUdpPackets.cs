@@ -12,6 +12,7 @@ internal sealed class FastbootUdpPackets(IPEndPoint endpoint, int maxAttempts)
 
     private int _sequence;
     private int _maxDataLength;
+    private byte[] _sendBuffer = new byte[HeaderSize];
 
     private enum PacketId : byte
     {
@@ -96,7 +97,13 @@ internal sealed class FastbootUdpPackets(IPEndPoint endpoint, int maxAttempts)
         written = 0;
         while (true)
         {
-            var packet = new byte[HeaderSize + length];
+            var packetSize = HeaderSize + length;
+            if (_sendBuffer.Length < packetSize)
+            {
+                _sendBuffer = new byte[packetSize];
+            }
+
+            var packet = _sendBuffer;
             packet[0] = (byte)id;
             packet[1] = (byte)flag;
             BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(2, 2), sequence);
@@ -108,7 +115,7 @@ internal sealed class FastbootUdpPackets(IPEndPoint endpoint, int maxAttempts)
             var valid = false;
             for (var attempt = 0; attempt < attempts; attempt++)
             {
-                client.Send(packet, packet.Length, endpoint);
+                client.Send(packet, packetSize, endpoint);
                 try
                 {
                     while (true)
