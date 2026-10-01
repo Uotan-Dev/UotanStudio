@@ -374,51 +374,9 @@ internal static class OtaToolHandlers
     /// source files), so the confined plan is re-serialized instead of passing the client text through.
     /// <para>工具服务会直接使用计划 JSON 中的路径（本地 zstd 覆盖项会作为源文件被读取），因此这里重新序列化
     /// 已受限的计划，而不是把客户端文本原样传下去。</para>
-    /// Deserialization leaves each omitted section null because the plan type is built without running its
-    /// initializers, so every section and collection is normalized to its empty form before confinement.
-    /// <para>计划类型构造时不执行初始化器，因此 JSON 省略的节会是 null；受限之前把每一节与集合归一为空形态。</para>
     /// </summary>
     private static DeliveryPlan ParsePlan(PathSandbox sandbox, string planJson)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(planJson);
-        var plan = DeliveryPlanJson.Deserialize(planJson)
-            ?? throw new InvalidDataException("Delivery plan JSON could not be parsed.");
-        var package = plan.Package ?? new DeliveryPackageOptions();
-        var payload = plan.Payload ?? new DeliveryPayloadOptions();
-        return plan with
-        {
-            OutputDirectory = string.IsNullOrWhiteSpace(plan.OutputDirectory)
-                ? plan.OutputDirectory
-                : sandbox.ResolveOutput(plan.OutputDirectory),
-            Package = package with
-            {
-                CertificatePath = ConfineOptional(package.CertificatePath, sandbox),
-                SigningKeyPath = ConfineOptional(package.SigningKeyPath, sandbox),
-                RecoveryUpdaterPath = ConfineOptional(package.RecoveryUpdaterPath, sandbox)
-            },
-            Payload = payload with
-            {
-                DynamicPartitionsFile = ConfineOptional(payload.DynamicPartitionsFile, sandbox),
-                SignatureFile = ConfineOptional(payload.SignatureFile, sandbox),
-                SigningKeyPath = ConfineOptional(payload.SigningKeyPath, sandbox),
-                PostinstallFile = ConfineOptional(payload.PostinstallFile, sandbox)
-            },
-            LocalZstd = (plan.LocalZstd ?? []).ToDictionary(p => p.Key, p => ConfineOptional(p.Value, sandbox) ?? string.Empty),
-            Container = (plan.Container ?? []).Select(f => ConfineFile(f, sandbox)).ToList(),
-            Files = (plan.Files ?? []).Select(f => ConfineFile(f, sandbox)).ToList()
-        };
-    }
-
-    /// <summary>
-    /// <para>限制计划内的可选路径但不要求存在：源镜像可以有意缺失，由计划校验按 <c>checkSources</c> 决定。</para>
-    /// Confines an optional plan path without requiring existence, because a plan may legitimately reference a
-    /// source image that is not on disk yet and plan validation decides whether that is an error.
-    /// </summary>
-    private static string ConfineOptional(string path, PathSandbox sandbox)
-        => string.IsNullOrEmpty(path) ? path : sandbox.Resolve(path);
-
-    private static DeliveryFile ConfineFile(DeliveryFile file, PathSandbox sandbox)
-        => file with { SourcePath = string.IsNullOrEmpty(file.SourcePath) ? "" : sandbox.Resolve(file.SourcePath) };
+        => DeliveryPlanJson.ParseConfinedPlan(sandbox, planJson);
 
     private static (IReadOnlyList<string> Files, bool Truncated) ListPreparedFiles(string target)
     {

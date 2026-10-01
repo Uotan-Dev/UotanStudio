@@ -6,6 +6,7 @@ using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Services.Delivery;
+using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.ViewModels.Shell;
 using Xunit;
 
@@ -13,12 +14,12 @@ namespace UotanStudio.Tests.Delivery;
 
 public sealed class DeliveryTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "delivery-tests-" + Guid.NewGuid().ToString("N"));
-    public DeliveryTests() => Directory.CreateDirectory(_root);
-    public void Dispose() => Directory.Delete(_root, true);
+    private readonly TempDirectory _temp = new();
+    private string Root => _temp.Path;
+    public void Dispose() => _temp.Dispose();
     private DeliveryFile Input(string name = "boot", int size = 8192)
     {
-        var path = Path.Combine(_root, name + ".img");
+        var path = Path.Combine(Root, name + ".img");
         File.WriteAllBytes(path, Enumerable.Range(0, size).Select(i => (byte)(i * 37)).ToArray());
         return new() { SourcePath = path, FileName = name + ".img", Partition = name, SourceLength = size };
     }
@@ -36,11 +37,11 @@ public sealed class DeliveryTests : IDisposable
         var expected = File.ReadAllBytes(file.SourcePath);
         if (sparse)
         {
-            var path = Path.Combine(_root, "sparse.img");
+            var path = Path.Combine(Root, "sparse.img");
             SparseImageConverter.ConvertRawToSparse(file.SourcePath, path);
             file = file with { SourcePath = path, SourceLength = new FileInfo(path).Length };
         }
-        var config = Path.Combine(_root, "dynamic.txt");
+        var config = Path.Combine(Root, "dynamic.txt");
         var plan = new DeliveryPlan
         {
             PackPayload = true,
@@ -49,13 +50,13 @@ public sealed class DeliveryTests : IDisposable
             Container = [file with { IncludeInSuper = true }],
             Super = new() { DeviceSize = 8 * 1024 * 1024 },
             Payload = new() { DynamicPartitionsFile = config },
-            OutputDirectory = Path.Combine(_root, "payload-out"),
+            OutputDirectory = Path.Combine(Root, "payload-out"),
             Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }],
             Txt = false
         };
         File.WriteAllText(config, DeliveryPayloadBuilder.GenerateDynamicLayout(plan));
         await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: TestContext.Current.CancellationToken);
-        var unpacked = Path.Combine(_root, "ota-content");
+        var unpacked = Path.Combine(Root, "ota-content");
         ZipFile.ExtractToDirectory(Path.Combine(plan.OutputDirectory, "ota.zip"), unpacked);
         var payload = Path.Combine(unpacked, "payload.bin");
         var bytes = File.ReadAllBytes(payload);
@@ -68,7 +69,7 @@ public sealed class DeliveryTests : IDisposable
         var manifest = UotanStudio.Firmware.OtaDelta.Payload.Proto.DeltaArchiveManifest.Parser.ParseFrom(bytes.AsSpan(24, metadataSize - 24).ToArray());
         Assert.NotNull(manifest.DynamicPartitionMetadata);
         Assert.Equal("system", Assert.Single(Assert.Single(manifest.DynamicPartitionMetadata.Groups).PartitionNames));
-        var extracted = Path.Combine(_root, "extracted"); Directory.CreateDirectory(extracted);
+        var extracted = Path.Combine(Root, "extracted"); Directory.CreateDirectory(extracted);
         UotanStudio.Firmware.OtaDelta.Payload.PayloadParser.Extract(payload, ["system"], extracted);
         Assert.Equal(expected, File.ReadAllBytes(Path.Combine(extracted, "system.img")));
     }
@@ -86,7 +87,7 @@ public sealed class DeliveryTests : IDisposable
             OrganizeDirectory = true,
             ContainerConfirmed = true,
             Container = [file],
-            OutputDirectory = Path.Combine(_root, "vendor-name-output"),
+            OutputDirectory = Path.Combine(Root, "vendor-name-output"),
             Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }],
             Txt = false
         };
@@ -94,7 +95,7 @@ public sealed class DeliveryTests : IDisposable
         Assert.True(model.Confirmed);
         await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: TestContext.Current.CancellationToken);
         using var zip = ZipFile.OpenRead(Path.Combine(plan.OutputDirectory, "ota.zip"));
-        var payload = Path.Combine(_root, "payload.bin");
+        var payload = Path.Combine(Root, "payload.bin");
         zip.GetEntry("payload.bin")!.ExtractToFile(payload);
         var metadata = UotanStudio.Firmware.OtaDelta.Payload.PayloadParser.GetPayloadMetadata(payload);
         var partition = Assert.Single(metadata.Manifest.Partitions);
@@ -118,7 +119,7 @@ public sealed class DeliveryTests : IDisposable
     public async Task InvalidPayloadConfigurationPublishesNothing()
     {
         var file = Input("system");
-        var config = Path.Combine(_root, "dynamic.txt");
+        var config = Path.Combine(Root, "dynamic.txt");
         File.WriteAllText(config, "super_partition_groups=main\nsuper_main_group_size=8192\nsuper_main_partition_list=unknown\n");
         var plan = new DeliveryPlan
         {
@@ -127,13 +128,13 @@ public sealed class DeliveryTests : IDisposable
             ContainerConfirmed = true,
             Container = [file],
             Payload = new() { DynamicPartitionsFile = config },
-            OutputDirectory = Path.Combine(_root, "out"),
+            OutputDirectory = Path.Combine(Root, "out"),
             Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }],
             Txt = false
         };
         await Assert.ThrowsAsync<InvalidDataException>(() => new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: TestContext.Current.CancellationToken));
         Assert.False(Directory.Exists(plan.OutputDirectory));
-        Assert.Empty(Directory.GetDirectories(_root, ".uotan-delivery-*"));
+        Assert.Empty(Directory.GetDirectories(Root, ".uotan-delivery-*"));
         Assert.True(File.Exists(file.SourcePath));
         Assert.Throws<NotSupportedException>(() => DeliveryValidation.Validate(plan with { Payload = new() { SignatureFile = "signature" } }));
     }
@@ -162,7 +163,7 @@ public sealed class DeliveryTests : IDisposable
     {
         var model = new DeliveryViewModel();
         model.SetMode(true, false, true);
-        var path = Path.Combine(_root, "boot_a.img");
+        var path = Path.Combine(Root, "boot_a.img");
         File.WriteAllBytes(path, new byte[4096]);
         model.SelectSources([new DeliveryFile { SourcePath = path, FileName = "boot_a.img", Partition = "boot_a", SourceLength = 4096 }]);
         var plan = new DeliveryPlan
@@ -322,11 +323,11 @@ public sealed class DeliveryTests : IDisposable
         var expected = File.ReadAllBytes(file.SourcePath);
         if (sparseInput)
         {
-            var path = Path.Combine(_root, "sparse.img");
+            var path = Path.Combine(Root, "sparse.img");
             SparseImageConverter.ConvertRawToSparse(file.SourcePath, path);
             file = file with { SourcePath = path, SourceLength = new FileInfo(path).Length };
         }
-        var output = Path.Combine(_root, "super.img");
+        var output = Path.Combine(Root, "super.img");
         await DeliverySuperBuilder.BuildAsync([file], new() { DeviceSize = 8 * 1024 * 1024, AutoZero = true, Sparse = sparseOutput }, output, token: TestContext.Current.CancellationToken);
         using var raw = new MemoryStream();
         using (var source = SparseReader.ImportAuto(output)) source.WriteRawToStream(raw);
@@ -346,7 +347,7 @@ public sealed class DeliveryTests : IDisposable
     {
         var a = Input("my_bigball_a");
         var b = Input("my_bigball_b", 0);
-        var output = Path.Combine(_root, "super.img");
+        var output = Path.Combine(Root, "super.img");
         await DeliverySuperBuilder.BuildAsync([a, b], new() { DeviceSize = 8 * 1024 * 1024, AutoZero = true }, output, token: TestContext.Current.CancellationToken);
         using var raw = new MemoryStream();
         using (var source = SparseReader.ImportAuto(output)) source.WriteRawToStream(raw);
@@ -359,12 +360,12 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public async Task EmptySuperIsStandaloneAndCancellationPublishesNothing()
     {
-        var output = Path.Combine(_root, "empty.img");
+        var output = Path.Combine(Root, "empty.img");
         await DeliverySuperBuilder.BuildAsync([new() { Partition = "system" }], new() { DeviceSize = 8 * 1024 * 1024, Empty = true }, output, token: TestContext.Current.CancellationToken);
         Assert.Equal(0x616c4467u, BitConverter.ToUInt32(File.ReadAllBytes(output)));
         Assert.True(new FileInfo(output).Length < 128 * 1024);
         using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
-        var cancelled = Path.Combine(_root, "cancelled.img");
+        var cancelled = Path.Combine(Root, "cancelled.img");
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => DeliverySuperBuilder.BuildAsync([Input()], new(), cancelled, token: cancellation.Token));
         Assert.False(File.Exists(cancelled));
     }
@@ -373,14 +374,14 @@ public sealed class DeliveryTests : IDisposable
     public async Task DirectoryExportPreservesInputsAndRejectsConflicts()
     {
         var file = Input(); var sourceHash = SHA256.HashData(File.ReadAllBytes(file.SourcePath));
-        var plan = new DeliveryPlan { Files = [file], Txt = false, OutputDirectory = Path.Combine(_root, "out") };
+        var plan = new DeliveryPlan { Files = [file], Txt = false, OutputDirectory = Path.Combine(Root, "out") };
         var service = new DeliveryOutputService(new NoTools());
         await service.ExportAsync(plan, token: TestContext.Current.CancellationToken);
         Assert.True(File.Exists(Path.Combine(plan.OutputDirectory, "images", "boot.img")));
         Assert.True(File.Exists(Path.Combine(plan.OutputDirectory, "checksums.sha256")));
         await Assert.ThrowsAsync<IOException>(() => service.ExportAsync(plan, token: TestContext.Current.CancellationToken));
         Assert.Equal(sourceHash, SHA256.HashData(File.ReadAllBytes(file.SourcePath)));
-        Assert.Empty(Directory.GetDirectories(_root, ".uotan-delivery-*"));
+        Assert.Empty(Directory.GetDirectories(Root, ".uotan-delivery-*"));
     }
 
     [Fact]
@@ -389,14 +390,14 @@ public sealed class DeliveryTests : IDisposable
         var plan = new DeliveryPlan
         {
             Files = [Input()],
-            OutputDirectory = Path.Combine(_root, "out"),
+            OutputDirectory = Path.Combine(Root, "out"),
             Scripts = new() { ["flash.txt"] = "manual edits\n" },
             GeneratedScripts = new() { ["flash.txt"] = "boot images/boot.img\r\n" },
             OpenScripts = ["flash.txt"],
             ScriptCarets = new() { ["flash.txt"] = 5 }
         };
-        var state = DeliveryPlanStore.CaptureElement(_root, plan);
-        var restored = Assert.IsType<DeliveryPlan>(DeliveryPlanStore.LoadFromState(state, _root));
+        var state = DeliveryPlanStore.CaptureElement(Root, plan);
+        var restored = Assert.IsType<DeliveryPlan>(DeliveryPlanStore.LoadFromState(state, Root));
         Assert.Empty(restored.Files);
         Assert.Empty(restored.Container);
         Assert.Equal("manual edits\n", restored.Scripts["flash.txt"]);
@@ -420,12 +421,12 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public void LoadFromState_ToleratesLegacyPlanMissingRecoveryUpdaterPath()
     {
-        var plan = new DeliveryPlan { OutputDirectory = _root, Files = [Input()], Container = [] };
-        var captured = DeliveryPlanStore.CaptureElement(_root, plan);
+        var plan = new DeliveryPlan { OutputDirectory = Root, Files = [Input()], Container = [] };
+        var captured = DeliveryPlanStore.CaptureElement(Root, plan);
         var root = System.Text.Json.Nodes.JsonNode.Parse(captured.GetRawText())!;
         root["Package"]!.AsObject().Remove("RecoveryUpdaterPath");
         using var doc = JsonDocument.Parse(root.ToJsonString());
-        var restored = DeliveryPlanStore.LoadFromState(doc.RootElement, _root);
+        var restored = DeliveryPlanStore.LoadFromState(doc.RootElement, Root);
         Assert.NotNull(restored);
         Assert.Equal("", restored!.Package.RecoveryUpdaterPath);
     }
@@ -436,7 +437,7 @@ public sealed class DeliveryTests : IDisposable
         var data = new byte[] { 1, 2, 3, 4 };
         var handler = new DownloadHandler(data);
         using var http = new HttpClient(handler);
-        var service = new DeliveryToolService(http, Path.Combine(_root, "cache"));
+        var service = new DeliveryToolService(http, Path.Combine(Root, "cache"));
         var package = new DeliveryToolPackage("sample", "https://example.org/tools.zip", Convert.ToHexString(SHA256.HashData(data)), "");
         var path = await service.AcquireAsync(package, null, TestContext.Current.CancellationToken);
         await service.AcquireAsync(package, null, TestContext.Current.CancellationToken);
@@ -457,18 +458,18 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public async Task ToolArchiveCannotEscapeDestination()
     {
-        var archive = Path.Combine(_root, "bad.zip");
+        var archive = Path.Combine(Root, "bad.zip");
         using (var zip = ZipFile.Open(archive, ZipArchiveMode.Create))
         using (var stream = zip.CreateEntry("platform-tools/../../escaped").Open()) stream.WriteByte(1);
-        await Assert.ThrowsAsync<InvalidDataException>(() => DeliveryToolService.ExtractAsync(archive, "platform-tools/", Path.Combine(_root, "tools"), TestContext.Current.CancellationToken));
-        Assert.False(File.Exists(Path.Combine(_root, "escaped")));
+        await Assert.ThrowsAsync<InvalidDataException>(() => DeliveryToolService.ExtractAsync(archive, "platform-tools/", Path.Combine(Root, "tools"), TestContext.Current.CancellationToken));
+        Assert.False(File.Exists(Path.Combine(Root, "escaped")));
     }
 
     [Fact]
     public async Task CancellingDuringCopyLeavesExistingDirectoryUntouched()
     {
         var file = Input(size: 1024 * 1024);
-        var output = Path.Combine(_root, "out"); Directory.CreateDirectory(output);
+        var output = Path.Combine(Root, "out"); Directory.CreateDirectory(output);
         File.WriteAllText(Path.Combine(output, "keep.txt"), "keep");
         using var cancellation = new CancellationTokenSource();
         var progress = new InlineProgress<DeliveryProgress>(p => { if (p.Percent > 55) cancellation.Cancel(); });
@@ -476,7 +477,7 @@ public sealed class DeliveryTests : IDisposable
             new() { Files = [file], Txt = false, OutputDirectory = output }, progress, cancellation.Token));
         Assert.Equal("keep", File.ReadAllText(Path.Combine(output, "keep.txt")));
         Assert.Single(Directory.GetFiles(output, "*", SearchOption.AllDirectories));
-        Assert.Empty(Directory.GetDirectories(_root, ".uotan-delivery-*"));
+        Assert.Empty(Directory.GetDirectories(Root, ".uotan-delivery-*"));
     }
 
     [Fact]
@@ -484,9 +485,9 @@ public sealed class DeliveryTests : IDisposable
     {
         var file = Input("system");
         var options = new DeliverySuperOptions { DeviceSize = 8 * 1024 * 1024 };
-        var raw = Path.Combine(_root, "raw.img");
+        var raw = Path.Combine(Root, "raw.img");
         await DeliverySuperBuilder.BuildAsync([file], options, raw, token: TestContext.Current.CancellationToken);
-        var output = Path.Combine(_root, "compressed");
+        var output = Path.Combine(Root, "compressed");
         await new DeliveryOutputService(new NoTools()).ExportAsync(new()
         {
             OrganizeDirectory = false,
@@ -507,7 +508,7 @@ public sealed class DeliveryTests : IDisposable
         var file = Input("system", 256 * 1024);
         const ulong deviceSize = 64UL * 1024 * 1024;
         var options = new DeliverySuperOptions { DeviceSize = deviceSize, Sparse = true, BlockSize = 4096 };
-        var output = Path.Combine(_root, "sparse-super.img");
+        var output = Path.Combine(Root, "sparse-super.img");
         await DeliverySuperBuilder.BuildAsync([file], options, output, token: TestContext.Current.CancellationToken);
 
         var length = new FileInfo(output).Length;
@@ -523,7 +524,7 @@ public sealed class DeliveryTests : IDisposable
     {
         var file = Input("system");
         var options = new DeliverySuperOptions { DeviceSize = 8 * 1024 * 1024, Empty = true };
-        var output = Path.Combine(_root, "empty-out");
+        var output = Path.Combine(Root, "empty-out");
         await new DeliveryOutputService(new NoTools()).ExportAsync(new()
         {
             OrganizeDirectory = false,
@@ -548,7 +549,7 @@ public sealed class DeliveryTests : IDisposable
             PackSuper = true,
             Super = new() { DeviceSize = 8 * 1024 * 1024, Empty = true, Zstd = true },
             Container = [Input("system")],
-            OutputDirectory = Path.Combine(_root, "empty-zstd-out")
+            OutputDirectory = Path.Combine(Root, "empty-zstd-out")
         };
         Assert.Throws<InvalidDataException>(() => DeliveryValidation.Validate(plan));
     }
@@ -568,7 +569,7 @@ public sealed class DeliveryTests : IDisposable
             PackSuper = true,
             Super = new() { DeviceSize = 8 * 1024 * 1024, Zstd = true, ZstdLevel = 30 },
             Container = [Input("system")],
-            OutputDirectory = Path.Combine(_root, "bad-zstd-out")
+            OutputDirectory = Path.Combine(Root, "bad-zstd-out")
         };
         Assert.Throws<InvalidDataException>(() => DeliveryValidation.Validate(plan));
     }
@@ -577,7 +578,7 @@ public sealed class DeliveryTests : IDisposable
     public void SuperZstdLevelSurvivesPlanPersistence()
     {
         var plan = new DeliveryPlan { Super = new() { Zstd = true, ZstdLevel = 12 } };
-        var restored = DeliveryPlanStore.LoadFromState(DeliveryPlanStore.CaptureElement(_root, plan), _root);
+        var restored = DeliveryPlanStore.LoadFromState(DeliveryPlanStore.CaptureElement(Root, plan), Root);
         Assert.Equal(12, restored!.Super.ZstdLevel);
     }
 
@@ -587,7 +588,7 @@ public sealed class DeliveryTests : IDisposable
     [InlineData(true, true)]
     public async Task EmptySuperOutputsWithoutConfirmationSourcesOrScripts(bool organize, bool retainedImages)
     {
-        var missing = new DeliveryFile { SourcePath = Path.Combine(_root, "missing.img"), Partition = "system", FileName = "system.img" };
+        var missing = new DeliveryFile { SourcePath = Path.Combine(Root, "missing.img"), Partition = "system", FileName = "system.img" };
         var plan = new DeliveryPlan
         {
             OrganizeDirectory = organize,
@@ -600,7 +601,7 @@ public sealed class DeliveryTests : IDisposable
             MacOS = true,
             Recovery = true,
             Scripts = new() { ["FlashWindows.bat"] = "user draft" },
-            OutputDirectory = Path.Combine(_root, "empty-direct")
+            OutputDirectory = Path.Combine(Root, "empty-direct")
         };
         DeliveryValidation.Validate(plan);
         Assert.Empty(DeliveryScriptGenerator.Generate(plan));
@@ -633,7 +634,7 @@ public sealed class DeliveryTests : IDisposable
             Super = new() { DeviceSize = 8 * 1024 * 1024, Empty = true },
             Container = [file with { IncludeInSuper = true }],
             Files = [new DeliveryFile { Generated = true, FileName = "super_empty.img", Partition = "super_empty" }],
-            OutputDirectory = Path.Combine(_root, "script-out")
+            OutputDirectory = Path.Combine(Root, "script-out")
         };
         DeliveryValidation.Validate(plan, false);
         var scripts = DeliveryScriptGenerator.Generate(plan, key => key);
@@ -752,7 +753,7 @@ public sealed class DeliveryTests : IDisposable
         new[] { "adb", "sqlite3", "mke2fs", "etc1tool", "hprof-conv", "make_f2fs", "make_f2fs_casefold", "mke2fs.conf" })]
     public void TrimPlatformToolsKeepsFastbootAndRemovesDeadBinaries(string name, string[] keeps, string[] removes)
     {
-        var target = Path.Combine(_root, "bin", name);
+        var target = Path.Combine(Root, "bin", name);
         foreach (var file in keeps.Concat(removes))
         {
             var path = Path.Combine(target, file);

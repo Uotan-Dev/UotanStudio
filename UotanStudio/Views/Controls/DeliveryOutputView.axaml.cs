@@ -87,14 +87,11 @@ public partial class DeliveryOutputView : UserControl
     {
         if (!outputEnabled && OutputSettings.IsEnabled) OutputImages.CommitEdit();
         OutputSettings.IsEnabled = outputEnabled;
-        // The script editor follows the output-image panel. Before the image
-        // composition is confirmed both surfaces must be read-only together.
-        // 脚本编辑器必须与输出镜像面板保持同一交互状态；编排未确认时两者同时禁止操作。
+
         _editorEnabled = outputEnabled && editorEnabled;
         DocumentPane.IsEnabled = _editorEnabled && _model?.IsRunning != true;
         ScriptSettingsExpander.IsEnabled = outputEnabled && _model?.PackPayload != true;
-        // 仅生成Super_Empty 时输出设置禁用，但底部进度条与开始输出按钮保持可用；其余场景随输出设置启用。
-        // With Super_Empty only the output settings are disabled while the footer stays available; otherwise it follows the settings.
+
         OutputFooter.IsEnabled = outputEnabled || emptyOnly;
     }
 
@@ -240,8 +237,7 @@ public partial class DeliveryOutputView : UserControl
     {
         var fingerprint = DeliveryScriptGenerator.Fingerprint(plan);
         if (_fingerprint == fingerprint && !force) return true;
-        // 脚本提示文案随当前界面语言生成；切换语言不重写已生成的脚本正文（指纹不含语言）。
-        // Prompts are generated in the current UI language; switching language never rewrites existing script bodies (the fingerprint excludes language).
+
         var generated = DeliveryScriptGenerator.Generate(plan, id => LanguageService.Instance.GetString("Delivery_Script_" + id));
         if (!replaceModified && (_allDocuments.Values.Any(d => d.Modified)
             || generated.Keys.Any(name => _allDocuments.TryGetValue(name, out var doc) && doc.Baseline is null && doc.Document.TextLength > 0))) return false;
@@ -279,10 +275,7 @@ public partial class DeliveryOutputView : UserControl
             BatchShellScriptBox.IsChecked = !plan.PackPayload && (plan.Windows || plan.Linux || plan.MacOS);
             DeviceCodenameBox.Text = plan.DeviceCodename; AuthorInfoBox.Text = plan.Information;
             _documents.Clear(); _allDocuments.Clear(); _activeDocument = null;
-            // Script bodies are derived artifacts. Do not restore persisted text
-            // or its fingerprint: QueueDeliveryChange will generate scripts from
-            // the current plan after the restored controls and image list settle.
-            // 脚本正文属于派生内容，还原时一律丢弃，待当前计划稳定后重新生成，避免沿用旧文件。
+
             _fingerprint = "";
             ClearEditor();
             UpdateRecoveryAvailability();
@@ -330,8 +323,7 @@ public partial class DeliveryOutputView : UserControl
         if (DocumentTabs.SelectedItem is not DeliveryScriptDocument document || ReferenceEquals(document, _activeDocument)) return;
         if (_activeDocument is not null) _activeDocument.CaretOffset = ScriptEditor.CaretOffset;
         _activeDocument = document;
-        // Swap documents rather than their text so each draft retains its own undo history.
-        // 切换文档对象，保留各草稿独立的撤销历史。
+
         ScriptEditor.Document = document.Document;
         ScriptEditor.IsReadOnly = false;
         ScriptEditor.CaretOffset = Math.Min(document.CaretOffset, document.Document.TextLength);

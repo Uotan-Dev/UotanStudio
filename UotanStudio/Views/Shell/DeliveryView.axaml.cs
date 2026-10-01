@@ -102,8 +102,7 @@ public partial class DeliveryView : UserControl
     {
         var packSuper = PackSuperBox.IsChecked == true;
         var packPayload = PackPayloadBox.IsChecked == true;
-        // ZIP 打包同样是一组打包设置，保持与 Super/Payload 一致的分隔线语义。
-        // ZIP packing is a pack-settings group too, so it keeps the same divider semantics as Super/Payload.
+
         SettingsDivider.IsVisible = packSuper || packPayload || DirectOutputBox.IsChecked == true;
         ProjectSettingsSelector.IsVisible = packSuper || packPayload;
         SuperSettings.IsVisible = packSuper || packPayload;
@@ -132,8 +131,7 @@ public partial class DeliveryView : UserControl
         if ((!SuperAbBox.IsVisible && SuperAbBox.IsChecked == true)
             || (!SuperAOnlyBox.IsVisible && SuperAOnlyBox.IsChecked == true))
             SuperVabBox.IsChecked = true;
-        // A-Only 联动仅在实际打包 Super 时生效；其他模式将 IsAOnly 复位，避免隐藏残留。
-        // The A-Only linkage only applies while actually packing Super; IsAOnly resets otherwise so the hide state never lingers.
+
         Composition.IsAOnly = PackSuperBox.IsChecked == true
             && SuperAOnlyBox.IsChecked == true
             && SuperVabBox.IsChecked != true
@@ -146,9 +144,7 @@ public partial class DeliveryView : UserControl
         var zipOutput = DirectOutputBox.IsChecked == true;
         if (zipOutput)
         {
-            // ZIP delivery carries a complete RAW Super image; sparse output is not a
-            // valid selectable format for this mode.
-            // ZIP 交付必须携带完整 RAW Super 镜像，SPARSE 在此模式下不可选。
+
             SuperRawBox.IsChecked = true;
             SuperSparseBox.IsChecked = false;
         }
@@ -158,8 +154,7 @@ public partial class DeliveryView : UserControl
 
     private void OnNodeArtifactsChanged(object? sender, EventArgs e)
     {
-        // 节点执行线程发布产物，需回到 UI 线程再重建镜像分组。
-        // Artifacts are published from workflow threads; rebuild the group on the UI thread.
+
         Dispatcher.UIThread.Post(UpdateNodeArtifacts);
     }
 
@@ -183,8 +178,7 @@ public partial class DeliveryView : UserControl
     private void UpdateImagesLayout()
     {
         var onRight = ImageSelection.ImagesOnRight;
-        // The new divider occupies the middle of the existing 12 DIP gap before the editor.
-        // 新分隔线放在编辑器前方原有的 12 DIP 间距中，避免额外留白挤压相邻两栏。
+
         const double gapBeforeDivider = 6;
         const double gapAfterDivider = 5;
         var rows = DeliveryContent.RowDefinitions;
@@ -243,8 +237,7 @@ public partial class DeliveryView : UserControl
         if (_solutionPath == context.CurrentSolutionPath) return;
         _solutionPath = context.CurrentSolutionPath;
         Composition.Reset();
-        // 交付输出默认落在子项目自己的 delivery/ 目录，与通用工作区 output/ 分离；该目录与源镜像 images/ 为同级，
-        // 打包时不会触发“输出目录是源镜像所在目录”的误报。
+
         OutputDirectoryBox.Text = context.SubProjects.FirstOrDefault() is { } sp
             ? sp.DeliveryDirectory
             : string.Empty;
@@ -282,11 +275,7 @@ public partial class DeliveryView : UserControl
         if (sender is RadioButton { IsChecked: true })
         {
             SuperMetadataSlotsBox.Text = ReferenceEquals(sender, SuperVabBox) ? "3" : "2";
-            // Keep the composition panel's A-Only visibility in sync immediately when
-            // switching between device types. Use the event source instead of reading
-            // the other radio button because Avalonia may clear the previous selection
-            // after this checked event. This prevents A-Only from lingering on VAB.
-            // 直接使用事件来源判断设备类型，避免旧 RadioButton 尚未取消选中时留下 A-Only 状态。
+
             Composition.IsAOnly = PackSuperBox.IsChecked == true && ReferenceEquals(sender, SuperAOnlyBox);
         }
     }
@@ -296,33 +285,21 @@ public partial class DeliveryView : UserControl
         var source = ResolveSourceSettings();
         if (source is null && UseProjectSuperSettingsBox.IsChecked == true)
         {
-            // 勾选后当前模式读不到来源配置（没有候选子项目、项目被移除或配置损坏）时立刻取消勾选并提示，
-            // 否则界面会停留在“使用项目配置”而输出仍按手工值进行。
-            // Clear the tick and report when the current mode has no readable source configuration (no candidate
-            // sub-project, the project went away, or the configuration is unreadable); otherwise the form keeps
-            // claiming the project drives the values while the plan still uses hand-entered ones.
+
             UseProjectSuperSettingsBox.IsChecked = false;
             _ = ShowDeliveryMessageAsync(LanguageService.Instance.GetString("Delivery_NoProjectSourceSettings"), false);
             return;
         }
 
         if (source is { } chosen) ApplySourceSettings(chosen.RootPath, chosen.Settings);
-        // 勾选来源配置后只禁用由项目驱动且确实取到值的表单字段，避免用户覆盖项目值，也避免禁用的文本框
-        // 把未被回填的用户旧值冒充项目值写进计划；底部镜像选项（压缩为 ZST、生成 Super_Empty）不属于
-        // 项目配置驱动字段，保持可交互。
-        // While a source configuration is applied, only the fields it actually supplies are disabled: the project
-        // values must not be overridden, and a greyed box must never present an unfilled stale user value as a
-        // project value. The image options (ZST, Super_Empty) are not project-driven and stay interactive.
+
         var settings = source?.Settings;
         var applied = settings is not null;
         var drivesSuperGeometry = settings is { Kind: "super" };
         var drivesPayloadMetadata = settings is { Kind: "payload" };
         var sourceGroupName = applied ? SourceGroupName(settings!) : "";
         SuperSettingsProjectBox.IsEnabled = applied;
-        // ZIP 直出会强制 RAW，格式此时由输出模式而不是来源决定，因此保持可见可交互，只由 SPARSE 自身的
-        // 禁用态表达约束。
-        // ZIP delivery forces RAW, so the format is decided by the output mode rather than the source; keep the
-        // group interactive and let SPARSE's own disabled state express the constraint.
+
         SuperFormatOptions.IsEnabled = !(drivesSuperGeometry && DirectOutputBox.IsChecked != true);
         SuperDeviceTypeOptions.IsEnabled = settings is not { DeviceType: "VAB" or "AB" or "AOnly" };
         SuperDeviceNameField.IsEnabled = !drivesPayloadMetadata && settings is not { DeviceName.Length: > 0 };
@@ -333,9 +310,7 @@ public partial class DeliveryView : UserControl
         SuperMetadataSlotsField.IsEnabled = !drivesSuperGeometry;
         PayloadTimestampBox.IsEnabled = !drivesPayloadMetadata;
         PayloadSecurityPatchBox.IsEnabled = !drivesPayloadMetadata;
-        // Payload 主版本由交付约束固定为 2，来源配置里没有该字段，所以保持只读可见而不标记为项目驱动。
-        // The Payload major version is pinned by the delivery contract instead of read from the configuration, so
-        // the read-only box stays enabled rather than being presented as project-driven.
+
         PayloadVersionBox.IsEnabled = true;
         PayloadMinorVersionBox.IsEnabled = !drivesPayloadMetadata;
         PayloadBuildFingerprintBox.IsEnabled = !drivesPayloadMetadata;
@@ -350,9 +325,7 @@ public partial class DeliveryView : UserControl
         if (ProjectContextService.Instance.SubProjects.FirstOrDefault(project => project.Name == name)?.RootPath
             is not { } root) return null;
         if (ReadSourceSettings(root) is not { } settings) return null;
-        // 配置里的 Kind 与当前模式不一致时按不可用处理，避免把另一套字段当成项目值禁用。
-        // A configuration whose Kind disagrees with the current mode counts as unavailable, so the other mode's
-        // fields are never disabled as though they held project values.
+
         return settings.Kind == (PackPayloadBox.IsChecked == true ? "payload" : "super") ? (root, settings) : null;
     }
 
@@ -384,10 +357,7 @@ public partial class DeliveryView : UserControl
     private void ApplySourceSettings(string root, DeliverySourceContainerSettings settings)
     {
         var sourcePath = SourceContainerMetadataService.GetPath(root, settings.Kind);
-        // ZIP 直出会强制 RAW，读到的 SPARSE 只在非直出时生效，因此把输出约束并入身份，
-        // 切换直出后重新回填，而不是留下先前被覆盖的格式值。
-        // ZIP output forces RAW, so a SPARSE reading only survives in non-ZIP mode; the output constraint is part
-        // of the identity so toggling ZIP re-applies the read format instead of keeping the overwritten value.
+
         var identity = sourcePath + "|" + File.GetLastWriteTimeUtc(sourcePath).Ticks + "|" +
             (DirectOutputBox.IsChecked == true ? "zip" : "dir");
         if (_appliedSourceSettings == identity) return;
@@ -406,9 +376,7 @@ public partial class DeliveryView : UserControl
         SuperVabBox.IsChecked = settings.DeviceType == "VAB";
         SuperAbBox.IsChecked = settings.DeviceType == "AB";
         SuperAOnlyBox.IsChecked = settings.DeviceType == "AOnly";
-        // 来源没有分组信息时保留用户填写的簇名，禁用态由 UpdateProjectSuperSelector 按“是否真的取到值”决定。
-        // Keep the user's group name when the source carries no groups; UpdateProjectSuperSelector disables the
-        // field only when a value was actually read.
+
         var groupName = SourceGroupName(settings);
         if (groupName.Length > 0) SuperGroupNameBox.Text = groupName;
         if (settings.Kind == "super")
@@ -582,8 +550,7 @@ public partial class DeliveryView : UserControl
 
     private void OnSidebarColumnChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
-        // GridSplitter changes this property for both pointer and keyboard resizing.
-        // 鼠标拖动及键盘调整均由 GridSplitter 更新列宽；保留用户选择的固定宽度。
+
         if (!_updatingSidebarWidth && e.Property == ColumnDefinition.WidthProperty && _sidebarColumn is { } column)
             _customSidebarWidth = column.Width.Value;
     }
@@ -609,8 +576,7 @@ public partial class DeliveryView : UserControl
             if (!stacked) UpdateSidebarWidth();
             return;
         }
-        // Preserve the stacked layout's height ratio while keeping the sidebar width independent of window size.
-        // 上下布局保留高度比例，左右布局的侧栏使用独立于窗口大小的固定宽度。
+
         if (_stacked == true)
             _stackedRatio = DeliveryLayout.RowDefinitions[0].Height.Value /
                 (DeliveryLayout.RowDefinitions[0].Height.Value + DeliveryLayout.RowDefinitions[2].Height.Value);

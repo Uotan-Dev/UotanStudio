@@ -23,9 +23,7 @@ public partial class DeliveryView
     private TaskCompletionSource? _deliveryCompletion;
     private string? _deliveryRoot;
     private bool _deliveryLoaded;
-    // 已应用到面板的解决方案完整重载代号；与 ProjectOperationsService 的计数器比较决定是否强制重载。
-    // The full-reload generation already applied to the panel; compared against the service counter to
-    // decide whether the plan and sub-project choices must be rebuilt from the solution file.
+
     private int _loadedSolutionGeneration;
     private bool _restoringDelivery;
     private bool _deliveryChangePending;
@@ -33,8 +31,7 @@ public partial class DeliveryView
 
     private void InitializeDelivery()
     {
-        // 交付计划随解决方案文件持久化：保存解决方案前由钩子捕获当前表单状态。
-        // The delivery plan persists inside the solution file: a hook captures the form state before solution saves.
+
         ProjectOperationsService.Instance.CaptureDeliveryState = CaptureDeliveryState;
         InitializePayloadSigningKeys();
         ManageZipKeysButton.Click += (_, _) => MenuViewModel.ShowKeyManagerWindow();
@@ -62,8 +59,7 @@ public partial class DeliveryView
         foreach (var box in new ToggleButton[] { DirectOutputBox, PackSuperBox, PackPayloadBox, SuperRawBox, SuperSparseBox,
                      SuperZstdBox, SuperVabBox, SuperAbBox, SuperAOnlyBox, GenerateSuperEmptyBox })
             box.IsCheckedChanged += (_, _) => QueueDeliveryChange();
-        // 压缩为ZST 与 仅生成Super_Empty 互斥：勾选其一自动取消另一项。
-        // ZST compression and Super_Empty-only are mutually exclusive; checking one clears the other.
+
         SuperZstdBox.IsCheckedChanged += (_, _) =>
         {
             if (SuperZstdBox.IsChecked == true && GenerateSuperEmptyBox.IsChecked == true) GenerateSuperEmptyBox.IsChecked = false;
@@ -71,8 +67,7 @@ public partial class DeliveryView
         };
         GenerateSuperEmptyBox.IsCheckedChanged += (_, _) =>
         {
-            // 仅生成Super_Empty：右栏输出设置（镜像列表与脚本生成器）禁用，开始输出按钮保持可用。
-            // Super_Empty only: right-pane output settings (image list and script generator) disabled; start output stays available.
+
             Composition.SuperEmptyOnly = GenerateSuperEmptyBox.IsChecked == true;
             if (GenerateSuperEmptyBox.IsChecked == true && SuperZstdBox.IsChecked == true) SuperZstdBox.IsChecked = false;
             UpdateSidebarLock();
@@ -217,8 +212,6 @@ public partial class DeliveryView
         }
     }
 
-    // The inactive list still owns its sources; expose that ownership to the picker without another selection state.
-    // 非编辑列表继续持有其镜像，只向选择器同步只读状态，不额外维护镜像归属。
     private IEnumerable<string> GetReadOnlyDeliverySources() =>
         (Composition.Model.EditingContainer ? Composition.Model.Output : Composition.Model.Container)
         .Where(image => image.FilePath is not null).Select(image => image.FilePath!);
@@ -297,11 +290,7 @@ public partial class DeliveryView
         try
         {
             var root = ProjectContextService.Instance.RootDirectory;
-            // 完整重载（打开、添加/删除子项目）由会话计数器标记：即使解决方案路径未变，也要丢弃内存计划，
-            // 从解决方案文件重新恢复并重建子项目下拉列表；面板当时未在可视树、错过消息时也能在再次进入时补上。
-            // A full reload (open, add/remove sub-project) is marked by the session counter: even with an
-            // unchanged path the in-memory plan is dropped, restored from the solution file and the sub-project
-            // choices rebuilt; a detached panel that missed the message catches up on the next refresh.
+
             var generation = ProjectOperationsService.Instance.SolutionReloadGeneration;
             var reloaded = generation != _loadedSolutionGeneration;
             var rootChanged = root != _deliveryRoot;
@@ -310,11 +299,7 @@ public partial class DeliveryView
                 _deliverySaveTimer.Stop();
                 _deliveryCancellation?.Cancel();
                 if (_deliveryCompletion is { } completion) await completion.Task;
-                // 仅“换到另一解决方案”才回写旧计划；同文件完整重载必须从文件读取，
-                // 否则刚被重新加载的交付状态会被内存中的旧表单覆盖。
-                // Only a move to a different solution writes the outgoing plan back; a full reload of the
-                // same file must read the stored state, or the reloaded plan would be overwritten by the
-                // stale in-memory form.
+
                 if (rootChanged && _deliveryLoaded && _deliveryRoot is not null) await PersistDeliveryAsync();
                 if (root != ProjectContextService.Instance.RootDirectory) return;
                 _restoringDelivery = true;
@@ -374,8 +359,7 @@ public partial class DeliveryView
             Composition.SuperEmptyOnly = plan.Super.Empty;
             Composition.AutoZero = plan.Super.AutoZero;
             Composition.Model.Reset(plan); Composition.OutputView.Restore(plan);
-            // 设备类型联动（含 A-Only 清理自动 B 槽行）必须在 AutoZero/Reset 之后应用，确保还原后状态一致。
-            // Device-type linkage (incl. the A-Only cleanup of auto B-slot rows) must run after AutoZero/Reset so the restored state is consistent.
+
             UpdateDeviceTypeOptions();
             UpdateSidebarLock();
         }
@@ -400,19 +384,15 @@ public partial class DeliveryView
             {
                 if (TopLevel.GetTopLevel(this) is not Window owner || !await DialogService.ConfirmAsync(owner, LanguageService.Instance.GetString("Tab_Delivery"),
                         LanguageService.Instance.GetString("Delivery_ReplaceEditedScripts"))) return;
-                // A project transition may have cancelled the operation while the dialog was open.
+
                 cancellation.Token.ThrowIfCancellationRequested();
                 if (root != _deliveryRoot) return;
                 Composition.OutputView.SynchronizeScripts(CaptureDeliveryPlan(), true);
             }
             plan = CaptureDeliveryPlan();
-            // 输出前的磁盘剩余空间预估；估算本身出错不阻塞输出。
-            // Disk space pre-check before exporting; an estimation failure never blocks the export.
+
             await CheckDeliveryDiskSpaceAsync(plan);
-            // 提前分析已存在的输出文件，弹窗提示冲突并列出文件名（过多时只报数量）；
-            // 是=覆盖全部冲突文件，否=保留原文件。
-            // Scan existing output files in advance and ask via a yes/no dialog whether to overwrite them
-            // all; the message lists the conflicting names, or just the count when there are too many.
+
             IReadOnlySet<string>? overwrite = null;
             if (!string.IsNullOrWhiteSpace(plan.OutputDirectory))
             {
@@ -427,7 +407,7 @@ public partial class DeliveryView
                         message += "\n" + string.Format(language.GetString("Delivery_OverwriteMore"), existing.Length - maxListed);
                     var overwriteAll = await DialogService.ConfirmYesNoAsync(owner, language.GetString("Delivery_OverwriteTitle"), message,
                         language.GetString("Explorer_Yes"), language.GetString("Explorer_No"));
-                    // A project transition may have cancelled the operation while the dialog was open.
+
                     cancellation.Token.ThrowIfCancellationRequested();
                     if (root != _deliveryRoot) return;
                     var comparison = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
@@ -451,8 +431,7 @@ public partial class DeliveryView
             Composition.SetRunning(true, 100);
             Composition.Model.Status = LanguageService.Instance.GetString("Delivery_OutputComplete", outputs.Length, plan.OutputDirectory);
             LogService.Instance.Write(LogLevel.Info, "Delivery", Composition.Model.Status);
-            // 生成的镜像同步映射到镜像文件管理面板，重名条目由面板标注来源。
-            // Map generated images into the image manager panel; the view annotates colliding file names with the source.
+
             ImageSelection.AddDeliveryOutputs(outputs);
             if (showCompletion && _attached && root == ProjectContextService.Instance.RootDirectory)
                 await ShowDeliveryMessageAsync(Composition.Model.Status, false);
@@ -487,8 +466,7 @@ public partial class DeliveryView
         {
             var outputDirectory = plan.OutputDirectory;
             if (string.IsNullOrWhiteSpace(outputDirectory)) return;
-            // 需求按交付计划估算：源镜像 + 生成的 Super/Payload + 工具，乘安全系数。
-            // Demand is estimated from the plan: source images + generated Super/Payload + tools, times the safety factor.
+
             var required = DiskSpaceEstimator.EstimateExportDemand(plan);
             if (required <= 0) return;
             var free = DiskSpaceEstimator.GetFreeBytes(outputDirectory);

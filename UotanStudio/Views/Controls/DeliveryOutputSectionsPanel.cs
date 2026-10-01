@@ -23,8 +23,6 @@ public sealed class DeliveryOutputSectionsPanel : Panel
         var scripts = Children[1];
         var height = Math.Max(0, availableSize.Height - Spacing);
 
-        // Reserve room for script settings first, then return any space unused by a short image list.
-        // 先为脚本设置留出空间，再将短镜像列表未用完的空间交还给脚本设置。
         scripts.Measure(new Size(availableSize.Width, height / 2));
         images.Measure(new Size(availableSize.Width, Math.Max(0, height - scripts.DesiredSize.Height)));
         scripts.Measure(new Size(availableSize.Width, Math.Max(0, height - images.DesiredSize.Height)));

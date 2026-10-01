@@ -192,16 +192,25 @@ internal static class DeliveryPayloadBuilder
         var size = checked(24L + (long)BinaryPrimitives.ReadUInt64BigEndian(header.AsSpan(12, 8)));
         input.Position = 0;
         using var metadata = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        var buffer = new byte[65536]; long remaining = size;
+        using var file = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[65536];
+        long remaining = size;
         while (remaining > 0)
         {
             var count = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), token).ConfigureAwait(false);
             if (count == 0) throw new EndOfStreamException();
-            metadata.AppendData(buffer, 0, count); remaining -= count;
+            metadata.AppendData(buffer, 0, count);
+            file.AppendData(buffer, 0, count);
+            remaining -= count;
         }
-        input.Position = 0;
-        var hash = await SHA256.HashDataAsync(input, token).ConfigureAwait(false);
-        var text = $"FILE_HASH={Convert.ToBase64String(hash)}\nFILE_SIZE={input.Length}\nMETADATA_HASH={Convert.ToBase64String(metadata.GetHashAndReset())}\nMETADATA_SIZE={size}\n";
+
+        int read;
+        while ((read = await input.ReadAsync(buffer, token).ConfigureAwait(false)) != 0)
+        {
+            file.AppendData(buffer, 0, read);
+        }
+
+        var text = $"FILE_HASH={Convert.ToBase64String(file.GetHashAndReset())}\nFILE_SIZE={input.Length}\nMETADATA_HASH={Convert.ToBase64String(metadata.GetHashAndReset())}\nMETADATA_SIZE={size}\n";
         await File.WriteAllTextAsync(properties, text, new UTF8Encoding(false), token).ConfigureAwait(false);
     }
 }

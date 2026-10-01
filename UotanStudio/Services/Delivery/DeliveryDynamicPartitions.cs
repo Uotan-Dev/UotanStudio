@@ -14,8 +14,6 @@ internal static class DeliveryDynamicPartitions
             var settings = SourceContainerMetadataService.Read(projectRoot, kind);
             if (settings is null) continue;
             found = true;
-            // Every LP partition is logical; Payload also contains physical boot partitions,
-            // so only its dynamic group members qualify.
             var partitions = kind == "super" ? settings.PartitionNames.AsEnumerable()
                 : DeliveryGroups.FromSource(settings).SelectMany(group => group.Partitions);
             foreach (var name in partitions)

@@ -99,9 +99,7 @@ public partial class DeliveryCompositionView : UserControl
     {
         CancelImageDrag();
         ImageListTitle.Classes.Set("payload", IsPayload);
-        // 容器编排（Super 或 Payload）均显示自动零分区选项，A-Only 仍隐藏；纯脚本交付隐藏。
-        // Auto-zero companions are a Super-only layout aid. Payload has its own
-        // partition metadata and must never expose this Super option.
+
         AutoZeroPartitionsBox.IsVisible = PackContainerMode && !IsPayload && !_isAOnly;
         SuperMembershipHeader.IsVisible = IsPayload;
         ZeroPartitionForm.IsVisible = !IsPayload && !_isAOnly && AutoZeroPartitionsBox.IsChecked != true;
@@ -119,9 +117,7 @@ public partial class DeliveryCompositionView : UserControl
         _packImages = packImages;
         IsPayload = packPayload;
         var changed = Model.SetMode(outputToDirectory, packSuper, packPayload);
-        // SetMode changes PackSuper/PackPayload on the model, so refresh the
-        // composition visibility after the new mode is applied.
-        // SetMode 会更新模型中的打包模式，必须在更新完成后刷新组合面板的可见性。
+
         UpdateMode();
         UpdateInteractionState();
         return changed;
@@ -139,12 +135,10 @@ public partial class DeliveryCompositionView : UserControl
         var confirmBeforeOutput = _packImages && _outputToDirectory && !IsSuperEmptyOnly;
         CompositionFooter.IsVisible = !(_packImages && !_outputToDirectory);
         ConfirmCompositionButton.IsEnabled = confirmBeforeOutput && !_compositionConfirmed && !Model.IsRunning;
-        // Keep Cancel outside the locked content so a confirmed list can be edited again.
-        // 取消按钮不随列表内容锁定，确认后仍可返回编辑。
+
         CancelCompositionButton.IsEnabled = confirmBeforeOutput && _compositionConfirmed && !Model.IsRunning;
         CompositionOutputFooter.IsVisible = _packImages && !_outputToDirectory;
-        // 仅生成Super_Empty：输出设置禁用但开始输出按钮（OutputFooter）保持可用。
-        // Super_Empty only: output settings disabled while the start-output button (OutputFooter) stays available.
+
         ScriptPane.SetInteractionState(_outputToDirectory && (!_packImages || _compositionConfirmed) && !IsSuperEmptyOnly,
             (_outputToDirectory || _packImages) && !IsSuperEmptyOnly, IsSuperEmptyOnly);
     }

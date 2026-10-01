@@ -6,6 +6,7 @@ using UotanStudio.Firmware.Application.Equivalence;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.Compression;
 using UotanStudio.Firmware.Compression.Compressors;
+using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -310,35 +311,42 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                 File.Delete(Path.Combine(imageDirectory, "payload_properties.txt"));
             var stagedFiles = Directory.EnumerateFiles(stage, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
             await VerifyStagedEquivalenceAsync(plan, stage, progress, token).ConfigureAwait(false);
-            var hashes = new StringBuilder();
-            long totalBytes = 0;
-            foreach (var file in stagedFiles) totalBytes = checked(totalBytes + new FileInfo(file).Length);
-            long processedBytes = 0;
-            progress?.Report(new(90, "Verifying output", Stage: "Delivery_ProgressVerify", Bytes: (0, totalBytes)));
-            for (var i = 0; i < stagedFiles.Length; i++)
-            {
-                token.ThrowIfCancellationRequested();
-                await using var input = new FileStream(stagedFiles[i], FileMode.Open, FileAccess.Read, FileShare.Read,
-                    1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
-                var fileLength = input.Length;
-                var hashAlgorithm = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-                var buffer = new byte[1024 * 1024];
-                int read;
-                while ((read = await input.ReadAsync(buffer.AsMemory(), token).ConfigureAwait(false)) != 0)
-                {
-                    hashAlgorithm.AppendData(buffer, 0, read);
-                    processedBytes = checked(processedBytes + read);
-                    progress?.Report(new(90 + processedBytes * 9.0 / Math.Max(1, totalBytes), "Verifying output",
-                        Stage: "Delivery_ProgressVerify", Bytes: (processedBytes, totalBytes), Detail: Path.GetFileName(stagedFiles[i])));
-                }
-                var hash = hashAlgorithm.GetHashAndReset();
-                hashAlgorithm.Dispose();
-                if (input.Length != fileLength) throw new IOException("Output changed while verifying.");
-                hashes.Append(Convert.ToHexString(hash).ToLowerInvariant()).Append("  ")
-                    .AppendLine(Path.GetRelativePath(stage, stagedFiles[i]).Replace('\\', '/'));
-            }
             if (plan.OrganizeDirectory)
+            {
+                long totalBytes = 0;
+                foreach (var file in stagedFiles) totalBytes = checked(totalBytes + new FileInfo(file).Length);
+                long processedBytes = 0;
+                progress?.Report(new(90, "Verifying output", Stage: "Delivery_ProgressVerify", Bytes: (0, totalBytes)));
+                var hashLines = new string[stagedFiles.Length];
+                var degree = Math.Max(1, Math.Min(stagedFiles.Length, FirmwareParallelism.Workers));
+                await Parallel.ForEachAsync(
+                    Enumerable.Range(0, stagedFiles.Length),
+                    new ParallelOptions { MaxDegreeOfParallelism = degree, CancellationToken = token },
+                    async (i, ct) =>
+                    {
+                        var buffer = new byte[1024 * 1024];
+                        await using var input = new FileStream(stagedFiles[i], FileMode.Open, FileAccess.Read, FileShare.Read,
+                            1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+                        var fileLength = input.Length;
+                        var hashAlgorithm = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                        int read;
+                        while ((read = await input.ReadAsync(buffer.AsMemory(), ct).ConfigureAwait(false)) != 0)
+                        {
+                            hashAlgorithm.AppendData(buffer, 0, read);
+                            var done = Interlocked.Add(ref processedBytes, read);
+                            progress?.Report(new(90 + done * 9.0 / Math.Max(1, totalBytes), "Verifying output",
+                                Stage: "Delivery_ProgressVerify", Bytes: (done, totalBytes), Detail: Path.GetFileName(stagedFiles[i])));
+                        }
+                        var hash = hashAlgorithm.GetHashAndReset();
+                        hashAlgorithm.Dispose();
+                        if (input.Length != fileLength) throw new IOException("Output changed while verifying.");
+                        hashLines[i] = Convert.ToHexString(hash).ToLowerInvariant() + "  "
+                            + Path.GetRelativePath(stage, stagedFiles[i]).Replace('\\', '/');
+                    }).ConfigureAwait(false);
+                var hashes = new StringBuilder();
+                foreach (var line in hashLines) hashes.AppendLine(line);
                 await File.WriteAllTextAsync(Path.Combine(stage, "checksums.sha256"), hashes.ToString(), token).ConfigureAwait(false);
+            }
             if (plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty)
             {
                 var archive = Path.Combine(stage, "super.zip");
@@ -395,19 +403,44 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     {
         var results = new List<DeliveryStagedEquivalence>();
         if (!plan.OrganizeDirectory) return results;
-        foreach (var file in plan.Files)
+        var indices = new List<int>();
+        for (var i = 0; i < plan.Files.Count; i++)
         {
-            token.ThrowIfCancellationRequested();
-            if (file.Generated || file.SourcePath.Length == 0) continue;
-            var staged = OrganizedImagePath(plan, stage, file);
-            if (!File.Exists(staged)) throw new IOException("Staged image is missing: " + file.FileName);
-            progress?.Report(new(90, "Verifying image equivalence",
-                Stage: "Delivery_ProgressEquivalence", Detail: file.FileName));
-            var result = await EvaluateStagedEquivalenceAsync(file, staged, plan.PackSuper, token).ConfigureAwait(false);
-            var failure = result.RequiredFailure;
-            if (failure is not null) throw new IOException(failure);
-            results.Add(result);
+            if (plan.Files[i].Generated || plan.Files[i].SourcePath.Length == 0) continue;
+            indices.Add(i);
         }
+        var evaluated = new DeliveryStagedEquivalence?[indices.Count];
+        var failures = new Exception?[indices.Count];
+        var degree = Math.Max(1, Math.Min(indices.Count, FirmwareParallelism.Workers));
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, indices.Count),
+            new ParallelOptions { MaxDegreeOfParallelism = degree, CancellationToken = token },
+            async (slot, ct) =>
+            {
+                var file = plan.Files[indices[slot]];
+                var staged = OrganizedImagePath(plan, stage, file);
+                if (!File.Exists(staged))
+                {
+                    failures[slot] = new IOException("Staged image is missing: " + file.FileName);
+                    return;
+                }
+                progress?.Report(new(90, "Verifying image equivalence",
+                    Stage: "Delivery_ProgressEquivalence", Detail: file.FileName));
+                var result = await EvaluateStagedEquivalenceAsync(file, staged, plan.PackSuper, ct).ConfigureAwait(false);
+                var failure = result.RequiredFailure;
+                if (failure is not null)
+                {
+                    failures[slot] = new IOException(failure);
+                    return;
+                }
+                evaluated[slot] = result;
+            }).ConfigureAwait(false);
+        // Slots are ordered by plan.Files index, so the first non-null failure is the same one a
+        // sequential pass would have thrown first, preserving fail-fast observable behavior.
+        foreach (var failure in failures)
+            if (failure is not null) throw failure;
+        foreach (var result in evaluated)
+            if (result is not null) results.Add(result);
         if (results.Count > 0)
         {
             var summary = new Dictionary<string, string>(StringComparer.Ordinal)

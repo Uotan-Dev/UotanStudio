@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using UotanStudio.Firmware.OtaDelta.Dat;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -20,11 +21,10 @@ internal static partial class DeliveryPackageBuilder
 
     private static DatSet[] DatSets(DeliveryPlan plan) => Selected(plan).Where(f => IsDatArtifact(f.FileName))
         .GroupBy(f => DatStem(f.FileName), StringComparer.OrdinalIgnoreCase)
-        .Select(g => new DatSet(g.Single(f => f.FileName.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase)),
-            g.Single(f => f.FileName.EndsWith(".new.dat", StringComparison.OrdinalIgnoreCase)
-                || f.FileName.EndsWith(".new.dat.br", StringComparison.OrdinalIgnoreCase)),
-            g.SingleOrDefault(f => f.FileName.EndsWith(".patch.dat", StringComparison.OrdinalIgnoreCase)
-                || f.FileName.EndsWith(".patch.dat.br", StringComparison.OrdinalIgnoreCase)))).ToArray();
+        .Select(g => new DatSet(
+            g.Single(f => DatFileSet.IsTransferList(f.FileName)),
+            g.Single(f => DatFileSet.IsNewData(f.FileName)),
+            g.SingleOrDefault(f => DatFileSet.IsPatchData(f.FileName)))).ToArray();
 
     private sealed record RecoveryImage(DeliveryFile File, string Member, DatSet? Dat = null);
 

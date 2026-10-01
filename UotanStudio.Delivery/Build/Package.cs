@@ -304,11 +304,25 @@ internal static partial class DeliveryPackageBuilder
     private static async Task AddHashedMemberAsync(ZipArchive zip, string member, Stream input, StringBuilder hashes,
         CancellationToken token, IProgress<DeliveryProgress>? progress)
     {
-        var hash = await SHA256.HashDataAsync(input, token);
-        input.Position = 0;
-        hashes.Append(Convert.ToHexString(hash).ToLowerInvariant()).Append("  ").Append(member).Append('\n');
+        var length = input.Length;
+        void Report(long count) => progress?.Report(new(85 + count * 4.0 / Math.Max(1, length), "Packaging ZIP",
+            (count, length), "Delivery_ProgressPackage", Detail: member));
+        Report(0);
+        using var hashAlgorithm = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         await using var output = Entry(zip, member).Open();
-        await CopyPackageMemberAsync(input, output, member, token, progress);
+        var buffer = new byte[65536];
+        long written = 0;
+        int read;
+        while ((read = await input.ReadAsync(buffer, token).ConfigureAwait(false)) != 0)
+        {
+            hashAlgorithm.AppendData(buffer, 0, read);
+            await output.WriteAsync(buffer.AsMemory(0, read), token).ConfigureAwait(false);
+            written = checked(written + read);
+            Report(written);
+        }
+
+        Report(written);
+        hashes.Append(Convert.ToHexString(hashAlgorithm.GetHashAndReset()).ToLowerInvariant()).Append("  ").Append(member).Append('\n');
     }
 
     private static async Task<string> ExpandPatchAsync(string source, string stage, CancellationToken token)
