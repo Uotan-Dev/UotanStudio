@@ -37,6 +37,7 @@
     <x:String x:Key="Delivery_OutputComplete">已输出 {0} 个文件：{1}</x:String>
     <x:String x:Key="Delivery_OutputCancelled">输出已取消。</x:String>
     <x:String x:Key="Delivery_PendingImage">待生成</x:String>
+    <x:String x:Key="Delivery_BSlotReadOnly">{0} (B 槽 · 只读)</x:String>
     <x:String x:Key="Delivery_AddPartitionsFirst">请先添加分区镜像。</x:String>
     <x:String x:Key="Delivery_InvalidPartition">分区名无效或重复。</x:String>
     <x:String x:Key="Delivery_MetadataSlots">元数据槽位</x:String>
@@ -508,7 +509,6 @@
     <x:String x:Key="Image_FsStageFile">{0}：{1}</x:String>
     <x:String x:Key="Image_FsPreparing">正在准备源镜像</x:String>
     <x:String x:Key="Image_FsExtracting">正在解包</x:String>
-    <x:String x:Key="Image_FsPreserving">正在保存原始镜像</x:String>
     <x:String x:Key="Image_FsVerifyingImage">正在校验原始镜像</x:String>
     <x:String x:Key="Image_FsVerifyingFiles">正在校验解包文件</x:String>
     <x:String x:Key="Image_FsReadingMetadata">正在读取文件属性</x:String>
@@ -707,6 +707,7 @@
     <x:String x:Key="FirmwareField_PublicKeyMetadataSize">公钥元数据大小（字节）</x:String>
     <x:String x:Key="FirmwareInfo_AvbSummary">显示文件声明的签名、哈希、回滚保护和描述符配置。读取配置不代表签名可信或分区内容已通过验证；AVB 签名也不代表镜像内容已加密。</x:String>
     <x:String x:Key="FirmwareInfo_FilesystemSummary">{0} 超级块特性和文件系统布局参数。特性标志表示格式能力，不代表每个文件都启用了该特性；未知位保留在原始十六进制值中。</x:String>
+    <x:String x:Key="FirmwareInfo_FatSummary">{0} 卷引导记录几何信息与目录布局参数。簇数描述声明容量，不代表镜像实际携带的数据量。</x:String>
     <x:String x:Key="FirmwareField_TotalBlocks">总块数量</x:String>
     <x:String x:Key="FirmwareField_TotalChunks">数据块条目数量</x:String>
     <x:String x:Key="FirmwareField_FileHeaderSize">文件头大小（字节）</x:String>

@@ -37,6 +37,7 @@
     <x:String x:Key="Delivery_OutputComplete">Output complete: {0} files in {1}</x:String>
     <x:String x:Key="Delivery_OutputCancelled">Output cancelled.</x:String>
     <x:String x:Key="Delivery_PendingImage">Pending</x:String>
+    <x:String x:Key="Delivery_BSlotReadOnly">{0} (B slot · read-only)</x:String>
     <x:String x:Key="Delivery_AddPartitionsFirst">Add partition images first.</x:String>
     <x:String x:Key="Delivery_InvalidPartition">Invalid or duplicate partition name.</x:String>
     <x:String x:Key="Delivery_MetadataSlots">Metadata slots</x:String>
@@ -508,7 +509,6 @@
     <x:String x:Key="Image_FsStageFile">{0}: {1}</x:String>
     <x:String x:Key="Image_FsPreparing">Preparing source image</x:String>
     <x:String x:Key="Image_FsExtracting">Extracting</x:String>
-    <x:String x:Key="Image_FsPreserving">Saving original image</x:String>
     <x:String x:Key="Image_FsVerifyingImage">Verifying original image</x:String>
     <x:String x:Key="Image_FsVerifyingFiles">Verifying extracted files</x:String>
     <x:String x:Key="Image_FsReadingMetadata">Reading file attributes</x:String>
@@ -707,6 +707,7 @@
     <x:String x:Key="FirmwareField_PublicKeyMetadataSize">Public Key Metadata Size</x:String>
     <x:String x:Key="FirmwareInfo_AvbSummary">Signature, hash, rollback protection and descriptor configuration declared by the file. Reading this configuration does not verify trust or partition contents. An AVB signature does not imply encrypted image data.</x:String>
     <x:String x:Key="FirmwareInfo_FilesystemSummary">{0} superblock features and filesystem layout. Feature flags describe format capabilities, not necessarily the settings of every file. Unknown bits are retained in the hexadecimal mask.</x:String>
+    <x:String x:Key="FirmwareInfo_FatSummary">{0} volume boot record geometry and directory layout. Cluster counts describe the declared volume, not the amount of data the shipped image carries.</x:String>
     <x:String x:Key="FirmwareField_TotalBlocks">Total blocks</x:String>
     <x:String x:Key="FirmwareField_TotalChunks">Total chunks</x:String>
     <x:String x:Key="FirmwareField_FileHeaderSize">File header size (bytes)</x:String>

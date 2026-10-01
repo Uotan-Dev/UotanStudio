@@ -10,10 +10,7 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 /// </summary>
 public partial class NodeConnectorViewModel : ConnectorViewModelBase
 {
-    private Guid _id = Guid.NewGuid();
     private string _portId = string.Empty;
-    private int _maxConnections;
-    private object? _data;
     private object? _initialValue;
 
     internal bool IsEditingLocked { get; set; }
@@ -40,9 +37,9 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// </summary>
     public Guid Id
     {
-        get => _id;
-        set => SetProperty(ref _id, value);
-    }
+        get => field;
+        set => SetProperty(ref field, value);
+    } = Guid.NewGuid();
 
     /// <summary>
     /// <para>获取或设置连接器允许的最大连接数，0 表示不限制。</para>
@@ -50,8 +47,8 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// </summary>
     public int MaxConnections
     {
-        get => _maxConnections;
-        set => SetProperty(ref _maxConnections, value);
+        get => field;
+        set => SetProperty(ref field, value);
     }
 
     /// <summary>
@@ -61,10 +58,10 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// </summary>
     public object? Data
     {
-        get => _data;
+        get => field;
         set
         {
-            if (SetProperty(ref _data, value))
+            if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(DataPreview));
             }

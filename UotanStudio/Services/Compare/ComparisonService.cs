@@ -76,7 +76,6 @@ internal sealed class ComparisonService(
         cancellationToken.ThrowIfCancellationRequested();
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
             81920, FileOptions.SequentialScan);
-        // This API owns a seekable file stream: enforce the original byte cap before decoding.
         if (stream.Length > MaximumTextBytes)
             throw new FormatException($"Text file exceeds the {MaximumTextBytes} byte limit.");
 
@@ -100,9 +99,6 @@ internal sealed class ComparisonService(
         ArgumentNullException.ThrowIfNull(lines);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // 原文件的编码（按 BOM）与换行风格必须保留：文本对比的编辑只改行内容，不改变文件形态。
-        // The original file's encoding (from its BOM) and line ending must survive: editing a text comparison changes
-        // line content, not the file's shape.
         var (encoding, lineEnding, endsWithNewLine) = DetectTextLayout(path);
         var builder = new StringBuilder();
         for (var index = 0; index < lines.Count; index++)
@@ -127,8 +123,6 @@ internal sealed class ComparisonService(
         {
             File.WriteAllText(staging, builder.ToString(), encoding);
             cancellationToken.ThrowIfCancellationRequested();
-            // 同目录内原子替换：写入失败或取消时保留用户原有文件。
-            // Atomic swap inside the same directory: a failed or cancelled write keeps the user's existing file.
             File.Move(staging, fullPath, overwrite: true);
         }
         finally

@@ -159,9 +159,6 @@ internal static class ComparisonRowBuilder
         var leftRecognized = left is { FormatName.Length: > 0 };
         var rightRecognized = right is { FormatName.Length: > 0 };
 
-        // 缺失侧的填充符：对侧文件不存在（null）时整侧留空，两侧都是文件而只是缺键/缺条目时才用 "-"。
-        // Placeholder for a missing side: a side without a file at all (null) stays blank, while "-"
-        // only marks a missing key/entry when both sides are files.
         var leftPlaceholder = left is null ? string.Empty : "-";
         var rightPlaceholder = right is null ? string.Empty : "-";
 
@@ -175,14 +172,12 @@ internal static class ComparisonRowBuilder
             return rows;
         }
 
-        // 格式名行。 Format-name row.
         rows.Add(new CompareRowViewModel(
             FolderItemStatus.Equal, 0,
             string.Empty, leftRecognized ? left!.FormatName : leftPlaceholder, string.Empty, false,
             string.Empty, rightRecognized ? right!.FormatName : rightPlaceholder, string.Empty, false,
             hasLeftLine: left is not null, hasRightLine: right is not null));
 
-        // 摘要行（按行拆分）。 Summary rows (split by line).
         var leftSummary = leftRecognized ? SplitLines(left!.Summary) : [];
         var rightSummary = rightRecognized ? SplitLines(right!.Summary) : [];
         var summaryCount = Math.Max(leftSummary.Count, rightSummary.Count);
@@ -195,7 +190,6 @@ internal static class ComparisonRowBuilder
                 hasLeftLine: left is not null, hasRightLine: right is not null));
         }
 
-        // 元数据键值对（左右并排，取两字典键并集）。 Metadata key-values (side by side, key union).
         var keys = new SortedSet<string>(StringComparer.Ordinal);
         if (leftRecognized)
         {
@@ -222,9 +216,6 @@ internal static class ComparisonRowBuilder
             var valueDiffers = hasLeft && hasRight
                 && !string.Equals(leftValue, rightValue, StringComparison.Ordinal);
 
-            // 同名键值对：值不同算差异（整行高亮）；仅单侧存在算单侧条目。
-            // Same-name key-values: differing values count as a difference (full-row highlight);
-            // keys present on only one side are single-side rows.
             var status = valueDiffers ? FolderItemStatus.Different
                 : hasLeft && hasRight ? FolderItemStatus.Equal
                 : hasLeft ? FolderItemStatus.LeftOnly
@@ -237,10 +228,6 @@ internal static class ComparisonRowBuilder
                 hasLeftLine: left is not null, hasRightLine: right is not null));
         }
 
-        // 条目行（按名称对齐：两侧名称并集，同名条目同一水平行；仅单侧条目在缺失侧置空占位，
-        // 不显示名称——与文件夹模式一致）。 Entry rows (aligned by name: union of both sides'
-        // names, same-name entries share a row; single-side entries leave the missing side blank,
-        // matching the folder-mode behavior).
         var leftEntries = leftRecognized ? left!.Entries : [];
         var rightEntries = rightRecognized ? right!.Entries : [];
         var entryNames = new SortedSet<string>(StringComparer.Ordinal);
@@ -266,9 +253,6 @@ internal static class ComparisonRowBuilder
                 hasLeftLine: hasLeft, hasRightLine: hasRight));
         }
 
-        // 组件行（名称 + 大小，同样按名称对齐；仅单侧组件在缺失侧置空）。
-        // Component rows (name + size, aligned by name too; single-side components leave the
-        // missing side blank).
         var leftComponents = leftRecognized ? left!.Components : [];
         var rightComponents = rightRecognized ? right!.Components : [];
         var componentNames = new SortedSet<string>(StringComparer.Ordinal);
@@ -290,9 +274,6 @@ internal static class ComparisonRowBuilder
             var hasRight = rightComponent is not null;
             var sizeDiffers = hasLeft && hasRight && leftComponent!.SizeBytes != rightComponent!.SizeBytes;
 
-            // 同名组件：大小不同算差异（整行高亮）；仅单侧存在算单侧条目。
-            // Same-name components: differing sizes count as a difference (full-row highlight);
-            // components present on only one side are single-side rows.
             var status = sizeDiffers ? FolderItemStatus.Different
                 : hasLeft && hasRight ? FolderItemStatus.Equal
                 : hasLeft ? FolderItemStatus.LeftOnly

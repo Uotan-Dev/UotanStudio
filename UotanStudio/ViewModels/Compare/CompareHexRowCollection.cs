@@ -125,11 +125,6 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
                     slot.LeftCount = ReadLine(_leftStream, offset, _leftLength, slot.Left);
                     slot.RightCount = ReadLine(_rightStream, offset, _rightLength, slot.Right);
                     slot.Index = index;
-                    // 行 VM 随槽一并缓存：同一索引反复访问（滚动/虚拟化重新取行/两侧共享同一集合）
-                    // 直接复用实例，不再每次分配新 VM 与字符串。
-                    // The row VM is cached with the slot: repeated access to the same index (scrolling,
-                    // virtualizer re-fetching, both panes sharing the collection) reuses the instance
-                    // instead of allocating a new VM and strings every time.
                     slot.Row = BuildRow(index, slot);
                 }
 
@@ -155,19 +150,6 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     /// Non-generic enumerator implementation forwarding to <see cref="GetEnumerator"/>.
     /// </summary>
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-    // ---- 非泛型 IList 只读实现 ----
-    // Avalonia 的 ItemsSourceView.Create 只对非泛型 IList 或 IReadOnlyList<object?> 采用可虚拟化
-    // 的 ListSourceView；仅实现泛型 IReadOnlyList<T> 的自定义集合（泛型不变性）会落入
-    // EnumerableSourceView——无 O(1) 索引访问，VirtualizingStackPanel 只能逐行物化，几十万行即
-    // 产生 GB 级内存。实现只读 IList 即可让 hex 列表像文本/文件夹模式（List<T>）一样虚拟化。
-    // ---- Read-only non-generic IList ----
-    // Avalonia's ItemsSourceView.Create only picks the virtualizable ListSourceView for the
-    // non-generic IList or IReadOnlyList<object?>; a custom collection implementing only the generic
-    // IReadOnlyList<T> (generic invariance) falls into EnumerableSourceView — no O(1) indexed access,
-    // so the VirtualizingStackPanel materializes every row, yielding gigabytes for hundreds of
-    // thousands of rows. Implementing a read-only IList lets the hex list virtualize like the
-    // text/folder modes (List<T>).
 
     bool IList.IsReadOnly => true;
 

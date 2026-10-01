@@ -49,10 +49,6 @@ public sealed partial class CompareViewModel
                 result.RightOnlyCount);
 
             _compareTreeRoot = BuildCompareTree(result, _leftPath, _rightPath);
-            // 对比一开始就展开最初始的文件夹：视图里立刻显示目录内的条目（根行仍保留，便于看到整棵对比的汇总状态），
-            // 而不是只显示一行文件夹名等着用户展开。
-            // The initial folder is expanded from the start: the view shows the directory's entries immediately (the root row stays so the
-            // aggregated status of the whole comparison remains visible) instead of a single folder row waiting to be expanded.
             _compareTreeRoot.IsExpanded = true;
             Mode = CompareMode.Folder;
             Rows = ComparisonRowBuilder.ForTree([_compareTreeRoot], compared: true);
@@ -61,8 +57,6 @@ public sealed partial class CompareViewModel
         }
         catch (OperationCanceledException)
         {
-            // 取消：保持当前状态，下次刷新覆盖。
-            // Cancelled: keep the current state; the next refresh overwrites it.
         }
         catch (Exception ex)
         {
@@ -72,10 +66,6 @@ public sealed partial class CompareViewModel
         }
         finally
         {
-            // 仅当仍是当前加载（未被更新的加载取代）时清除 busy：被取消的旧加载
-            // 不得把新加载的 busy 状态置 false。
-            // Clear busy only while this load is still the current one: a cancelled older load must not clear the
-            // newer load's busy state.
             if (ct == _loadCts.Token)
             {
                 IsBusy = false;
@@ -249,16 +239,11 @@ public sealed partial class CompareViewModel
             : status == FolderItemStatus.LeftOnly;
         if (missingOnTarget)
         {
-            // 目标侧才是源（选中的是另一侧不存在的条目）：该方向的复制没有源文件。
-            // The target side is the source (the selection does not exist on the other side): this direction has
-            // nothing to copy.
             return;
         }
 
         try
         {
-            // 方向决定源与目标：从左复制到右用左目录作源，反之用右目录作源。
-            // The direction picks source and target: left-to-right copies from the left directory and vice versa.
             if (fromLeftToRight)
             {
                 await _comparison.CopyAsync(_leftPath, _rightPath, node.RelativePath, CancellationToken.None);
@@ -268,9 +253,6 @@ public sealed partial class CompareViewModel
                 await _comparison.CopyAsync(_rightPath, _leftPath, node.RelativePath, CancellationToken.None);
             }
 
-            // 复制改变两侧状态（仅单侧 → 相同/不同），必须整对重新比对。
-            // The copy changes both sides' statuses (single-side → equal/different), so the whole pair has to be
-            // compared again.
             await CompareFoldersAsync();
         }
         catch (Exception ex)

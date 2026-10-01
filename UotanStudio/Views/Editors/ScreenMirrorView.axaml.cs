@@ -113,7 +113,7 @@ public partial class ScreenMirrorView : UserControl
     {
         var pointer = _pressedPointer;
         if (pointer is null) return;
-        _pressedPointer = null; // Clear first: releasing capture may synchronously raise CaptureLost.
+        _pressedPointer = null;
         var point = _lastTouch;
         _subscribed?.InjectTouch(cancel ? (byte)3 : ScrcpyConstants.ActionUp, ScrcpyConstants.PointerIdMouse,
             point.X, point.Y, point.Width, point.Height, 0, cancel ? 0 : _pressedButton);
@@ -127,7 +127,7 @@ public partial class ScreenMirrorView : UserControl
         base.OnPointerWheelChanged(e);
         if (TranslateTouch(e, false, out var point) && ViewModel is { } viewModel)
         {
-            // InjectScroll accepts positive-down; Avalonia Delta.Y is positive-up.
+
             viewModel.InjectScroll(point.X, point.Y, point.Width, point.Height, -(float)e.Delta.Y);
             e.Handled = true;
         }
@@ -146,8 +146,7 @@ public partial class ScreenMirrorView : UserControl
         point = default;
         if (ViewModel?.VideoPixelSize is not { Width: > 0, Height: > 0 } size) return false;
         int width = size.Width, height = size.Height;
-        // GetPosition applies the complete visual transform, including status row,
-        // dock offsets and DPI. Both inputs below are image-local logical units.
+
         if (!ScreenMirrorCoordinates.TryMap(e.GetPosition(FrameImage), FrameImage.Bounds.Size,
             width, height, clamp, out int x, out int y)) return false;
         point = (x, y, width, height);

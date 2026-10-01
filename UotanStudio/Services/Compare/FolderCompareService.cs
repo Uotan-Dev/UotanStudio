@@ -314,7 +314,6 @@ public sealed class FolderCompareService
                 }
                 else
                 {
-                    // 一侧为文件、一侧为目录，视为内容不同。 A file on one side and a directory on the other is Different.
                     result.Items.Add(new FolderCompareItem
                     {
                         RelativePath = relative,
@@ -401,12 +400,6 @@ public sealed class FolderCompareService
 
     private static async Task<bool> AreFilesEqualAsync(string leftPath, string rightPath, CancellationToken ct)
     {
-        // 等长文件先分块逐块 SequenceEqual 早退比较（不同即停）；SHA256 仅在
-        // 块比较无法判定时不再需要——块比较本身已是精确判定，直接返回结果，
-        // 避免等长且相同的文件再各读一遍算哈希。
-        // For equal-length files, compare in chunks with early exit on the first
-        // difference; the chunk comparison is already an exact verdict, so no extra
-        // SHA-256 pass is performed for equal-length files.
         var length = new FileInfo(leftPath).Length;
         await using var left = new FileStream(
             leftPath, FileMode.Open, FileAccess.Read, FileShare.Read, 0,
@@ -428,8 +421,6 @@ public sealed class FolderCompareService
                 var readB = await right.ReadAsync(bufferB.AsMemory(0, count), ct).ConfigureAwait(false);
                 if (readA != count || readB != count)
                 {
-                    // 文件在比较期间被缩短：视为不同。
-                    // The file shrank mid-comparison: treat as different.
                     return false;
                 }
                 if (!bufferA.AsSpan(0, count).SequenceEqual(bufferB.AsSpan(0, count)))

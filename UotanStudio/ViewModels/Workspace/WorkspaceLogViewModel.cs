@@ -43,8 +43,7 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
             _level = level;
             _source = source;
             _message = message;
-            // 显示与搜索共用同一格式化结果，避免筛选时每条日志重复格式化。
-            // Display and search share one formatted string; no reformatting per filter pass.
+
             Text = $"{timestamp} [{level,-5}] {source} - {message}".ReplaceLineEndings("\n");
         }
     }
@@ -69,7 +68,7 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
 
     /// <summary><para>100ms 批量刷新定时器，与全局日志面板共用同一批量约定。</para>100 ms flush timer, sharing the batched convention with the global log panel.</para></summary>
     private readonly DispatcherTimer _flushTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
-    private DispatcherTimer? _searchDebounce;
+    private UiDebounce? _searchDebounce;
 
     /// <summary><para>是否自动滚动至最新条目。Whether to auto-scroll to the latest entry.</para></summary>
     [ObservableProperty] private bool _autoScroll = true;
@@ -85,20 +84,7 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
 
     partial void OnSearchTextChanged(string value)
     {
-        // 搜索输入 250ms 防抖：避免每次按键都全量重建展示集合（与全局日志面板一致）。
-        // 250 ms debounce for search input: avoids rebuilding the display collection
-        // on every keystroke (matching the global log panel).
-        if (_searchDebounce is null)
-        {
-            _searchDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
-            _searchDebounce.Tick += (_, _) =>
-            {
-                _searchDebounce?.Stop();
-                ReapplyFilter();
-            };
-        }
-        _searchDebounce.Stop();
-        _searchDebounce.Start();
+        (_searchDebounce ??= new UiDebounce(ReapplyFilter)).Restart();
     }
 
     [RelayCommand]
@@ -156,7 +142,7 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
             }
             _pendingEntries.Enqueue(entry);
             _pendingCharacters += (long)entry.Message.Length + entry.Source.Length;
-            // Bound the display backlog even while the UI dispatcher is blocked.
+
             while (_pendingEntries.Count > MaxEntries || _pendingCharacters > MaximumCharacters)
             {
                 var removed = _pendingEntries.Dequeue();
@@ -187,7 +173,7 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
             while (_pendingEntries.TryPeek(out var next) && batch.Count < BatchEntries)
             {
                 var length = (long)next.Message.Length + next.Source.Length;
-                // Allow one large entry to make progress; the backlog has a hard character cap.
+
                 if (batch.Count > 0 && characters + length > BatchCharacters)
                 {
                     break;
@@ -213,7 +199,7 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
         {
             var removed = _allEntries[overflow];
             _historyCharacters -= removed.Text.Length;
-            // Count only entries actually present in the filtered view, including debounced searches.
+
             if (overflow < previousCount && visibleRemoved < Entries.Count
                 && ReferenceEquals(Entries[visibleRemoved], removed))
             {
@@ -274,8 +260,7 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
 
     private void ReapplyFilter()
     {
-        // 整体重建（单次 Reset），替代 Clear + 逐条 Add 的 5000 次集合事件。
-        // One bulk rebuild (single Reset) instead of Clear plus 5000 per-item Adds.
+
         List<LogEntryViewModel> hits;
         if (LevelFilter is null && string.IsNullOrEmpty(SourceFilter) && string.IsNullOrEmpty(SearchText))
         {

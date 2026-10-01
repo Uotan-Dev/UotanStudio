@@ -5,14 +5,9 @@ namespace UotanStudio.ViewModels.Workspace;
 
 internal partial class PropertiesViewModel
 {
-    // Keep a built-in English provider available for incomplete/custom locale packs.  The
-    // application resource lookup intentionally returns the key when a translation is missing;
-    // property rows should retain a readable label instead of exposing that implementation detail.
+
     private static readonly Lazy<UotanStudio.Locale.EnUs.Dock> EnglishDockResources = new();
 
-    // Format handlers intentionally expose stable, language-neutral keys.  Keep their
-    // presentation labels in the application locale dictionaries instead of coupling the
-    // firmware library to the UI language service.
     private static readonly IReadOnlyDictionary<string, string> PropertyNameResourceKeys =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -132,8 +127,6 @@ internal partial class PropertiesViewModel
             return localized;
         }
 
-        // A custom locale may omit a format label. Use the built-in English label before
-        // exposing the backend's camel-case key; plugin-specific names still remain untouched.
         var english = GetEnglishPropertyName(resourceKey);
         return string.Equals(english, resourceKey, StringComparison.Ordinal) ? name : english;
     }
@@ -200,8 +193,7 @@ internal partial class PropertiesViewModel
         }
         catch
         {
-            // A resource provider must not make the properties panel unusable.  Known callers
-            // provide valid built-in keys; an unknown key is retained as the final fallback.
+
         }
 
         return resourceKey;
@@ -209,8 +201,7 @@ internal partial class PropertiesViewModel
 
     private static PropertyRow CreateDynamicRow(string name, string value)
     {
-        // Keep both the stable resource key and the original name. The latter is the
-        // fallback for an unavailable locale entry and for format/plugin-specific keys.
+
         if (TryGetPropertyNameResourceKey(name, out var resourceKey))
         {
             var fallbackName = GetEnglishPropertyName(resourceKey);
@@ -236,8 +227,6 @@ internal partial class PropertiesViewModel
         {
             row.RefreshLocalizedName();
 
-            // The type is represented by a concrete row value rather than a binding to
-            // ContentTypeDisplay, so refresh that value along with its label.
             if (string.Equals(row.NameResourceKey, "Dock_Properties_Type", StringComparison.Ordinal))
             {
                 row.Value = ContentTypeDisplay;
@@ -246,19 +235,16 @@ internal partial class PropertiesViewModel
 
         if (ContentType == PropertiesContentType.TextDocument && _currentTextDocument is { } textDocument)
         {
-            // The auto-detect entry is localized text, so rebuild the list while retaining the
-            // document's stable language id and suppressing a write-back callback.
+
             PopulateLanguageSelector(textDocument.Language);
         }
 
         if (ContentType == PropertiesContentType.ScreenMirror && _mirror is not null)
         {
-            // Refresh localized values such as "Not reported" and "Audio off" immediately;
-            // waiting for the next statistics tick would leave a stopped session stale.
+
             UpdateMirrorProperties(false);
         }
 
-        // ContentTypeDisplay is also consumed by the type row's value and by external bindings.
         OnPropertyChanged(nameof(ContentTypeDisplay));
     }
 

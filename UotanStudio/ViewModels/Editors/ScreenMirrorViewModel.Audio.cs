@@ -76,13 +76,13 @@ public partial class ScreenMirrorViewModel
             while (!token.IsCancellationRequested)
             {
                 var packet = client.ReadAudioFrame(1000);
-                if (decoder is null) continue; // Keep draining even if decoding failed.
+                if (decoder is null) continue;
                 try
                 {
                     if (packet is null) { decoder.Poll(); continue; }
                     if (packet.IsCodecConfig)
                     {
-                        decoder.Initialize(packet.Data, OnAudioFrame); // Preserve playback callback across codec configuration changes.
+                        decoder.Initialize(packet.Data, OnAudioFrame);
                         continue;
                     }
                     if (decoder.IsInitialized) decoder.Decode(packet.Data, checked(packet.PresentationTimestampMicroseconds * 10));

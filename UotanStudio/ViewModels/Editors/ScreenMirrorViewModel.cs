@@ -45,9 +45,7 @@ public partial class ScreenMirrorViewModel : Document
     private bool _renderScheduled;
     internal Views.Editors.ScreenMirrorGpuPresenter GpuPresenter { get; private set; } = new();
     internal PixelSize VideoPixelSize => GpuPresenter.IsAvailable && GpuPresenter.PixelSize is { Width: > 0 } size ? size : Frame?.PixelSize ?? default;
-    // At most two session-owned buffers: reuse the pending frame before writing
-    // its replacement, while the UI may own the other buffer. Only exchange
-    // ownership under the lock; bitmap.Lock() must never hold up the decoder.
+
     private CancellationTokenSource? _cts;
     private Thread? _decodeThread;
     private Thread? _audioThread;
@@ -133,8 +131,7 @@ public partial class ScreenMirrorViewModel : Document
                 _client = mirror;
                 if (_disposed)
                 {
-                    // 页面在部署期间关闭时，Cleanup 可能已在本赋值前完成清理；这里兜底释放
-                    // 刚建立的会话，避免设备端 scrcpy 服务与 shell 流随页面关闭而泄漏。
+
                     _client = null;
                     mirror.Dispose();
                     return;
@@ -174,11 +171,7 @@ public partial class ScreenMirrorViewModel : Document
         _decodeThread.Start();
         if (decodeClient.AudioMetadata is not null)
         {
-            // Consume audio continuously so the server's audio socket never
-            // fills up and stalls the whole mirroring process; AAC is decoded
-            // and played, unsupported codecs keep draining.
-            // 持续消费音频，避免服务端音频 socket 缓冲填满阻塞整个投屏进程；
-            // AAC 解码并播放，不支持的编码保持排空。
+
             _audioThread = new Thread(() => AudioLoop(decodeClient, decodeToken))
             {
                 IsBackground = true,
@@ -203,7 +196,7 @@ public partial class ScreenMirrorViewModel : Document
         _disposed = true;
         GpuPresenter.Dispose();
         _cts?.Cancel();
-        _client?.Dispose(); // Unblock socket reads before waiting; decoder disposal stays on its owner thread.
+        _client?.Dispose();
         lock (_frameLock)
         {
             _pendingFrame = null;
@@ -215,7 +208,7 @@ public partial class ScreenMirrorViewModel : Document
         }
         catch
         {
-            // Join may fail if the thread already exited. 线程已退出时 Join 可能失败。
+
         }
         try
         {
@@ -223,7 +216,7 @@ public partial class ScreenMirrorViewModel : Document
         }
         catch
         {
-            // Join may fail if the thread already exited. 线程已退出时 Join 可能失败。
+
         }
         _audioThread = null;
 
@@ -233,8 +226,6 @@ public partial class ScreenMirrorViewModel : Document
         _cts?.Dispose();
         _cts = null;
 
-        // Clear on the owning UI thread; capture the old bitmap so a queued cleanup
-        // cannot dispose a replacement created by a subsequent reconnect.
         var oldFrame = Frame;
         void ReleaseBitmap()
         {
@@ -278,8 +269,7 @@ public partial class ScreenMirrorViewModel : Document
         => SendControl(ScrcpyControlMessageWriter.InjectScrollEvent(
             x, y, width, height,
             0,
-            // 客户端向下滚动在线路上为负（服务端正数表示向上）。
-            // Scroll-down is negative on the wire (server positive = scroll up).
+
             -delta));
 
     /// <summary>
@@ -305,7 +295,7 @@ public partial class ScreenMirrorViewModel : Document
         var client = _client;
         if (client is null || !client.IsControlConnected)
         {
-            return; // Not connected / control disabled: silently drop. 未连接或控制禁用时静默丢弃。
+            return;
         }
 
         try
@@ -314,8 +304,7 @@ public partial class ScreenMirrorViewModel : Document
         }
         catch
         {
-            // A failed inject must not crash the mirror session.
-            // 注入失败不应导致投屏会话崩溃。
+
         }
     }
 
@@ -368,8 +357,7 @@ public partial class ScreenMirrorViewModel : Document
                 Interlocked.Add(ref _receivedBytes, packet.Data.Length);
                 if (packet.IsCodecConfig)
                 {
-                    // Some MFTs require parameter sets and the first picture in a single sample.
-                    // Keep the complete scrcpy config packet and prepend it to the next picture.
+
                     if (packet.Data.Length > 1024 * 1024) throw new InvalidDataException("Excessive scrcpy codec configuration.");
                     configuration = packet.Data;
                     continue;
@@ -418,8 +406,7 @@ public partial class ScreenMirrorViewModel : Document
         lock (_frameLock)
         {
             if (_disposed) return;
-            // A pending frame has not reached the UI and can be replaced safely.
-            // Take it before conversion so a third full-size buffer is unnecessary.
+
             next = _pendingFrame ?? _spareFrame ?? new Views.Editors.ScreenMirrorPixelBuffer();
             if (_pendingFrame is not null) _pendingFrame = null;
             else _spareFrame = null;
@@ -446,8 +433,7 @@ public partial class ScreenMirrorViewModel : Document
         if (_disposed) { frame.Dispose(); return; }
         if (!GpuPresenter.PublishDmabuf(frame))
         {
-            // A presenter failure here means the surface cannot be presented; fall back to the
-            // NV12 download path for subsequent frames instead of dropping them all.
+
             decoder.GpuExportEnabled = false;
             frame.Dispose();
             return;
@@ -540,9 +526,7 @@ public partial class ScreenMirrorViewModel : Document
         var stride = framebuffer.RowBytes;
         var rowBytes = Math.Min(width * 4, stride);
         var dst = framebuffer.Address;
-        // 逐行复制到锁定帧缓冲，保证源行距（GPU 回读可能带填充）与位图行距不一致时的安全。
-        // Copy row by row into the locked framebuffer so a source-row-pitch mismatch
-        // (GPU readback may include padding) against the bitmap stride stays safe.
+
         for (var row = 0; row < height; row++)
         {
             Marshal.Copy(bgra, row * sourceStride, IntPtr.Add(dst, row * stride), rowBytes);

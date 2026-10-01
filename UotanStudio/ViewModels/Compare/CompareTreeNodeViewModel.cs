@@ -209,14 +209,9 @@ public sealed partial class CompareTreeNodeViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            // 列已被替换或视图已关闭：丢弃本次扫描结果。
-            // The column was replaced or the view closed: drop this scan's result.
         }
         catch (Exception)
         {
-            // 目录暂时不可读（权限/设备）时保留空集合，不打断正在显示的树。
-            // Keep an empty collection when the directory is temporarily unreadable (permissions or
-            // device) so the displayed tree is not torn down.
             Children.Clear();
         }
     }

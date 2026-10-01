@@ -184,9 +184,6 @@ internal sealed class CompareTextSlotModel
             return;
         }
 
-        // 之前就是填充槽且内容仍是占位符 → 维持填充；否则这一行在本侧是真实的（含空行）。
-        // A slot that was a filler and still holds the placeholder stays a filler; otherwise the line is real (including a
-        // blank line).
         var slot = _slots[index];
         var wasFiller = leftSide ? !slot.HasLeft : !slot.HasRight;
         var isFiller = wasFiller && string.Equals(text, FillerText, StringComparison.Ordinal);
@@ -239,15 +236,11 @@ internal sealed class CompareTextSlotModel
             _slots[startIndex + offset].SetSide(leftSide, lines[offset], present: true);
         }
 
-        // 新行少于原槽：多出来的槽在该侧退回填充。
-        // Fewer new lines than slots: the surplus slots fall back to fillers on this side.
         for (var offset = shared; offset < count; offset++)
         {
             _slots[startIndex + offset].SetSide(leftSide, string.Empty, present: false);
         }
 
-        // 新行多于原槽：在本侧补插新槽（对侧为填充）。
-        // More new lines than slots: insert extra slots on this side (fillers on the other side).
         if (lines.Count > count)
         {
             InsertLines(startIndex + count - 1, leftSide, [.. lines.Skip(count)]);

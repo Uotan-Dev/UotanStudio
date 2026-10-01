@@ -34,57 +34,46 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     public Func<IReadOnlyList<string>>? ValidatePackage { get; set; }
     private ObservableCollection<NodeViewModels.FlowNodeViewModel> _nodes = [];
     private ObservableCollection<NodeViewModels.NodeConnectionViewModel> _connections = [];
-    private double _zoom = 1.0;
-    private bool _showMinimap = true;
-    private string _searchText = string.Empty;
-    private string _executionStatus = LanguageService.Instance.GetString("Node_StatusReady");
     private Point _nextNodeLocation = new(100, 100);
     private static readonly Point DefaultNodeLocation = new(100, 100);
 
-    private NodeViewModels.FlowNodeViewModel? _selectedNode;
-    private ObservableCollection<NodeToolboxCategory> _visibleToolboxCategories = [];
     private readonly ObservableCollection<NodeViewModels.FlowNodeViewModel> _selectedNodes = [];
     private readonly ObservableCollection<NodeViewModels.BatchNodeInputViewModel> _batchInputs = [];
-    private double _executionProgress;
-    private bool _isExecuting;
-    private IReadOnlyList<PatchChangeViewModel> _patchChanges = [];
     private PatchRunOutcome _patchOutcome;
-    private bool _compositeReportTruncated;
 
     /// <summary>Whether the bounded report omitted additional skipped composites.</summary>
     public bool CompositeReportTruncated
     {
-        get => _compositeReportTruncated;
-        private set => SetProperty(ref _compositeReportTruncated, value);
+        get => field;
+        private set => SetProperty(ref field, value);
     }
-    private IReadOnlyList<PatchCompositeExecutionViewModel> _compositeExecutions = [];
 
     /// <summary>Individual invocation results; publication remains a root-run decision.</summary>
     public IReadOnlyList<PatchCompositeExecutionViewModel> CompositeExecutions
     {
-        get => _compositeExecutions;
+        get => field;
         private set
         {
-            if (SetProperty(ref _compositeExecutions, value))
+            if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(HasPatchReview));
             }
         }
-    }
+    } = [];
 
     /// <summary>Bounded review rows from the last execution or preview.</summary>
     public IReadOnlyList<PatchChangeViewModel> PatchChanges
     {
-        get => _patchChanges;
+        get => field;
         private set
         {
-            if (SetProperty(ref _patchChanges, value))
+            if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(HasPatchChanges));
                 OnPropertyChanged(nameof(HasPatchReview));
             }
         }
-    }
+    } = [];
 
     /// <summary>Whether a patch review panel should be visible.</summary>
     public bool HasPatchChanges => PatchChanges.Count > 0;
@@ -95,9 +84,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     /// <summary>Localized publication outcome, distinct from node execution success.</summary>
     public string PatchOutcomeText => LanguageService.Instance.GetString("Node_PatchOutcome_" + _patchOutcome);
-    private VisualPluginRegistration? _selectedVisualPlugin;
 
-    // ---- 撤销/重做命令栈（随活动节点项目文档切换而替换） ----
     private Stack<IEditorCommand> _undoStack = [];
     private Stack<IEditorCommand> _redoStack = [];
     private const int MaxUndoDepth = 100;
@@ -212,9 +199,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
     public double Zoom
     {
-        get => _zoom;
-        set => SetProperty(ref _zoom, value);
-    }
+        get => field;
+        set => SetProperty(ref field, value);
+    } = 1.0;
 
     /// <summary>
     /// <para>获取或设置是否显示小地图。</para>
@@ -222,9 +209,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
     public bool ShowMinimap
     {
-        get => _showMinimap;
-        set => SetProperty(ref _showMinimap, value);
-    }
+        get => field;
+        set => SetProperty(ref field, value);
+    } = true;
 
     /// <summary>
     /// <para>获取或设置节点搜索文本。</para>
@@ -232,13 +219,12 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
     public string SearchText
     {
-        get => _searchText;
+        get => field;
         set
         {
-            if (SetProperty(ref _searchText, value))
+            if (SetProperty(ref field, value))
             {
-                // 取消上一次搜索防抖任务
-                // Cancel the previous search debounce task
+
                 _searchDebounceCts?.Cancel();
                 _searchDebounceCts?.Dispose();
 
@@ -248,7 +234,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
                 _ = RefreshToolboxAfterDelayAsync(cts.Token);
             }
         }
-    }
+    } = string.Empty;
 
     private async Task RefreshToolboxAfterDelayAsync(CancellationToken cancellationToken)
     {
@@ -270,9 +256,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
     public string ExecutionStatus
     {
-        get => _executionStatus;
-        set => SetProperty(ref _executionStatus, value);
-    }
+        get => field;
+        set => SetProperty(ref field, value);
+    } = LanguageService.Instance.GetString("Node_StatusReady");
 
     /// <summary>
     /// <para>获取节点工具箱分类列表（全量，由插件注册填充）。</para>
@@ -286,9 +272,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
     public ObservableCollection<NodeToolboxCategory> VisibleToolboxCategories
     {
-        get => _visibleToolboxCategories;
-        private set => SetProperty(ref _visibleToolboxCategories, value);
-    }
+        get => field;
+        private set => SetProperty(ref field, value);
+    } = [];
 
     /// <summary>
     /// <para>获取或设置当前选中的节点，绑定到属性面板。</para>
@@ -296,10 +282,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
     public NodeViewModels.FlowNodeViewModel? SelectedNode
     {
-        get => _selectedNode;
+        get => field;
         set
         {
-            if (SetProperty(ref _selectedNode, value))
+            if (SetProperty(ref field, value))
             {
                 WeakReferenceMessenger.Default.Send(new NodeSelectionChangedMessage(value));
             }
@@ -312,8 +298,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
     public double ExecutionProgress
     {
-        get => _executionProgress;
-        set => SetProperty(ref _executionProgress, value);
+        get => field;
+        set => SetProperty(ref field, value);
     }
 
     /// <summary>
@@ -322,10 +308,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
     public bool IsExecuting
     {
-        get => _isExecuting;
+        get => field;
         private set
         {
-            if (!SetProperty(ref _isExecuting, value))
+            if (!SetProperty(ref field, value))
             {
                 return;
             }
@@ -363,8 +349,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// <summary>The composite node selected in the property-pane plugin workspace.</summary>
     public VisualPluginRegistration? SelectedVisualPlugin
     {
-        get => _selectedVisualPlugin;
-        set => SetProperty(ref _selectedVisualPlugin, value);
+        get => field;
+        set => SetProperty(ref field, value);
     }
 
     /// <summary>Whether the property pane exposes the plugin workspace.</summary>
@@ -374,7 +360,6 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// <para>执行期间订阅 LogService 的退订委托。</para>
     /// Unsubscribe delegate for the LogService subscription during execution.
     /// </summary>
-
 
     private Action? _executionLogUnsubscribe;
     private readonly HashSet<string> _executionLogSources = new(StringComparer.Ordinal);
@@ -1139,7 +1124,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// <summary>Deletes every selected node as one undoable operation.</summary>
     public void DeleteSelectedNodes()
     {
-        // 删除当前选中的节点及其相关连接，作为单个可撤销命令整批执行
+
         var toDelete = Nodes.Where(n => n.IsSelected).ToList();
         if (toDelete.Count == 0) return;
 
@@ -1207,8 +1192,6 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         ExecutionProgress = 0.0;
         _runCts = new CancellationTokenSource();
 
-        // 清空执行日志并订阅相关日志源（Engine、NodeEditor 或任一节点 Title）
-        // Clear the execution log and subscribe to relevant log sources (Engine, NodeEditor, or any node Title).
         ExecutionLog.Clear();
         AppendExecutionLog(LanguageService.Instance.GetString(preview ? "Node_Patch_Preview" : "Node_Run"));
 
@@ -1291,8 +1274,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         }
         finally
         {
-            // 退订执行日志，避免跨次运行的重复收集
-            // Unsubscribe from the execution log to avoid duplicate collection across runs.
+
             IsExecuting = false;
             FailedNodes = Nodes.Where(node => node.ExecutionStatus == NodeExecutionStatus.Failed || node.ExecutionError.Length > 0).ToArray();
             if (_engine != null)
@@ -1393,8 +1375,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     private void OnNodeStatusChanged(object? sender, NodeStatusChangedEventArgs e)
     {
-        // 节点状态变更：向执行日志写一行 “<Title> -> <状态>”，并记录一条调试日志
-        // Node status changed: append “<Title> -> <status>” to the execution log and write a debug log entry.
+
         var node = e.Node;
         void Append()
         {

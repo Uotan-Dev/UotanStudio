@@ -43,9 +43,7 @@ internal partial class PropertiesViewModel : Tool
             Value = value;
             LabelResourceKey = labelResourceKey;
             FallbackLabel = fallbackLabel ?? label;
-            // LanguageService returns the key itself when a locale omits a resource. Resolve that
-            // case at construction time as well as during a later language switch, so a newly
-            // created selector never exposes an implementation key in the UI.
+
             _label = !string.IsNullOrEmpty(labelResourceKey)
                 && string.Equals(label, labelResourceKey, StringComparison.Ordinal)
                 ? FallbackLabel
@@ -168,7 +166,6 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     private HexEditorViewModel? _currentHexDocument;
 
-    // Invalidates in-flight image metadata reads when the selected content changes.
     private long _imageDetailsGeneration;
 
     /// <summary>
@@ -228,8 +225,7 @@ internal partial class PropertiesViewModel : Tool
 
         if (string.IsNullOrEmpty(value) || (AvailableLanguages.Count > 0 && value == AvailableLanguages[0]))
         {
-            // 「自动检测」选项：按扩展名重新计算。
-            // "Auto Detect" option: re-resolve by file extension.
+
             var autoId = SyntaxLanguageRegistry.GetLanguageId(doc.FilePath ?? doc.Title) ?? string.Empty;
             doc.Language = autoId;
         }
@@ -365,8 +361,6 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        // 二进制文档：用已缓存的分析结果刷新属性面板。
-        // Binary document: refresh with the document's cached analysis results.
         if (doc.IsBinary)
         {
             RefreshForFileAnalysis(new FileAnalysisCompletedMessage(
@@ -376,8 +370,6 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        // 文本文档：展示文本相关属性。
-        // Text document: display text-related properties.
         RefreshForTextDocument(doc);
     }
 
@@ -411,8 +403,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     private void OnDtbNodeSelectionChanged(object recipient, DtbNodeSelectionChangedMessage message)
     {
-        // 仅当当前展示的是设备树文档时才联动更新选中节点详情。
-        // Only update the selected-node details when the panel is currently showing a DTB document.
+
         if (ContentType != PropertiesContentType.DtbDocument)
         {
             return;
@@ -447,7 +438,6 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_Format", image.Format));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Size", $"{image.SizeBytes:N0} bytes"));
 
-        // 尝试读取固件详细参数
         var imageDetailsGeneration = Volatile.Read(ref _imageDetailsGeneration);
         _ = RefreshImageDetailsAsync(image, imageDetailsGeneration);
 
@@ -479,15 +469,10 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_Text_LineCount", doc.LineCount.ToString("N0")));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Text_CharCount", doc.CharCount.ToString("N0")));
 
-        // 编码选择器：位于语法语言选择行上方，当前项随文档检测/所选编码同步。
-        // Encoding selector: placed above the language selector row, synced with the document's
-        // detected/selected encoding.
         _currentTextDocument = doc;
         PopulateEncodingSelector(doc);
         Properties.Add(CreateLocalizedRow("Dock_Properties_Text_Encoding", string.Empty, isEncodingSelector: true));
 
-        // 语言选择器：填充可用语言列表并根据当前 Language 选中对应项。
-        // Language selector: populate available languages and select the one matching the current Language.
         PopulateLanguageSelector(doc.Language);
         Properties.Add(CreateLocalizedRow("Dock_Properties_Text_Language", string.Empty, isLanguageSelector: true));
 
@@ -503,8 +488,6 @@ internal partial class PropertiesViewModel : Tool
     {
         if (_suppressEncodingChange) return;
 
-        // Hex 文档：回写文本列编码（仅影响显示/输入，不改变保存字节）。
-        // Hex document: write back the text-column encoding (display/input only; saved bytes unchanged).
         if (_currentHexDocument is { } hex)
         {
             if (!string.IsNullOrEmpty(value))
@@ -518,8 +501,7 @@ internal partial class PropertiesViewModel : Tool
         if (_currentTextDocument is not { } doc) return;
         if (string.IsNullOrEmpty(value) || (AvailableEncodings.Count > 0 && value == AvailableEncodings[0]))
         {
-            // 「自动检测」仅同步显示，不改变写盘编码。
-            // "Auto Detect" only syncs the display; it never changes the write encoding.
+
             return;
         }
 
@@ -542,8 +524,6 @@ internal partial class PropertiesViewModel : Tool
             AvailableLanguages.Add(lang.DisplayName);
         }
 
-        // 根据当前语言标识选中对应项；未识别时选中「自动检测」。
-        // Select the item matching the current language id; fall back to "Auto Detect" when unrecognized.
         var match = SyntaxLanguageRegistry.GetAllLanguages().FirstOrDefault(l => l.Id == currentLanguageId);
         _suppressLanguageChange = true;
         try
@@ -613,8 +593,6 @@ internal partial class PropertiesViewModel : Tool
             _suppressLanguageChange = false;
         }
 
-        // 编码选择器与语言选择器同生命周期：一并复位。
-        // The encoding selector shares the language selector's lifecycle: reset it too.
         AvailableEncodings.Clear();
         _suppressEncodingChange = true;
         try
@@ -845,9 +823,6 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_Hex_FileSize", $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Hex_ByteCount", doc.SizeDisplay));
 
-        // 编码选择器：与文本文档同一下拉行样式，控制 HexViewer 文本列解码/输入编码。
-        // Encoding selector: same dropdown-row style as text documents; controls the HexViewer
-        // text-column decode/input encoding.
         _currentHexDocument = doc;
         PopulateHexEncodingSelector(doc.EncodingName);
         Properties.Add(CreateLocalizedRow("Dock_Properties_Text_Encoding", string.Empty, isEncodingSelector: true));
@@ -954,8 +929,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     private void OnArscNodeSelectionChanged(object recipient, ArscNodeSelectionChangedMessage message)
     {
-        // 仅当当前展示的是 ARSC 文档时才联动更新选中节点详情。
-        // Only update the selected-node details when the panel is currently showing an ARSC document.
+
         if (ContentType != PropertiesContentType.ArscDocument)
         {
             return;
@@ -975,8 +949,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     private void OnManifestNodeSelectionChanged(object recipient, ManifestNodeSelectionChangedMessage message)
     {
-        // 仅当当前展示的是 Manifest 文档时才联动更新选中元素详情。
-        // Only update the selected-element details when the panel is currently showing a Manifest document.
+
         if (ContentType != PropertiesContentType.ManifestDocument)
         {
             return;
@@ -1071,9 +1044,7 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_Path", doc.FilePath ?? string.Empty));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Format", doc.FormatName));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Size", doc.ImageSizeText));
-        // FileCountText/DirectoryCountText already include their labels for the file-manager
-        // toolbar. The properties grid has a separate localized name column, so expose only the
-        // numeric values here to avoid rendering "Files | Files: 3".
+
         Properties.Add(CreateLocalizedRow("Dock_Properties_FileCount", doc.FileCount.ToString("N0")));
         Properties.Add(CreateLocalizedRow("Dock_Properties_DirectoryCount", doc.DirectoryCount.ToString("N0")));
 
@@ -1088,8 +1059,7 @@ internal partial class PropertiesViewModel : Tool
     {
         if (entry is null)
         {
-            // 条目清空时回退到文档级属性。
-            // When entry is cleared, fall back to document-level properties.
+
             RefreshForFileManagerDocument(doc);
             return;
         }
@@ -1158,9 +1128,6 @@ internal partial class PropertiesViewModel : Tool
         SelectedNodeTitle = analysis.FilePath ?? analysis.DetectedFormat ?? "Analysis";
         AddMagicRow(analysis.FilePath);
 
-        // Analysis 已包含 "Format" 行（由 FileViewModel 写入），此处不再单独追加，避免重复。
-        // The Analysis list already carries the "Format" row (written by FileViewModel),
-        // so adding it again here would duplicate the entry.
         foreach (var row in analysis.Analysis)
         {
             Properties.Add(CreateDynamicRow(row.Name, row.Value));
@@ -1212,7 +1179,7 @@ internal partial class PropertiesViewModel : Tool
                 return;
             }
 
-            var result = await handler.ReadMetadataAsync(absolutePath).ConfigureAwait(true);
+            var result = await Task.Run(() => handler.ReadMetadataAsync(absolutePath)).ConfigureAwait(true);
             if (!IsCurrentImageDetailsRequest(image, generation) || !result.Success)
             {
                 return;

@@ -124,11 +124,6 @@ public sealed class TextDiffService
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
 
-        // DiffPlex 1.9.0 的公共 API 均以整段文本为输入（行数组无法直接喂入），
-        // 故保留 Join 行为；本重载的优化点是读取侧的限长检查不再逐行扫描。
-        // DiffPlex 1.9.0's public APIs all take whole text (line arrays cannot be fed
-        // directly), so keep the Join; this overload's win is the read-side size bound
-        // without per-line rescans.
         var leftLines = ReadLinesBounded(left, ct);
         var rightLines = ReadLinesBounded(right, ct);
         return DiffLines(string.Join('\n', leftLines), string.Join('\n', rightLines));
@@ -142,7 +137,6 @@ public sealed class TextDiffService
 
         foreach (var block in result.DiffBlocks)
         {
-            // 块前的相等区间。 Equal (unchanged) region before this block.
             while (oldPos < block.DeleteStartA)
             {
                 lines.Add(new TextDiffLine
@@ -159,7 +153,6 @@ public sealed class TextDiffService
 
             if (block.DeleteCountA == 0)
             {
-                // Insert → Added（右侧行号）。 Insert-only block → Added (right line numbers).
                 for (var i = 0; i < block.InsertCountB; i++)
                 {
                     lines.Add(new TextDiffLine
@@ -174,7 +167,6 @@ public sealed class TextDiffService
             }
             else if (block.InsertCountB == 0)
             {
-                // Delete → Deleted（左侧行号）。 Delete-only block → Deleted (left line numbers).
                 for (var i = 0; i < block.DeleteCountA; i++)
                 {
                     lines.Add(new TextDiffLine
@@ -189,8 +181,6 @@ public sealed class TextDiffService
             }
             else
             {
-                // Replace → Modified（两侧行号，缺少的一侧行号为 0、文本为空串）。
-                // Replace block → Modified (both-side line numbers; missing side is 0 and empty text).
                 var count = Math.Max(block.DeleteCountA, block.InsertCountB);
                 for (var i = 0; i < count; i++)
                 {
@@ -211,7 +201,6 @@ public sealed class TextDiffService
             newPos = block.InsertStartB + block.InsertCountB;
         }
 
-        // 末尾的相等区间。 Trailing equal (unchanged) region.
         while (oldPos < result.PiecesOld.Count)
         {
             lines.Add(new TextDiffLine
@@ -234,11 +223,6 @@ public sealed class TextDiffService
         List<string> lines = [];
         long totalBytes = 0;
 
-        // 可 seek 的流（文件场景）一次性按流剩余长度做字节上限检查，消除每行
-        // Encoding.UTF8.GetByteCount 的重复全文扫描；非 seek 流回退为逐行累计。
-        // Seekable streams (the file case) check the byte cap once against the remaining
-        // stream length, removing the per-line Encoding.UTF8.GetByteCount rescan;
-        // non-seekable streams fall back to per-line accumulation.
         var perLineCounting = !stream.CanSeek;
         if (!perLineCounting && stream.Length - stream.Position > MaxDiffBytes)
         {

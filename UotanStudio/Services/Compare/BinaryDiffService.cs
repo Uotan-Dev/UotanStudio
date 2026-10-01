@@ -132,9 +132,6 @@ public sealed class BinaryDiffService
         {
             if (ct.IsCancellationRequested)
             {
-                // 协作式取消：提前退出并返回已扫描的部分统计/位图，由调用方在 await 后检查令牌。
-                // Cooperative cancellation: exit early and return the partially-scanned
-                // statistics/bitmap; the caller checks the token after awaiting.
                 break;
             }
 
@@ -146,11 +143,6 @@ public sealed class BinaryDiffService
                 break;
             }
 
-            // 快路径：两侧等长且整块相同时直接跳过逐字节扫描（Span 比较向量化），
-            // 相同文件与只差个别块的文件从 O(n) 字节循环降为每块一次内存比较。
-            // Fast path: equal-length identical blocks skip the per-byte scan entirely
-            // (vectorized Span comparison), reducing identical files to one memory
-            // comparison per block.
             if (leftRead == rightRead && leftBuffer.AsSpan(0, leftRead).SequenceEqual(rightBuffer.AsSpan(0, rightRead)))
             {
                 offset += count;

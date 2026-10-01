@@ -16,14 +16,7 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 public partial class FlowNodeViewModel : ViewModelBase, INodePosition
 {
     private string _title = string.Empty;
-    private Point _location;
     private NodeCategory _category;
-    private bool _isSelected;
-    private NodeExecutionStatus _executionStatus = NodeExecutionStatus.Idle;
-    private string _typeKey = string.Empty;
-    private string _nodeValueType = "Text";
-    private string _nodeValue = string.Empty;
-    private string _selectedImage = string.Empty;
 
     /// <summary>Prevents authoring changes while this node belongs to an executing editor.</summary>
     internal bool IsEditingLocked { get; set; }
@@ -75,8 +68,6 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
         }
     }
 
-    private string? _customName;
-
     /// <summary>Gets the localized title used by the node editor.</summary>
     public string LocalizedTitle => LanguageService.Instance.GetString(GetTitleResourceKey());
 
@@ -86,10 +77,10 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// </summary>
     public string CustomName
     {
-        get => _customName ?? string.Empty;
+        get => field ?? string.Empty;
         set
         {
-            if (!IsEditingLocked && SetProperty(ref _customName, value))
+            if (!IsEditingLocked && SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(DisplayHeader));
             }
@@ -116,12 +107,12 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// </summary>
     public Point Location
     {
-        get => _location;
+        get => field;
         set
         {
             if (!IsEditingLocked)
             {
-                SetProperty(ref _location, value);
+                SetProperty(ref field, value);
             }
         }
     }
@@ -142,10 +133,10 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// </summary>
     public bool IsSelected
     {
-        get => _isSelected;
+        get => field;
         set
         {
-            if (SetProperty(ref _isSelected, value))
+            if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(NodeBorderBrush));
                 OnPropertyChanged(nameof(NodeBorderThickness));
@@ -159,19 +150,18 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// </summary>
     public NodeExecutionStatus ExecutionStatus
     {
-        get => _executionStatus;
+        get => field;
         set
         {
-            if (SetProperty(ref _executionStatus, value))
+            if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(StatusBorderBrush));
-                // The canvas binds this derived brush rather than StatusBorderBrush directly.
-                // Notify it here so an unselected node repaints as soon as execution finishes.
+
                 OnPropertyChanged(nameof(NodeBorderBrush));
                 OnPropertyChanged(nameof(StatusDisplay));
             }
         }
-    }
+    } = NodeExecutionStatus.Idle;
 
     /// <summary>
     /// <para>获取当前执行状态对应的边框画刷，用于画布节点高亮（Idle 透明、Running 主题强调色、
@@ -204,10 +194,7 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     public string StatusDisplay => LanguageService.Instance.GetString("Node_Status_" + ExecutionStatus);
 
     private static readonly IBrush IdleBorderBrush = Brushes.Transparent;
-    // 共享静态画刷必须不可变：SolidColorBrush 携带创建线程的 Dispatcher 亲和性，非 UI 线程先初始化
-    // 节点 VM 时会让画布渲染在另一线程引用它们并抛 VerifyAccess。
-    // Shared static brushes must be immutable: SolidColorBrush carries the creating thread's dispatcher
-    // affinity, so a non-UI first touch breaks canvas rendering on the session thread.
+
     private static readonly IBrush SuccessBorderBrush = new ImmutableSolidColorBrush(Colors.Green);
     private static readonly IBrush FailureBorderBrush = new ImmutableSolidColorBrush(Colors.Red);
     private static readonly IBrush MutedBorderBrush = new ImmutableSolidColorBrush(Colors.Gray);
@@ -224,8 +211,7 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
                 && app.TryGetResource("AccentColor", app.ActualThemeVariant, out var value)
                 && value is Color color)
                 return new SolidColorBrush(color);
-            // 主题色兜底值：与 Themes/AccentColors.axaml 的 AccentColor 保持一致。
-            // Accent fallback, kept in sync with AccentColor in Themes/AccentColors.axaml.
+
             return new SolidColorBrush(Color.Parse("#FF4E45"));
         }
     }
@@ -237,13 +223,13 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// </summary>
     public string TypeKey
     {
-        get => _typeKey;
+        get => field;
         set
         {
-            if (SetProperty(ref _typeKey, value))
+            if (SetProperty(ref field, value))
                 OnPropertyChanged(nameof(LocalizedTitle));
         }
-    }
+    } = string.Empty;
 
     /// <summary>
     /// <para>获取或设置节点可配置值的类型（Text/Number/Boolean/Path），供常量等可配置节点在属性面板编辑。
@@ -253,15 +239,15 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// </summary>
     public virtual string NodeValueType
     {
-        get => _nodeValueType;
+        get => field;
         set
         {
             if (!IsEditingLocked)
             {
-                SetProperty(ref _nodeValueType, value);
+                SetProperty(ref field, value);
             }
         }
-    }
+    } = "Text";
 
     /// <summary>
     /// <para>获取或设置节点可配置的值，供常量等可配置节点在属性面板编辑；非可配置节点忽略。</para>
@@ -270,15 +256,15 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// </summary>
     public virtual string NodeValue
     {
-        get => _nodeValue;
+        get => field;
         set
         {
             if (!IsEditingLocked)
             {
-                SetProperty(ref _nodeValue, value);
+                SetProperty(ref field, value);
             }
         }
-    }
+    } = string.Empty;
 
     /// <summary>
     /// <para>获取节点是否为常量输入节点（属性面板据此显示常量编辑区）。</para>
@@ -302,15 +288,15 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// </summary>
     public virtual string SelectedImage
     {
-        get => _selectedImage;
+        get => field;
         set
         {
             if (!IsEditingLocked)
             {
-                SetProperty(ref _selectedImage, value);
+                SetProperty(ref field, value);
             }
         }
-    }
+    } = string.Empty;
 
     /// <summary>
     /// <para>获取可选的工程镜像相对路径列表（ProjectImage 节点属性面板绑定）；非镜像节点返回空列表。</para>

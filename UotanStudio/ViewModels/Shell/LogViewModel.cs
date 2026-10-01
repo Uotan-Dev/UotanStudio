@@ -127,9 +127,9 @@ public partial class LogViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// <para>搜索输入防抖定时器（250ms），避免每次按键都全量重建展示集合。</para>
-    /// Search input debounce timer (250 ms); avoids rebuilding the display collection on every keystroke.
+    /// Search input debounce (250 ms); avoids rebuilding the display collection on every keystroke.
     /// </summary>
-    private DispatcherTimer? _searchDebounce;
+    private UiDebounce? _searchDebounce;
 
     /// <summary>
     /// <para>取消订阅委托。</para>
@@ -170,19 +170,7 @@ public partial class LogViewModel : ViewModelBase, IDisposable
 
     partial void OnSearchTextChanged(string value)
     {
-        // 搜索输入 250ms 防抖：避免每次按键都全量重建展示集合。
-        // 250 ms debounce for search input: avoids rebuilding the display collection on every keystroke.
-        if (_searchDebounce is null)
-        {
-            _searchDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
-            _searchDebounce.Tick += (_, _) =>
-            {
-                _searchDebounce?.Stop();
-                ReapplyFilter();
-            };
-        }
-        _searchDebounce.Stop();
-        _searchDebounce.Start();
+        (_searchDebounce ??= new UiDebounce(ReapplyFilter)).Restart();
     }
 
     [RelayCommand]
@@ -246,8 +234,6 @@ public partial class LogViewModel : ViewModelBase, IDisposable
             TrackEntry(e);
         }
 
-        // 历史回填走整体重建（单次 Reset），不走逐条 Add。
-        // History backfill goes through one bulk rebuild (single Reset) instead of per-item Adds.
         ReapplyFilter();
     }
 
@@ -285,9 +271,6 @@ public partial class LogViewModel : ViewModelBase, IDisposable
             _pendingEntries.Clear();
         }
 
-        // 一批日志先统一登记，再按命中筛选一次性追加（最多两次集合事件）。
-        // Track the whole batch first, then append all filter hits in one Apply
-        // (at most two collection events).
         var added = new List<LogEntryViewModel>(batch.Count);
         foreach (var entry in batch)
         {
@@ -300,8 +283,6 @@ public partial class LogViewModel : ViewModelBase, IDisposable
 
         Entries.Apply(0, added);
 
-        // 批量裁剪：一次移除全部超限条目，替代逐条 RemoveAt(0) 的 O(n) 搬移。
-        // Bulk trim: remove all over-limit entries in one pass instead of per-entry RemoveAt(0).
         var overflow = _allEntries.Count - MaxEntries;
         if (overflow <= 0)
         {
@@ -346,8 +327,7 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void ReapplyFilter()
     {
-        // 整体重建（单次 Reset），替代 Clear + 逐条 Add 的 5000 次集合事件。
-        // One bulk rebuild (single Reset) instead of Clear plus 5000 per-item Adds.
+
         List<LogEntryViewModel> hits;
         if (LevelFilter is null && string.IsNullOrEmpty(SourceFilter) && string.IsNullOrEmpty(SearchText)
             && SelectedChannel?.Value is null)

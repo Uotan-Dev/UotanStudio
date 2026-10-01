@@ -135,7 +135,7 @@ internal partial class PropertiesViewModel
             Properties.Add(row);
         }
         Add("VideoCodec", settings.ScreenMirrorVideoCodec, [C("h264", "H.264"), C("h265", "H.265 / HEVC"), C("av1", "AV1")], v => settings.ScreenMirrorVideoCodec = v);
-        var backends = new List<PropertyChoice> { LC("0", "Auto", "Automatic") };
+        List<PropertyChoice> backends = [LC("0", "Auto", "Automatic")];
         if (OperatingSystem.IsWindows()) backends.AddRange([C("1", "Media Foundation · GPU"), C("2", "Media Foundation · CPU")]);
         if (OperatingSystem.IsMacOS()) backends.Add(C("3", "VideoToolbox · GPU"));
         backends.AddRange([C("4", "GStreamer · GPU"), C("5", "GStreamer · CPU")]);

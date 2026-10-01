@@ -117,9 +117,6 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
             NotifyCompareStateChanged();
             NotifyContentChanged();
 
-            // 参与对比后收起浏览编辑器：内容交给对比编辑器/行列表（结束对比时会按路径重新加载）。
-            // Hide the browsing editor once the column participates in a comparison: the compare editor or row list takes over and the
-            // content is reloaded from the path when the comparison ends.
             if (value != CompareColumnSide.Browse)
             {
                 IsTextEditorVisible = false;
@@ -344,8 +341,6 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
             return;
         }
 
-        // 浏览状态：本列自己的文本文件按当前行写回（结构编辑后的行结构同样生效）。
-        // Browsing: this column's own text file is written back from the current rows (structural edits included).
         if (IsTextEditorVisible)
         {
             var editorPath = (Path ?? string.Empty).Trim();
@@ -456,8 +451,6 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
                 return;
             }
 
-            // 用户编辑（载入时用 _loadingEditorText 抑制）。
-            // A user edit (suppressed with _loadingEditorText while loading).
             MarkDirty();
         }
     }
@@ -610,10 +603,6 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         {
             if (isDirectory)
             {
-                // 导入文件夹直接列出它里面的内容：根节点不作为一行（它的子项就是顶层行），子文件夹保持折叠、双击展开，
-                // 「返回上一级」按路径回退。
-                // Importing a folder lists its contents straight away: the root itself is not a row (its children are the top-level rows),
-                // subfolders stay collapsed until double-clicked and "go up" walks the path back.
                 var root = CompareTreeNodeViewModel.ForBrowsing(path, isDirectory: true, ct);
                 TreeRoot = root;
                 await root.EnsureChildrenLoadedAsync();
@@ -626,9 +615,6 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
             }
             else
             {
-                // 文本文件用项目文本编辑器打开（真正的多行编辑）；二进制文件仍用元数据行。
-                // A text file opens in the project's text editor (real multi-line editing); a binary file keeps the
-                // metadata rows.
                 var textLines = await _owner.ReadTextLinesAsync(path, ct);
                 ct.ThrowIfCancellationRequested();
                 if (textLines is not null)
@@ -657,8 +643,6 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         }
         catch (OperationCanceledException)
         {
-            // 取消：保持当前状态。
-            // Cancelled: keep the current state.
         }
         catch (Exception ex)
         {
@@ -669,8 +653,6 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         }
         finally
         {
-            // 仅当仍是当前加载时清除 busy：被取消的旧加载不得清除新加载的 busy。
-            // Clear busy only while this load is still the current one.
             if (ct == _loadCts.Token)
             {
                 IsBusy = false;
@@ -768,9 +750,6 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         OnPropertyChanged(nameof(HasPath));
         OnPropertyChanged(nameof(CanClose));
 
-        // 文档级的空态提示由各列内容推导，列状态变化后必须让文档重算。
-        // The document-level empty hint is derived from every column's content, so the document has to
-        // re-evaluate it after a column changes.
         _owner.NotifyColumnsChanged();
     }
 

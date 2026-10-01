@@ -320,8 +320,6 @@ public sealed partial class CompareViewModel : Document
             _textModel.ReplaceLines(startSlot, removedSlots, leftSide, lines);
         }
 
-        // 两侧都没内容的槽直接收掉（合并/删除留下的全空槽），行数变化量只跟本侧文件的行数保持一致。
-        // Slots empty on both sides are dropped (leftovers of a join or delete), so the row count only follows this side's file.
         _textModel.DropEmptySlots();
         MarkDirty(leftSide);
         RebuildTextRows();
@@ -443,8 +441,6 @@ public sealed partial class CompareViewModel : Document
         _lastTextUndoUtc = now;
         if (coalesce)
         {
-            // 合并到上一个点：保留更早的快照（那才是这次连续输入前的状态）。
-            // Coalesce into the previous point: the earlier snapshot is the state before the whole burst of typing.
             _textRedo.Clear();
             return;
         }
@@ -453,8 +449,6 @@ public sealed partial class CompareViewModel : Document
         _textUndo.Add(entry);
         _textUndoBytes += EstimateBytes(entry);
         _textRedo.Clear();
-        // 同时按条数与内存估算上限裁剪：大文件不会因为撤销历史把内存吃爆。
-        // Trim by both point count and estimated memory so undo history cannot blow up the memory footprint of a large file.
         while (_textUndo.Count > 1 && (_textUndo.Count > 100 || _textUndoBytes > MaxTextUndoBytes))
         {
             _textUndoBytes -= EstimateBytes(_textUndo[0]);
@@ -545,8 +539,6 @@ public sealed partial class CompareViewModel : Document
         endSlot = Math.Max(startSlot, Math.Min(endSlot, _textModel.Slots.Count - 1));
         if (selectedText is not null && startSlot == endSlot)
         {
-            // 单行内部分选中：按相同列范围替换对侧该行的内容。
-            // A partial selection inside one line: replace the counterpart's same column range.
             var target = _textModel.TextAt(startSlot, leftSide: !fromLeftToRight);
             var from = Math.Clamp(startColumn, 0, target.Length);
             var to = Math.Clamp(endColumn, from, target.Length);
@@ -657,9 +649,6 @@ public sealed partial class CompareViewModel : Document
     {
         if (IsComparing)
         {
-            // 对比进行中列数固定为两列：拖入的新路径被拒绝并给出明确提示，两列布局保持不变。
-            // A comparison keeps exactly two columns: a dropped path is rejected with an explicit hint and the
-            // two-column layout is left unchanged.
             ReportError(LanguageService.Instance.GetString("Compare_AddColumnWhileComparing"));
             return false;
         }
@@ -680,8 +669,6 @@ public sealed partial class CompareViewModel : Document
             loaded++;
         }
 
-        // 恰好拖入两个路径时直接开始对比（与「工具」菜单的语义一致）；其余情况只加载为浏览列。
-        // Exactly two dropped paths start the comparison straight away (matching the Tools menu); anything else only loads columns.
         if (loaded == 2 && loaded == paths.Count && !IsComparing)
         {
             await StartCompareAsync(allowSingleSide: false);
@@ -817,8 +804,6 @@ public sealed partial class CompareViewModel : Document
             return;
         }
 
-        // 单侧（对侧没有对应文件）没有可比对的第二个文件，无法产出差异区间，保持在元数据视图。
-        // A single side (no counterpart file) has no second file to diff against, so hex stays unavailable.
         if (!CanShowHexView)
         {
             return;
@@ -835,9 +820,6 @@ public sealed partial class CompareViewModel : Document
             var stats = await _comparison.CompareBinaryAsync(_fileLeftPath, _fileRightPath, rowDiffBitmap, ct);
             if (ct.IsCancellationRequested)
             {
-                // 协作式取消：位图/统计基于部分扫描结果，直接丢弃并保持当前视图。
-                // Cooperative cancellation: the bitmap/stats came from a partial scan, discard them and keep the
-                // current view.
                 return;
             }
 
@@ -856,8 +838,6 @@ public sealed partial class CompareViewModel : Document
         }
         catch (OperationCanceledException)
         {
-            // 取消：保持当前状态。
-            // Cancelled: keep the current state.
         }
         catch (Exception ex)
         {
@@ -867,10 +847,6 @@ public sealed partial class CompareViewModel : Document
         }
         finally
         {
-            // 仅当仍是当前加载（未被更新的加载取代）时清除 busy：被取消的旧加载
-            // 不得把新加载的 busy 状态置 false。
-            // Clear busy only while this load is still the current one: a cancelled older load must not clear
-            // the newer load's busy state.
             if (ct == _loadCts.Token)
             {
                 IsBusy = false;
@@ -906,9 +882,6 @@ public sealed partial class CompareViewModel : Document
 
         if (IsComparing && column.IsCompareSide)
         {
-            // 结束对比会重载两列的浏览内容，随后的移除落到浏览状态上。
-            // Ending the comparison reloads both columns' browsing content; the removal then applies to that
-            // browsing state.
             await EndCompareAsync();
         }
 
@@ -1134,9 +1107,6 @@ public sealed partial class CompareViewModel : Document
 
         foreach (var index in _selectedRowIndices)
         {
-            // 每选中的一槽单独应用：源侧有内容就复制过去，没有就把目标侧退成填充（等价于删掉目标那一行）。
-            // Each selected slot is applied on its own: the source side's content is copied over, or the target falls back to a
-            // filler when the source has no line there (equivalent to deleting the target's line).
             CopySlots(fromLeftToRight, index, 1);
         }
     }
@@ -1274,7 +1244,6 @@ public sealed partial class CompareViewModel : Document
         return -1;
     }
 
-
     /// <summary>
     /// <para>保存某一侧文本对比的编辑：把该侧当前的所有行按顺序写回文件（保留原编码与换行风格），
     /// 完成后清除「已修改」标记。</para>
@@ -1297,8 +1266,6 @@ public sealed partial class CompareViewModel : Document
             return;
         }
 
-        // 槽模型是唯一的真相：保存该侧真实行（填充槽不写入文件，空行照写）。
-        // The slot model is the single source of truth: save that side's real lines (fillers are never written, blank lines are).
         var lines = RealLines(leftSide);
         if (_textModel is null)
         {
@@ -1400,9 +1367,6 @@ public sealed partial class CompareViewModel : Document
 
         EnsureColumnCount(2);
 
-        // 命令语义是「对比这两个路径」：只保留前两列，多余的浏览列一并关闭。
-        // The command's contract is "compare these two paths": keep only the first two columns and close any
-        // extra browsing columns.
         while (Columns.Count > 2)
         {
             await RemoveColumnAsync(Columns[^1]);
@@ -1440,9 +1404,6 @@ public sealed partial class CompareViewModel : Document
         }
         else
         {
-            // 单侧：内容列保持它在文档中的位置（第 1 列 → 左，第 2 列 → 右），另一列为空。
-            // Single side: the populated column keeps its position (first column → left, second → right) and the
-            // other stays empty.
             left = Columns.ElementAtOrDefault(0);
             right = Columns.ElementAtOrDefault(1);
             if (ReferenceEquals(left, right))
@@ -1577,8 +1538,6 @@ public sealed partial class CompareViewModel : Document
         IsBusy = true;
         HasError = false;
         ErrorMessage = string.Empty;
-        // 重新读取磁盘内容意味着放弃此前的内存编辑（刷新/重新对比的语义）。
-        // Re-reading from disk abandons previous in-memory edits (the semantics of refresh/re-compare).
         _dirtyLeft = false;
         _dirtyRight = false;
         _selectedRowIndices = [];
@@ -1609,8 +1568,6 @@ public sealed partial class CompareViewModel : Document
         }
         catch (OperationCanceledException)
         {
-            // 取消：保持当前状态。
-            // Cancelled: keep the current state.
         }
         catch (Exception ex)
         {
@@ -1620,18 +1577,11 @@ public sealed partial class CompareViewModel : Document
         }
         finally
         {
-            // 仅当仍是当前加载（未被更新的加载取代）时清除 busy：被取消的旧加载
-            // 不得把新加载的 busy 状态置 false。
-            // Clear busy only while this load is still the current one: a cancelled older load must not clear the
-            // newer load's busy state.
             if (ct == _loadCts.Token)
             {
                 IsBusy = false;
             }
 
-            // 列头的十六进制/差异导航按钮可见性随本次加载后的模式与文件对重新求值。
-            // The header's hex/navigation button visibility is re-evaluated from the mode and file pair this load
-            // produced.
             NotifyColumnsCompareState();
         }
     }
@@ -1688,9 +1638,6 @@ public sealed partial class CompareViewModel : Document
         var lines = await _comparison.CompareTextAsync(_fileLeftPath, _fileRightPath, ct);
         ct.ThrowIfCancellationRequested();
 
-        // 文本对比使用「槽模型 + 两侧文本编辑器」：行号=对齐序号，填充槽显示斜杠，编辑由编辑器承担。
-        // A text comparison uses the slot model together with the project's text editors: one line per aligned slot with
-        // slashes for fillers, and the editors as the editing surface.
         _textModel = new CompareTextSlotModel();
         _textModel.Load(lines);
         RebuildTextRows();
@@ -1726,23 +1673,11 @@ public sealed partial class CompareViewModel : Document
             SelectedIndex = -1;
             StatsText = string.Empty;
 
-            // 不在此跑全文件差异扫描：二进制模式下汇总不显示差异计数，且多 GB 固件的全量扫描
-            // 耗时数十秒，会让 busy 指示一直转；差异统计在切换十六进制原始视图时才需要
-            // （CompareStats 位图重载），由 ToggleHexView 计算。
-            // No full-file diff scan here: in binary mode the summary shows no diff counts, and a full scan of
-            // multi-GB firmware takes tens of seconds, keeping the busy indicator spinning; diff stats are only
-            // needed when switching to the hex-raw view (the CompareStats bitmap overload), computed by
-            // ToggleHexView.
             HasError = false;
             ErrorMessage = string.Empty;
         }
         catch (OperationCanceledException)
         {
-            // 取消：保持当前状态，不向上传播（切换十六进制视图/重新加载会取消进行中的加载，
-            // 若此处不捕获，后台 Task 抛出的 OCE 可能成为未处理异常导致崩溃）。
-            // Cancelled: keep the current state and do not propagate — toggling the hex view or reloading cancels
-            // the in-flight load, and without this catch the OCE thrown inside the background Task could surface
-            // as an unhandled exception and crash the app.
         }
     }
 

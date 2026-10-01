@@ -18,7 +18,7 @@ public partial class PropertiesView : UserControl
         if (e.WidthChanged && double.IsFinite(e.NewSize.Width) && e.NewSize.Width > 0 &&
             sender is DataGrid { Columns.Count: > 0 } grid)
         {
-            // Keep the auto-sized names from crowding out values in narrow dock panels.
+
             grid.Columns[0].MaxWidth = System.Math.Max(1, e.NewSize.Width / 2);
         }
     }

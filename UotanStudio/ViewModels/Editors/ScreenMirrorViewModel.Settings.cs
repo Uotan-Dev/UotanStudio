@@ -33,7 +33,6 @@ public partial class ScreenMirrorViewModel
         IsApplyingMirrorSettings = true;
         try
         {
-            // Join the accepted startup before tearing down its owned streams.
             if (_startTask is { } start) await start;
             _cts?.Cancel();
             _client?.Dispose();

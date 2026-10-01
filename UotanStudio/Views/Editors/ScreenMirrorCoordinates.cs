@@ -14,7 +14,7 @@ internal static class ScreenMirrorCoordinates
         double scale = Math.Min(bounds.Width / width, bounds.Height / height);
         double px = (local.X - (bounds.Width - width * scale) / 2) / scale;
         double py = (local.Y - (bounds.Height - height * scale) / 2) / scale;
-        // Reject before conversion: truncating a negative fraction would otherwise hit pixel zero.
+
         if (!clamp && (px < 0 || py < 0 || px >= width || py >= height)) return false;
         x = (int)Math.Clamp(px, 0, width - 1);
         y = (int)Math.Clamp(py, 0, height - 1);
