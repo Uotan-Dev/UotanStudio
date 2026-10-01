@@ -936,7 +936,7 @@ public partial class FlashView : UserControl
         finally { _confirming = false; }
         if (!confirmed || SelectedDevice is not DetectedDevice current ||
             current.Key != device.Key || _model.PackagePath != _loadedPath ||
-            App.DeviceMonitor.Scan().All(found =>
+            (await Task.Run(App.DeviceMonitor.Scan)).All(found =>
                 found.Key != device.Key || found.Protocol != DeviceProtocolKind.Edl)) return;
         SetBusy(true);
         using var cancellation = new CancellationTokenSource();
@@ -976,7 +976,7 @@ public partial class FlashView : UserControl
         finally { _confirming = false; }
         if (!confirmed) return;
         if (SelectedDevice is not DetectedDevice current || current.Key != device.Key ||
-            App.DeviceMonitor.Scan().All(found => found.Key != device.Key ||
+            (await Task.Run(App.DeviceMonitor.Scan)).All(found => found.Key != device.Key ||
                 found.Protocol != DeviceProtocolKind.Fastboot))
         {
             AppendLog(language.GetString("Flash_DeviceChanged"));
@@ -1089,7 +1089,7 @@ public partial class FlashView : UserControl
             return;
         }
         if (SelectedDevice is not DetectedDevice current || current.Key != device.Key ||
-            App.DeviceMonitor.Scan().All(found => found.Key != device.Key || found.Protocol != device.Protocol))
+            (await Task.Run(App.DeviceMonitor.Scan)).All(found => found.Key != device.Key || found.Protocol != device.Protocol))
         {
             AppendLog(language.GetString("Flash_DeviceChanged"));
             return;

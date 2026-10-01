@@ -168,6 +168,7 @@
     <x:String x:Key="Flash_FolderOnly">Select a package, image folder, or HTTP(S) Payload URL.</x:String>
     <x:String x:Key="Flash_ImagesLoaded">images loaded</x:String>
     <x:String x:Key="Flash_DeviceChanged">The selected device changed. Refresh and confirm again.</x:String>
+    <x:String x:Key="Flash_Busy">Working...</x:String>
     <x:String x:Key="Flash_FileMissing">Image file is missing.</x:String>
     <x:String x:Key="Flash_PackageChanged">The package path changed. Load it before flashing.</x:String>
     <x:String x:Key="Flash_ProductMismatch">Device product does not match the flash manifest. Nothing was written.</x:String>

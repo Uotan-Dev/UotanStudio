@@ -7,7 +7,7 @@ namespace UotanStudio.Tests.Devices;
 public sealed class DevicePropertyReaderTests
 {
     [Fact]
-    public void AdbProperties_UsesFallbackAndCallerLocalization()
+    public void AdbProperties_QueriesAllLockSignalsInOrderAndUsesCallerLocalization()
     {
         var commands = new List<string>();
         string Run(string command)
@@ -27,6 +27,8 @@ public sealed class DevicePropertyReaderTests
         }
         string Localize(string key) => key switch
         {
+            "Device_Unlocked" => "unlocked",
+            "Device_Locked" => "locked",
             "Device_UptimeDay" => "d",
             "Device_UptimeHour" => "h",
             "Device_UptimeMinute" => "m",
@@ -44,20 +46,47 @@ public sealed class DevicePropertyReaderTests
         Assert.Equal("75", properties["batteryLevel"]);
         Assert.Equal("--", properties["brand"]);
         var first = commands.IndexOf("getprop ro.secureboot.lockstate");
-        Assert.Equal("getprop ro.boot.vbmeta.device_state", commands[first + 1]);
+        string[] lockCommands =
+        [
+            "getprop ro.secureboot.lockstate",
+            "getprop ro.boot.vbmeta.device_state",
+            "getprop ro.boot.verifiedbootstate",
+            "getprop ro.fastboot.unlock",
+        ];
+        Assert.Equal(lockCommands, commands.Skip(first).Take(lockCommands.Length).ToArray());
     }
 
-    [Fact]
-    public void AdbProperties_DoesNotRunLockFallbackAfterSuccessfulPrimaryQuery()
+    [Theory]
+    [InlineData("unlocked", "", "", "", "Device_Unlocked")]
+    [InlineData("", "unlocked", "", "", "Device_Unlocked")]
+    [InlineData("", "", "orange", "", "Device_Unlocked")]
+    [InlineData("", "", "", "true", "Device_Unlocked")]
+    [InlineData("", "locked", "orange", "true", "Device_Unlocked")]
+    [InlineData("locked", "", "", "", "Device_Locked")]
+    [InlineData("", "", "green", "", "Device_Locked")]
+    [InlineData("", "", "yellow", "", "Device_Locked")]
+    [InlineData("", "", "", "false", "Device_Locked")]
+    [InlineData("", "", "", "unknown", "Device_Locked")]
+    [InlineData("", "", "", "", "--")]
+    [InlineData("", "locked", "red", "", "Device_Locked")]
+    [InlineData("", "", "red", "", "--")]
+    public void AdbLockSignals_UnlockedEvidenceWinsOverLockedEvidence(
+        string lockstate,
+        string deviceState,
+        string verifiedbootstate,
+        string oemUnlock,
+        string expected)
     {
-        var commands = new List<string>();
-        DevicePropertyReader.ReadAdbProperties(command =>
+        var properties = DevicePropertyReader.ReadAdbProperties(command => command switch
         {
-            commands.Add(command);
-            return command == "getprop ro.secureboot.lockstate" ? "locked" : "";
+            "getprop ro.secureboot.lockstate" => lockstate,
+            "getprop ro.boot.vbmeta.device_state" => deviceState,
+            "getprop ro.boot.verifiedbootstate" => verifiedbootstate,
+            "getprop ro.fastboot.unlock" => oemUnlock,
+            _ => "",
         }, key => key);
 
-        Assert.DoesNotContain("getprop ro.boot.vbmeta.device_state", commands);
+        Assert.Equal(expected, properties["bl"]);
     }
 
     [Theory]

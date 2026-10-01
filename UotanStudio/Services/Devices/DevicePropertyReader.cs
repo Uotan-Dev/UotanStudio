@@ -72,13 +72,7 @@ internal static class DevicePropertyReader
             ["vndk"] = Get("getprop ro.vndk.version"),
         };
 
-        var bl = Get("getprop ro.secureboot.lockstate");
-        if (bl == "--")
-        {
-            bl = Get("getprop ro.boot.vbmeta.device_state");
-        }
-
-        map["bl"] = bl;
+        map["bl"] = ReadBlState(Get, getString);
         map["uptime"] = FormatUptime(Get("cat /proc/uptime"), getString);
 
         var (bLevel, bText) = ParseBattery(run("dumpsys battery"));
@@ -94,6 +88,34 @@ internal static class DevicePropertyReader
         map["diskText"] = dText;
 
         return map;
+    }
+
+    /// <summary>
+    /// <para>汇总 ADB 侧的 Bootloader 锁状态信号：任一权威属性证明已解锁即判为已解锁，否则存在上锁证据时判为上锁，
+    /// 全部缺失时返回 "--"。解锁证据优先合并，因为部分 OEM 设备解锁后仍继续上报 locked 的 <c>ro.boot.vbmeta.device_state</c>。
+    /// <c>ro.boot.verifiedbootstate</c> 的 red 表示设备已被破坏，不构成锁状态结论；华为设备上报的
+    /// <c>ro.fastboot.unlock</c> 只有 true 表示解锁，其余取值按上锁处理。</para>
+    /// Aggregates the ADB bootloader lock-state signals: any authoritative unlocked signal wins, otherwise
+    /// existing locked evidence means locked, and no evidence at all yields "--". Unlocked evidence is merged
+    /// first because some OEM devices keep reporting ro.boot.vbmeta.device_state as locked after an unlock.
+    /// verifiedbootstate "red" means a corrupt device and yields no lock-state verdict; the Huawei
+    /// ro.fastboot.unlock signal means unlocked only for "true" and every other reported value means locked.
+    /// </summary>
+    private static string ReadBlState(Func<string, string> get, Func<string, string> getString)
+    {
+        var lockstate = get("getprop ro.secureboot.lockstate").ToLowerInvariant();
+        var deviceState = get("getprop ro.boot.vbmeta.device_state").ToLowerInvariant();
+        var verifiedboot = get("getprop ro.boot.verifiedbootstate").ToLowerInvariant();
+        var oemUnlock = get("getprop ro.fastboot.unlock").ToLowerInvariant();
+
+        if (lockstate == "unlocked" || deviceState == "unlocked" || verifiedboot == "orange" || oemUnlock == "true")
+        {
+            return getString("Device_Unlocked");
+        }
+
+        return lockstate == "locked" || deviceState == "locked" || verifiedboot is "green" or "yellow" || oemUnlock != "--"
+            ? getString("Device_Locked")
+            : "--";
     }
 
     /// <summary>

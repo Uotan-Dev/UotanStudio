@@ -168,6 +168,7 @@
     <x:String x:Key="Flash_FolderOnly">请选择刷机包、镜像目录或 HTTP(S) Payload 链接。</x:String>
     <x:String x:Key="Flash_ImagesLoaded">个镜像已加载</x:String>
     <x:String x:Key="Flash_DeviceChanged">所选设备已变化，请刷新并重新确认。</x:String>
+    <x:String x:Key="Flash_Busy">正在处理...</x:String>
     <x:String x:Key="Flash_FileMissing">镜像文件不存在。</x:String>
     <x:String x:Key="Flash_PackageChanged">刷机包路径已更改，请先加载后再刷写。</x:String>
     <x:String x:Key="Flash_ProductMismatch">设备机型与刷机清单不匹配，未写入任何数据。</x:String>

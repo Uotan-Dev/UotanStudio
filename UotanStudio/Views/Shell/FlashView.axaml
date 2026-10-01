@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:icons="using:Material.Icons.Avalonia"
              xmlns:vm="using:UotanStudio.ViewModels.Shell"
+             xmlns:ursa="using:Ursa.Controls"
              mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="820"
              x:Class="UotanStudio.Views.Shell.FlashView"
              x:DataType="vm:FlashViewModel"
@@ -47,6 +48,7 @@
          窗口高度不足时由外层 ScrollViewer 提供整页纵向滚动。 -->
     <!-- One grid, three panes: wide screens use "log | partitions | actions", narrow screens move the log below the
          list. The outer ScrollViewer scrolls the whole page when the window is shorter than the content. -->
+    <Grid>
     <ScrollViewer Name="PageScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                  AllowAutoHide="True">
         <Grid Name="FlashLayout" Margin="12">
@@ -301,4 +303,16 @@
             </Border>
         </Grid>
     </ScrollViewer>
+    <!-- 覆盖层忙碌徽标：仅绑定 IsBusy 显隐，IsHitTestVisible=False 保证不拦截取消/操作输入。 -->
+    <!-- Busy badge overlay: visibility driven by IsBusy only; IsHitTestVisible=False keeps cancel/action input intact. -->
+    <Border IsVisible="{Binding IsBusy}" IsHitTestVisible="False" ZIndex="100"
+            HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,16,0,0"
+            Padding="16,8" CornerRadius="10" BorderThickness="1"
+            Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+            <ursa:LoadingIcon IsLoading="{Binding IsBusy}" Width="20" Height="20" />
+            <TextBlock Text="{DynamicResource Flash_Busy}" VerticalAlignment="Center" />
+        </StackPanel>
+    </Border>
+    </Grid>
 </UserControl>
