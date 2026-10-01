@@ -250,7 +250,7 @@ internal sealed class OfpQcCryptoProvider(IOppLogger? logger = null) : IOppForma
             ?? _customQcKeys.FirstOrDefault(k => string.Equals(k.KeyId, keyId, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool ContainsXmlDeclaration(string text) => text.Contains("<?xml");
+    private static bool ContainsXmlDeclaration(string text) => text.Contains("<?xml", StringComparison.Ordinal);
 
     private static string TruncateXmlAtLastCloseTag(string text)
     {

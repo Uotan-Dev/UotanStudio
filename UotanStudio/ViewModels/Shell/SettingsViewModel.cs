@@ -143,8 +143,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private bool _debugMode;
     private bool _erofsLegacyCompatibility;
 
-    // MCP 设置字段
-    // MCP settings fields
     private bool _mcpExposeEnabled;
     private int _mcpExposePort = AppSettings.DefaultMcpExposePort;
     private string _mcpExposeRootDirectory = string.Empty;
@@ -256,7 +254,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         }
     }
 
-
     /// <summary>
     /// <para>获取语言预览文本，根据当前语言动态更新。</para>
     /// Gets the language preview text, dynamically updated based on the current language.
@@ -292,7 +289,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _selectedThemeMode, value))
             {
-                // 通知三个 RadioButton 绑定属性同步更新，避免快速来回点击时 UI 选中态与 VM 脱节导致主题切换丢失
+
                 OnPropertyChanged(nameof(IsLightTheme));
                 OnPropertyChanged(nameof(IsDarkTheme));
                 OnPropertyChanged(nameof(IsSystemTheme));
@@ -383,7 +380,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     {
         _appSettings = settings;
 
-        // 初始化语言列表（从 LanguageService 动态获取）
         Languages = new ObservableCollection<LanguageInfo>(LanguageService.Instance.AvailableLanguages);
 
         InitializeFromAppSettings(_appSettings, applyLanguage);
@@ -406,7 +402,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         global::UotanStudio.Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
         global::UotanStudio.Firmware.FileSystem.Erofs.Builder.ErofsBuildDefaults.LegacyCompatibility = settings.ErofsLegacyCompatibility;
         _erofsLegacyCompatibility = settings.ErofsLegacyCompatibility;
-        // 根据 CultureName 查找或创建 LanguageInfo
+
         _selectedLanguage = string.IsNullOrEmpty(settings.CultureName)
             ? LanguageInfo.SystemLanguage
             : LanguageService.Instance.AvailableLanguages.FirstOrDefault(l => l.CultureName == settings.CultureName)
@@ -414,19 +410,14 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _selectedThemeMode = settings.ThemeMode;
         _autoSave = settings.AutoSave;
         _debugMode = settings.DebugMode;
-        // 启动恢复设置时同步应用调试模式，否则重启后 Debug 级别日志（含首次机会异常）被 Info 过滤。
-        // Apply debug mode when restoring settings at startup; otherwise Debug-level logs
-        // (including first-chance exceptions) stay filtered behind Info after a restart.
+
         LogService.Instance.ApplyDebugMode(_debugMode);
 
-        // Startup has already applied this preference before constructing localized shell components.
         if (applyLanguage)
         {
             ApplyLanguageInfo(_selectedLanguage);
         }
 
-        // 初始化 MCP 设置：连接列表按条目复制，避免编辑直接改写持久化实例。
-        // Initialize the MCP settings: copy the connections so edits never mutate the persisted instance.
         McpServers.Clear();
         foreach (var server in settings.McpServers)
         {
@@ -515,15 +506,12 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.DebugMode = _debugMode;
         _appSettings.ErofsLegacyCompatibility = _erofsLegacyCompatibility;
 
-        // 合并磁盘上最新的最近打开项目列表，避免防抖保存覆盖「最近打开」记录。
-        // Merge the latest recent-projects list from disk so the debounced save never wipes the MRU record.
         var latest = SettingsPersistenceService.Instance.LoadSettings();
         _appSettings.RecentProjects = latest.RecentProjects;
         _appSettings.FavoriteNodeTypes = latest.FavoriteNodeTypes;
         _appSettings.RecentNodeTypes = latest.RecentNodeTypes;
         _appSettings.ExpandedNodeCategories = latest.ExpandedNodeCategories;
 
-        // MCP 设置
         _appSettings.McpServers = [.. McpServers];
         _appSettings.McpExposeEnabled = _mcpExposeEnabled;
         _appSettings.McpExposePort = _mcpExposePort;
@@ -533,8 +521,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         var saved = SettingsPersistenceService.Instance.TrySaveSettings(_appSettings, out var error);
         WeakReferenceMessenger.Default.Send(new SettingsSaveCompletedMessage(saved, error));
 
-        // 保存成功后立即按新配置启动/停止内嵌 MCP 服务器；端口占用等失败只记录日志，不影响设置保存。
-        // Apply the exposure state right after a successful save; a busy port only logs and never fails the save.
         if (saved)
         {
             McpExposureService.Instance.Apply(_mcpExposeEnabled, _mcpExposePort, _mcpExposeRootDirectory, _mcpExposeAllowFlash);
@@ -566,7 +552,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void OnLanguagePackChanged(object? sender, LanguagePackChangedEventArgs e)
     {
-        // 同步更新语言列表
+
         Languages.Clear();
         foreach (var lang in LanguageService.Instance.AvailableLanguages)
         {
@@ -627,14 +613,12 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         InitializeFromAppSettings(_appSettings);
         McpExposureService.Instance.Apply(_mcpExposeEnabled, _mcpExposePort, _mcpExposeRootDirectory, _mcpExposeAllowFlash);
 
-        // 同步语言列表
         Languages.Clear();
         foreach (var lang in LanguageService.Instance.AvailableLanguages)
         {
             Languages.Add(lang);
         }
 
-        // Notify all properties changed
         OnPropertyChanged(string.Empty);
         WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(_selectedThemeMode));
     }

@@ -10,8 +10,7 @@ namespace UotanStudio.Views.Shell;
 
 public partial class MainView : UserControl
 {
-    // 底栏页面索引：前三个与最后三个 ContentPage 是撑开居中留白的占位页。
-    // Bottom-bar page indexes: the first and last three ContentPages are spacers that keep the group centred.
+
     private const int FlashTabIndex = 3;
     private const int WorkspaceTabIndex = 4;
     private const int DeliveryTabIndex = 5;
@@ -26,7 +25,7 @@ public partial class MainView : UserControl
     {
         _createPage = createPage;
         InitializeComponent();
-        // 默认选中 Workspace Tab（Flash=3, Workspace=4, Delivery=5, NodeEditor=6, Settings=7）。
+
         MainTabs.SelectedIndex = WorkspaceTabIndex;
         MainTabs.PropertyChanged += (_, change) =>
         {
@@ -37,7 +36,6 @@ public partial class MainView : UserControl
         };
         MainTabs.SelectionChanged += OnSelectionChanged;
 
-        // 初始同步：告知订阅者当前激活面板为 Workspace（与默认 SelectedIndex 对应）
         SendActiveTabChanged(MainTabs.SelectedIndex);
     }
 
@@ -141,7 +139,7 @@ public partial class MainView : UserControl
         WeakReferenceMessenger.Default.Register<MainView, OpenDocumentSearchMessage>(this, static (view, message) =>
         {
             view.MainTabs.SelectedIndex = WorkspaceTabIndex;
-            // Wait for the selected page's document dock to complete layout before positioning search.
+
             Dispatcher.UIThread.Post(() => view.WorkspaceDocuments.ShowDocumentSearch(message.ShowReplace), DispatcherPriority.Loaded);
         });
     }

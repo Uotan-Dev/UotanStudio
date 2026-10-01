@@ -139,9 +139,7 @@ public class WorkspaceDockFactory : Factory
             Title = "LeftPane",
             Proportion = 0.15,
             ActiveDockable = projectExplorer,
-            // 打包设置面板默认隐藏，经「窗口」菜单唤出，不进入初始可见列表。
-            // The packing settings panel is hidden by default (invoked from the Window menu), so it
-            // starts outside the visible list.
+
             VisibleDockables = CreateList<IDockable>(projectExplorer, pluginTool)
         };
 
@@ -194,8 +192,6 @@ public class WorkspaceDockFactory : Factory
         rootDock.DefaultDockable = mainLayout;
         rootDock.VisibleDockables = CreateList<IDockable>(mainLayout);
 
-        // 把各工作区面板登记到面板服务，供「窗口」菜单显示/隐藏/聚焦。
-        // Register each workspace panel with the panel service for the Window menu.
         var panels = WorkspacePanelService.Instance;
         panels.Register(WorkspacePanelService.ProjectExplorer, projectExplorer, leftTools, visible: true);
         panels.Register(WorkspacePanelService.ProjectSetting, projectSetting, leftTools, visible: false);
@@ -248,7 +244,6 @@ public class WorkspaceDockFactory : Factory
             ["Device"] = () => DeviceViewModel.EnsureInstance()
         };
 
-        // 创建启用 docking 的 HostWindow
         HostWindowLocator = new Dictionary<string, Func<IHostWindow?>>
         {
             [nameof(IDockWindow)] = () => CreateHostWindow(),
@@ -264,7 +259,7 @@ public class WorkspaceDockFactory : Factory
     {
         var options = new Dock.Model.Core.DockManagerOptions { IsDockingEnabled = true };
         var hwnd = new HostWindow(options);
-        // Floating document decorations are configured by the global HostWindow style.
+
         hwnd.ShowInTaskbar = true;
         hwnd.CanResize = true;
         return hwnd;
@@ -332,8 +327,6 @@ public class WorkspaceDockFactory : Factory
 
             dockable.Owner = null;
 
-            // 用户经停靠区关闭按钮移除面板后，同步「窗口」菜单的可见性状态。
-            // After a panel is removed via the dock's close button, sync the Window menu visibility.
             if (ownerDock is not null)
             {
                 WorkspacePanelService.Instance.OnDockContentsChanged(ownerDock);
@@ -341,11 +334,9 @@ public class WorkspaceDockFactory : Factory
         }
         catch
         {
-            // 移除过程中的异常不阻断关闭流程。
+
         }
 
-        // 文档关闭后立即释放大对象（解析模型/原始字节/树节点），避免内存占用保持不降。
-        // Release large objects as soon as a document is closed so the memory footprint drops.
         if (dockable is TerminalViewModel terminal)
         {
             _terminals?.Remove(terminal);
@@ -366,7 +357,7 @@ public class WorkspaceDockFactory : Factory
             }
             catch
             {
-                // 清理失败不影响关闭流程
+
             }
         }
         else if (dockable is UotanStudio.ViewModels.Editors.HexEditorViewModel hexEditor)
@@ -377,7 +368,7 @@ public class WorkspaceDockFactory : Factory
             }
             catch
             {
-                // 清理失败不影响关闭流程
+
             }
         }
         else if (dockable is UotanStudio.ViewModels.Editors.DtbEditorViewModel dtbEditor)
@@ -388,7 +379,7 @@ public class WorkspaceDockFactory : Factory
             }
             catch
             {
-                // 清理失败不影响关闭流程
+
             }
         }
         else if (dockable is UotanStudio.ViewModels.Editors.DexEditorViewModel dexEditor)
@@ -399,7 +390,7 @@ public class WorkspaceDockFactory : Factory
             }
             catch
             {
-                // 清理失败不影响关闭流程
+
             }
         }
         else if (dockable is UotanStudio.ViewModels.Editors.ManifestEditorViewModel manifestEditor)
@@ -410,7 +401,7 @@ public class WorkspaceDockFactory : Factory
             }
             catch
             {
-                // 清理失败不影响关闭流程
+
             }
         }
         else if (dockable is UotanStudio.ViewModels.Editors.ArscEditorViewModel arscEditor)
@@ -421,7 +412,7 @@ public class WorkspaceDockFactory : Factory
             }
             catch
             {
-                // 清理失败不影响关闭流程
+
             }
         }
         else if (dockable is UotanStudio.ViewModels.Editors.ElfInfoViewModel elfInfo)
@@ -440,7 +431,7 @@ public class WorkspaceDockFactory : Factory
             }
             catch
             {
-                // 清理失败不影响关闭流程
+
             }
         }
         else if (dockable is UotanStudio.ViewModels.Editors.PartitionEditorViewModel partitionEditor)
@@ -451,7 +442,7 @@ public class WorkspaceDockFactory : Factory
             }
             catch
             {
-                // 清理失败不影响关闭流程
+
             }
         }
         else if (dockable is UotanStudio.ViewModels.Editors.FileManagerEditorViewModel fileManager)
@@ -462,19 +453,19 @@ public class WorkspaceDockFactory : Factory
             }
             catch
             {
-                // 清理失败不影响关闭流程
+
             }
         }
         else if (dockable is UotanStudio.ViewModels.Editors.ScreenMirrorViewModel screenMirror)
         {
             try
             {
-                // 投屏文档持有设备端 scrcpy 会话与长驻 shell 流，不清理会让服务端进程随 shell 挂起残留。
+
                 screenMirror.Cleanup();
             }
             catch
             {
-                // 清理失败不影响关闭流程
+
             }
         }
     }

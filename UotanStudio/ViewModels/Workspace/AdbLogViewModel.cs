@@ -62,7 +62,6 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
 
     public IReadOnlyList<LogLevel?> Levels { get; } = [null, LogLevel.Trace, LogLevel.Debug, LogLevel.Info, LogLevel.Warn, LogLevel.Error, LogLevel.Fatal];
 
-    // An index distinguishes the null-valued All item from no ComboBox selection.
     public int SelectedLevelIndex
     {
         get => LevelFilter.HasValue ? (int)LevelFilter.Value + 1 : 0;
@@ -124,7 +123,7 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
         }
         catch (RegexMatchTimeoutException)
         {
-            // Stop retrying this pattern on every incoming line until the search changes.
+
             SearchError = LanguageService.Instance.GetString("Log_RegexTimeout");
             return false;
         }
@@ -153,7 +152,6 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
         _timer.Tick += OnTick;
     }
 
-    // Start tracking device selection and flushing logcat after layout creation.
     internal void Initialize()
     {
         if (_devices is not null || _disposed) return;
@@ -263,7 +261,7 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
 
     internal void FlushPending()
     {
-        // Keep the visible history fixed; Enqueue still retains the latest bounded batch.
+
         if (IsPaused) return;
         var batch = new List<AdbLogcatEntry>(250);
         lock (_sync)
@@ -297,7 +295,7 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
         {
             var capture = _capture;
             _capture = null;
-            // The worker owns disposal; it may have already completed.
+
             try { capture?.Cancel(); }
             catch (ObjectDisposedException) { }
         }

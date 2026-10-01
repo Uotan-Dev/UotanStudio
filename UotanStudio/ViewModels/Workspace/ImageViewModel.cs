@@ -47,7 +47,6 @@ internal partial class ImageViewModel : Tool
 
     private int _refreshVersion;
 
-
     private async Task<bool> RequestExtractOverwriteAsync(string directoryName)
     {
         var owner = TopLevelExtensions.GetTopLevel() as Avalonia.Controls.Window;
@@ -188,8 +187,7 @@ internal partial class ImageViewModel : Tool
 
     partial void OnSelectedImageChanged(ImageEntryViewModel? value)
     {
-        // 通知属性面板等订阅方刷新显示镜像详细参数。
-        // Notify subscribers such as the properties panel to refresh with detailed image parameters.
+
         WeakReferenceMessenger.Default.Send(new ImageSelectionChangedMessage(value));
     }
 
@@ -231,19 +229,11 @@ internal partial class ImageViewModel : Tool
     /// </summary>
     public ImageViewModel()
     {
-        // 订阅工程上下文变更：打开工程时自动扫描 images/ 目录注册已知镜像格式，
-        // 关闭工程时清空列表。
-        // Subscribe to project-context changes: on open, auto-register known image formats from the
-        // images/ directory; on close, clear the list.
+
         WeakReferenceMessenger.Default.Register<ProjectContextChangedMessage>(this, OnProjectContextChanged);
 
-        // 注册跨会话操作历史重建工厂，使重启后可恢复撤销栈。
-        // Register the cross-session history reconstructor so the undo stack can be restored after restart.
         OperationHistoryService.ReconstructOperation = ReconstructOperation;
 
-        // 「刷入选中文件」仅当选中 fastboot 设备时可用；设备接入/断开与选中变化时刷新命令可用性。
-        // "Flash selected" is enabled only for a selected fastboot device; refresh command availability
-        // when the device list or the current selection changes.
         var deviceVm = DeviceViewModel.EnsureInstance();
         ((INotifyPropertyChanged)deviceVm).PropertyChanged += (_, e) =>
         {
@@ -252,9 +242,7 @@ internal partial class ImageViewModel : Tool
                 RefreshFlashSelectedEnablement();
             }
         };
-        // DevicesChanged 在后台线程触发；命令的 CanExecuteChanged 会触达 UI 控件，必须回到 UI 线程再刷新。
-        // DevicesChanged fires on a background thread; the command's CanExecuteChanged reaches UI controls,
-        // so the refresh must be marshalled back to the UI thread.
+
         App.DeviceMonitor.DevicesChanged += (_, _) => RefreshFlashSelectedEnablement();
     }
 
@@ -326,8 +314,13 @@ internal partial class ImageViewModel : Tool
     }
 
     /// <summary>
-    /// <para>扫描 <c>images/</c> 或 <c>output/</c> 目录；输出模式同时包含 raw 镜像。</para>
-    /// Scans <c>images/</c> or <c>output/</c>; output mode also includes raw images.
+    /// <para>扫描 <c>images/</c> 或 <c>output/</c> 目录；输出模式同时包含 raw 镜像，解包模式登记
+    /// 内部包含文件系统的镜像与 boot 系列镜像（与后缀无关的内容探测，见
+    /// <see cref="ImageInputService.ContainsFileSystem"/> 与 <see cref="ImageInputService.IsBootFamilyFormat"/>）。</para>
+    /// Scans <c>images/</c> or <c>output/</c>; output mode also includes raw images, while unpack mode
+    /// registers images that carry a filesystem internally plus boot-family images (content probing
+    /// independent of the extension, see <see cref="ImageInputService.ContainsFileSystem"/> and
+    /// <see cref="ImageInputService.IsBootFamilyFormat"/>).
     /// </summary>
     private async Task RefreshFileEntriesAsync(ProjectContextService context, int version, bool outputMode)
     {
@@ -339,9 +332,6 @@ internal partial class ImageViewModel : Tool
             return;
         }
 
-        // 目录枚举与格式探测在后台线程执行，避免大目录/大文件头读取阻塞 UI。
-        // Directory enumeration and format probing run on a background thread so large folders or
-        // header reads never block the UI.
         var discovered = await Task.Run(() =>
         {
             var list = new List<(string Relative, long Size, string Format)>();
@@ -353,6 +343,11 @@ internal partial class ImageViewModel : Tool
                     continue;
                 }
 
+                if (!outputMode && !(ImageInputService.ContainsFileSystem(file) || ImageInputService.IsBootFamilyFormat(format)))
+                {
+                    continue;
+                }
+
                 var relative = Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/');
                 if (relative is null)
                 {
@@ -360,8 +355,7 @@ internal partial class ImageViewModel : Tool
                 }
 
                 var size = new FileInfo(file).Length;
-                // 自动扫描跳过 0 字节占位镜像（如 VAB 的 b 槽位空分区），无法解包或刷写。
-                // Auto-scan skips 0-byte placeholder images (e.g. empty VAB b-slot partitions): nothing to unpack or flash.
+
                 if (size == 0)
                 {
                     continue;
@@ -407,8 +401,6 @@ internal partial class ImageViewModel : Tool
             return;
         }
 
-        // 目录枚举在后台线程执行。
-        // Directory enumeration runs on a background thread.
         var discovered = await Task.Run(() =>
         {
             var list = new List<(string Name, string Relative)>();
@@ -472,8 +464,6 @@ internal partial class ImageViewModel : Tool
             SubProjectItems = null;
             IsSubProjectVisible = false;
 
-            // 单子项目时确保选中项与活动子项目一致。
-            // Ensure selection matches the active sub-project when only one exists.
             if (subProjects.Count == 1)
             {
                 SelectedSubProject = subProjects[0].Name;
@@ -486,8 +476,6 @@ internal partial class ImageViewModel : Tool
         if (SubProjectItems is null || !SubProjectItems.SequenceEqual(items)) SubProjectItems = items;
         IsSubProjectVisible = true;
 
-        // 保持当前选中项有效；若无效则回退到活动子项目。
-        // Keep the current selection valid; fall back to the active sub-project.
         var activeName = context.ActiveSubProject?.Name;
         if (SelectedSubProject != activeName)
         {

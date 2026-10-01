@@ -74,7 +74,6 @@ public sealed partial class DeviceMonitorService
         return RunFastboot(devices[0], operation);
     }
 
-    // Transaction callbacks must not retain or return the borrowed session.
     internal TResult RunFastboot<TResult>(DetectedDevice device, Func<FastbootSession, TResult> operation,
         CancellationToken cancellationToken = default)
     {

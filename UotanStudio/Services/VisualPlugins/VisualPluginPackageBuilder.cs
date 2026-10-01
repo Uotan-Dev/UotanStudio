@@ -102,8 +102,7 @@ public static class VisualPluginPackageBuilder
 
         if (existing.Kind == VisualPluginKind.CompositeNode)
         {
-            // An interface is a saved contract. Re-analysis offers additions but cannot silently
-            // remove a published port or overwrite an explicit public label.
+
             updated.Inputs = existing.Inputs.Select(ClonePort).ToList();
             updated.Outputs = existing.Outputs.Select(ClonePort).ToList();
         }
@@ -146,7 +145,6 @@ public static class VisualPluginPackageBuilder
             PortId = binding.PortId
         }).ToList()
     };
-
 
     private static void RemoveMachineSpecificPathDefaults(WorkflowSnapshot graph)
     {

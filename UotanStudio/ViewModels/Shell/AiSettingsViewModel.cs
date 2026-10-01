@@ -19,7 +19,6 @@ public partial class AiSettingsViewModel : ViewModelBase
     public char ApiKeyPasswordChar => IsApiKeyVisible ? '\0' : '*';
     public ObservableCollection<string> Models { get; } = [];
 
-    // Network commands stay unavailable until a backend is supplied.
     public IRelayCommand FetchModelsCommand { get; } = new RelayCommand(() => { }, () => false);
 
     internal void Reset()

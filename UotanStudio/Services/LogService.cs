@@ -113,7 +113,7 @@ public sealed class LogService : IUnifiedLog
         {
             foreach (var h in handlers)
             {
-                try { h(this, entry); } catch { /* 忽略订阅者异常 */ }
+                try { h(this, entry); } catch { }
             }
         }
 

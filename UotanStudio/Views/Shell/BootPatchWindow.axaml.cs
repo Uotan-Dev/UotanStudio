@@ -20,9 +20,7 @@ public partial class BootPatchWindow : Window
     {
         InitializeComponent();
         FileSourceBox.SelectionChanged += OnFileSourceChanged;
-        // 必要项（补丁包与 boot 镜像）齐备前保持「开始」禁用，不再在点击后用文字提示。
-        // Keep Start disabled until both the patch package and the boot image are set, instead of
-        // reporting the absence after the click.
+
         FilePathBox.TextChanging += (_, _) => UpdateStartEnabled();
         BootPathBox.TextChanging += (_, _) => UpdateStartEnabled();
         Opened += async (_, _) => await DetectBootArchitectureAsync();
@@ -122,8 +120,6 @@ public partial class BootPatchWindow : Window
         RefreshArchitectureOptions();
         RefreshKmiOptions();
 
-        // The left field is the SuperKey field for APatch and the pre-init
-        // device field for Magisk. KernelSU uses the KMI selector instead.
         PrebootDeviceBox.Text = string.Empty;
         PrebootDeviceBox.PlaceholderText = LanguageService.Instance.GetString(
             isApatch ? "BootPatch_ApatchPassword" : "BootPatch_DevicePlaceholder");
@@ -165,9 +161,8 @@ public partial class BootPatchWindow : Window
             ? LanguageService.Instance.GetString("BootPatch_ArchitectureUnknown")
             : _bootArchitecture;
         var autoText = LanguageService.Instance.GetString("BootPatch_AutoDetectArchitecture", detectedLabel);
-        var items = new List<string> { autoText };
-        // Preserve the package's architecture entries verbatim, including an
-        // entry equal to the architecture detected from boot.
+        List<string> items = [autoText];
+
         items.AddRange(detection.Architectures);
         ArchitectureBox.ItemsSource = items;
         ArchitectureBox.SelectedIndex = 0;
@@ -209,9 +204,7 @@ public partial class BootPatchWindow : Window
             : null;
     private async void OnStartPatchClick(object? sender, RoutedEventArgs e)
     {
-        // 取出路径的同时把非空判定交给编译器（按钮禁用只覆盖交互入口，这里再守一道）。
-        // Read the paths once and let the flow analysis see the non-null check; the disabled button covers
-        // the interactive entry only, so guard here as well.
+
         var packagePath = FilePathBox.Text;
         var bootPath = BootPathBox.Text;
         if (_isPatching || string.IsNullOrWhiteSpace(packagePath) || string.IsNullOrWhiteSpace(bootPath)) return;

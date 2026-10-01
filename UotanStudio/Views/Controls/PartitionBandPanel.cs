@@ -127,8 +127,6 @@ public sealed class PartitionBandPanel : Panel
             return Math.Max(0, available);
         }
 
-        // 无限约束下按最小宽度给出期望宽度。
-        // Under an infinite constraint fall back to the minimum-width layout.
         var total = 0.0;
         foreach (var child in Children)
         {

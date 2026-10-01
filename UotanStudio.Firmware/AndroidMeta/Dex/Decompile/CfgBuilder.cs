@@ -74,7 +74,7 @@ internal static class CfgBuilder
         if (instructions.Count == 0) return cfg;
 
 
-        var leaders = new SortedSet<int> { 0 };
+        SortedSet<int> leaders = [0];
         var offsetToIndex = new Dictionary<int, int>(instructions.Count);
         for (var i = 0; i < instructions.Count; i++)
         {

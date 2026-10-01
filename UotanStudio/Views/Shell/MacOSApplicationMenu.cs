@@ -21,9 +21,6 @@ internal sealed class MacOSApplicationMenu : IDisposable
 
         if (NativeMenu.GetMenu(app) is not { } menu) return;
 
-        // Avalonia 12.1.2 creates these English headers and attaches private native callbacks.
-        // Capture each item before localization so language changes preserve Services/Hide/Show/Quit behavior.
-        // 在本地化前识别框架默认项，保留系统服务子菜单及隐藏、显示、退出的原有回调。
         foreach (var item in menu.Items.OfType<NativeMenuItem>().ToArray())
         {
             if (item.Header == "About Avalonia")

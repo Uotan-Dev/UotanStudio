@@ -145,8 +145,7 @@ internal class DefaultKeyBadgeConverter : IMultiValueConverter
         if (values.Count < 2 || values[0] is not ManagedKey key || values[1] is not string ids) return false;
         if (!ids.Split(' ', StringSplitOptions.RemoveEmptyEntries)
                 .Contains(key.Kind + ":" + key.Id, StringComparer.Ordinal)) return false;
-        // The optional third binding supplies the entry's kind; a mismatched value hides the badge.
-        // 可选的第三个绑定提供条目用途；值不匹配时隐藏徽标。
+
         return values.Count < 3 || values[2] is not ManagedKeyKind kind || key.Kind == kind;
     }
 

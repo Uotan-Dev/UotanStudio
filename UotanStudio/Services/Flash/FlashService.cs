@@ -554,7 +554,7 @@ public sealed class FlashService : IFlashService
         }
         finally
         {
-            try { Directory.Delete(tempDir, recursive: true); } catch { /* 临时目录清理失败不阻断刷写结果 */ }
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
         }
     }
 

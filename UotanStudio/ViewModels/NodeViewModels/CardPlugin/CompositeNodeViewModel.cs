@@ -65,7 +65,7 @@ public sealed class CompositeNodeViewModel : FlowNodeViewModel
             {
                 throw new InvalidOperationException($"Composite '{PluginId}' requires its exact installed resource bundle version {PluginVersion}.");
             }
-            // Only a validated registration may supply a trusted archive path after JSON reload.
+
             _package.BundlePath = installed.BundlePath;
             _package.BundleRoot = installed.BundleRoot;
         }

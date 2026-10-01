@@ -151,8 +151,6 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
 
     partial void OnSourceChanged(string value)
     {
-        // Loading and cleanup reset this after assigning the source.
-        // 加载与清理在设置源码后重置此状态。
         IsDirty = true;
     }
 
@@ -211,12 +209,8 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
         CompileError = string.Empty;
         IsDirty = false;
 
-        // 解析完成后释放原始字节，SaveAsync 从 DTS 模型重建。
-        // Release raw bytes after parsing; SaveAsync rebuilds from the DTS model.
         RawBytes = null;
 
-        // 计算并缓存设备树统计信息，供属性面板展示。
-        // Compute and cache device-tree statistics for the properties panel.
         UpdateTreeStatistics(tree);
     }
 
@@ -283,8 +277,6 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
         var outBytes = DtbFormat.Write(result.Tree);
         await File.WriteAllBytesAsync(FilePath, outBytes).ConfigureAwait(true);
 
-        // 刷新原始字节并重建行号映射，保持联动一致。
-        // Refresh the raw bytes and rebuild the line map so linkage stays consistent.
         RawBytes = outBytes;
         _lineMap = DtsFormat.GetNodeLineMap(result.Tree);
         IsDirty = Source != source;
@@ -385,8 +377,6 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
     /// </param>
     private void UpdateTreeStatistics(DeviceTree tree)
     {
-        // 节点总数：递归遍历根节点下的所有后代。
-        // Total node count: recursively descend from the root.
         var total = 0;
         CountNodes(tree.Root, ref total);
         NodeCount = total;
@@ -396,8 +386,6 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
         RootSizeCells = GetPropertyCellAsString(tree.Root, "#size-cells");
         MemoryReservationCount = tree.MemoryReservations.Count;
 
-        // 触发依赖 SelectedNode 的派生属性刷新通知。
-        // Fire change notifications for the SelectedNode-derived computed properties.
         OnPropertyChanged(nameof(SelectedNodePath));
         OnPropertyChanged(nameof(SelectedNodePropertyCount));
         OnPropertyChanged(nameof(SelectedNodeChildCount));
@@ -428,8 +416,6 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
         {
             if (prop.Name == name && !prop.IsEmpty)
             {
-                // compatible 等属性可含多个以 NUL 分隔的字符串，这里统一为逗号分隔。
-                // Properties like compatible may carry multiple NUL-separated strings; join with commas.
                 var raw = prop.Value;
                 var end = raw.IndexOf((byte)0);
                 if (end <= 0)

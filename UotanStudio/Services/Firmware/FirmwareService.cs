@@ -688,12 +688,12 @@ public sealed class FirmwareService
     /// <summary>
     /// Unpacks a boot or vendor_boot image into a component directory: <c>kernel</c>, <c>ramdisk</c>
     /// (raw) and <c>ramdisk.cpio</c> (decompressed per <see cref="BootCompressor"/> detection),
-    /// <c>second</c>, <c>dtb</c>, <c>dtbo</c>, <c>signature</c>, plus a <c>.uotanstudio-repack.json</c> that
+    /// <c>second</c>, <c>dtb</c>, <c>dtbo</c>, <c>signature</c>, plus a <c>metadata.json</c> that
     /// <see cref="PackBootAsync"/> reads back to restore the original header configuration.
     /// <para>将 boot 或 vendor_boot 镜像解包到组件目录：<c>kernel</c>、<c>ramdisk</c>（原始）与
     /// <c>ramdisk.cpio</c>（按 <see cref="BootCompressor"/> 检测结果解压）、<c>second</c>、
     /// <c>dtb</c>、<c>dtbo</c>、<c>signature</c>，以及可供 <see cref="PackBootAsync"/> 读回的
-    /// <c>.uotanstudio-repack.json</c>（用于恢复原始头部配置并重打包）。</para>
+    /// <c>metadata.json</c>（用于恢复原始头部配置并重打包）。</para>
     /// </summary>
     /// <param name="bootPath">The boot / vendor_boot image file path. <para>boot / vendor_boot 镜像文件路径。</para></param>
     /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
@@ -761,10 +761,10 @@ public sealed class FirmwareService
     /// <summary>
     /// Packs a component directory produced by <see cref="UnpackBootAsync"/> back into a boot image
     /// with the original header version, using the <c>kernel</c>, <c>ramdisk</c>, <c>second</c>,
-    /// <c>dtb</c> and <c>signature</c> files and the <c>.uotanstudio-repack.json</c> metadata.
+    /// <c>dtb</c> and <c>signature</c> files and the <c>metadata.json</c> metadata.
     /// <para>将 <see cref="UnpackBootAsync"/> 产出的组件目录按原头部版本重打包为 boot 镜像，
     /// 使用 <c>kernel</c>、<c>ramdisk</c>、<c>second</c>、<c>dtb</c>、<c>signature</c> 文件与
-    /// <c>.uotanstudio-repack.json</c> 元数据。</para>
+    /// <c>metadata.json</c> 元数据。</para>
     /// </summary>
     /// <param name="inputDirectory">The directory produced by <see cref="UnpackBootAsync"/>. <para>由 <see cref="UnpackBootAsync"/> 产出的目录。</para></param>
     /// <param name="outputPath">The output boot image path. <para>输出 boot 镜像路径。</para></param>

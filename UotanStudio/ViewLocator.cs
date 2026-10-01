@@ -73,7 +73,6 @@ public class ViewLocator : IDataTemplate
                 {
                     editor.Background = Avalonia.Media.Brushes.Transparent;
                 }
-                // Tunnel before child selection handlers so their more specific properties win.
                 view.AddHandler(Avalonia.Input.InputElement.PointerPressedEvent,
                     (_, _) => UotanStudio.Services.Workspace.DocumentNotifications.Publish((Dock.Model.Mvvm.Controls.Document)param),
                     Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);

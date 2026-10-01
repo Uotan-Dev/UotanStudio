@@ -34,8 +34,7 @@ public partial class DtbEditorView : UserControl
         Loaded += (_, _) => UpdateEditorOwner();
         Unloaded += (_, _) => UpdateEditorOwner(detach: true);
         DataContextChanged += (_, _) => UpdateEditorOwner();
-        // 光标位置联动：右栏光标变化时反查并高亮左栏所属节点（XAML 无法直接绑定该事件）。
-        // Caret-position linkage: highlight the owning node in the left tree on caret movement.
+
         if (SourceEditor.TextArea?.Caret is { } caret)
         {
             caret.PositionChanged += OnSourceCaretChanged;
@@ -54,8 +53,6 @@ public partial class DtbEditorView : UserControl
             return;
         }
 
-        // 广播节点选中变更，供属性面板展示选中节点详情。
-        // Broadcast the node selection so the properties panel can show the selected node's details.
         WeakReferenceMessenger.Default.Send(new DtbNodeSelectionChangedMessage(vm, NodeTree.SelectedItem as DtbNodeViewModel));
 
         if (NodeTree.SelectedItem is not DtbNodeViewModel node)
@@ -67,9 +64,7 @@ public partial class DtbEditorView : UserControl
         if (line > 0)
         {
             SourceEditor.ScrollToLine(line);
-            // 把光标定位到节点起始内容行，并使代码编辑器获得键盘焦点，便于立即在节点处输入。
-            // Position the caret at the node's first content line and give the editor keyboard focus
-            // so input can begin immediately at the node location.
+
             if (SourceEditor.TextArea?.Caret is { } caret)
             {
                 caret.Line = line;
@@ -101,8 +96,6 @@ public partial class DtbEditorView : UserControl
             return;
         }
 
-        // 仅当左栏当前选中与所属节点不一致时才切换，避免循环联动。
-        // Only switch when the left selection does not already match, to avoid linkage feedback loops.
         if (NodeTree.SelectedItem is not DtbNodeViewModel cur || cur.FullPath != path)
         {
             Dispatcher.UIThread.Post(() => vm.TrySelectNode(path));

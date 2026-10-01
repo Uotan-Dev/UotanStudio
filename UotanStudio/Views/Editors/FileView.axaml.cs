@@ -21,8 +21,6 @@ public partial class FileView : UserControl
     {
         InitializeComponent();
 
-        // 16 进制查看器的字节编辑须反向标记文档为已修改（脏状态）。
-        // Byte edits in the hex viewer must mark the document dirty in the opposite direction.
         if (this.FindControl<HexViewer>("HexEditor") is { } hex)
         {
             hex.BytesEdited += OnHexBytesEdited;

@@ -32,10 +32,6 @@ internal partial class ProjectSettingViewModel : Tool
     /// </summary>
     internal static ProjectSettingViewModel EnsureInstance() => Instance ??= new();
 
-    // The codec default is lz4hc because the level combo below only feeds the HC search: with fast
-    // lz4 selected the level is ignored, so a default of "lz4" would silently pack larger images.
-    // 默认编解码器为 lz4hc，因为下方的等级下拉框只作用于 HC 搜索：选择快速 lz4 时该等级会被忽略，
-    // 默认值若为 "lz4" 会静默打出更大的镜像。
     [ObservableProperty]
     private bool typeEXT4 = false, typeF2FS = false, formatSPARSE = false, eXT4RO = false, sizeOri = false,
         eXT4Compress = false, sUPERSPARSE = false, typeEROFS = true, formatRAW = true, eXT4RW = true,
@@ -223,9 +219,7 @@ internal partial class ProjectSettingViewModel : Tool
             EXT4RO = dto.Ext4ReadOnly.Value;
             EXT4RW = !dto.Ext4ReadOnly.Value;
         }
-        // Legacy projects stored only "lz4"/"lz4hc"; those tokens stay valid picker choices, and the
-        // historical HC default is retained for an empty value.
-        // 旧工程仅存 "lz4"/"lz4hc"；这些令牌仍是有效的下拉选项，空值沿用历史上的 HC 默认。
+
         SelectedErofsAlgorithm = string.IsNullOrWhiteSpace(dto.ErofsAlgorithm)
             ? ErofsAlgorithmSelectors.Lz4HighCompression
             : ErofsAlgorithmSelectors.Normalize(dto.ErofsAlgorithm);
@@ -345,9 +339,6 @@ internal partial class ProjectSettingViewModel : Tool
             return;
         }
 
-        // 仅当面板处于默认状态（EROFS + RAW）时才自动切换，避免覆盖用户手动选择。
-        // Only auto-switch when the panel is at its default state (EROFS + RAW) to avoid
-        // overriding a manual selection.
         bool isDefaultState = TypeEROFS && !TypeEXT4 && !TypeF2FS && FormatRAW && !FormatSPARSE;
 
         if (!isDefaultState)

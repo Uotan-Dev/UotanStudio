@@ -119,8 +119,7 @@ public partial class NewProjectWindow : Window
         if (bytes is { } sample)
         {
             _meter.Report(sample.Processed, sample.Total);
-            // 剩余时间不可估（FormatEta 为 "—"）时去掉尾巴，避免孤立的破折号。
-            // Drop the eta tail when it is not estimable ("—") to avoid a dangling dash.
+
             OperationStats.Text = _meter.FormatStats(_meter.EstimatedRemaining is null
                 ? LanguageService.Instance.GetString("Progress_StatsNoEta")
                 : LanguageService.Instance.GetString("Progress_Stats"));
@@ -170,8 +169,6 @@ public partial class NewProjectWindow : Window
         }
     }
 
-
-
     /// <summary><para>表单提交结果；取消或关闭时保持为空。</para>Form result; stays null on cancel/close.</summary>
     public NewProjectFormResult? Result { get; private set; }
 
@@ -205,9 +202,6 @@ public partial class NewProjectWindow : Window
     {
         InitializeComponent();
 
-        // 窗口标题随表单语义：文件菜单入口创建新解决方案，已打开解决方案的入口创建子项目。
-        // The window title follows the form's semantics: the File-menu entry creates a new solution, the
-        // entry on an open solution creates a sub-project.
         Title = LanguageService.Instance.GetString(mode == NewProjectWindowMode.Solution
             ? "Menu_NewSolution"
             : "Explorer_NewEmptySubProject");
@@ -229,10 +223,7 @@ public partial class NewProjectWindow : Window
         {
             if (UnpackImagesBox.IsChecked != true) UnpackFullyBox.IsChecked = false;
         };
-        // TextChanged 在 Avalonia 12 中异步派发，程序化设置文本的守卫标志先于事件复位；
-        // TextChanging 同步触发，守卫才能正确区分用户输入与联动写入。
-        // TextBox.TextChanged fires asynchronously in Avalonia 12 — the guard flag would reset
-        // before the event arrives; TextChanging is synchronous so the guard works.
+
         ProjectNameBox.TextChanging += OnProjectNameChanged;
         ProjectLocationBox.TextChanging += OnLocationTextChanged;
         Opened += (_, _) => ProjectNameBox.Focus();
@@ -262,8 +253,7 @@ public partial class NewProjectWindow : Window
             });
             if (folders.Count > 0 && folders[0].TryGetLocalPath() is { } path)
             {
-                // “选择目录”选定的是基础目录，位置仍然拼接当前名称显示。
-                // The picker chooses the base directory; the location still shows base + current name.
+
                 _baseDirectory = path;
                 UpdateLocationText();
             }
@@ -341,7 +331,7 @@ public partial class NewProjectWindow : Window
             _containerPath = null;
             _containerEntries = analysis.Entries;
             DetachImageHandlers();
-            var entries = new List<NewProjectImageEntry> { new(uri.ToString(), "remote", isRemoteSource: true) };
+            List<NewProjectImageEntry> entries = [new(uri.ToString(), "remote", isRemoteSource: true)];
             entries.AddRange(analysis.Entries.Select(entry => new NewProjectImageEntry(entry.Name, entry.Format,
                 analysis.Url.ToString(), entry.FromPayload, entry.Name, entry.PayloadMemberPath)));
             _images = [.. entries];
@@ -445,7 +435,7 @@ public partial class NewProjectWindow : Window
                 .Where(group => group.Count() > 1)
                 .Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase)
             : [];
-        var entries = new List<NewProjectImageEntry> { new(containerPath, structure.Kind.ToString().ToLowerInvariant()) };
+        List<NewProjectImageEntry> entries = [new(containerPath, structure.Kind.ToString().ToLowerInvariant())];
         entries.AddRange(structure.Entries.Select(entry =>
         {
             var fileName = Path.GetFileName(entry.Name.Replace('\\', '/'));
@@ -475,8 +465,7 @@ public partial class NewProjectWindow : Window
 
     private void UpdateImageColumns()
     {
-        // Use the fewest columns that fit the available height, while keeping each column readable.
-        // 根据列表可用高度选择最少列数，并限制每列的最小宽度；窗口增高时自动合并列。
+
         var rowsPerColumn = Math.Max(1, (int)Math.Floor(ImageList.Bounds.Height / ImageRowHeight));
         var widthLimit = Math.Clamp((int)(ImageList.Bounds.Width / MinimumImageColumnWidth), 1, MaximumImageColumns);
         var requiredColumns = (int)Math.Ceiling((double)_images.Length / rowsPerColumn);
@@ -543,12 +532,7 @@ public partial class NewProjectWindow : Window
     private void OnLocationTextChanged(object? sender, TextChangingEventArgs e)
     {
         if (_updatingLocation) return;
-        // 手动编辑位置视为修改基础目录：编辑结果仍以当前项目名结尾时去掉该段，其余作为
-        // 新基础目录；名称与路径的联动始终保持开启，后续改名仍会同步路径中的文件夹名。
-        // A manual location edit changes the base directory: when the edited text still ends
-        // with the current project name that segment is stripped and the rest becomes the new
-        // base; name-driven syncing stays enabled so later renames keep updating the folder
-        // name in the location.
+
         var name = ProjectNameBox.Text?.Trim();
         if (ProjectLocationBox.Text is { Length: > 0 } text)
         {
@@ -585,12 +569,9 @@ public partial class NewProjectWindow : Window
 
     private async void OnCreateClick(object? sender, RoutedEventArgs e)
     {
-        // 表单未填写完整时「创建」按钮就处于禁用状态；这里再守一道，覆盖回车与程序化触发。
-        // The Create button is disabled while the form is incomplete; guard again for Enter and programmatic triggers.
+
         if (_isAnalyzing || _isCreating || !IsFormValid()) return;
 
-        // Preserve analyzed identity; never repeat metadata I/O on the UI thread at submission.
-        // 提交时保留分析结果，避免在 UI 线程重新读取原包元数据。
         var selected = _images.Where(image => image.IsSelectable && image.IsSelected).ToArray();
         var containerPath = _containerPath;
         var kind = _containerKind;
@@ -795,8 +776,7 @@ internal sealed partial class NewProjectImageEntry : ObservableObject
     /// <inheritdoc />
     partial void OnIsSelectedChanged(bool value)
     {
-        // 分组头不可勾选：忽略外部批量置位。
-        // Group headers are not selectable: batch toggles are ignored.
+
         if (IsGroupHeader && value)
         {
             _isSelected = false;

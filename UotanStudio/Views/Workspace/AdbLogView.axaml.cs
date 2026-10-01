@@ -165,7 +165,7 @@ public partial class AdbLogView : UserControl
         Vector? preservedOffset = null;
         if (_scroller is not null && (_model?.AutoScroll != true || LogEditor.SelectionLength > 0))
         {
-            // Preserve the visible text when cache eviction removes lines above it.
+
             var textView = LogEditor.TextArea.TextView;
             var removedTop = textView.GetVisualTopByDocumentLine(lineIndex + 1);
             var removedBottom = textView.GetVisualTopByDocumentLine(lineIndex + removedLineCount + 1);
@@ -199,7 +199,7 @@ public partial class AdbLogView : UserControl
     private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         if (_updating || _followScheduled || _scroller is null || _model is null) return;
-        // Browsing older lines pauses following; only the button enables it again.
+
         if (LogEditor.SelectionLength == 0 && e.OffsetDelta.Y < 0 &&
             _scroller.Offset.Y + _scroller.Viewport.Height < _scroller.Extent.Height - 4)
             _model.AutoScroll = false;
@@ -217,7 +217,7 @@ public partial class AdbLogView : UserControl
             _followScheduled = false;
             if (_model is { AutoScroll: true, IsPaused: false } && LogEditor.SelectionLength == 0 && _scroller is not null)
             {
-                // A finite offset avoids retaining ScrollToEnd's infinite target after following is disabled.
+
                 var offset = Math.Max(0, _scroller.Extent.Height - _scroller.Viewport.Height);
                 _scroller.SetCurrentValue(ScrollViewer.OffsetProperty, new Vector(_scroller.Offset.X, offset));
             }

@@ -338,7 +338,7 @@ public static partial class SmaliAssembler
             dex.Classes.AddRange(OrderedClasses());
             return dex;
         }
-        private static string Descriptor(string value) { value = value.Trim(); if (value is "void" or "V") return "V"; if (value is "boolean" or "Z") return "Z"; if (value is "byte" or "B") return "B"; if (value is "short" or "S") return "S"; if (value is "char" or "C") return "C"; if (value is "int" or "I") return "I"; if (value is "long" or "J") return "J"; if (value is "float" or "F") return "F"; if (value is "double" or "D") return "D"; if (value.StartsWith('[')) return "[" + Descriptor(value[1..]); if (value.StartsWith('L') && value.EndsWith(';')) return value; if (value.EndsWith("[]")) return "[" + Descriptor(value[..^2]); return "L" + value.Replace('.', '/') + ";"; }
+        private static string Descriptor(string value) { value = value.Trim(); if (value is "void" or "V") return "V"; if (value is "boolean" or "Z") return "Z"; if (value is "byte" or "B") return "B"; if (value is "short" or "S") return "S"; if (value is "char" or "C") return "C"; if (value is "int" or "I") return "I"; if (value is "long" or "J") return "J"; if (value is "float" or "F") return "F"; if (value is "double" or "D") return "D"; if (value.StartsWith('[')) return "[" + Descriptor(value[1..]); if (value.StartsWith('L') && value.EndsWith(';')) return value; if (value.EndsWith("[]", StringComparison.Ordinal)) return "[" + Descriptor(value[..^2]); return "L" + value.Replace('.', '/') + ";"; }
         private void Encode(MethodState state)
         {
             var layout = LayoutMethod(state, text => String(SmaliSyntax.StringLiteral(text)));

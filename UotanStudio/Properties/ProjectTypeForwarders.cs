@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using UotanStudio.Services.Projects;
 
-// Keep the assembly identity of formerly public project data/storage types resolvable for existing consumers.
 [assembly: TypeForwardedTo(typeof(ImageEntryDto))]
 [assembly: TypeForwardedTo(typeof(ProjectSettingsDto))]
 [assembly: TypeForwardedTo(typeof(SolutionPersistenceService))]

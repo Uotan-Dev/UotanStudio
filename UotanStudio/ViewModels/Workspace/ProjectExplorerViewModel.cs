@@ -89,9 +89,6 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
     {
         WeakReferenceMessenger.Default.Register<ProjectContextChangedMessage>(this, OnProjectContextChanged);
 
-        // 防抖 400ms：连续文件系统事件合并为一次刷新，避免复制大文件时的刷新风暴。
-        // Debounce 400ms: coalesce bursts of file-system events into a single refresh to avoid a
-        // refresh storm when copying large files.
         _fsDebounceTimer = new System.Threading.Timer(
             _ => Avalonia.Threading.Dispatcher.UIThread.Post(ApplyFileSystemChanges),
             null,
@@ -120,8 +117,7 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
         var svc = ProjectContextService.Instance;
         if (svc.RootDirectory is not null && Directory.Exists(svc.RootDirectory))
         {
-            // 填充项目文件夹路径集合，供懒加载子节点自动标记。
-            // Populate project folder paths for auto-marking lazily-loaded children.
+
             ExplorerNode.ProjectFolderPaths.Clear();
             foreach (var sp in svc.SubProjects)
             {
@@ -139,8 +135,7 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
             TreeViewContent.Clear();
 
             AddRoot(svc.RootDirectory, isProjectFolder: true);
-            // 立即加载根节点子目录，使 FileSystemWatcher 触发的后续刷新能生效。
-            // Eagerly load root children so subsequent FileSystemWatcher-triggered refreshes work.
+
             if (TreeViewContent.FirstOrDefault() is { IsDirectory: true } root)
                 root.EnsureChildrenLoaded();
         }
@@ -207,8 +202,7 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
         }
         catch (Exception)
         {
-            // 监听启动失败（路径不可达等）不影响资源管理器基本功能。
-            // A failed watcher start (unreachable path etc.) must not break the explorer.
+
         }
     }
 
@@ -226,8 +220,7 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
 
     private void OnFileSystemChanged(object sender, FileSystemEventArgs e)
     {
-        // 防抖：重置计时器，批量事件合并为一次刷新。
-        // Debounce: reset the timer so a burst of events becomes a single refresh.
+
         if (_disposed) return;
         try { _fsDebounceTimer.Change(400, Timeout.Infinite); }
         catch (ObjectDisposedException) { }
@@ -356,15 +349,14 @@ public sealed partial class ExplorerNode : ObservableObject
             if (!IsDirectory || IsPlaceholder) return null;
             try
             {
-                // ResolveActualMetadataPath applies the single-location rule: the consolidated
-                // .uotan/metadata/<partition>/ when a project is open, the local file otherwise.
+
                 var resolved = UotanStudio.Firmware.Core.Repacking.RepackMetadata.ResolveActualMetadataPath(Path,
                     UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(Path));
                 if (resolved is not null && File.Exists(resolved)) return resolved;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
             {
-                // An unavailable owner must not redirect the editor into another metadata location.
+
             }
 
             return null;
@@ -430,10 +422,7 @@ public sealed partial class ExplorerNode : ObservableObject
 
             foreach (var file in Directory.EnumerateFiles(Path))
             {
-                // 隐藏解决方案与子项目的身份文件（.uotan/.uotanfw），仿 VS 解决方案资源管理器行为。
-                // 节点项目文件（.uotannode）是用户一等文档，随 nodes/ 目录正常显示。
-                // Hide the solution and sub-project identity files (.uotan/.uotanfw), mimicking VS Solution
-                // Explorer. Node project files (.uotannode) are first-class user documents and stay visible.
+
                 var ext = System.IO.Path.GetExtension(file);
                 if (string.Equals(ext, ".uotan", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(ext, ".uotanfw", StringComparison.OrdinalIgnoreCase))
@@ -444,7 +433,6 @@ public sealed partial class ExplorerNode : ObservableObject
                 discovered.Add(new ExplorerNode(file, isDirectory: false));
             }
 
-            // Keep surviving node instances and their TreeViewItem containers intact.
             var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
             var previous = Children.Where(c => !c.IsPlaceholder).ToDictionary(c => c.Path, comparer);
             var desired = discovered.Select(c => previous.TryGetValue(c.Path, out var old)
@@ -463,7 +451,7 @@ public sealed partial class ExplorerNode : ObservableObject
         }
         catch (Exception)
         {
-            // Preserve the existing tree when a directory is temporarily unreadable.
+
         }
     }
 

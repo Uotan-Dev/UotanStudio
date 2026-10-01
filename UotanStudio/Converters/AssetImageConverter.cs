@@ -55,8 +55,6 @@ public sealed class AssetImageConverter : IValueConverter
         }
         catch (Exception)
         {
-            // 资源不存在或不是位图时按无头像处理，不打断界面渲染。
-            // Missing or non-bitmap assets are treated as "no avatar" without breaking the visual tree.
             return null;
         }
     }

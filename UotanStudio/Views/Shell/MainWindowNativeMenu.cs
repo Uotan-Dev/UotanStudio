@@ -41,9 +41,7 @@ internal sealed class MainWindowNativeMenu : IDisposable
         if (_disposed) return;
         _disposed = true;
         _window.PropertyChanged -= OnWindowPropertyChanged;
-        // Avalonia 12.1.2's exporter retains the original NativeMenu identity, even during Closed.
-        // Setting null creates a replacement menu and its native proxy rejects the mismatch.
-        // 关闭时保留已导出的菜单实例；只解除绑定并清空原集合，避免触发原生菜单身份不匹配。
+
         _items.Dispose();
     }
 
@@ -74,8 +72,7 @@ internal sealed class MainWindowNativeMenu : IDisposable
                 }
                 else if (entry is RecentProjectEntry recent)
                 {
-                    // ItemsSource contains data even while its hidden MenuItem containers are unrealized.
-                    // 菜单隐藏时不依赖容器生成，最近项目直接复用原数据和打开命令。
+
                     _target.Items.Add(new NativeMenuItem { Header = recent.DisplayName, Command = recent.OpenCommand });
                 }
                 else if (entry is MenuItem item)
@@ -104,8 +101,7 @@ internal sealed class MainWindowNativeMenu : IDisposable
         private static KeyGesture? MacGesture(KeyGesture? gesture)
         {
             if (gesture is null || !gesture.KeyModifiers.HasFlag(KeyModifiers.Control)) return gesture;
-            // Cmd+H belongs to macOS Hide; use the standard Find-and-Replace and Redo gestures.
-            // 避开系统隐藏应用快捷键，替换与重做采用 macOS 常用组合。
+
             if (gesture.Key == Key.H) return new KeyGesture(Key.F, KeyModifiers.Meta | KeyModifiers.Alt);
             if (gesture.Key == Key.Y) return new KeyGesture(Key.Z, KeyModifiers.Meta | KeyModifiers.Shift);
             return new KeyGesture(gesture.Key, (gesture.KeyModifiers & ~KeyModifiers.Control) | KeyModifiers.Meta);

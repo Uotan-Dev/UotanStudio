@@ -40,7 +40,6 @@ public partial class AdbLogView
             if (line.LineNumber > view._lines.Count || view._lines[line.LineNumber - 1].Entry is not { } entry)
                 return;
 
-            // Keep the original document spans so selecting across elided fields copies their complete text.
             var offset = line.Offset;
             foreach (var column in entry.Columns)
             {
@@ -92,7 +91,7 @@ public partial class AdbLogView
             TextRunProperties properties)
         {
             Properties = properties;
-            // TextFormatter adds the font line gap itself; including it in this run would enlarge every row.
+
             var metrics = properties.Typeface.GlyphTypeface.Metrics;
             var scale = properties.FontRenderingEmSize / metrics.DesignEmHeight;
             var height = (metrics.Descent - metrics.Ascent) * scale;

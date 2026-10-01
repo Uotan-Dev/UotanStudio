@@ -254,18 +254,14 @@ public static class GptTable
 
         var image = new byte[imageLength];
 
-        // 扇区 0：保护性 MBR（仅第一个槽位）。
-        // Sector 0: protective MBR (first slot only).
         WriteProtectiveMbr(image, diskSectors);
 
-        // 扇区 1：主 GPT 头。
-        // Sector 1: primary GPT header.
         var header = image.AsSpan(HeaderOffset, HeaderSize);
         Signature.CopyTo(header);
         BinaryPrimitives.WriteUInt32LittleEndian(header[8..], Revision);
         BinaryPrimitives.WriteUInt32LittleEndian(header[12..], HeaderSize);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[HeaderCrcOffset..], 0); // CRC 先置 0，稍后回填。
-        BinaryPrimitives.WriteUInt32LittleEndian(header[20..], 0); // reserved
+        BinaryPrimitives.WriteUInt32LittleEndian(header[HeaderCrcOffset..], 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(header[20..], 0);
         BinaryPrimitives.WriteUInt64LittleEndian(header[24..], PrimaryHeaderLba);
         BinaryPrimitives.WriteUInt64LittleEndian(header[32..], checked(diskSectors - 1));
         BinaryPrimitives.WriteUInt64LittleEndian(header[40..], FirstUsableLba);
@@ -274,18 +270,14 @@ public static class GptTable
         BinaryPrimitives.WriteUInt64LittleEndian(header[72..], EntriesStartLba);
         BinaryPrimitives.WriteUInt32LittleEndian(header[80..], (uint)entries.Count);
         BinaryPrimitives.WriteUInt32LittleEndian(header[84..], EntrySize);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[EntriesCrcOffset..], 0); // 稍后回填。
+        BinaryPrimitives.WriteUInt32LittleEndian(header[EntriesCrcOffset..], 0);
 
-        // 扇区 2 起：分区表项。
-        // Partition entries from sector 2.
         var entriesSpan = image.AsSpan((int)checked(EntriesStartLba * SectorSize), entryBytes);
         for (var i = 0; i < entries.Count; i++)
         {
             WriteEntry(entriesSpan.Slice(i * EntrySize, EntrySize), entries[i]);
         }
 
-        // 回填 CRC：先分区表项数组，再头（头 CRC 覆盖分区表 CRC 字段）。
-        // Backfill CRCs: entry array first, then header (the header CRC covers the entries CRC field).
         BinaryPrimitives.WriteUInt32LittleEndian(header[EntriesCrcOffset..], Crc32(entriesSpan));
         BinaryPrimitives.WriteUInt32LittleEndian(header[HeaderCrcOffset..], Crc32(header));
         return image;
@@ -335,9 +327,6 @@ public static class GptTable
             throw new ArgumentException("GPT requires at least one partition. GPT 至少需要一个分区。", nameof(entries));
         }
 
-        // 沿用原声明的槽位数，未使用的槽位继续按原布局置零；只有条目多于声明时才扩展数组。
-        // Keep the declared slot count so unused slots stay zero-padded as before; the array only grows
-        // when more entries are supplied than were declared.
         var slotCount = Math.Max(copies.Max(copy => (int)copy.EntryCount), entries.Count);
         if (slotCount > MaxEntryCount)
         {
@@ -365,8 +354,6 @@ public static class GptTable
                 WriteEntry(array.Slice(i * EntrySize, EntrySize), entries[i]);
             }
 
-            // 头 CRC 覆盖 header_size 字节，且计算时其自身的 CRC 字段必须为 0。
-            // The header CRC covers header_size bytes with its own CRC field zeroed.
             var header = result.AsSpan((int)copy.HeaderOffset, copy.HeaderSize);
             BinaryPrimitives.WriteUInt32LittleEndian(header[EntriesCrcOffset..], Crc32(array));
             BinaryPrimitives.WriteUInt32LittleEndian(header[80..], (uint)slotCount);
@@ -398,8 +385,6 @@ public static class GptTable
                 continue;
             }
 
-            // 首个有效副本决定分区表内容与磁盘几何。
-            // The first valid copy supplies the table contents and the disk geometry.
             var header = image.AsSpan((int)copy.HeaderOffset, HeaderSize);
             entries = ReadEntries(image.AsSpan((int)copy.EntriesOffset, (int)copy.EntryCount * EntrySize), copy.EntryCount);
             diskGuid = ReadGuidBigEndian(header[56..]);
@@ -521,11 +506,6 @@ public static class GptTable
             var last = BinaryPrimitives.ReadUInt64LittleEndian(slot[40..]);
             var name = ReadName(slot[56..]);
 
-            // 末 LBA 小于首 LBA 的条目是零大小分区（常见于 userdata），必须保留，
-            // 否则回写时该条目会消失；空槽位则由全零类型 GUID 与全零几何标记。
-            // An entry whose last LBA is below its first LBA is a zero-size partition (commonly userdata)
-            // and must be kept or it would vanish on write-back; unused slots carry a zero type GUID and
-            // zero geometry.
             if (typeGuid == Guid.Empty && name.Length == 0 && first == 0 && last == 0)
             {
                 continue;
@@ -567,9 +547,9 @@ public static class GptTable
     private static void WriteProtectiveMbr(Span<byte> image, ulong diskSectors)
     {
         var slot = image.Slice(446, 16);
-        slot[0] = 0; // 不可引导。
+        slot[0] = 0;
         slot[4] = ProtectiveMbrType;
-        BinaryPrimitives.WriteUInt32LittleEndian(slot[8..], 1); // 起始 LBA 1。
+        BinaryPrimitives.WriteUInt32LittleEndian(slot[8..], 1);
         var size = Math.Min(diskSectors, uint.MaxValue);
         BinaryPrimitives.WriteUInt32LittleEndian(slot[12..], (uint)size);
         image[510] = 0x55;

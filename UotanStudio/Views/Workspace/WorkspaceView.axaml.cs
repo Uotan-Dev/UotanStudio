@@ -37,16 +37,9 @@ public partial class WorkspaceView : UserControl
         InitializeComponent();
         InitializeDocumentSearch();
 
-        // Dock 主题自带的菜单（如自动隐藏面板固定条上的菜单）没有图标，在打开前补齐。
-        // The Dock theme's own menus (e.g. the auto-hidden tool bar menu) carry no icons; fill them in
-        // before the menu opens.
         DockControl.AddHandler(InputElement.ContextRequestedEvent, OnDockContextRequested,
             RoutingStrategies.Bubble, handledEventsToo: true);
 
-        // Dock 顶栏「下箭头」的 MenuFlyout 不是可视树中的普通控件、无法用样式覆盖，按类型全局接线，
-        // 让主窗口与浮动窗口的顶栏菜单在打开前都挂上图标补齐处理。
-        // The Dock header's down-arrow MenuFlyout is not a normal visual-tree control and cannot be styled;
-        // wire it app-wide by type so headers in both the main window and floating windows get icons.
         DockMenuIcons.EnsureWired();
     }
 
@@ -58,13 +51,10 @@ public partial class WorkspaceView : UserControl
     {
         if (e.Source is Control { ContextMenu: { } menu })
         {
-            // 菜单在 ContextRequested 之后才打开并设置 DataContext；延迟到打开后再补齐，否则标题尚未解析。
-            // The menu opens and receives its DataContext after ContextRequested; defer so the headers have resolved.
+
             Dispatcher.UIThread.Post(() => DockMenuIcons.Apply(menu));
         }
     }
-
-    // ===== 系统文件拖拽 =====
 
     /// <summary>
     /// <para>拖拽悬停事件：按是否携带文件/文件夹路径决定光标与允许的拖放效果
@@ -119,18 +109,12 @@ public partial class WorkspaceView : UserControl
             var files = paths.Where(File.Exists).ToArray();
             var directories = paths.Where(Directory.Exists).ToArray();
 
-            // 混合拖拽只取文件部分：目录与文件同时出现时仅打开文件，不触发目录导入。
-            // Mixed drags take only the file part: when files and folders arrive together, only
-            // the files are opened and the folder import is skipped.
             if (files.Length > 0 && directories.Length > 0)
             {
                 await OpenDocumentsAsync(files);
                 return;
             }
 
-            // 纯目录：枚举目录内已知固件扩展名文件（.img/.pac/.ops/.nb0 等）后导入工程镜像清单。
-            // Folder-only drop: enumerate the known firmware extensions inside each folder and
-            // import them into the project's image list.
             if (directories.Length > 0)
             {
                 var images = directories.SelectMany(EnumerateFirmwareImages).ToArray();
@@ -140,9 +124,6 @@ public partial class WorkspaceView : UserControl
                 }
             }
 
-            // 纯文件：逐文件走工作区打开链路（Auto 模式按扩展名+内容自动路由）。
-            // File-only drop: open each file through the workspace open chain (Auto mode routes
-            // by extension plus content).
             if (files.Length > 0)
             {
                 await OpenDocumentsAsync(files);
@@ -174,9 +155,6 @@ public partial class WorkspaceView : UserControl
             return;
         }
 
-        // 视图模型未就绪时退回消息链路（App 侧转发到同一打开逻辑）。
-        // Fall back to the message chain when the view model is not available (the app forwards
-        // it to the same open logic).
         foreach (var file in files)
         {
             WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(file));

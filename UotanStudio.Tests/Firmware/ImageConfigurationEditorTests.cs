@@ -219,7 +219,7 @@ public sealed class ImageConfigurationEditorTests : IDisposable
         else
         {
             Dictionary<string, string> projection = new() { ["build.prop"] = "file:original" };
-            var manifest = new FileSystemPreservationManifest
+            var manifest = new FileSystemPreservationData
             {
                 Projection = projection,
                 ParsedEntries = [new() { Path = ".", Mode = 0x41ED, Inode = 2 },

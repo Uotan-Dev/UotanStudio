@@ -198,12 +198,8 @@ public partial class FirmwareInfoViewModel : Document
 
         try
         {
-            // 幂等注册全部格式处理器（应用启动时通常已注册），确保识别集合完整。
-            // Idempotently register every format handler (the app usually does at startup) so detection is complete.
             FirmwareFormatRegistry.RegisterAll();
 
-            // Detect 内部为同步文件读取（流式读头部），放后台线程避免阻塞 UI。
-            // Detect performs synchronous file reads (streamed headers); run it on a background thread.
             var detectionResult = detection ?? await Task.Run(() => FormatDetector.DetectDetailed(path), source.Token).ConfigureAwait(true);
             source.Token.ThrowIfCancellationRequested();
             var handler = detectionResult?.Handler;
@@ -217,10 +213,6 @@ public partial class FirmwareInfoViewModel : Document
             FormatName = handler.FormatName;
             IsRecognized = true;
 
-            // 部分 handler 的解析是同步实现（Apk/Arsc/Dt/Nb0/Ntpi 等直接读文件），
-            // 必须在后台线程执行，否则整文件读取会阻塞 UI。
-            // Some handlers parse synchronously (Apk/Arsc/Dt/Nb0/Ntpi etc. read files directly);
-            // run them on a background thread so the file reads never block the UI.
             var result = await Task.Run(() => handler.ReadMetadataAsync(path, source.Token), source.Token).ConfigureAwait(true);
             source.Token.ThrowIfCancellationRequested();
             if (!result.Success)
@@ -246,8 +238,6 @@ public partial class FirmwareInfoViewModel : Document
             _rawMetadata = fields;
             RefreshMetadata();
 
-            // 结构化组件列表优先（名称 + 大小），未提供时回退到纯名称条目列表。
-            // Prefer the structured component list (name + size); fall back to the plain name list.
             if (result.Components is { Count: > 0 })
             {
                 foreach (var component in result.Components)
@@ -267,7 +257,6 @@ public partial class FirmwareInfoViewModel : Document
         }
         catch (OperationCanceledException) when (source.IsCancellationRequested)
         {
-            // Closing or replacing a document must not publish stale metadata.
         }
         catch (Exception ex)
         {

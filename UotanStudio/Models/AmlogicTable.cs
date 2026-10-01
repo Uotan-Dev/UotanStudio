@@ -143,9 +143,6 @@ public static class AmlogicTable
         var bootable = bootableFlags ?? [];
         bool IsBootable(int index) => index < bootable.Count && bootable[index];
 
-        // 超过 3 个分区时，第 4 槽让给扩展分区条目（承载逻辑分区），主分区数上限为 3。
-        // When there are more than 3 partitions, slot 4 holds the extended-partition entry (carrying
-        // logical partitions), so the primary-partition count caps at 3.
         var useExtended = entries.Count > MaxPrimaryPartitions - 1;
         var primaryCount = useExtended ? MaxPrimaryPartitions - 1 : entries.Count;
         var logicalCount = entries.Count - primaryCount;
@@ -187,8 +184,6 @@ public static class AmlogicTable
             endLba = Math.Max(endLba, extendedEnd + 1);
         }
 
-        // 名称表位置：最后一个分区起始扇区（构建与解析一致的确定性规则）。
-        // Name-table location: the last partition's start sector (deterministic rule shared with Parse).
         var nameTableStart = checked(entries[^1].StartSector);
         var nameTableBytes = checked(entries.Count * NameRecordSize);
         var nameTableSectors = checked((nameTableBytes + SectorSize - 1) / SectorSize);
@@ -225,8 +220,6 @@ public static class AmlogicTable
             }
         }
 
-        // 名称表。
-        // Name table.
         var nameTable = image.AsSpan(checked((int)(nameTableStart * SectorSize)), nameTableBytes);
         for (var i = 0; i < entries.Count; i++)
         {
@@ -330,8 +323,6 @@ public static class AmlogicTable
             }
         }
 
-        // 名称表：最后一个分区起始扇区，每记录 128 字节（名称 36 UTF-16LE 单元）。
-        // Name table: last partition's start sector, 128-byte records (36 UTF-16LE units each).
         var names = new List<string>(slots.Count);
         if (slots.Count > 0)
         {

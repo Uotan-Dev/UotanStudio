@@ -182,7 +182,7 @@ internal static class OppOpsParser
             {
                 ParseUfsProvisionElements(child, entries);
             }
-            else if (child.Name.LocalName.Contains("Program"))
+            else if (child.Name.LocalName.Contains("Program", StringComparison.Ordinal))
             {
                 ParseProgramElements(child, entries);
             }

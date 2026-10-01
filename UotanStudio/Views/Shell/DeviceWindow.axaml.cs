@@ -16,7 +16,7 @@ public partial class DeviceWindow : Window
     public DeviceWindow()
     {
         InitializeComponent();
-        // 使用 EnsureInstance 确保首次打开时创建设备面板单例（Instance 本身不会自创建）
+
         DataContext = DeviceViewModel.EnsureInstance();
     }
 }

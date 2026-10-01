@@ -30,8 +30,7 @@ public partial class MainWindow : Window
     /// <summary>Creates a window that owns the explicitly supplied shell for its lifetime.</summary>
     internal MainWindow(MainViewModel viewModel)
     {
-        // 在 InitializeComponent 之前设置 DataContext，使子控件绑定尽早可用；
-        // 也保证 SplashWindow 过渡的 fallback 路径（未预构建时）同样带数据上下文。
+
         _ownedViewModel = viewModel;
         DataContext = viewModel;
         InitializeComponent();
@@ -81,8 +80,7 @@ public partial class MainWindow : Window
             try
             {
                 window.Close();
-                // A busy child may veto Closing; hide it as a last resort so no
-                // secondary window survives the main-window lifetime.
+
                 if (window.IsVisible) window.Hide();
             }
             catch (Exception ex) { Services.LogService.Instance.Write(Services.LogLevel.Warn, "Lifecycle", ex.Message); }
@@ -91,8 +89,7 @@ public partial class MainWindow : Window
 
     private void OnTitleBarSizeChanged(object? sender, SizeChangedEventArgs e)
     {
-        // Equal insets center the title on the whole window, while long titles avoid both controls.
-        // 对称留白使标题相对整个窗口居中；设备名变长时同步收窄标题，避免重叠。
+
         var leftInset = TitleBarControls.Margin.Left + (TopMenu.IsVisible ? TopMenu.Bounds.Width : 0) + 12;
         var rightInset = DeviceSelectorMenu.Bounds.Width + DeviceSelectorMenu.Margin.Right + 12;
         MacWindowTitle.Margin = new Thickness(Math.Max(leftInset, rightInset), 0);
@@ -112,8 +109,7 @@ public partial class MainWindow : Window
 
     private void RefreshDeviceSelectorItems()
     {
-        // Keep existing rows during hotplug updates; static empty/footer items remain in place.
-        // 热插拔时保留已有设备行，空态和底部入口始终保持在原有位置。
+
         for (var i = _selectorDeviceItems.Count - 1; i >= 0; i--)
         {
             var item = _selectorDeviceItems[i];
@@ -133,8 +129,7 @@ public partial class MainWindow : Window
                 item = new MenuItem { DataContext = device, Theme = theme };
                 _selectorDeviceItems.Add(item);
             }
-            // Index zero is the localized empty-state item, hidden when devices exist.
-            // 第零项为空态占位，有设备时由本地化 XAML 绑定隐藏。
+
             if (DeviceSelector.Items.IndexOf(item) == i + 1) continue;
             DeviceSelector.Items.Remove(item);
             DeviceSelector.Items.Insert(i + 1, item);

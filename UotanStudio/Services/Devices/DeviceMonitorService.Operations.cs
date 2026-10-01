@@ -13,7 +13,6 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Mirroring;
 
-
 namespace UotanStudio.Services.Devices;
 
 public sealed partial class DeviceMonitorService
@@ -99,7 +98,6 @@ public sealed partial class DeviceMonitorService
             }
         }
 
-        // A native client keeps the session alive until the presentation owner releases it.
         try
         {
             session.Connect();
@@ -225,21 +223,12 @@ public sealed partial class DeviceMonitorService
     /// <summary>Reboots through the routed debug bridge session or the Fastboot transport.</summary>
     public async Task<bool> RebootAsync(DetectedDevice device, string mode, CancellationToken cancellationToken = default)
     {
-        // 目标模式即 reboot:<mode> 服务中冒号之后的部分（不带 "reboot " 前缀）。
-        // 若前缀传入，两种后端会拼成非法的 "reboot:reboot <mode>"，设备会回退为普通进系统重启。
-        // "now" 表示普通重启进系统（与 FirmwareKit.Comm.ADB 的默认值一致）。
-        // The target mode is the part after the colon of the reboot:<mode> service (no
-        // "reboot " prefix). Passing the prefix yields the invalid "reboot:reboot <mode>"
-        // which falls back to a plain system reboot. "now" means a plain reboot (matching
-        // FirmwareKit.Comm.ADB's default).
         var adbTarget = mode switch
         {
             "bootloader" => "bootloader",
             "recovery" => "recovery",
             "edl" => "edl",
             "sideload" => "sideload",
-            // fastboot 与 fastbootd 都表示用户空间 fastboot：adb reboot fastboot 进入 fastbootd。
-            // Both fastboot and fastbootd mean userspace fastboot: adb reboot fastboot enters fastbootd.
             "fastboot" => "fastboot",
             "fastbootd" => "fastboot",
             _ => "now",
@@ -249,8 +238,6 @@ public sealed partial class DeviceMonitorService
             "bootloader" => "bootloader",
             "recovery" => "recovery",
             "edl" => "edl",
-            // fastboot 协议下 reboot-fastboot 即重启到 fastbootd（用户空间 fastboot）。
-            // Over the fastboot protocol, reboot-fastboot is the reboot into fastbootd (userspace fastboot).
             "fastboot" => "fastboot",
             "fastbootd" => "fastboot",
             _ => null,
@@ -262,16 +249,11 @@ public sealed partial class DeviceMonitorService
             return true;
         }
 
-        // 设备即将重启：活动 logcat 捕获持有端点租约，必须先停止并等待其释放，
-        // 否则重启会话会与捕获冲突（Endpoint is already leased）。
-        // The device is about to reboot: an active logcat capture holds the endpoint lease,
-        // so stop it and await release first or the reboot session conflicts with the capture.
         if (device.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc)
         {
             await StopLogcatStreamingAsync(device).ConfigureAwait(false);
         }
 
-        // Resolve ownership before sending a reboot; never retry on another transport.
         if (device.Protocol == DeviceProtocolKind.Adb)
         {
             RunAdb(device, session =>

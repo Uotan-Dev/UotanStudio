@@ -243,8 +243,7 @@ public partial class WorkspaceView
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var document = await ResolveSearchDocumentAsync(group.Key, cancellationToken);
-                // 只读结构化视图（ARSC/DEX）不支持文本替换：在应用任何写入前拒绝。
-                // Read-only structured views (ARSC/DEX) reject text replacement before any write is applied.
+
                 if (document is not ISearchableDocument { SupportsSearchReplacement: true })
                     throw new IOException(LanguageService.Instance.GetString("FindReplace_NotSupported"));
                 var matches = group.Select(item => item.Match).ToArray();
@@ -312,8 +311,7 @@ public partial class WorkspaceView
             if (snapshot.Path is null) throw new IOException(LanguageService.Instance.GetString("FindReplace_Changed"));
             if (await Task.Run(() => ProjectTextSearchService.ReadSearchText(snapshot.Path, cancellationToken), cancellationToken) != snapshot.Text)
                 throw new IOException(LanguageService.Instance.GetString("FindReplace_Changed"));
-            // 按路径自动解析编辑器模式（文本 / DTB / ARSC / AXML / DEX 等）。
-            // Auto-resolve the editor mode by path (text / DTB / ARSC / AXML / DEX etc.).
+
             await vm.OpenDocumentAsync(snapshot.Path, EditorOpenMode.Auto);
             document = vm.FindDocumentsPanePublic()?.ActiveDockable;
         }
@@ -332,9 +330,7 @@ public partial class WorkspaceView
     private async Task SelectSearchMatchAsync(IDockable document, string snapshot, TextSearchMatch match,
         CancellationToken cancellationToken)
     {
-        // 无文本编辑器的结构化文档（如 ARSC）按偏移选中对应树节点，不做编辑器内定位。
-        // Structured documents without a text editor (e.g. ARSC) select the matching tree node by
-        // offset instead of locating inside an editor.
+
         if (document is ISearchMatchLocator locator)
         {
             if (SearchText(document) != snapshot)

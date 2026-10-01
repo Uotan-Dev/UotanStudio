@@ -33,7 +33,7 @@ public partial class TerminalView : UserControl
 
     private void BindModel()
     {
-        // Dock clears inherited DataContext while cached views are detached between tabs.
+
         if (DataContext is not TerminalViewModel model || ReferenceEquals(_model, model)) return;
         if (_model is not null)
         {
@@ -152,7 +152,7 @@ public partial class TerminalView : UserControl
             await session.StartAsync(columns, rows);
             if (_terminal != terminal || _session != session || session.Connection is not { } connection) return;
             terminal.AttachConnection(connection);
-            // The view can resize while the shell is starting asynchronously.
+
             connection.Resize(terminal.Terminal.Cols, terminal.Terminal.Rows);
             terminal.Refresh();
             UpdateButtons();

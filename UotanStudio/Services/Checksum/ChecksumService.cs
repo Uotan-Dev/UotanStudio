@@ -53,8 +53,6 @@ internal static class ChecksumService
         using var md5 = algorithms.Md5 ? IncrementalHash.CreateHash(HashAlgorithmName.MD5) : null;
         using var sha1 = algorithms.Sha1 ? IncrementalHash.CreateHash(HashAlgorithmName.SHA1) : null;
         using var sha256 = algorithms.Sha256 ? IncrementalHash.CreateHash(HashAlgorithmName.SHA256) : null;
-        // Crc32 是不实现 IDisposable 的结构体，不能用 using 声明。
-        // Crc32 is a struct without IDisposable, so it cannot take a using declaration.
         var crc32 = algorithms.Crc32 ? new Crc32() : (Crc32?)null;
 
         var buffer = new byte[BufferLength];
@@ -68,9 +66,6 @@ internal static class ChecksumService
             crc32?.Append(chunk);
         }
 
-        // 读取期间文件被截断或追加会使所有校验值失真；长度变化按失败处理而不是给出错误结果。
-        // A file truncated or appended while reading would skew every value; a length change fails
-        // instead of yielding wrong checksums.
         if (new FileInfo(filePath).Length != file.Length)
         {
             throw new IOException("File changed while hashing. 校验期间文件发生变化。");
@@ -80,10 +75,6 @@ internal static class ChecksumService
             Md5: HashToHex(md5),
             Sha1: HashToHex(sha1),
             Sha256: HashToHex(sha256),
-            // GetCurrentHash() 返回小端序字节，直接转十六进制会得到字节反转的摘要；按小端读成数值并
-            // 用 x8 输出，得到约定的大端序小写十六进制。
-            // GetCurrentHash() returns little-endian bytes, which would hex to a byte-reversed digest; read
-            // them little-endian and format with x8 for the conventional big-endian lowercase hex.
             Crc32: crc32 is null ? "" : BinaryPrimitives.ReadUInt32LittleEndian(crc32.GetCurrentHash()).ToString("x8"));
     }
 

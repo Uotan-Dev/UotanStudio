@@ -9,7 +9,6 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Mirroring;
 
-
 namespace UotanStudio.Services.Devices;
 
 public sealed partial class DeviceMonitorService
@@ -94,7 +93,6 @@ public sealed partial class DeviceMonitorService
         }
 
         var key = ResolveDirectUsbOpenKey(device);
-        // server 不存在且 USB 设备无法打开时视为不可用（返回 null），而非抛异常。
         if (key is null) return null;
         var lease = _controller.OpenLeaseByKeyAsync(key, DeviceSessionKind.Adb).GetAwaiter().GetResult();
         if (lease is null) return null;

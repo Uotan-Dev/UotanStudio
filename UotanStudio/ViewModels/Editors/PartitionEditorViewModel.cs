@@ -246,8 +246,6 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             _capacitySectors = 0;
             _isLoaded = false;
 
-            // LP super 元数据优先；读失败（非 LP）再试 Rockchip parameter。
-            // LP super metadata first; on failure (not an LP image) try a Rockchip parameter.
             LpMetadata? lp = null;
             try
             {
@@ -276,8 +274,6 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 var tableLoaded = await TryLoadTableAsync(path).ConfigureAwait(true);
                 if (tableLoaded)
                 {
-                    // 数据源与条目已由 TryLoadTableAsync 设置（GPT / MBR / Amlogic）。
-                    // The source and entries have been set by TryLoadTableAsync (GPT / MBR / Amlogic).
                 }
                 else
                 {
@@ -530,8 +526,6 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
         }
         catch
         {
-            // 解析失败则回退到 Rockchip 检测；错误经 CompileError 呈现。
-            // Parse failure falls back to the Rockchip detection; errors surface via CompileError.
         }
 
         return false;
@@ -636,10 +630,6 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             throw new InvalidOperationException("No GPT table loaded.");
         }
 
-        // 原位回写需要源镜像：EDL 合并 GPT 镜像的头部与条目数组不在标准 LBA 上，
-        // 重新构建会破坏其布局。
-        // In-place write-back needs the source image: in an EDL combined GPT image the headers and entry
-        // arrays sit off their standard LBAs, so rebuilding from scratch would break the layout.
         var image = await ReadBoundedTableAsync(FilePath!).ConfigureAwait(true)
             ?? throw new InvalidDataException("The GPT source file is no longer readable as a bounded table image.");
 
@@ -770,8 +760,6 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             {
                 var first = extents[firstIndex];
 
-                // 起始偏移：所有 extent 平移 delta，保持相对布局。
-                // Start offset: shift all extents by the delta, preserving the relative layout.
                 var delta = (long)item.StartSector - (long)first.TargetData;
                 ulong total = 0;
                 for (var i = 0; i < copied; i++)
@@ -787,8 +775,6 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                     extents[firstIndex + i] = extent with { TargetData = (ulong)newTarget };
                 }
 
-                // 大小：总大小的差值调整到最后一个 extent。
-                // Size: apply the total-size delta to the last extent.
                 if (total != item.SizeSectors)
                 {
                     var lastIndex = firstIndex + copied - 1;
@@ -802,8 +788,6 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                     extents[lastIndex] = last with { NumSectors = (ulong)newLast };
                 }
 
-                // 类型：仅当为 linear/zero 时写回第一个 extent 的目标类型，未知值保持原样。
-                // Type: only linear/zero is written back to the first extent's target type; unknown values are kept.
                 var targetType = item.Type switch
                 {
                     "linear" => MetadataFormat.LP_TARGET_TYPE_LINEAR,

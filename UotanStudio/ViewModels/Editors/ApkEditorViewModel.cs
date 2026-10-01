@@ -172,7 +172,6 @@ public partial class ApkEditorViewModel : Document
         {
             cancellationToken.ThrowIfCancellationRequested();
             using var browser = ArchiveBrowser.Open(path, cancellationToken);
-            // "\." normalizes to the archive root while satisfying the bounded path validator.
             browser.Extract(".", destination, cancellationToken);
         }, cancellationToken).ConfigureAwait(false);
     }
@@ -294,8 +293,6 @@ public partial class ApkEditorViewModel : Document
             return;
         }
 
-        // AXML 魔数 03 00 08 00：vector drawable，解析并渲染为位图。
-        // AXML magic 03 00 08 00: vector drawable, parse and render it to a bitmap.
         var isAxml = bytes[0] == 0x03 && bytes[1] == 0x00 && bytes[2] == 0x08 && bytes[3] == 0x00;
         if (isAxml)
         {
@@ -304,8 +301,6 @@ public partial class ApkEditorViewModel : Document
             return;
         }
 
-        // 魔数：PNG 89 50 4E 47；JPEG FF D8 FF；WebP RIFF..WEBP；其余不渲染。
-        // Magic: PNG 89 50 4E 47; JPEG FF D8 FF; WebP RIFF..WEBP; others skipped.
         var isPng = bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47;
         var isJpeg = bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
         var isWebp = bytes[0] == (byte)'R' && bytes[1] == (byte)'I' && bytes[2] == (byte)'F' && bytes[3] == (byte)'F';
@@ -322,8 +317,6 @@ public partial class ApkEditorViewModel : Document
         }
         catch
         {
-            // 解码失败时保持占位。
-            // Keep the placeholder when decoding fails.
         }
     }
 
@@ -342,9 +335,6 @@ public partial class ApkEditorViewModel : Document
 
         try
         {
-            // 位图输出尺寸取逻辑尺寸（dp）；视口坐标经缩放映射到该尺寸。
-            // The bitmap size is the logical size (dp); viewport coordinates are mapped
-            // onto it with a uniform scale.
             var width = Math.Max(1, (int)Math.Round(vd.Width));
             var height = Math.Max(1, (int)Math.Round(vd.Height));
             var scaleX = vd.ViewportWidth > 0 ? width / vd.ViewportWidth : 1.0;
@@ -364,8 +354,7 @@ public partial class ApkEditorViewModel : Document
                         }
                         catch
                         {
-                            continue; // 单条路径数据损坏时跳过，不影响其余路径。
-                            // Skip a single malformed path; the others still render.
+                            continue;
                         }
 
                         if (path.FillColor is { } fill)
@@ -391,8 +380,6 @@ public partial class ApkEditorViewModel : Document
         }
         catch
         {
-            // 渲染失败（平台绘图不可用等）时保持占位。
-            // Keep the placeholder when rendering fails.
             return null;
         }
     }

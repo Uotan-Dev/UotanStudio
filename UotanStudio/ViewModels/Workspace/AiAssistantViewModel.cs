@@ -19,7 +19,6 @@ public partial class AiAssistantViewModel : Tool
 
     [ObservableProperty] private AiConversationViewModel _selectedConversation;
 
-    // Sending is intentionally unavailable in this UI-only implementation.
     public IRelayCommand SendMessageCommand { get; } = new RelayCommand(() => { }, () => false);
 
     public AiAssistantViewModel(AiSettingsViewModel settings)

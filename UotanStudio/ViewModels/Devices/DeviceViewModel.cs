@@ -214,7 +214,6 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     }
 
     private void OnDevicesChanged(object? sender, EventArgs e) =>
-        // 热插拔/adb server 变更触发的增量刷新：保留当前选择。
         Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = RefreshDevicesAsync());
 
     /// <summary>
@@ -262,10 +261,6 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             var scanned = await Task.Run(() =>
                 DeviceMonitorService.GroupPhysicalDevices(App.DeviceMonitor.Scan())).ConfigureAwait(true);
 
-            // 差量更新：列表无变化直接跳过，有变化时按键保留/替换/插入/移除，
-            // 避免 ObservableCollection 整表 Reset 造成选中丢失与界面闪烁。
-            // Differential update: skip entirely when unchanged; otherwise keep/replace/insert/
-            // remove by key instead of a full Clear+Add that resets the whole ItemsControl.
             var changed = Devices.Count != scanned.Count;
             if (!changed)
             {
@@ -311,11 +306,6 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 SelectedDevice = Devices.FirstOrDefault(x => x.Key == selectedKey);
             }
 
-            // 选中不变式：只要列表中存在设备就保证选中项非空——原选中设备仍在则保留，
-            // 已断开或从未选中时自动回退到当前列表第一项。
-            // Selection invariant: whenever any device exists, keep a non-null selection —
-            // retain the previous device if still present, otherwise fall back to the first
-            // item (covers disconnects and the initial default selection).
             if (SelectedDevice is null && Devices.Count > 0)
             {
                 SelectedDevice = Devices[0];

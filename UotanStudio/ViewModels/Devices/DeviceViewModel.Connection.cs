@@ -184,7 +184,6 @@ public partial class DeviceViewModel
             }
         }
     }
-
     /// <summary>
     /// <para>是否可重启选中设备到 fastbootd。ADB 走 <c>reboot fastboot</c>，Fastboot 走
     /// <c>reboot-fastboot</c>；EDL/RKDL/HDC 没有该模式。</para>
@@ -209,7 +208,6 @@ public partial class DeviceViewModel
             return;
         }
 
-        // 弹出确认对话框
         var modeDisplayName = mode switch
         {
             "system" => LanguageService.Instance.GetString("Device_ModeSystem"),
@@ -248,6 +246,4 @@ public partial class DeviceViewModel
         }
     }
 
-
-    // ===== 快速固件操作 / Quick firmware operations =====
 }

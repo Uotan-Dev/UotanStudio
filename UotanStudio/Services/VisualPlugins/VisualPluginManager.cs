@@ -250,7 +250,6 @@ public sealed class VisualPluginManager
                 {
                     _disabledIds.Remove(registration.Id);
                 }
-                // Once the file is deleted, finish bookkeeping even if the caller cancels.
                 await SaveStateAsync(CancellationToken.None);
             }
             finally
@@ -314,8 +313,6 @@ public sealed class VisualPluginManager
         {
             if (published)
             {
-                // Restore retained bytes, not descriptors whose lazy source now points at the replacement.
-                // Once publication begins, cancellation must not interrupt recovery.
                 if (backup is not null)
                 {
                     File.Move(backup, oldPath!, overwrite: true);
@@ -380,7 +377,6 @@ public sealed class VisualPluginManager
 
     private static IEnumerable<string> GetExternalNodeTypes(VisualPluginPackage package)
     {
-        // Packages have already passed bounded structural validation before this traversal.
         var embedded = package.Graph.Nodes.Where(node => node.CompositePackage is not null)
             .ToLookup(node => node.TypeKey, node => node.CompositePackage!, StringComparer.OrdinalIgnoreCase);
         foreach (var type in package.Manifest.RequiredNodeTypes)

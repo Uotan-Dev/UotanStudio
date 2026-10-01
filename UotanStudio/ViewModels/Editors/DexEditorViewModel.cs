@@ -299,8 +299,6 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
             var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(true);
             RawBytes = bytes;
 
-            // 将 CPU 密集的解析与反汇编放到线程池执行，避免阻塞 UI 线程。
-            // Offload the CPU-bound parse and disassembly to the thread pool to keep the UI responsive.
             DexLoadResult result;
             try
             {
@@ -341,9 +339,6 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
 
         RefreshJarKeys();
 
-        // 合并视图为容器默认入口：聚合全部 DEX 条目的反汇编与统计。
-        // The merged view is the container default: aggregates disassembly and statistics
-        // across all DEX entries.
         await SetMergeViewAsync(true).ConfigureAwait(true);
     }
 
@@ -460,9 +455,6 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
         var fieldCount = 0;
         var stringCount = 0;
         var typeCount = 0;
-        // 合并文本与项目范围格式适配共用同一生成器，保证两侧文本逐字节一致。
-        // The merged text shares its generator with the project-scope format adapter so both
-        // sides produce byte-identical text.
         var source = DexContainerSearchText.BuildMergedSource(containerPath, dex =>
         {
             classCount += dex.Classes.Count;
@@ -695,9 +687,6 @@ public partial class DexEditorViewModel : Document, ISearchableDocument
             fieldCount += cls.StaticFields.Count + cls.InstanceFields.Count;
         }
 
-        // 全量反汇编：解析时为惰性解码（不预生成指令对象），此处按需解码每个方法生成 Smali 文本。
-        // Full disassembly: parsing is lazily decoded (no instruction objects are materialized up
-        // front); each method is decoded on demand here to produce the Smali text.
         var source = Disassembler.DisassembleAll(dex);
         return new DexLoadResult(dex, source, dex.Classes.Count, methodCount, fieldCount,
             dex.Strings.Count, dex.Types.Count, dex.Header.Version);

@@ -25,7 +25,6 @@ public static class CompositeGraphService
             selectedNodes, allConnections);
         package.Inputs = [.. boundary.Inputs];
         package.Outputs = [.. boundary.Outputs];
-        // Local encapsulation retains path values; portability sanitization belongs to export.
         package.Graph = new WorkflowSnapshot
         {
             Nodes = WorkflowPersistenceService.BuildNodeDtos(selectedNodes),

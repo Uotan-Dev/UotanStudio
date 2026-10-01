@@ -697,7 +697,7 @@ public static class SparseImageConverter
                 return;
             }
 
-            var outPath = outputPattern.Contains("{0}") ? string.Format(outputPattern, pieceIndex) : $"{outputPattern}.{pieceIndex:D2}";
+            var outPath = outputPattern.Contains("{0}", StringComparison.Ordinal) ? string.Format(outputPattern, pieceIndex) : $"{outputPattern}.{pieceIndex:D2}";
             var piece = new SparseFile(blockSize, totalLength);
             foreach (var item in pieceItems)
             {

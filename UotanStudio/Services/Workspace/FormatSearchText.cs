@@ -56,18 +56,12 @@ internal static class FormatSearchText
             return null;
         }
 
-        // 导航路径在项目扫描之外调用本方法，这里再核对一次输入尺寸，避免把超大文件整读入内存。
-        // The navigation path calls this outside the project scan, so the input size is re-checked here
-        // to avoid reading an oversized file fully into memory.
         if (new FileInfo(path).Length > TextSearchService.MaximumTextLength)
         {
             return null;
         }
 
         var extension = Path.GetExtension(path);
-        // 只读一次头部（覆盖最长的 ARSC 判定长度），所有魔数判定复用，避免多次打开文件。
-        // Read the header once (covering the longest ARSC detection length) and reuse it for every
-        // magic check, avoiding repeated file opens.
         byte[] header;
         try
         {
@@ -111,9 +105,6 @@ internal static class FormatSearchText
         }
         catch
         {
-            // 魔数不识别、解析失败或读取错误都按“跳过该文件”处理，与项目搜索的跳过语义一致。
-            // Unrecognized magic, parse failures and read errors all skip the file, matching the
-            // project search's skip semantics.
             return null;
         }
 

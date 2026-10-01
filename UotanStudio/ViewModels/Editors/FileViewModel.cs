@@ -21,10 +21,6 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
 {
     static FileViewModel()
     {
-        // GB18030 等代码页编码不在默认内置集合中，须注册 CodePagesEncodingProvider 后
-        // Encoding.GetEncoding("GB18030") 才可用（AOT 兼容，无反射）。
-        // Code-page encodings such as GB18030 are not built in by default; register the
-        // CodePagesEncodingProvider so Encoding.GetEncoding("GB18030") works (AOT-safe).
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
     }
 
@@ -170,8 +166,6 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
         {
             _fileSize = new FileInfo(path).Length;
 
-            // 先读取前 4096 字节用于二进制探测，避免将整个文件读入内存。
-            // Read only the first 4096 bytes for binary detection to avoid loading the entire file.
             var probe = await ReadProbeBytesAsync(path).ConfigureAwait(true);
             IsBinary = ResolveBinary(mode, path, probe);
 
@@ -183,8 +177,6 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
             }
             else
             {
-                // 文本模式：不保留 RawBytes，仅读取文本内容。
-                // Text mode: do not retain RawBytes; only read the text content.
                 RawBytes = null;
                 using var reader = new StreamReader(path, new System.Text.UTF8Encoding(false), detectEncodingFromByteOrderMarks: true);
                 Text = await reader.ReadToEndAsync().ConfigureAwait(true);
@@ -198,9 +190,6 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
         }
         catch (Exception ex)
         {
-            // 加载失败时把原因留给页面顶部错误条，避免只留下一片空编辑器（打开失败的调用方只记日志）。
-            // Surface load failures in the page's top error banner instead of leaving an empty editor
-            // behind (the open path only logs the exception).
             CompileError = global::UotanStudio.Services.UserError.Describe(ex);
             RawBytes = null;
             Text = string.Empty;
@@ -328,8 +317,6 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
                 }
             }
 
-            // 末尾无换行符时，最后一行仍需计数。
-            // Count the final line when it does not end with a newline.
             if (Text.Length > 0 && Text[^1] != '\n')
             {
                 count++;
@@ -362,8 +349,6 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
             return "UTF-8";
         }
 
-        // BOM 探测：UTF-8 (EF BB BF)、UTF-16 LE (FF FE)、UTF-16 BE (FE FF)、UTF-32 LE (FF FE 00 00)。
-        // BOM detection for UTF-8/UTF-16 LE/BE/UTF-32 LE.
         if (data.Length >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF)
         {
             return "UTF-8 (BOM)";
@@ -379,8 +364,6 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
             return "UTF-16 BE";
         }
 
-        // 无 BOM 时按字节分布推断：所有字节均 < 0x80 视为 ASCII；出现成对的 0x00 视为 UTF-16。
-        // Without BOM, infer by byte distribution: all < 0x80 → ASCII; paired 0x00 → UTF-16.
         var checkLength = Math.Min(data.Length, 4096);
         var hasHighByte = false;
         var looksUtf16Le = false;
@@ -402,8 +385,6 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
 
         if (checkLength >= 2 && zeroCount > checkLength / 4)
         {
-            // 大量空字节，倾向于 UTF-16；按奇偶位置判定字节序。
-            // Many null bytes → likely UTF-16; endianness decided by null-byte position.
             looksUtf16Le = data[1] == 0;
             looksUtf16Be = data[0] == 0;
         }
@@ -471,8 +452,6 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
             var handler = FormatDetector.Detect(path);
             if (handler is null)
             {
-                // FormatDetector 未识别时，尝试纯托管魔数嗅探（libmagic 风格）兜底
-                // Fall back to pure-managed magic sniffing (libmagic style) when FormatDetector misses
                 string? magic = null;
                 try
                 {
@@ -483,8 +462,6 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
                 }
                 catch
                 {
-                    // 嗅探失败不影响主流程
-                    // Sniff failures must not break the main flow
                 }
 
                 string format = magic ?? "Unknown / 未知格式";
@@ -498,7 +475,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
             AddAnalysis("Format", handler.FormatName);
             AddAnalysis("Size", $"{new FileInfo(path).Length:N0} bytes");
 
-            var result = await handler.ReadMetadataAsync(path).ConfigureAwait(true);
+            var result = await Task.Run(() => handler.ReadMetadataAsync(path)).ConfigureAwait(true);
             if (result.Success)
             {
                 if (result.Metadata != null)
@@ -509,9 +486,6 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
                     }
                 }
 
-                // 把组件/分区条目列表上屏，使属性面板在仅有 Metadata 之外也能看到封装内容。
-                // Surface the entry/partition list so the properties panel shows the encapsulated
-                // components even when the handler exposes no metadata.
                 if (result.Entries is { Count: > 0 })
                 {
                     AddAnalysis("Entries", result.Entries.Count.ToString("N0"));
@@ -542,8 +516,6 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
 
     private void NotifyAnalysisComplete(string path)
     {
-        // 通知属性面板等订阅方展示分析结果
-        // Notify subscribers such as the properties panel to display analysis results
         WeakReferenceMessenger.Default.Send(new FileAnalysisCompletedMessage(Analysis.ToList(), DetectedFormat, path));
     }
 
@@ -605,8 +577,6 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
 
     partial void OnTextChanged(string value)
     {
-        // 非加载路径的文本变更（编辑器回写、用户编辑等）视为内容已修改。
-        // Text changes outside loading (editor write-backs, user edits) mark the content dirty.
         if (!_isLoading)
         {
             IsDirty = true;

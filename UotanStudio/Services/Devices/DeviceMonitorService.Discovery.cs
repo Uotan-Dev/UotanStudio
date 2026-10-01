@@ -10,7 +10,6 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Mirroring;
 
-
 namespace UotanStudio.Services.Devices;
 
 public sealed partial class DeviceMonitorService
@@ -47,7 +46,6 @@ public sealed partial class DeviceMonitorService
         var endpoints = _controller.RefreshAsync().GetAwaiter().GetResult().Endpoints;
         var usbInfos = endpoints.Where(endpoint => endpoint.UsbInfo is not null)
             .Select(endpoint => endpoint.UsbInfo!).ToArray();
-        // The server's serial/connect key is authoritative; USB association requires unique identity evidence.
         var adbDevices = endpoints.Where(endpoint => endpoint.Protocol == "adb" &&
             endpoint.Route == "server").ToArray();
         var hdcTargets = endpoints.Where(endpoint => endpoint.Protocol == "hdc" &&
@@ -87,9 +85,6 @@ public sealed partial class DeviceMonitorService
             });
         }
 
-        // hdc server 通道（系统内存在 hdc server 时，作为 client 列举其管理的全部目标，
-        // 与 adb server 网络设备合并方式一致）。USB 直连枚举命中同一物理设备时以
-        // The host server owns HDC target identity and physical transport metadata.
         foreach (var target in hdcTargets)
         {
             if (target.TargetTransport is not ("USB" or "TCP")) continue;
@@ -147,8 +142,6 @@ public sealed partial class DeviceMonitorService
         _ => string.Empty
     };
 
-    // Physical identity binding is owned by Comm's discovery layer; the host only consumes it.
-    // 物理身份绑定由 Comm 的发现层拥有；宿主仅消费其结果。
     internal static string? PhysicalUsbId(UsbDeviceInfo info, string? serial)
         => UotanStudio.Comm.Devices.Discovery.UsbPhysicalIdentity.Of(info, serial);
 
@@ -188,8 +181,6 @@ public sealed partial class DeviceMonitorService
 
     private string? ReadFastbootSerial(UsbDeviceInfo info)
     {
-        // The getvar/claim mechanism now lives in Comm's discovery layer; the host only consumes the result.
-        // getvar/认领机制已移入 Comm 发现层；宿主仅消费结果。
         var serial = _controller.ReadFastbootSerial(info);
         if (serial is null)
         {

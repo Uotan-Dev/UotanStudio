@@ -34,10 +34,7 @@ internal partial class ImageViewModel
         var context = ProjectContextService.Instance;
         if (!context.IsProjectOpen || context.ActiveSubProject is null)
         {
-            // 记录精确的中止原因，便于定位创建流程中偶发的未打开工程状态：
-            // 区分是解决方案未打开，还是已打开但缺少活动子项目。
-            // Log the precise abort reason to diagnose transient no-project state during
-            // creation: distinguish a closed solution from a solution with no active sub-project.
+
             LogService.Instance.Write(LogLevel.Warn, "Images",
                 $"Import aborted: no project is open  导入中止：尚未打开工程 "
                 + $"[solutionOpen={context.IsProjectOpen}, solutionPath={context.CurrentSolutionPath ?? "<null>"}, activeSubProject={context.ActiveSubProject?.Name ?? "<null>"}]");
@@ -55,9 +52,6 @@ internal partial class ImageViewModel
         {
             var imagesDir = context.EnsureImagesDirectory();
 
-            // 预先汇总所有待复制文件的总字节数，用于跨文件加权进度；totalBytes=0 时不上报。
-            // Pre-compute total bytes of all files to copy for weighted cross-file progress;
-            // reporting is skipped when totalBytes is 0.
             var existingPaths = paths.Where(File.Exists).ToList();
             var totalBytes = existingPaths.Sum(p => new FileInfo(p).Length);
             var completedBytes = 0L;
@@ -80,8 +74,7 @@ internal partial class ImageViewModel
                     if (generation != _progressGeneration || !double.IsFinite(fraction)) return;
                     if (totalBytes > 0)
                     {
-                        // 单文件百分比折算为整体加权百分比：completedBytes + fraction * fileSize。
-                        // Convert per-file percentage into a weighted overall figure.
+
                         var overallBytes = completedBeforeFile + fraction / 100.0 * fileSize;
                         var reportedBytes = Math.Max(completedBytes, (long)overallBytes);
                         ReportByteStatistics(reportedBytes, totalBytes);
@@ -89,8 +82,7 @@ internal partial class ImageViewModel
                         byteProgress?.Report((reportedBytes, totalBytes));
                     }
                 }));
-                // 文件复制完成后累计已完成字节数，供后续文件加权计算。
-                // Accumulate completed bytes once this file finishes copying.
+
                 copiedPaths.Add(destination);
                 completedBytes += fileSize;
                 ReportByteStatistics(completedBytes, totalBytes);
@@ -126,8 +118,6 @@ internal partial class ImageViewModel
                 Images.Add(entry);
             }
 
-            // 自动推断打包类型：首个 ext4/erofs 镜像的格式继承到打包设置面板。
-            // Auto-infer packing type: inherit the format of the first ext4/erofs image.
             var firstFs = imported.FirstOrDefault(e => e.Format is "ext4" or "erofs");
             if (firstFs is not null)
             {

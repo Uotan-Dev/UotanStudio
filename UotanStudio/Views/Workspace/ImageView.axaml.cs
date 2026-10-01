@@ -36,8 +36,7 @@ public partial class ImageView : UserControl
     public ImageView()
     {
         InitializeComponent();
-        // DataGrid updates SelectedItem after the context-menu request. Capture the row
-        // during tunneling so the menu can use the image under the pointer immediately.
+
         ImagesGrid.AddHandler(PointerPressedEvent, OnImagesGridPointerPressed, RoutingStrategies.Tunnel);
     }
 
@@ -113,8 +112,7 @@ public partial class ImageView : UserControl
     {
         if (!_isAttached || _columnResizeQueued) return;
         _columnResizeQueued = true;
-        // 合并一次刷新中的变更，等文字布局完成，避免旧 DesiredSize 再次撑宽列。
-        // Wait for text layout so stale DesiredSize values cannot grow the columns again.
+
         Dispatcher.UIThread.Post(() =>
         {
             _columnResizeQueued = false;
@@ -122,8 +120,7 @@ public partial class ImageView : UserControl
 
             foreach (var column in ImagesGrid.Columns)
             {
-                // Auto 会保留历史最大宽度；显式清除测量值，同时保留用户手动设置的宽度。
-                // Auto retains its largest measurement; reset it without overriding manual widths.
+
                 if (column.Width.IsAuto)
                     column.Width = new DataGridLength(1, DataGridLengthUnitType.Auto, 0, 0);
             }
@@ -136,17 +133,12 @@ public partial class ImageView : UserControl
     {
         if (sender is not ContextMenu menu || DataContext is not ImageViewModel vm) return;
 
-        // XAML event hookup is not available for ContextMenu.Opened in this template,
-        // so attach it when the generated menu instance is first used.
         menu.Opened -= OnImageMenuOpened;
         menu.Opened += OnImageMenuOpened;
         menu.Closed -= OnImageMenuClosed;
         menu.Closed += OnImageMenuClosed;
         UpdateImageMenu(menu, vm);
 
-        // ContextMenu updates its placement target and inherited data context as the
-        // popup opens. Refresh once after that handoff as well, covering keyboard and
-        // first-click paths where Opening still sees the previous row.
         Dispatcher.UIThread.Post(() =>
         {
             if (menu.IsOpen && DataContext is ImageViewModel current)
@@ -162,16 +154,13 @@ public partial class ImageView : UserControl
 
     private void OnImageMenuClosed(object? sender, RoutedEventArgs e)
     {
-        // A later keyboard-opened menu may not have a pointer event to replace this
-        // value, so do not let the row captured by the right-click that closed the menu leak into it.
+
         _contextMenuImage = null;
     }
 
     private void UpdateImageMenu(ContextMenu menu, ImageViewModel vm)
     {
 
-        // Prefer the row captured during the pointer tunnel. If the menu was opened
-        // from the keyboard, PlacementTarget/DataContext provide the selected row.
         var targetImage = _contextMenuImage
             ?? menu.PlacementTarget?.DataContext as ImageEntryViewModel
             ?? menu.DataContext as ImageEntryViewModel;
@@ -185,12 +174,10 @@ public partial class ImageView : UserControl
             else if (item.Classes.Contains("flash-action")) item.IsVisible = !vm.IsPackMode;
             else if (item.Classes.Contains("boot-action"))
             {
-                // Keep the action in the menu for both file-list modes. A non-Boot row
-                // gets a disabled action instead of a stale item disappearing on the
-                // next right-click.
+
                 item.IsVisible = vm.IsUnpackMode || vm.IsOutputMode;
                 item.IsEnabled = targetImage is { IsDirectory: false }
-                    && string.Equals(targetImage.Format, "boot", StringComparison.OrdinalIgnoreCase);
+                    && targetImage.Format is "boot" or "init_boot" or "recovery" or "vendor_boot";
             }
         }
     }

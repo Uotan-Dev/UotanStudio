@@ -93,7 +93,7 @@ internal static class OppoInitializer
                 }
 
 
-                if (FormatDetector.IsAllZeros(headerBuffer.AsSpan(0, 46)))
+                if (headerBuffer.AsSpan(0, 46).IndexOfAnyExcept((byte)0) < 0)
                 {
                     return null;
                 }
@@ -108,7 +108,7 @@ internal static class OppoInitializer
                 }
 
 
-                return FormatDetector.IsAllZeros(headerBuffer.AsSpan(0, 46)) ? OppFormat.OfpMtk : null;
+                return headerBuffer.AsSpan(0, 46).IndexOfAnyExcept((byte)0) < 0 ? OppFormat.OfpMtk : null;
             }
             finally
             {

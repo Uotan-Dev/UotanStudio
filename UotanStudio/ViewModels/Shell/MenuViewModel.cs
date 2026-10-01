@@ -172,7 +172,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     {
         if (_currentTab == message.Tab) return;
         _currentTab = message.Tab;
-        // 通知节点编辑器相关命令重新评估 CanExecute
+
         ToggleMinimapCommand.NotifyCanExecuteChanged();
         ZoomInCommand.NotifyCanExecuteChanged();
         ZoomOutCommand.NotifyCanExecuteChanged();
@@ -184,8 +184,6 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// Whether the Node Editor panel is currently active; used solely by <c>CanExecute</c> helpers.
     /// </summary>
     private bool IsNodeEditorActive => _currentTab == ActiveTab.NodeEditor;
-
-    // ===== 文件 / File =====
 
     /// <summary>
     /// <para>打开新建项目配置窗口（新建解决方案语义）；点击创建后按组合路径创建解决方案、
@@ -204,10 +202,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var window = new NewProjectWindow(NewProjectWindowMode.Solution, null, null);
         window.CreateWithCancellationAsync = async (form, cancellationToken) =>
         {
-            // Location 即所选项目目录（基础目录/名称），解决方案文件位于该目录内，
-            // 数据目录与 .uotan/ 状态目录随之嵌套在所选目录下，不污染上级。
-            // Location is the chosen project directory (base/name); the solution file lives
-            // inside it so the data and .uotan state directories nest under it.
+
             GuardProjectLocationNotNested(form.Location, requireDirectChild: false);
             var solutionPath = Path.Combine(form.Location, form.ProjectName + ".uotan");
             await _projectOps.CreateNewSolutionAsync(solutionPath, cancellationToken);
@@ -237,9 +232,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             {
                 await UnpackSelectedPlainImagesAsync(form, images, window, cancellationToken);
             }
-            // 保存前刷新镜像列表：过滤手动登记的容器条目（zip 等 unknown 格式），避免持久化进工程快照。
-            // Refresh the image list before saving: filter manually registered container entries
-            // (zip and other unknown formats) so they are not persisted into the project snapshot.
+
             await images.RefreshAfterProjectCreationAsync();
             if (!await _projectOps.SaveAsync(saveActiveDocument: false))
                 throw new IOException("Could not save the imported project.");
@@ -272,7 +265,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 }
                 catch (InvalidOperationException)
                 {
-                    // Servers without range support fall back to one bounded local package pass.
+
                 }
             }
             if (form.ContainerKind == ContainerKind.Zip && form.SelectedZipMembers.Length > 0 && !form.CopyOriginal)
@@ -289,7 +282,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 }
                 catch (InvalidOperationException)
                 {
-                    // Compressed payload members fall back to one local package pass.
+
                 }
             }
             await service.DownloadAsync(uri, temp, progress, cancellationToken);
@@ -319,8 +312,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private async Task UnpackSelectedPlainImagesAsync(NewProjectFormResult form, ImageViewModel images, NewProjectWindow window, CancellationToken cancellationToken = default)
     {
         if (!form.UnpackImages || form.SelectedImagePaths.Length == 0) return;
-        // 只解包导入成功的镜像条目；导入失败（格式未知等）的文件不在列表中。
-        // Unpack only imported entries; files rejected at import (unknown format etc.) are not listed.
+
         var entries = images.Images
             .Where(entry => !entry.IsDirectory && form.SelectedImagePaths
                 .Any(path => string.Equals(Path.GetFileName(path), entry.DisplayName,
@@ -395,11 +387,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 
             if (form.SelectedPartitions.Length > 0)
             {
-                // 一次性批量提取全部勾选分区：单次打开容器并并行提取，进度条全程连续，
-                // 避免逐分区重复重开容器、重置进度条。
-                // Extract all selected partitions in one call: the container is opened once and the
-                // partitions extract in parallel under a single continuous progress bar, avoiding one
-                // container reopen and progress reset per partition.
+
                 var byteProgress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
                 var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
                     containerPath, form.SelectedPartitions,
@@ -419,9 +407,6 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 
         if (extractedPaths.Count == 0) return;
 
-        // 提取产物登记为镜像条目；勾选完全解压时对受支持产物继续递归解包（解包目录与 images/ 同级）。
-        // Register extracted files as entries; with full unpack, recursively unpack them (folders
-        // next to images/).
         var extractedEntries = extractedPaths
             .Select(images.AddExtractedImage)
             .OfType<ImageEntryViewModel>()
@@ -713,15 +698,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             context.SubProjects.Select(sp => sp.Name));
         window.CreateWithCancellationAsync = async (form, cancellationToken) =>
         {
-            // 位置已是组合后的完整目录（解决方案根/子项目名），.uotanfw 与目录同名。
-            // The location is the combined directory (solution root/sub-project name); the .uotanfw
-            // file shares the directory name.
+
             GuardProjectLocationNotNested(form.Location, requireDirectChild: true);
             var fwPath = Path.Combine(form.Location, form.ProjectName + ".uotanfw");
             await _projectOps.AddSubProjectAsync(fwPath);
-            // 重新加载解决方案后活动子项目回到第一项；切回刚创建的子项目再导入。
-            // Reloading the solution resets the active sub-project to the first one; switch back to
-            // the newly created one before importing.
+
             if (!await _projectOps.SwitchSubProjectAsync(form.ProjectName)) return;
 
             var images = ImageViewModel.EnsureInstance();
@@ -735,9 +716,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                     byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")), cancellationToken: cancellationToken);
                 await UnpackSelectedPlainImagesAsync(form, images, window, cancellationToken);
             }
-            // 保存前刷新镜像列表：过滤手动登记的容器条目（zip 等 unknown 格式），避免持久化进工程快照。
-            // Refresh the image list before saving: filter manually registered container entries
-            // (zip and other unknown formats) so they are not persisted into the project snapshot.
+
             await images.RefreshAfterProjectCreationAsync();
             if (!await _projectOps.SaveAsync(saveActiveDocument: false))
                 throw new IOException("Could not save the imported project.");
@@ -1061,8 +1040,6 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         WeakReferenceMessenger.Default.Send(new ExitApplicationMessage());
     }
 
-    // ===== 编辑 / Edit =====
-
     /// <summary><para>撤销当前页面内的编辑。</para>Undoes edits in the current page.</summary>
     [RelayCommand]
     private async Task Undo()
@@ -1159,8 +1136,6 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void Replace() => WeakReferenceMessenger.Default.Send(new OpenDocumentSearchMessage(ShowReplace: true));
 
-    // ===== 视图 / View =====
-
     /// <summary><para>切换到工作区选项卡。</para>Switch to the Workspace tab.</summary>
     [RelayCommand]
     private void GoToWorkspace()
@@ -1186,12 +1161,9 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void GoToCompare()
     {
-        // 「视图」菜单的多列文件浏览器入口：无论当前是否已有浏览器，都新开一个标签页。
-        // The View menu's multi-column file browser entry always opens a new tab, whether or not one already exists.
+
         WeakReferenceMessenger.Default.Send(new OpenCompareRequestMessage { OpenInNewTab = true });
     }
-
-    // ===== 窗口 / Window =====
 
     /// <summary>
     /// <para>工作区停靠面板服务；「窗口」菜单项通过其可见性属性绑定 IsChecked，并调用显示/隐藏命令。</para>
@@ -1235,8 +1207,6 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// <summary>显示或隐藏终端面板。 Show or hide the terminal panel.</summary>
     [RelayCommand]
     private void ToggleTerminal() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.Terminal);
-
-    // ===== 工具 / Tools =====
 
     /// <summary>
     /// <para>打开设备管理器窗口；窗口已打开时前置聚焦。</para>
@@ -1355,7 +1325,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     {
         if (holder == null || !holder.IsVisible)
         {
-            // 释放对已关闭窗口的旧引用，允许其被回收后再创建新窗口
+
             holder = null;
             holder = factory();
             holder.Show();
@@ -1412,8 +1382,6 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         SendNodeEditorAction(NodeEditorAction.Stop);
     }
 
-    // ===== 帮助 / Help =====
-
     /// <summary><para>打开在线文档。</para>Open online documentation.</summary>
     [RelayCommand]
     private async Task Documentation()
@@ -1464,8 +1432,6 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             dialog.ShowDialog(window);
         }
     }
-
-    // ===== 辅助方法 =====
 
     /// <summary>
     /// <para>弹出文件选择/保存对话框选取项目文件路径，返回所选路径或 <c>null</c>。</para>

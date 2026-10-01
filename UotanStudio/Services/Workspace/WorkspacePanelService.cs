@@ -105,10 +105,6 @@ public sealed partial class WorkspacePanelService : ObservableObject
     {
         foreach (var (key, visible) in panels)
         {
-            // 恢复可见性不改变当前激活面板：有工程时以解决方案状态恢复，活动面板保持用户
-            // 当前所处位置；仅加回可见列表/从可见列表移除。
-            // Restoring visibility must not change the active panel (e.g. after opening a solution the
-            // left pane should stay on the project explorer): only add back / remove from visible lists.
             if (visible) Show(key, activate: false);
             else Hide(key);
         }

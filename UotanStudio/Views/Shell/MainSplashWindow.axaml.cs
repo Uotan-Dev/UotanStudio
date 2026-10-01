@@ -48,7 +48,7 @@ public partial class MainSplashWindow : SplashWindow
             }
             catch (TimeoutException)
             {
-                // A suspended or minimized renderer must not prevent the main window from opening.
+
             }
         }
     }

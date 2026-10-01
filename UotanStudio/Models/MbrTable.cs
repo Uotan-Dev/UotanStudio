@@ -130,7 +130,6 @@ public static class MbrTable
 
             var start = BinaryPrimitives.ReadUInt32LittleEndian(entry[8..]);
             var size = BinaryPrimitives.ReadUInt32LittleEndian(entry[12..]);
-            // Do not compare against the probe length: standalone partition-table exports are valid inputs.
             if (entry[0] is not (0 or BootableFlag) || entry[4] == 0 || start == 0 || size == 0
                 || (ulong)start + size > 1UL << 32)
             {
@@ -208,11 +207,6 @@ public static class MbrTable
             throw new ArgumentException($"MBR partition count {entries.Count} is too large. MBR 分区数量过多。", nameof(entries));
         }
 
-        // MBR 的起始 LBA 与大小是两个独立的 32 位字段，超出即需要 GPT。保护性 0xEE 条目把大小写成
-        // 整盘扇区数（可达 0xFFFFFFFF），因此不能按 start+size 的上限来判定。
-        // MBR start LBA and size are separate 32-bit fields; beyond them the disk needs GPT. A protective
-        // 0xEE entry carries the whole-disk sector count as its size (up to 0xFFFFFFFF), so the fields are
-        // bounded individually rather than by their sum.
         foreach (var entry in entries)
         {
             if (entry.SizeSectors == 0)
@@ -231,9 +225,6 @@ public static class MbrTable
         var bootable = bootableFlags ?? [];
         bool IsBootable(int index) => index < bootable.Count && bootable[index];
 
-        // 超过 3 个分区时，第 4 槽让给扩展分区条目（承载逻辑分区），主分区数上限为 3。
-        // When there are more than 3 partitions, slot 4 holds the extended-partition entry (carrying
-        // logical partitions), so the primary-partition count caps at 3.
         var useExtended = entries.Count > MaxPrimaryPartitions - 1;
         var primaryCount = useExtended ? MaxPrimaryPartitions - 1 : entries.Count;
         var logicalCount = entries.Count - primaryCount;
@@ -241,8 +232,6 @@ public static class MbrTable
         ulong extendedEnd = 0;
         if (logicalCount > 0)
         {
-            // 逻辑分区需要额外一个扇区作为扩展分区起点前的 EBR；这里把扩展区起点定为第一个逻辑分区前。
-            // Logical partitions need one spare sector as the first EBR; the extended region starts there.
             extendedStart = checked(entries[primaryCount].StartSector - 1);
             var lastLogical = entries[^1];
             extendedEnd = checked(lastLogical.StartSector + lastLogical.SizeSectors - 1);
@@ -272,11 +261,6 @@ public static class MbrTable
             }
         }
 
-        // 镜像只承载表结构：扇区 0 的 MBR 与每个逻辑分区之前的 EBR。分区数据范围不参与镜像大小，
-        // 否则覆盖整盘的保护性 0xEE 条目会把镜像推到磁盘容量。
-        // The image carries only table structures: the MBR sector and the EBR in front of each logical
-        // partition. Partition data extents must not size the image, or a protective 0xEE entry spanning
-        // the whole disk would inflate it to the disk capacity.
         var endLba = logicalCount > 0 ? entries[^1].StartSector : 1UL;
         if (endLba > MaxImageSectors)
         {
@@ -288,8 +272,6 @@ public static class MbrTable
         var image = new byte[checked((long)endLba * SectorSize)];
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(DiskSignatureOffset), diskSignature);
 
-        // 主分区槽位。
-        // Primary slots.
         for (var i = 0; i < primaryCount; i++)
         {
             WriteSlot(image, PartitionTableOffset + i * PartitionEntrySize, entries[i], IsBootable(i), 0);
@@ -297,13 +279,9 @@ public static class MbrTable
 
         if (logicalCount > 0)
         {
-            // 第 4 槽：扩展分区。
-            // Slot 4: the extended partition.
             var extendedSize = checked(extendedEnd - extendedStart + 1);
             WriteExtendedSlot(image, PartitionTableOffset + 3 * PartitionEntrySize, extendedStart, extendedSize);
 
-            // EBR 链：每个逻辑分区之前一个扇区放置 EBR。
-            // EBR chain: one EBR sector precedes each logical partition.
             for (var i = 0; i < logicalCount; i++)
             {
                 var entry = entries[primaryCount + i];
@@ -474,7 +452,7 @@ public static class MbrTable
         {
             target[0] = 254;
             target[1] = 63;
-            target[2] = 0xC0 | 0x03; // cylinder 1023 的高 2 位 + 低 8 位。
+            target[2] = 0xC0 | 0x03;
             return;
         }
 

@@ -115,8 +115,7 @@ public class OutputNodeViewModel : FlowNodeViewModel
         var levelText = (Convert.ToString(ReadInput("Level"), CultureInfo.InvariantCulture) ?? "info").Trim().ToLowerInvariant();
         var level = ParseLogLevel(levelText) ?? LogLevel.Info;
         context.Log.Write(level, Title, message);
-        // 吸收原 Feedback.Console.Write 的能力：GUI 宿主下 stdout 通常不可见，因此默认关闭。
-        // Absorbs the former Feedback.Console.Write: stdout is usually invisible in GUI hosts, so it stays opt-in.
+
         if (NodeDataUtil.ToBool(ReadInput("Stdout"), false))
         {
             System.Console.WriteLine($"[{Title}] {message}");

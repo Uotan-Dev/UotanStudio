@@ -59,8 +59,6 @@ public partial class ProjectExplorerView : UserControl
             return;
         }
 
-        // 项目文件夹（子项目 / 解决方案根）：双击打开其项目配置文件。
-        // Project folders (sub-project / solution root): double-click opens their config file.
         if (node.IsDirectory && node.IsProjectFolder)
         {
             OpenProjectFileForFolder(node);
@@ -69,8 +67,7 @@ public partial class ProjectExplorerView : UserControl
 
         if (!node.IsDirectory)
         {
-            // 节点项目文件进入画布编辑器，其他文件进入文档工作区。
-            // Node project files open in the canvas editor; every other file goes to the document workspace.
+
             if (string.Equals(System.IO.Path.GetExtension(node.Path), ".uotannode", StringComparison.OrdinalIgnoreCase))
                 WeakReferenceMessenger.Default.Send(new OpenNodeProjectRequestMessage(
                     System.IO.Path.GetFileNameWithoutExtension(node.Path)));
@@ -86,8 +83,7 @@ public partial class ProjectExplorerView : UserControl
     /// </summary>
     private static void OpenProjectFileForFolder(ExplorerNode node)
     {
-        // 子项目文件夹：在目录内查找 .uotanfw 文件。
-        // Sub-project folder: find the .uotanfw file inside the directory.
+
         if (System.IO.Directory.Exists(node.Path))
         {
             foreach (var f in System.IO.Directory.EnumerateFiles(node.Path, "*.uotanfw"))
@@ -97,10 +93,6 @@ public partial class ProjectExplorerView : UserControl
             }
         }
 
-        // 顶层解决方案文件夹：当前根目录就是解决方案自身目录（.uotan 与子项目并列），
-        // 因此先在节点目录内查找 .uotan，再回退到父目录以兼容旧布局。
-        // Top-level solution folder: the root is the solution's own directory (the .uotan file sits
-        // alongside the sub-projects), so first search inside the node, then fall back to the parent.
         foreach (var f in System.IO.Directory.EnumerateFiles(node.Path, "*.uotan"))
         {
             WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(f));
@@ -205,15 +197,12 @@ public partial class ProjectExplorerView : UserControl
             return;
         }
 
-        // 与「工具 → 文件校验器」共用同一个窗口实例，右键只切换目标文件。
-        // Shares one window instance with Tools -> File Checksum; the context menu just switches the file.
         MenuViewModel.ShowFileChecksumWindow(node.Path);
     }
 
     private void OnNewEmptySubProject(object? sender, RoutedEventArgs e)
     {
-        // 右键「新建子项目」与顶部菜单共用同一表单流程（子项目模式的新建窗口）。
-        // The explorer "new sub-project" entry shares the form flow with the File menu.
+
         WeakReferenceMessenger.Default.Send(new AddSubProjectRequestMessage());
     }
 
@@ -316,12 +305,7 @@ public partial class ProjectExplorerView : UserControl
                 LanguageService.Instance.GetString("Menu_Delete"))) return;
         try
         {
-            // 子项目目录必须先经会话移除引用并重新加载解决方案（触发 ProjectContextChangedMessage，
-            // 刷新镜像面板下拉框等组件），再删除磁盘文件；直接 Directory.Delete 会让解决方案
-            // 保留指向已删目录的悬空引用。
-            // A sub-project directory must first go through the session (removing the reference and reloading
-            // the solution, which raises ProjectContextChangedMessage and refreshes the image panel's dropdown
-            // and other components) before deleting files; a raw Directory.Delete leaves a dangling reference.
+
             var subProject = FindSubProject(node);
             if (subProject is not null)
             {

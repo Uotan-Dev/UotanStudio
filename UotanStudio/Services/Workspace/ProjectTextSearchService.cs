@@ -39,12 +39,8 @@ internal static class ProjectTextSearchService
                 var text = ReadText(path, cancellationToken);
                 if (text is null)
                 {
-                    // 非纯文本：尝试二进制格式（DTB/ARSC/AXML/DEX/JAR）适配文本化，失败即跳过。
-                    // Not plain text: try the binary-format adapter (DTB/ARSC/AXML/DEX/JAR); skip on failure.
                     text = FormatSearchText.TryRead(path, cancellationToken);
                     if (text is null) continue;
-                    // 生成文本计入 64 MiB 扫描上限，避免单个小文件展开出超大搜索文本。
-                    // The generated text counts toward the 64 MiB scan cap so a small file cannot expand unboundedly.
                     bytes += text.Length;
                     if (bytes > 64 * 1024 * 1024) throw new IOException("Project search exceeds the 64 MiB scan limit. Narrow the scope.");
                 }

@@ -32,8 +32,7 @@ public partial class ChecksumWindow : Window
         InitializeComponent();
         DataContext = new ChecksumViewModel();
         SetFile(filePath);
-        // 窗口关闭时取消进行中的校验，避免任务在窗口生命周期外继续读文件。
-        // Cancels the running verification on close so hashing does not outlive the window.
+
         Closed += (_, _) => ViewModel.ClearResults();
     }
 

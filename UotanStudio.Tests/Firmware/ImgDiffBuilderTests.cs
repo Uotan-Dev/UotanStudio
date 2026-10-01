@@ -64,7 +64,7 @@ public sealed class ImgDiffBuilderTests
         using var temp = new TempDirectory();
         var list = temp.Write("list", $"4\n3\n0\n0\nimgdiff 0 {patchBytes.Length} {Sha1(source)} {Sha1(target)} 2,0,3 2 2,0,2 2,0,2\n");
         var output = Path.Combine(temp.Path, "out.img");
-        DatReader.Unpack(list, temp.WriteBytes("new.dat", []), temp.WriteBytes("patch.dat", patchBytes), temp.WriteBytes("old.img", source), output);
+        DatReader.Unpack(list, temp.WriteBytes("new.dat", []), temp.WriteBytes("patch.dat", patchBytes), temp.WriteBytes("old.img", source), output, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(target, File.ReadAllBytes(output));
     }
 

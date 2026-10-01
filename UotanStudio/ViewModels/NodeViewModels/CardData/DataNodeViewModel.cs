@@ -198,8 +198,7 @@ public class DataNodeViewModel : FlowNodeViewModel
         var hash = ComputeHash(data, algorithm);
         if (hash == null)
         {
-            // 校验和属于校验语义，未知算法必须显式失败，不能静默当作成功。
-            // A checksum is a validation; an unknown algorithm must fail explicitly rather than pass silently.
+
             throw new InvalidDataException($"Unsupported hash algorithm '{algorithm}'.  不支持的哈希算法。");
         }
 

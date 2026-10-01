@@ -11,7 +11,6 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Mirroring;
 
-
 namespace UotanStudio.Services.Devices;
 
 public sealed partial class DeviceMonitorService
@@ -28,8 +27,6 @@ public sealed partial class DeviceMonitorService
         {
             while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
             {
-                // Poll both servers even when they were absent at startup. A listening server
-                // with no targets still changes USB ownership and must invalidate discovery.
                 var adb = await ReadAdbSnapshotAsync(ct).ConfigureAwait(false);
                 var hdc = await ReadHdcSnapshotAsync(ct).ConfigureAwait(false);
                 var snapshot = adb + "\nHDC\n" + hdc;
@@ -126,14 +123,6 @@ public sealed partial class DeviceMonitorService
 
         LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Device monitor starting (initial full USB scan).");
 
-        // USB 热插拔监视（Windows 走 WM_DEVICECHANGE 原生事件，其他平台回退轮询快照）。
-        // 仅当变化涉及 ADB/Fastboot/EDL/RKDL 相关设备时才触发重扫：摄像头、键鼠等与
-        // 本工具无关的设备（如 0C45:6362）在总线上频繁插拔/接口重枚举时，不应反复触发
-        // 全量扫描与列表刷新。
-        // USB hotplug monitoring (native WM_DEVICECHANGE on Windows, polling snapshot
-        // elsewhere). Only changes of ADB/Fastboot/EDL/RKDL-relevant devices trigger a
-        // rescan: irrelevant devices such as webcams (e.g. 0C45:6362) that churn on the
-        // bus / re-enumerate interfaces must not repeatedly trigger full scans.
         _usbMonitor = _controller.WatchUsb(changes =>
         {
             LogDeviceChanges(changes);
@@ -143,9 +132,6 @@ public sealed partial class DeviceMonitorService
             }
         }, onError: _ => { });
 
-        // Server device changes are detected by the periodic bridge-target poll started above;
-        // no push monitor or external process is launched here.
-        // server 设备变更由上文启动的周期性桥接目标轮询检测；此处不创建推送监视器，也不拉起外部进程。
     }
 
     /// <summary>
@@ -197,9 +183,6 @@ public sealed partial class DeviceMonitorService
     {
         lock (_sync)
         {
-            // 设备列表即将变化：失效扫描缓存，使下一次 Scan() 重新枚举。
-            // The device list is about to change: invalidate the scan cache so the next
-            // Scan() re-enumerates.
             _cachedScan = null;
             _debounce ??= new Timer(_ => DevicesChanged?.Invoke(this, EventArgs.Empty), null, 300, Timeout.Infinite);
             _debounce.Change(300, Timeout.Infinite);

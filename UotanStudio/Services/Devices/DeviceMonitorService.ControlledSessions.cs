@@ -9,7 +9,6 @@ namespace UotanStudio.Services.Devices;
 
 public sealed partial class DeviceMonitorService
 {
-    // Synchronous protocol transactions use this boundary to acquire an async controller lease.
     private DeviceLease LeaseEndpoint(DetectedDevice device, bool useAdbServer = false,
         DeviceSessionKind? sessionKind = null, CancellationToken cancellationToken = default)
     {

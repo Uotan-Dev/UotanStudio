@@ -240,10 +240,6 @@ public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearc
         }
 
         AddDetail("Type", value.Type.ToString());
-        // 值级编辑：非复杂条目的可编辑类型（字符串/整数/十六进制/布尔）提供可写行，
-        // 修改时解析并按类型写回模型（String 经全局池 Intern 更新 ValueData）。
-        // Value-level editing: editable types (string/int/hex/bool) on simple entries get a writable
-        // row; edits are parsed back per type (String interning into the global pool for ValueData).
         if (!value.IsComplex && IsEditableType(value.Type))
         {
             Details.Add(new ArscDetailRow("Value", value.FormatValue(_table!.GlobalPool, entry.PackageId), text =>
@@ -360,8 +356,6 @@ public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearc
     /// <inheritdoc/>
     void ISearchMatchLocator.LocateSearchMatch(int offset, int length)
     {
-        // 从后往前找最后一个起始偏移不超过匹配位置的行，即为包含该匹配的锚点。
-        // Scan backwards for the last line starting at or before the match offset: the containing anchor.
         ArscTreeNodeViewModel? target = null;
         for (var i = _searchAnchors.Count - 1; i >= 0 && target is null; i--)
         {

@@ -29,7 +29,7 @@ public sealed class InteractionNodeViewModel : FlowNodeViewModel
                 {
                     SchemaError = "A connected form field has changed or its schema is no longer statically known.";
                 }
-                // Keep the endpoint so an interface change cannot silently delete a user's connection.
+
                 continue;
             }
         }

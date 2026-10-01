@@ -148,9 +148,6 @@ public sealed partial class ChecksumViewModel : ObservableObject
             return;
         }
 
-        // 每次校验使用独立取消源：文件切换清空结果时旧任务被取消，其结果不会写回界面。
-        // Each run gets its own cancellation source: clearing results on a file switch cancels the
-        // previous run, whose results then never reach the UI.
         var cts = new CancellationTokenSource();
         _verifyCts = cts;
         var path = FilePath;
@@ -160,8 +157,7 @@ public sealed partial class ChecksumViewModel : ObservableObject
         {
             if (!algorithms.Any)
             {
-                // 未勾选任何算法：只清空结果，不读文件。
-                // No algorithm selected: just clear the rows without reading the file.
+
                 Md5Value = string.Empty;
                 Sha1Value = string.Empty;
                 Sha256Value = string.Empty;
@@ -172,8 +168,7 @@ public sealed partial class ChecksumViewModel : ObservableObject
             var result = await ChecksumService.ComputeAsync(path, algorithms, cts.Token);
             if (cts.IsCancellationRequested)
             {
-                // 校验期间文件被切换：丢弃结果，保持清空状态。
-                // The file was switched mid-run: discard the results and keep the cleared state.
+
                 return;
             }
 
@@ -184,21 +179,17 @@ public sealed partial class ChecksumViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            // 取消：丢弃部分结果，保持当前状态。
-            // Cancelled: discard the partial results and keep the current state.
+
         }
         catch (Exception ex)
         {
-            // 文件读取失败（被删除、被占用等）：清空结果并记录日志。
-            // Reading failed (file deleted, locked, ...): clear the rows and log the error.
+
             LogService.Instance.Write(LogLevel.Error, "Checksum", $"Verify failed: {ex.Message}");
             ClearResults();
         }
         finally
         {
-            // 仅当本次校验仍是当前校验时才复位 busy；被取代的旧任务不得干扰新一轮的状态。
-            // Reset busy only while this run is still the current one; a superseded run must not
-            // clear the newer run's busy state.
+
             if (ReferenceEquals(_verifyCts, cts))
             {
                 IsBusy = false;

@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
 
 namespace UotanStudio.Firmware.VendorFirmware.UpdateApp;
 
@@ -59,7 +60,7 @@ public static class UpdateAppBuilder
 
         var destination = Path.GetFullPath(outputPath);
         var files = Directory.EnumerateFiles(inputDirectory, "*", SearchOption.TopDirectoryOnly)
-            .Where(path => !string.Equals(Path.GetFileName(path), ".uotanstudio-repack.json", StringComparison.Ordinal))
+            .Where(path => !string.Equals(Path.GetFileName(path), RepackMetadata.FileName, StringComparison.Ordinal))
             .Where(path => !string.Equals(Path.GetFullPath(path), destination,
                 OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
             .Select(path => new SourceFile(path, GetEntryName(path)))

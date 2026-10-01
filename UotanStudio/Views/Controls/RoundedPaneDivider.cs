@@ -75,8 +75,6 @@ public sealed class RoundedPaneDivider : Control
             path.EndFigure(false);
         }
 
-        // 投影沿同一弧线朝接收侧平移，限制在边缘外 3 DIP 内。
-        // Translate the same curve toward the receiving pane, staying within 3 DIP of its edge.
         for (var i = 0; i < ShadowPens.Length; i++)
         {
             var offset = EdgeThickness / 2 + (i + 0.5) * ShadowStep;

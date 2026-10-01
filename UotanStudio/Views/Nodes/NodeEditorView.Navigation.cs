@@ -159,10 +159,6 @@ public partial class NodeEditorView
             columns[3].Width = new GridLength(narrow ? 0 : 1);
             columns[4].Width = narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
 
-            // 两侧等分列保证中间执行组真正居中；Auto 列不会被 Grid 压缩，所以窄面板下中间列也改成星号，
-            // 让三组各自在列内换行而不是撑出窗口。
-            // Equal side columns keep the execution group truly centered; a star middle column is used when
-            // narrow so every group wraps in its own column instead of overflowing (Auto columns are never shrunk).
             EditorToolbar.ColumnDefinitions[1].Width = narrow
                 ? new GridLength(1, GridUnitType.Star)
                 : new GridLength(1, GridUnitType.Auto);

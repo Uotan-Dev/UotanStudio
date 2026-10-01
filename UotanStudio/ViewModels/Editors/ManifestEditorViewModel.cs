@@ -230,8 +230,6 @@ public partial class ManifestEditorViewModel : Document, ICommandSaveableDocumen
             CompileError = string.Empty;
             IsDirty = false;
 
-            // 解析完成后释放原始字节，SaveAsync 从 _doc 模型重建。
-            // Release raw bytes after parsing; SaveAsync rebuilds from the _doc model.
             RawBytes = null;
         }
         finally
@@ -255,9 +253,6 @@ public partial class ManifestEditorViewModel : Document, ICommandSaveableDocumen
         IsBusy = true;
         try
         {
-            // 文本被编辑过：按原模型类型参照重编译回 AXML 模型，再走现有写盘路径。
-            // Text was edited: recompile it back into the AXML model using the original model's types
-            // as a reference, then use the existing write path.
             if (_sourceEdited)
             {
                 AXmlDocument recompiled;
@@ -427,8 +422,6 @@ public partial class ManifestAttributeRow : ObservableObject
 
     partial void OnValueChanged(string value)
     {
-        // 写回模型：字符串型属性直接更新 RawValue（原始值）；否则尝试按类型解析。
-        // Write back: string-typed attributes update RawValue; others try to parse by type.
         if (_attribute.RawValue is not null)
         {
             _attribute.RawValue = value;
@@ -450,10 +443,6 @@ public partial class ManifestAttributeRow : ObservableObject
                 _attribute.ValueData = b ? 1u : 0u;
                 break;
             case AXmlValueType.String when _stringPool is not null:
-                // 字符串池重建：把新值 Intern 进池并更新 ValueData 索引，保存时由 AXmlWriter
-                // 按池顺序重建，任意字符串值均可编辑。
-                // String-pool rebuild: intern the new value and update the ValueData index; the
-                // AXmlWriter rebuilds the pool on save, so arbitrary string values are editable.
                 _attribute.ValueData = (uint)_stringPool.Intern(value);
                 break;
         }

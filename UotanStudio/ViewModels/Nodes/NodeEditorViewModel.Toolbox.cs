@@ -84,7 +84,7 @@ public partial class NodeEditorViewModel
             var matches = category.Items.Where(item => item.Matches(keyword) || category.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase)).ToArray();
             if (matches.Length > 0)
             {
-                // Search presents concrete operations directly, without another family-selection step.
+
                 VisibleToolboxCategories.Add(new NodeToolboxCategory(category.Name, category.Category, new(matches)) { IsExpanded = true });
             }
         }

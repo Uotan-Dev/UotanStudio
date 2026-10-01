@@ -178,7 +178,7 @@ public class NodeDockFactory : Factory
         }
         catch
         {
-            // 关闭流程中的异常不阻断用户操作。
+
         }
     }
 
@@ -208,7 +208,7 @@ public class NodeDockFactory : Factory
         }
         catch
         {
-            // 移除过程中的异常不阻断关闭流程。
+
         }
     }
 }

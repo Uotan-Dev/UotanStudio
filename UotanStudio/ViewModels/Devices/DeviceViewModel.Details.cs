@@ -43,7 +43,6 @@ public partial class DeviceViewModel
                 $"EDL protocol detection for {endpoint.Key} failed: {ex.Message}");
         }
     }
-
     /// <summary>
     /// <para>拉取 ADB 设备扩展信息（getprop / 系统级 / 电池 / 内存 / 存储）。官方 adb server 会枚举
     /// USB 与网络设备，因此无论传输类型都优先经 Comm 的 adb server 服务执行 shell；
@@ -66,7 +65,6 @@ public partial class DeviceViewModel
         }
         catch
         {
-            // 属性拉取失败不影响主流程（设备可能未授权）。
         }
 
         if (info is null || !ReferenceEquals(device.Device, endpoint))
@@ -173,7 +171,6 @@ public partial class DeviceViewModel
         }
         catch
         {
-            // 属性拉取失败不影响主流程。
         }
 
         if (info is null || !ReferenceEquals(device.Device, endpoint))
@@ -275,6 +272,5 @@ public partial class DeviceViewModel
 
         device.Slot = DevicePropertyReader.ParseSlot(info["slot"]);
     }
-
 
 }

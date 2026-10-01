@@ -40,14 +40,9 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
-        // 全局主题色：把 Themes/AccentColors.axaml 的强调色补进 Semi 主题作用域（见 AccentPalette）。
-        // Global accent: copy Themes/AccentColors.axaml into the Semi theme scope (see AccentPalette).
         AccentPalette.Install(this);
-        // Subscribe before startup settings are applied; retain LanguageChangedMessage for legacy callers.
         WeakReferenceMessenger.Default.Register<App, LanguageStateChangedMessage>(this,
             static (app, message) => app.UpdateSemiThemeLocale(message.CultureName));
-        // 跟随系统主题时，ActualThemeVariant 会随系统切换；据此重新合并
-        // LightColors/DarkColors，使 Hex* 等自定义画刷同步刷新。
         ActualThemeVariantChanged += (_, _) =>
         {
             var key = ActualThemeVariant == ThemeVariant.Dark ? "DarkColors" : "LightColors";
@@ -66,32 +61,15 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        // 设备路由由 Comm 层自动探测 adb/HDC server 存活状态决定：server 在则走 server 转发，
-        // 不在则走 USB/TCP 直写；组合根不再做任何直写强制。
-        // Device routing is decided by Comm's automatic server probing: a running adb/HDC server
-        // receives the traffic, otherwise direct USB/TCP is used; the composition root forces nothing.
-        // 将 Comm 层 USB 诊断桥接到统一日志服务。
         UsbLogBridge.Install();
-        // 挂接首次机会异常记录器：捕获调试器输出窗中「引发的异常」（Socket/取消/超时）到全局日志。
-        // Hook the first-chance exception logger: capture debugger-output "exception thrown"
-        // notices (socket / cancellation / timeout) into the global log.
         FirstChanceExceptionLogger.Install();
         LogService.Instance.Write(LogLevel.Info, "App", "UotanStudio framework initialization completed.");
 
-        // 幂等注册文件关联（后台执行，不阻塞启动；可用 --unregister-file-associations 注销）。
-        // Idempotently register file associations (background, non-blocking; remove with
-        // --unregister-file-associations).
         _ = Task.Run(() => FileAssociationService.Register());
 
-        // 注册全部固件格式处理器，供后续格式自动识别与结构分析使用。
         UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
 
-        // 仅初始化语言包注册表（纯内存操作，快速）；持久化设置的读取与主题/语言 XAML
-        // 加载推迟到启动序列中执行，使启动窗能立刻显示，避免首帧出现前的同步阻塞。
         LanguageService.Instance.Initialize();
-        // 启动窗的 Splash_* 状态文本在持久化语言应用之前就要 GetString，必须先按系统
-        // 语言合并 Locale 字典；字典是编译 XAML 的直接实例化，开销极小，持久化语言
-        // 随后由启动序列中的 ApplyLanguage 按槽位替换。
         LanguageService.Instance.InitializeFromSystemLanguage();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -101,8 +79,6 @@ public partial class App : Application
                     () => GetDesktopMainViewModel()?.MenuVM.AboutCommand.Execute(null));
             _desktopServices = new DesktopApplicationServices();
             desktop.Exit += OnDesktopExit;
-            // 桌面端：立即显示 Ursa 主题启动窗，启动序列（应用设置 + 首次全局 USB 扫描
-            // + 预构建主窗口）完成后关闭，由 SplashWindow 过渡到主窗口。
             var splash = new MainSplashWindow
             {
                 DataContext = new SplashViewModel(LanguageService.Instance.GetString("Splash_Initializing"))
@@ -110,13 +86,11 @@ public partial class App : Application
             desktop.MainWindow = splash;
             splash.Show();
             splash.StartupTask = RunStartupSequenceAsync(splash, (SplashViewModel)splash.DataContext);
-            // Close 触发 Ursa SplashWindow 的 CanClose（等待启动序列）→ CreateNextWindow 过渡。
             splash.Close();
         }
 
         base.OnFrameworkInitializationCompleted();
 
-        // Register messenger receivers
         WeakReferenceMessenger.Default.Register<ThemeChangedMessage>(this, OnThemeChanged);
         WeakReferenceMessenger.Default.Register<LanguageChangedMessage>(this, OnLanguageChanged);
         WeakReferenceMessenger.Default.Register<ExitApplicationMessage>(this, OnExitApplication);
@@ -155,33 +129,23 @@ public partial class App : Application
             stageTimer.Restart();
         }
         await ReportAsync(SplashPhase.Settings);
-        // 1) 后台读取持久化设置（文件 I/O 不应阻塞 UI 线程）。
         var settings = await Task.Run(() => SettingsPersistenceService.Instance.LoadSettings()).ConfigureAwait(true);
         global::UotanStudio.Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
         global::UotanStudio.Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
 
-        // 2) 先应用持久化主题与语言（须在主窗口创建前完成，使主窗口拿到正确的语言/主题；
-        //    此时启动窗已显示，DynamicResource 会自动刷新启动窗文案），随后的状态文本
-        //    即可用持久化语言解析。
         await ReportAsync(SplashPhase.ApplyingSettings);
         ApplyTheme(settings.ThemeMode);
         ApplyLanguage(settings.CultureName);
         await splash.AdvanceAsync(SplashPhase.ApplyingSettings);
-        // 按持久化设置启动内嵌 MCP 服务器（失败只记录日志，不阻断启动）。
-        // Start the embedded MCP server per the persisted settings (failures only log, never block startup).
         McpExposureService.Instance.Apply(settings.McpExposeEnabled, settings.McpExposePort);
 
         await ReportAsync(SplashPhase.Scanning);
         LogService.Instance.Write(LogLevel.Info, "App", "Startup sequence: initial USB scan starting.");
 
-        // 3) 启动设备监视并执行首次全局 USB 扫描，整体放后台线程：Start 内含 SetupAPI 初次
-        //    全量快照与 adb server 探测（可达数百毫秒），不能阻塞 UI 线程（启动窗会冻结）。
         var scanTask = _desktopServices!.StartAndScanAsync();
 
         var devices = await scanTask.ConfigureAwait(true);
 
-        // UI-owned objects stay on the dispatcher; render each stage before constructing the next component.
-        // UI 对象仍在调度线程构建；每个阶段先刷新启动窗，再创建下一组组件。
         MainViewModel? preparedModel = null;
         try
         {
@@ -195,8 +159,6 @@ public partial class App : Application
             LogService.Instance.Write(LogLevel.Error, "App", $"Pre-building main window failed: {ex.Message}");
         }
 
-        // 应用命令行选项：打开解决方案 / 导入文件（失败仅记日志，不阻断启动）。
-        // Apply startup file-association inputs: open a solution / import files (failures only log, never block startup).
         if (StartupFiles.Length > 0)
         {
             await ReportAsync(SplashPhase.OpeningFiles);
@@ -405,8 +367,6 @@ public partial class App : Application
             _ => ThemeVariant.Default
         };
 
-        // 根据实际生效的主题变体选择颜色字典：跟随系统（Default）时由 Avalonia 解析
-        // ActualThemeVariant，据此合并 LightColors/DarkColors，确保深色系统下 Hex* 等画刷也切换。
         var actual = ActualThemeVariant;
         var themeKey = actual == ThemeVariant.Dark ? "DarkColors" : "LightColors";
         LanguageService.Instance.ApplyTheme(themeKey);

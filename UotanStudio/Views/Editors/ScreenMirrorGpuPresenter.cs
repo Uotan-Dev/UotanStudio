@@ -126,7 +126,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         public void Dispose() => Interlocked.Exchange(ref _frame, null)?.Release();
         public void Render(ImmediateDrawingContext context)
         {
-            // Recycles zero-copy native resources on the render thread, even after a failure or close.
+
             while (owner._recycle.TryDequeue(out Action? recycle)) recycle();
             if (owner._closed || owner._failed) return;
             try
@@ -136,7 +136,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
                 using var lease = feature.Lease();
                 if (lease.GrContext is null) { owner._available = false; return; }
                 owner.Backend = $"Skia {lease.GrContext.Backend}";
-                _ = VideoImage.Effect.Value; // Probe shader support before selecting NV12 readback.
+                _ = VideoImage.Effect.Value;
                 if (!owner._closed) owner._available = true;
                 if (_frame is not { } image) return;
                 image.Draw(lease.SkCanvas, bounds, lease.CurrentOpacity, lease.GrContext);
@@ -234,8 +234,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         {
             float scale = (float)Math.Min(bounds.Width / Width, bounds.Height / Height);
             if (scale <= 0) return;
-            // Video images change continuously. Do not fill the application's GPU cache
-            // with obsolete frames; these uploads live only through this draw submission.
+
             using var uploadedFirst = gpu is null ? null : _first.ToTextureImage(gpu, false, false)
                 ?? throw new InvalidOperationException("Video texture upload failed.");
             using var uploadedUv = gpu is null || _uv is null ? null : _uv.ToTextureImage(gpu, false, false)
@@ -253,7 +252,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
                 using var uv = chroma.ToRawShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, new SKSamplingOptions(SKFilterMode.Nearest));
                 var effect = Effect.Value;
                 bool full = _range == VideoColorRange.Full, hd = _matrix == VideoColorMatrix.Bt709;
-                // Match the existing converter's supported matrices/ranges, including its Auto defaults.
+
                 using var uniforms = new SKRuntimeEffectUniforms(effect)
                 {
                     ["yOffset"] = full ? 0f : 16f,
@@ -339,8 +338,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
                 var (lumaTexture, lumaTarget) = lumaEgl.CreateBoundTexture(externalOes: false, GlR8);
                 var (chromaTexture, chromaTarget) = chromaEgl.CreateBoundTexture(externalOes: false, GlRg8);
                 _textures.AddRange([lumaTexture, chromaTexture]);
-                // Wrapped, not adopted: this class owns the GL textures and deletes them on recycle,
-                // so Skia must not release them behind our back.
+
                 _luma = SKImage.FromTexture(gpu,
                         new GRBackendTexture(_frame.Width, _frame.Height, false, new GRGlTextureInfo { Id = lumaTexture, Target = lumaTarget, Format = GlR8 }),
                         GRSurfaceOrigin.TopLeft, SKColorType.R8Unorm)

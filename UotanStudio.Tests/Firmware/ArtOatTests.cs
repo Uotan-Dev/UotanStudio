@@ -96,7 +96,7 @@ public sealed class ArtOatTests : IDisposable
             case "class": Put32(oat, fields + 8, uint.MaxValue); break;
             case "lookup": Put32(oat, fields + 12, uint.MaxValue); break;
             case "truncated": oat = oat[..70]; break;
-            case "companion": vdex = ArtVdexTests.Fixture(1, 10).Vdex; break;
+            case "companion": vdex = ArtVdexFixture.Fixture(1, 10).Vdex; break;
         }
         var oatPath = Write("bad.odex", oat);
         var vdexPath = Write("bad.vdex", vdex);
@@ -122,7 +122,7 @@ public sealed class ArtOatTests : IDisposable
 
     private static (byte[] Oat, byte[] Vdex) Fixture(int version = 124)
     {
-        var vdex = ArtVdexTests.Fixture(1, version == 124 ? 6 : 10).Vdex;
+        var vdex = ArtVdexFixture.Fixture(1, version == 124 ? 6 : 10).Vdex;
         var metadata = "compiler-filter\0quicken\0"u8.ToArray();
         Assert.Equal(24, metadata.Length);
         var location = "/system/app/Example.apk"u8.ToArray();

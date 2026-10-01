@@ -11,13 +11,10 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Mirroring;
 
-
 namespace UotanStudio.Services.Devices;
 
 public sealed partial class DeviceMonitorService
 {
-    // 活动 logcat 捕获登记：设备级操作（如重启）需要端点租约时，先停止捕获并等待其释放。
-    // Active logcat captures: device-level operations that need the endpoint lease stop them first.
     private sealed class LogStreamRegistration(CancellationTokenSource linked)
     {
         public CancellationTokenSource Linked { get; } = linked;
@@ -64,7 +61,7 @@ public sealed partial class DeviceMonitorService
         if (registration.Task is { } run)
         {
             try { await run.ConfigureAwait(false); }
-            catch { /* The owner already renders stream errors; stopping only guarantees release. */ }
+            catch { }
         }
     }
 
@@ -144,9 +141,6 @@ public sealed partial class DeviceMonitorService
         }
         catch (OperationCanceledException) when (!callerToken.IsCancellationRequested)
         {
-            // 设备级操作请求的停止：捕获方视为正常结束，租约已在 using 中释放。
-            // A device-level operation requested the stop: the owner sees a normal completion
-            // and the lease is already released by the using scope.
         }
         finally
         {
@@ -179,7 +173,6 @@ public sealed partial class DeviceMonitorService
         timeout.CancelAfter(TimeSpan.FromSeconds(10));
         var token = timeout.Token;
         const string successMarker = "__UOTAN_LOGCAT_CLEARED__";
-        // The legacy adb-server shell API does not expose the remote exit code.
         const string command = "logcat -b all -c && echo " + successMarker;
         var confirmed = false;
         var diagnostic = new System.Text.StringBuilder();

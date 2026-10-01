@@ -91,7 +91,6 @@ public partial class ElfInfoViewModel : Document
         }
         catch (OperationCanceledException) when (source.IsCancellationRequested)
         {
-            // Closing or replacing a document is not a parse failure.
         }
         catch (Exception ex)
         {

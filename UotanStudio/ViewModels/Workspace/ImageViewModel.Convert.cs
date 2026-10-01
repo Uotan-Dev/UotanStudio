@@ -86,8 +86,7 @@ internal partial class ImageViewModel
         var format = ImageInputService.DetectFormat(full);
 
         IsOperating = true;
-        // 捕获当前代际：OnIsOperatingChanged(true) 自增后即为本次操作的活跃代际。
-        // Capture the active generation after IsOperating flips (it increments in OnIsOperatingChanged).
+
         var generation = _progressGeneration;
         ProgressPercent = -1;
         _meter.Reset();
@@ -185,8 +184,6 @@ internal partial class ImageViewModel
         var datPath = Path.Combine(outputDir, baseName + ".new.dat");
         var transferPath = Path.Combine(outputDir, baseName + ".transfer.list");
 
-        // Sparse sources are first expanded to a raw staging file; the dat pass then reads the same raw bytes.
-        // 稀疏源先展开为 raw 暂存文件，之后 DAT 阶段读取同一份 raw 字节。
         string rawInput = source;
         string? stagingRaw = null;
         var rawPhases = 1;
@@ -216,8 +213,7 @@ internal partial class ImageViewModel
         var succeeded = false;
         try
         {
-            // DAT 阶段：baseOffset 叠加已完成的展开字节，total 为「展开+DAT」的汇总量。
-            // DAT phase: baseOffset stacks the expansion bytes already done; total sums "expansion + DAT".
+
             var datBase = (rawPhases - 1) * rawSize;
             var datTotal = checked(rawPhases * rawSize);
             var datProgress = new Progress<(long Processed, long Total)>(p =>
@@ -233,8 +229,6 @@ internal partial class ImageViewModel
                 return [datPath, transferPath];
             }
 
-            // BR 阶段：压缩 .new.dat 为 .new.dat.br，把导出文件体积并入总量以延续进度。
-            // BR phase: compress .new.dat into .new.dat.br, folding the exported size into the total.
             var datSize = new FileInfo(datPath).Length;
             var brPath = datPath + ".br";
             var brBase = checked(rawPhases * rawSize);
@@ -253,8 +247,7 @@ internal partial class ImageViewModel
         }
         finally
         {
-            // 临时 raw 始终删除；失败的转换回滚不完整的 union 产物。
-            // The staging raw is always removed; a failed conversion rolls back incomplete outputs.
+
             if (stagingRaw is not null) TryDelete(stagingRaw);
             if (!succeeded)
             {

@@ -10,12 +10,10 @@ namespace UotanStudio.ViewModels.Shell;
 public partial class KeyManagerViewModel : ViewModelBase
 {
     private readonly KeyLibraryService _library;
-    // Settings access seams; tests inject isolated delegates to avoid touching real user settings.
-    // 设置访问接缝；测试注入隔离委托以避免触碰真实用户设置。
+
     private readonly Func<AppSettings> _loadSettings = () => SettingsPersistenceService.Instance.LoadSettings();
     private readonly Func<string, string?, bool> _updateDefaultKeyId = SettingsPersistenceService.Instance.UpdateDefaultKeyId;
-    // Runtime-identity fingerprint seam; tests inject isolated keys to avoid touching real runtime files.
-    // 运行时身份指纹接缝；测试注入隔离密钥以避免触碰真实运行时文件。
+
     private readonly Func<ManagedKeyKind, string?> _runtimeFingerprint = KeyLibraryService.GetRuntimeIdentityFingerprint;
     public ObservableCollection<ManagedKey> Keys { get; } = [];
     public string[] Kinds { get; } = ["ADB", "HDC", "Payload", "JAR", "APK", "ZIP"];
@@ -63,8 +61,7 @@ public partial class KeyManagerViewModel : ViewModelBase
     /// <summary>Whether the key-size selector can be changed for the selected purpose.</summary>
     /// <summary>当前用途是否允许调整密钥位数。</summary>
     public bool IsBitsEditable => IsPayload || IsJar || IsZip;
-    // ---- APK certificate form (purpose index 4) ----
-    // ---- APK 证书表单（用途下标 4）----
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GenerateCommand))]
     private string _certificateAlias = "my-release-key";
@@ -76,9 +73,9 @@ public partial class KeyManagerViewModel : ViewModelBase
     [ObservableProperty] private string _locality = "Shanghai";
     [ObservableProperty] private string _state = "Shanghai";
     [ObservableProperty] private string _countryCode = "CN";
-    [ObservableProperty] private int _algorithmIndex; // 0 = RSA, 1 = EC
-    [ObservableProperty] private int _keySizeIndex; // index into ApkKeySizes
-    [ObservableProperty] private int _formatIndex; // ApkCertificateExportFormat
+    [ObservableProperty] private int _algorithmIndex;
+    [ObservableProperty] private int _keySizeIndex;
+    [ObservableProperty] private int _formatIndex;
     [ObservableProperty] private string _outputDirectory = "";
     /// <summary>Size/curve options for the selected algorithm; EC curves are dynamically expanded.</summary>
     /// <summary>当前算法可选的位数/曲线；EC 曲线动态扩展。</summary>
@@ -256,8 +253,6 @@ public partial class KeyManagerViewModel : ViewModelBase
     [RelayCommand]
     private Task DeleteAsync() => ConfirmDeletion && SelectedKey is { } key ? DeleteKeyAsync(key) : Task.CompletedTask;
 
-    // The caller confirms this specific row before deletion, independently of the current selection.
-    // 调用方先确认具体条目，删除目标不随当前选中项变化。
     internal Task DeleteKeyAsync(ManagedKey key) => RunAsync(async () =>
     {
         if (IsDefault(key))
@@ -283,11 +278,9 @@ public partial class KeyManagerViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanGenerate))]
     private Task GenerateAsync()
     {
-        // APK certificate generation goes through the dedicated generator + export bundle.
-        // APK 证书生成走专用生成器 + 格式导出。
+
         if (IsApkCertificate) return GenerateApkCertificateAsync();
-        // Other purposes map to the managed key library; JAR (index 3) maps to ManagedKeyKind.Jar.
-        // 其余用途映射到密钥库；JAR（下标 3）映射到 ManagedKeyKind.Jar。
+
         if (!IsLibraryPurpose) return Task.CompletedTask;
         var name = Name;
         var kind = KindIndex switch
@@ -314,8 +307,7 @@ public partial class KeyManagerViewModel : ViewModelBase
         var keyType = AlgorithmIndex == 1
             ? UotanStudio.Firmware.AndroidMeta.Apk.ApkSigningKeyType.EcP256
             : UotanStudio.Firmware.AndroidMeta.Apk.ApkSigningKeyType.Rsa2048;
-        // Map the selected size/curve onto the concrete key type: RSA sizes first, then EC curves.
-        // 把选中的位数/曲线映射到具体密钥类型：先 RSA 位数，再 EC 曲线。
+
         var size = SelectedApkKeySize;
         keyType = size switch
         {
@@ -348,8 +340,7 @@ public partial class KeyManagerViewModel : ViewModelBase
     {
         if (!IsLibraryPurpose) return Task.CompletedTask;
         var name = Name;
-        // JAR (index 3) imports as ManagedKeyKind.Jar; APK certificates use index 4.
-        // JAR（下标 3）导入为 ManagedKeyKind.Jar；APK 证书使用下标 4。
+
         var kind = KindIndex switch
         {
             (int)ManagedKeyKind.Jar => ManagedKeyKind.Jar,

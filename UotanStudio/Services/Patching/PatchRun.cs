@@ -308,7 +308,7 @@ public sealed partial class PatchRun(bool preview = false) : IAsyncDisposable
         }
         catch (Exception error)
         {
-            var errors = new List<Exception> { error };
+            List<Exception> errors = [error];
             foreach (var publication in applied.AsEnumerable().Reverse())
             {
                 try

@@ -304,8 +304,7 @@ public class HexViewer : Grid
                 case "UTF-16 BE":
                     return (new System.Text.UnicodeEncoding(true, true), "UTF-16 BE");
                 case "GB18030":
-                    // 代码页提供程序未注册时 GetEncoding 会失败，此时保持 ASCII 并如实标注。
-                    // Registration of the code-page provider may be missing; keep ASCII and label it honestly.
+
                     System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
                     return TryGetEncoding("GB18030", out var gb18030)
                         ? (gb18030, "GB18030")
@@ -359,8 +358,6 @@ public class HexViewer : Grid
             var scrollY = _scroll.Offset.Y;
             var viewportHeight = _scroll.Viewport.Height > 0 ? _scroll.Viewport.Height : Bounds.Height;
 
-            // Avalonia only hit-tests rendered geometry. Cover the visible viewport so the spacing
-            // around centered hex/ASCII glyphs remains part of each byte's pointer target.
             var hitTestHeight = Math.Max(0, Math.Min(viewportHeight, Bounds.Height - scrollY));
             if (hitTestHeight > 0)
             {
@@ -458,9 +455,6 @@ public class HexViewer : Grid
                     headerBrush);
             }
 
-            // 文本列表头显示当前生效的编码（随属性面板的编码下拉变化），不再是固定的 "ASCII"。
-            // The text-column header shows the effective encoding (driven by the properties-panel dropdown)
-            // instead of a hardcoded "ASCII".
             DrawCenteredText(context, textColumnLabel, layout.AsciiZoneStart, layout.AsciiWidth, 0, headerBrush);
             context.DrawLine(
                 new Pen(headerBrush, 1),
@@ -496,10 +490,7 @@ public class HexViewer : Grid
             for (var b = from; b <= to; b++)
             {
                 var byteInLine = (int)(b - start);
-                // 仅绘制十六进制区域的高亮矩形：ASCII 区域不单独绘制，否则会
-                // 在正确高亮的右侧出现一个更窄、位置偏移的重复高亮。
-                // Only highlight the hex-zone cell: the ASCII zone is not drawn separately, since
-                // doing so would add a narrower, right-offset duplicate highlight beside the real one.
+
                 var hexX = layout.XFromByteIndex(byteInLine, hexZone: true);
                 context.FillRectangle(brush, new Rect(hexX, y, layout.HexCellWidth, HexMetrics.LineHeight));
             }
@@ -567,8 +558,6 @@ public class HexViewer : Grid
 
             return null;
         }
-
-        // ===== 指针交互 / Pointer interaction =====
 
         private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
@@ -661,8 +650,6 @@ public class HexViewer : Grid
             var offset = (line * layout.BytesPerLine) + byteInLine;
             return Math.Min(offset, _data.Length - 1);
         }
-
-        // ===== 键盘与编辑 / Keyboard and editing =====
 
         private void OnKeyDown(object? sender, KeyEventArgs e)
         {
@@ -859,9 +846,7 @@ public class HexViewer : Grid
 
         private void InsertAscii(char c)
         {
-            // 按当前编码取首字节写入（就地单字节编辑模型；多字节字符仅写入首字节）。
-            // Take the first byte of the current encoding (in-place single-byte editing; multi-byte
-            // characters write only their first byte).
+
             var bytes = _textEncoding.GetBytes(c.ToString());
             WriteByteAtCaret(bytes.Length > 0 ? bytes[0] : (byte)c);
             AdvanceCaret();
@@ -920,8 +905,6 @@ public class HexViewer : Grid
                 return ((char)value).ToString();
             }
 
-            // 多字节编码：单字节无法组成完整序列，无法独立解码，显示占位符。
-            // Multi-byte encodings: a lone byte cannot complete a sequence; show a placeholder.
             if (!_textEncoding.IsSingleByte && _textEncoding != System.Text.Encoding.ASCII)
             {
                 return ".";
@@ -930,8 +913,6 @@ public class HexViewer : Grid
             var decoded = _textEncoding.GetString(new[] { value });
             return decoded.Length == 1 && decoded[0] is >= ' ' and <= '~' ? decoded : ".";
         }
-
-        // ===== 剪贴板 / Clipboard =====
 
         private async void CopySelection()
         {

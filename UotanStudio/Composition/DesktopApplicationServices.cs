@@ -70,8 +70,6 @@ internal sealed class DesktopApplicationServices : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        // Startup completes before the splash transitions to the closable main window.
-        // Never create a device view model just to shut down an application.
         try { _devicePanelAccessor()?.Dispose(); }
         finally { _monitor.Dispose(); }
     }

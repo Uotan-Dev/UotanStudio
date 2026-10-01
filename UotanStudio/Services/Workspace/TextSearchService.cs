@@ -28,10 +28,7 @@ internal static class TextSearchService
         var end = start + count;
         if (!options.UseRegex && !options.WholeWord)
         {
-            // 字面量搜索快路径：IndexOf(Ordinal) 比解释型 Regex 快一个量级，
-            // 且省去每次 new Regex 的构造开销（项目搜索按文件反复调用）。
-            // Literal fast path: IndexOf(Ordinal) is an order of magnitude faster
-            // than an interpreted Regex and avoids per-file Regex construction.
+
             return FindLiteral(text, options, start, end, cancellationToken);
         }
         var pattern = options.UseRegex ? options.Pattern : Regex.Escape(options.Pattern);
@@ -119,7 +116,7 @@ internal static class TextSearchService
         {
             return text;
         }
-        // The immutable source and match snapshot determine the exact result size before allocation.
+
         return string.Create((int)resultLength, (text, matches), static (destination, state) =>
         {
             var sourceOffset = 0;

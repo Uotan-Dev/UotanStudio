@@ -49,7 +49,7 @@ public partial class SplashViewModel(string initialStatus) : ViewModelBase
             SplashPhase.Ready => "Splash_Ready",
             _ => "Splash_Initializing"
         });
-        // Render priority precedes Background, so the stage is painted before the next UI-bound operation.
+
         await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Background);
     }
 }

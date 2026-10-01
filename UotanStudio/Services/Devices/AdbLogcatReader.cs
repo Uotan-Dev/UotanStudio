@@ -53,7 +53,6 @@ internal sealed class AdbLogcatReader(Func<string, Action<string>, CancellationT
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
-            // Process metadata is optional; inaccessible /proc must not stop log capture.
             names.Clear();
         }
         Volatile.Write(ref _processNames, names);

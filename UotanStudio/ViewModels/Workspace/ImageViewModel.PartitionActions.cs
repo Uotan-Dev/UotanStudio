@@ -286,8 +286,10 @@ internal partial class ImageViewModel
         var selected = clicked is null ? GetSelectedImages() : [clicked];
         foreach (var image in selected)
         {
-            // "super" 是 LP 容器（DetectFormat 按 LP 魔数判定），本质仍是可直接 fastboot flash 的整分区镜像。
-            if (image.IsDirectory || image.Format is not ("boot" or "raw" or "sparse" or "ext4" or "erofs" or "f2fs" or "super"))
+
+            if (image.IsDirectory
+                || image.Format is not ("raw" or "sparse" or "ext4" or "erofs" or "f2fs" or "super")
+                && !ImageInputService.IsBootFamilyFormat(image.Format))
             {
                 continue;
             }

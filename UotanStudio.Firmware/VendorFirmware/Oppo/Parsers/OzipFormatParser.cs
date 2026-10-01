@@ -130,7 +130,7 @@ internal sealed class OzipFormatParser : IOppFormatParser
         foreach (var zipEntry in archive.Entries)
         {
 
-            if (zipEntry.Length == 0 && zipEntry.FullName.EndsWith("/"))
+            if (zipEntry.Length == 0 && zipEntry.FullName.EndsWith('/'))
             {
                 continue;
             }

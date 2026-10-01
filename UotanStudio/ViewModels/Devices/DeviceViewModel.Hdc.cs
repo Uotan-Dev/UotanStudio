@@ -9,7 +9,6 @@ public partial class DeviceViewModel
 {
     private static bool TryHdc(DeviceInfo device)
     {
-        // Do not route HDC devices into ADB or claim a host-only handshake proves device reachability.
         return App.DeviceMonitor.HdcShellAsync(device.Device, "echo __UOTAN_HDC_READY__")
             .GetAwaiter().GetResult().Trim() == "__UOTAN_HDC_READY__";
     }

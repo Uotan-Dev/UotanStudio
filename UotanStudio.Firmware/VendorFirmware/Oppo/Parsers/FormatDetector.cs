@@ -139,23 +139,6 @@ internal static class FormatDetector
     }
 
     /// <summary>
-    /// Checks if the byte span consists entirely of zero bytes.
-    /// <para>检查字节跨度是否全部为零。</para>
-    /// </summary>
-    internal static bool IsAllZeros(ReadOnlySpan<byte> data)
-    {
-        for (var i = 0; i < data.Length; i++)
-        {
-            if (data[i] != 0)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>
     /// Checks if the byte span consists entirely of printable ASCII characters or null terminators.
     /// <para>检查字节跨度是否全部为可打印 ASCII 字符或空终止符。</para>
     /// </summary>

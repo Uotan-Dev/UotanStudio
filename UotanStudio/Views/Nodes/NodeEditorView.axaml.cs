@@ -47,8 +47,7 @@ public partial class NodeEditorView : UserControl
     {
         InitializeComponent();
         AddHandler(KeyDownEvent, OnLocalEditorKeyDown, RoutingStrategies.Bubble);
-        // 订阅画布选中变更：NodifyEditor 内部维护 SelectedItems，需在此同步到 ViewModel
-        // Subscribe to canvas selection changes: NodifyEditor keeps its own SelectedItems, so sync to the ViewModel here.
+
         Editor.SelectionChanged += OnEditorSelectionChanged;
         Editor.AddHandler(KeyDownEvent, OnEditorKeyDown, RoutingStrategies.Bubble);
         Editor.AddHandler(PointerPressedEvent, OnEditorPointerPressed,
@@ -63,13 +62,9 @@ public partial class NodeEditorView : UserControl
             RoutingStrategies.Bubble, handledEventsToo: true);
         EditorSurface.AddHandler(PointerCaptureLostEvent, OnSelectionBoxCaptureLost,
             RoutingStrategies.Bubble, handledEventsToo: true);
-        // 面板变宽/变窄时按可用宽度调整三栏最小宽度：窄面板下三栏等比例缩小而不是溢出被裁。
-        // Re-scale the pane minimums with the available width so a narrow pane shrinks all three instead of
-        // overflowing (which used to clip the right pane).
+
         PaneLayout.SizeChanged += (_, _) => ApplyPaneMinimums();
 
-        // Buttons consume bubbling pointer events. Observe the preview route and capture the pointer so
-        // a toolbox drag keeps reporting movement after it leaves the source button.
         AddHandler(PointerPressedEvent, OnToolboxItemPointerPressed,
             RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerMovedEvent, OnToolboxItemPointerMoved,
@@ -592,8 +587,7 @@ public partial class NodeEditorView : UserControl
         }
         finally
         {
-            // If the button generated a Click for the release, that event consumes the flag first.
-            // Otherwise clear it after input routing so the next intentional click still works.
+
             Dispatcher.UIThread.Post(() => _suppressToolboxClick = false, DispatcherPriority.Input);
         }
     }

@@ -8,12 +8,12 @@ internal sealed class DockTerminal : Iciclecreek.Terminal.TerminalView
 
     protected override void OnDetachedFromLogicalTree(LogicalTreeAttachmentEventArgs e)
     {
-        // Dock detaches inactive tabs and floating panels; their sessions remain owned by the tool.
+
         BeginReparent();
         base.OnDetachedFromLogicalTree(e);
         if (!_disposed && Terminal is { } terminal)
         {
-            // The upstream view unsubscribes on detach, but background programs still issue VT queries.
+
             terminal.DataReceived -= ForwardBackgroundReply;
             terminal.DataReceived += ForwardBackgroundReply;
         }

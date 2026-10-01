@@ -73,8 +73,7 @@ internal partial class ImageViewModel
         _progressGeneration++;
         if (value)
         {
-            // 新操作开始：取消尚未执行的报告自动隐藏。
-            // A new operation starts: cancel any pending report auto-hide.
+
             _hideReportCts?.Cancel();
             _hideReportCts?.Dispose();
             _hideReportCts = null;
@@ -85,8 +84,6 @@ internal partial class ImageViewModel
             return;
         }
 
-        // 操作结束：到期后清空状态与统计文本，进度区随之自动隐藏。
-        // The operation finished: clear status and stats after the delay so the progress area auto-hides.
         _hideReportCts?.Cancel();
         _hideReportCts?.Dispose();
         var cts = new CancellationTokenSource();

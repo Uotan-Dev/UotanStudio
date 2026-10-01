@@ -96,7 +96,6 @@ internal sealed class TerminalDockService(IFactory factory, IDock defaultHost) :
 
     private static IDock GetHost(Entry entry)
     {
-        // Keep the latest owner when a terminal is dragged or floated, including while it is hidden.
         if (entry.Model.Owner is IDock host) entry.Host = host;
         return entry.Host;
     }

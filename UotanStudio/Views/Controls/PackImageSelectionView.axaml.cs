@@ -110,8 +110,7 @@ public partial class PackImageSelectionView : UserControl
             var externalEntries = _groups.Where(group => group.IsExternal).SelectMany(group => group.Entries).ToArray();
             var discovered = await Task.Run(() => (Projects: projects.Select(project =>
             {
-                // 取消作为常规流程（切换页面）应提前终止而非抛异常，避免产生 OperationCanceledException。
-                // Cancellation stops the refresh early instead of throwing, since page switching cancels it routinely.
+
                 if (token.IsCancellationRequested) return default;
                 return (project.Name, Output: EnumerateImages(project.OutputDir, token),
                     Original: EnumerateImages(project.ImagesDir, token), DynamicPartitions: DeliveryDynamicPartitions.Read(project.RootPath));
@@ -166,8 +165,7 @@ public partial class PackImageSelectionView : UserControl
     internal static PackImageFileInfo[] EnumerateImages(string directory, CancellationToken token)
     {
         if (!Directory.Exists(directory)) return [];
-        // 页面切换取消枚举时提前终止，不抛取消异常；过期结果由调用方按 token 状态丢弃。
-        // Cancellation stops the enumeration early without throwing; stale results are discarded by the caller.
+
         return Directory.EnumerateFiles(directory).TakeWhile(_ => !token.IsCancellationRequested)
             .Where(path => Path.GetExtension(path).ToLowerInvariant() is
                 ".img" or ".bin" or ".raw" or ".simg" or ".sparse" or ".ext4" or ".erofs" or ".f2fs"
@@ -353,12 +351,12 @@ public partial class PackImageSelectionView : UserControl
     {
         var previous = _groups.FirstOrDefault(group => group.IsDeliveryOutputs);
         if (previous is not null) { _groups.Remove(previous); ReleaseGroup(previous); }
-        // 路径去重并排除已存在的条目，避免与项目分组重复。
+
         var paths = filePaths.Distinct(PathComparer).ToArray();
         var existing = _groups.SelectMany(group => group.FilePaths).ToHashSet(PathComparer);
         var added = paths.Where(path => !existing.Contains(path)).ToArray();
         if (added.Length == 0) { ApplyGroupOptions(); return; }
-        // 与其它来源重名时在显示名中标注来源，纯路径比较不区分。
+
         var takenNames = _groups.SelectMany(group => group.Entries).Select(entry => entry.Name).ToHashSet(PathComparer);
         var label = LanguageService.Instance.GetString("PackDialog_DeliveryOutputsSource");
         _groups.Add(ObserveGroup(new PackImageGroup(LanguageService.Instance.GetString("PackDialog_DeliveryOutputs"),

@@ -152,12 +152,7 @@ public partial class FlashView : UserControl
         _wide = wide;
         if (wide)
         {
-            // 宽屏三栏：日志在左、分区列表居中、操作栏在右；刷机包只占据列表所在的那一栏，
-            // 日志与操作栏跨满内容高度，窗口变窄时先按比例压缩日志和列表。
-            // 日志在左时关闭整页滚动：三栏内容始终压缩进视口，不出现滚动条。
-            // Wide three-column layout: log left, partitions centred, actions right. The package bar only covers
-            // the list column; the log and the action pane span the full content height. Page scrolling is off here
-            // so the three columns always fit the viewport without a scroll bar.
+
             PageScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
             FlashLayout.ColumnDefinitions =
             [
@@ -182,10 +177,7 @@ public partial class FlashView : UserControl
         }
         else
         {
-            // 窄屏：日志移到分区列表下方，列表优先占据上方高度（列表:日志 = 2.5:1），
-            // 操作栏跨满刷机包与列表两行，顶部对齐刷机包，窗口高度不足时整页滚动。
-            // Stacked layout: the log moves under the list and the list keeps 2.5:1 of the height. The action pane
-            // spans the package row and the list row so it reaches the top; short windows scroll the page.
+
             PageScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
             FlashLayout.ColumnDefinitions =
             [
@@ -260,8 +252,7 @@ public partial class FlashView : UserControl
         }
 
         _packageButtonsStacked = stacked;
-        // 在布局回调里直接改行列，会让本行的应得高度停留在旧值；放到下一轮布局再改。
-        // Mutating rows inside a layout callback leaves the row's desired height stale, so defer it to the next pass.
+
         Dispatcher.UIThread.Post(() => ApplyPackageBarLayout(stacked), DispatcherPriority.Loaded);
     }
 
@@ -1376,8 +1367,6 @@ public partial class FlashView : UserControl
         }
     }
 
-    // scatter 头探测只读有界前缀；MTK_PLATFORM 标记出现在文件起始处，不做全文扫描。
-    // The scatter probe reads a bounded prefix only; the MTK_PLATFORM marker sits at the head of the file.
     private static bool LooksLikeScatter(string path)
     {
         using var stream = File.OpenRead(path);
@@ -1457,9 +1446,6 @@ public partial class FlashView : UserControl
         finally { SetBusy(false); }
     }
 
-    // EMI 文件遵循两种互斥的负载约定；先按 BootloaderInfo 解析，失败后对同一有界 MMM 头再试 BinaryParameters。
-    // EMI files follow one of two mutually exclusive payload conventions; the bounded MMM header at
-    // offset zero is tried as BootloaderInfo first and as BinaryParameters only when that rejects.
     private static MtkEmiParameters ReadEmi(string path)
     {
         using (var stream = File.OpenRead(path))
@@ -1538,9 +1524,7 @@ public partial class FlashView : UserControl
         MtkFlashPreparation? preparation = null;
         try
         {
-            // DA 启动从 115200 握手开始由代理提速；附加运行中代理时会话已是提速后的波特率。
-            // DA startup handshakes at 115200 and the agent raises the speed; an already-running
-            // agent is attached at the post-upload rate.
+
             async Task<MtkSession> StartAgentAsync(CancellationToken token)
             {
                 var serial = new SerialConnectionOptions

@@ -75,8 +75,6 @@ public partial class DeviceView : UserControl
             vm.HdcOperationCommand.Execute(operation);
     }
 
-    // ===== 设备条目右键菜单 / Device item context menu =====
-
     /// <summary>
     /// Gets the device behind a context-menu item and selects it in the view model.
     /// <para>取出右键菜单项对应的设备并在视图模型中选中它。</para>

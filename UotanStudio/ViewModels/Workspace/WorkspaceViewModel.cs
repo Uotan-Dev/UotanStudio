@@ -183,18 +183,10 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        // Auto 模式：按扩展名+内容综合解析，命中 DTB/DTBO 即走双栏编辑器，
-        // 避免 .dtb 落入 FileViewModel 被当作普通二进制（十六进制）打开。
-        // Auto mode: resolve by extension+content; DTB/DTBO blobs route to the
-        // dual-pane editor instead of being opened as a plain binary (hex) document.
         FormatDetectionResult? detection = null;
         if (mode == EditorOpenMode.Auto)
         {
-            // 有界读取文件头参与格式与二进制内容探测：专用格式按魔数路由，其余明显二进制
-            // 统一进入 HexEditorView，避免 FileView 内嵌 Hex 与手动 Hex 使用不同宿主。
-            // Read a bounded header for format and binary-content detection: dedicated formats route by
-            // magic, while other clear binary data consistently uses HexEditorView instead of FileView's
-            // embedded fallback viewer.
+
             byte[]? header = null;
             try
             {
@@ -202,8 +194,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             }
             catch
             {
-                // 头部读取失败（文件被占用等）时退回纯扩展名解析。
-                // Fall back to extension-only resolution when the header cannot be read.
+
             }
 
             FirmwareFormatRegistry.RegisterAll();
@@ -232,65 +223,48 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        // 设备树二进制：走 DTB 双栏编辑器。
-        // Device-tree blobs open in the DTB dual-pane editor.
         if (mode == EditorOpenMode.Dtb)
         {
             await OpenDtbAsync(path);
             return;
         }
 
-        // DEX 二进制：走 DEX 双栏编辑器（结构树 + 反汇编）。
-        // DEX blobs open in the DEX dual-pane editor (structure tree + disassembly).
         if (mode == EditorOpenMode.Dex)
         {
             await OpenDexAsync(path);
             return;
         }
 
-        // AXML（AndroidManifest.xml 等二进制 XML）：走 Manifest 编辑器。
-        // AXML (AndroidManifest.xml and other binary XML): open in the Manifest editor.
         if (mode == EditorOpenMode.Axml)
         {
             await OpenManifestAsync(path);
             return;
         }
 
-        // ARSC（resources.arsc）：走 ARSC 资源表编辑器。
-        // ARSC (resources.arsc): open in the ARSC resource-table editor.
         if (mode == EditorOpenMode.Arsc)
         {
             await OpenArscAsync(path);
             return;
         }
 
-        // 十六进制：走专用 Hex 编辑器（HexView 控件）。
-        // Hex: open in the dedicated Hex editor (HexView control).
         if (mode == EditorOpenMode.Hex)
         {
             await OpenHexAsync(path);
             return;
         }
 
-        // APK 包：走 APK 元数据编辑器（图标/包名/版本/权限/ABI）。
-        // APK packages open in the APK metadata editor (icon/package/version/permissions/ABIs).
         if (mode == EditorOpenMode.Apk)
         {
             await OpenApkAsync(path);
             return;
         }
 
-        // 固件元数据面板：扩展名命中格式处理器注册表（.img/.pac/.ops/.nb0 等）。
-        // Firmware metadata panel: extensions registered by the format handlers (.img/.pac/.ops/.nb0 etc.).
         if (mode == EditorOpenMode.Firmware)
         {
             await OpenFirmwareAsync(path, detection);
             return;
         }
 
-        // 文件系统镜像（ext4/EROFS/F2FS raw img）：走文件管理器文档编辑器（内部目录树）。
-        // Filesystem images (ext4/EROFS/F2FS raw img) open in the file-manager document editor
-        // (internal directory tree).
         if (mode == EditorOpenMode.FileSystem)
         {
             await OpenFileSystemAsync(path);
@@ -318,8 +292,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
 
         if (existing is not null)
         {
-            // 已打开文档：若请求方式不同则切换视图模式并重载。
-            // Already-open document: switch view mode and reload when a different mode is requested.
+
             if (mode != EditorOpenMode.Auto && existing.OpenMode != mode)
             {
                 existing.OpenMode = mode;
@@ -343,10 +316,6 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
 
         await document.LoadContentAsync(fullPath, mode);
 
-        // 内容加载完成后补发活动文档消息，使属性面板刷新出行数/字符数/编码等真实值
-        // （ActiveDockable 在加载前就已触发一次刷新，当时文本尚未就绪，属性为缺省值）。
-        // Re-send the active-document message after content loads so the properties panel shows
-        // the real line/char counts and encoding (the first refresh fired before the text was ready).
         if (ReferenceEquals(documentDock.ActiveDockable, document))
         {
             Services.Workspace.DocumentNotifications.Publish(document);
@@ -533,11 +502,6 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
                 $"Failed to open firmware info for '{fullPath}': {ex.Message}");
         }
 
-        // 固件信息无法解析（格式未识别或元数据读取失败）时回退十六进制视图：
-        // 移除刚创建的固件文档并改用 Hex 编辑器打开，仅对本次新建且失败的文档生效。
-        // When firmware info cannot be parsed (unrecognized format or metadata read failure), fall back
-        // to the hex view: remove the just-created firmware document and reopen it in the Hex editor;
-        // only applies to newly-created documents that failed to load.
         if (document.HasError)
         {
             LogService.Instance.Write(LogLevel.Warn, "Workspace",
@@ -552,10 +516,6 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
-        // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
-        // Re-send the active-document message after load so the properties panel shows real values
-        // (the first refresh fired when the document data was not yet ready).
         if (ReferenceEquals(documentDock.ActiveDockable, document))
         {
             Services.Workspace.DocumentNotifications.Publish(document);
@@ -671,8 +631,6 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        // 按活动文档类型发送对应重载的消息，属性面板据此切换展示路径。
-        // Send the matching message overload by document type so the properties panel can switch paths.
         Services.Workspace.DocumentNotifications.Publish(dock.ActiveDockable);
     }
 
@@ -704,9 +662,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     {
         if (dto.Kind == "Compare")
         {
-            // 第一份对比文档复用文档区的实例，其余（同一会话里在新标签打开的文件对比）各开一个新标签。
-            // The first compare document reuses the document area's instance; the rest (file comparisons opened in
-            // new tabs during the session) each get their own tab.
+
             var compare = _compareDocument is null ? OpenCompareDocument() : OpenNewCompareDocument();
             if (compare is not null)
                 foreach (var path in new[] { dto.CompareLeftPath, dto.CompareRightPath })

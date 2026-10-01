@@ -76,6 +76,7 @@ public partial class FirmwareInfoViewModel
         {
             "Android Verified Boot (AVB)" => LanguageService.Instance.GetString("FirmwareInfo_AvbSummary"),
             "EROFS" or "EXT4" or "F2FS" => LanguageService.Instance.GetString("FirmwareInfo_FilesystemSummary", FormatName),
+            "FAT" or "EXFAT" => LanguageService.Instance.GetString("FirmwareInfo_FatSummary", FormatName),
             "Android Boot / Vendor Boot Image" => LanguageService.Instance.GetString("FirmwareInfo_BootSummary"),
             "Android OTA Payload (payload.bin)" => LanguageService.Instance.GetString("FirmwareInfo_PayloadSummary"),
             "Android Sparse Image (simg)" => LanguageService.Instance.GetString("FirmwareInfo_SparseSummary"),

@@ -325,9 +325,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
 
     private void QueuedRefresh()
     {
-        // 计时器回调来自线程池；释放前入队的通知可能仍留在 Dispatcher 队列里，这里再判一次。
-        // The timer fires on the thread pool, so a notification queued before disposal can still be
-        // sitting in the dispatcher queue; check again here.
+
         if (!_disposed)
         {
             _ = RefreshAsync();

@@ -104,9 +104,6 @@ internal sealed class ProjectWorkspaceCoordinator : IProjectWorkspace
         {
             try
             {
-                // Use the same save contract as the Save command for every editor that exposes
-                // ISaveableDocument (including Hex, ARSC, DEX, APK and future editors). Binary
-                // text views remain excluded because their Save operation is intentionally a no-op.
                 if (!DocumentSaveService.IsDirty(document)
                     || document is FileViewModel { IsBinary: true }) continue;
                 await DocumentSaveService.SaveAsync(document);

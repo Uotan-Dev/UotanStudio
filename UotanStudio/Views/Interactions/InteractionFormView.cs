@@ -49,7 +49,7 @@ public sealed class InteractionFormView : UserControl
         InteractionResult result;
         try
         {
-            // Files or directories can disappear after the last keystroke.
+
             result = _state.Submit();
         }
         catch (InvalidOperationException)

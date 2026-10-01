@@ -82,7 +82,6 @@ public partial class CodeEditor : TextEditor
     {
         base.OnApplyTemplate(e);
 
-        // AvaloniaEdit disables auto-hide in its template, which leaves Semi scrollbars expanded.
         foreach (var scrollViewer in this.GetVisualDescendants().OfType<ScrollViewer>())
         {
             scrollViewer.SetCurrentValue(ScrollViewer.AllowAutoHideProperty, true);
@@ -122,13 +121,7 @@ public partial class CodeEditor : TextEditor
 
         try
         {
-            // 首次安装或主题变化时重建 TextMate 安装（InstallTextMate 在安装时绑定主题）。
-            // 不调用 SetTheme：GetTheme(scopeName) 对部分语言（如 xml）会返回无效/空主题，
-            // 导致 TextMateSharp 内部 ParseTheme 抛 NullReferenceException。
-            // Rebuild the TextMate installation on first install or theme change (InstallTextMate
-            // binds the theme at install time). SetTheme is deliberately NOT used: GetTheme(scopeName)
-            // yields an invalid/null theme for some languages (e.g. xml), which makes TextMateSharp's
-            // internal ParseTheme throw a NullReferenceException.
+
             if (_installation is null || _installedTheme != theme)
             {
                 _installation?.Dispose();
@@ -137,15 +130,12 @@ public partial class CodeEditor : TextEditor
                 _installedTheme = theme;
             }
 
-            // 语法（语言）变化时仅更新 grammar，不重建安装。
-            // Grammar (language) changes only update the grammar, without rebuilding the installation.
             var scopeName = _options!.GetScopeByLanguageId(languageId);
             _installation.SetGrammar(scopeName);
         }
         catch
         {
-            // 高亮安装/更新失败时忽略，保留无高亮但可用的编辑器。
-            // Ignore highlight install/update failures, keeping the editor usable without highlighting.
+
         }
     }
 }

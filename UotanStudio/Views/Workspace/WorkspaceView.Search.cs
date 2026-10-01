@@ -53,7 +53,6 @@ public partial class WorkspaceView
             return;
         }
 
-        // Follow the real dock bounds so resizing side panels never moves search outside the document area.
         var tabs = _searchDocumentDock.GetVisualDescendants().OfType<DocumentTabStrip>()
             .FirstOrDefault(control => control.IsEffectivelyVisible);
         var contentTop = tabs?.TranslatePoint(new Point(0, tabs.Bounds.Height), _searchDocumentDock)?.Y ?? 0;

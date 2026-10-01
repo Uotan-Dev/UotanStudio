@@ -49,6 +49,8 @@ public static class FirmwareFormatRegistry
             Register(new FileSystem.F2fs.F2fsFormatHandler());
             Register(new FileSystem.Romfs.RomfsFormatHandler());
             Register(new FileSystem.Squashfs.SquashfsFormatHandler());
+            Register(new FileSystem.Fat.FatFormatHandler());
+            Register(new FileSystem.Fat.ExFatFormatHandler());
 
             Register(new BootSecurity.Avb.AvbFormatHandler());
             Register(new BootSecurity.BootImage.BootImageFormatHandler());
