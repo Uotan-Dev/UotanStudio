@@ -21,12 +21,12 @@ public sealed class QualcommImageViewModelTests
         File.Exists(Environment.GetEnvironmentVariable("UOTAN_ELF_FIREHOSE_SAMPLE"));
 
     [Fact(Skip = "Set UOTAN_ELF_FIREHOSE_SAMPLE to the SM7150 DDR Firehose sample.", SkipUnless = nameof(FirehoseSampleAvailable))]
-    public async Task AnalyzeAsync_Sm7150Firehose_ExposesDeclaredMetadataAndAutomaticRouting()
+    public async Task AnalyzeAsync_Sm7150Firehose_ExposesDeclaredMetadata()
     {
         var path = Environment.GetEnvironmentVariable("UOTAN_ELF_FIREHOSE_SAMPLE")!;
         var header = UotanStudio.Firmware.Core.FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
 
-        Assert.Equal(EditorOpenMode.Qualcomm, FileOpenMode.ResolveMode(path, header));
+        Assert.Equal(EditorOpenMode.Elf, FileOpenMode.ResolveMode(path, header));
         var report = await new QualcommWorkspaceAnalyzer().AnalyzeAsync(path, null, TestContext.Current.CancellationToken);
 
         Assert.Contains(report.Metadata, field => field.Name == "OemId" && field.Value == "0x72");
@@ -39,14 +39,14 @@ public sealed class QualcommImageViewModelTests
     [InlineData("renamed.txt")]
     [InlineData("program.bin")]
     [InlineData("program")]
-    public void ResolveMode_ValidatedQualcommElf_RoutesByContent(string name)
+    public void ResolveMode_ValidatedQualcommElf_RoutesToElfPanel(string name)
     {
         using var temp = new TempDirectory();
         var data = QualcommMetadataFixture.CreateElf(new byte[16], QualcommMetadataFixture.CreateMbn(6, 0, 120));
         var path = temp.WriteBytes(name, data);
 
-        Assert.Equal(EditorOpenMode.Qualcomm, FileOpenMode.ResolveMode(path, data[..64]));
-        Assert.Equal(EditorOpenMode.Qualcomm, FileOpenMode.ResolveMode("missing.elf", data));
+        Assert.Equal(EditorOpenMode.Elf, FileOpenMode.ResolveMode(path, data[..64]));
+        Assert.Equal(EditorOpenMode.Elf, FileOpenMode.ResolveMode("missing.elf", data));
     }
 
     [Fact]

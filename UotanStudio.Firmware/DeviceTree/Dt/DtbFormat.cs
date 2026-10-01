@@ -102,7 +102,7 @@ public static class DtbFormat
 
         var strings = new List<string>();
         var stringOffsets = new Dictionary<string, int>(StringComparer.Ordinal);
-        var stringsBytes = new List<byte> { 0 };
+        List<byte> stringsBytes = [0];
 
         int GetStringOffset(string name)
         {

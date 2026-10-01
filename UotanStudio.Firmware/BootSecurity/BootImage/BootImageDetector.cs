@@ -117,8 +117,9 @@ public static class BootImageDetector
 
         /// <summary>
         /// Annotations recorded during detection: a <c>type</c> key for every outcome, plus a
-        /// <c>version</c> key for vendor boot images and for AOSP images of at least 44 bytes.
-        /// <para>检测期间记录的注释：所有结果均含 <c>type</c> 键；vendor boot 以及
+        /// <c>version</c> key for vendor boot images of more than 8 bytes and for AOSP images of at
+        /// least 44 bytes.
+        /// <para>检测期间记录的注释：所有结果均含 <c>type</c> 键；超过 8 字节的 vendor boot 以及
         /// 不少于 44 字节的 AOSP 镜像还含 <c>version</c> 键。</para>
         /// </summary>
         /// <value>The detection annotations; empty before any probe runs. <para>检测注释；未探测时为空。</para></value>
@@ -251,7 +252,10 @@ public static class BootImageDetector
             result.Confidence = 100;
             result.Description = "Android Vendor Boot Image";
             result.Metadata["type"] = "vendor_boot";
-            result.Metadata["version"] = data[8].ToString();
+            if (data.Length > 8)
+            {
+                result.Metadata["version"] = data[8].ToString();
+            }
             return result;
         }
 

@@ -91,8 +91,7 @@ internal partial class ImageViewModel
             {
                 var (entry, paths) = requests[index];
                 StatusText = $"[{index + 1}/{requests.Length}] {operation}: {entry.DisplayName}";
-                // 条目内进度换算为总进度：当前条目占用 1/N 的进度条区间。
-                // Scale in-item progress into overall progress: each item owns a 1/N slice of the bar.
+
                 var itemProgress = CreateItemProgress(index, requests.Length);
                 try
                 {
@@ -118,8 +117,7 @@ internal partial class ImageViewModel
                     else
                     {
                         Directory.CreateDirectory(paths.OutputRoot);
-                        // 写入前确认同名目标：存在且作者选择跳过时不计入失败。
-                        // Confirm same-named targets before writing; a declined overwrite counts as skipped, not failed.
+
                         var conflicts = ImageOutputService.GetPlannedOutputs(paths, operation).Where(File.Exists).ToArray();
                         if (!await ConfirmPackOverwriteAsync(conflicts))
                         {
@@ -234,8 +232,9 @@ internal partial class ImageViewModel
         using var metadataScope = UotanStudio.Firmware.Core.Repacking.RepackMetadata.UseContext(
             ProjectContextService.Instance.CaptureMetadataContext(targetDirectory));
         UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
-        var handler = FormatDetector.Detect(paths.Source)
-            ?? throw new IOException("Unsupported firmware format.");
+        var handler = ImageInputService.IsBootFamilyFormat(entry.Format)
+            ? new UotanStudio.Firmware.BootSecurity.BootImage.BootImageFormatHandler()
+            : FormatDetector.Detect(paths.Source) ?? throw new IOException("Unsupported firmware format.");
         if (Directory.Exists(targetDirectory)
             && !await RequestExtractOverwriteAsync(targetDirectory))
         {
@@ -250,14 +249,20 @@ internal partial class ImageViewModel
             if (erofsDevices is null) return (false, true, targetDirectory);
         }
 
+        var sourceInfo = new FileInfo(paths.Source);
+        LogService.Instance.Write(LogLevel.Info, "Images",
+            $"Extracting {entry.DisplayName} | source={paths.Source} | size={ProgressMeter.FormatSize(sourceInfo.Length)} | format={handler.FormatName} | target={targetDirectory}");
+
         var byteProgress = CreateFileSystemProgress(entry.DisplayName);
 
         var result = await ExtractionDirectory.ReplaceAsync(targetDirectory, async () => entry.Format switch
         {
-            "boot" => await Task.Run(() => _firmware.UnpackBootAsync(paths.Source, targetDirectory), cancellationToken),
+            "boot" or "init_boot" or "recovery" or "vendor_boot" => await Task.Run(() => _firmware.UnpackBootAsync(paths.Source, targetDirectory), cancellationToken),
             "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(paths.Source, targetDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken), cancellationToken),
             "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(paths.Source, targetDirectory, paths.Name,
                 byteProgress: byteProgress, erofsExtraDevicePaths: erofsDevices, cancellationToken: cancellationToken),
+            // boot 家族其余变体（MTK/Samsung/DHTB/ChromeOS/Tegra/zImage/RSCE）由 BootImageFormatHandler 分派解包。
+            // Remaining boot-family variants (MTK/Samsung/DHTB/ChromeOS/Tegra/zImage/RSCE) dispatch through BootImageFormatHandler.
             _ => await Task.Run(async () =>
             {
                 var options = new UotanStudio.Firmware.Core.UnpackOptions { FileSystemProgress = byteProgress };
@@ -267,6 +272,7 @@ internal partial class ImageViewModel
             })
         });
         LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Images", result.Summary);
+        if (result.Success) LogExtractionContents(targetDirectory);
         return (result.Success, false, targetDirectory);
     }
 
@@ -314,9 +320,7 @@ internal partial class ImageViewModel
     private static string ResolveUnpackTargetDirectory(ImageOperationPaths paths)
     {
         var basePath = paths.UnpackedDirectory;
-        // 标准目录可正常用作目录时直接返回（已存在的同名目录由覆盖确认流程处理）。
-        // Return the standard path when it can be used as a directory; a pre-existing directory is
-        // handled by the overwrite-confirmation flow instead.
+
         if (!File.Exists(basePath))
         {
             return basePath;
@@ -362,6 +366,8 @@ internal partial class ImageViewModel
         {
             var queue = new Queue<ImageEntryViewModel>(entries);
             var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var seenNames = new HashSet<string>(entries.Select(entry => entry.DisplayName), StringComparer.OrdinalIgnoreCase);
             var done = 0;
             var total = queue.Count;
             while (queue.Count > 0)
@@ -372,9 +378,7 @@ internal partial class ImageViewModel
                 if (!processed.Add(source)) continue;
                 StatusText = string.Format(LanguageService.Instance.GetString("Image_FsStageFile"),
                     LanguageService.Instance.GetString("Image_FsExtracting"), entry.DisplayName);
-                // 条目内进度换算为总进度：队列可能动态增长，按已完成数近似分片。
-                // Scale in-item progress into overall progress; the queue may grow, so slices
-                // are approximated by the completed count.
+
                 var itemProgress = CreateItemProgress(done, total, growingQueue: true);
                 try
                 {
@@ -390,6 +394,7 @@ internal partial class ImageViewModel
                             var nestedImages = await Task.Run(() => CollectNestedImages(targetDirectory));
                             foreach (var nested in nestedImages)
                             {
+                                if (!seenNames.Add(nested.DisplayName)) continue;
                                 total++;
                                 queue.Enqueue(nested);
                             }
@@ -413,6 +418,34 @@ internal partial class ImageViewModel
         }
         finally { IsOperating = false; }
         if (failed > 0) throw new IOException(StatusText);
+    }
+
+    /// <summary>
+    /// <para>把解包目录根层的产物统计（目录与文件数量）写成一行统一日志，不逐条展开条目，
+    /// 避免递归解包大量嵌套镜像时刷屏。</para>
+    /// Writes a single unified-log line with the root-level extraction tally (directory and file
+    /// counts) instead of listing entries one by one, so recursive unpacking of nested images
+    /// does not flood the log.
+    /// </summary>
+    /// <param name="directory"><para>解包目标目录。</para>Extraction target directory.</param>
+    private static void LogExtractionContents(string directory)
+    {
+        try
+        {
+            var directories = 0;
+            var files = 0;
+            foreach (var path in Directory.EnumerateFileSystemEntries(directory))
+            {
+                if (Directory.Exists(path)) directories++;
+                else files++;
+            }
+            LogService.Instance.Write(LogLevel.Info, "Images",
+                $"Extracted contents: {directories} dir(s), {files} file(s)");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Images", $"Cannot list extraction contents of {directory}: {ex.Message}");
+        }
     }
 
     /// <summary>

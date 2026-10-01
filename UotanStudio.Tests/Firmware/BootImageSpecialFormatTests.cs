@@ -7,6 +7,7 @@ using UotanStudio.Firmware.BootSecurity.BootImage;
 using UotanStudio.Firmware.BootSecurity.BootImage.Formats;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -358,6 +359,221 @@ public sealed class BootImageSpecialFormatTests
         Assert.Equal(CompressionType.Gzip, parsed.CompressionType);
         Assert.Equal(0x40, parsed.CompressedOffset);
         Assert.Equal(16, parsed.CompressedSize);
+    }
+
+    [Fact]
+    public void MtkBootMagic_IsAcceptedByHandlerCanHandle()
+    {
+        var data = new byte[512];
+        BinaryPrimitives.WriteUInt32LittleEndian(data, 0x58881688);
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllBytes(path, data);
+
+            Assert.True(new BootImageFormatHandler().CanHandle(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void DhtbMagic_IsAcceptedByHandlerCanHandle()
+    {
+        var data = new byte[512];
+        BinaryPrimitives.WriteUInt32LittleEndian(data, 0x42484444);
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllBytes(path, data);
+
+            Assert.True(new BootImageFormatHandler().CanHandle(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task MtkBootImage_UnpacksComponentsThroughHandler()
+    {
+        var data = new byte[10240];
+        BinaryPrimitives.WriteUInt32LittleEndian(data, 0x58881688);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(40), 4);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(44), 1536);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(48), 8);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(52), 3584);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(56), 2);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(60), 5632);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(68), 2048);
+        new byte[] { 1, 2, 3, 4 }.CopyTo(data.AsSpan(2048));
+        "070701AB"u8.CopyTo(data.AsSpan(4096));
+        data[6144] = 9;
+        data[6145] = 8;
+
+        var root = Path.Combine(Path.GetTempPath(), "uotan-mtk-unpack-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "boot.img");
+            await File.WriteAllBytesAsync(source, data, TestContext.Current.CancellationToken);
+            var output = Path.Combine(root, "out");
+
+            var result = await new BootImageFormatHandler().UnpackAsync(source, output,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.Summary);
+            Assert.Equal([1, 2, 3, 4], await File.ReadAllBytesAsync(Path.Combine(output, "kernel"), TestContext.Current.CancellationToken));
+            Assert.Equal("070701AB"u8.ToArray(), await File.ReadAllBytesAsync(Path.Combine(output, "ramdisk"), TestContext.Current.CancellationToken));
+            Assert.Equal("070701AB"u8.ToArray(), await File.ReadAllBytesAsync(Path.Combine(output, "ramdisk.cpio"), TestContext.Current.CancellationToken));
+            Assert.Equal([9, 8], await File.ReadAllBytesAsync(Path.Combine(output, "second"), TestContext.Current.CancellationToken));
+            Assert.False(File.Exists(Path.Combine(output, "dtb")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task SamsungPxaBootImage_UnpacksComponentsThroughHandler()
+    {
+        var data = new byte[10240];
+        "ANDROID!"u8.CopyTo(data);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(8), 4);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(16), 8);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(24), 2);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(36), 2048);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(40), 5);
+        new byte[] { 1, 2, 3, 4 }.CopyTo(data.AsSpan(2048));
+        "070701AB"u8.CopyTo(data.AsSpan(4096));
+        data[6144] = 9;
+        data[6145] = 8;
+        new byte[] { 5, 6, 7, 8, 9 }.CopyTo(data.AsSpan(8192));
+
+        var root = Path.Combine(Path.GetTempPath(), "uotan-samsung-unpack-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "boot.img");
+            await File.WriteAllBytesAsync(source, data, TestContext.Current.CancellationToken);
+            var output = Path.Combine(root, "out");
+
+            var result = await new BootImageFormatHandler().UnpackAsync(source, output,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.Summary);
+            Assert.Equal([1, 2, 3, 4], await File.ReadAllBytesAsync(Path.Combine(output, "kernel"), TestContext.Current.CancellationToken));
+            Assert.Equal("070701AB"u8.ToArray(), await File.ReadAllBytesAsync(Path.Combine(output, "ramdisk.cpio"), TestContext.Current.CancellationToken));
+            Assert.Equal([9, 8], await File.ReadAllBytesAsync(Path.Combine(output, "second"), TestContext.Current.CancellationToken));
+            Assert.Equal([5, 6, 7, 8, 9], await File.ReadAllBytesAsync(Path.Combine(output, "extra"), TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DhtbBootImage_UnpacksComponentsThroughHandler()
+    {
+        var data = new byte[10240];
+        BinaryPrimitives.WriteUInt32LittleEndian(data, 0x42484444);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(8), 512);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(12), 4);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(16), 1536);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(24), 8);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(28), 3584);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(36), 2);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(40), 5632);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(52), 2048);
+        new byte[] { 1, 2, 3, 4 }.CopyTo(data.AsSpan(2048));
+        "070701AB"u8.CopyTo(data.AsSpan(4096));
+        data[6144] = 9;
+        data[6145] = 8;
+
+        var root = Path.Combine(Path.GetTempPath(), "uotan-dhtb-unpack-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "boot.img");
+            await File.WriteAllBytesAsync(source, data, TestContext.Current.CancellationToken);
+            var output = Path.Combine(root, "out");
+
+            var result = await new BootImageFormatHandler().UnpackAsync(source, output,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.Summary);
+            Assert.Equal([1, 2, 3, 4], await File.ReadAllBytesAsync(Path.Combine(output, "kernel"), TestContext.Current.CancellationToken));
+            Assert.Equal("070701AB"u8.ToArray(), await File.ReadAllBytesAsync(Path.Combine(output, "ramdisk"), TestContext.Current.CancellationToken));
+            Assert.Equal([9, 8], await File.ReadAllBytesAsync(Path.Combine(output, "second"), TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task TegraBlobImage_PublishesExtractOnlyRepackMetadata()
+    {
+        var data = new byte[320];
+        "NVDA"u8.CopyTo(data);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(12), 4);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(16), 256);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(20), 4);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(24), 260);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(36), 256);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(40), 320);
+        new byte[] { 1, 2, 3, 4 }.CopyTo(data.AsSpan(256));
+
+        var root = Path.Combine(Path.GetTempPath(), "uotan-tegra-unpack-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "blob.img");
+            await File.WriteAllBytesAsync(source, data, TestContext.Current.CancellationToken);
+            var output = Path.Combine(root, "out");
+
+            var result = await new BootImageFormatHandler().UnpackAsync(source, output,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.Summary);
+            Assert.Equal([1, 2, 3, 4], await File.ReadAllBytesAsync(Path.Combine(output, "kernel"), TestContext.Current.CancellationToken));
+            var metadata = RepackMetadata.Read(output);
+            Assert.NotNull(metadata);
+            Assert.False(metadata.CanPackDirectory);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void VendorBootDetector_MinimumEightByteMagic_DetectsWithoutVersionAnnotation()
+    {
+        var result = BootImageDetector.Detect("VNDRBOOT"u8.ToArray());
+
+        Assert.Equal(BootImageDetector.ImageFormat.VendorBoot, result.Format);
+        Assert.Equal("vendor_boot", result.Metadata["type"]);
+        Assert.False(result.Metadata.ContainsKey("version"));
+    }
+
+    [Fact]
+    public void VendorBootDetector_NineByteMagic_RecordsVersionAnnotation()
+    {
+        var data = new byte[9];
+        "VNDRBOOT"u8.CopyTo(data);
+        data[8] = 4;
+
+        var result = BootImageDetector.Detect(data);
+
+        Assert.Equal(BootImageDetector.ImageFormat.VendorBoot, result.Format);
+        Assert.Equal("4", result.Metadata["version"]);
     }
 
     [Fact]

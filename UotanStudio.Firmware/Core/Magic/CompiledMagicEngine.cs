@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
@@ -141,8 +142,8 @@ public static class CompiledMagicEngine
     /// Matches the bytes, returning the best hit (strength first, then load order).
     /// </summary>
     /// <param name="data">
-    /// File bytes to probe; the span is copied internally and may be a slice of a larger buffer. An
-    /// empty span yields no match. <para>待探测的文件字节；内部会复制，因此可以是更大缓冲区的切片。空区间不产生匹配。</para>
+    /// File bytes to probe; the span is copied into a pooled buffer and may be a slice of a larger
+    /// buffer. An empty span yields no match. <para>待探测的文件字节；内部会复制到复用缓冲区，因此可以是更大缓冲区的切片。空区间不产生匹配。</para>
     /// </param>
     /// <returns>
     /// The best hit, ranked by rule strength and, on a tie, by load order, or <see langword="null"/>
@@ -165,8 +166,21 @@ public static class CompiledMagicEngine
             return null;
         }
 
-        byte[] file = data.ToArray();
-        int len = file.Length;
+        int len = data.Length;
+        byte[] file = ArrayPool<byte>.Shared.Rent(len);
+        try
+        {
+            data.CopyTo(file);
+            return MatchRules(file, len);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(file);
+        }
+    }
+
+    private static MagicInfo? MatchRules(byte[] file, int len)
+    {
         MagicInfo? best = null;
 
         foreach (var rule in TopLevel)

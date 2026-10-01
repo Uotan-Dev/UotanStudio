@@ -414,6 +414,11 @@ public class BootImageParser : IDisposable
         Header.HeaderSize = effectiveHeaderSize;
         var signatureSize = isV4 ? Header.SignatureSize : 0u;
         var pageSize = DetectV3V4PageSize(effectiveHeaderSize, Header.KernelSize, Header.RamdiskSize, signatureSize, imageLength);
+        if (image.CanSeek && Header.RamdiskSize > 0)
+        {
+            pageSize = RefinePageSizeByContent(image, effectiveHeaderSize, Header.KernelSize, Header.RamdiskSize, pageSize, imageLength);
+        }
+
         Header.PageSize = pageSize;
 
         var alignedHeaderLength = ((long)effectiveHeaderSize + pageSize - 1) / pageSize * pageSize;
@@ -489,6 +494,109 @@ public class BootImageParser : IDisposable
     }
 
     private static long AlignUp(uint value, uint pageSize) => ((long)value + pageSize - 1) / pageSize * pageSize;
+
+    /// <summary>
+    /// Refines an arithmetic page-size guess with content evidence for version 3/4 images.
+    /// <para>用内容证据校正 V3/V4 镜像的算术页大小推断。</para>
+    /// </summary>
+    /// <param name="image">Seekable image stream. <para>可寻址的镜像流。</para></param>
+    /// <param name="headerSize">Effective (canonical-clamped) header size in bytes. <para>已钳制的头部大小（字节）。</para></param>
+    /// <param name="kernelSize">Declared kernel section size. <para>声明的 kernel 区段大小。</para></param>
+    /// <param name="ramdiskSize">Declared ramdisk section size; must be non-zero. <para>声明的 ramdisk 区段大小；必须非零。</para></param>
+    /// <param name="arithmeticPageSize">Result of <see cref="DetectV3V4PageSize"/>. <para><see cref="DetectV3V4PageSize"/> 的推断结果。</para></param>
+    /// <param name="imageLength">Total image length in bytes. <para>镜像总长度（字节）。</para></param>
+    /// <returns>
+    /// <paramref name="arithmeticPageSize"/> when its own ramdisk offset already carries a recognizable kernel/ramdisk
+    /// container signature or no smaller candidate does; otherwise the largest candidate whose ramdisk content is a
+    /// known container.
+    /// <para>当算术推断自身对应偏移的 ramdisk 已是可识别容器、或没有更小候选命中时返回
+    /// <paramref name="arithmeticPageSize"/>；否则返回 ramdisk 内容为已知容器的最大候选。</para>
+    /// </returns>
+    private static uint RefinePageSizeByContent(Stream image, uint headerSize, uint kernelSize, uint ramdiskSize, uint arithmeticPageSize, long imageLength)
+    {
+        if (ContentHasContainerSignature(image, headerSize, kernelSize, ramdiskSize, arithmeticPageSize, imageLength))
+        {
+            return arithmeticPageSize;
+        }
+
+        foreach (var candidate in V3V4PageSizeCandidates)
+        {
+            if (candidate == arithmeticPageSize)
+            {
+                continue;
+            }
+
+            if (candidate < headerSize)
+            {
+                break;
+            }
+
+            if (ContentHasContainerSignature(image, headerSize, kernelSize, ramdiskSize, candidate, imageLength))
+            {
+                return candidate;
+            }
+        }
+
+        return arithmeticPageSize;
+    }
+
+    /// <summary>
+    /// Checks whether the ramdisk section of a candidate page size starts with a recognizable kernel/ramdisk container signature.
+    /// <para>检查某个候选页大小下 ramdisk 区段的起始字节是否为可识别的内核/ramdisk 容器魔数。</para>
+    /// </summary>
+    /// <param name="image">Seekable image stream. <para>可寻址的镜像流。</para></param>
+    /// <param name="headerSize">Effective header size in bytes. <para>已钳制的头部大小（字节）。</para></param>
+    /// <param name="kernelSize">Declared kernel section size. <para>声明的 kernel 区段大小。</para></param>
+    /// <param name="ramdiskSize">Declared ramdisk section size. <para>声明的 ramdisk 区段大小。</para></param>
+    /// <param name="pageSize">Candidate page size to evaluate. <para>要评估的候选页大小。</para></param>
+    /// <param name="imageLength">Total image length in bytes. <para>镜像总长度（字节）。</para></param>
+    /// <returns>
+    /// <see langword="true"/> when the ramdisk section is in range and its leading bytes match a known container signature.
+    /// <para>ramdisk 区段在镜像范围内且起始字节匹配已知容器魔数时为 <see langword="true"/>。</para>
+    /// </returns>
+    private static bool ContentHasContainerSignature(Stream image, uint headerSize, uint kernelSize, uint ramdiskSize, uint pageSize, long imageLength)
+    {
+        long AlignPage(long value, uint page) => (value + page - 1) / page * page;
+        var kernelOffset = AlignPage(headerSize, pageSize);
+        var ramdiskOffset = AlignPage(kernelOffset + kernelSize, pageSize);
+        if (ramdiskOffset > imageLength || ramdiskSize > imageLength - ramdiskOffset)
+        {
+            return false;
+        }
+
+        var available = (int)Math.Min(ramdiskSize, imageLength - ramdiskOffset);
+        image.Position = ramdiskOffset;
+        Span<byte> probe = stackalloc byte[8];
+        var read = image.ReadAtLeast(probe, Math.Min(6, available), throwOnEndOfStream: false);
+        return HasRecognizableContainerSignature(probe[..read]);
+    }
+
+    /// <summary>
+    /// Recognizes the leading magic of the container layouts used for boot kernel/ramdisk components.
+    /// <para>识别 boot 内核/ramdisk 组件所用容器布局的首部魔数。</para>
+    /// </summary>
+    /// <param name="probe">Leading bytes of a component; a shorter probe is checked against the signatures that fit.
+    /// <para>组件的起始字节；更短的探测按能容纳的签名逐一比对。</para></param>
+    /// <returns>
+    /// <see langword="true"/> for CPIO (newc/crc/odc), gzip, LZ4 frame, LZ4 legacy, Zstd, XZ, BZip2, Brotli, raw LZMA or ELF magic.
+    /// <para>命中 CPIO（newc/crc/odc）、gzip、LZ4 帧、LZ4 传统、Zstd、XZ、BZip2、Brotli、原始 LZMA 或 ELF 魔数时为 <see langword="true"/>。</para>
+    /// </returns>
+    private static bool HasRecognizableContainerSignature(ReadOnlySpan<byte> probe)
+    {
+        if (probe.Length >= 6 && probe[..6].SequenceEqual("070701"u8)) return true;
+        if (probe.Length >= 6 && probe[..6].SequenceEqual("070702"u8)) return true;
+        if (probe.Length >= 6 && probe[..6].SequenceEqual("070707"u8)) return true;
+        if (probe.Length >= 2 && probe[0] == 0x1F && probe[1] == 0x8B) return true;
+        if (probe.Length >= 4 && probe[0] == 0x04 && probe[1] == 0x22 && probe[2] == 0x4D && probe[3] == 0x18) return true;
+        if (probe.Length >= 4 && probe[0] == 0x02 && probe[1] == 0x21 && probe[2] == 0x4C && probe[3] == 0x18) return true;
+        if (probe.Length >= 4 && probe[0] == 0x28 && probe[1] == 0xB5 && probe[2] == 0x2F && probe[3] == 0xFD) return true;
+        if (probe.Length >= 6 && probe[0] == 0xFD && probe[1] == 0x37 && probe[2] == 0x7A && probe[3] == 0x58 && probe[4] == 0x5A && probe[5] == 0x00) return true;
+        if (probe.Length >= 3 && probe[0] == 0x42 && probe[1] == 0x5A && probe[2] == 0x68) return true;
+        if (probe.Length >= 2 && probe[0] == 0x0B && probe[1] == 0x0A) return true;
+        if (probe.Length >= 3 && probe[0] == 0x5D && probe[1] == 0x00 && probe[2] == 0x00) return true;
+        if (probe.Length >= 4 && probe[0] == 0x7F && probe[1] == 0x45 && probe[2] == 0x4C && probe[3] == 0x46) return true;
+        return false;
+    }
 
     /// <summary>
     /// Streaming V0/V2 component extraction by offset from stream.

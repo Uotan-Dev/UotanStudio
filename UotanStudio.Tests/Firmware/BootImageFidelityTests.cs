@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using UotanStudio.Firmware.BootSecurity.BootImage;
+using UotanStudio.Firmware.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
 using Xunit;
@@ -80,6 +81,37 @@ public class BootImageFidelityTests
         uint headerSize, uint kernelSize, uint ramdiskSize, uint signatureSize, long imageLength)
     {
         Assert.Equal(4096u, BootImageParser.DetectV3V4PageSize(headerSize, kernelSize, ramdiskSize, signatureSize, imageLength));
+    }
+
+    [Fact]
+    public void V4_PaddedFullPartitionImage_Lz4LegacyRamdisk_PageSizeRefinedToFourKb()
+    {
+        var plaintext = "070701000000000000000000000000000000000000000000000000000000TRAILER!!!"u8.ToArray();
+        var ramdisk = BootCompressor.Compress(plaintext, CompressionType.Lz4Legacy);
+        Assert.True(ramdisk.Length >= 8);
+        Assert.Equal(0x02, ramdisk[0]);
+        Assert.Equal(0x21, ramdisk[1]);
+
+        const int pageSize = 4096;
+        const uint headerSize = 1584;
+        const int imageLength = 8 * 1024 * 1024;
+        var image = new byte[imageLength];
+        "ANDROID!"u8.CopyTo(image);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(8, 4), 0u);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(12, 4), (uint)ramdisk.Length);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(16, 4), 0x01040000u);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(20, 4), headerSize);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(40, 4), 4u);
+        ramdisk.CopyTo(image, pageSize);
+
+        Assert.Equal(16384u, BootImageParser.DetectV3V4PageSize(headerSize, 0u, (uint)ramdisk.Length, 0u, imageLength));
+
+        using var parser = new BootImageParser();
+        parser.Parse(image);
+
+        Assert.Equal(4096u, parser.Header.PageSize);
+        Assert.Equal(CompressionType.Lz4Legacy, parser.Header.RamdiskCompression);
+        Assert.Equal(plaintext, BootCompressor.TryDecompress(parser.Ramdisk, parser.Header.RamdiskCompression));
     }
 
     [Fact]

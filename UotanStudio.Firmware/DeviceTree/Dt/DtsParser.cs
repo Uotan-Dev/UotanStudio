@@ -675,6 +675,7 @@ internal sealed class DtsParser
     private byte[] ParseBitsValue(int bitWidth)
     {
         var values = new List<byte>();
+        Span<byte> cell = stackalloc byte[8];
         while (true)
         {
             SkipWhitespaceAndComments();
@@ -692,14 +693,12 @@ internal sealed class DtsParser
                 case 8: values.Add((byte)val); break;
                 case 16: values.Add((byte)(val >> 8)); values.Add((byte)val); break;
                 case 32:
-                    var b32 = new byte[4];
-                    BinaryPrimitives.WriteUInt32BigEndian(b32, (uint)val);
-                    values.AddRange(b32);
+                    BinaryPrimitives.WriteUInt32BigEndian(cell, (uint)val);
+                    values.AddRange(cell[..4]);
                     break;
                 case 64:
-                    var b64 = new byte[8];
-                    BinaryPrimitives.WriteUInt64BigEndian(b64, val);
-                    values.AddRange(b64);
+                    BinaryPrimitives.WriteUInt64BigEndian(cell, val);
+                    values.AddRange(cell);
                     break;
                 default: throw new InvalidOperationException($"Unsupported bit width: {bitWidth}");
             }
@@ -722,7 +721,12 @@ internal sealed class DtsParser
                     var fixups = tree.Root.FindChild("__fixups__") ?? tree.Root.AddChild("__fixups__");
                     var location = Encoding.UTF8.GetBytes($"{node.GetPath()}:{propName}:{offset}\0");
                     if (fixups.FindProperty(label) is { } existing)
-                        existing.ReplaceValue(existing.ValueBytes.Concat(location).ToArray());
+                    {
+                        var merged = new byte[existing.ValueBytes.Length + location.Length];
+                        existing.ValueBytes.AsSpan().CopyTo(merged);
+                        location.CopyTo(merged.AsSpan(existing.ValueBytes.Length));
+                        existing.ReplaceValue(merged);
+                    }
                     else fixups.AddProperty(label, location);
                     PatchCell(node, propName, offset, uint.MaxValue);
                     continue;

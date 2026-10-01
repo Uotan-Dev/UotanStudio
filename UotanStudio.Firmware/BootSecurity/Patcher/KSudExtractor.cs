@@ -345,7 +345,7 @@ public static partial class Extractor
             {
                 if (cur.Count > 0)
                     clusters.Add(cur);
-                cur = new List<(long P, string Name, ulong Fn)> { h };
+                cur = [h];
             }
         }
         if (cur.Count > 0)

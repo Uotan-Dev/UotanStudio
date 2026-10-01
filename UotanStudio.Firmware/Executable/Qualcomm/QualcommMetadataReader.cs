@@ -22,7 +22,7 @@ internal static class QualcommMetadataReader
     internal static IReadOnlyList<QualcommImageRegion> Regions(long offset, QualcommMbnLayout layout)
     {
         var headerSize = layout.Version == 6 ? 48 : 40;
-        var regions = new List<QualcommImageRegion> { new("MbnHeader", offset, headerSize) };
+        List<QualcommImageRegion> regions = [new("MbnHeader", offset, headerSize)];
         Add("CommonMetadata", headerSize, layout.QualcommMetadataOffset - headerSize);
         Add("QtiMetadata", layout.QualcommMetadataOffset, layout.QualcommMetadataLength);
         Add("OemMetadata", layout.OemMetadataOffset, layout.OemMetadataLength);

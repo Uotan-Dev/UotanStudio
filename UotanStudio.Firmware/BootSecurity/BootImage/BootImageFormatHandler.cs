@@ -1,5 +1,6 @@
 using System.Text;
 using UotanStudio.Firmware.BootSecurity.BootImage;
+using UotanStudio.Firmware.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BootSecurity.BootImage.Formats;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
@@ -9,8 +10,10 @@ using UotanStudio.Firmware.Core.Repacking;
 namespace UotanStudio.Firmware.BootSecurity.BootImage;
 
 /// <summary>
-/// Format handler that routes Android boot, vendor boot, Tegra blob and ARM zImage files to their parsers for metadata reading, unpacking and repacking.
-/// <para>格式处理器，将 Android boot、vendor boot、Tegra blob 与 ARM zImage 文件分派到各自的解析器，完成元数据读取、解包与重打包。</para>
+/// Format handler that routes Android boot, vendor boot, MTK boot, Samsung PXA, DHTB, Rockchip resource,
+/// Tegra blob and ARM zImage files to their parsers for metadata reading, unpacking and repacking.
+/// <para>格式处理器，将 Android boot、vendor boot、MTK boot、Samsung PXA、DHTB、Rockchip 资源、
+/// Tegra blob 与 ARM zImage 文件分派到各自的解析器，完成元数据读取、解包与重打包。</para>
 /// </summary>
 public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
@@ -23,6 +26,15 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
             metadata.CanPackDirectory = true;
             metadata.Configuration["resource"] = "RSCE";
             metadata.PackingNotes = "Creates a canonical unsigned RSCE container; original OEM fields, checksums and device acceptance are not preserved.";
+            return;
+        }
+
+        if (File.Exists(sourcePath) &&
+            BootImageDetector.Detect(ReadPrefix(sourcePath, 4096)).Format
+            is not (BootImageDetector.ImageFormat.AospBoot or BootImageDetector.ImageFormat.VendorBoot))
+        {
+            metadata.CanPackDirectory = false;
+            metadata.PackingNotes = " This boot-family variant is extracted only; the repack workflow accepts ANDROID! and VNDRBOOT headers, so the directory cannot be rebuilt into an image yet.";
             return;
         }
 
@@ -60,8 +72,8 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
     /// <param name="filePath">Path to probe; at most the first 64 bytes are read.
     /// <para>要探测的路径；至多读取前 64 字节。</para></param>
     /// <returns>
-    /// <see langword="true"/> when the file exists and its header matches the Android boot, vendor boot, Tegra blob or ARM zImage magic; <see langword="false"/> for blank paths, missing files and any I/O error, which is swallowed.
-    /// <para>当文件存在且其头部匹配 Android boot、vendor boot、Tegra blob 或 ARM zImage 魔数时为 <see langword="true"/>；对空路径、缺失文件以及任何被吞没的 I/O 错误返回 <see langword="false"/>。</para>
+    /// <see langword="true"/> when the file exists and its header matches the Android boot, vendor boot, MTK boot, DHTB, ChromeOS, Rockchip resource, Tegra blob or ARM zImage magic; <see langword="false"/> for blank paths, missing files and any I/O error, which is swallowed.
+    /// <para>当文件存在且其头部匹配 Android boot、vendor boot、MTK boot、DHTB、ChromeOS、Rockchip 资源、Tegra blob 或 ARM zImage 魔数时为 <see langword="true"/>；对空路径、缺失文件以及任何被吞没的 I/O 错误返回 <see langword="false"/>。</para>
     /// </returns>
     public bool CanHandle(string filePath)
     {
@@ -84,6 +96,8 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
                 && header[6] == (byte)'O' && header[7] == (byte)'T';
             var chromeOs = DetectChromeOsFile(filePath).IsChromeOs;
             return read >= 8 && (isAndroid || isVendor || chromeOs ||
+                MtkBootParser.IsMtkFormat(header[..read].ToArray()) ||
+                DhtbTool.IsDhtbFormat(header[..read].ToArray()) ||
                 RockchipResourceImage.DetectResource(header[..read].ToArray()) != RockchipResourceImage.BootResourceType.Unknown ||
                 TegraBlobTool.IsTegraBlob(header[..read]) ||
                 ZImageTool.IsZImage(header[..read]));
@@ -384,6 +398,17 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
+                var detection = BootImageDetector.Detect(ReadPrefix(filePath, 4096));
+                switch (detection.Format)
+                {
+                    case BootImageDetector.ImageFormat.MtkBoot:
+                        return UnpackMtkBoot(filePath, outputDirectory);
+                    case BootImageDetector.ImageFormat.SamsungPxa:
+                        return UnpackSamsungBoot(filePath, outputDirectory);
+                    case BootImageDetector.ImageFormat.DhtbBoot:
+                        return UnpackDhtbBoot(filePath, outputDirectory);
+                }
+
                 var magic = ReadMagic(filePath);
                 if (magic == BootMagic)
                     return UnpackBoot(filePath, outputDirectory);
@@ -591,6 +616,77 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
         return FirmwareOpResult.Ok(
             $"Unpacked vendor boot image v{header.HeaderVersion} ({entries.Count} files) to {outputDirectory}",
             entries: entries);
+    }
+
+    private static FirmwareOpResult UnpackMtkBoot(string filePath, string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+
+        using var parser = new MtkBootParser();
+        parser.ParseFile(filePath);
+
+        var entries = new List<string>();
+        WriteIfNonEmpty(outputDirectory, "kernel", parser.Kernel, entries);
+        WriteRamdiskWithCpio(outputDirectory, parser.Ramdisk, entries);
+        WriteIfNonEmpty(outputDirectory, "second", parser.Second, entries);
+        WriteIfNonEmpty(outputDirectory, "dtb", parser.Dtb, entries);
+
+        return FirmwareOpResult.Ok(
+            $"Unpacked MTK boot image ({entries.Count} files) to {outputDirectory}",
+            entries: entries);
+    }
+
+    private static FirmwareOpResult UnpackSamsungBoot(string filePath, string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+
+        using var parser = new SamsungBootParser();
+        parser.ParseFile(filePath);
+
+        var entries = new List<string>();
+        WriteIfNonEmpty(outputDirectory, "kernel", parser.Kernel, entries);
+        WriteRamdiskWithCpio(outputDirectory, parser.Ramdisk, entries);
+        WriteIfNonEmpty(outputDirectory, "second", parser.Second, entries);
+        WriteIfNonEmpty(outputDirectory, "extra", parser.Extra, entries);
+
+        return FirmwareOpResult.Ok(
+            $"Unpacked Samsung PXA boot image ({entries.Count} files) to {outputDirectory}",
+            entries: entries);
+    }
+
+    private static FirmwareOpResult UnpackDhtbBoot(string filePath, string outputDirectory)
+    {
+        var parsed = DhtbTool.ParseFile(filePath);
+        if (!parsed.IsValid)
+        {
+            return FirmwareOpResult.Fail(parsed.ErrorMessage ?? "Failed to parse DHTB image.");
+        }
+
+        Directory.CreateDirectory(outputDirectory);
+
+        var entries = new List<string>();
+        WriteIfNonEmpty(outputDirectory, "kernel", parsed.Kernel, entries);
+        WriteRamdiskWithCpio(outputDirectory, parsed.Ramdisk, entries);
+        WriteIfNonEmpty(outputDirectory, "second", parsed.Second, entries);
+
+        return FirmwareOpResult.Ok(
+            $"Unpacked DHTB boot image ({entries.Count} files) to {outputDirectory}",
+            entries: entries);
+    }
+
+    private static void WriteRamdiskWithCpio(string directory, byte[] ramdisk, List<string> entries)
+    {
+        WriteIfNonEmpty(directory, "ramdisk", ramdisk, entries);
+        if (ramdisk.Length == 0)
+        {
+            return;
+        }
+
+        var compression = BootCompressor.Detect(ramdisk);
+        var cpio = compression == CompressionType.None
+            ? ramdisk
+            : BootCompressor.TryDecompress(ramdisk, compression) ?? ramdisk;
+        WriteIfNonEmpty(directory, "ramdisk.cpio", cpio, entries);
     }
 
     private static void WriteIfNonEmpty(string directory, string name, byte[] data, List<string> entries)

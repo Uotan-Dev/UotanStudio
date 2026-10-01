@@ -1,6 +1,6 @@
 # DTBO Repacking
 
-`DtFormatHandler` supports DTBO files and directories containing `.uotanstudio-repack.json`.
+`DtFormatHandler` supports DTBO files and directories containing `metadata.json`.
 The CLI recognizes these directories automatically:
 
 ```text
@@ -16,7 +16,7 @@ The `Firmware.Unpack` and `Firmware.Pack` workflow nodes use the same backend.
 ## Extracted Files
 
 - `overlay_00.dtb`, `overlay_01.dtb`, ...: decompressed overlays in table order.
-- `.uotanstudio-repack.json`: unified metadata; `configuration` contains format
+- `metadata.json`: unified metadata; `configuration` contains format
   version, image capacity, header and ordered entry metadata.
 - `original.dtbo.img`: original bytes, including gaps, padding and trailing data.
 

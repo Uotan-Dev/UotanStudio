@@ -124,11 +124,10 @@ internal static class KernelSuEmbeddedExtractor
 
     private static string? TryGetArchitecture(string name)
     {
-        var n = name.ToLowerInvariant();
-        if (n.Contains("aarch64") || n.Contains("arm64")) return "arm64";
-        if (n.Contains("x86_64") || n.Contains("x64")) return "x64";
-        if (n.Contains("armeabi") || n.Contains("arm32")) return "arm32";
-        if (n.Contains("/x86/") || n.EndsWith("x86")) return "x86";
+        if (name.Contains("aarch64", StringComparison.OrdinalIgnoreCase) || name.Contains("arm64", StringComparison.OrdinalIgnoreCase)) return "arm64";
+        if (name.Contains("x86_64", StringComparison.OrdinalIgnoreCase) || name.Contains("x64", StringComparison.OrdinalIgnoreCase)) return "x64";
+        if (name.Contains("armeabi", StringComparison.OrdinalIgnoreCase) || name.Contains("arm32", StringComparison.OrdinalIgnoreCase)) return "arm32";
+        if (name.Contains("/x86/", StringComparison.OrdinalIgnoreCase) || name.EndsWith("x86", StringComparison.OrdinalIgnoreCase)) return "x86";
         return null;
     }
 

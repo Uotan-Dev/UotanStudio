@@ -191,7 +191,7 @@ internal static class KallsymsBinaryReader
                 {
                     continue;
                 }
-                var values = new List<ulong> { 0 };
+                List<ulong> values = [0];
                 var cursor = position + size;
                 while (cursor + size <= tokenTableOffset)
                 {
