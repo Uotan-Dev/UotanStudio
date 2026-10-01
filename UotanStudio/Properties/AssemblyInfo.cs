@@ -4,3 +4,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("GpuMirrorSmoke")]
 [assembly: InternalsVisibleTo("UotanStudio.DeliverySmoke")]
 [assembly: InternalsVisibleTo("UotanStudio.ProjectLifecycleSmoke")]
+[assembly: InternalsVisibleTo("UotanStudio.Benchmarks")]

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- BenchmarkDotNet 控制台基准应用：自带 runner，独立于解决方案测试发现集 -->
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>UotanStudio.Benchmarks</RootNamespace>
+    <!-- Legacy in-memory builders remain covered by measurements; production callers use streaming overloads. -->
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
+    <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
+    <ProjectReference Include="..\UotanStudio\UotanStudio.csproj" />
+    <!-- Reuse the public headless app and test doubles (HeadlessTestApp, TempDirectory, FakeAdbDeviceTransport). -->
+    <ProjectReference Include="..\UotanStudio.Tests\UotanStudio.Tests.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless" />
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+
+</Project>
