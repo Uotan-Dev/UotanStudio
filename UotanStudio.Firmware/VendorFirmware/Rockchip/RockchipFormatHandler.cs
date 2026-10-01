@@ -1,6 +1,5 @@
 using System.Globalization;
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.VendorFirmware.Rockchip;
 
 namespace UotanStudio.Firmware.VendorFirmware.Rockchip;
 

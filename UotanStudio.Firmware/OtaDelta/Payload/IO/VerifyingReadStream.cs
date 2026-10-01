@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Security.Cryptography;
 using UotanStudio.Firmware.Core.Streams;
-using UotanStudio.Firmware.OtaDelta.Payload;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.IO;
 

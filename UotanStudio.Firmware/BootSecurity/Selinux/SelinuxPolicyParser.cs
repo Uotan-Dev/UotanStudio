@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BootSecurity.Selinux;
 using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.BootSecurity.Selinux;

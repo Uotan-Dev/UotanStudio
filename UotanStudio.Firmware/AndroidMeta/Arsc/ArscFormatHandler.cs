@@ -1,4 +1,3 @@
-using UotanStudio.Firmware.AndroidMeta.Arsc;
 using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Firmware.AndroidMeta.Arsc;

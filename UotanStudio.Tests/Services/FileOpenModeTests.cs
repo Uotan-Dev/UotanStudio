@@ -1,4 +1,3 @@
-using UotanStudio.Firmware;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Views.Controls;

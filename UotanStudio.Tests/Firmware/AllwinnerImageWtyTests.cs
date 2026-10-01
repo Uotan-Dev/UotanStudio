@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.VendorFirmware.Allwinner.ImageWty;
 using Xunit;
 

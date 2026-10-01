@@ -4,7 +4,6 @@ using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
-using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Models;
 using UotanStudio.Firmware.FileSystem.Metadata;
 using UotanStudio.Firmware.FileSystem.Rebuilding;

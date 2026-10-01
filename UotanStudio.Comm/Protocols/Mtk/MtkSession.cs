@@ -2,7 +2,6 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Ports;
 using UotanStudio.Comm.Devices.Discovery;
-using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Protocols.Mtk.Discovery;

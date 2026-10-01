@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.BootSecurity.Workflow;
 using UotanStudio.Firmware.VendorFirmware.Amlogic;
 using UotanStudio.Firmware.VendorFirmware.SonySin;

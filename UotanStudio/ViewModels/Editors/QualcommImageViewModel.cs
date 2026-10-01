@@ -5,7 +5,6 @@ using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Executable.Qualcomm;
 using UotanStudio.Services;
-using UotanStudio.Services.Logging;
 
 namespace UotanStudio.ViewModels.Editors;
 

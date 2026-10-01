@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Core.Checksums;
-using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Journal;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4.Builder;

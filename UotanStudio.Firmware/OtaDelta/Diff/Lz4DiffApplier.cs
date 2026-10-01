@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using Google.Protobuf;
 using K4os.Compression.LZ4;
 using UotanStudio.Firmware.Compression.Codecs.Lz4;
-using UotanStudio.Firmware.OtaDelta.Diff;
 
 namespace UotanStudio.Firmware.OtaDelta.Diff;
 

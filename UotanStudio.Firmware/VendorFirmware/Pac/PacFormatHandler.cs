@@ -1,6 +1,5 @@
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
-using UotanStudio.Firmware.VendorFirmware.Pac;
 
 namespace UotanStudio.Firmware.VendorFirmware.Pac;
 

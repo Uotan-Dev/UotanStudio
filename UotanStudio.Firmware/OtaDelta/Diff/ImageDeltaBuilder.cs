@@ -1,5 +1,4 @@
 using UotanStudio.Firmware.Core.Streams;
-using UotanStudio.Firmware.OtaDelta.Diff;
 
 namespace UotanStudio.Firmware.OtaDelta.Diff;
 

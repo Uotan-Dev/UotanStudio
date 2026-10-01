@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using UotanStudio.Firmware.BootSecurity.Avb;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Verification;
 

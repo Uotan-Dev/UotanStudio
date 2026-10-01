@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.VendorFirmware.UpdateApp;
 using Xunit;

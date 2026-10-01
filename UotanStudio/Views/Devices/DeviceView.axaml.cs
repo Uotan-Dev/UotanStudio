@@ -1,7 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.VisualTree;
-using UotanStudio.Services;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.Views.Devices;

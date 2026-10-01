@@ -1,9 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
-using System.Net.Http;
 using System.Text.Json;
 using ModelContextProtocol;
-using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using UotanStudio.Services.Delivery;
 

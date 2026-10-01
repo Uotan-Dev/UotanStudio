@@ -1,6 +1,5 @@
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
-using UotanStudio.Firmware.DeviceTree.Dt;
 using DtTree = UotanStudio.Firmware.DeviceTree.Dt.DeviceTree;
 
 namespace UotanStudio.Firmware.DeviceTree.Dt;

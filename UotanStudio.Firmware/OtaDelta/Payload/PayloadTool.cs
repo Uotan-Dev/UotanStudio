@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.OtaDelta.Payload;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload;
 

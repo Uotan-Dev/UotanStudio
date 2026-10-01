@@ -1,5 +1,3 @@
-using System.Text;
-using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;

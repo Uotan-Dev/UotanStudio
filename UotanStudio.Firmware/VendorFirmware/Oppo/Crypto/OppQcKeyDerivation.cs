@@ -1,6 +1,4 @@
-﻿using UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
-
-namespace UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
+﻿namespace UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 
 internal static class OppQcKeyDerivation
 {

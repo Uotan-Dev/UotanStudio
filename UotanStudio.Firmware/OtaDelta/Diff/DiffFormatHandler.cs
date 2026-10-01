@@ -1,6 +1,5 @@
 using System.Globalization;
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.OtaDelta.Diff;
 
 namespace UotanStudio.Firmware.OtaDelta.Diff;
 

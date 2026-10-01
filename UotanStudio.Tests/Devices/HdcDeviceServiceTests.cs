@@ -1,5 +1,3 @@
-using UotanStudio.Comm.Protocols.Hdc;
-using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using Xunit;
 

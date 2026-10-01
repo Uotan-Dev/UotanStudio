@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Headers;
-using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.Infrastructure.Downloads;

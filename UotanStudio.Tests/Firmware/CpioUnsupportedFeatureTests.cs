@@ -4,7 +4,6 @@ using System.Text;
 using UotanStudio.Firmware.Archive;
 using UotanStudio.Firmware.Archive.Formats.Cpio;
 using UotanStudio.Firmware.Archive.Models;
-using UotanStudio.Firmware.Archive.Writing;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;

@@ -1,13 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.VisualTree;
 using UotanStudio.Services;
-using UotanStudio.Services.Devices;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Editors;
-using UotanStudio.Views.Shell;
 
 namespace UotanStudio.Views.Editors;
 

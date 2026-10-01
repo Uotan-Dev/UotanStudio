@@ -1,5 +1,4 @@
 using System.Xml.Linq;
-using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Protocols.Mtk.Storage;

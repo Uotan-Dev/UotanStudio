@@ -1,7 +1,6 @@
 using UotanStudio.Firmware.BootSecurity.BootImage;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
-using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Services.Firmware;
 using UotanStudio.ViewModels.Workspace;

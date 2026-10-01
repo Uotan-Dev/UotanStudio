@@ -1,7 +1,5 @@
 using System.IO.Compression;
-using System.Net.Http;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Infrastructure.Downloads;
 
 namespace UotanStudio.Services.Delivery;

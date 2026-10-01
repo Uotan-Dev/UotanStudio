@@ -3,7 +3,6 @@ using System.Globalization;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
-using UotanStudio.Firmware.OtaDelta.Dat;
 
 namespace UotanStudio.Firmware.OtaDelta.Dat;
 

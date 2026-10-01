@@ -1,5 +1,4 @@
 using UotanStudio.Firmware.Core.IO;
-using UotanStudio.Firmware.VendorFirmware.Pac;
 namespace UotanStudio.Firmware.VendorFirmware.Pac;
 
 /// <summary>

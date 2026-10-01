@@ -1,5 +1,3 @@
-using UotanStudio.Firmware.BootSecurity.Avb;
-
 namespace UotanStudio.Firmware.BootSecurity.Avb.Verification;
 
 public static partial class AvbChainVerifier

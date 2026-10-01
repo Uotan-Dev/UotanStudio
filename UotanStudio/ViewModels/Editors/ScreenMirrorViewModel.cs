@@ -2,15 +2,12 @@ using System.Buffers;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Avalonia;
-using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Media.Acceleration.Linux;
-using UotanStudio.Media.Audio;
 using UotanStudio.Media.Decoding;
 using UotanStudio.Services.Mirroring;
 

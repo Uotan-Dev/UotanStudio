@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using Google.Protobuf;
 using UotanStudio.Firmware.Core.IO;
-using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.Models;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 

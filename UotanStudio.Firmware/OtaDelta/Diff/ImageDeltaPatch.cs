@@ -2,7 +2,6 @@ using ICSharpCode.SharpZipLib.Zip.Compression;
 using ICSharpCode.SharpZipLib.Zip.Compression.Streams;
 using UotanStudio.Firmware.Compression.Internal;
 using UotanStudio.Firmware.Core.Streams;
-using UotanStudio.Firmware.OtaDelta.Diff;
 
 namespace UotanStudio.Firmware.OtaDelta.Diff;
 

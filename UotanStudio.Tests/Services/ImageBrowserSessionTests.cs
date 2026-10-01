@@ -6,7 +6,6 @@ using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.FileSystem.F2fs;
-using UotanStudio.Firmware.FileSystem.Fat;
 using UotanStudio.Services.FileManagement;
 using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.Tests.Firmware.Fat;

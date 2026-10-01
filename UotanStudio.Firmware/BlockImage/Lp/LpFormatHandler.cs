@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;

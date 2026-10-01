@@ -1,7 +1,6 @@
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
-using UotanStudio.Firmware.VendorFirmware.Dz;
 
 namespace UotanStudio.Firmware.VendorFirmware.Dz;
 

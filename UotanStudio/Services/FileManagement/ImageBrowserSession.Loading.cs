@@ -1,4 +1,3 @@
-using System.Text;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Archive.Browsing;
 using UotanStudio.Firmware.Archive.Models;

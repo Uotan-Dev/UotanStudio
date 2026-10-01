@@ -1,4 +1,3 @@
-using System.Buffers;
 using UotanStudio.Media.Decoding;
 using UotanStudio.Media.Decoding.MediaFoundation;
 using Xunit;

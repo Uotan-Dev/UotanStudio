@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Xml;
-using UotanStudio.Firmware.VendorFirmware.NTPi;
 using UotanStudio.Firmware.VendorFirmware.NTPi.Models;
 
 namespace UotanStudio.Firmware.VendorFirmware.NTPi;

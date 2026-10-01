@@ -3,7 +3,6 @@ using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
-using UotanStudio.Firmware.VendorFirmware.OnePlusOps;
 
 namespace UotanStudio.Firmware.VendorFirmware.OnePlusOps;
 

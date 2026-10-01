@@ -1,6 +1,5 @@
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
-using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.Builder;
 using UotanStudio.Firmware.OtaDelta.Payload.Models;
 

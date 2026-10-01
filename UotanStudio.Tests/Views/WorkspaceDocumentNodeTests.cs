@@ -4,7 +4,6 @@ using UotanStudio.Services.Execution;
 using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Nodes;
-using UotanStudio.ViewModels.NodeViewModels;
 using UotanStudio.ViewModels.Workspace;
 using Xunit;
 

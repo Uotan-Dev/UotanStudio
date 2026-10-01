@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using ModelContextProtocol;
-using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Protocols.Fastboot;

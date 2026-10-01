@@ -1,5 +1,4 @@
-﻿using UotanStudio.Firmware.VendorFirmware.Oppo;
-using UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
+﻿using UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Models;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Parsers;
 

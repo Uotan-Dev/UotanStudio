@@ -1,5 +1,4 @@
 using Org.BouncyCastle.Crypto.Parameters;
-using UotanStudio.Firmware.BootSecurity.Avb;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
 

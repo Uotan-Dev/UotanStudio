@@ -1,6 +1,4 @@
-using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
-using UotanStudio.Firmware.BlockImage.Sparse.Models;
 using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb;

@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb;

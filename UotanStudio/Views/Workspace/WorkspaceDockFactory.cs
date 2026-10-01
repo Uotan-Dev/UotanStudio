@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Media;
 using Dock.Avalonia.Controls;
 using Dock.Model.Controls;
 using Dock.Model.Core;
@@ -12,7 +11,6 @@ using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
-using UotanStudio.Views.Devices;
 
 namespace UotanStudio.Views.Workspace;
 

@@ -1,9 +1,6 @@
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
-using UotanStudio.Comm.Routing;
-using UotanStudio.Comm.Transports.Abstractions;
-using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Services.Devices;
 

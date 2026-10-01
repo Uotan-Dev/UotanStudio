@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
 
 namespace UotanStudio.Firmware.FileSystem.Metadata;

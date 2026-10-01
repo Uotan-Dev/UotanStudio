@@ -2,14 +2,10 @@ using UotanStudio.Comm;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices;
 using UotanStudio.Comm.Protocols.Adb;
-using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
-using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
-using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
-using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Mirroring;
 

@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using UotanStudio.Firmware.Core.Streams;
-using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.Metadata;

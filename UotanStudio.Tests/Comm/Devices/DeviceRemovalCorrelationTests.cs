@@ -3,7 +3,6 @@ using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Devices.Services.Sessions;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
-using UotanStudio.Comm.Transports.Usb.Core;
 using Xunit;
 
 namespace UotanStudio.Tests.Comm.Devices;

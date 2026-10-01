@@ -1,7 +1,6 @@
 using System.IO.Compression;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
-using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.Models;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;

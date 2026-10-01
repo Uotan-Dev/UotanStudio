@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using Org.BouncyCastle.Crypto.Parameters;
-using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Verification;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;

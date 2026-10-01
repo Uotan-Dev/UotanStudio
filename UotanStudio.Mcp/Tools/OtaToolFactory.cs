@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using ModelContextProtocol;
-using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using UotanStudio.Firmware.OtaDelta.Payload.Builder;
 using UotanStudio.Services.Delivery;

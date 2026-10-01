@@ -1,5 +1,4 @@
 using System.Text;
-using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Metadata;
 using UotanStudio.Firmware.FileSystem.Rebuilding;

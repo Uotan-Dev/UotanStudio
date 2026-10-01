@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.AndroidMeta.Arsc;
 using UotanStudio.Firmware.AndroidMeta.Resources;
 
 namespace UotanStudio.Firmware.AndroidMeta.Arsc;

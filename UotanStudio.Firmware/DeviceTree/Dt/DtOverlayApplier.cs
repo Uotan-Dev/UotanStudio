@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
-using UotanStudio.Firmware.DeviceTree.Dt;
 using DtTree = UotanStudio.Firmware.DeviceTree.Dt.DeviceTree;
 
 namespace UotanStudio.Firmware.DeviceTree.Dt;

@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Text.Json.Nodes;
-using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Parser;

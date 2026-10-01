@@ -2,9 +2,6 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using UotanStudio.Comm.Protocols.Common;
-using UotanStudio.Comm.Protocols.Fastboot.Images;
-using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Fastboot;
 

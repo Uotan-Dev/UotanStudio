@@ -1,4 +1,3 @@
-using UotanStudio.Firmware.Core;
 namespace UotanStudio.Firmware.Core.Repacking;
 
 /// <summary>

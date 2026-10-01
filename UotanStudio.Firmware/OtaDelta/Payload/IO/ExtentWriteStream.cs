@@ -1,4 +1,3 @@
-using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.IO;

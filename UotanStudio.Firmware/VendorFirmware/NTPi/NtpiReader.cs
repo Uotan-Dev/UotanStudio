@@ -1,5 +1,4 @@
 ﻿using UotanStudio.Firmware.Core.IO;
-using UotanStudio.Firmware.VendorFirmware.NTPi;
 using UotanStudio.Firmware.VendorFirmware.NTPi.Models;
 
 namespace UotanStudio.Firmware.VendorFirmware.NTPi;

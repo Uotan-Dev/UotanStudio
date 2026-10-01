@@ -1,4 +1,3 @@
-using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;

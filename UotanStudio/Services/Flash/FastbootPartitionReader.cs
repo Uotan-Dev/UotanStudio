@@ -1,5 +1,4 @@
 using System.Globalization;
-using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Flash;

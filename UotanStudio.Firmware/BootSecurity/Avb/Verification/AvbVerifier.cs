@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using UotanStudio.Firmware.BootSecurity.Avb;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Verification;
 

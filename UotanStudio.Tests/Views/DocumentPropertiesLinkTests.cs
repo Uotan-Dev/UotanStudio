@@ -9,7 +9,6 @@ using UotanStudio.Firmware.AndroidMeta.Dex;
 using UotanStudio.Firmware.DeviceTree.Dt;
 using UotanStudio.Messages;
 using UotanStudio.Models;
-using UotanStudio.Services;
 using UotanStudio.Services.Workspace;
 using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.Tests.Firmware;

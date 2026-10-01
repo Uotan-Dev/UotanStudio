@@ -7,7 +7,6 @@ using UotanStudio.Firmware.BootSecurity.BootImage;
 using UotanStudio.Firmware.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
-using UotanStudio.Firmware.BootSecurity.Patcher;
 using UotanStudio.Firmware.BootSecurity.Patcher.Kernel;
 using UotanStudio.Firmware.BootSecurity.Workflow;
 using UotanStudio.Firmware.Compression;

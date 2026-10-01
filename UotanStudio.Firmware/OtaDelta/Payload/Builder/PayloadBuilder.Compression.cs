@@ -1,5 +1,3 @@
-using UotanStudio.Firmware.Compression.Compressors;
-using UotanStudio.Firmware.OtaDelta.Payload;
 using ZstdSharp;
 using ZstdSharp.Unsafe;
 

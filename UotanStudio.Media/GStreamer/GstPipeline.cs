@@ -1,5 +1,3 @@
-using System.Runtime.InteropServices;
-
 namespace UotanStudio.Media.GStreamer;
 
 /// <summary>Owns a bounded appsrc pipeline and its error bus.</summary>

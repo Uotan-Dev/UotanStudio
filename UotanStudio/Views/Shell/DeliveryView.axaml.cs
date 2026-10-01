@@ -10,7 +10,6 @@ using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
-using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Views.Shell;
 

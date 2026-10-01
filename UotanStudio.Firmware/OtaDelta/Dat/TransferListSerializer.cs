@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using UotanStudio.Firmware.OtaDelta.Dat;
 
 namespace UotanStudio.Firmware.OtaDelta.Dat;
 

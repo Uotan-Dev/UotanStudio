@@ -1,5 +1,4 @@
 using System.Buffers;
-using UotanStudio.Firmware.OtaDelta.Payload;
 using ZstdSharp;
 using ZstdSharp.Unsafe;
 

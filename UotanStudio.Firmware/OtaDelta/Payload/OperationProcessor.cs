@@ -1,10 +1,8 @@
 using System.Buffers;
 using UotanStudio.Firmware.Compression;
-using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Diff;
 using UotanStudio.Firmware.OtaDelta.Diff.Zucchini;
-using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 

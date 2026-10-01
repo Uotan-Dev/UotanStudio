@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.IO.Ports;
 using System.Text;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;

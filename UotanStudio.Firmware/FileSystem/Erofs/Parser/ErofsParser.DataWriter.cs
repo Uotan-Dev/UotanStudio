@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
 using UotanStudio.Firmware.Core.Streams;
-using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Parser;

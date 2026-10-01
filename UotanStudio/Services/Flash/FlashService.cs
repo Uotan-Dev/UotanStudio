@@ -1,7 +1,6 @@
 using System.Text;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Comm.Contracts;
-using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;

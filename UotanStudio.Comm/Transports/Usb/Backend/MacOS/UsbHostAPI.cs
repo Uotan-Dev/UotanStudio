@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using UotanStudio.Comm.Transports.Usb.Backend.MacOS;
 using static UotanStudio.Comm.Transports.Usb.Backend.MacOS.IOKitUsbAPI;
 using static UotanStudio.Comm.Transports.Usb.Backend.MacOS.ObjcRuntime;
 

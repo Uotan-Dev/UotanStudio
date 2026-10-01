@@ -1,5 +1,3 @@
-using UotanStudio.Services.Firmware;
-
 namespace UotanStudio.ViewModels.Workspace;
 
 /// <summary>

@@ -1,8 +1,6 @@
 using System.Buffers.Binary;
-using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.FileSystem.Extraction;
-using UotanStudio.Firmware.FileSystem.Squashfs;
 
 namespace UotanStudio.Firmware.FileSystem.Squashfs;
 

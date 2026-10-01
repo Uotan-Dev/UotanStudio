@@ -1,7 +1,6 @@
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
-using UotanStudio.Firmware.VendorFirmware.Oppo;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Models;

@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.FileSystem.Metadata;
 
 namespace UotanStudio.Firmware.FileSystem.Rebuilding;

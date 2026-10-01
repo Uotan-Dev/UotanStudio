@@ -1,5 +1,4 @@
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.FileSystem.Fat;
 
 namespace UotanStudio.Firmware.FileSystem.Fat;
 

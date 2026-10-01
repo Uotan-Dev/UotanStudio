@@ -1,5 +1,4 @@
 using System.Text;
-using UotanStudio.Firmware;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.VendorFirmware.Oppo;

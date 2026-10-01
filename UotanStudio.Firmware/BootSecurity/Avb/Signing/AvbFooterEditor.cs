@@ -1,4 +1,3 @@
-using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
 

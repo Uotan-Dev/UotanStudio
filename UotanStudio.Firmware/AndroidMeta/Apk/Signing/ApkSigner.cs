@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.AndroidMeta.Apk;
 using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.AndroidMeta.Apk.Signing;

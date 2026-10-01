@@ -1,5 +1,4 @@
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.VendorFirmware.Oppo;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Models;
 
 namespace UotanStudio.Firmware.VendorFirmware.Oppo;

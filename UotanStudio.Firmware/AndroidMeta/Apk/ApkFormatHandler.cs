@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using UotanStudio.Firmware.AndroidMeta.Apk;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;

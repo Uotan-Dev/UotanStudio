@@ -1,5 +1,4 @@
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Models;
 

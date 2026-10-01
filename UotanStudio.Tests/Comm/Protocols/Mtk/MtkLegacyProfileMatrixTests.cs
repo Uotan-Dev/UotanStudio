@@ -1,6 +1,4 @@
-using System.Buffers.Binary;
 using UotanStudio.Comm.Protocols.Mtk;
-using UotanStudio.Comm.Protocols.Mtk.Storage;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

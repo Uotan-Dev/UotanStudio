@@ -4,10 +4,7 @@ using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
-using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
-using UotanStudio.Services.Flash;
-using UotanStudio.Services.Mirroring;
 
 namespace UotanStudio.Services.Devices;
 

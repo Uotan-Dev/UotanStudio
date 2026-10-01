@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
-using UotanStudio.Firmware.AndroidMeta.Apk;
 
 namespace UotanStudio.Firmware.AndroidMeta.Apk.Signing;
 

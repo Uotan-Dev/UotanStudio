@@ -4,7 +4,6 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
-using UotanStudio.Services.Flash;
 
 namespace UotanStudio.ViewModels.Devices;
 

@@ -6,7 +6,6 @@ using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
-using UotanStudio.Firmware.DeviceTree.Dt;
 
 namespace UotanStudio.Firmware.DeviceTree.Dt;
 

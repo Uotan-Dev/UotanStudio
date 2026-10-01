@@ -1,4 +1,3 @@
-using UotanStudio.Comm;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services.Sessions;
 using UotanStudio.Comm.Transports.Usb.Abstractions;

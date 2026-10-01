@@ -1,6 +1,5 @@
 using System.Text;
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.OtaDelta.Payload;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.Models;
 

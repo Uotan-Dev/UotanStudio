@@ -6,7 +6,6 @@ using Dock.Model.Core;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Workspace;
-using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
 

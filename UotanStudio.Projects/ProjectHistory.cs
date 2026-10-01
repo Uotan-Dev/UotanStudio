@@ -18,7 +18,7 @@ public enum HistoryOperationKind
     /// <summary><para>合成 boot 镜像。</para>Synthesize a boot image.</summary>
     SynthesizeImg,
 
-    /// <summary><para>打包 CPIO。</para>Pack a CPIO archive.</summary>
+    /// <summary><para>打包 Brotli。</para>Pack a Brotli archive.</summary>
     SynthesizeBr,
 
     /// <summary><para>删除镜像。</para>Delete an image.</summary>

@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using UotanStudio.Firmware.Core.IO;
-using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.Native;
 
 namespace UotanStudio.Firmware.FileSystem.F2fs;

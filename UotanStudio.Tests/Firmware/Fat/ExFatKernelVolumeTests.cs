@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Text;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.FileSystem.Fat;

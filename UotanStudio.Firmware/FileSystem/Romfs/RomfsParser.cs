@@ -2,7 +2,6 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Text;
 using UotanStudio.Firmware.Core;
-using UotanStudio.Firmware.FileSystem.Romfs;
 
 namespace UotanStudio.Firmware.FileSystem.Romfs;
 

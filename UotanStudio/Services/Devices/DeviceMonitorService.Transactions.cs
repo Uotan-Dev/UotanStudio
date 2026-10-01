@@ -1,10 +1,7 @@
 using UotanStudio.Comm.Contracts;
-using UotanStudio.Comm.Devices.Services;
-using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
-using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Services.Devices;

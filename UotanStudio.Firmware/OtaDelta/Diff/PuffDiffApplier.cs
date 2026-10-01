@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using Google.Protobuf;
-using UotanStudio.Firmware.OtaDelta.Diff;
 using UotanStudio.Firmware.OtaDelta.Payload;
 
 namespace UotanStudio.Firmware.OtaDelta.Diff;

@@ -3,9 +3,6 @@ using System.Text;
 using System.Text.Json;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
-using UotanStudio.Firmware.FileSystem;
-using UotanStudio.Firmware.FileSystem.Ext4;
-using UotanStudio.Firmware.FileSystem.Extraction;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.Metadata;
 

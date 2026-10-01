@@ -3,7 +3,6 @@ using System.IO.Compression;
 using System.Text;
 using UotanStudio.Firmware.OtaDelta.CareMap;
 using UotanStudio.Services.Delivery;
-using UotanStudio.ViewModels.Shell;
 using Xunit;
 
 namespace UotanStudio.Tests.Delivery;

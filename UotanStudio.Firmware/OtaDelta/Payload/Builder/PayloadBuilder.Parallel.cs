@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using Google.Protobuf;
 using UotanStudio.Firmware.Compression.Compressors;
 using UotanStudio.Firmware.Core.Streams;
-using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.Builder;

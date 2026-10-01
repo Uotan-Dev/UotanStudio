@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
-using UotanStudio.Firmware.AndroidMeta.AXml;
 using UotanStudio.Firmware.AndroidMeta.Resources;
 
 namespace UotanStudio.Firmware.AndroidMeta.AXml;

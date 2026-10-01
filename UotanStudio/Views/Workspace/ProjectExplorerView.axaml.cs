@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.IO;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;

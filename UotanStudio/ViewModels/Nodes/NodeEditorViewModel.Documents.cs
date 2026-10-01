@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.ViewModels.Nodes;
 

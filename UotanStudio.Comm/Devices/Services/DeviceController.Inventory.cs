@@ -2,7 +2,6 @@ using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
-using UotanStudio.Comm.Transports.Usb.Core;
 
 namespace UotanStudio.Comm.Devices.Services;
 

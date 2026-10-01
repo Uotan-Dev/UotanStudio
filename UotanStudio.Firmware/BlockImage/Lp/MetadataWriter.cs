@@ -1,4 +1,3 @@
-using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
 

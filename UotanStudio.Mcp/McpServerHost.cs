@@ -1,4 +1,3 @@
-using System.Text.Json;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using UotanStudio.Mcp.Resources;

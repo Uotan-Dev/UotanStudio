@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using UotanStudio.Firmware.VendorFirmware.Nb0;
 using UotanStudio.Firmware.VendorFirmware.Nb0.Models;
 
 namespace UotanStudio.Firmware.VendorFirmware.Nb0;

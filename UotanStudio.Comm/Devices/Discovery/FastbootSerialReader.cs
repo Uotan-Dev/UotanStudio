@@ -1,4 +1,3 @@
-using UotanStudio.Comm;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Transports.Usb.Abstractions;

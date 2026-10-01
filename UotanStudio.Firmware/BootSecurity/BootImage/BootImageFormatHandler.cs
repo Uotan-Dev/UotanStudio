@@ -1,5 +1,4 @@
 using System.Text;
-using UotanStudio.Firmware.BootSecurity.BootImage;
 using UotanStudio.Firmware.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BootSecurity.BootImage.Formats;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;

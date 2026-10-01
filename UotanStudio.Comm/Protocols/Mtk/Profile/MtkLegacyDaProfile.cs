@@ -1,5 +1,3 @@
-using UotanStudio.Comm.Protocols.Mtk.Storage;
-
 namespace UotanStudio.Comm.Protocols.Mtk.Profile;
 
 /// <summary>

@@ -1,6 +1,5 @@
 using System.Text;
 using UotanStudio.Comm.Contracts;
-using UotanStudio.Comm.Protocols.Adb;
 
 namespace UotanStudio.Services.Mirroring;
 

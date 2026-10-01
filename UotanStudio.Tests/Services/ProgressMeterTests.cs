@@ -1,4 +1,3 @@
-using System.Globalization;
 using UotanStudio.Services;
 using Xunit;
 

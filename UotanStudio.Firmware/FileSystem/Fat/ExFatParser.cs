@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Text;
-using DiscUtils;
 using DiscUtils.ExFat;
 using UotanStudio.Firmware.Core;
 

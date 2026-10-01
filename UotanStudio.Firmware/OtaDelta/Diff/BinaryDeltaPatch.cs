@@ -1,6 +1,5 @@
 using ICSharpCode.SharpZipLib.BZip2;
 using UotanStudio.Firmware.Core.Streams;
-using UotanStudio.Firmware.OtaDelta.Diff;
 
 namespace UotanStudio.Firmware.OtaDelta.Diff;
 

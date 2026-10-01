@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using UotanStudio.Firmware.Core.Streams;
-using UotanStudio.Firmware.VendorFirmware.NTPi;
 using UotanStudio.Firmware.VendorFirmware.NTPi.Models;
 
 namespace UotanStudio.Firmware.VendorFirmware.NTPi;

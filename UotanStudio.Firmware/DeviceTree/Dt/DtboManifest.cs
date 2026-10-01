@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using UotanStudio.Firmware.DeviceTree.Dt;
 
 namespace UotanStudio.Firmware.DeviceTree.Dt;
 

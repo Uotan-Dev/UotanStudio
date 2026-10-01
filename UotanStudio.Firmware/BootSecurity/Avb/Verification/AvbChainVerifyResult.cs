@@ -1,5 +1,3 @@
-using UotanStudio.Firmware.BootSecurity.Avb;
-
 namespace UotanStudio.Firmware.BootSecurity.Avb.Verification;
 
 /// <summary>Reports the requested offline checks without claiming hardware acceptance.

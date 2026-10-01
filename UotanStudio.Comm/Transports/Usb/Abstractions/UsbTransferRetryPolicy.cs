@@ -1,5 +1,3 @@
-using UotanStudio.Comm.Transports.Usb.Backend;
-
 namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 
 /// <summary>

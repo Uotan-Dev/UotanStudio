@@ -1,6 +1,4 @@
 using System.Security.Cryptography;
-using UotanStudio.Comm.Protocols.Mtk.Discovery;
-using UotanStudio.Comm.Protocols.Mtk.Upload;
 using UotanStudio.Firmware.VendorFirmware.MediaTek;
 
 namespace UotanStudio.Comm.Protocols.Mtk.Profile;

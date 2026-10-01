@@ -6,7 +6,6 @@ using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.FileManagement;
-using UotanStudio.Views.Controls;
 
 namespace UotanStudio.ViewModels.Editors;
 

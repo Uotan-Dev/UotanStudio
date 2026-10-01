@@ -1,5 +1,3 @@
-using UotanStudio.Firmware.Core;
-
 namespace UotanStudio.Firmware.FileSystem.Metadata;
 
 /// <summary>

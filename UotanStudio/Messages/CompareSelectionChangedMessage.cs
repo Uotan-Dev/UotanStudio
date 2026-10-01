@@ -1,5 +1,3 @@
-using UotanStudio.ViewModels.Compare;
-
 namespace UotanStudio.Messages;
 
 /// <summary>

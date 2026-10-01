@@ -1,6 +1,5 @@
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
-using UotanStudio.Firmware.VendorFirmware.Nb0;
 using UotanStudio.Firmware.VendorFirmware.Nb0.Models;
 
 namespace UotanStudio.Firmware.VendorFirmware.Nb0;

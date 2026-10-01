@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;

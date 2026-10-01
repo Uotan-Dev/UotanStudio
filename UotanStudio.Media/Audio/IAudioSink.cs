@@ -1,6 +1,3 @@
-using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
-
 namespace UotanStudio.Media.Audio;
 
 /// <summary>

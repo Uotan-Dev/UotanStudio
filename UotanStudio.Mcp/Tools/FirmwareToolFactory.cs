@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using ModelContextProtocol;
-using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.Application.Formats;

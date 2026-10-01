@@ -1,5 +1,4 @@
 using UotanStudio.Comm.Contracts;
-using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
 
 namespace UotanStudio.Comm.Protocols.Edl.Reenum;
