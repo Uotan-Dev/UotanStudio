@@ -46,7 +46,7 @@ public class NtpiStreamingTests
         var outDir = Path.Combine(temp.Path, "out");
         using (var reader = NtpiReader.CreateDefault())
         {
-            reader.Unpack(ntpiPath, outDir);
+            reader.Unpack(ntpiPath, outDir, cancellationToken: TestContext.Current.CancellationToken);
         }
 
         foreach (var (relative, expected) in files)
@@ -73,7 +73,7 @@ public class NtpiStreamingTests
         }
 
         using var reader = NtpiReader.CreateDefault();
-        var info = reader.ReadInfo(ntpiPath);
+        var info = reader.ReadInfo(ntpiPath, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Contains(info.Regions, region => region.Type == RegionType.Region6 && region.Size == 0);
         Assert.All(info.FileEntries, entry =>
         {
@@ -82,12 +82,12 @@ public class NtpiStreamingTests
             Assert.Equal(0, entry.Offset);
         });
 
-        var parsed = reader.Parse(ntpiPath);
+        var parsed = reader.Parse(ntpiPath, cancellationToken: TestContext.Current.CancellationToken);
         Assert.False(parsed.Regions.TryGetValue(RegionType.Region6, out var region6) && region6.Length != 0);
         Assert.All(parsed.ExtractedFiles.Values, Assert.Empty);
 
         var outputDir = Path.Combine(temp.Path, "output");
-        reader.Unpack(ntpiPath, outputDir);
+        reader.Unpack(ntpiPath, outputDir, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Empty(File.ReadAllBytes(Path.Combine(outputDir, "empty-a.bin")));
         Assert.Empty(File.ReadAllBytes(Path.Combine(outputDir, "empty-b.bin")));
     }
@@ -99,7 +99,7 @@ public class NtpiStreamingTests
         var ntpiPath = PackSamplePackage(temp.Path, out var files, out _);
 
         using var reader = NtpiReader.CreateDefault();
-        var parsed = reader.Parse(ntpiPath);
+        var parsed = reader.Parse(ntpiPath, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(files.Count, parsed.FileEntries.Count);
         Assert.Equal(files.Count, parsed.ExtractedFiles.Count);
@@ -123,7 +123,7 @@ public class NtpiStreamingTests
         var ntpiPath = PackSamplePackage(temp.Path, out var files, out _);
 
         using var reader = NtpiReader.CreateDefault();
-        var info = reader.ReadInfo(ntpiPath);
+        var info = reader.ReadInfo(ntpiPath, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1ul, info.MajorVersion);
         Assert.Equal(3ul, info.MinorVersion);
@@ -158,7 +158,7 @@ public class NtpiStreamingTests
         }
 
         using var reader = NtpiReader.CreateDefault();
-        var parsed = reader.Parse(ntpiPath);
+        var parsed = reader.Parse(ntpiPath, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(2, parsed.FileEntries.Count);
         Assert.Equal(data["one.bin"], parsed.ExtractedFiles["one.bin"]);
         Assert.Equal(data["two.bin"], parsed.ExtractedFiles["two.bin"]);
@@ -180,7 +180,7 @@ public class NtpiStreamingTests
         }
 
         using var reader = NtpiReader.CreateDefault();
-        var info = reader.ReadInfo(package);
+        var info = reader.ReadInfo(package, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Single(info.FileEntries);
         Assert.Equal("source.txt", info.FileEntries[0].Name);
     }
@@ -400,7 +400,7 @@ public class NtpiStreamingTests
         File.WriteAllBytes(truncatedPath, full[..(int)(full.Length * 0.7)]);
 
         using var reader = NtpiReader.CreateDefault();
-        Assert.ThrowsAny<NtpiException>(() => reader.Unpack(truncatedPath, Path.Combine(temp.Path, "out")));
+        Assert.ThrowsAny<NtpiException>(() => reader.Unpack(truncatedPath, Path.Combine(temp.Path, "out"), cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -414,7 +414,7 @@ public class NtpiStreamingTests
         File.WriteAllBytes(truncatedPath, full[..(int)(full.Length * 0.5)]);
 
         using var reader = NtpiReader.CreateDefault();
-        Assert.ThrowsAny<NtpiException>(() => reader.Parse(truncatedPath));
+        Assert.ThrowsAny<NtpiException>(() => reader.Parse(truncatedPath, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     private static string PackSamplePackage(string tempRoot, out Dictionary<string, byte[]> files, out string inputDir)

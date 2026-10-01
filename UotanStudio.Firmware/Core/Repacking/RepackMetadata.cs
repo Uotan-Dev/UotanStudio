@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using UotanStudio.Firmware.Core;
@@ -16,12 +16,12 @@ namespace UotanStudio.Firmware.Core.Repacking;
 public sealed class RepackMetadata
 {
     /// <summary>Names the directory metadata file.<para>目录元数据文件名。</para></summary>
-    public const string FileName = ".uotanstudio-repack.json";
+    public const string FileName = "metadata.json";
     /// <summary>Names the consolidated metadata subdirectory under <c>.uotan/</c>.<para>统一元数据子目录名（位于 <c>.uotan/</c> 下）。</para></summary>
     public const string MetadataFolderName = "metadata";
     private const string SchemaName = "UotanStudio.Firmware.Repack";
     private const string PointerSchemaName = "UotanStudio.Firmware.RepackPointer";
-    private const long MaximumBytes = 32 * 1024 * 1024;
+    private const long MaximumBytes = 256 * 1024 * 1024;
     private const string DefaultPartitionName = "unknown";
 
     private static string? _defaultMetadataRoot;
@@ -194,23 +194,18 @@ public sealed class RepackMetadata
     /// </value>
     public string PackingNotes { get; set; } = string.Empty;
     /// <summary>
-    /// Identifies the private filesystem image and verified host projection retained for exact recovery.
-    /// <para>标识为精确还原而保留的私有文件系统镜像及已校验的主机投影。</para>
+    /// Gets or sets the filesystem preservation payload that lets a preserved rebuild reproduce the
+    /// source image without retaining it. It is written by the filesystem provider during extraction
+    /// and travels inside this same file, so no sibling artifact is produced.
+    /// <para>获取或设置文件系统保留负载，使受保留重建无需保留原镜像即可复现源镜像。它由文件系统提供方在解包时
+    /// 写入，并随本文件一同保存，因此不会产生兄弟产物。</para>
     /// </summary>
     /// <value>
-    /// Preservation identifier written by the provider, or <see langword="null"/> when the format keeps no artifacts.
-    /// <para>由提供方写入的保留标识；格式无保留产物时为 <see langword="null"/>。</para>
+    /// A format-owned JSON tree holding the structured override tables and the verified capture record,
+    /// or <see langword="null"/> when the format keeps no filesystem preservation data.
+    /// <para>承载结构化覆盖表与已校验采集记录的格式专属 JSON 树；格式无文件系统保留数据时为 <see langword="null"/>。</para>
     /// </value>
-    public string? FileSystemPreservationId { get; set; }
-    /// <summary>
-    /// Integrity checksum of the preservation manifest; editing its parsed snapshot is not an implicit rebuild instruction.
-    /// <para>保留清单的完整性校验和；编辑其解析快照不构成隐式重建指令。</para>
-    /// </summary>
-    /// <value>
-    /// Hash recorded alongside <see cref="FileSystemPreservationId"/>, or <see langword="null"/> when nothing was captured.
-    /// <para>与 <see cref="FileSystemPreservationId"/> 一同记录的哈希；未捕获产物时为 <see langword="null"/>。</para>
-    /// </value>
-    public string? FileSystemPreservationHash { get; set; }
+    public JsonObject? FileSystemPreservation { get; set; }
 
     /// <summary>
     /// Detects the partition name from a source image filename (strips extension).
@@ -272,8 +267,8 @@ public sealed class RepackMetadata
     /// <para>校验通过的元数据；解析位置不存在元数据文件时返回 <see langword="null"/>。</para>
     /// </returns>
     /// <exception cref="InvalidDataException">
-    /// The stored file is a symbolic link, exceeds 32 MiB, or fails schema validation.
-    /// <para>存储文件为符号链接、超过 32 MiB 或未通过模式校验。</para>
+    /// The stored file is a symbolic link, exceeds 256 MiB, or fails schema validation.
+    /// <para>存储文件为符号链接、超过 256 MiB 或未通过模式校验。</para>
     /// </exception>
     /// <exception cref="JsonException">
     /// The stored file is not valid JSON. <para>存储文件不是合法 JSON。</para>
@@ -302,8 +297,8 @@ public sealed class RepackMetadata
     /// <para>校验通过的元数据；上下文解析出的路径不存在时返回 <see langword="null"/>。</para>
     /// </returns>
     /// <exception cref="InvalidDataException">
-    /// The stored file is a symbolic link, exceeds 32 MiB, or fails schema validation.
-    /// <para>存储文件为符号链接、超过 32 MiB 或未通过模式校验。</para>
+    /// The stored file is a symbolic link, exceeds 256 MiB, or fails schema validation.
+    /// <para>存储文件为符号链接、超过 256 MiB 或未通过模式校验。</para>
     /// </exception>
     /// <exception cref="JsonException">
     /// The stored file is not valid JSON. <para>存储文件不是合法 JSON。</para>
@@ -327,8 +322,8 @@ public sealed class RepackMetadata
     /// <para>校验通过的元数据；文件不存在时返回 <see langword="null"/>。</para>
     /// </returns>
     /// <exception cref="InvalidDataException">
-    /// The file is a symbolic link, exceeds 32 MiB, or fails schema, version, format-name or field validation.
-    /// <para>文件为符号链接、超过 32 MiB，或未通过模式、版本、格式名与字段校验。</para>
+    /// The file is a symbolic link, exceeds 256 MiB, or fails schema, version, format-name or field validation.
+    /// <para>文件为符号链接、超过 256 MiB，或未通过模式、版本、格式名与字段校验。</para>
     /// </exception>
     /// <exception cref="JsonException">
     /// The file content is not valid JSON. <para>文件内容不是合法 JSON。</para>
@@ -339,7 +334,7 @@ public sealed class RepackMetadata
         if ((File.GetAttributes(absolutePath) & FileAttributes.ReparsePoint) != 0)
             throw new InvalidDataException("Repack metadata must not be a symbolic link.");
         using var input = File.OpenRead(absolutePath);
-        if (input.Length > MaximumBytes) throw new InvalidDataException("Repack metadata exceeds 32 MiB.");
+        if (input.Length > MaximumBytes) throw new InvalidDataException("Repack metadata exceeds 256 MiB.");
         var metadata = JsonSerializer.Deserialize(input, RepackJsonContext.Default.RepackMetadata);
         if (metadata is null || metadata.Schema != SchemaName || metadata.Version != 1
             || string.IsNullOrWhiteSpace(metadata.FormatName) || metadata.SourceLength < 0
@@ -659,7 +654,7 @@ public sealed class RepackMetadata
     /// <para>目标位置已有被打包元数据保留的非元数据文件，或发布失败。</para>
     /// </exception>
     /// <exception cref="InvalidDataException">
-    /// The serialized metadata exceeds 32 MiB. <para>序列化后的元数据超过 32 MiB。</para>
+    /// The serialized metadata exceeds 256 MiB. <para>序列化后的元数据超过 256 MiB。</para>
     /// </exception>
     public static async Task WriteAsync(IReadonlyFormatHandler handler, string sourcePath, string outputDirectory,
         CancellationToken cancellationToken = default, IReadOnlyDictionary<string, string>? extractionProperties = null,
@@ -727,7 +722,7 @@ public sealed class RepackMetadata
     /// <para>目标位置已有被打包元数据保留的非元数据文件，或发布失败。</para>
     /// </exception>
     /// <exception cref="InvalidDataException">
-    /// The serialized metadata exceeds 32 MiB. <para>序列化后的元数据超过 32 MiB。</para>
+    /// The serialized metadata exceeds 256 MiB. <para>序列化后的元数据超过 256 MiB。</para>
     /// </exception>
     public static async Task WriteAsync(IReadonlyFormatHandler handler, string sourcePath, string outputDirectory,
         RepackMetadataContext context, CancellationToken cancellationToken = default,
@@ -798,7 +793,7 @@ public sealed class RepackMetadata
     /// <para>目标已存在且不是可识别的元数据，或写入或移动失败。</para>
     /// </exception>
     /// <exception cref="InvalidDataException">
-    /// The serialized metadata exceeds 32 MiB. <para>序列化后的元数据超过 32 MiB。</para>
+    /// The serialized metadata exceeds 256 MiB. <para>序列化后的元数据超过 256 MiB。</para>
     /// </exception>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken"/> is signaled. <para><paramref name="cancellationToken"/> 被触发。</para>
@@ -815,7 +810,7 @@ public sealed class RepackMetadata
             await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
                 await JsonSerializer.SerializeAsync(output, this, RepackJsonContext.Default.RepackMetadata, cancellationToken).ConfigureAwait(false);
-                if (output.Length > MaximumBytes) throw new InvalidDataException("Repack metadata exceeds 32 MiB.");
+                if (output.Length > MaximumBytes) throw new InvalidDataException("Repack metadata exceeds 256 MiB.");
             }
             cancellationToken.ThrowIfCancellationRequested();
             AtomicPublish.Publish(temporary, path);

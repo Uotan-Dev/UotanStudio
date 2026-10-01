@@ -20,7 +20,7 @@ public class DatImageDiffTests
         using var temp = new TempDirectory();
         var list = temp.Write("list", $"4\n1\n0\n0\nimgdiff 0 {patch.Length} {Hash(source)} {Hash(target)} 2,0,1 1 2,0,1\n");
         var output = Path.Combine(temp.Path, "target.img");
-        DatReader.Unpack(list, temp.WriteBytes("new.dat", []), temp.WriteBytes("patch.dat", patch), temp.WriteBytes("old.img", source), output);
+        DatReader.Unpack(list, temp.WriteBytes("new.dat", []), temp.WriteBytes("patch.dat", patch), temp.WriteBytes("old.img", source), output, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(target, File.ReadAllBytes(output));
     }
 
@@ -60,7 +60,7 @@ public class DatImageDiffTests
         using var temp = new TempDirectory();
         var list = temp.Write("list", $"4\n3\n0\n0\nimgdiff 0 {patch.Length} {Hash(source)} {Hash(target)} 2,0,3 1 2,0,1\n");
         var output = Path.Combine(temp.Path, "out.img");
-        DatReader.Unpack(list, temp.WriteBytes("new.dat", []), temp.WriteBytes("patch.dat", patch), temp.WriteBytes("old.img", source), output);
+        DatReader.Unpack(list, temp.WriteBytes("new.dat", []), temp.WriteBytes("patch.dat", patch), temp.WriteBytes("old.img", source), output, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(target, File.ReadAllBytes(output));
     }
 

@@ -13,13 +13,13 @@ internal static class Lz4DiffApplier
     private sealed record Block(int Offset, int Length, int StoredLength, byte[] Hash, byte[] Patch);
     private sealed record Info(int Algorithm, int Level, bool ZeroPadding, List<Block> Blocks);
 
-    internal static byte[] Apply(byte[] source, byte[] patch, int expectedLength)
+    internal static byte[] Apply(ReadOnlySpan<byte> source, ReadOnlySpan<byte> patch, int expectedLength)
     {
-        if (patch.Length < 16 || !patch.AsSpan(0, 7).SequenceEqual("LZ4DIFF"u8) || BinaryPrimitives.ReadUInt32BigEndian(patch.AsSpan(7, 4)) != 1)
+        if (patch.Length < 16 || !patch[0..7].SequenceEqual("LZ4DIFF"u8) || BinaryPrimitives.ReadUInt32BigEndian(patch[7..11]) != 1)
             throw new InvalidDataException("Invalid LZ4DIFF header.");
-        var headerLength = BinaryPrimitives.ReadUInt32BigEndian(patch.AsSpan(11, 4));
+        var headerLength = BinaryPrimitives.ReadUInt32BigEndian(patch[11..15]);
         if (headerLength > 16 * 1024 * 1024 || headerLength > patch.Length - 16) throw new InvalidDataException("Invalid LZ4DIFF protobuf length.");
-        using var proto = new CodedInputStream(patch, 16, (int)headerLength);
+        using var proto = new CodedInputStream(patch.Slice(16, (int)headerLength).ToArray());
         Info? sourceInfo = null, targetInfo = null; int innerType = 0; uint tag;
         while ((tag = proto.ReadTag()) != 0)
         {
@@ -33,7 +33,7 @@ internal static class Lz4DiffApplier
         foreach (var block in sourceInfo.Blocks)
         {
             if (sourcePosition > source.Length || block.StoredLength > source.Length - sourcePosition) throw new InvalidDataException("LZ4DIFF source block exceeds input.");
-            var stored = source.AsSpan(sourcePosition, block.StoredLength); var plain = plainSource.AsSpan(block.Offset, block.Length);
+            var stored = source.Slice(sourcePosition, block.StoredLength); var plain = plainSource.AsSpan(block.Offset, block.Length);
             if (block.StoredLength >= block.Length) stored[..block.Length].CopyTo(plain);
             else
             {
@@ -44,7 +44,7 @@ internal static class Lz4DiffApplier
             sourcePosition += block.StoredLength;
         }
         if (sourcePosition != source.Length) throw new InvalidDataException("Unexpected LZ4DIFF source tail.");
-        var innerPatch = patch.AsSpan(checked(16 + (int)headerLength)); byte[] plainTarget;
+        var innerPatch = patch[checked(16 + (int)headerLength)..]; byte[] plainTarget;
         var plainTargetPooled = false;
         if (innerType == 0)
         {

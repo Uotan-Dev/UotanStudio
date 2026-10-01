@@ -340,7 +340,7 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
         var temporary = Path.Combine(directory, $".{Path.GetFileName(destination)}.{Guid.NewGuid():N}.tmp");
         try
         {
-            var arguments = new List<string> { "-l" };
+            List<string> arguments = ["-l"];
             arguments.Add("-b");
             arguments.Add(options.BlockSize.ToString(CultureInfo.InvariantCulture));
             arguments.Add("-a");
@@ -496,7 +496,7 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
             mkfsArguments.Add(imagePath);
             RequireSuccess("mke2fs", await RunAsync("mke2fs", mkfsArguments, cancellationToken).ConfigureAwait(false));
 
-            var droidArguments = new List<string> { "-e", fsConfigToolPath };
+            List<string> droidArguments = ["-e", fsConfigToolPath];
             if (options.FileContextsPath is not null)
             {
                 droidArguments.Add("-S");

@@ -53,7 +53,7 @@ public sealed class FileSystemAttributePlanTests
     private static FileSystemEditPlan Create(bool acl)
     {
         Dictionary<string, string> projection = new(StringComparer.Ordinal) { ["a"] = "file:identical", ["b"] = "file:identical" };
-        var manifest = new FileSystemPreservationManifest
+        var manifest = new FileSystemPreservationData
         {
             Projection = projection,
             ParsedEntries =

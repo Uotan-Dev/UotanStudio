@@ -79,7 +79,7 @@ public sealed partial class ErofsParser
             if (_hasMetabox && (nid & NidMetaboxFlag) != 0)
             {
                 var tailStart = checked(MetaboxOffset(nid) + inode.InlineDataOffset);
-                output.Write(ReadMetaboxBytes(tailStart, checked((int)tailLength), "Tailpacked inline data"));
+                output.Write(ReadMetaboxSpan(tailStart, checked((int)tailLength), "Tailpacked inline data"));
             }
             else
             {
@@ -160,12 +160,11 @@ public sealed partial class ErofsParser
             if (startBlk == (inode.Chunk48Bit ? 0xFFFFFFFFFFFFUL : uint.MaxValue))
             {
 
-                var zeroes = new byte[(int)Math.Min(chunkLen, 1 << 16)];
                 var zeroed = 0L;
                 while (zeroed < chunkLen)
                 {
-                    var n = (int)Math.Min(zeroes.Length, chunkLen - zeroed);
-                    output.Write(zeroes, 0, n);
+                    var n = (int)Math.Min(SharedZeroBuffer.Length, chunkLen - zeroed);
+                    output.Write(SharedZeroBuffer, 0, n);
                     zeroed += n;
                 }
 
@@ -533,7 +532,7 @@ public sealed partial class ErofsParser
     {
         if (iteration.IsTailPacked && IsMetaboxInode(context.Nid))
         {
-            context.Output.Write(ReadMetaboxBytes(dataStart, checked((int)iteration.Llen), "Plain lcluster data"));
+            context.Output.Write(ReadMetaboxSpan(dataStart, checked((int)iteration.Llen), "Plain lcluster data"));
         }
         else
         {
@@ -639,8 +638,8 @@ public sealed partial class ErofsParser
 
         if (iteration.IsTailPacked && IsMetaboxInode(context.Nid))
         {
-            ReadMetaboxBytes(pblkStart, compressedByteLen, "Compressed pcluster data")
-                .CopyTo(context.Compressed, 0);
+            ReadMetaboxSpan(pblkStart, compressedByteLen, "Compressed pcluster data")
+                .CopyTo(context.Compressed.AsSpan(0, compressedByteLen));
         }
         else
         {
@@ -1277,7 +1276,7 @@ public sealed partial class ErofsParser
             var start = checked(InodeOffset(packedNid) + packed.InlineDataOffset + (long)fragmentOff);
             if (IsMetaboxInode(packedNid))
             {
-                output.Write(ReadMetaboxBytes(start, checked((int)length), "Packed fragment data"));
+                output.Write(ReadMetaboxSpan(start, checked((int)length), "Packed fragment data"));
             }
             else
             {
@@ -1409,7 +1408,7 @@ public sealed partial class ErofsParser
 
         if (IsMetaboxInode(packedNid))
         {
-            output.Write(ReadMetaboxBytes(inlineStart, checked((int)remaining), "Packed fragment data"));
+            output.Write(ReadMetaboxSpan(inlineStart, checked((int)remaining), "Packed fragment data"));
         }
         else
         {

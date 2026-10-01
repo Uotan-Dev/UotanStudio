@@ -59,7 +59,7 @@ internal sealed class NativeSepolicyTools(NativeFileSystemTools tools)
         {
             throw new FileNotFoundException("SELinux policy file was not found.", policyPath);
         }
-        var arguments = new List<string> { "-A" };
+        List<string> arguments = ["-A"];
         AppendSelector(arguments, "-s", query?.SourceType);
         AppendSelector(arguments, "-t", query?.TargetType);
         AppendSelector(arguments, "-c", query?.ObjectClass);

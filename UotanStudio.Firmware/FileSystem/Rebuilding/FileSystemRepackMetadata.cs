@@ -45,8 +45,8 @@ internal static class FileSystemRepackMetadata
         GenerateFileSystemMetadata(metadataDirectory, RepackMetadata.DetectPartitionName(Path.GetFileName(sourcePath)),
             metadata.FormatName, sourcePath, metadata.Configuration, cancellationToken);
         metadata.CanPackDirectory = true;
-        metadata.PackingNotes = "Retains structured inode metadata and hash-deduplicated content objects, not the original image. Snapshot replay does not require the source image or host tree. Physical layout is regenerated; attributes and file content are verified before publication.";
-        await FileSystemPreservation.CaptureAsync(sourcePath, outputDirectory, metadataDirectory, metadata, cancellationToken).ConfigureAwait(false);
+        metadata.PackingNotes = "Retains structured inode metadata and verified per-file hashes, not the original image or file contents. Rebuilding requires the extracted host tree; attributes and file content are verified before publication.";
+        FileSystemPreservation.CaptureAsync(sourcePath, outputDirectory, metadataDirectory, metadata, cancellationToken);
     }
 
     private static void GenerateFileSystemMetadata(string metadataDirectory, string partitionName,

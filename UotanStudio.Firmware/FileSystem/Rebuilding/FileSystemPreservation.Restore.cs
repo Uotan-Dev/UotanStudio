@@ -70,38 +70,24 @@ public static partial class FileSystemPreservation
     private static bool TryRestoreCore(string inputDirectory, string outputPath, string format,
         CancellationToken cancellationToken, Action<IReadOnlyDictionary<string, string>>? rebuildReport,
         long? maximumOutputBytes, IReadOnlyList<FileSystemAttributeEdit>? attributeEdits,
-        IReadOnlyList<FileSystemXattrEdit>? xattrEdits, string? snapshotDirectory = null)
+        IReadOnlyList<FileSystemXattrEdit>? xattrEdits)
     {
         if (maximumOutputBytes is <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(maximumOutputBytes));
         }
-        var metadata = snapshotDirectory is null ? RepackMetadata.Read(inputDirectory)
-            : RepackMetadata.Read(snapshotDirectory, RepackMetadataContext.LocalDirectory);
+        var metadata = RepackMetadata.Read(inputDirectory);
         if (metadata is null) return false;
         if (metadata.FormatName != format) throw new FileSystemCorruptedException("Filesystem metadata format does not match the requested image format.");
         if (format == "Android Sparse Image (simg)" && metadata.Configuration.Count == 0
-            && metadata.FileSystemPreservationId is null && metadata.FileSystemPreservationHash is null
+            && metadata.FileSystemPreservation is null
             && File.Exists(Path.Combine(inputDirectory, Path.GetFileNameWithoutExtension(metadata.SourceFileName) + ".raw")))
             return false;
-        if (metadata.FileSystemPreservationId is not { Length: 32 } id || !Guid.TryParseExact(id, "N", out _))
-            throw new FileSystemCorruptedException("Filesystem preservation data is missing. Re-extract the source image before rebuilding it.");
-        var metadataDirectory = snapshotDirectory ?? Path.GetDirectoryName(RepackMetadata.ResolveActualMetadataPath(inputDirectory))!;
-        var directory = FileExtraction.ResolvePath(metadataDirectory, FolderName + "/" + id);
-        var manifestPath = FileExtraction.ResolvePath(directory, "manifest.json");
-        if (new FileInfo(manifestPath).Length > MaximumManifestBytes) throw new FileSystemCorruptedException("Filesystem preservation manifest exceeds its size limit.");
-        if (metadata.FileSystemPreservationHash != HashFile(manifestPath, cancellationToken))
-            throw new FileSystemCorruptedException("Filesystem preservation manifest hash mismatch.");
-        FileSystemPreservationManifest manifest;
-        using (var file = File.OpenRead(manifestPath))
-        {
-            if (file.Length > MaximumManifestBytes) throw new FileSystemCorruptedException("Filesystem preservation manifest exceeds its size limit.");
-            manifest = JsonSerializer.Deserialize(file, FileSystemPreservationJsonContext.Default.FileSystemPreservationManifest)
-                ?? throw new FileSystemCorruptedException("Invalid filesystem preservation manifest.");
-        }
-        if (manifest.Version is not (1 or 2) || manifest.Format != format
-            || manifest.Projection is null || manifest.Sidecars is null || manifest.Projection.Count > MaximumEntries)
-            throw new FileSystemUnsupportedFeatureException("Unsupported filesystem preservation manifest.");
+        var manifest = ReadPayload(metadata)
+            ?? throw new FileSystemCorruptedException("Filesystem preservation data is missing. Re-extract the source image before rebuilding it.");
+        if (manifest.Format != format) throw new FileSystemUnsupportedFeatureException("Unsupported filesystem preservation data.");
+        if (manifest.Projection.Count > MaximumEntries)
+            throw new FileSystemCorruptedException("Filesystem projection exceeds 100000 entries.");
         ValidateConfiguration(metadata, manifest);
         var packingOptions = new Dictionary<string, string>(metadata.PackingOptions, StringComparer.Ordinal);
         if (RepackMetadata.PackingOverrides is { } overrides)
@@ -111,16 +97,8 @@ public static partial class FileSystemPreservation
                 packingOptions[key] = value;
             }
         }
-        if (!Same(ReadSidecars(metadataDirectory, metadata.SourceFileName, id, cancellationToken,
-                    includeReferenceFiles: manifest.Version == 1),
-                manifest.Version == 1 ? manifest.Sidecars : StructuredSidecars(manifest.Sidecars)))
-            throw new FileSystemUnsupportedFeatureException("Filesystem configuration changed. The current writer cannot guarantee preservation of every source feature after this change.");
+        var metadataDirectory = Path.GetDirectoryName(RepackMetadata.ResolveActualMetadataPath(inputDirectory))!;
         var projection = Scan(inputDirectory, metadataDirectory, metadata.SourceFileName, cancellationToken);
-        if (snapshotDirectory is not null)
-        {
-            ValidateSnapshotProjection(manifest, projection);
-            manifest.Projection = projection;
-        }
         var fullOutput = Path.GetFullPath(outputPath);
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         foreach (var protectedRoot in new[] { inputDirectory, metadataDirectory })
@@ -129,12 +107,8 @@ public static partial class FileSystemPreservation
             if (fullOutput.Equals(root, comparison) || fullOutput.StartsWith(root + Path.DirectorySeparatorChar, comparison))
                 throw new IOException("Rebuilt output must be outside the extracted tree and its preservation data.");
         }
-        var tables = FileSystemMetadataOverrides.LoadTables(metadataDirectory, metadata.SourceFileName, id,
-            requireStructured: manifest.Version >= 2);
-        if (manifest.Version >= 2)
-        {
-            ValidateInodeFlags(manifest.ParsedEntries, tables.Rebuild?.InnerFormat ?? format);
-        }
+        var tables = FileSystemMetadataOverrides.LoadTables(metadata, metadataDirectory, requireStructured: true);
+        ValidateInodeFlags(manifest.ParsedEntries, tables.Rebuild?.InnerFormat ?? format);
         var plan = new FileSystemEditPlan(inputDirectory, manifest, projection, RepackMetadata.DetectPartitionName(metadata.SourceFileName));
         if ((format == "F2FS" || tables.Rebuild?.InnerFormat == "F2FS")
             && RepackMetadata.PackingOverrides is { } explicitOptions
@@ -162,8 +136,7 @@ public static partial class FileSystemPreservation
             }
         }
         if (xattrEdits is not null) { plan.ApplyUserXattrs(xattrEdits, cancellationToken); }
-        var effectiveFsConfig = manifest.Version >= 2 ? new Dictionary<string, FsConfigEntry>(StringComparer.Ordinal)
-            : new Dictionary<string, FsConfigEntry>(tables.FsConfig, StringComparer.Ordinal);
+        var effectiveFsConfig = new Dictionary<string, FsConfigEntry>(StringComparer.Ordinal);
         if (attributeEdits is not null)
         {
             foreach (var (path, attributes) in plan.ApplyAttributes(attributeEdits, cancellationToken))
@@ -177,21 +150,13 @@ public static partial class FileSystemPreservation
             using var bounded = maximumOutputBytes is { } capacity
                 ? new CapacityWriteStream(output, capacity, cancellationToken) : null;
             BuildEdited(inputDirectory, (Stream?)bounded ?? output, format, effectiveFsConfig,
-                manifest.Version >= 2 ? new Dictionary<string, string>(StringComparer.Ordinal) : tables.FileContexts, tables.Rebuild,
+                new Dictionary<string, string>(StringComparer.Ordinal), tables.Rebuild,
                 packingOptions, output, Path.GetDirectoryName(fullOutput)!, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             output.Flush(flushToDisk: true);
-            if (manifest.Version >= 2)
-            {
-                VerifyRebuilt(output, plan, cancellationToken);
-            }
-            var current = snapshotDirectory is null ? RepackMetadata.Read(inputDirectory)
-                : RepackMetadata.Read(snapshotDirectory, RepackMetadataContext.LocalDirectory);
+            VerifyRebuilt(output, plan, cancellationToken);
+            var current = RepackMetadata.Read(inputDirectory);
             if (current is null || HashConfiguration(current) != HashConfiguration(metadata)
-                || current.FileSystemPreservationHash != metadata.FileSystemPreservationHash
-                || !Same(ReadSidecars(metadataDirectory, metadata.SourceFileName, id, cancellationToken,
-                            includeReferenceFiles: manifest.Version == 1),
-                        manifest.Version == 1 ? manifest.Sidecars : StructuredSidecars(manifest.Sidecars))
                 || !Same(Scan(inputDirectory, metadataDirectory, metadata.SourceFileName, cancellationToken), projection))
                 throw new IOException("Filesystem content or attributes changed during rebuilding.");
         }, overwrite: true);
@@ -200,7 +165,7 @@ public static partial class FileSystemPreservation
         return true;
     }
 
-    private static string? ValidateConfiguration(RepackMetadata metadata, FileSystemPreservationManifest manifest)
+    private static string? ValidateConfiguration(RepackMetadata metadata, FileSystemPreservationData manifest)
     {
         if (HashConfiguration(metadata) == manifest.ConfigurationHash) return null;
         if (metadata.FormatName == "EROFS" && manifest.ConfigurationJson is { Length: > 0 })
@@ -221,15 +186,15 @@ public static partial class FileSystemPreservation
 
     /// <summary>
     /// Builds the post-publish equivalence report. Byte identity streams the produced image against the source
-    /// digest and length recorded in the manifest; structure and content reflect the verification that already ran
-    /// for version 2 manifests; capacity compares the produced extent against the source filesystem baseline,
+    /// digest and length recorded in the preservation payload; structure and content reflect the verification
+    /// that already ran; capacity compares the produced extent against the source filesystem baseline,
     /// using the logical extent for sparse containers. The EROFS compression profile keys are inherited verbatim
     /// so existing result consumers keep working.
-    /// <para>构建发布后的等价报告。字节一致性把产出镜像流式计入摘要并与清单记录的源摘要和长度比对；结构与内容
-    /// 反映版本 2 清单已经执行过的校验；容量把产出范围与源文件系统基线比较，稀疏容器使用逻辑范围。EROFS 压缩
-    /// 档案键保持原样继承，使既有结果消费方继续可用。</para>
+    /// <para>构建发布后的等价报告。字节一致性把产出镜像流式计入摘要并与保留负载记录的源摘要和长度比对；结构与
+    /// 内容反映已经执行过的校验；容量把产出范围与源文件系统基线比较，稀疏容器使用逻辑范围。EROFS 压缩档案键
+    /// 保持原样继承，使既有结果消费方继续可用。</para>
     /// </summary>
-    private static Dictionary<string, string> BuildEquivalenceReport(string format, FileSystemPreservationManifest manifest,
+    private static Dictionary<string, string> BuildEquivalenceReport(string format, FileSystemPreservationData manifest,
         RebuildParameters? rebuild, string publishedPath, CancellationToken token)
     {
         var rebuiltLength = new FileInfo(publishedPath).Length;
@@ -243,11 +208,8 @@ public static partial class FileSystemPreservation
             ["ProducedImageHash"] = producedHash,
             ["SourceImageHash"] = manifest.SourceHash,
         };
-        if (manifest.Version >= 2)
-        {
-            report["EquivalentStructure"] = "True";
-            report["EquivalentContent"] = "True";
-        }
+        report["EquivalentStructure"] = "True";
+        report["EquivalentContent"] = "True";
 
         var capacityLength = rebuiltLength;
         if (format == "Android Sparse Image (simg)")

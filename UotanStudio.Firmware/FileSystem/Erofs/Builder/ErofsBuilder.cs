@@ -3,6 +3,7 @@ using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Checksums;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Metadata;
@@ -179,7 +180,7 @@ public sealed partial class ErofsBuilder
         var temporaryPath = Path.Combine(Path.GetTempPath(), $"uotan-erofs-{Guid.NewGuid():N}.tmp");
         var stagingExclusions = excludedPaths.Append(Path.GetFullPath(temporaryPath)).ToArray();
         var effective = ValidateAndCollect(directoryPath, out var root, options, stagingExclusions);
-        if (output.CanSeek && SupportsResizeWithoutMutation(output))
+        if (output.CanSeek && StreamResize.SupportsResizeWithoutMutation(output))
         {
             var baseOffset = output.Position;
             BuildImage(root, effective, output, baseOffset, freshDestination: false);
@@ -200,24 +201,6 @@ public sealed partial class ErofsBuilder
         finally
         {
             try { File.Delete(temporaryPath); } catch { }
-        }
-    }
-
-    private static bool SupportsResizeWithoutMutation(Stream output)
-    {
-        var position = output.Position;
-        try
-        {
-            output.SetLength(output.Length);
-            return true;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
-        finally
-        {
-            output.Position = position;
         }
     }
 
@@ -547,6 +530,12 @@ public sealed partial class ErofsBuilder
         public int CompressedLength;
         public uint BlockAddress;
         public bool Plain;
+
+        /// <summary>Staging-file offset of this pcluster's accepted encoding; -1 when the plan was
+        /// produced without staging (dense planner) and the write pass must re-compress.
+        /// <para>该 pcluster 已接受编码在暂存文件中的偏移；规划未经过暂存（密集规划器）时为 -1，
+        /// 写出阶段需要重新压缩。</para></summary>
+        public long StagedOffset = -1;
     }
 
     /// <summary>Computes s_available_compr_algs: the LZ4 max distance in legacy (pre-5.13)
@@ -571,32 +560,38 @@ public sealed partial class ErofsBuilder
     {
         using var output = new OffsetStream(destination, baseOffset);
         var context = ImageBuildContext.Create(root, options, output);
-
-        context.CollectOrderedNodes();
-        context.MergeHardlinks();
-        context.PlanNodePayloads();
-        context.PlanNodeLayouts();
-        context.CreatePackedNode();
-        context.PlanMetabox();
-        var metaOff = context.AssignInodeOffsets();
-        var totalBlocks = context.AssignDataAddresses(metaOff);
-
-        var finalSize = checked(totalBlocks * context.BlockSize);
-        var oldLength = output.Length;
-        output.SetLength(finalSize);
-        if (!freshDestination)
+        try
         {
-            ZeroImage(output, Math.Min(oldLength, finalSize), options.CancellationToken);
+            context.CollectOrderedNodes();
+            context.MergeHardlinks();
+            context.PlanNodePayloads();
+            context.PlanNodeLayouts();
+            context.CreatePackedNode();
+            context.PlanMetabox();
+            var metaOff = context.AssignInodeOffsets();
+            var totalBlocks = context.AssignDataAddresses(metaOff);
+
+            var finalSize = checked(totalBlocks * context.BlockSize);
+            var oldLength = output.Length;
+            output.SetLength(finalSize);
+            if (!freshDestination)
+            {
+                ZeroImage(output, Math.Min(oldLength, finalSize), options.CancellationToken);
+            }
+
+            var featureIncompat = context.ComputeFeatureIncompat();
+            var superblock = context.BuildSuperblock(totalBlocks, featureIncompat);
+            context.WriteSuperblockAndDevices(output, superblock, totalBlocks);
+            context.WriteNodeData(output);
+            context.WriteInodes(output);
+            context.WriteSuperblockChecksum(output);
+
+            output.Position = finalSize;
         }
-
-        var featureIncompat = context.ComputeFeatureIncompat();
-        var superblock = context.BuildSuperblock(totalBlocks, featureIncompat);
-        context.WriteSuperblockAndDevices(output, superblock, totalBlocks);
-        context.WriteNodeData(output);
-        context.WriteInodes(output);
-        context.WriteSuperblockChecksum(output);
-
-        output.Position = finalSize;
+        finally
+        {
+            context.StagedCompression?.Dispose();
+        }
     }
 
     private sealed class OffsetStream(Stream inner, long baseOffset) : Stream

@@ -29,7 +29,7 @@ public sealed class FileSystemEditingTests : IDisposable
         Directory.CreateDirectory(directory);
         var child = Path.Combine(directory, "uotan-name-encoded");
         File.WriteAllText(child, "data");
-        var manifest = new FileSystemPreservationManifest
+        var manifest = new FileSystemPreservationData
         {
             ParsedEntries = [new() { Path = ".", Mode = 0x41ED, Uid = 123, Gid = 456 }],
             ImagePaths = new() { ["original/colon:name"] = "original/uotan-name-encoded" }

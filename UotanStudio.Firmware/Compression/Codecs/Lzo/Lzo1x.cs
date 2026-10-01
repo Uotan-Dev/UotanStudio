@@ -495,7 +495,7 @@ internal static class Lzo1x
     {
         var worst = input.Length + (input.Length / 16) + 64 + 3;
         var output = new byte[worst];
-        var status = TryCompress(input.ToArray(), output, out var written);
+        var status = TryCompress(input, output, out var written);
         if (status != LzoStatus.Ok)
         {
             throw new InvalidOperationException(
@@ -505,12 +505,14 @@ internal static class Lzo1x
         return output.AsSpan(0, written).ToArray();
     }
 
-    private static LzoStatus TryCompress(byte[] input, byte[] output, out int bytesWritten)
+    private static LzoStatus TryCompress(ReadOnlySpan<byte> input, Span<byte> output, out int bytesWritten)
     {
+        var inSpan = input;
+        var outSpan = output;
         bytesWritten = 0;
-        var inLen = input.Length;
+        var inLen = inSpan.Length;
         var op = 0;
-        var opEnd = output.Length;
+        var opEnd = outSpan.Length;
         var dataStart = op;
         const int m4MaxOffset = 0xbfff;
 
@@ -523,12 +525,14 @@ internal static class Lzo1x
         var ti = 0;
         var litStart = 0;
 
+        var dict = new ushort[DSize];
         while (l > 20)
         {
             var ll = Math.Min(l, m4MaxOffset + 1);
 
 
-            var status = CompressBlock(ip, ll, new ushort[DSize], ref ti, ref litStart);
+            Array.Clear(dict, 0, dict.Length);
+            var status = CompressBlock(ip, ll, dict, inSpan, outSpan, ref ti, ref litStart);
             if (status != LzoStatus.Ok)
             {
                 return status;
@@ -549,7 +553,7 @@ internal static class Lzo1x
                     return LzoStatus.OutputOverrun;
                 }
 
-                output[op++] = (byte)(17 + finalT);
+                outSpan[op++] = (byte)(17 + finalT);
             }
             else if (finalT <= 3)
             {
@@ -558,7 +562,7 @@ internal static class Lzo1x
                     return LzoStatus.OutputOverrun;
                 }
 
-                output[op + stateOffset] |= (byte)finalT;
+                outSpan[op + stateOffset] |= (byte)finalT;
             }
             else if (finalT <= 18)
             {
@@ -567,7 +571,7 @@ internal static class Lzo1x
                     return LzoStatus.OutputOverrun;
                 }
 
-                output[op++] = (byte)(finalT - 3);
+                outSpan[op++] = (byte)(finalT - 3);
             }
             else
             {
@@ -577,7 +581,7 @@ internal static class Lzo1x
                     return LzoStatus.OutputOverrun;
                 }
 
-                output[op++] = 0;
+                outSpan[op++] = 0;
                 while (tt > 255)
                 {
                     tt -= 255;
@@ -586,7 +590,7 @@ internal static class Lzo1x
                         return LzoStatus.OutputOverrun;
                     }
 
-                    output[op++] = 0;
+                    outSpan[op++] = 0;
                 }
 
                 if (op + 1 > opEnd)
@@ -594,7 +598,7 @@ internal static class Lzo1x
                     return LzoStatus.OutputOverrun;
                 }
 
-                output[op++] = (byte)tt;
+                outSpan[op++] = (byte)tt;
             }
 
             if (finalT > opEnd - op)
@@ -602,7 +606,7 @@ internal static class Lzo1x
                 return LzoStatus.OutputOverrun;
             }
 
-            Array.Copy(input, ii, output, op, finalT);
+            inSpan.Slice(ii, finalT).CopyTo(outSpan.Slice(op));
             op += finalT;
         }
 
@@ -611,14 +615,15 @@ internal static class Lzo1x
             return LzoStatus.OutputOverrun;
         }
 
-        output[op++] = M4Marker | 1;
-        output[op++] = 0;
-        output[op++] = 0;
+        outSpan[op++] = M4Marker | 1;
+        outSpan[op++] = 0;
+        outSpan[op++] = 0;
 
         bytesWritten = op;
         return LzoStatus.Ok;
 
-        LzoStatus CompressBlock(int blockStart, int blockLen, ushort[] dict, ref int pendingTi, ref int literalStart)
+        LzoStatus CompressBlock(int blockStart, int blockLen, ushort[] dict, ReadOnlySpan<byte> inSpan,
+            Span<byte> outSpan, ref int pendingTi, ref int literalStart)
         {
             var inEnd = blockStart + blockLen;
             var ipEnd = inEnd - 20;
@@ -638,11 +643,11 @@ internal static class Lzo1x
                     break;
                 }
 
-                var dv = BinaryPrimitives.ReadUInt32LittleEndian(input.AsSpan(blockIp, 4));
+                var dv = BinaryPrimitives.ReadUInt32LittleEndian(inSpan.Slice(blockIp, 4));
                 var h = (int)(((dv * 0x1824429dU) >> (32 - DBits)) & DMask);
                 var mPos = blockStart + dict[h];
                 dict[h] = (ushort)(blockIp - blockStart);
-                if (dv != BinaryPrimitives.ReadUInt32LittleEndian(input.AsSpan(mPos, 4)))
+                if (dv != BinaryPrimitives.ReadUInt32LittleEndian(inSpan.Slice(mPos, 4)))
                 {
                     continue;
                 }
@@ -664,11 +669,11 @@ internal static class Lzo1x
                                 return LzoStatus.OutputOverrun;
                             }
 
-                            output[op++] = (byte)(17 + litLen);
+                            outSpan[op++] = (byte)(17 + litLen);
                         }
                         else
                         {
-                            output[op + stateOffset] |= (byte)litLen;
+                            outSpan[op + stateOffset] |= (byte)litLen;
                         }
                     }
                     else if (litLen <= 18)
@@ -678,7 +683,7 @@ internal static class Lzo1x
                             return LzoStatus.OutputOverrun;
                         }
 
-                        output[op++] = (byte)(litLen - 3);
+                        outSpan[op++] = (byte)(litLen - 3);
                     }
                     else
                     {
@@ -688,7 +693,7 @@ internal static class Lzo1x
                             return LzoStatus.OutputOverrun;
                         }
 
-                        output[op++] = 0;
+                        outSpan[op++] = 0;
                         while (tt > 255)
                         {
                             tt -= 255;
@@ -697,7 +702,7 @@ internal static class Lzo1x
                                 return LzoStatus.OutputOverrun;
                             }
 
-                            output[op++] = 0;
+                            outSpan[op++] = 0;
                         }
 
                         if (op + 1 > opEnd)
@@ -705,7 +710,7 @@ internal static class Lzo1x
                             return LzoStatus.OutputOverrun;
                         }
 
-                        output[op++] = (byte)tt;
+                        outSpan[op++] = (byte)tt;
                     }
 
                     if (litLen > opEnd - op)
@@ -713,13 +718,13 @@ internal static class Lzo1x
                         return LzoStatus.OutputOverrun;
                     }
 
-                    Array.Copy(input, ii, output, op, litLen);
+                    inSpan.Slice(ii, litLen).CopyTo(outSpan.Slice(op));
                     op += litLen;
                 }
 
 
                 var mLen = 4;
-                while (blockIp + mLen < ipEnd && input[blockIp + mLen] == input[mPos + mLen])
+                while (blockIp + mLen < ipEnd && inSpan[blockIp + mLen] == inSpan[mPos + mLen])
                 {
                     mLen++;
                 }
@@ -740,20 +745,20 @@ internal static class Lzo1x
                         return LzoStatus.OutputOverrun;
                     }
 
-                    output[op++] = (byte)(((mLen - 1) << 5) | ((off & 7) << 2));
-                    output[op++] = (byte)(off >> 3);
+                    outSpan[op++] = (byte)(((mLen - 1) << 5) | ((off & 7) << 2));
+                    outSpan[op++] = (byte)(off >> 3);
                 }
                 else if (mOff <= M3MaxOffset)
                 {
                     var off = mOff - 1;
                     if (mLen <= M3MaxLen)
                     {
-                        output[op++] = (byte)(M3Marker | (mLen - 2));
+                        outSpan[op++] = (byte)(M3Marker | (mLen - 2));
                     }
                     else
                     {
                         var rem = mLen - M3MaxLen;
-                        output[op++] = M3Marker;
+                        outSpan[op++] = M3Marker;
                         while (rem > 255)
                         {
                             rem -= 255;
@@ -762,7 +767,7 @@ internal static class Lzo1x
                                 return LzoStatus.OutputOverrun;
                             }
 
-                            output[op++] = 0;
+                            outSpan[op++] = 0;
                         }
 
                         if (op + 1 > opEnd)
@@ -770,7 +775,7 @@ internal static class Lzo1x
                             return LzoStatus.OutputOverrun;
                         }
 
-                        output[op++] = (byte)rem;
+                        outSpan[op++] = (byte)rem;
                     }
 
                     if (op + 2 > opEnd)
@@ -778,19 +783,19 @@ internal static class Lzo1x
                         return LzoStatus.OutputOverrun;
                     }
 
-                    output[op++] = (byte)(off << 2);
-                    output[op++] = (byte)(off >> 6);
+                    outSpan[op++] = (byte)(off << 2);
+                    outSpan[op++] = (byte)(off >> 6);
                 }
                 else
                 {
                     var off = mOff - 0x4000;
                     if (mLen <= M4MaxLen)
                     {
-                        output[op++] = (byte)(M4Marker | ((off >> 11) & 8) | (mLen - 2));
+                        outSpan[op++] = (byte)(M4Marker | ((off >> 11) & 8) | (mLen - 2));
                     }
                     else
                     {
-                        output[op++] = (byte)(M4Marker | ((off >> 11) & 8));
+                        outSpan[op++] = (byte)(M4Marker | ((off >> 11) & 8));
                         var rem = mLen - M4MaxLen;
                         while (rem > 255)
                         {
@@ -800,7 +805,7 @@ internal static class Lzo1x
                                 return LzoStatus.OutputOverrun;
                             }
 
-                            output[op++] = 0;
+                            outSpan[op++] = 0;
                         }
 
                         if (op + 1 > opEnd)
@@ -808,7 +813,7 @@ internal static class Lzo1x
                             return LzoStatus.OutputOverrun;
                         }
 
-                        output[op++] = (byte)rem;
+                        outSpan[op++] = (byte)rem;
                     }
 
                     if (op + 2 > opEnd)
@@ -816,8 +821,8 @@ internal static class Lzo1x
                         return LzoStatus.OutputOverrun;
                     }
 
-                    output[op++] = (byte)(off << 2);
-                    output[op++] = (byte)(off >> 6);
+                    outSpan[op++] = (byte)(off << 2);
+                    outSpan[op++] = (byte)(off >> 6);
                 }
 
                 hasOpcode = true;

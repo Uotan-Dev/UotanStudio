@@ -42,7 +42,7 @@ public class DatReaderTests
         SparseImageConverter.ConvertRawToSparse(datPath, sparseDat);
 
         var outputPath = Path.Combine(temp.Path, "output.img");
-        DatReader.Unpack(listPath, sparseDat, outputPath);
+        DatReader.Unpack(listPath, sparseDat, outputPath, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(image, File.ReadAllBytes(outputPath));
     }
@@ -58,7 +58,7 @@ public class DatReaderTests
         DatWriter.Write(imagePath, datPath, listPath);
 
         var outputPath = Path.Combine(temp.Path, "output.img");
-        DatReader.Unpack(listPath, datPath, outputPath);
+        DatReader.Unpack(listPath, datPath, outputPath, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(image, File.ReadAllBytes(outputPath));
     }
@@ -70,7 +70,7 @@ public class DatReaderTests
         var listPath = temp.Write("x.transfer.list", "2\n4\n0\n0\nbsdiff 0 32 2,0,4 4 2,0,4\n");
         var datPath = temp.WriteBytes("x.new.dat", []);
 
-        Assert.Throws<ArgumentException>(() => DatReader.Unpack(listPath, datPath, Path.Combine(temp.Path, "out.img")));
+        Assert.Throws<ArgumentException>(() => DatReader.Unpack(listPath, datPath, Path.Combine(temp.Path, "out.img"), cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public class DatReaderTests
         var listPath = temp.Write("x.transfer.list", "2\n4\n1\n2\nstash abc123 2,0,2\nnew 2,2,4\n");
         var datPath = temp.WriteBytes("x.new.dat", []);
 
-        Assert.Throws<ArgumentException>(() => DatReader.Unpack(listPath, datPath, Path.Combine(temp.Path, "out.img")));
+        Assert.Throws<ArgumentException>(() => DatReader.Unpack(listPath, datPath, Path.Combine(temp.Path, "out.img"), cancellationToken: TestContext.Current.CancellationToken));
     }
 
     private static void RoundTrip(byte[] image)

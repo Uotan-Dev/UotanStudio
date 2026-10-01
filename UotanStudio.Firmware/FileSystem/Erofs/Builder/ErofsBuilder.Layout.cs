@@ -58,6 +58,19 @@ public sealed partial class ErofsBuilder
         /// <para>全部收集节点的先序列表；打包节点与 metabox 节点稍后追加。</para></summary>
         public List<BuildNode> Ordered { get; } = [];
 
+        /// <summary>
+        /// Staging file holding the compressed payloads accepted during <see cref="PlanNodePayloads"/>;
+        /// the write pass copies from it instead of re-compressing each pcluster. Null until the first
+        /// compressed plan stages bytes, and disposed with the build.
+        /// <para>承载 <see cref="PlanNodePayloads"/> 阶段接受的压缩负载的暂存文件；写出阶段从中复制而不再
+        /// 重新压缩。首次压缩规划写入前为 null，并随构建结束释放。</para>
+        /// </summary>
+        public Core.CompressionPayloadStaging? StagedCompression { get; private set; }
+
+        /// <summary>Creates the compression payload staging file on first use.
+        /// <para>首次使用时创建压缩负载暂存文件。</para></summary>
+        public Core.CompressionPayloadStaging EnsureStagedCompression() => StagedCompression ??= new();
+
         public List<(BuildNode Alias, BuildNode Canonical)> Hardlinks { get; } = [];
 
         public List<PackedFragment> PackedFragments { get; } = [];
@@ -272,6 +285,7 @@ public sealed partial class ErofsBuilder
         /// </summary>
         internal void PlanNodePayloads()
         {
+            var staging = EnsureStagedCompression();
             Core.FirmwareParallelism.ForEach(Ordered, node =>
             {
                 Options.CancellationToken.ThrowIfCancellationRequested();
@@ -282,7 +296,7 @@ public sealed partial class ErofsBuilder
                     ? Options.SourceCompressionOptions?.GetValueOrDefault(original.Algorithm) ?? Options : Options;
                 node.LogicalClusterSize = node.SourceInode?.LogicalClusterSize ?? BlockSize;
                 if (node.SourceInode?.Compressed ?? Options.Compress)
-                    node.Pclusters = TryPlanCompressed(node, BlockSize, node.CompressionOptions);
+                    node.Pclusters = TryPlanCompressed(node, BlockSize, node.CompressionOptions, staging);
             });
         }
 
@@ -743,7 +757,7 @@ public sealed partial class ErofsBuilder
                 }
                 else if (node.Pclusters is not null)
                 {
-                    WriteCompressedData(output, node, BlockSize, node.CompressionOptions!);
+                    WriteCompressedData(output, node, BlockSize, node.CompressionOptions!, StagedCompression!);
                 }
                 else if (node.IsMetaboxContainer)
                 {

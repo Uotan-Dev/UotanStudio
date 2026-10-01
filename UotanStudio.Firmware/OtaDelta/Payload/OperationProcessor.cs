@@ -135,11 +135,22 @@ internal static class OperationProcessor
             }
             else if (op.Type is InstallOperation.Types.Type.Lz4diffBsdiff or InstallOperation.Types.Type.Lz4diffPuffdiff)
             {
-                var oldBytes = new byte[checked((int)oldData.Length)];
-                var patchBytes = new byte[checked((int)patch.Length)];
-                oldData.ReadExactly(oldBytes);
-                patch.ReadExactly(patchBytes);
-                output.Write(Lz4DiffApplier.Apply(oldBytes, patchBytes, checked((int)output.Length)));
+                var oldBytes = ArrayPool<byte>.Shared.Rent(checked((int)oldData.Length));
+                var patchBytes = ArrayPool<byte>.Shared.Rent(checked((int)patch.Length));
+                try
+                {
+                    oldData.ReadExactly(oldBytes.AsSpan(0, (int)oldData.Length));
+                    patch.ReadExactly(patchBytes.AsSpan(0, (int)patch.Length));
+                    output.Write(Lz4DiffApplier.Apply(
+                        oldBytes.AsSpan(0, (int)oldData.Length),
+                        patchBytes.AsSpan(0, (int)patch.Length),
+                        checked((int)output.Length)));
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(oldBytes);
+                    ArrayPool<byte>.Shared.Return(patchBytes);
+                }
             }
             else throw new PayloadUnsupportedOperationException("Unsupported delta operation.", op.Type.ToString());
         }

@@ -1,6 +1,7 @@
 using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.F2fs.Models;
 using UotanStudio.Firmware.FileSystem.Metadata;
@@ -249,7 +250,7 @@ public sealed partial class F2fsBuilder
         var cancellationToken = options?.CancellationToken ?? default;
         cancellationToken.ThrowIfCancellationRequested();
         var root = CollectNodes(Path.GetFullPath(sourceDirectory), stagingExclusions, cancellationToken);
-        if (output.CanSeek && SupportsResizeWithoutMutation(output))
+        if (output.CanSeek && StreamResize.SupportsResizeWithoutMutation(output))
         {
             WriteImageCore(root, output, output.Position, freshDestination: false, options);
             return;
@@ -269,24 +270,6 @@ public sealed partial class F2fsBuilder
         finally
         {
             try { File.Delete(temporaryPath); } catch { }
-        }
-    }
-
-    private static bool SupportsResizeWithoutMutation(Stream output)
-    {
-        var position = output.Position;
-        try
-        {
-            output.SetLength(output.Length);
-            return true;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
-        finally
-        {
-            output.Position = position;
         }
     }
 
@@ -335,6 +318,7 @@ public sealed partial class F2fsBuilder
         effective.Validate();
         effective.CancellationToken.ThrowIfCancellationRequested();
         var blockSize = effective.BlockSize;
+        using var compressionStaging = new CompressionPayloadStaging();
 
         var ordered = CollectPreOrder(root!);
 
@@ -376,7 +360,7 @@ public sealed partial class F2fsBuilder
             effective.CancellationToken.ThrowIfCancellationRequested();
             if (!node.IsDirectory)
             {
-                PlanFileData(node, effective);
+                PlanFileData(node, effective, compressionStaging);
             }
             else
             {
@@ -412,7 +396,7 @@ public sealed partial class F2fsBuilder
         WriteCheckpoints(output, baseOffset, layout, plan, validNodeCount, inodeCount);
         WriteSit(output, baseOffset, layout, plan, blockSize);
         WriteNat(output, baseOffset, layout, nat);
-        WriteMainArea(output, baseOffset, ordered, blockSize, effective.CancellationToken);
+        WriteMainArea(output, baseOffset, ordered, blockSize, compressionStaging, effective.CancellationToken);
         effective.CancellationToken.ThrowIfCancellationRequested();
         WriteSsa(output, baseOffset, layout, plan, blockSize);
     }
@@ -595,7 +579,7 @@ public sealed partial class F2fsBuilder
         }
     }
 
-    private static void PlanFileData(BuildNode node, F2fsOptions options)
+    private static void PlanFileData(BuildNode node, F2fsOptions options, CompressionPayloadStaging compressionStaging)
     {
         var preservedCompression = node.SourceMetadata?.F2fsCompression;
         var compress = node.SourceMetadata is null ? options.EnableCompression : preservedCompression is not null;
@@ -640,7 +624,7 @@ public sealed partial class F2fsBuilder
         if (compress && !node.IsSymlink && (preservedCompression is not null || size > node.ClusterPages * options.BlockSize))
         {
 
-            if (TryPlanCompressedFileData(node, options))
+            if (TryPlanCompressedFileData(node, options, compressionStaging))
             {
                 PlanDnodes(node, node.DataBlockCount);
                 return;
@@ -676,7 +660,7 @@ public sealed partial class F2fsBuilder
     /// Compressed layout planning (first pass): streams the source in 64 KB clusters and compresses full clusters.
     /// <para>压缩布局规划（第一遍）：按 64 KB 簇流式读取源文件，对完整簇尝试压缩。</para>
     /// </summary>
-    private static bool TryPlanCompressedFileData(BuildNode node, F2fsOptions options)
+    private static bool TryPlanCompressedFileData(BuildNode node, F2fsOptions options, CompressionPayloadStaging compressionStaging)
     {
         var blockSize = options.BlockSize;
         var clusterPages = node.ClusterPages;
@@ -692,6 +676,7 @@ public sealed partial class F2fsBuilder
 
         var compressedSizes = new int[clusterCount];
         compressedSizes.AsSpan().Fill(-1);
+        var stagedOffsets = new long[clusterCount];
         var allocated = 0;
         var anyCompressed = false;
         var clusterBuffer = new byte[clusterBytes];
@@ -716,6 +701,7 @@ public sealed partial class F2fsBuilder
                 if (payload is not null && payloadBlocks < clusterPages)
                 {
                     compressedSizes[c] = payload.Length;
+                    stagedOffsets[c] = compressionStaging.Append(payload);
                     anyCompressed = true;
                     node.DataBlockAddrs[logical] = uint.MaxValue - 1;
                     for (var i = 0; i < payloadBlocks; i++)
@@ -757,6 +743,7 @@ public sealed partial class F2fsBuilder
 
         node.AllocatedDataBlockCount = allocated;
         node.CompressedClusterSizes = compressedSizes;
+        node.CompressedClusterStagedOffsets = stagedOffsets;
         node.IsCompressedFile = true;
         return true;
     }
@@ -851,35 +838,11 @@ public sealed partial class F2fsBuilder
             {
                 var offset = i * blockSize;
                 var length = Math.Min(blockSize, Math.Max(0, total - offset));
-                holes[baseBlock + i] = IsAllZero(segment.AsSpan(offset, length));
+                holes[baseBlock + i] = segment.AsSpan(offset, length).IndexOfAnyExcept((byte)0) < 0;
             }
         }
 
         return holes;
-    }
-
-    private static bool IsAllZero(ReadOnlySpan<byte> data)
-    {
-        var zeros = data;
-        while (zeros.Length >= 16)
-        {
-            if (System.Runtime.Intrinsics.Vector128.LoadUnsafe(ref System.Runtime.InteropServices.MemoryMarshal.GetReference(zeros)) != System.Runtime.Intrinsics.Vector128<byte>.Zero)
-            {
-                return false;
-            }
-
-            zeros = zeros[16..];
-        }
-
-        foreach (var value in zeros)
-        {
-            if (value != 0)
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private static void PlanDnodes(BuildNode node, int dataBlocks)
@@ -1457,6 +1420,7 @@ public sealed partial class F2fsBuilder
         public List<uint> DataBlockAddrs = [];
         public bool IsCompressedFile;
         public int[]? CompressedClusterSizes;
+        public long[]? CompressedClusterStagedOffsets;
         public CompressionAlgorithm CompressedAlgorithm;
         public int CompressionLevel;
         public List<DnodePlan> Dnodes = [];

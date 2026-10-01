@@ -1,11 +1,11 @@
 # Extraction Directory Metadata
 
-Successful format-handler extraction creates `.uotanstudio-repack.json` in the
-output root. Application firmware extraction services also write this file when
-they call parsers directly. Ordinary filesystem subdirectories do not represent
-independent images and do not receive separate metadata. Metadata is written only
-during extraction: an existing extraction directory without it gains one only by
-being extracted again from its source image.
+Successful format-handler extraction creates `metadata.json` in the output root.
+Application firmware extraction services also write this file when they call
+parsers directly. Ordinary filesystem subdirectories do not represent independent
+images and do not receive separate metadata. Metadata is written only during
+extraction: an existing extraction directory without it gains one only by being
+extracted again from its source image.
 
 When a project is open, the application services pass a metadata root and the
 metadata file plus the filesystem sidecars are stored under
@@ -18,6 +18,16 @@ detected partition name is used exclusively; otherwise the extraction directory
 itself is checked. There is no cross-fallback between the two layouts.
 `ProjectContextService` sets and clears the ambient default root on project
 open/close.
+
+One file carries everything. `fileSystemPreservation` merges the structured
+override tables (`partition`, `fsConfig`, `fileContexts`, `partitionInfo`,
+`rebuild`) with the verified capture record (`format`, `sourceLength`,
+`sourceHash`, `configurationHash`, `configurationJson`, `projection`,
+`imagePaths`, `parsedEntries`). No sibling manifest, override document or
+`.filesystem/` directory is produced, so the deepest path is
+`{project root}/.uotan/metadata/<partition name>/metadata.json`. Editing the
+payload changes the document digest, so a hand-edited file is rejected instead of
+silently steering a rebuild.
 
 Example for an EROFS image:
 
@@ -67,12 +77,11 @@ are not applied as packing options; physical layout and allocation are rebuilt.
 
 EROFS also records `configuration.compression`, including algorithm-specific
 dictionary/window and LZ4 distance/cluster limits. Edited EROFS builds derive
-these settings and per-file inode attributes from the hash-verified retained
-image. They preserve UUID, raw volume bytes and source timestamps. The on-disk
+these settings and per-file inode attributes from the hash-verified captured
+metadata. They preserve UUID, raw volume bytes and source timestamps. The on-disk
 format does not identify encoder level or distinguish LZ4 from LZ4HC, so
 `compressionLevel` is explicitly null. Compressed data boundaries, physical
-layout and final image size can change. Unedited directories restore the
-retained image exactly. See [EROFS rebuild behaviour](../../docs/filesystem-erofs.md)
+layout and final image size can change. See [EROFS rebuild behaviour](../../docs/filesystem-erofs.md)
 for native-tool and kernel validation and the tested feature boundaries.
 
 | Format | Options |
@@ -106,7 +115,7 @@ directories with metadata use that configuration; directories without metadata
 continue to use the project packing settings.
 
 Double-clicking an extraction directory in the project explorer opens its
-`.uotanstudio-repack.json` in the text editor. The path resolution uses the
+`metadata.json` in the text editor. The path resolution uses the
 same single-location rule: the consolidated metadata file under
 `.uotan/metadata/<partition name>/` when a project is open, the local file
 otherwise. The file is opened even if it contains an unfinished JSON edit so it
@@ -120,6 +129,6 @@ files bearing this schema are excluded: an unrelated payload file with the same
 name is preserved, and extraction reports the reserved-name collision instead
 of replacing it with metadata.
 
-Metadata uses source-generated JSON serialization, a 32 MiB read/write limit and
+Metadata uses source-generated JSON serialization, a 64 MiB read/write limit and
 atomic replacement. It is published only after successful extraction. The format
 handler's `--no-overwrite` policy also protects existing directory metadata.

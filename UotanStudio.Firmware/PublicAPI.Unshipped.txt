@@ -235,3 +235,70 @@ UotanStudio.Firmware.Executable.ExecutableException.ExecutableException(string! 
 UotanStudio.Firmware.Executable.ExecutableUnsupportedFeatureException
 UotanStudio.Firmware.Executable.ExecutableUnsupportedFeatureException.ExecutableUnsupportedFeatureException(string! message) -> void
 UotanStudio.Firmware.Executable.ExecutableUnsupportedFeatureException.ExecutableUnsupportedFeatureException(string! message, System.Exception? innerException) -> void
+UotanStudio.Firmware.Core.Repacking.RepackMetadata.FileSystemPreservation.get -> System.Text.Json.Nodes.JsonObject?
+UotanStudio.Firmware.Core.Repacking.RepackMetadata.FileSystemPreservation.set -> void
+const UotanStudio.Firmware.Core.Repacking.RepackMetadata.FileName = "metadata.json" -> string!
+const UotanStudio.Firmware.DeviceTree.Dt.DtboFormat.ManifestFileName = "metadata.json" -> string!
+UotanStudio.Firmware.FileSystem.Fat.FatParser
+UotanStudio.Firmware.FileSystem.Fat.FatParser.BytesPerSector.get -> int
+UotanStudio.Firmware.FileSystem.Fat.FatParser.DeclaredVolumeBytes.get -> long
+UotanStudio.Firmware.FileSystem.Fat.FatParser.Dispose() -> void
+UotanStudio.Firmware.FileSystem.Fat.FatParser.ExtractToDirectory(string! outputDirectory, bool overwrite, long maximumOutputBytes, System.IProgress<(long Processed, long Total)>? byteProgress, System.Threading.CancellationToken cancellationToken) -> (System.Collections.Generic.IReadOnlyList<string!>! Extracted, System.Collections.Generic.IReadOnlyList<string!>! Unreadable)
+UotanStudio.Firmware.FileSystem.Fat.FatParser.FatCount.get -> int
+UotanStudio.Firmware.FileSystem.Fat.FatParser.FatParser(System.IO.Stream! stream) -> void
+UotanStudio.Firmware.FileSystem.Fat.FatParser.FatParser(string! imagePath) -> void
+UotanStudio.Firmware.FileSystem.Fat.FatParser.ImageBytes.get -> long
+UotanStudio.Firmware.FileSystem.Fat.FatParser.IsCapacityEquivalent.get -> bool
+UotanStudio.Firmware.FileSystem.Fat.FatParser.MaxRootDirectoryEntries.get -> int
+UotanStudio.Firmware.FileSystem.Fat.FatParser.ReadFile(string! path, System.IO.Stream! output) -> void
+UotanStudio.Firmware.FileSystem.Fat.FatParser.ReservedSectorCount.get -> int
+UotanStudio.Firmware.FileSystem.Fat.FatParser.SectorsPerCluster.get -> int
+UotanStudio.Firmware.FileSystem.Fat.FatParser.TotalClusters.get -> long
+UotanStudio.Firmware.FileSystem.Fat.FatParser.Variant.get -> string!
+UotanStudio.Firmware.FileSystem.Fat.FatParser.VolumeLabel.get -> string!
+static UotanStudio.Firmware.FileSystem.Fat.FatParser.IsFatImage(string! filePath) -> bool
+static UotanStudio.Firmware.FileSystem.Fat.FatParser.IsFatStream(System.IO.Stream! stream) -> bool
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.BytesPerSector.get -> int
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.ClusterCount.get -> long
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.DeclaredVolumeBytes.get -> long
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.Dispose() -> void
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.ExFatParser(System.IO.Stream! stream) -> void
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.ExFatParser(string! imagePath) -> void
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.ExtractToDirectory(string! outputDirectory, bool overwrite, long maximumOutputBytes, System.IProgress<(long Processed, long Total)>? byteProgress, System.Threading.CancellationToken cancellationToken) -> (System.Collections.Generic.IReadOnlyList<string!>! Extracted, System.Collections.Generic.IReadOnlyList<string!>! Unreadable)
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.FatCount.get -> int
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.ImageBytes.get -> long
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.IsCapacityEquivalent.get -> bool
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.ListFiles() -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry!>!
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.ReadFile(string! path, System.IO.Stream! output) -> void
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.SectorsPerCluster.get -> int
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.Variant.get -> string!
+UotanStudio.Firmware.FileSystem.Fat.ExFatParser.VolumeLabel.get -> string!
+UotanStudio.Firmware.FileSystem.Fat.FatParser.ListFiles() -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry!>!
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.<Clone>$() -> UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry!
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.Attributes.get -> System.IO.FileAttributes
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.Attributes.init -> void
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.Deconstruct(out string! Path, out long Size, out UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntryKind Kind, out System.IO.FileAttributes Attributes, out System.DateTime LastWriteTimeUtc) -> void
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.Equals(UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry? other) -> bool
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.FatVolumeEntry(string! Path, long Size, UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntryKind Kind, System.IO.FileAttributes Attributes, System.DateTime LastWriteTimeUtc) -> void
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.Kind.get -> UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntryKind
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.Kind.init -> void
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.LastWriteTimeUtc.get -> System.DateTime
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.LastWriteTimeUtc.init -> void
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.Path.get -> string!
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.Path.init -> void
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.Size.get -> long
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.Size.init -> void
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntryKind
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntryKind.Directory = 1 -> UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntryKind
+UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntryKind.File = 0 -> UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntryKind
+override UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.Equals(object? obj) -> bool
+override UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.GetHashCode() -> int
+override UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.ToString() -> string!
+static UotanStudio.Firmware.FileSystem.Fat.ExFatParser.IsExFatImage(string! filePath) -> bool
+static UotanStudio.Firmware.FileSystem.Fat.ExFatParser.IsExFatStream(System.IO.Stream! stream) -> bool
+static UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.operator !=(UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry? left, UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry? right) -> bool
+static UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry.operator ==(UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry? left, UotanStudio.Firmware.FileSystem.Fat.FatVolumeEntry? right) -> bool
+static UotanStudio.Firmware.FileSystem.Fat.ExFatParser.IsExFatBootRecord(System.ReadOnlySpan<byte> header, long? imageLength = null) -> bool
+static UotanStudio.Firmware.FileSystem.Fat.FatParser.IsFatBootRecord(System.ReadOnlySpan<byte> header, long? imageLength = null) -> bool

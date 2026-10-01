@@ -52,7 +52,7 @@ public class DatIncrementalTests
         using var temp = new TempDirectory(); var original = Pattern(2, 9);
         var image = temp.WriteBytes("image.img", original);
         var list = temp.Write("list", "1\n1\nmove 2,0,1 2,1,2\n");
-        DatReader.Unpack(list, temp.WriteBytes("new.dat", []), null, image, image);
+        DatReader.Unpack(list, temp.WriteBytes("new.dat", []), null, image, image, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(original.AsSpan(0, BlockSize).ToArray().Concat(original.AsSpan(0, BlockSize).ToArray()), File.ReadAllBytes(image));
         Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp-*"));
     }
@@ -97,7 +97,7 @@ public class DatIncrementalTests
         var list = $"4\n1\n0\n0\nbsdiff 0 {patch.Length} {Hash(original)} {Hash(original)} 2,0,1 1 2,0,1\n";
         using var temp = new TempDirectory();
         var output = temp.WriteBytes("out.img", "existing"u8.ToArray());
-        Assert.Throws<InvalidDataException>(() => DatReader.Unpack(temp.Write("list", list), temp.WriteBytes("new.dat", []), temp.WriteBytes("patch.dat", patch), temp.WriteBytes("source.img", original), output));
+        Assert.Throws<InvalidDataException>(() => DatReader.Unpack(temp.Write("list", list), temp.WriteBytes("new.dat", []), temp.WriteBytes("patch.dat", patch), temp.WriteBytes("source.img", original), output, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal("existing"u8.ToArray(), File.ReadAllBytes(output));
         Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp-*"));
     }
@@ -106,7 +106,7 @@ public class DatIncrementalTests
     public void TruncatedNewData_PreservesExistingDestination()
     {
         using var temp = new TempDirectory(); var output = temp.WriteBytes("out.img", "existing"u8.ToArray());
-        Assert.Throws<EndOfStreamException>(() => DatReader.Unpack(temp.Write("list", "4\n1\n0\n0\nnew 2,0,1\n"), temp.WriteBytes("new.dat", new byte[BlockSize - 1]), output));
+        Assert.Throws<EndOfStreamException>(() => DatReader.Unpack(temp.Write("list", "4\n1\n0\n0\nnew 2,0,1\n"), temp.WriteBytes("new.dat", new byte[BlockSize - 1]), output, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal("existing"u8.ToArray(), File.ReadAllBytes(output));
         Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp-*"));
     }

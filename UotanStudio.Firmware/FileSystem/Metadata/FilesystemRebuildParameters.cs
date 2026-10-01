@@ -1,29 +1,6 @@
-using System.Text.Json.Serialization;
 using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Firmware.FileSystem.Metadata;
-
-/// <summary>
-/// Machine-readable mirror of the Android-style filesystem sidecars, persisted beside
-/// <c>manifest.json</c> so repacking prefers structured tables over fragile flat-text parsing.
-/// <para>Android 风格文件系统附属元数据的机器可读镜像，与 <c>manifest.json</c> 同目录存放，
-/// 使重打包优先使用结构化表而非脆弱的扁平文本解析。</para>
-/// </summary>
-internal sealed class FilesystemMetadataDocument
-{
-    /// <summary>Gets the schema version.<para>获取模式版本。</para></summary>
-    public int Version { get; set; } = 1;
-    /// <summary>Gets the partition name.<para>获取分区名。</para></summary>
-    public string Partition { get; set; } = "";
-    /// <summary>Gets the SELinux label table keyed by image path.<para>获取以镜像路径为键的 SELinux 标签表。</para></summary>
-    public Dictionary<string, string> FileContexts { get; set; } = new(StringComparer.Ordinal);
-    /// <summary>Gets the POSIX attribute table keyed by image path.<para>获取以镜像路径为键的 POSIX 属性表。</para></summary>
-    public Dictionary<string, FsConfigEntry> FsConfig { get; set; } = new(StringComparer.Ordinal);
-    /// <summary>Gets the partition key-value table (superblock/format keys).<para>获取分区键值表（superblock/格式键）。</para></summary>
-    public Dictionary<string, string> PartitionInfo { get; set; } = new(StringComparer.Ordinal);
-    /// <summary>Gets the source rebuild parameters captured at extraction.<para>获取解包时采集的源重建参数。</para></summary>
-    public RebuildParameters? Rebuild { get; set; }
-}
 
 /// <summary>
 /// Parameters captured from the source image at extraction so a tree can be rebuilt without retaining
@@ -136,7 +113,7 @@ internal sealed class ErofsRebuildParameters
     /// Gets whether the source image used the legacy (pre-5.13) layout, i.e. no big pclusters and
     /// no compacted indexes, so older (5.4 / 5.10) kernels can still mount it.
     /// <para>获取源镜像是否采用 legacy（pre-5.13）布局，即无 big pcluster 与紧凑索引，
-    /// 使较旧内核（5.4 / 5.10）仍能挂载。</para>
+    /// 使较旧内核（5.4 / 5.10）仍可挂载。</para>
     /// </summary>
     public bool LegacyCompatibility { get; set; }
     /// <summary>Gets the declared compression configuration records.<para>获取已声明的压缩配置记录。</para></summary>
@@ -201,9 +178,3 @@ internal sealed class ErofsRebuildInode
     /// <summary>Gets the original extent record width in bytes.</summary>
     public int? SourceExtentRecordSize { get; set; }
 }
-
-[JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-[JsonSerializable(typeof(FilesystemMetadataDocument))]
-[JsonSerializable(typeof(RebuildParameters))]
-[JsonSerializable(typeof(ErofsRebuildParameters))]
-internal partial class FilesystemMetadataJsonContext : JsonSerializerContext;

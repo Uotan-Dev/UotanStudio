@@ -1,7 +1,6 @@
 using System.Globalization;
-using System.Text.Json;
-using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem.Rebuilding;
 
 namespace UotanStudio.Firmware.FileSystem.Metadata;
 
@@ -206,82 +205,41 @@ internal static class FileSystemMetadataOverrides
         }
     }
 
-    private const string MetadataFolderName = ".filesystem";
-    private const string MetadataFileName = "metadata.json";
+    /// <summary>
+    /// Loads the optional preservation payload carried by an already parsed metadata instance.
+    /// Returns <c>null</c> when the format recorded none or the tree fails validation.
+    /// <para>从已解析的元数据实例加载可选的保留负载。格式未记录或 JSON 树校验失败时返回 <c>null</c>。</para>
+    /// </summary>
+    /// <param name="metadata"><para>已解析的元数据实例。</para>The parsed metadata instance.</param>
+    /// <returns>The typed payload, or <see langword="null"/> when absent or invalid.
+    /// <para>类型化负载；不存在或非法时返回 <see langword="null"/>。</para></returns>
+    internal static FileSystemPreservationData? TryLoadDocument(RepackMetadata? metadata)
+        => FileSystemPreservation.ReadPayload(metadata);
 
     /// <summary>
-    /// Loads an optional <c>metadata.json</c> document from the preservation directory
-    /// (<c>.filesystem/&lt;id&gt;/metadata.json</c>). Returns <c>null</c> when absent, the id is
-    /// invalid, or the document fails validation.
-    /// <para>从保留目录（<c>.filesystem/&lt;id&gt;/metadata.json</c>）加载可选的 <c>metadata.json</c> 文档。
-    /// 不存在、id 非法或文档校验失败时返回 <c>null</c>。</para>
+    /// Loads the filesystem override tables, preferring the structured preservation payload inside the
+    /// metadata file and falling back to parsing the flat sidecars when the format recorded none.
+    /// <para>加载文件系统覆盖表：优先使用元数据文件内的结构化保留负载，格式未记录时回退解析扁平附属文件。</para>
     /// </summary>
-    internal static FilesystemMetadataDocument? TryLoadDocument(string metadataDirectory, string sourceFileName, string? preservationId)
-    {
-        if (string.IsNullOrWhiteSpace(metadataDirectory) || string.IsNullOrWhiteSpace(sourceFileName)
-            || preservationId is not { Length: 32 } || !Guid.TryParseExact(preservationId, "N", out _))
-            return null;
-        var path = FileExtraction.ResolvePath(metadataDirectory, MetadataFolderName + "/" + preservationId + "/" + MetadataFileName);
-        if (!File.Exists(path) || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) return null;
-        using var input = File.OpenRead(path);
-        FilesystemMetadataDocument? document;
-        try
-        {
-            document = JsonSerializer.Deserialize(input, FilesystemMetadataJsonContext.Default.FilesystemMetadataDocument);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-
-        if (document is null || document.Version != 1 || document.FileContexts is null
-            || document.FsConfig is null || document.PartitionInfo is null)
-            return null;
-        return document;
-    }
-
-    /// <summary>
-    /// Builds a rich document from the on-disk Android-style flat sidecars, for persisting as
-    /// <c>metadata.json</c> when no original image is retained.
-    /// <para>从磁盘上的 Android 风格扁平附属文件构建富文档，用于在未保留原镜像时持久化为 <c>metadata.json</c>。</para>
-    /// </summary>
-    internal static FilesystemMetadataDocument BuildDocument(string metadataDirectory, string sourceFileName, RebuildParameters? rebuild = null)
-    {
-        var partition = RepackMetadata.DetectPartitionName(sourceFileName);
-        var prefix = FileSystemMetadataGenerator.GetMetadataFileName(partition, "");
-        return new FilesystemMetadataDocument
-        {
-            Partition = partition,
-            FileContexts = new Dictionary<string, string>(
-                LoadFileContexts(Path.Combine(metadataDirectory, prefix + "file_contexts")), StringComparer.Ordinal),
-            FsConfig = new Dictionary<string, FsConfigEntry>(
-                LoadFsConfig(Path.Combine(metadataDirectory, prefix + "fs_config")), StringComparer.Ordinal),
-            PartitionInfo = new Dictionary<string, string>(
-                LoadPartitionInfo(Path.Combine(metadataDirectory, prefix + "info")), StringComparer.Ordinal),
-            Rebuild = rebuild
-        };
-    }
-
-    /// <summary>
-    /// Loads the filesystem override tables, preferring the structured <c>metadata.json</c> and
-    /// falling back to parsing the flat sidecars when it is absent.
-    /// <para>加载文件系统覆盖表：优先使用结构化的 <c>metadata.json</c>，不存在时回退解析扁平附属文件。</para>
-    /// </summary>
+    /// <param name="metadata"><para>已解析的元数据实例。</para>The parsed metadata instance.</param>
+    /// <param name="metadataDirectory"><para>扁平附属文件所在目录。</para>Directory holding the flat sidecars.</param>
+    /// <param name="requireStructured"><para>为 <see langword="true"/> 时缺少结构化负载即抛出异常，绝不回退。</para>
+    /// When <see langword="true"/>, a missing structured payload throws instead of falling back.</param>
     internal static (
         IReadOnlyDictionary<string, FsConfigEntry> FsConfig,
         IReadOnlyDictionary<string, string> FileContexts,
         IReadOnlyDictionary<string, string> PartitionInfo,
-        RebuildParameters? Rebuild) LoadTables(string metadataDirectory, string sourceFileName, string? preservationId,
+        RebuildParameters? Rebuild) LoadTables(RepackMetadata metadata, string metadataDirectory,
             bool requireStructured = false)
     {
-        var document = TryLoadDocument(metadataDirectory, sourceFileName, preservationId);
+        var document = TryLoadDocument(metadata);
         if (document is null)
         {
             if (requireStructured)
             {
                 throw new InvalidDataException("Filesystem structured rebuild metadata is missing or invalid.");
             }
-            var partition = RepackMetadata.DetectPartitionName(sourceFileName);
+            var partition = RepackMetadata.DetectPartitionName(metadata.SourceFileName);
             var prefix = FileSystemMetadataGenerator.GetMetadataFileName(partition, "");
             return (
                 LoadFsConfig(Path.Combine(metadataDirectory, prefix + "fs_config")),

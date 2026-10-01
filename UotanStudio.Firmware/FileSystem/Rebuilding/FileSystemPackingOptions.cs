@@ -24,8 +24,7 @@ internal static class FileSystemPackingOptions
         }
         try
         {
-            var metadataDirectory = Path.GetDirectoryName(RepackMetadata.ResolveActualMetadataPath(directory)) ?? directory;
-            var document = FileSystemMetadataOverrides.TryLoadDocument(metadataDirectory, metadata.SourceFileName, metadata.FileSystemPreservationId);
+            var document = FileSystemMetadataOverrides.TryLoadDocument(metadata);
             if (document is { PartitionInfo.Count: > 0 })
             {
                 foreach (var (key, value) in document.PartitionInfo)
@@ -36,7 +35,7 @@ internal static class FileSystemPackingOptions
                     }
                 }
             }
-            else if (metadata.FileSystemPreservationId is null)
+            else if (metadata.FileSystemPreservation is null)
             {
                 var infoPath = RepackMetadata.DiscoverMetadataFile(directory, "_info", metadata.SourceFileName);
                 if (infoPath is not null)
@@ -51,11 +50,11 @@ internal static class FileSystemPackingOptions
                 }
             }
 
-            if (metadata.FileSystemPreservationId is null && !options.ContainsKey("FsConfigPath"))
+            if (metadata.FileSystemPreservation is null && !options.ContainsKey("FsConfigPath"))
             {
                 options["FsConfigPath"] = RepackMetadata.DiscoverMetadataFile(directory, "_fs_config", metadata.SourceFileName) ?? string.Empty;
             }
-            if (metadata.FileSystemPreservationId is null && !options.ContainsKey("FileContextsPath"))
+            if (metadata.FileSystemPreservation is null && !options.ContainsKey("FileContextsPath"))
             {
                 options["FileContextsPath"] = RepackMetadata.DiscoverMetadataFile(directory, "_file_contexts", metadata.SourceFileName) ?? string.Empty;
             }

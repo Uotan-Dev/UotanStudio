@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.Core;
@@ -190,22 +191,32 @@ public sealed class FileSystemPreservationTests : IDisposable
     }
 
     [Theory]
-    [InlineData("metadata")]
-    [InlineData("manifest")]
+    [InlineData("digest")]
+    [InlineData("entry")]
     [InlineData("missing")]
     [InlineData("config")]
     public async Task InvalidOrChangedState_NeverReplacesExistingOutput(string mutation)
     {
         var (handler, _, extracted) = await ExtractAsync("EROFS");
         var metadata = RepackMetadata.Read(extracted)!;
-        var state = Path.Combine(extracted, ".filesystem", metadata.FileSystemPreservationId!);
+        var path = Path.Combine(extracted, RepackMetadata.FileName);
         switch (mutation)
         {
-            case "metadata":
-                using (var file = new FileStream(Path.Combine(state, "metadata.json"), FileMode.Open, FileAccess.Write)) file.WriteByte((byte)'X');
+            case "digest":
+                var digest = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+                digest["fileSystemPreservation"]!.AsObject()["configurationHash"] = new string('0', 64);
+                File.WriteAllText(path, digest.ToJsonString());
                 break;
-            case "manifest": File.AppendAllText(Path.Combine(state, "manifest.json"), " "); break;
-            case "missing": File.Delete(Path.Combine(state, "manifest.json")); break;
+            case "entry":
+                var entry = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+                entry["fileSystemPreservation"]!.AsObject()["parsedEntries"]!.AsArray()[0]!["uid"] = 12345;
+                File.WriteAllText(path, entry.ToJsonString());
+                break;
+            case "missing":
+                var stripped = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+                stripped.Remove("fileSystemPreservation");
+                File.WriteAllText(path, stripped.ToJsonString());
+                break;
             case "config":
                 metadata.PackingOptions["BlockSize"] = "8192";
                 await metadata.SaveAsync(extracted, Token);

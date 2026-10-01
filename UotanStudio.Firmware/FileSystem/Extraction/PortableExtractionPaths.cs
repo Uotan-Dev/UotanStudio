@@ -40,7 +40,7 @@ internal sealed class PortableExtractionPaths
                 var reserved = new[] { "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9" };
                 var encode = aliases.Contains(name) || name.Length > 120 || name.Any(c => c < 32 || "\\:*?\"<>|".Contains(c))
                     || name.EndsWith('.') || name.EndsWith(' ') || name.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase)
-                    || name.Equals(".filesystem", StringComparison.OrdinalIgnoreCase) || name.Equals(RepackMetadata.FileName, StringComparison.OrdinalIgnoreCase)
+                    || name.Equals(RepackMetadata.FileName, StringComparison.OrdinalIgnoreCase)
                     || name.EndsWith("_info", StringComparison.Ordinal) || name.EndsWith("_fs_config", StringComparison.Ordinal) || name.EndsWith("_file_contexts", StringComparison.Ordinal)
                     || reserved.Contains(stem, StringComparer.OrdinalIgnoreCase);
                 var host = encode ? Prefix + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(name))) : name;

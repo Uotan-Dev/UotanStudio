@@ -3998,7 +3998,6 @@ UotanStudio.Firmware.Core.FileSystemWorkStage.BuildingImage = 6 -> UotanStudio.F
 UotanStudio.Firmware.Core.FileSystemWorkStage.Compressing = 8 -> UotanStudio.Firmware.Core.FileSystemWorkStage
 UotanStudio.Firmware.Core.FileSystemWorkStage.Extracting = 1 -> UotanStudio.Firmware.Core.FileSystemWorkStage
 UotanStudio.Firmware.Core.FileSystemWorkStage.Preparing = 0 -> UotanStudio.Firmware.Core.FileSystemWorkStage
-UotanStudio.Firmware.Core.FileSystemWorkStage.Preserving = 2 -> UotanStudio.Firmware.Core.FileSystemWorkStage
 UotanStudio.Firmware.Core.FileSystemWorkStage.ReadingMetadata = 5 -> UotanStudio.Firmware.Core.FileSystemWorkStage
 UotanStudio.Firmware.Core.FileSystemWorkStage.VerifyingFiles = 4 -> UotanStudio.Firmware.Core.FileSystemWorkStage
 UotanStudio.Firmware.Core.FileSystemWorkStage.VerifyingImage = 3 -> UotanStudio.Firmware.Core.FileSystemWorkStage
@@ -4154,10 +4153,6 @@ UotanStudio.Firmware.Core.Repacking.RepackMetadata.CanPackDirectory.get -> bool
 UotanStudio.Firmware.Core.Repacking.RepackMetadata.CanPackDirectory.set -> void
 UotanStudio.Firmware.Core.Repacking.RepackMetadata.Configuration.get -> System.Text.Json.Nodes.JsonObject!
 UotanStudio.Firmware.Core.Repacking.RepackMetadata.Configuration.set -> void
-UotanStudio.Firmware.Core.Repacking.RepackMetadata.FileSystemPreservationHash.get -> string?
-UotanStudio.Firmware.Core.Repacking.RepackMetadata.FileSystemPreservationHash.set -> void
-UotanStudio.Firmware.Core.Repacking.RepackMetadata.FileSystemPreservationId.get -> string?
-UotanStudio.Firmware.Core.Repacking.RepackMetadata.FileSystemPreservationId.set -> void
 UotanStudio.Firmware.Core.Repacking.RepackMetadata.FormatName.get -> string!
 UotanStudio.Firmware.Core.Repacking.RepackMetadata.FormatName.set -> void
 UotanStudio.Firmware.Core.Repacking.RepackMetadata.PackingNotes.get -> string!
@@ -5445,7 +5440,6 @@ const UotanStudio.Firmware.DeviceTree.Dt.DtboFormat.CompressionGzip = 2 -> uint
 const UotanStudio.Firmware.DeviceTree.Dt.DtboFormat.CompressionNone = 0 -> uint
 const UotanStudio.Firmware.DeviceTree.Dt.DtboFormat.CompressionZlib = 1 -> uint
 const UotanStudio.Firmware.DeviceTree.Dt.DtboFormat.DefaultMaximumDecompressedBytes = 268435456 -> long
-const UotanStudio.Firmware.DeviceTree.Dt.DtboFormat.ManifestFileName = ".uotanstudio-repack.json" -> string!
 const UotanStudio.Firmware.DeviceTree.Dt.FdtConstants.Alignment = 4 -> int
 const UotanStudio.Firmware.DeviceTree.Dt.FdtConstants.DtboDefaultPageSize = 2048 -> uint
 const UotanStudio.Firmware.DeviceTree.Dt.FdtConstants.DtboEntrySize = 32 -> int
@@ -5518,7 +5512,6 @@ const UotanStudio.Firmware.Core.FirmwareParallelism.MaximumWorkers = 64 -> int
 const UotanStudio.Firmware.Core.Magic.FileMagic.DefaultProbeLength = 65536 -> int
 const UotanStudio.Firmware.Core.Magic.Generated.CompiledMagicData.GeneratedAt = "2026-09-28 08:51:07Z" -> string!
 const UotanStudio.Firmware.Core.Magic.Generated.CompiledMagicData.RuleCount = 4205 -> int
-const UotanStudio.Firmware.Core.Repacking.RepackMetadata.FileName = ".uotanstudio-repack.json" -> string!
 const UotanStudio.Firmware.Core.Repacking.RepackMetadata.MetadataFolderName = "metadata" -> string!
 const UotanStudio.Firmware.VendorFirmware.Dz.DzChunkHeader.Size = 512 -> int
 const UotanStudio.Firmware.VendorFirmware.Dz.KdzHeader.Size = 272 -> int
@@ -6360,7 +6353,6 @@ static UotanStudio.Firmware.FileSystem.Native.NativeToolResult.operator ==(Uotan
 static UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemAttributeEdit.operator !=(UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemAttributeEdit? left, UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemAttributeEdit? right) -> bool
 static UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemAttributeEdit.operator ==(UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemAttributeEdit? left, UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemAttributeEdit? right) -> bool
 static UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemPreservation.OpenErofsParser(System.IO.Stream! source, System.Threading.CancellationToken token = default(System.Threading.CancellationToken), bool requireCompleteMetadata = false) -> UotanStudio.Firmware.FileSystem.Erofs.Parser.ErofsParser!
-static UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemPreservation.ReplaySnapshot(string! metadataDirectory, string! outputPath, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken), long? maximumOutputBytes = null) -> void
 static UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemPreservation.TryRestore(string! inputDirectory, string! outputPath, string! format, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken), System.Action<System.Collections.Generic.IReadOnlyDictionary<string!, string!>!>? rebuildReport = null, long? maximumOutputBytes = null, System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemAttributeEdit!>? attributeEdits = null, System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemXattrEdit!>? xattrEdits = null) -> bool
 static UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemPreservation.UnpackAsync(UotanStudio.Firmware.Core.IReadonlyFormatHandler! handler, string! sourcePath, string! outputDirectory, UotanStudio.Firmware.Core.UnpackOptions? options, System.Threading.CancellationToken cancellationToken, System.Func<string!, System.Threading.Tasks.Task<UotanStudio.Firmware.Core.FirmwareOpResult!>!>! unpack) -> System.Threading.Tasks.Task<UotanStudio.Firmware.Core.FirmwareOpResult!>!
 static UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemXattrEdit.operator !=(UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemXattrEdit? left, UotanStudio.Firmware.FileSystem.Rebuilding.FileSystemXattrEdit? right) -> bool

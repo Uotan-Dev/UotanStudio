@@ -96,14 +96,16 @@ public sealed class Ext4Parser : IDisposable
     private long _pathCharacters;
     private Journal.JournalOverlay _journalOverlay = Journal.JournalOverlay.Empty;
 
+    private long _cacheTick;
+
     /// <summary>
     /// Bounded cache of metadata blocks (indirect pointer blocks and extent index/leaf blocks)
-    /// that are re-read once per logical block during sequential file reads. Cleared wholesale
-    /// when over capacity; parser instances are single-threaded by usage model.
+    /// that are re-read once per logical block during sequential file reads. When over capacity a
+    /// single least-recently-used block is evicted; parser instances are single-threaded by usage model.
     /// <para>元数据块（间接指针块与 extent 索引/叶子块）的有界缓存——顺序读取大文件时这些块
-    /// 会被逐逻辑块重复读取；超容量时整体清空。解析器实例按现有使用模型为单线程。</para>
+    /// 会被逐逻辑块重复读取；超容量时按最近最少使用逐出一个块。解析器实例按现有使用模型为单线程。</para>
     /// </summary>
-    private readonly Dictionary<ulong, byte[]> _metadataBlockCache = new();
+    private readonly Dictionary<ulong, (byte[] Data, long Stamp)> _metadataBlockCache = new();
 
     /// <summary>
     /// Maximum number of metadata blocks retained in <see cref="_metadataBlockCache"/>.
@@ -917,19 +919,35 @@ public sealed class Ext4Parser : IDisposable
 
     private byte[] ReadBlock(ulong physicalBlock)
     {
-        if (_metadataBlockCache.TryGetValue(physicalBlock, out var cached))
+        if (_metadataBlockCache.TryGetValue(physicalBlock, out var entry))
         {
-            return cached;
+            _metadataBlockCache[physicalBlock] = (entry.Data, ++_cacheTick);
+            return entry.Data;
         }
 
         var buffer = new byte[_blockSize];
         ReadBlockTo(physicalBlock, buffer);
         if (_metadataBlockCache.Count >= MaxCachedMetadataBlocks)
         {
-            _metadataBlockCache.Clear();
+            EvictLeastRecentlyUsedMetadataBlock();
         }
-        _metadataBlockCache[physicalBlock] = buffer;
+        _metadataBlockCache[physicalBlock] = (buffer, ++_cacheTick);
         return buffer;
+    }
+
+    private void EvictLeastRecentlyUsedMetadataBlock()
+    {
+        var oldestStamp = long.MaxValue;
+        ulong oldestKey = 0;
+        foreach (var (key, value) in _metadataBlockCache)
+        {
+            if (value.Stamp < oldestStamp)
+            {
+                oldestStamp = value.Stamp;
+                oldestKey = key;
+            }
+        }
+        _metadataBlockCache.Remove(oldestKey);
     }
 
     private void ReadBlockTo(ulong physicalBlock, byte[] buffer)

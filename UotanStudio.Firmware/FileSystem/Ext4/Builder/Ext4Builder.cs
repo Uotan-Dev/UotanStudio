@@ -353,7 +353,7 @@ public sealed partial class Ext4Builder
 
         var stagingExclusions = excludedFiles.Append(Path.GetFullPath(temporaryPath)).ToArray();
         var plannedRoot = BuildTree(Path.GetFullPath(sourceDirectory), stagingExclusions);
-        var canResize = output.CanSeek && SupportsResizeWithoutMutation(output);
+        var canResize = output.CanSeek && StreamResize.SupportsResizeWithoutMutation(output);
         var requiresStaging = effective.CapacityMode == Ext4CapacityMode.Minimize
             || effective.BlockSharingMode == Ext4BlockSharingMode.ShareDuplicateData;
         if (canResize && !requiresStaging)
@@ -379,25 +379,6 @@ public sealed partial class Ext4Builder
         finally
         {
             try { File.Delete(temporaryPath); } catch { }
-        }
-    }
-
-    private static bool SupportsResizeWithoutMutation(Stream output)
-    {
-        var position = output.Position;
-        try
-        {
-
-            output.SetLength(output.Length);
-            return true;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
-        finally
-        {
-            output.Position = position;
         }
     }
 
@@ -1384,7 +1365,7 @@ public sealed partial class Ext4Builder
         var filesToScan = nodes.Where(n => enableSparse && n.AttributeValue is null && !n.IsSymlink && !n.IsInlineData && !n.IsDirectory && n.Size > 0).ToList();
         if (filesToScan.Count > 0)
         {
-            Parallel.ForEach(filesToScan, node =>
+            Core.FirmwareParallelism.ForEach(filesToScan, node =>
             {
                 node.HoleBlocks = DetectHoles(node.FullPath, node.Size, blockSize);
             });

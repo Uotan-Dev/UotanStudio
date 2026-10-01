@@ -53,7 +53,8 @@ public sealed partial class ErofsBuilder
         return configuration;
     }
 
-    private static PclusterPlan[]? TryPlanCompressed(BuildNode node, int blockSize, ErofsOptions options)
+    private static PclusterPlan[]? TryPlanCompressed(BuildNode node, int blockSize, ErofsOptions options,
+        Core.CompressionPayloadStaging staging)
     {
         if (options.OptimizeCompression && options.Algorithm == ErofsCompressionAlgorithm.Lz4)
             return TryPlanDenseCompressed(node, blockSize, options);
@@ -139,7 +140,13 @@ public sealed partial class ErofsBuilder
                 continue;
             }
 
-            plans.Add(new PclusterPlan { SourceOffset = pos, SourceLength = acceptedLen, CompressedLength = acceptedOut });
+            plans.Add(new PclusterPlan
+            {
+                SourceOffset = pos,
+                SourceLength = acceptedLen,
+                CompressedLength = acceptedOut,
+                StagedOffset = staging.Append(compressed.AsSpan(0, acceptedOut))
+            });
             pos += acceptedLen;
             clusterIndex += CeilDiv(acceptedLen, clusterSize);
         }
@@ -152,7 +159,15 @@ public sealed partial class ErofsBuilder
         return plans.ToArray();
     }
 
-    private static void WriteCompressedData(Stream output, BuildNode node, int blockSize, ErofsOptions options)
+    /// <summary>
+    /// Writes each planned pcluster: staged encodings from the planning pass are copied directly, and
+    /// only plans produced without staging (dense planner) or plain clusters re-read the source, so a
+    /// pcluster accepted by the binary-search probe is never compressed a second time.
+    /// <para>写出每个规划的 pcluster：规划阶段暂存的编码直接复制，只有未经暂存的规划（密集规划器）与
+    /// 原样簇才重读源文件，因此二分探测接受的 pcluster 不会被压缩第二次。</para>
+    /// </summary>
+    private static void WriteCompressedData(Stream output, BuildNode node, int blockSize, ErofsOptions options,
+        Core.CompressionPayloadStaging staging)
     {
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         var raw = new byte[node.Pclusters!.Max(p => p.SourceLength)];
@@ -160,21 +175,33 @@ public sealed partial class ErofsBuilder
         foreach (var p in node.Pclusters!)
         {
             options.CancellationToken.ThrowIfCancellationRequested();
-            fs.Position = p.SourceOffset;
-            fs.ReadExactly(raw, 0, p.SourceLength);
             if (p.Plain)
             {
+                fs.Position = p.SourceOffset;
+                fs.ReadExactly(raw, 0, p.SourceLength);
                 var offset = checked((long)p.BlockAddress * blockSize);
                 WriteAt(output, offset, raw, p.SourceLength);
                 WriteZeroes(output, offset + p.SourceLength, blockSize - p.SourceLength);
                 continue;
             }
-            var outLen = ErofsCompression.AlgorithmCompress(
-                options, raw, 0, p.SourceLength, compressed, 0, compressed.Length);
-            if (outLen != p.CompressedLength)
+
+            int outLen;
+            if (p.StagedOffset >= 0)
             {
-                throw new FileSystemCorruptedException(
-                    $"Compressed length mismatch for '{node.FullPath}': {outLen} != {p.CompressedLength}.");
+                outLen = p.CompressedLength;
+                staging.Read(p.StagedOffset, compressed.AsSpan(0, outLen));
+            }
+            else
+            {
+                fs.Position = p.SourceOffset;
+                fs.ReadExactly(raw, 0, p.SourceLength);
+                outLen = ErofsCompression.AlgorithmCompress(
+                    options, raw, 0, p.SourceLength, compressed, 0, compressed.Length);
+                if (outLen != p.CompressedLength)
+                {
+                    throw new FileSystemCorruptedException(
+                        $"Compressed length mismatch for '{node.FullPath}': {outLen} != {p.CompressedLength}.");
+                }
             }
 
             if (node.InlineCompressedTail && ReferenceEquals(p, node.Pclusters![^1]))

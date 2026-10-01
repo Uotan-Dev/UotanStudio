@@ -55,12 +55,12 @@ public sealed class FileSystemByteProgressTests : IDisposable
         var result = await handler.UnpackAsync(image, output, new UnpackOptions { FileSystemProgress = progress }, Token);
         Assert.True(result.Success, result.Summary);
         foreach (var stage in new[] { FileSystemWorkStage.Preparing, FileSystemWorkStage.Extracting,
-            FileSystemWorkStage.Preserving, FileSystemWorkStage.VerifyingImage, FileSystemWorkStage.VerifyingFiles })
+            FileSystemWorkStage.VerifyingImage, FileSystemWorkStage.VerifyingFiles })
         {
             var samples = events.Where(e => e.Stage == stage).ToArray();
             Assert.True(samples.Length >= 2, stage.ToString());
             Assert.Equal(0, samples[0].Processed);
-            var total = stage is FileSystemWorkStage.Extracting or FileSystemWorkStage.VerifyingFiles or FileSystemWorkStage.Preserving
+            var total = stage is FileSystemWorkStage.Extracting or FileSystemWorkStage.VerifyingFiles
                 ? expectedBytes : new FileInfo(image).Length;
             Assert.All(samples, sample => { Assert.Equal(total, sample.Total); Assert.InRange(sample.Processed, 0, total); });
             Assert.Equal(total, samples[^1].Processed);

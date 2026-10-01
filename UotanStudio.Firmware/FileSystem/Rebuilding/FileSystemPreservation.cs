@@ -4,9 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
-using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
-using UotanStudio.Firmware.FileSystem.Extraction;
 using UotanStudio.Firmware.FileSystem.Metadata;
 
 namespace UotanStudio.Firmware.FileSystem.Rebuilding;
@@ -17,9 +15,7 @@ namespace UotanStudio.Firmware.FileSystem.Rebuilding;
 /// </summary>
 public static partial class FileSystemPreservation
 {
-    private const string FolderName = ".filesystem";
     private const int MaximumEntries = 100000;
-    private const long MaximumManifestBytes = 32 * 1024 * 1024;
     private static readonly AsyncLocal<Dictionary<string, string>?> CapturedPaths = new();
     private static readonly AsyncLocal<IReadOnlyList<string>?> FrozenErofsDevices = new();
     private static readonly AsyncLocal<IProgress<FileSystemByteProgress>?> ActiveProgress = new();
@@ -73,110 +69,94 @@ public static partial class FileSystemPreservation
         if (RepackMetadata.HasPackingOverrides) return;
         if (FileSystemEditPlan.Current is { } plan && Path.GetFullPath(directory) == plan.Root) return;
         var metadataPath = RepackMetadata.ResolveActualMetadataPath(directory);
-        var hasSnapshot = Directory.Exists(Path.Combine(directory, FolderName))
-            || metadataPath is not null && Directory.Exists(Path.Combine(Path.GetDirectoryName(metadataPath)!, FolderName));
-        if (hasSnapshot || metadataPath is not null && RepackMetadata.IsMetadataFile(metadataPath)
+        if (metadataPath is not null && RepackMetadata.IsMetadataFile(metadataPath)
             && RepackMetadata.Read(directory)?.FormatName is "EXT4" or "EROFS" or "F2FS" or "Android Sparse Image (simg)")
             throw new FileSystemUnsupportedFeatureException("Use the filesystem format handler for an extracted image; a fresh directory build would discard preserved source semantics.");
     }
 
-    internal static async Task CaptureAsync(string source, string extraction, string metadataDirectory,
-        RepackMetadata metadata, CancellationToken cancellationToken)
+    /// <summary>
+    /// Reads the filesystem preservation payload carried by a metadata instance. The JSON tree is
+    /// materialized on demand, so callers that only need the outer metadata never pay for it.
+    /// <para>读取元数据实例携带的文件系统保留负载。JSON 树按需物化，只关心外层元数据的调用方无需承担开销。</para>
+    /// </summary>
+    /// <param name="metadata"><para>已读取的元数据实例。</para>The parsed metadata instance.</param>
+    /// <returns>
+    /// The typed payload, or <see langword="null"/> when the format recorded none or the tree is invalid.
+    /// <para>类型化负载；格式未记录或 JSON 树非法时返回 <see langword="null"/>。</para>
+    /// </returns>
+    internal static FileSystemPreservationData? ReadPayload(RepackMetadata? metadata)
     {
-        var id = Guid.NewGuid().ToString("N");
-        var directory = FileExtraction.ResolvePath(metadataDirectory, FolderName + "/" + id);
-        Directory.CreateDirectory(directory);
+        if (metadata?.FileSystemPreservation is not { } payload) return null;
+        FileSystemPreservationData? data;
         try
         {
-            var rebuild = BuildRebuildParameters(source, metadata.FormatName);
-            var parsedEntries = ReadEntries(source, metadata.FormatName);
-            ValidateInodeFlags(parsedEntries, rebuild?.InnerFormat ?? metadata.FormatName);
-            var document = new FilesystemMetadataDocument
-            {
-                Partition = RepackMetadata.DetectPartitionName(metadata.SourceFileName),
-                Rebuild = rebuild,
-                PartitionInfo = metadata.Configuration["superblock"] is JsonObject superblock
-                    ? superblock.ToDictionary(pair => pair.Key, pair => pair.Value?.ToString() ?? string.Empty,
-                        StringComparer.Ordinal)
-                    : new(StringComparer.Ordinal),
-                FsConfig = parsedEntries.ToDictionary(entry => FileSystemEditPlan.Normalize(entry.Path),
-                    entry => new FsConfigEntry(entry.Uid, entry.Gid, (ushort)(entry.Mode & 0xFFF)), StringComparer.Ordinal),
-                FileContexts = parsedEntries.Where(entry => entry.Xattrs?.ContainsKey("security.selinux") == true)
-                    .ToDictionary(entry => FileSystemEditPlan.Normalize(entry.Path),
-                        entry => Encoding.UTF8.GetString(entry.Xattrs!["security.selinux"]).TrimEnd('\0'), StringComparer.Ordinal)
-            };
-            var metadataPath = FileExtraction.ResolvePath(directory, "metadata.json");
-            await using (var output = new FileStream(metadataPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                await JsonSerializer.SerializeAsync(output, document, FilesystemMetadataJsonContext.Default.FilesystemMetadataDocument,
-                    cancellationToken).ConfigureAwait(false);
-            }
-            metadata.FileSystemPreservationId = id;
-            var imageBytes = new ExtractionByteCounter(new FileInfo(source).Length,
-                FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.VerifyingImage), cancellationToken);
-            var sourceHash = HashFile(source, cancellationToken, imageBytes.Add);
-            imageBytes.Complete();
-            var manifest = new FileSystemPreservationManifest
-            {
-                Version = 2,
-                Format = metadata.FormatName,
-                SourceLength = new FileInfo(source).Length,
-                SourceHash = sourceHash,
-                ConfigurationHash = HashConfiguration(metadata),
-                ConfigurationJson = JsonSerializer.Serialize(metadata, RepackJsonContext.Default.RepackMetadata),
-                ImagePaths = CapturedPaths.Value is { } paths ? new(paths, StringComparer.Ordinal) : [],
-                ParsedEntries = parsedEntries,
-                Projection = Scan(extraction, metadataDirectory, metadata.SourceFileName, cancellationToken,
-                    ActiveProgress.Value is null ? null : FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.VerifyingFiles)),
-                Sidecars = ReadSidecars(metadataDirectory, metadata.SourceFileName, id, cancellationToken, includeReferenceFiles: false)
-            };
-            VerifyCapturedContents(source, manifest, cancellationToken);
-            await CaptureObjectsAsync(extraction, directory, manifest, cancellationToken).ConfigureAwait(false);
-            var path = Path.Combine(directory, "manifest.json");
-            await using (var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                using var bounded = new CountingWriteStream(file, MaximumManifestBytes, leaveOpen: true);
-                await JsonSerializer.SerializeAsync(bounded, manifest, FileSystemPreservationJsonContext.Default.FileSystemPreservationManifest,
-                    cancellationToken).ConfigureAwait(false);
-            }
-            metadata.FileSystemPreservationHash = HashFile(path, cancellationToken);
+            data = payload.Deserialize(FileSystemPreservationJsonContext.Default.FileSystemPreservationData);
         }
-        catch
+        catch (JsonException)
         {
-            if (Directory.Exists(directory)) Directory.Delete(directory, true);
-            throw;
+            return null;
         }
+
+        return data is null || data.Version != 1 || data.PartitionInfo is null || data.FsConfig is null
+            || data.FileContexts is null || data.Projection is null || data.ParsedEntries is null
+            || string.IsNullOrWhiteSpace(data.Partition)
+            ? null
+            : data;
+    }
+
+    internal static void CaptureAsync(string source, string extraction, string metadataDirectory,
+        RepackMetadata metadata, CancellationToken cancellationToken)
+    {
+        var rebuild = BuildRebuildParameters(source, metadata.FormatName);
+        var parsedEntries = ReadEntries(source, metadata.FormatName);
+        ValidateInodeFlags(parsedEntries, rebuild?.InnerFormat ?? metadata.FormatName);
+        var imageBytes = new ExtractionByteCounter(new FileInfo(source).Length,
+            FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.VerifyingImage), cancellationToken);
+        var sourceHash = HashFile(source, cancellationToken, imageBytes.Add);
+        imageBytes.Complete();
+        var data = new FileSystemPreservationData
+        {
+            Version = 1,
+            Format = metadata.FormatName,
+            Partition = RepackMetadata.DetectPartitionName(metadata.SourceFileName),
+            SourceLength = new FileInfo(source).Length,
+            SourceHash = sourceHash,
+            ConfigurationJson = JsonSerializer.Serialize(metadata, RepackJsonContext.Default.RepackMetadata),
+            Rebuild = rebuild,
+            PartitionInfo = metadata.Configuration["superblock"] is JsonObject superblock
+                ? superblock.ToDictionary(pair => pair.Key, pair => pair.Value?.ToString() ?? string.Empty,
+                    StringComparer.Ordinal)
+                : new(StringComparer.Ordinal),
+            FsConfig = parsedEntries.ToDictionary(entry => FileSystemEditPlan.Normalize(entry.Path),
+                entry => new FsConfigEntry(entry.Uid, entry.Gid, (ushort)(entry.Mode & 0xFFF)), StringComparer.Ordinal),
+            FileContexts = parsedEntries.Where(entry => entry.Xattrs?.ContainsKey("security.selinux") == true)
+                .ToDictionary(entry => FileSystemEditPlan.Normalize(entry.Path),
+                    entry => Encoding.UTF8.GetString(entry.Xattrs!["security.selinux"]).TrimEnd('\0'), StringComparer.Ordinal),
+            ImagePaths = CapturedPaths.Value is { } paths ? new(paths, StringComparer.Ordinal) : [],
+            ParsedEntries = parsedEntries,
+            Projection = Scan(extraction, metadataDirectory, metadata.SourceFileName, cancellationToken,
+                ActiveProgress.Value is null ? null : FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.VerifyingFiles))
+        };
+        VerifyCapturedContents(source, data, cancellationToken);
+        var payload = JsonSerializer.SerializeToNode(data,
+            FileSystemPreservationJsonContext.Default.FileSystemPreservationData)!.AsObject();
+        metadata.FileSystemPreservation = payload;
+        payload["configurationHash"] = HashConfiguration(metadata);
     }
 
     private static bool Same(Dictionary<string, string> actual, Dictionary<string, string> expected)
         => actual.Count == expected.Count && actual.All(pair => expected.TryGetValue(pair.Key, out var value) && value == pair.Value);
 
+    /// <summary>
+    /// Hashes the metadata document with the preservation payload's own digest removed, so the digest
+    /// covers the payload content and can be compared both at capture and at read time.
+    /// <para>对移除保留负载自身摘要后的元数据文档计算哈希，使摘要覆盖负载内容，并可在采集与读取两侧比对。</para>
+    /// </summary>
     private static string HashConfiguration(RepackMetadata metadata)
     {
-        var json = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(metadata, RepackJsonContext.Default.RepackMetadata))!.AsObject();
-        json.Remove("fileSystemPreservationHash");
+        var json = JsonSerializer.SerializeToNode(metadata, RepackJsonContext.Default.RepackMetadata)!.AsObject();
+        if (json["fileSystemPreservation"] is JsonObject payload) payload.Remove("configurationHash");
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json.ToJsonString())));
-    }
-
-    private static Dictionary<string, string> StructuredSidecars(Dictionary<string, string> sidecars)
-        => sidecars.Where(pair => pair.Key == "metadata.json").ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-
-    private static Dictionary<string, string> ReadSidecars(string directory, string source, string preservationId, CancellationToken token,
-        bool includeReferenceFiles = true)
-    {
-        var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (includeReferenceFiles)
-        {
-            foreach (var suffix in new[] { "_fs_config", "_file_contexts", "_info" })
-            {
-                var name = RepackMetadata.DetectPartitionName(source) + suffix;
-                var path = FileExtraction.ResolvePath(directory, name);
-                if (File.Exists(path)) result.Add(name, HashFile(path, token));
-            }
-        }
-        var metadata = FileExtraction.ResolvePath(directory, FolderName + "/" + preservationId + "/metadata.json");
-        if (File.Exists(metadata)) result.Add("metadata.json", HashFile(metadata, token));
-        return result;
     }
 
     private static string HashFile(string path, CancellationToken token, Action<int>? processed = null)
@@ -210,7 +190,7 @@ public static partial class FileSystemPreservation
             {
                 token.ThrowIfCancellationRequested();
                 if (directory.Equals(metadata, comparison)
-                    && (Path.GetFileName(path) == FolderName || RepackMetadata.IsMetadataFile(path)
+                    && (RepackMetadata.IsMetadataFile(path)
                         || Path.GetFileName(path) == RepackMetadata.DetectPartitionName(sourceName) + "_fs_config"
                         || Path.GetFileName(path) == RepackMetadata.DetectPartitionName(sourceName) + "_file_contexts"
                         || Path.GetFileName(path) == RepackMetadata.DetectPartitionName(sourceName) + "_info")) continue;

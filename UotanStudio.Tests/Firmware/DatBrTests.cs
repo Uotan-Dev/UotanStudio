@@ -84,7 +84,7 @@ public class DatBrTests
         }
 
         var outputPath = Path.Combine(temp.Path, "output.img");
-        DatReader.Unpack(listPath, datPath, outputPath);
+        DatReader.Unpack(listPath, datPath, outputPath, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(image, File.ReadAllBytes(outputPath));
     }
 

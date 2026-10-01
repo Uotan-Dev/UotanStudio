@@ -136,7 +136,13 @@ public static partial class FileSystemPreservation
         }
     }
 
-    private static void VerifyCapturedContents(string source, FileSystemPreservationManifest manifest, CancellationToken token)
+    internal static string ProjectionIdentity(string value)
+    {
+        var mode = value.IndexOf(":mode=", StringComparison.Ordinal);
+        return mode < 0 ? value : value[..mode];
+    }
+
+    private static void VerifyCapturedContents(string source, FileSystemPreservationData manifest, CancellationToken token)
     {
         using var input = File.OpenRead(source);
         if (manifest.Format == "Android Sparse Image (simg)")
@@ -150,7 +156,7 @@ public static partial class FileSystemPreservation
         }
     }
 
-    private static void VerifyCapturedFilesystem(Stream image, FileSystemPreservationManifest manifest, CancellationToken token)
+    private static void VerifyCapturedFilesystem(Stream image, FileSystemPreservationData manifest, CancellationToken token)
     {
         WithContentReader(image, DetectFilesystem(image), read =>
         {

@@ -29,7 +29,7 @@ internal static class PuffDeflateCodec
         while (bits.Position < bits.End)
         {
             var final = bits.Read(1); var type = bits.Read(2);
-            var metadata = new List<byte> { (byte)((final << 7) | (type << 5)) };
+            List<byte> metadata = [(byte)((final << 7) | (type << 5))];
             Huffman literalTree; Huffman distanceTree;
             if (type == 0)
             {

@@ -1243,6 +1243,16 @@ public sealed partial class ErofsParser : IDisposable
         => IsMetaboxInode(nid) ? ReadMetaboxBytes(offset, length, what) : ReadBytes(offset, length, what);
 
     private byte[] ReadMetaboxBytes(long offset, int length, string what)
+        => ReadMetaboxSpan(offset, length, what).ToArray();
+
+    /// <summary>
+    /// Returns the requested METABOX slice without copying it. The span is valid only while the
+    /// parser is alive and must not be retained past the current operation; callers that need an
+    /// owned buffer use <see cref="ReadMetaboxBytes"/> or copy into their own destination.
+    /// <para>返回请求的 METABOX 切片而不复制。该 span 仅在解析器存活期间有效，不得跨当前操作保留；
+    /// 需要独占缓冲的调用方使用 <see cref="ReadMetaboxBytes"/> 或复制到自己的目标缓冲。</para>
+    /// </summary>
+    private ReadOnlySpan<byte> ReadMetaboxSpan(long offset, int length, string what)
     {
         _readCancellation.ThrowIfCancellationRequested();
         if (_metaboxData is null || offset < 0 || length < 0
@@ -1250,7 +1260,7 @@ public sealed partial class ErofsParser : IDisposable
         {
             throw new FileSystemCorruptedException($"{what} exceeds the METABOX data stream.");
         }
-        return _metaboxData.AsSpan((int)offset, length).ToArray();
+        return _metaboxData.AsSpan((int)offset, length);
     }
 
     private int DirectoryBlockSize => _superblock.DirBlkBits == 0 ? _blockSize : 1 << _superblock.DirBlkBits;

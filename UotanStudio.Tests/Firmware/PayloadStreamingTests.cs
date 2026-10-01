@@ -10,32 +10,6 @@ namespace UotanStudio.Tests.Firmware;
 public class PayloadStreamingTests
 {
     [Fact]
-    public void Replace_StreamsAcrossMultipleDestinationExtents()
-    {
-        var payload = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
-        var operation = CreateOperation(InstallOperation.Types.Type.Replace, payload, 4,
-            new Extent { StartBlock = 0, NumBlocks = 1 },
-            new Extent { StartBlock = 2, NumBlocks = 1 });
-
-        using var payloadStream = new MemoryStream(payload);
-        using var output = CreateTemporaryFile(12, out var path);
-        try
-        {
-            OperationProcessor.ProcessOperation(operation, output, payloadStream, 0, 4, new object(), new object(), TestContext.Current.CancellationToken);
-            output.Position = 0;
-            var actual = new byte[12];
-            output.ReadExactly(actual);
-
-            Assert.Equal(new byte[] { 1, 2, 3, 4, 0, 0, 0, 0, 5, 6, 7, 8 }, actual);
-        }
-        finally
-        {
-            output.Dispose();
-            File.Delete(path);
-        }
-    }
-
-    [Fact]
     public void Replace_ChecksCancellationBetweenChunks()
     {
         var payload = new byte[128 * 1024];

@@ -54,7 +54,7 @@ public static partial class FileSystemPreservation
                 throw new ArgumentException("External device images are supported only for EROFS.");
             if (external is { Count: > ushort.MaxValue })
                 throw new FileSystemCorruptedException("EROFS external device count exceeds the on-disk limit.");
-            var originals = new List<string> { Path.GetFullPath(sourcePath) };
+            List<string> originals = [Path.GetFullPath(sourcePath)];
             var frozenDevices = new List<string>();
             if (external is not null)
             {

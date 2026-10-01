@@ -12,6 +12,16 @@ public sealed partial class CpioCompressedRoundTripTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), $"cpio-compressed-{Guid.NewGuid():N}");
 
+    public static bool NativeToolsEnabled =>
+        Environment.GetEnvironmentVariable("UOTAN_NATIVE_TOOLS") == "1" && OperatingSystem.IsWindows();
+
+    private static string ResolveTool(string tool)
+    {
+        var root = Environment.GetEnvironmentVariable("UOTAN_CPIO_TOOL_ROOT");
+        return !string.IsNullOrWhiteSpace(root) && tool is "zstd" or "lz4" or "lzop"
+            ? $"{root.TrimEnd('/')}/usr/bin/{tool}" : tool;
+    }
+
     [Theory(Skip = "Requires UOTAN_NATIVE_TOOLS=1 on Windows with WSL cpio/gzip/xz/bzip2/lzma.", SkipUnless = nameof(NativeToolsEnabled))]
     [InlineData("gz", "gzip")]
     [InlineData("xz", "xz")]

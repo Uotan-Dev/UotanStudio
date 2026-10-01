@@ -41,8 +41,8 @@ public sealed partial class ErofsParser
                 _count = (int)Math.Min(_buffer.Length, _length - offset);
                 if (_parser.IsMetaboxInode(_nid))
                 {
-                    _parser.ReadMetaboxBytes(_start + offset, _count, "Compressed index")
-                        .CopyTo(_buffer, 0);
+                    _parser.ReadMetaboxSpan(_start + offset, _count, "Compressed index")
+                        .CopyTo(_buffer.AsSpan(0, _count));
                 }
                 else
                 {

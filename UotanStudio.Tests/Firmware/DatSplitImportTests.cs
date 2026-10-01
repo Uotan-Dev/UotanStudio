@@ -32,7 +32,7 @@ public class DatSplitImportTests
         Assert.Equal(["system.new.dat.000", "system.new.dat.001"], set.Parts.Select(Path.GetFileName));
         Assert.Equal(original, File.ReadAllBytes(joined));
         var output = Path.Combine(temp.Path, "system.img");
-        DatReader.Unpack(list, joined, output);
+        DatReader.Unpack(list, joined, output, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(image, File.ReadAllBytes(output));
     }
 
@@ -57,7 +57,7 @@ public class DatSplitImportTests
         Assert.Equal(DatSplitKind.NewDatBrotli, set.Kind);
         Assert.Equal(original, File.ReadAllBytes(joined));
         var output = Path.Combine(temp.Path, "system.img");
-        DatReader.Unpack(list, joined, output, brotliCompressed: true);
+        DatReader.Unpack(list, joined, output, brotliCompressed: true, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(image, File.ReadAllBytes(output));
     }
 

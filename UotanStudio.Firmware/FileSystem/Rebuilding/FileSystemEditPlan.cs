@@ -20,7 +20,7 @@ internal sealed class FileSystemEditPlan
     internal IEnumerable<(string HostPath, PreservedInodeEntry Entry)> Files =>
         hostPaths.Select(pair => (Path.Combine(Root, pair.Key.Replace('/', Path.DirectorySeparatorChar)), entries[pair.Value]));
 
-    internal FileSystemEditPlan(string root, FileSystemPreservationManifest manifest, Dictionary<string, string> projection, string? partition = null)
+    internal FileSystemEditPlan(string root, FileSystemPreservationData manifest, Dictionary<string, string> projection, string? partition = null)
     {
         Root = Path.GetFullPath(root);
         var originals = manifest.ParsedEntries.ToDictionary(e => Normalize(e.Path), StringComparer.Ordinal);

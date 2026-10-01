@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.F2fs.Models;
 
@@ -271,6 +272,7 @@ public sealed partial class F2fsBuilder
         long baseOffset,
         List<BuildNode> ordered,
         int blockSize,
+        CompressionPayloadStaging compressionStaging,
         CancellationToken cancellationToken)
     {
         foreach (var node in ordered)
@@ -291,7 +293,7 @@ public sealed partial class F2fsBuilder
                     WriteDnode(output, baseOffset, node, dnode, blockSize);
                 }
 
-                WriteFileDataBlocks(output, baseOffset, node, blockSize, cancellationToken);
+                WriteFileDataBlocks(output, baseOffset, node, blockSize, compressionStaging, cancellationToken);
             }
             else if (node.IsDirectory)
             {
@@ -439,6 +441,7 @@ public sealed partial class F2fsBuilder
         long baseOffset,
         BuildNode node,
         int blockSize,
+        CompressionPayloadStaging compressionStaging,
         CancellationToken cancellationToken)
     {
         if (node.InlineData || node.DataBlockCount == 0)
@@ -448,7 +451,7 @@ public sealed partial class F2fsBuilder
 
         if (node.IsCompressedFile)
         {
-            WriteCompressedFileDataBlocks(output, baseOffset, node, blockSize, cancellationToken);
+            WriteCompressedFileDataBlocks(output, baseOffset, node, blockSize, compressionStaging, cancellationToken);
             return;
         }
 
@@ -483,20 +486,23 @@ public sealed partial class F2fsBuilder
     }
 
     /// <summary>
-    /// Second-pass data write for a compressed file: re-streams the source in 64 KB clusters.
-    /// <para>压缩文件的第二遍数据写出：按 64 KB 簇流式重读源文件。</para>
+    /// Second-pass data write for a compressed file: copies the cluster payloads staged during the
+    /// parallel planning pass and re-streams the source only to serve clusters stored uncompressed,
+    /// so no cluster is ever compressed twice. The staged bytes are exactly the planned payloads, so
+    /// the previous re-compression length check against the source is unnecessary by construction.
+    /// <para>压缩文件的第二遍数据写出：复制并行规划阶段暂存的簇负载，仅为按原样存储的簇重读源文件，
+    /// 因此任何簇都不会被压缩两次。暂存字节即规划时的负载，原来源重压缩长度校验在构造上已不再需要。</para>
     /// </summary>
     private static void WriteCompressedFileDataBlocks(
         Stream output,
         long baseOffset,
         BuildNode node,
         int blockSize,
+        CompressionPayloadStaging compressionStaging,
         CancellationToken cancellationToken)
     {
         var clusterPages = node.ClusterPages;
         var clusterBytes = clusterPages * blockSize;
-        var algorithm = node.CompressedAlgorithm;
-        var level = node.CompressionLevel;
         var clusterBuffer = new byte[clusterBytes];
 
         using var source = File.OpenRead(node.FullPath);
@@ -511,18 +517,8 @@ public sealed partial class F2fsBuilder
             var plannedPayloadLength = node.CompressedClusterSizes[c];
             if (plannedPayloadLength >= 0)
             {
-
-
-                var payload = F2fsCompression.CompressCluster(
-                    clusterBuffer.AsSpan(0, clusterBytes),
-                    algorithm,
-                    level);
-                if (payload is null || payload.Length != plannedPayloadLength)
-                {
-                    throw new InvalidOperationException(
-                        $"F2FS source file '{node.FullPath}' changed between the layout and write passes "
-                        + $"(cluster {c}).  F2FS 源文件在两遍构建之间发生了变化。");
-                }
+                var payload = GC.AllocateUninitializedArray<byte>(plannedPayloadLength);
+                compressionStaging.Read(node.CompressedClusterStagedOffsets![c], payload);
                 if ((node.CompressFlags & 1) != 0)
                 {
                     BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(4),

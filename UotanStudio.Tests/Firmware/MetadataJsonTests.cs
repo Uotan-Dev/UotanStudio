@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Nodes;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
@@ -30,22 +31,25 @@ public sealed class MetadataJsonTests : IDisposable
     public MetadataJsonTests() => Directory.CreateDirectory(_root);
 
     [Fact]
-    public async Task Unpack_WritesMetadataJsonAndNoOriginalImage_WithFlatSidecars()
+    public async Task Unpack_WritesSingleMetadataFileAndNoPreservationDirectory()
     {
         var (image, extracted) = await BuildAndUnpackAsync();
         var meta = RepackMetadata.Read(extracted)!;
-        var id = meta.FileSystemPreservationId!;
-        var state = Path.Combine(extracted, ".filesystem", id);
 
-        Assert.True(File.Exists(Path.Combine(state, "metadata.json")));
-        Assert.Equal(["manifest.json", "metadata.json"], Directory.EnumerateFiles(state).Select(Path.GetFileName).Order(StringComparer.Ordinal));
-        Assert.True(File.Exists(Path.Combine(extracted, "system_fs_config")));
-        Assert.True(File.Exists(Path.Combine(extracted, "system_file_contexts")));
-        Assert.True(File.Exists(Path.Combine(extracted, "system_info")));
-        var document = FileSystemMetadataOverrides.TryLoadDocument(extracted, meta.SourceFileName!, id);
+        var document = FileSystemMetadataOverrides.TryLoadDocument(meta);
         Assert.NotNull(document);
         Assert.Equal("EXT4", document!.Rebuild?.Format);
         Assert.NotNull(document.Rebuild?.BlockSize);
+        Assert.Equal("system", document.Partition);
+        Assert.NotEmpty(document.Projection);
+        Assert.Equal(64, document.SourceHash.Length);
+        Assert.Equal(64, document.ConfigurationHash.Length);
+        Assert.True(File.Exists(Path.Combine(extracted, "system_fs_config")));
+        Assert.True(File.Exists(Path.Combine(extracted, "system_file_contexts")));
+        Assert.True(File.Exists(Path.Combine(extracted, "system_info")));
+        Assert.False(Directory.Exists(Path.Combine(extracted, ".filesystem")));
+        Assert.DoesNotContain(Directory.EnumerateFileSystemEntries(extracted).Select(Path.GetFileName),
+            name => name is "manifest.json" or ".uotanstudio-repack.json");
     }
 
     [Theory]
@@ -69,21 +73,23 @@ public sealed class MetadataJsonTests : IDisposable
     }
 
     [Fact]
-    public async Task LoadTables_PrefersMetadataJson_AndFallsBackToFlatSidecars()
+    public async Task LoadTables_PrefersStructuredPayload_AndFallsBackToFlatSidecars()
     {
         var (_, extracted) = await BuildAndUnpackAsync();
         var meta = RepackMetadata.Read(extracted)!;
-        var id = meta.FileSystemPreservationId!;
 
-        var json = FileSystemMetadataOverrides.LoadTables(extracted, meta.SourceFileName!, id);
+        var json = FileSystemMetadataOverrides.LoadTables(meta, extracted);
         Assert.True(FileSystemMetadataOverrides.TryGetFsConfig(json.FsConfig, "/", out var jsonRoot));
         Assert.Equal(9000u, jsonRoot.Uid);
         Assert.True(FileSystemMetadataOverrides.TryGetLabel(json.FileContexts, "/data", out var jsonLabel));
         Assert.Equal("u:object_r:system_file:s0", jsonLabel);
         Assert.Equal("EXT4", json.Rebuild?.Format);
 
-        File.Delete(Path.Combine(extracted, ".filesystem", id, "metadata.json"));
-        var flat = FileSystemMetadataOverrides.LoadTables(extracted, meta.SourceFileName!, id);
+        var metadataPath = Path.Combine(extracted, RepackMetadata.FileName);
+        var document = JsonNode.Parse(File.ReadAllText(metadataPath))!.AsObject();
+        document.Remove("fileSystemPreservation");
+        File.WriteAllText(metadataPath, document.ToJsonString());
+        var flat = FileSystemMetadataOverrides.LoadTables(RepackMetadata.Read(extracted)!, extracted);
         Assert.Null(flat.Rebuild);
         Assert.True(FileSystemMetadataOverrides.TryGetFsConfig(flat.FsConfig, "/", out var flatRoot));
         Assert.Equal(9000u, flatRoot.Uid);
@@ -123,13 +129,14 @@ public sealed class MetadataJsonTests : IDisposable
     }
 
     [Fact]
-    public async Task TamperedMetadataJson_FailsSidecarInvariant_AndNeverReplacesOutput()
+    public async Task TamperedMetadataJson_FailsDocumentDigest_AndNeverReplacesOutput()
     {
         var (_, extracted) = await BuildAndUnpackAsync();
-        var meta = RepackMetadata.Read(extracted)!;
-        var metadataJson = Path.Combine(extracted, ".filesystem", meta.FileSystemPreservationId!, "metadata.json");
-        using (var file = new FileStream(metadataJson, FileMode.Open, FileAccess.Write))
-            file.WriteByte((byte)'X');
+        var metadataPath = Path.Combine(extracted, RepackMetadata.FileName);
+        var document = JsonNode.Parse(File.ReadAllText(metadataPath))!.AsObject();
+        var payload = document["fileSystemPreservation"]!.AsObject();
+        payload["fsConfig"]!.AsObject().First().Value!.AsObject()["uid"] = 0;
+        File.WriteAllText(metadataPath, document.ToJsonString());
         var output = Path.Combine(_root, "existing.img");
         File.WriteAllText(output, "keep-original-output");
 
@@ -155,7 +162,7 @@ public sealed class MetadataJsonTests : IDisposable
         Assert.True(unpacked.Success, unpacked.Summary);
         var meta = RepackMetadata.Read(extracted)!;
         Assert.Equal("Android Sparse Image (simg)", meta.FormatName);
-        var document = FileSystemMetadataOverrides.TryLoadDocument(extracted, meta.SourceFileName!, meta.FileSystemPreservationId!);
+        var document = FileSystemMetadataOverrides.TryLoadDocument(meta);
         Assert.NotNull(document);
         Assert.Equal("Android Sparse Image (simg)", document!.Rebuild?.Format);
         Assert.Equal("EXT4", document.Rebuild?.InnerFormat);

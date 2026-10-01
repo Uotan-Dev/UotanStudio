@@ -117,7 +117,7 @@ internal static class AndroidF2fsImageBuilder
                 cancellationToken).ConfigureAwait(false);
             NativeFileSystemTools.RequireSuccess("mkfs.f2fs", mkfs);
 
-            var args = new List<string> { "-f", sourcePath, "-t", mountPoint };
+            List<string> args = ["-f", sourcePath, "-t", mountPoint];
             if (fsConfigPath is not null)
             {
                 args.Add("-C");

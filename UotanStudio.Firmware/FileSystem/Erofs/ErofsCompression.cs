@@ -402,20 +402,27 @@ internal static class ErofsCompression
         var decoder = new Decoder();
         decoder.SetDecoderProperties(properties);
 
-        var rebuilt = new byte[sourceLength];
-        rebuilt[0] = 0;
-        Buffer.BlockCopy(source, sourceIndex + 1, rebuilt, 1, sourceLength - 1);
-        using var input = new MemoryStream(rebuilt, writable: false);
-        using var output = new BoundedWriteStream(target, targetIndex, targetLength);
-
-        decoder.Code(input, output, sourceLength, targetLength, null);
-        if (output.Position != targetLength)
+        var rebuilt = System.Buffers.ArrayPool<byte>.Shared.Rent(sourceLength);
+        try
         {
-            throw new FileSystemCorruptedException(
-                $"LZMA stream produced {output.Position} bytes, expected {targetLength}.");
-        }
+            rebuilt[0] = 0;
+            Buffer.BlockCopy(source, sourceIndex + 1, rebuilt, 1, sourceLength - 1);
+            using var input = new MemoryStream(rebuilt, 0, sourceLength, writable: false);
+            using var output = new BoundedWriteStream(target, targetIndex, targetLength);
 
-        return checked((int)output.Position);
+            decoder.Code(input, output, sourceLength, targetLength, null);
+            if (output.Position != targetLength)
+            {
+                throw new FileSystemCorruptedException(
+                    $"LZMA stream produced {output.Position} bytes, expected {targetLength}.");
+            }
+
+            return checked((int)output.Position);
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(rebuilt);
+        }
     }
 
     private static int ResolveLzmaDictionarySize(int sourceLength, int dictSize)

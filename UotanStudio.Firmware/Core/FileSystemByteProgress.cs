@@ -10,31 +10,28 @@ namespace UotanStudio.Firmware.Core;
 public enum FileSystemWorkStage
 {
     /// <summary>Staging work that runs before image content is read or written. <para>在读取或写入镜像内容之前进行的准备性工作。</para></summary>
-    Preparing,
+    Preparing = 0,
 
     /// <summary>Writing extracted file bytes from an image to disk. <para>把镜像中的文件字节解压写出到磁盘。</para></summary>
-    Extracting,
-
-    /// <summary>Carrying existing filesystem content through a rebuild. <para>在重建过程中沿用已有的文件系统内容。</para></summary>
-    Preserving,
+    Extracting = 1,
 
     /// <summary>Reading and comparing image-level regions for integrity. <para>读取并比对镜像级区域以校验完整性。</para></summary>
-    VerifyingImage,
+    VerifyingImage = 3,
 
     /// <summary>Reading and comparing extracted files for integrity. <para>读取并比对已解压文件以校验完整性。</para></summary>
-    VerifyingFiles,
+    VerifyingFiles = 4,
 
     /// <summary>Reading filesystem metadata structures. <para>读取文件系统元数据结构。</para></summary>
-    ReadingMetadata,
+    ReadingMetadata = 5,
 
     /// <summary>Writing a rebuilt filesystem image. <para>写出重建后的文件系统镜像。</para></summary>
-    BuildingImage,
+    BuildingImage = 6,
 
     /// <summary>Writing block-image payload output. <para>写出块镜像载荷输出。</para></summary>
-    WritingDat,
+    WritingDat = 7,
 
     /// <summary>Compressing finished output. <para>压缩已生成的输出。</para></summary>
-    Compressing,
+    Compressing = 8,
 }
 
 /// <summary>

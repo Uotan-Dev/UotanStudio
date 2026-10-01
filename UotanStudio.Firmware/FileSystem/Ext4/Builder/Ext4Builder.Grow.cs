@@ -250,7 +250,7 @@ public sealed partial class Ext4Builder
 
         if (hasResizeInode)
         {
-            var groupsForResize = new List<GroupInfo> { group0 };
+            List<GroupInfo> groupsForResize = [group0];
             WriteResizeInodeMetadata(output, 0, groupsForResize, (int)blocksPerGroup, (int)newGroupCount,
                 oldGdtBlocks, (int)reservedGdtBlocks, (int)blockSize, (int)inodeSize, (int)inodesPerGroup, sb.Uuid,
                 metadataCsum, resizeDindirBlock);

@@ -135,7 +135,7 @@ internal static class FileSystemMetadataGenerator
     {
         ArgumentNullException.ThrowIfNull(extractionDirectory);
         Directory.CreateDirectory(metadataDirectory);
-        var paths = new List<string> { "." };
+        List<string> paths = ["."];
         if (Directory.Exists(extractionDirectory))
         {
             foreach (var entry in Directory.EnumerateFileSystemEntries(extractionDirectory, "*", SearchOption.AllDirectories))
