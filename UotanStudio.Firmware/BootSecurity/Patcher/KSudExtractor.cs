@@ -151,7 +151,7 @@ public static partial class Extractor
         byte[] data = elf.Data;
         long? fnOff = elf.VaToOff(fnVa);
         if (fnOff is null)
-            return new List<ulong>();
+            return [];
         var refs = new List<ulong>();
         long end = Math.Min(data.Length - 3, fnOff.Value + window);
         long i = fnOff.Value;
@@ -227,7 +227,7 @@ public static partial class Extractor
         byte[] data = elf.Data;
         long? fnOff = elf.VaToOff(fnVa);
         if (fnOff is null)
-            return new List<ulong>();
+            return [];
         var refs = new List<ulong>();
         long end = Math.Min(data.Length - 7, fnOff.Value + window);
         long i = fnOff.Value;
@@ -381,7 +381,7 @@ public static partial class Extractor
     {
         long? off = elf.VaToOff(staticVa);
         if (off is null)
-            return new List<ulong>();
+            return [];
         long end = Math.Min(view.Length - 8, off.Value + scanBytes);
         var fns = new List<ulong>();
         for (long q = off.Value; q <= end; q += 8)

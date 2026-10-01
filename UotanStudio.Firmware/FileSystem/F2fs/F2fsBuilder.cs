@@ -927,7 +927,7 @@ public sealed partial class F2fsBuilder
                     var index = (int)(baseIndex + b);
                     while (blocks.Count <= index)
                     {
-                        blocks.Add(new List<F2fsDirectoryEntry>());
+                        blocks.Add([]);
                     }
 
                     if (blocks[index].Sum(static e => e.SlotCount) + slots <= F2fsDirectoryEntry.SlotsPerBlock)

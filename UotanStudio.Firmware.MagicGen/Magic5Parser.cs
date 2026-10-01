@@ -399,32 +399,17 @@ internal sealed class Magic5Parser
             case "string":
                 rule.Kind = MagicKind.String;
                 ParseStringModifiers(rule, modifiers);
-                if (SetPattern(rule, valueTok))
-                {
-                    return true;
-                }
-
-                return false;
+                return SetPattern(rule, valueTok);
 
             case "ustring":
                 rule.Kind = MagicKind.String;
-                if (SetPattern(rule, valueTok))
-                {
-                    return true;
-                }
-
-                return false;
+                return SetPattern(rule, valueTok);
 
             case "search":
                 rule.Kind = MagicKind.Search;
                 ParseStringModifiers(rule, modifiers);
                 rule.SearchRange = ExtractDigits(modifiers);
-                if (SetPattern(rule, valueTok))
-                {
-                    return true;
-                }
-
-                return false;
+                return SetPattern(rule, valueTok);
 
             case "pstring":
                 rule.Kind = MagicKind.PString;

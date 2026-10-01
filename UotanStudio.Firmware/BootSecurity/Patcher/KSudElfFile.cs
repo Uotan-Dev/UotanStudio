@@ -199,7 +199,7 @@ public sealed class ElfFile
         ushort shnum = BinaryPrimitives.ReadUInt16LittleEndian(Data.AsSpan(60));
         ushort shstrndx = BinaryPrimitives.ReadUInt16LittleEndian(Data.AsSpan(62));
         if (shoff == 0 || shnum == 0)
-            return new List<Section>();
+            return [];
         var secs = new List<(uint NameOff, uint Type, ulong Flags, ulong Addr, ulong Offset, ulong Size)>();
         for (int i = 0; i < shnum; i++)
         {
@@ -215,7 +215,7 @@ public sealed class ElfFile
             secs.Add((nameOff, typ, flags, addr, offset, size));
         }
         if (shstrndx >= secs.Count)
-            return new List<Section>();
+            return [];
         ulong shstrOff = secs[shstrndx].Offset;
         var outSections = new List<Section>(secs.Count);
         foreach (var (nameOff, typ, flags, addr, offset, size) in secs)
