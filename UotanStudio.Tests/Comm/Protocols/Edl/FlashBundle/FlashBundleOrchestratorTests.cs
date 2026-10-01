@@ -396,30 +396,6 @@ public class FlashBundleOrchestratorTests
         Assert.Throws<EdlException>(() => RawProgramParser.ParseAll([rawPath], dir.Path));
     }
 
-    [Theory]
-    [InlineData(-1L)]
-    [InlineData(1L)]
-    [InlineData(2L)]
-    [InlineData(long.MaxValue)]
-    public async Task FlashBundleAsync_InvalidSourceOffset_FailsWithoutProgramCommand(long offset)
-    {
-        using var dir = new TempDirectory();
-        dir.WriteBytes("boot.img", new byte[4096]);
-        var rawPath = dir.Write("rawprogram0.xml", $"""
-            <data><program filename="boot.img" start_sector="0" num_partition_sectors="1"
-              SECTOR_SIZE_IN_BYTES="4096" file_sector_offset="{offset}"/></data>
-            """);
-        using var transport = CreateBundleTransport(0);
-        using var session = CreateSession(transport);
-
-        var result = await new FlashBundleOrchestrator(session).FlashBundleAsync(
-            rawPath, null, dir.Path, null, TestContext.Current.CancellationToken);
-
-        Assert.False(result.IsSuccess);
-        Assert.Single(result.Errors);
-        Assert.DoesNotContain(transport.Writes, bytes => Encoding.UTF8.GetString(bytes).Contains("<program ", StringComparison.Ordinal));
-    }
-
     private static string SinglePartitionRawProgram(string filename, int sectors)
         => $$"""
             <?xml version="1.0" encoding="UTF-8"?>

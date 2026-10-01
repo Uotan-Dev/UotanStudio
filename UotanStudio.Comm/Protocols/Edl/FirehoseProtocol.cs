@@ -270,6 +270,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     private readonly ICommTransport _transport = transport ?? throw new ArgumentNullException(nameof(transport));
     private readonly int _cmdTimeoutMs = timeoutMs ?? EdlConstants.DefaultCommandTimeoutMs;
     private readonly byte[] _rxBuffer = new byte[4 * 1024];
+    private readonly byte[] _responseDocument = GC.AllocateUninitializedArray<byte>(MaximumResponseBytes);
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     private int _rxBufferBytes;
     private volatile bool _disposed;

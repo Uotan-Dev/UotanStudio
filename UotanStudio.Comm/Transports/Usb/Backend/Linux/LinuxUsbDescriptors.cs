@@ -15,7 +15,7 @@ internal static class LinuxUsbDescriptors
         {
             return null;
         }
-        var parts = new List<byte[]> { device };
+        List<byte[]> parts = [device];
         var offset = 18;
         for (var index = 0; index < device[17]; index++)
         {

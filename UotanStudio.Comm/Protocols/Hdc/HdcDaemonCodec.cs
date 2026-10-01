@@ -14,18 +14,41 @@ internal static class HdcDaemonCodec
     {
         var payload = message.Payload ?? [];
         if (payload.Length > HdcConstants.MaxPayloadSize) throw new InvalidDataException("HDC payload exceeds limit.");
-        using var metadata = new MemoryStream();
-        Number(metadata, 1, message.ChannelId);
-        Number(metadata, 2, (uint)message.Command);
-        Number(metadata, 3, 0);
-        Number(metadata, 4, 9);
-        var packet = new byte[checked(11 + (int)metadata.Length + payload.Length)];
+        Span<byte> metadata = stackalloc byte[32];
+        var metadataLength = WriteMetadata(metadata, message.ChannelId, (uint)message.Command);
+        var packet = new byte[checked(11 + metadataLength + payload.Length)];
         packet[0] = (byte)'H'; packet[1] = (byte)'W'; packet[4] = 1;
-        BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(5), (ushort)metadata.Length);
+        BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(5), (ushort)metadataLength);
         BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(7), (uint)payload.Length);
-        metadata.GetBuffer().AsSpan(0, (int)metadata.Length).CopyTo(packet.AsSpan(11));
-        payload.CopyTo(packet, 11 + (int)metadata.Length);
+        metadata[..metadataLength].CopyTo(packet.AsSpan(11));
+        payload.CopyTo(packet, 11 + metadataLength);
         return packet;
+    }
+
+    private static int WriteMetadata(Span<byte> destination, uint channelId, uint command)
+    {
+        var offset = WriteNumber(destination, 0, 1, channelId);
+        offset = WriteNumber(destination, offset, 2, command);
+        offset = WriteNumber(destination, offset, 3, 0);
+        return WriteNumber(destination, offset, 4, 9);
+    }
+
+    private static int WriteNumber(Span<byte> destination, int offset, uint field, ulong value)
+    {
+        offset = WriteVarint(destination, offset, (ulong)field << 3);
+        return WriteVarint(destination, offset, value);
+    }
+
+    private static int WriteVarint(Span<byte> destination, int offset, ulong value)
+    {
+        while (value >= 128)
+        {
+            destination[offset++] = (byte)(value | 128);
+            value >>= 7;
+        }
+
+        destination[offset++] = (byte)value;
+        return offset;
     }
 
     /// <summary>Validates a fixed daemon header before allocating its body.</summary>
@@ -41,20 +64,40 @@ internal static class HdcDaemonCodec
     }
 
     /// <summary>Decodes a complete device packet and checks its verification code and optional checksum.</summary>
-    public static HdcMessage Decode(ReadOnlySpan<byte> packet)
+    public static HdcMessage Decode(ReadOnlySpan<byte> packet) => packet.Length < 11
+        ? throw new InvalidDataException("Truncated HDC packet.")
+        : Decode(packet[..11], packet[11..]);
+
+    /// <summary>
+    /// Decodes a device packet supplied as its 11-byte header and body segments, so callers reading the
+    /// two segments separately never need to concatenate them.
+    /// <para>按 11 字节头部与主体两段解码设备包，分段读取的调用方因此无需拼接。</para>
+    /// </summary>
+    public static HdcMessage Decode(ReadOnlySpan<byte> header, ReadOnlySpan<byte> body)
     {
-        if (packet.Length < 11) throw new InvalidDataException("Truncated HDC packet.");
-        var (metadata, payloadSize) = ReadHeader(packet[..11]);
-        if (packet.Length != 11 + metadata + payloadSize) throw new InvalidDataException("HDC packet length mismatch.");
-        var fields = ReadFields(packet.Slice(11, metadata));
+        if (header.Length != 11) throw new InvalidDataException("Truncated HDC packet.");
+        var (metadata, payloadSize) = ReadHeader(header);
+        if (body.Length != metadata + payloadSize) throw new InvalidDataException("HDC packet length mismatch.");
+        var fields = ReadFields(body[..metadata]);
         var channel = GetNumber(fields, 1); var command = GetNumber(fields, 2);
         var checksum = GetNumber(fields, 3);
         if (GetNumber(fields, 4) != 9 || channel > uint.MaxValue || command > ushort.MaxValue || checksum > 255)
             throw new InvalidDataException("Invalid HDC protection metadata.");
-        var payload = packet[(11 + metadata)..].ToArray();
-        if (checksum != 0 && checksum != (uint)(payload.Sum(b => (int)b) & 255))
+        var payload = body[metadata..];
+        if (checksum != 0 && checksum != (uint)Checksum8(payload))
             throw new InvalidDataException("HDC payload checksum mismatch.");
-        return new((HdcCommand)command, (uint)channel, 0, payload);
+        return new((HdcCommand)command, (uint)channel, 0, payload.ToArray());
+    }
+
+    private static int Checksum8(ReadOnlySpan<byte> data)
+    {
+        var sum = 0;
+        foreach (var value in data)
+        {
+            sum += value;
+        }
+
+        return sum & 255;
     }
 
     /// <summary>Serializes a daemon authentication handshake. Auth state is not a signing algorithm.</summary>

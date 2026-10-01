@@ -152,13 +152,13 @@ public sealed class LibUsbTransferTests
         var readGate = GetChunkGate(device, "_readChunkGate");
         var writeGate = GetChunkGate(device, "_writeChunkGate");
         Assert.True(await readGate.WaitAsync(0, TestContext.Current.CancellationToken));
-        var disposing = Task.Run(device.Dispose);
+        var disposing = Task.Run(device.Dispose, TestContext.Current.CancellationToken);
         var completedFirst = await Task.WhenAny(disposing, Task.Delay(250, TestContext.Current.CancellationToken));
         Assert.NotSame(disposing, completedFirst);
         readGate.Release();
         await disposing;
-        Assert.Throws<ObjectDisposedException>(() => { readGate.Wait(0); });
-        Assert.Throws<ObjectDisposedException>(() => { writeGate.Wait(0); });
+        Assert.Throws<ObjectDisposedException>(() => { readGate.Wait(0, TestContext.Current.CancellationToken); });
+        Assert.Throws<ObjectDisposedException>(() => { writeGate.Wait(0, TestContext.Current.CancellationToken); });
     }
 
     [Fact]
@@ -166,8 +166,8 @@ public sealed class LibUsbTransferTests
     {
         var device = new LibUsbDevice();
         device.Dispose();
-        Assert.Throws<ObjectDisposedException>(() => { GetChunkGate(device, "_readChunkGate").Wait(0); });
-        Assert.Throws<ObjectDisposedException>(() => { GetChunkGate(device, "_writeChunkGate").Wait(0); });
+        Assert.Throws<ObjectDisposedException>(() => { GetChunkGate(device, "_readChunkGate").Wait(0, TestContext.Current.CancellationToken); });
+        Assert.Throws<ObjectDisposedException>(() => { GetChunkGate(device, "_writeChunkGate").Wait(0, TestContext.Current.CancellationToken); });
         device.Dispose();
     }
 

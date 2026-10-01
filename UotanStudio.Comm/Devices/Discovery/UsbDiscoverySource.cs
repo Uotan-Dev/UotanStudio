@@ -91,36 +91,85 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
         var devices = await _kit.EnumerateUsbDevicesAsync(_backend, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
-        return devices.Select(device =>
+        foreach (var device in devices)
         {
             if (string.IsNullOrWhiteSpace(device.DeviceKey) || string.IsNullOrWhiteSpace(device.DevicePath))
             {
                 throw new InvalidDataException("USB endpoint has no exact device key or path.");
             }
+        }
 
-            var serial = device.SerialNumber;
-            var protocol = UsbProtocolClassifier.Classify(device);
-            if (protocol == "fastboot" && (string.IsNullOrWhiteSpace(serial) || serial == "UNKNOWN"))
-            {
-                serial = ProbeFastbootSerial(device) ?? serial;
-            }
+        var probedSerials = await ProbeMissingFastbootSerialsAsync(devices, cancellationToken).ConfigureAwait(false);
+        return devices.Select(device => Project(device, probedSerials.GetValueOrDefault(device.DevicePath)))
+            .Where(endpoint => !IsServerOwned(endpoint.Protocol, adbServerLive, hdcServerLive))
+            .ToArray();
+    }
 
-            return new DeviceEndpoint
-            {
-                Source = Name,
-                Transport = device.SourceApiKind.ToString(),
-                Address = device.DeviceKey,
-                DisplayName = serial,
-                Serial = serial,
-                Route = "direct-usb",
-                Protocol = protocol,
-                UsbInfo = device,
-                Usb = new(device.SourceApiKind, device.DevicePath, device.VendorId, device.ProductId,
-                    device.InterfaceClass, device.InterfaceSubClass, device.InterfaceProtocol)
-            };
-        })
-        .Where(endpoint => !IsServerOwned(endpoint.Protocol, adbServerLive, hdcServerLive))
-        .ToArray();
+    /// <summary>
+    /// Projects one device into its <c>direct-usb</c> endpoint; the probed serial slot is pre-filled by
+    /// the concurrent probe pass so projection itself never claims an interface and enumeration order
+    /// is preserved.
+    /// <para>把单个设备投影为 <c>direct-usb</c> 端点；探测序列号槽位由并发探测阶段预先填充，因此投影
+    /// 本身不再认领接口，枚举顺序得以保留。</para>
+    /// </summary>
+    private DeviceEndpoint Project(UsbDeviceInfo device, string? probedSerial)
+    {
+        var serial = device.SerialNumber;
+        var protocol = UsbProtocolClassifier.Classify(device);
+        if (probedSerial is not null)
+        {
+            serial = probedSerial;
+        }
+
+        return new DeviceEndpoint
+        {
+            Source = Name,
+            Transport = device.SourceApiKind.ToString(),
+            Address = device.DeviceKey,
+            DisplayName = serial,
+            Serial = serial,
+            Route = "direct-usb",
+            Protocol = protocol,
+            UsbInfo = device,
+            Usb = new(device.SourceApiKind, device.DevicePath, device.VendorId, device.ProductId,
+                device.InterfaceClass, device.InterfaceSubClass, device.InterfaceProtocol)
+        };
+    }
+
+    /// <summary>
+    /// Probes serial-less fastboot devices concurrently, one task per distinct physical path. Concurrent
+    /// probes claim different USB handles, and path grouping guarantees a device is never claimed twice
+    /// within one round; the memoized, failure-bounded per-identity rules are unchanged.
+    /// <para>对缺少序列号的 fastboot 设备并发探测，每个不同物理路径一个任务。并发探测认领的是不同
+    /// USB 句柄，且按路径分组保证同一设备在一轮内不会被重复认领；按身份记忆化与限次的规则保持不变。</para>
+    /// </summary>
+    private async Task<Dictionary<string, string?>> ProbeMissingFastbootSerialsAsync(
+        IReadOnlyList<UsbDeviceInfo> devices, CancellationToken cancellationToken)
+    {
+        var targets = devices
+            .Where(device => UsbProtocolClassifier.Classify(device) == "fastboot" &&
+                (string.IsNullOrWhiteSpace(device.SerialNumber) || device.SerialNumber == "UNKNOWN"))
+            .GroupBy(device => device.DevicePath, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .ToArray();
+        if (targets.Length == 0)
+        {
+            return [];
+        }
+
+        var serials = new string?[targets.Length];
+        await Task.WhenAll(targets.Select((device, index) => Task.Run(() =>
+        {
+            serials[index] = ProbeFastbootSerial(device);
+        }, cancellationToken))).ConfigureAwait(false);
+
+        var probed = new Dictionary<string, string?>(targets.Length, StringComparer.Ordinal);
+        for (var i = 0; i < targets.Length; i++)
+        {
+            probed[targets[i].DevicePath] = serials[i];
+        }
+
+        return probed;
     }
 
     private static bool IsServerOwned(string? protocol, bool adbLive, bool hdcLive) => protocol switch

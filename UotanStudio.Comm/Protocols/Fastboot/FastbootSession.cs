@@ -18,7 +18,7 @@ public sealed partial class FastbootSession : IProtocolSession
     /// Frame delimiters used to find the end of an INFO/TEXT payload.
     /// <para>用于查找 INFO/TEXT 负载结尾的帧分隔符。</para>
     /// </summary>
-    private static readonly char[] ResponseDelimiters = ['\0', '\r', '\n'];
+    private static readonly SearchValues<byte> ResponseDelimiters = SearchValues.Create([(byte)'\0', (byte)'\r', (byte)'\n']);
     private readonly int _timeoutMs;
     private readonly Dictionary<string, string> _varCache = new(StringComparer.Ordinal);
     private readonly Dictionary<string, bool> _hasSlotCache = new(StringComparer.Ordinal);
@@ -51,7 +51,62 @@ public sealed partial class FastbootSession : IProtocolSession
     /// <para>上一次响应的终止帧之后收到且尚未消费的负载字节。fastboot 应答在线上是按包成帧的，
     /// 保留余量可以让流重新同步，而不是把过期字节算到下一条命令头上。</para>
     /// </summary>
-    private readonly List<byte> _pendingBytes = [];
+    private readonly PendingBuffer _pendingBytes = new();
+
+    /// <summary>
+    /// Growable byte accumulator for wire framing. Appends copy a whole transport read at once and
+    /// decoders slice the buffer directly, replacing per-byte list appends and the whole-buffer copy
+    /// every UTF-8 decode previously paid.
+    /// <para>线上组帧用的可增长字节累积器。追加按整次传输读取一次性拷贝，解码直接对缓冲区分片，
+    /// 取代此前逐字节的列表追加以及每次 UTF-8 解码付出的整缓冲拷贝。</para>
+    /// </summary>
+    private sealed class PendingBuffer
+    {
+        private byte[] _buffer = new byte[FastbootConstants.ResponseBufferSize * 4];
+        private int _length;
+
+        /// <summary>Buffered byte count. <para>已缓冲的字节数。</para></summary>
+        /// <value>Bytes currently buffered. <para>当前缓冲的字节数。</para></value>
+        public int Count => _length;
+
+        /// <summary>Buffered bytes as one contiguous span. <para>已缓冲字节构成的连续切片。</para></summary>
+        /// <value>The buffered prefix of the backing buffer. <para>后备缓冲区的已缓冲前缀。</para></value>
+        public ReadOnlySpan<byte> Span => _buffer.AsSpan(0, _length);
+
+        /// <summary>Discards all buffered bytes. <para>丢弃全部已缓冲字节。</para></summary>
+        public void Clear() => _length = 0;
+
+        /// <summary>Appends a whole read to the buffer, growing it when needed.
+        /// <para>把一次读取整体追加进缓冲区，必要时扩容。</para></summary>
+        /// <param name="data">Bytes delivered by one transport read. <para>一次传输读取送达的字节。</para></param>
+        public void Append(ReadOnlySpan<byte> data)
+        {
+            if (_buffer.Length < _length + data.Length)
+            {
+                var grown = new byte[Math.Max(_buffer.Length * 2, _length + data.Length)];
+                _buffer.AsSpan(0, _length).CopyTo(grown);
+                _buffer = grown;
+            }
+
+            data.CopyTo(_buffer.AsSpan(_length));
+            _length += data.Length;
+        }
+
+        /// <summary>Removes <paramref name="count"/> leading bytes and shifts the remainder forward.
+        /// <para>移除起始 <paramref name="count"/> 个字节并把剩余部分前移。</para></summary>
+        /// <param name="count">Number of leading bytes to drop; at most <see cref="Count"/>.
+        /// <para>要丢弃的起始字节数；至多 <see cref="Count"/>。</para></param>
+        public void RemoveFromStart(int count)
+        {
+            if (count < 0 || count > _length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(count));
+            }
+
+            _buffer.AsSpan(count, _length - count).CopyTo(_buffer);
+            _length -= count;
+        }
+    }
 
     /// <summary>Upper bound on bytes accumulated for one command's TEXT payload; a device flooding
     /// TEXT frames beyond this fails the command instead of growing the buffer unboundedly.

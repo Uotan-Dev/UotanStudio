@@ -96,7 +96,7 @@ public sealed partial class FastbootSession
                 var offset = 0;
                 while (true)
                 {
-                    var consumed = ConsumeFrame(_pendingBytes, offset, response, ref textBuffer, ref textBytes);
+                    var consumed = ConsumeFrame(_pendingBytes.Span, offset, response, ref textBuffer, ref textBytes);
                     if (consumed == 0)
                     {
                         break;
@@ -109,14 +109,14 @@ public sealed partial class FastbootSession
                         or FastbootResponseState.Data
                         or FastbootResponseState.Unknown)
                     {
-                        _pendingBytes.RemoveRange(0, offset);
+                        _pendingBytes.RemoveFromStart(offset);
                         return response;
                     }
                 }
 
                 if (offset > 0)
                 {
-                    _pendingBytes.RemoveRange(0, offset);
+                    _pendingBytes.RemoveFromStart(offset);
                 }
 
                 var remainingTicks = timeoutTicks - (Stopwatch.GetTimestamp() - startTimestamp);
@@ -144,10 +144,7 @@ public sealed partial class FastbootSession
                 }
 
                 zeroReads = 0;
-                for (var i = 0; i < readLen; i++)
-                {
-                    _pendingBytes.Add(buffer[i]);
-                }
+                _pendingBytes.Append(buffer.AsSpan(0, readLen));
             }
 
             response.State = FastbootResponseState.Timeout;
@@ -182,10 +179,10 @@ public sealed partial class FastbootSession
     /// <param name="textBytes">Total TEXT bytes accumulated so far. 目前累积的 TEXT 字节总数。</param>
     /// <returns>The number of bytes consumed by the frame, or 0 when more input is required.
     /// 该帧消费的字节数；需要更多输入时为 0。</returns>
-    private static int ConsumeFrame(List<byte> pending, int offset, FastbootResponse response,
+    private static int ConsumeFrame(ReadOnlySpan<byte> pending, int offset, FastbootResponse response,
         ref StringBuilder? textBuffer, ref int textBytes)
     {
-        var available = pending.Count - offset;
+        var available = pending.Length - offset;
         if (available < 4)
         {
             return 0;
@@ -193,7 +190,7 @@ public sealed partial class FastbootSession
 
         if (!IsKnownPrefixAt(pending, offset))
         {
-            var junk = DecodeUtf8(pending, offset, pending.Count);
+            var junk = DecodeUtf8(pending, offset, pending.Length);
             response.State = FastbootResponseState.Unknown;
             response.Info = "device sent unknown status code: " + junk;
             response.Text = junk;
@@ -251,7 +248,7 @@ public sealed partial class FastbootSession
             response.State = isInfo ? FastbootResponseState.Info : FastbootResponseState.Text;
 
             var next = endIdx;
-            while (next < pending.Count && (pending[next] == '\0' || pending[next] == '\r' || pending[next] == '\n'))
+            while (next < pending.Length && (pending[next] == '\0' || pending[next] == '\r' || pending[next] == '\n'))
             {
                 next++;
             }
@@ -280,7 +277,7 @@ public sealed partial class FastbootSession
         response.State = FastbootResponseState.Data;
         response.DataSize = dataSize;
         response.Text = textBuffer?.ToString() ?? string.Empty;
-        return dataEnd < pending.Count && pending[dataEnd] == '\0' ? dataEnd + 1 - offset : available;
+        return dataEnd < pending.Length && pending[dataEnd] == '\0' ? dataEnd + 1 - offset : available;
     }
 
     /// <summary>
@@ -293,22 +290,23 @@ public sealed partial class FastbootSession
     /// 后者仅去除一个尾随 NUL。<paramref name="frameEnd"/> 报告帧之后的字节位置，超出部分保留在
     /// 待解析缓冲区中留给下一个响应，而不是被静默丢弃。</para>
     /// </summary>
-    private static string ExtractFrameContent(List<byte> pending, int start, out int frameEnd)
+    private static string ExtractFrameContent(ReadOnlySpan<byte> pending, int start, out int frameEnd)
     {
-        frameEnd = pending.Count;
-        if (start >= pending.Count)
+        frameEnd = pending.Length;
+        if (start >= pending.Length)
         {
             return string.Empty;
         }
 
-        var nulIdx = pending.IndexOf((byte)'\0', start);
+        var nulIdx = pending[start..].IndexOf((byte)'\0');
         if (nulIdx >= 0)
         {
-            frameEnd = nulIdx + 1;
-            return nulIdx > start ? DecodeUtf8(pending, start, nulIdx) : string.Empty;
+            var absolute = start + nulIdx;
+            frameEnd = absolute + 1;
+            return absolute > start ? DecodeUtf8(pending, start, absolute) : string.Empty;
         }
 
-        return DecodeUtf8(pending, start, pending.Count);
+        return DecodeUtf8(pending, start, pending.Length);
     }
 
     /// <summary>
@@ -320,9 +318,9 @@ public sealed partial class FastbootSession
     /// 因此字段结束于随后 8 字节内的首个 NUL/CR/LF，或凑满 8 个数字时恰为 8 字节处；
     /// 更短则说明还需要更多字节。</para>
     /// </summary>
-    private static int FindDataEnd(List<byte> pending, int start)
+    private static int FindDataEnd(ReadOnlySpan<byte> pending, int start)
     {
-        var limit = Math.Min(pending.Count, start + 8);
+        var limit = Math.Min(pending.Length, start + 8);
         for (var i = start; i < limit; i++)
         {
             if (pending[i] == '\0' || pending[i] == '\r' || pending[i] == '\n')
@@ -331,7 +329,7 @@ public sealed partial class FastbootSession
             }
         }
 
-        return pending.Count >= start + 8 ? start + 8 : -1;
+        return pending.Length >= start + 8 ? start + 8 : -1;
     }
 
     /// <summary>
@@ -341,15 +339,15 @@ public sealed partial class FastbootSession
     /// <para>查找 INFO/TEXT 负载的结尾：第一个 NUL/CR/LF 分隔符。帧完全无分隔符时（无填充的
     /// TCP 帧），下一个状态前缀即为其结尾；两者都未出现前需要更多字节。</para>
     /// </summary>
-    private static int FindInfoTextEnd(List<byte> pending, int contentStart)
+    private static int FindInfoTextEnd(ReadOnlySpan<byte> pending, int contentStart)
     {
-        var delimiterIdx = IndexOfAny(pending, ResponseDelimiters, contentStart);
+        var delimiterIdx = pending[contentStart..].IndexOfAny(ResponseDelimiters);
         if (delimiterIdx >= 0)
         {
-            return delimiterIdx;
+            return contentStart + delimiterIdx;
         }
 
-        for (var i = contentStart + 1; i <= pending.Count - 4; i++)
+        for (var i = contentStart + 1; i <= pending.Length - 4; i++)
         {
             if (IsTerminalPrefixAt(pending, i) || IsPrefixAt(pending, i, 'I', 'N', 'F', 'O') || IsPrefixAt(pending, i, 'T', 'E', 'X', 'T'))
             {
@@ -360,30 +358,14 @@ public sealed partial class FastbootSession
         return -1;
     }
 
-    private static int IndexOfAny(List<byte> pending, char[] delimiters, int start)
-    {
-        for (var i = start; i < pending.Count; i++)
-        {
-            foreach (var delimiter in delimiters)
-            {
-                if (pending[i] == delimiter)
-                {
-                    return i;
-                }
-            }
-        }
-
-        return -1;
-    }
-
-    private static string DecodeUtf8(List<byte> pending, int start, int end)
+    private static string DecodeUtf8(ReadOnlySpan<byte> pending, int start, int end)
     {
         if (end <= start)
         {
             return string.Empty;
         }
 
-        return Encoding.UTF8.GetString(pending.ToArray(), start, end - start);
+        return Encoding.UTF8.GetString(pending[start..end]);
     }
 
     /// <summary>
@@ -414,21 +396,21 @@ public sealed partial class FastbootSession
             : size > FastbootConstants.SparseMaxDownloadSize ? -2 : size;
     }
 
-    private static bool IsPrefixAt(List<byte> s, int index, char a, char b, char c, char d)
-        => index + 4 <= s.Count &&
+    private static bool IsPrefixAt(ReadOnlySpan<byte> s, int index, char a, char b, char c, char d)
+        => index + 4 <= s.Length &&
            s[index] == a &&
            s[index + 1] == b &&
            s[index + 2] == c &&
            s[index + 3] == d;
 
-    private static bool IsKnownPrefixAt(List<byte> s, int index)
+    private static bool IsKnownPrefixAt(ReadOnlySpan<byte> s, int index)
         => IsPrefixAt(s, index, 'O', 'K', 'A', 'Y') ||
            IsPrefixAt(s, index, 'F', 'A', 'I', 'L') ||
            IsPrefixAt(s, index, 'I', 'N', 'F', 'O') ||
            IsPrefixAt(s, index, 'T', 'E', 'X', 'T') ||
            IsPrefixAt(s, index, 'D', 'A', 'T', 'A');
 
-    private static bool IsTerminalPrefixAt(List<byte> s, int index)
+    private static bool IsTerminalPrefixAt(ReadOnlySpan<byte> s, int index)
         => IsPrefixAt(s, index, 'O', 'K', 'A', 'Y') ||
            IsPrefixAt(s, index, 'F', 'A', 'I', 'L') ||
            IsPrefixAt(s, index, 'D', 'A', 'T', 'A');

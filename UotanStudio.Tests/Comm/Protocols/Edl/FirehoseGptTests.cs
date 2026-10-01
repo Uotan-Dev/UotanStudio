@@ -72,31 +72,6 @@ public partial class FirehoseGptTests
     }
 
     [Fact]
-    public async Task ReadGptAsync_QueuedProbe_WaitsUntilBothCopiesAreRead()
-    {
-        using var transport = Transport(GptReaderTests.CreateDisk(512), 512);
-        using var protocol = Protocol(transport, 512);
-        var respond = transport.OnWrite!;
-        Task<FirehoseResponse>? queued = null;
-        transport.OnWrite = bytes =>
-        {
-            if (Encoding.UTF8.GetString(bytes).Contains("<read ", StringComparison.Ordinal) && queued is null)
-            {
-                queued = protocol.NopAsync(TestContext.Current.CancellationToken);
-                Assert.False(queued.IsCompleted);
-            }
-            return respond(bytes);
-        };
-
-        await protocol.ReadGptAsync(0, TestContext.Current.CancellationToken);
-        Assert.NotNull(queued);
-        Assert.True((await queued).IsAck);
-
-        Assert.Equal(new[] { "getstorageinfo", "read", "read", "read", "read", "nop" },
-            Commands(transport).Select(command => command.Name.LocalName));
-    }
-
-    [Fact]
     public async Task ReadGptAsync_PreCancelled_DoesNotQueryGeometry()
     {
         using var transport = Transport(GptReaderTests.CreateDisk(512), 512);

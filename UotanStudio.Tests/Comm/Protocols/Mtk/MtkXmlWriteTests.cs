@@ -234,6 +234,7 @@ public partial class MtkSessionTests
 
     [Theory]
     [InlineData("source_file", "C:/source.bin")]
+    [InlineData("source_file", "C:/credential.bin")]
     [InlineData("source_file", "MEM://0x0:0x201")]
     [InlineData("checksum", "CHK_SUM")]
     [InlineData("info", "")]

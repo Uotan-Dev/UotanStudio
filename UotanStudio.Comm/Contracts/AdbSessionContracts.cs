@@ -204,13 +204,17 @@ public interface IAdbSyncClient : IDisposable
 
     /// <summary>Lists a remote directory. <para>列出远程目录。</para></summary>
     /// <param name="remotePath">Device-side directory path. <para>设备侧目录路径。</para></param>
+    /// <param name="cancellationToken">Checked before each directory record; cancellation stops the LIST loop.
+    /// <para>在每条目录记录前检查；取消会停止 LIST 循环。</para></param>
     /// <returns>Every entry received before the done marker; empty for an empty directory.
     /// <para>收到结束标记前的全部条目；空目录返回空列表。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidDataException">The peer rejected the request or answered with an
     /// unexpected id. <para>对端拒绝请求或返回了非预期标识。</para></exception>
-    IReadOnlyList<SyncEntry> List(string remotePath);
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    IReadOnlyList<SyncEntry> List(string remotePath, CancellationToken cancellationToken = default);
 
     /// <summary>Pushes a local file to the device. <para>推送本地文件到设备。</para></summary>
     /// <param name="localPath">Existing local file opened for reading. <para>以只读方式打开的已存在本地文件。</para></param>
@@ -219,6 +223,8 @@ public interface IAdbSyncClient : IDisposable
     /// <c>0x81A4</c> is regular-file <c>0644</c>. <para>以八进制编码进 sync 请求的 Unix 权限位；默认 <c>0x81A4</c> 即普通文件 <c>0644</c>。</para></param>
     /// <param name="mtime">Device-side modification timestamp in seconds; <c>0</c> means the
     /// current UTC time at transfer. <para>设备侧修改时间（秒）；<c>0</c> 表示传输时的当前 UTC 时间。</para></param>
+    /// <param name="cancellationToken">Checked before each client chunk is read and sent; cancellation
+    /// stops the push between packets. <para>在读取并发送每个客户端数据块前检查；取消会在数据包之间停止推送。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="localPath"/> or
     /// <paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="localPath"/> 或 <paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
@@ -226,7 +232,9 @@ public interface IAdbSyncClient : IDisposable
     /// <para><paramref name="localPath"/> 不存在。</para></exception>
     /// <exception cref="InvalidDataException">The device rejected the transfer or answered with an
     /// unexpected id. <para>设备拒绝传输或返回了非预期标识。</para></exception>
-    void Push(string localPath, string remotePath, uint mode = 0x81A4, uint mtime = 0);
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    void Push(string localPath, string remotePath, uint mode = 0x81A4, uint mtime = 0, CancellationToken cancellationToken = default);
 
     /// <summary>Pushes a stream to the device. <para>推送流到设备。</para></summary>
     /// <param name="source">Read to end-of-stream in client chunk sizes; the caller keeps
@@ -236,33 +244,45 @@ public interface IAdbSyncClient : IDisposable
     /// <c>0x81A4</c> is regular-file <c>0644</c>. <para>以八进制编码进 sync 请求的 Unix 权限位；默认 <c>0x81A4</c> 即普通文件 <c>0644</c>。</para></param>
     /// <param name="mtime">Device-side modification timestamp in seconds; <c>0</c> means the
     /// current UTC time at transfer. <para>设备侧修改时间（秒）；<c>0</c> 表示传输时的当前 UTC 时间。</para></param>
+    /// <param name="cancellationToken">Checked before each client chunk is read and sent; cancellation
+    /// stops the push between packets. <para>在读取并发送每个客户端数据块前检查；取消会在数据包之间停止推送。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="source"/> or
     /// <paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="source"/> 或 <paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidDataException">The device rejected the transfer or answered with an
     /// unexpected id. <para>设备拒绝传输或返回了非预期标识。</para></exception>
-    void PushStream(Stream source, string remotePath, uint mode = 0x81A4, uint mtime = 0);
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    void PushStream(Stream source, string remotePath, uint mode = 0x81A4, uint mtime = 0, CancellationToken cancellationToken = default);
 
     /// <summary>Pulls a remote file to a local path. <para>拉取远程文件到本地路径。</para></summary>
     /// <param name="remotePath">Device-side source file. <para>设备侧源文件。</para></param>
     /// <param name="localPath">Local destination; created or truncated. <para>本地目标；不存在则创建，存在则截断。</para></param>
+    /// <param name="cancellationToken">Checked before each device chunk is written; cancellation stops
+    /// the pull between packets. <para>在写入每个设备数据块前检查；取消会在数据包之间停止拉取。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> or
     /// <paramref name="localPath"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 或 <paramref name="localPath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidDataException">The device rejected the transfer or answered with an
     /// unexpected id. <para>设备拒绝传输或返回了非预期标识。</para></exception>
-    void Pull(string remotePath, string localPath);
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    void Pull(string remotePath, string localPath, CancellationToken cancellationToken = default);
 
     /// <summary>Pulls a remote file into a stream. <para>拉取远程文件到流。</para></summary>
     /// <param name="remotePath">Device-side source file. <para>设备侧源文件。</para></param>
     /// <param name="destination">Written sequentially from the current position; the caller keeps
     /// ownership. <para>从当前位置顺序写入；所有权仍归调用方。</para></param>
+    /// <param name="cancellationToken">Checked before each device chunk is written; cancellation stops
+    /// the pull between packets. <para>在写入每个设备数据块前检查；取消会在数据包之间停止拉取。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> or
     /// <paramref name="destination"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 或 <paramref name="destination"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidDataException">The device rejected the transfer or answered with an
     /// unexpected id. <para>设备拒绝传输或返回了非预期标识。</para></exception>
-    void PullStream(string remotePath, Stream destination);
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    void PullStream(string remotePath, Stream destination, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

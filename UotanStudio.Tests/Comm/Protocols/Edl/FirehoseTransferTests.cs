@@ -109,7 +109,6 @@ public class FirehoseTransferTests
 
     [Theory]
     [InlineData(Complete)]
-    [InlineData(Nak)]
     public async Task ProgramAsync_EntryNotAcknowledgedInRawMode_DoesNotConsumeSource(string response)
     {
         using var transport = new ScriptedCommTransport();

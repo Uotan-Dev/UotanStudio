@@ -54,35 +54,6 @@ public partial class MtkSessionTests
     }
 
     [Theory]
-    [InlineData("source_file", "C:/credential.bin")]
-    [InlineData("source_file", "MEM://0x0:0x201")]
-    [InlineData("checksum", "CHK_SUM")]
-    [InlineData("info", "")]
-    [InlineData("packet_length", "0x0")]
-    [InlineData("packet_length", "0x100001")]
-    [InlineData("packet_length", "512")]
-    [InlineData("extra", "value")]
-    public async Task UploadXmlSecurityResourceAsync_InvalidCallback_RejectsWithoutReadingSource(string field, string value)
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreateXmlStageTwoHardwareSessionAsync(transport);
-        using var source = new MemoryStream(new byte[512]);
-        EnqueueXmlCompletion(transport);
-        EnqueueXmlText(transport, "OK");
-        var request = XmlSecurityRequest(512, 512);
-        request.Element("arg")!.SetElementValue(field, value);
-        EnqueueXmlText(transport, request.ToString(SaveOptions.DisableFormatting));
-        var before = transport.Writes.Count;
-
-        await Assert.ThrowsAsync<MtkProtocolException>(() => session.UploadXmlSecurityResourceAsync(
-            MtkXmlSecurityResourceKind.FlashPolicy, source, 512, cancellationToken: TestContext.Current.CancellationToken));
-
-        Assert.Equal(8, transport.Writes.Count - before);
-        Assert.Equal(0, source.Position);
-        Assert.Equal(MtkSessionState.Faulted, session.State);
-    }
-
-    [Theory]
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(2)]

@@ -96,7 +96,7 @@ public sealed class AdbSyncCopyTests
         using var sync = adb.CreateSyncClient();
         using var source = new ShortReadStream(data, maximumRead);
 
-        sync.PushStream(source, "/simulation/file.bin", mtime: 123);
+        sync.PushStream(source, "/simulation/file.bin", mtime: 123, cancellationToken: TestContext.Current.CancellationToken);
 
         var offset = 0;
         foreach (var packet in transport.WrtePayloads)

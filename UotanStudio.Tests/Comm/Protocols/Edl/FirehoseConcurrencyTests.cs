@@ -173,7 +173,7 @@ public class FirehoseConcurrencyTests
         var protocol = CreateProtocol(transport);
 
         protocol.Dispose();
-        Assert.Throws<ObjectDisposedException>(() => GetOperationGate(protocol).Wait(TimeSpan.Zero));
+        Assert.Throws<ObjectDisposedException>(() => GetOperationGate(protocol).Wait(TimeSpan.Zero, TestContext.Current.CancellationToken));
         protocol.Dispose();
     }
 
@@ -188,7 +188,7 @@ public class FirehoseConcurrencyTests
         lease.Dispose();
         var gate = GetOperationGate(protocol);
 
-        Assert.True(gate.Wait(TimeSpan.Zero));
+        Assert.True(gate.Wait(TimeSpan.Zero, TestContext.Current.CancellationToken));
         gate.Release();
         Assert.False(protocol.RequiresReconnect);
         await Assert.ThrowsAsync<ObjectDisposedException>(() => protocol.NopAsync(TestContext.Current.CancellationToken));
@@ -203,11 +203,11 @@ public class FirehoseConcurrencyTests
 
         protocol.Dispose();
         var gate = GetOperationGate(protocol);
-        Assert.False(gate.Wait(TimeSpan.Zero));
+        Assert.False(gate.Wait(TimeSpan.Zero, TestContext.Current.CancellationToken));
 
         lease.Dispose();
         protocol.Dispose();
-        Assert.Throws<ObjectDisposedException>(() => gate.Wait(TimeSpan.Zero));
+        Assert.Throws<ObjectDisposedException>(() => gate.Wait(TimeSpan.Zero, TestContext.Current.CancellationToken));
         await Assert.ThrowsAsync<ObjectDisposedException>(() => protocol.NopAsync(TestContext.Current.CancellationToken));
     }
 

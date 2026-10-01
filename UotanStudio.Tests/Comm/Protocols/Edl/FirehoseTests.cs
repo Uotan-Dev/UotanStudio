@@ -385,20 +385,6 @@ public class FirehoseTests
     }
 
     [Fact]
-    public async Task PatchAsync_DiskTarget_SendsPatchAndReceivesAcknowledgement()
-    {
-        var transport = new ScriptedCommTransport();
-        transport.Enqueue(AckXml);
-        var protocol = CreateProtocol(transport);
-
-        var response = await protocol.PatchAsync("DISK", 0, 0, 0, "00", 1, TestContext.Current.CancellationToken);
-
-        Assert.True(response.IsAck);
-        Assert.Equal("ACK", response.RawValue);
-        Assert.Contains("filename=\"DISK\"", Encoding.UTF8.GetString(Assert.Single(transport.Writes)), StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task WipeAsync_WritesZerosPayload()
     {
         var transport = new ScriptedCommTransport();

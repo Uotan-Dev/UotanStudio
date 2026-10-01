@@ -436,8 +436,8 @@ public sealed partial class FastbootSession
             return 0;
         }
 
-        _pendingBytes.CopyTo(0, target, offset, take);
-        _pendingBytes.RemoveRange(0, take);
+        _pendingBytes.Span[..take].CopyTo(target.AsSpan(offset, take));
+        _pendingBytes.RemoveFromStart(take);
         return take;
     }
 

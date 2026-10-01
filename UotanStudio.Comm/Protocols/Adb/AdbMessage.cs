@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+
 namespace UotanStudio.Comm.Protocols.Adb;
 
 /// <summary>
@@ -87,17 +89,10 @@ internal static class AdbMessaging
         var payloadCrc = ComputeCrc(message.Payload);
 
         var packet = new byte[AdbConstants.HeaderSize + (message.Payload?.Length ?? 0)];
-        using var ms = new MemoryStream(packet);
-        using var bw = new BinaryWriter(ms);
-        bw.Write(command);
-        bw.Write(message.Arg0);
-        bw.Write(message.Arg1);
-        bw.Write(payloadLength);
-        bw.Write(payloadCrc);
-        bw.Write(command ^ 0xFFFFFFFF);
+        WriteHeader(packet, command, message.Arg0, message.Arg1, payloadLength, payloadCrc);
         if (message.Payload is { Length: > 0 })
         {
-            bw.Write(message.Payload);
+            message.Payload.AsSpan().CopyTo(packet.AsSpan(AdbConstants.HeaderSize));
         }
 
         return packet;
@@ -111,20 +106,20 @@ internal static class AdbMessaging
     /// <returns>The 24-byte header. 24 字节头部。</returns>
     public static byte[] SerializeHeader(AdbMessage message)
     {
-        var command = (uint)message.Command;
-        var payloadLength = message.Payload is null ? 0u : (uint)message.Payload.Length;
-        var payloadCrc = ComputeCrc(message.Payload);
-
         var header = new byte[AdbConstants.HeaderSize];
-        using var ms = new MemoryStream(header);
-        using var bw = new BinaryWriter(ms);
-        bw.Write(command);
-        bw.Write(message.Arg0);
-        bw.Write(message.Arg1);
-        bw.Write(payloadLength);
-        bw.Write(payloadCrc);
-        bw.Write(command ^ 0xFFFFFFFF);
+        WriteHeader(header, (uint)message.Command, message.Arg0, message.Arg1,
+            message.Payload is null ? 0u : (uint)message.Payload.Length, ComputeCrc(message.Payload));
         return header;
+    }
+
+    private static void WriteHeader(Span<byte> destination, uint command, uint arg0, uint arg1, uint payloadLength, uint payloadCrc)
+    {
+        BinaryPrimitives.WriteUInt32LittleEndian(destination, command);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], arg0);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[8..], arg1);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[12..], payloadLength);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[16..], payloadCrc);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[20..], command ^ 0xFFFFFFFF);
     }
 
     /// <summary>
@@ -140,14 +135,13 @@ internal static class AdbMessaging
             throw new InvalidDataException($"Invalid ADB header size: {header?.Length}");
         }
 
-        using var ms = new MemoryStream(header);
-        using var br = new BinaryReader(ms);
-        var command = br.ReadUInt32();
-        var arg0 = br.ReadUInt32();
-        var arg1 = br.ReadUInt32();
-        var payloadLength = br.ReadUInt32();
-        var payloadCrc = br.ReadUInt32();
-        var magic = br.ReadUInt32();
+        var fields = header.AsSpan();
+        var command = BinaryPrimitives.ReadUInt32LittleEndian(fields);
+        var arg0 = BinaryPrimitives.ReadUInt32LittleEndian(fields[4..]);
+        var arg1 = BinaryPrimitives.ReadUInt32LittleEndian(fields[8..]);
+        var payloadLength = BinaryPrimitives.ReadUInt32LittleEndian(fields[12..]);
+        var payloadCrc = BinaryPrimitives.ReadUInt32LittleEndian(fields[16..]);
+        var magic = BinaryPrimitives.ReadUInt32LittleEndian(fields[20..]);
 
         return (command ^ 0xFFFFFFFF) != magic
             ? throw new InvalidDataException("Invalid ADB message magic!")

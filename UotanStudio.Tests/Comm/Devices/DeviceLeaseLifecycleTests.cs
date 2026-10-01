@@ -71,7 +71,7 @@ public sealed class DeviceLeaseLifecycleTests
         await controller.OpenAsync(snapshot, endpoint.Id, TestContext.Current.CancellationToken);
         var transport = opener.Last!;
 
-        var disposeCall = Task.Run(controller.Dispose);
+        var disposeCall = Task.Run(controller.Dispose, TestContext.Current.CancellationToken);
         var finishedFirst = await Task.WhenAny(disposeCall, Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         Assert.Same(disposeCall, finishedFirst);
         await disposeCall;

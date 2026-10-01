@@ -10,6 +10,13 @@ public sealed partial class FirehoseProtocol
 {
     private const int MaximumResponseBytes = 64 * 1024;
 
+    /// <summary>
+    /// The only response terminator; matching is gated on its final byte so the scan runs once per
+    /// candidate byte instead of once per appended byte.
+    /// <para>唯一的响应终止符；匹配由其末字节触发，扫描只发生在候选字节上而不是每个追加字节上。</para>
+    /// </summary>
+    private static ReadOnlySpan<byte> ResponseTerminator => "</data>"u8;
+
     private async Task<FirehoseResponse> ReceiveResponseAsync(CancellationToken cancellationToken, int? timeoutMs = null,
         Action<string>? logObserver = null, Action<FirehoseDataBlock>? blockObserver = null)
     {
@@ -17,7 +24,7 @@ public sealed partial class FirehoseProtocol
         var budget = timeoutMs ?? checked(Configuration.ResponseTimeoutSeconds * 1000);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(budget);
         var start = Environment.TickCount64;
-        var document = new byte[MaximumResponseBytes];
+        var document = _responseDocument;
         var length = 0;
 
         while (Environment.TickCount64 - start < budget)
@@ -56,7 +63,9 @@ public sealed partial class FirehoseProtocol
                 }
 
                 document[length++] = value;
-                if (!document.AsSpan(0, length).EndsWith("</data>"u8))
+                if (value != (byte)'>'
+                    || length < ResponseTerminator.Length
+                    || !document.AsSpan(length - ResponseTerminator.Length).StartsWith(ResponseTerminator))
                 {
                     continue;
                 }

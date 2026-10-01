@@ -129,7 +129,7 @@ public sealed class HdcAppClient(HdcConnection connection) : UotanStudio.Comm.Co
                     var entry = new System.Formats.Tar.UstarTarEntry(System.Formats.Tar.TarEntryType.RegularFile,
                         Path.GetRelativePath(root.FullName, package.FullName).Replace('\\', '/'))
                     { DataStream = input };
-                    writer.WriteEntryAsync(entry, cancellationToken).GetAwaiter().GetResult();
+                    writer.WriteEntry(entry);
                 }
             cancellationToken.ThrowIfCancellationRequested();
             return InstallPackage(tar, options, cancellationToken);
@@ -196,7 +196,7 @@ public sealed class HdcAppClient(HdcConnection connection) : UotanStudio.Comm.Co
                 foreach (var entry in selected)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    writer.WriteEntryAsync(Path.Combine(staging, entry.Name), entry.Name, cancellationToken).GetAwaiter().GetResult();
+                    writer.WriteEntry(Path.Combine(staging, entry.Name), entry.Name);
                 }
             return InstallPackage(tar, options, cancellationToken);
         }

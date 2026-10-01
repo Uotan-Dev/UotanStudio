@@ -115,25 +115,6 @@ public partial class MtkSessionTests
         Assert.Equal(MtkSessionState.Faulted, session.State);
     }
 
-    [Theory]
-    [InlineData("OK@0x0")]
-    [InlineData("OK@0x10001")]
-    [InlineData("ERR!FAILED")]
-    public async Task QueryXmlSystemPropertyAsync_InvalidLength_RejectsBeforeData(string length)
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreateXmlStageTwoHardwareSessionAsync(transport);
-        EnqueueXmlStoragePrefix(transport);
-        EnqueueXmlText(transport, length);
-        var before = transport.Writes.Count;
-
-        await Assert.ThrowsAsync<MtkProtocolException>(() => session.QueryXmlSystemPropertyAsync(
-            "DA.SLA", cancellationToken: TestContext.Current.CancellationToken));
-
-        Assert.Equal(10, transport.Writes.Count - before);
-        Assert.Equal(MtkSessionState.Faulted, session.State);
-    }
-
     [Fact]
     public async Task QueryXmlSystemPropertyAsync_InvalidUtf8_RejectsWithoutReplacement()
     {

@@ -21,11 +21,11 @@ public sealed class HdcConnection : IDisposable
     /// whole daemon packet that follows the USB header, so the ceiling is the payload limit plus the
     /// fixed daemon PayloadHead of <see cref="HdcConstants.HeaderSize"/> bytes plus
     /// <see cref="HdcDaemonCodec.MaximumMetadataSize"/>, which is 1035 framing bytes on top of the payload limit.
-    /// Blocks above it can never satisfy <see cref="HdcDaemonCodec.Decode"/> and are rejected before their body is read.
+    /// Blocks above it can never satisfy <see cref="HdcDaemonCodec.Decode(System.ReadOnlySpan{byte})"/> and are rejected before their body is read.
     /// <para>HDC 单个 USB 块可声明的最大字节数。<see cref="HdcUsbHead.DataSize"/> 覆盖 USB 头之后的完整守护进程报文，
     /// 因此上限等于负载上限加上 <see cref="HdcConstants.HeaderSize"/> 字节的固定守护进程头与
     /// <see cref="HdcDaemonCodec.MaximumMetadataSize"/>，即负载上限再加 1035 字节帧开销。
-    /// 超过该值的块无法满足 <see cref="HdcDaemonCodec.Decode"/>，会在读取其主体前被拒绝。</para>
+    /// 超过该值的块无法满足 <see cref="HdcDaemonCodec.Decode(System.ReadOnlySpan{byte})"/>，会在读取其主体前被拒绝。</para>
     /// </summary>
     internal const int MaximumUsbBlockSize = HdcConstants.MaxPayloadSize + HdcConstants.HeaderSize + HdcDaemonCodec.MaximumMetadataSize;
 
@@ -51,6 +51,7 @@ public sealed class HdcConnection : IDisposable
     private const int StaleBlockReadTimeoutMs = 160;
 
     private readonly ICommTransport _transport;
+    private readonly byte[] _usbHeadScratch = new byte[11];
     private readonly HdcAuthentication _authentication;
     private readonly Lock _sendLock = new();
     private readonly Lock _streamsLock = new();
@@ -340,9 +341,9 @@ public sealed class HdcConnection : IDisposable
 
     /// <summary>
     /// Reports whether an announced USB block size exceeds what the daemon framing can encode,
-    /// so the body is never allocated for a block that <see cref="HdcDaemonCodec.Decode"/> must reject.
+    /// so the body is never allocated for a block that <see cref="HdcDaemonCodec.Decode(System.ReadOnlySpan{byte})"/> must reject.
     /// <para>判断声明的 USB 块大小是否超出守护进程帧编码能力，从而避免为
-    /// <see cref="HdcDaemonCodec.Decode"/> 必然拒绝的块分配主体。</para>
+    /// <see cref="HdcDaemonCodec.Decode(System.ReadOnlySpan{byte})"/> 必然拒绝的块分配主体。</para>
     /// </summary>
     /// <param name="dataSize">The <see cref="HdcUsbHead.DataSize"/> value carried by the USB header. <para>USB 头部携带的 <see cref="HdcUsbHead.DataSize"/> 值。</para></param>
     /// <returns><see langword="true"/> when the block is larger than <see cref="MaximumUsbBlockSize"/>. <para>块大于 <see cref="MaximumUsbBlockSize"/> 时为 <see langword="true"/>。</para></returns>
@@ -500,7 +501,7 @@ public sealed class HdcConnection : IDisposable
         {
             while (true)
             {
-                var usb = HdcUsbHead.Parse(ReadExact(11, DefaultTimeoutMs));
+                var usb = HdcUsbHead.Parse(ReadExact(_usbHeadScratch, DefaultTimeoutMs));
                 if (usb.Flag0 != 'U' || usb.Flag1 != 'B')
                     throw new InvalidDataException("Invalid HDC USB identity.");
                 if (!_connected && usb.SessionId != _sessionId)
@@ -521,7 +522,7 @@ public sealed class HdcConnection : IDisposable
         var header = ReadExact(11, DefaultTimeoutMs);
         var (metadata, payload) = HdcDaemonCodec.ReadHeader(header);
         var body = ReadBody(metadata + payload);
-        return HdcDaemonCodec.Decode([.. header, .. body]);
+        return HdcDaemonCodec.Decode(header, body);
     }
 
     /// <summary>
@@ -543,44 +544,39 @@ public sealed class HdcConnection : IDisposable
                 {
                     continue;
                 }
-                catch (InvalidDataException) { throw; }
 
-                try
+                switch (message.Command)
                 {
-                    switch (message.Command)
-                    {
-                        case HdcCommand.Handshake:
-                            HandleHandshake(message);
-                            break;
+                    case HdcCommand.Handshake:
+                        HandleHandshake(message);
+                        break;
 
-                        case HdcCommand.Echo:
-                        case HdcCommand.EchoRaw:
-                            HandleEcho(message);
-                            break;
+                    case HdcCommand.Echo:
+                    case HdcCommand.EchoRaw:
+                        HandleEcho(message);
+                        break;
 
-                        case HdcCommand.ChannelClose:
-                            HandleChannelClose(message);
-                            break;
+                    case HdcCommand.ChannelClose:
+                        HandleChannelClose(message);
+                        break;
 
-                        case HdcCommand.WakeupSlaveTask:
-                            break;
+                    case HdcCommand.WakeupSlaveTask:
+                        break;
 
-                        case HdcCommand.ShellData:
-                        case HdcCommand.FileData:
-                        case HdcCommand.ForwardData:
-                            HandleData(message);
-                            break;
+                    case HdcCommand.ShellData:
+                    case HdcCommand.FileData:
+                    case HdcCommand.ForwardData:
+                        HandleData(message);
+                        break;
 
-                        case HdcCommand.HeartbeatMsg:
-                            Send(message);
-                            break;
+                    case HdcCommand.HeartbeatMsg:
+                        Send(message);
+                        break;
 
-                        default:
-                            HandleData(message);
-                            break;
-                    }
+                    default:
+                        HandleData(message);
+                        break;
                 }
-                catch { throw; }
             }
         }
         catch (Exception ex)
@@ -717,13 +713,26 @@ public sealed class HdcConnection : IDisposable
     private byte[] ReadExact(int length, int timeoutMs)
     {
         var buffer = new byte[length];
+        return ReadExact(buffer, timeoutMs);
+    }
+
+    /// <summary>
+    /// Reads exactly <see cref="Array.Length"/> bytes into the supplied buffer, reusing it instead of
+    /// allocating per frame.
+    /// <para>向给定缓冲区精确读取填满其长度的字节，复用缓冲区而不是每帧分配。</para>
+    /// </summary>
+    /// <param name="buffer">The destination buffer sized to the exact read length. 长度恰为读取长度的目标缓冲区。</param>
+    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
+    /// <returns>The same buffer instance, for call-site ergonomics. 同一缓冲区实例。</returns>
+    private byte[] ReadExact(byte[] buffer, int timeoutMs)
+    {
         var totalRead = 0;
         var deadline = Environment.TickCount64 + timeoutMs;
-        while (totalRead < length)
+        while (totalRead < buffer.Length)
         {
             var remaining = deadline - Environment.TickCount64;
             if (remaining <= 0) throw new IOException("HDC frame deadline exceeded.");
-            var n = _transport.Read(buffer, totalRead, length - totalRead, (int)remaining);
+            var n = _transport.Read(buffer, totalRead, buffer.Length - totalRead, (int)remaining);
             if (n == 0)
             {
                 if (totalRead == 0) throw new TimeoutException("HDC idle read timeout.");

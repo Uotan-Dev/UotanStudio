@@ -113,7 +113,7 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Lists a remote directory.
     /// <para>列出远端目录内容。</para>
     /// </summary>
-    public IReadOnlyList<SyncEntry> List(string remotePath)
+    public IReadOnlyList<SyncEntry> List(string remotePath, CancellationToken cancellationToken = default)
     {
         if (remotePath is null)
         {
@@ -128,6 +128,8 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         var entries = new List<SyncEntry>();
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var id = Encoding.ASCII.GetString(ReadExact(stream, 4), 0, 4);
 
             if (id == SyncIds.Done)
@@ -164,7 +166,7 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Pushes a local file to the device.
     /// <para>将本地文件推送到设备。</para>
     /// </summary>
-    public void Push(string localPath, string remotePath, uint mode = 0x81A4, uint mtime = 0)
+    public void Push(string localPath, string remotePath, uint mode = 0x81A4, uint mtime = 0, CancellationToken cancellationToken = default)
     {
         if (localPath is null)
         {
@@ -177,14 +179,14 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         }
 
         using var fs = File.OpenRead(localPath);
-        PushStream(fs, remotePath, mode, mtime);
+        PushStream(fs, remotePath, mode, mtime, cancellationToken);
     }
 
     /// <summary>
     /// Pushes a stream to the device.
     /// <para>将流推送到设备。</para>
     /// </summary>
-    public void PushStream(Stream source, string remotePath, uint mode = 0x81A4, uint mtime = 0)
+    public void PushStream(Stream source, string remotePath, uint mode = 0x81A4, uint mtime = 0, CancellationToken cancellationToken = default)
     {
         if (source is null)
         {
@@ -195,6 +197,8 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         {
             throw new ArgumentNullException(nameof(remotePath));
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         var stream = EnsureStream();
         if (mtime == 0)
@@ -209,6 +213,7 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         var buffer = new byte[_maxChunk];
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var read = source.Read(buffer, 0, buffer.Length);
             if (read <= 0)
             {
@@ -231,7 +236,7 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// Pulls a remote file into a local file.
     /// <para>将设备上的远端文件拉取到本地文件。</para>
     /// </summary>
-    public void Pull(string remotePath, string localPath)
+    public void Pull(string remotePath, string localPath, CancellationToken cancellationToken = default)
     {
         if (remotePath is null)
         {
@@ -244,11 +249,11 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         }
 
         using var fs = File.Create(localPath);
-        PullStream(remotePath, fs);
+        PullStream(remotePath, fs, cancellationToken);
     }
 
     /// <summary>Pulls a remote file into a stream. 将远端文件拉取到流中。</summary>
-    public void PullStream(string remotePath, Stream destination)
+    public void PullStream(string remotePath, Stream destination, CancellationToken cancellationToken = default)
     {
         if (remotePath is null)
         {
@@ -260,12 +265,15 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
             throw new ArgumentNullException(nameof(destination));
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         var stream = EnsureStream();
         var request = BuildV1Packet(SyncIds.Recv, Encoding.UTF8.GetBytes(remotePath));
         stream.Write(request);
 
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var header = ReadExact(stream, V1HeaderSize);
             var id = Encoding.ASCII.GetString(header, 0, 4);
             var length = BitConverter.ToUInt32(header, 4);

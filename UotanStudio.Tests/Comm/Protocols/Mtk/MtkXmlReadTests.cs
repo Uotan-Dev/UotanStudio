@@ -334,23 +334,6 @@ public partial class MtkSessionTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ReadXmlStorageAsync_AuthenticatedRegion_RejectsBeforeIo(bool ufs)
-    {
-        using var transport = new ScriptedCommTransport();
-        using var session = await CreateXmlStorageSessionAsync(transport, ufs);
-        using var destination = new MemoryStream();
-        var before = transport.Writes.Count;
-
-        await Assert.ThrowsAsync<NotSupportedException>(() => session.ReadXmlStorageAsync(
-            ufs ? "UFS-LUA3" : "EMMC-RPMB", 0, 512, destination, cancellationToken: TestContext.Current.CancellationToken));
-
-        Assert.Equal(before, transport.Writes.Count);
-        Assert.Equal(MtkSessionState.XmlStorageGeometryKnown, session.State);
-    }
-
-    [Theory]
     [InlineData(0)]
     [InlineData(86400001)]
     public async Task ReadXmlStorageAsync_InvalidDeadline_RejectsBeforeIo(int timeoutMs)

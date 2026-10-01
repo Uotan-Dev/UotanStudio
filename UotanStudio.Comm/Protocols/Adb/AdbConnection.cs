@@ -416,18 +416,20 @@ internal sealed class AdbConnection : IDisposable
     /// <param name="message">The WRTE message. WRTE 消息。</param>
     private void HandleWrite(AdbMessage message)
     {
+        AdbStream? stream;
         lock (_lock)
         {
-            if (_streams.TryGetValue(message.Arg1, out var stream))
-            {
-                stream.EnqueueData(message.Payload ?? []);
-                Send(AdbMessaging.BuildOkay(message.Arg1, message.Arg0));
-            }
-            else
-            {
-                Send(AdbMessaging.BuildClose(message.Arg1, message.Arg0));
-            }
+            _streams.TryGetValue(message.Arg1, out stream);
         }
+
+        if (stream is null)
+        {
+            Send(AdbMessaging.BuildClose(message.Arg1, message.Arg0));
+            return;
+        }
+
+        stream.EnqueueData(message.Payload ?? []);
+        Send(AdbMessaging.BuildOkay(message.Arg1, message.Arg0));
     }
 
     /// <summary>
