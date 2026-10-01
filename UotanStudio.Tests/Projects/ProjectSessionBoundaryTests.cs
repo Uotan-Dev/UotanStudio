@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Services.Projects;
 using Xunit;
 
@@ -232,7 +233,7 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         var nested = Path.Combine(context.EnsureImagesDirectory(), "nested", "system.img");
         Directory.CreateDirectory(Path.GetDirectoryName(nested)!);
         File.WriteAllBytes(nested, [7, 8, 9]);
-        var metadata = Path.Combine(context.GetMetadataRoot()!, "system", ".uotanstudio-repack.json");
+        var metadata = Path.Combine(context.GetMetadataRoot()!, "system", RepackMetadata.FileName);
         Directory.CreateDirectory(Path.GetDirectoryName(metadata)!);
         File.WriteAllText(metadata, "metadata-marker");
         var first = Path.Combine(oldRoot, "original", "original.uotanfw");
@@ -250,7 +251,7 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         Assert.Equal(firstBytes, File.ReadAllBytes(first));
         Assert.Equal(firstBytes, File.ReadAllBytes(Path.Combine(destination, "original", "original.uotanfw")));
         Assert.Equal(new byte[] { 7, 8, 9 }, File.ReadAllBytes(Path.Combine(destination, "second", "images", "nested", "system.img")));
-        Assert.Equal("metadata-marker", File.ReadAllText(Path.Combine(destination, "second", ".uotan", "metadata", "system", ".uotanstudio-repack.json")));
+        Assert.Equal("metadata-marker", File.ReadAllText(Path.Combine(destination, "second", ".uotan", "metadata", "system", RepackMetadata.FileName)));
         var snapshot = await SolutionPersistenceService.LoadSolutionAsync(target, TestContext.Current.CancellationToken);
         Assert.Equal(2, snapshot!.SubProjects!.Count);
     }

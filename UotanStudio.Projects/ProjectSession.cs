@@ -296,6 +296,8 @@ public sealed partial class ProjectSession
         History.Clear();
         _workspace.ChangeProjectRoot(Context.RootDirectory!, preserveDocuments: false);
         Changed?.Invoke();
+        ProjectDiagnostics.Write(ProjectLogLevel.Info, "Menu",
+            $"Created solution: {solutionName} | solution={Path.GetFullPath(path)} | root={rootDir} | sub-project={subProjectDir} | firmware={firmwarePath} | state={stateDir} | images={subImagesDir} | output={subOutputDir} | delivery={Path.Combine(subProjectDir, "delivery")}");
     }
 
     /// <summary>
@@ -425,7 +427,8 @@ public sealed partial class ProjectSession
 
         SolutionReloaded?.Invoke();
         Changed?.Invoke();
-        ProjectDiagnostics.Write(ProjectLogLevel.Info, "Menu", $"Opened solution: {path}");
+        ProjectDiagnostics.Write(ProjectLogLevel.Info, "Menu",
+            $"Opened solution: {path} | root={Context.RootDirectory} | sub-projects={Context.SubProjects.Count} | node-projects={Context.NodeProjects.Count} | canvases={openedNodeProjects.Count} | images={firmware?.Images.Count ?? 0}");
         return true;
     }
 
@@ -550,7 +553,8 @@ public sealed partial class ProjectSession
         };
         await transaction.StageAsync(fwPath, firmware, SolutionJsonContext.Default.FirmwareProjectSnapshot, cancellationToken);
 
-        ProjectDiagnostics.Write(ProjectLogLevel.Info, "Menu", $"Added sub-project: {subName}");
+        ProjectDiagnostics.Write(ProjectLogLevel.Info, "Menu",
+            $"Added sub-project: {subName} | firmware={fwPath} | directory={subProjectDir} | state={Path.Combine(subProjectDir, ".uotan")} | images={imagesDir} | output={outputDir} | delivery={Path.Combine(subProjectDir, "delivery")}");
 
         await RegisterSubProjectAsync(fwPath, subName, transaction, cancellationToken);
     }
@@ -605,12 +609,15 @@ public sealed partial class ProjectSession
             return;
         }
 
-        Directory.CreateDirectory(Path.Combine(dirPath, "images"));
-        Directory.CreateDirectory(Path.Combine(dirPath, "output"));
+        var imagesDir = Path.Combine(dirPath, "images");
+        var outputDir = Path.Combine(dirPath, "output");
+        Directory.CreateDirectory(imagesDir);
+        Directory.CreateDirectory(outputDir);
         Directory.CreateDirectory(Path.Combine(dirPath, "delivery"));
 
         var fwPath = Path.Combine(dirPath, subName + ".uotanfw");
-        if (!File.Exists(fwPath))
+        var createFirmware = !File.Exists(fwPath);
+        if (createFirmware)
         {
             var firmware = new FirmwareProjectSnapshot
             {
@@ -622,7 +629,8 @@ public sealed partial class ProjectSession
             await transaction.StageAsync(fwPath, firmware, SolutionJsonContext.Default.FirmwareProjectSnapshot, cancellationToken);
         }
 
-        ProjectDiagnostics.Write(ProjectLogLevel.Info, "Menu", $"Imported sub-project: {subName} from {dirPath}");
+        ProjectDiagnostics.Write(ProjectLogLevel.Info, "Menu",
+            $"Imported sub-project: {subName} from {dirPath} | firmware={fwPath} ({(createFirmware ? "created" : "existing")}) | images={imagesDir} | output={outputDir} | delivery={Path.Combine(dirPath, "delivery")}");
 
         await RegisterSubProjectAsync(fwPath, subName, transaction, cancellationToken);
     }

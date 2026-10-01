@@ -46,7 +46,7 @@ internal sealed class ProjectFileTransaction : IDisposable
         }
         catch (Exception publicationError)
         {
-            var failures = new List<Exception> { publicationError };
+            List<Exception> failures = [publicationError];
             foreach (var file in published.AsEnumerable().Reverse())
             {
                 try

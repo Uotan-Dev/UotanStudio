@@ -68,6 +68,8 @@ public sealed partial class ProjectSession
             _workspace.ActivateWorkflow(name);
             created = true;
             Changed?.Invoke();
+            ProjectDiagnostics.Write(ProjectLogLevel.Info, "Menu",
+                $"Created node project: {name} | file={filePath} | relative={relativePath} | directory={Context.NodeProjectsDirectory}");
         }, changingProject: true, cancellationToken: cancellationToken);
         return created;
     }

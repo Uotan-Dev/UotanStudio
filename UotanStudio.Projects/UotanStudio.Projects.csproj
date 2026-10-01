@@ -6,5 +6,6 @@
   <ItemGroup>
     <InternalsVisibleTo Include="UotanStudio" />
     <InternalsVisibleTo Include="UotanStudio.Tests" />
+    <InternalsVisibleTo Include="UotanStudio.Benchmarks" />
   </ItemGroup>
 </Project>
