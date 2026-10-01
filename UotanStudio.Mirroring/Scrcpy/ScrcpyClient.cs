@@ -192,6 +192,8 @@ public sealed class ScrcpyClient : IDisposable
 
     private readonly Func<string, Stream> _open;
     private readonly ScrcpyServerOptions _options;
+    private readonly byte[] _videoFrameHeader = new byte[12];
+    private readonly byte[] _audioFrameHeader = new byte[12];
 
     private Stream? _videoStream;
     private Stream? _audioStream;
@@ -389,12 +391,12 @@ public sealed class ScrcpyClient : IDisposable
             throw new InvalidOperationException("Client is not connected. 客户端尚未连接。");
         }
 
-        var header = TryReadExact(stream, 12, timeoutMs);
-        if (header is null || header.Length != 12)
+        if (!TryReadExactInto(stream, _videoFrameHeader, timeoutMs))
         {
             return null;
         }
 
+        var header = _videoFrameHeader;
         var pts = BinaryPrimitives.ReadInt64BigEndian(header);
         var length = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(8));
         if (length is < 0 or > MaxFrameLength)
@@ -403,7 +405,13 @@ public sealed class ScrcpyClient : IDisposable
                 $"Frame length {length} exceeds the {MaxFrameLength}-byte bound. 帧长度 {length} 超出 {MaxFrameLength} 字节上限。");
         }
 
-        var payload = ReadExact(stream, length, timeoutMs);
+        var payload = GC.AllocateUninitializedArray<byte>(length);
+        if (!TryReadExactInto(stream, payload, timeoutMs))
+        {
+            throw new InvalidDataException(
+                $"Stream ended after 0/{length} expected bytes. 流在读取 0/{length} 字节后提前结束。");
+        }
+
         return new ScrcpyVideoFrame(pts, payload);
     }
 
@@ -429,12 +437,12 @@ public sealed class ScrcpyClient : IDisposable
                 "Audio is not enabled or the client is not connected. 音频未启用或客户端尚未连接。");
         }
 
-        var header = TryReadExact(stream, 12, timeoutMs);
-        if (header is null || header.Length != 12)
+        if (!TryReadExactInto(stream, _audioFrameHeader, timeoutMs))
         {
             return null;
         }
 
+        var header = _audioFrameHeader;
         var pts = BinaryPrimitives.ReadInt64BigEndian(header);
         var length = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(8));
         if (length is < 0 or > MaxAudioFrameLength)
@@ -443,7 +451,13 @@ public sealed class ScrcpyClient : IDisposable
                 $"Audio frame length {length} exceeds the {MaxAudioFrameLength}-byte bound. 音频帧长度 {length} 超出 {MaxAudioFrameLength} 字节上限。");
         }
 
-        var payload = ReadExact(stream, length, timeoutMs);
+        var payload = GC.AllocateUninitializedArray<byte>(length);
+        if (!TryReadExactInto(stream, payload, timeoutMs))
+        {
+            throw new InvalidDataException(
+                $"Stream ended after 0/{length} expected bytes. 流在读取 0/{length} 字节后提前结束。");
+        }
+
         return new ScrcpyAudioFrame(pts, payload);
     }
 
@@ -523,43 +537,51 @@ public sealed class ScrcpyClient : IDisposable
         Interlocked.Exchange(ref _controlStream, null)?.Dispose();
     }
 
-    private static byte[] ReadExact(Stream stream, int length, int timeoutMs)
+    private byte[] ReadExact(Stream stream, int length, int timeoutMs)
     {
-        if (!TryReadExact(stream, length, timeoutMs, out var result) || result!.Length != length)
+        var buffer = GC.AllocateUninitializedArray<byte>(length);
+        if (!TryReadExactInto(stream, buffer, timeoutMs))
         {
             throw new InvalidDataException(
-                $"Stream ended after {result?.Length ?? 0}/{length} expected bytes. 流在读取 {result?.Length ?? 0}/{length} 字节后提前结束。");
+                $"Stream ended after 0/{length} expected bytes. 流在读取 0/{length} 字节后提前结束。");
         }
 
-        return result!;
+        return buffer;
     }
 
-    private static byte[]? TryReadExact(Stream stream, int length, int timeoutMs)
-        => TryReadExact(stream, length, timeoutMs, out var result) ? result : null;
-
-    private static bool TryReadExact(Stream stream, int length, int timeoutMs, out byte[]? result)
+    private byte[]? TryReadExact(Stream stream, int length, int timeoutMs)
     {
-        if (length == 0)
+        var buffer = GC.AllocateUninitializedArray<byte>(length);
+        return TryReadExactInto(stream, buffer, timeoutMs) ? buffer : null;
+    }
+
+    /// <summary>
+    /// Fills the supplied buffer exactly once per call, so per-frame reads reuse the caller's header
+    /// scratch instead of allocating. Frame payloads escape to consumers via the returned frame records
+    /// and therefore cannot be pooled.
+    /// <para>每次调用精确填满给定缓冲区，使逐帧读取复用调用方的头部暂存而不是分配。帧负载经返回的
+    /// 帧记录交由消费者持有，因此不能池化。</para>
+    /// </summary>
+    private bool TryReadExactInto(Stream stream, byte[] buffer, int timeoutMs)
+    {
+        if (buffer.Length == 0)
         {
-            result = [];
             return true;
         }
 
-        var buffer = new byte[length];
         var offset = 0;
-        while (offset < length)
+        if (stream.CanTimeout) stream.ReadTimeout = timeoutMs == 0 ? 1 : timeoutMs;
+        while (offset < buffer.Length)
         {
-            if (stream.CanTimeout) stream.ReadTimeout = timeoutMs == 0 ? 1 : timeoutMs;
             int count;
-            try { count = stream.Read(buffer, offset, length - offset); }
-            catch (TimeoutException) when (offset == 0) { result = null; return false; }
+            try { count = stream.Read(buffer, offset, buffer.Length - offset); }
+            catch (TimeoutException) when (offset == 0) { return false; }
             catch (IOException ex) when (offset == 0 && ex.InnerException is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.TimedOut })
-            { result = null; return false; }
+            { return false; }
             if (count == 0) throw new EndOfStreamException("scrcpy service closed during a packet read.");
             offset += count;
         }
 
-        result = buffer;
         return true;
     }
 }
