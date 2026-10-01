@@ -75,15 +75,11 @@ internal sealed class SelinuxFileLabelInference
                 if (label != "<<none>>" && !IsObjectContext(label))
                     throw new FileSystemCorruptedException($"Invalid SELinux file object context in {path}: {label}");
                 var pattern = parts[0];
-                var digest = pattern.Replace("\\d", "", StringComparison.Ordinal);
-                if (digest.Contains("(?", StringComparison.Ordinal) || digest.Contains("[[:", StringComparison.Ordinal)
-                    || digest.Contains("&&", StringComparison.Ordinal) || digest.Contains("-[", StringComparison.Ordinal)
-                    || Regex.IsMatch(digest, @"\\[a-zA-Z0-9]", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
-                    throw new FileSystemUnsupportedFeatureException($"Unsupported SELinux regex in {path}: {pattern}");
-                var literal = !Regex.IsMatch(pattern, @"(?<!\\)[.\^$?*+|\[({]", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+                var translated = SelinuxPolicyRegexTranslator.Translate(pattern, path);
+                var literal = !Regex.IsMatch(translated, @"(?<!\\)[.\^$?*+|\[({]", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
                 try
                 {
-                    var bytes = Encoding.Latin1.GetString(Encoding.UTF8.GetBytes(pattern));
+                    var bytes = Encoding.Latin1.GetString(Encoding.UTF8.GetBytes(translated));
                     rules.Add(new(new Regex("\\A(?:" + bytes + ")\\z", RegexOptions.NonBacktracking | RegexOptions.Singleline
                         | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)), literal, kind, label));
                 }

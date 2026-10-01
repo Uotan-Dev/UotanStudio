@@ -96,12 +96,75 @@ public sealed class SelinuxFileLabelInferenceTests : IDisposable
 
     [Theory]
     [InlineData(@"/system/(?=bin).* u:object_r:system_file:s0")]
-    [InlineData(@"/system/\w+ u:object_r:system_file:s0")]
+    [InlineData(@"/system/(?<x>bin) u:object_r:system_file:s0")]
+    [InlineData(@"/system/\1 u:object_r:system_file:s0")]
+    [InlineData(@"/system/\p{L} u:object_r:system_file:s0")]
+    [InlineData(@"/system/[\D] u:object_r:system_file:s0")]
+    [InlineData("/system/[[:bogus:]] u:object_r:system_file:s0")]
+    [InlineData("/system/[a[:^digit:]] u:object_r:system_file:s0")]
+    [InlineData("/system/[[:^digit:]x] u:object_r:system_file:s0")]
     [InlineData("/system/[ u:object_r:system_file:s0")]
     public void UnsupportedRegexPoliciesCannotSilentlyFallBack(string rule)
     {
         Policy(rule);
         Assert.Throws<FileSystemUnsupportedFeatureException>(() => Infer("bin/new"));
+    }
+
+    [Theory]
+    [InlineData("bin/42", "digit_file")]
+    [InlineData("bin/4é", "system_file")]
+    public void PosixClassesMatchAsciiBytes(string path, string expected)
+    {
+        Policy("/system/bin/[[:digit:]]+ u:object_r:digit_file:s0");
+        Assert.Equal(Context(expected), Infer(path));
+    }
+
+    [Fact]
+    public void NegatedPosixClassMatchesOutsideRanges()
+    {
+        Policy("/system/bin/[[:^digit:]]+ u:object_r:nondigit_file:s0");
+        Assert.Equal(Context("nondigit_file"), Infer("bin/abc"));
+        Assert.Equal(Context("system_file"), Infer("bin/123"));
+    }
+
+    [Theory]
+    [InlineData("bin/abc_1", "word_file")]
+    [InlineData("bin/a-b", "system_file")]
+    public void PerlShorthandsUseAsciiRanges(string path, string expected)
+    {
+        Policy(@"/system/bin/\w+ u:object_r:word_file:s0");
+        Assert.Equal(Context(expected), Infer(path));
+    }
+
+    [Fact]
+    public void ShorthandsInsideClassesBecomeRanges()
+    {
+        Policy(@"/system/bin/[\d]{2} u:object_r:pair_file:s0");
+        Assert.Equal(Context("pair_file"), Infer("bin/55"));
+        Assert.Equal(Context("system_file"), Infer("bin/5a"));
+    }
+
+    [Fact]
+    public void NonCapturingGroupsMatchAlternations()
+    {
+        Policy("/system/bin/(?:foo|bar) u:object_r:group_file:s0");
+        Assert.Equal(Context("group_file"), Infer("bin/foo"));
+        Assert.Equal(Context("system_file"), Infer("bin/baz"));
+    }
+
+    [Fact]
+    public void PunctClassMatchesSymbolPaths()
+    {
+        Policy(@"/system/bin/[^\/]*[[:punct:]][^\/]* u:object_r:punct_file:s0");
+        Assert.Equal(Context("punct_file"), Infer("bin/a.b"));
+        Assert.Equal(Context("system_file"), Infer("bin/ab"));
+    }
+
+    [Fact]
+    public void EscapedSlashNegatedClassMatchesDataSegments()
+    {
+        Policy(@"/data/[^\/]+ u:object_r:data_dir:s0");
+        Assert.Equal(Context("data_dir"), Infer("dir", partition: "userdata"));
     }
 
     [Fact]
