@@ -22,6 +22,8 @@
     <PackageReference Include="K4os.Compression.LZ4.Legacy" />
     <PackageReference Include="K4os.Compression.LZ4.Streams" />
     <PackageReference Include="LZMA-SDK" />
+    <PackageReference Include="LTRData.DiscUtils.ExFat" />
+    <PackageReference Include="LTRData.DiscUtils.Fat" />
     <PackageReference Include="SharpCompress" />
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />

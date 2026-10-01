@@ -6,8 +6,10 @@ using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.FileSystem.F2fs;
+using UotanStudio.Firmware.FileSystem.Fat;
 using UotanStudio.Services.FileManagement;
 using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.Firmware.Fat;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
@@ -56,7 +58,7 @@ public sealed class ImageBrowserSessionTests
                 && entry.Size == payload.Length && entry.Kind == ImageBrowserEntryKind.File);
             session.Extract(["nested"], destination);
             Assert.Equal(payload, File.ReadAllBytes(Path.Combine(destination, "nested", "blob.bin")));
-            Assert.False(File.Exists(Path.Combine(destination, "other.txt")));
+            Assert.False(File.Exists(Path.Combine(destination, "OTHER.TXT")));
         }
         finally { session.Dispose(); }
 
@@ -159,6 +161,87 @@ public sealed class ImageBrowserSessionTests
         Assert.Equal(1, source.Count);
         session.Dispose();
         Assert.Equal(1, source.Count);
+    }
+
+    [Theory]
+    [InlineData("FAT12")]
+    [InlineData("FAT32")]
+    [InlineData("exFAT")]
+    public void FatFamilySession_ListsUnicodeNamesAndExtractsSelectedSubtree(string format)
+    {
+        using var temp = new TempDirectory();
+        byte[] payload = [0, 1, 2, 0xFF, 0x80, 0x7F];
+        string member;
+        string subtree;
+        string path;
+        if (format == "exFAT")
+        {
+            path = WriteKernelExFatVolume(temp);
+            member = "logs/deep/nested/启动日志 2026-01-02 记录.txt";
+            subtree = "logs";
+            Assert.Equal(8_388_608, new FileInfo(path).Length);
+        }
+        else
+        {
+            path = new FatImageBuilder(format == "FAT12" ? 12 : 32)
+                .AddFile("logs/启动日志 2026-01-02 记录.txt", payload)
+                .AddFile("other.txt", "not selected"u8.ToArray())
+                .WriteTo(temp.Path + Path.DirectorySeparatorChar + "volume.img");
+            member = "LOGS/启动日志 2026-01-02 记录.txt";
+            subtree = "LOGS";
+        }
+
+        var destination = Path.Combine(temp.Path, "out");
+        var session = ImageBrowserSession.Open(path, Token);
+        try
+        {
+            Assert.Equal(format, session.FormatName);
+            Assert.Contains(session.Entries, entry => entry.Path == member
+                && entry.Kind == ImageBrowserEntryKind.File);
+
+            session.Extract([subtree], destination);
+            var extracted = Path.Combine(destination, member.Replace('/', Path.DirectorySeparatorChar));
+            if (format == "exFAT")
+            {
+                Assert.Equal(Pattern(1_000), File.ReadAllBytes(extracted));
+            }
+            else
+            {
+                Assert.Equal(payload, File.ReadAllBytes(extracted));
+            }
+
+            Assert.False(File.Exists(Path.Combine(destination, "OTHER.TXT")));
+        }
+        finally { session.Dispose(); }
+
+        using var exclusive = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        Assert.True(exclusive.CanWrite);
+        Assert.Throws<ObjectDisposedException>(() => session.Extract(["other.txt"], destination));
+    }
+
+    private static string WriteKernelExFatVolume(TempDirectory temp)
+    {
+        var asset = Path.Combine(AppContext.BaseDirectory, "TestData", "Fat", "exfat-kernel-written.deflate");
+        var image = Path.Combine(temp.Path, "exfat.img");
+        using (var compressed = File.OpenRead(asset))
+        using (var deflate = new DeflateStream(compressed, CompressionMode.Decompress))
+        using (var output = File.Create(image))
+        {
+            deflate.CopyTo(output);
+        }
+
+        return image;
+    }
+
+    private static byte[] Pattern(int length)
+    {
+        var payload = new byte[length];
+        for (var index = 0; index < length; index++)
+        {
+            payload[index] = (byte)((index * 7 + index % 251) % 256);
+        }
+
+        return payload;
     }
 
     private sealed class DisposalCounter(bool throwOnDispose = false) : IDisposable

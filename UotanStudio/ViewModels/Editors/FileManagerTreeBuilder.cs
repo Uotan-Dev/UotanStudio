@@ -20,8 +20,6 @@ internal static class FileManagerTreeBuilder
         var root = new List<FileManagerEntryViewModel>();
         var byPath = new Dictionary<string, FileManagerEntryViewModel>(StringComparer.Ordinal);
 
-        // 第一遍：为所有真实条目创建节点，确保真实目录优先于合成目录。
-        // First pass: create nodes for all real entries so real directories win over synthesized ones.
         foreach (var entry in entries)
         {
             byPath[entry.Path] = new FileManagerEntryViewModel(GetName(entry.Path), entry.Path, entry.Size, entry.Kind switch
@@ -32,8 +30,6 @@ internal static class FileManagerTreeBuilder
             });
         }
 
-        // 第二遍：挂载到父节点，缺失的中间目录按需合成。
-        // Second pass: attach to parents, synthesizing missing intermediate directories on demand.
         foreach (var entry in entries)
         {
             var node = byPath[entry.Path];
@@ -75,8 +71,6 @@ internal static class FileManagerTreeBuilder
 
         var parentPath = path[..slash];
 
-        // 自直接父级向上收集缺失的祖先路径。
-        // Collect missing ancestor paths upward from the immediate parent.
         var missing = new Stack<string>();
         var cursor = parentPath;
         while (cursor.Length > 0 && !byPath.ContainsKey(cursor))

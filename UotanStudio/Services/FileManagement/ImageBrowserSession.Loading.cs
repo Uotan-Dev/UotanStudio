@@ -8,6 +8,7 @@ using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
+using UotanStudio.Firmware.FileSystem.Fat;
 
 namespace UotanStudio.Services.FileManagement;
 
@@ -46,8 +47,17 @@ internal sealed partial class ImageBrowserSession
         /// </summary>
         F2fs,
 
-        Fat12,
-        Fat32,
+        /// <summary>
+        /// <para>FAT12/FAT16/FAT32 卷。</para>
+        /// A FAT12, FAT16 or FAT32 volume.
+        /// </summary>
+        Fat,
+
+        /// <summary>
+        /// <para>exFAT 卷。</para>
+        /// An exFAT volume.
+        /// </summary>
+        ExFat,
 
         /// <summary>
         /// <para>CPIO/TAR 归档。</para>
@@ -76,7 +86,8 @@ internal sealed partial class ImageBrowserSession
         {
             // 先按物理偏移探测（raw 镜像直接命中）。
             // Probe the physical header first (raw images match directly).
-            var kind = DetectKindFromHeader(FormatDetector.ReadHeader(path, FilesystemHeaderLength));
+            var kind = DetectKindFromHeader(FormatDetector.ReadHeader(path, FilesystemHeaderLength),
+                new FileInfo(path).Length);
             if (kind != FilesystemKind.Unknown)
             {
                 return kind;
@@ -87,7 +98,7 @@ internal sealed partial class ImageBrowserSession
             if (IsSparseImage(path))
             {
                 var logical = SparseReader.PeekLogicalRange(path, 0, FilesystemHeaderLength);
-                kind = DetectKindFromHeader(logical);
+                kind = DetectKindFromHeader(logical, imageLength: null);
                 if (kind != FilesystemKind.Unknown)
                 {
                     return kind;
@@ -109,7 +120,7 @@ internal sealed partial class ImageBrowserSession
     /// Detects the filesystem kind from header bytes by magic (ext4 0xEF53@1080, erofs 0xE0F5E1E2@1024,
     /// f2fs 0xF2F52010@1024). Returns <see cref="FilesystemKind.Unknown"/> when too short or unmatched.
     /// </summary>
-    private static FilesystemKind DetectKindFromHeader(byte[] header)
+    private static FilesystemKind DetectKindFromHeader(byte[] header, long? imageLength)
     {
         if (header.Length >= 1082
             && System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(1080, 2)) == 0xEF53)
@@ -129,15 +140,22 @@ internal sealed partial class ImageBrowserSession
             return FilesystemKind.F2fs;
         }
 
-        if (header.Length >= 512 && header[510] == 0x55 && header[511] == 0xAA
-            && Encoding.ASCII.GetString(header, 54, 8).Trim() is "FAT12" or "FAT16")
+        // FAT12/FAT16/FAT32/exFAT 卷：几何校验复用 Firmware 解析器，避免在宿主另写一套 BIOS 参数块规则。
+        // sparse 逻辑头部只覆盖镜像前缀，无法给出真实长度，因此传入 null 跳过数据区上限，由解析器在装载时校验。
+        // FAT family and exFAT volumes: geometry validation is reused from the Firmware parsers so the host
+        // does not keep a second set of BIOS parameter block rules. A sparse logical header only covers a
+        // prefix, so its unknown length is passed as null and the parser validates when the volume loads.
+        if (header.Length >= 512)
         {
-            return FilesystemKind.Fat12;
-        }
-        if (header.Length >= 90 && header[510] == 0x55 && header[511] == 0xAA
-            && Encoding.ASCII.GetString(header, 82, 8).Trim() == "FAT32")
-        {
-            return FilesystemKind.Fat32;
+            if (FatParser.IsFatBootRecord(header, imageLength))
+            {
+                return FilesystemKind.Fat;
+            }
+
+            if (ExFatParser.IsExFatBootRecord(header, imageLength))
+            {
+                return FilesystemKind.ExFat;
+            }
         }
 
         // CPIO newc 魔数 "070701" 或 "070702"，CPIO bin 魔数 0x71C7（大端）。
@@ -197,10 +215,10 @@ internal sealed partial class ImageBrowserSession
                 }
 
                 return LoadF2fs(path, ct);
-            case FilesystemKind.Fat12:
-                return LoadFat12(path, ct);
-            case FilesystemKind.Fat32:
-                return LoadFat12(path, ct);
+            case FilesystemKind.Fat:
+                return LoadFat(path, ct);
+            case FilesystemKind.ExFat:
+                return LoadExFat(path, ct);
             case FilesystemKind.Cpio:
                 return LoadCpio(path, ct);
             default:
@@ -324,11 +342,49 @@ internal sealed partial class ImageBrowserSession
         catch { browser.Dispose(); throw; }
     }
 
-    private static ImageBrowserSession LoadFat12(string path, CancellationToken ct)
+    private static ImageBrowserSession LoadFat(string path, CancellationToken ct)
     {
-        ct.ThrowIfCancellationRequested();
-        var parser = Fat12ImageParser.Open(path);
-        return new ImageBrowserSession(parser.FormatName, new FileInfo(path).Length, parser, parser.Entries, null);
+        var parser = new FatParser(path);
+        try
+        {
+            return BuildFatSession(parser.Variant, parser.ImageBytes, parser, parser.ListFiles(), ct);
+        }
+        catch
+        {
+            parser.Dispose();
+            throw;
+        }
+    }
+
+    private static ImageBrowserSession LoadExFat(string path, CancellationToken ct)
+    {
+        var parser = new ExFatParser(path);
+        try
+        {
+            return BuildFatSession(parser.Variant, parser.ImageBytes, parser, parser.ListFiles(), ct);
+        }
+        catch
+        {
+            parser.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>Indexes a FAT-family volume tree into browser entries.</summary>
+    private static ImageBrowserSession BuildFatSession(string formatName, long imageSize, IDisposable parser,
+        IReadOnlyList<FatVolumeEntry> entries, CancellationToken ct)
+    {
+        var flat = new List<ImageBrowserEntry>(entries.Count);
+        foreach (var entry in entries)
+        {
+            ct.ThrowIfCancellationRequested();
+            flat.Add(new ImageBrowserEntry(entry.Path, entry.Size,
+                entry.Kind == FatVolumeEntryKind.Directory
+                    ? ImageBrowserEntryKind.Directory
+                    : ImageBrowserEntryKind.File));
+        }
+
+        return new ImageBrowserSession(formatName, imageSize, parser, flat, null);
     }
 
 

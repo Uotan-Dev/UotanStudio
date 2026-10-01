@@ -36,6 +36,7 @@
 
   <ItemGroup>
     <Content Include="TestData\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="TestData\**\*.deflate" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

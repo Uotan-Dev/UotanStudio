@@ -5,13 +5,15 @@ using Xunit;
 namespace UotanStudio.Tests.Services;
 
 /// <summary>
-/// <para>验证 <see cref="ImageInputService"/> 迁出的格式探测与源路径解析行为：
-/// 扩展名优先、魔数判定、头部读取失败回退、未知输入返回 unknown、小文件头部截断语义，
+/// <para>验证 <see cref="ImageInputService"/> 迁出的格式探测、内容优先的文件系统探测与源路径解析行为：
+/// 扩展名优先、魔数判定、头部读取失败回退、未知输入返回 unknown、小文件头部截断语义、
+/// <c>ContainsFileSystem</c> 对 EXT/EROFS/F2FS/FAT/exFAT 及 sparse/payload/super 容器的判定，
 /// 以及源路径解析的存在性校验。不初始化 UI、不触碰 ProjectContextService。</para>
-/// Validates the format-probing and source-path-resolution behavior migrated to
-/// <see cref="ImageInputService"/>: extension-first rules, magic matching, header-read fallback,
-/// unknown inputs, small-file header truncation semantics, and existence validation for source
-/// path resolution. No UI initialization and no ProjectContextService usage.
+/// Validates the format-probing, content-first filesystem probing and source-path-resolution behavior
+/// migrated to <see cref="ImageInputService"/>: extension-first rules, magic matching, header-read
+/// fallback, unknown inputs, small-file header truncation semantics, <c>ContainsFileSystem</c> decisions
+/// for EXT/EROFS/F2FS/FAT/exFAT and for sparse/payload/super containers, and existence validation for
+/// source path resolution. No UI initialization and no ProjectContextService usage.
 /// </summary>
 public sealed class ImageInputServiceTests
 {
@@ -72,15 +74,114 @@ public sealed class ImageInputServiceTests
     }
 
     [Theory]
-    [InlineData("ANDROID!")]
-    [InlineData("VNDRBOOT")]
-    public void DetectFormat_BootMagic_ReturnsBoot(string magic)
+    [InlineData("boot.img", "ANDROID!", "boot")]
+    [InlineData("init_boot.img", "ANDROID!", "init_boot")]
+    [InlineData("init_boot_a.img", "ANDROID!", "init_boot")]
+    [InlineData("recovery.img", "ANDROID!", "recovery")]
+    [InlineData("boot.img", "VNDRBOOT", "vendor_boot")]
+    [InlineData("vendor_boot_a.img", "VNDRBOOT", "vendor_boot")]
+    public void DetectFormat_BootMagic_ReturnsFamilyLabel(string name, string magic, string expected)
     {
         using var temp = new TempDirectory();
-        var file = temp.WriteBytes("boot.img", System.Text.Encoding.ASCII.GetBytes(magic));
+        var file = temp.WriteBytes(name, System.Text.Encoding.ASCII.GetBytes(magic));
 
-        Assert.Equal("boot", ImageInputService.DetectFormat(file));
+        Assert.Equal(expected, ImageInputService.DetectFormat(file));
     }
+
+    [Fact]
+    public void DetectFormat_MtkBootMagic_ReturnsMtkBoot()
+    {
+        using var temp = new TempDirectory();
+        var bytes = new byte[16];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(bytes, 0x58881688);
+        var file = temp.WriteBytes("boot.img", bytes);
+
+        Assert.Equal("mtk_boot", ImageInputService.DetectFormat(file));
+    }
+
+    [Fact]
+    public void DetectFormat_DhtbMagic_ReturnsDhtbBoot()
+    {
+        using var temp = new TempDirectory();
+        var bytes = new byte[16];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(bytes, 0x42484444);
+        var file = temp.WriteBytes("boot.img", bytes);
+
+        Assert.Equal("dhtb_boot", ImageInputService.DetectFormat(file));
+    }
+
+    [Fact]
+    public void DetectFormat_SamsungPxaMagic_ReturnsSamsungBoot()
+    {
+        using var temp = new TempDirectory();
+        var bytes = new byte[64];
+        "ANDROID!"u8.CopyTo(bytes);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(40), 8);
+        var file = temp.WriteBytes("boot.img", bytes);
+
+        Assert.Equal("samsung_boot", ImageInputService.DetectFormat(file));
+    }
+
+    [Fact]
+    public void DetectFormat_RockchipResourceMagic_ReturnsRkResource()
+    {
+        using var temp = new TempDirectory();
+        var bytes = new byte[16];
+        "RSCE"u8.CopyTo(bytes);
+        var file = temp.WriteBytes("resource.img", bytes);
+
+        Assert.Equal("rk_resource", ImageInputService.DetectFormat(file));
+    }
+
+    [Fact]
+    public void DetectFormat_TegraMagic_ReturnsTegraBlob()
+    {
+        using var temp = new TempDirectory();
+        var file = temp.WriteBytes("blob.img", "NVDAboot"u8.ToArray());
+
+        Assert.Equal("tegra_blob", ImageInputService.DetectFormat(file));
+    }
+
+    [Fact]
+    public void DetectFormat_ChromeOsMagic_ReturnsChromeOsBoot()
+    {
+        using var temp = new TempDirectory();
+        var bytes = new byte[64];
+        "CHROMEOS"u8.CopyTo(bytes);
+        var file = temp.WriteBytes("vbkernel.img", bytes);
+
+        Assert.Equal("chromeos_boot", ImageInputService.DetectFormat(file));
+    }
+
+    [Fact]
+    public void DetectFormat_ZImageMagic_ReturnsZImage()
+    {
+        using var temp = new TempDirectory();
+        var bytes = new byte[0x40];
+        new byte[] { 0x18, 0x28, 0x6F, 0x01 }.CopyTo(bytes, 0x24);
+        var file = temp.WriteBytes("kernel.img", bytes);
+
+        Assert.Equal("zimage", ImageInputService.DetectFormat(file));
+    }
+
+    [Theory]
+    [InlineData("boot", true)]
+    [InlineData("init_boot", true)]
+    [InlineData("recovery", true)]
+    [InlineData("vendor_boot", true)]
+    [InlineData("mtk_boot", true)]
+    [InlineData("samsung_boot", true)]
+    [InlineData("dhtb_boot", true)]
+    [InlineData("chromeos_boot", true)]
+    [InlineData("tegra_blob", true)]
+    [InlineData("zimage", true)]
+    [InlineData("rk_resource", true)]
+    [InlineData("ext4", false)]
+    [InlineData("raw", false)]
+    [InlineData("super", false)]
+    [InlineData("unknown", false)]
+    public void IsBootFamilyFormat_KnownLabels_MatchesMembership(string format, bool expected)
+        => Assert.Equal(expected, ImageInputService.IsBootFamilyFormat(format));
 
     [Fact]
     public void DetectFormat_ValidExt4Superblock_ReturnsExt4()
@@ -275,6 +376,167 @@ public sealed class ImageInputServiceTests
         var file = temp.WriteBytes("boot.img", [1]);
         Assert.Null(service.ResolveSourcePath(file, isDirectory: true, operation: "img"));
         Assert.Single(warnings);
+    }
+
+    [Fact]
+    public void ContainsFileSystem_ExtensionlessFat12BootRecord_ReturnsTrue()
+    {
+        using var temp = new TempDirectory();
+        var file = temp.WriteBytes("partition-backup", MakeFatFamilyBootSector("FAT12   ", 54));
+
+        Assert.True(ImageInputService.ContainsFileSystem(file));
+        Assert.Equal("fat", ImageInputService.DetectFormat(file));
+    }
+
+    [Fact]
+    public void ContainsFileSystem_Fat16BootRecordInBinFile_ReturnsTrue()
+    {
+        using var temp = new TempDirectory();
+        var file = temp.WriteBytes("bootloader.bin", MakeFatFamilyBootSector("FAT16   ", 54));
+
+        Assert.True(ImageInputService.ContainsFileSystem(file));
+    }
+
+    [Fact]
+    public void ContainsFileSystem_Fat32BootRecordInImgFile_ReturnsTrue()
+    {
+        using var temp = new TempDirectory();
+        var file = temp.WriteBytes("sdcard.img", MakeFatFamilyBootSector("FAT32   ", 82));
+
+        Assert.True(ImageInputService.ContainsFileSystem(file));
+    }
+
+    [Fact]
+    public void ContainsFileSystem_ExFatBootRecordInRenamedFile_ReturnsTrue()
+    {
+        using var temp = new TempDirectory();
+        var file = temp.WriteBytes("renamed.unknown", MakeExFatBootSector());
+
+        Assert.True(ImageInputService.ContainsFileSystem(file));
+        Assert.Equal("exfat", ImageInputService.DetectFormat(file));
+    }
+
+    [Fact]
+    public void ContainsFileSystem_Ext4ErofsAndF2fsImages_ReturnTrue()
+    {
+        using var temp = new TempDirectory();
+        var ext4 = temp.WriteBytes("system.img", MakeExt4Superblock());
+        var erofs = temp.WriteBytes("product.img", MakeHeaderWithUint32(1024, 0xE0F5E1E2, 2048));
+        var f2fs = temp.WriteBytes("userdata.img", MakeHeaderWithUint32(1024, 0xF2F52010, 2048));
+
+        Assert.True(ImageInputService.ContainsFileSystem(ext4));
+        Assert.True(ImageInputService.ContainsFileSystem(erofs));
+        Assert.True(ImageInputService.ContainsFileSystem(f2fs));
+    }
+
+    [Fact]
+    public void ContainsFileSystem_PayloadMagic_ReturnsTrue()
+    {
+        using var temp = new TempDirectory();
+        var file = temp.WriteBytes("payload.bin", "CrAU"u8.ToArray());
+
+        Assert.True(ImageInputService.ContainsFileSystem(file));
+    }
+
+    [Fact]
+    public void ContainsFileSystem_BootImage_ReturnsFalse()
+    {
+        using var temp = new TempDirectory();
+        var file = temp.WriteBytes("boot.img", System.Text.Encoding.ASCII.GetBytes("ANDROID!"));
+
+        Assert.False(ImageInputService.ContainsFileSystem(file));
+    }
+
+    [Fact]
+    public void ContainsFileSystem_BlockDataSuffixWithBareExt4Magic_ReturnsFalse()
+    {
+        using var temp = new TempDirectory();
+        var file = temp.WriteBytes("system.new.dat", MakeHeaderWithUint16(1080, 0xEF53, 2048));
+
+        Assert.Equal("dat", ImageInputService.DetectFormat(file));
+        Assert.False(ImageInputService.ContainsFileSystem(file));
+    }
+
+    [Fact]
+    public void ContainsFileSystem_ElfWithFilesystemMagicBytes_ReturnsFalse()
+    {
+        using var temp = new TempDirectory();
+        var header = new byte[4096];
+        "\u007fELF"u8.CopyTo(header);
+        header[1080] = 0x53;
+        header[1081] = 0xEF;
+        var file = temp.WriteBytes("toybox.img", header);
+
+        Assert.False(ImageInputService.ContainsFileSystem(file));
+    }
+
+    [Fact]
+    public void ContainsFileSystem_MissingOrBlankPath_ReturnsFalse()
+    {
+        using var temp = new TempDirectory();
+
+        Assert.False(ImageInputService.ContainsFileSystem(System.IO.Path.Combine(temp.Path, "gone.img")));
+        Assert.False(ImageInputService.ContainsFileSystem(string.Empty));
+    }
+
+    [Fact]
+    public void ContainsFileSystem_SparseWrappingExt4LogicalStream_ReturnsTrue()
+    {
+        using var temp = new TempDirectory();
+        var raw = temp.WriteBytes("system.raw", MakeExt4Superblock());
+        var sparse = System.IO.Path.Combine(temp.Path, "system.simg");
+        UotanStudio.Firmware.BlockImage.Sparse.SparseImageConverter.ConvertRawToSparse(raw, sparse, 4096);
+
+        Assert.Equal("sparse", ImageInputService.DetectFormat(sparse));
+        Assert.True(ImageInputService.ContainsFileSystem(sparse));
+    }
+
+    [Fact]
+    public void ContainsFileSystem_SparseWrappingBootImage_ReturnsFalse()
+    {
+        using var temp = new TempDirectory();
+        var payload = new byte[8192];
+        System.Text.Encoding.ASCII.GetBytes("ANDROID!").CopyTo(payload, 0);
+        var raw = temp.WriteBytes("boot.raw", payload);
+        var sparse = System.IO.Path.Combine(temp.Path, "boot.simg");
+        UotanStudio.Firmware.BlockImage.Sparse.SparseImageConverter.ConvertRawToSparse(raw, sparse, 4096);
+
+        Assert.Equal("sparse", ImageInputService.DetectFormat(sparse));
+        Assert.False(ImageInputService.ContainsFileSystem(sparse));
+    }
+
+    [Fact]
+    public async Task ContainsFileSystem_LpSuperContainer_ReturnsTrue()
+    {
+        using var source = new TempDirectory();
+        source.WriteBytes("system.img", MakeExt4Superblock());
+        using var output = new TempDirectory();
+        var image = System.IO.Path.Combine(output.Path, "super.img");
+        var packed = await new UotanStudio.Firmware.BlockImage.Lp.LpFormatHandler()
+            .PackAsync(source.Path, image, TestContext.Current.CancellationToken);
+        Assert.True(packed.Success, packed.Summary);
+
+        Assert.Equal("super", ImageInputService.DetectFormat(image));
+        Assert.True(ImageInputService.ContainsFileSystem(image));
+    }
+
+    private static byte[] MakeFatFamilyBootSector(string filesystemType, int typeOffset)
+    {
+        var image = new byte[512];
+        System.Text.Encoding.ASCII.GetBytes("MSWIN4.1").CopyTo(image, 3);
+        System.Text.Encoding.ASCII.GetBytes(filesystemType).CopyTo(image, typeOffset);
+        image[510] = 0x55;
+        image[511] = 0xAA;
+        return image;
+    }
+
+    private static byte[] MakeExFatBootSector()
+    {
+        var image = new byte[512];
+        System.Text.Encoding.ASCII.GetBytes("EXFAT   ").CopyTo(image, 3);
+        image[510] = 0x55;
+        image[511] = 0xAA;
+        return image;
     }
 
     private static byte[] MakeExt4Superblock()

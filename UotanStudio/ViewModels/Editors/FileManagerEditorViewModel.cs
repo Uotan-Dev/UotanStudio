@@ -290,8 +290,6 @@ public partial class FileManagerEditorViewModel : Document
 
         try
         {
-            // 解析与建树为 CPU/IO 密集操作，放到线程池执行避免阻塞 UI。
-            // Parse and tree building are CPU/IO-bound; run them on the thread pool to keep the UI responsive.
             var result = await Task.Run(() =>
             {
                 var session = ImageBrowserSession.Open(path, ct,
@@ -313,8 +311,6 @@ public partial class FileManagerEditorViewModel : Document
         }
         catch (OperationCanceledException)
         {
-            // 取消：保持文档当前状态，下次加载会重新覆盖。
-            // Cancelled: keep the current document state; the next load overwrites it.
         }
         catch (Exception ex)
         {
@@ -398,8 +394,6 @@ public partial class FileManagerEditorViewModel : Document
     /// </summary>
     private async Task ExtractSelectedAsync()
     {
-        // 优先使用多选集合；若为空则回退到单选条目。
-        // Prefer the multi-select collection; fall back to the single selected entry.
         var entries = SelectedEntries.Count > 0
             ? SelectedEntries.ToList()
             : SelectedEntry is not null ? [SelectedEntry] : [];
@@ -433,7 +427,6 @@ public partial class FileManagerEditorViewModel : Document
             return;
         }
 
-        // A refresh or document close may have replaced the session while the picker was open.
         if (!ReferenceEquals(session, _session)) return;
 
         IsLoading = true;
@@ -589,6 +582,5 @@ public partial class FileManagerEditorViewModel : Document
             ? $"{bytes} {units[0]}"
             : $"{value:0.##} {units[unit]}";
     }
-
 
 }

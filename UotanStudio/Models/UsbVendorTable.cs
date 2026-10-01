@@ -18,7 +18,6 @@ public static class UsbVendorTable
 {
     private static readonly Dictionary<ushort, string> _vendors = new()
     {
-        // Android OEMs
         [0x04E8] = "Samsung",
         [0x18D1] = "Google",
         [0x22B8] = "Motorola",
@@ -34,7 +33,6 @@ public static class UsbVendorTable
         [0x2DE3] = "HMD Global",
         [0x0421] = "Nokia",
 
-        // SoC vendors (EDL / bootrom / RKDL 常见)
         [0x05C6] = "Qualcomm",
         [0x1782] = "MediaTek",
         [0x0E8D] = "MediaTek",
@@ -45,10 +43,8 @@ public static class UsbVendorTable
         [0x1B8E] = "Amlogic",
         [0x2483] = "Actions",
 
-        // USB gadget / host bridges (ADB gadget, fastbootd, serial)
         [0x1D6B] = "Linux Foundation",
 
-        // Common USB-serial bridge chips (Serial 模式)
         [0x10C4] = "Silicon Labs",
         [0x1A86] = "QinHeng",
         [0x0403] = "FTDI",

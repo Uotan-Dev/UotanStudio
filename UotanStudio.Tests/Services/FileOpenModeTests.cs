@@ -37,6 +37,58 @@ public class FileOpenModeTests
     }
 
     [Fact]
+    public void ExtensionLessFatAndExFatVolumesRouteToFileSystemBrowser()
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        var boot = new byte[512];
+        "EXFAT   "u8.CopyTo(boot.AsSpan(3));
+        boot[0x6C] = 9;
+        boot[0x6D] = 3;
+        boot[0x6E] = 1;
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(boot.AsSpan(0x48), 16_384);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(boot.AsSpan(0x50), 2_048);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(boot.AsSpan(0x54), 16);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(boot.AsSpan(0x58), 4_096);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(boot.AsSpan(0x5C), 1_536);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(boot.AsSpan(0x60), 5);
+        boot[510] = 0x55;
+        boot[511] = 0xAA;
+
+        Assert.True(FileOpenMode.IsExFatMagic(boot));
+        Assert.True(FileOpenMode.IsFatFamilyMagic(boot));
+        Assert.True(FileOpenMode.IsFilesystemMagic(boot));
+        Assert.False(FileOpenMode.IsFatMagic(boot));
+
+        var volume = KernelExFatVolume();
+        var exFatPath = WriteTempFile("exfat-volume", volume);
+        var fat = new UotanStudio.Tests.Firmware.Fat.FatImageBuilder(12)
+            .AddFile("NOTE.TXT", [1, 2, 3])
+            .WriteTo(Path.Combine(Path.GetTempPath(), "uotan-fat-mode-" + Guid.NewGuid().ToString("N") + ".img"));
+        try
+        {
+            Assert.Equal(EditorOpenMode.FileSystem,
+                FileOpenMode.ResolveMode(exFatPath, FormatDetector.ReadHeader(exFatPath, FileOpenMode.ContentProbeLength)));
+            Assert.True(FileOpenMode.IsFatMagic(FormatDetector.ReadHeader(fat, 512)));
+            Assert.False(FileOpenMode.IsExFatMagic(FormatDetector.ReadHeader(fat, 512)));
+        }
+        finally
+        {
+            File.Delete(exFatPath);
+            File.Delete(fat);
+        }
+    }
+
+    private static byte[] KernelExFatVolume()
+    {
+        var asset = Path.Combine(AppContext.BaseDirectory, "TestData", "Fat", "exfat-kernel-written.deflate");
+        using var compressed = File.OpenRead(asset);
+        using var deflate = new System.IO.Compression.DeflateStream(compressed, System.IO.Compression.CompressionMode.Decompress);
+        using var output = new MemoryStream();
+        deflate.CopyTo(output);
+        return output.ToArray();
+    }
+
+    [Fact]
     public void ExtensionLessUnknownBinaryFallsBackToHex()
     {
         FirmwareFormatRegistry.RegisterAll();

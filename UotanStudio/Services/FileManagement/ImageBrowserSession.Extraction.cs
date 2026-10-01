@@ -2,6 +2,7 @@ using UotanStudio.Firmware.Archive.Browsing;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
+using UotanStudio.Firmware.FileSystem.Fat;
 
 namespace UotanStudio.Services.FileManagement;
 
@@ -36,8 +37,11 @@ internal sealed partial class ImageBrowserSession
             case F2fsParser f2fs:
                 ExtractFilesystem(relativePath, targetDirectory, f2fs.ReadFile);
                 break;
-            case Fat12ImageParser fat12:
-                ExtractFilesystem(relativePath, targetDirectory, fat12.ReadFile);
+            case FatParser fat:
+                ExtractFilesystem(relativePath, targetDirectory, fat.ReadFile);
+                break;
+            case ExFatParser exfat:
+                ExtractFilesystem(relativePath, targetDirectory, exfat.ReadFile);
                 break;
         }
     }

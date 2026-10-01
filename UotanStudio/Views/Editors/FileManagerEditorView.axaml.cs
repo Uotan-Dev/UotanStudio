@@ -37,7 +37,6 @@ public partial class FileManagerEditorView : UserControl
             return;
         }
 
-        // Preserve independently adjusted proportions when docking changes the available width.
         if (stacked)
         {
             _treeWidth = BrowserGrid.ColumnDefinitions[0].Width;

@@ -7,7 +7,6 @@ using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Magic;
 using UotanStudio.Firmware.Executable.Elf;
-using UotanStudio.Firmware.Executable.Qualcomm;
 using UotanStudio.Services.Logging;
 
 namespace UotanStudio.Views.Controls;
@@ -112,21 +111,6 @@ public static class FileOpenMode
     /// </summary>
     public const int ContentProbeLength = 65536;
 
-    private static bool IsQualcommElf(string path, byte[] header)
-    {
-        try
-        {
-            using Stream stream = File.Exists(path)
-                ? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.RandomAccess)
-                : new MemoryStream(header, writable: false);
-            return QualcommImageProbe.IsQualcommElf(stream);
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
-
     /// <summary>
     /// <para>解析指定文件应使用的打开方式。规则：<c>.dts→Text</c>、<c>.dtb/.dtbo→Dtb</c>、
     /// 已知固件扩展名（格式处理器注册表聚合，如 <c>.img/.pac/.ops/.nb0</c>）→<c>Firmware</c>、
@@ -153,92 +137,56 @@ public static class FileOpenMode
             || ext.Equals(".logcat", StringComparison.OrdinalIgnoreCase)
             || ext.Equals(".adblog", StringComparison.OrdinalIgnoreCase)) return EditorOpenMode.Log;
 
-        // 设备树双栏编辑器优先于纯二进制。
-        // Device tree dual-pane editor takes precedence over plain binary.
         if (IsDtbExtension(ext))
         {
             return EditorOpenMode.Dtb;
         }
 
-        // DEX 二进制：走 DEX 双栏编辑器（结构树 + 反汇编）。
-        // DEX blobs open in the DEX dual-pane editor (structure tree + disassembly).
         if (IsDexExtension(ext))
         {
             return EditorOpenMode.Dex;
         }
 
-        // JAR 容器：与 APK 同为 ZIP+DEX 容器，走 DEX 编辑器（多 DEX 条目 + 资源浏览）。
-        // JAR containers: like APK, a ZIP+DEX container, opening in the DEX editor
-        // (multi-DEX entries + resource browsing).
         if (IsJarExtension(ext))
         {
             return EditorOpenMode.Dex;
         }
 
-        // ARSC 资源表：走 ARSC 编辑器（resources.arsc 等）。
-        // ARSC resource tables open in the ARSC editor (resources.arsc etc.).
         if (IsArscExtension(ext))
         {
             return EditorOpenMode.Arsc;
         }
 
-        // APK 包：走 APK 元数据编辑器（优先于已知二进制列表中的 .apk→Hex）。
-        // APK packages open in the APK metadata editor (before the known-binary .apk→Hex entry).
         if (IsApkExtension(ext))
         {
             return EditorOpenMode.Apk;
         }
 
-        // 设备树源文件按文本（语法高亮）打开。
-        // Device tree sources open as text (with syntax highlighting).
         if (IsDtsExtension(ext))
         {
             return EditorOpenMode.Text;
         }
 
-        // 文件系统镜像（ext4/EROFS/F2FS）：扩展名命中专用集合时以内容魔数确认后路由到文件管理器
-        // 编辑器。注意 .img 与固件格式重叠，必须用魔数判定（ext4 0xEF53@1080、erofs 0xE0F5E1E2@1024、
-        // f2fs 0xF2F52010@1024），未命中则继续走固件/十六进制分支。
-        // Filesystem images (ext4/EROFS/F2FS): when the extension matches the dedicated set, confirm by
-        // content magic before routing to the file-manager editor. .img overlaps with firmware formats,
-        // so the magic must decide (ext4 0xEF53@1080, erofs 0xE0F5E1E2@1024, f2fs 0xF2F52010@1024);
-        // otherwise the Firmware/Hex branches below take over.
         if (IsFilesystemImageExtension(ext) && IsFilesystemImage(path))
         {
             return EditorOpenMode.FileSystem;
         }
 
-        // 归档及压缩文件在文件管理器中浏览；压缩归档展开内部目录，单文件压缩显示一个条目。
-        // Browse archives and compressed files; single-file compression exposes one member.
         if (ArchiveBrowser.SupportsPath(path))
         {
             return EditorOpenMode.FileSystem;
         }
 
-        // 分区表内容探测（LP super 元数据）：仅当文件名/扩展名可能为 super 镜像时才读取内容，
-        // 避免对普通文件做多余 I/O；LP 几何魔数（0x616c4467 @4096）优先于固件面板接管 .img/.super。
-        // Partition-table content sniffing (LP super metadata): only reads content when the name or
-        // extension could be a super image, avoiding extra I/O for ordinary files; the LP geometry
-        // magic (0x616c4467 @4096) wins over the firmware panel for .img/.super files.
         if (IsLpCandidatePath(path) && IsLpSuperImage(path))
         {
             return EditorOpenMode.Partition;
         }
 
-        // GPT / MBR 分区表内容探测：候选路径（.img/.gpt/.mbr/.bin 或无扩展名）读取头部，
-        // GPT 魔数优先于 MBR（GPT 镜像含保护性 MBR，两者都会命中 0x55AA）。
-        // GPT / MBR partition-table content sniffing: candidate paths (.img/.gpt/.mbr/.bin or none)
-        // get a header read; the GPT magic wins over MBR (a GPT image carries a protective MBR so both
-        // would match 0x55AA).
         if (IsPartitionTableCandidatePath(path) && (IsGptImage(path) || IsMbrImage(path)))
         {
             return EditorOpenMode.Partition;
         }
 
-        // 固件元数据面板：扩展名命中格式处理器注册表聚合出的集合（.img/.pac/.ops/.nb0 等），
-        // 其余专用编辑器已在上方优先拦截（如 .dtb/.dex/.arsc/.apk）。
-        // Firmware metadata panel: the extension matches the set aggregated from the registered
-        // format handlers (.img/.pac/.ops/.nb0 etc.); dedicated editors above already claim their own.
         if (IsFirmwareExtension(ext))
         {
             return EditorOpenMode.Firmware;
@@ -254,10 +202,6 @@ public static class FileOpenMode
             return EditorOpenMode.Text;
         }
 
-        // 分区表内容探测（Rockchip parameter 文本）：扩展名不被任何专用编辑器接管
-        // （如无扩展名的 "parameter" 文件）时按内容判定。
-        // Partition-table content sniffing (Rockchip parameter text): files whose extension is not
-        // claimed by a dedicated editor (e.g. the extension-less "parameter" file) are decided by content.
         if (IsRockchipParameter(path))
         {
             return EditorOpenMode.Partition;
@@ -282,99 +226,61 @@ public static class FileOpenMode
     /// </param>
     public static EditorOpenMode ResolveMode(string path, byte[]? header, FormatDetectionResult? detection = null)
     {
-        // A complete, valid ELF header wins regardless of suffix. A magic-only or malformed ELF
-        // stays inspectable as hex instead of being claimed by an unrelated extension handler.
+
         if (header is not null && header.AsSpan().StartsWith("\u007fELF"u8))
         {
             if (!ElfReader.TryReadHeader(header, out _))
             {
                 return EditorOpenMode.Hex;
             }
-            return IsQualcommElf(path, header) ? EditorOpenMode.Qualcomm : EditorOpenMode.Elf;
+            return EditorOpenMode.Elf;
         }
 
-        // AXML 内容探测优先：AndroidManifest.xml 等二进制 XML 即使扩展名为 .xml（会被文本路由
-        // 拦截）也应走 Manifest 编辑器，避免按 UTF-8 文本打开乱码。
-        // AXML content sniffing first: binary XML files such as AndroidManifest.xml carry a .xml
-        // extension (which the text route would claim), so the AXML magic must win to avoid opening
-        // them as mangled UTF-8 text.
         if (header is not null && UotanStudio.Firmware.AndroidMeta.AXml.AXmlParser.IsAxml(header))
         {
             return EditorOpenMode.Axml;
         }
 
-        // DTB/DTBO 魔数优先：FDT（0xD00DFEED）与 DTBO（0xD7B7AB1E，均大端）即使扩展名缺失或
-        // 为 .img/.bin（会被固件/Hex 路由拦截）也走设备树双栏编辑器。
-        // DTB/DTBO magic first: FDT (0xD00DFEED) and DTBO (0xD7B7AB1E, both big-endian) open in the
-        // device-tree dual-pane editor even when the extension is absent or is .img/.bin
-        // (which the firmware/Hex routes would claim).
         if (header is not null && IsDtbMagic(header))
         {
             return EditorOpenMode.Dtb;
         }
 
-        // DEX 魔数优先："dex\n" 起始的字节码即使无扩展名或被改名也走 DEX 双栏编辑器。
-        // DEX magic first: bytecode starting with "dex\n" opens in the DEX dual-pane editor even
-        // without an extension or after a rename.
         if (header is not null && IsDexMagic(header))
         {
             return EditorOpenMode.Dex;
         }
 
-        // Strong firmware signatures take precedence over any misleading or missing extension.
         if (header is not null && IsFirmwareMagic(header))
         {
             return EditorOpenMode.Firmware;
         }
 
-        // ZIP 容器魔数：PK 头按内容命中文件管理器浏览；.apk/.jar 的专用编辑器仍由扩展名路由
-        // 优先（ZIP 魔数无法区分 APK/JAR 与普通 ZIP）。
-        // ZIP container magic: a PK header routes to file-manager browsing by content; the dedicated
-        // .apk/.jar editors still win via their extension routes (the ZIP magic cannot tell an APK/JAR
-        // from a plain ZIP).
         if (header is not null && IsZipMagic(header) && !IsApkExtension(Path.GetExtension(path)) && !IsJarExtension(Path.GetExtension(path)))
         {
             return EditorOpenMode.FileSystem;
         }
 
-        // 文件系统镜像魔数优先：头部已提供且长度足够时直接命中（ext4 0xEF53@1080、
-        // erofs 0xE0F5E1E2@1024、f2fs 0xF2F52010@1024），不必再按扩展名回落固件面板。
-        // Filesystem image magic takes priority: when the header is provided and long enough, the magic
-        // decides directly (ext4 0xEF53@1080, erofs 0xE0F5E1E2@1024, f2fs 0xF2F52010@1024) without
-        // falling back to the firmware panel by extension.
         if (header is not null && IsFilesystemMagic(header))
         {
             return EditorOpenMode.FileSystem;
         }
 
-        // LP super 元数据魔数优先：头部已提供且足够长（覆盖偏移 4096 的几何魔数）时直接命中，
-        // 即使扩展名为 .img/.super 会被固件面板接管。
-        // LP super metadata magic takes priority: when the header is provided and long enough (covers
-        // the geometry magic at offset 4096) it decides directly, even though .img/.super extensions
-        // are claimed by the firmware panel.
         if (header is not null && IsLpMetadataMagic(header))
         {
             return EditorOpenMode.Partition;
         }
 
-        // GPT / MBR 分区表魔数：GPT 优先（GPT 镜像含保护性 MBR，两者都会命中 0x55AA）。
-        // GPT / MBR partition-table magic: GPT first (a GPT image carries a protective MBR so both
-        // would match 0x55AA).
         if (header is not null && (IsGptMagic(header) || IsMbrMagic(header)))
         {
             return EditorOpenMode.Partition;
         }
 
-        // Rockchip parameter 文本特征（CMDLINE: 与 mtdparts=）。
-        // Rockchip parameter text characteristics (CMDLINE: and mtdparts=).
         if (header is not null && IsRockchipParameterText(header))
         {
             return EditorOpenMode.Partition;
         }
 
-        // A validated handler must remain authoritative even when the file uses a vendor-specific
-        // suffix (for example sparse-super fragments such as .0). Extension lists are only hints;
-        // otherwise a successfully detected firmware object fell through to the generic hex editor.
         if (detection is { Confidence: not DetectionConfidence.ExtensionOnly })
         {
             var formatName = detection.Handler.FormatName;
@@ -407,20 +313,11 @@ public static class FileOpenMode
             return mode;
         }
 
-        // ARSC 内容探测：resources.arsc 为 0x0002 表头。
-        // ARSC content sniffing: resources.arsc carries the 0x0002 table header.
         if (header is not null && UotanStudio.Firmware.AndroidMeta.Arsc.ArscParser.IsArsc(header))
         {
             return EditorOpenMode.Arsc;
         }
 
-        // 无扩展名文件的格式注册表嗅探：遍历已注册格式处理器按内容识别（boot/payload/sparse/
-        // CPIO/Oppo/RKAF 等），命中时走固件元数据面板；面板解析失败会由 WorkspaceViewModel
-        // 回退到 Hex。仅在扩展名为空时执行，避免与既有扩展名路由双源冲突。
-        // Format-registry sniffing for extension-less files: iterate registered format handlers for
-        // content-based detection (boot/payload/sparse/CPIO/Oppo/RKAF etc.); a hit opens the firmware
-        // metadata panel (which WorkspaceViewModel falls back to Hex on parse failure). Only runs for
-        // extension-less files to avoid dual-source conflicts with the extension routes above.
         if (header is not null && header.Length > 0 && string.IsNullOrEmpty(Path.GetExtension(path)))
         {
             FirmwareFormatRegistry.RegisterAll();
@@ -430,17 +327,11 @@ public static class FileOpenMode
             }
         }
 
-        // Auto 分支的 magic 兜底：识别出强二进制类型视为十六进制。
-        // Magic fallback for the Auto branch: a recognized strongly-binary type opens as hex.
         if (header is not null && FileMagic.Describe(header) is not null)
         {
             return EditorOpenMode.Hex;
         }
 
-        // 未命中具体魔数的普通二进制仍统一进入专用 Hex 编辑器，避免先创建 FileView 后
-        // 再由其内部内容探测切换视图，造成自动打开与“以十六进制打开”的宿主样式不一致。
-        // Generic binary data without a known magic still uses the dedicated Hex editor. This avoids
-        // creating FileView first and switching its inner viewer later, which produced a different host UI.
         if (header is not null && IsBinaryContent(header))
         {
             return EditorOpenMode.Hex;
@@ -590,17 +481,13 @@ public static class FileOpenMode
 
         try
         {
-            // 先按物理偏移的原始魔数判定（raw 镜像直接命中）。
-            // First check the raw magic at the physical offset (raw images match directly).
+
             var header = FormatDetector.ReadHeader(path, FilesystemHeaderLength);
             if (IsFilesystemMagic(header))
             {
                 return true;
             }
 
-            // 物理魔数未命中：sparse 包装的镜像（如 product.img）按逻辑偏移重新探测内部文件系统。
-            // Physical magic missed: for sparse-wrapped images (e.g. product.img) re-probe the internal
-            // filesystem by logical offset.
             if (IsSparseImage(path))
             {
                 var logical = SparseReader.PeekLogicalRange(path, 0, FilesystemHeaderLength);
@@ -611,8 +498,7 @@ public static class FileOpenMode
         }
         catch
         {
-            // 读取失败按非文件系统镜像处理。
-            // A read failure is treated as a non-filesystem image.
+
             return false;
         }
     }
@@ -643,8 +529,7 @@ public static class FileOpenMode
         }
         catch
         {
-            // 读取失败按非 sparse 镜像处理。
-            // A read failure is treated as a non-sparse image.
+
             return false;
         }
     }
@@ -710,16 +595,38 @@ public static class FileOpenMode
             && (header[3] == 0x04 || header[3] == 0x06 || header[3] == 0x08);
 
     /// <summary>
-    /// <para>判断头部字节是否命中任意一种文件系统魔数（ext4/EROFS/F2FS）。</para>
-    /// Determines whether the header bytes match any filesystem magic (ext4/EROFS/F2FS).
+    /// <para>判断头部字节是否命中任意一种文件系统魔数（ext4/EROFS/F2FS/FAT12/16/32/exFAT）。</para>
+    /// Determines whether the header bytes match any filesystem magic (ext4/EROFS/F2FS/FAT12/16/32/exFAT).
     /// </summary>
     public static bool IsFilesystemMagic(ReadOnlySpan<byte> header) =>
-        IsExt4Magic(header) || IsErofsMagic(header) || IsF2fsMagic(header) || IsFat12Magic(header);
+        IsExt4Magic(header) || IsErofsMagic(header) || IsF2fsMagic(header) || IsFatFamilyMagic(header);
 
-    public static bool IsFat12Magic(ReadOnlySpan<byte> header) =>
+    /// <summary>
+    /// <para>判断头部是否命中 FAT 家族（FAT12/FAT16/FAT32）或 exFAT 卷引导记录，用作文件打开模式判据；
+    /// 结构校验仍由 <c>UotanStudio.Firmware</c> 的解析器完成。</para>
+    /// Whether the header carries a FAT family (FAT12/FAT16/FAT32) or exFAT volume boot record, used only as
+    /// an open-mode hint; structural validation stays with the <c>UotanStudio.Firmware</c> parsers.
+    /// </summary>
+    public static bool IsFatFamilyMagic(ReadOnlySpan<byte> header) => IsFatMagic(header) || IsExFatMagic(header);
+
+    /// <summary>
+    /// <para>是否为 FAT12/FAT16/FAT32 卷引导记录：要求偏移 510 的 0x55AA 签名，并比对偏移 54 或 82 的文件系统名。</para>
+    /// Whether the header is a FAT12/FAT16/FAT32 volume boot record: it requires the 0x55AA signature at
+    /// offset 510 and matches the filesystem name at offset 54 or 82.
+    /// </summary>
+    public static bool IsFatMagic(ReadOnlySpan<byte> header) =>
         header.Length >= 512 && header[510] == 0x55 && header[511] == 0xAA
         && (Encoding.ASCII.GetString(header.Slice(54, 8)).Trim() is "FAT12" or "FAT16"
             || header.Length >= 90 && Encoding.ASCII.GetString(header.Slice(82, 8)).Trim() == "FAT32");
+
+    /// <summary>
+    /// <para>是否为 exFAT 卷引导记录：要求偏移 510 的 0x55AA 签名与偏移 3 的 "EXFAT   " 文件系统名。</para>
+    /// Whether the header is an exFAT volume boot record: it requires the 0x55AA signature at offset 510 and
+    /// the "EXFAT   " filesystem name at offset 3.
+    /// </summary>
+    public static bool IsExFatMagic(ReadOnlySpan<byte> header) =>
+        header.Length >= 512 && header[510] == 0x55 && header[511] == 0xAA
+        && Encoding.ASCII.GetString(header.Slice(3, 8)) == "EXFAT   ";
 
     /// <summary>
     /// <para>是否为 ext4 魔数（小端 0xEF53 位于偏移 1080）。</para>
@@ -834,8 +741,7 @@ public static class FileOpenMode
         }
         catch
         {
-            // 读取失败按非 LP 镜像处理。
-            // A read failure is treated as a non-LP image.
+
             return false;
         }
     }
@@ -864,8 +770,7 @@ public static class FileOpenMode
         }
         catch
         {
-            // 读取失败按非 Rockchip parameter 处理。
-            // A read failure is treated as a non-Rockchip parameter file.
+
             return false;
         }
     }
@@ -941,8 +846,7 @@ public static class FileOpenMode
         }
         catch
         {
-            // 读取失败按非分区表处理。
-            // A read failure is treated as a non-partition-table file.
+
             return false;
         }
     }
@@ -987,8 +891,6 @@ public static class FileOpenMode
             return false;
         }
 
-        // FileExtensions 不带点、小写存储；这里去掉前导点后按 OrdinalIgnoreCase 命中。
-        // FileExtensions are stored dot-less and lowercase; strip the leading dot and match case-insensitively.
         var normalized = ext[0] == '.' ? ext[1..] : ext;
         return _firmwareExtensions.Value.Contains(normalized);
     }
@@ -1034,9 +936,7 @@ public static class FileOpenMode
 
     private static HashSet<string> LoadFirmwareExtensions()
     {
-        // 幂等注册全部格式处理器，确保聚合集合完整；应用启动时通常已注册。
-        // Idempotently register every format handler so the aggregated set is complete;
-        // the app usually registers them at startup already.
+
         FirmwareFormatRegistry.RegisterAll();
 
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1048,11 +948,6 @@ public static class FileOpenMode
             }
         }
 
-        // AXML 处理器的 "xml" 是内容确认型扩展名（须经 AXML 魔数），不能仅凭扩展名路由到
-        // 固件面板，否则纯文本 .xml 会被错误接管；此处的排除是安全名单的负向裁切。
-        // The AXml handler's "xml" is content-confirmed (AXML magic) and must not be claimed by
-        // extension alone, or plain-text .xml would be misrouted; this exclusion is a negative carve-out
-        // of the safe positive list.
         set.Remove("xml");
 
         return set;
@@ -1071,8 +966,6 @@ public static class FileOpenMode
             return false;
         }
 
-        // 语法高亮能解析的扩展名一律视为文本。
-        // Extensions resolvable by syntax highlighting are treated as text.
         if (!string.IsNullOrEmpty(SyntaxLanguageRegistry.GetLanguageId(ext)))
         {
             return true;
