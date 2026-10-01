@@ -98,6 +98,280 @@ internal static class AvbFecCodec
         }, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Rebuilds whole 4096-byte blocks that are known to be damaged from intact FEC parity.
+    /// <para>借助完好的 FEC 校验码重建已知损坏的整块 4096 字节数据。</para></summary>
+    /// <remarks>Applies Reed-Solomon erasure decoding: the block list is the set of erasure positions and the parity is trusted.
+    /// A round can repair at most <c>roots</c> erased blocks; damaged parity or too many erasures in one round aborts the rebuild
+    /// and leaves every image byte untouched. The standalone <c>fec</c> tool's trailing footer block is not produced or consumed.
+    /// <para>采用 Reed-Solomon 删除译码：坏块列表即删除位置集合，校验码视为可信。单轮最多重建 <c>roots</c> 个删除块；
+    /// 校验码本身损坏或某轮删除数超出上限时中止重建且不改动任何镜像字节。不生成也不消费独立 <c>fec</c> 工具的末尾 footer 块。</para></remarks>
+    /// <param name="image">Readable, writable, seekable image holding the data prefix and its trailing FEC parity; its position is restored.
+    /// <para>可读、可写、可定位的镜像，包含数据前缀及其尾部 FEC 校验码；结束后恢复位置。</para></param>
+    /// <param name="fecOffset">Start of FEC, also the protected source length. <para>FEC 起点，亦为受保护源长度。</para></param>
+    /// <param name="fecSize">Declared parity length without a standalone fec footer. <para>不含独立 fec footer 的校验码声明长度。</para></param>
+    /// <param name="roots">Number of RS parity roots. <para>RS 校验根数。</para></param>
+    /// <param name="badBlocks">Zero-based 4096-byte block numbers inside the protected prefix to rebuild; duplicates are ignored.
+    /// <para>受保护前缀内待重建的从零起算 4096 字节块编号；重复项忽略。</para></param>
+    /// <param name="cancellationToken">Cancels reads, solves and writes. <para>取消读取、求解与写入。</para></param>
+    /// <returns>True when every requested block was reconstructed and written; false when the erasures exceed the code's capacity.
+    /// <para>全部请求块均重建并写入时为真；删除数超出码可纠正能力时为假。</para></returns>
+    /// <exception cref="ArgumentException">The stream cannot read, write or seek, or a block number is out of range.
+    /// <para>流不可读、不可写或不可定位，或块编号越界。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The geometry is invalid or the parity size mismatches the declaration.
+    /// <para>布局无效或校验码长度与声明不符。</para></exception>
+    /// <exception cref="EndOfStreamException">Declared bytes cannot be read completely. <para>无法完整读取声明的字节。</para></exception>
+    /// <exception cref="OperationCanceledException">Cancellation was requested. <para>请求了取消。</para></exception>
+    public static async Task<bool> RepairAsync(Stream image, long fecOffset, long fecSize, uint roots,
+        IReadOnlyCollection<long> badBlocks, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(badBlocks);
+        ArgumentNullException.ThrowIfNull(image);
+        if (!image.CanRead || !image.CanWrite || !image.CanSeek)
+        {
+            throw new ArgumentException("The image stream must be readable, writable and seekable.", nameof(image));
+        }
+        if (CalculateParitySize(fecOffset, roots) != fecSize)
+        {
+            throw new ArgumentOutOfRangeException(nameof(fecSize), "The declared parity size does not match the geometry.");
+        }
+        var dataSymbols = CodewordSize - (int)roots;
+        var blocks = fecOffset / BlockSize;
+        if (badBlocks.Count == 0)
+        {
+            return false;
+        }
+        if (badBlocks.Any(block => block < 0 || block >= blocks))
+        {
+            throw new ArgumentOutOfRangeException(nameof(badBlocks), "Every repaired block must lie inside the protected prefix.");
+        }
+        var rounds = (blocks + dataSymbols - 1) / dataSymbols;
+        var erasures = new HashSet<long>[rounds];
+        foreach (var block in badBlocks)
+        {
+            var round = (int)(block % rounds);
+            erasures[round] ??= [];
+            _ = erasures[round].Add(block / rounds);
+        }
+        if (erasures.Any(set => set is not null && set.Count > roots))
+        {
+            return false;
+        }
+        var polynomial = CreateGenerator((int)roots);
+        var basis = new byte[dataSymbols][];
+        for (var symbol = 0; symbol < dataSymbols; symbol++)
+        {
+            var unit = new byte[dataSymbols];
+            unit[symbol] = 1;
+            var parity = new byte[roots];
+            EncodeParity(unit, parity, polynomial, (int)roots);
+            basis[symbol] = parity;
+        }
+        var badSet = badBlocks.ToHashSet();
+        var originalPosition = image.Position;
+        var repaired = new List<(long Offset, byte[] Data)>();
+        try
+        {
+            var data = new byte[dataSymbols * BlockSize];
+            var parity = new byte[(int)roots * BlockSize];
+            for (var round = 0L; round < rounds; round++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var erasedSymbols = erasures[(int)round];
+                if (erasedSymbols is null)
+                {
+                    continue;
+                }
+                var erased = new int[erasedSymbols.Count];
+                var index = 0;
+                foreach (var symbol in erasedSymbols)
+                {
+                    erased[index++] = (int)symbol;
+                }
+                Array.Sort(erased);
+                for (var symbol = 0; symbol < dataSymbols; symbol++)
+                {
+                    var blockOffset = checked(((long)symbol * rounds + round) * BlockSize);
+                    var target = data.AsMemory(symbol * BlockSize, BlockSize);
+                    target.Span.Clear();
+                    if (blockOffset < fecOffset && !badSet.Contains(blockOffset / BlockSize))
+                    {
+                        image.Position = blockOffset;
+                        await image.ReadExactlyAsync(target, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+                var parityOffset = checked(fecOffset + round * (long)roots * BlockSize);
+                image.Position = parityOffset;
+                await image.ReadExactlyAsync(parity, cancellationToken).ConfigureAwait(false);
+                var transforms = TryBuildErasureSolve(erased, basis, (int)roots, out var success);
+                if (!success)
+                {
+                    return false;
+                }
+                var outputs = new byte[erased.Length][];
+                for (var slot = 0; slot < erased.Length; slot++)
+                {
+                    outputs[slot] = new byte[BlockSize];
+                }
+                var residual = new byte[roots];
+                for (var column = 0; column < BlockSize; column++)
+                {
+                    for (var root = 0; root < roots; root++)
+                    {
+                        residual[root] = parity[column * (int)roots + root];
+                    }
+                    for (var symbol = 0; symbol < dataSymbols; symbol++)
+                    {
+                        if (Array.IndexOf(erased, symbol) >= 0)
+                        {
+                            continue;
+                        }
+                        var value = data[symbol * BlockSize + column];
+                        if (value != 0)
+                        {
+                            for (var root = 0; root < roots; root++)
+                            {
+                                residual[root] ^= Multiply(value, basis[symbol][root]);
+                            }
+                        }
+                    }
+                    for (var slot = 0; slot < erased.Length; slot++)
+                    {
+                        byte sum = 0;
+                        for (var root = 0; root < roots; root++)
+                        {
+                            sum ^= Multiply(transforms[slot][root], residual[root]);
+                        }
+                        outputs[slot][column] = sum;
+                    }
+                    for (var root = erased.Length; root < roots; root++)
+                    {
+                        byte check = 0;
+                        for (var source = 0; source < roots; source++)
+                        {
+                            check ^= Multiply(transforms[root][source], residual[source]);
+                        }
+                        if (check != 0)
+                        {
+                            return false;
+                        }
+                    }
+                }
+                for (var slot = 0; slot < erased.Length; slot++)
+                {
+                    var blockOffset = checked(((long)erased[slot] * rounds + round) * BlockSize);
+                    repaired.Add((blockOffset, outputs[slot]));
+                }
+            }
+            foreach (var entry in repaired)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                image.Position = entry.Offset;
+                await image.WriteAsync(entry.Data, cancellationToken).ConfigureAwait(false);
+            }
+            return true;
+        }
+        finally
+        {
+            image.Position = originalPosition;
+        }
+    }
+
+    /// <summary>Reduces the parity-basis columns for the erased symbols into a row transform that yields their values.
+    /// <para>将已删除符号的校验基列约简为可直接读出其取值的行变换。</para></summary>
+    private static byte[][] TryBuildErasureSolve(int[] erased, byte[][] basis, int roots, out bool success)
+    {
+        var count = erased.Length;
+        var matrix = new byte[roots][];
+        var transforms = new byte[roots][];
+        for (var row = 0; row < roots; row++)
+        {
+            matrix[row] = new byte[count];
+            transforms[row] = new byte[roots];
+            for (var slot = 0; slot < count; slot++)
+            {
+                matrix[row][slot] = basis[erased[slot]][row];
+            }
+            transforms[row][row] = 1;
+        }
+        for (var column = 0; column < count; column++)
+        {
+            var pivot = -1;
+            for (var row = column; row < roots; row++)
+            {
+                if (matrix[row][column] != 0)
+                {
+                    pivot = row;
+                    break;
+                }
+            }
+            if (pivot < 0)
+            {
+                success = false;
+                return [];
+            }
+            if (pivot != column)
+            {
+                (matrix[column], matrix[pivot]) = (matrix[pivot], matrix[column]);
+                (transforms[column], transforms[pivot]) = (transforms[pivot], transforms[column]);
+            }
+            var inverse = Inverse(matrix[column][column]);
+            for (var slot = 0; slot < count; slot++)
+            {
+                matrix[column][slot] = Multiply(matrix[column][slot], inverse);
+            }
+            for (var source = 0; source < roots; source++)
+            {
+                transforms[column][source] = Multiply(transforms[column][source], inverse);
+            }
+            for (var row = 0; row < roots; row++)
+            {
+                if (row == column)
+                {
+                    continue;
+                }
+                var factor = matrix[row][column];
+                if (factor == 0)
+                {
+                    continue;
+                }
+                for (var slot = 0; slot < count; slot++)
+                {
+                    matrix[row][slot] ^= Multiply(factor, matrix[column][slot]);
+                }
+                for (var source = 0; source < roots; source++)
+                {
+                    transforms[row][source] ^= Multiply(factor, transforms[column][source]);
+                }
+            }
+        }
+        success = true;
+        return transforms;
+    }
+
+    private static void EncodeParity(byte[] data, byte[] parity, byte[] polynomial, int roots)
+    {
+        var code = parity.AsSpan(0, roots);
+        code.Clear();
+        for (var symbol = 0; symbol < data.Length; symbol++)
+        {
+            var feedback = (byte)(data[symbol] ^ code[0]);
+            for (var root = 0; root < code.Length - 1; root++)
+            {
+                code[root] = (byte)(code[root + 1] ^ Multiply(feedback, polynomial[root + 1]));
+            }
+            code[^1] = Multiply(feedback, polynomial[^1]);
+        }
+    }
+
+    private static byte Inverse(byte value)
+    {
+        if (value == 0)
+        {
+            throw new ArgumentException("Only nonzero field elements have inverses.", nameof(value));
+        }
+        return Exponents[CodewordSize - Logarithms[value]];
+    }
+
     private static async Task<bool> ProcessAsync(Stream image, long coveredBytes, uint roots,
         Func<ReadOnlyMemory<byte>, CancellationToken, Task<bool>> consume, CancellationToken cancellationToken)
     {
