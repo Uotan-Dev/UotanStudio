@@ -73,11 +73,26 @@ public static class AdbQrPairing
 
     private static string RandomString(int length)
     {
-        var bytes = RandomNumberGenerator.GetBytes(length);
+        // 256 is not divisible by the alphabet size (62), so a plain modulo would bias the
+        // trailing letters; rejection sampling keeps every character uniform.
+        // 256 不能被字母表大小（62）整除，直接取模会使尾部字母出现偏多；拒绝采样保证每个字符均匀分布。
+        const int MaxUnbiased = 248; // 62 * 4, the largest multiple of the alphabet size within a byte.
+        var bytes = RandomNumberGenerator.GetBytes(length * 2);
         var chars = new char[length];
+        var byteIndex = 0;
         for (var i = 0; i < length; i++)
         {
-            chars[i] = Alphabet[bytes[i] % Alphabet.Length];
+            byte sample;
+            do
+            {
+                if (byteIndex >= bytes.Length)
+                {
+                    bytes = RandomNumberGenerator.GetBytes(length * 2);
+                    byteIndex = 0;
+                }
+            }
+            while ((sample = bytes[byteIndex++]) >= MaxUnbiased);
+            chars[i] = Alphabet[sample % Alphabet.Length];
         }
 
         return new string(chars);

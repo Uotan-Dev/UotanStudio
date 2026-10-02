@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Sockets;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Udp;
@@ -128,7 +129,10 @@ public static class AdbQrPairingService
             ?? throw new TimeoutException(
                 $"The device did not advertise the pairing service '{credentials.ServiceName}'. Make sure " +
                 "Wireless debugging is enabled and the QR code was scanned.");
-        var host = pairing.Addresses[0];
+        var host = pairing.Addresses.Count > 0
+            ? pairing.Addresses[0]
+            : throw new IOException(
+                $"The pairing service '{credentials.ServiceName}' was advertised without a resolvable address.");
 
         var foundAt = DebugBridgeNetworkAddress.FormatEndpoint(host, pairing.Port);
         progress?.Report(new AdbQrPairingProgress(AdbQrPairingStage.DeviceFound, foundAt));
@@ -294,15 +298,33 @@ public static class AdbQrPairingService
     {
         var connect = await DiscoverEndpointAsync(useServer,
                 entry => AdbServerMdns.IsType(entry, AdbMdnsDiscovery.AdbTlsService) &&
-                         string.Equals(entry.Host, host, StringComparison.OrdinalIgnoreCase),
+                         IsSameHost(entry.Host, host),
                 AdbMdnsDiscovery.AdbTlsService,
-                device => device.Addresses.Any(candidate =>
-                    string.Equals(candidate, host, StringComparison.OrdinalIgnoreCase)),
+                device => device.Addresses.Any(candidate => IsSameHost(candidate, host)),
                 ConnectDiscoveryTimeout, cancellationToken).ConfigureAwait(false)
             ?? throw new AdbQrPairingConnectPortException(route, host,
                 $"The device did not advertise its secure connect service after pairing (no " +
                 $"'{AdbMdnsDiscovery.AdbTlsService}' entry for {host}).");
         return connect.Port;
+    }
+
+    /// <summary>
+    /// Compares two discovered host strings as addresses: equal text matches, and so do the IPv4
+    /// and IPv6 forms of the same address, so a phone that advertises the secure connect service
+    /// over a different address family than the pairing service is still recognized.
+    /// <para>把两个发现到的主机字符串按地址比较：文本相同视为一致，同一地址的 IPv4 与 IPv6
+    /// 写法也视为一致，这样手机以与配对服务不同的地址族广播安全连接服务时仍能被识别。</para>
+    /// </summary>
+    private static bool IsSameHost(string candidate, string host)
+    {
+        if (string.Equals(candidate, host, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return IPAddress.TryParse(candidate, out var candidateAddress) &&
+            IPAddress.TryParse(host, out var hostAddress) &&
+            candidateAddress.Equals(hostAddress.MapToIPv6());
     }
 
     /// <summary>
