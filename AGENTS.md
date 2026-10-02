@@ -134,11 +134,12 @@ dotnet test --solution UotanStudio.slnx --no-restore
 
 实测工作区验证状态（2026-10-01）：
 
-- `dotnet build UotanStudio.Tests/UotanStudio.Tests.csproj --no-restore --nologo`：0 错误，0 条 `xUnit1051` 警告（异步测试已全部改用 `TestContext.Current.CancellationToken`）；当前工作区另有少量位于进行中改动文件（`Firmware/Fat/`）的分析器警告，随该功能完成而消除。
+- `dotnet build UotanStudio.Tests/UotanStudio.Tests.csproj --no-restore --nologo`：0 错误，0 条 `xUnit1051` 警告（异步测试一律用 `TestContext.Current.CancellationToken`）。
 - `dotnet build UotanStudio.Firmware/UotanStudio.Firmware.csproj --no-restore --nologo --no-incremental -v:n`：0 错误、0 警告。警告清点必须带 `--no-incremental`：增量构建不重跑分析器，会显示"0 个警告"。
 - `TreatWarningsAsErrors=true` 在 `UotanStudio.Comm`、`UotanStudio.Media` 与 `UotanStudio.Firmware` 生效；`UotanStudio.Tests` 另有 `NoWarn CS0618`。在 Firmware 中新增无 XML 注释的公共类型会使构建以 `CS1591`/`RS0016` 失败。
 - whitespace/style `dotnet format --verify-no-changes`：通过。
-- 完整测试集：8390 总数 / 8181 通过 / 194 跳过 / 15 失败（2026-10-01 实测；15 条失败全部来自进行中的 FAT/文件系统保留元数据功能：`Firmware.Fat.*` 探测 6 条、`ErofsExtentInteroperabilityTests` 3 条、`FileSystemByteProgressTests` 6 条，功能合入后应归零）。在 `git worktree` 隔离副本里跑同一套件时，`UotanStudio.Tests.Firmware.DexSmaliDebugTests.Assemble_CoLocatedDebugEvents_PreservesDeclaredOrder` 可能失败——原因是 autocrlf 把 LF 语料检出成 CRLF，属于检出产物而非缺陷。
-- 194 条跳过全部来自环境门控：`UOTAN_NATIVE_TOOLS`、`UOTAN_LARGE_DATA`、`UOTAN_SMALI_CLASSPATH`、`UOTAN_HOS_UPDATE_APP_SAMPLE` 等；缺少门控时按 `Skip = "…"` 明确跳过。
+- 完整测试集：8089 总数 / 8055 通过 / 34 跳过 / 0 失败（2026-10-02 在仓库内 `UotanStudio.Tests/bin/Debug/net10.0` 测试宿主实测）。把测试宿主输出重定向到仓库外目录会让 `FirmwareContextDependencyScannerTests.TryFindRepositoryRoot_CurrentTestHostOutput_FindsCheckedOutSolution` 因找不到 `UotanStudio.slnx` 而失败，并额外产生环境跳过，因此该用例只在仓库内运行时结果有效。
+- 无 server 的 TCP ADB 与 scrcpy 投屏已在模拟器回环端口（同一实例的 5555 与 16384）实测：直接握手、shell、`localabstract` 多流、h264 首帧与关键帧、SET_CLIPBOARD 回包均通过；该 ROM 不回应 GET_CLIPBOARD，设备→客户端剪贴板主动推送仍未在硬件上观察到。真实 USB 设备、物理手机与 macOS/Linux 平台路径仍未验证。
+- 34 条跳过全部来自环境门控：`UOTAN_NATIVE_TOOLS`、`UOTAN_LARGE_DATA`、`UOTAN_SMALI_CLASSPATH`、`UOTAN_HOS_UPDATE_APP_SAMPLE` 等；缺少门控时按 `Skip = "…"` 明确跳过。
 - JAR/DEX、LP、流式构建、异常日志、Delivery 和镜像输入的定向测试均通过。
 - CI 门禁见 `.github/workflows/ci.yml`（构建 + whitespace/style 双 `dotnet format` + `dotnet test --solution`，不设置 `UOTAN_*`，因此门控套件自跳）；`.github/workflows/release.yml` 只负责 NativeAOT 发布。同一二进制多次运行时可能偶发 1 次无法复现的单测失败（总数与通过数之差为 1），具体用例未定位；把整套件当成"确定全绿"之前先按日志里的 `失败` 行确认。
