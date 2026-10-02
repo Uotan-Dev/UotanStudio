@@ -141,12 +141,15 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// Connects and authenticates with the ADB peer.
     /// <para>连接并认证 ADB 对端。</para>
     /// </summary>
+    /// <exception cref="TimeoutException">The peer did not answer the handshake; when the message
+    /// loop already stopped, the loop's own failure is the inner cause.
+    /// <para>对端未完成握手；消息循环已经停止时，循环自身的失败作为内部原因。</para></exception>
     public void Connect()
     {
         ThrowIfDisposed();
         Connection.Connect();
         if (!Connection.WaitForPeer(10000))
-            throw new TimeoutException("ADB peer did not complete the connection handshake.");
+            throw HandshakeTimeout();
     }
 
     /// <summary>
@@ -154,13 +157,23 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// <para>异步连接并认证。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <exception cref="TimeoutException">The peer did not answer the handshake; when the message
+    /// loop already stopped, the loop's own failure is the inner cause.
+    /// <para>对端未完成握手；消息循环已经停止时，循环自身的失败作为内部原因。</para></exception>
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         await Connection.ConnectAsync(cancellationToken).ConfigureAwait(false);
-        if (!await Task.Run(() => Connection.WaitForPeer(10000, cancellationToken), cancellationToken).ConfigureAwait(false))
-            throw new TimeoutException("ADB peer did not complete the connection handshake.");
+        if (!await Task.Run(() => Connection.WaitForPeer(10000, cancellationToken), cancellationToken)
+                .ConfigureAwait(false))
+            throw HandshakeTimeout();
     }
+
+    private TimeoutException HandshakeTimeout() =>
+        Connection.LoopFault is { } fault
+            ? new TimeoutException(
+                $"ADB peer did not complete the connection handshake: {fault.Message}", fault)
+            : new TimeoutException("ADB peer did not complete the connection handshake.");
 
     /// <summary>
     /// Opens a stream to a service.

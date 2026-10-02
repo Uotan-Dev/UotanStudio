@@ -30,7 +30,17 @@ internal sealed class AdbConnection : IDisposable
     private uint _nextLocalId = 1;
     private bool _connected;
     private bool _disposed;
+    private Exception? _loopFault;
     private Thread? _messageLoopThread;
+
+    /// <summary>
+    /// Gets why the message loop stopped, or <c>null</c> while it is still reading. The loop runs on
+    /// its own thread, so a handshake failure would otherwise never reach the caller that is waiting
+    /// for the peer banner.
+    /// <para>获取消息循环停止的原因；循环仍在读取时为 <c>null</c>。循环运行在自己的线程上，
+    /// 否则握手失败永远到不了正在等待对端横幅的调用方。</para>
+    /// </summary>
+    internal Exception? LoopFault => Volatile.Read(ref _loopFault);
 
     /// <summary>
     /// Gets whether the connection is established.
@@ -462,6 +472,7 @@ internal sealed class AdbConnection : IDisposable
     private void FaultAllStreams(Exception ex)
     {
         AdbStream[] streams;
+        Volatile.Write(ref _loopFault, ex);
         lock (_lock)
         {
             streams = [.. _streams.Values];
