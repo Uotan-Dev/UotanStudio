@@ -161,18 +161,15 @@ public class LanguagePackRegistry
     public IReadOnlyCollection<LanguagePackDescriptor> GetAllPacks() => _packs.Values;
 
     /// <summary>
-    /// <para>自动发现并注册内置语言包。扫描已知的内置语言文化，创建对应的描述符。</para>
-    /// Automatically discovers and registers built-in language packs. Scans known built-in cultures and creates corresponding descriptors.
+    /// <para>为已知内置语言文化注册内置语言包描述符，文化清单与模块清单在此固定列出，不读取任何 URI。</para>
+    /// Registers built-in language pack descriptors for the known built-in cultures; the culture and module
+    /// lists are enumerated here and no URI is read.
     /// </summary>
-    /// <param name="baseUri">
-    /// <para>语言包的基础 URI（如 "avares://UotanStudio/Locale"）。</para>
-    /// The base URI for language packs (e.g., "avares://UotanStudio/Locale").
-    /// </param>
     /// <param name="knownCultures">
     /// <para>已知的文化名称列表。若为 null，则使用默认的 en-US 和 zh-CN。</para>
     /// The list of known culture names. If null, uses default en-US and zh-CN.
     /// </param>
-    public void DiscoverBuiltInPacks(string baseUri = "avares://UotanStudio/Locale", string[]? knownCultures = null)
+    public void DiscoverBuiltInPacks(string[]? knownCultures = null)
     {
         var cultures = knownCultures ?? ["en-US", "zh-CN"];
         var defaultModules = new[] { "Common", "Menu", "Dock", "Node", "Settings", "Device", "Interaction" };
