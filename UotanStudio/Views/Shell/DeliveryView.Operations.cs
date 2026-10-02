@@ -392,10 +392,11 @@ public partial class DeliveryView
 
             await CheckDeliveryDiskSpaceAsync(plan);
 
+            var planJson = DeliveryPlanSerializer.ToJson(plan);
             IReadOnlySet<string>? overwrite = null;
             if (!string.IsNullOrWhiteSpace(plan.OutputDirectory))
             {
-                var existing = DeliveryOutputService.FindExistingOutputs(plan);
+                var existing = DeliveryService.ListOutputs(planJson).Existing.ToArray();
                 if (existing.Length > 0 && TopLevel.GetTopLevel(this) is Window owner)
                 {
                     var language = LanguageService.Instance;
@@ -415,16 +416,14 @@ public partial class DeliveryView
             }
             if (root is not null) await PersistDeliveryAsync();
             Composition.SetRunning(true, 0); SidebarForm.IsEnabled = false; ImageSelection.IsEnabled = false;
-            var progress = new Progress<DeliveryProgress>(value =>
+            var progress = new Progress<DeliveryBuildProgress>(value =>
             {
                 if (!acceptingProgress || !ReferenceEquals(_deliveryCancellation, cancellation) || root != _deliveryRoot) return;
-                Composition.Model.ReportProgress(value);
+                Composition.Model.ReportProgress(value.ToDeliveryProgress());
                 Composition.SetRunning(true, Composition.Model.Progress);
             });
-            var service = new DeliveryOutputService(new DeliveryToolService(DeliveryHttp,
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UotanStudio", "delivery-tools")),
-                new DeliveryKeyProvider());
-            var outputs = await service.ExportAsync(plan, progress, cancellation.Token, overwrite);
+            var outputs = (await new DeliveryService(DeliveryHttp, signingKeys: new DeliveryKeyProvider())
+                .BuildAsync(planJson, overwrite, progress, cancellation.Token)).ToArray();
             acceptingProgress = false;
             Composition.Model.ResetProgressStatistics();
             Composition.SetRunning(true, 100);

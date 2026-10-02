@@ -3,12 +3,14 @@ using System.Text.Json;
 namespace UotanStudio.Services.Delivery;
 
 /// <summary>
-/// Public, reflection-free entry point that lets headless consumers drive delivery
+/// Public, reflection-free entry point that lets hosts and headless consumers drive delivery
 /// validation, output listing, tool preparation and builds from a serialized <see cref="DeliveryPlan"/>
-/// JSON contract. It deliberately exposes only plain types so no internal plan/build record crosses the
-/// assembly boundary and no <c>InternalsVisibleTo</c> grant is needed.
-/// <para>面向无头调用方（命令行）的公共无反射入口：以交付计划 JSON 契约驱动校验、输出列举、工具准备与构建。
-/// 有意只暴露普通类型，内部计划/构建记录不跨越程序集边界，也无需 <c>InternalsVisibleTo</c> 授权。</para>
+/// JSON contract. Only plain types cross the assembly boundary; the internal plan and build records stay
+/// inside this assembly, so consumers that need validation details or naming helpers still reach them
+/// through the <c>InternalsVisibleTo</c> grants listed in the assembly info.
+/// <para>公共无反射入口：以交付计划 JSON 契约驱动校验、输出列举、工具准备与构建。跨程序集边界只暴露普通类型，
+/// 内部计划与构建记录留在本子项目内；需要校验细节或命名辅助的调用方仍按程序集信息里的
+/// <c>InternalsVisibleTo</c> 授权直接访问。</para>
 /// </summary>
 /// <param name="httpClient">
 /// HTTP client used to download the pinned platform-tools and zstd during tool preparation and builds; validation and output listing ignore it.
@@ -18,17 +20,40 @@ namespace UotanStudio.Services.Delivery;
 /// Writable directory holding the downloaded tool cache; null or blank falls back to <see cref="DefaultToolCacheDirectory"/>.
 /// <para>存放已下载工具缓存的可写目录；为 null 或空白时回退到 <see cref="DefaultToolCacheDirectory"/>。</para>
 /// </param>
+/// <param name="signingKeys">
+/// Key provider used when the plan requests signed output; null keeps the build unsigned-capable only, and a signed plan fails honestly.
+/// <para>计划要求签名输出时使用的密钥供应器；为 null 时仅能产出无签名输出，签名计划会如实失败。</para>
+/// </param>
 /// <remarks>
 /// Validation and output listing run fully standalone. Build and tool preparation download pinned
 /// platform-tools and zstd over the network, so they require a caller-supplied <see cref="HttpClient"/>
-/// and a writable tool cache; plan-level image signing is driven by the key paths already inside the plan
-/// rather than an injected keystore, so an unsigned-only host fails honestly when a key is required.
+/// and a writable tool cache. Payload and package signing is driven by the key paths inside the plan
+/// resolved through the injected <paramref name="signingKeys"/>; hosts without a provider must not attempt
+/// a signed plan.
 /// <para>校验与输出列举完全独立。构建与工具准备会通过网络下载钉定的 platform-tools 与 zstd，
-/// 因此需要调用方提供的 <see cref="HttpClient"/> 与可写工具缓存；镜像签名由计划内已有的密钥路径驱动，
-/// 而非注入的密钥库，因此缺少密钥时纯无签名宿主会如实失败。</para>
+/// 因此需要调用方提供的 <see cref="HttpClient"/> 与可写工具缓存。Payload 与卡刷包签名由计划内的密钥路径
+/// 经注入的 <paramref name="signingKeys"/> 解析，缺少供应器的宿主不得尝试签名计划。</para>
 /// </remarks>
-public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDirectory = null)
+public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDirectory = null,
+    IDeliverySigningKeyProvider? signingKeys = null)
 {
+    /// <summary><para>注入的工具准备服务覆盖实例；非空时构建与工具准备不再自行创建
+    /// <see cref="DeliveryToolService"/>，供测试以无网络替身驱动门面。</para>
+    /// Injected tool-preparation override; when set, builds and tool preparation reuse it instead of creating
+    /// a <see cref="DeliveryToolService"/>, letting tests drive the facade without network.</summary>
+    private readonly IDeliveryTools? toolOverride;
+
+    /// <summary>
+    /// <para>以注入的工具替身构造门面，用于在无网络条件下验证构建与签名链路。</para>
+    /// Builds the facade over an injected tool stand-in so the build and signing paths can be verified without network.
+    /// </summary>
+    /// <param name="tools"><para>工具准备替身。</para>The tool-preparation stand-in.</param>
+    /// <param name="signingKeys"><para>签名密钥供应器，可为 null。</para>Optional signing key provider.</param>
+    internal DeliveryService(IDeliveryTools tools, IDeliverySigningKeyProvider? signingKeys = null)
+        : this(httpClient: null!, toolCacheDirectory: null, signingKeys: signingKeys)
+    {
+        toolOverride = tools;
+    }
     /// <summary><para>默认工具缓存目录（当前用户 LocalApplicationData 下）。</para>
     /// Default tool cache directory under the current user's local application data.</summary>
     /// <value>The absolute, once-resolved cache directory used when no explicit tool cache is supplied.
@@ -121,7 +146,8 @@ public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDire
     /// <para>用于构建的序列化 <c>DeliveryPlan</c> JSON。</para></param>
     /// <param name="overwrite">Paths allowed to replace existing outputs; others are left untouched. Null permits no overwrites.
     /// <para>允许覆盖既有输出的路径；其余保持不变。为 null 时不允许覆盖。</para></param>
-    /// <param name="log">Optional sink for human-readable progress lines. <para>可选的进度文本接收器。</para></param>
+    /// <param name="log">Optional typed progress sink carrying stage, byte and item metrics.
+    /// <para>可选的强类型进度接收端，携带阶段、字节与条目度量。</para></param>
     /// <param name="cancellationToken">Cancels an in-flight build or tool download. <para>取消进行中的构建或工具下载。</para></param>
     /// <returns>The absolute paths of the outputs produced by the build.
     /// <para>本次构建产出的输出绝对路径。</para></returns>
@@ -129,16 +155,24 @@ public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDire
     /// <para><paramref name="planJson"/> 为 null、空或仅空白。</para></exception>
     /// <exception cref="System.IO.InvalidDataException">The plan cannot be parsed.
     /// <para>计划无法解析。</para></exception>
+    /// <exception cref="System.InvalidOperationException">The plan requires signed output but no
+    /// <see cref="IDeliverySigningKeyProvider"/> was injected.
+    /// <para>计划需要签名输出，但未注入 <see cref="IDeliverySigningKeyProvider"/>。</para></exception>
     /// <exception cref="System.OperationCanceledException">The operation was canceled via <paramref name="cancellationToken"/>.
     /// <para>通过 <paramref name="cancellationToken"/> 取消了操作。</para></exception>
     public async Task<IReadOnlyList<string>> BuildAsync(string planJson, IReadOnlySet<string>? overwrite = null,
-        IProgress<string>? log = null, CancellationToken cancellationToken = default)
+        IProgress<DeliveryBuildProgress>? log = null, CancellationToken cancellationToken = default)
     {
         var plan = ParsePlan(planJson);
-        var outputs = await new DeliveryOutputService(NewToolService())
-            .ExportAsync(plan, ToProgress(log), cancellationToken, overwrite).ConfigureAwait(false);
+        var outputs = await new DeliveryOutputService(CreateTools(), signingKeys)
+            .ExportAsync(plan, log is null ? null : new ProgressAdapter(log), cancellationToken, overwrite)
+            .ConfigureAwait(false);
         return outputs;
     }
+
+    private IDeliveryTools CreateTools()
+        => toolOverride ?? new DeliveryToolService(httpClient,
+            string.IsNullOrWhiteSpace(toolCacheDirectory) ? DefaultToolCacheDirectory : toolCacheDirectory);
 
     private DeliveryToolService NewToolService()
         => new(httpClient, string.IsNullOrWhiteSpace(toolCacheDirectory) ? DefaultToolCacheDirectory : toolCacheDirectory);
@@ -151,10 +185,15 @@ public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDire
     }
 
     private static IProgress<DeliveryProgress>? ToProgress(IProgress<string>? log)
-        => log is null ? null : new ProgressAdapter(log);
+        => log is null ? null : new TextProgressAdapter(log);
 
-    private sealed class ProgressAdapter(IProgress<string> log) : IProgress<DeliveryProgress>
+    private sealed class TextProgressAdapter(IProgress<string> log) : IProgress<DeliveryProgress>
     {
         public void Report(DeliveryProgress value) => log.Report($"{value.Percent:0}% {value.Message}");
+    }
+
+    private sealed class ProgressAdapter(IProgress<DeliveryBuildProgress> log) : IProgress<DeliveryProgress>
+    {
+        public void Report(DeliveryProgress value) => log.Report(value.ToBuildProgress());
     }
 }
