@@ -41,6 +41,13 @@ internal static class PayloadPropertiesParser
             result.MetadataSize = ms;
         }
 
+        if (properties.TryGetValue("max_zstd_dict_raw_size", out var dictSize) && long.TryParse(dictSize, out var rawSize))
+        {
+            result.MaxZstdDictRawSize = rawSize;
+        }
+
+        result.MaxZstdDictTrust = properties.TryGetValue("max_zstd_dict_trust", out var trust) ? trust : string.Empty;
+
         return result;
     }
 

@@ -9,7 +9,7 @@ namespace UotanStudio.Firmware.OtaDelta.Diff;
 /// <para>bsdiff 二进制补丁的只读格式处理器：可识别并检视补丁，但应用或生成补丁需要第二个文件，
 /// 须经 <see cref="DeltaEngine"/> 完成。</para>
 /// </summary>
-public sealed class DiffFormatHandler : IFormatHandler
+public sealed class DiffFormatHandler : IReadonlyFormatHandler
 {
     private const string BsdiffMagic = "BSDIFF40";
     private const int BsdiffHeaderSize = 32;

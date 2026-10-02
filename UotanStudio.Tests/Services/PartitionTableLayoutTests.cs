@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using UotanStudio.Models;
+using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Editors;
 using Xunit;
 
@@ -173,7 +174,7 @@ public sealed class PartitionTableLayoutTests
 
     private static byte[] CreateCombinedBlob(IReadOnlyList<GptEntry> entries)
     {
-        var standard = GptTable.Build(2UL * 1024 * 1024 * 1024, Guid.NewGuid(), entries);
+        var standard = BuildStandardTableRegions(entries);
         var image = new byte[(LastSector + 1) * SectorSize];
         standard.AsSpan(0, SectorSize).CopyTo(image);
 
@@ -187,6 +188,17 @@ public sealed class PartitionTableLayoutTests
         WriteHeader(image, standard, BackupHeaderSector, 0, 1, 0, arrayCrc);
         FillUnmodelledSectors(image);
         return image;
+    }
+
+    private static byte[] BuildStandardTableRegions(IReadOnlyList<GptEntry> entries)
+    {
+        var fixture = new List<GptFixtureEntry>(entries.Count);
+        foreach (var entry in entries)
+        {
+            fixture.Add(new GptFixtureEntry(entry.TypeGuid, entry.UniqueGuid, entry.FirstLba, entry.LastLba, entry.Name));
+        }
+
+        return GptFixtureImage.Build(2UL * 1024 * 1024 * 1024, Guid.NewGuid(), fixture);
     }
 
     private static void WriteHeader(byte[] image, byte[] standard, int sector, ulong selfLba, ulong alternateLba, ulong entriesLba, uint arrayCrc)

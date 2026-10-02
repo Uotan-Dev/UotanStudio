@@ -27,12 +27,13 @@ internal static class ZstdReplaceDecoder
     /// <remarks>
     /// AOSP gates external dictionaries with the payload properties <c>max_zstd_dict_raw_size</c> (byte ceiling
     /// for the dictionary a frame may use) and <c>max_zstd_dict_trust</c>; those keys live in
-    /// <c>payload_properties.txt</c>, parsed into <see cref="Payload.Models.PayloadProperties"/>. This
-    /// repository has no manifest field for them and the parallel extractor does not yet thread a dictionary
-    /// into REPLACE_ZSTD decoding, so dictionary use is currently exercised through this decoder directly.
+    /// <c>payload_properties.txt</c> and are parsed into <see cref="Payload.Models.PayloadProperties"/>.
+    /// <see cref="PayloadExtractor"/> resolves a per-partition dictionary, rejects one above its configured ceiling
+    /// and threads it into REPLACE_ZSTD decoding; callers without a manifest ceiling keep the 64 MiB bound here.
     /// <para>AOSP 通过载荷属性 <c>max_zstd_dict_raw_size</c>（一帧可用字典的字节上限）与 <c>max_zstd_dict_trust</c>
     /// 管控外部字典；这些键位于 <c>payload_properties.txt</c>，由 <see cref="Payload.Models.PayloadProperties"/> 解析。
-    /// 本仓库清单中没有对应字段，并行提取器也尚未把字典接入 REPLACE_ZSTD 解码，因此字典路径目前经由本解码器直接验证。</para>
+    /// <see cref="PayloadExtractor"/> 按分区解析字典、拒绝超出所配置上限的字典，并把字典贯穿到 REPLACE_ZSTD 解码；
+    /// 未声明清单上限的调用方沿用本解码器的 64 MiB 上界。</para>
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="dictionary"/> exceeds the 64 MiB ceiling. <para><paramref name="dictionary"/> 超过 64 MiB 上限。</para>

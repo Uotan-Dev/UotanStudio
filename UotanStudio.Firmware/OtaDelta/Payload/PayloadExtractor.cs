@@ -14,16 +14,52 @@ internal class PayloadExtractor
 {
     internal const long DefaultMaximumPartitionBytes = 64L * 1024 * 1024 * 1024;
 
+    internal const long DefaultMaximumZstdDictBytes = 64L * 1024 * 1024;
+
     /// <summary>Buffer size in bytes for the file streams created during partition extraction.</summary>
     /// <para>分区提取期间创建的文件流所用的缓冲区大小（字节）。</para>
     private const int CopyBufferSize = 81920;
 
     private readonly long maximumPartitionBytes;
+    private readonly IReadOnlyDictionary<string, byte[]>? zstdDictionaries;
+    private readonly long maximumZstdDictBytes;
 
-    internal PayloadExtractor(long maximumPartitionBytes = DefaultMaximumPartitionBytes)
+    internal PayloadExtractor(long maximumPartitionBytes = DefaultMaximumPartitionBytes,
+        IReadOnlyDictionary<string, byte[]>? zstdDictionaries = null,
+        long maximumZstdDictBytes = DefaultMaximumZstdDictBytes)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumPartitionBytes);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumZstdDictBytes);
         this.maximumPartitionBytes = maximumPartitionBytes;
+        this.zstdDictionaries = zstdDictionaries;
+        this.maximumZstdDictBytes = maximumZstdDictBytes;
+    }
+
+    /// <summary>
+    /// Resolves the external raw content dictionary a partition's REPLACE_ZSTD frames were compressed with.
+    /// <para>解析某分区 REPLACE_ZSTD 帧压缩时使用的外部原始内容字典。</para>
+    /// </summary>
+    /// <remarks>
+    /// The AOSP <c>max_zstd_dict_raw_size</c> ceiling arrives as <c>maximumZstdDictBytes</c>; an oversized
+    /// dictionary is rejected here instead of being silently ignored while decoding.
+    /// <para>AOSP 的 <c>max_zstd_dict_raw_size</c> 上限由 <c>maximumZstdDictBytes</c> 传入；超限字典在此直接拒绝，
+    /// 不会在解码时被静默忽略。</para>
+    /// </remarks>
+    private ReadOnlyMemory<byte> ZstdDictionaryFor(string partitionName)
+    {
+        if (zstdDictionaries is null || !zstdDictionaries.TryGetValue(partitionName, out var dictionary)
+            || dictionary.Length == 0)
+        {
+            return Memory<byte>.Empty;
+        }
+
+        if (dictionary.Length > maximumZstdDictBytes)
+        {
+            throw new PayloadUnsupportedOperationException(
+                $"Zstd dictionary for {partitionName} exceeds the configured raw-size ceiling.", nameof(partitionName));
+        }
+
+        return dictionary;
     }
 
     private static readonly HashSet<InstallOperation.Types.Type> ParallelizableTypes =
@@ -277,7 +313,7 @@ internal class PayloadExtractor
                             MaxDegreeOfParallelism = workers,
                             CancellationToken = cancellationToken
                         },
-                        op => OperationProcessor.ProcessOperation(op, outFile, opStream, baseOffset, blockSize, writeLock, streamLock, cancellationToken, progressTracker));
+                        op => OperationProcessor.ProcessOperation(op, outFile, opStream, baseOffset, blockSize, writeLock, streamLock, cancellationToken, progressTracker, ZstdDictionaryFor(partition.PartitionName)));
 
                     foreach (var op in sequentialOps)
                     {
@@ -294,7 +330,7 @@ internal class PayloadExtractor
                             MaxDegreeOfParallelism = workers,
                             CancellationToken = cancellationToken
                         },
-                        op => OperationProcessor.ProcessOperation(op, outFile, stream!, baseOffset, blockSize, writeLock, streamLock, cancellationToken, progressTracker));
+                        op => OperationProcessor.ProcessOperation(op, outFile, stream!, baseOffset, blockSize, writeLock, streamLock, cancellationToken, progressTracker, ZstdDictionaryFor(partition.PartitionName)));
 
                     using var deltaPayload = new IndependentReadStream(stream!, streamLock);
                     foreach (var op in sequentialOps)

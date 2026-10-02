@@ -13,11 +13,11 @@ public sealed partial class PayloadBuilder
     /// Dictionary-free frames rebuild through this repository's extractor. Frames that use an external
     /// dictionary additionally require the consumer to hold the exact dictionary bytes and honor the AOSP
     /// gating keys <c>max_zstd_dict_raw_size</c> and <c>max_zstd_dict_trust</c> from
-    /// <c>payload_properties.txt</c>; the parallel extractor does not thread dictionaries into REPLACE_ZSTD
-    /// decoding yet, so dictionary frames are verified through <c>ZstdReplaceDecoder</c> directly.
+    /// <c>payload_properties.txt</c>; <see cref="PayloadExtractor"/> takes the per-partition dictionary and the
+    /// raw-size ceiling, so dictionary frames rebuild through the same extractor path.
     /// <para>无字典帧可经本仓库提取器重建。使用外部字典的帧还要求消费方持有完全一致的字典字节，并遵守
     /// <c>payload_properties.txt</c> 中 AOSP 管控键 <c>max_zstd_dict_raw_size</c> 与 <c>max_zstd_dict_trust</c>；
-    /// 并行提取器尚未把字典接入 REPLACE_ZSTD 解码，因此字典帧需经 <c>ZstdReplaceDecoder</c> 直接验证。</para>
+    /// <see cref="PayloadExtractor"/> 接收按分区字典与原始大小上限，因此字典帧同样经该提取器路径重建。</para>
     /// </remarks>
     /// <remarks>
     /// Adding a REPLACE_ZSTD partition raises the manifest minor version to 10, matching the upstream rule

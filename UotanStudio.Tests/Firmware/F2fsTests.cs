@@ -111,6 +111,45 @@ public class F2fsTests
     }
 
     [Fact]
+    public async Task PackAsync_WithByteProgress_ReportsBuildingImageFramesUpToTotal()
+    {
+        var root = CreateTempDirectory();
+        var imagePath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".img");
+        try
+        {
+            File.WriteAllBytes(Path.Combine(root, "a.bin"), new byte[4096]);
+            File.WriteAllBytes(Path.Combine(root, "b.bin"), new byte[8192]);
+            var collector = new ProgressCollector();
+
+            var result = await ((UotanStudio.Firmware.Core.IWritableFormatHandler)new F2fsFormatHandler())
+                .PackAsync(root, imagePath, collector, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success);
+            Assert.NotEmpty(collector.Frames);
+            Assert.All(collector.Frames, frame => Assert.Equal(UotanStudio.Firmware.Core.FileSystemWorkStage.BuildingImage, frame.Stage));
+            Assert.Equal([4096L, 12288L], collector.Frames.Select(static frame => frame.Processed).OrderBy(static value => value).ToArray());
+            Assert.All(collector.Frames, frame => Assert.Equal(12288L, frame.Total));
+        }
+        finally
+        {
+            if (File.Exists(imagePath)) File.Delete(imagePath);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private sealed class ProgressCollector : IProgress<UotanStudio.Firmware.Core.FileSystemByteProgress>
+    {
+        private readonly List<UotanStudio.Firmware.Core.FileSystemByteProgress> _frames = [];
+
+        public IReadOnlyList<UotanStudio.Firmware.Core.FileSystemByteProgress> Frames => _frames;
+
+        public void Report(UotanStudio.Firmware.Core.FileSystemByteProgress value)
+        {
+            lock (_frames) _frames.Add(value);
+        }
+    }
+
+    [Fact]
     public async Task Handler_DetectsMetadataAndUnpacksBuiltImage()
     {
         var root = CreateTempDirectory();

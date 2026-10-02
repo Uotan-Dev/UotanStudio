@@ -190,100 +190,6 @@ public static class GptTable
     }
 
     /// <summary>
-    /// <para>由归一化条目构建 GPT 镜像（唯一 GUID 自动生成，类型 GUID 无法解析时用 Linux 默认值）。</para>
-    /// Builds a GPT image from normalized entries (unique GUIDs are generated; the type GUID
-    /// falls back to the Linux default when unparseable).
-    /// </summary>
-    public static byte[] Build(ulong diskSizeBytes, Guid diskGuid, IReadOnlyList<PartitionEntry> entries)
-    {
-        ArgumentNullException.ThrowIfNull(entries);
-        var gptEntries = new List<GptEntry>(entries.Count);
-        foreach (var entry in entries)
-        {
-            if (entry.SizeSectors == 0)
-            {
-                throw new ArgumentException($"GPT partition '{entry.Name}' has zero size. 分区大小不能为零。", nameof(entries));
-            }
-
-            var typeGuid = Guid.TryParse(entry.Type, out var parsed) ? parsed : DefaultTypeGuid;
-            var first = checked(entry.StartSector);
-            var last = checked(entry.StartSector + entry.SizeSectors - 1);
-            gptEntries.Add(new GptEntry
-            {
-                TypeGuid = typeGuid,
-                UniqueGuid = Guid.NewGuid(),
-                FirstLba = first,
-                LastLba = last,
-                Attributes = 0,
-                Name = entry.Name
-            });
-        }
-
-        return Build(diskSizeBytes, diskGuid, gptEntries);
-    }
-
-    /// <summary>
-    /// <para>由 GPT 条目构建完整 GPT 镜像：扇区 0 保护性 MBR、扇区 1 主 GPT 头、扇区 2 起分区表项，
-    /// 并正确计算头与分区表的 CRC-32。</para>
-    /// Builds a complete GPT image: sector 0 protective MBR, sector 1 primary GPT header,
-    /// partition entries from sector 2, with correct header and entry-array CRC-32 values.
-    /// </summary>
-    public static byte[] Build(ulong diskSizeBytes, Guid diskGuid, IReadOnlyList<GptEntry> entries)
-    {
-        ArgumentNullException.ThrowIfNull(entries);
-        if (entries.Count == 0)
-        {
-            throw new ArgumentException("GPT requires at least one partition. GPT 至少需要一个分区。", nameof(entries));
-        }
-
-        if (entries.Count > MaxEntryCount)
-        {
-            throw new ArgumentException($"GPT partition count {entries.Count} exceeds {MaxEntryCount}. 分区数量超限。", nameof(entries));
-        }
-
-        var diskSectors = checked(diskSizeBytes / SectorSize);
-        if (diskSectors < FirstUsableLba + FirstUsableLba)
-        {
-            throw new ArgumentException($"Disk size {diskSizeBytes} is too small for GPT. 磁盘太小，无法容纳 GPT 头。", nameof(diskSizeBytes));
-        }
-
-        var lastUsableLba = checked(diskSectors - FirstUsableLba - 1);
-        var entryBytes = checked(entries.Count * EntrySize);
-        var entrySectors = checked((entryBytes + SectorSize - 1) / SectorSize);
-        var imageLength = checked((long)((EntriesStartLba + (ulong)entrySectors) * SectorSize));
-
-        var image = new byte[imageLength];
-
-        WriteProtectiveMbr(image, diskSectors);
-
-        var header = image.AsSpan(HeaderOffset, HeaderSize);
-        Signature.CopyTo(header);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[8..], Revision);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[12..], HeaderSize);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[HeaderCrcOffset..], 0);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[20..], 0);
-        BinaryPrimitives.WriteUInt64LittleEndian(header[24..], PrimaryHeaderLba);
-        BinaryPrimitives.WriteUInt64LittleEndian(header[32..], checked(diskSectors - 1));
-        BinaryPrimitives.WriteUInt64LittleEndian(header[40..], FirstUsableLba);
-        BinaryPrimitives.WriteUInt64LittleEndian(header[48..], lastUsableLba);
-        WriteGuidBigEndian(header[56..], diskGuid);
-        BinaryPrimitives.WriteUInt64LittleEndian(header[72..], EntriesStartLba);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[80..], (uint)entries.Count);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[84..], EntrySize);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[EntriesCrcOffset..], 0);
-
-        var entriesSpan = image.AsSpan((int)checked(EntriesStartLba * SectorSize), entryBytes);
-        for (var i = 0; i < entries.Count; i++)
-        {
-            WriteEntry(entriesSpan.Slice(i * EntrySize, EntrySize), entries[i]);
-        }
-
-        BinaryPrimitives.WriteUInt32LittleEndian(header[EntriesCrcOffset..], Crc32(entriesSpan));
-        BinaryPrimitives.WriteUInt32LittleEndian(header[HeaderCrcOffset..], Crc32(header));
-        return image;
-    }
-
-    /// <summary>
     /// <para>解析 GPT 镜像：定位每个扇区对齐的头部，校验头 CRC，并按声明的条目 LBA 或 CRC 搜索定位
     /// 条目数组；以首个有效副本作为分区表来源。</para>
     /// Parses a GPT image: locates every sector-aligned header, validates the header CRC, resolves each
@@ -543,18 +449,6 @@ public static class GptTable
     /// A header and its entry array located inside the source image.
     /// </summary>
     private readonly record struct GptCopy(long HeaderOffset, int HeaderSize, long EntriesOffset, uint EntryCount);
-
-    private static void WriteProtectiveMbr(Span<byte> image, ulong diskSectors)
-    {
-        var slot = image.Slice(446, 16);
-        slot[0] = 0;
-        slot[4] = ProtectiveMbrType;
-        BinaryPrimitives.WriteUInt32LittleEndian(slot[8..], 1);
-        var size = Math.Min(diskSectors, uint.MaxValue);
-        BinaryPrimitives.WriteUInt32LittleEndian(slot[12..], (uint)size);
-        image[510] = 0x55;
-        image[511] = 0xAA;
-    }
 
     private static void WriteGuidBigEndian(Span<byte> target, Guid guid)
     {

@@ -7,7 +7,7 @@ namespace UotanStudio.Firmware.VendorFirmware.Oppo;
 /// Format handler exposing Oppo OFP/OPS/OZIP archives through the shared unpack pipeline.
 /// <para>通过共享解包流程对外提供 Oppo OFP/OPS/OZIP 归档的格式处理器。</para>
 /// </summary>
-public sealed class OppoFormatHandler : IFormatHandler
+public sealed class OppoFormatHandler : IReadonlyFormatHandler
 {
     private readonly OppReader _reader = new();
 

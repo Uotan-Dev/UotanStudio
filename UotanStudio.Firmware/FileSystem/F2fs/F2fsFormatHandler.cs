@@ -225,6 +225,14 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider,
     /// <exception cref="OperationCanceledException">The token was cancelled during packing.
     /// <para>打包过程中令牌被取消。</para></exception>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+        => PackCore(inputPath, outputPath, null, cancellationToken);
+
+    Task<FirmwareOpResult> IWritableFormatHandler.PackAsync(string inputPath, string outputPath,
+        IProgress<FileSystemByteProgress>? progress, CancellationToken cancellationToken)
+        => PackCore(inputPath, outputPath, progress, cancellationToken);
+
+    private Task<FirmwareOpResult> PackCore(string inputPath, string outputPath,
+        IProgress<FileSystemByteProgress>? progress, CancellationToken cancellationToken)
     {
         return Task.Run(() =>
         {
@@ -259,7 +267,7 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider,
                 Directory.CreateDirectory(Path.GetDirectoryName(fullOutputPath)!);
                 try
                 {
-                    F2fsBuilder.Build(inputPath, rawOutput, new F2fsOptions
+                    F2fsBuilder.BuildWithProgress(inputPath, rawOutput, new F2fsOptions
                     {
                         BlockSize = FileSystemPackingOptions.IntegerOption(options, "BlockSize", 4096),
                         SegmentSize = FileSystemPackingOptions.IntegerOption(options, "SegmentSize", 2 * 1024 * 1024),
@@ -275,7 +283,9 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider,
                         FsConfigPath = FileSystemPackingOptions.NullIfEmpty(options, "FsConfigPath"),
                         FileContextsPath = FileSystemPackingOptions.NullIfEmpty(options, "FileContextsPath"),
                         CancellationToken = cancellationToken,
-                    });
+                    }, progress is null
+                        ? null
+                        : FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage));
                     if (sparseOutput)
                     {
                         SparseContainerAccess.Resolve().ConvertRawToSparseAtomic(rawOutput, fullOutputPath, cancellationToken);

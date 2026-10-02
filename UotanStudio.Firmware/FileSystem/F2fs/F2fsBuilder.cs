@@ -131,6 +131,24 @@ public sealed partial class F2fsBuilder
     }
 
     /// <summary>
+    /// Managed F2FS build path with byte progress for the data planning stage.
+    /// <para>带数据规划阶段字节进度的托管 F2FS 构建路径。</para>
+    /// </summary>
+    internal static void BuildWithProgress(string sourceDirectory, string outputPath, F2fsOptions? options,
+        IProgress<(long Processed, long Total)>? progress)
+    {
+        FileSystemPreservation.RejectLossyDirectoryRebuild(sourceDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceDirectory);
+        ArgumentNullException.ThrowIfNull(outputPath);
+        if (options?.AndroidNativeProfile == true)
+        {
+            Build(sourceDirectory, outputPath, options);
+            return;
+        }
+        BuildManaged(sourceDirectory, outputPath, options, progress);
+    }
+
+    /// <summary>
     /// Builds an F2FS image from sourceDirectory and atomically writes it to outputPath.
     /// <para>从 sourceDirectory 构建 f2fs 镜像并原子写入 outputPath。</para>
     /// </summary>
@@ -177,7 +195,8 @@ public sealed partial class F2fsBuilder
     }
 
     /// <summary>Managed (non-native) F2FS build path shared by <see cref="Build(string, string, F2fsOptions?)"/> and <see cref="BuildAsync"/>.</summary>
-    private static void BuildManaged(string sourceDirectory, string outputPath, F2fsOptions? options)
+    private static void BuildManaged(string sourceDirectory, string outputPath, F2fsOptions? options,
+        IProgress<(long Processed, long Total)>? progress = null)
     {
         var fullOutputPath = Path.GetFullPath(outputPath);
         var outputDirectory = Path.GetDirectoryName(fullOutputPath)!;
@@ -193,7 +212,7 @@ public sealed partial class F2fsBuilder
                        temporaryPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1 << 16,
                        FileOptions.SequentialScan))
             {
-                WriteImageCore(root, temporary, 0, freshDestination: true, options);
+                WriteImageCore(root, temporary, 0, freshDestination: true, options, progress);
                 cancellationToken.ThrowIfCancellationRequested();
                 temporary.Flush(flushToDisk: true);
             }
@@ -310,7 +329,8 @@ public sealed partial class F2fsBuilder
         return string.Join('/', parts);
     }
 
-    private static void WriteImageCore(BuildNode root, Stream output, long baseOffset, bool freshDestination, F2fsOptions? options)
+    private static void WriteImageCore(BuildNode root, Stream output, long baseOffset, bool freshDestination,
+        F2fsOptions? options, IProgress<(long Processed, long Total)>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(output);
         var effective = options ?? new F2fsOptions();
@@ -354,6 +374,10 @@ public sealed partial class F2fsBuilder
         });
         AssignInodeNumbers(ordered);
         foreach (var (alias, canonical) in hardlinks) alias.Ino = canonical.Ino;
+        var plannedBytes = 0L;
+        var totalPlannedBytes = progress is null
+            ? 0L
+            : ordered.Where(node => !node.IsDirectory).Sum(node => (long)node.Size);
         Core.FirmwareParallelism.ForEach(ordered, node =>
         {
             effective.CancellationToken.ThrowIfCancellationRequested();
@@ -364,6 +388,10 @@ public sealed partial class F2fsBuilder
             else
             {
                 PlanDirectoryBlocks(node);
+            }
+            if (progress is not null && !node.IsDirectory)
+            {
+                progress.Report((Interlocked.Add(ref plannedBytes, (long)node.Size), totalPlannedBytes));
             }
         });
 

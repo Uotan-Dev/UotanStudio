@@ -464,6 +464,31 @@ public static partial class PayloadParser
     /// <exception cref="UotanStudio.Firmware.OtaDelta.Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
     /// <para>Zucchini 操作数据块无法解码，或声明了本库无法应用的可执行类型；该异常在创建任何分区输出之前抛出。</para></exception>
     public static void Extract(string filePath, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
+        => ExtractFileCore(filePath, extractFiles, outputDir, sourcePayloadPath, sourceImages, maximumPartitionBytes, null, PayloadExtractor.DefaultMaximumZstdDictBytes);
+
+    /// <summary>
+    /// Extracts partitions from a payload file while threading external raw content dictionaries into
+    /// REPLACE_ZSTD operations, mirroring the AOSP <c>max_zstd_dict_raw_size</c> ceiling.
+    /// <para>从载荷文件提取分区，并把外部原始内容字典贯穿到 REPLACE_ZSTD 操作，对应 AOSP 的 <c>max_zstd_dict_raw_size</c> 上限。</para>
+    /// </summary>
+    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
+    /// <param name="extractFiles">Partition names to extract; null or empty extracts every named partition. <para>要提取的分区名；为 null 或空时提取全部有名字分区。</para></param>
+    /// <param name="outputDir">Destination directory; null keeps the manifest-derived default. <para>目标目录；为 null 时使用按清单推导的默认值。</para></param>
+    /// <param name="zstdDictionaries">Dictionaries keyed by partition name; a partition without an entry keeps the dictionary-free path. <para>按分区名索引的字典；缺少条目的分区沿用无字典路径。</para></param>
+    /// <param name="maximumZstdDictRawSize">Ceiling for each supplied dictionary; larger dictionaries fail before decoding; must be positive. <para>单个字典的上限；超限字典在解码前失败；必须为正数。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank. <para><paramref name="filePath"/> 为空白。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> or <paramref name="zstdDictionaries"/> is <see langword="null"/>. <para><paramref name="filePath"/> 或 <paramref name="zstdDictionaries"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumZstdDictRawSize"/> is not positive. <para><paramref name="maximumZstdDictRawSize"/> 不为正数。</para></exception>
+    /// <exception cref="PayloadException">The payload is unsupported, a partition escapes the output directory, a dictionary exceeds its ceiling, or a frame cannot be decoded. <para>载荷不受支持、分区逃逸输出目录、字典超出上限，或帧无法解码。</para></exception>
+    public static void ExtractWithZstdDictionaries(string filePath, string[]? extractFiles, string? outputDir,
+        IReadOnlyDictionary<string, byte[]> zstdDictionaries,
+        long maximumZstdDictRawSize = PayloadExtractor.DefaultMaximumZstdDictBytes)
+        => ExtractFileCore(filePath, extractFiles, outputDir, null, null, PayloadExtractor.DefaultMaximumPartitionBytes,
+            zstdDictionaries, maximumZstdDictRawSize);
+
+    private static void ExtractFileCore(string filePath, string[]? extractFiles, string? outputDir,
+        string? sourcePayloadPath, IReadOnlyDictionary<string, string>? sourceImages, long maximumPartitionBytes,
+        IReadOnlyDictionary<string, byte[]>? zstdDictionaries, long maximumZstdDictRawSize)
     {
         Guard.ThrowIfNull(filePath);
         Guard.ThrowIfNullOrWhiteSpace(filePath);
@@ -475,7 +500,7 @@ public static partial class PayloadParser
         {
             using var plan = BuildExtractPlan(filePath, ref tempPath);
             var resolvedSourceImages = ResolveSourceImages(plan.Manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
-            new PayloadExtractor(maximumPartitionBytes).ExtractPartitions(
+            new PayloadExtractor(maximumPartitionBytes, zstdDictionaries, maximumZstdDictRawSize).ExtractPartitions(
                 plan.Manifest, plan.OuterStream, plan.Header.BaseOffset, extractFiles, outputDir ?? string.Empty, resolvedSourceImages,
                 openPayloadStream: plan.OpenPayloadStream);
         }
@@ -557,7 +582,7 @@ public static partial class PayloadParser
                 sink = new OffsetByteProgress(byteProgress, plan.ContainerOffset, plan.TotalBytes);
             }
 
-            var extractor = new PayloadExtractor(maximumPartitionBytes);
+            var extractor = new PayloadExtractor(maximumPartitionBytes, null, PayloadExtractor.DefaultMaximumZstdDictBytes);
             await extractor.ExtractPartitionsAsync(
                 plan.Manifest, plan.OuterStream, plan.Header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken,
                 resolvedSourceImages, sink, plan.OpenPayloadStream).ConfigureAwait(false);
@@ -611,7 +636,7 @@ public static partial class PayloadParser
         {
             var (manifest, header) = ReadManifest(stream);
             var resolvedSourceImages = ResolveSourceImages(manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
-            new PayloadExtractor(maximumPartitionBytes).ExtractPartitions(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, resolvedSourceImages);
+            new PayloadExtractor(maximumPartitionBytes, null, PayloadExtractor.DefaultMaximumZstdDictBytes).ExtractPartitions(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, resolvedSourceImages);
         }
         finally
         {
@@ -667,7 +692,7 @@ public static partial class PayloadParser
         {
             var (manifest, header) = await ReadManifestAsync(stream, cancellationToken).ConfigureAwait(false);
             var resolvedSourceImages = ResolveSourceImages(manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
-            var extractor = new PayloadExtractor(maximumPartitionBytes);
+            var extractor = new PayloadExtractor(maximumPartitionBytes, null, PayloadExtractor.DefaultMaximumZstdDictBytes);
             await extractor.ExtractPartitionsAsync(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken, resolvedSourceImages, byteProgress).ConfigureAwait(false);
         }
         finally

@@ -1,6 +1,7 @@
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Models;
 using UotanStudio.Services.Flash;
+using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Editors;
 using Xunit;
 
@@ -15,11 +16,11 @@ public sealed class PartitionEditorBandTests
         try
         {
             var path = Path.Combine(directory, "disk.img");
-            File.WriteAllBytes(path, GptTable.Build(1024UL * 1024, Guid.NewGuid(),
+            WriteGptImage(path, 1024UL * 1024,
             [
                 Partition(0x22, 1024, "first"),
                 Partition(1058, 990, "second")
-            ]));
+            ]);
             var editor = new PartitionEditorViewModel();
             await editor.LoadAsync(path);
 
@@ -46,11 +47,11 @@ public sealed class PartitionEditorBandTests
         try
         {
             var path = Path.Combine(directory, "disk.img");
-            File.WriteAllBytes(path, GptTable.Build(1024UL * 1024, Guid.NewGuid(),
+            WriteGptImage(path, 1024UL * 1024,
             [
                 Partition(0x22, 1024, "first"),
                 Partition(1058, 990, "second")
-            ]));
+            ]);
             var editor = new PartitionEditorViewModel();
             await editor.LoadAsync(path);
             var item = editor.Partitions.Single(p => p.Name == "second");
@@ -88,10 +89,10 @@ public sealed class PartitionEditorBandTests
         try
         {
             var path = Path.Combine(directory, "disk.img");
-            File.WriteAllBytes(path, GptTable.Build(2UL * 1024 * 1024, Guid.NewGuid(),
+            WriteGptImage(path, 2UL * 1024 * 1024,
             [
                 Partition(0x22, 1024, "first")
-            ]));
+            ]);
             var editor = new PartitionEditorViewModel();
             await editor.LoadAsync(path);
 
@@ -126,11 +127,11 @@ public sealed class PartitionEditorBandTests
         {
             var path = Path.Combine(directory, "disk.img");
             var remainingGuid = Guid.NewGuid();
-            File.WriteAllBytes(path, GptTable.Build(1024UL * 1024, Guid.NewGuid(),
+            WriteGptImage(path, 1024UL * 1024,
             [
                 new GptEntry { TypeGuid = GptTable.DefaultTypeGuid, UniqueGuid = remainingGuid, FirstLba = 34, LastLba = 1057, Name = "keep" },
                 new GptEntry { TypeGuid = GptTable.DefaultTypeGuid, UniqueGuid = Guid.NewGuid(), FirstLba = 1058, LastLba = 1500, Name = "drop" }
-            ]));
+            ]);
             var editor = new PartitionEditorViewModel();
             await editor.LoadAsync(path);
             editor.SelectedPartition = editor.Partitions.Single(p => p.Name == "drop");
@@ -162,11 +163,11 @@ public sealed class PartitionEditorBandTests
         try
         {
             var path = Path.Combine(directory, "disk.img");
-            File.WriteAllBytes(path, GptTable.Build(1024UL * 1024, Guid.NewGuid(),
+            WriteGptImage(path, 1024UL * 1024,
             [
                 Partition(0x22, 1024, "first"),
                 Partition(1058, 990, "second")
-            ]));
+            ]);
             var before = File.ReadAllBytes(path);
             var editor = new PartitionEditorViewModel();
             await editor.LoadAsync(path);
@@ -318,6 +319,30 @@ public sealed class PartitionEditorBandTests
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    private static void WriteGptImage(string path, ulong diskSizeBytes, IReadOnlyList<PartitionEntry> entries)
+    {
+        var fixture = new List<GptFixtureEntry>(entries.Count);
+        foreach (var entry in entries)
+        {
+            fixture.Add(new GptFixtureEntry(
+                Guid.TryParse(entry.Type, out var type) ? type : GptTable.DefaultTypeGuid,
+                Guid.NewGuid(), entry.StartSector, checked(entry.StartSector + entry.SizeSectors - 1), entry.Name));
+        }
+
+        GptFixtureImage.Write(path, diskSizeBytes, fixture);
+    }
+
+    private static void WriteGptImage(string path, ulong diskSizeBytes, IReadOnlyList<GptEntry> entries)
+    {
+        var fixture = new List<GptFixtureEntry>(entries.Count);
+        foreach (var entry in entries)
+        {
+            fixture.Add(new GptFixtureEntry(entry.TypeGuid, entry.UniqueGuid, entry.FirstLba, entry.LastLba, entry.Name));
+        }
+
+        GptFixtureImage.Write(path, diskSizeBytes, fixture);
     }
 
     private static PartitionEntry Partition(ulong start, ulong size, string name) => new()

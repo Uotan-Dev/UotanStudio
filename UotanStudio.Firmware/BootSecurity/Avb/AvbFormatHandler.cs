@@ -10,7 +10,7 @@ namespace UotanStudio.Firmware.BootSecurity.Avb;
 /// <para>Android Verified Boot 的格式处理器：识别独立 VBMeta 镜像与带 AVB 尾部的分区镜像，读取元数据并提取 VBMeta 结构。
 /// 输入一律视为不可信并做边界检查；畸形镜像返回失败结果而不抛出异常。</para>
 /// </summary>
-internal sealed class AvbFormatHandler : IFormatHandler
+internal sealed class AvbFormatHandler : IReadonlyFormatHandler
 {
     /// <summary>Display name published with every operation result of this handler.
     /// <para>本处理器每次操作结果随附的显示名称。</para></summary>

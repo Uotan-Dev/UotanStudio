@@ -3,15 +3,15 @@ using UotanStudio.Firmware.Core;
 namespace UotanStudio.Firmware.BlockImage.Gpt;
 
 /// <summary>
-/// Read-only handler for GPT-bearing disk images: it detects the <c>EFI PART</c> header, reports the
-/// validated partition map, and "unpacks" by publishing a partition-entry manifest rather than carving
-/// partition payloads. Writing or repairing tables is a separate concern exposed by
-/// <c>GptTableWriter</c> and <c>GptRepair</c>, so this handler intentionally implements only the
-/// read-only surface.
-/// <para>GPT 磁盘镜像的只读处理器：检测 <c>EFI PART</c> 头部、报告经校验的分区映射；“解包”仅发布分区条目清单，
-/// 而不切除分区数据。写入或修复表由 <c>GptTableWriter</c> 与 <c>GptRepair</c> 独立承担，因此本处理器有意只实现只读接口。</para>
+/// Handler for GPT-bearing disk images: it detects the <c>EFI PART</c> header, reports the validated
+/// partition map, and "unpacks" by publishing a partition-entry manifest rather than carving partition
+/// payloads. Packing republishes an image through <c>GptTableWriter.ApplyToImageFile</c>, which rewrites
+/// both header copies and both entry arrays from the validated table while leaving payload bytes intact.
+/// <para>GPT 磁盘镜像处理器：检测 <c>EFI PART</c> 头部、报告经校验的分区映射；“解包”仅发布分区条目清单，
+/// 而不切除分区数据。打包经 <c>GptTableWriter.ApplyToImageFile</c> 重新发布镜像，按已校验的表重写主备头部
+/// 与两份条目数组，同时保持数据字节不变。</para>
 /// </summary>
-public sealed class GptFormatHandler : IReadonlyFormatHandler
+public sealed class GptFormatHandler : IFormatHandler
 {
     private static readonly int[] CandidateBlockSizes = [512, 4096, 16384, 65536];
 
@@ -142,6 +142,54 @@ public sealed class GptFormatHandler : IReadonlyFormatHandler
             return Task.FromResult(FirmwareOpResult.Ok(
                 $"Wrote the GPT partition manifest for {table.Partitions.Count} entries to {manifestPath}.",
                 entries: [manifestPath],
+                metadata: BuildMetadata(table)));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Republishes the image with both GPT header copies and both entry arrays rewritten from the validated
+    /// table; partition payload bytes are copied untouched.
+    /// <para>按已校验的表重写 GPT 的主备头部与两份条目数组后重新发布镜像；分区数据字节原样复制。</para>
+    /// </summary>
+    /// <param name="inputPath">
+    /// <para>源磁盘镜像，其 GPT 主备对必须能通过校验。</para>
+    /// Source disk image whose GPT pair must validate.
+    /// </param>
+    /// <param name="outputPath">
+    /// <para>发布后的目标镜像路径，经临时文件原子写入。</para>
+    /// Destination image path, published atomically through a temporary file.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// <para>在读取表与复制镜像期间持续检查。</para>
+    /// Checked while reading the table and during the image copy.
+    /// </param>
+    /// <returns>
+    /// <para>成功结果说明发布的镜像与恢复的条目数；表无法校验或容量与镜像不符时返回失败结果。</para>
+    /// Success result naming the published image and the restored entry count; a failure result when the
+    /// table does not validate or its capacity differs from the image length.
+    /// </returns>
+    /// <exception cref="OperationCanceledException">
+    /// <para>取消在发布过程中被请求；该异常重新抛出且不改动目标。</para>
+    /// Cancellation requested during publication; rethrown so the destination stays untouched.
+    /// </exception>
+    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var table = ReadTable(inputPath, cancellationToken);
+            GptTableWriter.ApplyToImageFile(inputPath, outputPath, table, cancellationToken);
+            return Task.FromResult(FirmwareOpResult.Ok(
+                $"Republished {outputPath} with {table.Partitions.Count} GPT entries in {table.PartitionEntryCount} slots.",
+                entries: [Path.GetFullPath(outputPath)],
                 metadata: BuildMetadata(table)));
         }
         catch (OperationCanceledException)

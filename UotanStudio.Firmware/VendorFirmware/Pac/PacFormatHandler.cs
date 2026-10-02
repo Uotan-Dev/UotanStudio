@@ -4,8 +4,11 @@ using UotanStudio.Firmware.Core.Repacking;
 namespace UotanStudio.Firmware.VendorFirmware.Pac;
 
 /// <summary>
-/// Handles SPRD/UNISOC PAC firmware packages for metadata reading and extraction; packing is not supported.
-/// <para>处理 SPRD/UNISOC PAC 固件包的元数据读取与解包；不支持打包。</para>
+/// Handles SPRD/UNISOC PAC firmware packages for metadata reading, extraction and packing through
+/// <see cref="PacBuilder"/>; the packed output is a canonical unsigned PAC rather than a byte-for-byte
+/// reproduction of the OEM package.
+/// <para>处理 SPRD/UNISOC PAC 固件包的元数据读取、解包与经 <see cref="PacBuilder"/> 的打包；
+/// 打包产出的是规范的无签名 PAC，而不是 OEM 原包的逐字节复现。</para>
 /// </summary>
 internal sealed class PacFormatHandler : IFormatHandler, IRepackMetadataProvider
 {
@@ -150,24 +153,29 @@ internal sealed class PacFormatHandler : IFormatHandler, IRepackMetadataProvider
     }
 
     /// <summary>
-    /// Packs the input into firmware asynchronously.
-    /// <para>异步将输入打包为固件。</para>
+    /// Builds a canonical unsigned PAC package from the extracted input directory.
+    /// <para>由解包后的输入目录构建规范的无签名 PAC 包。</para>
     /// </summary>
+    /// <remarks>
+    /// <see cref="PacPackOptions"/> stays unpinned here: callers get the builder defaults, because no host or
+    /// MCP entry exposes per-package PAC options yet.
+    /// <para>这里不指定 <see cref="PacPackOptions"/>：调用方获得构建器默认值，因为目前没有宿主或 MCP 入口暴露 PAC 的逐包选项。</para>
+    /// </remarks>
     /// <param name="inputPath">
-    /// Directory or file that would be packed; it is never opened by this handler.
-    /// <para>本应被打包的目录或文件；此处理器不会打开它。</para>
+    /// Extracted directory that <see cref="PacBuilder"/> walks to assemble the package.
+    /// <para><see cref="PacBuilder"/> 遍历以组装包的解包目录。</para>
     /// </param>
     /// <param name="outputPath">
-    /// Intended output file; nothing is written because packing is unsupported.
-    /// <para>期望的输出文件；由于不支持打包，不会写入任何内容。</para>
+    /// PAC file created or overwritten by the builder.
+    /// <para>由构建器创建或覆盖的 PAC 文件。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// Accepted for interface uniformity; the call fails immediately and does not observe it.
-    /// <para>仅为接口一致性而保留；调用会立即失败且不检查它。</para>
+    /// Observed by the builder between file copies; cancellation is rethrown.
+    /// <para>构建器在文件复制之间检查该令牌；取消会重新抛出。</para>
     /// </param>
     /// <returns>
-    /// A completed failed result stating that PAC packing is not supported by this handler.
-    /// <para>已完成、说明此处理器不支持 PAC 打包的失败结果。</para>
+    /// A result reporting the packed file entry count, or a failure result carrying the underlying error message.
+    /// <para>结果报告打包的条目数量；失败时携带底层错误信息。</para>
     /// </returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {

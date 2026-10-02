@@ -110,10 +110,10 @@ public interface IWritableFormatHandler : IReadonlyFormatHandler
 
     /// <summary>
     /// Packs input with optional byte-level progress. Defaults to
-    /// <see cref="PackAsync(string, string, CancellationToken)"/>; filesystem handlers override it
-    /// to report real byte counts to the caller.
+    /// <see cref="PackAsync(string, string, CancellationToken)"/>; the ext4, EROFS and F2FS handlers override it
+    /// to report real byte counts to the caller, while every other handler keeps the default no-progress path.
     /// <para>带可选字节级进度的打包。默认委托给 <see cref="PackAsync(string, string, CancellationToken)"/>；
-    /// 文件系统处理器可重写它以向调用方上报真实字节进度。</para>
+    /// ext4、EROFS 与 F2FS 处理器重写它以向调用方上报真实字节进度，其余处理器沿用不上报进度的默认路径。</para>
     /// </summary>
     /// <param name="inputPath"><para>输入路径（目录或文件，依格式而定）。</para>Input path (directory or file, format-specific).</param>
     /// <param name="outputPath"><para>输出文件路径。</para>Output file path.</param>

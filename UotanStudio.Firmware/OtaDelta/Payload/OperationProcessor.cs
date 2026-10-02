@@ -173,7 +173,8 @@ internal static class OperationProcessor
         object writeLock,
         object streamLock,
         CancellationToken cancellationToken = default,
-        PartitionByteProgress? byteProgress = null)
+        PartitionByteProgress? byteProgress = null,
+        ReadOnlyMemory<byte> zstdDictionary = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         long dataPos;
@@ -209,7 +210,7 @@ internal static class OperationProcessor
             using var bounded = new BoundedReadStream(cursor, dataPos, dataLength, leaveOpen: true);
             using var hashing = new VerifyingReadStream(bounded, op.DataSha256Hash?.ToByteArray());
             cancellationToken.ThrowIfCancellationRequested();
-            ProcessReplaceStream(op, hashing, outFile, blockSize, writeLock, cancellationToken, byteProgress);
+            ProcessReplaceStream(op, hashing, outFile, blockSize, writeLock, cancellationToken, byteProgress, zstdDictionary);
             hashing.Complete();
             return;
         }
@@ -227,7 +228,7 @@ internal static class OperationProcessor
             throw new PayloadUnsupportedOperationException($"Unsupported parallel operation type: {op.Type}", op.Type.ToString());
     }
 
-    private static void ProcessReplaceStream(InstallOperation op, Stream input, FileStream outFile, uint blockSize, object writeLock, CancellationToken cancellationToken, PartitionByteProgress? byteProgress = null)
+    private static void ProcessReplaceStream(InstallOperation op, Stream input, FileStream outFile, uint blockSize, object writeLock, CancellationToken cancellationToken, PartitionByteProgress? byteProgress = null, ReadOnlyMemory<byte> zstdDictionary = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var output = new ExtentWriteStream(outFile, op.DstExtents, blockSize, requireExactLength: true, syncRoot: writeLock, byteProgress: byteProgress);
@@ -258,7 +259,7 @@ internal static class OperationProcessor
                 CompressionService.Decompress(input, output, CompressionFormat.Xz, output.Length, cancellationToken);
                 break;
             case InstallOperation.Types.Type.ReplaceZstd:
-                ZstdReplaceDecoder.Decode(input, output, cancellationToken);
+                ZstdReplaceDecoder.Decode(input, output, zstdDictionary, cancellationToken);
                 break;
             default:
                 throw new PayloadUnsupportedOperationException($"Unsupported replace operation type: {op.Type}", op.Type.ToString());
