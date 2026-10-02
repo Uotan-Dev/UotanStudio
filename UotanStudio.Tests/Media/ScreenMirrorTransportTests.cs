@@ -9,6 +9,7 @@ public sealed class ScreenMirrorTransportTests
     [Fact]
     public void OpenAdbLease_NetworkTargetWithoutServer_DoesNotOpenUsb()
     {
+        DebugBridgeRoute.InitializeAdbServerProbe();
         if (DebugBridgeRoute.UseAdbServer())
             Assert.Skip("An ADB server is running; the absent-server route cannot be tested.");
 

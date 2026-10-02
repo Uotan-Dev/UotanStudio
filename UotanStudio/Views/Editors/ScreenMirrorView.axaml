@@ -8,7 +8,8 @@
              d:DesignWidth="800"
              d:DesignHeight="600"
              x:DataType="vm:ScreenMirrorViewModel"
-             x:Class="UotanStudio.Views.Editors.ScreenMirrorView">
+             x:Class="UotanStudio.Views.Editors.ScreenMirrorView"
+             Focusable="True">
   <Grid RowDefinitions="Auto,*,Auto">
     <Border Grid.Row="0"
             Padding="8,4"
@@ -30,5 +31,25 @@
                  FontSize="13"
                  Text="{Binding DeviceName}" />
     </Panel>
+
+    <Border Grid.Row="2"
+            Padding="8,4"
+            Background="{DynamicResource PageBackground}">
+      <StackPanel Orientation="Horizontal"
+                  Spacing="6">
+        <Button Content="{DynamicResource ScreenMirror_Back}"
+                Click="OnBackClick"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_Back}" />
+        <Button Content="{DynamicResource ScreenMirror_Power}"
+                Click="OnPowerClick"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_Power}" />
+        <Button Content="{DynamicResource ScreenMirror_PushClipboard}"
+                Click="OnPushClipboardClick"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_PushClipboard}" />
+        <Button Content="{DynamicResource ScreenMirror_PullClipboard}"
+                Click="OnPullClipboardClick"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_PullClipboard}" />
+      </StackPanel>
+    </Border>
   </Grid>
 </UserControl>

@@ -18,8 +18,8 @@ public sealed record ScrcpyVideoMetadata(uint CodecFourCc, int Width, int Height
     /// <para>由大端序四字符码解码得到的编码名称。</para>
     /// </summary>
     /// <value>
-    /// The ASCII text of the four-character code, for example <c>H264</c>.
-    /// <para>四字符码的 ASCII 文本，例如 <c>H264</c>。</para>
+    /// The ASCII text of the codec identifier with NUL and space padding removed, for example <c>h264</c>.
+    /// <para>去除 NUL 与空格填充后的编码标识 ASCII 文本，例如 <c>h264</c>。</para>
     /// </value>
     public string CodecName
     {
@@ -27,7 +27,7 @@ public sealed record ScrcpyVideoMetadata(uint CodecFourCc, int Width, int Height
         {
             var bytes = BitConverter.GetBytes(CodecFourCc);
             Array.Reverse(bytes);
-            return Encoding.ASCII.GetString(bytes);
+            return Encoding.ASCII.GetString(bytes).Trim('\0', ' ');
         }
     }
 }
@@ -87,7 +87,7 @@ public sealed record ScrcpyVideoFrame(long Pts, byte[] Data)
 /// <param name="Type">Device message type. 设备消息类型。</param>
 /// <param name="Clipboard">Clipboard text for <see cref="ScrcpyConstants.DeviceTypeClipboard"/>. 剪贴板消息的文本。</param>
 /// <param name="AckSequence">Acknowledged sequence for ACK_CLIPBOARD. ACK_CLIPBOARD 确认的序号。</param>
-internal sealed record ScrcpyDeviceMessage(byte Type, string? Clipboard = null, ulong AckSequence = 0);
+public sealed record ScrcpyDeviceMessage(byte Type, string? Clipboard = null, ulong AckSequence = 0);
 
 /// <summary>
 /// Audio stream metadata announced by the server on the audio socket.
@@ -101,16 +101,22 @@ public sealed record ScrcpyAudioMetadata(uint CodecFourCc)
     /// <para>由大端序四字符码解码得到的大写编码名称。</para>
     /// </summary>
     /// <value>
-    /// The ASCII codec name with trailing NUL and space characters removed and upper-cased, for example <c>OPUS</c>.
-    /// <para>去除末尾 NUL 与空格并转为大写的 ASCII 编码名称，例如 <c>OPUS</c>。</para>
+    /// The ASCII codec name with NUL and space padding removed and upper-cased, for example <c>OPUS</c>.
+    /// <para>去除 NUL 与空格填充并转为大写的 ASCII 编码名称，例如 <c>OPUS</c>。</para>
     /// </value>
+    /// <remarks>
+    /// Short codec names are packed rather than padded: the server sends <c>aac</c> as <c>0x00616163</c>
+    /// and <c>raw</c> as <c>0x00726177</c>, so the filler byte leads instead of trails.
+    /// <para>短编码名按打包而非填充发送：服务端把 <c>aac</c> 发成 <c>0x00616163</c>、把 <c>raw</c> 发成
+    /// <c>0x00726177</c>，因此补位字节出现在开头而不是结尾。</para>
+    /// </remarks>
     public string CodecName
     {
         get
         {
             var bytes = BitConverter.GetBytes(CodecFourCc);
             Array.Reverse(bytes);
-            return Encoding.ASCII.GetString(bytes).TrimEnd('\0', ' ').ToUpperInvariant();
+            return Encoding.ASCII.GetString(bytes).Trim('\0', ' ').ToUpperInvariant();
         }
     }
 }
@@ -198,6 +204,10 @@ public sealed class ScrcpyClient : IDisposable
     private Stream? _videoStream;
     private Stream? _audioStream;
     private Stream? _controlStream;
+
+    /// <summary>Delay between video socket attempts while the server process boots.
+    /// <para>服务端进程启动期间，视频 socket 重试之间的等待。</para></summary>
+    private const int SocketRetryDelayMs = 50;
 
     /// <summary>
     /// Initializes the client over an established device session; call <see cref="Connect"/> once the server is running. The session owns the streams returned by <c>OpenServiceStream</c>.
@@ -302,10 +312,14 @@ public sealed class ScrcpyClient : IDisposable
     public bool IsControlConnected => _controlStream is not null;
 
     /// <summary>
-    /// Connects the sockets in server order and reads the stream metadata.
-    /// <para>按服务端要求的顺序连接 socket 并读取流元数据。</para>
+    /// Connects the sockets in server order and reads the stream metadata. The video socket is retried
+    /// until <paramref name="timeoutMs"/> elapses because the server creates its sockets only after the
+    /// device runtime has booted.
+    /// <para>按服务端要求的顺序连接 socket 并读取流元数据。视频 socket 会在 <paramref name="timeoutMs"/>
+    /// 内持续重试，因为服务端要等设备运行时完成启动后才创建 socket。</para>
     /// </summary>
-    /// <param name="timeoutMs">Per-read timeout in milliseconds. <para>单次读取超时（毫秒）。</para></param>
+    /// <param name="timeoutMs">Budget for the initial video socket wait, and per-read timeout in
+    /// milliseconds. <para>初始视频 socket 等待的总预算，同时作为单次读取超时（毫秒）。</para></param>
     /// <exception cref="InvalidDataException">Thrown when the handshake fails. <para>握手失败时抛出。</para></exception>
     public void Connect(int timeoutMs = 10000)
     {
@@ -320,16 +334,7 @@ public sealed class ScrcpyClient : IDisposable
 
     private void ConnectCore(int timeoutMs)
     {
-        _videoStream = _open("localabstract:" + _options.SocketName);
-
-        if (_options.SendDummyByte)
-        {
-            var dummy = ReadExact(_videoStream, 1, timeoutMs);
-            if (dummy.Length != 1 || dummy[0] != 0)
-            {
-                throw new InvalidDataException("Expected 0x00 dummy byte on the video socket. 视频 socket 上应收到 0x00 哑字节。");
-            }
-        }
+        _videoStream = OpenVideoStream(timeoutMs);
 
         if (_options.Audio)
         {
@@ -373,6 +378,51 @@ public sealed class ScrcpyClient : IDisposable
                 _audioStream = null;
             }
             else AudioMetadata = new ScrcpyAudioMetadata(codecId);
+        }
+    }
+
+    /// <summary>
+    /// Opens the video socket and consumes the readiness byte, retrying until the launch budget runs
+    /// out. The server publishes its abstract sockets only after the device runtime has started, so an
+    /// early attempt is answered by the daemon with an accepted-then-closed stream rather than a refusal.
+    /// <para>打开视频 socket 并消费就绪字节，在启动预算耗尽前持续重试。服务端要等设备运行时启动后才发布
+    /// 其 abstract socket，因此过早的尝试会被守护进程以“先接受、再关闭”的流回应，而不是直接拒绝。</para>
+    /// </summary>
+    /// <param name="timeoutMs">Total wait budget in milliseconds. <para>总等待预算（毫秒）。</para></param>
+    /// <returns>The ready video socket with the dummy byte already consumed.
+    /// <para>已消费哑字节、可供读取的视频 socket。</para></returns>
+    private Stream OpenVideoStream(int timeoutMs)
+    {
+        var endpoint = "localabstract:" + _options.SocketName;
+        var deadline = Environment.TickCount64 + Math.Max(timeoutMs, 1);
+        while (true)
+        {
+            var remaining = (int)Math.Max(deadline - Environment.TickCount64, 1);
+            Stream? stream = null;
+            byte dummy = 0;
+            try
+            {
+                stream = _open(endpoint);
+                if (_options.SendDummyByte)
+                {
+                    dummy = ReadExact(stream, 1, remaining)[0];
+                }
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException
+                                       && Environment.TickCount64 < deadline)
+            {
+                stream?.Dispose();
+                Thread.Sleep(SocketRetryDelayMs);
+                continue;
+            }
+
+            if (dummy != 0)
+            {
+                stream.Dispose();
+                throw new InvalidDataException("Expected 0x00 dummy byte on the video socket. 视频 socket 上应收到 0x00 哑字节。");
+            }
+
+            return stream;
         }
     }
 
@@ -485,7 +535,10 @@ public sealed class ScrcpyClient : IDisposable
     /// </summary>
     /// <param name="timeoutMs">Per-read timeout in milliseconds. 单次读取超时（毫秒）。</param>
     /// <returns>The message, or <see langword="null"/> when none arrived. 消息；未到达时为 <see langword="null"/>。</returns>
-    internal ScrcpyDeviceMessage? TryReadDeviceMessage(int timeoutMs = 0)
+    /// <exception cref="InvalidDataException">The announced clipboard length exceeds the bound, or the type byte
+    /// is not a known device message type.
+    /// <para>宣告的剪贴板长度超出上限，或类型字节不属于已知的设备消息类型。</para></exception>
+    public ScrcpyDeviceMessage? TryReadDeviceMessage(int timeoutMs = 0)
     {
         var stream = _controlStream;
         if (stream is null)

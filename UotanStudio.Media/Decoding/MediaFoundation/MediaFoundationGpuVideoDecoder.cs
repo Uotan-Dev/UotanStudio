@@ -735,17 +735,11 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             int rowBytes = checked(_width * 4);
             int required = checked(rowBytes * _height);
             if (stride < rowBytes) throw new InvalidDataException("Staging readback is truncated.");
-            byte[] pooled = GetReadbackBuffer(required);
-            fixed (byte* target = pooled.AsSpan(0, required))
-            {
-                Span<byte> destination = new(target, required);
-                for (int row = 0; row < _height; row++)
-                {
-                    new ReadOnlySpan<byte>((byte*)mapped.pData + (nint)row * stride, rowBytes)
-                        .CopyTo(destination.Slice(row * rowBytes, rowBytes));
-                }
-            }
-            using var frame = new GpuDecodedVideoFrame(pooled, required, _width, _height, rowBytes, timestampTicks)
+            // The staging map stays valid until Unmap, and the callback completes before that, so
+            // the frame borrows the mapped memory instead of an extra full-frame copy.
+            // staging 映射在 Unmap 之前一直有效，而回调在 Unmap 前完成，因此帧直接借用映射内存，
+            // 省去一次整帧拷贝。
+            using var frame = new PointerDecodedVideoFrame((byte*)mapped.pData, required, _width, _height, stride, timestampTicks)
             {
                 ReturnBufferToPool = false,
                 ColorMatrix = (_inputColorSpace & 4) != 0 ? VideoColorMatrix.Bt709 : VideoColorMatrix.Bt601,

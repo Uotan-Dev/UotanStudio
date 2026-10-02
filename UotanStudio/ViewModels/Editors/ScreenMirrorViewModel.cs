@@ -42,14 +42,23 @@ public partial class ScreenMirrorViewModel : Document
     private bool _renderScheduled;
     internal Views.Editors.ScreenMirrorGpuPresenter GpuPresenter { get; private set; } = new();
     internal PixelSize VideoPixelSize => GpuPresenter.IsAvailable && GpuPresenter.PixelSize is { Width: > 0 } size ? size : Frame?.PixelSize ?? default;
+    internal PixelSize InjectionVideoSize => UotanStudio.Views.Editors.ScreenMirrorCoordinates.ResolveInjectionSize(StreamMetadata, VideoPixelSize);
 
     private CancellationTokenSource? _cts;
     private Thread? _decodeThread;
     private Thread? _audioThread;
+    private Thread? _controlThread;
     private volatile bool _disposed;
 
     /// <summary>Raised on the audio thread after the output sink opened successfully.</summary>
     public event EventHandler? AudioSinkOpened;
+
+    /// <summary>
+    /// <para>设备端复制或请求回传的剪贴板文本，从控制消息泵线程触发；订阅方负责切回 UI 线程写入本地剪贴板。</para>
+    /// Clipboard text copied on the device or returned for an explicit request, raised from the control-message
+    /// pump thread; subscribers marshal to the UI thread before touching the local clipboard.
+    /// </summary>
+    public event EventHandler<string>? DeviceClipboardReceived;
 
     /// <summary>Gets the total decoded audio frames; 0 while audio is off or unsupported.</summary>
     /// <summary>获取累计解码音频帧数；音频关闭或编码不受支持时为 0。</summary>
@@ -176,6 +185,41 @@ public partial class ScreenMirrorViewModel : Document
             };
             _audioThread.Start();
         }
+        if (decodeClient.IsControlConnected)
+        {
+            _controlThread = new Thread(() => ControlLoop(decodeClient, decodeToken))
+            {
+                IsBackground = true,
+                Name = "UotanStudio.ScreenMirror.Control",
+            };
+            _controlThread.Start();
+        }
+    }
+
+    private void ControlLoop(Services.Mirroring.ManagedMirrorSession client, CancellationToken token)
+    {
+        while (!token.IsCancellationRequested && !_disposed)
+        {
+            ScrcpyDeviceMessage? message;
+            try
+            {
+                message = client.ReadDeviceMessage(200);
+            }
+            catch (Exception)
+            {
+                return;
+            }
+
+            if (message is null)
+            {
+                continue;
+            }
+
+            if (message.Type == ScrcpyConstants.DeviceTypeClipboard && message.Clipboard is { Length: > 0 } text)
+            {
+                DeviceClipboardReceived?.Invoke(this, text);
+            }
+        }
     }
 
     /// <summary>
@@ -216,6 +260,15 @@ public partial class ScreenMirrorViewModel : Document
 
         }
         _audioThread = null;
+        try
+        {
+            _controlThread?.Join(2000);
+        }
+        catch
+        {
+
+        }
+        _controlThread = null;
 
         _client?.Dispose();
 
@@ -286,6 +339,45 @@ public partial class ScreenMirrorViewModel : Document
     /// <param name="text"><para>要注入的文本（≤300 字节）。</para>Text to inject (≤300 bytes).</param>
     public void InjectText(string text)
         => SendControl(ScrcpyControlMessageWriter.InjectText(text));
+
+    /// <summary>
+    /// <para>把文本写入设备剪贴板，可选择直接粘贴到焦点输入框。控制通道未就绪时静默忽略，与触摸注入一致。</para>
+    /// Writes text to the device clipboard, optionally pasting into the focused field; ignored while the control
+    /// channel is unavailable, matching touch injection.
+    /// </summary>
+    /// <param name="text"><para>要送往设备的文本（UTF-8 上限 300 字节）。</para>Text to send (300 UTF-8 byte cap).</param>
+    /// <param name="paste"><para>是否在设备端同时粘贴。</para>Whether the device also pastes it.</param>
+    public void SendClipboard(string text, bool paste) => SendSession(client => client.SendClipboard(text, paste));
+
+    /// <summary>
+    /// <para>请求设备回传剪贴板；结果经 <see cref="DeviceClipboardReceived"/> 送达。</para>
+    /// Requests the device clipboard; the answer arrives on <see cref="DeviceClipboardReceived"/>.
+    /// </summary>
+    public void RequestClipboard() => SendSession(client => client.RequestClipboard());
+
+    /// <summary><para>发送一次 Android「返回」按压。</para>Sends one Android BACK press.</summary>
+    public void SendBack() => SendSession(client => client.SendBack());
+
+    /// <summary><para>切换设备屏幕电源状态。</para>Toggles the device screen power.</summary>
+    public void ToggleDisplayPower() => SendSession(client => client.ToggleDisplayPower());
+
+    private void SendSession(Action<Services.Mirroring.ManagedMirrorSession> send)
+    {
+        var client = _client;
+        if (client is null || !client.IsControlConnected)
+        {
+            return;
+        }
+
+        try
+        {
+            send(client);
+        }
+        catch
+        {
+
+        }
+    }
 
     private void SendControl(byte[] message)
     {

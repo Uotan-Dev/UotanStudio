@@ -1,4 +1,5 @@
 using Avalonia;
+using UotanStudio.Services.Mirroring;
 using UotanStudio.Views.Editors;
 using Xunit;
 
@@ -39,5 +40,17 @@ public class ScreenMirrorCoordinatesTests
         Assert.True(ScreenMirrorCoordinates.TryMap(new Point(400, 300), new Size(800, 600), 900, 1600, false, out int x, out int y));
         Assert.Equal((450, 800), (x, y));
         Assert.False(ScreenMirrorCoordinates.TryMap(new Point(20, 300), new Size(800, 600), 900, 1600, false, out _, out _));
+    }
+
+    [Fact]
+    public void InjectionSize_PrefersServerAnnouncedVideoSizeOrientedByFrame()
+    {
+        var announced = new ScrcpyVideoMetadata(0x68323634, 1080, 2400);
+
+        Assert.Equal(new PixelSize(1080, 2400), ScreenMirrorCoordinates.ResolveInjectionSize(announced, new PixelSize(1088, 2400)));
+        Assert.Equal(new PixelSize(2400, 1080), ScreenMirrorCoordinates.ResolveInjectionSize(announced, new PixelSize(2400, 1088)));
+        Assert.Equal(new PixelSize(1088, 2400), ScreenMirrorCoordinates.ResolveInjectionSize(null, new PixelSize(1088, 2400)));
+        Assert.Equal(new PixelSize(1088, 2400), ScreenMirrorCoordinates.ResolveInjectionSize(new ScrcpyVideoMetadata(0x68323634, 0, 2400), new PixelSize(1088, 2400)));
+        Assert.Equal(default, ScreenMirrorCoordinates.ResolveInjectionSize(announced, default));
     }
 }

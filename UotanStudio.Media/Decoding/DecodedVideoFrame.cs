@@ -74,12 +74,14 @@ public class DecodedVideoFrame : IDisposable
             throw new ArgumentNullException(nameof(buffer));
         }
 
-        if (length < 0 || length > buffer.Length)
+        // Borrowed native frames pass an empty array; their length is validated by the derived type.
+        // 借用的原生帧传入空数组，长度由派生类型自行校验。
+        if (buffer.Length > 0 && (length < 0 || length > buffer.Length))
         {
             throw new ArgumentOutOfRangeException(nameof(length));
         }
 
-        if (!skipNv12Validation)
+        if (!skipNv12Validation && buffer.Length > 0)
         {
             int required = VideoFrameLimits.Nv12Length(width, height, stride);
             if (length < required)
@@ -208,19 +210,71 @@ public class DecodedVideoFrame : IDisposable
     /// <para><see cref="Buffer"/> 的 <c>[0, Length)</c> 区间；在帧释放前有效。</para>
     /// </value>
     /// <exception cref="ObjectDisposedException">The frame has been disposed. <para>帧已释放时抛出。</para></exception>
-    public ReadOnlySpan<byte> Span => Buffer.AsSpan(0, Length);
+    public virtual ReadOnlySpan<byte> Span => Buffer.AsSpan(0, Length);
 
     /// <summary>
     /// Releases the frame, returning its buffer to <see cref="ArrayPool{T}"/> unless the
     /// storage is decoder-owned; calling it more than once has no additional effect.
     /// <para>释放帧；除非存储归解码器所有，否则将缓冲区归还给 <see cref="ArrayPool{T}"/>。重复调用无额外效果。</para>
     /// </summary>
-    public void Dispose()
+    public virtual void Dispose()
     {
         var buffer = Interlocked.Exchange(ref _buffer, null);
         if (buffer is not null && ReturnBufferToPool)
         {
             ArrayPool<byte>.Shared.Return(buffer);
         }
+    }
+}
+
+/// <summary>
+/// A frame whose pixels live in decoder-owned native memory (e.g. a mapped staging texture)
+/// that stays valid only until <see cref="Dispose"/>; consumers must copy or convert within
+/// the decode callback. <see cref="Buffer"/> is unavailable.
+/// <para>像素位于解码器自有原生内存（如映射的 staging 纹理）中的帧，该内存仅在
+/// <see cref="Dispose"/> 之前有效；消费方必须在解码回调内完成复制或转换。
+/// <see cref="Buffer"/> 不可用。</para>
+/// </summary>
+public sealed unsafe class PointerDecodedVideoFrame : DecodedVideoFrame
+{
+    private readonly byte* _pointer;
+    private bool _released;
+
+    /// <summary>
+    /// Creates a borrowed frame over native memory with the BGRA layout used by the Windows
+    /// GPU decode path (dense rows; stride may exceed width × 4 for alignment).
+    /// <para>在原生内存上创建借用帧，布局为 Windows GPU 解码路径使用的 BGRA（行内紧密排列；
+    /// 行距可为对齐而大于宽度 × 4）。</para>
+    /// </summary>
+    /// <param name="pointer">Native pixel memory owned by the decoder. 解码器持有的原生像素内存。</param>
+    /// <param name="length">Valid byte count starting at <paramref name="pointer"/>. <paramref name="pointer"/> 起的有效字节数。</param>
+    /// <param name="width">Frame width in pixels. 帧宽度（像素）。</param>
+    /// <param name="height">Frame height in pixels. 帧高度（像素）。</param>
+    /// <param name="stride">Bytes per BGRA row. 每行 BGRA 字节数。</param>
+    /// <param name="timestampTicks">Presentation timestamp in ticks. 显示时间戳（tick）。</param>
+    public PointerDecodedVideoFrame(byte* pointer, int length, int width, int height, int stride, long timestampTicks)
+        : base(Array.Empty<byte>(), length, width, height, stride, timestampTicks, skipNv12Validation: true)
+    {
+        if (length < checked(width * height * 4))
+        {
+            throw new ArgumentException("The mapped memory does not contain a complete BGRA frame.", nameof(length));
+        }
+
+        _pointer = pointer;
+    }
+
+    /// <inheritdoc/>
+    public override ReadOnlySpan<byte> Span => !_released && _pointer is not null
+        ? new ReadOnlySpan<byte>(_pointer, Length)
+        : throw new ObjectDisposedException(nameof(PointerDecodedVideoFrame));
+
+    /// <summary>
+    /// Marks the borrowed native memory as released; it does not own any managed buffer.
+    /// <para>标记借用的原生内存已归还；该帧不持有任何托管缓冲区。</para>
+    /// </summary>
+    public override void Dispose()
+    {
+        _released = true;
+        base.Dispose();
     }
 }

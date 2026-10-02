@@ -235,9 +235,9 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             float scale = (float)Math.Min(bounds.Width / Width, bounds.Height / Height);
             if (scale <= 0) return;
 
-            using var uploadedFirst = gpu is null ? null : _first.ToTextureImage(gpu, false, false)
+            using var uploadedFirst = gpu is null ? null : _first.ToTextureImage(gpu, true, false)
                 ?? throw new InvalidOperationException("Video texture upload failed.");
-            using var uploadedUv = gpu is null || _uv is null ? null : _uv.ToTextureImage(gpu, false, false)
+            using var uploadedUv = gpu is null || _uv is null ? null : _uv.ToTextureImage(gpu, true, false)
                 ?? throw new InvalidOperationException("Chroma texture upload failed.");
             var first = uploadedFirst ?? _first;
             var chroma = uploadedUv ?? _uv;
@@ -247,9 +247,10 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
                 canvas.Translate((float)(bounds.X + (bounds.Width - Width * scale) / 2), (float)(bounds.Y + (bounds.Height - Height * scale) / 2));
                 canvas.Scale(scale);
                 using var paint = new SKPaint { Color = SKColors.White.WithAlpha((byte)Math.Clamp(opacity * 255, 0, 255)) };
-                if (chroma is null) { canvas.DrawImage(first, 0, 0, new SKSamplingOptions(SKFilterMode.Linear), paint); return; }
-                using var y = first.ToRawShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, new SKSamplingOptions(SKFilterMode.Nearest));
-                using var uv = chroma.ToRawShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, new SKSamplingOptions(SKFilterMode.Nearest));
+                var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
+                if (chroma is null) { canvas.DrawImage(first, 0, 0, sampling, paint); return; }
+                using var y = first.ToRawShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, sampling);
+                using var uv = chroma.ToRawShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, sampling);
                 var effect = Effect.Value;
                 bool full = _range == VideoColorRange.Full, hd = _matrix == VideoColorMatrix.Bt709;
 

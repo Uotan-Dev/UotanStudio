@@ -168,7 +168,7 @@ public static class VideoDecoderFactory
             MediaFoundation.MediaFoundationGpuVideoDecoder => "Media Foundation (GPU)",
             MediaFoundation.MediaFoundationVideoDecoder => "Media Foundation (CPU)",
             VideoToolbox.VideoToolboxVideoDecoder => "VideoToolbox (hardware)",
-            GStreamer.GStreamerVideoDecoder gst => $"GStreamer ({(gst.UsesHardware ? "GPU" : "CPU")}: {gst.DecoderElement})",
+            GStreamer.GStreamerVideoDecoder gst => $"GStreamer ({(gst.UsesHardware ? gst.UsesCpuConverter ? "hardware, CPU planes" : "GPU" : "CPU")}: {gst.DecoderElement})",
             VaApiVideoDecoder => "VA-API (libavcodec, hardware)",
             _ => "Unknown",
         };

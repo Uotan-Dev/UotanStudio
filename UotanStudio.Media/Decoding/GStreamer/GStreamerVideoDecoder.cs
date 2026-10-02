@@ -68,6 +68,18 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
     /// </value>
     public bool UsesHardware => _hardware;
     /// <summary>
+    /// Whether the built pipeline converts planes on the CPU.
+    /// <para>获取一个值，该值指示已构建的管线是否在 CPU 上转换平面。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> when the pipeline contains a conversion stage, so decoded planes land in
+    /// system memory even if the decoder element itself is hardware; hardware elements that output
+    /// D3D11/GL memory need this stage before the NV12 caps can be negotiated.
+    /// <para>管线含转换阶段时为 <see langword="true"/>：此时即使解码元素本身是硬件，解码平面仍落到系统内存，
+    /// 因为输出 D3D11/GL 内存的硬件元素必须先经该阶段才能协商到 NV12 caps。</para>
+    /// </value>
+    public bool UsesCpuConverter { get; private set; }
+    /// <summary>
     /// Gets a value indicating whether a GStreamer pipeline is currently built.
     /// <para>获取一个值，该值指示当前是否已构建 GStreamer 管线。</para>
     /// </summary>
@@ -156,6 +168,7 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
         ArgumentNullException.ThrowIfNull(frameCallback);
         VideoFrameLimits.ValidateDimensions(width, height);
         _pipeline?.Dispose(); _pipeline = null;
+        UsesCpuConverter = false;
         GstNative.Initialize();
         _codec = codec; _width = width; _height = height; _callback = frameCallback; _sequence = 0;
         string name = codec switch { VideoCodecId.H264 => "h264", VideoCodecId.H265 => "h265", VideoCodecId.Av1 => "av1", _ => throw new ArgumentOutOfRangeException(nameof(codec)) };
@@ -168,8 +181,10 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
             if (!GstNative.HasElement(candidate)) continue;
             try
             {
-                _pipeline = new GstPipeline($"appsrc name=input is-live=true format=time block=false max-bytes={GstPipeline.MaximumQueuedBytes} caps=video/x-{name},stream-format={format},width={width},height={height} ! {name}parse ! {candidate} ! video/x-raw ! videoconvert ! {outputCaps} ! appsink name=output sync=false max-buffers=8 drop=false enable-last-sample=false");
+                string description = $"appsrc name=input is-live=true format=time block=false max-bytes={GstPipeline.MaximumQueuedBytes} caps=video/x-{name},stream-format={format},width={width},height={height} ! {name}parse ! {candidate} ! video/x-raw ! videoconvert ! {outputCaps} ! appsink name=output sync=false max-buffers=8 drop=false enable-last-sample=false";
+                _pipeline = new GstPipeline(description);
                 DecoderElement = candidate;
+                UsesCpuConverter = description.Contains("videoconvert", StringComparison.Ordinal);
                 return;
             }
             catch (Exception error) when (error is NotSupportedException or InvalidOperationException) { errors.Add($"{candidate}: {error.Message}"); }

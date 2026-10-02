@@ -1,5 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
 using UotanStudio.Services.Mirroring;
 using UotanStudio.ViewModels.Editors;
 
@@ -35,6 +38,7 @@ public partial class ScreenMirrorView : UserControl
         {
             _subscribed = viewModel;
             viewModel.FramePresented += OnFramePresented;
+            viewModel.DeviceClipboardReceived += OnDeviceClipboardReceived;
             OnFramePresented(viewModel, EventArgs.Empty);
         }
     }
@@ -42,8 +46,135 @@ public partial class ScreenMirrorView : UserControl
     private void UnsubscribeFromFrames()
     {
         EndGesture(cancel: true);
-        if (_subscribed is { } previous) previous.FramePresented -= OnFramePresented;
+        if (_subscribed is { } previous)
+        {
+            previous.FramePresented -= OnFramePresented;
+            previous.DeviceClipboardReceived -= OnDeviceClipboardReceived;
+        }
         _subscribed = null;
+    }
+
+    private void OnDeviceClipboardReceived(object? sender, string text)
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(async () =>
+        {
+            try
+            {
+                await clipboard.SetTextAsync(text);
+            }
+            catch
+            {
+
+            }
+        });
+    }
+
+    private void OnBackClick(object? sender, RoutedEventArgs e) => ViewModel?.SendBack();
+
+    private void OnPowerClick(object? sender, RoutedEventArgs e) => ViewModel?.ToggleDisplayPower();
+
+    private void OnPullClipboardClick(object? sender, RoutedEventArgs e) => ViewModel?.RequestClipboard();
+
+    private async void OnPushClipboardClick(object? sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { } viewModel || TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+        {
+            return;
+        }
+
+        var text = await clipboard.TryGetTextAsync();
+        if (!string.IsNullOrEmpty(text))
+        {
+            viewModel.SendClipboard(text, paste: false);
+        }
+    }
+
+    /// <summary>
+    /// <para>把物理键盘按键映射为 Android 键码注入；未知键不拦截，保留宿主快捷键语义。</para>
+    /// Maps physical key presses onto injected Android key codes; unmapped keys stay unhandled so host
+    /// shortcuts keep working.
+    /// </summary>
+    /// <inheritdoc />
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (ViewModel is { } viewModel && TryMapAndroidKey(e.Key, out var keyCode))
+        {
+            viewModel.InjectKeyCode(ScrcpyConstants.ActionDown, keyCode, MapMetaState(e.KeyModifiers));
+            e.Handled = true;
+        }
+    }
+
+    /// <inheritdoc />
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        base.OnKeyUp(e);
+        if (ViewModel is { } viewModel && TryMapAndroidKey(e.Key, out var keyCode))
+        {
+            viewModel.InjectKeyCode(ScrcpyConstants.ActionUp, keyCode, MapMetaState(e.KeyModifiers));
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// <para>把文本输入转发为 scrcpy INJECT_TEXT，避免逐键映射布局差异。</para>
+    /// Forwards typed text as scrcpy INJECT_TEXT instead of per-key codes so layout differences stay on the device.
+    /// </summary>
+    /// <inheritdoc />
+    protected override void OnTextInput(Avalonia.Input.TextInputEventArgs e)
+    {
+        base.OnTextInput(e);
+        if (ViewModel is { } viewModel && e.Text is { Length: > 0 } text)
+        {
+            viewModel.InjectText(text);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// <para>Avalonia 按键到 Android KeyEvent 键码的映射表。</para>
+    /// Maps Avalonia keys onto Android KeyEvent key codes.
+    /// </summary>
+    private static bool TryMapAndroidKey(Key key, out int keyCode)
+    {
+        (Key Key, int Code)[] table =
+        [
+            (Key.Escape, 111), (Key.Home, 3), (Key.Back, 67), (Key.Tab, 61), (Key.Enter, 66),
+            (Key.Space, 62), (Key.Up, 19), (Key.Down, 20), (Key.Left, 21), (Key.Right, 22),
+            (Key.D0, 7), (Key.D1, 8), (Key.D2, 9), (Key.D3, 10), (Key.D4, 11), (Key.D5, 12),
+            (Key.D6, 13), (Key.D7, 14), (Key.D8, 15), (Key.D9, 16),
+        ];
+        foreach (var (candidate, code) in table)
+        {
+            if (key == candidate)
+            {
+                keyCode = code;
+                return true;
+            }
+        }
+
+        if (key is >= Key.A and <= Key.Z)
+        {
+            keyCode = 29 + (key - Key.A);
+            return true;
+        }
+
+        keyCode = 0;
+        return false;
+    }
+
+    private static int MapMetaState(KeyModifiers modifiers)
+    {
+        var meta = 0;
+        if (modifiers.HasFlag(KeyModifiers.Shift)) meta |= 1;
+        if (modifiers.HasFlag(KeyModifiers.Alt)) meta |= 2;
+        if (modifiers.HasFlag(KeyModifiers.Control)) meta |= 4096;
+        return meta;
     }
 
     private void OnFramePresented(object? sender, EventArgs e)
@@ -144,7 +275,7 @@ public partial class ScreenMirrorView : UserControl
     private bool TranslateTouch(PointerEventArgs e, bool clamp, out (int X, int Y, int Width, int Height) point)
     {
         point = default;
-        if (ViewModel?.VideoPixelSize is not { Width: > 0, Height: > 0 } size) return false;
+        if (ViewModel?.InjectionVideoSize is not { Width: > 0, Height: > 0 } size) return false;
         int width = size.Width, height = size.Height;
 
         if (!ScreenMirrorCoordinates.TryMap(e.GetPosition(FrameImage), FrameImage.Bounds.Size,

@@ -103,7 +103,6 @@ public class ScrcpyControlMessageTests
     [InlineData(ScrcpyConstants.ControlTypeExpandNotificationPanel)]
     [InlineData(ScrcpyConstants.ControlTypeExpandSettingsPanel)]
     [InlineData(ScrcpyConstants.ControlTypeCollapsePanels)]
-    [InlineData(ScrcpyConstants.ControlTypeSetDisplayPower)]
     public void Simple_SingleByteMessages(byte type)
     {
         var msg = ScrcpyControlMessageWriter.Simple(type);
@@ -116,6 +115,19 @@ public class ScrcpyControlMessageTests
     public void Simple_RejectsMultiByteTypes()
     {
         Assert.Throws<ArgumentException>(() => ScrcpyControlMessageWriter.Simple(ScrcpyConstants.ControlTypeInjectKeyCode));
+        Assert.Throws<ArgumentException>(() => ScrcpyControlMessageWriter.Simple(ScrcpyConstants.ControlTypeSetDisplayPower));
+    }
+
+    [Theory]
+    [InlineData(true, ScrcpyConstants.ScreenPowerModeNormal)]
+    [InlineData(false, ScrcpyConstants.ScreenPowerModeOff)]
+    public void SetDisplayPower_CarriesPowerModeByte(bool on, byte expectedMode)
+    {
+        var msg = ScrcpyControlMessageWriter.SetDisplayPower(on);
+
+        Assert.Equal(2, msg.Length);
+        Assert.Equal(ScrcpyConstants.ControlTypeSetDisplayPower, msg[0]);
+        Assert.Equal(expectedMode, msg[1]);
     }
 
     [Fact]

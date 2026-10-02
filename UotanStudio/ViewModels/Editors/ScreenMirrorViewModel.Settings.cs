@@ -12,12 +12,19 @@ public partial class ScreenMirrorViewModel
     private AppSettings? _pendingSettings;
     private AppSettings _activeSettings = new();
     internal AppSettings PendingSettings => _pendingSettings ??= SettingsPersistenceService.Instance.LoadSettings().Copy();
+    /// <summary>
+    /// Decoder options for the active session. The GPU backend always reads back NV12 planes: the
+    /// presenter and the bitmap fallback both consume NV12, and the smaller planes measured about twice
+    /// the decode rate of letting the video processor convert to BGRA on the GPU.
+    /// <para>当前会话的解码器选项。GPU 后端始终回读 NV12 平面：呈现器与位图回退都能消费 NV12，
+    /// 而且按实测，回读较小平面比让视频处理器在 GPU 上转成 BGRA 的解码速率约快一倍。</para>
+    /// </summary>
     internal VideoDecoderOptions ActiveDecoderOptions => new()
     {
         Backend = _activeSettings.ScreenMirrorDecoderBackend,
         ColorMatrix = _activeSettings.ScreenMirrorColorMatrix,
         ColorRange = _activeSettings.ScreenMirrorColorRange,
-        PreferNv12Output = GpuPresenter.IsAvailable,
+        PreferNv12Output = true,
     };
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ApplyMirrorSettingsCommand))]

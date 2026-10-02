@@ -64,8 +64,23 @@ public static class ScrcpyConstants
     public const byte ControlTypeGetClipboard = 8;
     /// <summary>Control message type: set the device clipboard. <para>控制消息类型：设置设备剪贴板。</para></summary>
     public const byte ControlTypeSetClipboard = 9;
-    /// <summary>Control message type: turn the display power on or off. <para>控制消息类型：打开或关闭屏幕电源。</para></summary>
+    /// <summary>Control message type: set the display power mode (scrcpy 2.7 calls it SET_SCREEN_POWER_MODE).
+    /// <para>控制消息类型：设置屏幕电源模式（scrcpy 2.7 中名为 SET_SCREEN_POWER_MODE）。</para></summary>
+    /// <remarks><para>类型字节后还有一个模式字节，取值见 <see cref="ScreenPowerModeOff"/> 与
+    /// <see cref="ScreenPowerModeNormal"/>；只发类型字节会让服务端把下一条控制消息当作模式消费，
+    /// 解析随即错位并以协议异常终止服务端进程。</para>
+    /// <para>A mode byte follows the type, one of <see cref="ScreenPowerModeOff"/> or
+    /// <see cref="ScreenPowerModeNormal"/>; omitting it makes the server consume the next control message as the
+    /// mode, desynchronizing the stream and killing the server process with a protocol error.</para></remarks>
     public const byte ControlTypeSetDisplayPower = 10;
+
+    /// <summary>Power mode value 0 (<c>POWER_MODE_OFF</c>): the display is powered off.
+    /// <para>电源模式 0（<c>POWER_MODE_OFF</c>）：屏幕关闭。</para></summary>
+    public const byte ScreenPowerModeOff = 0;
+
+    /// <summary>Power mode value 2 (<c>POWER_MODE_NORMAL</c>): the display is powered on.
+    /// <para>电源模式 2（<c>POWER_MODE_NORMAL</c>）：屏幕点亮。</para></summary>
+    public const byte ScreenPowerModeNormal = 2;
 
     /// <summary>Device message type: clipboard content. <para>设备消息类型：剪贴板内容。</para></summary>
     public const byte DeviceTypeClipboard = 0;

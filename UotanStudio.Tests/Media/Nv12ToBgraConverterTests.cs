@@ -28,8 +28,11 @@ public class Nv12ToBgraConverterTests
         {
             for (int col = 0; col < width; col++)
             {
-                int uv = stride * height + (row / 2) * stride + (col & ~1);
-                var expected = ExpectedPixel(source[row * stride + col], source[uv], source[uv + 1]);
+                int uvRow = stride * height + (row / 2) * stride;
+                int uvRowNext = row / 2 + 1 < (height + 1) / 2 ? uvRow + stride : uvRow;
+                var u = SampleChroma(source, uvRow, uvRowNext, col >> 1, width, row & 1);
+                var v = SampleChroma(source, uvRow + 1, uvRowNext + 1, col >> 1, width, row & 1);
+                var expected = ExpectedPixel(source[row * stride + col], u, v);
                 int offset = row * outputStride + col * 4;
                 Assert.Equal(expected, (actual[offset], actual[offset + 1], actual[offset + 2], actual[offset + 3]));
             }
@@ -80,6 +83,17 @@ public class Nv12ToBgraConverterTests
 
     private static byte Clamp(int value) => (byte)(value < 0 ? 0 : (value > 255 ? 255 : value));
 
+    /// <summary>
+    /// 双线性色度参考采样：水平 3:1 加权靠前一列，奇数亮度行垂直 1:1 混合，末列钳制。
+    /// </summary>
+    private static byte SampleChroma(byte[] nv12, int uvRow, int uvRowNext, int cell, int width, int verticalWeight)
+    {
+        var nextCell = cell + 1 < (width + 1) / 2 ? cell + 1 : cell;
+        var upper = (nv12[uvRow + cell * 2] * 3 + nv12[uvRow + nextCell * 2] + 2) >> 2;
+        var lower = (nv12[uvRowNext + cell * 2] * 3 + nv12[uvRowNext + nextCell * 2] + 2) >> 2;
+        return (byte)(verticalWeight != 0 ? (upper + lower + 1) >> 1 : upper);
+    }
+
     [Fact]
     public void GetBgraBufferSize_ReturnsWidthTimesHeightTimes4()
     {
@@ -110,8 +124,9 @@ public class Nv12ToBgraConverterTests
             {
                 var y = nv12[(row * stride) + col];
                 var uvRow = (height * stride) + ((row / 2) * stride);
-                var u = nv12[uvRow + (col & ~1)];
-                var v = nv12[uvRow + (col & ~1) + 1];
+                var uvRowNext = row / 2 + 1 < (height + 1) / 2 ? uvRow + stride : uvRow;
+                var u = SampleChroma(nv12, uvRow, uvRowNext, col >> 1, width, row & 1);
+                var v = SampleChroma(nv12, uvRow + 1, uvRowNext + 1, col >> 1, width, row & 1);
                 var (b, g, r, a) = ExpectedPixel(y, u, v);
 
                 var offset = (row * width * 4) + (col * 4);
@@ -141,8 +156,9 @@ public class Nv12ToBgraConverterTests
             {
                 var y = nv12[(row * stride) + col];
                 var uvRow = (height * stride) + ((row / 2) * stride);
-                var u = nv12[uvRow + (col & ~1)];
-                var v = nv12[uvRow + (col & ~1) + 1];
+                var uvRowNext = row / 2 + 1 < (height + 1) / 2 ? uvRow + stride : uvRow;
+                var u = SampleChroma(nv12, uvRow, uvRowNext, col >> 1, width, row & 1);
+                var v = SampleChroma(nv12, uvRow + 1, uvRowNext + 1, col >> 1, width, row & 1);
                 var (b, g, r, a) = ExpectedPixel(y, u, v);
 
                 var offset = (row * width * 4) + (col * 4);

@@ -30,5 +30,6 @@ public class ScrcpyVideoMetadataTests
     {
         Assert.Equal("h264", new ScrcpyVideoMetadata(0x68323634, 1080, 1920).CodecName);
         Assert.Equal("h265", new ScrcpyVideoMetadata(0x68323635, 1080, 1920).CodecName);
+        Assert.Equal("av1", new ScrcpyVideoMetadata(0x00617631, 1080, 1920).CodecName);
     }
 }

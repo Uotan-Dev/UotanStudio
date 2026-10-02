@@ -25,10 +25,11 @@ public sealed class ScreenMirrorPixelBufferTests
     }
 
     [Fact]
-    public void DesktopDefaults_KeepGpuColorConversion()
+    public void DesktopDefaults_ReadBackNv12BeforeAnyDraw()
     {
         var mirror = new UotanStudio.ViewModels.Editors.ScreenMirrorViewModel();
-        Assert.False(mirror.ActiveDecoderOptions.PreferNv12Output);
+        Assert.False(mirror.GpuPresenter.IsAvailable);
+        Assert.True(mirror.ActiveDecoderOptions.PreferNv12Output);
     }
     [Fact]
     public void RepeatedFrames_ReuseExactSizeStorageAndOwnTheCopy()

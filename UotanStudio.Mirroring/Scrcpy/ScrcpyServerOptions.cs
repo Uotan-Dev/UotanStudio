@@ -90,6 +90,15 @@ public sealed class ScrcpyServerOptions
     /// </value>
     public bool Control { get; init; } = true;
 
+    /// <summary>是否把设备复制操作自动同步到客户端剪贴板。
+    /// <para>Whether the device automatically pushes clipboard copies to the client.</para></summary>
+    /// <value>
+    /// Defaults to <see langword="true"/>, matching the scrcpy server default; the option is only sent when
+    /// disabled so the default argument list stays unchanged.
+    /// <para>默认 <see langword="true"/>，与 scrcpy 服务端默认一致；仅在关闭时下发该参数，默认参数列表保持不变。</para>
+    /// </value>
+    public bool ClipboardAutoSync { get; init; } = true;
+
     /// <summary>The server log level ("verbose", "debug", "info", "warn", "error").
     /// <para>服务端日志级别（"verbose"、"debug"、"info"、"warn"、"error"）。</para></summary>
     /// <value>Defaults to <c>warn</c>; any other value makes <see cref="BuildArguments"/> throw.
@@ -169,6 +178,7 @@ public sealed class ScrcpyServerOptions
             "cleanup=true",
             "tunnel_forward=true",
         };
+        if (!ClipboardAutoSync) args.Add("clipboard_autosync=false");
         if (VideoEncoder.Length > 0) args.Add($"video_encoder={VideoEncoder}");
         return [.. args];
     }

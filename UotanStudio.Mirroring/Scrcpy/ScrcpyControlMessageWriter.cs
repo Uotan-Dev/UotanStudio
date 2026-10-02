@@ -201,8 +201,8 @@ public static class ScrcpyControlMessageWriter
     }
 
     /// <summary>
-    /// Builds a single-byte control message (panels, display power).
-    /// <para>构建单字节控制消息（面板、屏幕电源）。</para>
+    /// Builds a single-byte control message (panel expansion and collapse).
+    /// <para>构建单字节控制消息（展开与收起面板）。</para>
     /// </summary>
     /// <param name="type">One of the single-byte control types. <para>单字节负载的控制类型。</para></param>
     /// <returns>The encoded message. <para>编码后的消息。</para></returns>
@@ -212,9 +212,25 @@ public static class ScrcpyControlMessageWriter
         => type is ScrcpyConstants.ControlTypeExpandNotificationPanel
             or ScrcpyConstants.ControlTypeExpandSettingsPanel
             or ScrcpyConstants.ControlTypeCollapsePanels
-            or ScrcpyConstants.ControlTypeSetDisplayPower
             ? [type]
             : throw new ArgumentException("Type is not a single-byte control message. 该类型不是单字节控制消息。", nameof(type));
+
+    /// <summary>
+    /// Builds TYPE_SET_DISPLAY_POWER (type + power mode), 2 bytes.
+    /// <para>构建 TYPE_SET_DISPLAY_POWER（类型 + 电源模式），共 2 字节。</para>
+    /// </summary>
+    /// <param name="on">Whether the display is powered on; the mode byte is
+    /// <see cref="ScrcpyConstants.ScreenPowerModeNormal"/> or <see cref="ScrcpyConstants.ScreenPowerModeOff"/>.
+    /// <para>屏幕是否点亮；模式字节为 <see cref="ScrcpyConstants.ScreenPowerModeNormal"/> 或
+    /// <see cref="ScrcpyConstants.ScreenPowerModeOff"/>。</para></param>
+    /// <returns>The encoded message. <para>编码后的消息。</para></returns>
+    /// <remarks>
+    /// <para>服务端按 SurfaceControl 的电源模式解释第二个字节，1 不是合法模式值，因此不能写成布尔的 0/1。</para>
+    /// <para>The server forwards the second byte to SurfaceControl as a power mode, and 1 is not a valid mode, so
+    /// the flag cannot be encoded as a boolean 0/1.</para>
+    /// </remarks>
+    public static byte[] SetDisplayPower(bool on)
+        => [ScrcpyConstants.ControlTypeSetDisplayPower, on ? ScrcpyConstants.ScreenPowerModeNormal : ScrcpyConstants.ScreenPowerModeOff];
 
     /// <summary>
     /// Builds TYPE_SET_CLIPBOARD (type + sequence id + paste flag + length + text).

@@ -7,9 +7,11 @@ public class ScrcpyAudioMetadataTests
 {
     [Theory]
     [InlineData(0x6F707573u, "OPUS")]
-    [InlineData(0x61616320u, "AAC")]
     [InlineData(0x666C6163u, "FLAC")]
-    public void AudioCodec_UsesUpstreamLowercaseFourCc(uint fourCc, string expected)
+    [InlineData(0x00616163u, "AAC")]
+    [InlineData(0x00726177u, "RAW")]
+    [InlineData(0x61616320u, "AAC")]
+    public void AudioCodec_DecodesPaddedAndPackedFourCc(uint fourCc, string expected)
     {
         Assert.Equal(expected, new ScrcpyAudioMetadata(fourCc).CodecName);
     }

@@ -23,6 +23,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
 {
     private readonly StringBuilder _output = new();
     private int _disposed;
+    private bool _displayPowerOn = true;
 
     /// <summary>Device name announced by the server during <see cref="Connect"/>.
     /// <para>在 <see cref="Connect"/> 期间服务端宣告的设备名。</para></summary>
@@ -142,6 +143,75 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
     /// <exception cref="InvalidOperationException">Control is disabled or the session is not connected.
     /// <para>控制未启用或会话尚未连接。</para></exception>
     public void SendControl(byte[] message) => client.SendControl(message);
+
+    /// <summary>
+    /// <para>轮询一条设备 → 客户端消息（剪贴板内容或剪贴板确认）。控制 socket 由调用方单独泵取，
+    /// 与视频、音频读取互不干扰。</para>
+    /// Polls one device → client message (clipboard payload or clipboard acknowledgement). The control socket is
+    /// pumped by the caller and is independent of the video and audio readers.
+    /// </summary>
+    /// <param name="timeoutMs">Per-read timeout in milliseconds; zero returns immediately when nothing is pending.
+    /// <para>单次读取超时（毫秒）；为 0 时无待读消息即立即返回。</para></param>
+    /// <returns>The device message, or <see langword="null"/> when none arrived.
+    /// <para>设备消息；未到达时为 <see langword="null"/>。</para></returns>
+    /// <exception cref="InvalidDataException">The device sent an over-long clipboard or an unknown message type.
+    /// <para>设备发出超长剪贴板或未知消息类型。</para></exception>
+    public ScrcpyDeviceMessage? ReadDeviceMessage(int timeoutMs = 0) => client.TryReadDeviceMessage(timeoutMs);
+
+    /// <summary>
+    /// <para>把文本写入设备剪贴板，可选择同时在焦点输入框粘贴。UTF-8 编码上限 300 字节。</para>
+    /// Writes text into the device clipboard, optionally pasting it into the focused field. The UTF-8 payload is
+    /// capped at 300 bytes.
+    /// </summary>
+    /// <param name="text"><para>要写入设备剪贴板的文本。</para>The text to place on the device clipboard.</param>
+    /// <param name="paste"><para>是否同时粘贴到焦点输入框。</para>Whether the device also pastes into the focused field.</param>
+    /// <param name="sequence"><para>请求序号，由设备的 ACK_CLIPBOARD 回显。</para>Request sequence echoed by the device's ACK_CLIPBOARD.</param>
+    /// <exception cref="InvalidOperationException">Control is disabled or the session is not connected.
+    /// <para>控制未启用或会话尚未连接。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="text"/> encodes to more than 300 UTF-8 bytes.
+    /// <para><paramref name="text"/> 的 UTF-8 编码超过 300 字节。</para></exception>
+    public void SendClipboard(string text, bool paste, ulong sequence = 0)
+        => client.SendControl(ScrcpyControlMessageWriter.SetClipboard(text, paste, sequence));
+
+    /// <summary>
+    /// <para>请求设备回传剪贴板内容；结果以 <see cref="ScrcpyConstants.DeviceTypeClipboard"/> 消息出现在
+    /// <see cref="ReadDeviceMessage"/> 上。</para>
+    /// Asks the device to send its clipboard; the result arrives as a
+    /// <see cref="ScrcpyConstants.DeviceTypeClipboard"/> message on <see cref="ReadDeviceMessage"/>.
+    /// </summary>
+    /// <param name="copyKey"><para><see cref="ScrcpyConstants.CopyKeyCopy"/> 或 <see cref="ScrcpyConstants.CopyKeyCut"/>。</para>
+    /// <see cref="ScrcpyConstants.CopyKeyCopy"/> or <see cref="ScrcpyConstants.CopyKeyCut"/>.</param>
+    /// <exception cref="InvalidOperationException">Control is disabled or the session is not connected.
+    /// <para>控制未启用或会话尚未连接。</para></exception>
+    public void RequestClipboard(byte copyKey = ScrcpyConstants.CopyKeyCopy)
+        => client.SendControl(ScrcpyControlMessageWriter.GetClipboard(copyKey));
+
+    /// <summary>
+    /// <para>发送一次 Android「返回」按压（down/up 两条消息）；屏幕关闭时该消息用于唤醒。</para>
+    /// Sends one Android BACK press as a down/up pair; the same message wakes a powered-off screen.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Control is disabled or the session is not connected.
+    /// <para>控制未启用或会话尚未连接。</para></exception>
+    public void SendBack()
+    {
+        client.SendControl(ScrcpyControlMessageWriter.BackOrScreenOn(ScrcpyConstants.ActionDown));
+        client.SendControl(ScrcpyControlMessageWriter.BackOrScreenOn(ScrcpyConstants.ActionUp));
+        _displayPowerOn = true;
+    }
+
+    /// <summary>
+    /// <para>切换设备屏幕电源状态。scrcpy 的消息只接受绝对的开/关模式，因此本会话记录上一次下发的状态用于反向
+    /// 切换；会话新建时假定屏幕是点亮的。</para>
+    /// Toggles the device screen power. The scrcpy message only carries an absolute on/off mode, so the session
+    /// remembers the last value sent and inverts it; a fresh session assumes the screen is on.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Control is disabled or the session is not connected.
+    /// <para>控制未启用或会话尚未连接。</para></exception>
+    public void ToggleDisplayPower()
+    {
+        _displayPowerOn = !_displayPowerOn;
+        client.SendControl(ScrcpyControlMessageWriter.SetDisplayPower(_displayPowerOn));
+    }
 
     private void DrainServerOutput()
     {
