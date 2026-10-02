@@ -129,6 +129,10 @@
     <x:String x:Key="ScreenMirror_Mirroring">Mirroring</x:String>
     <x:String x:Key="ScreenMirror_Stopped">Mirroring stopped</x:String>
     <x:String x:Key="ScreenMirror_Failed">Mirroring failed: </x:String>
+    <x:String x:Key="ScreenMirror_Back">Back</x:String>
+    <x:String x:Key="ScreenMirror_Power">Power</x:String>
+    <x:String x:Key="ScreenMirror_PushClipboard">Send Clipboard</x:String>
+    <x:String x:Key="ScreenMirror_PullClipboard">Get Clipboard</x:String>
 
     <!-- Flash page -->
     <x:String x:Key="Flash_Package">Package</x:String>

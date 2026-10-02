@@ -129,6 +129,10 @@
     <x:String x:Key="ScreenMirror_Mirroring">投屏中</x:String>
     <x:String x:Key="ScreenMirror_Stopped">投屏已停止</x:String>
     <x:String x:Key="ScreenMirror_Failed">投屏失败：</x:String>
+    <x:String x:Key="ScreenMirror_Back">返回</x:String>
+    <x:String x:Key="ScreenMirror_Power">电源</x:String>
+    <x:String x:Key="ScreenMirror_PushClipboard">发送剪贴板</x:String>
+    <x:String x:Key="ScreenMirror_PullClipboard">获取剪贴板</x:String>
 
     <!-- 烧录页面 -->
     <x:String x:Key="Flash_Package">刷机包</x:String>
