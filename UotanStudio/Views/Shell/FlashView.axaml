@@ -288,6 +288,33 @@
                                     Click="OnMtkFlashClick"
                                     Content="{DynamicResource Flash_MtkFlash}"
                                     AutomationProperties.Name="{DynamicResource Flash_MtkFlash}" />
+                            <TextBlock Name="MtkScatterHintText" Text="{DynamicResource Flash_MtkLoadScatterHint}"
+                                       FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <TextBlock Name="EdlHeader" Text="{DynamicResource Flash_Edl}" FontWeight="SemiBold" IsVisible="False" />
+                        <StackPanel Name="EdlPane" Spacing="8" IsVisible="False">
+                            <TextBlock Name="EdlStorageInfoText" Text="{DynamicResource Flash_EdlStorageInfoUnknown}"
+                                       FontSize="12" Opacity="0.8" TextWrapping="Wrap" />
+                            <Button Name="EdlReadStorageInfoButton" Classes="pane-action"
+                                    Click="OnEdlReadStorageInfoClick"
+                                    Content="{DynamicResource Flash_EdlReadStorageInfo}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlReadStorageInfo}" />
+                            <Button Name="EdlChooseProgrammerButton" Classes="pane-action"
+                                    Click="OnEdlChooseProgrammerClick"
+                                    Content="{DynamicResource Flash_EdlChooseProgrammer}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlChooseProgrammer}" />
+                            <TextBlock Name="EdlProgrammerPathText" TextTrimming="CharacterEllipsis"
+                                       FontSize="12" Opacity="0.8" />
+                            <Button Name="EdlReadbackButton" Classes="pane-action"
+                                    Click="OnEdlReadbackClick"
+                                    Content="{DynamicResource Flash_EdlReadbackSelected}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlReadbackSelected}" />
+                            <CheckBox Name="EdlGenerateXmlBox" Content="{DynamicResource Flash_EdlGenerateXml}"
+                                      HorizontalAlignment="Left"
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlGenerateXml}" />
+                            <CheckBox Name="EdlGeneralizedXmlBox" Content="{DynamicResource Flash_EdlGeneralizedXml}"
+                                      HorizontalAlignment="Left" IsEnabled="False"
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlGeneralizedXml}" />
                         </StackPanel>
                         <TextBlock Text="{DynamicResource Flash_Image}" FontWeight="SemiBold" />
                         <StackPanel Spacing="8">

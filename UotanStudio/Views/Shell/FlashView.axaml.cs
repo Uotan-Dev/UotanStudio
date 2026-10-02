@@ -95,6 +95,7 @@ public partial class FlashView : UserControl
     private string? _rootPackagePath;
     private readonly Dictionary<FlashPartitionEntry, RawProgramEntry> _edlEntries = [];
     private string? _edlProgrammer;
+    private string? _edlProgrammerOverride;
     private bool _flatBinPackage;
     private CancellationTokenSource? _flashCancellation;
     private IReadOnlyList<FlashPartitionEntry> _overallRows = [];
@@ -115,6 +116,9 @@ public partial class FlashView : UserControl
         DataContext = _model;
         MtkStorageKindBox.ItemsSource = new[] { "eMMC", "UFS" };
         MtkStorageKindBox.SelectedIndex = 0;
+        EdlGeneralizedXmlBox.IsEnabled = false;
+        EdlGenerateXmlBox.IsCheckedChanged += (_, _) =>
+            EdlGeneralizedXmlBox.IsEnabled = EdlGenerateXmlBox.IsChecked == true;
         RefreshMtkPorts();
         AttachedToVisualTree += (_, _) =>
         {
@@ -349,6 +353,7 @@ public partial class FlashView : UserControl
         _requiresFastbootd = false;
         _edlEntries.Clear();
         _edlProgrammer = null;
+        _edlProgrammerOverride = null;
         _flatBinPackage = false;
         _mtkResolution = null;
         _mtkRows.Clear();
@@ -613,6 +618,7 @@ public partial class FlashView : UserControl
             _flatBinPackage = false;
             _edlEntries.Clear();
             _edlProgrammer = null;
+            _edlProgrammerOverride = null;
             _mtkResolution = null;
             _mtkRows.Clear();
             MtkPane.IsVisible = false;
@@ -784,7 +790,39 @@ public partial class FlashView : UserControl
         _model.SelectedDeviceText = SelectedDevice is { } device
             ? $"{device.ProtocolLabel} · {device.DisplayName}"
             : LanguageService.Instance.GetString("Flash_NoDevice");
+        UpdateModeVisibility();
     }
+
+    /// <summary>
+    /// <para>按所选设备的协议切换操作面板可见性：Fastboot/ADB 保持现状；EDL 显示专用面板并隐藏
+    /// Fastboot 专属项；串口设备显示 MTK 面板的只读提示态；其余协议隐藏 EDL 与 MTK 两块。</para>
+    /// Switches the action-pane visibility by the selected device's protocol: Fastboot/ADB keep the
+    /// existing layout; EDL shows the dedicated pane and hides Fastboot-only items; serial devices
+    /// show the MTK pane in its hint state; every other protocol hides both panes.
+    /// </summary>
+    private void UpdateModeVisibility()
+    {
+        var protocol = SelectedDevice?.Protocol;
+        var isEdl = protocol is DeviceProtocolKind.Edl;
+        var isMtkSerial = SelectedDevice is { Transport: DeviceTransportKind.Serial };
+        EdlHeader.IsVisible = EdlPane.IsVisible = isEdl;
+        MtkPane.IsVisible = isMtkSerial || _mtkResolution is not null;
+        MtkScatterHintText.IsVisible = _mtkResolution is null;
+        SwitchSlotButton.IsVisible = !isEdl && !isMtkSerial;
+        UseAdbBox.IsVisible = !isEdl && !isMtkSerial;
+        AddRootBox.IsVisible = !isEdl && !isMtkSerial;
+        DeleteCowBox.IsVisible = !isEdl && !isMtkSerial;
+        EdlReadbackButton.IsEnabled = !_busy && isEdl && HasSelectedEdlEntries();
+        EdlReadStorageInfoButton.IsEnabled = !_busy && isEdl;
+        EdlChooseProgrammerButton.IsEnabled = !_busy && isEdl;
+    }
+
+    /// <summary>
+    /// <para>判断是否选中了可回读的 EDL 条目。</para>
+    /// Returns whether any readable EDL entry is selected.
+    /// </summary>
+    private bool HasSelectedEdlEntries()
+        => _model.Partitions.Any(row => row.IsSelected && row.CanSelect && _edlEntries.ContainsKey(row));
 
     private void SetBusy(bool value)
     {
@@ -1161,7 +1199,7 @@ public partial class FlashView : UserControl
                             SetRowRunning(row, "Flash_Status_Flashing");
                             var result = await FlashService.Default.FlashEdlPartitionAsync(
                                 edl, _edlEntries[row], Path.GetDirectoryName(row.FilePath)!,
-                                _edlProgrammer, progress, cancellation.Token, verify);
+                                _edlProgrammerOverride ?? _edlProgrammer, progress, cancellation.Token, verify);
                             AppendLog(result.Summary);
                             SetRowFinished(row, result.Success);
                             if (!result.Success) break;
@@ -1463,6 +1501,154 @@ public partial class FlashView : UserControl
 
         using var retry = File.OpenRead(path);
         return MtkEmiReader.ReadPreloader(retry, 0, MtkEmiPayloadLayout.BinaryParameters);
+    }
+
+    /// <summary>
+    /// <para>读取所选 EDL 设备的存储几何与 GPT 摘要并展示；仅供显示，不改变刷写状态。</para>
+    /// Reads the selected EDL device's storage geometry and GPT summary for display only.
+    /// </summary>
+    private async void OnEdlReadStorageInfoClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device) return;
+        SetBusy(true);
+        try
+        {
+            var info = await App.DeviceMonitor.RunEdlAsync(device, async edl =>
+            {
+                var firehose = edl.Firehose
+                    ?? throw new InvalidOperationException("The EDL session has no Firehose instance.");
+                var geometry = await firehose.GetStorageGeometryAsync(0, CancellationToken.None).ConfigureAwait(true);
+                var snapshot = await firehose.ReadGptAsync(0, CancellationToken.None).ConfigureAwait(true);
+                return (geometry, snapshot);
+            }, CancellationToken.None);
+            EdlStorageInfoText.Text =
+                $"LUN0 {info.geometry.SectorSize} B × {info.geometry.SectorCount} · " +
+                $"{info.geometry.CapacityBytes / 1024d / 1024d / 1024d:F2} GiB · " +
+                $"GPT {info.snapshot.Table.Partitions.Count} partitions";
+            AppendLog(EdlStorageInfoText.Text);
+        }
+        catch (Exception ex) { AppendLog(ex.Message); }
+        finally
+        {
+            SetBusy(false);
+            UpdateEdlButton();
+        }
+    }
+
+    /// <summary>
+    /// <para>选择用于覆盖包内 programmer 的引导文件；覆盖只影响后续 EDL 刷写与回读。</para>
+    /// Picks a programmer file overriding the package-supplied one for later EDL work.
+    /// </summary>
+    private async void OnEdlChooseProgrammerClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || TopLevel.GetTopLevel(this) is not { } topLevel) return;
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString("Flash_EdlChooseProgrammer"),
+            AllowMultiple = false,
+            FileTypeFilter = [FilePickerFileTypes.All]
+        });
+        if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
+        _edlProgrammerOverride = File.Exists(path) ? path : null;
+        EdlProgrammerPathText.Text = _edlProgrammerOverride is { } programmer
+            ? Path.GetFileName(programmer)
+            : string.Empty;
+        ToolTip.SetTip(EdlProgrammerPathText, _edlProgrammerOverride ?? string.Empty);
+        if (_edlProgrammerOverride is { } selected)
+        {
+            AppendLog(Path.GetFileName(selected));
+        }
+    }
+
+    /// <summary>
+    /// <para>回读所选 EDL 分区到用户目录；勾选生成 XML 时按回读结果写出 rawprogram 清单，
+    /// 通用化选项把与磁盘末尾相邻的条目改写为 <c>NUM_DISK_SECTORS-</c> 相对起始扇区。</para>
+    /// Reads the selected EDL partitions back into a user directory; with XML generation enabled,
+    /// a rawprogram manifest is written from the results and the generalized option rewrites
+    /// entries abutting the disk end as relative <c>NUM_DISK_SECTORS-</c> start sectors.
+    /// </summary>
+    private async void OnEdlReadbackClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming ||
+            SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
+            TopLevel.GetTopLevel(this) is not { } topLevel) return;
+        var selected = _model.Partitions
+            .Where(row => row.IsSelected && row.CanSelect && _edlEntries.TryGetValue(row, out _))
+            .Select(row => (Row: row, Entry: _edlEntries[row]))
+            .ToArray();
+        if (selected.Length == 0) return;
+        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString("Flash_EdlReadbackSelected"),
+            AllowMultiple = false
+        });
+        if (_busy || _confirming || folders.Count != 1 || folders[0].TryGetLocalPath() is not { } destination) return;
+        var generateXml = EdlGenerateXmlBox.IsChecked == true;
+        var generalized = generateXml && EdlGeneralizedXmlBox.IsChecked == true;
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        SetBusy(true);
+        EdlReadbackButton.IsEnabled = false;
+        try
+        {
+            var manifest = new List<EdlReadbackManifestEntry>();
+            var sectorSize = 0L;
+            var numDiskSectors = 0L;
+            await App.DeviceMonitor.RunEdlAsync(device, async edl =>
+            {
+                var firehose = edl.Firehose
+                    ?? throw new InvalidOperationException("The EDL session has no Firehose instance.");
+                if (generalized)
+                {
+                    numDiskSectors = (await firehose.GetStorageGeometryAsync(
+                        0, cancellation.Token).ConfigureAwait(true)).SectorCount;
+                }
+
+                foreach (var (row, entry) in selected)
+                {
+                    cancellation.Token.ThrowIfCancellationRequested();
+                    SetRowRunning(row, "Flash_Status_Flashing");
+                    var displayName = string.IsNullOrEmpty(entry.Label) ? entry.Filename : entry.Label;
+                    var outputPath = Path.Combine(destination,
+                        entry.Filename.Length > 0 ? entry.Filename : $"{displayName}.img");
+                    var result = await BackupService.BackupEdlPartitionAsync(
+                        edl, entry, outputPath, null, cancellation.Token).ConfigureAwait(true);
+                    AppendLog(result.Summary);
+                    SetRowFinished(row, result.Success);
+                    if (!result.Success) return false;
+                    if (!generateXml) continue;
+                    var geometry = await firehose.GetStorageGeometryAsync(
+                        entry.PhysicalPartitionNumber, cancellation.Token).ConfigureAwait(true);
+                    sectorSize = entry.SectorSizeInBytes > 0 ? entry.SectorSizeInBytes : geometry.SectorSize;
+                    manifest.Add(new EdlReadbackManifestEntry
+                    {
+                        PartitionName = displayName,
+                        StartSector = FlashService.ParseStartSectorValue(entry.StartSector),
+                        SectorCount = entry.NumPartitionSectors,
+                        PhysicalPartitionNumber = entry.PhysicalPartitionNumber,
+                        FileName = Path.GetFileName(outputPath)
+                    });
+                }
+
+                return true;
+            }, CancellationToken.None);
+            if (generateXml && manifest.Count > 0)
+            {
+                var manifestPath = Path.Combine(destination, "rawprogram_readback.xml");
+                await EdlReadbackManifestWriter.WriteAsync(
+                    manifestPath, manifest, sectorSize, numDiskSectors, generalized,
+                    cancellation.Token).ConfigureAwait(true);
+                AppendLog(Path.GetFileName(manifestPath));
+            }
+        }
+        catch (OperationCanceledException) { MarkUnfinishedSkipped(); }
+        catch (Exception ex) { AppendLog(ex.Message); }
+        finally
+        {
+            _flashCancellation = null;
+            SetBusy(false);
+            UpdateEdlButton();
+        }
     }
 
     private async void OnMtkFlashClick(object? sender, RoutedEventArgs e)

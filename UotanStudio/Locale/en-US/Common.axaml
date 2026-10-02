@@ -210,6 +210,14 @@
     <x:String x:Key="Flash_MtkFlash">Start MTK download</x:String>
     <x:String x:Key="Flash_MtkPlanPreview">{0} operations, {1} MiB total</x:String>
     <x:String x:Key="Flash_MtkTooManySteps">Too many selected scatter steps.</x:String>
+    <x:String x:Key="Flash_MtkLoadScatterHint">Load a scatter file to enable MTK download.</x:String>
+    <x:String x:Key="Flash_Edl">EDL (Firehose)</x:String>
+    <x:String x:Key="Flash_EdlStorageInfoUnknown">Storage info unknown. Read the storage report first.</x:String>
+    <x:String x:Key="Flash_EdlReadStorageInfo">Read storage info</x:String>
+    <x:String x:Key="Flash_EdlChooseProgrammer">Override programmer (loader)</x:String>
+    <x:String x:Key="Flash_EdlReadbackSelected">Read back selected partitions</x:String>
+    <x:String x:Key="Flash_EdlGenerateXml">Generate rawprogram/patch XML</x:String>
+    <x:String x:Key="Flash_EdlGeneralizedXml">Generalize XML (fit different storage sizes)</x:String>
 
     <!-- ViewLocator -->
     <x:String x:Key="ViewLocator_NotFound">Not Found: </x:String>

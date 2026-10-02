@@ -210,6 +210,14 @@
     <x:String x:Key="Flash_MtkFlash">开始 MTK 下载</x:String>
     <x:String x:Key="Flash_MtkPlanPreview">共 {0} 项操作，合计 {1} MiB</x:String>
     <x:String x:Key="Flash_MtkTooManySteps">所选 scatter 步骤过多。</x:String>
+    <x:String x:Key="Flash_MtkLoadScatterHint">加载 scatter 文件后才能开始 MTK 下载。</x:String>
+    <x:String x:Key="Flash_Edl">EDL（Firehose）</x:String>
+    <x:String x:Key="Flash_EdlStorageInfoUnknown">存储信息未知，请先读取存储报告。</x:String>
+    <x:String x:Key="Flash_EdlReadStorageInfo">读取存储信息</x:String>
+    <x:String x:Key="Flash_EdlChooseProgrammer">覆盖 Programmer（引导）</x:String>
+    <x:String x:Key="Flash_EdlReadbackSelected">回读所选分区</x:String>
+    <x:String x:Key="Flash_EdlGenerateXml">生成 rawprogram/patch XML</x:String>
+    <x:String x:Key="Flash_EdlGeneralizedXml">通用化 XML（适配不同存储容量）</x:String>
 
     <!-- 视图定位器 -->
     <x:String x:Key="ViewLocator_NotFound">未找到: </x:String>
