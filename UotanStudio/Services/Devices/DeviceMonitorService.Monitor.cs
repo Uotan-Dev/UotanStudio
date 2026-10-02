@@ -1,5 +1,6 @@
 using UotanStudio.Comm;
 using UotanStudio.Comm.Protocols.Hdc;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Services.Devices;
@@ -43,7 +44,7 @@ public sealed partial class DeviceMonitorService
     {
         try
         {
-            if (!await DeviceCommunicationConfiguration.ProbeAdbServerAsync(ct).ConfigureAwait(false))
+            if (!DebugBridgeRoute.AdbServerAvailable)
             {
                 return "absent";
             }
@@ -61,7 +62,7 @@ public sealed partial class DeviceMonitorService
     {
         try
         {
-            if (!await DeviceCommunicationConfiguration.ProbeHdcServerAsync(ct).ConfigureAwait(false))
+            if (!DebugBridgeRoute.UseHdcServer())
             {
                 return "absent";
             }
@@ -90,6 +91,7 @@ public sealed partial class DeviceMonitorService
         _edlConnections = new EdlConnectionCache((device, token) => Task.Run(
             () => LeaseEndpoint(device, sessionKind: UotanStudio.Comm.Contracts.DeviceSessionKind.Edl,
                 cancellationToken: token), token), ScheduleChange);
+        RestorePairedNetworkTargets();
     }
 
     /// <summary>

@@ -1,0 +1,59 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:icons="using:Material.Icons.Avalonia"
+        x:Class="UotanStudio.Views.Devices.QrPairingWindow"
+        Title="{DynamicResource Device_QrPairTitle}"
+        Width="420" Height="560" MinWidth="380" MinHeight="480"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="True"
+        CanMinimize="False" CanMaximize="False"
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
+        WindowDecorations="Full" Icon="/Assets/UotanToolbox.png">
+    <Window.Styles>
+        <Style Selector="TextBlock"><Setter Property="FontSize" Value="13" /></Style>
+        <Style Selector="Button"><Setter Property="FontSize" Value="13" /></Style>
+        <Style Selector="WindowDrawnDecorations /template/ StackPanel#PART_OverlayPanel">
+            <Setter Property="MinWidth" Value="0" /><Setter Property="Width" Value="{DynamicResource CaptionButtonWidth}" />
+        </Style>
+        <Style Selector="WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MinimizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MaximizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=FullScreenButton]">
+            <Setter Property="IsVisible" Value="False" /><Setter Property="IsEnabled" Value="False" />
+        </Style>
+        <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
+            <Setter Property="Background"><ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" /></Setter>
+        </Style>
+        <Style Selector="WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
+            <Setter Property="Margin" Value="40,0,48,0" /><Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+    </Window.Styles>
+    <Grid RowDefinitions="Auto,*,Auto" Margin="0,32,0,0">
+        <TextBlock Grid.Row="0" Text="{DynamicResource Device_QrPairGuide}" Margin="20,4,20,0"
+                   TextWrapping="Wrap" Opacity="0.85" />
+        <StackPanel Grid.Row="1" Margin="20" Spacing="12">
+            <Border HorizontalAlignment="Center" Padding="12" CornerRadius="8"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                    Background="White">
+                <Image Name="QrImage" Width="240" Height="240" Stretch="Uniform" />
+            </Border>
+            <TextBlock Name="StatusText" Text="{DynamicResource Device_QrPairWaiting}"
+                       TextWrapping="Wrap" TextAlignment="Center" Opacity="0.85" />
+            <StackPanel Name="ManualPortPanel" IsVisible="False" Spacing="8">
+                <TextBlock Text="{DynamicResource Device_QrPairManualGuide}"
+                           TextWrapping="Wrap" TextAlignment="Center" Opacity="0.85" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+                    <TextBox Name="PortBox" Width="120" VerticalContentAlignment="Center"
+                             PlaceholderText="{DynamicResource Device_QrPairManualPortHint}"
+                             KeyDown="OnManualPortKeyDown" />
+                    <Button Name="ManualConnectButton" Content="{DynamicResource Device_QrPairManualConnect}"
+                            MinWidth="88" Height="30" Click="OnManualConnectClick" />
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+        <Border Grid.Row="2" Padding="20,14" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+                Background="{DynamicResource PageBackground}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                <Button Name="ActionButton" Content="{DynamicResource Editor_Cancel}"
+                        MinWidth="88" Height="32" Click="OnCancelClick" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

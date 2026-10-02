@@ -89,6 +89,18 @@ public sealed class DevicePropertyReaderTests
         Assert.Equal(expected, properties["bl"]);
     }
 
+    [Fact]
+    public void AdbProperties_PermissionDeniedBoardIdFallsBackToSentinel()
+    {
+        var properties = DevicePropertyReader.ReadAdbProperties(command => command switch
+        {
+            "cat /sys/devices/soc0/serial_number" => "cat: /sys/devices/soc0/serial_number: Permission denied",
+            _ => "",
+        }, key => key);
+
+        Assert.Equal("--", properties["boardid"]);
+    }
+
     [Theory]
     [InlineData("_a", "Slot A")]
     [InlineData(" B ", "Slot B")]

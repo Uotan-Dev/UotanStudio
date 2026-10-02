@@ -53,6 +53,8 @@
     <PackageReference Include="Semi.Avalonia.DataGrid" />
     <PackageReference Include="Semi.Avalonia.Dock" />
     <PackageReference Include="NodifyM.Avalonia" />
+    <!-- QR code rendering for the wireless-debugging pairing popup. -->
+    <PackageReference Include="QRCoder" />
     <PackageReference Include="DiffPlex" />
     <PackageReference Include="SharpCompress" />
     <PackageReference Include="System.IO.Hashing" />

@@ -39,6 +39,8 @@ internal static class DebugBridgeServerControl
         finally
         {
             DebugBridgeRoute.InvalidateProbe(DeviceCommunicationConfiguration.ServerHost, port);
+            DebugBridgeRoute.InitializeAdbServerProbe();
+            DebugBridgeRoute.InitializeHdcServerProbe();
             await monitor.ForceRefreshAsync().ConfigureAwait(false);
         }
     }

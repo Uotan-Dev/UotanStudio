@@ -265,7 +265,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             {
                 for (var i = 0; i < scanned.Count; i++)
                 {
-                    if (Devices[i].Key != (scanned[i][0].PhysicalId ?? scanned[i][0].Key) ||
+                    if (Devices[i].Key != scanned[i][0].GroupId ||
                         !Devices[i].MatchesConnections(scanned[i]))
                     {
                         changed = true;
@@ -278,7 +278,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 for (var i = 0; i < scanned.Count; i++)
                 {
                     var match = i < Devices.Count &&
-                        Devices[i].Key == (scanned[i][0].PhysicalId ?? scanned[i][0].Key)
+                        Devices[i].Key == scanned[i][0].GroupId
                         ? Devices[i] : null;
                     if (match is not null)
                     {

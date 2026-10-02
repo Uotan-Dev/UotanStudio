@@ -209,12 +209,25 @@ public sealed partial class DeviceMonitorService
         => DebugBridgeServerControl.StopHdcAsync(this, cancellationToken);
 
     /// <summary>Disconnects only the selected network ADB target.</summary>
-    public Task DisconnectAdbAsync(DetectedDevice device, CancellationToken cancellationToken = default)
+    public async Task DisconnectAdbAsync(DetectedDevice device, CancellationToken cancellationToken = default)
     {
         if (device.Protocol != DeviceProtocolKind.Adb || device.Transport != DeviceTransportKind.Tcp)
             throw new ArgumentException("A network ADB target is required.", nameof(device));
-        return AdbServerServices.DisconnectAsync(device.Serial,
-            DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort, cancellationToken);
+        if (!device.Key.StartsWith("adb-tcp:", StringComparison.Ordinal))
+        {
+            await AdbServerServices.DisconnectAsync(device.Serial,
+                DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort, cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        TryDetachManualNetworkTarget(device.Serial);
+        if (DebugBridgeRoute.AdbServerAvailable)
+        {
+            await AdbServerServices.DisconnectAsync(device.Serial,
+                DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort, cancellationToken)
+                .ConfigureAwait(false);
+        }
     }
     /// <summary>Reboots through the routed debug bridge session or the Fastboot transport.</summary>
     public async Task<bool> RebootAsync(DetectedDevice device, string mode, CancellationToken cancellationToken = default)
@@ -295,7 +308,7 @@ public sealed partial class DeviceMonitorService
         {
             var match = ListAdbServerTargets()
                 .FirstOrDefault(target => string.Equals(target.Serial, serial, StringComparison.Ordinal));
-            if (match.Serial is not null) return match.State.ToLowerInvariant();
+            if (match is not null) return match.State.ToLowerInvariant();
         }
         var targets = Scan().Where(d => d.Protocol == DeviceProtocolKind.Adb &&
             string.Equals(d.Serial, serial, StringComparison.Ordinal)).Take(2).ToArray();

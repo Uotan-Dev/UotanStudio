@@ -105,7 +105,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     }
 
     /// <summary>稳定键。 Stable key.</summary>
-    public string Key => Connections[0].PhysicalId ?? Connections[0].Key;
+    public string Key => Connections[0].GroupId;
 
     /// <summary>设备序列号。 Device serial.</summary>
     public string Serial => Device.Serial;

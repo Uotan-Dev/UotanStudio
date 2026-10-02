@@ -22,6 +22,7 @@ public class AppSettings : IJsonOnDeserialized
         FavoriteNodeTypes ??= [];
         RecentNodeTypes ??= [];
         ExpandedNodeCategories ??= [];
+        PairedNetworkTargets ??= [];
     }
 
     /// <summary>USB backend policy, applied at the next application startup.</summary>
@@ -45,6 +46,7 @@ public class AppSettings : IJsonOnDeserialized
         copy.FavoriteNodeTypes = [.. FavoriteNodeTypes];
         copy.RecentNodeTypes = [.. RecentNodeTypes];
         copy.ExpandedNodeCategories = [.. ExpandedNodeCategories];
+        copy.PairedNetworkTargets = [.. PairedNetworkTargets];
         copy.McpServers = [.. McpServers];
         copy.AdditionalSettings = AdditionalSettings is null ? null : new(AdditionalSettings);
         return copy;
@@ -167,6 +169,14 @@ public class AppSettings : IJsonOnDeserialized
     public List<string> ExpandedNodeCategories { get; set; } = [];
 
     /// <summary>
+    /// <para>获取或设置配对成功后记住的网络调试目标，用于重启后按 IP 重新发现 adbd 的安全连接端口。</para>
+    /// Gets or sets the network debugging targets remembered after pairing, used to re-discover each
+    /// daemon's secure connect port by IP address after a restart.
+    /// </summary>
+    [JsonPropertyName("pairedNetworkTargets")]
+    public List<PairedNetworkTarget> PairedNetworkTargets { get; set; } = [];
+
+    /// <summary>
     /// <para>获取或设置设为"当前签名"的 ADB 密钥库条目 Id；空字符串表示使用启动自动生成的运行时身份。</para>
     /// Gets or sets the Id of the ADB key library entry set as the "current signature"; empty string means the runtime identity auto-generated at startup.
     /// </summary>
@@ -280,6 +290,17 @@ public class AppSettings : IJsonOnDeserialized
     [JsonPropertyName("mcpExposeAllowFlash")]
     public bool McpExposeAllowFlash { get; set; }
 }
+
+/// <summary>
+/// A network debugging target remembered after a successful pairing, so the host can re-discover
+/// its secure connect port by IP address instead of asking the user to scan again.
+/// <para>记住配对成功的网络调试目标，使宿主能按 IP 地址重新发现其安全连接端口，而无需用户再次扫码。</para>
+/// </summary>
+/// <param name="Address">The <c>host:port</c> endpoint as last observed.
+/// <para>最后一次观测到的 <c>host:port</c> 端点。</para></param>
+/// <param name="RequiresTls">Whether the endpoint needs the TLS transport recorded at pairing time.
+/// <para>该端点是否需要使用配对时记录的 TLS 传输。</para></param>
+public sealed record PairedNetworkTarget(string Address, bool RequiresTls);
 
 /// <summary>
 /// <para><see cref="AppSettings"/> 的 JSON 序列化上下文，为 AOT 兼容提供源生成支持。</para>
@@ -429,6 +450,20 @@ public class SettingsPersistenceService
     {
         var settings = LoadSettings();
         settings.RecentProjects = recentProjects ?? [];
+        SaveSettings(settings);
+    }
+
+    /// <summary>
+    /// Replaces the remembered pairing targets, merging on top of the latest settings on disk so
+    /// other settings are never overwritten.
+    /// <para>替换记住的配对目标：以磁盘上最新设置为基础合并写入，避免覆盖其他设置项。</para>
+    /// </summary>
+    /// <param name="targets">The current remembered targets; <c>null</c> clears them.
+    /// <para>当前应记住的目标；为 <c>null</c> 时清空。</para></param>
+    public void UpdatePairedNetworkTargets(List<PairedNetworkTarget> targets)
+    {
+        var settings = LoadSettings();
+        settings.PairedNetworkTargets = targets ?? [];
         SaveSettings(settings);
     }
 

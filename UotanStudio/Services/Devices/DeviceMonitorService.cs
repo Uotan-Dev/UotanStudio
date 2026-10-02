@@ -53,6 +53,19 @@ public sealed class DetectedDevice
     public required DeviceTransportKind Transport { get; init; }
     /// <summary>Verified physical identity shared by protocol endpoints, or null when unavailable.</summary>
     public string? PhysicalId { get; init; }
+    /// <summary>
+    /// <para>server 为该端点解析出的网络端点，用于把同一设备的多条传输并入一张卡；两条端点共享同一别名时
+    /// 才写入，绝不按地址形状推断。</para>
+    /// Network endpoint the server resolved for this endpoint, written on every transport that shares
+    /// it so several routes to one device merge into a single card; never inferred from address shape.
+    /// </summary>
+    public string? NetworkAlias { get; init; }
+    /// <summary>
+    /// <para>本行所属设备的稳定分组键：优先别名，其次 USB 物理身份，最后回退到端点自身键。</para>
+    /// Stable grouping key for the device this row belongs to: the alias first, then the USB physical
+    /// identity, then the endpoint's own key.
+    /// </summary>
+    public string GroupId => NetworkAlias ?? PhysicalId ?? Key;
     /// <summary>状态文本（device/offline/fastboot/edl/maskrom/loader…）。 State text.</summary>
     public string State { get; set; } = string.Empty;
     /// <summary>The observed EDL protocol, independent of USB presence.</summary>

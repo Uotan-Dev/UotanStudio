@@ -511,6 +511,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.FavoriteNodeTypes = latest.FavoriteNodeTypes;
         _appSettings.RecentNodeTypes = latest.RecentNodeTypes;
         _appSettings.ExpandedNodeCategories = latest.ExpandedNodeCategories;
+        _appSettings.PairedNetworkTargets = latest.PairedNetworkTargets;
 
         _appSettings.McpServers = [.. McpServers];
         _appSettings.McpExposeEnabled = _mcpExposeEnabled;
@@ -524,6 +525,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         if (saved)
         {
             McpExposureService.Instance.Apply(_mcpExposeEnabled, _mcpExposePort, _mcpExposeRootDirectory, _mcpExposeAllowFlash);
+            McpClientConnectionService.Instance.Apply(McpServers);
         }
     }
 

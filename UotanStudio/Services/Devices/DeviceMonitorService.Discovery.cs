@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
@@ -34,6 +35,17 @@ public sealed partial class DeviceMonitorService
     /// <para>执行实际的全量枚举与分类。</para>
     /// Performs the actual full enumeration and classification.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// adb 为自己经 mDNS 自动建立的传输按 DNS-SD 实例名命名，因此同一台设备还会以该名字解析出的
+    /// <c>host:port</c> 再列一次；两行都带上这个端点作为别名，随后并入同一张卡。
+    /// </para>
+    /// <para>
+    /// adb keys a transport it auto-connected through mDNS by the DNS-SD instance name, so the same device
+    /// is listed again under the <c>host:port</c> that name resolves to; both rows carry that endpoint as
+    /// their alias and merge into one card.
+    /// </para>
+    /// </remarks>
     private IReadOnlyList<DetectedDevice> ScanCore()
     {
         var devices = new List<DetectedDevice>();
@@ -89,33 +101,39 @@ public sealed partial class DeviceMonitorService
                 PhysicalId = target.TargetTransport == "USB"
                     ? FindServerUsbIdentity(usbInfos, target.Address, DeviceProtocolKind.Hdc) : null,
                 Protocol = DeviceProtocolKind.Hdc,
-                Transport = target.TargetTransport switch
-                {
-                    "USB" => DeviceTransportKind.Usb,
-                    "TCP" => DeviceTransportKind.Tcp,
-                    _ => DeviceTransportKind.Unknown,
-                },
+                Transport = MapServerTransport(target.TargetTransport),
                 State = target.State?.Equals("Connected", StringComparison.OrdinalIgnoreCase) == true ? "device"
                     : target.State?.Equals("Unauthorized", StringComparison.OrdinalIgnoreCase) == true
                         ? "unauthorized" : "offline",
             });
         }
 
+        var resolvedEndpoints = adbDevices
+            .Where(target => target.AliasAddress is not null)
+            .Select(target => target.AliasAddress!)
+            .ToHashSet(StringComparer.Ordinal);
         foreach (var target in adbDevices)
         {
+            devices.Add(AdbDevice(target, usbInfos,
+                target.AliasAddress ?? (resolvedEndpoints.Contains(target.Address) ? target.Address : null)));
+        }
+
+        foreach (var target in ManualNetworkTargets)
+        {
+            if (devices.Any(entry => string.Equals(entry.Serial, target, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
             devices.Add(new DetectedDevice
             {
-                Key = "adb:" + target.Address,
-                Serial = target.Address,
-                PhysicalId = !target.Address.Contains(':')
-                    ? FindServerUsbIdentity(usbInfos, target.Address, DeviceProtocolKind.Adb) : null,
+                Key = "adb-tcp:" + target,
+                Serial = target,
+                NetworkAlias = resolvedEndpoints.Contains(target) ? target : null,
                 Protocol = DeviceProtocolKind.Adb,
-                Transport = target.Address.Contains(':') ? DeviceTransportKind.Tcp : DeviceTransportKind.Usb,
-                State = target.State?.ToLowerInvariant() ?? "offline",
+                Transport = DeviceTransportKind.Tcp,
+                State = "device",
             });
-
-            LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
-                $"adb server channel device: {target.Address}");
         }
 
         _edlConnections.RetainDevices(devices.Where(device => device.Protocol == DeviceProtocolKind.Edl)
@@ -125,6 +143,45 @@ public sealed partial class DeviceMonitorService
 
     internal static bool IsSupportedHdcTarget(HdcTargetInfo target)
         => target.Transport is "USB" or "TCP";
+
+    /// <summary>
+    /// <para>把一条 adb server 目标投影为设备行；<paramref name="networkAlias"/> 是 server 为其解析出的
+    /// 网络端点，用于把同一设备的多条传输并入一张卡。</para>
+    /// Projects one adb server target into a device row; <paramref name="networkAlias"/> is the network
+    /// endpoint the server resolved for it, used to fold several transports of one device into a card.
+    /// </summary>
+    private static DetectedDevice AdbDevice(DeviceEndpoint target, IReadOnlyList<UsbDeviceInfo> usbInfos,
+        string? networkAlias)
+    {
+        var transport = MapServerTransport(target.TargetTransport);
+        LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
+            $"adb server channel device: {target.Address} ({transport})");
+        return new DetectedDevice
+        {
+            Key = "adb:" + target.Address,
+            Serial = target.Address,
+            PhysicalId = transport == DeviceTransportKind.Usb
+                ? FindServerUsbIdentity(usbInfos, target.Address, DeviceProtocolKind.Adb) : null,
+            NetworkAlias = networkAlias,
+            Protocol = DeviceProtocolKind.Adb,
+            Transport = transport,
+            State = target.State?.ToLowerInvariant() ?? "offline",
+        };
+    }
+
+    /// <summary>
+    /// <para>把 server 上报的链路文本映射为传输类型；缺少链路证据时返回 <c>Unknown</c>，不按序列号形状猜测
+    /// USB。adb server 只在真实 USB 传输的行上打印 <c>usb:</c> 描述符。</para>
+    /// Maps the server-reported link text to a transport kind; returns <c>Unknown</c> without link evidence
+    /// instead of guessing USB from the serial shape, because the adb server prints the <c>usb:</c>
+    /// descriptor only on genuine USB transport lines.
+    /// </summary>
+    internal static DeviceTransportKind MapServerTransport(string? targetTransport) => targetTransport switch
+    {
+        "USB" => DeviceTransportKind.Usb,
+        "TCP" => DeviceTransportKind.Tcp,
+        _ => DeviceTransportKind.Unknown,
+    };
 
     private static string ProtocolToken(DeviceProtocolKind protocol) => protocol switch
     {
@@ -145,8 +202,23 @@ public sealed partial class DeviceMonitorService
 
     internal static IReadOnlyList<IReadOnlyList<DetectedDevice>> GroupPhysicalDevices(
         IEnumerable<DetectedDevice> endpoints)
-        => endpoints.GroupBy(device => device.PhysicalId ?? device.Key, StringComparer.Ordinal)
-            .Select(group => (IReadOnlyList<DetectedDevice>)group.ToArray()).ToArray();
+        => endpoints.GroupBy(device => device.GroupId, StringComparer.Ordinal)
+            .Select(group => OrderGroupLeader(group.ToArray())).ToArray();
+
+    /// <summary>
+    /// <para>把可拨号地址那一行放到组首，使合并后的卡片默认使用 server 直接列出的 <c>host:port</c> 端点，
+    /// 而不是按实例名拨号的重复传输；无别名时保持发现顺序。</para>
+    /// Puts the dial-address row first so a merged card defaults to the <c>host:port</c> endpoint the
+    /// server lists directly rather than the instance-name duplicate; discovery order is kept without
+    /// an alias.
+    /// </summary>
+    private static IReadOnlyList<DetectedDevice> OrderGroupLeader(IReadOnlyList<DetectedDevice> group)
+    {
+        var alias = group.FirstOrDefault(device => device.NetworkAlias is not null)?.NetworkAlias;
+        return alias is null || group[0].Serial == alias
+            ? group
+            : group.OrderBy(device => device.Serial == alias ? 0 : 1).ToArray();
+    }
 
     internal static IReadOnlyList<DetectedDevice> CoalesceSameEndpoint(IEnumerable<DetectedDevice> candidates)
     {

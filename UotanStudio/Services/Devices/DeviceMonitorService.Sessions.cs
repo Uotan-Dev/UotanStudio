@@ -82,6 +82,10 @@ public sealed partial class DeviceMonitorService
                 throw new IOException("The selected ADB server target is unavailable. Refresh and select the USB target for direct access.");
             return OpenServerAdbLease(device.Serial);
         }
+        if (device.Key.StartsWith("adb-tcp:", StringComparison.Ordinal))
+        {
+            return OpenDirectNetworkAdbLease(device.Serial);
+        }
         if (device.Transport == DeviceTransportKind.Tcp && !DebugBridgeRoute.UseAdbServer())
             throw new IOException("A network ADB target requires the ADB server.");
         if (DebugBridgeSessionOpener.AdbServerOwns(device.Serial))
@@ -116,6 +120,95 @@ public sealed partial class DeviceMonitorService
             Protocol = "adb"
         };
         return (_controller.AdoptSession(endpoint, session), session);
+    }
+
+    /// <summary>
+    /// <para>为无 server 期间手动登记的网络目标打开直接 TCP ADB 会话租约。安全目标记住的端口会随
+    /// 设备重启无线调试而改变，因此 TLS 握手失败时先按 IP 重新浏览一次端口再重试；两条路径都失败
+    /// 才注销目标。重解析有期限，因为本方法是同步的租约打开边界。</para>
+    /// Opens a direct TCP ADB lease for a manually registered network target while no server listens.
+    /// A secure target's remembered port changes whenever the device restarts wireless debugging, so a
+    /// failed TLS handshake re-browses the port by IP address once and retries; only when both attempts
+    /// fail is the target detached. The re-resolution is bounded because this method is a synchronous
+    /// lease-opening boundary.
+    /// </summary>
+    private (DeviceLease Lease, IAdbDeviceSession Session) OpenDirectNetworkAdbLease(string serial)
+    {
+        if (!DebugBridgeNetworkAddress.TrySplitEndpoint(serial, out var host, out var port))
+        {
+            throw new IOException("A manually registered network target needs a host:port address.");
+        }
+
+        var isSecure = _manualNetworkTargets.TryGetValue(serial, out var requiresTls) && requiresTls;
+        var address = serial;
+        IAdbDeviceSession session;
+        try
+        {
+            session = OpenConnectedNetworkSession(host, port, isSecure);
+        }
+        catch (Exception) when (!isSecure)
+        {
+            TryDetachManualNetworkTarget(serial);
+            throw;
+        }
+        catch (Exception) when (isSecure)
+        {
+            var resolved = _controller.ResolveSecureNetworkPortAsync(host, RediscoverSecurePortTimeout)
+                .GetAwaiter().GetResult();
+            if (resolved is null || resolved == port)
+            {
+                TryDetachManualNetworkTarget(serial);
+                throw;
+            }
+
+            address = DebugBridgeNetworkAddress.FormatEndpoint(host, resolved.Value);
+            _manualNetworkTargets.Remove(serial);
+            _manualNetworkTargets[address] = true;
+            SavePairedNetworkTargets();
+            try
+            {
+                session = OpenConnectedNetworkSession(host, resolved.Value, isSecure: true);
+            }
+            catch
+            {
+                TryDetachManualNetworkTarget(address);
+                throw;
+            }
+        }
+
+        var endpoint = new DeviceEndpoint
+        {
+            Source = "adb-tcp",
+            Transport = "adb-tcp",
+            Address = address,
+            DisplayName = address,
+            Serial = address,
+            Route = "direct",
+            Protocol = "adb"
+        };
+        return (_controller.AdoptSession(endpoint, session), session);
+    }
+
+    /// <summary>
+    /// <para>打开并完成一次网络 ADB 握手；失败时释放会话后向上抛出底层原因。</para>
+    /// Opens a network ADB session and completes its handshake, releasing the session and rethrowing
+    /// the underlying reason on failure.
+    /// </summary>
+    private IAdbDeviceSession OpenConnectedNetworkSession(string host, int port, bool isSecure)
+    {
+        var session = isSecure
+            ? _controller.OpenSecureNetworkAdbSession(host, port)
+            : _controller.OpenNetworkAdbSession(host, port);
+        try
+        {
+            session.Connect();
+            return session;
+        }
+        catch
+        {
+            session.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -217,7 +310,7 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>Lists the targets managed by the running adb server, or an empty list when it is absent.</summary>
-    internal static IReadOnlyList<(string Serial, string State)> ListAdbServerTargets() =>
+    internal static IReadOnlyList<AdbTargetInfo> ListAdbServerTargets() =>
         new AdbServerServices(string.Empty, DeviceCommunicationConfiguration.ServerHost,
             DeviceCommunicationConfiguration.AdbServerPort).ListTargets();
 

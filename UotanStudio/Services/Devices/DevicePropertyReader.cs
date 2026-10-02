@@ -22,6 +22,7 @@ internal static class DevicePropertyReader
             || trimmed.Contains("not found", StringComparison.OrdinalIgnoreCase)
             || trimmed.Contains("device offline", StringComparison.OrdinalIgnoreCase)
             || trimmed.Contains("unauthorized", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("permission denied", StringComparison.OrdinalIgnoreCase)
             || trimmed.Contains("closed", StringComparison.OrdinalIgnoreCase)
             || trimmed.Contains("fail", StringComparison.OrdinalIgnoreCase)
                 ? "--"

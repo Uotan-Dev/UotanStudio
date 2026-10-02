@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -156,29 +156,6 @@
                                 ToolTip.Tip="{DynamicResource Device_ScreenMirror}">
                             <avalonia:MaterialIcon Kind="Cast" Width="16" Height="16" />
                         </Button>
-                        <Button Classes="DeviceIconButton"
-                                Command="{Binding FastbootReadInfoCommand}"
-                                ToolTip.Tip="{DynamicResource Device_FastbootReadInfo}">
-                            <avalonia:MaterialIcon Kind="InformationOutline" Width="16" Height="16" />
-                        </Button>
-                        <Button Classes="DeviceIconButton"
-                                Command="{Binding QuickFlashCommand}"
-                                CommandParameter="boot"
-                                ToolTip.Tip="{DynamicResource Device_QuickFlash}">
-                            <avalonia:MaterialIcon Kind="Flash" Width="16" Height="16" />
-                        </Button>
-                        <Button Classes="DeviceIconButton"
-                                Command="{Binding BackupPartitionCommand}"
-                                CommandParameter="boot"
-                                ToolTip.Tip="{DynamicResource Device_BackupPartition}">
-                            <avalonia:MaterialIcon Kind="DatabaseArrowUp" Width="16" Height="16" />
-                        </Button>
-                        <Button Classes="DeviceIconButton"
-                                Command="{Binding RestorePartitionCommand}"
-                                CommandParameter="boot"
-                                ToolTip.Tip="{DynamicResource Device_RestorePartition}">
-                            <avalonia:MaterialIcon Kind="DatabaseArrowDown" Width="16" Height="16" />
-                        </Button>
                         <Button Classes="DeviceActionButton" Content="HDC"
                                 IsVisible="{Binding SelectedDevice.IsHdc, FallbackValue=False}">
                             <Button.Flyout>
@@ -198,10 +175,15 @@
                                VerticalAlignment="Center" FontSize="12" Opacity="0.65"
                                TextTrimming="CharacterEllipsis"
                                ToolTip.Tip="{Binding StatusText}" />
+                    <!-- 连接进度条放在左侧按钮下方的状态行内，避免撑高工具栏底部分割线。 -->
+                    <!-- The connect progress bar sits in the status row under the left buttons so it never grows the toolbar divider. -->
+                    <ProgressBar Grid.Row="1" Grid.Column="0" IsIndeterminate="True"
+                                 IsVisible="{Binding IsConnectionBusy}" Height="3"
+                                 VerticalAlignment="Center" />
                     <Border x:Name="RemoteConnectionPanel" Grid.Column="1"
                             Width="400" MaxWidth="400" HorizontalAlignment="Right" VerticalAlignment="Top">
                         <StackPanel Spacing="6">
-                            <Grid ColumnDefinitions="96,*,32,32" ColumnSpacing="8">
+                            <Grid ColumnDefinitions="96,*,32,32,32" ColumnSpacing="4">
                                 <ComboBox x:Name="RemoteProtocolBox" SelectedIndex="{Binding RemoteProtocolIndex, Mode=TwoWay}"
                                           IsEnabled="{Binding !IsConnectionBusy}" Height="32"
                                           HorizontalAlignment="Stretch"
@@ -223,13 +205,17 @@
                                         ToolTip.Tip="{DynamicResource Device_RemoteConnect}">
                                     <avalonia:MaterialIcon Kind="LinkVariant" Width="16" Height="16" />
                                 </Button>
-                                <Button x:Name="CancelConnectionButton" Grid.Column="3" Classes="DeviceIconButton"
+                                <Button x:Name="QrPairingButton" Grid.Column="3" Classes="DeviceIconButton"
+                                        Command="{Binding OpenQrPairingCommand}"
+                                        ToolTip.Tip="{DynamicResource Device_QrPair}">
+                                    <avalonia:MaterialIcon Kind="QrcodeScan" Width="16" Height="16" />
+                                </Button>
+                                <Button x:Name="CancelConnectionButton" Grid.Column="4" Classes="DeviceIconButton"
                                         Command="{Binding CancelConnectionCommand}"
                                         ToolTip.Tip="{DynamicResource Device_RemoteCancel}">
                                     <avalonia:MaterialIcon Kind="Close" Width="16" Height="16" />
                                 </Button>
                             </Grid>
-                            <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsConnectionBusy}" Height="3" />
                             <TextBlock x:Name="RemoteAddressError" Text="{DynamicResource Device_RemoteInvalidAddress}"
                                        IsVisible="{Binding HasInvalidRemoteAddress}" TextWrapping="Wrap" />
                             <TextBlock Text="{Binding ConnectionStatusText}" TextWrapping="Wrap"

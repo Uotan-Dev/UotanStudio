@@ -2,10 +2,12 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
+using UotanStudio.Comm.Transports.Tcp;
 using UotanStudio.Services.Devices;
 using UotanStudio.ViewModels.Devices;
 using Xunit;
@@ -46,6 +48,61 @@ public sealed class RemoteDeviceConnectionTests
     {
         Assert.False(DebugBridgeNetworkAddress.TryNormalize(input, out var address));
         Assert.Empty(address);
+    }
+
+    [Theory]
+    [InlineData("2001:db8::1", "[2001:db8::1]")]
+    [InlineData("[2001:db8::1]", "[2001:db8::1]")]
+    [InlineData("fe80::1%eth0", "[fe80::1%eth0]")]
+    [InlineData("192.0.2.1", "192.0.2.1")]
+    [InlineData("device.example", "device.example")]
+    public void FormatHost_Ipv6Literal_BracketsForServerEndpointGrammar(string host, string expected)
+        => Assert.Equal(expected, DebugBridgeNetworkAddress.FormatHost(host));
+
+    [Theory]
+    [InlineData("2001:db8::1", 5555, "[2001:db8::1]:5555")]
+    [InlineData("192.0.2.1", 5555, "192.0.2.1:5555")]
+    [InlineData("device.example", 43111, "device.example:43111")]
+    public void FormatEndpoint_Ipv6Host_ProducesSplitableEndpointIdentity(
+        string host, int port, string expected)
+        => Assert.Equal(expected, DebugBridgeNetworkAddress.FormatEndpoint(host, port));
+
+    [Theory]
+    [InlineData("[2001:db8::1]:5555", "2001:db8::1", 5555)]
+    [InlineData("[fe80::1%eth0]:45123", "fe80::1%eth0", 45123)]
+    [InlineData("192.0.2.1:5555", "192.0.2.1", 5555)]
+    [InlineData("device.example:43111", "device.example", 43111)]
+    public void TrySplitEndpoint_BracketedOrPlainIdentity_ReturnsBareHostAndPort(
+        string endpoint, string expectedHost, int expectedPort)
+    {
+        Assert.True(DebugBridgeNetworkAddress.TrySplitEndpoint(endpoint, out var host, out var port));
+        Assert.Equal(expectedHost, host);
+        Assert.Equal(expectedPort, port);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("localhost")]
+    [InlineData("localhost:0")]
+    [InlineData("localhost:65536")]
+    [InlineData("[]:5555")]
+    [InlineData("2001:db8::1")]
+    public void TrySplitEndpoint_MissingOrInvalidPort_Rejects(string? endpoint)
+    {
+        Assert.False(DebugBridgeNetworkAddress.TrySplitEndpoint(endpoint, out var host, out var port));
+        Assert.Empty(host);
+        Assert.Equal(0, port);
+    }
+
+    [Fact]
+    public void FormatEndpointThenTrySplitEndpoint_Ipv6RoundTripsToDialableBareHost()
+    {
+        var endpoint = DebugBridgeNetworkAddress.FormatEndpoint("fd56:1de:1157:0:a034:6903:6060:7323", 37811);
+
+        Assert.True(DebugBridgeNetworkAddress.TrySplitEndpoint(endpoint, out var host, out var port));
+        Assert.Equal("fd56:1de:1157:0:a034:6903:6060:7323", host);
+        Assert.Equal(37811, port);
     }
 
     [Theory]
@@ -210,6 +267,84 @@ public sealed class RemoteDeviceConnectionTests
 
         await Assert.ThrowsAsync<NotSupportedException>(() =>
             new HdcDeviceService().DisconnectAsync(device, TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("192.0.2.1", DebugBridgeNetworkAddress.DefaultDevicePort, "192.0.2.1:5555")]
+    [InlineData(" device.example ", DebugBridgeNetworkAddress.DefaultDevicePort, "device.example:5555")]
+    [InlineData("[2001:db8::1]", 5555, "[2001:db8::1]:5555")]
+    [InlineData("192.0.2.1:9000", 5555, "192.0.2.1:9000")]
+    [InlineData("192.0.2.1", 0, null)]
+    [InlineData("::1", 5555, null)]
+    [InlineData("192.0.2.1:65536", 5555, null)]
+    public void TryNormalize_DefaultPort_AppliesOnlyToBareHost(string input, int defaultPort, string? expected)
+    {
+        Assert.Equal(expected is not null, DebugBridgeNetworkAddress.TryNormalize(input, defaultPort, out var address));
+        Assert.Equal(expected ?? string.Empty, address);
+    }
+
+    [Theory]
+    [InlineData(DeviceProtocolKind.Adb, "192.0.2.1", "192.0.2.1:5555")]
+    [InlineData(DeviceProtocolKind.Adb, "192.0.2.1:7000", "192.0.2.1:7000")]
+    [InlineData(DeviceProtocolKind.Hdc, "192.0.2.1", "192.0.2.1:5555")]
+    public void TryNormalizeNetworkAddress_BareHost_AppliesDefaultDevicePort(
+        DeviceProtocolKind protocol, string input, string expected)
+    {
+        Assert.True(DeviceMonitorService.TryNormalizeNetworkAddress(protocol, input, out var address));
+        Assert.Equal(expected, address);
+    }
+
+    [Fact]
+    public async Task AdbDirectNetworkSession_WithoutServer_CompletesHandshakeOverTcp()
+    {
+        using var listener = Listen();
+        using var keepDaemonAlive = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var daemon = ServeDaemonHandshakeAsync(listener, keepDaemonAlive.Token);
+        using var rsa = RSA.Create(2048);
+        using var authentication = new AdbAuthentication(rsa);
+        using var session = new AdbSession(new AdbTcpTransport("127.0.0.1", Port(listener)), authentication);
+
+        await Task.Run(session.Connect, TestContext.Current.CancellationToken);
+
+        Assert.True(session.IsConnected);
+        Assert.False(session.UsesServer);
+        keepDaemonAlive.Cancel();
+        Assert.Equal(nameof(AdbCommand.Cnxn), await daemon);
+    }
+
+    [Fact]
+    public void AdbTcpTransport_UnreachablePort_ReportsTransportFailureNotAggregateWrapper()
+    {
+        var listener = Listen();
+        var port = Port(listener);
+        listener.Stop();
+
+        var error = Assert.ThrowsAny<Exception>(() =>
+            new AdbTcpTransport("127.0.0.1", port, connectTimeoutMs: 1000));
+
+        Assert.IsNotType<AggregateException>(error);
+        Assert.True(error is SocketException or TimeoutException,
+            $"Expected a socket or timeout failure, observed {error.GetType().Name}.");
+    }
+
+    private static async Task<string> ServeDaemonHandshakeAsync(TcpListener listener, CancellationToken keepAlive)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+        var token = deadline.Token;
+        using var socket = await listener.AcceptTcpClientAsync(token);
+        var stream = socket.GetStream();
+        var header = new byte[AdbConstants.HeaderSize];
+        await stream.ReadExactlyAsync(header, token);
+        var request = AdbMessaging.ParseHeader(header);
+        var payload = new byte[(int)request.PayloadLength];
+        await stream.ReadExactlyAsync(payload, token);
+        await stream.WriteAsync(AdbMessaging.Serialize(new AdbMessage(
+            AdbCommand.Cnxn, AdbConstants.ProtocolVersion, AdbConstants.MaxPayload,
+            "device::ro.product.name=fake;"u8.ToArray())), token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => Task.Delay(Timeout.InfiniteTimeSpan, keepAlive));
+        return request.Command.ToString() ?? string.Empty;
     }
 
     private static TcpListener Listen()

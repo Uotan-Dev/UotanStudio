@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
+using UotanStudio.Views.Devices;
 
 namespace UotanStudio.ViewModels.Devices;
 
@@ -53,6 +54,7 @@ public partial class DeviceViewModel
                 ConnectCommand.NotifyCanExecuteChanged();
                 DisconnectCommand.NotifyCanExecuteChanged();
                 ConnectRemoteCommand.NotifyCanExecuteChanged();
+                OpenQrPairingCommand.NotifyCanExecuteChanged();
                 CancelConnectionCommand.NotifyCanExecuteChanged();
                 foreach (var device in Devices)
                 {
@@ -89,6 +91,36 @@ public partial class DeviceViewModel
         }
         await ChangeNetworkConnectionAsync(RemoteProtocol, address, null);
     }
+
+    /// <summary>
+    /// <para>打开扫码无线配对窗口；配对流程与远程连接互斥，忙碌时禁用入口。</para>
+    /// Opens the QR wireless pairing window; pairing and remote connections are mutually
+    /// exclusive, so the entry is disabled while busy.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanOpenQrPairing))]
+    private async Task OpenQrPairingAsync()
+    {
+        if (IsConnectionBusy)
+        {
+            return;
+        }
+        var owner = DialogService.GetOwnerWindow();
+        if (owner is null)
+        {
+            return;
+        }
+        IsConnectionBusy = true;
+        try
+        {
+            await new QrPairingWindow().ShowDialog(owner);
+        }
+        finally
+        {
+            IsConnectionBusy = false;
+        }
+    }
+
+    private bool CanOpenQrPairing() => !IsConnectionBusy;
 
     [RelayCommand(CanExecute = nameof(CanManageSelectedConnection))]
     private async Task ConnectAsync()
