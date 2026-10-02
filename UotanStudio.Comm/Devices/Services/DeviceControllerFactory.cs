@@ -1,5 +1,6 @@
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services.Sessions;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Devices.Services;
@@ -14,9 +15,12 @@ namespace UotanStudio.Comm.Devices.Services;
 public static class DeviceControllerFactory
 {
     /// <summary>
-    /// <para>用共享通信套件与标准本机调试桥端点创建默认控制器，使调用方无需直接命名 CommKit。</para>
+    /// <para>用共享通信套件与标准本机调试桥端点创建默认控制器，使调用方无需直接命名 CommKit。
+    /// 创建时先对默认 adb 与 HDC 端点各做一次启动探测，把结论写入各自的全局存在性参数，
+    /// 再由 server 监视循环保持更新。</para>
     /// Creates the default controller over the shared communication kit, so callers need not name <c>CommKit</c>.
-    /// </summary>
+    /// Creation first probes the default adb and HDC endpoints once and writes the outcomes into the
+    /// respective global availability parameters; the server-state watch then keeps them fresh.</summary>
     /// <returns>A controller with removal and server-state watches already running.
     /// <para>已启动移除监视与 server 状态监视的控制器。</para></returns>
     public static DeviceController CreateDefault() => CreateDefault(CommKit.Default);
@@ -25,6 +29,8 @@ public static class DeviceControllerFactory
     internal static DeviceController CreateDefault(ICommKit kit)
     {
         ArgumentNullException.ThrowIfNull(kit);
+        DebugBridgeRoute.InitializeAdbServerProbe();
+        DebugBridgeRoute.InitializeHdcServerProbe();
         var controller = new DeviceController(
             [
                 new UsbDiscoverySource(kit, UsbApiKind.Auto),

@@ -248,12 +248,12 @@ public static class OpenSourceProjects
         {
             Name = "Makaretu.Dns.Multicast",
             Description = "mDNS/DNS-SD 库（本地网络设备发现）",
-            RepositoryUrl = "https://github.com/sanjaymak/Dns",
+            RepositoryUrl = "https://github.com/richardschneider/net-mdns",
             LicenseName = "MIT",
-            LicenseUrl = "https://github.com/sanjaymak/Dns/blob/master/LICENSE",
-            AuthorName = "Sanjay Mak",
-            AuthorGitHubUrl = "https://github.com/sanjaymak",
-            AuthorAvatarUrl = "https://github.com/sanjaymak.png"
+            LicenseUrl = "https://github.com/richardschneider/net-mdns/blob/master/LICENSE",
+            AuthorName = "Richard Schneider",
+            AuthorGitHubUrl = "https://github.com/richardschneider",
+            AuthorAvatarUrl = "https://github.com/richardschneider.png"
         },
         new OpenSourceProject
         {
@@ -273,6 +273,61 @@ public static class OpenSourceProjects
             RepositoryUrl = "https://github.com/dotnet/runtime",
             LicenseName = "MIT",
             LicenseUrl = "https://github.com/dotnet/runtime/blob/main/LICENSE.TXT",
+            AuthorName = ".NET Foundation",
+            AuthorGitHubUrl = "https://github.com/dotnet",
+            AuthorAvatarUrl = "https://github.com/dotnet.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "YamlDotNet",
+            Description = "YAML 读写库（设备树/配置 YAML 解析）",
+            RepositoryUrl = "https://github.com/aaubry/YamlDotNet",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/aaubry/YamlDotNet/blob/master/LICENSE.txt",
+            AuthorName = "Antoine Aubry",
+            AuthorGitHubUrl = "https://github.com/aaubry",
+            AuthorAvatarUrl = "https://github.com/aaubry.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "DiffPlex",
+            Description = "文本差异比较库（文件对比服务的行级 diff）",
+            RepositoryUrl = "https://github.com/mmanela/diffplex",
+            LicenseName = "Apache-2.0",
+            LicenseUrl = "https://github.com/mmanela/diffplex/blob/master/License.txt",
+            AuthorName = "Matthew Manela",
+            AuthorGitHubUrl = "https://github.com/mmanela",
+            AuthorAvatarUrl = "https://github.com/mmanela.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "DiscUtils (LTRData fork)",
+            Description = "纯托管 FAT12/16/32 与 exFAT 卷实现（FAT 分区读写）",
+            RepositoryUrl = "https://github.com/LTRData/DiscUtils",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/LTRData/DiscUtils/blob/master/LICENSE",
+            AuthorName = "LTRData (Kenneth Bell / original DiscUtils)",
+            AuthorGitHubUrl = "https://github.com/LTRData",
+            AuthorAvatarUrl = "https://github.com/LTRData.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "Model Context Protocol C# SDK",
+            Description = "官方 MCP C# SDK（内嵌 MCP 服务器）",
+            RepositoryUrl = "https://github.com/modelcontextprotocol/csharp-sdk",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/modelcontextprotocol/csharp-sdk/blob/main/LICENSE",
+            AuthorName = "Model Context Protocol",
+            AuthorGitHubUrl = "https://github.com/modelcontextprotocol",
+            AuthorAvatarUrl = "https://github.com/modelcontextprotocol.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "BenchmarkDotNet",
+            Description = "性能基准测试框架（基准测试项目）",
+            RepositoryUrl = "https://github.com/dotnet/BenchmarkDotNet",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/dotnet/BenchmarkDotNet/blob/master/LICENSE.md",
             AuthorName = ".NET Foundation",
             AuthorGitHubUrl = "https://github.com/dotnet",
             AuthorAvatarUrl = "https://github.com/dotnet.png"

@@ -5,7 +5,9 @@ using System.Net.Sockets;
 
 namespace UotanStudio.Comm.Routing;
 
-/// <summary>Probes debug bridge server liveness over plain TCP. Only a refused connection means absent.</summary>
+/// <summary>Probes debug bridge server liveness over plain TCP and holds the process-global adb and
+/// HDC server availability parameters. Only a refused connection means absent.
+/// <para>以普通 TCP 探测调试桥 server 存活，并持有进程全局的 adb 与 HDC server 存在性参数。仅连接被拒绝表示不存在。</para></summary>
 /// <remarks>
 /// <para>正值结果（server 存在）按短 TTL 缓存，避免一次扫描内对同一端点重复建连；
 /// 「连接被拒绝」结果不缓存（保持既有约定：仅连接被拒绝视为不存在，不缓存负结果），
@@ -27,6 +29,93 @@ public static class DebugBridgeRoute
     private const int PositiveTtlMs = 2000;
     private static readonly Lock StateLock = new();
     private static readonly Dictionary<string, bool> ReportedStates = new(StringComparer.Ordinal);
+
+    private static bool _adbServerAvailable;
+
+    /// <summary>
+    /// <para>进程全局的 adb server 存在性参数。启动时由 <see cref="InitializeAdbServerProbe"/> 探测写入，
+    /// 之后由 server 监视循环每轮对默认端点的确定性结论刷新；未知结果保持上次状态。所有 adb 操作路由
+    /// （shell、push、pull、reboot、logcat、投屏等）读取本参数决定经 server 转发还是直写目标端口。</para>
+    /// Process-global adb server availability. Written by <see cref="InitializeAdbServerProbe"/> at
+    /// startup and refreshed each pass by the server-lifecycle watch's conclusive probe of the
+    /// default endpoint; inconclusive probes keep the previous value. Every adb operation route
+    /// (shell, push, pull, reboot, logcat, mirroring) reads this value to choose server forwarding
+    /// versus direct port access.</summary>
+    /// <value>
+    /// <see langword="true"/> when the last conclusive probe of <see cref="DebugBridgeEndpoints.ServerHost"/>
+    /// at <see cref="DebugBridgeEndpoints.AdbServerPort"/> found a listening server.
+    /// <para>当对默认端点的最后一次确定性探测发现 server 正在监听时为 <see langword="true"/>。</para></value>
+    public static bool AdbServerAvailable => Volatile.Read(ref _adbServerAvailable);
+
+    internal static void SetAdbServerAvailable(bool available) => Volatile.Write(ref _adbServerAvailable, available);
+
+    private static bool _hdcServerAvailable;
+
+    /// <summary>
+    /// <para>进程全局的 HDC server 存在性参数，语义与 <see cref="AdbServerAvailable"/> 对称：启动时由
+    /// <see cref="InitializeHdcServerProbe"/> 探测写入，之后由 server 监视循环每轮的确定性结论刷新；
+    /// 未知结果保持上次状态。所有 HDC 操作路由（shell、hilog、文件传输等）读取本参数决定经
+    /// HDC server 转发还是直连 USB。</para>
+    /// Process-global HDC server availability, mirroring <see cref="AdbServerAvailable"/>: written
+    /// by <see cref="InitializeHdcServerProbe"/> at startup and refreshed each pass by the
+    /// server-lifecycle watch's conclusive probe of the default HDC endpoint; inconclusive probes
+    /// keep the previous value. Every HDC operation route (shell, hilog, file transfer) reads this
+    /// value to choose server forwarding versus direct USB access.</summary>
+    /// <value>
+    /// <see langword="true"/> when the last conclusive probe of <see cref="DebugBridgeEndpoints.ServerHost"/>
+    /// at <see cref="DebugBridgeEndpoints.HdcServerPort"/> found a listening server.
+    /// <para>当对默认 HDC 端点的最后一次确定性探测发现 server 正在监听时为 <see langword="true"/>。</para></value>
+    public static bool HdcServerAvailable => Volatile.Read(ref _hdcServerAvailable);
+
+    internal static void SetHdcServerAvailable(bool available) => Volatile.Write(ref _hdcServerAvailable, available);
+
+    /// <summary>
+    /// <para>程序启动与显式 server 生命周期操作后的重同步边界：对默认 HDC 端点做一次真实探测，
+    /// 把确定性结论（监听或拒绝）写入 <see cref="HdcServerAvailable"/>；未知结论保持当前值。
+    /// 本方法不抛出 socket 异常。</para>
+    /// Startup and post-lifecycle resync boundary: probes the default HDC endpoint once for real
+    /// and writes the conclusive outcome (listening or refused) into
+    /// <see cref="HdcServerAvailable"/>; an inconclusive probe keeps the current value. The method
+    /// never throws socket exceptions.</summary>
+    public static void InitializeHdcServerProbe()
+    {
+        try
+        {
+            var outcome = TryProbeAsync(DebugBridgeEndpoints.ServerHost, DebugBridgeEndpoints.HdcServerPort)
+                .GetAwaiter().GetResult();
+            if (outcome != DebugBridgeProbeOutcome.Unknown)
+            {
+                SetHdcServerAvailable(outcome == DebugBridgeProbeOutcome.Listening);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// <para>程序启动与显式 server 生命周期操作后的重同步边界：对默认 adb 端点做一次真实探测，
+    /// 把确定性结论（监听或拒绝）写入 <see cref="AdbServerAvailable"/>；未知结论保持当前值。
+    /// 本方法不抛出 socket 异常。</para>
+    /// Startup and post-lifecycle resync boundary: probes the default adb endpoint once for real
+    /// and writes the conclusive outcome (listening or refused) into
+    /// <see cref="AdbServerAvailable"/>; an inconclusive probe keeps the current value. The method
+    /// never throws socket exceptions.</summary>
+    public static void InitializeAdbServerProbe()
+    {
+        try
+        {
+            var outcome = TryProbeAsync(DebugBridgeEndpoints.ServerHost, DebugBridgeEndpoints.AdbServerPort)
+                .GetAwaiter().GetResult();
+            if (outcome != DebugBridgeProbeOutcome.Unknown)
+            {
+                SetAdbServerAvailable(outcome == DebugBridgeProbeOutcome.Listening);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
 
     /// <summary>
     /// Reports initial endpoint state and subsequent transitions for host logging; never writes to the console.
@@ -298,29 +387,61 @@ public static class DebugBridgeRoute
         _scopeCache?.TryRemove(key, out _);
     }
 
-    /// <summary>Reports whether the local ADB endpoint currently has a listening server.
-    /// <para>报告本机 ADB 端点当前是否有正在监听的 server。</para></summary>
+    /// <summary>
+    /// <para>读取全局 adb server 存在性参数；本方法不发起探测。参数由启动时的
+    /// <see cref="InitializeAdbServerProbe"/> 写入，并由 server 监视循环对默认端点的周期性
+    /// <see cref="TryProbeAsync"/> 保持更新。</para>
+    /// Reads the process-global adb server availability parameter without probing. The value is
+    /// written by <see cref="InitializeAdbServerProbe"/> at startup and kept fresh by the
+    /// server-watch loop's periodic <see cref="TryProbeAsync"/> passes over the default
+    /// endpoint.</summary>
     /// <returns>
-    /// <see langword="true"/> when a server is listening on <see cref="DebugBridgeEndpoints.ServerHost"/>
-    /// at <see cref="DebugBridgeEndpoints.AdbServerPort"/>; the result may come from the probe scope or TTL cache.
-    /// <para>当 <see cref="DebugBridgeEndpoints.ServerHost"/> 的
-    /// <see cref="DebugBridgeEndpoints.AdbServerPort"/> 端口上有 server 监听时返回 <see langword="true"/>；
-    /// 结果可能来自探测作用域或 TTL 缓存。</para></returns>
-    public static bool UseAdbServer() => ProbeEndpoint(DebugBridgeEndpoints.ServerHost, DebugBridgeEndpoints.AdbServerPort);
+    /// <see langword="true"/> when the global parameter currently marks the adb server as present.
+    /// <para>当全局参数当前标记 adb server 存在时返回 <see langword="true"/>。</para></returns>
+    public static bool UseAdbServer() => AdbServerAvailable;
 
-    /// <summary>Checks the configured HDC endpoint on every new operation.
-    /// <para>在每次新操作时检查已配置的 HDC 端点。</para></summary>
+    /// <summary>
+    /// <para>按端点选择存在性来源：默认端点读取全局参数 <see cref="AdbServerAvailable"/>；
+    /// 其他端点（测试替身或第二台 server）保持实时 <see cref="ProbeEndpoint"/> 探测。</para>
+    /// Selects the availability source per endpoint: the default endpoint reads the global
+    /// <see cref="AdbServerAvailable"/> parameter; any other endpoint (test doubles or a second
+    /// server) keeps live <see cref="ProbeEndpoint"/> probing.</summary>
+    /// <param name="host">adb server host to decide for. <para>待判定的 adb server 主机。</para></param>
+    /// <param name="port">adb server port to decide for. <para>待判定的 adb server 端口。</para></param>
+    /// <returns>
+    /// <see langword="true"/> when the endpoint is marked available, from the global parameter for
+    /// the default endpoint or from a probe for any other endpoint.
+    /// <para>端点被标记为可用时为 <see langword="true"/>；默认端点取全局参数，其他端点取探测结果。</para></returns>
+    public static bool UseAdbServer(string host, int port)
+        => host == DebugBridgeEndpoints.ServerHost && port == DebugBridgeEndpoints.AdbServerPort
+            ? AdbServerAvailable
+            : ProbeEndpoint(host, port);
+
+    /// <summary>
+    /// <para>按端点选择 HDC 存在性来源：默认端点（含 OHOS_HDC_SERVER_PORT 解析出的端口）读取全局参数
+    /// <see cref="HdcServerAvailable"/>；其他端点（测试替身或自定义 server）保持实时
+    /// <see cref="ProbeEndpoint"/> 探测。</para>
+    /// Selects the HDC availability source per endpoint: the default endpoint (including the port
+    /// resolved from OHOS_HDC_SERVER_PORT) reads the global <see cref="HdcServerAvailable"/>
+    /// parameter; any other endpoint (test doubles or a custom server) keeps live
+    /// <see cref="ProbeEndpoint"/> probing.</summary>
     /// <param name="host">Server host, defaulting to <see cref="DebugBridgeEndpoints.ServerHost"/>.
     /// <para>server 主机，默认为 <see cref="DebugBridgeEndpoints.ServerHost"/>。</para></param>
     /// <param name="port">Explicit port number; when null the value of
     /// <see cref="DebugBridgeEndpoints.HdcServerPort"/> is used.
     /// <para>显式端口号；为 null 时使用 <see cref="DebugBridgeEndpoints.HdcServerPort"/> 的值。</para></param>
     /// <returns>
-    /// <see langword="true"/> when a server is listening on the selected HDC endpoint; the result may come
-    /// from the probe scope or TTL cache.
-    /// <para>当所选 HDC 端点上有 server 监听时返回 <see langword="true"/>；结果可能来自探测作用域或 TTL 缓存。</para></returns>
+    /// <see langword="true"/> when the endpoint is marked available, from the global parameter for
+    /// the default endpoint or from a probe for any other endpoint.
+    /// <para>端点被标记为可用时为 <see langword="true"/>；默认端点取全局参数，其他端点取探测结果。</para></returns>
     public static bool UseHdcServer(string host = DebugBridgeEndpoints.ServerHost, int? port = null)
-        => ProbeEndpoint(host, port ?? DebugBridgeEndpoints.HdcServerPort);
+    {
+        var defaultPort = DebugBridgeEndpoints.HdcServerPort;
+        var effectivePort = port ?? defaultPort;
+        return host == DebugBridgeEndpoints.ServerHost && effectivePort == defaultPort
+            ? HdcServerAvailable
+            : ProbeEndpoint(host, effectivePort);
+    }
 
     private sealed class ProbeScope : IDisposable
     {

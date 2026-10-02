@@ -64,20 +64,31 @@ internal sealed class AdbTcpTransport : ICommTransport
         _client = CreateAndConnect(connectTimeoutMs);
     }
 
+    /// <summary>
+    /// Connects a new client within <paramref name="connectTimeoutMs"/>. The wait is cancelled
+    /// rather than awaited with a timeout, because blocking on the task would surface the socket
+    /// failure wrapped in an <see cref="AggregateException"/> and callers could not catch the
+    /// transport error they asked about.
+    /// <para>在 <paramref name="connectTimeoutMs"/> 内连接新的客户端。等待通过取消实现而非带超时的
+    /// 阻塞，因为阻塞等待会把套接字失败包进 <see cref="AggregateException"/>，调用方就无法捕获它
+    /// 真正关心的传输错误。</para>
+    /// </summary>
+    /// <param name="connectTimeoutMs">Connection timeout in milliseconds.
+    /// <para>连接超时（毫秒）。</para></param>
+    /// <returns>A connected client. <para>已连接的客户端。</para></returns>
     private TcpClient CreateAndConnect(int connectTimeoutMs)
     {
         TcpClient client = new() { NoDelay = true };
         try
         {
-            var connectTask = client.ConnectAsync(Host, Port);
-            if (!connectTask.Wait(connectTimeoutMs))
+            using var timeout = new CancellationTokenSource(connectTimeoutMs);
+            try
+            {
+                client.ConnectAsync(Host, Port, timeout.Token).GetAwaiter().GetResult();
+            }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested)
             {
                 throw new TimeoutException($"Timed out connecting to ADB device at {Host}:{Port}.");
-            }
-
-            if (connectTask.IsFaulted)
-            {
-                throw connectTask.Exception?.GetBaseException() ?? new SocketException((int)SocketError.ConnectionRefused);
             }
 
             var stream = client.GetStream();

@@ -36,11 +36,19 @@ must not silently become a direct USB target.
 ## Automatic server routing
 
 Server liveness is probed over plain TCP only — the library never starts, stops
-or shells out to `adb`/`hdc` executables. When a server is listening, its
-targets are served through the server; when the probe reports connection
-refused, targets route through direct USB/TCP. Positive probe results are
-cached for a short TTL, a refused connection is never cached, and `BeginProbeScope`
-merges repeated probes within one scan pass. The USB access policy is registered
+or shells out to `adb`/`hdc` executables. The default adb and HDC endpoints are
+probed once when the controller is created and the conclusive outcomes are
+written to the process-global `DebugBridgeRoute.AdbServerAvailable` and
+`DebugBridgeRoute.HdcServerAvailable`; the server-lifecycle watch refreshes
+both parameters on every pass and explicit server shutdown re-syncs them.
+Every adb and HDC operation route reads its parameter instead of probing:
+when it marks the server as present, the serial must additionally appear in
+the server's target list and targets are served through the server; when
+absent, targets route through direct USB/TCP. Only a refused connection marks
+a server absent and inconclusive probes keep the last state. Non-default
+endpoints keep per-operation probes: positive results are cached for a short
+TTL, a refused connection is never cached, and `BeginProbeScope` merges
+repeated probes within one scan pass. The USB access policy is registered
 when the `CommKit` facade is constructed; without it, debug interfaces fail closed.
 
 Direct HDC server shutdown uses the host-channel protocol (`HdcServerClient.KillAsync`);

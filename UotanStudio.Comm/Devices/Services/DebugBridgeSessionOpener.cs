@@ -20,22 +20,28 @@ public static class DebugBridgeSessionOpener
     /// <summary>
     /// Checks ADB ownership by exact serial; unknown identities remain protected when targets exist.
     /// <para>按精确序列号检查 ADB 归属；存在目标时，未知身份仍受保护。</para>
+    /// Server presence comes from the global <see cref="DebugBridgeRoute.AdbServerAvailable"/>
+    /// parameter for the default endpoint; the serial must additionally appear in the server's
+    /// target list.
+    /// <para>默认端点的 server 存在性取全局参数 <see cref="DebugBridgeRoute.AdbServerAvailable"/>；
+    /// 序列号还必须出现在 server 的目标列表中。</para>
     /// </summary>
     /// <param name="serial">
     /// Target serial to check; when null or blank, any nonempty target list counts as ownership.
     /// <para>待检查的目标序列号；为 null 或空白时，只要目标列表非空即视为归属。</para>
     /// </param>
     /// <param name="host">
-    /// adb server host to probe. <para>待探测的 adb server 主机。</para>
+    /// adb server host to decide for. <para>待判定的 adb server 主机。</para>
     /// </param>
     /// <param name="port">
-    /// adb server port to probe. <para>待探测的 adb server 端口。</para>
+    /// adb server port to decide for. <para>待判定的 adb server 端口。</para>
     /// </param>
-    /// <returns><see langword="true"/> when a live server owns the serial; probing never falls back to raw USB.
-    /// <para>当存活的 server 拥有该序列号时为 <see langword="true"/>；探测绝不回退到裸 USB。</para></returns>
+    /// <returns><see langword="true"/> when the server is marked available and owns the serial; a present
+    /// server never falls back to raw USB.
+    /// <para>当 server 被标记为存在并且拥有该序列号时为 <see langword="true"/>；server 存在时绝不回退裸 USB。</para></returns>
     public static bool AdbServerOwns(string? serial, string host = DebugBridgeEndpoints.ServerHost, int port = DebugBridgeEndpoints.AdbServerPort)
     {
-        if (!DebugBridgeRoute.ProbeEndpoint(host, port)) return false;
+        if (!DebugBridgeRoute.UseAdbServer(host, port)) return false;
         var targets = new AdbServerServices(string.Empty, host, port).ListTargets();
         return string.IsNullOrWhiteSpace(serial)
             ? targets.Count != 0

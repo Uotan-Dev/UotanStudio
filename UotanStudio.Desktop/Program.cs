@@ -71,7 +71,8 @@ sealed class Program
         if (UotanStudio.Mcp.McpLauncher.IsCompanionRequested(args))
         {
             _ = Task.Run(() => UotanStudio.Mcp.McpLauncher.RunCompanionAsync(
-                args, new UotanStudio.Services.Mcp.DesktopDeviceManagerGateway()));
+                args, new UotanStudio.Services.Mcp.DesktopDeviceManagerGateway(),
+                () => new UotanStudio.Services.Delivery.DeliveryKeyProvider()));
         }
 
         App.StartupFiles = args.Where(File.Exists).ToArray();

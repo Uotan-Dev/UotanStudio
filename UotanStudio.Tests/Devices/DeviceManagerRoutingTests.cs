@@ -16,6 +16,8 @@ public sealed class DeviceManagerRoutingTests
     [InlineData(DeviceProtocolKind.Hdc)]
     public void ResolveDirectUsbOpenKey_ServerPresent_RejectsStaleDirectTarget(DeviceProtocolKind protocol)
     {
+        DebugBridgeRoute.InitializeAdbServerProbe();
+        DebugBridgeRoute.InitializeHdcServerProbe();
         if (protocol == DeviceProtocolKind.Adb && !DebugBridgeRoute.UseAdbServer() ||
             protocol == DeviceProtocolKind.Hdc && !DebugBridgeRoute.UseHdcServer())
             Assert.Skip("The corresponding debug bridge server is not running.");
@@ -33,6 +35,7 @@ public sealed class DeviceManagerRoutingTests
     [Fact]
     public async Task OpenAdbLease_ServerOriginTarget_NeverFallsBackToUsb()
     {
+        DebugBridgeRoute.InitializeAdbServerProbe();
         var device = new DetectedDevice
         {
             Key = "adb:stale",
@@ -195,6 +198,34 @@ public sealed class DeviceManagerRoutingTests
     }
 
     [Fact]
+    public void GroupPhysicalDevices_SharedNetworkAlias_MergesInstanceKeyedTransportBehindDialAddress()
+    {
+        static DetectedDevice Target(string serial, string? alias) => new()
+        {
+            Key = "adb:" + serial,
+            Serial = serial,
+            Protocol = DeviceProtocolKind.Adb,
+            Transport = DeviceTransportKind.Tcp,
+            NetworkAlias = alias
+        };
+        const string dialled = "192.168.1.169:37701";
+        const string instanceKeyed = "adb-b845ebdf-lkQzC4._adb-tls-connect._tcp.";
+
+        var groups = DeviceMonitorService.GroupPhysicalDevices([
+            Target(instanceKeyed, dialled),
+            Target(dialled, dialled),
+            Target("emulator-5554", null)
+        ]);
+
+        Assert.Equal(2, groups.Count);
+        Assert.Equal(2, groups[0].Count);
+        Assert.Equal(dialled, groups[0][0].Serial);
+        Assert.Equal(dialled, groups[0][0].GroupId);
+        Assert.Equal(instanceKeyed, groups[0][1].Serial);
+        Assert.Equal("adb:emulator-5554", Assert.Single(groups[1]).GroupId);
+    }
+
+    [Fact]
     public void PhysicalUsbId_SharedContainer_MergesDifferentInterfacesWithoutCollapsingOtherDevices()
     {
         var shared = Guid.NewGuid();
@@ -251,6 +282,18 @@ public sealed class DeviceManagerRoutingTests
         Assert.Null(DeviceMonitorService.FindServerUsbIdentity(infos, "B845EBDF", DeviceProtocolKind.Hdc));
         infos[1].DeviceInstanceId = infos[0].DeviceInstanceId;
         Assert.Null(DeviceMonitorService.FindServerUsbIdentity(infos, "B845EBDF", DeviceProtocolKind.Adb));
+    }
+
+    [Theory]
+    [InlineData("USB", DeviceTransportKind.Usb)]
+    [InlineData("TCP", DeviceTransportKind.Tcp)]
+    [InlineData("UART", DeviceTransportKind.Unknown)]
+    [InlineData("", DeviceTransportKind.Unknown)]
+    [InlineData(null, DeviceTransportKind.Unknown)]
+    public void MapServerTransport_WithoutLinkEvidence_NeverGuessesUsb(string? targetTransport,
+        DeviceTransportKind expected)
+    {
+        Assert.Equal(expected, DeviceMonitorService.MapServerTransport(targetTransport));
     }
 
     [Fact]

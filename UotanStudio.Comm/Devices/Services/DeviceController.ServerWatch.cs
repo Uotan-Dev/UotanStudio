@@ -10,12 +10,14 @@ namespace UotanStudio.Comm.Devices.Services;
 /// server list while a server is retained as live. An inconclusive probe keeps the last known
 /// state; only a conclusive listening/refused change raises
 /// <see cref="DebugBridgeAvailabilityChanged"/> and invalidates cached probes (the snapshot then
-/// flips between server endpoints and direct-USB endpoints).
+/// flips between server endpoints and direct-USB endpoints). Every pass also refreshes the
+/// process-global adb and HDC availability parameters so operations route on them without probing.
 /// <para>server 生命周期监视：用三态调试桥探测周期检查本机 adb/HDC server 端口，并在有 server
 /// 被保留为存活时释放目标已从 server 列表消失的已采纳 server 会话租约。未能得出结论的探测保持
 /// 上次已知状态；只有确定性的监听/拒绝结论变化才会触发
 /// <see cref="DebugBridgeAvailabilityChanged"/> 并使缓存探测结果失效（快照随之在 server 端点与
-/// direct-usb 端点之间切换）。</para>
+/// direct-usb 端点之间切换）。每轮还会刷新进程全局的 adb 与 HDC 存在性参数，使操作无需探测即可
+/// 按该参数路由。</para>
 /// </summary>
 public sealed partial class DeviceController
 {
@@ -50,7 +52,8 @@ public sealed partial class DeviceController
 
     private Task RunServerWatchLoopAsync(TimeSpan interval, CancellationToken cancellationToken)
         => RunServerWatchAsync(DebugBridgeEndpoints.AdbServerPort, DebugBridgeEndpoints.HdcServerPort,
-            ProbeDebugBridgeEndpointAsync, interval, cancellationToken);
+            ProbeDebugBridgeEndpointAsync, interval, cancellationToken,
+            DebugBridgeRoute.SetAdbServerAvailable, DebugBridgeRoute.SetHdcServerAvailable);
 
     private static Task<DebugBridgeProbeOutcome> ProbeDebugBridgeEndpointAsync(int port, CancellationToken cancellationToken)
         => DebugBridgeRoute.TryProbeAsync(DebugBridgeEndpoints.ServerHost, port, cancellationToken);
@@ -81,10 +84,22 @@ public sealed partial class DeviceController
     /// <param name="interval">Delay between passes. <para>两轮探测之间的延时。</para></param>
     /// <param name="cancellationToken">Stops the loop; cancellation ends the task normally.
     /// <para>停止循环；取消后任务正常结束。</para></param>
+    /// <param name="adbAvailabilitySink">Receives the retained adb liveness on every pass; the
+    /// production loop writes it into <see cref="DebugBridgeRoute.AdbServerAvailable"/> so every
+    /// adb operation routes on the global parameter. Null keeps the loop side-effect free for tests.
+    /// <para>每轮把保留的 adb 存活状态交给它；生产循环将其写入
+    /// <see cref="DebugBridgeRoute.AdbServerAvailable"/>，使所有 adb 操作按全局参数路由。
+    /// 为 null 时循环无副作用（测试用）。</para></param>
+    /// <param name="hdcAvailabilitySink">Receives the retained HDC liveness on every pass; the
+    /// production loop writes it into <see cref="DebugBridgeRoute.HdcServerAvailable"/>. Null keeps
+    /// the loop side-effect free for tests.
+    /// <para>每轮把保留的 HDC 存活状态交给它；生产循环将其写入
+    /// <see cref="DebugBridgeRoute.HdcServerAvailable"/>。为 null 时循环无副作用（测试用）。</para></param>
     /// <returns>Task that completes after the loop exits. <para>循环退出后完成的任务。</para></returns>
     internal async Task RunServerWatchAsync(int adbPort, int hdcPort,
         Func<int, CancellationToken, Task<DebugBridgeProbeOutcome>> probe, TimeSpan interval,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, Action<bool>? adbAvailabilitySink = null,
+        Action<bool>? hdcAvailabilitySink = null)
     {
         var reported = (Adb: false, Hdc: false);
         while (!cancellationToken.IsCancellationRequested)
@@ -93,6 +108,8 @@ public sealed partial class DeviceController
             {
                 var adbLive = await ResolveLastKnownStateAsync(probe, adbPort, reported.Adb, cancellationToken).ConfigureAwait(false);
                 var hdcLive = await ResolveLastKnownStateAsync(probe, hdcPort, reported.Hdc, cancellationToken).ConfigureAwait(false);
+                adbAvailabilitySink?.Invoke(adbLive);
+                hdcAvailabilitySink?.Invoke(hdcLive);
                 if (adbLive != reported.Adb || hdcLive != reported.Hdc)
                 {
                     reported = (adbLive, hdcLive);

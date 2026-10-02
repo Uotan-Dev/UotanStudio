@@ -71,7 +71,7 @@ internal sealed class CommDeviceTransportOpener(
             endpoint.Transport == "adb-server" && endpoint.Route == "server" &&
             !string.IsNullOrWhiteSpace(endpoint.Address) && endpoint.Serial == endpoint.Address)
         {
-            if (!await DebugBridgeRoute.IsListeningAsync(adbHost, adbPort, cancellationToken).ConfigureAwait(false))
+            if (!DebugBridgeRoute.UseAdbServer(adbHost, adbPort))
                 throw new IOException("ADB server is unavailable.");
             var validation = Task.Run(() =>
                 new AdbServerServices(endpoint.Address, adbHost, adbPort).ValidateTarget());
@@ -96,7 +96,7 @@ internal sealed class CommDeviceTransportOpener(
             endpoint.Transport == "hdc-server" && endpoint.Route == "server" &&
             !string.IsNullOrWhiteSpace(endpoint.Address) && endpoint.Serial == endpoint.Address)
         {
-            if (!await DebugBridgeRoute.IsListeningAsync(hdcHost, _hdcPort, cancellationToken).ConfigureAwait(false))
+            if (!DebugBridgeRoute.UseHdcServer(hdcHost, _hdcPort))
                 throw new IOException("HDC server is unavailable.");
             using var client = new HdcServerClient(hdcHost, _hdcPort);
             var output = await client.ExecuteAsync(string.Empty, "list targets -v",

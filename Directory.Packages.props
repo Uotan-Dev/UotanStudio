@@ -39,6 +39,10 @@
     <PackageVersion Include="Makaretu.Dns.Multicast" Version="0.27.0" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
     <PackageVersion Include="System.IO.Ports" Version="10.0.12" />
+    <!-- Managed ADB client used only for host:pair / host:connect while an adb server listens. -->
+    <PackageVersion Include="AdvancedSharpAdbClient" Version="3.6.16" />
+    <!-- QR code generation for the wireless-debugging pairing popup (pure managed PNG writer). -->
+    <PackageVersion Include="QRCoder" Version="1.8.0" />
     <!-- UotanStudio.Firmware third-party dependencies -->
     <PackageVersion Include="BrotliSharpLib" Version="0.3.3" />
     <PackageVersion Include="BsDiff" Version="1.1.0" />

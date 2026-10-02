@@ -1,6 +1,9 @@
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Adb;
+using UotanStudio.Comm.Protocols.Adb.Pairing;
 using UotanStudio.Comm.Protocols.Hdc;
+using UotanStudio.Comm.Transports.Tcp;
+using UotanStudio.Comm.Transports.Udp;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Devices.Services;
@@ -94,6 +97,71 @@ public sealed partial class DeviceController
     /// <para>经套接字与 adb server 交互的会话门面。</para></returns>
     public IAdbDeviceSession OpenServerAdbSession(string serial, string host, int port)
         => AdbSession.ForServer(serial, host, port);
+
+    /// <summary>
+    /// Opens a direct TCP session to the daemon at <c>host:port</c> authenticated with the default ADB key,
+    /// bypassing any server. The caller must <c>Connect()</c> the session and dispose it on failure.
+    /// <para>打开到 <c>host:port</c> 上 adbd 的直接 TCP 会话，使用默认 ADB 密钥完成认证；不经过任何
+    /// server。调用方需自行 <c>Connect()</c> 并在失败时释放。</para>
+    /// </summary>
+    /// <param name="host">Device hostname or IP literal. <para>设备主机名或 IP 字面量。</para></param>
+    /// <param name="port">Daemon port, conventionally 5555. <para>adbd 监听端口，通常是 5555。</para></param>
+    /// <param name="authentication">
+    /// Authentication identity used by the handshake; the default runtime ADB identity applies when null.
+    /// <para>握手使用的认证身份；为 null 时读取默认运行时 ADB 身份。</para>
+    /// </param>
+    /// <returns>An unconnected direct session. <para>尚未连接的直接会话。</para></returns>
+    public IAdbDeviceSession OpenNetworkAdbSession(string host, int port, AdbAuthentication? authentication = null)
+        => new AdbSession(new AdbTcpTransport(host, port), authentication ?? AdbAuthentication.LoadOrCreate());
+
+    /// <summary>
+    /// Opens a direct session to adbd's secure service (Android 11+ TLS) at <c>host:port</c>: the
+    /// client presents the certificate from the pairing keystore (a prior direct QR pairing is
+    /// required) and the server certificate is accepted as any self-signed certificate, matching
+    /// AOSP trust-on-first-use semantics. The caller must <c>Connect()</c> the session and dispose
+    /// it on failure.
+    /// <para>打开到 <c>host:port</c> 上 adbd 安全服务（Android 11+ TLS）的直接会话：客户端出示
+    /// 配对密钥库中的证书（须先完成扫码直连配对），服务端证书按 AOSP 语义接受任意自签证书。
+    /// 调用方需自行 <c>Connect()</c> 并在失败时释放。</para>
+    /// </summary>
+    /// <param name="host">Device hostname or IP literal. <para>设备主机名或 IP 字面量。</para></param>
+    /// <param name="port">Secure daemon port. <para>adbd 安全服务监听端口。</para></param>
+    /// <param name="authentication">
+    /// Authentication identity used by the handshake; the default runtime ADB identity applies when null.
+    /// <para>握手使用的认证身份；为 null 时读取默认运行时 ADB 身份。</para>
+    /// </param>
+    /// <returns>An unconnected direct session. <para>尚未连接的直接会话。</para></returns>
+    public IAdbDeviceSession OpenSecureNetworkAdbSession(string host, int port, AdbAuthentication? authentication = null)
+        => new AdbSession(
+            new AdbTlsTransport(host, port, AdbPairingKeystore.LoadOrCreateClientCertificate()),
+            authentication ?? AdbAuthentication.LoadOrCreate());
+
+    /// <summary>
+    /// Browses <c>_adb-tls-connect._tcp</c> until an instance resolves to <paramref name="host"/> and
+    /// returns its port, so a remembered secure endpoint can be re-discovered after the device
+    /// restarted wireless debugging on a different port. Returns <c>null</c> when the deadline passes
+    /// with no advertisement.
+    /// <para>浏览 <c>_adb-tls-connect._tcp</c> 直到某个实例解析到 <paramref name="host"/> 并返回其端口，
+    /// 使记住的安全端点能在设备重启无线调试、端口变化后被重新发现；期限内无广播时返回 <c>null</c>。</para>
+    /// </summary>
+    /// <param name="host">Device IP address literal of the remembered endpoint.
+    /// <para>已记住端点的设备 IP 字面量。</para></param>
+    /// <param name="timeout">Overall browse deadline; the Comm default applies when <c>null</c>.
+    /// <para>整体浏览期限；为 <c>null</c> 时使用 Comm 默认值。</para></param>
+    /// <param name="cancellationToken">Cancels the browse. <para>取消浏览。</para></param>
+    /// <returns>
+    /// The advertised secure connect port, or <c>null</c> when the device did not advertise it.
+    /// <para>广播出的安全连接端口；设备未广播时为 <c>null</c>。</para>
+    /// </returns>
+    /// <exception cref="ArgumentException"><paramref name="host"/> is blank.
+    /// <para><paramref name="host"/> 为空。</para></exception>
+    public async Task<int?> ResolveSecureNetworkPortAsync(string host, TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        var service = await AdbMdnsDiscovery.WaitForConnectServiceAsync(host, timeout, cancellationToken)
+            .ConfigureAwait(false);
+        return service?.Port;
+    }
 
     /// <summary>
     /// <para>创建一条经本机 HDC server 交互的 server 客户端门面，供需要 server 级操作

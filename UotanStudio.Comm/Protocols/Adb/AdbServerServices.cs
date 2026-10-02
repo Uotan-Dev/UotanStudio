@@ -20,11 +20,12 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// Lists server-managed targets without selecting a device transport.
     /// <para>列出 server 管理的目标，不选择设备传输通道。</para>
     /// </summary>
-    /// <returns>One entry per non-empty <c>serial state</c> line reported by <c>host:devices-l</c>.
-    /// <para>对应 <c>host:devices-l</c> 报告的每条非空 "serial state" 行的条目。</para></returns>
+    /// <returns>One entry per non-empty <c>serial state descriptors</c> line reported by
+    /// <c>host:devices-l</c>, with each line's transport descriptor preserved.
+    /// <para>对应 <c>host:devices-l</c> 报告的每条非空 “serial state 描述符” 行的条目，并保留每行的传输描述符。</para></returns>
     /// <exception cref="IOException">The device list length is invalid or the server connection failed.
     /// <para>设备列表长度非法或 server 连接失败。</para></exception>
-    public IReadOnlyList<(string Serial, string State)> ListTargets()
+    public IReadOnlyList<AdbTargetInfo> ListTargets()
     {
         using var client = new TcpClient { NoDelay = true };
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
@@ -40,20 +41,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
             throw new IOException("Invalid ADB device list length.");
         var bytes = new byte[length];
         stream.ReadExactly(bytes);
-        var targets = new List<(string Serial, string State)>();
-        foreach (var line in Encoding.UTF8.GetString(bytes).Split('\n', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var fields = line.AsSpan().Trim();
-            var serialLength = fields.IndexOfAny(' ', '\t');
-            if (serialLength <= 0) continue;
-            var serial = fields[..serialLength].ToString();
-            fields = fields[serialLength..].TrimStart();
-            var stateLength = fields.IndexOfAny(' ', '\t');
-            var state = (stateLength < 0 ? fields : fields[..stateLength]).ToString();
-            if (state.Length != 0)
-                targets.Add((serial, state));
-        }
-        return targets;
+        return AdbTargetInfo.Parse(Encoding.UTF8.GetString(bytes));
     }
 
     /// <summary>
@@ -187,7 +175,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
             throw new ArgumentException("A device host:port address is required.", nameof(address));
         }
 
-        var response = await RunNetworkCommandAsync("host:connect:" + target, host, port, cancellationToken)
+        var response = await RunNetworkCommandAsync("host:connect:" + target, host, port, null, cancellationToken)
             .ConfigureAwait(false);
         if (!response.StartsWith("connected to ", StringComparison.Ordinal) &&
             !response.StartsWith("already connected to ", StringComparison.Ordinal))
@@ -216,7 +204,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     public static async Task DisconnectAsync(string serial, string host, int port, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serial);
-        var response = await RunNetworkCommandAsync("host:disconnect:" + serial, host, port, cancellationToken)
+        var response = await RunNetworkCommandAsync("host:disconnect:" + serial, host, port, null, cancellationToken)
             .ConfigureAwait(false);
         if (!response.StartsWith("disconnected ", StringComparison.Ordinal))
         {
@@ -224,29 +212,56 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         }
     }
 
+    /// <summary>
+    /// Runs one host-level command and returns its payload text. Callers that poll the server in a
+    /// loop pass a deadline short enough to keep the poll cadence, because a wedged server would
+    /// otherwise hold the request for the network default.
+    /// <para>执行一条 host 级命令并返回其应答文本。按循环轮询 server 的调用方应传入足够短的期限以保持轮询
+    /// 节奏，否则卡住的 server 会把该请求占用整个网络默认超时。</para>
+    /// </summary>
+    /// <param name="command">The raw host command, e.g. <c>host:mdns:services</c>.
+    /// <para>原始 host 命令，如 <c>host:mdns:services</c>。</para></param>
+    /// <param name="host">The adb server host. <para>adb server 主机。</para></param>
+    /// <param name="port">The adb server TCP port. <para>adb server 的 TCP 端口。</para></param>
+    /// <param name="timeout">Deadline for connect, request and response; the 30 second network
+    /// default applies when <c>null</c>. <para>连接、请求与响应的期限；为 <c>null</c> 时使用 30 秒网络默认值。</para></param>
+    /// <param name="cancellationToken">Cancels the exchange. <para>取消协议交互。</para></param>
+    /// <returns>The decoded, trimmed payload. <para>解码并去除首尾空白后的应答文本。</para></returns>
+    /// <exception cref="IOException">The server reported FAIL or sent an invalid status.
+    /// <para>server 返回 FAIL 或发送了非法状态。</para></exception>
+    /// <exception cref="TimeoutException">The exchange exceeded <paramref name="timeout"/>.
+    /// <para>交互超过 <paramref name="timeout"/>。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
+    internal static Task<string> RunHostCommandAsync(string command, string host, int port, TimeSpan? timeout,
+        CancellationToken cancellationToken = default) =>
+        RunNetworkCommandAsync(command, host, port, timeout, cancellationToken);
+
     private static async Task<string> RunNetworkCommandAsync(string command, string host, int port,
-        CancellationToken cancellationToken)
+        TimeSpan? timeout, CancellationToken cancellationToken)
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        var deadline = timeout ?? TimeSpan.FromSeconds(30);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        linked.CancelAfter(deadline);
         try
         {
-            using var stream = await OpenHostStreamAsync(host, port, timeout.Token).ConfigureAwait(false);
-            await RequestAsync(stream, command, timeout.Token).ConfigureAwait(false);
+            using var stream = await OpenHostStreamAsync(host, port, linked.Token).ConfigureAwait(false);
+            await RequestAsync(stream, command, linked.Token).ConfigureAwait(false);
             var header = new byte[4];
-            await stream.ReadExactlyAsync(header, timeout.Token).ConfigureAwait(false);
+            await stream.ReadExactlyAsync(header, linked.Token).ConfigureAwait(false);
             if (!int.TryParse(Encoding.ASCII.GetString(header), NumberStyles.HexNumber,
                     CultureInfo.InvariantCulture, out var length) || length is < 0 or > 65535)
             {
                 throw new IOException("Invalid ADB server response length.");
             }
             var bytes = new byte[length];
-            await stream.ReadExactlyAsync(bytes, timeout.Token).ConfigureAwait(false);
+            await stream.ReadExactlyAsync(bytes, linked.Token).ConfigureAwait(false);
             return Encoding.UTF8.GetString(bytes).Trim();
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new TimeoutException("ADB network operation exceeded 30 seconds.");
+            throw new TimeoutException("ADB network operation exceeded " +
+                deadline.TotalSeconds.ToString("0.##", CultureInfo.InvariantCulture) + " seconds.");
         }
     }
 

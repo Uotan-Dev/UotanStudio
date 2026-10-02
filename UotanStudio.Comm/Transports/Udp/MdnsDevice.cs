@@ -33,8 +33,9 @@ internal sealed class MdnsDevice(
     public string? HostName { get; } = hostName;
 
     /// <summary>
-    /// Gets the service TCP port from the SRV record (defaults to 5555).
-    /// <para>获取 SRV 记录中的服务 TCP 端口（默认 5555）。</para>
+    /// Gets the service TCP port, taken from the SRV record when browsed locally and from the
+    /// server-resolved row when read from the adb server's mDNS table.
+    /// <para>获取服务 TCP 端口：本地浏览时取自 SRV 记录，读取 adb server 的 mDNS 表时取自 server 已解析的行。</para>
     /// </summary>
     public int Port { get; } = port;
 

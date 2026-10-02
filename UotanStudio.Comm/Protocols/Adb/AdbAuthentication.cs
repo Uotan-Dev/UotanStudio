@@ -67,6 +67,9 @@ public sealed class AdbAuthentication : IDisposable
         return new AdbAuthentication(rsa);
     }
 
+    /// <summary>Gets the underlying RSA key (internal: TLS pairing certificate generation).</summary>
+    internal RSA RsaKey => _rsa;
+
     /// <summary>
     /// Loads the authentication key from <paramref name="keyPath"/> (PEM, PKCS#1 or
     /// PKCS#8), or generates and persists a new 2048-bit key when the file does not
@@ -152,9 +155,25 @@ public sealed class AdbAuthentication : IDisposable
     /// <para>追加在密钥后的可选注释；默认为 "user@host"。</para>
     /// </param>
     /// <returns>The public key payload bytes. <para>公钥负载字节。</para></returns>
-    public byte[] BuildPublicKeyPayload(string? comment = null)
+    public byte[] BuildPublicKeyPayload(string? comment = null) => BuildPublicKeyPayload(_rsa, comment);
+
+    /// <summary>
+    /// Builds the ADB public key payload for an arbitrary RSA key:
+    /// base64(RSAPublicKey) + " user@host\0".
+    /// <para>为任意 RSA 密钥构建 ADB 公钥负载：base64(RSAPublicKey) + " user@host\0"。</para>
+    /// </summary>
+    /// <param name="rsa">The RSA key to encode. <para>待编码的 RSA 密钥。</para></param>
+    /// <param name="comment">
+    /// Optional comment appended after the key; defaults to "user@host".
+    /// <para>追加在密钥后的可选注释；默认为 "user@host"。</para>
+    /// </param>
+    /// <returns>The public key payload bytes. <para>公钥负载字节。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="rsa"/> is <c>null</c>.
+    /// <para><paramref name="rsa"/> 为 <c>null</c>。</para></exception>
+    public static byte[] BuildPublicKeyPayload(RSA rsa, string? comment = null)
     {
-        var publicKey = _rsa.ExportParameters(false);
+        ArgumentNullException.ThrowIfNull(rsa);
+        var publicKey = rsa.ExportParameters(false);
         (var n0inv, var n, var rr, var exponent) = ConvertRsaToAdb(publicKey);
         var adbKey = AdbRsaToBuffer(n0inv, n, rr, exponent);
 

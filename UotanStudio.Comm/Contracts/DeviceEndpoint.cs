@@ -104,6 +104,24 @@ public sealed record DeviceEndpoint
     /// <para>server 上报的目标传输文本；未知时为 <see langword="null"/>；它不会决定传输的开启方式。</para>
     /// </value>
     public string? TargetTransport { get; init; }
+
+    /// <summary>
+    /// Network endpoint the server's own mDNS table resolves this transport to.
+    /// <para>server 内置 mDNS 表为该传输解析出的网络端点。</para>
+    /// </summary>
+    /// <value>
+    /// A <c>host:port</c> address, or <see langword="null"/> when the server reported no such
+    /// resolution. adb keys a transport it auto-connected through mDNS by the DNS-SD instance name
+    /// instead of by the dial address, so the same physical device can appear as a second target
+    /// whose address is not a network endpoint; this field names the endpoint that transport really
+    /// reaches. It is correlation evidence only: routing still uses <see cref="Address"/>, because
+    /// rewriting the key would stop selecting a transport that exists under the instance name alone.
+    /// <para><c>host:port</c> 形式的地址；server 未给出解析结果时为 <see langword="null"/>。adb 会用
+    /// DNS-SD 实例名而不是可拨号地址为其经 mDNS 自动建立的传输命名，因此同一台物理设备可能作为第二个
+    /// 目标出现，而其地址并非网络端点；本字段指出该传输实际抵达的端点。它只是关联证据：路由仍使用
+    /// <see cref="Address"/>，因为改写键名会导致只有实例名键的传输无法被选中。</para>
+    /// </value>
+    public string? AliasAddress { get; init; }
     /// <summary>
     /// Observed USB identity backing this endpoint.
     /// <para>支撑该端点的已观测 USB 身份。</para>
@@ -186,6 +204,7 @@ public sealed record DeviceEndpoint
             && State == other.State
             && Serial == other.Serial
             && TargetTransport == other.TargetTransport
+            && AliasAddress == other.AliasAddress
             && Usb == other.Usb
             && UsbInfoEquals(UsbInfo, other.UsbInfo);
     }
@@ -212,6 +231,7 @@ public sealed record DeviceEndpoint
         hash.Add(State);
         hash.Add(Serial);
         hash.Add(TargetTransport);
+        hash.Add(AliasAddress);
         hash.Add(Usb);
         hash.Add(UsbInfoHashCode(UsbInfo));
         return hash.ToHashCode();

@@ -210,6 +210,63 @@ public sealed class DeviceServerWatchStateTests
         Assert.Contains(logger.Messages, message => message.Contains("Device removal subscriber failed: InvalidOperationException", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task RunServerWatchAsync_AdbAvailabilitySink_ReceivesRetainedStateEachPass()
+    {
+        await using var controller = CreateController(new ScriptedSource("adb-server", _ => []));
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var probe = new ScriptedProbe(
+            [
+                (DebugBridgeProbeOutcome.Listening, DebugBridgeProbeOutcome.Refused),
+                (DebugBridgeProbeOutcome.Unknown, DebugBridgeProbeOutcome.Refused),
+                (DebugBridgeProbeOutcome.Refused, DebugBridgeProbeOutcome.Refused),
+            ],
+            cancellation);
+        var received = new List<bool>();
+
+        await controller.RunServerWatchAsync(ProbeAdbPort, ProbeHdcPort, probe.ProbeAsync,
+            TimeSpan.FromMilliseconds(1), cancellation.Token, received.Add);
+
+        Assert.Equal([true, true, false], received);
+    }
+
+    [Fact]
+    public async Task RunServerWatchAsync_HdcAvailabilitySink_ReceivesRetainedStateEachPass()
+    {
+        await using var controller = CreateController(new ScriptedSource("hdc-server", _ => []));
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var probe = new ScriptedProbe(
+            [
+                (DebugBridgeProbeOutcome.Refused, DebugBridgeProbeOutcome.Listening),
+                (DebugBridgeProbeOutcome.Refused, DebugBridgeProbeOutcome.Unknown),
+                (DebugBridgeProbeOutcome.Refused, DebugBridgeProbeOutcome.Refused),
+            ],
+            cancellation);
+        var received = new List<bool>();
+
+        await controller.RunServerWatchAsync(ProbeAdbPort, ProbeHdcPort, probe.ProbeAsync,
+            TimeSpan.FromMilliseconds(1), cancellation.Token, null, received.Add);
+
+        Assert.Equal([true, true, false], received);
+    }
+
+    [Fact]
+    public async Task RunServerWatchAsync_NoAvailabilitySink_PassesLeaveGlobalParameterUnchanged()
+    {
+        DebugBridgeRoute.InitializeAdbServerProbe();
+        var before = DebugBridgeRoute.AdbServerAvailable;
+        await using var controller = CreateController(new ScriptedSource("adb-server", _ => []));
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var probe = new ScriptedProbe(
+            [(DebugBridgeProbeOutcome.Listening, DebugBridgeProbeOutcome.Refused)],
+            cancellation);
+
+        await controller.RunServerWatchAsync(ProbeAdbPort, ProbeHdcPort, probe.ProbeAsync,
+            TimeSpan.FromMilliseconds(1), cancellation.Token);
+
+        Assert.Equal(before, DebugBridgeRoute.AdbServerAvailable);
+    }
+
     private static DeviceEndpoint ServerEndpoint(string source, string transport, string address)
         => new() { Source = source, Transport = transport, Address = address, Route = "server" };
 
