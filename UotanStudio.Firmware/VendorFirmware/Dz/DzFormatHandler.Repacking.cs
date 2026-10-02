@@ -110,17 +110,17 @@ internal sealed partial class DzFormatHandler
         var entries = new JsonArray();
         for (var index = 0; index < names.Length; index++)
         {
-            entries.Add(new JsonObject { ["name"] = names[index], ["recordOffset"] = records[index] });
+            entries.Add((JsonNode)new JsonObject { ["name"] = names[index], ["recordOffset"] = records[index] });
         }
         var physicalOrder = new JsonArray();
         foreach (var index in order)
         {
-            physicalOrder.Add(index);
+            physicalOrder.Add((JsonNode)JsonValue.Create(index));
         }
         var preservedGaps = new JsonArray();
         foreach (var length in gaps)
         {
-            preservedGaps.Add(length);
+            preservedGaps.Add((JsonNode)JsonValue.Create(length));
         }
         metadata.Configuration["kdz"] = new JsonObject
         {

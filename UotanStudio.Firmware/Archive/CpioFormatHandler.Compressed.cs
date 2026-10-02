@@ -205,7 +205,7 @@ public sealed partial class CpioFormatHandler
             }
 
             var header = entry.Metadata;
-            entries.Add(new JsonObject
+            entries.Add((JsonNode)new JsonObject
             {
                 ["name"] = entry.Name,
                 ["projection"] = PathPatternMatcher.NormalizeArchivePath(entry.Name),

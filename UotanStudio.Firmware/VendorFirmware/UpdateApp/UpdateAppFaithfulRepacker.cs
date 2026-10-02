@@ -136,7 +136,7 @@ public static class UpdateAppFaithfulRepacker
                 item["file"] = Path.GetFileName(path);
             else if (entry.FileSize > 0)
                 item["inline"] = ReadInlinePayload(sourcePath, entry, cancellationToken);
-            entries.Add(item);
+            entries.Add((JsonNode)item);
         }
 
         var artifact = $".updateapp-layout-{Guid.NewGuid():N}.bin";

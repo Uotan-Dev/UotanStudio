@@ -39,7 +39,7 @@ internal sealed partial class DzFormatHandler
             var compression = magic.AsSpan().SequenceEqual(new byte[] { 0x28, 0xB5, 0x2F, 0xFD }) ? "zstd"
                 : (magic[0] & 15) == 8 && ((magic[0] << 8) | magic[1]) % 31 == 0 ? "zlib"
                 : throw new InvalidDataException("Unsupported DZ compression.");
-            chunks.Add(new JsonObject
+            chunks.Add((JsonNode)new JsonObject
             {
                 ["header"] = Convert.ToBase64String(chunkHeader),
                 ["compression"] = compression
