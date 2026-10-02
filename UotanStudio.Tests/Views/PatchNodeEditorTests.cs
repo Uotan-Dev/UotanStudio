@@ -88,11 +88,8 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
     [InlineData("Workspace.Partition.Resolve", "Layout", "Resolve partition file path", "解析分区文件路径")]
     [InlineData("Binary.Pattern.Find", "Find", "Find masked binary pattern", "查找掩码二进制模式")]
     [InlineData("Binary.Pattern.Replace", "Find", "Replace masked binary pattern", "替换掩码二进制模式")]
-    [InlineData("Config.Fstab.Query", "Text", "Query Android fstab", "查询 Android fstab")]
     [InlineData("Config.Fstab.Edit", "Text", "Edit Android fstab", "编辑 Android fstab")]
-    [InlineData("Config.Fstab.Add", "Text", "Add Android fstab entry", "新增 Android fstab 条目")]
     [InlineData("Config.InitRc.Query", "Text", "Query Android init.rc", "查询 Android init.rc")]
-    [InlineData("Config.FsConfig.Query", "Text", "Query UotanStudio fs_config", "查询 UotanStudio fs_config")]
     [InlineData("Image.Text.Read", "Path", "Read text inside filesystem image", "读取文件系统镜像内文本")]
     [InlineData("Image.Text.Stage", "Path", "Write text inside filesystem image", "写入文件系统镜像内文本")]
     [InlineData("Image.Edit.CollectText", "Image Edits", "Collect image text edit", "收集镜像文本修改")]
@@ -102,12 +99,7 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
     [InlineData("Image.Xattr.Set", "Path", "Set image user attribute", "设置镜像用户扩展属性")]
     [InlineData("Image.Xattr.Delete", "Path", "Delete image user attribute", "删除镜像用户扩展属性")]
     [InlineData("Image.File.SetAttributes", "Path", "Set image file attributes", "设置镜像文件属性")]
-    [InlineData("Config.FileContexts.Query", "Text", "Query file_contexts rule", "查询 file_contexts 规则")]
-    [InlineData("Config.FileContexts.Add", "Text", "Add file_contexts rule", "新增 file_contexts 规则")]
-    [InlineData("Config.FileContexts.Delete", "Text", "Delete file_contexts rule", "删除 file_contexts 规则")]
     [InlineData("Config.FileContexts.Edit", "Text", "Edit file_contexts label", "编辑 file_contexts 标签")]
-    [InlineData("Config.FsConfig.Add", "Text", "Add UotanStudio fs_config entry", "新增 UotanStudio fs_config 条目")]
-    [InlineData("Config.FsConfig.Delete", "Text", "Delete UotanStudio fs_config entry", "删除 UotanStudio fs_config 条目")]
     [InlineData("Config.FsConfig.Edit", "Text", "Edit UotanStudio fs_config", "编辑 UotanStudio fs_config")]
     [InlineData("Config.InitRc.FindReferences", "Text", "Check init service references", "检查 init 服务引用")]
     [InlineData("Config.InitRc.EditArgument", "Text", "Edit Android init.rc argument", "编辑 Android init.rc 参数")]
@@ -296,10 +288,10 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
         {
             dispatch = fixture.Session.Dispatch(() =>
             {
-                Assert.Equal("Check format precondition", new global::UotanStudio.Locale.EnUs.Node()["Node_Validation_Format_Check"]);
-                Assert.Equal("检查格式条件", new global::UotanStudio.Locale.ZhCn.Node()["Node_Validation_Format_Check"]);
+                Assert.Equal("Inspect file format", new global::UotanStudio.Locale.EnUs.Node()["Node_Validation_Format_Detect"]);
+                Assert.Equal("探测文件格式", new global::UotanStudio.Locale.ZhCn.Node()["Node_Validation_Format_Detect"]);
                 using var editor = new NodeEditorViewModel();
-                var node = PatchNodeViewModel.Create("Validation.Format.Check");
+                var node = PatchNodeViewModel.Create("Validation.Format.Detect");
                 editor.Nodes.Add(node);
                 editor.SetSelection([node]);
                 var view = new NodeEditorView { DataContext = editor };
@@ -322,7 +314,7 @@ public sealed class PatchNodeEditorTests(NodeEditorUiFixture fixture)
                         LanguageService.Instance.ApplyLanguage(locale);
                         Dispatcher.UIThread.RunJobs();
                         window.UpdateLayout();
-                        Assert.Equal(locale == "zh-CN" ? "检查格式条件" : "Check format precondition", node.LocalizedTitle);
+                        Assert.Equal(locale == "zh-CN" ? "探测文件格式" : "Inspect file format", node.LocalizedTitle);
                         Assert.Equal(locale == "zh-CN" ? "内容签名" : "Content signature", output.DataPreview);
                         Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(),
                             block => block.IsVisible && block.Text == output.DataPreview);

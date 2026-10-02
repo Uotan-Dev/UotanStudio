@@ -21,9 +21,6 @@ public sealed class NetworkNodeViewModel : FlowNodeViewModel
     public static NetworkNodeViewModel CreateDownloadNode(HttpClient? httpClient = null)
         => Create("Network.File.Download", "Download", httpClient);
 
-    public static NetworkNodeViewModel CreateGitHubDownloadNode(HttpClient? httpClient = null)
-        => Create("Network.GitHub.Download", "GitHub Mirror Download", httpClient);
-
     private static NetworkNodeViewModel Create(string typeKey, string title, HttpClient? httpClient)
     {
         var node = new NetworkNodeViewModel(title, httpClient)
@@ -32,6 +29,14 @@ public sealed class NetworkNodeViewModel : FlowNodeViewModel
             TypeKey = typeKey
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "URL", PortId = "url", PortType = NodePortType.Text });
+        node.Input.Add(new NodeConnectorViewModel
+        {
+            Title = "Source",
+            PortId = "source",
+            PortType = NodePortType.Text,
+            InitialValue = "Direct",
+            Choices = new[] { "Direct", "GitHub Mirror" }.Select(item => new NodePortChoice(item)).ToArray()
+        });
         node.Input.Add(new NodeConnectorViewModel
         {
             Title = "Output Path",
@@ -93,10 +98,10 @@ public sealed class NetworkNodeViewModel : FlowNodeViewModel
             throw new InvalidDataException("Timeout Seconds must be between 1 and 3600.");
         }
 
-        var useMirrors = string.Equals(TypeKey, "Network.GitHub.Download", StringComparison.Ordinal);
+        var useMirrors = string.Equals(Convert.ToString(ReadInput("Source"), CultureInfo.InvariantCulture), "GitHub Mirror", StringComparison.Ordinal);
         if (useMirrors && !HttpDownload.IsGitHubUrl(uri))
         {
-            throw new InvalidOperationException("GitHub Mirror Download only accepts GitHub download addresses.");
+            throw new InvalidOperationException("GitHub Mirror source only accepts GitHub download addresses.");
         }
 
         var progress = new DownloadProgress(value =>

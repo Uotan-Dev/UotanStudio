@@ -111,8 +111,9 @@ public sealed class PatchQueryTests : IDisposable
         Set(stage, "Text", "{\"enabled\":true}");
         var find = PatchNodeViewModel.Create("Workspace.File.Find");
         Set(find, "Pattern", "nested/*.bin");
-        var check = PatchNodeViewModel.Create("Validation.Format.Check");
+        var check = PatchNodeViewModel.Create("Validation.Format.Detect");
         Set(check, "Expected Format", "Json");
+        Set(check, "Required Evidence", "Structure");
         var condition = PatchNodeViewModel.Create("Validation.Condition.Evaluate");
         Set(condition, "Operation", "FileExists");
         var directory = PatchNodeViewModel.Create("Validation.Condition.Evaluate");
@@ -141,7 +142,9 @@ public sealed class PatchQueryTests : IDisposable
         var path = Path.Combine(_root, "not-json.bin");
         Set(writer, "Output Path", path);
         Set(writer, "Text", "{broken}");
-        var check = PatchNodeViewModel.Create("Validation.Format.Check");
+        var check = PatchNodeViewModel.Create("Validation.Format.Detect");
+        Set(check, "Expected Format", "Json");
+        Set(check, "Required Evidence", "Structure");
         var assert = PatchNodeViewModel.Create("Validation.Boolean.Assert");
         var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([writer, check, assert],
             [Connect(writer, "Path", check, "Path"), Connect(check, "Match", assert, "Condition")], Token);

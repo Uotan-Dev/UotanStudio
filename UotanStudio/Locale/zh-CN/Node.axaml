@@ -95,7 +95,6 @@
     <x:String x:Key="Node_Data_Compression_Compress">压缩</x:String>
     <x:String x:Key="Node_Data_Bytes_Swap">字节序转换</x:String>
     <x:String x:Key="Node_Network_File_Download">联网下载</x:String>
-    <x:String x:Key="Node_Network_GitHub_Download">GitHub 镜像加速下载</x:String>
     <x:String x:Key="Node_Flow_Execution_Start">开始</x:String>
     <x:String x:Key="Node_Flow_Execution_End">结束</x:String>
     <x:String x:Key="Node_Flow_Condition_Branch">条件分支</x:String>
@@ -239,9 +238,7 @@
     <x:String x:Key="Node_Validation_Condition_Evaluate">补丁条件判断</x:String>
     <x:String x:Key="Node_Validation_Boolean_Assert">补丁断言</x:String>
     <x:String x:Key="Node_Config_Text_Edit">文本补丁</x:String>
-    <x:String x:Key="Node_Config_AndroidProperty_Query">读取 Android 属性</x:String>
     <x:String x:Key="Node_Config_AndroidProperty_Edit">修改 Android 属性</x:String>
-    <x:String x:Key="Node_Config_Xml_Query">查询 XML</x:String>
     <x:String x:Key="Node_Config_Xml_Edit">修改 XML</x:String>
     <x:String x:Key="Node_Patch_SelectFolder">选择补丁目标目录</x:String>
     <x:String x:Key="Node_Patch_AssertionFailed">补丁断言失败，已停止此分支。</x:String>
@@ -338,9 +335,7 @@
     <x:String x:Key="Node_PatchOutcome_RolledBack">发布失败，已恢复原文件</x:String>
     <x:String x:Key="Node_PatchOutcome_RecoveryRequired">恢复失败，已保留备份文件</x:String>
     <x:String x:Key="Node_Patch_UnsupportedGraph">补丁流程包含未接入暂存或预览机制的节点，未执行。请使用支持补丁事务的节点。</x:String>
-    <x:String x:Key="Node_Config_Json_Query">查询 JSON 值</x:String>
     <x:String x:Key="Node_Config_Json_Edit">编辑 JSON 值</x:String>
-    <x:String x:Key="Node_Config_Ini_Query">查询 INI 值</x:String>
     <x:String x:Key="Node_Config_Ini_Edit">编辑 INI 值</x:String>
     <x:String x:Key="Node_Conn_JSONPointer">JSON 指针（留空表示根）</x:String>
     <x:String x:Key="Node_Conn_JSONValue">JSON 值</x:String>
@@ -349,7 +344,6 @@
     <x:String x:Key="Node_Patch_JsonHint">指针示例：/name/0；~ 写为 ~0，/ 写为 ~1。值采用 JSON 语法：字符串带引号，数字、true/false 和 null 不带引号。修改会重新序列化文档。删除数组元素必须校验原值，后续元素的索引会前移。</x:String>
     <x:String x:Key="Node_Patch_IniHint">采用区分大小写的 [节名称] 和 键=值 语法；节名称留空表示全局。# 和 ; 仅在行首表示注释，在值内按普通字符处理。不接受重复节、重复键或多行值。</x:String>
     <x:String x:Key="Node_Validation_Format_Detect">探测文件格式</x:String>
-    <x:String x:Key="Node_Validation_Format_Check">检查格式条件</x:String>
     <x:String x:Key="Node_Workspace_File_Find">查找待应用目录中的文件</x:String>
     <x:String x:Key="Node_Conn_ExpectedFormat">预期格式</x:String>
     <x:String x:Key="Node_Conn_RequiredEvidence">要求的证据</x:String>
@@ -499,7 +493,6 @@
     <x:String x:Key="Node_Patch_BinaryPreviewRow">{0}，{1} 字节，{2}：{3} → {4} {5}</x:String>
     <x:String x:Key="Node_Patch_BytesTruncated">（仅显示前 64 字节）</x:String>
     <x:String x:Key="Node_Patch_WindowsTruncated">其余替换窗口未显示。</x:String>
-    <x:String x:Key="Node_Config_Fstab_Query">查询 Android fstab</x:String>
     <x:String x:Key="Node_Config_Fstab_Edit">编辑 Android fstab</x:String>
     <x:String x:Key="Node_Conn_Field">字段</x:String>
     <x:String x:Key="Node_Conn_MountPoint">挂载点</x:String>
@@ -514,7 +507,6 @@
     <x:String x:Key="Node_Choice_DeleteFlag">删除标志</x:String>
     <x:String x:Key="Node_Patch_FstabHint">仅支持 Android 五列 fstab，不适用于 recovery 或 /proc/mounts 方言。按原始挂载点及可选文件系统类型筛选，精确校验命中数量。设置值会替换一个字段；标志操作编辑逗号分隔的挂载选项或 fs_mgr 标志，空值表示无参数标志。旧值检查针对完整字段。保留间距、注释和未编辑内容。本节点不验证设备对标志的支持或实际挂载能力。</x:String>
     <x:String x:Key="Node_Choice_DeleteEntry">删除选中条目所在行</x:String>
-    <x:String x:Key="Node_Config_Fstab_Add">新增 Android fstab 条目</x:String>
     <x:String x:Key="Node_Conn_BlockDevice">块设备</x:String>
     <x:String x:Key="Node_Conn_FileSystem">文件系统类型</x:String>
     <x:String x:Key="Node_Conn_MountOptions">挂载选项</x:String>
@@ -557,7 +549,6 @@
     <x:String x:Key="Node_Conn_InvalidReferences">格式错误的引用命令</x:String>
     <x:String x:Key="Node_Conn_AmbiguousServices">有歧义的服务声明</x:String>
     <x:String x:Key="Node_Patch_InitRcReferencesHint">检查动作及服务 onrestart 中的 start、stop、restart、enable 和 exec_start。外部服务由调用者声明，每行填写一个原始名称，不读取 import 文件。依赖属性的参数保留为未解析状态。本地同名服务视为歧义，包括无法确定加载顺序的 override 情况。布尔结果仅覆盖这些具名引用，不代表完整 init 语义、其他命令、接口、类或可启动性通过。数量为检查的命令数。可连接断言节点，在存在未解析引用时阻止发布。</x:String>
-    <x:String x:Key="Node_Config_FsConfig_Query">查询 UotanStudio fs_config</x:String>
     <x:String x:Key="Node_Config_FsConfig_Edit">编辑 UotanStudio fs_config</x:String>
     <x:String x:Key="Node_Conn_ImagePath">镜像内路径</x:String>
     <x:String x:Key="Node_Conn_UID">UID</x:String>
@@ -566,10 +557,7 @@
     <x:String x:Key="Node_Conn_ExpectedGID">预期 GID</x:String>
     <x:String x:Key="Node_Conn_ExpectedMode">预期权限模式</x:String>
     <x:String x:Key="Node_Patch_FsConfigHint">编辑 UotanStudio 重建器读取的空格分隔元数据方言。UID/GID 为无符号十进制；权限使用十进制（493）或带前导零的八进制（0755），不采用无前导零的 Android 八进制写法。查询输出带前导零的八进制。按镜像内原始路径精确选择一条，重复则拒绝。编辑输出十进制权限，保留尾部能力数据但不解析或应用它。仅修改旁路元数据文本，不直接改变宿主权限或镜像。重建集成、SELinux 标签及扩展属性需使用相应操作。</x:String>
-    <x:String x:Key="Node_Config_FsConfig_Add">新增 UotanStudio fs_config 条目</x:String>
-    <x:String x:Key="Node_Config_FsConfig_Delete">删除 UotanStudio fs_config 条目</x:String>
     <x:String x:Key="Node_Patch_FsConfigEntryHint">采用 UotanStudio 元数据方言：十进制 UID/GID，十进制或带前导零的八进制权限。新增时追加缺失路径，尾部能力占位为零；已有相同属主和权限时保留原文及不透明能力数据，值不同或路径重复则冲突。删除移除完整条目行；缺失时保持不变，启用旧值检查则要求存在。数量表示原有命中数。不增删实际文件、不应用能力或重建镜像，需另行组合相应操作。</x:String>
-    <x:String x:Key="Node_Config_FileContexts_Query">查询 file_contexts 规则</x:String>
     <x:String x:Key="Node_Config_FileContexts_Edit">编辑 file_contexts 标签</x:String>
     <x:String x:Key="Node_Conn_PathExpression">精确路径表达式</x:String>
     <x:String x:Key="Node_Conn_MetadataOnly">仅导出重打包元数据</x:String>
@@ -584,10 +572,11 @@
     <x:String x:Key="Node_Choice_Pipe">命名管道</x:String>
     <x:String x:Key="Node_Choice_Socket">套接字</x:String>
     <x:String x:Key="Node_Patch_FileContextHint">按路径表达式原始写法和文件类型限定精确选择一条文本规则。未限定类型仅选择两列规则，不匹配所有类型。不执行正则或转换为宿主路径。编辑只替换上下文词，保留顺序、间距及独立注释。身份重复、字段格式错误或旧值不符时拒绝。上下文形式检查不等于加载策略验证；规则重叠与优先级、编译后的上下文及实际镜像扩展属性发布仍需单独处理。</x:String>
-    <x:String x:Key="Node_Config_FileContexts_Add">新增 file_contexts 规则</x:String>
-    <x:String x:Key="Node_Config_FileContexts_Delete">删除 file_contexts 规则</x:String>
     <x:String x:Key="Node_Patch_FileContextEntryHint">以路径表达式原文和类型限定作为身份。新增追加缺失规则；已有相同标签时不变，不同标签或身份重复则冲突。删除移除整行规则；缺失时不变，启用旧标签检查则要求存在。数量表示原有命中数。其他规则保持顺序，但增删规则可能改变有效标签：不检查正则重叠、优先级或加载策略有效性，不直接修改镜像扩展属性。</x:String>
     <x:String x:Key="Node_Image_Text_Read">读取文件系统镜像内文本</x:String>
+    <x:String x:Key="Node_Choice_Direct">直连</x:String>
+    <x:String x:Key="Node_Choice_GitHub_Mirror">GitHub 镜像</x:String>
+    <x:String x:Key="Node_Conn_Source">来源</x:String>
     <x:String x:Key="Node_Choice_EXT4">EXT4</x:String>
     <x:String x:Key="Node_Choice_EROFS">EROFS</x:String>
     <x:String x:Key="Node_Patch_ImageReadTextHint">从原始 EXT4/EROFS 镜像按原始路径读取普通文件，支持读取已暂存的镜像替换结果。拒绝链接、越界路径、特殊文件和超过 16 MiB 的文件，解码文本最多 4 Mi 字符。目录枚举有条目与路径预算并支持取消。读取前后检查完整镜像哈希，并保留为发布依赖。哈希输出标识提取的文件。Sparse/Super/Payload 容器需另行解包。本节点仅负责读取，镜像修改及重建需另行处理。</x:String>

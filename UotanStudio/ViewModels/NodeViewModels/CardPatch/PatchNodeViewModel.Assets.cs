@@ -6,31 +6,6 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 
 public sealed partial class PatchNodeViewModel
 {
-    private static void ConfigureAssetNode(PatchNodeViewModel node)
-    {
-        if (node.TypeKey == "Resource.Asset.Open")
-        {
-            node.AddInput("Asset ID", NodePortType.Text, string.Empty, hint: "Node_Patch_AssetHint");
-            node.AddOutput("Asset", NodePortType.PatchAsset);
-            node.AddOutput("Name", NodePortType.Text);
-            node.AddOutput("Length", NodePortType.Number);
-            node.AddOutput("Hash", NodePortType.Text);
-            return;
-        }
-        node.AddInput("Asset", NodePortType.PatchAsset, hint: "Node_Patch_AssetHint");
-        if (node.TypeKey == "Resource.Asset.ReadText")
-        {
-            node.AddOutput("Text", NodePortType.Text);
-            node.AddOutput("Encoding", NodePortType.Text);
-            node.AddOutput("Hash", NodePortType.Text);
-            return;
-        }
-        node.AddInput("Workspace", NodePortType.PatchWorkspace);
-        node.AddInput("Relative Path", NodePortType.Text, string.Empty);
-        node.AddInput("Operation", NodePortType.Text, "Add", choices: Enum.GetNames<PatchFileMode>());
-        node.AddOutput("Workspace", NodePortType.PatchWorkspace);
-    }
-
     private async Task ExecuteAssetNodeAsync(INodeExecutionContext context)
     {
         if (TypeKey == "Resource.Asset.Open")

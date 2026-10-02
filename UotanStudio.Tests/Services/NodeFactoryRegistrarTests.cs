@@ -146,7 +146,7 @@ public sealed class NodeFactoryRegistrarTests(UotanStudio.Tests.Views.NodeEditor
     [InlineData("Build.Dat.Convert", "Transfer List")]
     [InlineData("Image.Super.Pack", "Device Size")]
     [InlineData("Network.File.Download", "URL")]
-    [InlineData("Network.GitHub.Download", "Output Path")]
+    [InlineData("Network.File.Download", "Output Path")]
     [InlineData("Device.Property.Read", "Name")]
     [InlineData("Data.Value.Compare", "Data A")]
     public void Descriptors_RequiredInputs_FollowOperationContract(string typeKey, string title)
@@ -203,7 +203,7 @@ public sealed class NodeFactoryRegistrarTests(UotanStudio.Tests.Views.NodeEditor
                 {
                     token.ThrowIfCancellationRequested();
                     var key = prefix + worker + "." + index;
-                    NodeTypeRegistry.Register(key, () => PatchNodeViewModel.Create("Validation.Format.Check"));
+                    NodeTypeRegistry.Register(key, () => PatchNodeViewModel.Create("Validation.Format.Detect"));
                     Assert.True(NodeTypeRegistry.Contains(key));
                     Assert.IsType<PatchNodeViewModel>(NodeTypeRegistry.Create(key));
                     var snapshot = NodeTypeRegistry.Keys;
@@ -343,6 +343,67 @@ public sealed class NodeFactoryRegistrarTests(UotanStudio.Tests.Views.NodeEditor
         {
             unsubscribe();
         }
+    }
+
+    [Fact]
+    public async Task LoadFromAsync_MergedTypeKeyAlias_CreatesSuccessorWithRecordedDefaults()
+    {
+        NodeFactoryRegistrar.RegisterAll();
+        using var editor = new NodeEditorViewModel();
+        var snapshot = new WorkflowSnapshot
+        {
+            Nodes =
+            [
+                new NodeDto
+                {
+                    InstanceId = "gh",
+                    TypeKey = "Network.GitHub.Download",
+                    InputInitialValues = new Dictionary<string, string>
+                    {
+                        ["URL"] = "https://github.com/uotanstudio/uotanstudio/releases/download/v1/app.zip",
+                        ["Output Path"] = "app.zip"
+                    }
+                }
+            ]
+        };
+
+        await editor.LoadFromAsync(snapshot);
+
+        var node = Assert.Single(editor.Nodes);
+        Assert.Equal("Network.File.Download", node.TypeKey);
+        Assert.Equal("GitHub Mirror", node.Input.Single(port => port.Title == "Source").InitialValue);
+        Assert.Equal("https://github.com/uotanstudio/uotanstudio/releases/download/v1/app.zip",
+            node.Input.Single(port => port.Title == "URL").InitialValue);
+    }
+
+    [Fact]
+    public async Task LoadFromAsync_ConfigQueryAlias_MapsOperationOntoMergedNode()
+    {
+        NodeFactoryRegistrar.RegisterAll();
+        using var editor = new NodeEditorViewModel();
+        var snapshot = new WorkflowSnapshot
+        {
+            Nodes =
+            [
+                new NodeDto
+                {
+                    InstanceId = "fc",
+                    TypeKey = "Config.FileContexts.Query",
+                    InputInitialValues = new Dictionary<string, string>
+                    {
+                        ["Text"] = "/vendor/bin/hw vendor.so u:object_r:vendor_file:s0\n",
+                        ["Path Expression"] = "/vendor/bin/hw/vendor.so"
+                    }
+                }
+            ]
+        };
+
+        await editor.LoadFromAsync(snapshot);
+
+        var node = Assert.Single(editor.Nodes);
+        Assert.Equal("Config.FileContexts.Edit", node.TypeKey);
+        Assert.Equal("Query", node.Input.Single(port => port.Title == "Operation").InitialValue);
+        Assert.Equal("/vendor/bin/hw/vendor.so", node.Input.Single(port => port.Title == "Path Expression").InitialValue);
     }
 
     [Fact]

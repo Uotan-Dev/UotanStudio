@@ -6,115 +6,6 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 
 public sealed partial class PatchNodeViewModel
 {
-    private static void ConfigureFileNode(PatchNodeViewModel node)
-    {
-        switch (node.TypeKey)
-        {
-            case "Binary.Pattern.Find":
-            case "Binary.Pattern.Replace":
-                node.AddInput("Path", NodePortType.Path);
-                node.AddInput("Find", NodePortType.Text, "", hint: node.TypeKey == "Binary.Pattern.Find" ? "Node_Patch_BinaryFindHint" : "Node_Patch_BinaryReplaceHint");
-                node.AddInput("Find Mask", NodePortType.Text, "");
-                if (node.TypeKey == "Binary.Pattern.Replace")
-                {
-                    node.AddInput("Replacement", NodePortType.Text, "");
-                    node.AddInput("Replace Mask", NodePortType.Text, "");
-                }
-                node.AddInput("Start Offset", NodePortType.Text, "0");
-                node.AddInput("Search Length", NodePortType.Text, "-1");
-                node.AddInput("Alignment", NodePortType.Text, "1");
-                node.AddInput("Skip Matches", NodePortType.Text, "0");
-                node.AddInput("Expected Matches", NodePortType.Number, 1d);
-                node.AddOutput("Offsets", NodePortType.Any);
-                node.AddOutput("Count", NodePortType.Number);
-                return;
-            case "Validation.Format.Detect":
-            case "Validation.Format.Check":
-                node.AddInput("Path", NodePortType.Path, hint: "Node_Patch_FormatHint");
-                if (node.TypeKey == "Validation.Format.Check")
-                {
-                    node.AddInput("Expected Format", NodePortType.Text, "Json",
-                        choices: Enum.GetNames<PatchFormatKind>().Where(name => name != "Unknown").ToArray());
-                    node.AddInput("Required Evidence", NodePortType.Text, "Structure", choices: ["Signature", "Structure"]);
-                    node.AddOutput("Match", NodePortType.Boolean);
-                }
-                node.AddOutput("Format", NodePortType.Text, "Node_Choice_");
-                node.AddOutput("Evidence", NodePortType.Text, "Node_Choice_");
-                node.AddOutput("Detail", NodePortType.Text, "Node_PatchFormat_");
-                node.AddOutput("Structure Valid", NodePortType.Boolean);
-                return;
-            case "Workspace.Directory.Open":
-                node.AddInput("Root", NodePortType.Path, directory: true);
-                node.AddOutput("Workspace", NodePortType.PatchWorkspace);
-                return;
-            case "Validation.File.Hash":
-            case "Validation.Hash.Verify":
-                node.AddInput("Path", NodePortType.Path);
-                if (node.TypeKey == "Validation.Hash.Verify")
-                {
-                    node.AddInput("Expected Hash", NodePortType.Text, string.Empty);
-                    node.AddOutput("Valid", NodePortType.Boolean);
-                }
-                node.AddOutput("Hash", NodePortType.Text);
-                return;
-            case "Validation.Count.Assert":
-                node.AddInput("Count", NodePortType.Number, 0d);
-                node.AddInput("Expected Matches", NodePortType.Number, 1d);
-                node.AddOutput("Valid", NodePortType.Boolean);
-                return;
-        }
-        node.AddInput("Workspace", NodePortType.PatchWorkspace);
-        node.AddOutput("Workspace", NodePortType.PatchWorkspace);
-        switch (node.TypeKey)
-        {
-            case "Workspace.Partition.Resolve":
-                node.AddInput("Partition", NodePortType.Text, "vendor", choices:
-                    ["system", "vendor", "product", "system_ext", "odm", "vendor_dlkm", "odm_dlkm", "system_dlkm"]);
-                node.AddInput("Layout", NodePortType.Text, "PartitionDirectories",
-                    choices: ["PartitionDirectories", "PartitionRoot", "SystemAsRoot"], hint: "Node_Patch_PartitionPathHint");
-                node.AddInput("Partition Path", NodePortType.Text, "/etc/build.prop");
-                node.AddOutput("Path", NodePortType.Path);
-                node.AddOutput("Relative Path", NodePortType.Text);
-                node.AddOutput("Exists", NodePortType.Boolean);
-                break;
-            case "Workspace.File.Find":
-                node.AddInput("Pattern", NodePortType.Text, "vendor/etc/*.xml");
-                node.AddInput("Expected Matches", NodePortType.Number, 1d);
-                node.AddOutput("Path", NodePortType.Path);
-                node.AddOutput("Files", NodePortType.Any);
-                node.AddOutput("Relative Path", NodePortType.Text);
-                node.AddOutput("Relative Paths", NodePortType.Any);
-                node.AddOutput("Count", NodePortType.Number);
-                break;
-            case "Workspace.Text.Stage":
-                node.AddInput("Relative Path", NodePortType.Text, string.Empty);
-                node.AddInput("Text", NodePortType.Text, string.Empty, multiline: true);
-                node.AddInput("Encoding", NodePortType.Text, "utf8", choices: ["utf8", "utf8-bom", "utf16-le", "utf16-be"]);
-                node.AddInput("Operation", NodePortType.Text, "Replace", choices: Enum.GetNames<PatchFileMode>());
-                break;
-            case "Workspace.File.Import":
-                node.AddInput("Source", NodePortType.Path, string.Empty);
-                node.AddInput("Relative Path", NodePortType.Text, string.Empty);
-                node.AddInput("Operation", NodePortType.Text, "Add", choices: Enum.GetNames<PatchFileMode>());
-                node.AddInput("Expected Hash", NodePortType.Text, string.Empty);
-                break;
-            case "Workspace.File.Delete":
-                node.AddInput("Relative Path", NodePortType.Text, string.Empty);
-                node.AddInput("Expected Hash", NodePortType.Text, string.Empty);
-                break;
-            case "Workspace.File.Exists":
-                node.AddInput("Relative Path", NodePortType.Text, string.Empty);
-                node.AddOutput("Exists", NodePortType.Boolean);
-                break;
-            case "Validation.Changes.Verify":
-                node.AddInput("Expected Paths", NodePortType.Text, string.Empty, multiline: true);
-                node.AddOutput("Valid", NodePortType.Boolean);
-                break;
-            default:
-                throw new ArgumentException("Unknown patch node type.", nameof(node));
-        }
-    }
-
     private async Task ExecuteFileNodeAsync(INodeExecutionContext context)
     {
         var run = GetRun(context);
@@ -138,10 +29,9 @@ public sealed partial class PatchNodeViewModel
                 WriteOutput("Count", offsets.Count);
                 return;
             case "Validation.Format.Detect":
-            case "Validation.Format.Check":
                 var expectedFormat = PatchFormatKind.Unknown;
                 var required = PatchFormatEvidence.Structure;
-                if (TypeKey == "Validation.Format.Check")
+                if (!string.IsNullOrWhiteSpace(Text("Expected Format")))
                 {
                     if (!Enum.TryParse(Text("Expected Format"), out expectedFormat) || !Enum.IsDefined(expectedFormat)
                         || expectedFormat == PatchFormatKind.Unknown
@@ -155,7 +45,7 @@ public sealed partial class PatchNodeViewModel
                 WriteOutput("Evidence", probe.Evidence.ToString());
                 WriteOutput("Detail", probe.Detail);
                 WriteOutput("Structure Valid", !probe.Rejected && probe.Evidence == PatchFormatEvidence.Structure);
-                if (TypeKey == "Validation.Format.Check")
+                if (expectedFormat != PatchFormatKind.Unknown)
                 {
                     WriteOutput("Match", probe.Matches(expectedFormat, required));
                 }

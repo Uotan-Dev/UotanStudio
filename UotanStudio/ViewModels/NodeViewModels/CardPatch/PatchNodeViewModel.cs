@@ -3,190 +3,38 @@ using System.Text.RegularExpressions;
 using UotanStudio.Firmware.Patching;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Patching;
+using UotanStudio.ViewModels.Nodes;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>Offline configuration patch nodes. Mutations produce text until explicitly published.</summary>
 public sealed partial class PatchNodeViewModel : FlowNodeViewModel
 {
-    private PatchNodeViewModel(string typeKey) : base(typeKey, NodeCategory.Data)
+    private PatchNodeViewModel(string typeKey, bool completesFlow = true) : base(typeKey, NodeCategory.Data)
     {
         TypeKey = typeKey;
         AddInput("Flow", NodePortType.Flow);
-        AddOutput("Completed", NodePortType.Flow);
+        if (completesFlow)
+        {
+            AddOutput("Completed", NodePortType.Flow);
+        }
     }
 
     /// <summary>Creates a node with stable ports shared by the canvas, persistence and composites.</summary>
     public static PatchNodeViewModel Create(string typeKey)
     {
-        var node = new PatchNodeViewModel(typeKey);
-        switch (typeKey)
+        if (!PatchNodePorts.TryGetSet(typeKey, out var ports))
         {
-            case "Image.Xattr.Set":
-            case "Image.Xattr.Delete":
-                ConfigureImageXattrEdit(node);
-                break;
-            case "Image.Xattr.Read":
-                node.AddInput("Path", NodePortType.Path, hint: "Node_Patch_ImageReadXattrHint");
-                node.AddInput("File System", NodePortType.Text, "EXT4", choices: ["EXT4", "EROFS"]);
-                node.AddInput("Image Path", NodePortType.Text, "/build.prop");
-                node.AddInput("Attribute Name", NodePortType.Text, "security.selinux");
-                node.AddOutput("Data", NodePortType.Data);
-                node.AddOutput("Exists", NodePortType.Boolean);
-                break;
-            case "Image.File.ReadAttributes":
-            case "Image.File.SetAttributes":
-                ConfigureImageAttributes(node);
-                break;
-            case "Image.Edit.CollectText":
-            case "Image.Edit.Apply":
-                ConfigureImageBatch(node);
-                break;
-            case "Image.Text.Stage":
-                node.AddInput("Path", NodePortType.Path, hint: "Node_Patch_ImageWriteTextHint");
-                node.AddInput("File System", NodePortType.Text, "EXT4", choices: ["EXT4", "EROFS"]);
-                node.AddInput("Image Path", NodePortType.Text, "/build.prop");
-                node.AddInput("Text", NodePortType.Text, string.Empty, multiline: true);
-                node.AddInput("Encoding", NodePortType.Text, "utf8", choices: ["utf8", "utf8-bom", "utf16-le", "utf16-be"]);
-                node.AddInput("Expected Hash", NodePortType.Text, string.Empty);
-                node.AddInput("Image Capacity", NodePortType.Text, "", hint: "Node_Patch_ImageCapacityHint");
-                node.AddInput("Extraction Budget", NodePortType.Text, "68719476736");
-                node.AddOutput("Changed", NodePortType.Boolean);
-                break;
-            case "Image.Text.Read":
-                node.AddInput("Path", NodePortType.Path, hint: "Node_Patch_ImageReadTextHint");
-                node.AddInput("File System", NodePortType.Text, "EXT4", choices: ["EXT4", "EROFS"]);
-                node.AddInput("Image Path", NodePortType.Text, "/build.prop");
-                node.AddOutput("Text", NodePortType.Text);
-                node.AddOutput("Encoding", NodePortType.Text);
-                node.AddOutput("Hash", NodePortType.Text);
-                break;
-            case "Config.FileContexts.Query":
-            case "Config.FileContexts.Add":
-            case "Config.FileContexts.Delete":
-            case "Config.FileContexts.Edit":
-                ConfigureFileContextNode(node);
-                break;
-            case "Config.FsConfig.Query":
-            case "Config.FsConfig.Add":
-            case "Config.FsConfig.Delete":
-            case "Config.FsConfig.Edit":
-                ConfigureFsConfigNode(node);
-                break;
-            case "Config.InitRc.Query":
-            case "Config.InitRc.FindReferences":
-            case "Config.InitRc.EditArgument":
-            case "Config.InitRc.EditHeader":
-            case "Config.InitRc.AddSection":
-            case "Config.InitRc.AddCommand":
-            case "Config.InitRc.EditCommand":
-                ConfigureInitRcNode(node);
-                break;
-            case "Config.Fstab.Query":
-            case "Config.Fstab.Add":
-            case "Config.Fstab.Edit":
-                ConfigureFstabNode(node);
-                break;
-            case "Validation.Applicability.Check":
-            case "Flow.Applicability.Gate":
-                node.AddInput("Compatible", NodePortType.Boolean, false,
-                    hint: typeKey == "Flow.Applicability.Gate" ? "Node_Patch_ApplyGateHint" : "Node_Patch_ApplicabilityHint");
-                node.AddInput("Original State Matches", NodePortType.Boolean, false);
-                node.AddInput("Desired State Matches", NodePortType.Boolean, false);
-                node.AddOutput("Applicability", NodePortType.Text, "Node_Applicability_");
-                node.AddOutput("Should Apply", NodePortType.Boolean);
-                if (typeKey == "Flow.Applicability.Gate")
-                {
-                    node.Output.Remove(node.Output.Single(port => port.Title == "Completed"));
-                    node.AddOutput("Apply", NodePortType.Flow);
-                    node.AddOutput("Skip", NodePortType.Flow);
-                }
-                break;
-            case "Resource.Asset.Open":
-            case "Resource.Asset.ReadText":
-            case "Workspace.Asset.Stage":
-                ConfigureAssetNode(node);
-                break;
-            case "Config.Json.Query":
-            case "Config.Json.Edit":
-            case "Config.Ini.Query":
-            case "Config.Ini.Edit":
-                ConfigureStructuredNode(node);
-                break;
-            case "File.Text.Read":
-                node.AddInput("Path", NodePortType.Path);
-                node.AddOutput("Text", NodePortType.Text);
-                node.AddOutput("Encoding", NodePortType.Text);
-                node.AddOutput("Hash", NodePortType.Text);
-                break;
-            case "File.Text.Publish":
-                node.AddInput("Output Path", NodePortType.Path);
-                node.AddInput("Text", NodePortType.Text, string.Empty, multiline: true);
-                node.AddInput("Encoding", NodePortType.Text, "utf8", choices: ["utf8", "utf8-bom", "utf16-le", "utf16-be"]);
-                node.AddOutput("Path", NodePortType.Path);
-                break;
-            case "Validation.Condition.Evaluate":
-                node.AddInput("Value", NodePortType.Text, string.Empty, multiline: true);
-                node.AddInput("Path", NodePortType.Path, string.Empty);
-                node.AddInput("Expected Value", NodePortType.Text, string.Empty);
-                node.AddInput("Upper Version", NodePortType.Text, string.Empty);
-                node.AddInput("Operation", NodePortType.Text, "Equals", choices:
-                    ["Equals", "Contains", "Regex", "VersionRange", "FileExists", "DirectoryExists"]);
-                node.AddOutput("Match", NodePortType.Boolean);
-                break;
-            case "Validation.Boolean.Assert":
-                node.AddInput("Condition", NodePortType.Boolean, false);
-                node.AddInput("Reason", NodePortType.Text, string.Empty);
-                node.AddOutput("Valid", NodePortType.Boolean);
-                break;
-            case "Config.Text.Edit":
-                node.AddInput("Text", NodePortType.Text, string.Empty, multiline: true);
-                node.AddInput("Find", NodePortType.Text, string.Empty, multiline: true);
-                node.AddInput("Replacement", NodePortType.Text, string.Empty, multiline: true);
-                node.AddInput("Operation", NodePortType.Text, "Replace", choices: Enum.GetNames<TextPatchOperation>());
-                node.AddInput("Regex", NodePortType.Boolean, false);
-                node.AddInput("Expected Matches", NodePortType.Number, 1d);
-                node.AddResultOutputs();
-                break;
-            case "Config.AndroidProperty.Query":
-                node.AddInput("Text", NodePortType.Text, string.Empty, multiline: true);
-                node.AddInput("Key", NodePortType.Text, string.Empty);
-                node.AddOutput("Value", NodePortType.Text);
-                node.AddOutput("Exists", NodePortType.Boolean);
-                break;
-            case "Config.AndroidProperty.Edit":
-                node.AddInput("Text", NodePortType.Text, string.Empty, multiline: true);
-                node.AddInput("Key", NodePortType.Text, string.Empty);
-                node.AddInput("Value", NodePortType.Text, string.Empty);
-                node.AddInput("Operation", NodePortType.Text, "Set", choices: ["Set", "Delete"]);
-                node.AddInput("Allow Create", NodePortType.Boolean, false);
-                node.AddOldValueInputs();
-                node.AddResultOutputs();
-                break;
-            case "Config.Xml.Query":
-            case "Config.Xml.Edit":
-                node.AddInput("Text", NodePortType.Text, string.Empty, multiline: true);
-                node.AddInput("XPath", NodePortType.Text, string.Empty);
-                node.AddInput("Namespaces", NodePortType.Text, string.Empty, multiline: true);
-                node.AddInput("Expected Matches", NodePortType.Number, 1d);
-                if (typeKey == "Config.Xml.Edit")
-                {
-                    node.AddInput("Operation", NodePortType.Text, "SetValue", choices: Enum.GetNames<XmlPatchOperation>());
-                    node.AddInput("Value", NodePortType.Text, string.Empty, multiline: true);
-                    node.AddInput("Attribute Name", NodePortType.Text, string.Empty);
-                    node.AddOldValueInputs();
-                    node.AddResultOutputs();
-                }
-                else
-                {
-                    node.AddOutput("Value", NodePortType.Text);
-                    node.AddOutput("Values", NodePortType.Any);
-                    node.AddOutput("Count", NodePortType.Number);
-                }
-                break;
-            default:
-                ConfigureFileNode(node);
-                break;
+            throw new ArgumentException("Unknown patch node type.", nameof(typeKey));
+        }
+        var node = new PatchNodeViewModel(typeKey, ports.CompletesFlow);
+        foreach (var declaration in ports.Inputs)
+        {
+            node.AddInput(declaration);
+        }
+        foreach (var declaration in ports.Outputs)
+        {
+            node.AddOutput(declaration);
         }
         return node;
     }
@@ -227,15 +75,9 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
                 WriteOutput("Encoding", imageText.Encoding);
                 WriteOutput("Hash", imageText.Sha256);
                 break;
-            case "Config.FileContexts.Query":
-            case "Config.FileContexts.Add":
-            case "Config.FileContexts.Delete":
             case "Config.FileContexts.Edit":
                 ExecuteFileContextNode(token);
                 break;
-            case "Config.FsConfig.Query":
-            case "Config.FsConfig.Add":
-            case "Config.FsConfig.Delete":
             case "Config.FsConfig.Edit":
                 ExecuteFsConfigNode(token);
                 break;
@@ -248,8 +90,6 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
             case "Config.InitRc.EditCommand":
                 ExecuteInitRcNode(token);
                 break;
-            case "Config.Fstab.Query":
-            case "Config.Fstab.Add":
             case "Config.Fstab.Edit":
                 ExecuteFstabNode(token);
                 break;
@@ -262,9 +102,7 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
             case "Workspace.Asset.Stage":
                 await ExecuteAssetNodeAsync(context).ConfigureAwait(false);
                 break;
-            case "Config.Json.Query":
             case "Config.Json.Edit":
-            case "Config.Ini.Query":
             case "Config.Ini.Edit":
                 ExecuteStructuredNode(token);
                 break;
@@ -293,27 +131,31 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
                 SetResult(TextPatch.Apply(Text("Text"), Text("Find"), Text("Replacement"),
                     Operation<TextPatchOperation>(), Boolean("Regex"), Count(), token));
                 break;
-            case "Config.AndroidProperty.Query":
-                var value = AndroidPropertyPatch.Read(Text("Text"), Text("Key"));
-                WriteOutput("Value", value ?? string.Empty);
-                WriteOutput("Exists", value is not null);
-                break;
             case "Config.AndroidProperty.Edit":
-                var operation = Text("Operation");
-                if (operation is not "Set" and not "Delete")
+                var propertyOperation = Text("Operation");
+                if (propertyOperation == "Query")
+                {
+                    var queryValue = AndroidPropertyPatch.Read(Text("Text"), Text("Key"));
+                    WriteOutput("Value", queryValue ?? string.Empty);
+                    WriteOutput("Exists", queryValue is not null);
+                    break;
+                }
+                if (propertyOperation is not "Set" and not "Delete")
                 {
                     throw new InvalidDataException("Invalid property operation.");
                 }
-                SetResult(AndroidPropertyPatch.Apply(Text("Text"), Text("Key"), Text("Value"), operation == "Delete",
+                SetResult(AndroidPropertyPatch.Apply(Text("Text"), Text("Key"), Text("Value"), propertyOperation == "Delete",
                     Boolean("Check Old Value"), Text("Expected Old Value"), Boolean("Allow Create")));
                 break;
-            case "Config.Xml.Query":
-                var values = XmlPatch.Query(Text("Text"), Text("XPath"), Text("Namespaces"), Count());
-                WriteOutput("Values", values);
-                WriteOutput("Value", values.Count == 1 ? values[0] : null);
-                WriteOutput("Count", values.Count);
-                break;
             case "Config.Xml.Edit":
+                if (Text("Operation") == "Query")
+                {
+                    var values = XmlPatch.Query(Text("Text"), Text("XPath"), Text("Namespaces"), Count());
+                    WriteOutput("Values", values);
+                    WriteOutput("Value", values.Count == 1 ? values[0] : null);
+                    WriteOutput("Count", values.Count);
+                    break;
+                }
                 SetResult(XmlPatch.Apply(Text("Text"), Text("XPath"), Text("Namespaces"), Operation<XmlPatchOperation>(),
                     Text("Value"), Text("Attribute Name"), Count(), Boolean("Check Old Value"), Text("Expected Old Value")));
                 break;
@@ -408,18 +250,14 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
         WriteOutput("Changed", result.Changed);
     }
 
-    private void AddOldValueInputs()
+    private void AddInput(NodeInputDeclaration declaration)
     {
-        AddInput("Check Old Value", NodePortType.Boolean, false);
-        AddInput("Expected Old Value", NodePortType.Text, string.Empty);
+        AddInput(declaration.Title, declaration.PortType, declaration.InitialValue, declaration.Multiline,
+            declaration.Directory, declaration.Choices?.ToArray(), declaration.HintResourceKey);
     }
 
-    private void AddResultOutputs()
-    {
-        AddOutput("Text", NodePortType.Text);
-        AddOutput("Count", NodePortType.Number);
-        AddOutput("Changed", NodePortType.Boolean);
-    }
+    private void AddOutput(NodeOutputDeclaration declaration)
+        => AddOutput(declaration.Title, declaration.PortType, declaration.ValueResourcePrefix);
 
     private long PositiveImageBytes(string title)
     {

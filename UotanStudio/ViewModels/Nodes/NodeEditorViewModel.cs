@@ -37,51 +37,27 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     private readonly ObservableCollection<NodeViewModels.FlowNodeViewModel> _selectedNodes = [];
     private readonly ObservableCollection<NodeViewModels.BatchNodeInputViewModel> _batchInputs = [];
-    private PatchRunOutcome _patchOutcome;
 
-    /// <summary>Whether the bounded report omitted additional skipped composites.</summary>
-    public bool CompositeReportTruncated
-    {
-        get => field;
-        private set => SetProperty(ref field, value);
-    }
+    /// <summary>Review state for the last patch execution or preview, extracted from the editor shell.</summary>
+    public PatchReviewViewModel PatchReview { get; } = new();
 
     /// <summary>Individual invocation results; publication remains a root-run decision.</summary>
-    public IReadOnlyList<PatchCompositeExecutionViewModel> CompositeExecutions
-    {
-        get => field;
-        private set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(HasPatchReview));
-            }
-        }
-    } = [];
+    public IReadOnlyList<PatchCompositeExecutionViewModel> CompositeExecutions => PatchReview.CompositeExecutions;
 
     /// <summary>Bounded review rows from the last execution or preview.</summary>
-    public IReadOnlyList<PatchChangeViewModel> PatchChanges
-    {
-        get => field;
-        private set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(HasPatchChanges));
-                OnPropertyChanged(nameof(HasPatchReview));
-            }
-        }
-    } = [];
+    public IReadOnlyList<PatchChangeViewModel> PatchChanges => PatchReview.PatchChanges;
 
     /// <summary>Whether a patch review panel should be visible.</summary>
-    public bool HasPatchChanges => PatchChanges.Count > 0;
+    public bool HasPatchChanges => PatchReview.HasPatchChanges;
 
     /// <summary>Includes a meaningful preflight result even when no file changes were staged.</summary>
-    public bool HasPatchReview => HasPatchChanges || CompositeExecutions.Count > 0 || _patchOutcome is PatchRunOutcome.NotApplicable
-        or PatchRunOutcome.NoChanges or PatchRunOutcome.AlreadyApplied or PatchRunOutcome.Conflict;
+    public bool HasPatchReview => PatchReview.HasPatchReview;
 
     /// <summary>Localized publication outcome, distinct from node execution success.</summary>
-    public string PatchOutcomeText => LanguageService.Instance.GetString("Node_PatchOutcome_" + _patchOutcome);
+    public string PatchOutcomeText => PatchReview.PatchOutcomeText;
+
+    /// <summary>Whether the bounded report omitted additional skipped composites.</summary>
+    public bool CompositeReportTruncated => PatchReview.CompositeReportTruncated;
 
     private Stack<IEditorCommand> _undoStack = [];
     private Stack<IEditorCommand> _redoStack = [];
@@ -342,17 +318,20 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     public ObservableCollection<string> ExecutionLog { get; } = [];
 
     /// <summary>Installed composite nodes available for isolated graph editing.</summary>
-    public ObservableCollection<VisualPluginRegistration> EditableVisualPlugins { get; } = [];
+    public VisualPluginWorkspaceViewModel PluginWorkspace { get; }
+
+    /// <summary>Whether the property pane exposes the plugin workspace.</summary>
+    public bool ShowVisualPluginWorkspace => PluginWorkspace.ShowWorkspace;
+
+    /// <summary>Installed composite nodes available for isolated graph editing.</summary>
+    public ObservableCollection<VisualPluginRegistration> EditableVisualPlugins => PluginWorkspace.EditableVisualPlugins;
 
     /// <summary>The composite node selected in the property-pane plugin workspace.</summary>
     public VisualPluginRegistration? SelectedVisualPlugin
     {
-        get => field;
-        set => SetProperty(ref field, value);
+        get => PluginWorkspace.SelectedVisualPlugin;
+        set => PluginWorkspace.SelectedVisualPlugin = value;
     }
-
-    /// <summary>Whether the property pane exposes the plugin workspace.</summary>
-    public bool ShowVisualPluginWorkspace { get; }
 
     /// <summary>
     /// <para>执行期间订阅 LogService 的退订委托。</para>
@@ -391,7 +370,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
     public NodeEditorViewModel(bool showVisualPluginWorkspace = true)
     {
-        ShowVisualPluginWorkspace = showVisualPluginWorkspace;
+        PluginWorkspace = new VisualPluginWorkspaceViewModel(showVisualPluginWorkspace);
+        PatchReview.PropertyChanged += (_, args) => OnPropertyChanged(args.PropertyName);
         SelectedNodes = new ReadOnlyObservableCollection<NodeViewModels.FlowNodeViewModel>(_selectedNodes);
         _draftDocument = new NodeProjectDocument(string.Empty, _nodes, _connections);
         _activeDocument = _draftDocument;
@@ -404,29 +384,6 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         WeakReferenceMessenger.Default.Register<NodeEditorActionMessage>(this, OnNodeEditorAction);
         LanguageService.Instance.LanguageChanged += OnLanguageChanged;
         NodeFactoryRegistrar.DescriptorsChanged += OnDescriptorsChanged;
-        VisualPluginManager.Instance.Changed += OnVisualPluginsChanged;
-        RefreshEditableVisualPlugins();
-    }
-
-    private void OnVisualPluginsChanged(object? sender, EventArgs e)
-    {
-        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) RefreshEditableVisualPlugins();
-        else Avalonia.Threading.Dispatcher.UIThread.Post(RefreshEditableVisualPlugins);
-    }
-
-    private void RefreshEditableVisualPlugins()
-    {
-        var selectedId = SelectedVisualPlugin?.Id;
-        EditableVisualPlugins.Clear();
-        foreach (var registration in VisualPluginManager.Instance.Registrations.Where(registration =>
-                     registration.Kind == VisualPluginKind.CompositeNode && registration.IsAvailable))
-        {
-            EditableVisualPlugins.Add(registration);
-        }
-
-        SelectedVisualPlugin = EditableVisualPlugins.FirstOrDefault(registration =>
-            string.Equals(registration.Id, selectedId, StringComparison.OrdinalIgnoreCase))
-            ?? EditableVisualPlugins.FirstOrDefault();
     }
 
     private void OnDescriptorsChanged(object? sender, EventArgs e)
@@ -451,9 +408,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         {
             choice.RefreshLocalization();
         }
-        PatchChanges = PatchChanges.Select(item => new PatchChangeViewModel(item.Change)).ToArray();
-        CompositeExecutions = CompositeExecutions.Select(item => new PatchCompositeExecutionViewModel(item.Execution)).ToArray();
-        OnPropertyChanged(nameof(PatchOutcomeText));
+        PatchReview.RefreshLocalization();
         InitializeToolbox();
         RefreshVisibleToolbox();
         OnPropertyChanged(nameof(DeleteSelectionText));
@@ -1179,13 +1134,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             node.ExecutionError = string.Empty;
             node.ExecutionStatus = NodeExecutionStatus.Idle;
         }
-        PatchChanges = [];
+        PatchReview.Reset();
         NodeArtifactRegistry.Reset();
-        CompositeExecutions = [];
-        CompositeReportTruncated = false;
-        _patchOutcome = PatchRunOutcome.None;
-        OnPropertyChanged(nameof(PatchOutcomeText));
-        OnPropertyChanged(nameof(HasPatchReview));
         ExecutionStatus = LanguageService.Instance.GetString("Node_Run");
         ExecutionProgress = 0.0;
         _runCts = new CancellationTokenSource();
@@ -1235,12 +1185,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
             {
-                PatchChanges = result.PatchChanges.Select(change => new PatchChangeViewModel(change)).ToArray();
-                CompositeExecutions = result.CompositeExecutions.Select(item => new PatchCompositeExecutionViewModel(item)).ToArray();
-                CompositeReportTruncated = result.CompositeReportTruncated;
-                _patchOutcome = result.PatchOutcome;
-                OnPropertyChanged(nameof(PatchOutcomeText));
-                OnPropertyChanged(nameof(HasPatchReview));
+                PatchReview.Publish(result);
             });
 
             ExecutionStatus = result.Status switch
@@ -1317,8 +1262,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CanRedo));
         ExecutionProgress = 0.0;
         ExecutionStatus = LanguageService.Instance.GetString("Node_StatusReady");
-        PatchChanges = [];
-        CompositeExecutions = [];
+        PatchReview.Clear();
         FailedNodes = [];
         IsExecutionLogExpanded = false;
         ExecutionLog.Clear();
@@ -1578,7 +1522,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         DetachAllPropertyTracking();
         LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
         NodeFactoryRegistrar.DescriptorsChanged -= OnDescriptorsChanged;
-        VisualPluginManager.Instance.Changed -= OnVisualPluginsChanged;
+        PluginWorkspace.Dispose();
         WeakReferenceMessenger.Default.Unregister<NodeEditorActionMessage>(this);
         _searchDebounceCts?.Cancel();
         _searchDebounceCts?.Dispose();

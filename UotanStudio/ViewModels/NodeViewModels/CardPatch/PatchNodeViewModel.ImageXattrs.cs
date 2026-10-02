@@ -5,21 +5,6 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 
 public sealed partial class PatchNodeViewModel
 {
-    private static void ConfigureImageXattrEdit(PatchNodeViewModel node)
-    {
-        node.AddInput("Path", NodePortType.Path, hint: "Node_Patch_ImageXattrEditHint");
-        node.AddInput("File System", NodePortType.Text, "EXT4", choices: ["EXT4", "EROFS"]);
-        node.AddInput("Image Path", NodePortType.Text, "/build.prop");
-        node.AddInput("Attribute Name", NodePortType.Text, "user.patch");
-        if (node.TypeKey == "Image.Xattr.Set") { node.AddInput("Hex Value", NodePortType.Text, "", multiline: true); }
-        node.AddInput("Check Old Value", NodePortType.Boolean, false);
-        node.AddInput("Expected Exists", NodePortType.Boolean, true);
-        node.AddInput("Expected Hex Value", NodePortType.Text, "", multiline: true);
-        node.AddInput("Image Capacity", NodePortType.Text, "", hint: "Node_Patch_ImageCapacityHint");
-        node.AddInput("Extraction Budget", NodePortType.Text, "68719476736");
-        node.AddOutput("Changed", NodePortType.Boolean);
-    }
-
     private async Task ExecuteImageXattrEditAsync(INodeExecutionContext context)
     {
         var check = Boolean("Check Old Value");

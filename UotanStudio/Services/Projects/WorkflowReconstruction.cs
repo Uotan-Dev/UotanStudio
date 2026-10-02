@@ -26,11 +26,23 @@ internal static class WorkflowReconstruction
         }
         if (!NodeTypeRegistry.Contains(dto.TypeKey))
         {
-            if (!preserveUnknown) return false;
-            node = new MissingNodeViewModel(dto, $"Node type '{dto.TypeKey}' is unavailable.");
-            node.CustomName = dto.CustomName ?? string.Empty;
+            var alias = NodeTypeAlias.Find(dto.TypeKey);
+            if (alias is null || !NodeTypeRegistry.Contains(alias.TargetTypeKey))
+            {
+                if (!preserveUnknown) return false;
+                node = new MissingNodeViewModel(dto, $"Node type '{dto.TypeKey}' is unavailable.");
+                node.CustomName = dto.CustomName ?? string.Empty;
+                RestoreInstanceId(node, dto, restoreInstanceId);
+                RestoreInitialValues(node, dto.InputInitialValues, dto.InputInitialValuesByPortId);
+                return true;
+            }
+            node = NodeTypeRegistry.Create(alias.TargetTypeKey)!;
+            NodeTypeAlias.ApplyDefaults(node, alias);
+            if (!string.IsNullOrWhiteSpace(dto.CustomName))
+            {
+                node.CustomName = dto.CustomName;
+            }
             RestoreInstanceId(node, dto, restoreInstanceId);
-            RestoreInitialValues(node, dto.InputInitialValues, dto.InputInitialValuesByPortId);
             return true;
         }
         // A registered factory that throws surfaces here as an error, not the "unknown type" MissingNode above.

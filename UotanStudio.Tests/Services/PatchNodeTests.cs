@@ -266,7 +266,8 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData(true, true)]
     public async Task Execute_FileContextEntry_PreviewsOrPublishesRuleLifecycle(bool preview, bool delete)
     {
-        var edit = PatchNodeViewModel.Create(delete ? "Config.FileContexts.Delete" : "Config.FileContexts.Add");
+        var edit = PatchNodeViewModel.Create("Config.FileContexts.Edit");
+        Set(edit, "Operation", delete ? "Delete" : "Add");
         const string rule = "/path u:object_r:vendor_file:s0\n";
         Set(edit, "Text", delete ? "# keep\n" + rule : "# keep\n");
         Set(edit, "Path Expression", "/path");
@@ -319,7 +320,8 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData(true, true)]
     public async Task Execute_FsConfigEntry_PreviewsOrPublishesAdditionAndDeletion(bool preview, bool delete)
     {
-        var edit = PatchNodeViewModel.Create(delete ? "Config.FsConfig.Delete" : "Config.FsConfig.Add");
+        var edit = PatchNodeViewModel.Create("Config.FsConfig.Edit");
+        Set(edit, "Operation", delete ? "Delete" : "Add");
         Set(edit, "Text", delete ? "# keep\nfile 0 0 420 0\n" : "# keep\n");
         Set(edit, "Image Path", "file");
         var write = PatchNodeViewModel.Create("File.Text.Publish");
@@ -348,7 +350,8 @@ public sealed class PatchNodeTests : IDisposable
         Set(edit, "Image Path", "vendor/bin/test");
         Set(edit, "UID", "1000");
         Set(edit, "Mode", "0644");
-        var query = PatchNodeViewModel.Create("Config.FsConfig.Query");
+        var query = PatchNodeViewModel.Create("Config.FsConfig.Edit");
+        Set(query, "Operation", "Query");
         Set(query, "Image Path", "vendor/bin/test");
         var write = PatchNodeViewModel.Create("File.Text.Publish");
         var target = Path.Combine(_root, "vendor_fs_config");
@@ -540,10 +543,11 @@ public sealed class PatchNodeTests : IDisposable
     [InlineData(true, true)]
     public async Task Execute_FstabEdit_PreservesLayoutThroughPreviewAndPublication(bool preview, bool add)
     {
-        var edit = PatchNodeViewModel.Create(add ? "Config.Fstab.Add" : "Config.Fstab.Edit");
+        var edit = PatchNodeViewModel.Create("Config.Fstab.Edit");
         Set(edit, "Text", "# keep\r\nsystem\t/system ext4 ro wait,logical\r\n");
         if (add)
         {
+            Set(edit, "Operation", "Add");
             Set(edit, "File System", "erofs");
         }
         else
@@ -775,15 +779,16 @@ public sealed class PatchNodeTests : IDisposable
     }
 
     [Theory]
-    [InlineData("Config.Json.Query", "{\"x\":null}", "JSON Value", "null", true)]
-    [InlineData("Config.Json.Query", "{}", "JSON Value", "", false)]
-    [InlineData("Config.Ini.Query", "x=", "Value", "", true)]
-    [InlineData("Config.Ini.Query", "", "Value", "", false)]
+    [InlineData("Config.Json.Edit", "{\"x\":null}", "JSON Value", "null", true)]
+    [InlineData("Config.Json.Edit", "{}", "JSON Value", "", false)]
+    [InlineData("Config.Ini.Edit", "x=", "Value", "", true)]
+    [InlineData("Config.Ini.Edit", "", "Value", "", false)]
     public async Task Execute_StructuredQuery_ReportsMissingSeparately(string type, string text, string port, string expected, bool exists)
     {
         var node = PatchNodeViewModel.Create(type);
         Set(node, "Text", text);
-        Set(node, type == "Config.Json.Query" ? "JSON Pointer" : "Key", type == "Config.Json.Query" ? "/x" : "x");
+        Set(node, "Operation", "Query");
+        Set(node, type == "Config.Json.Edit" ? "JSON Pointer" : "Key", type == "Config.Json.Edit" ? "/x" : "x");
         var result = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([node], [], TestContext.Current.CancellationToken);
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         Assert.Equal(expected, node.Output.Single(output => output.Title == port).Data);

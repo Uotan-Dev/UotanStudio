@@ -6,30 +6,6 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 
 public sealed partial class PatchNodeViewModel
 {
-    private static void ConfigureImageAttributes(PatchNodeViewModel node)
-    {
-        node.AddInput("Path", NodePortType.Path, hint: "Node_Patch_ImageAttributesHint");
-        node.AddInput("File System", NodePortType.Text, "EXT4", choices: ["EXT4", "EROFS"]);
-        node.AddInput("Image Path", NodePortType.Text, "/build.prop");
-        if (node.TypeKey == "Image.File.ReadAttributes")
-        {
-            node.AddOutput("UID", NodePortType.Text);
-            node.AddOutput("GID", NodePortType.Text);
-            node.AddOutput("Mode", NodePortType.Text);
-            return;
-        }
-        node.AddInput("UID", NodePortType.Text, "0");
-        node.AddInput("GID", NodePortType.Text, "0");
-        node.AddInput("Mode", NodePortType.Text, "0644");
-        node.AddInput("Check Old Value", NodePortType.Boolean, false);
-        node.AddInput("Expected UID", NodePortType.Text, "0");
-        node.AddInput("Expected GID", NodePortType.Text, "0");
-        node.AddInput("Expected Mode", NodePortType.Text, "0644");
-        node.AddInput("Image Capacity", NodePortType.Text, "", hint: "Node_Patch_ImageCapacityHint");
-        node.AddInput("Extraction Budget", NodePortType.Text, "68719476736");
-        node.AddOutput("Changed", NodePortType.Boolean);
-    }
-
     private async Task ExecuteImageAttributesAsync(INodeExecutionContext context)
     {
         var run = GetRun(context);

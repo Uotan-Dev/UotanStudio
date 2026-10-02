@@ -95,7 +95,6 @@
     <x:String x:Key="Node_Data_Compression_Compress">Compress</x:String>
     <x:String x:Key="Node_Data_Bytes_Swap">Byte Swap</x:String>
     <x:String x:Key="Node_Network_File_Download">Download</x:String>
-    <x:String x:Key="Node_Network_GitHub_Download">GitHub Mirror Accelerated Download</x:String>
     <x:String x:Key="Node_Flow_Execution_Start">Start</x:String>
     <x:String x:Key="Node_Flow_Execution_End">End</x:String>
     <x:String x:Key="Node_Flow_Condition_Branch">Branch</x:String>
@@ -239,9 +238,7 @@
     <x:String x:Key="Node_Validation_Condition_Evaluate">Evaluate patch condition</x:String>
     <x:String x:Key="Node_Validation_Boolean_Assert">Assert patch condition</x:String>
     <x:String x:Key="Node_Config_Text_Edit">Patch text</x:String>
-    <x:String x:Key="Node_Config_AndroidProperty_Query">Read Android property</x:String>
     <x:String x:Key="Node_Config_AndroidProperty_Edit">Edit Android property</x:String>
-    <x:String x:Key="Node_Config_Xml_Query">Query XML</x:String>
     <x:String x:Key="Node_Config_Xml_Edit">Edit XML</x:String>
     <x:String x:Key="Node_Patch_SelectFolder">Select patch target directory</x:String>
     <x:String x:Key="Node_Patch_AssertionFailed">Patch assertion failed; this branch has stopped.</x:String>
@@ -338,9 +335,7 @@
     <x:String x:Key="Node_PatchOutcome_RolledBack">Publication failed; original files restored</x:String>
     <x:String x:Key="Node_PatchOutcome_RecoveryRequired">Recovery failed; backups retained</x:String>
     <x:String x:Key="Node_Patch_UnsupportedGraph">This patch graph contains nodes outside staging or preview support. Use transaction-aware patch nodes; nothing was executed.</x:String>
-    <x:String x:Key="Node_Config_Json_Query">Query JSON value</x:String>
     <x:String x:Key="Node_Config_Json_Edit">Edit JSON value</x:String>
-    <x:String x:Key="Node_Config_Ini_Query">Query INI value</x:String>
     <x:String x:Key="Node_Config_Ini_Edit">Edit INI value</x:String>
     <x:String x:Key="Node_Conn_JSONPointer">JSON Pointer (empty = root)</x:String>
     <x:String x:Key="Node_Conn_JSONValue">JSON value</x:String>
@@ -349,7 +344,6 @@
     <x:String x:Key="Node_Patch_JsonHint">Use /name/0 pointers; escape ~ as ~0 and / as ~1. Values are JSON: quote strings, leave numbers, true/false and null unquoted. Changes reserialize the document. Array deletion requires an old-value check and shifts later indices.</x:String>
     <x:String x:Key="Node_Patch_IniHint">Case-sensitive [section] and key=value syntax. An empty section selects global keys. # and ; start whole-line comments; inside values they are literal. Duplicate sections/keys and multiline values are rejected.</x:String>
     <x:String x:Key="Node_Validation_Format_Detect">Inspect file format</x:String>
-    <x:String x:Key="Node_Validation_Format_Check">Check format precondition</x:String>
     <x:String x:Key="Node_Workspace_File_Find">Find staged workspace files</x:String>
     <x:String x:Key="Node_Conn_ExpectedFormat">Expected format</x:String>
     <x:String x:Key="Node_Conn_RequiredEvidence">Required evidence</x:String>
@@ -499,7 +493,6 @@
     <x:String x:Key="Node_Patch_BinaryPreviewRow">{0}, {1} bytes, {2}: {3} → {4} {5}</x:String>
     <x:String x:Key="Node_Patch_BytesTruncated">(first 64 bytes only)</x:String>
     <x:String x:Key="Node_Patch_WindowsTruncated">Additional replacement windows are omitted.</x:String>
-    <x:String x:Key="Node_Config_Fstab_Query">Query Android fstab</x:String>
     <x:String x:Key="Node_Config_Fstab_Edit">Edit Android fstab</x:String>
     <x:String x:Key="Node_Conn_Field">Field</x:String>
     <x:String x:Key="Node_Conn_MountPoint">Mount point</x:String>
@@ -514,7 +507,6 @@
     <x:String x:Key="Node_Choice_DeleteFlag">Delete flag</x:String>
     <x:String x:Key="Node_Patch_FstabHint">Android five-column fstab only, not recovery or /proc/mounts dialects. Select literal mount point and optionally filesystem type; match count is exact. Set value replaces one field. Flag operations edit comma-separated mount options or fs_mgr flags; empty value creates a bare flag. The old-value guard checks the complete selected field. Spacing, comments and unedited content are preserved. This does not validate device-specific flag support or mountability.</x:String>
     <x:String x:Key="Node_Choice_DeleteEntry">Delete selected entry lines</x:String>
-    <x:String x:Key="Node_Config_Fstab_Add">Add Android fstab entry</x:String>
     <x:String x:Key="Node_Conn_BlockDevice">Block device</x:String>
     <x:String x:Key="Node_Conn_FileSystem">Filesystem type</x:String>
     <x:String x:Key="Node_Conn_MountOptions">Mount options</x:String>
@@ -557,7 +549,6 @@
     <x:String x:Key="Node_Conn_InvalidReferences">Malformed reference commands</x:String>
     <x:String x:Key="Node_Conn_AmbiguousServices">Ambiguous service declarations</x:String>
     <x:String x:Key="Node_Patch_InitRcReferencesHint">Checks start, stop, restart, enable and exec_start in actions and service onrestart commands. External service names are caller-declared, one literal name per line; imports are not read. Property-dependent arguments remain unresolved. Duplicate local service names are ambiguous, including override cases whose load order is unknown. The boolean covers only these named references, not full init syntax, other commands, interfaces, classes or bootability. Count is inspected commands. Connect the boolean to Assert to block publication on unresolved references.</x:String>
-    <x:String x:Key="Node_Config_FsConfig_Query">Query UotanStudio fs_config</x:String>
     <x:String x:Key="Node_Config_FsConfig_Edit">Edit UotanStudio fs_config</x:String>
     <x:String x:Key="Node_Conn_ImagePath">Image path</x:String>
     <x:String x:Key="Node_Conn_UID">UID</x:String>
@@ -566,10 +557,7 @@
     <x:String x:Key="Node_Conn_ExpectedGID">Expected GID</x:String>
     <x:String x:Key="Node_Conn_ExpectedMode">Expected permission mode</x:String>
     <x:String x:Key="Node_Patch_FsConfigHint">Edits the space-delimited metadata dialect consumed by UotanStudio builders. UID/GID are unsigned decimal; modes are decimal (493) or zero-prefixed octal (0755), not unprefixed Android octal. Query returns zero-prefixed octal. Select exactly one literal image path; duplicates fail. Edits emit decimal permissions and retain trailing capability data without interpreting or applying it. This changes sidecar text, not host permissions or an image directly. Rebuild integration, SELinux labels and xattrs require their own operations.</x:String>
-    <x:String x:Key="Node_Config_FsConfig_Add">Add UotanStudio fs_config entry</x:String>
-    <x:String x:Key="Node_Config_FsConfig_Delete">Delete UotanStudio fs_config entry</x:String>
     <x:String x:Key="Node_Patch_FsConfigEntryHint">UotanStudio metadata dialect: decimal UID/GID, decimal or zero-prefixed octal permissions. Add appends a missing literal path with trailing capability placeholder 0; identical ownership/permissions preserve existing source and opaque capability data, while different values or duplicate paths conflict. Delete removes the whole entry line; absent entries are unchanged unless an old-value guard requires one. Count reports existing matches. Does not add/delete the actual file, apply capabilities or rebuild an image; compose those operations separately.</x:String>
-    <x:String x:Key="Node_Config_FileContexts_Query">Query file_contexts rule</x:String>
     <x:String x:Key="Node_Config_FileContexts_Edit">Edit file_contexts label</x:String>
     <x:String x:Key="Node_Conn_PathExpression">Exact path expression</x:String>
     <x:String x:Key="Node_Conn_MetadataOnly">Metadata only</x:String>
@@ -584,10 +572,11 @@
     <x:String x:Key="Node_Choice_Pipe">Named pipe</x:String>
     <x:String x:Key="Node_Choice_Socket">Socket</x:String>
     <x:String x:Key="Node_Patch_FileContextHint">Select one text rule by its exact path-expression spelling and file-kind qualifier. Unqualified selects only a two-field rule, not every kind. Regexes are not executed or converted to host paths. Edit replaces only the context token, preserving order, spacing and full-line comments. Duplicate identities, malformed fields and old-value mismatches fail. Context shape checking is not loaded-policy validation; overlap/precedence, compiled contexts and actual image xattr publication remain separate.</x:String>
-    <x:String x:Key="Node_Config_FileContexts_Add">Add file_contexts rule</x:String>
-    <x:String x:Key="Node_Config_FileContexts_Delete">Delete file_contexts rule</x:String>
     <x:String x:Key="Node_Patch_FileContextEntryHint">Identity is the exact path expression plus file-kind qualifier. Add appends a missing rule; an identical existing label is unchanged and a different label or duplicate identity conflicts. Delete removes the whole rule line; missing is unchanged unless an old-label guard requires it. Count reports existing matches. Other rules retain their order, but adding/removing rules can affect effective labels: regex overlap, precedence and loaded-policy validity are not checked. Does not modify image xattrs directly.</x:String>
     <x:String x:Key="Node_Image_Text_Read">Read text inside filesystem image</x:String>
+    <x:String x:Key="Node_Choice_Direct">Direct</x:String>
+    <x:String x:Key="Node_Choice_GitHub_Mirror">GitHub mirror</x:String>
+    <x:String x:Key="Node_Conn_Source">Source</x:String>
     <x:String x:Key="Node_Choice_EXT4">EXT4</x:String>
     <x:String x:Key="Node_Choice_EROFS">EROFS</x:String>
     <x:String x:Key="Node_Patch_ImageReadTextHint">Reads a literal regular file from a raw EXT4/EROFS image, including staged image replacements. Links, traversal, special files and files over 16 MiB are rejected; decoded text is limited to 4 Mi characters. Enumeration has entry/path budgets and supports cancellation. The full image hash is checked before/after reading and retained as a publication dependency. Hash output identifies the extracted file. Sparse/Super/Payload containers require separate extraction. This node reads only; image modification/rebuild is separate.</x:String>

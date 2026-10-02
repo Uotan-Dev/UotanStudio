@@ -2,6 +2,7 @@ using System.Globalization;
 using UotanStudio.Projects.Interactions;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Interactions;
+using UotanStudio.ViewModels.Nodes;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 
@@ -58,149 +59,46 @@ public sealed class InteractionNodeViewModel : FlowNodeViewModel
             }
         }
     }
-    public static IReadOnlyList<string> TypeKeys { get; } =
-    [
-        "UI.Content.Text", "UI.Content.Divider", "UI.Content.Image",
-        "UI.Field.Text", "UI.Field.Number", "UI.Field.Boolean", "UI.Field.Choice", "UI.Field.MultiChoice",
-        "UI.Field.File", "UI.Field.Directory", "UI.Field.SavePath",
-        "UI.Layout.Row", "UI.Layout.Column", "UI.Layout.Group", "UI.Layout.Pages",
-        "UI.Condition.Equals", "UI.Form.Create", "UI.Dialog.Show", "UI.Result.Read",
-        "UI.Dialog.Confirm", "UI.Notification.Show", "UI.Progress.Open", "UI.Progress.Update", "UI.Progress.Close"
-    ];
+
+    /// <summary>
+    /// <para>全部 <c>UI.*</c> 元素的类型键，顺序与交互元素注册表一致。</para>
+    /// Type keys of all <c>UI.*</c> elements, ordered like the interaction element registry.
+    /// </summary>
+    public static IReadOnlyList<string> TypeKeys => InteractionElements.TypeKeys;
 
     private InteractionNodeViewModel(string typeKey) : base(typeKey, NodeCategory.Output)
     {
         TypeKey = typeKey;
     }
 
+    /// <summary>
+    /// <para>按类型键创建交互节点，端口布局来自元素描述符。</para>
+    /// Creates an interaction node by type key; the port layout comes from the element descriptor.
+    /// </summary>
+    /// <param name="typeKey">
+    /// <para>交互元素类型键。</para>
+    /// The interaction element type key.
+    /// </param>
+    /// <returns>
+    /// <para>配置好端口的交互节点。</para>
+    /// The interaction node with its ports configured.
+    /// </returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <para>类型键不是已注册的交互元素时抛出。</para>
+    /// Thrown when the type key is not a registered interaction element.
+    /// </exception>
     public static InteractionNodeViewModel Create(string typeKey)
     {
-        if (!TypeKeys.Contains(typeKey, StringComparer.Ordinal))
+        if (!InteractionElements.TryGetDescriptor(typeKey, out var descriptor))
         {
             throw new ArgumentOutOfRangeException(nameof(typeKey));
         }
         var node = new InteractionNodeViewModel(typeKey);
-        if (typeKey.StartsWith("UI.Field.", StringComparison.Ordinal))
-        {
-            node.In("Field ID", NodePortType.Text, Guid.NewGuid().ToString("N"));
-            node.In("Label", NodePortType.Text, string.Empty);
-            node.In("Description", NodePortType.Text, string.Empty);
-            node.In("Required", NodePortType.Boolean, false);
-            node.In("Max Length", NodePortType.Number, 4096d);
-            var kind = ParseFieldKind(typeKey);
-            node.In("Default", kind == InteractionElementKind.NumberField ? NodePortType.Number : kind == InteractionElementKind.BooleanField ? NodePortType.Boolean : NodePortType.Text,
-                kind == InteractionElementKind.BooleanField ? false : string.Empty);
-            if (kind is InteractionElementKind.ChoiceField or InteractionElementKind.MultiChoiceField)
-            {
-                node.In("Options", NodePortType.Text, string.Empty, multiline: true);
-            }
-            if (kind == InteractionElementKind.NumberField)
-            {
-                node.In("Minimum", NodePortType.Text, string.Empty);
-                node.In("Maximum", NodePortType.Text, string.Empty);
-            }
-            node.In("Sensitive", NodePortType.Boolean, false);
-            node.Input.Single(port => port.Title == "Sensitive").PropertyChanged += (_, args) =>
-            {
-                if (args.PropertyName == nameof(NodeConnectorViewModel.InitialValue))
-                {
-                    node.Input.Single(port => port.Title == "Default").IsSensitive = node.Input.Single(port => port.Title == "Sensitive").InitialValue is true;
-                }
-            };
-            node.In("Visible When", NodePortType.Record);
-            node.In("Enabled When", NodePortType.Record);
-            node.In("Required When", NodePortType.Record);
-            node.Out("Component", NodePortType.UiComponent);
-        }
-        else if (typeKey.StartsWith("UI.Layout.", StringComparison.Ordinal))
-        {
-            node.In("Label", NodePortType.Text, string.Empty);
-            node.In("First", NodePortType.UiComponent);
-            node.In("Second", NodePortType.UiComponent);
-            node.Out("Component", NodePortType.UiComponent);
-        }
-        else
-        {
-            switch (typeKey)
-            {
-                case "UI.Notification.Show":
-                case "UI.Progress.Open":
-                    node.In("Flow", NodePortType.Flow);
-                    node.In("Title", NodePortType.Text, string.Empty);
-                    node.In("Message", NodePortType.Text, string.Empty);
-                    node.Out("Completed", NodePortType.Flow);
-                    if (typeKey == "UI.Progress.Open")
-                    {
-                        node.Out("Handle", NodePortType.Record);
-                    }
-                    break;
-                case "UI.Progress.Update":
-                case "UI.Progress.Close":
-                    node.In("Flow", NodePortType.Flow);
-                    node.In("Handle", NodePortType.Record, required: true);
-                    if (typeKey == "UI.Progress.Update")
-                    {
-                        node.In("Message", NodePortType.Text, string.Empty);
-                        node.In("Progress", NodePortType.Number, 0d);
-                    }
-                    node.Out("Completed", NodePortType.Flow);
-                    break;
-                case "UI.Content.Text":
-                    node.In("Text", NodePortType.Text, string.Empty, multiline: true);
-                    node.Out("Component", NodePortType.UiComponent);
-                    break;
-                case "UI.Content.Divider":
-                    node.Out("Component", NodePortType.UiComponent);
-                    break;
-                case "UI.Content.Image":
-                    node.In("Path", NodePortType.Path, string.Empty);
-                    node.Out("Component", NodePortType.UiComponent);
-                    break;
-                case "UI.Condition.Equals":
-                    node.In("Field ID", NodePortType.Text, string.Empty);
-                    node.In("Expected", NodePortType.Text, string.Empty);
-                    node.In("Value Type", NodePortType.Text, "Text", choices: ["Text", "Number", "Boolean"]);
-                    node.Out("Condition", NodePortType.Record);
-                    break;
-                case "UI.Form.Create":
-                    node.In("Title", NodePortType.Text, string.Empty);
-                    node.In("Content", NodePortType.UiComponent, required: true);
-                    node.In("Submit Label", NodePortType.Text, string.Empty);
-                    node.In("Cancel Label", NodePortType.Text, string.Empty);
-                    node.Out("Form", NodePortType.UiForm);
-                    break;
-                case "UI.Dialog.Show":
-                case "UI.Dialog.Confirm":
-                    node.In("Flow", NodePortType.Flow);
-                    if (typeKey == "UI.Dialog.Show")
-                    {
-                        node.In("Form", NodePortType.UiForm, required: true);
-                    }
-                    else
-                    {
-                        node.In("Title", NodePortType.Text, string.Empty);
-                        node.In("Message", NodePortType.Text, string.Empty, multiline: true);
-                    }
-                    node.In("Timeout Seconds", NodePortType.Number, 0d);
-                    node.Out("Submitted", NodePortType.Flow);
-                    node.Out("Cancelled", NodePortType.Flow);
-                    node.Out("TimedOut", NodePortType.Flow);
-                    node.Out("Values", NodePortType.Record);
-                    break;
-                case "UI.Result.Read":
-                    node.In("Values", NodePortType.Record, required: true);
-                    node.In("Field ID", NodePortType.Text, string.Empty);
-                    node.In("Value Type", NodePortType.Text, "Text", choices: ["Text", "Number", "Boolean", "List"]);
-                    node.Out("Text", NodePortType.Text);
-                    node.Out("Number", NodePortType.Number);
-                    node.Out("Boolean", NodePortType.Boolean);
-                    node.Out("Selection", NodePortType.List);
-                    break;
-            }
-        }
+        descriptor.DeclarePorts(node);
         return node;
     }
 
+    /// <inheritdoc />
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {
         context.CancellationToken.ThrowIfCancellationRequested();
@@ -212,193 +110,19 @@ public sealed class InteractionNodeViewModel : FlowNodeViewModel
         {
             output.Data = output.PortType == NodePortType.Flow ? false : null;
         }
-        if (TypeKey.StartsWith("UI.Field.", StringComparison.Ordinal))
+        if (!InteractionElements.TryGetDescriptor(TypeKey, out var descriptor))
         {
-            var kind = ParseFieldKind(TypeKey);
-            WriteOutput("Component", new InteractionElement
-            {
-                Id = Text("Field ID"),
-                Kind = kind,
-                Label = Text("Label"),
-                Description = Text("Description"),
-                Required = Bool("Required"),
-                Sensitive = Bool("Sensitive"),
-                MaxLength = ReadMaximumLength(),
-                DefaultValue = Value(ReadInput("Default"), kind == InteractionElementKind.NumberField ? "Number" : kind == InteractionElementKind.BooleanField ? "Boolean" : kind == InteractionElementKind.MultiChoiceField ? "List" : "Text"),
-                Options = Text("Options").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries),
-                Minimum = OptionalNumber("Minimum"),
-                Maximum = OptionalNumber("Maximum"),
-                VisibleWhen = ReadInput("Visible When") as InteractionCondition,
-                EnabledWhen = ReadInput("Enabled When") as InteractionCondition,
-                RequiredWhen = ReadInput("Required When") as InteractionCondition
-            });
-            return;
+            throw new InvalidDataException("Unknown interaction element.");
         }
-        if (TypeKey.StartsWith("UI.Layout.", StringComparison.Ordinal))
-        {
-            var children = new[] { ReadInput("First"), ReadInput("Second") }.OfType<InteractionElement>().ToArray();
-            WriteOutput("Component", new InteractionElement { Id = InstanceId, Kind = Enum.Parse<InteractionElementKind>(TypeKey[10..]), Label = Text("Label"), Children = children });
-            return;
-        }
-        switch (TypeKey)
-        {
-            case "UI.Notification.Show":
-            case "UI.Progress.Open":
-                var feedback = context.Interactions as IWorkflowFeedbackService ?? throw new NotSupportedException("The host does not support feedback.");
-                if (TypeKey == "UI.Notification.Show")
-                {
-                    await feedback.NotifyAsync(Text("Title"), Text("Message"), context.CancellationToken).ConfigureAwait(false);
-                }
-                else
-                {
-                    var handle = await feedback.OpenProgressAsync(Text("Title"), Text("Message"), context.CancellationToken).ConfigureAwait(false);
-                    try
-                    {
-                        context.RegisterResource(handle);
-                    }
-                    catch
-                    {
-                        await handle.DisposeAsync().ConfigureAwait(false);
-                        throw;
-                    }
-                    WriteOutput("Handle", handle);
-                }
-                WriteOutput("Completed", true);
-                break;
-            case "UI.Progress.Update":
-                await Require<IInteractionProgress>("Handle").UpdateAsync(Text("Message"), Convert.ToDouble(ReadInput("Progress"), CultureInfo.InvariantCulture), context.CancellationToken).ConfigureAwait(false);
-                WriteOutput("Completed", true);
-                break;
-            case "UI.Progress.Close":
-                await Require<IInteractionProgress>("Handle").DisposeAsync().ConfigureAwait(false);
-                WriteOutput("Completed", true);
-                break;
-            case "UI.Content.Text":
-            case "UI.Content.Divider":
-                WriteOutput("Component", new InteractionElement { Id = InstanceId, Kind = TypeKey.EndsWith("Text", StringComparison.Ordinal) ? InteractionElementKind.Text : InteractionElementKind.Divider, Label = Text("Text") });
-                break;
-            case "UI.Content.Image":
-                var path = Text("Path");
-                await using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
-                {
-                    if (stream.Length is <= 0 or > 8 * 1024 * 1024)
-                    {
-                        throw new InvalidDataException("An interaction image must be between 1 byte and 8 MiB.");
-                    }
-                    var data = new byte[(int)stream.Length];
-                    await stream.ReadExactlyAsync(data, context.CancellationToken).ConfigureAwait(false);
-                    WriteOutput("Component", new InteractionElement { Id = InstanceId, Kind = InteractionElementKind.Image, ImageData = data });
-                }
-                break;
-            case "UI.Condition.Equals":
-                WriteOutput("Condition", new InteractionCondition { FieldId = Text("Field ID"), EqualsValue = Value(ReadInput("Expected"), Text("Value Type")) });
-                break;
-            case "UI.Form.Create":
-                var form = new InteractionForm
-                {
-                    Title = Text("Title"),
-                    Content = Require<InteractionElement>("Content"),
-                    SubmitLabel = NullIfEmpty(Text("Submit Label")),
-                    CancelLabel = NullIfEmpty(Text("Cancel Label"))
-                };
-                _ = new InteractionFormState(form);
-                WriteOutput("Form", form);
-                break;
-            case "UI.Dialog.Show":
-            case "UI.Dialog.Confirm":
-                var dialogForm = TypeKey == "UI.Dialog.Show" ? Require<InteractionForm>("Form") : new InteractionForm
-                {
-                    Title = Text("Title"),
-                    Content = new InteractionElement { Id = "message", Kind = InteractionElementKind.Text, Label = Text("Message") }
-                };
-                var seconds = Convert.ToDouble(ReadInput("Timeout Seconds"), CultureInfo.InvariantCulture);
-                if (!double.IsFinite(seconds) || seconds < 0 || seconds > 86_400)
-                {
-                    throw new InvalidDataException("Invalid interaction timeout.");
-                }
-                using (context.BeginUserInteractionWait())
-                {
-                    var result = await context.Interactions.ShowAsync(new InteractionRequest
-                    {
-                        Form = dialogForm,
-                        Source = LocalizedTitle,
-                        Timeout = seconds == 0 ? null : TimeSpan.FromSeconds(seconds)
-                    }, context.CancellationToken).ConfigureAwait(false);
-                    if (result.Outcome == InteractionOutcome.Submitted)
-                    {
-                        WriteOutput("Values", new InteractionRecord(result.Values, dialogForm));
-                        var runtimeFields = new InteractionFormState(dialogForm).Fields.ToDictionary(field => field.Id, StringComparer.Ordinal);
-                        foreach (var field in _fieldSchema.Values)
-                        {
-                            if (result.Values.TryGetValue(field.Id, out var fieldValue))
-                            {
-                                var data = field.Type switch
-                                {
-                                    NodePortType.Boolean => (object?)fieldValue.Boolean,
-                                    NodePortType.Number => fieldValue.Number,
-                                    NodePortType.List => fieldValue.Selection,
-                                    _ => fieldValue.Text
-                                };
-                                var output = Output.Single(port => port.PortId == "field." + field.Id);
-                                output.IsSensitive = runtimeFields.TryGetValue(field.Id, out var runtimeField) && runtimeField.Sensitive;
-                                output.Data = data;
-                            }
-                        }
-                    }
-                    WriteOutput(result.Outcome.ToString(), true);
-                }
-                break;
-            case "UI.Result.Read":
-                var record = Require<InteractionRecord>("Values");
-                if (!record.Values.TryGetValue(Text("Field ID"), out var value))
-                {
-                    throw new InvalidDataException("The submitted result does not contain that field.");
-                }
-                var type = Text("Value Type");
-                var sensitive = new InteractionFormState(record.Schema).Fields.Any(field => field.Id == Text("Field ID") && field.Sensitive);
-                foreach (var output in Output)
-                {
-                    output.IsSensitive = sensitive;
-                }
-                switch (type)
-                {
-                    case "Text" when value.Text is not null: WriteOutput("Text", value.Text); break;
-                    case "Number" when value.Number.HasValue: WriteOutput("Number", value.Number.Value); break;
-                    case "Boolean" when value.Boolean.HasValue: WriteOutput("Boolean", value.Boolean.Value); break;
-                    case "List" when value.Selection is not null: WriteOutput("Selection", value.Selection); break;
-                    default: throw new InvalidDataException("The submitted field does not have the requested type.");
-                }
-                break;
-        }
+        await descriptor.Execute(this, context).ConfigureAwait(false);
     }
 
-    private static InteractionElementKind ParseFieldKind(string typeKey) => typeKey[9..] switch
-    {
-        "Text" => InteractionElementKind.TextField,
-        "Number" => InteractionElementKind.NumberField,
-        "Boolean" => InteractionElementKind.BooleanField,
-        "Choice" => InteractionElementKind.ChoiceField,
-        "MultiChoice" => InteractionElementKind.MultiChoiceField,
-        "File" => InteractionElementKind.FileField,
-        "Directory" => InteractionElementKind.DirectoryField,
-        "SavePath" => InteractionElementKind.SavePathField,
-        _ => throw new InvalidDataException("Unknown field kind.")
-    };
+    internal IReadOnlyDictionary<string, InteractionFieldSchema> FieldSchema => _fieldSchema;
 
-    private static InteractionValue Value(object? value, string type) => type switch
-    {
-        "Number" => string.IsNullOrWhiteSpace(Convert.ToString(value, CultureInfo.InvariantCulture)) ? new InteractionValue() : new InteractionValue { Number = Convert.ToDecimal(value, CultureInfo.InvariantCulture) },
-        "Boolean" => new InteractionValue { Boolean = Convert.ToBoolean(value, CultureInfo.InvariantCulture) },
-        "List" => new InteractionValue { Selection = (Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty).Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) },
-        "Text" => new InteractionValue { Text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty },
-        _ => throw new InvalidDataException("Unknown interaction value type.")
-    };
-
-    private T Require<T>(string title) where T : class => ReadInput(title) as T ?? throw new InvalidDataException($"Missing {title} input.");
-    private string Text(string title) => Convert.ToString(ReadInput(title), CultureInfo.InvariantCulture) ?? string.Empty;
-    private bool Bool(string title) => Convert.ToBoolean(ReadInput(title), CultureInfo.InvariantCulture);
-    private decimal? OptionalNumber(string title) => string.IsNullOrWhiteSpace(Text(title)) ? null : decimal.Parse(Text(title), CultureInfo.InvariantCulture);
-    private int ReadMaximumLength()
+    internal string Text(string title) => Convert.ToString(ReadInput(title), CultureInfo.InvariantCulture) ?? string.Empty;
+    internal bool Bool(string title) => Convert.ToBoolean(ReadInput(title), CultureInfo.InvariantCulture);
+    internal decimal? OptionalNumber(string title) => string.IsNullOrWhiteSpace(Text(title)) ? null : decimal.Parse(Text(title), CultureInfo.InvariantCulture);
+    internal int ReadMaximumLength()
     {
         var value = Convert.ToDouble(ReadInput("Max Length"), CultureInfo.InvariantCulture);
         if (!double.IsFinite(value) || value != Math.Truncate(value) || value is < 1 or > 1_048_576)
@@ -407,7 +131,28 @@ public sealed class InteractionNodeViewModel : FlowNodeViewModel
         }
         return (int)value;
     }
-    private static string? NullIfEmpty(string text) => string.IsNullOrWhiteSpace(text) ? null : text;
+    internal T Require<T>(string title) where T : class => ReadInput(title) as T ?? throw new InvalidDataException($"Missing {title} input.");
+    internal static InteractionValue Value(object? value, string type) => type switch
+    {
+        "Number" => string.IsNullOrWhiteSpace(Convert.ToString(value, CultureInfo.InvariantCulture)) ? new InteractionValue() : new InteractionValue { Number = Convert.ToDecimal(value, CultureInfo.InvariantCulture) },
+        "Boolean" => new InteractionValue { Boolean = Convert.ToBoolean(value, CultureInfo.InvariantCulture) },
+        "List" => new InteractionValue { Selection = (Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty).Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) },
+        "Text" => new InteractionValue { Text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty },
+        _ => throw new InvalidDataException("Unknown interaction value type.")
+    };
+    internal static string? NullIfEmpty(string text) => string.IsNullOrWhiteSpace(text) ? null : text;
+
+    internal void In(NodeInputDeclaration declaration)
+    {
+        In(declaration.Title, declaration.PortType, declaration.InitialValue, declaration.Multiline, declaration.Choices?.ToArray(), declaration.Required);
+        var port = Input[^1];
+        port.IsAdvanced = declaration.Advanced;
+        port.IsConfiguration = declaration.IsConfiguration;
+        port.IsVisibleWhen = declaration.VisibleWhen;
+    }
+
+    internal void Out(NodeOutputDeclaration declaration) => Out(declaration.Title, declaration.PortType);
+
     private void In(string title, NodePortType type, object? initial = null, bool multiline = false, string[]? choices = null, bool required = false)
     {
         Input.Add(new NodeConnectorViewModel

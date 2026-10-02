@@ -40,9 +40,9 @@ public sealed class NetworkNodeTests
     }
 
     [Fact]
-    public void GitHubDownload_RequestHeaders_DefaultToBrowserUserAgent()
+    public void Download_RequestHeaders_DefaultToBrowserUserAgent()
     {
-        var node = NetworkNodeViewModel.CreateGitHubDownloadNode();
+        var node = NetworkNodeViewModel.CreateDownloadNode();
         var headers = Assert.Single(node.Input, port => port.PortId == "user-agent");
 
         Assert.Equal("Request Headers", headers.Title);
@@ -154,11 +154,12 @@ public sealed class NetworkNodeTests
     }
 
     [Fact]
-    public async Task GitHubDownload_NonGitHubUrl_RejectsBeforeNetworkAccess()
+    public async Task Download_GitHubMirrorSource_NonGitHubUrl_RejectsBeforeNetworkAccess()
     {
         var handler = new DownloadHandler([]);
         using var client = new HttpClient(handler);
-        var node = NetworkNodeViewModel.CreateGitHubDownloadNode(client);
+        var node = NetworkNodeViewModel.CreateDownloadNode(client);
+        SetInput(node, "Source", "GitHub Mirror");
         SetInput(node, "URL", "https://example.test/firmware.bin");
         SetInput(node, "Output Path", Path.Combine(Path.GetTempPath(), "unused.bin"));
 

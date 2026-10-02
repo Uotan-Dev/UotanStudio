@@ -77,22 +77,7 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
             {
                 return LanguageService.Instance.GetString("Interaction_SensitiveValue");
             }
-            var text = Data switch
-            {
-                null => string.Empty,
-                string value => ValueResourcePrefix is null ? value : LanguageService.Instance.GetString(ValueResourcePrefix + value),
-                bool value => LanguageService.Instance.GetString(value ? "Node_Conn_True" : "Node_Conn_False"),
-                Services.Patching.PatchWorkspace workspace => workspace.Root,
-                Services.Projects.FileArtifact artifact => artifact.Path,
-                Services.Patching.PatchAsset asset => asset.Name,
-                Services.Patching.PatchImageEdits edits => string.Join(Environment.NewLine,
-                    edits.Items.Take(8).Select(edit => edit.Path[..Math.Min(edit.Path.Length, 160)])),
-                IReadOnlyList<string> values => string.Join(Environment.NewLine, values.Take(8).Select(value => value[..Math.Min(value.Length, 160)])),
-                byte[] bytes => $"{bytes.Length:N0} B",
-                IFormattable number => number.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
-                _ => string.Empty
-            };
-            return text.Length <= 800 ? text : text[..800] + "…";
+            return NodeValueFormatter.Describe(Data, ValueResourcePrefix);
         }
     }
 
