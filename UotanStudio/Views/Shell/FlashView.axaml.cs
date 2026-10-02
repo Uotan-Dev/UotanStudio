@@ -23,8 +23,11 @@ namespace UotanStudio.Views.Shell;
 /// Flash page: package selection, partition list, action panel and log output.
 /// </summary>
 /// <remarks>
-/// <para>本页只提供界面与布局，尚未接刷写后端；按钮不执行任何刷写动作。</para>
-/// Coordinates package inspection, managed image preparation and selected-device Fastboot operations.
+/// <para>本页协调镜像归属与所选设备的刷写事务：EDL/Fastboot/RKDL 走 <c>FlashService</c>，
+/// ADB 走 <c>FlashSuService</c>，MTK  scatter 走 <c>MtkFlashService</c>，擦除与属性读取同样由这些服务持有。</para>
+/// Coordinates package inspection, managed image preparation and selected-device Fastboot, EDL, RKDL,
+/// MTK and ADB-su flashing transactions held by <c>FlashService</c>, <c>FlashSuService</c> and
+/// <c>MtkFlashService</c>.
 /// </remarks>
 public partial class FlashView : UserControl
 {
