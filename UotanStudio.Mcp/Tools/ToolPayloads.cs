@@ -54,6 +54,10 @@ internal sealed record AdbFileSyncPayload(
 
 internal sealed record AdbRebootPayload(string Serial, string? Mode);
 
+internal sealed record QrPairingCodePayload(string ServiceName, string Password, string Payload);
+
+internal sealed record QrPairingResultPayload(string Route, string Address);
+
 internal sealed record FlashPayload(string Partition, string Image);
 
 internal sealed record PartitionPayload(string Partition);
@@ -134,6 +138,8 @@ internal sealed record EnvPayload(
 [JsonSerializable(typeof(AdbShellPayload))]
 [JsonSerializable(typeof(AdbFileSyncPayload))]
 [JsonSerializable(typeof(AdbRebootPayload))]
+[JsonSerializable(typeof(QrPairingCodePayload))]
+[JsonSerializable(typeof(QrPairingResultPayload))]
 [JsonSerializable(typeof(FlashPayload))]
 [JsonSerializable(typeof(PartitionPayload))]
 [JsonSerializable(typeof(Dictionary<string, string>))]

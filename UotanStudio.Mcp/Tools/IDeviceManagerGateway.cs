@@ -98,6 +98,30 @@ public interface IDeviceManagerGateway
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Downloads one device file through the ADB sync client into <paramref name="localPath"/>.
+    /// <para>经 ADB sync 客户端把设备文件下载到 <paramref name="localPath"/>。</para>
+    /// The gateway owns endpoint leasing; the caller supplies an already sandbox-resolved destination.
+    /// <para>网关负责端点租用；调用方给出已按沙箱解析的目的地。</para>
+    /// </summary>
+    /// <param name="serial">Device serial or device key from the inventory. <para>设备序列号或清单中的设备标识。</para></param>
+    /// <param name="remotePath">Absolute on-device path to fetch. <para>要获取的设备端绝对路径。</para></param>
+    /// <param name="localPath">Destination file path the gateway creates or overwrites.
+    /// <para>网关创建或覆盖的目标文件路径。</para></param>
+    /// <param name="cancellationToken">Checked before leasing the endpoint and before creating the sync
+    /// client; the transfer itself is a synchronous protocol call without its own token.
+    /// <para>在租用端点前与创建 sync 客户端前检查该令牌；传输本身是没有令牌的同步协议调用。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="serial"/> or <paramref name="remotePath"/> is empty
+    /// or only whitespace. <para><paramref name="serial"/> 或 <paramref name="remotePath"/> 为空或仅空白。</para></exception>
+    /// <exception cref="IOException">No unique target matches the identity, the endpoint could not be leased,
+    /// or the device rejected the download. <para>没有唯一目标与该标识匹配、端点无法租用，或设备拒绝该下载。</para></exception>
+    /// <exception cref="InvalidOperationException">The selected endpoint offers no supported ADB session.
+    /// <para>所选端点没有受支持的 ADB 会话。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was requested.
+    /// <para><paramref name="cancellationToken"/> 已请求取消。</para></exception>
+    void PullAdbFile(string serial, string remotePath, string localPath,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Runs one transaction against a Fastboot device.
     /// <para>对一个 Fastboot 设备执行一次事务。</para>
     /// The session is borrowed for the duration of <paramref name="operation"/> only and is closed
@@ -132,4 +156,46 @@ public interface IDeviceManagerGateway
     /// <para><paramref name="cancellationToken"/> 已请求取消。</para></exception>
     TResult RunFastboot<TResult>(string? target, Func<FastbootSession, TResult> operation,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates the one-time credentials a wireless-debugging QR pairing code carries. No device is
+    /// touched, so a headless caller renders the returned payload text into a QR code itself and the
+    /// phone scans it before <see cref="PairQrWirelessAsync"/> is invoked.
+    /// <para>创建无线调试二维码配对所携带的一次性凭据。此过程不触碰设备：无头调用方自行把返回的负载
+    /// 文本渲染成二维码，手机扫描后再调用 <see cref="PairQrWirelessAsync"/>。</para>
+    /// </summary>
+    /// <returns>The mDNS instance name, the pairing password and the QR payload text.
+    /// <para>mDNS 实例名、配对密码与二维码负载文本。</para></returns>
+    (string ServiceName, string Password, string Payload) CreateQrPairingSession();
+
+    /// <summary>
+    /// Waits for the phone to scan the QR code built from these credentials, completes pairing and
+    /// connects the device. With a local adb server listening, pairing and connecting both go through
+    /// the server, so the target appears in <see cref="ListAdbTargets"/> afterwards; without one the
+    /// gateway pairs directly over TLS and only reports the address, which the headless ADB tools do
+    /// not address themselves.
+    /// <para>等待手机扫描由这些凭据生成的二维码、完成配对并连接设备。本机 adb server 在监听时，配对与
+    /// 连接都经 server 完成，之后目标会出现在 <see cref="ListAdbTargets"/> 中；没有 server 时由网关直接
+    /// 走 TLS 配对，只报告地址，而无头 ADB 工具本身不会寻址该地址。</para>
+    /// </summary>
+    /// <param name="serviceName">The instance name returned by <see cref="CreateQrPairingSession"/>.
+    /// <para><see cref="CreateQrPairingSession"/> 返回的实例名。</para></param>
+    /// <param name="password">The pairing password returned with it.
+    /// <para>同时返回的配对密码。</para></param>
+    /// <param name="timeoutSeconds">Deadline for the phone to appear and pair, in seconds.
+    /// <para>手机出现并完成配对的期限，单位为秒。</para></param>
+    /// <param name="cancellationToken">Cancels discovery, pairing and connecting.
+    /// <para>取消发现、配对与连接。</para></param>
+    /// <returns>The route the pairing completed through and the connected <c>host:port</c> address.
+    /// <para>配对完成的路径与已连接的 <c>host:port</c> 地址。</para></returns>
+    /// <exception cref="ArgumentException">The credentials are blank or <paramref name="timeoutSeconds"/>
+    /// is out of range. <para>凭据为空或 <paramref name="timeoutSeconds"/> 超出范围。</para></exception>
+    /// <exception cref="TimeoutException">The phone did not advertise the pairing or connect service in
+    /// time. <para>手机未在期限内广播配对或连接服务。</para></exception>
+    /// <exception cref="IOException">The pairing protocol or the server command failed.
+    /// <para>配对协议或 server 命令失败。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was requested.
+    /// <para><paramref name="cancellationToken"/> 已请求取消。</para></exception>
+    Task<(string Route, string Address)> PairQrWirelessAsync(string serviceName, string password,
+        int timeoutSeconds = 180, CancellationToken cancellationToken = default);
 }

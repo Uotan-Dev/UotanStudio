@@ -39,11 +39,15 @@ public sealed class McpServerHost
     /// <param name="deviceManager">Device gateway used by device tools. <para>设备工具使用的设备网关。</para></param>
     /// <param name="deliveryTools">Tool-preparation provider enabling <c>delivery_build</c> on this host only.
     /// <para>仅对本宿主启用 <c>delivery_build</c> 的工具准备提供器。</para></param>
+    /// <param name="signingKeys">Signing key provider used by <c>delivery_build</c>; <see langword="null"/> keeps signed plans failing honestly.
+    /// <para><c>delivery_build</c> 使用的签名密钥供应器；为 <see langword="null"/> 时签名计划如实失败。</para></param>
     internal McpServerHost(McpServerConfig config, IDeviceManagerGateway? deviceManager,
-        Func<UotanStudio.Services.Delivery.IDeliveryTools?>? deliveryTools)
+        Func<UotanStudio.Services.Delivery.IDeliveryTools?>? deliveryTools,
+        Func<UotanStudio.Services.Delivery.IDeliverySigningKeyProvider?>? signingKeys = null)
         : this(new PathSandbox(config.RootDirectory), config.AllowFlash, deviceManager)
     {
         DeliveryTools = deliveryTools;
+        SigningKeys = signingKeys;
     }
 
     /// <summary>
@@ -81,11 +85,15 @@ public sealed class McpServerHost
     /// <param name="deviceManager">Device gateway used by device tools. <para>设备工具使用的设备网关。</para></param>
     /// <param name="deliveryTools">Tool-preparation provider enabling <c>delivery_build</c> on this host only.
     /// <para>仅对本宿主启用 <c>delivery_build</c> 的工具准备提供器。</para></param>
+    /// <param name="signingKeys">Signing key provider used by <c>delivery_build</c>; <see langword="null"/> keeps signed plans failing honestly.
+    /// <para><c>delivery_build</c> 使用的签名密钥供应器；为 <see langword="null"/> 时签名计划如实失败。</para></param>
     internal McpServerHost(PathSandbox sandbox, bool allowFlash, IDeviceManagerGateway? deviceManager,
-        Func<UotanStudio.Services.Delivery.IDeliveryTools?>? deliveryTools)
+        Func<UotanStudio.Services.Delivery.IDeliveryTools?>? deliveryTools,
+        Func<UotanStudio.Services.Delivery.IDeliverySigningKeyProvider?>? signingKeys = null)
         : this(sandbox, allowFlash, deviceManager)
     {
         DeliveryTools = deliveryTools;
+        SigningKeys = signingKeys;
     }
 
     /// <summary>
@@ -95,6 +103,12 @@ public sealed class McpServerHost
     /// </summary>
     /// <value><para>构造时给出的提供器，或 <see langword="null"/>。</para>The provider supplied at construction, or <see langword="null"/>.</value>
     internal Func<UotanStudio.Services.Delivery.IDeliveryTools?>? DeliveryTools { get; private set; }
+
+    /// <summary>
+    /// <para>本宿主的交付签名密钥供应器，决定 <c>delivery_build</c> 能否产出签名输出。</para>
+    /// This host's delivery signing key provider, deciding whether <c>delivery_build</c> can produce signed output.</summary>
+    /// <value><para>构造时给出的供应器，或 <see langword="null"/>。</para>The provider supplied at construction, or <see langword="null"/>.</value>
+    internal Func<UotanStudio.Services.Delivery.IDeliverySigningKeyProvider?>? SigningKeys { get; private set; }
 
     /// <summary>Gets the sandbox all file-touching tools share. <para>所有文件工具共享的沙箱。</para></summary>
     /// <value>The instance built for this run, used to resolve and confine every client-supplied path.
@@ -123,7 +137,7 @@ public sealed class McpServerHost
         tools.AddRange(FirmwareToolFactory.CreateTools(Sandbox));
         tools.AddRange(CompressionToolFactory.CreateTools(Sandbox));
         tools.AddRange(DeviceToolFactory.CreateTools(Sandbox, DeviceManager));
-        tools.AddRange(DeliveryToolFactory.CreateTools(Sandbox, DeliveryTools));
+        tools.AddRange(DeliveryToolFactory.CreateTools(Sandbox, DeliveryTools, SigningKeys));
         tools.AddRange(OtaToolFactory.CreateTools(Sandbox));
         tools.AddRange(ProjectToolFactory.CreateTools(Sandbox));
         tools.AddRange(MiscToolFactory.CreateTools(Sandbox));

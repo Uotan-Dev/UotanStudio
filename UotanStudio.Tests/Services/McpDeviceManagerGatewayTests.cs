@@ -105,6 +105,45 @@ public sealed class McpDeviceManagerGatewayTests
         Assert.Null(manager.Service);
     }
 
+    [Fact]
+    public async Task QrPairingCodeAsync_InjectedGateway_ReturnsWifiPayloadAndCredentials()
+    {
+        var result = await DeviceToolHandlers.QrPairingCodeAsync(new RecordingManager(),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success);
+        Assert.Matches(@"^WIFI:T:ADB;S:ADB_WIFI_[0-9A-Za-z]{14}-[0-9A-Za-z]{6};P:[0-9A-Za-z]{21};;$",
+            result.Summary);
+        Assert.Contains("ADB_WIFI_aaaaaaaaaaaaaa-bbbbbb", result.Data!.Value.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AdbPairQrAsync_InjectedGateway_ForwardsCredentialsAndReportsRoute()
+    {
+        var manager = new RecordingManager();
+
+        var result = await DeviceToolHandlers.AdbPairQrAsync(manager, "ADB_WIFI_aaaaaaaaaaaaaa-bbbbbb",
+            "password1234567890ABC", 45, TestContext.Current.CancellationToken);
+
+        Assert.Equal("ADB_WIFI_aaaaaaaaaaaaaa-bbbbbb", manager.PairingServiceName);
+        Assert.Equal("password1234567890ABC", manager.PairingPassword);
+        Assert.Equal(45, manager.PairingTimeoutSeconds);
+        Assert.True(result.Success);
+        Assert.Contains("Direct", result.Summary, StringComparison.Ordinal);
+        Assert.Contains("10.0.0.9:45321", result.Summary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AdbPairQrAsync_BlankServiceName_RejectsBeforePairing()
+    {
+        var manager = new RecordingManager();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => DeviceToolHandlers.AdbPairQrAsync(
+            manager, " ", "password1234567890ABC", 30, TestContext.Current.CancellationToken));
+
+        Assert.Null(manager.PairingServiceName);
+    }
+
     private sealed class RecordingManager : IDeviceManagerGateway
     {
         public string? Serial { get; private set; }
@@ -161,6 +200,38 @@ public sealed class McpDeviceManagerGatewayTests
         public void PushAdbFile(string serial, string localPath, string remotePath,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+
+        public int PullCalls;
+        public string? PullRemotePath;
+        public string? PullLocalPath;
+
+        public void PullAdbFile(string serial, string remotePath, string localPath,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            PullCalls++;
+            Serial = serial;
+            PullRemotePath = remotePath;
+            PullLocalPath = localPath;
+        }
+
+        public string? PairingServiceName { get; private set; }
+        public string? PairingPassword { get; private set; }
+        public int? PairingTimeoutSeconds { get; private set; }
+
+        public (string ServiceName, string Password, string Payload) CreateQrPairingSession() =>
+            ("ADB_WIFI_aaaaaaaaaaaaaa-bbbbbb", "password1234567890ABC",
+                "WIFI:T:ADB;S:ADB_WIFI_aaaaaaaaaaaaaa-bbbbbb;P:password1234567890ABC;;");
+
+        public Task<(string Route, string Address)> PairQrWirelessAsync(string serviceName, string password,
+            int timeoutSeconds = 180, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            PairingServiceName = serviceName;
+            PairingPassword = password;
+            PairingTimeoutSeconds = timeoutSeconds;
+            return Task.FromResult(("Direct", "10.0.0.9:45321"));
+        }
 
         public TResult RunFastboot<TResult>(string? target, Func<FastbootSession, TResult> operation,
             CancellationToken cancellationToken = default)

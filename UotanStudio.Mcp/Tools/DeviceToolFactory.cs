@@ -135,7 +135,47 @@ internal static class DeviceToolFactory
                 Destructive = false
             });
 
-        return [list, adbDevices, adbShell, adbPull, adbPush, fastbootVariables];
+        var qrPairingCode = McpServerTool.Create(
+            (CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
+                token => DeviceToolHandlers.QrPairingCodeAsync(manager, token), cancellationToken),
+            new McpServerToolCreateOptions
+            {
+                Name = "adb_qr_pairing_code",
+                Description = "Generate fresh one-time wireless-debugging QR pairing credentials and return "
+                    + "the WIFI:T:ADB;... payload text. Render that text as a QR code yourself, have the phone "
+                    + "scan it (Settings -> Developer options -> Wireless debugging -> Pair device with QR code), "
+                    + "then call adb_pair_qr with the returned serviceName and password. Every call mints new "
+                    + "credentials, and a code is only usable by the pairing that follows it.",
+                ReadOnly = true,
+                Idempotent = false,
+                OpenWorld = true,
+                Destructive = false
+            });
+
+        var adbPairQr = McpServerTool.Create(
+            ([Description("Service name returned by adb_qr_pairing_code.")] string serviceName,
+             [Description("Pairing password returned by adb_qr_pairing_code.")] string password,
+             [Description("Seconds to wait for the phone to appear and pair.")] int timeoutSeconds = 180,
+             CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
+                token => DeviceToolHandlers.AdbPairQrAsync(manager, serviceName, password, timeoutSeconds, token),
+                cancellationToken),
+            new McpServerToolCreateOptions
+            {
+                Name = "adb_pair_qr",
+                Description = "Wait for the phone to scan the QR code built from adb_qr_pairing_code "
+                    + "credentials, then pair and connect it. While a local adb server listens, pairing and "
+                    + "connecting both go through that server, so the device appears in adb_devices and the "
+                    + "other adb_* tools can address it. With no server listening the toolbox pairs directly "
+                    + "over TLS and only reports the host:port: the headless adb_* tools address server-managed "
+                    + "or USB endpoints, so that secure direct endpoint is driven by the desktop app instead. "
+                    + "This blocks until the phone scans, so call it only after the code is displayed.",
+                ReadOnly = false,
+                Idempotent = false,
+                OpenWorld = true,
+                Destructive = false
+            });
+
+        return [list, adbDevices, adbShell, adbPull, adbPush, fastbootVariables, qrPairingCode, adbPairQr];
     }
 
     /// <summary>
@@ -324,53 +364,7 @@ internal static class DeviceToolHandlers
             var tempPath = Path.Combine(directory, $"{Path.GetFileName(resolvedLocal)}.{Guid.NewGuid():N}.part");
             try
             {
-                manager.RunAdbService(serial, "sync:", stream =>
-                {
-                    SendSync(stream, "RECV", System.Text.Encoding.UTF8.GetBytes(remotePath));
-                    using var output = File.Create(tempPath);
-                    var header = new byte[8];
-                    while (true)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        stream.ReadExactly(header);
-                        var id = System.Text.Encoding.ASCII.GetString(header, 0, 4);
-                        var length = BitConverter.ToUInt32(header, 4);
-                        if (id == "DONE")
-                        {
-                            break;
-                        }
-                        if (id == "FAIL")
-                        {
-                            if (length > 65536)
-                            {
-                                throw new IOException("ADB sync failure message is too large.");
-                            }
-
-                            var message = new byte[length];
-                            stream.ReadExactly(message);
-                            throw new IOException("ADB sync pull failed: " + System.Text.Encoding.UTF8.GetString(message));
-                        }
-                        if (id != "DATA")
-                        {
-                            throw new IOException("Invalid ADB sync response.");
-                        }
-                        if (length > 65536)
-                        {
-                            throw new IOException("ADB sync data chunk is too large.");
-                        }
-                        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent((int)length);
-                        try
-                        {
-                            stream.ReadExactly(buffer.AsSpan(0, (int)length));
-                            output.Write(buffer.AsSpan(0, (int)length));
-                        }
-                        finally
-                        {
-                            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
-                        }
-                    }
-                    return true;
-                }, cancellationToken);
+                manager.PullAdbFile(serial, remotePath, tempPath, cancellationToken);
                 File.Move(tempPath, resolvedLocal, overwrite: true);
             }
             catch
@@ -401,17 +395,25 @@ internal static class DeviceToolHandlers
                 ToolJson.Data(new AdbFileSyncPayload(serial, remotePath, resolvedLocal, info.Length)));
         }, cancellationToken).ConfigureAwait(false);
 
-    /// <summary>
-    /// Writes one adb sync packet (command id, payload length, payload) to the service stream.
-    /// <para>向服务流写入一个 adb sync 包（命令 ID、负载长度、负载）。</para>
-    /// </summary>
-    private static void SendSync(Stream stream, string id, ReadOnlySpan<byte> data)
+    public static async Task<ToolResult> QrPairingCodeAsync(IDeviceManagerGateway manager,
+        CancellationToken cancellationToken)
+        => await Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var (serviceName, password, payload) = manager.CreateQrPairingSession();
+            return new ToolResult(true, payload, ToolJson.Data(new QrPairingCodePayload(
+                serviceName, password, payload)));
+        }, cancellationToken).ConfigureAwait(false);
+
+    public static async Task<ToolResult> AdbPairQrAsync(IDeviceManagerGateway manager, string serviceName,
+        string password, int timeoutSeconds, CancellationToken cancellationToken)
     {
-        Span<byte> header = stackalloc byte[8];
-        System.Text.Encoding.ASCII.GetBytes(id, header);
-        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(header[4..], (uint)data.Length);
-        stream.Write(header);
-        stream.Write(data);
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+        var (route, address) = await manager.PairQrWirelessAsync(serviceName, password, timeoutSeconds,
+            cancellationToken).ConfigureAwait(false);
+        return new ToolResult(true, $"Paired through the {route} route; connected to {address}.",
+            ToolJson.Data(new QrPairingResultPayload(route, address)));
     }
 
     public static async Task<ToolResult> FastbootVariablesAsync(IDeviceManagerGateway manager, string? target,

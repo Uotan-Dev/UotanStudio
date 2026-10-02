@@ -80,6 +80,16 @@ public class McpSandboxTests : IDisposable
     }
 
     [Fact]
+    public void BuildTools_DefaultConfig_RegistersQrPairingTools()
+    {
+        var config = new McpServerConfig { RootDirectory = _root, AllowFlash = false };
+        var names = new McpServerHost(config).BuildTools().Select(t => t.ProtocolTool.Name).ToList();
+
+        Assert.Contains("adb_qr_pairing_code", names);
+        Assert.Contains("adb_pair_qr", names);
+    }
+
+    [Fact]
     public void BuildTools_AllowFlashConfig_IncludesFlashTools()
     {
         var config = new McpServerConfig { RootDirectory = _root, AllowFlash = true };

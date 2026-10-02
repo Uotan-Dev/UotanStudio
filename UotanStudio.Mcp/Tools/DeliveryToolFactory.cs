@@ -42,9 +42,12 @@ internal static class DeliveryToolFactory
     /// <param name="sandbox"><para>约束计划与输出路径的沙箱。</para>The sandbox confining plan and output paths.</param>
     /// <param name="deliveryTools"><para>本宿主的工具准备服务提供器；为 <see langword="null"/> 时 <c>delivery_build</c> 如实报告能力缺口。</para>
     /// This host's tool-preparation provider; when <see langword="null"/> <c>delivery_build</c> reports the capability gap.</param>
+    /// <param name="signingKeys"><para>本宿主的签名密钥供应器；为 <see langword="null"/> 时签名计划如实失败。</para>
+    /// This host's signing key provider; signed plans fail honestly when it is <see langword="null"/>.</param>
     internal static IReadOnlyList<McpServerTool> CreateTools(
         PathSandbox sandbox,
-        Func<IDeliveryTools?>? deliveryTools = null)
+        Func<IDeliveryTools?>? deliveryTools = null,
+        Func<IDeliverySigningKeyProvider?>? signingKeys = null)
     {
         var validate = McpServerTool.Create(
             ([Description("Delivery plan JSON (DeliveryPlan schema; paths sandbox-relative or absolute inside the sandbox).")] string planJson,
@@ -82,7 +85,7 @@ internal static class DeliveryToolFactory
              [Description("Existing output file names allowed to be replaced (defaults to none).")] string[]? overwrite = null,
              IProgress<ProgressNotificationValue>? progress = null,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
-                token => DeliveryToolHandlers.Build(sandbox, planJson, overwrite, progress, deliveryTools, token), cancellationToken),
+                token => DeliveryToolHandlers.Build(sandbox, planJson, overwrite, progress, deliveryTools, signingKeys, token), cancellationToken),
             new McpServerToolCreateOptions
             {
                 Name = "delivery_build",
@@ -149,6 +152,8 @@ internal static class DeliveryToolHandlers
     /// <param name="progress"><para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para>The MCP-bound progress instance, possibly <see langword="null"/>.</param>
     /// <param name="deliveryTools"><para>本宿主的工具准备服务提供器；为 <see langword="null"/> 或未产出实例时如实报告能力缺口。</para>
     /// This host's tool-preparation provider; when <see langword="null"/> or empty the capability gap is reported honestly.</param>
+    /// <param name="signingKeys"><para>本宿主的签名密钥供应器；为 <see langword="null"/> 时签名计划如实失败。</para>
+    /// This host's signing key provider; signed plans fail honestly when it is <see langword="null"/>.</param>
     /// <param name="cancellationToken"><para>取消进行中构建或工具下载的令牌。</para>Token cancelling the in-flight build or tool download.</param>
     /// <returns><para>描述产出路径数量的结果信封。</para>An envelope summarizing the produced output paths.</returns>
     /// <exception cref="OperationCanceledException"><para>客户端在构建中请求取消时重新抛出，交由 <see cref="ToolGuard"/> 映射为取消结果。</para>
@@ -156,7 +161,7 @@ internal static class DeliveryToolHandlers
     public static async Task<ToolResult> Build(
         PathSandbox sandbox, string planJson, string[]? overwrite,
         IProgress<ProgressNotificationValue>? progress, Func<IDeliveryTools?>? deliveryTools,
-        CancellationToken cancellationToken)
+        Func<IDeliverySigningKeyProvider?>? signingKeys, CancellationToken cancellationToken)
     {
         if (deliveryTools?.Invoke() is null)
         {
@@ -172,8 +177,8 @@ internal static class DeliveryToolHandlers
         try
         {
             using var httpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
-            var outputs = await new DeliveryService(httpClient)
-                .BuildAsync(confinedPlanJson, overwriteSet, ToLogProgress(progress), cancellationToken)
+            var outputs = await new DeliveryService(httpClient, signingKeys: signingKeys?.Invoke())
+                .BuildAsync(confinedPlanJson, overwriteSet, ToBuildProgress(progress), cancellationToken)
                 .ConfigureAwait(false);
             return new ToolResult(true,
                 $"Delivery build produced {outputs.Count} output path(s).",
@@ -197,40 +202,25 @@ internal static class DeliveryToolHandlers
         => DeliveryPlanJson.ParseConfinedPlan(sandbox, planJson);
 
     /// <summary>
-    /// <para>把协议进度目标转为交付门面的文本进度接收端；没有进度令牌时返回 <see langword="null"/>，
-    /// 底层实现因此不会消耗上报开销。门面只公开 <c>DeliveryProgress</c> 的「NN% 消息」行（该记录是子项目内部类型），
-    /// 所以这里把行首百分比还原为协议进度值，并把总进度固定为 100。</para>
-    /// Converts the protocol progress sink into the facade's text-progress sink; without a progress
-    /// token this returns <see langword="null"/> so backing implementations skip reporting overhead.
-    /// The public facade only exposes each <c>DeliveryProgress</c> as an "NN% message" line (the record
-    /// itself is delivery-internal), so the leading percentage is recovered as the protocol progress
-    /// value with the total pinned to 100.
+    /// <para>把协议进度目标转为交付门面的强类型进度接收端；没有进度令牌时返回 <see langword="null"/>，
+    /// 底层实现因此不会消耗上报开销。</para>
+    /// Converts the protocol progress sink into the facade's typed progress sink; without a progress token
+    /// this returns <see langword="null"/> so backing implementations skip reporting overhead.
     /// </summary>
     /// <param name="progress"><para>MCP 绑定的进度实例，可能为 <see langword="null"/>。</para>The MCP-bound progress instance, possibly <see langword="null"/>.</param>
-    /// <returns><para>供交付构建上报进度行的接收端。</para>A progress-line sink for the delivery build to report to.</returns>
-    private static IProgress<string>? ToLogProgress(IProgress<ProgressNotificationValue>? progress) =>
+    /// <returns><para>供交付构建上报进度值的接收端。</para>A progress sink the delivery build reports to.</returns>
+    private static IProgress<DeliveryBuildProgress>? ToBuildProgress(IProgress<ProgressNotificationValue>? progress) =>
         progress is null
             ? null
-            : new Progress<string>(line => progress.Report(ToNotification(line)));
+            : new Progress<DeliveryBuildProgress>(value => progress.Report(ToNotification(value)));
 
     /// <summary>
-    /// <para>把门面的一行进度文本还原为协议进度通知；无法解析前导百分比时按 0 上报并保留原文。</para>
-    /// Recovers a protocol progress notification from one facade line; when the leading percentage
-    /// cannot be parsed the progress stays 0 and the raw line is kept as the message.
+    /// <para>把门面进度值转为协议进度通知；总进度固定为 100，消息取门面的可读文本。</para>
+    /// Maps a facade progress value onto a protocol progress notification with the total pinned to 100 and
+    /// the facade's human-readable text as the message.
     /// </summary>
-    /// <param name="line"><para>门面输出的一行进度文本。</para>One progress line emitted by the delivery facade.</param>
-    /// <returns><para>百分比与原文组成的协议进度值。</para>A protocol progress value carrying the percent and the text.</returns>
-    private static ProgressNotificationValue ToNotification(string line)
-    {
-        var percent = 0f;
-        var split = line.IndexOf(' ');
-        if (split > 1 && line[split - 1] == '%' &&
-            float.TryParse(line.AsSpan(0, split - 1), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture,
-                out var parsed))
-        {
-            percent = parsed;
-        }
-
-        return new ProgressNotificationValue { Progress = percent, Total = 100f, Message = line };
-    }
+    /// <param name="value"><para>门面输出的一帧进度值。</para>One progress value emitted by the delivery facade.</param>
+    /// <returns><para>百分比与文本组成的协议进度值。</para>A protocol progress value carrying the percent and the text.</returns>
+    private static ProgressNotificationValue ToNotification(DeliveryBuildProgress value)
+        => new() { Progress = (float)value.Percent, Total = 100f, Message = value.Message };
 }

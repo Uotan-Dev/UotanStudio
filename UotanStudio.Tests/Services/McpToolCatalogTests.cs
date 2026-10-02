@@ -54,6 +54,8 @@ public sealed class McpToolCatalogTests : IDisposable
         "adb_shell",
         "adb_pull",
         "adb_push",
+        "adb_qr_pairing_code",
+        "adb_pair_qr",
         "fastboot_variables",
         "delivery_validate",
         "delivery_list_outputs",

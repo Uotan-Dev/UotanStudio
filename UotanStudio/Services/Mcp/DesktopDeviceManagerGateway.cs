@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Protocols.Adb.Pairing;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Mcp.Tools;
@@ -39,6 +40,19 @@ public sealed class DesktopDeviceManagerGateway : IDeviceManagerGateway
         }, cancellationToken);
     }
 
+    public void PullAdbFile(string serial, string remotePath, string localPath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serial);
+        ArgumentException.ThrowIfNullOrWhiteSpace(remotePath);
+        _monitor.RunAdb(RequireUniqueAdbTarget(serial), session =>
+        {
+            using var sync = session.CreateSyncClient();
+            sync.Pull(remotePath, localPath);
+            return true;
+        }, cancellationToken);
+    }
+
     public TResult RunFastboot<TResult>(string? target, Func<FastbootSession, TResult> operation,
         CancellationToken cancellationToken = default)
     {
@@ -72,6 +86,29 @@ public sealed class DesktopDeviceManagerGateway : IDeviceManagerGateway
 
         return _monitor.RunFastboot(matches[0], operation, cancellationToken);
     }
+
+    public (string ServiceName, string Password, string Payload) CreateQrPairingSession()
+    {
+        var credentials = AdbQrPairing.GenerateCredentials();
+        return (credentials.ServiceName, credentials.Password, AdbQrPairing.BuildPayload(credentials));
+    }
+
+    public async Task<(string Route, string Address)> PairQrWirelessAsync(string serviceName, string password,
+        int timeoutSeconds = 180, CancellationToken cancellationToken = default)
+    {
+        if (timeoutSeconds is < 1 or > MaxPairingWaitSeconds)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeoutSeconds),
+                $"The QR pairing wait must be between 1 and {MaxPairingWaitSeconds} seconds.");
+        }
+
+        var outcome = await _monitor.RunQrPairingAsync(
+            new AdbQrPairingCredentials(serviceName, password), progress: null, cancellationToken,
+            TimeSpan.FromSeconds(timeoutSeconds)).ConfigureAwait(false);
+        return (outcome.Route.ToString(), outcome.Address);
+    }
+
+    private const int MaxPairingWaitSeconds = 1800;
 
     /// <summary>
     /// <para>在桌面宿主的已扫描目标中定位唯一的 ADB 设备，标识匹配区分大小写。</para>

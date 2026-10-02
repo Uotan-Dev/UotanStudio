@@ -1,6 +1,7 @@
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
+using UotanStudio.Comm.Protocols.Adb.Pairing;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -86,6 +87,20 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
         }, cancellationToken);
     }
 
+    public void PullAdbFile(string serial, string remotePath, string localPath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(remotePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(localPath);
+        _ = RunAdb(serial, session =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using var sync = session.CreateSyncClient();
+            sync.Pull(remotePath, localPath);
+            return true;
+        }, cancellationToken);
+    }
+
     private TResult RunAdb<TResult>(string serial,
         Func<UotanStudio.Comm.Contracts.IAdbDeviceSession, TResult> operation,
         CancellationToken cancellationToken = default)
@@ -166,6 +181,31 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway
             Close(lease);
         }
     }
+
+    public (string ServiceName, string Password, string Payload) CreateQrPairingSession()
+    {
+        var credentials = AdbQrPairing.GenerateCredentials();
+        return (credentials.ServiceName, credentials.Password, AdbQrPairing.BuildPayload(credentials));
+    }
+
+    public async Task<(string Route, string Address)> PairQrWirelessAsync(string serviceName, string password,
+        int timeoutSeconds = 180, CancellationToken cancellationToken = default)
+    {
+        if (timeoutSeconds is < 1 or > MaxPairingWaitSeconds)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeoutSeconds),
+                $"The QR pairing wait must be between 1 and {MaxPairingWaitSeconds} seconds.");
+        }
+
+        var outcome = await AdbQrPairingService.PairAsync(
+            new AdbQrPairingCredentials(serviceName, password),
+            progress: null,
+            discoveryTimeout: TimeSpan.FromSeconds(timeoutSeconds),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        return (outcome.Route.ToString(), outcome.Address);
+    }
+
+    private const int MaxPairingWaitSeconds = 1800;
 
     /// <summary>
     /// <para>按 serial 或 USB 设备键判断某个 Fastboot 端点是否就是调用方选定的目标。</para>

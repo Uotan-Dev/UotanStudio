@@ -55,17 +55,20 @@ public static class McpLauncher
     /// <para>由 <see cref="McpServerConfig.Parse"/> 读取的启动参数；沙箱根目录依然生效，伴随模式同样限制客户端路径。</para></param>
     /// <param name="deviceManager">Host-supplied gateway that owns device enumeration and transactions for every tool call.
     /// <para>由宿主提供的网关，为每次工具调用持有设备枚举与事务管理。</para></param>
+    /// <param name="signingKeys">Host-supplied signing key provider for <c>delivery_build</c>; <see langword="null"/> keeps signed plans failing honestly.
+    /// <para>宿主提供的签名密钥供应器，供 <c>delivery_build</c> 使用；为 <see langword="null"/> 时签名计划如实失败。</para></param>
     /// <param name="cancellationToken">Stops the stdio loop; defaults to no cancellation.
     /// <para>停止 stdio 循环；默认不取消。</para></param>
     /// <returns>A task that completes when the transport closes or cancellation is observed.
     /// <para>在传输关闭或观察到取消时完成的任务。</para></returns>
     public static async Task RunCompanionAsync(string[] args, Tools.IDeviceManagerGateway deviceManager,
+        Func<UotanStudio.Services.Delivery.IDeliverySigningKeyProvider?>? signingKeys = null,
         CancellationToken cancellationToken = default)
     {
         var config = McpServerConfig.Parse(args);
         var host = new McpServerHost(
             new PathSandbox(config.RootDirectory), config.AllowFlash, deviceManager,
-            CreateDesktopDeliveryTools());
+            CreateDesktopDeliveryTools(), signingKeys);
         await host.RunAsync(cancellationToken).ConfigureAwait(false);
     }
 

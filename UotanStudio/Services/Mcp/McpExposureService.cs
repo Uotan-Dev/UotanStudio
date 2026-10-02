@@ -117,7 +117,8 @@ internal sealed class McpExposureService
             await StopCoreAsync("MCP exposure restarting.").ConfigureAwait(false);
 
             var serverHost = new McpServerHost(sandbox, allowFlash,
-                new DesktopDeviceManagerGateway(), McpLauncher.CreateDesktopDeliveryTools());
+                new DesktopDeviceManagerGateway(), McpLauncher.CreateDesktopDeliveryTools(),
+                () => new global::UotanStudio.Services.Delivery.DeliveryKeyProvider());
             var host = new McpHttpServerHost(serverHost.BuildTools(), serverHost.BuildResources());
             host.Start(effectivePort);
 
