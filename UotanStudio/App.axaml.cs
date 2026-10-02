@@ -137,6 +137,7 @@ public partial class App : Application
         ApplyLanguage(settings.CultureName);
         await splash.AdvanceAsync(SplashPhase.ApplyingSettings);
         McpExposureService.Instance.Apply(settings.McpExposeEnabled, settings.McpExposePort);
+        McpClientConnectionService.Instance.Apply();
 
         await ReportAsync(SplashPhase.Scanning);
         LogService.Instance.Write(LogLevel.Info, "App", "Startup sequence: initial USB scan starting.");
