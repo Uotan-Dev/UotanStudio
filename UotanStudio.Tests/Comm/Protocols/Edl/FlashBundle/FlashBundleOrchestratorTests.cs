@@ -460,4 +460,257 @@ public class FlashBundleOrchestratorTests
             ? hex
             : long.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
     }
+
+    [Fact]
+    public async Task FlashBundleAsync_SkipAbsentSources_ProgramsPresentEntriesAndWarnsAboutMissing()
+    {
+        using var dir = new TempDirectory();
+        dir.Write("rawprogram0.xml", """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <data>
+              <program SECTOR_SIZE_IN_BYTES="4096" file_sector_offset="0" filename="boot.img"
+                       physical_partition_number="0" start_sector="0x8000" num_partition_sectors="4"
+                       label="boot" sparse="false" />
+              <program SECTOR_SIZE_IN_BYTES="4096" file_sector_offset="0" filename="vendor.img"
+                       physical_partition_number="0" start_sector="0x9000" num_partition_sectors="4"
+                       label="vendor" sparse="false" />
+            </data>
+            """);
+        dir.WriteBytes("boot.img", new byte[4096 * 4]);
+        var transport = CreateBundleTransport(commandAckCount: 1);
+        using var session = CreateSession(transport);
+        var orchestrator = new FlashBundleOrchestrator(session);
+        var options = new FlashBundleOptions
+        {
+            RawProgramPath = Path.Combine(dir.Path, "rawprogram0.xml"),
+            ImageDirectory = dir.Path,
+            SkipAbsentSources = true
+        };
+
+        var result = await orchestrator.FlashBundleAsync(options, null, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.ProgramEntriesAbsent);
+        Assert.Contains("vendor.img", Assert.Single(result.Warnings), StringComparison.Ordinal);
+        Assert.Equal(1, transport.Writes.Count(write =>
+            Encoding.UTF8.GetString(write).Contains("<program", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task FlashBundleAsync_ContinueOnFailure_AttemptsEveryEntryAndReportsFirstFailure()
+    {
+        using var dir = new TempDirectory();
+        dir.Write("rawprogram0.xml", """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <data>
+              <program SECTOR_SIZE_IN_BYTES="4096" file_sector_offset="0" filename="boot.img"
+                       physical_partition_number="0" start_sector="0x8000" num_partition_sectors="1"
+                       label="boot" sparse="false" />
+              <program SECTOR_SIZE_IN_BYTES="4096" file_sector_offset="0" filename="dtbo.img"
+                       physical_partition_number="0" start_sector="0x9000" num_partition_sectors="1"
+                       label="dtbo" sparse="false" />
+            </data>
+            """);
+        dir.WriteBytes("boot.img", new byte[4096]);
+        dir.WriteBytes("dtbo.img", new byte[4096]);
+        var programReplies = 0;
+        var transport = new ScriptedCommTransport
+        {
+            OnWrite = bytes =>
+            {
+                var text = Encoding.UTF8.GetString(bytes);
+                if (text.Contains("<getstorageinfo", StringComparison.Ordinal))
+                {
+                    return [Encoding.UTF8.GetBytes("""
+                        <data><log value='{"storage_info":{"block_size":4096,"total_blocks":1048576}}'/><response value="ACK"/></data>
+                        """)];
+                }
+
+                if (text.Contains("<nop", StringComparison.Ordinal))
+                {
+                    return [Encoding.UTF8.GetBytes(NopResponseXml)];
+                }
+
+                if (text.Contains("<configure", StringComparison.Ordinal))
+                {
+                    return [Encoding.UTF8.GetBytes(ConfigureAckXml)];
+                }
+
+                if (!text.Contains("<program", StringComparison.Ordinal))
+                {
+                    return [];
+                }
+
+                programReplies++;
+                return programReplies == 1
+                    ? [Encoding.UTF8.GetBytes("""
+                        <data><log value="received request but cannot perform"/></data><data><response value="NAK" rawmode="false"/></data>
+                        """)]
+                    : [Encoding.UTF8.GetBytes("<data><response value=\"ACK\" rawmode=\"true\"/></data>"), Encoding.UTF8.GetBytes(AckXml)];
+            }
+        };
+        using var session = CreateSession(transport);
+        var orchestrator = new FlashBundleOrchestrator(session);
+        var options = new FlashBundleOptions
+        {
+            RawProgramPath = Path.Combine(dir.Path, "rawprogram0.xml"),
+            ImageDirectory = dir.Path,
+            ContinueOnFailure = true
+        };
+
+        var result = await orchestrator.FlashBundleAsync(options, null, TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        var programCount = transport.Writes.Count(write =>
+            Encoding.UTF8.GetString(write).Contains("<program", StringComparison.Ordinal));
+        Assert.True(programCount == 2, $"programs={programCount}; errors={string.Join("; ", result.Errors)}; reconnect={result.RequiresReconnect}");
+        Assert.Equal(1, result.ProgramEntriesProcessed);
+        Assert.Contains(result.Errors, error => error.Contains("boot", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FlashBundleAsync_DeclaredPartitionCapacityLargerThanImage_ProgramsImageSectorsOnly()
+    {
+        using var dir = new TempDirectory();
+        dir.Write("rawprogram0.xml", SinglePartitionRawProgram("boot.img", 262144));
+        dir.WriteBytes("boot.img", new byte[4096]);
+        var transport = CreateBundleTransport(commandAckCount: 1);
+        using var session = CreateSession(transport);
+        var orchestrator = new FlashBundleOrchestrator(session);
+        var options = new FlashBundleOptions
+        {
+            RawProgramPath = Path.Combine(dir.Path, "rawprogram0.xml"),
+            ImageDirectory = dir.Path
+        };
+
+        var result = await orchestrator.FlashBundleAsync(options, null, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains("num_partition_sectors=\"1\"",
+            Encoding.UTF8.GetString(transport.Writes.Single(write =>
+                Encoding.UTF8.GetString(write).Contains("<program", StringComparison.Ordinal))), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FlashBundleAsync_VerifyEnabled_ReadsBackProgrammedEntryAndCountsIt()
+    {
+        using var dir = new TempDirectory();
+        var rawPath = dir.Write("rawprogram0.xml", SinglePartitionRawProgram("boot.img", 4));
+        var bootImage = new byte[4096 * 4];
+        Random.Shared.NextBytes(bootImage);
+        dir.WriteBytes("boot.img", bootImage);
+        var transport = CreateVerifyTransport(bootImage, corrupted: false);
+        using var session = CreateSession(transport);
+        var orchestrator = new FlashBundleOrchestrator(session);
+
+        var result = await orchestrator.FlashBundleAsync(new FlashBundleOptions
+        {
+            RawProgramPath = rawPath,
+            ImageDirectory = dir.Path,
+            Verify = true
+        }, progress: null, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, string.Join("; ", result.Errors));
+        Assert.Equal(1, result.ProgramEntriesProcessed);
+        Assert.Equal(1, result.VerifiedEntries);
+        Assert.Contains(transport.Writes,
+            write => Encoding.UTF8.GetString(write).Contains("<read ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FlashBundleAsync_VerifyEnabled_MismatchedReadback_FailsBundle()
+    {
+        using var dir = new TempDirectory();
+        var rawPath = dir.Write("rawprogram0.xml", SinglePartitionRawProgram("boot.img", 4));
+        var bootImage = new byte[4096 * 4];
+        Random.Shared.NextBytes(bootImage);
+        dir.WriteBytes("boot.img", bootImage);
+        var transport = CreateVerifyTransport(bootImage, corrupted: true);
+        using var session = CreateSession(transport);
+        var orchestrator = new FlashBundleOrchestrator(session);
+
+        var result = await orchestrator.FlashBundleAsync(new FlashBundleOptions
+        {
+            RawProgramPath = rawPath,
+            ImageDirectory = dir.Path,
+            Verify = true
+        }, progress: null, TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(0, result.VerifiedEntries);
+        Assert.Contains(result.Errors, error => error.Contains("boot", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FlashBundleAsync_VerifyEnabled_DeclaredRangeMismatch_SkipsWithWarning()
+    {
+        using var dir = new TempDirectory();
+        dir.Write("rawprogram0.xml", SinglePartitionRawProgram("boot.img", 262144));
+        dir.WriteBytes("boot.img", new byte[4096]);
+        var transport = CreateBundleTransport(commandAckCount: 1);
+        using var session = CreateSession(transport);
+        var orchestrator = new FlashBundleOrchestrator(session);
+
+        var result = await orchestrator.FlashBundleAsync(new FlashBundleOptions
+        {
+            RawProgramPath = Path.Combine(dir.Path, "rawprogram0.xml"),
+            ImageDirectory = dir.Path,
+            Verify = true
+        }, progress: null, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, string.Join("; ", result.Errors));
+        Assert.Equal(1, result.ProgramEntriesProcessed);
+        Assert.Equal(0, result.VerifiedEntries);
+        Assert.Contains(result.Warnings,
+            warning => warning.Contains("Read-back verification skipped", StringComparison.Ordinal));
+        Assert.DoesNotContain(transport.Writes,
+            write => Encoding.UTF8.GetString(write).Contains("<read ", StringComparison.Ordinal));
+    }
+
+    private static ScriptedCommTransport CreateVerifyTransport(byte[] payload, bool corrupted)
+    {
+        var readPayload = (byte[])payload.Clone();
+        if (corrupted)
+        {
+            readPayload[0] ^= 0xFF;
+        }
+
+        var finalAck = Encoding.UTF8.GetBytes(AckXml);
+        var rawAck = Encoding.UTF8.GetBytes("<data><response value=\"ACK\" rawmode=\"true\"/></data>");
+        return new ScriptedCommTransport
+        {
+            OnWrite = bytes =>
+            {
+                var text = Encoding.UTF8.GetString(bytes);
+                if (text.Contains("<getstorageinfo", StringComparison.Ordinal))
+                {
+                    return [Encoding.UTF8.GetBytes("""
+                        <data><log value='{"storage_info":{"block_size":4096,"total_blocks":1048576}}'/><response value="ACK"/></data>
+                        """)];
+                }
+
+                if (text.Contains("<nop", StringComparison.Ordinal))
+                {
+                    return [Encoding.UTF8.GetBytes(NopResponseXml)];
+                }
+
+                if (text.Contains("<configure", StringComparison.Ordinal))
+                {
+                    return [Encoding.UTF8.GetBytes(ConfigureAckXml)];
+                }
+
+                if (text.Contains("<program", StringComparison.Ordinal))
+                {
+                    return [Encoding.UTF8.GetBytes("<data><response value=\"ACK\" rawmode=\"true\"/></data>"), finalAck];
+                }
+
+                if (text.Contains("<read ", StringComparison.Ordinal))
+                {
+                    return [rawAck, readPayload, finalAck];
+                }
+
+                return [];
+            }
+        };
+    }
 }

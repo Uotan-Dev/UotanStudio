@@ -112,7 +112,7 @@ public sealed class FirehoseCapabilitySnapshotTests
     }
 
     [Fact]
-    public async Task Erase_WhenCapabilityUnknown_IsRefusedBeforeAnyByteReachesTheWire()
+    public async Task Erase_WhenCapabilityUnknown_IsRefusedAfterOneDiscoveryProbeOnly()
     {
         using var transport = ConfigureTransport("<data><response value=\"ACK\" MaxPayloadSizeToTargetInBytes=\"4096\"/></data>");
         using var protocol = Protocol(transport);
@@ -125,11 +125,100 @@ public sealed class FirehoseCapabilitySnapshotTests
         Assert.Equal(EdlErrorCode.NotSupported, error.ErrorCode);
         Assert.Equal(EdlFailureKind.CapabilityNotReported, error.FailureKind);
         Assert.Equal(EdlFailureKind.CapabilityNotReported, protocol.LastFailureKind);
-        Assert.Equal(before, transport.Writes.Count);
+        var probe = Assert.Single(transport.Writes.Skip(before));
+        Assert.Contains("<nop", Encoding.UTF8.GetString(probe), StringComparison.Ordinal);
         Assert.DoesNotContain(transport.Writes, bytes =>
             Encoding.UTF8.GetString(bytes).Contains("<erase", StringComparison.Ordinal));
         Assert.False(protocol.RequiresReconnect);
+
+        var afterFirst = transport.Writes.Count;
+        await Assert.ThrowsAsync<EdlException>(() =>
+            protocol.PatchAsync("boot.img", 0, "0x10", 4, "0xff", 1, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(afterFirst, transport.Writes.Count);
     }
+
+    [Fact]
+    public async Task Erase_WhenTargetReportsEraseInSupportedFunctions_IsEmitted()
+    {
+        using var transport = ConfigureTransport(
+            "<data><response value=\"ACK\" MaxPayloadSizeToTargetInBytes=\"4096\"/></data>",
+            """
+            <data>
+            <log value="INFO: supported functions"/>
+            <log value="erase"/>
+            <log value="end of supported functions"/>
+            <response value="ACK" rawmode="false"/>
+            </data>
+            """);
+        using var protocol = Protocol(transport);
+        await protocol.ConfigureAsync(cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(FeatureSupport.Unknown, protocol.Capabilities!.Erase);
+
+        var response = await protocol.EraseAsync(0, 1, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(response.IsAck);
+        Assert.Equal(FeatureSupport.Supported, protocol.Capabilities!.Erase);
+        Assert.Contains(transport.Writes, bytes =>
+            Encoding.UTF8.GetString(bytes).Contains("<erase", StringComparison.Ordinal));
+        Assert.Contains(protocol.Capabilities.Evidence, evidence => evidence.Phase == "capability-discovery");
+    }
+
+    [Fact]
+    public async Task Erase_WhenAckExplicitlyReportsUnsupported_TargetReportNeverUpgradesIt()
+    {
+        using var transport = ConfigureTransport(
+            "<data><response value=\"ACK\" Erase=\"false\"/></data>",
+            """<data><log value="supported functions: erase"/><response value="ACK" rawmode="false"/></data>""");
+        using var protocol = Protocol(transport);
+        await protocol.ConfigureAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var before = transport.Writes.Count;
+
+        await Assert.ThrowsAsync<EdlException>(() =>
+            protocol.EraseAsync(0, 1, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(FeatureSupport.Unsupported, protocol.Capabilities!.Erase);
+        Assert.Equal(before, transport.Writes.Count);
+    }
+
+    [Theory]
+    [InlineData("erase", "patch")]
+    [InlineData("ufs", "program")]
+    public void ParseSupportedFunctions_OneNamePerLine_IgnoresMarkersAndPrefixes(params string[] expected)
+    {
+        var parsed = FirehoseCapabilitySnapshot.ParseSupportedFunctions(
+        [
+            "INFO: supported functions",
+            .. expected,
+            "INFO: end of supported functions",
+            "ignored-trailing-line"
+        ]);
+
+        Assert.NotNull(parsed);
+        Assert.All(expected, name => Assert.Contains(name, parsed!, StringComparer.OrdinalIgnoreCase));
+        Assert.DoesNotContain("ignored-trailing-line", parsed!, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ParseSupportedFunctions_InlineCommaList_IsSplitAndTrimmed()
+    {
+        var parsed = FirehoseCapabilitySnapshot.ParseSupportedFunctions(
+            ["supported functions: erase, patch , ufs"]);
+
+        Assert.NotNull(parsed);
+        Assert.Equal(3, parsed!.Count);
+        Assert.Contains("erase", parsed, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("patch", parsed, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("ufs", parsed, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("no report here")]
+    public void ParseSupportedFunctions_NoMarker_YieldsNull(string line)
+        => Assert.Null(FirehoseCapabilitySnapshot.ParseSupportedFunctions([line]));
+
+    [Fact]
+    public void ParseSupportedFunctions_EmptyLogs_YieldsNull()
+        => Assert.Null(FirehoseCapabilitySnapshot.ParseSupportedFunctions([]));
 
     [Fact]
     public async Task ProgramErasePatchWipe_WhenEachIsReportedUnsupported_EachIsRefusedWithoutWrites()
@@ -217,6 +306,7 @@ public sealed class FirehoseCapabilitySnapshotTests
             PerCandidateReasons = []
         }, image, null, TestContext.Current.CancellationToken);
         var before = transport.Writes.Count;
+        transport.Enqueue("""<data><response value="ACK" rawmode="false"/></data>""");
 
         Assert.Equal(AbcSha256, session.Capabilities!.ResourceSha256Hex);
         Assert.Equal("prog_firehose.bin", session.Capabilities.ProgrammerFileName);
@@ -227,12 +317,14 @@ public sealed class FirehoseCapabilitySnapshotTests
             session.Firehose.EraseAsync(0, 1, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal(EdlErrorCode.NotSupported, error.ErrorCode);
-        Assert.Equal(before, transport.Writes.Count);
+        Assert.Equal(before + 1, transport.Writes.Count);
+        var probe = transport.Writes[^1];
+        Assert.Contains("<nop", Encoding.UTF8.GetString(probe), StringComparison.Ordinal);
         Assert.DoesNotContain(transport.Writes, bytes =>
             Encoding.UTF8.GetString(bytes).Contains("<erase", StringComparison.Ordinal));
     }
 
-    private static ScriptedCommTransport ConfigureTransport(string configureAckXml)
+    private static ScriptedCommTransport ConfigureTransport(string configureAckXml, string? nopResponseXml = null)
     {
         var transport = new ScriptedCommTransport();
         transport.OnWrite = bytes =>
@@ -246,6 +338,12 @@ public sealed class FirehoseCapabilitySnapshotTests
             if (text.Contains("<program", StringComparison.Ordinal))
             {
                 return [Encoding.UTF8.GetBytes("""<data><response value="ACK" rawmode="true"/></data>""")];
+            }
+
+            if (text.Contains("<nop", StringComparison.Ordinal))
+            {
+                return [Encoding.UTF8.GetBytes(nopResponseXml
+                    ?? """<data><response value="ACK" rawmode="false"/></data>""")];
             }
 
             return [Encoding.UTF8.GetBytes("""<data><response value="ACK" rawmode="false"/></data>""")];

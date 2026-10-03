@@ -177,19 +177,6 @@ public sealed partial class FirehoseProtocol
         return response;
     }
 
-    /// <summary>
-    /// Marks the specified drive as bootable via &lt;setbootablestoragedrive&gt;.
-    /// <para>通过 &lt;setbootablestoragedrive&gt; 标记指定驱动器为可启动。</para>
-    /// </summary>
-    /// <param name="value">The bootable storage drive number (UFS→1, eMMC→0). <para>可启动存储驱动器编号（UFS→1，eMMC→0）。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The Firehose response. <para>Firehose 响应。</para></returns>
-    public async Task<FirehoseResponse> SetBootableStorageDriveAsync(int value, CancellationToken cancellationToken = default)
-    {
-        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
-        return await SetBootableStorageDriveCoreAsync(value, cancellationToken).ConfigureAwait(false);
-    }
-
     private async Task<FirehoseResponse> SetBootableStorageDriveCoreAsync(int value, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
@@ -231,6 +218,7 @@ public sealed partial class FirehoseProtocol
             {
                 _lastGeometry = geometry;
             }
+            _lastStorageDetails = report.ParseDetails() ?? _lastStorageDetails;
         }
         return response;
     }

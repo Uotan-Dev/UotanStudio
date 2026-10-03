@@ -46,6 +46,12 @@ public enum FlashBundlePhase
     UfsProvisioning,
 
     /// <summary>
+    /// Reading programmed entries back and comparing them with their sources.
+    /// <para>回读已编程条目并与源文件比对。</para>
+    /// </summary>
+    Verifying,
+
+    /// <summary>
     /// The operation completed.
     /// <para>操作已完成。</para>
     /// </summary>
@@ -224,6 +230,15 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
             var filteredPatches = input.Patches;
             var ufsProvision = input.Ufs;
             var sources = input.Sources;
+            if (input.AbsentPrograms is { Count: > 0 } absentPrograms)
+            {
+                result.ProgramEntriesAbsent = absentPrograms.Count;
+                foreach (var entry in absentPrograms)
+                {
+                    result.Warnings.Add($"Program entry '{(string.IsNullOrEmpty(entry.Label) ? entry.Filename : entry.Label)}' was not programmed because its source image '{entry.Filename}' is absent from the package.");
+                }
+            }
+
             var hasSectorCommands = (!options.SkipProgram && filteredPrograms.Count > 0)
                 || filteredPatches is { Count: > 0 };
             var preflightSectorSize = FlashBundlePreflight.SelectSectorSize(filteredPrograms, filteredPatches,

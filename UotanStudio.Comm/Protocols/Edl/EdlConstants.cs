@@ -139,6 +139,58 @@ internal static class EdlConstants
     public const uint SaharaCmdReadData64 = 0x12;
 
     /// <summary>
+    /// Largest Sahara memory-debug region table the host will buffer, mirroring the reference
+    /// server's single megabyte intermediate buffer that a table must fit into
+    /// (QSaharaServer/src/sahara_protocol.h:58 and QSaharaServer/src/sahara_protocol.c:626-629).
+    /// <para>主机愿意缓冲的最大 Sahara 内存调试区域表大小，对齐参考服务端必须放入其中的 1 MiB
+    /// 中间缓冲区（QSaharaServer/src/sahara_protocol.h:58 与 QSaharaServer/src/sahara_protocol.c:626-629）。</para>
+    /// </summary>
+    public const int SaharaMemoryTableLimitBytes = 1024 * 1024;
+
+    /// <summary>
+    /// Largest single Sahara MEMORY_READ request, matching the reference server's default
+    /// max_ram_dump_read (QSaharaServer/src/sahara_protocol.c:80 and the chunking at
+    /// QSaharaServer/src/sahara_protocol.c:922-923).
+    /// <para>单次 Sahara MEMORY_READ 的最大请求量，对齐参考服务端默认的 max_ram_dump_read
+    /// （QSaharaServer/src/sahara_protocol.c:80 与 QSaharaServer/src/sahara_protocol.c:922-923 的分块）。</para>
+    /// </summary>
+    public const int SaharaMemoryReadChunkBytes = 1024 * 1024;
+
+    /// <summary>
+    /// Byte size of one 32-bit Sahara debug-table record, the reference layout of save preference,
+    /// base address, length and two twenty-byte strings
+    /// (QSaharaServer/src/sahara_protocol.h:463-471).
+    /// <para>单个 32 位 Sahara 调试表记录的字节数，即参考布局中保存优先级、基地址、长度与两个
+    /// 20 字节字符串（QSaharaServer/src/sahara_protocol.h:463-471）。</para>
+    /// </summary>
+    public const int SaharaMemoryRecordBytesLegacy = 52;
+
+    /// <summary>
+    /// Byte size of one 64-bit Sahara debug-table record, the same fields widened to eight bytes
+    /// (QSaharaServer/src/sahara_protocol.h:472-479).
+    /// <para>单个 64 位 Sahara 调试表记录的字节数，即同一组字段全部拓宽为 8 字节
+    /// （QSaharaServer/src/sahara_protocol.h:472-479）。</para>
+    /// </summary>
+    public const int SaharaMemoryRecordBytes64 = 64;
+
+    /// <summary>
+    /// Byte length of the fixed description and file-name fields inside a Sahara debug record
+    /// (QSaharaServer/src/sahara_protocol.h:463).
+    /// <para>Sahara 调试记录内固定描述与文件名字段的字节长度
+    /// （QSaharaServer/src/sahara_protocol.h:463）。</para>
+    /// </summary>
+    public const int SaharaMemoryRecordStringBytes = 20;
+
+    /// <summary>
+    /// Host-side ceiling for one Sahara memory-debug region request. No reference implementation
+    /// bounds a region by protocol, so this is a local guard against an unbounded dump rather than
+    /// a claim about target behaviour.
+    /// <para>主机侧对单个 Sahara 内存调试区域请求的上限。任何参考实现都未按协议限制区域大小，因此这只是
+    /// 防止无限转储的本地护栏，而非对目标行为的断言。</para>
+    /// </summary>
+    public const long SaharaMemoryRegionLimitBytes = 1024L * 1024 * 1024;
+
+    /// <summary>
     /// Standard XML header for Firehose messages.
     /// <para>Firehose 消息的标准 XML 头。</para>
     /// </summary>
@@ -655,18 +707,6 @@ internal enum EdlErrorCode
     /// <para>Peek（内存读取）操作失败。</para>
     /// </summary>
     PeekFailed,
-
-    /// <summary>
-    /// Poke (memory write) operation failed.
-    /// <para>Poke（内存写入）操作失败。</para>
-    /// </summary>
-    PokeFailed,
-
-    /// <summary>
-    /// Memory command (memcpy/pokedword) failed.
-    /// <para>内存命令（memcpy/pokedword）失败。</para>
-    /// </summary>
-    MemoryCommandFailed,
 
     /// <summary>
     /// UFS provisioning operation failed.

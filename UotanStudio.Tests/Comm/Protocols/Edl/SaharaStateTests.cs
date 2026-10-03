@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Tests.Comm.TestDoubles;
@@ -199,5 +200,33 @@ public partial class SaharaTests
 
         await Assert.ThrowsAsync<SaharaException>(() => protocol.HandshakeAsync(
             ImagesWithFirehose(), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task HandshakeAsync_DeviceAdvertisesSmallerCommandLength_HostKeepsSuccessStatusAndFullRequestedPayload()
+    {
+        using var transport = new ScriptedCommTransport();
+        byte[] hello = new byte[48];
+        BinaryPrimitives.WriteUInt32LittleEndian(hello.AsSpan(0, 4), 0x01);
+        BinaryPrimitives.WriteUInt32LittleEndian(hello.AsSpan(4, 4), 48);
+        BinaryPrimitives.WriteUInt32LittleEndian(hello.AsSpan(8, 4), 2);
+        BinaryPrimitives.WriteUInt32LittleEndian(hello.AsSpan(12, 4), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(hello.AsSpan(16, 4), 1500);
+        transport.Enqueue(hello);
+        byte[] image = [.. Enumerable.Repeat((byte)0x77, 1024)];
+        using var stream = new MemoryStream(image);
+        var images = new Dictionary<uint, Stream> { [0x0D] = stream };
+        EnqueueReadData(transport, imageId: 0x0D, offset: 0, length: 1024);
+        EnqueueEndOfImage(transport, 0);
+        EnqueueDoneResponse(transport, 1);
+        EnqueueCommandReady(transport);
+        var protocol = new SaharaProtocol(transport);
+
+        await protocol.HandshakeAsync(images, TestContext.Current.CancellationToken);
+
+        Assert.Equal(48, transport.Writes[0].Length);
+        Assert.Equal(0u, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[0].AsSpan(16, 4)));
+        Assert.Equal(4096u, protocol.MaxPacketLength);
+        Assert.Equal(image, transport.Writes[1]);
     }
 }

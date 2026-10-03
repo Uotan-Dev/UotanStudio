@@ -55,6 +55,35 @@ public class EdlSinglePartitionTests
         Assert.Equal("recovery", entries[2].Label);
     }
 
+    [Theory]
+    [InlineData("NUM_DISK_SECTORS-100.", true)]
+    [InlineData("NUM_DISK_SECTORS-100", true)]
+    [InlineData("  NUM_DISK_SECTORS-100.  ", true)]
+    [InlineData("0x8000", false)]
+    [InlineData("32768", false)]
+    public void IsRelativeStartSector_RecognizesDiskRelativeExpressions(string value, bool expected)
+        => Assert.Equal(expected, FlashService.IsRelativeStartSector(value));
+
+    [Fact]
+    public void ParseStartSectorValue_RelativeExpression_ResolvesAgainstSectorCount()
+    {
+        Assert.Equal(9900, FlashService.ParseStartSectorValue("NUM_DISK_SECTORS-100.", 10000));
+        Assert.Equal(9900, FlashService.ParseStartSectorValue("NUM_DISK_SECTORS-0x64.", 10000));
+        Assert.Equal(32768, FlashService.ParseStartSectorValue("0x8000", 10000));
+        Assert.Equal(4096, FlashService.ParseStartSectorValue("4096", 10000));
+    }
+
+    [Theory]
+    [InlineData("NUM_DISK_SECTORS-100.", 0)]
+    [InlineData("NUM_DISK_SECTORS-100.", -1)]
+    public void ParseStartSectorValue_RelativeWithoutSectorCount_Throws(string value, long sectorCount)
+        => Assert.Throws<InvalidOperationException>(() => FlashService.ParseStartSectorValue(value, sectorCount));
+
+    [Fact]
+    public void ParseStartSectorValue_RelativeOffsetOutsideTheDisk_Throws()
+        => Assert.Throws<InvalidOperationException>(() =>
+            FlashService.ParseStartSectorValue("NUM_DISK_SECTORS-100.", 50));
+
     [Fact]
     public void FindEdlTarget_MatchesByLabelFilenameAndImagePath()
     {
@@ -116,7 +145,7 @@ public class EdlSinglePartitionTests
     }
 
     [Fact]
-    public async Task FlashImageAsync_EdlWithoutRawProgram_ReturnsClearError()
+    public async Task FlashImageAsync_EdlWithoutRawProgram_RoutesToDeviceSession()
     {
         using var dir = new TempDirectory();
         dir.WriteBytes("boot.img", new byte[1024]);
@@ -133,7 +162,7 @@ public class EdlSinglePartitionTests
         var result = await FlashService.Default.FlashImageAsync(device, "boot", imagePath, null, CancellationToken.None);
 
         Assert.False(result.Success);
-        Assert.Contains("rawprogram", result.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("rawprogram", result.Summary, StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]

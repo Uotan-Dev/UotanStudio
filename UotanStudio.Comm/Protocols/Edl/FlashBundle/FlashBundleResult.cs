@@ -34,6 +34,15 @@ public sealed class FlashBundleResult
     public int ProgramEntriesSkipped { get; set; }
 
     /// <summary>
+    /// Gets or sets the number of program entries dropped before execution because their source image
+    /// is not present in the package.
+    /// <para>获取或设置在执行前因源镜像不在包内而被丢弃的 program 条目数。</para>
+    /// </summary>
+    /// <value>Count of absent-source entries; only non-zero when <see cref="FlashBundleOptions.SkipAbsentSources"/> is set.
+    /// <para>缺失源镜像条目数；仅在设置 <see cref="FlashBundleOptions.SkipAbsentSources"/> 时非零。</para></value>
+    public int ProgramEntriesAbsent { get; set; }
+
+    /// <summary>
     /// Gets or sets the number of erase entries that were successfully processed.
     /// <para>获取或设置已成功处理的 erase 条目数。</para>
     /// </summary>
@@ -75,12 +84,33 @@ public sealed class FlashBundleResult
     public bool UfsProvisioned { get; set; }
 
     /// <summary>
+    /// Gets or sets the number of program entries whose read-back verification completed.
+    /// <para>获取或设置回读校验完成的 program 条目数。</para>
+    /// </summary>
+    /// <value>Entries compared byte by byte against their sources after programming when
+    /// <see cref="FlashBundleOptions.Verify"/> is set; entries skipped by the verification gate
+    /// are not counted.
+    /// <para>设置 <see cref="FlashBundleOptions.Verify"/> 后与源逐字节比对完成的条目数；
+    /// 被校验门控跳过的条目不计入。</para></value>
+    public int VerifiedEntries { get; set; }
+
+    /// <summary>
     /// Gets or sets the list of error messages that occurred during the flash process.
     /// <para>获取或设置刷写过程中发生的错误消息列表。</para>
     /// </summary>
     /// <value>Per-entry failure descriptions and the final fatal error text; a non-empty list marks the run as failed.
     /// <para>逐条目失败描述与最终致命错误文本；列表非空即表示本次运行失败。</para></value>
     public List<string> Errors { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the list of non-fatal deviations recorded while the bundle ran, such as a source
+    /// longer than its declared sector range.
+    /// <para>获取或设置刷写包运行期间记录的非致命偏差，例如源文件长于其声明扇区范围。</para>
+    /// </summary>
+    /// <value>Descriptions of writes that proceeded with less data than the manifest names; a non-empty
+    /// list does not mark the run as failed.
+    /// <para>按清单少于其声明数据量完成写入的描述；列表非空不表示本次运行失败。</para></value>
+    public List<string> Warnings { get; set; } = [];
 
     /// <summary>
     /// Gets or sets program payload bytes with a final device ACK, including completed sparse

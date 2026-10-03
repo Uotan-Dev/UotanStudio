@@ -132,6 +132,13 @@ public sealed class EdlProtocolProbeTests
     }
 
     [Fact]
+    public void UnderlyingSerialPortName_NativeTransport_IsNull()
+    {
+        using var session = new EdlSession(new ScriptedCommTransport());
+        Assert.Null(session.UnderlyingSerialPortName);
+    }
+
+    [Fact]
     public async Task InitializeAsync_AfterFirehoseProbe_DiscardsProbeAckAndConfiguresDirectly()
     {
         var transport = new ScriptedCommTransport
@@ -149,6 +156,39 @@ public sealed class EdlProtocolProbeTests
         Assert.Null(session.Sahara);
         Assert.Equal(2, transport.Writes.Count);
         Assert.Contains("<configure ", Encoding.UTF8.GetString(transport.Writes[1]));
+    }
+
+    [Fact]
+    public async Task ProbeProtocolAsync_SaharaHello_CapturesHandshakeInfoWithoutConsumingBytes()
+    {
+        var transport = new ScriptedCommTransport();
+        transport.Enqueue(Hello());
+        using var session = new EdlSession(transport);
+
+        Assert.Equal(EdlProtocolState.Sahara, await session.ProbeProtocolAsync(TestContext.Current.CancellationToken));
+
+        var handshake = session.SaharaHandshake;
+        Assert.NotNull(handshake);
+        Assert.Equal(2u, handshake.ProtocolVersion);
+        Assert.Equal(1u, handshake.MinProtocolVersion);
+        Assert.Equal(4096u, handshake.MaxCommandLength);
+        var replay = new byte[48];
+        Assert.Equal(48, await session.Transport.ReadAsync(replay, 0, replay.Length, 100,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(Hello(), replay);
+    }
+
+    [Fact]
+    public async Task ProbeProtocolAsync_FirehoseAck_DoesNotCaptureSaharaHandshake()
+    {
+        var transport = new ScriptedCommTransport
+        {
+            OnWrite = _ => [Encoding.UTF8.GetBytes("<data><response value=\"ACK\" /></data>")]
+        };
+        using var session = new EdlSession(transport);
+
+        Assert.Equal(EdlProtocolState.Firehose, await session.ProbeProtocolAsync(TestContext.Current.CancellationToken));
+        Assert.Null(session.SaharaHandshake);
     }
 
     [Fact]

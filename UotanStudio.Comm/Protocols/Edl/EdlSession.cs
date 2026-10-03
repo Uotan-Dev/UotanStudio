@@ -8,6 +8,7 @@ using UotanStudio.Comm.Protocols.Edl.Auth;
 using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Comm.Protocols.Edl.Reenum;
 using UotanStudio.Comm.Transports.Abstractions;
+using UotanStudio.Comm.Transports.Serial;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -15,7 +16,7 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// Represents an EDL (Emergency Download Mode) protocol session combining Sahara and Firehose protocols.
 /// <para>表示 EDL（紧急下载模式）协议会话，组合 Sahara 和 Firehose 协议。</para>
 /// </summary>
-public sealed class EdlSession : IProtocolSession
+public sealed partial class EdlSession : IProtocolSession
 {
     private static readonly TimeSpan MaxRelinkTimeout = TimeSpan.FromHours(24);
     private readonly List<ProtocolEvidence> _initializationEvidence = [];
@@ -207,7 +208,14 @@ public sealed class EdlSession : IProtocolSession
         cancellationToken.ThrowIfCancellationRequested();
         if (_protocolState == EdlProtocolState.Unknown)
         {
-            SetProtocolState(await _probeTransport.ProbeAsync(cancellationToken).ConfigureAwait(false));
+            var state = await _probeTransport.ProbeAsync(cancellationToken).ConfigureAwait(false);
+            if (state == EdlProtocolState.Sahara && _probeTransport.TryReadSaharaHello(out var hello) &&
+                hello.Version > 0 && hello.MaxCommandLength > 0)
+            {
+                SaharaHandshake = new SaharaHandshakeInfo(hello.Version, hello.MinVersion,
+                    hello.MaxCommandLength, hello.Mode);
+            }
+            SetProtocolState(state);
         }
         return _protocolState;
     }
@@ -228,6 +236,26 @@ public sealed class EdlSession : IProtocolSession
     /// <value>A fresh instance created by each initialization attempt, or <c>null</c> before the
     /// first one starts. <para>每次初始化尝试创建的新实例；首次初始化前为 <c>null</c>。</para></value>
     public SaharaProtocol? Sahara { get; private set; }
+
+    /// <summary>
+    /// Gets the passively captured Sahara HELLO facts from the latest probe, without disturbing the
+    /// pending handshake.
+    /// <para>获取最近一次探测被动捕获的 Sahara HELLO 信息，不干扰未完成的握手。</para>
+    /// </summary>
+    /// <value>The captured handshake facts, or <see langword="null"/> before a Sahara HELLO was seen.
+    /// <para>捕获到的握手信息；尚未观测到 Sahara HELLO 时为 <see langword="null"/>。</para></value>
+    public SaharaHandshakeInfo? SaharaHandshake { get; private set; }
+
+    /// <summary>
+    /// Gets the COM port name when the endpoint's QDLoader-style serial driver fallback is in use.
+    /// <para>端点走 QDLoader 串口驱动回退时，获取对应的 COM 端口名。</para>
+    /// </summary>
+    /// <value>The serial port name (for example <c>COM3</c>), or <see langword="null"/> when the
+    /// session runs over a native USB transport.
+    /// <para>串口名（如 <c>COM3</c>）；会话使用原生 USB 传输时为 <see langword="null"/>。</para></value>
+    public string? UnderlyingSerialPortName => Transport is EdlProbeTransport { Inner: SerialTransport serial }
+        ? serial.PortName
+        : null;
 
     /// <summary>
     /// Gets the Firehose protocol instance.
@@ -633,6 +661,34 @@ public sealed class EdlSession : IProtocolSession
         if (!IsConfigured)
         {
             await InitializeAsync(programmerImage, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Ensures the session is initialized with explicit startup requirements, including vendor authentication.
+    /// <para>确保会话按显式启动要求初始化，其中可包含厂商鉴权。</para>
+    /// </summary>
+    /// <remarks>Startup requirements are validated even when the session is already configured, so a late request
+    /// for vendor authentication fails loudly instead of being skipped.</remarks>
+    /// <param name="programmerImage">Optional programmer image stream. <para>可选的编程器镜像流。</para></param>
+    /// <param name="options">Immutable startup requirements, or <see langword="null"/> for the defaults.
+    /// <para>不可变的启动要求；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A task representing the asynchronous operation. <para>表示异步操作的任务。</para></returns>
+    public async Task EnsureInitializedAsync(Stream? programmerImage, EdlInitializationOptions? options,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
+        if (options is not null)
+        {
+            await InitializeAsync(programmerImage, options, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (!IsConfigured)
+        {
+            await InitializeAsync(programmerImage, cancellationToken).ConfigureAwait(false);
         }
     }
 

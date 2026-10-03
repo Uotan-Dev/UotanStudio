@@ -16,16 +16,12 @@ public class FirehoseConcurrencyTests
     [InlineData("configure")]
     [InlineData("detect")]
     [InlineData("storage")]
-    [InlineData("bootable")]
     [InlineData("slot")]
     [InlineData("erase")]
     [InlineData("patch")]
     [InlineData("read")]
     [InlineData("stream")]
     [InlineData("peek")]
-    [InlineData("poke")]
-    [InlineData("pokedword")]
-    [InlineData("memcpy")]
     [InlineData("ufs")]
     [InlineData("ufs-reset")]
     [InlineData("power")]
@@ -290,16 +286,12 @@ public class FirehoseConcurrencyTests
             "configure" => protocol.ConfigureAsync(cancellationToken: cancellationToken),
             "detect" => protocol.AutoDetectSectorSizeAsync(cancellationToken),
             "storage" => protocol.GetStorageInfoAsync(cancellationToken: cancellationToken),
-            "bootable" => protocol.SetBootableStorageDriveAsync(0, cancellationToken),
             "slot" => protocol.SetActivePartitionAsync("a", cancellationToken),
             "erase" => protocol.EraseAsync(0, 1, cancellationToken: cancellationToken),
             "patch" => protocol.PatchAsync("DISK", 0, 0, 0, "1", 4, cancellationToken),
             "read" => protocol.ReadAsync(0, 1, cancellationToken: cancellationToken),
             "stream" => protocol.ReadToStreamAsync(destination, 0, 1, cancellationToken: cancellationToken),
             "peek" => protocol.PeekAsync(512, 0, cancellationToken),
-            "poke" => protocol.PokeAsync(4, 0, new byte[4], cancellationToken),
-            "pokedword" => protocol.PokeDwordAsync(0, 1, cancellationToken),
-            "memcpy" => protocol.MemcpyAsync(0, 512, 512, cancellationToken),
             "ufs" => protocol.ProvisionUfsAsync(new UfsCommon(), [new UfsBody()], new UfsEpilogue(), cancellationToken: cancellationToken),
             "ufs-reset" => protocol.UfsResetAsync(cancellationToken),
             "power" => protocol.ResetAsync(cancellationToken),

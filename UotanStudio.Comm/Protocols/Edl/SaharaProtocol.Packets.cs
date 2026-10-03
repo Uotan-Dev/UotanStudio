@@ -259,9 +259,9 @@ internal struct SaharaHelloResponsePacket
     /// <summary>The minimum host protocol version (Sahara spec min_version).
     /// <para>主机最低协议版本（Sahara 规范的 min_version）。</para></summary>
     public uint MinVersion;
-    /// <summary>The maximum command length (Sahara spec max_cmd_len).
-    /// <para>最大命令长度（Sahara 规范的 max_cmd_len）。</para></summary>
-    public uint MaxCommandLength;
+    /// <summary>The host status word (Sahara spec status; 0 means success).
+    /// <para>主机状态字（Sahara 规范的 status；0 表示成功）。</para></summary>
+    public uint Status;
     /// <summary>The operating mode. <para>操作模式。</para></summary>
     public SaharaMode Mode;
     /// <summary>Reserved word 0. <para>保留字 0。</para></summary>
@@ -362,6 +362,21 @@ internal struct SaharaDoneResponsePacket
 }
 
 /// <summary>
+/// Sahara RESET packet structure (8 bytes), the host request that makes the target leave its current
+/// mode (QSaharaServer/src/sahara_protocol.h:374-379).
+/// <para>Sahara RESET 包结构（8 字节），即让目标离开当前模式的主机请求
+/// （QSaharaServer/src/sahara_protocol.h:374-379）。</para>
+/// </summary>
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+internal struct SaharaResetPacket
+{
+    /// <summary>The command identifier. <para>命令标识。</para></summary>
+    public SaharaCommand Command;
+    /// <summary>The packet length. <para>包长度。</para></summary>
+    public uint Length;
+}
+
+/// <summary>
 /// Sahara RESET_RESPONSE packet structure.
 /// <para>Sahara RESET_RESPONSE 包结构。</para>
 /// </summary>
@@ -372,4 +387,82 @@ internal struct SaharaResetResponsePacket
     public SaharaCommand Command;
     /// <summary>The packet length. <para>包长度。</para></summary>
     public uint Length;
+}
+
+/// <summary>
+/// Sahara MEMORY_DEBUG packet structure (16 bytes), carrying the address and length of the target's
+/// debug region table (QSaharaServer/src/sahara_protocol.h:388-395).
+/// <para>Sahara MEMORY_DEBUG 包结构（16 字节），携带目标调试区域表的地址与长度
+/// （QSaharaServer/src/sahara_protocol.h:388-395）。</para>
+/// </summary>
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+internal struct SaharaMemoryDebugPacket
+{
+    /// <summary>The command identifier. <para>命令标识。</para></summary>
+    public SaharaCommand Command;
+    /// <summary>The packet length. <para>包长度。</para></summary>
+    public uint Length;
+    /// <summary>The memory address of the region table. <para>区域表的内存地址。</para></summary>
+    public uint MemoryTableAddress;
+    /// <summary>The byte length of the region table. <para>区域表的字节长度。</para></summary>
+    public uint MemoryTableLength;
+}
+
+/// <summary>
+/// Sahara MEMORY_DEBUG64 packet structure (24 bytes), the widened variant of
+/// <see cref="SaharaMemoryDebugPacket"/> (QSaharaServer/src/sahara_protocol.h:396-401).
+/// <para>Sahara MEMORY_DEBUG64 包结构（24 字节），即 <see cref="SaharaMemoryDebugPacket"/> 的拓宽变体
+/// （QSaharaServer/src/sahara_protocol.h:396-401）。</para>
+/// </summary>
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+internal struct SaharaMemoryDebug64Packet
+{
+    /// <summary>The command identifier. <para>命令标识。</para></summary>
+    public SaharaCommand Command;
+    /// <summary>The packet length. <para>包长度。</para></summary>
+    public uint Length;
+    /// <summary>The memory address of the region table. <para>区域表的内存地址。</para></summary>
+    public ulong MemoryTableAddress;
+    /// <summary>The byte length of the region table. <para>区域表的字节长度。</para></summary>
+    public ulong MemoryTableLength;
+}
+
+/// <summary>
+/// Sahara MEMORY_READ packet structure (16 bytes), the host request that makes the target return the
+/// addressed bytes with no packet framing (QSaharaServer/src/sahara_protocol.h:403-410 and the
+/// transmitter at QSaharaServer/src/sahara_protocol.c:1465-1495).
+/// <para>Sahara MEMORY_READ 包结构（16 字节），即让目标按地址回送裸字节且不再带包框的主机请求
+/// （QSaharaServer/src/sahara_protocol.h:403-410，以及发送实现
+/// QSaharaServer/src/sahara_protocol.c:1465-1495）。</para>
+/// </summary>
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+internal struct SaharaMemoryReadPacket
+{
+    /// <summary>The command identifier. <para>命令标识。</para></summary>
+    public SaharaCommand Command;
+    /// <summary>The packet length. <para>包长度。</para></summary>
+    public uint Length;
+    /// <summary>The memory address to read. <para>要读取的内存地址。</para></summary>
+    public uint MemoryAddress;
+    /// <summary>The number of bytes to read. <para>要读取的字节数。</para></summary>
+    public uint MemoryLength;
+}
+
+/// <summary>
+/// Sahara MEMORY_READ64 packet structure (24 bytes), the widened variant of
+/// <see cref="SaharaMemoryReadPacket"/> (QSaharaServer/src/sahara_protocol.h:411-416).
+/// <para>Sahara MEMORY_READ64 包结构（24 字节），即 <see cref="SaharaMemoryReadPacket"/> 的拓宽变体
+/// （QSaharaServer/src/sahara_protocol.h:411-416）。</para>
+/// </summary>
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+internal struct SaharaMemoryRead64Packet
+{
+    /// <summary>The command identifier. <para>命令标识。</para></summary>
+    public SaharaCommand Command;
+    /// <summary>The packet length. <para>包长度。</para></summary>
+    public uint Length;
+    /// <summary>The memory address to read. <para>要读取的内存地址。</para></summary>
+    public ulong MemoryAddress;
+    /// <summary>The number of bytes to read. <para>要读取的字节数。</para></summary>
+    public ulong MemoryLength;
 }

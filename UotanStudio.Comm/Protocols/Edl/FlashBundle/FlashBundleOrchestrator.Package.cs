@@ -135,6 +135,13 @@ public sealed partial class FlashBundleOrchestrator
         {
             ResolveSourceFiles(programs, options.ImageDirectory);
         }
+        var absentPrograms = options.SkipAbsentSources && !options.SkipProgram
+            ? programs.Where(entry => !string.IsNullOrEmpty(entry.Filename) && !File.Exists(entry.SourceFile)).ToList()
+            : [];
+        if (absentPrograms.Count > 0)
+        {
+            programs.RemoveAll(entry => absentPrograms.Contains(entry));
+        }
         List<PatchEntry>? patches = null;
         if (!options.SkipPatch && !string.IsNullOrEmpty(options.PatchPath))
         {
@@ -156,11 +163,12 @@ public sealed partial class FlashBundleOrchestrator
             }
         }
         var sources = options.SkipProgram ? null : FlashBundleSources.Open(programs, cancellationToken, maximumFiles);
-        return new PreparedBundle(programs, patches, ufs, sources);
+        return new PreparedBundle(programs, patches, ufs, sources, absentPrograms);
     }
 
     private sealed record PreparedBundle(List<RawProgramEntry> Programs, List<PatchEntry>? Patches,
-        UfsProvisionPlan? Ufs, FlashBundleSources? Sources) : IDisposable
+        UfsProvisionPlan? Ufs, FlashBundleSources? Sources,
+        List<RawProgramEntry>? AbsentPrograms = null) : IDisposable
     {
         public void Dispose() => Sources?.Dispose();
     }

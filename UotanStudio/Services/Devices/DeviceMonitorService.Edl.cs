@@ -17,6 +17,16 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
+    /// <para>返回该 EDL 端点最近一次探测附加采集到的只读详情快照；探测尚未运行或采集失败时为 null。</para>
+    /// Returns the read-only detail snapshot collected alongside the EDL endpoint's latest probe;
+    /// null when the probe has not run yet or collection failed.
+    /// </summary>
+    /// <param name="device">The EDL endpoint to query. <para>要查询的 EDL 端点。</para></param>
+    /// <returns>The latest detail snapshot, or <see langword="null"/>.
+    /// <para>最近的详情快照；无则 <see langword="null"/>。</para></returns>
+    public EdlDetailsSnapshot? GetEdlDetails(DetectedDevice device) => _edlConnections.GetDetails(device.Key);
+
+    /// <summary>
     /// <para>惰性接线 EDL 租约代际判活探针：parked 租约只有在携带类型化 EdlSession、会话连接
     /// 仍存活，且其传输代际与控制器当前代际不矛盾时才可复用；代际不同即作废重开。探针缺失
     /// 身份信息或从未观测到代际时保留租约，交由会话自身的故障路径退休。</para>

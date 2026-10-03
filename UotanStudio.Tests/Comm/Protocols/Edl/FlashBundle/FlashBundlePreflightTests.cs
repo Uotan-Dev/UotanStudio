@@ -64,10 +64,7 @@ public class FlashBundlePreflightTests
     [InlineData("end-offset")]
     [InlineData("overflow-offset")]
     [InlineData("negative-sectors")]
-    [InlineData("too-short")]
-    [InlineData("partial-sector")]
     [InlineData("invalid-address")]
-    [InlineData("relative-range")]
     [InlineData("negative-partition")]
     [InlineData("sector-mismatch")]
     [InlineData("sparse-corrupt")]
@@ -85,10 +82,7 @@ public class FlashBundlePreflightTests
             case "end-offset": second.SetAttributeValue("file_sector_offset", 1); break;
             case "overflow-offset": second.SetAttributeValue("file_sector_offset", long.MaxValue); break;
             case "negative-sectors": second.SetAttributeValue("num_partition_sectors", -1); break;
-            case "too-short": second.SetAttributeValue("num_partition_sectors", 2); break;
-            case "partial-sector": directory.WriteBytes("second.img", new byte[511]); break;
             case "invalid-address": second.SetAttributeValue("start_sector", "unexpected"); break;
-            case "relative-range": second.SetAttributeValue("start_sector", "NUM_DISK_SECTORS-1."); second.SetAttributeValue("num_partition_sectors", 2); break;
             case "negative-partition": second.SetAttributeValue("physical_partition_number", -1); break;
             case "sector-mismatch": second.SetAttributeValue("SECTOR_SIZE_IN_BYTES", 4096); break;
             case "sparse-corrupt": second.SetAttributeValue("sparse", true); break;
@@ -115,6 +109,65 @@ public class FlashBundlePreflightTests
         Assert.Equal(0, result.EraseEntriesProcessed);
         Assert.Empty(transport.Writes);
         Assert.Equal(0, transport.ReadCount);
+    }
+
+    [Theory]
+    [InlineData("capacity")]
+    [InlineData("partial-tail")]
+    [InlineData("disk-relative")]
+    public async Task FlashBundleAsync_SourceShorterThanDeclaredCapacity_ProgramsSourceDerivedRange(string shape)
+    {
+        using var directory = new TempDirectory();
+        var imageLength = shape == "partial-tail" ? 511 : 512;
+        directory.WriteBytes("first.img", new byte[imageLength]);
+        var entry = Program("first.img");
+        entry.SetAttributeValue("num_partition_sectors", shape == "partial-tail" ? 1 : 2);
+        if (shape == "disk-relative")
+        {
+            entry.SetAttributeValue("start_sector", "NUM_DISK_SECTORS-1.");
+        }
+
+        var rawPath = directory.Write("rawprogram.xml", new XElement("data", entry).ToString());
+        var programSeen = false;
+        using var transport = new ScriptedCommTransport();
+        transport.OnWrite = bytes =>
+        {
+            var text = Encoding.UTF8.GetString(bytes);
+            if (text.Contains("<getstorageinfo", StringComparison.Ordinal))
+            {
+                return [Encoding.UTF8.GetBytes("""
+                    <data><log value='{"storage_info":{"block_size":512,"total_blocks":1048576}}'/><response value="ACK"/></data>
+                    """)];
+            }
+
+            if (text.Contains("<configure", StringComparison.Ordinal))
+            {
+                return [Encoding.UTF8.GetBytes("""
+                    <data><response value="ACK" rawmode="false" MaxPayloadSizeToTargetInBytes="1048576" Program="true" Erase="true" Patch="true" Wipe="true" UfsProvisioning="true"/></data>
+                    """)];
+            }
+
+            if (text.Contains("<program", StringComparison.Ordinal))
+            {
+                programSeen = true;
+                return [Encoding.UTF8.GetBytes("<data><response value='ACK' rawmode='true'/></data>"), Encoding.UTF8.GetBytes(Ack)];
+            }
+
+            return [Encoding.UTF8.GetBytes(Ack)];
+        };
+        using var session = CreateSession(transport, 512);
+
+        var result = await new FlashBundleOrchestrator(session).FlashBundleAsync(
+            rawPath, null, directory.Path, null, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess, string.Join("; ", result.Errors));
+        Assert.True(programSeen);
+        var program = Encoding.UTF8.GetString(transport.Writes.Single(write =>
+            Encoding.UTF8.GetString(write).Contains("<program", StringComparison.Ordinal)));
+        Assert.Contains("num_partition_sectors=\"1\"", program, StringComparison.Ordinal);
+        Assert.Contains("start_sector=", program, StringComparison.Ordinal);
+        byte[] expectedPayload = [.. new byte[imageLength], .. new byte[512 - imageLength]];
+        Assert.Equal(expectedPayload, transport.Writes[^1]);
     }
 
     [Theory]
@@ -165,7 +218,7 @@ public class FlashBundlePreflightTests
     public async Task FlashBundleAsync_UnknownSectorSize_RequiresOfflineEvidenceOrPreflightsAfterConfigure(bool dryRun)
     {
         using var directory = new TempDirectory();
-        directory.WriteBytes("first.img", new byte[511]);
+        directory.WriteBytes("first.img", []);
         var entry = Program("first.img");
         entry.SetAttributeValue("SECTOR_SIZE_IN_BYTES", 0);
         var rawPath = directory.Write("rawprogram.xml", new XElement("data", entry).ToString());

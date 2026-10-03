@@ -94,7 +94,7 @@ public static class EdlReadbackManifestWriter
             var startSector = FormatStartSector(entry, numDiskSectors, generalized);
             document.Root!.Add(new XElement("program",
                 new XAttribute("SECTOR_SIZE_IN_BYTES", sectorSizeInBytes.ToString(CultureInfo.InvariantCulture)),
-                new XAttribute("file", entry.FileName),
+                new XAttribute("filename", entry.FileName),
                 new XAttribute("label", entry.PartitionName),
                 new XAttribute("start_sector", startSector),
                 new XAttribute("num_partition_sectors", entry.SectorCount.ToString(CultureInfo.InvariantCulture)),

@@ -177,9 +177,6 @@ public class FirehoseTests
         Assert.Contains("<getstorageinfo physical_partition_number=\"0\" />", FirehoseXmlBuilder.BuildGetStorageInfo(0), StringComparison.Ordinal);
         Assert.Contains("<setactivepartition slot=\"a\" />", FirehoseXmlBuilder.BuildSetActivePartition("a"), StringComparison.Ordinal);
         Assert.Contains("<peek size_in_bytes=\"4\" address=\"0x4000\" />", FirehoseXmlBuilder.BuildPeek(4, "0x4000"), StringComparison.Ordinal);
-        Assert.Contains("<poke size_in_bytes=\"4\" address=\"0x4000\" value=\"00\" />", FirehoseXmlBuilder.BuildPoke(4, "0x4000", "00"), StringComparison.Ordinal);
-        Assert.Contains("<pokedword address=\"0x4000\" value=\"1\" />", FirehoseXmlBuilder.BuildPokeDword("0x4000", "1"), StringComparison.Ordinal);
-        Assert.Contains("<memcpy dst_offset=\"0x100\" src_offset=\"0x200\" size=\"8\" />", FirehoseXmlBuilder.BuildMemcpy("0x100", "0x200", 8), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -320,6 +317,108 @@ public class FirehoseTests
         Assert.Equal(2, transport.Writes.Count);
         var retried = Encoding.UTF8.GetString(transport.Writes[1]);
         Assert.Contains("MaxPayloadSizeToTargetInBytes=\"8192\"", retried, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConfigureAsync_AckCarriesMemoryName_AdoptsReportedStorageType()
+    {
+        var transport = new ScriptedCommTransport();
+        transport.Enqueue("""
+            <?xml version="1.0" encoding="UTF-8" ?>
+            <data>
+            <response value="ACK" MemoryName="UFS"/>
+            </data>
+            """);
+
+        var protocol = CreateProtocol(transport);
+
+        await protocol.ConfigureAsync(maxRetries: 1, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(FirehoseStorageType.Ufs, protocol.Configuration.StorageType);
+    }
+
+    [Fact]
+    public async Task ConfigureAsync_NakNamesDifferentStorageType_RetriesWithMatchingMemoryName()
+    {
+        var transport = new ScriptedCommTransport();
+        transport.Enqueue("""
+            <?xml version="1.0" encoding="UTF-8" ?>
+            <data>
+            <response value="NAK" MemoryName="ufs"/>
+            </data>
+            """);
+        transport.Enqueue(AckXml);
+        var protocol = CreateProtocol(transport, new FirehoseConfiguration
+        {
+            SectorSize = 4096,
+            AutoDetectSectorSize = false,
+            ConfigureRetryIntervalMs = 0
+        });
+
+        await protocol.ConfigureAsync(maxRetries: 3, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(FirehoseStorageType.Ufs, protocol.Configuration.StorageType);
+        Assert.Equal(2, transport.Writes.Count);
+        Assert.Contains("<configure MemoryName=\"eMMC\"", Encoding.UTF8.GetString(transport.Writes[0]), StringComparison.Ordinal);
+        Assert.Contains("<configure MemoryName=\"ufs\"", Encoding.UTF8.GetString(transport.Writes[1]), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConfigureAsync_NakLogTextNamesDifferentStorageType_RetriesWithMatchingMemoryName()
+    {
+        var transport = new ScriptedCommTransport();
+        transport.Enqueue("""
+            <?xml version="1.0" encoding="UTF-8" ?>
+            <data>
+            <log value="storage init failed: expected UFS"/>
+            <response value="NAK"/>
+            </data>
+            """);
+        transport.Enqueue(AckXml);
+        var protocol = CreateProtocol(transport, new FirehoseConfiguration
+        {
+            SectorSize = 4096,
+            AutoDetectSectorSize = false,
+            ConfigureRetryIntervalMs = 0
+        });
+
+        await protocol.ConfigureAsync(maxRetries: 3, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(FirehoseStorageType.Ufs, protocol.Configuration.StorageType);
+        Assert.Contains("<configure MemoryName=\"ufs\"", Encoding.UTF8.GetString(transport.Writes[1]), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConfigureAsync_NakNamesCurrentStorageType_KeepsSendingSameMemoryName()
+    {
+        var transport = new ScriptedCommTransport();
+        transport.Enqueue("""
+            <?xml version="1.0" encoding="UTF-8" ?>
+            <data>
+            <response value="NAK" MemoryName="eMMC"/>
+            </data>
+            """);
+        transport.Enqueue("""
+            <?xml version="1.0" encoding="UTF-8" ?>
+            <data>
+            <response value="NAK" MemoryName="eMMC"/>
+            </data>
+            """);
+        var protocol = CreateProtocol(transport, new FirehoseConfiguration
+        {
+            SectorSize = 4096,
+            AutoDetectSectorSize = false,
+            ConfigureRetryIntervalMs = 0
+        });
+
+        var exception = await Assert.ThrowsAsync<EdlException>(
+            () => protocol.ConfigureAsync(maxRetries: 2, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(EdlErrorCode.ConfigureFailed, exception.ErrorCode);
+        Assert.Equal(FirehoseStorageType.Emmc, protocol.Configuration.StorageType);
+        Assert.Equal(2, transport.Writes.Count);
+        Assert.All(transport.Writes, write =>
+            Assert.Contains("<configure MemoryName=\"eMMC\"", Encoding.UTF8.GetString(write), StringComparison.Ordinal));
     }
 
     [Fact]

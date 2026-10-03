@@ -267,6 +267,14 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 {
     private const int DisposalGateTimeoutMs = 250;
 
+    /// <summary>
+    /// <para>能力发现用的单次 <c>&lt;nop&gt;</c> 往返时限；到点即放弃并保持原有严格门控，
+    /// 绝不让一次发现把刷写拖成分钟级等待。</para>
+    /// Per-round bound for the capability-discovery <c>&lt;nop&gt;</c>; expiry abandons discovery and
+    /// keeps the gating exactly as strict as before, so one probe never stalls a flash for minutes.
+    /// </summary>
+    private const int CapabilityDiscoveryTimeoutMs = 5000;
+
     private readonly ICommTransport _transport = transport ?? throw new ArgumentNullException(nameof(transport));
     private readonly int _cmdTimeoutMs = timeoutMs ?? EdlConstants.DefaultCommandTimeoutMs;
     private readonly byte[] _rxBuffer = new byte[4 * 1024];
@@ -279,7 +287,10 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     private volatile EdlFailureKind _lastFailureKind;
     private FirehoseCapabilitySnapshot? _capabilitySnapshot;
     private FirehoseStorageGeometry? _lastGeometry;
+    private FirehoseStorageDetails? _lastStorageDetails;
     private FirehoseResponse? _lastConfigureAck;
+    private IReadOnlySet<string>? _supportedFunctions;
+    private bool _capabilityDiscoveryAttempted;
 
     /// <summary>
     /// Gets the immutable capability snapshot negotiated by the latest successful configure, or
@@ -289,6 +300,15 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// </summary>
     /// <value>The snapshot guarding high-risk storage commands. <para>守卫高风险存储命令的快照。</para></value>
     public FirehoseCapabilitySnapshot? Capabilities => _capabilitySnapshot;
+
+    /// <summary>
+    /// Gets the descriptive storage facts merged from the latest successful
+    /// <c>&lt;getstorageinfo&gt;</c> logs, or <see langword="null"/> when none were reported.
+    /// <para>获取从最近一次成功的 <c>&lt;getstorageinfo&gt;</c> 日志合并出的描述性存储信息；
+    /// 目标未上报时为 <see langword="null"/>。</para>
+    /// </summary>
+    /// <value>The merged descriptive facts. <para>合并后的描述性信息。</para></value>
+    public FirehoseStorageDetails? LastStorageDetails => _lastStorageDetails;
 
     /// <summary>
     /// Gets the typed classification of the most recent failure observed by this protocol instance.
@@ -345,6 +365,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         bool deferStorageDetection = false)
     {
         ThrowIfDisposed();
+        var attemptedStorageTypes = new HashSet<FirehoseStorageType> { Configuration.StorageType };
         for (var attempt = 0; attempt < maxRetries; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -411,6 +432,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                 }
                 else if (attempt < maxRetries - 1)
                 {
+                    AdoptStorageTypeFromNak(response, attemptedStorageTypes);
                     continue;
                 }
                 else
@@ -443,7 +465,9 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                 Configuration.MaxPayloadSizeFromTarget = ackFromTarget.Value;
             }
 
-            Log($"Configure OK: MaxPayload={Configuration.MaxPayloadSizeToTarget}, FromTarget={Configuration.MaxPayloadSizeFromTarget}");
+            AdoptStorageTypeFromAck(response);
+
+            Log($"Configure OK: MaxPayload={Configuration.MaxPayloadSizeToTarget}, FromTarget={Configuration.MaxPayloadSizeFromTarget}, MemoryName={Configuration.StorageType}");
             _lastConfigureAck = response;
 
             if (!deferStorageDetection)
@@ -457,6 +481,134 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
         throw new EdlException(EdlErrorCode.ConfigureFailed,
             $"Firehose configure failed after {maxRetries} attempts (timeout).");
+    }
+
+    /// <summary>
+    /// Adopts the storage type reported by a successful configure acknowledgement so later
+    /// storage-dependent defaults and commands follow the device's real media instead of the
+    /// pre-configured guess.
+    /// <para>采纳成功 configure 应答上报的存储类型，使后续依赖存储类型的默认值与命令跟随设备
+    /// 真实介质，而不是沿用配置期的猜测值。</para>
+    /// </summary>
+    /// <param name="response">The acknowledged configure response. <para>已确认的 configure 应答。</para></param>
+    private void AdoptStorageTypeFromAck(FirehoseResponse response)
+    {
+        var reported = response["MemoryName"];
+        if (reported is null || !TryParseStorageType(reported, out var parsed) || parsed == Configuration.StorageType)
+        {
+            return;
+        }
+
+        Log($"Adopting configure ACK MemoryName: {Configuration.StorageType} -> {parsed}.");
+        Configuration.StorageType = parsed;
+    }
+
+    /// <summary>
+    /// Switches the configured storage type when a configure NAK names a different media, so the
+    /// next retry sends a matching <c>MemoryName</c>. Each storage type is attempted at most once
+    /// per configure call; a NAK that names no new type leaves the retry behaviour unchanged.
+    /// <para>当 configure NAK 指明了不同介质时切换所配置的存储类型，使下一次重试发送匹配的
+    /// <c>MemoryName</c>。单次 configure 内每种存储类型至多尝试一次；NAK 未指明新类型时重试
+    /// 行为保持不变。</para>
+    /// </summary>
+    /// <param name="response">The rejected configure response. <para>被拒绝的 configure 应答。</para></param>
+    /// <param name="attemptedStorageTypes">Storage types already sent in this configure call. <para>本次 configure 已发送过的存储类型。</para></param>
+    private void AdoptStorageTypeFromNak(FirehoseResponse response, HashSet<FirehoseStorageType> attemptedStorageTypes)
+    {
+        if (_vip is not null)
+        {
+            return;
+        }
+
+        var candidates = new[] { response["MemoryName"], response.RawValue, response.RawXml };
+        foreach (var candidate in candidates)
+        {
+            if (candidate is null || !TryMatchStorageTypeText(candidate, out var matched)
+                || matched == Configuration.StorageType || !attemptedStorageTypes.Add(matched))
+            {
+                continue;
+            }
+
+            Log($"Configure rejected this storage type; retrying with MemoryName for {matched}.");
+            Configuration.StorageType = matched;
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Parses a configure <c>MemoryName</c> token into a storage type.
+    /// <para>把 configure 的 <c>MemoryName</c> 记号解析为存储类型。</para>
+    /// </summary>
+    /// <param name="value">The reported memory name. <para>上报的存储名称。</para></param>
+    /// <param name="storageType">The parsed storage type on success. <para>解析成功时的存储类型。</para></param>
+    /// <returns><see langword="true"/> when the token names a supported storage type. <para>记号指向受支持的存储类型时为 true。</para></returns>
+    private static bool TryParseStorageType(string value, out FirehoseStorageType storageType)
+    {
+        if (string.Equals(value, "ufs", StringComparison.OrdinalIgnoreCase))
+        {
+            storageType = FirehoseStorageType.Ufs;
+            return true;
+        }
+
+        if (string.Equals(value, "nand", StringComparison.OrdinalIgnoreCase))
+        {
+            storageType = FirehoseStorageType.Nand;
+            return true;
+        }
+
+        if (string.Equals(value, "spinor", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "spi nor", StringComparison.OrdinalIgnoreCase))
+        {
+            storageType = FirehoseStorageType.Spinor;
+            return true;
+        }
+
+        if (string.Equals(value, "emmc", StringComparison.OrdinalIgnoreCase))
+        {
+            storageType = FirehoseStorageType.Emmc;
+            return true;
+        }
+
+        storageType = FirehoseStorageType.Unknown;
+        return false;
+    }
+
+    /// <summary>
+    /// Finds a storage-type mention inside a configure rejection message.
+    /// <para>在 configure 拒绝消息中查找存储类型提法。</para>
+    /// </summary>
+    /// <param name="text">The rejection text (attribute, value or raw XML). <para>拒绝文本（属性、值或原始 XML）。</para></param>
+    /// <param name="storageType">The first storage type named by the text. <para>文本中首个提及的存储类型。</para></param>
+    /// <returns><see langword="true"/> when the text names a supported storage type. <para>文本提及受支持的存储类型时为 true。</para></returns>
+    private static bool TryMatchStorageTypeText(string text, out FirehoseStorageType storageType)
+    {
+        if (text.Contains("ufs", StringComparison.OrdinalIgnoreCase))
+        {
+            storageType = FirehoseStorageType.Ufs;
+            return true;
+        }
+
+        if (text.Contains("spinor", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("spi nor", StringComparison.OrdinalIgnoreCase))
+        {
+            storageType = FirehoseStorageType.Spinor;
+            return true;
+        }
+
+        if (text.Contains("nand", StringComparison.OrdinalIgnoreCase))
+        {
+            storageType = FirehoseStorageType.Nand;
+            return true;
+        }
+
+        if (text.Contains("emmc", StringComparison.OrdinalIgnoreCase))
+        {
+            storageType = FirehoseStorageType.Emmc;
+            return true;
+        }
+
+        storageType = FirehoseStorageType.Unknown;
+        return false;
     }
 
     internal async Task CompleteStorageConfigurationOwnedAsync(CancellationToken cancellationToken)
@@ -488,16 +640,102 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         if (_lastConfigureAck is { IsAck: true, IsRawMode: false } ack)
         {
             _capabilitySnapshot = FirehoseCapabilitySnapshot.FromConfigureAck(ack, Configuration, _lastGeometry,
-                _faulted, DateTimeOffset.UtcNow);
+                _faulted, DateTimeOffset.UtcNow, _supportedFunctions);
         }
     }
 
     /// <summary>
-    /// Refuses a command before any byte reaches the wire when the negotiated snapshot exists and
-    /// does not report positive support. An absent snapshot means the caller drove the low-level
-    /// protocol without configuring; session entry points always configure first.
-    /// <para>当已协商的快照存在且未明确报告支持时，在任何字节上线之前拒绝该命令。快照缺失表示
-    /// 调用方在未 configure 的情况下直接驱动底层协议；会话入口总是先 configure。</para>
+    /// Guards one attribute-driven command before any byte reaches the wire. When the configure
+    /// acknowledgement simply omitted the attribute, one <c>&lt;nop&gt;</c> round trip asks the
+    /// target for its own supported-functions report and the snapshot is renegotiated once; only
+    /// after that does the standard refusal apply. Read, program and sparse are governed by their
+    /// own negotiation and never spend this round trip.
+    /// <para>在任何字节上线之前守护一条由属性驱动的命令。若 configure 应答只是省略了该属性，先用一次
+    /// <c>&lt;nop&gt;</c> 往返询问目标自报的支持功能列表并重新定格一次快照，之后才应用标准拒绝。
+    /// 读、编程与稀疏由各自协商决定，不消耗这次往返。</para>
+    /// </summary>
+    /// <param name="command">The command about to be sent. <para>即将发送的命令。</para></param>
+    /// <param name="cancellationToken">Cancellation for the discovery round trip.
+    /// <para>用于发现往返的取消令牌。</para></param>
+    /// <exception cref="EdlException">Thrown when the snapshot reports the capability as unknown or
+    /// unsupported. <para>快照报告能力未知或不支持时抛出。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled discovery.
+    /// <para>调用方取消了发现。</para></exception>
+    private async Task RequireDestructiveCapabilityAsync(EdlFirehoseCommand command, CancellationToken cancellationToken)
+    {
+        if (_capabilitySnapshot?.For(command) is not FeatureSupport.Unknown
+            || _capabilityDiscoveryAttempted
+            || _vip is not null)
+        {
+            RequireCapability(command);
+            return;
+        }
+
+        _capabilityDiscoveryAttempted = true;
+        _supportedFunctions = await QuerySupportedFunctionsOwnedAsync(cancellationToken).ConfigureAwait(false);
+        if (_supportedFunctions is not null)
+        {
+            CaptureCapabilities();
+        }
+
+        RequireCapability(command);
+    }
+
+    /// <summary>
+    /// Sends one <c>&lt;nop&gt;</c> and collects the target's supported-functions report. Every
+    /// failure — a NAK, a timeout, or an unexpected raw-mode entry — is logged and yields null so
+    /// capability gating simply stays as strict as it was; the report only ever upgrades a
+    /// capability the acknowledgement already left undeclared.
+    /// <para>发送一次 <c>&lt;nop&gt;</c> 并收集目标上报的支持功能列表。任何失败——NAK、超时或意外进入
+    /// 原始模式——都记录日志并返回 null，使能力门控保持与此前同样严格；该报告只会提升应答本就
+    /// 未声明的能力。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation for the round trip. <para>该次往返的取消令牌。</para></param>
+    /// <returns>The reported function names, or null when none could be collected.
+    /// <para>上报的功能名；未能收集时为 null。</para></returns>
+    private async Task<IReadOnlySet<string>?> QuerySupportedFunctionsOwnedAsync(CancellationToken cancellationToken)
+    {
+        var logs = new List<string>();
+        try
+        {
+            var response = await SendCommandAndWaitResponseAsync(FirehoseXmlBuilder.BuildNop(), cancellationToken,
+                responseTimeoutMs: CapabilityDiscoveryTimeoutMs, logObserver: logs.Add).ConfigureAwait(false);
+            if (response.IsRawMode)
+            {
+                _faulted = true;
+                Log("Capability discovery unexpectedly entered raw mode; the session now requires a reconnect.");
+                return null;
+            }
+
+            if (!response.IsAck)
+            {
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Capability discovery failed: {ex.Message}");
+            return null;
+        }
+
+        var functions = FirehoseCapabilitySnapshot.ParseSupportedFunctions(logs);
+        if (functions is not null)
+        {
+            Log($"Target reported supported functions: {string.Join(", ", functions.Order())}");
+        }
+
+        return functions;
+    }
+
+    /// <summary>
+    /// Refuses a command when the negotiated snapshot exists and does not report positive support,
+    /// so the command's own bytes never reach the wire. Attribute-driven commands may already have
+    /// spent one bounded capability-discovery <c>&lt;nop&gt;</c> round trip before this check; an
+    /// absent snapshot means the caller drove the low-level protocol without configuring, and
+    /// session entry points always configure first.
+    /// <para>当已协商的快照存在且未明确报告支持时拒绝该命令，使该命令自身的字节绝不落到线上。
+    /// 属性驱动的命令在此检查前可能已经花掉一次有界的能力发现 <c>&lt;nop&gt;</c> 往返；快照缺失表示
+    /// 调用方在未 configure 的情况下直接驱动底层协议，而会话入口总是先 configure。</para>
     /// </summary>
     /// <param name="command">The command about to be sent. <para>即将发送的命令。</para></param>
     /// <exception cref="EdlException">Thrown when the snapshot reports the capability as unknown or
@@ -510,7 +748,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             var kind = snapshot.For(command);
             _lastFailureKind = EdlFailureKind.CapabilityNotReported;
             throw new EdlException(EdlErrorCode.NotSupported,
-                $"The configure response did not report positive support for {command} (state {kind}); the command was refused before any byte was sent.")
+                $"The target did not report positive support for {command} (state {kind}); the command was refused before its own bytes were sent.")
             {
                 FailureKind = EdlFailureKind.CapabilityNotReported
             };

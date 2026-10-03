@@ -3,8 +3,11 @@ using System.Xml.Linq;
 namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 
 /// <summary>
-/// Parses rawprogram XML files containing program entries for EDL flashing.
-/// <para>解析包含 EDL 刷写 program 条目的 rawprogram XML 文件。</para>
+/// Parses rawprogram XML files containing program entries for EDL flashing. A program entry
+/// carries its image name in the <c>filename</c> attribute; the legacy <c>file</c> attribute
+/// is accepted as a fallback so manifests written by older tooling still resolve.
+/// <para>解析包含 EDL 刷写 program 条目的 rawprogram XML 文件。program 条目以 <c>filename</c> 属性
+/// 携带镜像名；为兼容旧版工具写出的清单，同时回退读取 <c>file</c> 属性。</para>
 /// </summary>
 public static class RawProgramParser
 {
@@ -136,7 +139,7 @@ public static class RawProgramParser
             {
                 SectorSizeInBytes = (long?)element.Attribute("SECTOR_SIZE_IN_BYTES") ?? 0,
                 NumPartitionSectors = (long?)element.Attribute("num_partition_sectors") ?? 0,
-                Filename = (string?)element.Attribute("filename") ?? string.Empty,
+                Filename = (string?)element.Attribute("filename") ?? (string?)element.Attribute("file") ?? string.Empty,
                 PhysicalPartitionNumber = (int?)element.Attribute("physical_partition_number") ?? 0,
                 StartSector = (string?)element.Attribute("start_sector") ?? "0",
                 FileSectorOffset = (long?)element.Attribute("file_sector_offset") ?? 0,

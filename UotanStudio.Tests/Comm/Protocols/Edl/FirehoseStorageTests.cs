@@ -125,6 +125,57 @@ public class FirehoseStorageTests
         Assert.Equal(2, transport.Writes.Count);
     }
 
+    [Fact]
+    public async Task GetStorageGeometryAsync_DescriptiveFields_MergesLastStorageDetails()
+    {
+        using var transport = new ScriptedCommTransport();
+        transport.Enqueue(Report("""{"storage_info":{"mem_type":"ufs","block_size":4096,"total_blocks":100,"page_size":2048}}""", false)
+            + Report("""{"storage_info":{"storage_type":"UFS","block_size":4096,"total_blocks":100,"serial_num":"0xABCDEF","fw_ver":"3.1","manufacturer_id":"Samsung","density":617545818112,"physical_partition_number":1}}"""));
+        using var protocol = new FirehoseProtocol(transport);
+
+        var geometry = await protocol.GetStorageGeometryAsync(1, TestContext.Current.CancellationToken);
+
+        Assert.Equal(4096, geometry.SectorSize);
+        var details = protocol.LastStorageDetails;
+        Assert.NotNull(details);
+        Assert.Equal("UFS", details.StorageType);
+        Assert.Equal("ufs", details.MemType);
+        Assert.Equal(2048, details.PageSize);
+        Assert.Equal(617545818112L, details.Density);
+        Assert.Equal("0xABCDEF", details.SerialNumber);
+        Assert.Equal("3.1", details.FirmwareVersion);
+        Assert.Equal("Samsung", details.ManufacturerId);
+        Assert.Equal(1, details.PhysicalPartitionNumber);
+    }
+
+    [Fact]
+    public async Task GetStorageGeometryAsync_GeometryOnlyReports_LeavesDescriptiveFieldsNull()
+    {
+        using var transport = new ScriptedCommTransport();
+        transport.Enqueue(Report("""{"storage_info":{"block_size":512,"total_blocks":100}}"""));
+        using var protocol = new FirehoseProtocol(transport);
+
+        await protocol.GetStorageGeometryAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.NotNull(protocol.LastStorageDetails);
+        Assert.Null(protocol.LastStorageDetails.StorageType);
+        Assert.Null(protocol.LastStorageDetails.SerialNumber);
+    }
+
+    [Fact]
+    public async Task GetStorageGeometryAsync_MalformedDescriptiveFields_KeepsGeometryStrictness()
+    {
+        using var transport = new ScriptedCommTransport();
+        transport.Enqueue(Report("""{"storage_info":{"block_size":512,"total_blocks":100,"density":"not-a-number","page_size":[]}}"""));
+        using var protocol = new FirehoseProtocol(transport);
+
+        var geometry = await protocol.GetStorageGeometryAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(512, geometry.SectorSize);
+        Assert.Null(protocol.LastStorageDetails!.PageSize);
+        Assert.Null(protocol.LastStorageDetails.Density);
+    }
+
     [Theory]
     [InlineData("0", 100, 0)]
     [InlineData("99", 1, 99)]

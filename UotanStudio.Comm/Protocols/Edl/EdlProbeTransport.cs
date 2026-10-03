@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using System.Text;
 using UotanStudio.Comm.Transports.Abstractions;
 
@@ -121,6 +122,40 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
         return foundLog;
     }
 
+    /// <summary>
+    /// Passively reads the buffered Sahara HELLO after a successful Sahara classification; the bytes
+    /// stay queued for the subsequent handshake.
+    /// <para>Sahara 分类成功后被动读取缓冲的 Sahara HELLO；这些字节仍保留在队列中供后续握手使用。</para>
+    /// </summary>
+    /// <param name="hello">The decoded HELLO packet. <para>解码后的 HELLO 包。</para></param>
+    /// <returns><see langword="true"/> when a complete HELLO is buffered.
+    /// <para>缓冲中存在完整 HELLO 时为 true。</para></returns>
+    internal bool TryReadSaharaHello(out SaharaHelloPacket hello)
+    {
+        hello = default;
+        var bytes = _buffer.AsSpan(0, _length);
+        if (bytes.Length < Marshal.SizeOf<SaharaHelloPacket>())
+        {
+            return false;
+        }
+        var command = (SaharaCommand)BinaryPrimitives.ReadUInt32LittleEndian(bytes);
+        var length = BinaryPrimitives.ReadUInt32LittleEndian(bytes[4..]);
+        if (command != SaharaCommand.Hello || length != 48)
+        {
+            return false;
+        }
+        hello = new SaharaHelloPacket
+        {
+            Command = command,
+            Length = length,
+            Version = BinaryPrimitives.ReadUInt32LittleEndian(bytes[8..]),
+            MinVersion = BinaryPrimitives.ReadUInt32LittleEndian(bytes[12..]),
+            MaxCommandLength = BinaryPrimitives.ReadUInt32LittleEndian(bytes[16..]),
+            Mode = (SaharaMode)BinaryPrimitives.ReadUInt32LittleEndian(bytes[20..]),
+        };
+        return true;
+    }
+
     internal static EdlProtocolState Classify(ReadOnlySpan<byte> bytes)
     {
         if (bytes.Length >= 8)
@@ -179,6 +214,12 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
         }
         return EdlProtocolState.Unknown;
     }
+
+    /// <summary>
+    /// Gets the underlying transport wrapped by this probe transport.
+    /// <para>获取本探测传输包装的底层传输。</para>
+    /// </summary>
+    internal ICommTransport Inner => inner;
 
     public bool IsConnected => inner.IsConnected;
     public void Connect() => inner.Connect();

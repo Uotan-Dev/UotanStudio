@@ -166,6 +166,99 @@ public sealed class EdlAuthenticationEvidenceTests
     }
 
     [Fact]
+    public async Task InitializeAsync_SetProjModelProvider_SendsReferenceToken()
+    {
+        var written = new List<string>();
+        using var transport = new ScriptedCommTransport
+        {
+            OnWrite = bytes =>
+            {
+                var text = Encoding.UTF8.GetString(bytes);
+                written.Add(text);
+                return [Encoding.UTF8.GetBytes(text.Contains("setprojmodel", StringComparison.Ordinal)
+                    ? "<data><response value=\"ACK\" model_check=\"0\" auth_token_verify=\"0\"/></data>"
+                    : Ack)];
+            }
+        };
+        using var session = CreateSession(transport);
+        var provider = new EdlOnePlusProjectAuthProvider(new EdlOnePlusProjectProfile
+        {
+            ProjectId = "18825",
+            ProductionKey = "b2fad511325185e5",
+            RandomPostfix = "0iyFR00pPnoqjVNL",
+            VersionString = "guacamoles_21_O.22_191107",
+            Family = EdlOnePlusProjectFamily.ProjectModel,
+        }, EdlOnePlusReferenceVectors.FixedKey);
+        var options = new EdlInitializationOptions
+        {
+            ProjectAuthentication = new EdlProjectAuthenticationOptions
+            {
+                Kind = EdlProjectAuthenticationKind.OnePlusProject,
+                ProjectId = "18825",
+                SerialNumber = 123456,
+                Provider = provider,
+                CommandTokenProvider = provider,
+            }
+        };
+
+        await session.InitializeAsync(null, options, TestContext.Current.CancellationToken);
+
+        Assert.Equal(EdlAuthStage.Completed, session.AuthenticationResult!.ReachedStage);
+        Assert.Contains(written, text => text.Contains("<setprojmodel", StringComparison.Ordinal)
+            && text.Contains(EdlOnePlusReferenceVectors.ProjectModelGuacamolesToken, StringComparison.Ordinal)
+            && text.Contains("pk=\"FreeProgDontSale\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task InitializeAsync_SetSoftwareProjModelProvider_UsesDeviceTimestampAndReferenceToken()
+    {
+        var written = new List<string>();
+        using var transport = new ScriptedCommTransport
+        {
+            OnWrite = bytes =>
+            {
+                var text = Encoding.UTF8.GetString(bytes);
+                written.Add(text);
+                if (text.Contains("setprocstart", StringComparison.Ordinal))
+                {
+                    return [Encoding.UTF8.GetBytes(
+                        "<data><response value=\"ACK\" device_timestamp=\"1729390368\"/></data>")];
+                }
+
+                return [Encoding.UTF8.GetBytes(text.Contains("setswprojmodel", StringComparison.Ordinal)
+                    ? "<data><response value=\"ACK\" model_check=\"0\" auth_token_verify=\"0\"/></data>"
+                    : Ack)];
+            }
+        };
+        using var session = CreateSession(transport);
+        var provider = new EdlOnePlusProjectAuthProvider(new EdlOnePlusProjectProfile
+        {
+            ProjectId = "f2056ae1",
+            ProductionKey = "7016147d58e8c038",
+            RandomPostfix = "c75oVnz8yUgLZObh",
+            VersionString = "billie8_14_E.01_201028",
+            Family = EdlOnePlusProjectFamily.SoftwareProjectModel,
+        }, EdlOnePlusReferenceVectors.FixedKey);
+        var options = new EdlInitializationOptions
+        {
+            ProjectAuthentication = new EdlProjectAuthenticationOptions
+            {
+                Kind = EdlProjectAuthenticationKind.OnePlusSoftwareProject,
+                ProjectId = "f2056ae1",
+                SerialNumber = 123456,
+                Provider = provider,
+            }
+        };
+
+        await session.InitializeAsync(null, options, TestContext.Current.CancellationToken);
+
+        Assert.Equal(EdlAuthStage.Completed, session.AuthenticationResult!.ReachedStage);
+        Assert.Contains(written, text => text.Contains("setprocstart", StringComparison.Ordinal));
+        Assert.Contains(written, text => text.Contains("<setswprojmodel", StringComparison.Ordinal)
+            && text.Contains(EdlOnePlusReferenceVectors.SoftwareBillie8Token, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task InitializeAsync_NetTypeAcknowledged_RecordsOnePlusNetTypeStageCompleted()
     {
         using var transport = new ScriptedCommTransport { OnWrite = _ => [Encoding.UTF8.GetBytes(Ack)] };
@@ -179,6 +272,36 @@ public sealed class EdlAuthenticationEvidenceTests
         Assert.Equal(CommandOutcomeKind.Completed, session.AuthenticationEvidence[0].Outcome);
         Assert.Equal(EdlAuthStage.Completed, session.AuthenticationResult!.ReachedStage);
         Assert.True(session.IsConfigured);
+    }
+
+    [Fact]
+    public async Task EnsureInitializedAsync_WithOptions_RoutesIntoTheRecordedStartupStage()
+    {
+        using var transport = new ScriptedCommTransport { OnWrite = _ => [Encoding.UTF8.GetBytes(Ack)] };
+        transport.Enqueue(Encoding.UTF8.GetBytes(PaddedFirehose.PadRight(48)));
+        using var session = CreateSession(transport);
+
+        await session.EnsureInitializedAsync(null, new EdlInitializationOptions { SendOnePlusNetType = true },
+            TestContext.Current.CancellationToken);
+
+        Assert.True(session.IsConfigured);
+        Assert.Equal(["auth-oneplus-nettype"],
+            session.AuthenticationEvidence.Select(static evidence => evidence.Phase));
+        Assert.Equal(EdlAuthStage.Completed, session.AuthenticationResult!.ReachedStage);
+    }
+
+    [Fact]
+    public async Task EnsureInitializedAsync_RequirementsAfterConfiguration_FailInsteadOfBeingIgnored()
+    {
+        using var transport = new ScriptedCommTransport { OnWrite = _ => [Encoding.UTF8.GetBytes(Ack)] };
+        transport.Enqueue(Encoding.UTF8.GetBytes(PaddedFirehose.PadRight(48)));
+        using var session = CreateSession(transport);
+        await session.EnsureInitializedAsync(null, TestContext.Current.CancellationToken);
+        Assert.True(session.IsConfigured, $"evidence={string.Join(",", session.AuthenticationEvidence.Select(static item => item.Phase))}");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => session.EnsureInitializedAsync(null,
+            new EdlInitializationOptions { SendOnePlusNetType = true }, TestContext.Current.CancellationToken));
+        Assert.Empty(session.AuthenticationEvidence);
     }
 
     [Fact]

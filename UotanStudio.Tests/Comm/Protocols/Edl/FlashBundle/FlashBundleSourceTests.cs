@@ -240,7 +240,7 @@ public partial class FlashBundleSourceTests
         var manifest = directory.Write("rawprogram.xml", """
             <data>
               <program filename="source.img" start_sector="0" num_partition_sectors="1" SECTOR_SIZE_IN_BYTES="512"/>
-              <program filename="short.img" start_sector="1" num_partition_sectors="1" SECTOR_SIZE_IN_BYTES="512"/>
+              <program filename="short.img" start_sector="1" num_partition_sectors="1" file_sector_offset="2" SECTOR_SIZE_IN_BYTES="512"/>
             </data>
             """);
         using var transport = Transport();

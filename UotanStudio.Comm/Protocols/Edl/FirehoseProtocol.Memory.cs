@@ -3,8 +3,8 @@ using System.Security.Cryptography;
 namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>
-/// Firehose protocol read and memory (peek/poke/memcpy) operations.
-/// <para>Firehose 协议的读取与内存（peek/poke/memcpy）操作。</para>
+/// Firehose protocol partition read and memory peek operations.
+/// <para>Firehose 协议的分区读取与内存 peek 读取操作。</para>
 /// </summary>
 public sealed partial class FirehoseProtocol
 {
@@ -247,89 +247,6 @@ public sealed partial class FirehoseProtocol
             _faulted = true;
             throw;
         }
-    }
-
-    /// <summary>
-    /// Writes memory on the target device via &lt;poke&gt;.
-    /// <para>通过 &lt;poke&gt; 向目标设备写入内存。</para>
-    /// </summary>
-    /// <param name="sizeInBytes">The number of bytes to write; must equal <c>value.Length</c>.<para>待写入字节数；必须等于 <c>value.Length</c>。</para></param>
-    /// <param name="address">The memory address.<para>内存地址。</para></param>
-    /// <param name="value">The bytes to write, encoded by the caller in target byte order.<para>待写入的字节，由调用方按目标字节序编码。</para></param>
-    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
-    /// <returns>The Firehose response.<para>Firehose 响应。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.<para><paramref name="value"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><c>value.Length</c> does not match <paramref name="sizeInBytes"/>.<para><c>value.Length</c> 与 <paramref name="sizeInBytes"/> 不一致。</para></exception>
-    public async Task<FirehoseResponse> PokeAsync(long sizeInBytes, long address, byte[] value, CancellationToken cancellationToken = default)
-    {
-        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
-        if (value == null)
-        {
-            throw new ArgumentNullException(nameof(value));
-        }
-
-        if (value.Length != sizeInBytes)
-        {
-            throw new ArgumentException($"Value length ({value.Length}) does not match sizeInBytes ({sizeInBytes}).", nameof(value));
-        }
-
-        var addressStr = $"0x{address:X}";
-        var valueStr = $"0x{BitConverter.ToString(value).Replace("-", "")}";
-        var xml = FirehoseXmlBuilder.BuildPoke(sizeInBytes, addressStr, valueStr);
-        Log($"Sent <poke> address={addressStr}, size={sizeInBytes}");
-
-        var response = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
-        return !response.IsAck
-            ? throw new EdlException(EdlErrorCode.PokeFailed,
-                $"Poke failed at address {addressStr}. Response: {response.RawValue}")
-            : response;
-    }
-
-    /// <summary>
-    /// Writes a 32-bit word to the target device via &lt;pokedword&gt;.
-    /// <para>通过 &lt;pokedword&gt; 向目标设备写入 32 位字。</para>
-    /// </summary>
-    /// <param name="address">The target address.<para>目标地址。</para></param>
-    /// <param name="value">The 32-bit value.<para>32 位值。</para></param>
-    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
-    /// <returns>The Firehose response.<para>Firehose 响应。</para></returns>
-    public async Task<FirehoseResponse> PokeDwordAsync(long address, uint value, CancellationToken cancellationToken = default)
-    {
-        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
-        var addressStr = $"0x{address:X}";
-        var valueStr = $"0x{value:X8}";
-        var xml = FirehoseXmlBuilder.BuildPokeDword(addressStr, valueStr);
-        Log($"Sent <pokedword> address={addressStr}, value={valueStr}");
-
-        var response = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
-        return !response.IsAck
-            ? throw new EdlException(EdlErrorCode.PokeFailed,
-                $"PokeDword failed at address {addressStr}. Response: {response.RawValue}")
-            : response;
-    }
-
-    /// <summary>
-    /// Performs a memory copy on the target device via &lt;memcpy&gt;.
-    /// <para>通过 &lt;memcpy&gt; 在目标设备执行内存拷贝。</para>
-    /// </summary>
-    /// <param name="dstOffset">The destination address.<para>目标地址。</para></param>
-    /// <param name="srcOffset">The source address.<para>源地址。</para></param>
-    /// <param name="size">The copy size in bytes.<para>拷贝大小（字节）。</para></param>
-    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
-    /// <returns>The Firehose response.<para>Firehose 响应。</para></returns>
-    public async Task<FirehoseResponse> MemcpyAsync(long dstOffset, long srcOffset, long size, CancellationToken cancellationToken = default)
-    {
-        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
-        var dstStr = $"0x{dstOffset:X}";
-        var srcStr = $"0x{srcOffset:X}";
-        var xml = FirehoseXmlBuilder.BuildMemcpy(dstStr, srcStr, size);
-        Log($"Sent <memcpy> dst={dstStr}, src={srcStr}, size={size}");
-
-        var response = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
-        return !response.IsAck
-            ? throw new EdlException(EdlErrorCode.MemoryCommandFailed,
-                $"Memcpy failed: dst={dstStr}, src={srcStr}, size={size}. Response: {response.RawValue}")
-            : response;
     }
 
     /// <summary>

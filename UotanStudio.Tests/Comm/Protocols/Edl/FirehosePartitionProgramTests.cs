@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Text;
 using System.Xml.Linq;
 using UotanStudio.Comm.Protocols.Edl;
+using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.Tests.Firmware;
 using Xunit;
@@ -134,6 +136,38 @@ public partial class FirehoseGptTests
 
         Assert.Equal(new[] { "program", "read", "nop" },
             ProgramCommands(transport).TakeLast(3).Select(command => command.Name.LocalName));
+    }
+
+    [Fact]
+    public async Task ResolveEntry_UsesDeviceGptRangeAndReportedGeometry()
+    {
+        var disk = GptReaderTests.CreateDisk(512);
+        using var transport = ProgramTransport(disk);
+        using var protocol = Protocol(transport, 512);
+        var snapshot = await protocol.ReadGptAsync(0, TestContext.Current.CancellationToken);
+        var partition = snapshot.Table.FindPartition("boot");
+
+        var entry = EdlGptPartitionService.ResolveEntry(snapshot, "boot");
+
+        Assert.Equal("boot", entry.Label);
+        Assert.Equal("boot", entry.Filename);
+        Assert.Equal((long)partition.FirstLba, long.Parse(entry.StartSector, CultureInfo.InvariantCulture));
+        Assert.Equal(checked((long)(partition.LastLba - partition.FirstLba + 1UL)), entry.NumPartitionSectors);
+        Assert.Equal(snapshot.Geometry.SectorSize, entry.SectorSizeInBytes);
+        Assert.Equal(snapshot.Geometry.PhysicalPartitionNumber, entry.PhysicalPartitionNumber);
+    }
+
+    [Fact]
+    public async Task ResolveEntry_MissingPartitionName_ThrowsWithoutIssuingCommands()
+    {
+        var disk = GptReaderTests.CreateDisk(512);
+        using var transport = ProgramTransport(disk);
+        using var protocol = Protocol(transport, 512);
+        var snapshot = await protocol.ReadGptAsync(0, TestContext.Current.CancellationToken);
+
+        Assert.Throws<KeyNotFoundException>(() => EdlGptPartitionService.ResolveEntry(snapshot, "nominal"));
+        Assert.DoesNotContain(transport.Writes, write =>
+            Encoding.UTF8.GetString(write).Contains("<program", StringComparison.Ordinal));
     }
 
     private static IEnumerable<XElement> ProgramCommands(ScriptedCommTransport transport) => transport.Writes

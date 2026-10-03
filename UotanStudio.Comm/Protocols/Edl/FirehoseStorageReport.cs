@@ -62,6 +62,82 @@ internal sealed class FirehoseStorageReport
         return result;
     }
 
+    /// <summary>
+    /// Leniently merges the descriptive fields of every buffered report; missing or malformed fields
+    /// are skipped because descriptive storage facts are optional.
+    /// <para>宽松合并所有缓冲报告的描述性字段；描述性存储信息是可选的，缺失或格式异常的字段
+    /// 一律跳过。</para>
+    /// </summary>
+    internal FirehoseStorageDetails? ParseDetails()
+    {
+        FirehoseStorageDetails? result = null;
+        foreach (var report in _reports)
+        {
+            var start = report.IndexOf('{');
+            if (start < 0)
+            {
+                continue;
+            }
+            try
+            {
+                using var document = JsonDocument.Parse(report.AsMemory(start), new JsonDocumentOptions { MaxDepth = 8 });
+                var info = document.RootElement.GetProperty("storage_info");
+                var parsed = new FirehoseStorageDetails
+                {
+                    StorageType = GetText(info, "storage_type") ?? GetText(info, "type"),
+                    MemType = GetText(info, "mem_type"),
+                    PageSize = GetInteger(info, "page_size"),
+                    Density = GetInteger(info, "density"),
+                    SerialNumber = GetText(info, "serial_num"),
+                    ManufacturerId = GetText(info, "manufacturer_id"),
+                    FirmwareVersion = GetText(info, "fw_ver"),
+                    PhysicalPartitionNumber = (int?)GetInteger(info, "physical_partition_number"),
+                };
+                if (result is null)
+                {
+                    result = parsed;
+                    continue;
+                }
+                result = result with
+                {
+                    StorageType = result.StorageType ?? parsed.StorageType,
+                    MemType = result.MemType ?? parsed.MemType,
+                    PageSize = result.PageSize ?? parsed.PageSize,
+                    Density = result.Density ?? parsed.Density,
+                    SerialNumber = result.SerialNumber ?? parsed.SerialNumber,
+                    ManufacturerId = result.ManufacturerId ?? parsed.ManufacturerId,
+                    FirmwareVersion = result.FirmwareVersion ?? parsed.FirmwareVersion,
+                    PhysicalPartitionNumber = result.PhysicalPartitionNumber ?? parsed.PhysicalPartitionNumber,
+                };
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException
+                or FormatException or OverflowException or ArgumentOutOfRangeException)
+            {
+                continue;
+            }
+        }
+        return result;
+    }
+
+    private static string? GetText(JsonElement info, string name) => info.TryGetProperty(name, out var value)
+        ? value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number => value.GetRawText(),
+            _ => null,
+        }
+        : null;
+
+    private static long? GetInteger(JsonElement info, string name)
+    {
+        if (!info.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.Number ||
+            !value.TryGetInt64(out var number))
+        {
+            return null;
+        }
+        return number;
+    }
+
     private static void RejectDuplicateProperties(JsonElement element)
     {
         var names = new HashSet<string>(StringComparer.Ordinal);

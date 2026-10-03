@@ -69,7 +69,10 @@ public sealed partial class FlashBundleOrchestrator
                         result.Errors.Add($"Erase failed for '{displayName}': {ex.Message} 擦除失败。");
                         result.ProgramEntriesSkipped++;
                         RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, i, total);
-                        return false;
+                        if (!options.ContinueOnFailure || firehose.RequiresReconnect)
+                        {
+                            return false;
+                        }
                     }
                     catch (OperationCanceledException ex)
                     {
@@ -92,12 +95,18 @@ public sealed partial class FlashBundleOrchestrator
                     }
 
                     var source = sources?.Get(entry) ?? throw new InvalidOperationException("The bundle source was not retained.");
-                    await FlashProgramEntryAsync(entry, source, sectorSize,
+                    await FlashProgramEntryAsync(entry, source, sectorSize, result,
                         bytes =>
                         {
                             itemAcked = checked(itemAcked + bytes);
                             result.TotalBytesWritten = checked(result.TotalBytesWritten + bytes);
                         }, cancellationToken).ConfigureAwait(false);
+                    if (options.Verify)
+                    {
+                        await VerifyProgramEntryAsync(options, progress, firehose, entry, source, sectorSize,
+                            displayName, i, total, result, cancellationToken).ConfigureAwait(false);
+                    }
+
                     result.ProgramEntriesProcessed++;
                     touchedPartitions.Add(entry.PhysicalPartitionNumber);
                     RecordItem(result, FlashBundleItemKind.Program, entry, sectorSize, CommandOutcomeKind.Completed,
@@ -111,7 +120,10 @@ public sealed partial class FlashBundleOrchestrator
                     result.Errors.Add($"Program failed for '{displayName}': {ex.Message} 编程失败。");
                     result.ProgramEntriesSkipped++;
                     RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, i, total);
-                    return false;
+                    if (!options.ContinueOnFailure || firehose.RequiresReconnect)
+                    {
+                        return false;
+                    }
                 }
                 catch (OperationCanceledException ex)
                 {
@@ -169,7 +181,10 @@ public sealed partial class FlashBundleOrchestrator
                     result.Errors.Add($"Patch failed for '{displayName}': {ex.Message} 修补失败。");
                     result.PatchEntriesSkipped++;
                     RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, i, total);
-                    return false;
+                    if (!options.ContinueOnFailure || firehose.RequiresReconnect)
+                    {
+                        return false;
+                    }
                 }
                 catch (OperationCanceledException ex)
                 {
@@ -220,7 +235,10 @@ public sealed partial class FlashBundleOrchestrator
                     result.RequiresReconnect = firehose.RequiresReconnect;
                     result.Errors.Add($"Wipe failed for partition {partition}: {ex.Message} 擦写失败。");
                     RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, i, targets.Length);
-                    return false;
+                    if (!options.ContinueOnFailure || firehose.RequiresReconnect)
+                    {
+                        return false;
+                    }
                 }
                 catch (OperationCanceledException ex)
                 {
@@ -272,7 +290,10 @@ public sealed partial class FlashBundleOrchestrator
                 result.RequiresReconnect = firehose.RequiresReconnect;
                 result.Errors.Add($"UFS provisioning failed: {ex.Message} UFS 配置失败。");
                 RaiseProgress(progress, FlashBundlePhase.Error, ex.Message, 0, 1);
-                return false;
+                if (!options.ContinueOnFailure || firehose.RequiresReconnect)
+                {
+                    return false;
+                }
             }
             catch (OperationCanceledException ex)
             {
@@ -425,7 +446,8 @@ public sealed partial class FlashBundleOrchestrator
     }
 
     private async Task FlashProgramEntryAsync(
-        RawProgramEntry entry, Stream stream, long sectorSize, Action<long> rangeCompleted, CancellationToken cancellationToken)
+        RawProgramEntry entry, Stream stream, long sectorSize, FlashBundleResult result,
+        Action<long> rangeCompleted, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(entry.SourceFile))
         {
@@ -462,14 +484,17 @@ public sealed partial class FlashBundleOrchestrator
         }
 
         stream.Position = sourceOffset;
-        var lengthFromOffset = stream.Length - stream.Position;
-        var numSectors = entry.NumPartitionSectors > 0
-            ? entry.NumPartitionSectors
-            : (lengthFromOffset / sectorSize) + (lengthFromOffset % sectorSize != 0 ? 1 : 0);
+        var available = stream.Length - stream.Position;
+        var numSectors = FlashProgramLength.ResolveSectors(available, entry.NumPartitionSectors, sectorSize);
 
         if (numSectors <= 0)
         {
             return;
+        }
+
+        if (FlashProgramLength.IsTruncatedByDeclaration(available, entry.NumPartitionSectors, sectorSize))
+        {
+            result.Warnings.Add($"Program entry '{entry.Label ?? entry.Filename}' declares {entry.NumPartitionSectors} sectors but its source needs {(available / sectorSize) + (available % sectorSize == 0 ? 0 : 1)}; the tail is not programmed.");
         }
 
         var responseRaw = await RequireFirehose().ProgramCoreAsync(
@@ -480,6 +505,30 @@ public sealed partial class FlashBundleOrchestrator
                 $"Flash failed for '{entry.Label ?? entry.Filename}'. Response: {responseRaw.RawValue} 刷写失败。");
         }
         rangeCompleted(checked(numSectors * sectorSize));
+    }
+
+    private static async Task VerifyProgramEntryAsync(
+        FlashBundleOptions options, IProgress<FlashBundleProgress>? progress, FirehoseProtocol firehose,
+        RawProgramEntry entry, Stream source, long sectorSize, string displayName, int index, int total,
+        FlashBundleResult result, CancellationToken cancellationToken)
+    {
+        var address = FirehoseSectorAddress.Parse(entry.StartSector);
+        source.Position = 0;
+        if (entry.IsSparse || IsAndroidSparse(source) || entry.FileSectorOffset != 0
+            || entry.NumPartitionSectors <= 0 || sectorSize <= 0 || source.Length % sectorSize != 0
+            || source.Length / sectorSize != entry.NumPartitionSectors || address.RelativeToEnd)
+        {
+            result.Warnings.Add(
+                $"Read-back verification skipped for '{displayName}': its source does not exactly cover an absolute declared sector range.");
+            return;
+        }
+
+        RaiseProgress(progress, FlashBundlePhase.Verifying,
+            $"Verifying {displayName}... 校验 {displayName}...", index, total);
+        source.Position = 0;
+        await firehose.VerifyProgramOwnedAsync(source, address.Value,
+            entry.NumPartitionSectors, entry.Filename, entry.PhysicalPartitionNumber, cancellationToken).ConfigureAwait(false);
+        result.VerifiedEntries++;
     }
 
     private static bool IsAndroidSparse(Stream stream)

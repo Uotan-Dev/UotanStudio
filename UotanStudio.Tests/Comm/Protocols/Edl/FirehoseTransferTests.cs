@@ -128,11 +128,34 @@ public class FirehoseTransferTests
     {
         using var transport = new ScriptedCommTransport();
         using var protocol = CreateProtocol(transport);
-        using var source = new MemoryStream(new byte[511]);
+        using var source = new MemoryStream(0);
         await Assert.ThrowsAsync<ArgumentException>(() =>
             protocol.ProgramAsync(source, 0, 1, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Empty(transport.Writes);
         Assert.False(protocol.RequiresReconnect);
+    }
+
+    [Fact]
+    public async Task ProgramAsync_SourceShortByPartialSector_SendsZeroFilledFinalSector()
+    {
+        using var transport = new ScriptedCommTransport();
+        using var protocol = CreateProtocol(transport);
+        transport.OnWrite = _ =>
+        [
+            Encoding.UTF8.GetBytes(transport.Writes.Count switch
+            {
+                1 => "<data><response value='ACK' rawmode='true'/></data>",
+                _ => Complete
+            })
+        ];
+        byte[] data = [.. Enumerable.Repeat((byte)0xC3, 511)];
+        using var source = new MemoryStream(data);
+
+        var response = await protocol.ProgramAsync(source, 0, 1, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(response.IsAck);
+        byte[] expectedPayload = [.. data, 0];
+        Assert.Equal(expectedPayload, transport.Writes[1]);
     }
 
     [Fact]

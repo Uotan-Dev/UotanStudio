@@ -1,5 +1,7 @@
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Edl;
+using UotanStudio.Services;
+using UotanStudio.Services.Logging;
 
 namespace UotanStudio.Services.Devices;
 
@@ -46,6 +48,7 @@ internal sealed class EdlConnectionCache(
         internal readonly SemaphoreSlim Operation = new(1, 1);
         internal DeviceLease? Parked;
         internal volatile EdlProtocolState State;
+        internal volatile EdlDetailsSnapshot? Details;
         internal volatile bool Removed;
     }
 
@@ -65,6 +68,18 @@ internal sealed class EdlConnectionCache(
         lock (_gate)
         {
             return _entries.TryGetValue(key, out var entry) ? entry.State : EdlProtocolState.Unknown;
+        }
+    }
+
+    /// <summary>
+    /// <para>返回该端点最近一次探测附加采集到的只读详情快照。</para>
+    /// Returns the read-only detail snapshot collected alongside the endpoint's latest probe.
+    /// </summary>
+    internal EdlDetailsSnapshot? GetDetails(string key)
+    {
+        lock (_gate)
+        {
+            return _entries.TryGetValue(key, out var entry) ? entry.Details : null;
         }
     }
 
@@ -109,6 +124,7 @@ internal sealed class EdlConnectionCache(
             var session = RequireSession(entry.Parked);
             var state = await session.ProbeProtocolAsync(cancellationToken).ConfigureAwait(false);
             Publish(entry, state);
+            await CollectDetailsAsync(entry, session, state, cancellationToken).ConfigureAwait(false);
             return entry.Removed ? EdlProtocolState.Unknown : state;
         }
         catch
@@ -192,6 +208,66 @@ internal sealed class EdlConnectionCache(
                 changed();
             }
         }
+    }
+
+    /// <summary>
+    /// <para>探测之后尽力附加采集只读设备详情：Sahara 模式取被动捕获的 HELLO 信息；Firehose 模式
+    /// 复用已运行的编程器执行 configure 与 getstorageinfo（均为只读命令）。任何失败都只降级为
+    /// "无详情"，绝不改变探测状态，也不让探测失败。</para>
+    /// Best-effort read-only detail collection after the probe: Sahara mode uses the passively
+    /// captured HELLO; Firehose mode reuses the already-running programmer for configure and
+    /// getstorageinfo (both read-only). Any failure degrades to "no details" without changing the
+    /// probed state or failing the probe.
+    /// </summary>
+    private static async Task CollectDetailsAsync(Entry entry, EdlSession session, EdlProtocolState state,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var portName = session.UnderlyingSerialPortName;
+            EdlDetailsSnapshot? details = state switch
+            {
+                EdlProtocolState.Sahara when session.SaharaHandshake is { } handshake
+                    => new EdlDetailsSnapshot { Sahara = handshake, SerialPortName = portName },
+                EdlProtocolState.Firehose => await CollectFirehoseDetailsAsync(session, portName, cancellationToken)
+                    .ConfigureAwait(false),
+                _ => portName is null ? null : new EdlDetailsSnapshot { SerialPortName = portName },
+            };
+            if (details is not null)
+            {
+                entry.Details = details;
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // 详情采集失败不影响探测结果；保留旧快照或保持 null。
+            // Detail collection failures never affect the probe result; keep the old snapshot or null.
+            LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                $"EDL detail collection failed: {ex.Message}");
+        }
+    }
+
+    private static async Task<EdlDetailsSnapshot> CollectFirehoseDetailsAsync(EdlSession session,
+        string? serialPortName, CancellationToken cancellationToken)
+    {
+        await session.InitializeAsync(null, cancellationToken).ConfigureAwait(false);
+        FirehoseResponse? storage = null;
+        try
+        {
+            storage = await session.Firehose!.GetStorageInfoAsync(0, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or TimeoutException or InvalidOperationException)
+        {
+            // 存储查询是可选的附加信息；configure 能力快照已足够展示。
+            // The storage query is optional enrichment; the configure capability snapshot is enough.
+        }
+        return new EdlDetailsSnapshot
+        {
+            Capabilities = session.Capabilities,
+            Geometry = storage?.StorageGeometry,
+            Storage = session.Firehose!.LastStorageDetails,
+            SerialPortName = serialPortName,
+        };
     }
 
     private static EdlSession RequireSession(DeviceLease lease)

@@ -8,36 +8,45 @@ namespace UotanStudio.Services.Flash;
 internal static class FlashEdlBundleService
 {
     /// <summary>Inspects all bundle members before opening a device, then flashes them in manifest order.</summary>
-    public static async Task FlashAsync(DetectedDevice device, string folder, string programmerPath, CancellationToken ct)
+    /// <returns>The non-fatal deviations recorded while the bundle ran.</returns>
+    public static async Task<IReadOnlyList<string>> FlashAsync(DetectedDevice device, string folder, string programmerPath,
+        CancellationToken ct, bool continueOnFailure = false, bool skipAbsentSources = false,
+        IReadOnlyList<string>? labels = null, IProgress<FlashBundleProgress>? progress = null, bool verify = false,
+        bool skipUfsProvision = false, EdlBundleTuning? tuning = null, EdlInitializationOptions? initialization = null)
     {
         if (device.Protocol != DeviceProtocolKind.Edl || !File.Exists(programmerPath))
         {
             throw new InvalidOperationException("An EDL device and Firehose programmer are required.");
         }
-        var options = InspectFolder(folder, false, ct);
-        await App.DeviceMonitor.RunEdlAsync(device, async session =>
+        var options = InspectFolder(folder, skipUfsProvision, ct, continueOnFailure, skipAbsentSources, labels,
+            verify, tuning);
+        return await App.DeviceMonitor.RunEdlAsync(device, async session =>
         {
             await InspectAllAsync(session, options, ct).ConfigureAwait(false);
             using var programmer = File.OpenRead(programmerPath);
-            await session.EnsureInitializedAsync(programmer, ct).ConfigureAwait(false);
-            await ExecuteAllAsync(session, options, ct).ConfigureAwait(false);
-            return true;
+            await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            return await ExecuteAllAsync(session, options, progress, ct).ConfigureAwait(false);
         }, ct).ConfigureAwait(false);
     }
 
-    internal static async Task FlashSerialCoreAsync(Func<CancellationToken, Task<EdlSession>> connect,
-        string folder, bool includeUfsProvision, CancellationToken cancellationToken)
+    internal static async Task<IReadOnlyList<string>> FlashSerialCoreAsync(Func<CancellationToken, Task<EdlSession>> connect,
+        string folder, bool includeUfsProvision, CancellationToken cancellationToken, bool continueOnFailure = false,
+        bool skipAbsentSources = false, IReadOnlyList<string>? labels = null,
+        IProgress<FlashBundleProgress>? progress = null, bool verify = false, EdlBundleTuning? tuning = null)
     {
         ArgumentNullException.ThrowIfNull(connect);
-        var options = InspectFolder(folder, !includeUfsProvision, cancellationToken);
+        var options = InspectFolder(folder, !includeUfsProvision, cancellationToken, continueOnFailure,
+            skipAbsentSources, labels, verify, tuning);
         using var session = await connect(cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("The serial connector returned no EDL session.");
         cancellationToken.ThrowIfCancellationRequested();
         await InspectAllAsync(session, options, cancellationToken).ConfigureAwait(false);
-        await ExecuteAllAsync(session, options, cancellationToken).ConfigureAwait(false);
+        return await ExecuteAllAsync(session, options, progress, cancellationToken).ConfigureAwait(false);
     }
 
-    private static FlashBundleOptions[] InspectFolder(string folder, bool skipUfsProvision, CancellationToken ct)
+    private static FlashBundleOptions[] InspectFolder(string folder, bool skipUfsProvision, CancellationToken ct,
+        bool continueOnFailure, bool skipAbsentSources, IReadOnlyList<string>? labels, bool verify,
+        EdlBundleTuning? tuning)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         ct.ThrowIfCancellationRequested();
@@ -55,7 +64,7 @@ internal static class FlashEdlBundleService
         foreach (var entry in programs.Where(entry => !string.IsNullOrEmpty(entry.Filename)))
         {
             ct.ThrowIfCancellationRequested();
-            if (!File.Exists(entry.SourceFile))
+            if (!File.Exists(entry.SourceFile) && !skipAbsentSources)
             {
                 throw new FileNotFoundException("EDL bundle image is missing.", entry.SourceFile);
             }
@@ -69,6 +78,13 @@ internal static class FlashEdlBundleService
                     "patch" + Path.GetFileNameWithoutExtension(manifest)["rawprogram".Length..] + ".xml")
                 : null,
             ImageDirectory = directory,
+            ContinueOnFailure = continueOnFailure,
+            SkipAbsentSources = skipAbsentSources,
+            Verify = verify,
+            OverrideSectorSize = tuning?.OverrideSectorSize,
+            Slot = tuning?.Slot,
+            WipeFirstSectors = tuning?.WipeFirstSectors ?? 0,
+            Labels = labels is { Count: > 0 } selected ? [.. selected] : null,
             // Provisioning is a package-wide operation, after all program/patch manifests.
             SkipUfsProvision = skipUfsProvision || index != manifests.Length - 1
         }).ToArray();
@@ -90,17 +106,21 @@ internal static class FlashEdlBundleService
         }
     }
 
-    private static async Task ExecuteAllAsync(EdlSession session, FlashBundleOptions[] options, CancellationToken ct)
+    private static async Task<IReadOnlyList<string>> ExecuteAllAsync(EdlSession session, FlashBundleOptions[] options,
+        IProgress<FlashBundleProgress>? progress, CancellationToken ct)
     {
         var orchestrator = new FlashBundleOrchestrator(session);
-        var results = await orchestrator.FlashPackageAsync(options, null, ct).ConfigureAwait(false);
+        var results = await orchestrator.FlashPackageAsync(options, progress, ct).ConfigureAwait(false);
+        var warnings = new List<string>();
         foreach (var result in results)
         {
             if (!result.IsSuccess)
             {
                 throw new IOException(DescribeFailure(result));
             }
+            warnings.AddRange(result.Warnings);
         }
+        return warnings;
     }
 
     /// <summary>

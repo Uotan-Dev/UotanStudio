@@ -65,7 +65,7 @@ public class EdlSerialBundleServiceTests
         dir.Write("rawprogram0.xml", Manifest("first.img", 1));
         dir.Write("rawprogram1.xml", Manifest("second.img", 2));
         dir.WriteBytes("first.img", new byte[512]);
-        dir.WriteBytes("second.img", new byte[511]);
+        dir.WriteBytes("second.img", []);
         using var transport = Transport();
 
         await Assert.ThrowsAsync<InvalidDataException>(() => FlashEdlBundleService.FlashSerialCoreAsync(
@@ -209,6 +209,86 @@ public class EdlSerialBundleServiceTests
 
     private static string Manifest(string file, int sector) =>
         $"""<data><program filename="{file}" start_sector="{sector}" num_partition_sectors="1" SECTOR_SIZE_IN_BYTES="512"/></data>""";
+
+    [Fact]
+    public async Task FlashSerialAsync_Tuning_AppliesSlotAndLeadingWipe()
+    {
+        using var dir = new TempDirectory();
+        dir.Write("rawprogram0.xml", Manifest("first.img", 1));
+        dir.WriteBytes("first.img", new byte[512]);
+        using var transport = Transport();
+
+        await FlashEdlBundleService.FlashSerialCoreAsync(token => OpenAsync(transport, token),
+            dir.Path, false, TestContext.Current.CancellationToken, tuning: new EdlBundleTuning
+            {
+                Slot = 2,
+                WipeFirstSectors = 1
+            });
+
+        var commands = Commands(transport);
+        var program = Assert.Single(commands, command => command.Name == "program"
+            && (string?)command.Attribute("filename") == "first.img");
+        Assert.Equal("2", (string?)program.Attribute("slot"));
+        Assert.Contains(commands, command => command.Name == "program"
+            && (string?)command.Attribute("filename") == "Zeros16KB.bin");
+        Assert.Equal(1, transport.DisposeCount);
+    }
+
+    [Fact]
+    public async Task FlashSerialAsync_TuningOmitted_KeepsDefaultSlotAndSkipsWipe()
+    {
+        using var dir = new TempDirectory();
+        dir.Write("rawprogram0.xml", Manifest("first.img", 1));
+        dir.WriteBytes("first.img", new byte[512]);
+        using var transport = Transport();
+
+        await FlashEdlBundleService.FlashSerialCoreAsync(token => OpenAsync(transport, token),
+            dir.Path, false, TestContext.Current.CancellationToken);
+
+        var commands = Commands(transport);
+        var program = Assert.Single(commands, command => command.Name == "program");
+        Assert.Null((string?)program.Attribute("slot"));
+        Assert.DoesNotContain(commands, command => command.Name == "program"
+            && (string?)command.Attribute("filename") == "Zeros16KB.bin");
+    }
+
+    [Fact]
+    public async Task FlashSerialAsync_OverrideSectorSize_OverridesDisagreeingManifestDeclaration()
+    {
+        using var dir = new TempDirectory();
+        dir.Write("rawprogram0.xml",
+            """<data><program filename="first.img" start_sector="1" num_partition_sectors="1" SECTOR_SIZE_IN_BYTES="1024"/></data>""");
+        dir.WriteBytes("first.img", new byte[512]);
+        using var transport = Transport();
+
+        await FlashEdlBundleService.FlashSerialCoreAsync(token => OpenAsync(transport, token),
+            dir.Path, false, TestContext.Current.CancellationToken, tuning: new EdlBundleTuning
+            {
+                OverrideSectorSize = 512
+            });
+
+        var program = Assert.Single(Commands(transport), command => command.Name == "program");
+        Assert.Equal("512", (string?)program.Attribute("SECTOR_SIZE_IN_BYTES"));
+        Assert.Equal(1, transport.DisposeCount);
+    }
+
+    [Fact]
+    public async Task FlashSerialAsync_ManifestSectorSizeDisagreesWithoutOverride_StopsBeforeProgram()
+    {
+        using var dir = new TempDirectory();
+        dir.Write("rawprogram0.xml",
+            """<data><program filename="first.img" start_sector="1" num_partition_sectors="1" SECTOR_SIZE_IN_BYTES="1024"/></data>""");
+        dir.WriteBytes("first.img", new byte[512]);
+        using var transport = Transport();
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            FlashEdlBundleService.FlashSerialCoreAsync(token => OpenAsync(transport, token),
+                dir.Path, false, TestContext.Current.CancellationToken));
+
+        Assert.Contains("sector size", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("configure", Assert.Single(Commands(transport)).Name.LocalName);
+        Assert.Equal(1, transport.DisposeCount);
+    }
 
     [Fact]
     public async Task FlashSerialAsync_CancelledAfterConnect_DisposesWithoutProgramming()

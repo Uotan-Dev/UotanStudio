@@ -82,30 +82,50 @@ public sealed partial class FirehoseProtocol
         startSector.ValidateRange(numSectors);
         var totalBytes = ValidateStorageRange(0, numSectors, physicalPartition);
         var payloadSize = GetProgramPayloadSize();
-        if (!dataStream.CanRead || (dataStream.CanSeek && dataStream.Length - dataStream.Position < totalBytes))
+        if (!dataStream.CanRead)
         {
-            throw new ArgumentException("The source must contain the entire declared program range.", nameof(dataStream));
+            throw new ArgumentException("The program source must be readable.", nameof(dataStream));
+        }
+
+        var tailPaddingBytes = 0L;
+        if (dataStream.CanSeek)
+        {
+            var available = dataStream.Length - dataStream.Position;
+            if (available < totalBytes)
+            {
+                try
+                {
+                    tailPaddingBytes = FlashProgramLength.ResolveTailPadding(available, numSectors, Configuration.SectorSize);
+                }
+                catch (ArgumentOutOfRangeException exception)
+                {
+                    throw new ArgumentException(
+                        exception.Message, nameof(dataStream), exception);
+                }
+            }
         }
 
         cancellationToken.ThrowIfCancellationRequested();
         var transferStarted = false;
         var payloadSent = false;
+        var responseReceived = false;
         try
         {
             var credential = await GetOnePlusCommandTokenOwnedAsync("program", cancellationToken).ConfigureAwait(false);
             var xml = FirehoseXmlBuilder.BuildProgram(Configuration.SectorSize, numSectors, filename, physicalPartition, startSector,
                 slot: EffectiveSlot, publicKey: credential.PublicKey, token: credential.Token);
             var ready = await SendCommandAndWaitResponseAsync(xml, cancellationToken);
+            responseReceived = true;
             RequireRawMode(ready, EdlErrorCode.ProgramFailed);
             transferStarted = true;
-            await SendProgramPayloadAsync(dataStream, totalBytes, payloadSize, cancellationToken);
+            await SendProgramPayloadAsync(dataStream, totalBytes, tailPaddingBytes, payloadSize, cancellationToken);
             payloadSent = true;
             var completion = await ReceiveTransferCompletionAsync(EdlErrorCode.ProgramFailed, cancellationToken);
             return completion;
         }
         catch (Exception ex)
         {
-            _faulted = true;
+            _faulted = payloadSent || transferStarted || !responseReceived;
             RecordFailure(ex, transferStarted, payloadSent);
             throw;
         }
@@ -224,6 +244,22 @@ public sealed partial class FirehoseProtocol
     public async Task VerifyProgramAsync(Stream dataStream, long startSector, long numSectors, string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        await VerifyProgramOwnedAsync(dataStream, startSector, numSectors, filename, physicalPartition, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Verifies a program entry on an already-owned operation lease; the caller must hold the lease.
+    /// <para>在已持有的操作租约上校验 program 条目；调用方必须已持有该租约。</para>
+    /// </summary>
+    /// <param name="dataStream">The original data stream (must be seekable). <para>原始数据流（必须可寻址）。</para></param>
+    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
+    /// <param name="numSectors">The number of sectors. <para>扇区数量。</para></param>
+    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
+    /// <param name="physicalPartition">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A task representing the asynchronous operation. <para>表示异步操作的任务。</para></returns>
+    internal async Task VerifyProgramOwnedAsync(Stream dataStream, long startSector, long numSectors, string filename, int physicalPartition, CancellationToken cancellationToken)
+    {
         if (dataStream == null)
         {
             throw new ArgumentNullException(nameof(dataStream));
@@ -300,7 +336,7 @@ public sealed partial class FirehoseProtocol
         int physicalPartition, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
-        RequireCapability(EdlFirehoseCommand.Erase);
+        await RequireDestructiveCapabilityAsync(EdlFirehoseCommand.Erase, cancellationToken).ConfigureAwait(false);
         startSector.ValidateRange(numSectors);
         ValidateStorageRange(0, numSectors, physicalPartition);
         var xml = FirehoseXmlBuilder.BuildErase(Configuration.SectorSize, numSectors, physicalPartition, startSector, EffectiveSlot);
@@ -373,7 +409,7 @@ public sealed partial class FirehoseProtocol
         long byteOffset, string value, long sizeInBytes, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
-        RequireCapability(EdlFirehoseCommand.Patch);
+        await RequireDestructiveCapabilityAsync(EdlFirehoseCommand.Patch, cancellationToken).ConfigureAwait(false);
         var address = ValidatePatch(Configuration.SectorSize, filename, physicalPartition, startSector, byteOffset, value, sizeInBytes);
         var credential = await GetOnePlusCommandTokenOwnedAsync("patch", cancellationToken).ConfigureAwait(false);
         var xml = FirehoseXmlBuilder.BuildPatch(Configuration.SectorSize, filename, physicalPartition, address, byteOffset,
@@ -431,7 +467,7 @@ public sealed partial class FirehoseProtocol
         string zeroFilename, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
-        RequireCapability(EdlFirehoseCommand.Wipe);
+        await RequireDestructiveCapabilityAsync(EdlFirehoseCommand.Wipe, cancellationToken).ConfigureAwait(false);
         Log($"Sending <wipe> (program-with-zeros) pp={physicalPartition}, start={startSector}, sectors={numSectors}");
         using var zeros = new ZeroFilledStream();
         return await ProgramCoreAsync(zeros, new FirehoseSectorAddress(startSector, false), numSectors,
@@ -441,25 +477,42 @@ public sealed partial class FirehoseProtocol
     /// <summary>
     /// Streams the raw program payload from the data stream to the device, with a per-storage
     /// write timeout. A failed write is never replayed because its accepted length is unknown.
+    /// The trailing <paramref name="tailPaddingBytes"/> are sent as zeros so a source whose last
+    /// sector is only partially filled still covers the whole programmed range.
+    /// <para>把原始 program 载荷从数据流发送到设备，并带每存储写入超时。写入失败绝不重放，因为其被接受的长度未知。
+    /// 末尾的 <paramref name="tailPaddingBytes"/> 字节以零发送，使最后一个扇区仅部分填充的源文件也能覆盖完整编程范围。</para>
     /// </summary>
     /// <param name="dataStream">The data stream to write. 要写入的数据流。</param>
     /// <param name="totalBytes">The total number of bytes to send. 待发送的总字节数。</param>
+    /// <param name="tailPaddingBytes">The trailing byte count supplied as zeros, always below one sector.
+    /// 以零补齐的尾部字节数，恒小于一个扇区。</param>
     /// <param name="maxPayload">The validated, sector-aligned transfer size.</param>
     /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
     /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
-    private async Task SendProgramPayloadAsync(Stream dataStream, long totalBytes, int maxPayload, CancellationToken cancellationToken)
+    private async Task SendProgramPayloadAsync(Stream dataStream, long totalBytes, long tailPaddingBytes, int maxPayload, CancellationToken cancellationToken)
     {
         var zlpTimeout = GetZlpTimeoutMs();
         var buffer = ArrayPool<byte>.Shared.Rent(maxPayload);
         try
         {
+            var dataBytes = totalBytes - tailPaddingBytes;
             long bytesWritten = 0;
             while (bytesWritten < totalBytes)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var toRead = (int)Math.Min(maxPayload, totalBytes - bytesWritten);
-                await dataStream.ReadExactlyAsync(buffer.AsMemory(0, toRead), cancellationToken);
+                var readable = (int)Math.Min(toRead, dataBytes - bytesWritten);
+                if (readable > 0)
+                {
+                    await dataStream.ReadExactlyAsync(buffer.AsMemory(0, readable), cancellationToken);
+                }
+
+                if (readable < toRead)
+                {
+                    buffer.AsSpan(readable, toRead - readable).Clear();
+                }
+
                 ThrowIfDisposed();
                 cancellationToken.ThrowIfCancellationRequested();
                 await WritePacketAsync(buffer, toRead, zlpTimeout, cancellationToken).ConfigureAwait(false);

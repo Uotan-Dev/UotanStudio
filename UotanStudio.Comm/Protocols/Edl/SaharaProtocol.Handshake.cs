@@ -70,7 +70,7 @@ public sealed partial class SaharaProtocol
                     Length = (uint)Marshal.SizeOf<SaharaHelloResponsePacket>(),
                     Version = EdlConstants.SaharaVersion,
                     MinVersion = EdlConstants.SaharaHostCompatibleVersion,
-                    MaxCommandLength = 0,
+                    Status = 0,
                     Mode = SaharaMode.ImageTxPending
                 };
                 await WriteStructAsync(probeHello, cancellationToken);

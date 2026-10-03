@@ -37,8 +37,8 @@ public sealed partial class FirehoseProtocol
     internal async Task<FirehoseResponse> ProvisionUfsOwnedAsync(UfsProvisionPlan plan, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
-        RequireCapability(EdlFirehoseCommand.UfsProvisioning);
         ArgumentNullException.ThrowIfNull(plan);
+        await RequireDestructiveCapabilityAsync(EdlFirehoseCommand.UfsProvisioning, cancellationToken).ConfigureAwait(false);
         FirehoseResponse? last = null;
         for (var index = 0; index < plan.Commands.Count; index++)
         {

@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -41,7 +42,43 @@ public sealed class EdlReadbackManifestWriterTests
         Assert.Equal("2048", (string?)program.Attribute("start_sector"));
         Assert.Equal("1024", (string?)program.Attribute("num_partition_sectors"));
         Assert.Equal("4096", (string?)program.Attribute("SECTOR_SIZE_IN_BYTES"));
-        Assert.Equal("boot.img", (string?)program.Attribute("file"));
+        Assert.Equal("boot.img", (string?)program.Attribute("filename"));
+    }
+
+    [Fact]
+    public void Generate_GeneratedManifest_RoundTripsThroughRawProgramParser()
+    {
+        var content = EdlReadbackManifestWriter.Generate(
+            [BootEntry, UserDataEntry], sectorSizeInBytes: 4096, numDiskSectors: 0, generalized: false);
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
+        var entries = RawProgramParser.Parse(stream);
+
+        Assert.Equal(2, entries.Count);
+        Assert.Equal("boot.img", entries[0].Filename);
+        Assert.Equal("boot", entries[0].Label);
+        Assert.Equal("2048", entries[0].StartSector);
+        Assert.Equal(1024, entries[0].NumPartitionSectors);
+        Assert.Equal(4096, entries[0].SectorSizeInBytes);
+        Assert.Equal(0, entries[0].PhysicalPartitionNumber);
+        Assert.Equal("userdata.img", entries[1].Filename);
+    }
+
+    [Fact]
+    public void Parse_LegacyFileAttribute_FallsBackToFilename()
+    {
+        const string xml = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <data>
+              <program SECTOR_SIZE_IN_BYTES="4096" file="boot.img" label="boot" start_sector="2048" num_partition_sectors="1024" physical_partition_number="0" />
+            </data>
+            """;
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+        var entry = Assert.Single(RawProgramParser.Parse(stream));
+
+        Assert.Equal("boot.img", entry.Filename);
+        Assert.Equal("boot", entry.Label);
     }
 
     [Fact]

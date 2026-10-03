@@ -53,6 +53,16 @@ public class FirehoseResponse
     public string? RawValue { get; set; }
 
     /// <summary>
+    /// Gets the classification of a rejected response.
+    /// <para>获取被拒绝响应的分类结果。</para>
+    /// </summary>
+    /// <value>The evidence-backed error description, or <see langword="null"/> when the response is
+    /// an acknowledgement, a raw-mode indication, or a log-only block.
+    /// <para>基于证据的错误描述；当响应为确认、原始模式指示或仅含日志的块时为
+    /// <see langword="null"/>。</para></value>
+    public FirehoseResponseError? Error { get; internal set; }
+
+    /// <summary>
     /// Gets or sets the raw XML.
     /// <para>获取或设置原始 XML。</para>
     /// </summary>
@@ -153,7 +163,7 @@ internal static class FirehoseResponseParser
             var responseNode = dataNode.SelectSingleNode("response");
             if (responseNode != null)
             {
-                response = ParseResponseNode(responseNode, xml);
+                response = ParseResponseNode(responseNode, xml, null);
             }
             else
             {
@@ -236,7 +246,7 @@ internal static class FirehoseResponseParser
                         throw new FirehoseException("Multiple responses in one Firehose document are ambiguous.");
                     }
 
-                    block.Response = ParseResponseNode(node, xml);
+                    block.Response = ParseResponseNode(node, xml, block.Logs.Count > 0 ? block.Logs[^1] : null);
                 }
                 else if (capturePayloads)
                 {
@@ -284,13 +294,18 @@ internal static class FirehoseResponseParser
     }
 
     /// <summary>
-    /// Parses a <c>&lt;response&gt;</c> element node into a <see cref="FirehoseResponse"/>.
-    /// <para>将 <c>&lt;response&gt;</c> 元素节点解析为 <see cref="FirehoseResponse"/>。</para>
+    /// Parses a <c>&lt;response&gt;</c> element node into a <see cref="FirehoseResponse"/> and
+    /// attaches the evidence-backed classification of a rejection.
+    /// <para>将 <c>&lt;response&gt;</c> 元素节点解析为 <see cref="FirehoseResponse"/>，并为被拒绝的
+    /// 响应附加基于证据的分类。</para>
     /// </summary>
     /// <param name="responseNode">The response element node. response 元素节点。</param>
     /// <param name="xml">The containing XML text (stored as RawXml). 所在 XML 文本（存为 RawXml）。</param>
+    /// <param name="lastLogValue">The value text of the last log node preceding this response within
+    /// the same document, or <see langword="null"/> when there is none.
+    /// 同一文档中位于该响应之前的最后一条 log 节点的文本；没有时为 <see langword="null"/>。</param>
     /// <returns>The parsed response. 解析后的响应。</returns>
-    private static FirehoseResponse ParseResponseNode(XmlNode responseNode, string xml)
+    private static FirehoseResponse ParseResponseNode(XmlNode responseNode, string xml, string? lastLogValue)
     {
         var response = new FirehoseResponse { RawXml = xml };
 
@@ -312,6 +327,7 @@ internal static class FirehoseResponseParser
             }
         }
 
+        response.Error = FirehoseErrorClassifier.Classify(response, lastLogValue);
         return response;
     }
 }

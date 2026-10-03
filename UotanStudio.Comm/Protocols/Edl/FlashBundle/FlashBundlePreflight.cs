@@ -162,14 +162,13 @@ internal static class FlashBundlePreflight
         }
 
         var available = source.Length - offset;
-        var sectors = entry.NumPartitionSectors > 0
-            ? entry.NumPartitionSectors
-            : available / sectorSize + (available % sectorSize == 0 ? 0 : 1);
-        address.ValidateRange(sectors);
-        if (checked(sectors * sectorSize) > available)
+        var sectors = FlashProgramLength.ResolveSectors(available, entry.NumPartitionSectors, sectorSize);
+        if (sectors == 0)
         {
-            throw new InvalidDataException("The source does not contain the complete declared sector range; implicit padding is not enabled.");
+            throw new InvalidDataException("The source holds no whole or partial sector to program.");
         }
+
+        address.ValidateRange(sectors);
         return sectors;
     }
 

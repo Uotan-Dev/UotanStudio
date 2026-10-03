@@ -261,13 +261,16 @@ public sealed record FirehoseCapabilitySnapshot : CapabilitySnapshot
     /// <param name="geometry">The validated geometry observed so far, when any. <para>迄今观测到的经校验几何信息（若有）。</para></param>
     /// <param name="requiresReconnect">Whether the session already requires a reconnect. <para>会话是否已需要重连。</para></param>
     /// <param name="capturedAtUtc">The capture instant. <para>捕获时刻。</para></param>
+    /// <param name="supportedFunctions">Functions the target listed in its &lt;nop&gt; report, used
+    /// only to upgrade capabilities the acknowledgement left undeclared; null when none were reported.
+    /// <para>目标在 &lt;nop; 报告中列出的功能，仅用于提升应答未声明的能力；未报告时为 null。</para></param>
     /// <returns>The immutable snapshot. <para>不可变快照。</para></returns>
     /// <exception cref="ArgumentNullException">The response or configuration is <see langword="null"/>.
     /// <para>应答或配置为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException">The response is not an acknowledgement. <para>应答不是确认。</para></exception>
     public static FirehoseCapabilitySnapshot FromConfigureAck(FirehoseResponse configureResponse,
         FirehoseConfiguration configuration, FirehoseStorageGeometry? geometry, bool requiresReconnect,
-        DateTimeOffset capturedAtUtc)
+        DateTimeOffset capturedAtUtc, IReadOnlySet<string>? supportedFunctions = null)
     {
         ArgumentNullException.ThrowIfNull(configureResponse);
         ArgumentNullException.ThrowIfNull(configuration);
@@ -278,21 +281,36 @@ public sealed record FirehoseCapabilitySnapshot : CapabilitySnapshot
 
         var ackPayload = configureResponse.GetInt64("MaxPayloadSizeToTargetInBytes");
         var programSupport = ackPayload is > 0 ? FeatureSupport.Supported : FeatureSupport.Unknown;
-        var wireEvidence = new ProtocolEvidence
+        var evidence = new List<ProtocolEvidence>
         {
-            Protocol = "edl",
-            Phase = "configure",
-            Outcome = CommandOutcomeKind.Completed,
-            Detail = $"attributeCount={configureResponse.Attributes.Count}",
-            RawResponseHex = configureResponse.RawXml is { Length: > 0 and <= 65536 } xml
-                ? Convert.ToHexStringLower(System.Text.Encoding.UTF8.GetBytes(xml))
-                : null,
-            ObservedAtUtc = capturedAtUtc
+            new()
+            {
+                Protocol = "edl",
+                Phase = "configure",
+                Outcome = CommandOutcomeKind.Completed,
+                Detail = $"attributeCount={configureResponse.Attributes.Count}",
+                RawResponseHex = configureResponse.RawXml is { Length: > 0 and <= 65536 } xml
+                    ? Convert.ToHexStringLower(System.Text.Encoding.UTF8.GetBytes(xml))
+                    : null,
+                ObservedAtUtc = capturedAtUtc
+            }
         };
+        if (supportedFunctions is not null)
+        {
+            evidence.Add(new ProtocolEvidence
+            {
+                Protocol = "edl",
+                Phase = "capability-discovery",
+                Outcome = CommandOutcomeKind.Completed,
+                Detail = $"supportedFunctions={string.Join(",", supportedFunctions.Order())}",
+                ObservedAtUtc = capturedAtUtc
+            });
+        }
+
         return new FirehoseCapabilitySnapshot
         {
             CapturedAtUtc = capturedAtUtc,
-            Evidence = [wireEvidence],
+            Evidence = [.. evidence],
             ResourceSha256Hex = null,
             TransportGeneration = null,
             StorageType = configuration.StorageType,
@@ -308,17 +326,97 @@ public sealed record FirehoseCapabilitySnapshot : CapabilitySnapshot
             RequiresReconnect = requiresReconnect,
             Read = FeatureSupport.Supported,
             Program = programSupport,
-            Erase = ParseTriState(configureResponse["Erase"]),
-            Patch = ParseTriState(configureResponse["Patch"]),
-            Wipe = ParseTriState(configureResponse["Wipe"]),
+            Erase = WithFunctionFallback(ParseTriState(configureResponse["Erase"]), supportedFunctions, "erase"),
+            Patch = WithFunctionFallback(ParseTriState(configureResponse["Patch"]), supportedFunctions, "patch"),
+            Wipe = WithFunctionFallback(ParseTriState(configureResponse["Wipe"]), supportedFunctions, "program"),
             Sparse = programSupport,
             Gpt = FeatureSupport.Supported,
-            UfsProvisioning = ParseTriState(configureResponse["UfsProvisioning"]),
+            UfsProvisioning = WithFunctionFallback(ParseTriState(configureResponse["UfsProvisioning"]), supportedFunctions, "ufs"),
             RawMode = ParseTriState(configureResponse["rawmode"]),
             VendorAuthentication = ParseTriState(configureResponse["VendorAuth"]),
             SixtyFourBitAddressing = ParseTriState(configureResponse["SixtyFourBitAddressing"]),
             Reconnect = ParseTriState(configureResponse["Reconnect"])
         };
+    }
+
+    /// <summary>
+    /// Upgrades an undeclared destructive capability to <see cref="FeatureSupport.Supported"/> when
+    /// the target itself listed the backing function in its <c>&lt;nop&gt;</c> supported-functions
+    /// report. An explicit configure attribute always wins, and a missing report changes nothing.
+    /// <para>当目标在 <c>&lt;nop&gt;</c> 支持功能报告中自行列出了支撑该能力的命令时，把未声明的
+    /// 破坏性能力提升为 <see cref="FeatureSupport.Supported"/>。configure 的显式属性始终优先，
+    /// 报告缺失则不改变任何状态。</para>
+    /// </summary>
+    /// <param name="declared">The tri-state parsed from the configure acknowledgement.
+    /// <para>由 configure 应答解析出的三态值。</para></param>
+    /// <param name="supportedFunctions">Functions the target listed, or null when none were reported.
+    /// <para>目标列出的功能；未报告时为 null。</para></param>
+    /// <param name="function">The backing function name for the capability. <para>该能力对应的支撑命令名。</para></param>
+    /// <returns>The capability state to publish. <para>要发布的能力状态。</para></returns>
+    private static FeatureSupport WithFunctionFallback(FeatureSupport declared,
+        IReadOnlySet<string>? supportedFunctions, string function)
+        => declared == FeatureSupport.Unknown && supportedFunctions is not null && supportedFunctions.Contains(function)
+            ? FeatureSupport.Supported
+            : declared;
+
+    /// <summary>
+    /// Extracts the target's supported-function names from <c>&lt;nop&gt;</c> log lines: collection
+    /// starts at a line mentioning supported functions, stops at the end marker, and both the
+    /// one-name-per-line and the inline comma-separated shapes are accepted. Names are compared
+    /// case-insensitively; an empty report yields null rather than an empty set.
+    /// <para>从 <c>&lt;nop&gt;</c> 日志行中提取目标支持的功能名：以提到 supported functions 的行开始收集、
+    /// 遇到结束标记停止，逐行与行内逗号分隔两种形态都接受。名称按不区分大小写比较；空报告返回
+    /// null 而不是空集合。</para>
+    /// </summary>
+    /// <param name="logLines">The bounded log lines captured for the nop command. <para>为 nop 命令捕获的有界日志行。</para></param>
+    /// <returns>The reported names, or null when the target reported none. <para>上报的名称；目标未上报时为 null。</para></returns>
+    internal static IReadOnlySet<string>? ParseSupportedFunctions(IReadOnlyList<string> logLines)
+    {
+        ArgumentNullException.ThrowIfNull(logLines);
+        var functions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var collecting = false;
+        foreach (var raw in logLines)
+        {
+            var line = raw.Trim();
+            if (line.StartsWith("INFO: ", StringComparison.OrdinalIgnoreCase))
+            {
+                line = line[6..].Trim();
+            }
+
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            if (line.Contains("end of supported functions", StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            if (line.Contains("supported functions", StringComparison.OrdinalIgnoreCase))
+            {
+                var separator = line.IndexOf(':');
+                var inline = separator >= 0 ? line[(separator + 1)..] : string.Empty;
+                foreach (var name in inline.Split(','))
+                {
+                    var trimmed = name.Trim();
+                    if (trimmed.Length > 0)
+                    {
+                        functions.Add(trimmed);
+                    }
+                }
+
+                collecting = inline.IndexOf(',') < 0;
+                continue;
+            }
+
+            if (collecting)
+            {
+                functions.Add(line);
+            }
+        }
+
+        return functions.Count > 0 ? functions : null;
     }
 
     /// <summary>

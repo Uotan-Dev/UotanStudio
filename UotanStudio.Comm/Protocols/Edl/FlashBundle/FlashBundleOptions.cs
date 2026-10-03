@@ -119,6 +119,38 @@ public sealed class FlashBundleOptions
     public bool SkipUfsProvision { get; set; }
 
     /// <summary>
+    /// Gets or sets whether program entries whose source image is absent are dropped instead of
+    /// failing the bundle, mirroring the per-partition selection of a package GUI.
+    /// <para>获取或设置源镜像缺失的 program 条目是被丢弃还是使整包失败，对应包图形界面的逐项选择行为。</para>
+    /// </summary>
+    /// <value>True to skip entries whose resolved source file does not exist and record each as a warning;
+    /// false makes a missing image abort preparation.
+    /// <para>为 true 时跳过解析后源文件不存在的条目并逐项记录警告；为 false 时缺失镜像会使准备阶段中止。</para></value>
+    public bool SkipAbsentSources { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether execution continues after an individual program, erase, patch, wipe or
+    /// provisioning command fails.
+    /// <para>获取或设置单个 program、erase、patch、wipe 或 provisioning 命令失败后是否继续执行。</para>
+    /// </summary>
+    /// <value>True attempts every remaining manifest item and reports the collected failures; false stops at
+    /// the first failure. The run is still marked failed when any item failed.
+    /// <para>为 true 时仍会尝试其余清单条目并汇总失败；为 false 时在首个失败处停止。任一条目失败时本次运行仍记为失败。</para></value>
+    public bool ContinueOnFailure { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether each programmed raw entry is read back and compared byte by byte
+    /// after its transfer completes.
+    /// <para>获取或设置每条 raw program 条目在传输完成后是否回读并逐字节比对。</para>
+    /// </summary>
+    /// <value>True verifies entries whose source exactly covers the declared sector range at an
+    /// absolute start sector; sparse sources, source-sector offsets, truncated or rounded images
+    /// and disk-relative addresses are skipped with a recorded warning.
+    /// <para>为 true 时校验源文件恰好覆盖声明扇区范围且起始扇区为绝对地址的条目；sparse 源、
+    /// 源扇区偏移、被截断或向上取整的镜像以及磁盘相对地址会被跳过并记录警告。</para></value>
+    public bool Verify { get; set; }
+
+    /// <summary>
     /// Gets or sets whether the bundle runs offline source/command preflight without device
     /// communication. Sector-based operations require a manifest, configured or overridden
     /// sector size; device capacity and authorization cannot be verified offline.
