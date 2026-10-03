@@ -115,7 +115,7 @@ public partial class MtkSessionTests
         Assert.Throws<NotSupportedException>(() => storage.ValidateRange(3, 0, 512));
     }
 
-    private static byte[] StorageGeometry(MtkXFlashStorageKind kind)
+    internal static byte[] StorageGeometry(MtkXFlashStorageKind kind)
     {
         var geometry = new byte[kind == MtkXFlashStorageKind.Emmc ? 96 : 48];
         BinaryPrimitives.WriteUInt32LittleEndian(geometry, 1);

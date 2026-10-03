@@ -30,6 +30,56 @@ public static partial class MtkFlashService
             physicalPartition, layout, steps, cancellationToken);
     }
 
+    /// <summary>Starts a serial agent whose loader entry is matched from the reported hardware identity,
+    /// then prepares selected Scatter operations against the live GPT.</summary>
+    /// <remarks>
+    /// The handshake happens before the entry is chosen, so an ambiguous container stops before any
+    /// download agent byte is uploaded. The DA family is explicit, and an SLA key store is consulted only
+    /// for the identity the device reports.
+    /// </remarks>
+    /// <param name="serial">Explicit serial port and line settings.</param>
+    /// <param name="protocol">Explicit DA family; no detection or fallback is performed.</param>
+    /// <param name="startup">Parsed loader profile, storage family, identity policy and companion resources.</param>
+    /// <param name="physicalPartition">Explicit physical user region to observe.</param>
+    /// <param name="layout">Selected Scatter storage layout, not automatic platform authorization.</param>
+    /// <param name="steps">Explicit operations and caller-selected sources.</param>
+    /// <param name="cancellationToken">Cancellation for connection, metadata and source preflight.</param>
+    /// <returns>An owned preview which performs storage writes only on a separate ExecuteAsync call.</returns>
+    public static Task<MtkFlashPreparation> PrepareScatterMatchedAsync(SerialConnectionOptions serial,
+        MtkDaProtocol protocol, MtkAutoStartup startup, uint physicalPartition, MtkScatterStorage layout,
+        IReadOnlyList<MtkScatterFlashStep> steps, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(serial);
+        ArgumentNullException.ThrowIfNull(startup);
+        return PrepareScatterAsync(token => MtkBootstrap.MatchSerialAsync(serial, protocol, startup, token),
+            physicalPartition, layout, steps, cancellationToken);
+    }
+
+    /// <summary>Boots an identity-matched agent on a session the device lease already owns, then prepares
+    /// selected Scatter operations against the live GPT.</summary>
+    /// <remarks>
+    /// The session stays bound to the caller's lease: disposing the returned preparation releases the plan
+    /// and the session, and the lease disposes the transport afterwards. Use this entry for USB-classified
+    /// MTK targets, where no serial port is selected.
+    /// </remarks>
+    /// <param name="session">A leased session in the created state.</param>
+    /// <param name="protocol">Explicit DA family; no detection or fallback is performed.</param>
+    /// <param name="startup">Parsed loader profile, storage family, identity policy and companion resources.</param>
+    /// <param name="physicalPartition">Explicit physical user region to observe.</param>
+    /// <param name="layout">Selected Scatter storage layout, not automatic platform authorization.</param>
+    /// <param name="steps">Explicit operations and caller-selected sources.</param>
+    /// <param name="cancellationToken">Cancellation for startup, metadata and source preflight.</param>
+    /// <returns>An owned preview which performs storage writes only on a separate ExecuteAsync call.</returns>
+    public static Task<MtkFlashPreparation> PrepareScatterOnSessionAsync(MtkSession session,
+        MtkDaProtocol protocol, MtkAutoStartup startup, uint physicalPartition, MtkScatterStorage layout,
+        IReadOnlyList<MtkScatterFlashStep> steps, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(startup);
+        return PrepareScatterAsync(token => MtkBootstrap.MatchAsync(session, protocol, startup, token),
+            physicalPartition, layout, steps, cancellationToken);
+    }
+
     internal static async Task<MtkFlashPreparation> PrepareScatterAsync(Func<CancellationToken, Task<MtkSession>> connect,
         uint physicalPartition, MtkScatterStorage layout, IReadOnlyList<MtkScatterFlashStep> steps,
         CancellationToken cancellationToken)

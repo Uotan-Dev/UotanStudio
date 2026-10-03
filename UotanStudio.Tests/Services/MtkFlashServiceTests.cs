@@ -1,4 +1,6 @@
+using System.Buffers.Binary;
 using UotanStudio.Comm.Protocols.Mtk;
+using UotanStudio.Comm.Protocols.Mtk.Profile;
 using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Comm.Protocols.Mtk;
 using UotanStudio.Tests.Comm.TestDoubles;
@@ -144,5 +146,27 @@ public sealed class MtkFlashServiceTests
 
         Assert.Equal(before, transport.Writes.Count);
         Assert.Equal(1, transport.DisposeCount);
+    }
+
+    [Fact]
+    public async Task PrepareOnSessionAsync_IdentityMatchedAgent_PreparesGptNamedEraseOnTheLeasedSession()
+    {
+        using var directory = new TempDirectory();
+        var loaderPath = directory.WriteBytes("loader.bin", MtkSessionTests.BootstrapContainer());
+        var profile = await MtkLoaderProfile.FromFileAsync(loaderPath, TestContext.Current.CancellationToken);
+        using var transport = new ScriptedCommTransport();
+        var geometry = MtkSessionTests.StorageGeometry(MtkXFlashStorageKind.Emmc);
+        BinaryPrimitives.WriteUInt64LittleEndian(geometry.AsSpan(64), 128 * 512);
+        MtkSessionTests.EnqueueBootstrap(transport, bootRom: false, geometry: geometry);
+        MtkSessionTests.EnqueueGpt(transport, GptReaderTests.CreateDisk(512));
+        using var session = new MtkSession(transport);
+        var startup = new MtkAutoStartup { Profile = profile, StorageKind = MtkXFlashStorageKind.Emmc };
+
+        using var preparation = await MtkFlashService.PrepareOnSessionAsync(session, MtkDaProtocol.XFlash,
+            startup, 8, [new(MtkFlashStepKind.Erase, "boot", 0, 512)], TestContext.Current.CancellationToken);
+
+        Assert.Equal(MtkFlashPlanState.Prepared, preparation.State);
+        Assert.Equal(512, preparation.TotalBytes);
+        Assert.Equal(0, transport.DisposeCount);
     }
 }

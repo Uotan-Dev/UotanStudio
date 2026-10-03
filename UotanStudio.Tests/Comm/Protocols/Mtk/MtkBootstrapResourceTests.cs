@@ -168,7 +168,6 @@ public partial class MtkSessionTests
 
     [Theory]
     [InlineData("missing-provider")]
-    [InlineData("missing-selection")]
     [InlineData("duplicate")]
     [InlineData("unknown")]
     [InlineData("too-many")]
@@ -187,7 +186,6 @@ public partial class MtkSessionTests
             BootResourceProvider = failure == "missing-provider" ? null : provider,
             BootResourceOrder = failure switch
             {
-                "missing-selection" => [],
                 "duplicate" => [MtkBootResourceKind.Authentication, MtkBootResourceKind.Authentication],
                 "unknown" => [(MtkBootResourceKind)9],
                 "too-many" => [MtkBootResourceKind.Authentication, MtkBootResourceKind.RootCertificate, MtkBootResourceKind.Authentication],
@@ -201,6 +199,67 @@ public partial class MtkSessionTests
         Assert.Equal(0, calls);
         Assert.Empty(transport.Writes);
         Assert.Equal(1, transport.DisposeCount);
+    }
+
+    [Fact]
+    public async Task BootstrapInitializeAsync_ProviderWithoutExplicitOrder_DerivesUploadsFromTargetSecurityBits()
+    {
+        using var directory = new TempDirectory();
+        using var transport = new ScriptedCommTransport();
+        EnqueueBootstrap(transport, false,
+            [MtkBootResourceKind.Authentication, MtkBootResourceKind.RootCertificate]);
+        var calls = new List<MtkBootResourceKind>();
+        var options = BootstrapOptions(directory) with
+        {
+            BootResourceProvider = new BootResourceProvider((_, kind, _) =>
+            {
+                calls.Add(kind);
+                return Task.FromResult(new MtkBootResource(new MemoryStream([1, 2, 3, 4, 5, 6, 7, 8]), 8));
+            })
+        };
+
+        using var session = await MtkXFlashBootstrap.InitializeAsync(transport, options, TestContext.Current.CancellationToken);
+
+        Assert.Equal(new[] { MtkBootResourceKind.Authentication, MtkBootResourceKind.RootCertificate }, calls);
+        Assert.Equal(MtkSessionState.XFlashStorageReady, session.State);
+    }
+
+    [Theory]
+    [InlineData(0x17u, true, true)]
+    [InlineData(0x04u, true, false)]
+    [InlineData(0x10u, false, true)]
+    [InlineData(0x02u, false, false)]
+    [InlineData(0x00u, false, false)]
+    public void ResolveBootResourceOrder_WithoutExplicitOrder_UsesOnlyRequiredTargetBits(
+        uint targetConfiguration, bool authentication, bool rootCertificate)
+    {
+        var device = new MtkDeviceInfo(0x766, 0, 0xCA00, 0x0100, targetConfiguration);
+
+        var order = MtkBootstrap.ResolveBootResourceOrder([], new BootResourceProvider((_, _, _) =>
+            Task.FromResult(new MtkBootResource(new MemoryStream([1]), 1))), device);
+
+        var expected = new List<MtkBootResourceKind>();
+        if (authentication)
+        {
+            expected.Add(MtkBootResourceKind.Authentication);
+        }
+
+        if (rootCertificate)
+        {
+            expected.Add(MtkBootResourceKind.RootCertificate);
+        }
+
+        Assert.Equal(expected, order);
+    }
+
+    [Fact]
+    public void ResolveBootResourceOrder_ExplicitOrderOrMissingProvider_KeepsCapturedSelection()
+    {
+        var device = new MtkDeviceInfo(0x766, 0, 0xCA00, 0x0100, 0x17);
+        MtkBootResourceKind[] explicitOrder = [MtkBootResourceKind.RootCertificate];
+
+        Assert.Same(explicitOrder, MtkBootstrap.ResolveBootResourceOrder(explicitOrder, null, device));
+        Assert.Empty(MtkBootstrap.ResolveBootResourceOrder([], null, device));
     }
 
     [Theory]

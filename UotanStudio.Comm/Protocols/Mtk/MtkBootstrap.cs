@@ -82,7 +82,8 @@ public static partial class MtkBootstrap
     }
 
     private static async Task<MtkSession> InitializeCoreAsync(ICommTransport? transport, MtkDaProtocol protocol, MtkBootstrapOptions options,
-        Func<CancellationToken, Task<ICommTransport>>? connect, CancellationToken cancellationToken)
+        Func<CancellationToken, Task<ICommTransport>>? connect, CancellationToken cancellationToken,
+        MtkSession? startedSession = null, MtkDeviceInfo? startedDevice = null)
     {
         MtkSession? session = null;
         try
@@ -102,8 +103,10 @@ public static partial class MtkBootstrap
             {
                 throw new ArgumentException("DA1 and DA2 must be explicitly selected distinct regions.", nameof(options));
             }
-            using var stageOne = loader.OpenRegion(options.EntryIndex, options.StageOneRegionIndex, MtkDaRegionContent.Complete);
-            using var stageTwo = loader.OpenRegion(options.EntryIndex, options.StageTwoRegionIndex, options.StageTwoContent);
+            using var rawStageOne = loader.OpenRegion(options.EntryIndex, options.StageOneRegionIndex, MtkDaRegionContent.Complete);
+            using var rawStageTwo = loader.OpenRegion(options.EntryIndex, options.StageTwoRegionIndex, options.StageTwoContent);
+            Stream stageOne = rawStageOne;
+            Stream stageTwo = rawStageTwo;
             var entry = loader.Metadata.Entries[options.EntryIndex];
             var first = entry.Regions[options.StageOneRegionIndex];
             var second = entry.Regions[options.StageTwoRegionIndex];
@@ -120,28 +123,53 @@ public static partial class MtkBootstrap
             if (protocol == MtkDaProtocol.Legacy)
             {
                 _ = options.Legacy!.BuildRuntime(entry.HardwareCode, new(0, 0));
+                if (options.Legacy.PatchStageTwoSecurityChecks)
+                {
+                    var patch = MtkLegacyDaPatcher.TryPatch(ReadAll(stageOne), ReadAll(stageTwo),
+                        (int)first.SignatureLength, (int)second.SignatureLength, loader.Metadata.HeaderIndicatesV6)
+                        ?? throw new MtkProtocolException(
+                            "The selected loader entry has no attested Legacy download-agent patch site.");
+                    stageOne = new MemoryStream(patch.StageOne, writable: false);
+                    stageTwo = new MemoryStream(patch.StageTwo, writable: false);
+                }
             }
 
-            if (transport is null)
+            MtkDeviceInfo device;
+            if (startedSession is not null)
             {
-                transport = await connect!(cancellationToken).ConfigureAwait(false)
-                    ?? throw new InvalidOperationException("The serial connector returned no transport.");
+                session = startedSession;
+                device = startedDevice
+                    ?? throw new ArgumentException(
+                        "A pre-started session must carry the identity queried from the device.", nameof(startedSession));
             }
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!transport.IsConnected)
+            else
             {
-                throw new InvalidOperationException("The selected transport is not connected.");
+                if (transport is null)
+                {
+                    transport = await connect!(cancellationToken).ConfigureAwait(false)
+                        ?? throw new InvalidOperationException("The serial connector returned no transport.");
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!transport.IsConnected)
+                {
+                    throw new InvalidOperationException("The selected transport is not connected.");
+                }
+
+                session = new MtkSession(transport, options.TransferTimeoutMs, options.HandshakeTimeoutMs);
+                device = await session.InitializeAsync(cancellationToken).ConfigureAwait(false);
             }
-            session = new MtkSession(transport, options.TransferTimeoutMs, options.HandshakeTimeoutMs);
-            var device = await session.InitializeAsync(cancellationToken).ConfigureAwait(false);
+
             ValidateIdentity(entry, device, options.IdentityMatch);
             if (protocol == MtkDaProtocol.Legacy)
             {
                 await session.QueryLegacyBootVersionsAsync(cancellationToken).ConfigureAwait(false);
             }
-            await UploadBootResourcesAsync(session, device, options.BootResourceProvider, resourceOrder,
+            await UploadBootResourcesAsync(session, device, options.BootResourceProvider,
+                ResolveBootResourceOrder(resourceOrder, options.BootResourceProvider, device),
                 cancellationToken).ConfigureAwait(false);
-            if (options.BootRomSlaResponder is { } responder)
+            var bootRomResponder = options.BootRomSlaResponder ?? options.SlaKeyProvider?.ResolveSlaResponder(device);
+            if (bootRomResponder is { } responder)
             {
                 await session.UploadDownloadAgentWithSlaAsync(stageOne, first.LoadAddress, checked((int)stageOne.Length),
                     responder, checked((int)first.SignatureLength), options.SlaTimeoutMs,
@@ -244,6 +272,14 @@ public static partial class MtkBootstrap
             throw new ArgumentException("XML startup requires XML settings and eMMC/UFS selection; DRAM resources use its host file store, not XFlash EMI.", nameof(options));
         }
         options.Xml.Validate();
+    }
+
+    private static byte[] ReadAll(Stream image)
+    {
+        image.Position = 0;
+        using var buffer = new MemoryStream();
+        image.CopyTo(buffer);
+        return buffer.ToArray();
     }
 
     private static void ValidateRegion(uint address, long length, bool wordLength)

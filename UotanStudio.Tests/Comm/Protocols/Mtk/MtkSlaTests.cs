@@ -262,6 +262,61 @@ public partial class MtkSessionTests
         Assert.Equal(MtkSessionState.XFlashStorageReady, session.State);
     }
 
+    [Fact]
+    public async Task BootstrapInitializeAsync_SlaKeyProvider_ResolvesResponderAfterHandshake()
+    {
+        using var directory = new TempDirectory();
+        using var transport = new ScriptedCommTransport();
+        EnqueueBootstrap(transport, false, requireSla: true);
+        var provider = new DirectoryKeyProvider();
+        var options = BootstrapOptions(directory) with { SlaKeyProvider = provider };
+
+        using var session = await MtkXFlashBootstrap.InitializeAsync(transport, options, TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, provider.ResolveCalls);
+        Assert.Equal(1, provider.RespondCalls);
+        Assert.Equal(MtkSessionState.XFlashStorageReady, session.State);
+    }
+
+    [Fact]
+    public async Task BootstrapInitializeAsync_SlaKeyProviderWithoutMatch_StopsAtSlaRequest()
+    {
+        using var directory = new TempDirectory();
+        using var transport = new ScriptedCommTransport();
+        EnqueueBootstrap(transport, false, requireSla: true);
+        var options = BootstrapOptions(directory) with
+        {
+            SlaKeyProvider = new DirectoryKeyProvider { ReturnNull = true }
+        };
+
+        var error = await Assert.ThrowsAsync<MtkProtocolException>(
+            () => MtkXFlashBootstrap.InitializeAsync(transport, options, TestContext.Current.CancellationToken));
+
+        Assert.Equal(0x1D0Du, error.Status);
+        Assert.Equal(1, transport.DisposeCount);
+    }
+
+    private sealed class DirectoryKeyProvider : IMtkSlaKeyProvider
+    {
+        public bool ReturnNull { get; init; }
+
+        public int ResolveCalls { get; private set; }
+
+        public int RespondCalls { get; private set; }
+
+        public IMtkBootRomSlaResponder? ResolveSlaResponder(MtkDeviceInfo device)
+        {
+            ResolveCalls++;
+            return ReturnNull
+                ? null
+                : new SlaResponder((_, _, _) =>
+                {
+                    RespondCalls++;
+                    return Task.FromResult(new byte[8]);
+                });
+        }
+    }
+
     private static async Task<MtkSession> CreateSlaSessionAsync(ScriptedCommTransport transport)
     {
         EnqueueIdentity(transport);

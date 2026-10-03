@@ -142,9 +142,12 @@ public sealed partial class MtkSession
                 _ = await ReadAsync(20, _timeoutMs, token).ConfigureAwait(false);
                 await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
                 var response = await ReadAsync(3, _timeoutMs, token).ConfigureAwait(false);
-                if (!response.AsSpan().SequenceEqual(Convert.FromHexString(options.StageOneResponseHex)))
+                var observed = Convert.ToHexString(response);
+                if (options.StageOneResponseHex is { } expected
+                    && !response.AsSpan().SequenceEqual(Convert.FromHexString(expected)))
                 {
-                    throw new MtkProtocolException("The Legacy DA1 response does not match the selected loader profile.");
+                    throw new MtkProtocolException(
+                        $"The Legacy DA1 response does not match the selected loader profile; the agent sent {observed} and the profile asserts {expected}.");
                 }
                 _state = MtkSessionState.LegacyStageOneReady;
                 await WriteAsync(runtime, _timeoutMs, token).ConfigureAwait(false);
@@ -172,7 +175,7 @@ public sealed partial class MtkSession
                     Protocol = "mtk",
                     Phase = "legacy-da-profile",
                     Outcome = CommandOutcomeKind.Completed,
-                    Detail = MtkLegacyDaProfile.From(options, storageKind).Describe()
+                    Detail = MtkLegacyDaProfile.From(options, storageKind, observed).Describe()
                 });
                 LegacyStorage = storage;
                 _state = MtkSessionState.LegacyStorageReady;

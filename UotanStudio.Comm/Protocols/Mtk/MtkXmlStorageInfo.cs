@@ -94,6 +94,24 @@ public sealed class MtkXmlStorageInfo
     /// 两者都没有时为 <see langword="null"/>。</para></value>
     public string? CidHex { get; }
 
+    /// <summary>Gets the canonical region token that carries the file-system partition table for this family.
+    /// <para>获取该家族中承载文件系统分区表的规范区域标记。</para></summary>
+    /// <value>
+    /// <c>EMMC-USER</c> for eMMC and <c>UFS-LUA2</c> for UFS, mirroring the tokens the reference tool sends for
+    /// the "user" partition of each family. The region is present in <see cref="Regions"/> only when the device
+    /// reported it, so callers still select a region through range validation.
+    /// <para>eMMC 为 <c>EMMC-USER</c>，UFS 为 <c>UFS-LUA2</c>，与参考工具为各家族 “user” 分区发送的标记一致。
+    /// 仅当设备上报该区域时它才出现在 <see cref="Regions"/> 中，因此调用方仍需通过范围校验选择区域。</para>
+    /// </value>
+    public string UserDataRegionName => GetUserDataRegionName(Kind);
+
+    /// <summary>Gets the canonical user-data region token for a block-storage family.
+    /// <para>获取块存储家族对应的规范用户数据区域标记。</para></summary>
+    /// <param name="kind">The storage family. <para>存储家族。</para></param>
+    /// <returns><c>EMMC-USER</c> or <c>UFS-LUA2</c>. <para><c>EMMC-USER</c> 或 <c>UFS-LUA2</c>。</para></returns>
+    public static string GetUserDataRegionName(MtkXmlStorageKind kind) =>
+        kind == MtkXmlStorageKind.Emmc ? "EMMC-USER" : "UFS-LUA2";
+
     /// <summary>Validates ordinary block access without clamping, rounding or permitting authenticated regions.
     /// <para>校验常规块访问，不进行截断或取整，也不允许访问需认证的区域。</para></summary>
     /// <param name="regionName">An exact XML region token from this geometry.

@@ -61,59 +61,66 @@ public sealed partial class MtkSession
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            RequireState(MtkSessionState.XmlStorageGeometryKnown);
-            cancellationToken.ThrowIfCancellationRequested();
-            var storage = XmlStorage ?? throw new InvalidOperationException("XML storage has not been discovered.");
-            storage.ValidateRange(regionName, offset, length);
-            RequireXmlOrdinaryRegionSnapshot(regionName);
-            ValidateXmlStorageSource(source, length);
-            var channel = _xml ?? throw new InvalidOperationException("The XML DA channel was not attached.");
-            var sourceId = $"MEM://0x0:0x{length:x}";
-            var command = new XElement("da", new XElement("version", "1.0"), new XElement("command", "CMD:WRITE-FLASH"),
-                new XElement("arg", new XElement("partition", regionName), new XElement("offset", $"0x{offset:x}"),
-                    new XElement("source_file", sourceId)));
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            deadline.CancelAfter(timeoutMs);
-            var token = deadline.Token;
-            try
-            {
-                await SendXmlControlCommandOwnedAsync(channel, XmlHostCapabilities(download: true, fileSize: true), token).ConfigureAwait(false);
-                await channel.SendCommandAsync(command, token).ConfigureAwait(false);
-                await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
-                var sizeRequest = await ReceiveXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
-                RequireXmlCommand(sizeRequest, "CMD:FILE-SYS-OPERATION");
-                var arguments = sizeRequest.Arguments;
-                if (arguments.Count != 2
-                    || !arguments.TryGetValue("key", out var key) || key != "FILE-SIZE"
-                    || !arguments.TryGetValue("file_path", out var path) || path != sourceId)
-                {
-                    throw new MtkProtocolException("Only FILE-SIZE for the selected opaque XML source is supported.");
-                }
-                await channel.AcknowledgeAsync(token).ConfigureAwait(false);
-                await channel.AcknowledgeValueAsync((ulong)length, token).ConfigureAwait(false);
-                var request = await ReceiveXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
-                var packetLength = ValidateXmlDownloadRequest(request, sourceId);
-                await channel.AcknowledgeAsync(token).ConfigureAwait(false);
-                await SendXmlSourceOwnedAsync(channel, source, length, packetLength, progress, token).ConfigureAwait(false);
-                await channel.AcknowledgeAsync(token).ConfigureAwait(false);
-                await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
-                token.ThrowIfCancellationRequested();
-                ThrowIfDisposed();
-            }
-            catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-            {
-                FaultXml();
-                throw new TimeoutException("The XML write deadline expired; storage may have changed and the write must not be replayed.", error);
-            }
-            catch
-            {
-                FaultXml();
-                throw;
-            }
+            await WriteXmlStorageOwnedAsync(regionName, offset, length, source, timeoutMs, progress,
+                cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             _operation.Release();
+        }
+    }
+
+    private async Task WriteXmlStorageOwnedAsync(string regionName, long offset, long length, Stream source,
+        int timeoutMs, IProgress<long>? progress, CancellationToken cancellationToken)
+    {
+        RequireState(MtkSessionState.XmlStorageGeometryKnown);
+        cancellationToken.ThrowIfCancellationRequested();
+        var storage = XmlStorage ?? throw new InvalidOperationException("XML storage has not been discovered.");
+        storage.ValidateRange(regionName, offset, length);
+        RequireXmlOrdinaryRegionSnapshot(regionName);
+        ValidateXmlStorageSource(source, length);
+        var channel = _xml ?? throw new InvalidOperationException("The XML DA channel was not attached.");
+        var sourceId = $"MEM://0x0:0x{length:x}";
+        var command = new XElement("da", new XElement("version", "1.0"), new XElement("command", "CMD:WRITE-FLASH"),
+            new XElement("arg", new XElement("partition", regionName), new XElement("offset", $"0x{offset:x}"),
+                new XElement("source_file", sourceId)));
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeoutMs);
+        var token = deadline.Token;
+        try
+        {
+            await SendXmlControlCommandOwnedAsync(channel, XmlHostCapabilities(download: true, fileSize: true), token).ConfigureAwait(false);
+            await channel.SendCommandAsync(command, token).ConfigureAwait(false);
+            await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
+            var sizeRequest = await ReceiveXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
+            RequireXmlCommand(sizeRequest, "CMD:FILE-SYS-OPERATION");
+            var arguments = sizeRequest.Arguments;
+            if (arguments.Count != 2
+                || !arguments.TryGetValue("key", out var key) || key != "FILE-SIZE"
+                || !arguments.TryGetValue("file_path", out var path) || path != sourceId)
+            {
+                throw new MtkProtocolException("Only FILE-SIZE for the selected opaque XML source is supported.");
+            }
+            await channel.AcknowledgeAsync(token).ConfigureAwait(false);
+            await channel.AcknowledgeValueAsync((ulong)length, token).ConfigureAwait(false);
+            var request = await ReceiveXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
+            var packetLength = ValidateXmlDownloadRequest(request, sourceId);
+            await channel.AcknowledgeAsync(token).ConfigureAwait(false);
+            await SendXmlSourceOwnedAsync(channel, source, length, packetLength, progress, token).ConfigureAwait(false);
+            await channel.AcknowledgeAsync(token).ConfigureAwait(false);
+            await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
+            ThrowIfDisposed();
+        }
+        catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            FaultXml();
+            throw new TimeoutException("The XML write deadline expired; storage may have changed and the write must not be replayed.", error);
+        }
+        catch
+        {
+            FaultXml();
+            throw;
         }
     }
 

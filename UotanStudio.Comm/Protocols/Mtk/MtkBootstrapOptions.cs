@@ -196,6 +196,20 @@ public record MtkBootstrapOptions
     /// </value>
     public IMtkBootRomSlaResponder? BootRomSlaResponder { get; init; }
     /// <summary>
+    /// Gets an optional key provider resolved against the queried device identity after the
+    /// handshake, so an explicitly selected loader can answer a Boot ROM SLA request from a
+    /// keys directory without a pre-known hardware code. An explicit
+    /// <see cref="BootRomSlaResponder"/> wins over this provider.
+    /// <para>获取可选的密钥提供方：握手后按查询到的设备身份解析，使显式选定的加载器无需预先
+    /// 知道硬件代码也能应答 Boot ROM SLA 请求。显式的 <see cref="BootRomSlaResponder"/>
+    /// 优先于此提供方。</para>
+    /// </summary>
+    /// <value>
+    /// The provider resolved after handshake, or <see langword="null"/> when no directory keys apply.
+    /// <para>握手后解析的提供方；无目录密钥适用时为 <see langword="null"/>。</para>
+    /// </value>
+    public IMtkSlaKeyProvider? SlaKeyProvider { get; init; }
+    /// <summary>
     /// Gets the authorized XFlash/XML DA2 signing provider, invoked only when DA2 reports SLA enabled.
     /// Legacy profiles reject this setting.
     /// <para>获取授权的 XFlash/XML DA2 签名提供方，仅在 DA2 报告启用 SLA 时调用。

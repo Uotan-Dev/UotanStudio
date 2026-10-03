@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using UotanStudio.Comm.Protocols.Mtk;
+using UotanStudio.Comm.Protocols.Mtk.Profile;
 using UotanStudio.Firmware.VendorFirmware.MediaTek;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -162,6 +163,62 @@ public partial class MtkSessionTests
         Assert.Equal(1, transport.DisposeCount);
     }
 
+    [Fact]
+    public async Task BootstrapMatchAsync_IdentityFromHandshake_SelectsEntryAndReachesStorageReady()
+    {
+        using var dir = new TempDirectory();
+        var loaderPath = dir.WriteBytes("loader.bin", BootstrapContainer());
+        var profile = await MtkLoaderProfile.FromFileAsync(loaderPath, TestContext.Current.CancellationToken);
+        using var transport = new ScriptedCommTransport();
+        EnqueueBootstrap(transport, bootRom: false);
+
+        using var session = await MtkBootstrap.MatchAsync(transport, MtkDaProtocol.XFlash,
+            new MtkAutoStartup { Profile = profile, StorageKind = MtkXFlashStorageKind.Emmc },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(MtkSessionState.XFlashStorageReady, session.State);
+        Assert.NotNull(session.XFlashStorage);
+        Assert.Contains(transport.Writes, bytes => bytes.AsSpan().SequenceEqual(Enumerable.Repeat((byte)0x42, 12).ToArray()));
+    }
+
+    [Fact]
+    public async Task BootstrapMatchAsync_ContainerIdentityMismatch_StopsBeforeDaUpload()
+    {
+        using var dir = new TempDirectory();
+        var bytes = BootstrapContainer();
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(110), 0x9999);
+        var loaderPath = dir.WriteBytes("loader.bin", bytes);
+        var profile = await MtkLoaderProfile.FromFileAsync(loaderPath, TestContext.Current.CancellationToken);
+        using var transport = new ScriptedCommTransport();
+        EnqueueBootstrap(transport, bootRom: false);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => MtkBootstrap.MatchAsync(transport,
+            MtkDaProtocol.XFlash, new MtkAutoStartup { Profile = profile, StorageKind = MtkXFlashStorageKind.Emmc },
+            TestContext.Current.CancellationToken));
+
+        Assert.Contains("did not resolve to one entry", failure.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(transport.Writes, bytes => bytes.AsSpan().SequenceEqual(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }));
+    }
+
+    [Fact]
+    public async Task BootstrapMatchAsync_BorrowedLeasedSession_ReachesStorageReadyOnSameSession()
+    {
+        using var dir = new TempDirectory();
+        var loaderPath = dir.WriteBytes("loader.bin", BootstrapContainer());
+        var profile = await MtkLoaderProfile.FromFileAsync(loaderPath, TestContext.Current.CancellationToken);
+        using var transport = new ScriptedCommTransport();
+        EnqueueBootstrap(transport, bootRom: false);
+        using var session = new MtkSession(transport);
+
+        var booted = await MtkBootstrap.MatchAsync(session, MtkDaProtocol.XFlash,
+            new MtkAutoStartup { Profile = profile, StorageKind = MtkXFlashStorageKind.Emmc },
+            TestContext.Current.CancellationToken);
+
+        Assert.Same(session, booted);
+        Assert.Equal(MtkSessionState.XFlashStorageReady, booted.State);
+        Assert.NotNull(booted.XFlashStorage);
+    }
+
     private static MtkXFlashBootstrapOptions BootstrapOptions(TempDirectory dir) => new()
     {
         LoaderPath = dir.WriteBytes("loader.bin", BootstrapContainer()),
@@ -172,7 +229,7 @@ public partial class MtkSessionTests
         StorageKind = MtkXFlashStorageKind.Emmc
     };
 
-    private static byte[] BootstrapContainer()
+    internal static byte[] BootstrapContainer()
     {
         var bytes = new byte[1048];
         "MTK_DOWNLOAD_AGENT"u8.CopyTo(bytes);
@@ -197,7 +254,7 @@ public partial class MtkSessionTests
         return bytes;
     }
 
-    private static void EnqueueBootstrap(ScriptedCommTransport transport, bool bootRom,
+    internal static void EnqueueBootstrap(ScriptedCommTransport transport, bool bootRom,
         MtkBootResourceKind[]? resources = null, bool requireSla = false, bool requireDaSla = false,
         byte[]? geometry = null)
     {

@@ -43,40 +43,47 @@ public sealed partial class MtkSession
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            RequireState(MtkSessionState.XmlStorageGeometryKnown);
-            cancellationToken.ThrowIfCancellationRequested();
-            var storage = XmlStorage ?? throw new InvalidOperationException("XML storage has not been discovered.");
-            storage.ValidateRange(regionName, offset, length);
-            RequireXmlOrdinaryRegionSnapshot(regionName);
-            var channel = _xml ?? throw new InvalidOperationException("The XML DA channel was not attached.");
-            var command = new XElement("da", new XElement("version", "1.0"), new XElement("command", "CMD:ERASE-FLASH"),
-                new XElement("arg", new XElement("partition", regionName), new XElement("offset", $"0x{offset:x}"),
-                    new XElement("length", $"0x{length:x}")));
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            deadline.CancelAfter(timeoutMs);
-            var token = deadline.Token;
-            try
-            {
-                await SendXmlControlCommandOwnedAsync(channel, XmlHostCapabilities(download: false), token).ConfigureAwait(false);
-                await SendXmlControlCommandOwnedAsync(channel, command, token).ConfigureAwait(false);
-                await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
-                token.ThrowIfCancellationRequested();
-                ThrowIfDisposed();
-            }
-            catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-            {
-                FaultXml();
-                throw new TimeoutException("The XML erase deadline expired; the device may still be erasing and must not be retried blindly.", error);
-            }
-            catch
-            {
-                FaultXml();
-                throw;
-            }
+            await EraseXmlStorageOwnedAsync(regionName, offset, length, timeoutMs, cancellationToken)
+                .ConfigureAwait(false);
         }
         finally
         {
             _operation.Release();
+        }
+    }
+
+    private async Task EraseXmlStorageOwnedAsync(string regionName, long offset, long length, int timeoutMs,
+        CancellationToken cancellationToken)
+    {
+        RequireState(MtkSessionState.XmlStorageGeometryKnown);
+        cancellationToken.ThrowIfCancellationRequested();
+        var storage = XmlStorage ?? throw new InvalidOperationException("XML storage has not been discovered.");
+        storage.ValidateRange(regionName, offset, length);
+        RequireXmlOrdinaryRegionSnapshot(regionName);
+        var channel = _xml ?? throw new InvalidOperationException("The XML DA channel was not attached.");
+        var command = new XElement("da", new XElement("version", "1.0"), new XElement("command", "CMD:ERASE-FLASH"),
+            new XElement("arg", new XElement("partition", regionName), new XElement("offset", $"0x{offset:x}"),
+                new XElement("length", $"0x{length:x}")));
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeoutMs);
+        var token = deadline.Token;
+        try
+        {
+            await SendXmlControlCommandOwnedAsync(channel, XmlHostCapabilities(download: false), token).ConfigureAwait(false);
+            await SendXmlControlCommandOwnedAsync(channel, command, token).ConfigureAwait(false);
+            await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
+            ThrowIfDisposed();
+        }
+        catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            FaultXml();
+            throw new TimeoutException("The XML erase deadline expired; the device may still be erasing and must not be retried blindly.", error);
+        }
+        catch
+        {
+            FaultXml();
+            throw;
         }
     }
 }

@@ -36,13 +36,17 @@ public sealed partial class MtkSession
         CancellationToken cancellationToken = default)
         => QueryXmlSystemPropertyCoreAsync(key, null, timeoutMs, cancellationToken);
 
-    /// <summary>Queries DA.SLA against an explicitly selected property-envelope profile.
-    /// <para>针对显式选定的属性信封（envelope）配置查询 DA.SLA。</para></summary>
-    /// <remarks>No envelope is inferred from the reply. Only exact ENABLED and DISABLED values are
-    /// classified; other nonempty values remain Unknown. Failure never returns a disabled indication.
-    /// Even DisabledReported is an agent statement, not proof of authorization or device authenticity.</remarks>
-    /// <param name="expectedEnvelopeName">Exact unqualified outer element name selected from the caller's loader profile.
-    /// <para>来自调用方加载器配置、精确的不带命名空间前缀的外层元素名。</para></param>
+    /// <summary>Queries DA.SLA, optionally asserting the property-envelope profile selected by the caller.
+    /// <para>查询 DA.SLA，并按需断言调用方选定的属性信封配置。</para></summary>
+    /// <remarks>No envelope is inferred from the reply and the reported name is never rewritten. Only exact
+    /// ENABLED and DISABLED values are classified; other nonempty values remain Unknown. Failure never
+    /// returns a disabled indication. Even DisabledReported is an agent statement, not proof of
+    /// authorization or device authenticity.
+    /// <para>不从回复推断信封，也不改写上报的名称。仅精确的 ENABLED 与 DISABLED 值会被分类；其他非空值仍为
+    /// Unknown。失败绝不返回已禁用的指示。即便 DisabledReported 也只是代理的陈述，不构成授权或设备真实性证据。</para></remarks>
+    /// <param name="expectedEnvelopeName">Exact unqualified outer element name selected from the caller's loader
+    /// profile, or <see langword="null"/> to accept the envelope the agent reports.
+    /// <para>来自调用方加载器配置、精确的不带命名空间前缀的外层元素名；为 <see langword="null"/> 时接受代理上报的信封。</para></param>
     /// <param name="timeoutMs">Cooperative whole-operation deadline, from one millisecond through 24 hours.
     /// <para>整次操作的协作式截止时间，范围从 1 毫秒到 24 小时。</para></param>
     /// <param name="cancellationToken">Cancellation for waiting and the complete query.
@@ -56,12 +60,15 @@ public sealed partial class MtkSession
     /// <para><paramref name="expectedEnvelopeName"/> 超过 128 个字符，或 <paramref name="timeoutMs"/> 越界。</para></exception>
     /// <exception cref="System.Xml.XmlException"><paramref name="expectedEnvelopeName"/> fails XML name validation.
     /// <para><paramref name="expectedEnvelopeName"/> 未通过 XML 名称校验。</para></exception>
-    public async Task<MtkXmlSlaReport> QueryXmlSlaStatusAsync(string expectedEnvelopeName, int timeoutMs = 120000,
+    public async Task<MtkXmlSlaReport> QueryXmlSlaStatusAsync(string? expectedEnvelopeName, int timeoutMs = 120000,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(expectedEnvelopeName);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(expectedEnvelopeName.Length, 128);
-        XmlConvert.VerifyNCName(expectedEnvelopeName);
+        if (expectedEnvelopeName is { } asserted)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(asserted);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(asserted.Length, 128);
+            XmlConvert.VerifyNCName(asserted);
+        }
         var property = await QueryXmlSystemPropertyCoreAsync("DA.SLA", expectedEnvelopeName, timeoutMs, cancellationToken).ConfigureAwait(false);
         return new MtkXmlSlaReport(property);
     }

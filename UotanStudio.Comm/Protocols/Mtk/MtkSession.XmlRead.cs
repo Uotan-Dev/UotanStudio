@@ -57,78 +57,85 @@ public sealed partial class MtkSession
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            RequireState(MtkSessionState.XmlStorageGeometryKnown);
-            cancellationToken.ThrowIfCancellationRequested();
-            var storage = XmlStorage ?? throw new InvalidOperationException("XML storage has not been discovered.");
-            storage.ValidateRange(regionName, offset, length);
-            RequireXmlOrdinaryRegionSnapshot(regionName);
-            var channel = _xml ?? throw new InvalidOperationException("The XML DA channel was not attached.");
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            deadline.CancelAfter(timeoutMs);
-            var token = deadline.Token;
-            var command = new XElement("da", new XElement("version", "1.0"), new XElement("command", "CMD:READ-FLASH"),
-                new XElement("arg", new XElement("partition", regionName), new XElement("offset", $"0x{offset:x}"),
-                    new XElement("length", $"0x{length:x}"), new XElement("target_file", "ROM_0")));
-            try
-            {
-                await SendXmlControlCommandOwnedAsync(channel, XmlHostCapabilities(download: false, upload: true), token).ConfigureAwait(false);
-                await channel.SendCommandAsync(command, token).ConfigureAwait(false);
-                await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
-                var request = await ReceiveXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
-                var packetLength = ValidateXmlUploadRequest(request, "ROM_0", MtkXmlChannel.MaximumBinaryPayload);
-                await channel.AcknowledgeAsync(token).ConfigureAwait(false);
-                RequireXmlReadLength(await channel.ReceiveTextAsync(token).ConfigureAwait(false), length);
-                await channel.AcknowledgeAsync(token).ConfigureAwait(false);
-                await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
-                await channel.AcknowledgeAsync(token).ConfigureAwait(false);
-                long transferred = 0;
-                while (transferred < length)
-                {
-                    var limit = (int)Math.Min(packetLength, length - transferred);
-                    var payload = await channel.ReceivePayloadAsync(limit, token).ConfigureAwait(false);
-                    if (payload.Length == 0)
-                    {
-                        throw new MtkProtocolException("The XML storage read returned an empty data frame.");
-                    }
-                    ThrowIfDisposed();
-                    await destination.WriteAsync(payload, token).ConfigureAwait(false);
-                    token.ThrowIfCancellationRequested();
-                    await channel.AcknowledgeAsync(token).ConfigureAwait(false);
-                    var status = await channel.ReceiveTextAsync(token).ConfigureAwait(false);
-                    transferred += payload.Length;
-                    if (status == "OK")
-                    {
-                        await channel.AcknowledgeAsync(token).ConfigureAwait(false);
-                    }
-                    else if (transferred == length && !status.StartsWith("ERR!", StringComparison.Ordinal))
-                    {
-                        var end = ParseXmlMessageOwned(status);
-                        await AcknowledgeXmlEndOwnedAsync(channel, end, token).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        throw new MtkProtocolException("The XML storage read ended or failed before all selected bytes were received.");
-                    }
-                    progress?.Report(transferred);
-                }
-                await AcknowledgeXmlStartOwnedAsync(channel, token).ConfigureAwait(false);
-                token.ThrowIfCancellationRequested();
-                ThrowIfDisposed();
-            }
-            catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-            {
-                FaultXml();
-                throw new TimeoutException("The XML storage read deadline expired; reconnect before continuing.", error);
-            }
-            catch
-            {
-                FaultXml();
-                throw;
-            }
+            await ReadXmlStorageOwnedAsync(regionName, offset, length, destination, timeoutMs, progress,
+                cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             _operation.Release();
+        }
+    }
+
+    private async Task ReadXmlStorageOwnedAsync(string regionName, long offset, long length, Stream destination,
+        int timeoutMs, IProgress<long>? progress, CancellationToken cancellationToken)
+    {
+        RequireState(MtkSessionState.XmlStorageGeometryKnown);
+        cancellationToken.ThrowIfCancellationRequested();
+        var storage = XmlStorage ?? throw new InvalidOperationException("XML storage has not been discovered.");
+        storage.ValidateRange(regionName, offset, length);
+        RequireXmlOrdinaryRegionSnapshot(regionName);
+        var channel = _xml ?? throw new InvalidOperationException("The XML DA channel was not attached.");
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeoutMs);
+        var token = deadline.Token;
+        var command = new XElement("da", new XElement("version", "1.0"), new XElement("command", "CMD:READ-FLASH"),
+            new XElement("arg", new XElement("partition", regionName), new XElement("offset", $"0x{offset:x}"),
+                new XElement("length", $"0x{length:x}"), new XElement("target_file", "ROM_0")));
+        try
+        {
+            await SendXmlControlCommandOwnedAsync(channel, XmlHostCapabilities(download: false, upload: true), token).ConfigureAwait(false);
+            await channel.SendCommandAsync(command, token).ConfigureAwait(false);
+            await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
+            var request = await ReceiveXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
+            var packetLength = ValidateXmlUploadRequest(request, "ROM_0", MtkXmlChannel.MaximumBinaryPayload);
+            await channel.AcknowledgeAsync(token).ConfigureAwait(false);
+            RequireXmlReadLength(await channel.ReceiveTextAsync(token).ConfigureAwait(false), length);
+            await channel.AcknowledgeAsync(token).ConfigureAwait(false);
+            await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
+            await channel.AcknowledgeAsync(token).ConfigureAwait(false);
+            long transferred = 0;
+            while (transferred < length)
+            {
+                var limit = (int)Math.Min(packetLength, length - transferred);
+                var payload = await channel.ReceivePayloadAsync(limit, token).ConfigureAwait(false);
+                if (payload.Length == 0)
+                {
+                    throw new MtkProtocolException("The XML storage read returned an empty data frame.");
+                }
+                ThrowIfDisposed();
+                await destination.WriteAsync(payload, token).ConfigureAwait(false);
+                token.ThrowIfCancellationRequested();
+                await channel.AcknowledgeAsync(token).ConfigureAwait(false);
+                var status = await channel.ReceiveTextAsync(token).ConfigureAwait(false);
+                transferred += payload.Length;
+                if (status == "OK")
+                {
+                    await channel.AcknowledgeAsync(token).ConfigureAwait(false);
+                }
+                else if (transferred == length && !status.StartsWith("ERR!", StringComparison.Ordinal))
+                {
+                    var end = ParseXmlMessageOwned(status);
+                    await AcknowledgeXmlEndOwnedAsync(channel, end, token).ConfigureAwait(false);
+                }
+                else
+                {
+                    throw new MtkProtocolException("The XML storage read ended or failed before all selected bytes were received.");
+                }
+                progress?.Report(transferred);
+            }
+            await AcknowledgeXmlStartOwnedAsync(channel, token).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
+            ThrowIfDisposed();
+        }
+        catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            FaultXml();
+            throw new TimeoutException("The XML storage read deadline expired; reconnect before continuing.", error);
+        }
+        catch
+        {
+            FaultXml();
+            throw;
         }
     }
 

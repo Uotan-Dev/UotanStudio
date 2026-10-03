@@ -31,7 +31,7 @@ public sealed partial class MtkSessionTests
         Assert.Equal(8, session.LegacyStorage.Regions.Count);
         Assert.Equal(8192, session.LegacyStorage.Regions[7].CapacityBytes);
         Assert.Equal("000102030405060708090A0B0C0D0E0F", session.LegacyStorage.CidHex);
-        Assert.Contains(transport.Writes, bytes => bytes.SequenceEqual(Convert.FromHexString("05FE0008007007FFFF000000000002010200")));
+        Assert.Contains(transport.Writes, bytes => bytes.SequenceEqual(Convert.FromHexString("05FE0008007007FFFF010000000002010200")));
         Assert.Contains(transport.Writes, bytes => bytes.SequenceEqual(Convert.FromHexString("400000000000001000000004")));
         Assert.Contains(transport.Writes, bytes => bytes.SequenceEqual(new byte[] { 0xEE, 0xEE, 0xEE, 0xEE }));
         Assert.Equal(1, transport.Writes.Count(bytes => bytes.SequenceEqual(new byte[] { 0xFE })));
@@ -49,6 +49,7 @@ public sealed partial class MtkSessionTests
     [InlineData("response")]
     [InlineData("packet")]
     [InlineData("bmt")]
+    [InlineData("nor-cfg")]
     [InlineData("iot")]
     public async Task LegacyBootstrapAsync_InvalidPolicy_RejectsBeforeDeviceIo(string failure)
     {
@@ -63,7 +64,8 @@ public sealed partial class MtkSessionTests
             case "ufs": options = options with { StorageKind = MtkXFlashStorageKind.Ufs }; break;
             case "response": options = options with { Legacy = LegacyProfile() with { StageOneResponseHex = "ZZZZZZ" } }; break;
             case "packet": options = options with { Legacy = LegacyProfile() with { StoragePacketLength = 511 } }; break;
-            case "bmt": options = options with { Legacy = LegacyProfile() with { NandBmtEnabled = true } }; break;
+            case "bmt": options = options with { Legacy = LegacyProfile() with { NandBmtFlag = 3 } }; break;
+            case "nor-cfg": options = options with { Legacy = LegacyProfile() with { NorChipSelect = 0x0009 } }; break;
             case "iot":
                 var bytes = BootstrapContainer();
                 BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(110), 0x6261);
@@ -103,6 +105,39 @@ public sealed partial class MtkSessionTests
         Assert.Equal(1, transport.DisposeCount);
         Assert.DoesNotContain(transport.Writes, bytes => Encoding.UTF8.GetString(bytes).Contains("<command>", StringComparison.Ordinal));
         Assert.DoesNotContain(transport.Writes, bytes => bytes.SequenceEqual(new byte[] { 0xC0 }));
+    }
+
+    [Fact]
+    public async Task LegacyBootstrapAsync_UnassertedDa1Response_StartsWithAnyReportedAckBytes()
+    {
+        using var dir = new TempDirectory();
+        var options = LegacyBootstrapOptions(dir) with { Legacy = LegacyProfile() with { StageOneResponseHex = null } };
+        using var transport = new ScriptedCommTransport();
+        EnqueueLegacyBootstrap(transport, false, "response");
+        transport.Enqueue([0x5A, 0x5A]);
+
+        using var session = await MtkBootstrap.InitializeAsync(transport, MtkDaProtocol.Legacy, options,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(MtkSessionState.LegacyStorageReady, session.State);
+        var evidence = session.Evidence.Single(entry => entry.Phase == "legacy-da-profile");
+        Assert.Contains("da1-response=CF0000", evidence.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("asserted", evidence.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LegacyBootstrapAsync_AssertedDa1ResponseMismatch_ReportsObservedAndAssertedBytes()
+    {
+        using var dir = new TempDirectory();
+        var options = LegacyBootstrapOptions(dir) with { Legacy = LegacyProfile() with { StageOneResponseHex = "C10000" } };
+        using var transport = new ScriptedCommTransport();
+        EnqueueLegacyBootstrap(transport, false, "response");
+
+        var error = await Assert.ThrowsAsync<MtkProtocolException>(() => MtkBootstrap.InitializeAsync(transport,
+            MtkDaProtocol.Legacy, options, TestContext.Current.CancellationToken));
+
+        Assert.Contains("the agent sent CF0000 and the profile asserts C10000", error.Message, StringComparison.Ordinal);
+        Assert.Equal(1, transport.DisposeCount);
     }
 
     [Theory]
@@ -186,6 +221,115 @@ public sealed partial class MtkSessionTests
         {
             Assert.Equal(Convert.FromHexString("0000000146460000000000000000000000000000FF000000"), bytes[^24..]);
         }
+    }
+
+    [Fact]
+    public void LegacyRuntime_DefaultStartupProfile_TransmitsReferenceNorCfgTimingBmtAndChargeBytes()
+    {
+        var bytes = LegacyProfile().BuildRuntime(0x0766, new(5, 0xFE));
+
+        Assert.Equal(Convert.FromHexString("05FE0008007007FFFF010000000002010200"), bytes);
+        Assert.Equal(0x0008, BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(2)));
+        Assert.Equal(0x01, bytes[9]);
+        Assert.Equal(0x02, bytes[14]);
+    }
+
+    [Fact]
+    public void LegacyRuntime_SelectedStartupParameters_LandOnTheirDocumentedWireBytes()
+    {
+        var options = LegacyProfile() with
+        {
+            NorChipSelect = 0x0000,
+            NandChipSelect = 0x01,
+            NandAccessTiming = 0x7007FF00,
+            NandBmtFlag = 2,
+            NandBmtPoolBytes = 0x1500000,
+            ForceCharging = true
+        };
+
+        var bytes = options.BuildRuntime(0x6582, new(5, 0xFE));
+
+        Assert.Equal(Convert.FromHexString("05FE0000017007FF0002015000000101020000000001"), bytes);
+        Assert.Equal(0x02, bytes[9]);
+        Assert.Equal(0x01500000u, BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(10)));
+        Assert.Equal(0x01, bytes[14]);
+        Assert.Equal(0x00, bytes[17]);
+    }
+
+    [Fact]
+    public async Task LegacyBootstrapAsync_SelectedStartupParameters_TransportsExactRuntimePayloadAfterStageOneAck()
+    {
+        using var dir = new TempDirectory();
+        var options = LegacyBootstrapOptions(dir) with
+        {
+            Legacy = LegacyProfile() with
+            {
+                NorChipSelect = 0x0000,
+                NandChipSelect = 0x01,
+                NandAccessTiming = 0x7007FF00,
+                NandBmtFlag = 2,
+                NandBmtPoolBytes = 0x1500000,
+                ForceCharging = true
+            }
+        };
+        using var transport = new ScriptedCommTransport();
+        EnqueueLegacyBootstrap(transport, false);
+
+        using var session = await MtkBootstrap.InitializeAsync(transport, MtkDaProtocol.Legacy, options,
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(transport.Writes, bytes => bytes.SequenceEqual(Convert.FromHexString("05FE0000017007FF00020150000001010200")));
+        Assert.Equal(MtkSessionState.LegacyStorageReady, session.State);
+    }
+
+    [Theory]
+    [InlineData(false, 0x02)]
+    [InlineData(true, 0x01)]
+    public void LegacyRuntime_ForceChargingSwitch_SelectsAutoOrOnChargeByte(bool forceCharging, byte expected)
+    {
+        var bytes = (LegacyProfile() with { ForceCharging = forceCharging })
+            .BuildRuntime(0x0766, new(5, 0xFE));
+
+        Assert.Equal(expected, bytes[14]);
+    }
+
+    [Theory]
+    [InlineData((byte)0, 0u)]
+    [InlineData((byte)1, 0u)]
+    [InlineData((byte)0, 0x00A00000u)]
+    [InlineData((byte)2, 0x01500000u)]
+    public void LegacyRuntime_ReferenceFlagAndPoolCombinations_TransmitBothBytesWithoutCoupling(byte flag, uint poolBytes)
+    {
+        var bytes = (LegacyProfile() with { NandBmtFlag = flag, NandBmtPoolBytes = poolBytes })
+            .BuildRuntime(0x0766, new(5, 0xFE));
+
+        Assert.Equal(flag, bytes[9]);
+        Assert.Equal(poolBytes, BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(10)));
+    }
+
+    [Theory]
+    [InlineData(0x0001)]
+    [InlineData(0x0009)]
+    [InlineData(ushort.MaxValue)]
+    public void LegacyRuntime_UndocumentedNorCfgWord_ThrowsWithTheOffendingParameter(ushort value)
+    {
+        var options = LegacyProfile() with { NorChipSelect = value };
+
+        var error = Assert.Throws<ArgumentOutOfRangeException>(() => options.Validate());
+        Assert.Equal(nameof(MtkLegacyOptions.NorChipSelect), error.ParamName);
+        Assert.Throws<ArgumentOutOfRangeException>(() => options.BuildRuntime(0x0766, new(5, 0xFE)));
+    }
+
+    [Theory]
+    [InlineData((byte)3)]
+    [InlineData((byte)255)]
+    public void LegacyRuntime_UndocumentedBmtFlag_ThrowsWithTheOffendingParameter(byte flag)
+    {
+        var options = LegacyProfile() with { NandBmtFlag = flag };
+
+        var error = Assert.Throws<ArgumentOutOfRangeException>(() => options.Validate());
+        Assert.Equal(nameof(MtkLegacyOptions.NandBmtFlag), error.ParamName);
+        Assert.Throws<ArgumentOutOfRangeException>(() => options.BuildRuntime(0x0766, new(5, 0xFE)));
     }
 
     private static MtkLegacyOptions LegacyProfile(bool nand64 = false) => new()

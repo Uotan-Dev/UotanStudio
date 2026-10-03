@@ -13,8 +13,9 @@ public sealed partial class MtkSession
     /// Queries XML DA2 SLA and completes one challenge-response exchange under exclusive session ownership.
     /// <para>查询 XML DA2 SLA，并在独占会话期间完成一次挑战响应交换。</para>
     /// </summary>
-    /// <param name="expectedEnvelopeName">The exact property envelope selected by the loader profile.
-    /// <para>加载器配置选定的精确属性信封名称。</para></param>
+    /// <param name="expectedEnvelopeName">The property envelope asserted from the loader profile, or
+    /// <see langword="null"/> to accept the envelope the agent reports.
+    /// <para>加载器配置断言的属性信封名称；为 <see langword="null"/> 时接受代理实际上报的信封。</para></param>
     /// <param name="responder">The authorized provider, required when SLA is enabled.
     /// It receives UTF-8 device information and the decoded rnd field.
     /// <para>启用 SLA 时必需的授权提供方，接收 UTF-8 设备信息与解码的 rnd 字段。</para></param>
@@ -32,12 +33,15 @@ public sealed partial class MtkSession
     /// <para>挑战文档不符合支持的 SLA 架构。</para></exception>
     /// <exception cref="TimeoutException">The cooperative deadline expired.
     /// <para>协作式截止时间已到。</para></exception>
-    public async Task<bool> AuthenticateXmlStageTwoAsync(string expectedEnvelopeName,
+    public async Task<bool> AuthenticateXmlStageTwoAsync(string? expectedEnvelopeName,
         IMtkDaSlaResponder? responder = null, int timeoutMs = 60000, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(expectedEnvelopeName);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(expectedEnvelopeName.Length, 128);
-        XmlConvert.VerifyNCName(expectedEnvelopeName);
+        if (expectedEnvelopeName is { } asserted)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(asserted);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(asserted.Length, 128);
+            XmlConvert.VerifyNCName(asserted);
+        }
         ValidateSlaTimeout(timeoutMs);
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
         try

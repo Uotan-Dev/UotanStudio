@@ -54,6 +54,21 @@ public sealed partial class MtkSession
     private async Task TransferLegacyStorageAsync(bool write, byte partitionId, long offset, long length, Stream stream,
         int timeoutMs, IProgress<long>? progress, CancellationToken cancellationToken, bool nor = false)
     {
+        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await TransferLegacyStorageOwnedAsync(write, partitionId, offset, length, stream, timeoutMs, progress,
+                cancellationToken, nor).ConfigureAwait(false);
+        }
+        finally
+        {
+            _operation.Release();
+        }
+    }
+
+    private async Task TransferLegacyStorageOwnedAsync(bool write, byte partitionId, long offset, long length,
+        Stream stream, int timeoutMs, IProgress<long>? progress, CancellationToken cancellationToken, bool nor)
+    {
         ArgumentNullException.ThrowIfNull(stream);
         if (write ? !stream.CanRead : !stream.CanWrite)
         {
@@ -65,96 +80,88 @@ public sealed partial class MtkSession
         {
             throw new EndOfStreamException("The selected storage source is shorter than the requested transfer.");
         }
-        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
+        RequireState(MtkSessionState.LegacyStorageReady);
+        if (nor)
+        {
+            var geometry = LegacyStorage!.Nor ?? throw new NotSupportedException("The Legacy session is not initialized for NOR.");
+            geometry.ValidateRange(offset, length, write);
+        }
+        else
+        {
+            LegacyStorage!.ValidateRange(partitionId, offset, length);
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        var options = _legacyOptions!;
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeoutMs);
+        var token = deadline.Token;
         try
         {
-            RequireState(MtkSessionState.LegacyStorageReady);
-            if (nor)
+            if (!write)
             {
-                var geometry = LegacyStorage!.Nor ?? throw new NotSupportedException("The Legacy session is not initialized for NOR.");
-                geometry.ValidateRange(offset, length, write);
-            }
-            else
-            {
-                LegacyStorage!.ValidateRange(partitionId, offset, length);
-            }
-            cancellationToken.ThrowIfCancellationRequested();
-            var options = _legacyOptions!;
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            deadline.CancelAfter(timeoutMs);
-            var token = deadline.Token;
-            try
-            {
-                if (!write)
+                _ = await QueryLegacyUsbSpeedOwnedAsync(token).ConfigureAwait(false);
+                if (!nor)
                 {
-                    _ = await QueryLegacyUsbSpeedOwnedAsync(token).ConfigureAwait(false);
-                    if (!nor)
-                    {
-                        await SwitchLegacyPartitionOwnedAsync(partitionId, token).ConfigureAwait(false);
-                    }
+                    await SwitchLegacyPartitionOwnedAsync(partitionId, token).ConfigureAwait(false);
                 }
-                var header = new byte[23];
-                header[0] = write ? (byte)0x62 : (byte)0xD6;
-                header[1] = options.HostOs == MtkXmlHostOs.Windows ? (byte)0x0B : (byte)0x0C;
-                header[2] = nor ? (byte)0 : (byte)2;
+            }
+            var header = new byte[23];
+            header[0] = write ? (byte)0x62 : (byte)0xD6;
+            header[1] = options.HostOs == MtkXmlHostOs.Windows ? (byte)0x0B : (byte)0x0C;
+            header[2] = nor ? (byte)0 : (byte)2;
+            if (write)
+            {
+                header[1] = nor ? (byte)0x20 : (byte)1;
+                header[2] = partitionId;
+            }
+            BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(3), (ulong)offset);
+            BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(11), (ulong)length);
+            BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(19), (uint)options.StoragePacketLength);
+            await WriteAsync(header, _timeoutMs, token).ConfigureAwait(false);
+            await RequireLegacyByteAsync(0x5A, "storage header", token).ConfigureAwait(false);
+            var buffer = write ? new byte[(int)Math.Min(length, options.StoragePacketLength)] : null;
+            long transferred = 0;
+            while (transferred < length)
+            {
+                var count = (int)Math.Min(length - transferred, options.StoragePacketLength);
                 if (write)
                 {
-                    header[1] = nor ? (byte)0x20 : (byte)1;
-                    header[2] = partitionId;
+                    await stream.ReadExactlyAsync(buffer!.AsMemory(0, count), token).ConfigureAwait(false);
+                    await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
+                    await WriteAsync(buffer!, count, _timeoutMs, token).ConfigureAwait(false);
+                    var checksum = new byte[2];
+                    BinaryPrimitives.WriteUInt16BigEndian(checksum, LegacySum(buffer.AsSpan(0, count)));
+                    await WriteAsync(checksum, _timeoutMs, token).ConfigureAwait(false);
+                    await RequireLegacyByteAsync(0x69, "storage packet", token).ConfigureAwait(false);
                 }
-                BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(3), (ulong)offset);
-                BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(11), (ulong)length);
-                BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(19), (uint)options.StoragePacketLength);
-                await WriteAsync(header, _timeoutMs, token).ConfigureAwait(false);
-                await RequireLegacyByteAsync(0x5A, "storage header", token).ConfigureAwait(false);
-                var buffer = write ? new byte[(int)Math.Min(length, options.StoragePacketLength)] : null;
-                long transferred = 0;
-                while (transferred < length)
+                else
                 {
-                    var count = (int)Math.Min(length - transferred, options.StoragePacketLength);
-                    if (write)
+                    var data = await ReadAsync(count, _timeoutMs, token).ConfigureAwait(false);
+                    var checksum = BinaryPrimitives.ReadUInt16BigEndian(await ReadAsync(2, _timeoutMs, token).ConfigureAwait(false));
+                    if (checksum != LegacySum(data))
                     {
-                        await stream.ReadExactlyAsync(buffer!.AsMemory(0, count), token).ConfigureAwait(false);
-                        await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
-                        await WriteAsync(buffer!, count, _timeoutMs, token).ConfigureAwait(false);
-                        var checksum = new byte[2];
-                        BinaryPrimitives.WriteUInt16BigEndian(checksum, LegacySum(buffer.AsSpan(0, count)));
-                        await WriteAsync(checksum, _timeoutMs, token).ConfigureAwait(false);
-                        await RequireLegacyByteAsync(0x69, "storage packet", token).ConfigureAwait(false);
+                        throw new MtkProtocolException("The Legacy storage packet checksum does not match.");
                     }
-                    else
-                    {
-                        var data = await ReadAsync(count, _timeoutMs, token).ConfigureAwait(false);
-                        var checksum = BinaryPrimitives.ReadUInt16BigEndian(await ReadAsync(2, _timeoutMs, token).ConfigureAwait(false));
-                        if (checksum != LegacySum(data))
-                        {
-                            throw new MtkProtocolException("The Legacy storage packet checksum does not match.");
-                        }
-                        await stream.WriteAsync(data, token).ConfigureAwait(false);
-                        await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
-                    }
-                    token.ThrowIfCancellationRequested();
-                    ThrowIfDisposed();
-                    transferred += count;
-                    progress?.Report(transferred);
+                    await stream.WriteAsync(data, token).ConfigureAwait(false);
+                    await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
                 }
                 token.ThrowIfCancellationRequested();
                 ThrowIfDisposed();
+                transferred += count;
+                progress?.Report(transferred);
             }
-            catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-            {
-                FaultLegacy();
-                throw new TimeoutException("The Legacy storage transfer deadline expired; the session cannot be replayed.", error);
-            }
-            catch
-            {
-                FaultLegacy();
-                throw;
-            }
+            token.ThrowIfCancellationRequested();
+            ThrowIfDisposed();
         }
-        finally
+        catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            _operation.Release();
+            FaultLegacy();
+            throw new TimeoutException("The Legacy storage transfer deadline expired; the session cannot be replayed.", error);
+        }
+        catch
+        {
+            FaultLegacy();
+            throw;
         }
     }
 

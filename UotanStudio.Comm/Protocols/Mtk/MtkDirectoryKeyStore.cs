@@ -61,7 +61,7 @@ public interface IMtkDaaResourceProvider
 /// 以更具体者为准），DAA 资源命名为 <c>daa_cert_&lt;hwcode&gt;.bin</c> /
 /// <c>daa_auth_&lt;hwcode&gt;.bin</c>。标识不区分大小写；除文件命名外不做任何下载、生成或推断。</para>
 /// </summary>
-public sealed class MtkDirectoryKeyStore : IMtkSlaKeyProvider, IMtkDaaResourceProvider
+public sealed class MtkDirectoryKeyStore : IMtkSlaKeyProvider, IMtkDaaResourceProvider, IMtkBootResourceProvider
 {
     private readonly string _directory;
 
@@ -146,6 +146,41 @@ public sealed class MtkDirectoryKeyStore : IMtkSlaKeyProvider, IMtkDaaResourcePr
     /// <para>认证字节；文件缺失或不可读时返回 <see langword="null"/>。</para></returns>
     public Task<ReadOnlyMemory<byte>?> ResolveAuthenticationAsync(MtkDeviceInfo device, CancellationToken cancellationToken)
         => ResolveDaaResourceAsync($"daa_auth_{device.HardwareCode:x4}.bin", cancellationToken);
+
+    /// <summary>
+    /// Opens a copy of the keys-directory resource for one explicitly selected kind, so the same
+    /// directory that answers a Boot ROM SLA request can also supply the E0 certificate or the E2
+    /// authentication file.
+    /// <para>为一个显式选定的资源种类打开 keys 目录中资源的副本，使同一个既能应答 Boot ROM SLA
+    /// 请求的目录也能提供 E0 根证书或 E2 认证文件。</para>
+    /// </summary>
+    /// <param name="device">Identity whose hardware code selects the resource file.
+    /// <para>以其硬件代码选择资源文件的身份。</para></param>
+    /// <param name="kind">The explicitly selected resource kind. <para>显式选定的资源种类。</para></param>
+    /// <param name="cancellationToken">Cancellation for the file read.
+    /// <para>用于文件读取的取消令牌。</para></param>
+    /// <returns>An owned resource wrapping a private copy of the file bytes.
+    /// <para>包装文件字节私有副本的持有资源。</para></returns>
+    /// <exception cref="InvalidOperationException">The file is absent or unreadable for the
+    /// requested kind. <para>所请求种类的文件缺失或不可读。</para></exception>
+    public async Task<MtkBootResource> OpenAsync(MtkDeviceInfo device, MtkBootResourceKind kind,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        var payload = kind switch
+        {
+            MtkBootResourceKind.RootCertificate => await ResolveRootCertificateAsync(device, cancellationToken).ConfigureAwait(false),
+            MtkBootResourceKind.Authentication => await ResolveAuthenticationAsync(device, cancellationToken).ConfigureAwait(false),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
+        };
+        if (payload is not { } bytes)
+        {
+            throw new InvalidOperationException(
+                $"The keys directory has no {kind} resource for hardware code 0x{device.HardwareCode:X4}.");
+        }
+
+        return new MtkBootResource(new MemoryStream(bytes.ToArray(), writable: false), bytes.Length);
+    }
 
     private async Task<ReadOnlyMemory<byte>?> ResolveDaaResourceAsync(string fileName, CancellationToken cancellationToken)
     {

@@ -30,66 +30,73 @@ public sealed partial class MtkSession
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            RequireState(MtkSessionState.LegacyStorageReady);
-            LegacyStorage!.ValidateRange(partitionId, offset, length);
-            cancellationToken.ThrowIfCancellationRequested();
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            deadline.CancelAfter(timeoutMs);
-            var token = deadline.Token;
-            try
-            {
-                _ = await QueryLegacyUsbSpeedOwnedAsync(token).ConfigureAwait(false);
-                await SwitchLegacyPartitionOwnedAsync(partitionId, token).ConfigureAwait(false);
-                var header = new byte[21];
-                header[0] = 0xD4;
-                header[1] = 2;
-                BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(5), (ulong)offset);
-                BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(13), (ulong)length);
-                await WriteAsync(header, _timeoutMs, token).ConfigureAwait(false);
-                var previous = -1;
-                for (var reports = 0; reports < 4096; reports++)
-                {
-                    await RequireLegacyByteAsync(0x5A, "erase progress", token).ConfigureAwait(false);
-                    await RequireLegacyByteAsync(0x5A, "erase progress header", token).ConfigureAwait(false);
-                    var status = await ReadLegacyWordAsync(token).ConfigureAwait(false);
-                    if (status is not (0 or 0xBD1))
-                    {
-                        throw new MtkProtocolException("The Legacy erase progress contains a device error.", status);
-                    }
-                    var percentage = (await ReadAsync(1, _timeoutMs, token).ConfigureAwait(false))[0];
-                    if (percentage > 100 || percentage < previous)
-                    {
-                        throw new MtkProtocolException("Legacy erase progress is out of range or decreased.");
-                    }
-                    previous = percentage;
-                    await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
-                    if (percentage == 100)
-                    {
-                        await RequireLegacyByteAsync(0x5A, "erase completion", token).ConfigureAwait(false);
-                        await RequireLegacyByteAsync(0x5A, "erase final completion", token).ConfigureAwait(false);
-                        token.ThrowIfCancellationRequested();
-                        ThrowIfDisposed();
-                        progress?.Report(100);
-                        return;
-                    }
-                    progress?.Report(percentage);
-                }
-                throw new MtkProtocolException("The Legacy erase progress report limit was exceeded.");
-            }
-            catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-            {
-                FaultLegacy();
-                throw new TimeoutException("The Legacy erase deadline expired; the target result is unknown.", error);
-            }
-            catch
-            {
-                FaultLegacy();
-                throw;
-            }
+            await EraseLegacyStorageOwnedAsync(partitionId, offset, length, timeoutMs, progress,
+                cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             _operation.Release();
+        }
+    }
+
+    private async Task EraseLegacyStorageOwnedAsync(byte partitionId, long offset, long length, int timeoutMs,
+        IProgress<int>? progress, CancellationToken cancellationToken)
+    {
+        RequireState(MtkSessionState.LegacyStorageReady);
+        LegacyStorage!.ValidateRange(partitionId, offset, length);
+        cancellationToken.ThrowIfCancellationRequested();
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeoutMs);
+        var token = deadline.Token;
+        try
+        {
+            _ = await QueryLegacyUsbSpeedOwnedAsync(token).ConfigureAwait(false);
+            await SwitchLegacyPartitionOwnedAsync(partitionId, token).ConfigureAwait(false);
+            var header = new byte[21];
+            header[0] = 0xD4;
+            header[1] = 2;
+            BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(5), (ulong)offset);
+            BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(13), (ulong)length);
+            await WriteAsync(header, _timeoutMs, token).ConfigureAwait(false);
+            var previous = -1;
+            for (var reports = 0; reports < 4096; reports++)
+            {
+                await RequireLegacyByteAsync(0x5A, "erase progress", token).ConfigureAwait(false);
+                await RequireLegacyByteAsync(0x5A, "erase progress header", token).ConfigureAwait(false);
+                var status = await ReadLegacyWordAsync(token).ConfigureAwait(false);
+                if (status is not (0 or 0xBD1))
+                {
+                    throw new MtkProtocolException("The Legacy erase progress contains a device error.", status);
+                }
+                var percentage = (await ReadAsync(1, _timeoutMs, token).ConfigureAwait(false))[0];
+                if (percentage > 100 || percentage < previous)
+                {
+                    throw new MtkProtocolException("Legacy erase progress is out of range or decreased.");
+                }
+                previous = percentage;
+                await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
+                if (percentage == 100)
+                {
+                    await RequireLegacyByteAsync(0x5A, "erase completion", token).ConfigureAwait(false);
+                    await RequireLegacyByteAsync(0x5A, "erase final completion", token).ConfigureAwait(false);
+                    token.ThrowIfCancellationRequested();
+                    ThrowIfDisposed();
+                    progress?.Report(100);
+                    return;
+                }
+                progress?.Report(percentage);
+            }
+            throw new MtkProtocolException("The Legacy erase progress report limit was exceeded.");
+        }
+        catch (OperationCanceledException error) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            FaultLegacy();
+            throw new TimeoutException("The Legacy erase deadline expired; the target result is unknown.", error);
+        }
+        catch
+        {
+            FaultLegacy();
+            throw;
         }
     }
 }

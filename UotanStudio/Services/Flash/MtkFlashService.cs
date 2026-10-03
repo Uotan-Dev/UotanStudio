@@ -24,6 +24,32 @@ public static partial class MtkFlashService
             physicalPartition, steps, cancellationToken);
     }
 
+    /// <summary>Boots an identity-matched agent on a session the device lease already owns, then
+    /// prepares GPT-named operations against the live table.</summary>
+    /// <remarks>
+    /// The session stays bound to the caller's lease: disposing the returned preparation releases the
+    /// plan and the session, and the lease disposes the transport afterwards. Use this entry for
+    /// USB-classified MTK targets and for erase steps, which name a GPT partition instead of a
+    /// scatter row and therefore skip the scatter policy reconciliation.
+    /// </remarks>
+    /// <param name="session">A leased session in the created state.</param>
+    /// <param name="protocol">Explicit DA family; no detection or fallback is performed.</param>
+    /// <param name="startup">Parsed loader profile, storage family, identity policy and companion resources.</param>
+    /// <param name="physicalPartition">Explicit physical user region to observe.</param>
+    /// <param name="steps">Explicit named operations; copied before asynchronous startup.</param>
+    /// <param name="cancellationToken">Cancellation for startup, metadata and source preflight.</param>
+    /// <returns>An owned preview which performs storage writes only on a separate ExecuteAsync call.</returns>
+    public static Task<MtkFlashPreparation> PrepareOnSessionAsync(MtkSession session, MtkDaProtocol protocol,
+        MtkAutoStartup startup, uint physicalPartition, IReadOnlyList<MtkPartitionFlashStep> steps,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(startup);
+        ArgumentNullException.ThrowIfNull(steps);
+        return PrepareAsync(token => MtkBootstrap.MatchAsync(session, protocol, startup, token),
+            physicalPartition, steps, cancellationToken);
+    }
+
     internal static async Task<MtkFlashPreparation> PrepareAsync(Func<CancellationToken, Task<MtkSession>> connect,
         uint physicalPartition, IReadOnlyList<MtkPartitionFlashStep> steps, CancellationToken cancellationToken)
     {
@@ -67,7 +93,7 @@ public static partial class MtkFlashService
 }
 
 /// <summary>Owns a previewed one-shot MTK plan and its live session. Abandoning a preview requires disposal.</summary>
-public sealed class MtkFlashPreparation : IDisposable
+public sealed class MtkFlashPreparation : IMtkFlashPlanPreview
 {
     private readonly MtkSession _session;
     private readonly MtkFlashPlan _plan;
@@ -87,6 +113,8 @@ public sealed class MtkFlashPreparation : IDisposable
         _session.StorageCapability;
     /// <summary>Gets the read-only physical operations to preview, excluding sparse holes.</summary>
     public IReadOnlyList<MtkFlashOperation> Operations => _plan.Operations;
+    /// <inheritdoc />
+    public int OperationCount => _plan.Operations.Count;
     /// <summary>Gets actual planned write/erase bytes, excluding optional readback and sparse holes.</summary>
     public long TotalBytes => _plan.TotalBytes;
     /// <summary>Gets the communication plan's one-shot lifecycle state.</summary>

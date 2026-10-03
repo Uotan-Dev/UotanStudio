@@ -23,7 +23,7 @@ public sealed partial class MtkSessionTests
         var evidence = session.Evidence.Single(entry => entry.Phase == "legacy-da-profile");
         Assert.Equal(UotanStudio.Comm.Protocols.Common.Evidence.CommandOutcomeKind.Completed, evidence.Outcome);
         Assert.Contains($"kind={kind}", evidence.Detail, StringComparison.Ordinal);
-        Assert.Contains("da1-response=C10000", evidence.Detail, StringComparison.Ordinal);
+        Assert.Contains("da1-response=C10000 (asserted C10000)", evidence.Detail, StringComparison.Ordinal);
         Assert.Contains("completion=Standard", evidence.Detail, StringComparison.Ordinal);
         Assert.Contains("agent-packet=4", evidence.Detail, StringComparison.Ordinal);
     }
