@@ -128,7 +128,7 @@ public partial class ScreenMirrorViewModel : Document
                 _streamOptions = options;
                 StatusText = GetLocalizedString("ScreenMirror_Installing");
                 var mirror = App.DeviceMonitor.StartMirror(
-                    device, ResolveServerJarPath(), options);
+                    device, ScrcpyServerLocator.Resolve(), options);
                 if (_disposed)
                 {
                     mirror.Dispose();
@@ -395,28 +395,6 @@ public partial class ScreenMirrorViewModel : Document
         {
 
         }
-    }
-
-    /// <summary>Locates the bundled scrcpy-server jar next to the executable.</summary>
-    /// <summary>在可执行文件旁定位随附的 scrcpy-server jar。</summary>
-    private static string ResolveServerJarPath()
-    {
-        var candidates = new[]
-        {
-            Path.Combine(AppContext.BaseDirectory, "Assets", "scrcpy-server.jar"),
-            Path.Combine(AppContext.BaseDirectory, "scrcpy-server.jar"),
-        };
-        foreach (var candidate in candidates)
-        {
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        throw new FileNotFoundException(
-            $"scrcpy server jar not found. Place scrcpy-server {ScrcpyConstants.ServerVersion} at Assets/scrcpy-server.jar. "
-            + $"未找到 scrcpy 服务端 jar。请将 scrcpy-server {ScrcpyConstants.ServerVersion} 放置到 Assets/scrcpy-server.jar。");
     }
 
     private void DecodeLoop(Services.Mirroring.ManagedMirrorSession client, CancellationToken token)

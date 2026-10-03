@@ -187,7 +187,9 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
                 uniform float4 coefficients;
                 half4 main(float2 p) {
                     float y = max(luma.eval(p).r * 255.0 - yOffset, 0.0) * yScale;
-                    float2 uv = chroma.eval(floor(p * 0.5) + 0.5).rg * 255.0 - 128.0;
+                    float2 cell = floor(p * 0.5);
+                    float parity = mod(floor(p.y), 2.0);
+                    float2 uv = chroma.eval(float2(cell.x + 0.75, cell.y + 0.5 + parity * 0.5)).rg * 255.0 - 128.0;
                     float3 rgb = float3(y + coefficients.x * uv.y,
                         y + coefficients.y * uv.x + coefficients.z * uv.y,
                         y + coefficients.w * uv.x);
