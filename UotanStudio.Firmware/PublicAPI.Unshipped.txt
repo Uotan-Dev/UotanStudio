@@ -310,3 +310,26 @@ UotanStudio.Firmware.OtaDelta.Payload.Models.PayloadProperties.MaxZstdDictRawSiz
 UotanStudio.Firmware.OtaDelta.Payload.Models.PayloadProperties.MaxZstdDictTrust.get -> string!
 UotanStudio.Firmware.BlockImage.Gpt.GptFormatHandler.PackAsync(string! inputPath, string! outputPath, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<UotanStudio.Firmware.Core.FirmwareOpResult!>!
 static UotanStudio.Firmware.OtaDelta.Payload.PayloadParser.ExtractWithZstdDictionaries(string! filePath, string![]? extractFiles, string? outputDir, System.Collections.Generic.IReadOnlyDictionary<string!, byte[]!>! zstdDictionaries, long maximumZstdDictRawSize = 67108864) -> void
+UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent
+UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.<Clone>$() -> UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent!
+UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.Bytes.get -> byte[]!
+UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.Bytes.init -> void
+UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.Deconstruct(out ulong StartLba, out uint SectorCount, out byte[]! Bytes) -> void
+UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.Equals(UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent? other) -> bool
+UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.GptDeviceExtent(ulong StartLba, uint SectorCount, byte[]! Bytes) -> void
+UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.SectorCount.get -> uint
+UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.SectorCount.init -> void
+UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.StartLba.get -> ulong
+UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.StartLba.init -> void
+UotanStudio.Firmware.BlockImage.Gpt.GptDeviceImage
+override UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.Equals(object? obj) -> bool
+override UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.GetHashCode() -> int
+override UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.ToString() -> string!
+static UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.operator !=(UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent? left, UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent? right) -> bool
+static UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent.operator ==(UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent? left, UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent? right) -> bool
+static UotanStudio.Firmware.BlockImage.Gpt.GptDeviceImage.BuildExtents(UotanStudio.Firmware.BlockImage.Gpt.GptTable! table) -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent!>!
+UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection
+UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection.Backup = 1 -> UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection
+UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection.Both = 2 -> UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection
+UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection.Primary = 0 -> UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection
+static UotanStudio.Firmware.BlockImage.Gpt.GptDeviceImage.BuildExtents(UotanStudio.Firmware.BlockImage.Gpt.GptTable! table, UotanStudio.Firmware.BlockImage.Gpt.GptCopySelection copies) -> System.Collections.Generic.IReadOnlyList<UotanStudio.Firmware.BlockImage.Gpt.GptDeviceExtent!>!

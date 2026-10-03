@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
 using UotanStudio.Firmware.AndroidMeta.Resources;
+using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Firmware.AndroidMeta.AXml;
 
@@ -54,7 +55,7 @@ public static class AXmlTextFormat
         XDocument document;
         try
         {
-            document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
+            document = UntrustedXmlDocument.Parse(xml, preserveWhitespace: true);
         }
         catch (XmlException ex)
         {

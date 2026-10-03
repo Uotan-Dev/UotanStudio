@@ -22,7 +22,7 @@ internal static class OfpQcParser
         XDocument doc;
         try
         {
-            doc = XDocument.Parse(xmlContent);
+            doc = UntrustedXmlDocument.Parse(xmlContent);
         }
         catch (XmlException ex)
         {

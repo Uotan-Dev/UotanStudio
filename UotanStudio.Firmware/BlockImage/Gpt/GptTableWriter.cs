@@ -400,7 +400,7 @@ internal static class GptTableWriter
         ]));
     }
 
-    private static long ValidateTable(GptTable table)
+    internal static long ValidateTable(GptTable table)
     {
         var blockSize = table.BlockSize;
         var blockCount = table.BlockCount;
@@ -476,7 +476,7 @@ internal static class GptTableWriter
         return checked((long)(blockCount * (uint)blockSize));
     }
 
-    private static byte[] BuildEntryArray(GptTable table)
+    internal static byte[] BuildEntryArray(GptTable table)
     {
         var entrySize = (int)table.PartitionEntrySize;
         var array = new byte[checked((int)table.PartitionEntryCount * entrySize)];
@@ -493,7 +493,7 @@ internal static class GptTableWriter
         return array;
     }
 
-    private static byte[] BuildHeaderBlock(GptTable table, ulong myLba, ulong alternateLba, ulong arrayLba, uint arrayCrc)
+    internal static byte[] BuildHeaderBlock(GptTable table, ulong myLba, ulong alternateLba, ulong arrayLba, uint arrayCrc)
     {
         var block = new byte[table.BlockSize];
         "EFI PART"u8.CopyTo(block);
@@ -513,7 +513,7 @@ internal static class GptTableWriter
         return block;
     }
 
-    private static byte[] BuildProtectiveMbr(ulong blockCount)
+    internal static byte[] BuildProtectiveMbr(ulong blockCount)
     {
         var mbr = new byte[512];
         mbr[446] = 0x00;

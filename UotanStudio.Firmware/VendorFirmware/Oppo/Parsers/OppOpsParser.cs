@@ -159,7 +159,7 @@ internal static class OppOpsParser
         XDocument doc;
         try
         {
-            doc = XDocument.Parse(xml);
+            doc = UntrustedXmlDocument.Parse(xml);
         }
         catch (XmlException ex)
         {

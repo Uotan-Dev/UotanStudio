@@ -127,7 +127,11 @@ public class F2fsTests
             Assert.True(result.Success);
             Assert.NotEmpty(collector.Frames);
             Assert.All(collector.Frames, frame => Assert.Equal(UotanStudio.Firmware.Core.FileSystemWorkStage.BuildingImage, frame.Stage));
-            Assert.Equal([4096L, 12288L], collector.Frames.Select(static frame => frame.Processed).OrderBy(static value => value).ToArray());
+            var processed = collector.Frames.Select(static frame => frame.Processed).ToArray();
+            Assert.Equal(2, processed.Length);
+            Assert.Equal(processed.OrderBy(static value => value).ToArray(), processed);
+            Assert.Equal(12288L, processed[^1]);
+            Assert.Contains(processed[0], new[] { 4096L, 8192L });
             Assert.All(collector.Frames, frame => Assert.Equal(12288L, frame.Total));
         }
         finally
