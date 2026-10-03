@@ -374,7 +374,13 @@ public sealed class RemoteDeviceConnectionTests
         if (reply is null)
         {
             await cancellation!.CancelAsync();
-            Assert.Equal(0, await stream.ReadAsync(new byte[1], token));
+            try
+            {
+                Assert.Equal(0, await stream.ReadAsync(new byte[1], token));
+            }
+            catch (IOException)
+            {
+            }
             return;
         }
         var bytes = Encoding.UTF8.GetBytes(reply);

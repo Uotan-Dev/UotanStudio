@@ -61,6 +61,12 @@ internal static partial class UsbPnpNative
     private static partial uint CM_Get_Parent(out uint parentDevInst, uint devInst, uint flags);
 
     [LibraryImport("cfgmgr32.dll")]
+    private static partial uint CM_Get_Child(out uint childDevInst, uint devInst, uint flags);
+
+    [LibraryImport("cfgmgr32.dll")]
+    private static partial uint CM_Get_Sibling(out uint siblingDevInst, uint devInst, uint flags);
+
+    [LibraryImport("cfgmgr32.dll")]
     private static partial uint CM_Locate_DevNodeW(out uint devInst,
         [MarshalAs(UnmanagedType.LPWStr)] string deviceId, uint flags);
 
@@ -214,6 +220,42 @@ internal static partial class UsbPnpNative
     /// </returns>
     internal static bool TryGetParent(uint devInst, out uint parentDevInst)
         => CM_Get_Parent(out parentDevInst, devInst, 0) == CrSuccess;
+
+    /// <summary>
+    /// <para>取一个 <c>DEVINST</c> 的第一个直接子节点；无子节点或查询失败时返回
+    /// <see langword="false"/>。</para>
+    /// Takes the first direct child of a <c>DEVINST</c>; returns <see langword="false"/> when the
+    /// node has no children or the lookup fails.
+    /// </summary>
+    /// <param name="devInst">
+    /// The parent devnode handle. <para>父设备节点句柄。</para>
+    /// </param>
+    /// <param name="childDevInst">
+    /// The first child handle when this returns <see langword="true"/>. <para>返回 <see langword="true"/> 时的第一个子节点句柄。</para>
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when a child exists. <para>存在子节点时返回 <see langword="true"/>。</para>
+    /// </returns>
+    internal static bool TryGetChild(uint devInst, out uint childDevInst)
+        => CM_Get_Child(out childDevInst, devInst, 0) == CrSuccess;
+
+    /// <summary>
+    /// <para>取同父节点下某 <c>DEVINST</c> 的下一个兄弟节点；没有更多兄弟或查询失败时返回
+    /// <see langword="false"/>。</para>
+    /// Takes the next sibling of a <c>DEVINST</c> under the same parent; returns
+    /// <see langword="false"/> when no sibling remains or the lookup fails.
+    /// </summary>
+    /// <param name="devInst">
+    /// The current sibling devnode handle. <para>当前兄弟设备节点句柄。</para>
+    /// </param>
+    /// <param name="siblingDevInst">
+    /// The next sibling handle when this returns <see langword="true"/>. <para>返回 <see langword="true"/> 时的下一个兄弟节点句柄。</para>
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when a sibling exists. <para>存在兄弟节点时返回 <see langword="true"/>。</para>
+    /// </returns>
+    internal static bool TryGetSibling(uint devInst, out uint siblingDevInst)
+        => CM_Get_Sibling(out siblingDevInst, devInst, 0) == CrSuccess;
 
     /// <summary>
     /// <para>读取一个设备节点的全部已定义属性，把无法读取的字段降级为

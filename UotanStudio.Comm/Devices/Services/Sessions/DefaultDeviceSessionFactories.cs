@@ -8,6 +8,7 @@ using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Mtk.Discovery;
 using UotanStudio.Comm.Transports.Abstractions;
+using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Devices.Services.Sessions;
@@ -125,6 +126,11 @@ internal sealed class EdlDeviceSessionFactory : IDeviceSessionFactory
     {
         cancellationToken.ThrowIfCancellationRequested();
         LeasedTransport.RequireProtocol(endpoint, "edl");
+        if (LeasedTransport.TryUnwrap<SerialTransport>(transport, out var serial))
+        {
+            return Task.FromResult<object>(new EdlSession(serial));
+        }
+
         var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
         return Task.FromResult<object>(new EdlSession(new UsbDeviceTransport(usb)));
     }

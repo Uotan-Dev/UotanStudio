@@ -4,7 +4,9 @@ using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
+using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Comm.Transports.Usb.Backend.Windows;
 
 namespace UotanStudio.Comm.Devices.Services;
 
@@ -17,8 +19,13 @@ internal sealed class CommDeviceTransportOpener(
 
     /// <summary>
     /// Opens exactly the endpoint's own transport without changing routes; the adb-server target
-    /// validation ends on completion or promptly on the caller's cancellation.
-    /// <para>只打开端点自身的传输且不改变路由；adb-server 目标校验要么正常完成，要么被调用方取消即时终止。</para>
+    /// validation ends on completion or promptly on the caller's cancellation. When the exact USB
+    /// endpoint cannot be opened because the Qualcomm QDLoader driver bound it as a COM port, an
+    /// <c>edl</c> endpoint falls back to that serial port; every other protocol keeps the plain
+    /// failure.
+    /// <para>只打开端点自身的传输且不改变路由；adb-server 目标校验要么正常完成，要么被调用方取消即时终止。
+    /// 当精确 USB 端点因高通 QDLoader 驱动将其绑定为 COM 口而无法打开时，<c>edl</c> 端点回退到该串口；
+    /// 其他协议维持原有失败语义。</para>
     /// </summary>
     /// <param name="endpoint">The endpoint produced by discovery; anything unrecognized is rejected.
     /// <para>发现层产出的端点；任何无法识别的输入都会被拒绝。</para></param>
@@ -51,8 +58,21 @@ internal sealed class CommDeviceTransportOpener(
             filter.InterfaceProtocol == usb.InterfaceProtocol)
         {
             DebugBridgeSessionOpener.RequireDirectUsb(usb.InterfaceClass, usb.InterfaceSubClass, usb.InterfaceProtocol, endpoint.Serial);
-            var session = kit.OpenUsbDeviceSessionByKey(endpoint.Address, usb.Backend)
-                ?? throw new IOException("Exact USB endpoint is unavailable.");
+            var session = kit.OpenUsbDeviceSessionByKey(endpoint.Address, usb.Backend);
+            if (session is null)
+            {
+                if (string.Equals(endpoint.Protocol, "edl", StringComparison.Ordinal) &&
+                    EdlSerialPortFallback.TryOpenConnected(usb.Path) is { } serial)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        serial.Dispose();
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+                    return new OwnedDeviceTransport<SerialTransport>(serial);
+                }
+                throw new IOException("Exact USB endpoint is unavailable.");
+            }
             if (session.DeviceInfo.SourceApiKind != usb.Backend ||
                 !UsbDeviceIdentity.MatchesOpenedKey(endpoint.Address, session.DeviceInfo.DeviceKey))
             {
