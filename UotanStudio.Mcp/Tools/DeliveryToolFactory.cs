@@ -32,24 +32,8 @@ namespace UotanStudio.Mcp.Tools;
 /// </summary>
 internal static class DeliveryToolFactory
 {
-    /// <summary>
-    /// Builds the delivery tools for one host, binding the tool-preparation provider that host was
-    /// given; the provider is no longer a process-wide mutable static, so a headless server can never
-    /// inherit another session's injection and the honest-gap result depends only on this host's config.
-    /// <para>为单个宿主构建交付工具，并绑定该宿主获得的工具准备服务提供器；该提供器不再是进程级可变静态，
-    /// 因此无头服务器不会继承其他会话的注入，能力缺口的如实上报只取决于本宿主配置。</para>
-    /// </summary>
-    /// <param name="sandbox"><para>约束计划与输出路径的沙箱。</para>The sandbox confining plan and output paths.</param>
-    /// <param name="deliveryTools"><para>本宿主的工具准备服务提供器；为 <see langword="null"/> 时 <c>delivery_build</c> 如实报告能力缺口。</para>
-    /// This host's tool-preparation provider; when <see langword="null"/> <c>delivery_build</c> reports the capability gap.</param>
-    /// <param name="signingKeys"><para>本宿主的签名密钥供应器；为 <see langword="null"/> 时签名计划如实失败。</para>
-    /// This host's signing key provider; signed plans fail honestly when it is <see langword="null"/>.</param>
-    internal static IReadOnlyList<McpServerTool> CreateTools(
-        PathSandbox sandbox,
-        Func<IDeliveryTools?>? deliveryTools = null,
-        Func<IDeliverySigningKeyProvider?>? signingKeys = null)
-    {
-        var validate = McpServerTool.Create(
+    internal static McpServerTool CreateDeliveryValidate(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Delivery plan JSON (DeliveryPlan schema; paths sandbox-relative or absolute inside the sandbox).")] string planJson,
              [Description("Skip source-image existence checks.")] bool skipSources = false,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
@@ -65,7 +49,8 @@ internal static class DeliveryToolFactory
                 Destructive = false
             });
 
-        var outputs = McpServerTool.Create(
+    internal static McpServerTool CreateDeliveryListOutputs(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Delivery plan JSON.")] string planJson,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
                 token => Task.FromResult(DeliveryToolHandlers.ListOutputs(sandbox, planJson)), cancellationToken),
@@ -80,7 +65,24 @@ internal static class DeliveryToolFactory
                 Destructive = false
             });
 
-        var build = McpServerTool.Create(
+    /// <summary>
+    /// <para>Builds the delivery build tool for one host, binding the tool-preparation provider that
+    /// host was given; the provider is no longer a process-wide mutable static, so a headless server
+    /// can never inherit another session's injection and the honest-gap result depends only on this
+    /// host's config.</para>
+    /// <para>为单个宿主构建交付构建工具，并绑定该宿主获得的工具准备服务提供器；该提供器不再是进程级可变静态，
+    /// 因此无头服务器不会继承其他会话的注入，能力缺口的如实上报只取决于本宿主配置。</para>
+    /// </summary>
+    /// <param name="sandbox"><para>约束计划与输出路径的沙箱。</para>The sandbox confining plan and output paths.</param>
+    /// <param name="deliveryTools"><para>本宿主的工具准备服务提供器；为 <see langword="null"/> 时 <c>delivery_build</c> 如实报告能力缺口。</para>
+    /// This host's tool-preparation provider; when <see langword="null"/> <c>delivery_build</c> reports the capability gap.</param>
+    /// <param name="signingKeys"><para>本宿主的签名密钥供应器；为 <see langword="null"/> 时签名计划如实失败。</para>
+    /// This host's signing key provider; signed plans fail honestly when it is <see langword="null"/>.</param>
+    internal static McpServerTool CreateDeliveryBuild(
+        PathSandbox sandbox,
+        Func<IDeliveryTools?>? deliveryTools = null,
+        Func<IDeliverySigningKeyProvider?>? signingKeys = null) =>
+        McpServerTool.Create(
             ([Description("Delivery plan JSON.")] string planJson,
              [Description("Existing output file names allowed to be replaced (defaults to none).")] string[]? overwrite = null,
              IProgress<ProgressNotificationValue>? progress = null,
@@ -98,9 +100,6 @@ internal static class DeliveryToolFactory
                 OpenWorld = false,
                 Destructive = false
             });
-
-        return [validate, outputs, build];
-    }
 }
 
 /// <summary>

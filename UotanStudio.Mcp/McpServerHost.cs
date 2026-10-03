@@ -133,19 +133,14 @@ public sealed class McpServerHost
     /// <see cref="AllowFlash"/> 允许时追加刷写类工具。</para></returns>
     public IReadOnlyList<McpServerTool> BuildTools()
     {
+        var context = new PluginToolContext(Sandbox, DeviceManager, DeliveryTools, SigningKeys, AllowFlash);
         var tools = new List<McpServerTool>();
-        tools.AddRange(FirmwareToolFactory.CreateTools(Sandbox));
-        tools.AddRange(CompressionToolFactory.CreateTools(Sandbox));
-        tools.AddRange(DeviceToolFactory.CreateTools(Sandbox, DeviceManager));
-        tools.AddRange(DeliveryToolFactory.CreateTools(Sandbox, DeliveryTools, SigningKeys));
-        tools.AddRange(OtaToolFactory.CreateTools(Sandbox));
-        tools.AddRange(ProjectToolFactory.CreateTools(Sandbox));
-        tools.AddRange(MiscToolFactory.CreateTools(Sandbox));
-        tools.AddRange(EnvToolFactory.CreateTools(Sandbox, AllowFlash));
-
-        if (AllowFlash)
+        foreach (var descriptor in PluginToolCatalog.All)
         {
-            tools.AddRange(DeviceToolFactory.CreateFlashTools(Sandbox, DeviceManager));
+            if (!descriptor.FlashGated || AllowFlash)
+            {
+                tools.Add(descriptor.Create(context));
+            }
         }
 
         return tools;

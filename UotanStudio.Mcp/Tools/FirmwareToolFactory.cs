@@ -3,6 +3,7 @@ using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.Core;
 
@@ -23,9 +24,8 @@ namespace UotanStudio.Mcp.Tools;
 /// </summary>
 internal static class FirmwareToolFactory
 {
-    internal static IReadOnlyList<McpServerTool> CreateTools(PathSandbox sandbox)
-    {
-        var list = McpServerTool.Create(
+    internal static McpServerTool CreateListFormats() =>
+        McpServerTool.Create(
             (CancellationToken cancellationToken) => ToolGuard.RunAsync(
                 static token => Task.FromResult(FirmwareToolHandlers.ListFormats()), cancellationToken), new McpServerToolCreateOptions
                 {
@@ -38,7 +38,8 @@ internal static class FirmwareToolFactory
                     Destructive = false
                 });
 
-        var detect = McpServerTool.Create(
+    internal static McpServerTool CreateDetectFormat(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Absolute path inside the sandbox, or sandbox-relative path.")] string path,
              CancellationToken cancellationToken) => ToolGuard.RunAsync(
                 token => Task.FromResult(FirmwareToolHandlers.DetectFormat(sandbox, path)), cancellationToken),
@@ -53,7 +54,8 @@ internal static class FirmwareToolFactory
                 Destructive = false
             });
 
-        var metadata = McpServerTool.Create(
+    internal static McpServerTool CreateReadMetadata(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Absolute path inside the sandbox, or sandbox-relative path.")] string path,
              CancellationToken cancellationToken) => ToolGuard.RunAsync(
                 token => FirmwareToolHandlers.ReadMetadataAsync(sandbox, path, token), cancellationToken),
@@ -67,7 +69,26 @@ internal static class FirmwareToolFactory
                 Destructive = false
             });
 
-        var unpack = McpServerTool.Create(
+    internal static McpServerTool CreateReadGpt(PathSandbox sandbox) =>
+        McpServerTool.Create(
+            ([Description("Absolute path inside the sandbox, or sandbox-relative path.")] string path,
+             [Description("Logical block size; defaults to 512.")] int blockSize = 512,
+             CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
+                token => FirmwareToolHandlers.ReadGptAsync(sandbox, path, blockSize, token), cancellationToken),
+            new McpServerToolCreateOptions
+            {
+                Name = "read_gpt",
+                Description = "Validate both GPT headers and entry arrays of a whole-device image and "
+                    + "return the partition list (index, name, type/id GUIDs, LBA range, byte offset and "
+                    + "length) without reading partition contents.",
+                ReadOnly = true,
+                Idempotent = true,
+                OpenWorld = false,
+                Destructive = false
+            });
+
+    internal static McpServerTool CreateUnpackFirmware(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Absolute path inside the sandbox, or sandbox-relative path.")] string inputPath,
              [Description("Output directory; created when missing. Must stay inside the sandbox.")] string outputDirectory,
              [Description("Per-file decompression budget in bytes for formats without a trusted output size.")] long maximumOutputBytes = 64L * 1024 * 1024 * 1024,
@@ -86,7 +107,8 @@ internal static class FirmwareToolFactory
                 Destructive = false
             });
 
-        var pack = McpServerTool.Create(
+    internal static McpServerTool CreatePackFirmware(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Input directory or file, depending on the detected format.")] string inputPath,
              [Description("Target file path for the packed image. Must stay inside the sandbox.")] string outputPath,
              IProgress<ProgressNotificationValue>? progress = null,
@@ -105,7 +127,8 @@ internal static class FirmwareToolFactory
                 Destructive = false
             });
 
-        var extract = McpServerTool.Create(
+    internal static McpServerTool CreateExtractContainerEntries(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Container file path inside the sandbox (super image, payload.bin, or ZIP).")] string containerPath,
              [Description("Inner entry names to extract: super/payload partition names, or full ZIP member paths.")] string[] entries,
              [Description("Output directory; created when missing. Must stay inside the sandbox.")] string outputDirectory,
@@ -128,7 +151,8 @@ internal static class FirmwareToolFactory
                 Destructive = false
             });
 
-        var mergeSparseChunks = McpServerTool.Create(
+    internal static McpServerTool CreateMergeSparseChunks(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Any numbered member of a *.sparsechunk.NN set; siblings are resolved from its name.")] string selectedChunkPath,
              [Description("Destination image path. Must stay inside the sandbox.")] string outputPath,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
@@ -145,7 +169,8 @@ internal static class FirmwareToolFactory
                 Destructive = false
             });
 
-        var splitSparseChunks = McpServerTool.Create(
+    internal static McpServerTool CreateSplitSparseChunks(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Raw image path inside the sandbox; sparse containers are rejected.")] string inputPath,
              [Description("Piece name prefix; the two-digit index is appended after .sparsechunk.")] string basePath,
              [Description("Physical bytes per piece except the final remainder.")] long chunkSizeBytes,
@@ -162,9 +187,6 @@ internal static class FirmwareToolFactory
                 OpenWorld = false,
                 Destructive = false
             });
-
-        return [list, detect, metadata, unpack, pack, extract, mergeSparseChunks, splitSparseChunks];
-    }
 }
 
 /// <summary>
@@ -210,6 +232,29 @@ internal static class FirmwareToolHandlers
         }
 
         return ToolResult.From(await handler.ReadMetadataAsync(resolved, cancellationToken).ConfigureAwait(false));
+    }
+
+    public static async Task<ToolResult> ReadGptAsync(
+        PathSandbox sandbox, string path, int blockSize, CancellationToken cancellationToken)
+    {
+        var resolved = sandbox.Resolve(path, mustExist: true);
+        return await Task.Run(() =>
+        {
+            using var stream = new FileStream(resolved, FileMode.Open, FileAccess.Read, FileShare.Read,
+                131072, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            var blockCount = (ulong)(stream.Length / blockSize);
+            var table = GptReader.Read(stream, blockSize, blockCount, cancellationToken);
+            var partitions = table.Partitions
+                .Select(partition => new GptPartitionEntryPayload(
+                    partition.Index, partition.Name, partition.TypeId.ToString("D"),
+                    partition.Id.ToString("D"), partition.FirstLba, partition.LastLba,
+                    partition.ByteOffset, partition.ByteLength))
+                .ToArray();
+            return new ToolResult(true,
+                $"GPT with {partitions.Length} partition(s), block size {table.BlockSize}.",
+                ToolJson.Data(new GptTablePayload(resolved, table.DiskId.ToString("D"),
+                    table.BlockSize, table.BlockCount, table.MetadataSha256, partitions)));
+        }, cancellationToken).ConfigureAwait(false);
     }
 
     public static async Task<ToolResult> UnpackAsync(

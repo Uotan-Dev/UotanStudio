@@ -18,9 +18,8 @@ namespace UotanStudio.Mcp.Tools;
 /// </summary>
 internal static class EnvToolFactory
 {
-    internal static IReadOnlyList<McpServerTool> CreateTools(PathSandbox sandbox, bool allowFlash)
-    {
-        var getEnv = McpServerTool.Create(
+    internal static McpServerTool CreateGetEnv(PathSandbox sandbox, bool allowFlash) =>
+        McpServerTool.Create(
             (CancellationToken cancellationToken) => ToolGuard.RunAsync(
                 token => Task.FromResult(EnvToolHandlers.GetEnv(sandbox, allowFlash)), cancellationToken),
             new McpServerToolCreateOptions
@@ -33,9 +32,6 @@ internal static class EnvToolFactory
                 OpenWorld = false,
                 Destructive = false
             });
-
-        return [getEnv];
-    }
 }
 
 /// <summary>

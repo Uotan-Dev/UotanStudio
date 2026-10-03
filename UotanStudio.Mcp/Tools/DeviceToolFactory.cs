@@ -27,9 +27,8 @@ namespace UotanStudio.Mcp.Tools;
 /// </summary>
 internal static class DeviceToolFactory
 {
-    internal static IReadOnlyList<McpServerTool> CreateTools(PathSandbox sandbox, IDeviceManagerGateway manager)
-    {
-        var list = McpServerTool.Create(
+    internal static McpServerTool CreateListDevices(IDeviceManagerGateway manager) =>
+        McpServerTool.Create(
             ([Description("Return every endpoint, including ones with no known protocol, plus each OS device path and stable device key.")] bool detailed = false,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
                 token => DeviceToolHandlers.ListDevicesAsync(manager, detailed, token), cancellationToken),
@@ -50,7 +49,8 @@ internal static class DeviceToolFactory
                 Destructive = false
             });
 
-        var adbDevices = McpServerTool.Create(
+    internal static McpServerTool CreateAdbDevices(IDeviceManagerGateway manager) =>
+        McpServerTool.Create(
             (CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
                 token => DeviceToolHandlers.ListAdbDevicesAsync(manager, token), cancellationToken),
             new McpServerToolCreateOptions
@@ -64,7 +64,8 @@ internal static class DeviceToolFactory
                 Destructive = false
             });
 
-        var adbShell = McpServerTool.Create(
+    internal static McpServerTool CreateAdbShell(IDeviceManagerGateway manager) =>
+        McpServerTool.Create(
             ([Description("Target serial from adb_devices.")] string serial,
              [Description("Shell command to execute on the device.")] string command,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
@@ -82,7 +83,8 @@ internal static class DeviceToolFactory
                 Destructive = false
             });
 
-        var adbPull = McpServerTool.Create(
+    internal static McpServerTool CreateAdbPull(PathSandbox sandbox, IDeviceManagerGateway manager) =>
+        McpServerTool.Create(
             ([Description("Target serial from adb_devices.")] string serial,
              [Description("Remote path on the device.")] string remotePath,
              [Description("Local file path inside the sandbox.")] string localPath,
@@ -101,7 +103,8 @@ internal static class DeviceToolFactory
                 Destructive = false
             });
 
-        var adbPush = McpServerTool.Create(
+    internal static McpServerTool CreateAdbPush(PathSandbox sandbox, IDeviceManagerGateway manager) =>
+        McpServerTool.Create(
             ([Description("Target serial from adb_devices.")] string serial,
              [Description("Local file path inside the sandbox.")] string localPath,
              [Description("Remote path on the device.")] string remotePath,
@@ -119,7 +122,8 @@ internal static class DeviceToolFactory
                 Destructive = false
             });
 
-        var fastbootVariables = McpServerTool.Create(
+    internal static McpServerTool CreateFastbootVariables(IDeviceManagerGateway manager) =>
+        McpServerTool.Create(
             ([Description("Fastboot serial or device key from list_devices; required only when more than one fastboot device is attached.")] string? target = null,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
                 token => DeviceToolHandlers.FastbootVariablesAsync(manager, target, token), cancellationToken),
@@ -135,7 +139,26 @@ internal static class DeviceToolFactory
                 Destructive = false
             });
 
-        var qrPairingCode = McpServerTool.Create(
+    internal static McpServerTool CreateFastbootSlot(IDeviceManagerGateway manager) =>
+        McpServerTool.Create(
+            ([Description("Switch to the other A/B slot (a<->b); omit to only query the active slot.")] bool? switchSlot = null,
+             [Description("Fastboot serial or device key from list_devices; required only when more than one fastboot device is attached.")] string? target = null,
+             CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
+                token => DeviceToolHandlers.FastbootSlotAsync(manager, switchSlot, target, token), cancellationToken),
+            new McpServerToolCreateOptions
+            {
+                Name = "fastboot_slot",
+                Description = "Query the active A/B slot of a fastboot device, or optionally switch to "
+                    + "the other slot. The whole tool is destructive-flagged and requires --allow-flash "
+                    + "because switching mutates the device.",
+                ReadOnly = false,
+                Idempotent = false,
+                OpenWorld = true,
+                Destructive = true
+            });
+
+    internal static McpServerTool CreateAdbQrPairingCode(IDeviceManagerGateway manager) =>
+        McpServerTool.Create(
             (CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
                 token => DeviceToolHandlers.QrPairingCodeAsync(manager, token), cancellationToken),
             new McpServerToolCreateOptions
@@ -152,7 +175,8 @@ internal static class DeviceToolFactory
                 Destructive = false
             });
 
-        var adbPairQr = McpServerTool.Create(
+    internal static McpServerTool CreateAdbPairQr(IDeviceManagerGateway manager) =>
+        McpServerTool.Create(
             ([Description("Service name returned by adb_qr_pairing_code.")] string serviceName,
              [Description("Pairing password returned by adb_qr_pairing_code.")] string password,
              [Description("Seconds to wait for the phone to appear and pair.")] int timeoutSeconds = 180,
@@ -175,18 +199,50 @@ internal static class DeviceToolFactory
                 Destructive = false
             });
 
-        return [list, adbDevices, adbShell, adbPull, adbPush, fastbootVariables, qrPairingCode, adbPairQr];
-    }
-
     /// <summary>
-    /// Flash/wipe/reboot tools: only invoked by <see cref="McpServerHost.BuildTools"/> when
-    /// <c>--allow-flash</c> is set.
-    /// <para>刷写/擦除/重启类工具：仅在 <c>--allow-flash</c> 时由
-    /// <see cref="McpServerHost.BuildTools"/> 调用。</para>
+    /// Flash/wipe/reboot tools: only registered when <c>--allow-flash</c> is set.
+    /// <para>刷写/擦除/重启类工具：仅在 <c>--allow-flash</c> 时注册。</para>
     /// </summary>
-    internal static IReadOnlyList<McpServerTool> CreateFlashTools(PathSandbox sandbox, IDeviceManagerGateway manager)
-    {
-        var reboot = McpServerTool.Create(
+    internal static McpServerTool CreateDeviceShell(IDeviceManagerGateway manager) =>
+        McpServerTool.Create(
+            ([Description("Target serial from adb_devices.")] string serial,
+             [Description("Shell command to execute on the device.")] string command,
+             CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
+                token => DeviceToolHandlers.AdbShellAsync(manager, serial, command, token), cancellationToken),
+            new McpServerToolCreateOptions
+            {
+                Name = "device_shell",
+                Description = "Run an arbitrary shell command on an adb target. This is the gated shell "
+                    + "surface for plugins and agents: unlike adb_shell it is destructive-flagged and "
+                    + "only registered with --allow-flash, so callers must consciously enable it. "
+                    + "Prefer the specific tools (adb_pull/adb_push/fastboot_*) when one fits.",
+                ReadOnly = false,
+                Idempotent = false,
+                OpenWorld = true,
+                Destructive = true
+            });
+
+    internal static McpServerTool CreateRecoveryClean(IDeviceManagerGateway manager) =>
+        McpServerTool.Create(
+            ([Description("Clean mode: factoryreset runs TWRP's factory reset; formatdata formats the data partition.")] string mode,
+             [Description("Target serial from adb_devices; the device must be booted into a TWRP-style recovery.")] string serial,
+             CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
+                token => DeviceToolHandlers.RecoveryCleanAsync(manager, mode, serial, token), cancellationToken),
+            new McpServerToolCreateOptions
+            {
+                Name = "recovery_clean",
+                Description = "Wipe data through a booted TWRP-style recovery: factoryreset invokes the "
+                    + "recovery's built-in factory reset and formatdata formats the data partition and "
+                    + "reboots recovery to refresh the partition table. Both destroy user data; the tool "
+                    + "is gated behind --allow-flash.",
+                ReadOnly = false,
+                Idempotent = false,
+                OpenWorld = true,
+                Destructive = true
+            });
+
+    internal static McpServerTool CreateAdbReboot(IDeviceManagerGateway manager) =>
+        McpServerTool.Create(
             ([Description("Target serial from adb_devices.")] string serial,
              [Description("Reboot mode: empty, bootloader, recovery, fastboot, sideload.")] string? mode = null,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
@@ -202,7 +258,8 @@ internal static class DeviceToolFactory
                 Destructive = true
             });
 
-        var fastbootFlash = McpServerTool.Create(
+    internal static McpServerTool CreateFastbootFlash(PathSandbox sandbox, IDeviceManagerGateway manager) =>
+        McpServerTool.Create(
             ([Description("Partition name, e.g. boot, system.")] string partition,
              [Description("Image file path inside the sandbox.")] string imagePath,
              [Description("Wipe the partition before flashing.")] bool wipe = false,
@@ -225,7 +282,8 @@ internal static class DeviceToolFactory
                 Destructive = true
             });
 
-        var fastbootErase = McpServerTool.Create(
+    internal static McpServerTool CreateFastbootErase(IDeviceManagerGateway manager) =>
+        McpServerTool.Create(
             ([Description("Partition name.")] string partition,
              [Description("Fastboot serial or device key from list_devices; required only when more than one fastboot device is attached.")] string? target = null,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
@@ -240,9 +298,6 @@ internal static class DeviceToolFactory
                 OpenWorld = true,
                 Destructive = true
             });
-
-        return [reboot, fastbootFlash, fastbootErase];
-    }
 }
 
 /// <summary>
@@ -424,6 +479,56 @@ internal static class DeviceToolHandlers
             return new ToolResult(true,
                 $"{variables.Count} fastboot variable(s).", ToolJson.Data(variables));
         }, cancellationToken).ConfigureAwait(false);
+
+    public static async Task<ToolResult> FastbootSlotAsync(IDeviceManagerGateway manager, bool? switchSlot,
+        string? target, CancellationToken cancellationToken)
+        => await Task.Run(() =>
+        {
+            var result = manager.RunFastboot(target, session =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var slot = session.GetVariable("current-slot", useCache: false).Trim();
+                if (switchSlot != true)
+                {
+                    return new ToolResult(true, $"Active slot: {slot}",
+                        ToolJson.Data(new Dictionary<string, string> { ["slot"] = slot }));
+                }
+                var other = slot switch
+                {
+                    "a" => "b",
+                    "b" => "a",
+                    _ => throw new InvalidOperationException($"Unrecognized active slot: {slot}")
+                };
+                session.SetActiveSlot(other).ThrowIfFailed();
+                return new ToolResult(true, $"Switched active slot from {slot} to {other}.",
+                    ToolJson.Data(new Dictionary<string, string> { ["previous"] = slot, ["slot"] = other }));
+            }, cancellationToken);
+            return result;
+        }, cancellationToken).ConfigureAwait(false);
+
+    public static async Task<ToolResult> RecoveryCleanAsync(IDeviceManagerGateway manager, string mode,
+        string serial, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serial);
+        var command = mode switch
+        {
+            "factoryreset" => "factory_reset",
+            "formatdata" => "format data",
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Supported modes: factoryreset, formatdata.")
+        };
+        return await Task.Run(() =>
+        {
+            var output = manager.RunAdbService(serial, $"shell:twrp {command}", stream =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                using var memory = new MemoryStream();
+                stream.CopyTo(memory);
+                return System.Text.Encoding.UTF8.GetString(memory.ToArray());
+            }, cancellationToken);
+            return new ToolResult(true, $"Recovery {mode} requested on {serial}.",
+                ToolJson.Data(new Dictionary<string, string> { ["mode"] = mode, ["serial"] = serial, ["output"] = output }));
+        }, cancellationToken).ConfigureAwait(false);
+    }
 
     public static async Task<ToolResult> AdbRebootAsync(IDeviceManagerGateway manager, string serial,
         string? mode, CancellationToken cancellationToken)

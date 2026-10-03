@@ -22,9 +22,8 @@ namespace UotanStudio.Mcp.Tools;
 /// </summary>
 internal static class CompressionToolFactory
 {
-    internal static IReadOnlyList<McpServerTool> CreateTools(PathSandbox sandbox)
-    {
-        var list = McpServerTool.Create(
+    internal static McpServerTool CreateListAlgorithms() =>
+        McpServerTool.Create(
             (CancellationToken cancellationToken) => ToolGuard.RunAsync(
                 static token => Task.FromResult(CompressionToolHandlers.ListAlgorithms()), cancellationToken),
             new McpServerToolCreateOptions
@@ -38,7 +37,8 @@ internal static class CompressionToolFactory
                 Destructive = false
             });
 
-        var compress = McpServerTool.Create(
+    internal static McpServerTool CreateCompressFile(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Input file path inside the sandbox.")] string inputPath,
              [Description("Output file path inside the sandbox.")] string outputPath,
              [Description("Algorithm name, e.g. zstd, brotli, lz4, lz4legacy, lzma, xz, lzop, gzip, deflate, zlib.")] string algorithm,
@@ -61,7 +61,8 @@ internal static class CompressionToolFactory
                 Destructive = false
             });
 
-        var decompress = McpServerTool.Create(
+    internal static McpServerTool CreateDecompressFile(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Input file path inside the sandbox.")] string inputPath,
              [Description("Output file path inside the sandbox.")] string outputPath,
              [Description("Optional algorithm name; auto-detected from magic bytes when omitted.")] string? algorithm = null,
@@ -81,9 +82,6 @@ internal static class CompressionToolFactory
                 OpenWorld = false,
                 Destructive = false
             });
-
-        return [list, compress, decompress];
-    }
 }
 
 /// <summary>

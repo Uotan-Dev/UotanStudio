@@ -99,6 +99,31 @@ internal sealed record InputOutputPayload(string Input, string Output);
 
 internal sealed record PathPayload(string Path);
 
+internal sealed record GptPartitionEntryPayload(
+    int Index,
+    string Name,
+    string TypeId,
+    string PartitionId,
+    ulong FirstLba,
+    ulong LastLba,
+    long ByteOffset,
+    long ByteLength);
+
+internal sealed record GptTablePayload(
+    string Path,
+    string DiskId,
+    int BlockSize,
+    ulong BlockCount,
+    string MetadataSha256,
+    IReadOnlyList<GptPartitionEntryPayload> Partitions);
+
+internal sealed record DownloadFilePayload(
+    string Url,
+    string Output,
+    long Bytes,
+    string? Sha256,
+    bool Verified);
+
 internal sealed record ContainerExtractionPayload(
     string Kind,
     IReadOnlyList<string> Entries,
@@ -156,6 +181,9 @@ internal sealed record EnvPayload(
 [JsonSerializable(typeof(ArscSummaryPayload))]
 [JsonSerializable(typeof(InputOutputPayload))]
 [JsonSerializable(typeof(PathPayload))]
+[JsonSerializable(typeof(GptTablePayload))]
+[JsonSerializable(typeof(GptPartitionEntryPayload))]
+[JsonSerializable(typeof(DownloadFilePayload))]
 [JsonSerializable(typeof(ContainerExtractionPayload))]
 [JsonSerializable(typeof(OtaZipVerificationPayload))]
 [JsonSerializable(typeof(OtaZipPatchPayload))]

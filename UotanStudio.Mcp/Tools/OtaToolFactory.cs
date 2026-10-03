@@ -26,9 +26,8 @@ namespace UotanStudio.Mcp.Tools;
 /// </summary>
 internal static class OtaToolFactory
 {
-    internal static IReadOnlyList<McpServerTool> CreateTools(PathSandbox sandbox)
-    {
-        var verify = McpServerTool.Create(
+    internal static McpServerTool CreateOtaZipVerify(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("A/B OTA or recovery ZIP path inside the sandbox.")] string zipPath,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
                 token => OtaToolHandlers.VerifyAsync(sandbox, zipPath, token), cancellationToken),
@@ -45,7 +44,8 @@ internal static class OtaToolFactory
                 Destructive = false
             });
 
-        var patch = McpServerTool.Create(
+    internal static McpServerTool CreateOtaZipPatch(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Source OTA ZIP path inside the sandbox; read only and never modified.")] string inputPath,
              [Description("Destination ZIP path inside the sandbox; replaced atomically once the archive is complete.")] string outputPath,
              [Description("JSON object mapping OTA ZIP member names to local sandbox file paths, e.g. {\"updater-script\":\"scripts/updater-script\"}. Members not listed are copied unchanged and unknown keys are appended.")] string? replacementsJson = null,
@@ -67,7 +67,8 @@ internal static class OtaToolFactory
                 Destructive = false
             });
 
-        var rebuild = McpServerTool.Create(
+    internal static McpServerTool CreateOtaZipRebuild(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Existing OTA ZIP supplying the copied-through members and the metadata base.")] string inputPath,
              [Description("Destination OTA ZIP path inside the sandbox; published only after verification.")] string outputPath,
              [Description("Replacement payload.bin inside the sandbox: CrAU version 2 or 3, at most 16 GiB, manifest plus metadata-signature prefix within 64 MiB.")] string payloadPath,
@@ -91,7 +92,8 @@ internal static class OtaToolFactory
                 Destructive = false
             });
 
-        var convert = McpServerTool.Create(
+    internal static McpServerTool CreateSuperPayloadConvert(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Source LP Super image path inside the sandbox; read only.")] string superPath,
              [Description("Destination payload.bin path inside the sandbox. Its companion payload_properties.txt is always written into the same directory.")] string payloadPath,
              [Description("Payload block size in bytes; a power of two from 512 through 1048576 and every extracted partition must be a multiple of it.")] uint blockSize = 4096,
@@ -117,7 +119,8 @@ internal static class OtaToolFactory
                 Destructive = false
             });
 
-        var prepareTools = McpServerTool.Create(
+    internal static McpServerTool CreateDeliveryPrepareTools(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Delivery plan JSON (DeliveryPlan schema; paths sandbox-relative or absolute inside the sandbox). The windows/linux/macOS flags decide which platform bundles are fetched.")] string planJson,
              [Description("Directory that receives the bin/ tool layout; must stay inside the sandbox. Empty falls back to the plan's outputDirectory.")] string directory = "",
              IProgress<ProgressNotificationValue>? progress = null,
@@ -137,9 +140,6 @@ internal static class OtaToolFactory
                 OpenWorld = true,
                 Destructive = false
             });
-
-        return [verify, patch, rebuild, convert, prepareTools];
-    }
 }
 
 /// <summary>

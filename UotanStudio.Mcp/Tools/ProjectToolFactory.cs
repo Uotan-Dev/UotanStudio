@@ -22,9 +22,8 @@ namespace UotanStudio.Mcp.Tools;
 /// </summary>
 internal static class ProjectToolFactory
 {
-    internal static IReadOnlyList<McpServerTool> CreateTools(PathSandbox sandbox)
-    {
-        var read = McpServerTool.Create(
+    internal static McpServerTool CreateSolutionRead(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Solution file path (.uotan) inside the sandbox.")] string path,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
                 token => ProjectToolHandlers.ReadSolutionAsync(sandbox, path, token), cancellationToken),
@@ -39,7 +38,8 @@ internal static class ProjectToolFactory
                 Destructive = false
             });
 
-        var write = McpServerTool.Create(
+    internal static McpServerTool CreateSolutionWrite(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Solution file path (.uotan) inside the sandbox.")] string path,
              [Description("Complete SolutionSnapshot JSON to write. Existing state not included in the JSON is lost.")] string snapshotJson,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
@@ -55,7 +55,8 @@ internal static class ProjectToolFactory
                 Destructive = true
             });
 
-        var firmwareProject = McpServerTool.Create(
+    internal static McpServerTool CreateFirmwareProjectRead(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Firmware project file path (.uotanfw) inside the sandbox.")] string path,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
                 token => ProjectToolHandlers.ReadFirmwareProjectAsync(sandbox, path, token), cancellationToken),
@@ -68,9 +69,6 @@ internal static class ProjectToolFactory
                 OpenWorld = false,
                 Destructive = false
             });
-
-        return [read, write, firmwareProject];
-    }
 }
 
 /// <summary>

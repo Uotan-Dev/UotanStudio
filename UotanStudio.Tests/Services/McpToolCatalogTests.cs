@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ModelContextProtocol.Server;
 using UotanStudio.Mcp;
+using UotanStudio.Mcp.Tools;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
@@ -41,6 +42,7 @@ public sealed class McpToolCatalogTests : IDisposable
         "list_formats",
         "detect_format",
         "read_metadata",
+        "read_gpt",
         "unpack_firmware",
         "pack_firmware",
         "extract_container_entries",
@@ -75,14 +77,18 @@ public sealed class McpToolCatalogTests : IDisposable
         "axml_parse",
         "arsc_parse",
         "apk_strip_signatures",
+        "download_file",
         "get_env"
     ];
 
     private static readonly string[] FlashToolNames =
     [
         "adb_reboot",
+        "device_shell",
         "fastboot_erase",
-        "fastboot_flash"
+        "fastboot_flash",
+        "fastboot_slot",
+        "recovery_clean"
     ];
 
     [Fact]
@@ -105,6 +111,29 @@ public sealed class McpToolCatalogTests : IDisposable
         Assert.Equal(
             FlashToolNames.OrderBy(name => name, StringComparer.Ordinal),
             flashNames.Except(baseNames, StringComparer.Ordinal).OrderBy(name => name, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void BuildTools_DescriptorCatalog_ProjectsExactlyToEmittedTools()
+    {
+        var catalog = PluginToolCatalog.All;
+
+        Assert.Equal(BaseToolNames.Length + FlashToolNames.Length, catalog.Count);
+        Assert.Equal(
+            catalog.Count,
+            catalog.Select(descriptor => descriptor.Name).Distinct(StringComparer.Ordinal).Count());
+
+        foreach (var allowFlash in new[] { false, true })
+        {
+            var expected = catalog
+                .Where(descriptor => !descriptor.FlashGated || allowFlash)
+                .Select(descriptor => descriptor.Name)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToList();
+            var emitted = ToolNames(allowFlash).OrderBy(name => name, StringComparer.Ordinal).ToList();
+
+            Assert.Equal(expected, emitted);
+        }
     }
 
     [Fact]

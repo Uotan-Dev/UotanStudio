@@ -22,9 +22,8 @@ namespace UotanStudio.Mcp.Tools;
 /// </summary>
 internal static class MiscToolFactory
 {
-    internal static IReadOnlyList<McpServerTool> CreateTools(PathSandbox sandbox)
-    {
-        var dexDisassemble = McpServerTool.Create(
+    internal static McpServerTool CreateDexDisassemble(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("DEX file path inside the sandbox.")] string path,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
                 token => MiscToolHandlers.DexDisassembleAsync(sandbox, path, token), cancellationToken),
@@ -38,7 +37,8 @@ internal static class MiscToolFactory
                 Destructive = false
             });
 
-        var dexDecompile = McpServerTool.Create(
+    internal static McpServerTool CreateDexDecompile(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("DEX file path inside the sandbox.")] string path,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
                 token => MiscToolHandlers.DexDecompileAsync(sandbox, path, token), cancellationToken),
@@ -53,7 +53,8 @@ internal static class MiscToolFactory
                 Destructive = false
             });
 
-        var dexAssemble = McpServerTool.Create(
+    internal static McpServerTool CreateDexAssemble(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Smali text to assemble.")] string smali,
              [Description("Output .dex file path inside the sandbox.")] string outputPath,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
@@ -68,7 +69,8 @@ internal static class MiscToolFactory
                 Destructive = false
             });
 
-        var dexInfo = McpServerTool.Create(
+    internal static McpServerTool CreateDexInfo(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("DEX file path inside the sandbox.")] string path,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
                 token => MiscToolHandlers.DexInfoAsync(sandbox, path, token), cancellationToken),
@@ -83,7 +85,8 @@ internal static class MiscToolFactory
                 Destructive = false
             });
 
-        var axmlParse = McpServerTool.Create(
+    internal static McpServerTool CreateAxmlParse(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Compiled binary XML (AXML) file path inside the sandbox.")] string path,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
                 token => MiscToolHandlers.AxmlParseAsync(sandbox, path, token), cancellationToken),
@@ -98,7 +101,8 @@ internal static class MiscToolFactory
                 Destructive = false
             });
 
-        var arscParse = McpServerTool.Create(
+    internal static McpServerTool CreateArscParse(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("resources.arsc file path inside the sandbox.")] string path,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
                 token => MiscToolHandlers.ArscParseAsync(sandbox, path, token), cancellationToken),
@@ -112,7 +116,8 @@ internal static class MiscToolFactory
                 Destructive = false
             });
 
-        var apkStrip = McpServerTool.Create(
+    internal static McpServerTool CreateApkStripSignatures(PathSandbox sandbox) =>
+        McpServerTool.Create(
             ([Description("Input APK path inside the sandbox.")] string inputPath,
              [Description("Output APK path inside the sandbox (must differ from the input).")] string outputPath,
              CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
@@ -128,8 +133,25 @@ internal static class MiscToolFactory
                 Destructive = false
             });
 
-        return [dexDisassemble, dexDecompile, dexAssemble, dexInfo, axmlParse, arscParse, apkStrip];
-    }
+    internal static McpServerTool CreateDownloadFile(PathSandbox sandbox) =>
+        McpServerTool.Create(
+            ([Description("Direct http(s) download URL.")] string url,
+             [Description("Output file path inside the sandbox.")] string outputPath,
+             [Description("Optional SHA-256 hex digest; the download fails when it does not match.")] string? sha256 = null,
+             CancellationToken cancellationToken = default) => ToolGuard.RunAsync(
+                token => MiscToolHandlers.DownloadFileAsync(sandbox, url, outputPath, sha256, token), cancellationToken),
+            new McpServerToolCreateOptions
+            {
+                Name = "download_file",
+                Description = "Download a file over http(s) into the sandbox with streaming and atomic "
+                    + "publish: bytes land in a temporary file that replaces the output only after the "
+                    + "hash check passes, so cancelling or a digest mismatch leaves the previous file "
+                    + "untouched and never a truncated download.",
+                ReadOnly = false,
+                Idempotent = false,
+                OpenWorld = true,
+                Destructive = false
+            });
 }
 
 /// <summary>
@@ -250,6 +272,61 @@ internal static class MiscToolHandlers
                 $"Signature entries stripped into: {resolvedOutput}",
                 ToolJson.Data(new InputOutputPayload(resolvedInput, resolvedOutput)));
         }, cancellationToken);
+
+    public static async Task<ToolResult> DownloadFileAsync(PathSandbox sandbox, string url,
+        string outputPath, string? sha256, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(url);
+        var resolved = sandbox.ResolveOutput(outputPath);
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            || uri.Scheme is not ("http" or "https"))
+        {
+            return new ToolResult(false, "Only absolute http(s) URLs are supported.");
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(resolved)!);
+        var temporary = resolved + "." + Guid.NewGuid().ToString("N") + ".part";
+        var published = false;
+        try
+        {
+            using var client = new HttpClient();
+            await using (var source = await client.GetStreamAsync(uri, cancellationToken).ConfigureAwait(false))
+            await using (var target = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                131072, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                await source.CopyToAsync(target, 131072, cancellationToken).ConfigureAwait(false);
+                await target.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            string? actual = null;
+            if (!string.IsNullOrWhiteSpace(sha256))
+            {
+                await using var stream = new FileStream(temporary, FileMode.Open, FileAccess.Read, FileShare.Read,
+                    131072, FileOptions.Asynchronous | FileOptions.SequentialScan);
+                actual = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
+                if (!string.Equals(actual, sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    return new ToolResult(false,
+                        $"SHA-256 mismatch: expected {sha256}, downloaded {actual}. The output was not modified.");
+                }
+            }
+
+            File.Move(temporary, resolved, overwrite: true);
+            published = true;
+            return new ToolResult(true,
+                $"Downloaded {new FileInfo(resolved).Length} bytes into {resolved}"
+                    + (actual is null ? string.Empty : $" (sha256 {actual})"),
+                ToolJson.Data(new DownloadFilePayload(url, resolved, new FileInfo(resolved).Length,
+                    actual, actual is not null)));
+        }
+        finally
+        {
+            if (!published && File.Exists(temporary))
+            {
+                File.Delete(temporary);
+            }
+        }
+    }
 
     /// <summary>
     /// Keeps metadata parsing bounded even though the parsers stream internally.
