@@ -64,7 +64,25 @@
     <x:String x:Key="Device_EdlInfo">EDL 模式信息</x:String>
     <x:String x:Key="Device_EdlProtocol">设备协议状态</x:String>
     <x:String x:Key="Device_ProtocolUnknown">未知</x:String>
+    <x:String x:Key="Device_EdlSaharaVersion">Sahara 协议版本</x:String>
+    <x:String x:Key="Device_EdlMaxCommandLength">Sahara 最大命令长度</x:String>
+    <x:String x:Key="Device_EdlFirehoseVersion">Firehose 版本</x:String>
+    <x:String x:Key="Device_EdlProgrammer">编程器</x:String>
+    <x:String x:Key="Device_EdlStorageType">存储类型</x:String>
+    <x:String x:Key="Device_EdlStorageSerial">存储序列号</x:String>
+    <x:String x:Key="Device_EdlStorageFirmware">存储固件版本</x:String>
+    <x:String x:Key="Device_EdlStorageManufacturer">存储厂商标识</x:String>
+    <x:String x:Key="Device_EdlPageSize">存储页大小</x:String>
+    <x:String x:Key="Device_EdlSectorSize">存储块大小</x:String>
+    <x:String x:Key="Device_EdlCapacity">存储总容量</x:String>
+    <x:String x:Key="Device_EdlMaxPayload">Firehose 最大载荷</x:String>
+    <x:String x:Key="Device_TransportSerial">串口</x:String>
     <x:String x:Key="Device_RkdlInfo">RKDL 模式信息</x:String>
+    <x:String x:Key="Device_MtkInfo">MTK 模式信息</x:String>
+    <x:String x:Key="Device_MtkHardware">硬件代码</x:String>
+    <x:String x:Key="Device_MtkFirmware">软硬件版本</x:String>
+    <x:String x:Key="Device_MtkSecurityBits">安全位 SBC/SLA/DAA/CERT</x:String>
+    <x:String x:Key="Device_MtkInfoUnknown">尚未取得 Boot ROM 身份信息。</x:String>
     <x:String x:Key="Device_Serial">序列号</x:String>
     <x:String x:Key="Device_Model">型号</x:String>
     <x:String x:Key="Device_AndroidVersion">系统版本</x:String>
@@ -105,7 +123,6 @@
     <!-- 刷写卡片 -->
     <x:String x:Key="Flash_Flash">刷写</x:String>
     <x:String x:Key="Flash_FlashCard">刷写分区</x:String>
-    <x:String x:Key="Flash_Partition">分区</x:String>
     <x:String x:Key="Flash_PartitionHint">如 boot</x:String>
     <x:String x:Key="Flash_ImagePath">镜像路径</x:String>
     <x:String x:Key="Flash_ImagePathHint">镜像文件路径</x:String>

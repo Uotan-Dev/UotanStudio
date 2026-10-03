@@ -147,6 +147,7 @@
     <x:String x:Key="Plugin_SelectHint">Select a package to view its details.</x:String>
     <x:String x:Key="Plugin_Template">Workflow template</x:String>
     <x:String x:Key="Plugin_Composite">Composite node</x:String>
+    <x:String x:Key="Plugin_Script">Script node</x:String>
     <x:String x:Key="Plugin_Enabled">Enabled</x:String>
     <x:String x:Key="Plugin_Enable">Enable</x:String>
     <x:String x:Key="Plugin_Disable">Disable</x:String>
@@ -165,6 +166,10 @@
     <x:String x:Key="Plugin_Removed">Visual plugin removed</x:String>
     <x:String x:Key="Plugin_TemplateApplied">Template added to the node canvas</x:String>
     <x:String x:Key="Plugin_GraphSaved">Composite-node graph saved</x:String>
+    <x:String x:Key="Plugin_EditScript">Edit Lua script</x:String>
+    <x:String x:Key="Plugin_SaveScript">Save plugin script</x:String>
+    <x:String x:Key="Plugin_ExportScript">Export Lua source…</x:String>
+    <x:String x:Key="Plugin_ScriptSaved">Script-node source saved</x:String>
     <x:String x:Key="Plugin_EditorUnavailable">The node editor is not available.</x:String>
     <x:String x:Key="Plugin_OperationFailed">Plugin operation failed: {0}</x:String>
     <x:String x:Key="Keys_Subtitle">Manage device authentication and Payload signing keys across projects.</x:String>

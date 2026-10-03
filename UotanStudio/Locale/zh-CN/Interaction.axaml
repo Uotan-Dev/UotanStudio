@@ -56,14 +56,11 @@
     <x:String x:Key="Node_Conn_SubmitLabel">提交按钮文本</x:String>
     <x:String x:Key="Node_Conn_CancelLabel">取消按钮文本</x:String>
     <x:String x:Key="Node_Conn_Form">表单</x:String>
-    <x:String x:Key="Node_Conn_TimeoutSeconds">超时秒数</x:String>
     <x:String x:Key="Node_Conn_Submitted">已提交</x:String>
     <x:String x:Key="Node_Conn_Cancelled">已取消</x:String>
     <x:String x:Key="Node_Conn_TimedOut">已超时</x:String>
-    <x:String x:Key="Node_Conn_Values">字段数据</x:String>
     <x:String x:Key="Node_Conn_Selection">选中项</x:String>
     <x:String x:Key="Node_Conn_Component">组件</x:String>
-    <x:String x:Key="Node_Conn_Condition">条件</x:String>
     <x:String x:Key="Node_Conn_Handle">进度句柄</x:String>
     <x:String x:Key="Interaction_SensitiveValue">敏感值已隐藏</x:String>
     <x:String x:Key="Node_Conn_MaxLength">最大长度</x:String>

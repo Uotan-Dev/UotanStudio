@@ -64,7 +64,25 @@
     <x:String x:Key="Device_EdlInfo">EDL Mode Information</x:String>
     <x:String x:Key="Device_EdlProtocol">Device protocol state</x:String>
     <x:String x:Key="Device_ProtocolUnknown">Unknown</x:String>
+    <x:String x:Key="Device_EdlSaharaVersion">Sahara protocol version</x:String>
+    <x:String x:Key="Device_EdlMaxCommandLength">Sahara max command length</x:String>
+    <x:String x:Key="Device_EdlFirehoseVersion">Firehose version</x:String>
+    <x:String x:Key="Device_EdlProgrammer">Programmer</x:String>
+    <x:String x:Key="Device_EdlStorageType">Storage type</x:String>
+    <x:String x:Key="Device_EdlStorageSerial">Storage serial number</x:String>
+    <x:String x:Key="Device_EdlStorageFirmware">Storage firmware version</x:String>
+    <x:String x:Key="Device_EdlStorageManufacturer">Storage manufacturer ID</x:String>
+    <x:String x:Key="Device_EdlPageSize">Storage page size</x:String>
+    <x:String x:Key="Device_EdlSectorSize">Storage block size</x:String>
+    <x:String x:Key="Device_EdlCapacity">Storage capacity</x:String>
+    <x:String x:Key="Device_EdlMaxPayload">Firehose max payload</x:String>
+    <x:String x:Key="Device_TransportSerial">Serial</x:String>
     <x:String x:Key="Device_RkdlInfo">RKDL Mode Information</x:String>
+    <x:String x:Key="Device_MtkInfo">MTK Mode Information</x:String>
+    <x:String x:Key="Device_MtkHardware">Hardware code</x:String>
+    <x:String x:Key="Device_MtkFirmware">HW/SW version</x:String>
+    <x:String x:Key="Device_MtkSecurityBits">Security bits SBC/SLA/DAA/CERT</x:String>
+    <x:String x:Key="Device_MtkInfoUnknown">Boot ROM identity not available yet.</x:String>
     <x:String x:Key="Device_Serial">Serial</x:String>
     <x:String x:Key="Device_Model">Model</x:String>
     <x:String x:Key="Device_AndroidVersion">System Version</x:String>
@@ -105,7 +123,6 @@
     <!-- Flash card -->
     <x:String x:Key="Flash_Flash">Flash</x:String>
     <x:String x:Key="Flash_FlashCard">Flash Partition</x:String>
-    <x:String x:Key="Flash_Partition">Partition</x:String>
     <x:String x:Key="Flash_PartitionHint">e.g. boot</x:String>
     <x:String x:Key="Flash_ImagePath">Image path</x:String>
     <x:String x:Key="Flash_ImagePathHint">Path to the image file</x:String>

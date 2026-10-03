@@ -81,6 +81,12 @@
     <x:String x:Key="Node_Device_Power_Reboot">重启设备</x:String>
     <x:String x:Key="Node_Device_Storage_EraseAll">全部擦除</x:String>
     <x:String x:Key="Node_Device_Ota_Sideload">OTA 侧载</x:String>
+    <x:String x:Key="Node_Device_State_Query">查询设备状态</x:String>
+    <x:String x:Key="Node_Device_Table_Read">读取分区表</x:String>
+    <x:String x:Key="Node_Device_Slot_Query">查询活动槽位</x:String>
+    <x:String x:Key="Node_Device_Slot_Switch">切换活动槽位</x:String>
+    <x:String x:Key="Node_Device_Recovery_Clean">恢复模式擦除</x:String>
+    <x:String x:Key="Node_Device_Shell_Command">执行 Shell 命令</x:String>
     <x:String x:Key="Node_File_Binary_Read">读取文件</x:String>
     <x:String x:Key="Node_Data_Value_Constant">常量</x:String>
     <x:String x:Key="Node_Resource_Project_Image">工程镜像</x:String>
@@ -95,6 +101,8 @@
     <x:String x:Key="Node_Data_Compression_Compress">压缩</x:String>
     <x:String x:Key="Node_Data_Bytes_Swap">字节序转换</x:String>
     <x:String x:Key="Node_Network_File_Download">联网下载</x:String>
+    <x:String x:Key="Node_Mirroring_Session_Start">开始投屏</x:String>
+    <x:String x:Key="Node_Mirroring_Session_Stop">停止投屏</x:String>
     <x:String x:Key="Node_Flow_Execution_Start">开始</x:String>
     <x:String x:Key="Node_Flow_Execution_End">结束</x:String>
     <x:String x:Key="Node_Flow_Condition_Branch">条件分支</x:String>
@@ -410,6 +418,7 @@
     <x:String x:Key="Plugin_DependencyVersionMismatch">包 {0} 的版本是 {1}；要求范围为 [{2}, {3})，* 表示不限制。</x:String>
     <x:String x:Key="Plugin_PackageConflict">不能与以下包同时启用：{0}</x:String>
     <x:String x:Key="Plugin_RuntimeUnavailable">包 {0} 已被禁用、移除、更新或变得不可用。请刷新复合节点后再执行。</x:String>
+    <x:String x:Key="Plugin_CodeRuntimeDisabled">当前构建为 AOT 或裁剪发布，依赖代码的插件无法运行；数据插件不受影响，JIT 构建支持所有插件种类。</x:String>
     <x:String x:Key="Plugin_Requirements">包依赖与冲突</x:String>
     <x:String x:Key="Plugin_DependencyHelp">这里检查已安装并启用的包，不会自动应用前置补丁。每行填写：包ID 最低版本 最高版本。* 表示不限制，下限包含、上限不包含。版本使用三段数字（例如 1.2.3）。只填写 ID 表示接受任意版本。</x:String>
     <x:String x:Key="Plugin_Dependencies">依赖包</x:String>
@@ -622,9 +631,11 @@
     <x:String x:Key="Node_Category_Firmware">固件与镜像</x:String>
     <x:String x:Key="Node_Category_Build">构建与交付</x:String>
     <x:String x:Key="Node_Category_Device">设备操作</x:String>
+    <x:String x:Key="Node_Category_Mirroring">投屏</x:String>
     <x:String x:Key="Node_Category_Flow">流程控制</x:String>
     <x:String x:Key="Node_Category_Interaction">交互与反馈</x:String>
     <x:String x:Key="Node_Category_Composite">我的复合节点</x:String>
+    <x:String x:Key="Node_Category_Script">我的脚本节点</x:String>
     <x:String x:Key="Node_Toolbox_Favorites">收藏</x:String>
     <x:String x:Key="Node_Toolbox_Recent">最近使用</x:String>
     <x:String x:Key="Node_Toolbox_Favorite">添加到收藏</x:String>
@@ -716,6 +727,7 @@
     <x:String x:Key="Node_Network_Timeout">下载超时。</x:String>
     <x:String x:Key="Node_Device_InvalidInput">设备操作缺少有效的设备、分区或输入文件。</x:String>
     <x:String x:Key="Node_Device_RebootFailed">设备拒绝了重启请求。</x:String>
+    <x:String x:Key="Node_Mirroring_NoSession">投屏会话未激活。</x:String>
     <x:String x:Key="Node_Category_Workspace">工作区操作</x:String>
     <x:String x:Key="Node_Workspace_Document_Resolve">定位已打开文档</x:String>
     <x:String x:Key="Node_Workspace_Document_ReadText">读取文档文本</x:String>

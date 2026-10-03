@@ -81,6 +81,12 @@
     <x:String x:Key="Node_Device_Power_Reboot">Reboot Device</x:String>
     <x:String x:Key="Node_Device_Storage_EraseAll">Erase All</x:String>
     <x:String x:Key="Node_Device_Ota_Sideload">OTA Sideload</x:String>
+    <x:String x:Key="Node_Device_State_Query">Query Device State</x:String>
+    <x:String x:Key="Node_Device_Table_Read">Read Partition Table</x:String>
+    <x:String x:Key="Node_Device_Slot_Query">Query Slot</x:String>
+    <x:String x:Key="Node_Device_Slot_Switch">Switch Slot</x:String>
+    <x:String x:Key="Node_Device_Recovery_Clean">Recovery Wipe</x:String>
+    <x:String x:Key="Node_Device_Shell_Command">Run Shell Command</x:String>
     <x:String x:Key="Node_File_Binary_Read">Read File</x:String>
     <x:String x:Key="Node_Data_Value_Constant">Constant</x:String>
     <x:String x:Key="Node_Resource_Project_Image">Project Image</x:String>
@@ -95,6 +101,8 @@
     <x:String x:Key="Node_Data_Compression_Compress">Compress</x:String>
     <x:String x:Key="Node_Data_Bytes_Swap">Byte Swap</x:String>
     <x:String x:Key="Node_Network_File_Download">Download</x:String>
+    <x:String x:Key="Node_Mirroring_Session_Start">Start Mirroring</x:String>
+    <x:String x:Key="Node_Mirroring_Session_Stop">Stop Mirroring</x:String>
     <x:String x:Key="Node_Flow_Execution_Start">Start</x:String>
     <x:String x:Key="Node_Flow_Execution_End">End</x:String>
     <x:String x:Key="Node_Flow_Condition_Branch">Branch</x:String>
@@ -410,6 +418,7 @@
     <x:String x:Key="Plugin_DependencyVersionMismatch">Package {0} has version {1}; required range is [{2}, {3}), where * means unbounded.</x:String>
     <x:String x:Key="Plugin_PackageConflict">Cannot be enabled together with package: {0}</x:String>
     <x:String x:Key="Plugin_RuntimeUnavailable">Package {0} was disabled, removed, updated or became unavailable. Refresh the composite before running it.</x:String>
+    <x:String x:Key="Plugin_CodeRuntimeDisabled">This build runs ahead-of-time (AOT) or trimmed, so code-dependent plugins cannot run. Data plugins are unaffected, and JIT builds support every plugin kind.</x:String>
     <x:String x:Key="Plugin_Requirements">Package dependencies and conflicts</x:String>
     <x:String x:Key="Plugin_DependencyHelp">Installed/enabled packages only; this does not apply prerequisite patches. One line: package.id minimum maximum. Use * for no bound; minimum is inclusive and maximum exclusive. Versions use major.minor.patch (e.g. 1.2.3). An ID alone accepts any version.</x:String>
     <x:String x:Key="Plugin_Dependencies">Required packages</x:String>
@@ -622,9 +631,11 @@
     <x:String x:Key="Node_Category_Firmware">Firmware and images</x:String>
     <x:String x:Key="Node_Category_Build">Build and delivery</x:String>
     <x:String x:Key="Node_Category_Device">Device operations</x:String>
+    <x:String x:Key="Node_Category_Mirroring">Screen mirroring</x:String>
     <x:String x:Key="Node_Category_Flow">Flow control</x:String>
     <x:String x:Key="Node_Category_Interaction">Interaction and feedback</x:String>
     <x:String x:Key="Node_Category_Composite">My composite nodes</x:String>
+    <x:String x:Key="Node_Category_Script">My script nodes</x:String>
     <x:String x:Key="Node_Toolbox_Favorites">Favorites</x:String>
     <x:String x:Key="Node_Toolbox_Recent">Recently used</x:String>
     <x:String x:Key="Node_Toolbox_Favorite">Add to favorites</x:String>
@@ -716,6 +727,7 @@
     <x:String x:Key="Node_Network_Timeout">The download timed out.</x:String>
     <x:String x:Key="Node_Device_InvalidInput">The device operation is missing a valid device, partition or input file.</x:String>
     <x:String x:Key="Node_Device_RebootFailed">The device rejected the reboot request.</x:String>
+    <x:String x:Key="Node_Mirroring_NoSession">The mirroring session is not active.</x:String>
     <x:String x:Key="Node_Category_Workspace">Workspace operations</x:String>
     <x:String x:Key="Node_Workspace_Document_Resolve">Resolve open document</x:String>
     <x:String x:Key="Node_Workspace_Document_ReadText">Read document text</x:String>

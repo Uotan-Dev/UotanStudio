@@ -56,14 +56,11 @@
     <x:String x:Key="Node_Conn_SubmitLabel">Submit label</x:String>
     <x:String x:Key="Node_Conn_CancelLabel">Cancel label</x:String>
     <x:String x:Key="Node_Conn_Form">Form</x:String>
-    <x:String x:Key="Node_Conn_TimeoutSeconds">Timeout seconds</x:String>
     <x:String x:Key="Node_Conn_Submitted">Submitted</x:String>
     <x:String x:Key="Node_Conn_Cancelled">Cancelled</x:String>
     <x:String x:Key="Node_Conn_TimedOut">Timed out</x:String>
-    <x:String x:Key="Node_Conn_Values">Values</x:String>
     <x:String x:Key="Node_Conn_Selection">Selection</x:String>
     <x:String x:Key="Node_Conn_Component">Component</x:String>
-    <x:String x:Key="Node_Conn_Condition">Condition</x:String>
     <x:String x:Key="Node_Conn_Handle">Progress handle</x:String>
     <x:String x:Key="Interaction_SensitiveValue">Hidden sensitive value</x:String>
     <x:String x:Key="Node_Conn_MaxLength">Maximum length</x:String>

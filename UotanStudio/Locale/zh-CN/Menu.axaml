@@ -147,6 +147,7 @@
     <x:String x:Key="Plugin_SelectHint">选择一个插件包以查看详情。</x:String>
     <x:String x:Key="Plugin_Template">工作流模板</x:String>
     <x:String x:Key="Plugin_Composite">复合节点</x:String>
+    <x:String x:Key="Plugin_Script">脚本节点</x:String>
     <x:String x:Key="Plugin_Enabled">已启用</x:String>
     <x:String x:Key="Plugin_Enable">启用</x:String>
     <x:String x:Key="Plugin_Disable">禁用</x:String>
@@ -165,6 +166,10 @@
     <x:String x:Key="Plugin_Removed">可视化插件已移除</x:String>
     <x:String x:Key="Plugin_TemplateApplied">模板已添加到节点画布</x:String>
     <x:String x:Key="Plugin_GraphSaved">复合节点图已保存</x:String>
+    <x:String x:Key="Plugin_EditScript">编辑 Lua 脚本</x:String>
+    <x:String x:Key="Plugin_SaveScript">保存插件脚本</x:String>
+    <x:String x:Key="Plugin_ExportScript">导出 Lua 源码…</x:String>
+    <x:String x:Key="Plugin_ScriptSaved">脚本节点源码已保存</x:String>
     <x:String x:Key="Plugin_EditorUnavailable">节点编辑器当前不可用。</x:String>
     <x:String x:Key="Plugin_OperationFailed">插件操作失败：{0}</x:String>
     <x:String x:Key="Keys_Subtitle">管理设备认证与 Payload 签名密钥，独立于当前工程。</x:String>
