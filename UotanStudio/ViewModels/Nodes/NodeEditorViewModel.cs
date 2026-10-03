@@ -333,6 +333,12 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         set => PluginWorkspace.SelectedVisualPlugin = value;
     }
 
+    /// <summary>Whether the current publish form blocks any plugin kind in the property-pane workspace.</summary>
+    public bool CodeRuntimeDisabled => PluginWorkspace.CodeRuntimeDisabled;
+
+    /// <summary>Localized explanation shown while plugin kinds are blocked; empty otherwise.</summary>
+    public string CodeRuntimeDisabledText => PluginWorkspace.CodeRuntimeDisabledText;
+
     /// <summary>
     /// <para>执行期间订阅 LogService 的退订委托。</para>
     /// Unsubscribe delegate for the LogService subscription during execution.

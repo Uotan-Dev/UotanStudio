@@ -1,4 +1,7 @@
 using System.Collections.ObjectModel;
+using UotanStudio.Services;
+using UotanStudio.Services.Execution;
+using UotanStudio.Services.Plugins;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.VisualPlugins;
 
@@ -13,6 +16,23 @@ public sealed class VisualPluginWorkspaceViewModel : ViewModelBase, IDisposable
 {
     /// <summary>Whether the property pane exposes the plugin workspace.</summary>
     public bool ShowWorkspace { get; }
+
+    /// <summary>
+    /// <para>获取当前发布形式是否禁用了任一插件种类（AOT 或裁剪发布下仅代码类插件受影响）；面板据此显示说明而非静默留空。</para>
+    /// Gets whether the current publish form blocks any plugin kind (only code-dependent kinds are
+    /// affected on an AOT or trimmed publish); the pane shows an explanation instead of staying silently empty.
+    /// </summary>
+    public bool CodeRuntimeDisabled =>
+        PluginKindPolicy.BlockedKinds(RuntimeCapabilityProbe.EffectiveCapability).Count > 0;
+
+    /// <summary>
+    /// <para>获取代码运行时被禁用时的本地化说明文本；未禁用时为空字符串。</para>
+    /// Gets the localized explanation shown while code-dependent plugins are disabled; an empty
+    /// string when they are enabled.
+    /// </summary>
+    public string CodeRuntimeDisabledText => CodeRuntimeDisabled
+        ? LanguageService.Instance.GetString("Plugin_CodeRuntimeDisabled")
+        : string.Empty;
 
     /// <summary>Installed composite nodes available for isolated graph editing.</summary>
     public ObservableCollection<VisualPluginRegistration> EditableVisualPlugins { get; } = [];

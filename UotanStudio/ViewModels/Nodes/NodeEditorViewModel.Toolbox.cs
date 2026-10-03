@@ -25,7 +25,7 @@ public partial class NodeEditorViewModel
         ToolboxCategories.Clear();
         NodeFactoryRegistrar.RegisterAll();
         var language = LanguageService.Instance;
-        string[] categories = ["Inputs", "Workspace", "Data", "Validation", "Configuration", "Firmware", "Build", "Device", "Flow", "Interaction", "Composite"];
+        string[] categories = ["Inputs", "Workspace", "Data", "Validation", "Configuration", "Firmware", "Build", "Device", "Mirroring", "Flow", "Interaction", "Composite", "Script"];
         foreach (var category in categories)
         {
             var descriptors = NodeFactoryRegistrar.Descriptors.Where(descriptor =>
@@ -58,10 +58,12 @@ public partial class NodeEditorViewModel
     private static NodeCategory GetToolboxNodeCategory(string category) => category switch
     {
         "Device" => NodeCategory.Flash,
+        "Mirroring" => NodeCategory.Flash,
         "Flow" => NodeCategory.Flow,
         "Interaction" => NodeCategory.Output,
         "Firmware" or "Build" => NodeCategory.Firmware,
         "Composite" => NodeCategory.Plugin,
+        "Script" => NodeCategory.Plugin,
         _ => NodeCategory.Data
     };
 
@@ -202,7 +204,7 @@ public sealed class NodeToolboxItem : ViewModelBase
     public string TypeKey { get; }
     public string FamilyId { get; } = string.Empty;
     public string FamilyName { get; } = string.Empty;
-    public bool IsDestructive { get; }
+    public bool RequiresConfirmation { get; }
     public NodeCapability Capabilities { get; }
     public IRelayCommand ToggleFavoriteCommand { get; }
     public IReadOnlyList<NodeToolboxPreset> Presets { get; } = [];
@@ -233,7 +235,7 @@ public sealed class NodeToolboxItem : ViewModelBase
         var familyKey = "Node_Family_" + FamilyId;
         var family = language.GetString(familyKey);
         FamilyName = family == familyKey ? FamilyId : family;
-        IsDestructive = descriptor.IsDestructive;
+        RequiresConfirmation = descriptor.RequiresConfirmation;
         Capabilities = descriptor.Capabilities;
         _isFavorite = isFavorite;
         _keywords = [.. descriptor.SearchKeywords, .. NodeSearchIndex.GetLabels(descriptor.NameResourceKey)];

@@ -69,10 +69,8 @@
                                         <TextBlock Grid.Column="1" Text="{Binding Version}" FontSize="11" Opacity="0.65" />
                                     </Grid>
                                     <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="{DynamicResource Plugin_Template}" FontSize="11"
-                                                   Foreground="{DynamicResource AccentColor}" IsVisible="{Binding IsTemplate}" />
-                                        <TextBlock Text="{DynamicResource Plugin_Composite}" FontSize="11"
-                                                   Foreground="{DynamicResource AccentColor}" IsVisible="{Binding !IsTemplate}" />
+                                        <TextBlock Text="{Binding KindText}" FontSize="11"
+                                                   Foreground="{DynamicResource AccentColor}" />
                                         <TextBlock Text="{DynamicResource Plugin_Enabled}" FontSize="11"
                                                    IsVisible="{Binding IsEnabled}" />
                                     </StackPanel>
@@ -120,7 +118,7 @@
                         <Button Classes="plugin-action" Content="{DynamicResource Plugin_UseTemplate}"
                                 Click="UseTemplateClick" IsEnabled="{Binding SelectedPlugin.IsAvailable}"
                                 IsVisible="{Binding SelectedPlugin.IsTemplate}" />
-                        <Button Classes="plugin-action" Content="{DynamicResource Plugin_EditGraph}"
+                        <Button Classes="plugin-action" Content="{Binding SelectedPlugin.EditActionText}"
                                 Click="EditGraphClick" IsEnabled="{Binding SelectedPlugin.IsAvailable}"
                                 IsVisible="{Binding !SelectedPlugin.IsTemplate}" />
                         <Button Classes="plugin-action" Content="{DynamicResource Plugin_Disable}"

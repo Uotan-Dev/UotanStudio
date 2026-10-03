@@ -77,6 +77,45 @@ public static class VisualPluginPackageBuilder
     }
 
     /// <summary>
+    /// Builds a script-node package from inline Lua source, without an internal graph or public ports.
+    /// <para>从内联 Lua 源码构建脚本节点包，不含内部图或对外端口。</para>
+    /// </summary>
+    /// <param name="name"><para>用户可见的包名称。</para>The user-visible package name.</param>
+    /// <param name="id"><para>包标识；会经 <see cref="NormalizeId"/> 归一化。</para>The package id; normalized through <see cref="NormalizeId"/>.</param>
+    /// <param name="script"><para>要在宿主沙箱中执行的 Lua 源码。</para>The Lua source executed in the host sandbox.</param>
+    /// <param name="author"><para>包的作者署名。</para>The package author attribution.</param>
+    /// <param name="version"><para>包版本。</para>The package version.</param>
+    /// <returns><para>通过校验的脚本节点包。</para>The validated script-node package.</returns>
+    /// <exception cref="ArgumentException"><paramref name="name"/> or <paramref name="script"/> is empty.
+    /// <para><paramref name="name"/> 或 <paramref name="script"/> 为空。</para></exception>
+    /// <exception cref="InvalidDataException">Validation reports errors, such as an over-long script.
+    /// <para>校验报错，例如脚本超长。</para></exception>
+    public static VisualPluginPackage CreateScript(string name, string id, string script,
+        string author = "", string version = "1.0.0")
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(script);
+        if (string.IsNullOrWhiteSpace(script))
+            throw new ArgumentException("A script-node package requires a non-empty Lua script.", nameof(script));
+
+        var package = new VisualPluginPackage
+        {
+            Kind = VisualPluginKind.ScriptNode,
+            Script = script,
+            Manifest = new VisualPluginManifest
+            {
+                Id = NormalizeId(id),
+                Name = name.Trim(),
+                Version = string.IsNullOrWhiteSpace(version) ? "1.0.0" : version.Trim(),
+                Author = author.Trim()
+            }
+        };
+        var errors = VisualPluginValidation.Validate(package);
+        if (errors.Count > 0) throw new InvalidDataException(string.Join(Environment.NewLine, errors));
+        return package;
+    }
+
+    /// <summary>
     /// Rebuilds an installed package while retaining its manifest contract and stable public port identities.
     /// </summary>
     public static VisualPluginPackage CreateUpdated(VisualPluginPackage existing,

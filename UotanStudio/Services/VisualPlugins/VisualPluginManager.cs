@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using UotanStudio.Services.Execution;
+using UotanStudio.Services.Plugins;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
 
@@ -13,6 +15,7 @@ public sealed class VisualPluginManager
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly string _directory;
     private readonly string _statePath;
+    private readonly IPluginRegistry _registry;
     private readonly HashSet<string> _registeredTypeKeys = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> _disabledIds = new(StringComparer.OrdinalIgnoreCase);
 
@@ -25,13 +28,14 @@ public sealed class VisualPluginManager
     /// <summary>Raised after installed packages or activation state changes.</summary>
     public event EventHandler? Changed;
 
-    /// <summary>Creates a manager. A custom directory is supported for isolated tests.</summary>
-    public VisualPluginManager(string? directory = null)
+    /// <summary>Creates a manager. A custom directory or registry is supported for isolated tests.</summary>
+    public VisualPluginManager(string? directory = null, IPluginRegistry? registry = null)
     {
         _directory = directory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "UotanStudio", "visual-plugins");
         _statePath = Path.Combine(_directory, "state.json");
+        _registry = registry ?? PluginRegistry.Shared;
         Refresh();
     }
 
@@ -41,7 +45,7 @@ public sealed class VisualPluginManager
         Directory.CreateDirectory(_directory);
         LoadState();
         foreach (var typeKey in _registeredTypeKeys.ToArray())
-            NodeFactoryRegistrar.UnregisterVisualPlugin(typeKey);
+            _registry.UnregisterNode(typeKey);
         _registeredTypeKeys.Clear();
 
         var loaded = new List<(string Path, VisualPluginPackage Package)>();
@@ -60,20 +64,21 @@ public sealed class VisualPluginManager
             }
         }
 
+        var capability = RuntimeCapabilityProbe.EffectiveCapability;
         var duplicates = loaded.GroupBy(entry => entry.Package.Manifest.Id, StringComparer.OrdinalIgnoreCase)
             .Where(group => group.Count() > 1)
             .Select(group => group.Key)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var compositeByType = loaded
-            .Where(entry => entry.Package.Kind == VisualPluginKind.CompositeNode)
+            .Where(entry => IsNodeKind(entry.Package.Kind))
             .GroupBy(entry => entry.Package.NodeTypeKey, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First().Package, StringComparer.OrdinalIgnoreCase);
         var cycleTypes = FindDependencyCycles(compositeByType);
-        var available = new HashSet<string>(NodeFactoryRegistrar.BuiltInTypeKeys, StringComparer.OrdinalIgnoreCase);
+        var available = new HashSet<string>(_registry.BuiltInTypeKeys, StringComparer.OrdinalIgnoreCase);
         var errorsById = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         var pending = new List<VisualPluginPackage>();
         var enabledPackages = loaded.Select(entry => entry.Package)
-            .Where(package => package.Kind == VisualPluginKind.CompositeNode && !_disabledIds.Contains(package.Manifest.Id))
+            .Where(package => IsNodeKind(package.Kind) && !_disabledIds.Contains(package.Manifest.Id))
             .ToArray();
 
         foreach (var (_, package) in loaded)
@@ -83,8 +88,9 @@ public sealed class VisualPluginManager
             if (duplicates.Contains(package.Manifest.Id)) errors.Add("Multiple installed files use the same plugin id.");
             if (!SupportsCurrentPlatform(package.Manifest.Platforms)) errors.Add("This package does not support the current platform.");
             if (cycleTypes.Contains(package.NodeTypeKey)) errors.Add("Composite-plugin dependency cycle detected.");
+            if (PluginKindPolicy.IsActivationBlocked(package.Kind, capability)) errors.Add(LanguageService.Instance.GetString("Plugin_CodeRuntimeDisabled"));
             errors.AddRange(GetRequirementErrors(package, enabledPackages));
-            if (package.Kind == VisualPluginKind.CompositeNode
+            if (IsNodeKind(package.Kind)
                 && !_disabledIds.Contains(package.Manifest.Id)
                 && errors.Count == 0)
             {
@@ -101,7 +107,15 @@ public sealed class VisualPluginManager
                 var package = pending[index];
                 if (!GetExternalNodeTypes(package).All(available.Contains)) continue;
                 if (!package.Manifest.Dependencies.All(dependency => available.Contains("VisualPlugin." + dependency.Id))) continue;
-                NodeFactoryRegistrar.RegisterVisualPlugin(package, () => GetExecutionErrors(package));
+                var descriptor = package.Kind switch
+                {
+                    VisualPluginKind.CompositeNode => NodeCatalogSeed.CreateCompositePluginDescriptor(
+                        package, () => GetExecutionErrors(package)),
+                    VisualPluginKind.ScriptNode => NodeCatalogSeed.CreateScriptPluginDescriptor(
+                        package, () => GetExecutionErrors(package)),
+                    _ => throw new InvalidOperationException("Only node packages can be registered in the toolbox.")
+                };
+                _registry.RegisterNode(descriptor, package);
                 _registeredTypeKeys.Add(package.NodeTypeKey);
                 available.Add(package.NodeTypeKey);
                 pending.RemoveAt(index);
@@ -125,7 +139,7 @@ public sealed class VisualPluginManager
         Registrations.Clear();
         foreach (var (path, package) in loaded.OrderBy(entry => entry.Package.Manifest.Name, StringComparer.CurrentCultureIgnoreCase))
         {
-            var enabled = package.Kind == VisualPluginKind.CompositeNode && !_disabledIds.Contains(package.Manifest.Id);
+            var enabled = IsNodeKind(package.Kind) && !_disabledIds.Contains(package.Manifest.Id);
             Registrations.Add(new VisualPluginRegistration(path, package, enabled,
                 [.. errorsById[package.Manifest.Id]]));
         }
@@ -149,7 +163,7 @@ public sealed class VisualPluginManager
                 throw new InvalidOperationException("Resolve duplicate installed package ids before replacing a package.");
             }
             await PublishPackageAsync(matches.FirstOrDefault(), package, cancellationToken);
-            if (package.Kind == VisualPluginKind.CompositeNode) _disabledIds.Remove(package.Manifest.Id);
+            if (IsNodeKind(package.Kind)) _disabledIds.Remove(package.Manifest.Id);
             await SaveStateAsync(cancellationToken);
             Refresh();
             return Registrations.First(registration =>
@@ -161,7 +175,59 @@ public sealed class VisualPluginManager
         }
     }
 
-    /// <summary>Enables or disables an installed composite node without modifying its portable package.</summary>
+    /// <summary>Installs or replaces an already-built package after structural validation.</summary>
+    /// <param name="package">The package to install; it must already pass <see cref="VisualPluginValidation.Validate"/>.</param>
+    /// <param name="cancellationToken">Cancels the publication while preserving the previous target.</param>
+    public async Task<VisualPluginRegistration> InstallPackageAsync(VisualPluginPackage package,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        var errors = VisualPluginValidation.Validate(package);
+        if (errors.Count > 0)
+            throw new InvalidDataException(string.Join(Environment.NewLine, errors));
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            Directory.CreateDirectory(_directory);
+            var matches = Registrations.Where(candidate => string.Equals(candidate.Id, package.Manifest.Id,
+                StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (matches.Length > 1)
+            {
+                throw new InvalidOperationException("Resolve duplicate installed package ids before replacing a package.");
+            }
+            await PublishPackageAsync(matches.FirstOrDefault(), package, cancellationToken);
+            if (IsNodeKind(package.Kind)) _disabledIds.Remove(package.Manifest.Id);
+            await SaveStateAsync(cancellationToken);
+            Refresh();
+            return Registrations.First(registration =>
+                string.Equals(registration.Id, package.Manifest.Id, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Builds and installs one script-node package from a <c>.lua</c> source file.</summary>
+    /// <param name="luaPath">Path to the Lua source file.</param>
+    /// <param name="cancellationToken">Cancels the read and installation.</param>
+    /// <exception cref="ArgumentException"><paramref name="luaPath"/> is null, empty, or whitespace.</exception>
+    /// <exception cref="InvalidDataException">The script is empty, exceeds the package bound, or fails validation.</exception>
+    public async Task<VisualPluginRegistration> InstallScriptAsync(string luaPath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(luaPath);
+        var script = await File.ReadAllTextAsync(luaPath, cancellationToken).ConfigureAwait(false);
+        if (script.Length > VisualPluginValidation.MaximumScriptLength)
+            throw new InvalidDataException($"Plugin script exceeds {VisualPluginValidation.MaximumScriptLength} characters.");
+        var name = Path.GetFileNameWithoutExtension(luaPath);
+        var package = VisualPluginPackageBuilder.CreateScript(name, VisualPluginPackageBuilder.NormalizeId(name), script);
+        return await InstallPackageAsync(package, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Enables or disables an installed node package (composite or script) without modifying its
+    /// portable package. <para>启用或禁用一个已安装的节点类包（复合或脚本），不修改其可移植包内容。</para></summary>
     public async Task SetEnabledAsync(string pluginId, bool enabled,
         CancellationToken cancellationToken = default)
     {
@@ -334,6 +400,9 @@ public sealed class VisualPluginManager
             }
         }
     }
+
+    private static bool IsNodeKind(VisualPluginKind kind)
+        => kind is VisualPluginKind.CompositeNode or VisualPluginKind.ScriptNode;
 
     private void LoadState()
     {
@@ -539,8 +608,18 @@ public sealed class VisualPluginRegistration
     public VisualPluginKind Kind => Package.Kind;
     public bool IsEnabled { get; }
     public bool IsTemplate => Kind == VisualPluginKind.WorkflowTemplate;
-    public bool ShowEnableAction => Kind == VisualPluginKind.CompositeNode && !IsEnabled;
-    public bool ShowDisableAction => Kind == VisualPluginKind.CompositeNode && IsEnabled;
+    public bool ShowEnableAction => Kind is VisualPluginKind.CompositeNode or VisualPluginKind.ScriptNode && !IsEnabled;
+    public bool ShowDisableAction => Kind is VisualPluginKind.CompositeNode or VisualPluginKind.ScriptNode && IsEnabled;
+    /// <summary>Localized label for the edit action, matching the selected package kind.</summary>
+    public string EditActionText => LanguageService.Instance.GetString(
+        Kind == VisualPluginKind.ScriptNode ? "Plugin_EditScript" : "Plugin_EditGraph");
+    /// <summary>Localized label describing the package kind.</summary>
+    public string KindText => LanguageService.Instance.GetString(Kind switch
+    {
+        VisualPluginKind.WorkflowTemplate => "Plugin_Template",
+        VisualPluginKind.ScriptNode => "Plugin_Script",
+        _ => "Plugin_Composite"
+    });
     public IReadOnlyList<string> Errors { get; }
     public bool IsAvailable => Errors.Count == 0;
     public string RequiredNodes => string.Join(", ", Package.Manifest.RequiredNodeTypes);

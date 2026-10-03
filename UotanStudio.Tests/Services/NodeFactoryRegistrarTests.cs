@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Avalonia;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Services;
+using UotanStudio.Services.Plugins;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
@@ -13,6 +14,80 @@ namespace UotanStudio.Tests.Services;
 [Collection("Node editor UI")]
 public sealed class NodeFactoryRegistrarTests(UotanStudio.Tests.Views.NodeEditorUiFixture fixture)
 {
+    [Fact]
+    public void FacadeAndRegistry_PublishSameSnapshot()
+    {
+        Assert.Equal(
+            NodeFactoryRegistrar.Descriptors.Select(descriptor => descriptor.TypeKey),
+            PluginRegistry.Shared.Descriptors.Select(descriptor => descriptor.TypeKey));
+        Assert.Same(NodeFactoryRegistrar.BuiltInTypeKeys, PluginRegistry.Shared.BuiltInTypeKeys);
+    }
+
+    [Fact]
+    public void Descriptors_RequiresConfirmation_MatchesMutatingDeviceOperations()
+    {
+        var confirming = NodeFactoryRegistrar.Descriptors
+            .Where(descriptor => descriptor.RequiresConfirmation)
+            .Select(descriptor => descriptor.TypeKey)
+            .OrderBy(typeKey => typeKey, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "Device.Ota.Sideload",
+                "Device.Partition.Erase",
+                "Device.Partition.Flash",
+                "Device.Power.Reboot",
+                "Device.Recovery.Clean",
+                "Device.Shell.Command",
+                "Device.Slot.Switch",
+                "Device.Storage.EraseAll"
+            ],
+            confirming);
+        Assert.All(
+            NodeFactoryRegistrar.Descriptors.Where(descriptor => descriptor.RequiresConfirmation),
+            descriptor => Assert.True(descriptor.Capabilities.HasFlag(NodeCapability.MutatesDevice)));
+    }
+
+    [Fact]
+    public void Descriptors_RequiredDeviceState_OnlyDeclaredForDeviceNodes()
+    {
+        foreach (var descriptor in NodeFactoryRegistrar.Descriptors)
+        {
+            if (descriptor.TypeKey.StartsWith("Mirroring.", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            var expectedNone = !descriptor.TypeKey.StartsWith("Device.", StringComparison.Ordinal);
+            Assert.Equal(expectedNone, descriptor.RequiredDeviceState == DeviceRequiredState.None);
+        }
+
+        var flash = Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Device.Partition.Flash");
+        Assert.Equal(DeviceRequiredState.Fastboot, flash.RequiredDeviceState);
+        Assert.Equal(DeviceRequiredState.Fastboot,
+            Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Device.Table.Read").RequiredDeviceState);
+        Assert.Equal(DeviceRequiredState.Fastboot,
+            Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Device.Slot.Switch").RequiredDeviceState);
+        Assert.Equal(DeviceRequiredState.Adb,
+            Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Device.Shell.Command").RequiredDeviceState);
+        Assert.Equal(DeviceRequiredState.Adb,
+            Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Mirroring.Session.Start").RequiredDeviceState);
+        Assert.Equal(DeviceRequiredState.None,
+            Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Mirroring.Session.Stop").RequiredDeviceState);
+    }
+
+    [Fact]
+    public void RegisterVisualPlugin_NonCompositeKind_Throws()
+    {
+        var package = new VisualPluginPackage
+        {
+            Kind = VisualPluginKind.WorkflowTemplate,
+            Manifest = new VisualPluginManifest { Id = "tests.registry.template", Name = "Template" }
+        };
+
+        Assert.Throws<ArgumentException>(() => NodeFactoryRegistrar.RegisterVisualPlugin(package));
+    }
+
     [Fact]
     public async Task RegisterVisualPlugin_ConcurrentUpdates_PreservesDescriptorSnapshotsAndPackages()
     {
@@ -252,7 +327,7 @@ public sealed class NodeFactoryRegistrarTests(UotanStudio.Tests.Views.NodeEditor
     public void Descriptors_ExposeExecutionCapabilities()
     {
         var flash = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Device.Partition.Flash");
-        Assert.True(flash.IsDestructive);
+        Assert.True(flash.RequiresConfirmation);
         Assert.True(flash.Capabilities.HasFlag(NodeCapability.RequiresDevice));
         Assert.True(flash.Capabilities.HasFlag(NodeCapability.MutatesDevice));
 

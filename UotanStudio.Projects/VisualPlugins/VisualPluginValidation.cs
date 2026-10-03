@@ -33,6 +33,12 @@ public static partial class VisualPluginValidation
     public const int MaximumPortCount = 16384;
 
     /// <summary>
+    /// Maximum accepted Lua script source length for a script-node package.
+    /// <para>脚本节点插件接受的 Lua 源码长度上限。</para>
+    /// </summary>
+    public const int MaximumScriptLength = 512 * 1024;
+
+    /// <summary>
     /// Validates a package without consulting host node registrations.
     /// <para>校验插件包的结构，不查询宿主节点注册信息。</para>
     /// </summary>
@@ -217,6 +223,33 @@ public static partial class VisualPluginValidation
             || package.Outputs.Any(port => port is null))
         {
             return ["Plugin graph collections and their elements must not be null."];
+        }
+        if (package.Script is null)
+        {
+            errors.Add("Plugin script source must not be null.");
+        }
+        else if (package.Kind == VisualPluginKind.ScriptNode)
+        {
+            if (string.IsNullOrWhiteSpace(package.Script))
+            {
+                errors.Add("A script-node package must provide a non-empty Lua script.");
+            }
+            else if (package.Script.Length > MaximumScriptLength)
+            {
+                errors.Add($"Plugin script exceeds {MaximumScriptLength} characters.");
+            }
+            if (graph.Nodes.Count > 0 || graph.Connections.Count > 0)
+            {
+                errors.Add("A script-node package cannot declare a graph.");
+            }
+            if (package.Inputs.Count > 0 || package.Outputs.Count > 0)
+            {
+                errors.Add("A script-node package cannot declare public ports.");
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(package.Script))
+        {
+            errors.Add("Only script-node packages can carry a Lua script.");
         }
         if (graph.Nodes.Count > MaximumNodeCount)
             errors.Add($"Plugin graph exceeds {MaximumNodeCount} nodes.");

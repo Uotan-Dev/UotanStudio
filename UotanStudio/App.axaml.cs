@@ -12,6 +12,7 @@ using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Logging;
 using UotanStudio.Services.Mcp;
+using UotanStudio.Services.Plugins;
 using UotanStudio.Themes;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Shell;
@@ -67,6 +68,8 @@ public partial class App : Application
         _ = Task.Run(() => FileAssociationService.Register());
 
         UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
+
+        _ = PluginHost.Current.Capability;
 
         LanguageService.Instance.Initialize();
         LanguageService.Instance.InitializeFromSystemLanguage();

@@ -474,6 +474,54 @@ public sealed class VisualPluginTests
         Assert.Equal(["Data.Value.Constant"], restored.Manifest.RequiredNodeTypes);
     }
 
+    [Fact]
+    public async Task Manager_AotCapability_None_KeepsDataPackagesAvailable()
+    {
+        using var temp = new TempDirectory();
+        NodeFactoryRegistrar.RegisterAll();
+        var package = CreateDependencyPackage("tests.aot-active", "Data.Value.Constant");
+        await VisualPluginFile.SaveAsync(Path.Combine(temp.Path, "aot.uotanplugin.json"), package,
+            TestContext.Current.CancellationToken);
+        RuntimeCapabilityProbe.SetCapabilityOverride(PluginRuntimeCapability.None);
+        try
+        {
+            var manager = new VisualPluginManager(temp.Path);
+            var registration = Assert.Single(manager.Registrations);
+
+            Assert.True(registration.IsAvailable);
+            Assert.DoesNotContain(registration.Errors,
+                error => error.Contains("AOT", StringComparison.OrdinalIgnoreCase));
+            Assert.True(NodeTypeRegistry.Contains(package.NodeTypeKey));
+        }
+        finally
+        {
+            RuntimeCapabilityProbe.SetCapabilityOverride(null);
+        }
+    }
+
+    [Fact]
+    public async Task Manager_CodeLoadingCapability_LeavesCompositePluginsAvailable()
+    {
+        using var temp = new TempDirectory();
+        NodeFactoryRegistrar.RegisterAll();
+        var package = CreateDependencyPackage("tests.jit-active", "Data.Value.Constant");
+        await VisualPluginFile.SaveAsync(Path.Combine(temp.Path, "jit.uotanplugin.json"), package,
+            TestContext.Current.CancellationToken);
+        RuntimeCapabilityProbe.SetCapabilityOverride(PluginRuntimeCapability.CodeLoading);
+        try
+        {
+            var manager = new VisualPluginManager(temp.Path);
+            var registration = Assert.Single(manager.Registrations);
+
+            Assert.True(registration.IsAvailable);
+            Assert.True(NodeTypeRegistry.Contains(package.NodeTypeKey));
+        }
+        finally
+        {
+            RuntimeCapabilityProbe.SetCapabilityOverride(null);
+        }
+    }
+
     private static VisualPluginPackage CreateTemplatePackage() => new()
     {
         Kind = VisualPluginKind.WorkflowTemplate,

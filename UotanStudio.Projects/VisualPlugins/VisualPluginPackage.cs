@@ -41,6 +41,13 @@ public sealed class VisualPluginPackage
     /// </value>
     public WorkflowSnapshot Graph { get; set; } = new();
 
+    /// <summary>Lua source executed when <see cref="Kind"/> is <c>ScriptNode</c>. <para>当 <see cref="Kind"/> 为 <c>ScriptNode</c> 时执行的 Lua 源码。</para></summary>
+    /// <value>
+    /// Inline script text; empty for every other kind, and required within the script size bound when the kind is a script node.
+    /// <para>内联脚本文本；其它种类为空，脚本节点种类下必须在脚本大小上限内非空。</para>
+    /// </value>
+    public string Script { get; set; } = string.Empty;
+
     /// <summary>Composite-node inputs mapped to internal node inputs. <para>复合节点输入到内部节点输入的映射。</para></summary>
     /// <value>
     /// Public input ports exposed when <see cref="Kind"/> is <c>CompositeNode</c>; an empty list means the package takes no external input.
@@ -99,7 +106,13 @@ public enum VisualPluginKind
     /// Registers the contained graph as one reusable node.
     /// <para>将所含图注册为一个可复用节点。</para>
     /// </summary>
-    CompositeNode
+    CompositeNode,
+
+    /// <summary>
+    /// Runs a host-sandboxed Lua script against the injected tool surface.
+    /// <para>对注入的工具面执行宿主沙箱内的 Lua 脚本。</para>
+    /// </summary>
+    ScriptNode
 }
 
 /// <summary>

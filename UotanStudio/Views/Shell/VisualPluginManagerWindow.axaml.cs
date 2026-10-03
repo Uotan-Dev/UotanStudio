@@ -10,7 +10,7 @@ using Ursa.Controls;
 
 namespace UotanStudio.Views.Shell;
 
-/// <summary>Independent manager for portable JSON workflow templates and composite nodes.</summary>
+/// <summary>Independent manager for portable JSON workflow templates, composite nodes and Lua script nodes.</summary>
 public partial class VisualPluginManagerWindow : Window
 {
     private readonly VisualPluginManager _manager = VisualPluginManager.Instance;
@@ -36,11 +36,14 @@ public partial class VisualPluginManagerWindow : Window
             AllowMultiple = false,
             FileTypeFilter = [new FilePickerFileType(LanguageService.Instance.GetString("Plugin_Import"))
             {
-                Patterns = ["*.uotanplugin", "*.uotanplugin.json", "*.json"]
+                Patterns = ["*.uotanplugin", "*.uotanplugin.json", "*.json", "*.lua"]
             }]
         });
         if (files.FirstOrDefault()?.TryGetLocalPath() is not { } path) return;
-        await RunAsync(() => _manager.InstallAsync(path), "Plugin_Installed");
+        var install = string.Equals(Path.GetExtension(path), ".lua", StringComparison.OrdinalIgnoreCase)
+            ? _manager.InstallScriptAsync(path)
+            : _manager.InstallAsync(path);
+        await RunAsync(() => install, "Plugin_Installed");
     }
 
     private void RefreshClick(object? sender, RoutedEventArgs e) => Model.Refresh();
@@ -67,8 +70,15 @@ public partial class VisualPluginManagerWindow : Window
 
     private void EditGraphClick(object? sender, RoutedEventArgs e)
     {
-        if (Model.SelectedPlugin is { Kind: VisualPluginKind.CompositeNode } registration)
-            new VisualPluginEditorWindow(registration).Show();
+        switch (Model.SelectedPlugin)
+        {
+            case { Kind: VisualPluginKind.CompositeNode } composite:
+                new VisualPluginEditorWindow(composite).Show();
+                break;
+            case { Kind: VisualPluginKind.ScriptNode } script:
+                new ScriptPluginEditorWindow(script).Show();
+                break;
+        }
     }
 
     private async void EnableClick(object? sender, RoutedEventArgs e) => await SetEnabledAsync(true);
@@ -77,7 +87,7 @@ public partial class VisualPluginManagerWindow : Window
 
     private async Task SetEnabledAsync(bool enabled)
     {
-        if (Model.SelectedPlugin is not { Kind: VisualPluginKind.CompositeNode } registration) return;
+        if (Model.SelectedPlugin is not { Kind: VisualPluginKind.CompositeNode or VisualPluginKind.ScriptNode } registration) return;
         await RunAsync(() => _manager.SetEnabledAsync(registration.Id, enabled));
     }
 
