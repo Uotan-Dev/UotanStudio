@@ -91,7 +91,7 @@ internal static class WorkflowInteractionPreflight
             return;
         }
         var descriptor = NodeFactoryRegistrar.Descriptors.FirstOrDefault(candidate => candidate.TypeKey == typeKey);
-        if (descriptor?.Capabilities.HasFlag(NodeCapability.MutatesDevice) == true)
+        if (descriptor?.RequiresConfirmation == true)
         {
             operations.Add(typeKey);
         }
@@ -167,7 +167,7 @@ internal static class WorkflowInteractionPreflight
             return InspectPackage(package, host, visiting, depth, supportsDocuments);
         }
         var descriptor = NodeFactoryRegistrar.Descriptors.FirstOrDefault(candidate => candidate.TypeKey == typeKey);
-        if (descriptor?.Capabilities.HasFlag(NodeCapability.MutatesDevice) == true && !host.IsSupported)
+        if (descriptor?.RequiresConfirmation == true && !host.IsSupported)
         {
             return LanguageService.Instance.GetString("Node_Destructive_UnsupportedHost");
         }

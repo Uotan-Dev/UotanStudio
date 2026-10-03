@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Comm.Protocols.Edl;
+using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Models;
 using UotanStudio.Services.Devices;
 
@@ -41,6 +42,22 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
             }
             if (connection is null || ReferenceEquals(Device, connection)) return;
             Device = connection;
+            MtkHardware = string.Empty;
+            MtkFirmware = string.Empty;
+            MtkSecurityBits = string.Empty;
+            EdlSerialPort = string.Empty;
+            EdlSaharaVersion = string.Empty;
+            EdlMaxCommandLength = string.Empty;
+            EdlFirehoseVersion = string.Empty;
+            EdlProgrammer = string.Empty;
+            EdlStorageType = string.Empty;
+            EdlStorageSerial = string.Empty;
+            EdlStorageFirmware = string.Empty;
+            EdlStorageManufacturer = string.Empty;
+            EdlPageSize = string.Empty;
+            EdlSectorSize = string.Empty;
+            EdlCapacity = string.Empty;
+            EdlMaxPayload = string.Empty;
             foreach (var property in new[]
             {
                 nameof(Device), nameof(SelectedConnection), nameof(Serial), nameof(State),
@@ -49,7 +66,12 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
                 nameof(VendorName), nameof(IsAdb), nameof(IsHdc), nameof(HasSystemInfo),
                 nameof(IsFastboot), nameof(SupportsFastbootd), nameof(IsEdl), nameof(IsRkdl),
                 nameof(IsUsb), nameof(IsNetwork), nameof(IsSerial), nameof(CanManageConnection),
-                nameof(EdlProtocol), nameof(HasEdlProtocol)
+                nameof(EdlProtocol), nameof(HasEdlProtocol), nameof(EdlBadge),
+                nameof(EdlSaharaVersion), nameof(EdlMaxCommandLength), nameof(EdlFirehoseVersion),
+                nameof(EdlProgrammer), nameof(EdlStorageType), nameof(EdlStorageSerial),
+                nameof(EdlStorageFirmware), nameof(EdlStorageManufacturer), nameof(EdlPageSize),
+                nameof(EdlSectorSize), nameof(EdlCapacity), nameof(EdlMaxPayload),
+                nameof(IsMtk), nameof(HasMtkInfo)
             })
                 OnPropertyChanged(property);
             owner?.NotifyConnectionChanged(this);
@@ -128,6 +150,13 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <summary>连接模式（ADB/Fastboot/EDL/RKDL）。 Connection mode.</summary>
     public string Mode => Device.ProtocolLabel;
 
+    /// <summary>
+    /// <para>EDL 端点走 QDLoader 串口驱动回退时的 COM 端口号；原生 USB 传输时为空。</para>
+    /// The COM port number when the EDL endpoint uses the QDLoader serial-driver fallback;
+    /// empty over a native USB transport.
+    /// </summary>
+    public string EdlSerialPort { get; private set => SetProperty(ref field, value); } = string.Empty;
+
     /// <summary>协议类型枚举值。 Protocol kind value.</summary>
     public DeviceProtocolKind Protocol => Device.Protocol;
 
@@ -136,6 +165,8 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     {
         DeviceTransportKind.Tcp => "Network",
         DeviceTransportKind.Serial => "Serial",
+        DeviceTransportKind.Usb when EdlSerialPort.Length > 0 =>
+            $"{UotanStudio.Services.LanguageService.Instance.GetString("Device_TransportSerial")} ({EdlSerialPort})",
         DeviceTransportKind.Usb => "USB",
         _ => "Unknown",
     };
@@ -182,6 +213,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     {
         DeviceTransportKind.Tcp => Device.Serial,
         DeviceTransportKind.Serial => Device.Key,
+        DeviceTransportKind.Usb when EdlSerialPort.Length > 0 => EdlSerialPort,
         DeviceTransportKind.Usb => "USB",
         _ => "Unknown",
     };
@@ -233,6 +265,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
                 Device.EdlProtocol = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(HasEdlProtocol));
+                OnPropertyChanged(nameof(EdlBadge));
             }
         }
     }
@@ -240,8 +273,186 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <summary>Whether Sahara or Firehose has been verified for this endpoint.</summary>
     public bool HasEdlProtocol => IsEdl && EdlProtocol != EdlProtocolState.Unknown;
 
+    /// <summary>
+    /// <para>EDL 徽章文本：已校验协议时在 EDL 后追加 Sahara/Firehose 模式。</para>
+    /// EDL badge text: appends the Sahara/Firehose mode after EDL once verified.
+    /// </summary>
+    public string EdlBadge => HasEdlProtocol ? $"EDL · {EdlProtocol}" : "EDL";
+
+    /// <summary>
+    /// <para>Sahara HELLO 上报的协议版本，未采集时为空。</para>
+    /// The Sahara HELLO-reported protocol version; empty until collected.
+    /// </summary>
+    public string EdlSaharaVersion { get; private set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>Sahara HELLO 上报的最大命令长度（max_cmd_len），未采集时为空。</para>
+    /// The Sahara HELLO-reported maximum command length (max_cmd_len); empty until collected.
+    /// </summary>
+    public string EdlMaxCommandLength { get; private set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>Firehose configure 上报的编程器版本，未采集时为空。</para>
+    /// The programmer version reported by Firehose configure; empty until collected.
+    /// </summary>
+    public string EdlFirehoseVersion { get; private set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>Firehose 编程器文件名，未采集时为空。</para>
+    /// The Firehose programmer file name; empty until collected.
+    /// </summary>
+    public string EdlProgrammer { get; private set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>存储类型（优先 getstorageinfo，其次 configure），未采集时为空。</para>
+    /// The storage type (getstorageinfo first, then configure); empty until collected.
+    /// </summary>
+    public string EdlStorageType { get; private set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>存储序列号，未采集时为空。</para>
+    /// The storage serial number; empty until collected.
+    /// </summary>
+    public string EdlStorageSerial { get; private set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>存储固件版本，未采集时为空。</para>
+    /// The storage firmware version; empty until collected.
+    /// </summary>
+    public string EdlStorageFirmware { get; private set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>存储厂商标识，未采集时为空。</para>
+    /// The storage manufacturer identifier; empty until collected.
+    /// </summary>
+    public string EdlStorageManufacturer { get; private set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>存储页大小（字节），未采集时为空。</para>
+    /// The storage page size in bytes; empty until collected.
+    /// </summary>
+    public string EdlPageSize { get; private set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>存储块大小（字节），未采集时为空。</para>
+    /// The storage block size in bytes; empty until collected.
+    /// </summary>
+    public string EdlSectorSize { get; private set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>存储总容量（二进制 GiB 及原始字节数），未采集时为空。</para>
+    /// The total storage capacity (binary GiB plus raw bytes); empty until collected.
+    /// </summary>
+    public string EdlCapacity { get; private set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>Firehose 协商的最大载荷（字节），未采集时为空。</para>
+    /// The Firehose-negotiated maximum payload in bytes; empty until collected.
+    /// </summary>
+    public string EdlMaxPayload { get; private set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>将探测附加采集到的只读 EDL 详情写入模型；null 表示本次未采集到，保留原值。</para>
+    /// Records the read-only EDL details collected alongside the probe; null means nothing was
+    /// collected this time and existing values are kept.
+    /// </summary>
+    /// <param name="details">The collected snapshot, or null. <para>采集到的快照，或 null。</para></param>
+    internal void SetEdlDetails(EdlDetailsSnapshot? details)
+    {
+        if (details is null)
+        {
+            return;
+        }
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        var serialPort = details.SerialPortName ?? string.Empty;
+        if (EdlSerialPort != serialPort)
+        {
+            EdlSerialPort = serialPort;
+            OnPropertyChanged(nameof(Transport));
+            OnPropertyChanged(nameof(LinkPort));
+        }
+        if (details.Sahara is { } sahara)
+        {
+            EdlSaharaVersion = sahara.ProtocolVersion.ToString(culture);
+            EdlMaxCommandLength = sahara.MaxCommandLength.ToString(culture);
+        }
+        if (details.Capabilities is { } capabilities)
+        {
+            EdlFirehoseVersion = capabilities.FirehoseVersion ?? string.Empty;
+            EdlProgrammer = capabilities.ProgrammerFileName ?? string.Empty;
+            if (capabilities.MaxPayloadSizeToTargetInBytes is { } payload)
+            {
+                EdlMaxPayload = payload.ToString("N0", culture);
+            }
+        }
+        if (details.Storage is { } storage)
+        {
+            EdlStorageType = storage.StorageType ?? storage.MemType ?? string.Empty;
+            EdlStorageSerial = storage.SerialNumber ?? string.Empty;
+            EdlStorageFirmware = storage.FirmwareVersion ?? string.Empty;
+            EdlStorageManufacturer = storage.ManufacturerId ?? string.Empty;
+            if (storage.PageSize is { } pageSize)
+            {
+                EdlPageSize = pageSize.ToString("N0", culture);
+            }
+        }
+        if (details.Geometry is { } geometry)
+        {
+            EdlSectorSize = geometry.SectorSize.ToString("N0", culture);
+            var capacity = geometry.CapacityBytes;
+            EdlCapacity = string.Create(culture, $"{capacity / (1024.0 * 1024 * 1024):0.#} GiB ({capacity:N0} bytes)");
+        }
+        if (EdlStorageType.Length == 0 && details.Capabilities is not null)
+        {
+            EdlStorageType = details.Capabilities.StorageType.ToString();
+        }
+    }
+
     /// <summary>是否为 RKDL 设备。 Whether the device is in RKDL mode.</summary>
     public bool IsRkdl => Device.Protocol == DeviceProtocolKind.Rkdl;
+
+    /// <summary>是否为 MTK 设备。 Whether the device is a MediaTek target.</summary>
+    public bool IsMtk => Device.Protocol == DeviceProtocolKind.Mtk;
+
+    /// <summary>
+    /// <para>MTK 硬件代码与子代码（<c>0x8A00 / 0x0001</c>），未查询时为空。</para>
+    /// The MediaTek hardware code and subcode (<c>0x8A00 / 0x0001</c>); empty until queried.
+    /// </summary>
+    public string MtkHardware { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>MTK 硬件与软件版本，未查询时为空。</para>
+    /// The MediaTek hardware and software revisions; empty until queried.
+    /// </summary>
+    public string MtkFirmware { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>MTK 目标安全位（<c>SBC/SLA/DAA/CERT</c> 置位情况），未查询时为空。</para>
+    /// The MediaTek target security bits (<c>SBC/SLA/DAA/CERT</c>); empty until queried.
+    /// </summary>
+    public string MtkSecurityBits { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>是否已查询到 MTK 身份信息。 Whether MediaTek identity info has been queried.</summary>
+    public bool HasMtkInfo => MtkHardware.Length > 0;
+
+    /// <summary>
+    /// <para>写入一次只读 Boot ROM 握手得到的 MTK 身份与安全位；值本身是技术串，标签由视图本地化。</para>
+    /// Records the MediaTek identity and security bits obtained from one read-only Boot ROM
+    /// handshake; the values themselves are technical strings and the labels come from the view.
+    /// </summary>
+    /// <param name="info">The identity reported by the target. <para>目标上报的身份。</param>
+    internal void SetMtkInfo(MtkDeviceInfo info)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        MtkHardware = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"0x{info.HardwareCode:X4} / 0x{info.HardwareSubCode:X4}");
+        MtkFirmware = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"{info.HardwareVersion} / {info.SoftwareVersion}");
+        MtkSecurityBits = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"SBC={(info.SecureBootEnabled ? 1 : 0)} SLA={(info.SerialLinkAuthenticationRequired ? 1 : 0)} " +
+            $"DAA={(info.DownloadAgentAuthenticationRequired ? 1 : 0)} CERT={(info.RootCertificateRequired ? 1 : 0)}");
+        OnPropertyChanged(nameof(HasMtkInfo));
+    }
 
     /// <summary>是否为 USB 直连设备。 Whether the device is connected over USB.</summary>
     public bool IsUsb => Device.Transport == DeviceTransportKind.Usb;

@@ -13,11 +13,15 @@ namespace UotanStudio.Tests.Comm.Diagnostics;
 /// <remarks>
 /// All tests that touch the static <see cref="UsbTrace"/> state live in this single class
 /// (xunit v3 runs classes in parallel), and each one restores the global logger/flag it
-/// changes so the class remains order-independent.
+/// changes so the class remains order-independent. The class joins the non-parallel
+/// "Log pipeline" collection because the global logger it installs would otherwise receive
+/// the trace output of USB work running in other collections.
 /// <para>所有触及 <see cref="UsbTrace"/> 静态状态的测试都放在这一个类中
 /// （xunit v3 并行运行不同类），并且每个测试都会还原其改动的全局 logger/开关，
-/// 使类内顺序无关。</para>
+/// 使类内顺序无关。该类加入非并行的 "Log pipeline" 集合，因为其安装的全局 logger 否则会
+/// 收到其它集合并行执行的 USB 工作产生的跟踪输出。</para>
 /// </remarks>
+[Collection("Log pipeline")]
 public class UsbTraceTests
 {
     private sealed class RecordingLogger : IUsbLogger

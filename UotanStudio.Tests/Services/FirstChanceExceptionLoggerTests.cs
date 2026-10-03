@@ -103,3 +103,6 @@ public sealed class FirstChanceExceptionLoggerTests : IDisposable
         Assert.Equal(1, _entries.Count(e => e.Message.Contains("idempotency-probe", StringComparison.Ordinal)));
     }
 }
+
+[CollectionDefinition("Log pipeline", DisableParallelization = true)]
+public sealed class LogPipelineCollection;

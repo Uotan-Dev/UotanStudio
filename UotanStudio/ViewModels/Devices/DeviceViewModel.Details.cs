@@ -7,6 +7,12 @@ namespace UotanStudio.ViewModels.Devices;
 public partial class DeviceViewModel
 {
     /// <summary>
+    /// <para>MTK 只读身份查询的协作式时限；到点即放弃，不让一次扫描被设备拖住。</para>
+    /// Cooperative bound for the MTK read-only identity query, so one scan is never held up by a device.
+    /// </summary>
+    private const int MtkIdentityTimeoutMs = 5000;
+
+    /// <summary>
     /// <para>按设备协议分发到对应的信息丰富方法。</para>
     /// Dispatches to the mode-specific enrichment method based on the device protocol.
     /// </summary>
@@ -16,9 +22,58 @@ public partial class DeviceViewModel
         DeviceProtocolKind.Hdc => EnrichHdcInfoAsync(device),
         DeviceProtocolKind.Fastboot => EnrichFastbootInfoAsync(device),
         DeviceProtocolKind.Edl => EnrichEdlInfoAsync(device),
+        DeviceProtocolKind.Mtk => EnrichMtkInfoAsync(device),
         DeviceProtocolKind.Rkdl => Task.CompletedTask,
         _ => Task.CompletedTask,
     };
+
+    /// <summary>
+    /// <para>仅对 Boot ROM/Preloader 描述符状态的 MTK 目标做一次只读握手，取得硬件代码与安全位。
+    /// 握手阶段不喂狗、不写内存、不绕过认证、不复位；已查询过或状态不属于可安全握手的取值时直接跳过。</para>
+    /// Performs one read-only handshake against MTK targets whose descriptors report Boot ROM or
+    /// preloader state, recording the hardware code and security bits. The handshake feeds no
+    /// watchdog, writes no memory, bypasses no authentication and resets nothing; targets already
+    /// queried or in any other state are skipped.
+    /// </summary>
+    /// <param name="device">The device entry to enrich. <para>待丰富的设备条目。</param>
+    /// <returns>A task completing after the query or its bounded failure. <para>查询或其受限失败后完成的任务。</returns>
+    private async Task EnrichMtkInfoAsync(DeviceInfo device)
+    {
+        if (!ShouldQueryMtkIdentity(device.Device.State, device.HasMtkInfo))
+        {
+            return;
+        }
+
+        var endpoint = device.Device;
+        try
+        {
+            using var timeout = new CancellationTokenSource(MtkIdentityTimeoutMs);
+            var info = await App.DeviceMonitor.RunMtkAsync(endpoint,
+                session => session.InitializeAsync(timeout.Token), timeout.Token).ConfigureAwait(true);
+            if (ReferenceEquals(device.Device, endpoint))
+            {
+                device.SetMtkInfo(info);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                $"MTK identity query for {endpoint.Key} failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para>决定是否对一个 MTK 端点发起只读身份握手：仅限描述符状态为 Boot ROM 或 Preloader、
+    /// 且尚未查询过的目标；DA 运行态、日志态与 adb 态一律不发协议字节。</para>
+    /// Decides whether to run the read-only identity handshake for an MTK endpoint: only descriptor
+    /// states Boot ROM or preloader, and only before a successful query; DA-runtime, logging and adb
+    /// states never receive protocol bytes.
+    /// </summary>
+    /// <param name="state">The descriptor-derived state reported by discovery. <para>发现层给出的描述符状态。</param>
+    /// <param name="hasMtkInfo">Whether identity info was already recorded. <para>身份信息是否已记录。</param>
+    /// <returns><see langword="true"/> when the handshake may run. <para>可以握手时为 true。</returns>
+    internal static bool ShouldQueryMtkIdentity(string state, bool hasMtkInfo)
+        => !hasMtkInfo && state is "brom" or "preloader";
 
     private async Task EnrichEdlInfoAsync(DeviceInfo device)
     {
@@ -29,6 +84,7 @@ public partial class DeviceViewModel
             if (ReferenceEquals(device.Device, endpoint))
             {
                 device.EdlProtocol = state;
+                device.SetEdlDetails(App.DeviceMonitor.GetEdlDetails(endpoint));
             }
         }
         catch (Exception ex)

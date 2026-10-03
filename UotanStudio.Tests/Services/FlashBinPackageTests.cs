@@ -23,6 +23,31 @@ public sealed class FlashBinPackageTests
             Assert.Equal("system", Assert.Single(package.Images).Partition);
             Assert.Equal("system_a", Assert.Single(package.Programs).Label);
             Assert.Equal("prog_ufs_firehose_test.elf", Path.GetFileName(package.Programmer));
+            Assert.Equal("prog_ufs_firehose_test.elf", Path.GetFileName(Assert.Single(package.Programmers)));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Read_MultipleFirehoseLoaders_ReportsEveryCandidateWithoutChoosing()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "flash-bin-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(root, "system.bin"), [1]);
+            File.WriteAllBytes(Path.Combine(root, "prog_ufs_firehose_sm8250.elf"), [3]);
+            File.WriteAllBytes(Path.Combine(root, "prog_firehose_256kb.elf"), [4]);
+
+            var package = FlashBinPackage.Read(root);
+
+            Assert.Null(package.Programmer);
+            Assert.Equal(
+                ["prog_firehose_256kb.elf", "prog_ufs_firehose_sm8250.elf"],
+                package.Programmers.Select(Path.GetFileName));
         }
         finally
         {

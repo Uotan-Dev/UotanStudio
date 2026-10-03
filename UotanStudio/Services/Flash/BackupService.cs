@@ -47,8 +47,7 @@ public static class BackupService
                 : device.Protocol switch
                 {
                     DeviceProtocolKind.Fastboot => await Task.Run(() => BackupFastbootDevice(device, partition, outPath, progress, ct), ct).ConfigureAwait(false),
-                    DeviceProtocolKind.Edl => throw new InvalidOperationException(
-                        "EDL backup requires the rawprogram geometry; use BackupEdlPartitionAsync(device, partition, outPath, rawProgramPath, ...). EDL 备份需要 rawprogram 分区几何信息。"),
+                    DeviceProtocolKind.Edl => await EdlGptPartitionService.BackupAsync(device, partition, outPath, progress, ct).ConfigureAwait(false),
                     DeviceProtocolKind.Rkdl => throw new InvalidOperationException(
                         "RKDL backup requires the Rockchip partition table; use RkdlSession.ReadLBA directly. RKDL 备份需自行提供分区表。"),
                     _ => throw new InvalidOperationException($"Unsupported protocol for backup: {device.Mode}")
@@ -98,8 +97,8 @@ public static class BackupService
                 : device.Protocol switch
                 {
                     DeviceProtocolKind.Fastboot => await Task.Run(() => RestoreFastbootDevice(device, partition, imagePath, progress, ct), ct).ConfigureAwait(false),
-                    DeviceProtocolKind.Edl => throw new InvalidOperationException(
-                        "EDL restore requires the rawprogram geometry; use FlashService.FlashEdlPartitionAsync or RestoreEdlPartitionAsync. EDL 还原需要 rawprogram 分区几何信息。"),
+                    DeviceProtocolKind.Edl => MapEdlResult(await EdlGptPartitionService
+                        .FlashAsync(device, partition, imagePath, verify: true, null, ct).ConfigureAwait(false)),
                     _ => throw new InvalidOperationException($"Unsupported protocol for restore: {device.Mode}")
                 };
         }
@@ -113,6 +112,12 @@ public static class BackupService
             return new BackupResult { Success = false, Summary = ex.Message };
         }
     }
+
+    private static BackupResult MapEdlResult(FlashResult result) => new()
+    {
+        Success = result.Success,
+        Summary = result.Summary
+    };
 
     /// <summary>
     /// <para>Fastboot 设备级备份：打开会话后委托给
@@ -282,9 +287,13 @@ public static class BackupService
                 $"rawprogram entry '{displayName}' has no num_partition_sectors; EDL backup cannot determine the partition size. 无法确定分区扇区数。");
         }
 
+        var startSector = FlashService.IsRelativeStartSector(entry.StartSector)
+            ? FlashService.ParseStartSectorValue(entry.StartSector, (
+                await firehose.GetStorageGeometryAsync(entry.PhysicalPartitionNumber, ct).ConfigureAwait(false)).SectorCount)
+            : FlashService.ParseStartSectorValue(entry.StartSector);
         return await BackupEdlToFileAsync(
             session, displayName, entry.Filename, entry.PhysicalPartitionNumber,
-            FlashService.ParseStartSectorValue(entry.StartSector), entry.NumPartitionSectors, sectorSize,
+            startSector, entry.NumPartitionSectors, sectorSize,
             outPath, progress, ct).ConfigureAwait(false);
     }
 
@@ -367,6 +376,12 @@ public static class BackupService
         {
             throw new InvalidOperationException(
                 $"rawprogram entry for '{partition}' has no num_partition_sectors; EDL backup cannot determine the partition size. 无法确定分区扇区数。");
+        }
+
+        if (FlashService.IsRelativeStartSector(entry.StartSector))
+        {
+            throw new InvalidOperationException(
+                $"rawprogram entry for '{partition}' uses a NUM_DISK_SECTORS-relative start_sector; resolve it against the live device geometry before restoring. 相对 start_sector 需先按设备几何解析后再还原。");
         }
 
         return (FlashService.ParseStartSectorValue(entry.StartSector), entry.NumPartitionSectors);

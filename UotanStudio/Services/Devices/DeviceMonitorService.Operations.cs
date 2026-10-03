@@ -3,6 +3,7 @@ using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Edl;
+using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Serial;
@@ -56,20 +57,27 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>Runs a preflighted Firehose bundle on the selected EDL serial target.</summary>
-    public Task FlashEdlSerialAsync(SerialConnectionOptions serial, string folder, string? programmerPath,
+    public Task<IReadOnlyList<string>> FlashEdlSerialAsync(SerialConnectionOptions serial, string folder, string? programmerPath,
         FirehoseConfiguration? configuration = null, bool includeUfsProvision = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, bool continueOnFailure = false,
+        bool skipAbsentSources = false, IReadOnlyList<string>? labels = null,
+        IProgress<FlashBundleProgress>? progress = null, bool verify = false, EdlBundleTuning? tuning = null)
     {
         RequireSerialTarget(serial, EnumerateSerialPorts());
         return FlashEdlBundleService.FlashSerialCoreAsync(
             token => EdlSerialBootstrap.ConnectAsync(serial, programmerPath, configuration, token),
-            folder, includeUfsProvision, cancellationToken);
+            folder, includeUfsProvision, cancellationToken, continueOnFailure, skipAbsentSources, labels,
+            progress, verify, tuning);
     }
 
     /// <summary>Runs a preflighted bundle against the selected USB EDL device.</summary>
-    public Task FlashEdlBundleAsync(DetectedDevice device, string folder, string programmerPath,
-        CancellationToken cancellationToken = default)
-        => FlashEdlBundleService.FlashAsync(device, folder, programmerPath, cancellationToken);
+    public Task<IReadOnlyList<string>> FlashEdlBundleAsync(DetectedDevice device, string folder, string programmerPath,
+        CancellationToken cancellationToken = default, bool continueOnFailure = false,
+        bool skipAbsentSources = false, IReadOnlyList<string>? labels = null,
+        IProgress<FlashBundleProgress>? progress = null, bool verify = false, bool skipUfsProvision = false,
+        EdlBundleTuning? tuning = null, EdlInitializationOptions? initialization = null)
+        => FlashEdlBundleService.FlashAsync(device, folder, programmerPath, cancellationToken,
+            continueOnFailure, skipAbsentSources, labels, progress, verify, skipUfsProvision, tuning, initialization);
 
     /// <summary>Routes deployment and connection through the selected ADB server or native USB target.</summary>
     public ManagedMirrorSession StartMirror(DetectedDevice device,

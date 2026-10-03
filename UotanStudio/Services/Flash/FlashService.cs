@@ -92,6 +92,11 @@ public sealed class FlashService : IFlashService
                 throw new ArgumentException("Partition must not be empty.", nameof(partition));
             }
 
+            if (device.Protocol == DeviceProtocolKind.Edl)
+            {
+                return await EdlGptPartitionService.EraseAsync(device, partition, progress, ct).ConfigureAwait(false);
+            }
+
             if (device.Protocol != DeviceProtocolKind.Fastboot)
             {
                 return new FlashResult { Success = false, Summary = "Erase only supported via fastboot. 擦除仅支持 fastboot 模式。" };
@@ -627,8 +632,10 @@ public sealed class FlashService : IFlashService
         var rawProgramPath = Directory.EnumerateFiles(imageDir, "rawprogram*.xml", SearchOption.TopDirectoryOnly).FirstOrDefault();
         if (rawProgramPath is null)
         {
-            throw new InvalidOperationException(
-                "No rawprogram*.xml found in the image directory; EDL flashing requires a rawprogram (single-partition or full bundle). 镜像目录中未找到 rawprogram*.xml。");
+            Report(progress, partition, 0,
+                "No rawprogram in the image directory; using the device partition table. 镜像目录无 rawprogram，改用设备分区表定位。");
+            return await EdlGptPartitionService.FlashAsync(device, partition, imagePath, verify: false, progress, ct)
+                .ConfigureAwait(false);
         }
 
         var entries = RawProgramParser.ParseAll([rawProgramPath], imageDir);
@@ -674,7 +681,8 @@ public sealed class FlashService : IFlashService
     /// </summary>
     public async Task<FlashResult> FlashEdlPartitionAsync(
         EdlSession session, RawProgramEntry entry, string imageDir, string? programmerPath,
-        IProgress<FlashProgress>? progress, CancellationToken ct, bool verify)
+        IProgress<FlashProgress>? progress, CancellationToken ct, bool verify,
+        EdlInitializationOptions? initialization = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         if (programmerPath is not null && !File.Exists(programmerPath))
@@ -682,7 +690,7 @@ public sealed class FlashService : IFlashService
             throw new FileNotFoundException("Firehose programmer is missing.", programmerPath);
         }
         using var programmer = programmerPath is null ? null : File.OpenRead(programmerPath);
-        await session.EnsureInitializedAsync(programmer, ct).ConfigureAwait(false);
+        await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
         var firehose = session.Firehose
             ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
         return await FlashEdlPartitionAsync(firehose, entry, imageDir, progress, ct, verify).ConfigureAwait(false);
@@ -769,6 +777,7 @@ public sealed class FlashService : IFlashService
         long? verifyNumSectors = null;
         long verifyStartSector = 0;
         string? verifySkipReason = null;
+        var truncated = false;
 
         Report(progress, displayName, 30, $"Sending program for {displayName}... 正在发送 program 命令...");
         using var stream = File.OpenRead(sourceFile);
@@ -800,7 +809,7 @@ public sealed class FlashService : IFlashService
                 maximumSectors, ct).ConfigureAwait(false);
             if (!response.IsAck)
             {
-                throw new InvalidOperationException($"EDL sparse program failed for '{displayName}'. Response: {response.RawValue}");
+                throw new InvalidOperationException($"EDL sparse program failed for '{displayName}'. Response: {EdlFailureText.Describe(response)}");
             }
         }
         else
@@ -813,18 +822,13 @@ public sealed class FlashService : IFlashService
 
             stream.Position = sourceOffset;
             var lengthFromOffset = stream.Length - stream.Position;
-            var numSectors = entry.NumPartitionSectors > 0
-                ? entry.NumPartitionSectors
-                : (lengthFromOffset / sectorSize) + (lengthFromOffset % sectorSize != 0 ? 1 : 0);
+            var numSectors = FlashProgramLength.ResolveSectors(lengthFromOffset, entry.NumPartitionSectors, sectorSize);
             if (numSectors <= 0)
             {
                 throw new InvalidOperationException($"Image for '{displayName}' is empty; nothing to program. 镜像为空。");
             }
 
-            if (checked(numSectors * sectorSize) > lengthFromOffset)
-            {
-                throw new InvalidDataException("The image is shorter than the requested whole-sector range.");
-            }
+            truncated = FlashProgramLength.IsTruncatedByDeclaration(lengthFromOffset, entry.NumPartitionSectors, sectorSize);
 
             var geometry = await firehose.GetStorageGeometryAsync(entry.PhysicalPartitionNumber, ct).ConfigureAwait(false);
             if (geometry.SectorSize != sectorSize)
@@ -837,16 +841,20 @@ public sealed class FlashService : IFlashService
                 stream, startSector, numSectors, entry.Filename, entry.PhysicalPartitionNumber, ct).ConfigureAwait(false);
             if (!response.IsAck)
             {
-                throw new InvalidOperationException($"EDL program failed for '{displayName}'. Response: {response.RawValue}");
+                throw new InvalidOperationException($"EDL program failed for '{displayName}'. Response: {EdlFailureText.Describe(response)}");
             }
 
             if (sourceOffset != 0)
             {
                 verifySkipReason = "the entry programs from a non-zero file_sector_offset, so the device range does not start at the source file's first byte";
             }
-            else if (checked(numSectors * sectorSize) != stream.Length)
+            else if (checked(numSectors * sectorSize) > stream.Length)
             {
-                verifySkipReason = "the image is longer than the programmed whole-sector range";
+                verifySkipReason = "the final sector is zero-filled past the last image byte";
+            }
+            else if (checked(numSectors * sectorSize) < stream.Length)
+            {
+                verifySkipReason = "the image is longer than the programmed range";
             }
             else
             {
@@ -856,6 +864,11 @@ public sealed class FlashService : IFlashService
         }
 
         var summary = $"EDL partition '{displayName}' flashed via Firehose program.";
+        if (truncated)
+        {
+            summary += $" Only {entry.NumPartitionSectors} declared sectors were programmed; the image tail was not written (truncated). 仅写入声明的 {entry.NumPartitionSectors} 个扇区，镜像尾部未写入。";
+        }
+
         if (verify)
         {
             if (verifyNumSectors is null)
@@ -1299,6 +1312,54 @@ public sealed class FlashService : IFlashService
             ? hex
             : throw new InvalidOperationException(
             $"Invalid start_sector value: '{value}'; single-partition EDL flash requires a numeric start_sector. start_sector 值无效。");
+    }
+
+    /// <summary>
+    /// <para>判断 rawprogram 的 start_sector 是否为 <c>NUM_DISK_SECTORS-</c> 相对表达式
+    /// （含可选结尾句点），与 Firehose 侧的地址文法保持一致。</para>
+    /// Whether a rawprogram start_sector is a <c>NUM_DISK_SECTORS-</c> relative expression (with an
+    /// optional trailing dot), matching the address grammar used on the Firehose side.
+    /// </summary>
+    /// <param name="value"><para>清单里的 start_sector 原文。</para>The literal start_sector text.</param>
+    /// <returns><para>为相对表达式时返回 true。</para>True when the expression is disk-relative.</returns>
+    public static bool IsRelativeStartSector(string value)
+        => value.Trim().TrimEnd('.').StartsWith("NUM_DISK_SECTORS-", StringComparison.Ordinal);
+
+    /// <summary>
+    /// <para>解析 rawprogram 的 start_sector：绝对表达式直接返回，<c>NUM_DISK_SECTORS-</c> 相对表达式
+    /// 按该 LUN 的扇区总数求出绝对扇区。</para>
+    /// Parses a rawprogram start_sector: absolute expressions return as-is, while
+    /// <c>NUM_DISK_SECTORS-</c> relative expressions resolve against the LUN's sector count.
+    /// </summary>
+    /// <param name="value"><para>清单里的 start_sector 原文。</para>The literal start_sector text.</param>
+    /// <param name="numDiskSectors"><para>该物理分区的总扇区数；相对表达式必需。</para>
+    /// The physical partition's sector count; required for relative expressions.</param>
+    /// <returns><para>绝对起始扇区。</para>The absolute start sector.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// <para>相对表达式未提供扇区总数，或该偏移落在盘外。</para>
+    /// A relative expression lacks a sector count, or the offset falls outside the disk.
+    /// </exception>
+    public static long ParseStartSectorValue(string value, long numDiskSectors)
+    {
+        if (!IsRelativeStartSector(value))
+        {
+            return ParseStartSectorValue(value);
+        }
+
+        if (numDiskSectors <= 0)
+        {
+            throw new InvalidOperationException(
+                $"Relative start_sector '{value}' cannot be resolved without the LUN sector count. 相对 start_sector 需要该 LUN 的扇区总数。");
+        }
+
+        var offset = ParseStartSectorValue(value.Trim().TrimEnd('.')["NUM_DISK_SECTORS-".Length..]);
+        if (offset <= 0 || offset > numDiskSectors)
+        {
+            throw new InvalidOperationException(
+                $"Relative start_sector '{value}' falls outside a LUN of {numDiskSectors} sectors. 相对 start_sector 超出该 LUN 容量。");
+        }
+
+        return numDiskSectors - offset;
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-﻿<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -310,12 +310,8 @@
                                                 </Border>
                                                 <Border Classes="ModeChip" Background="#E65100"
                                                         IsVisible="{Binding IsEdl}">
-                                                    <TextBlock Text="EDL" FontSize="10" Foreground="White" />
+                                                    <TextBlock Text="{Binding EdlBadge}" FontSize="10" Foreground="White" />
                                                 </Border>
-                                                <Grid IsVisible="{Binding IsEdl}">
-                                                    <TextBlock Text="{Binding EdlProtocol}" IsVisible="{Binding HasEdlProtocol}" FontSize="10" />
-                                                    <TextBlock Text="{DynamicResource Device_ProtocolUnknown}" IsVisible="{Binding !HasEdlProtocol}" FontSize="10" />
-                                                </Grid>
                                                 <Border Classes="ModeChip" Background="#4A148C"
                                                         IsVisible="{Binding IsRkdl}">
                                                     <TextBlock Text="RKDL" FontSize="10" Foreground="White" />
@@ -389,12 +385,8 @@
                                     </Border>
                                     <Border Classes="ModeChip" Background="#E65100"
                                             IsVisible="{Binding IsEdl}">
-                                        <TextBlock Text="EDL" FontSize="11" Foreground="White" />
+                                        <TextBlock Text="{Binding EdlBadge}" FontSize="11" Foreground="White" />
                                     </Border>
-                                    <Grid IsVisible="{Binding IsEdl}">
-                                        <TextBlock Text="{Binding EdlProtocol}" IsVisible="{Binding HasEdlProtocol}" FontSize="11" />
-                                        <TextBlock Text="{DynamicResource Device_ProtocolUnknown}" IsVisible="{Binding !HasEdlProtocol}" FontSize="11" />
-                                    </Grid>
                                     <Border Classes="ModeChip" Background="#4A148C"
                                             IsVisible="{Binding IsRkdl}">
                                         <TextBlock Text="RKDL" FontSize="11" Foreground="White" />
@@ -644,6 +636,68 @@
                                     <TextBlock Grid.Row="2" Grid.Column="1" Classes="CardValue"
                                                Text="{Binding Model}" />
                                 </Grid>
+                                <StackPanel Spacing="8" Margin="0,8,0,0">
+                                    <Grid ColumnDefinitions="150,*"
+                                          IsVisible="{Binding EdlSaharaVersion, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlSaharaVersion}" />
+                                        <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlSaharaVersion}" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="150,*"
+                                          IsVisible="{Binding EdlMaxCommandLength, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlMaxCommandLength}" />
+                                        <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlMaxCommandLength}" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="150,*"
+                                          IsVisible="{Binding EdlFirehoseVersion, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlFirehoseVersion}" />
+                                        <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlFirehoseVersion}" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="150,*"
+                                          IsVisible="{Binding EdlProgrammer, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlProgrammer}" />
+                                        <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlProgrammer}" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="150,*"
+                                          IsVisible="{Binding EdlStorageType, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlStorageType}" />
+                                        <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlStorageType}" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="150,*"
+                                          IsVisible="{Binding EdlStorageSerial, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlStorageSerial}" />
+                                        <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlStorageSerial}" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="150,*"
+                                          IsVisible="{Binding EdlStorageFirmware, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlStorageFirmware}" />
+                                        <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlStorageFirmware}" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="150,*"
+                                          IsVisible="{Binding EdlStorageManufacturer, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlStorageManufacturer}" />
+                                        <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlStorageManufacturer}" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="150,*"
+                                          IsVisible="{Binding EdlPageSize, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlPageSize}" />
+                                        <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlPageSize}" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="150,*"
+                                          IsVisible="{Binding EdlSectorSize, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlSectorSize}" />
+                                        <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlSectorSize}" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="150,*"
+                                          IsVisible="{Binding EdlCapacity, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlCapacity}" />
+                                        <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlCapacity}" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="150,*"
+                                          IsVisible="{Binding EdlMaxPayload, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlMaxPayload}" />
+                                        <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlMaxPayload}" />
+                                    </Grid>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 
@@ -669,6 +723,34 @@
                                     <TextBlock Grid.Row="2" Grid.Column="1" Classes="CardValue"
                                                Text="{Binding Model}" />
                                 </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- MTK 模式信息：硬件代码与安全位来自一次只读 Boot ROM 握手，值为技术串，标签走资源。 -->
+                        <!-- MTK mode info: the hardware code and security bits come from one read-only Boot ROM
+                             handshake; the values are technical strings and the labels come from resources. -->
+                        <Border Classes="InfoCard" IsVisible="{Binding IsMtk}">
+                            <StackPanel>
+                                <TextBlock Classes="CardCaption" Text="{DynamicResource Device_MtkInfo}" />
+                                <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8"
+                                      IsVisible="{Binding HasMtkInfo}">
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_MtkHardware}" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding MtkHardware}" />
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_MtkFirmware}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding MtkFirmware}" />
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_MtkSecurityBits}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding MtkSecurityBits}" />
+                                </Grid>
+                                <TextBlock Classes="CardValue" Text="{DynamicResource Device_MtkInfoUnknown}"
+                                           IsVisible="{Binding !HasMtkInfo}" />
                             </StackPanel>
                         </Border>
                         </StackPanel>

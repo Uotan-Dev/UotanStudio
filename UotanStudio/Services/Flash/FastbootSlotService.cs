@@ -2,9 +2,25 @@ using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Flash;
 
-/// <summary>Changes the selected device's A/B active slot through its managed Fastboot session.</summary>
+/// <summary>Reads and changes the selected device's A/B active slot through its managed Fastboot session.</summary>
 public static class FastbootSlotService
 {
+    /// <summary>Reads the current active slot reported by the selected Fastboot device.</summary>
+    public static Task<string> GetCurrentSlotAsync(DetectedDevice device, CancellationToken ct)
+    {
+        if (device.Protocol != DeviceProtocolKind.Fastboot)
+        {
+            throw new ArgumentException("A Fastboot device is required.", nameof(device));
+        }
+
+        return Task.Run(() =>
+        {
+            ct.ThrowIfCancellationRequested();
+            return App.DeviceMonitor.RunFastboot(device,
+                session => session.GetVariable("current-slot", useCache: false).Trim(), ct);
+        }, ct);
+    }
+
     /// <summary>Switches from a to b or b to a; devices without a recognized current slot are rejected.</summary>
     public static Task<string> SetOtherAsync(DetectedDevice device, CancellationToken ct)
     {

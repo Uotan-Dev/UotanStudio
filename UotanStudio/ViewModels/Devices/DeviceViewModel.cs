@@ -317,7 +317,9 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 $"Scan completed: {Devices.Count} device(s) found.");
 
             var enrichable = Devices
-                .Where(x => x.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Fastboot or DeviceProtocolKind.Hdc or DeviceProtocolKind.Edl)
+                .Where(x => x.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Fastboot
+                        or DeviceProtocolKind.Hdc or DeviceProtocolKind.Edl
+                    || (x.Protocol is DeviceProtocolKind.Mtk && x.State is "brom" or "preloader"))
                 .ToList();
             if (enrichable.Count > 0)
             {

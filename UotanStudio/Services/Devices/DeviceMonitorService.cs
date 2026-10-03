@@ -33,6 +33,8 @@ public enum DeviceProtocolKind
     Edl,
     /// <summary>瑞芯微 bootrom/loader（rockusb）。 Rockchip bootrom/loader.</summary>
     Rkdl,
+    /// <summary>联发科 BootROM/DA（mtk）。 MediaTek BootROM or download-agent mode.</summary>
+    Mtk,
     /// <summary>OpenHarmony HDC（USB 直连或经本机 hdc server）。 OpenHarmony HDC (USB direct or via the local hdc server).</summary>
     Hdc,
 }
@@ -98,6 +100,7 @@ public sealed class DetectedDevice
         DeviceProtocolKind.Fastboot => "Fastboot",
         DeviceProtocolKind.Edl => "EDL",
         DeviceProtocolKind.Rkdl => "RKDL",
+        DeviceProtocolKind.Mtk => "MTK",
         _ => throw new ArgumentOutOfRangeException(nameof(Protocol), Protocol, "Unexpected protocol kind.")
     };
 }

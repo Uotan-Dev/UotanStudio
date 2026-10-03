@@ -3,6 +3,7 @@ using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Hdc;
+using UotanStudio.Comm.Protocols.Mtk.Discovery;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Services.Devices;
@@ -81,6 +82,7 @@ public sealed partial class DeviceMonitorService
                     DeviceProtocolKind.Fastboot => "fastboot",
                     DeviceProtocolKind.Edl => "edl",
                     DeviceProtocolKind.Rkdl => RkdlState(info),
+                    DeviceProtocolKind.Mtk => MtkState(info),
                     DeviceProtocolKind.Hdc => "device",
                     _ => string.Empty,
                 },
@@ -190,6 +192,7 @@ public sealed partial class DeviceMonitorService
         DeviceProtocolKind.Fastboot => "fastboot",
         DeviceProtocolKind.Edl => "edl",
         DeviceProtocolKind.Rkdl => "rkdl",
+        DeviceProtocolKind.Mtk => "mtk",
         _ => string.Empty
     };
 
@@ -292,10 +295,22 @@ public sealed partial class DeviceMonitorService
             "fastboot" => DeviceProtocolKind.Fastboot,
             "edl" => DeviceProtocolKind.Edl,
             "rkdl" => DeviceProtocolKind.Rkdl,
+            "mtk" => DeviceProtocolKind.Mtk,
             _ => null
         };
 
     private static string RkdlState(UsbDeviceInfo info)
         => RkdlConstants.KnownLoaderProductIds.Contains(info.ProductId) ? "loader" : "maskrom";
+
+    private static string MtkState(UsbDeviceInfo info)
+        => MtkModeClassifier.Classify(info).Mode switch
+        {
+            MtkUsbMode.BootRom => "brom",
+            MtkUsbMode.Preloader => "preloader",
+            MtkUsbMode.DaRuntime => "da",
+            MtkUsbMode.LoggingOnly => "logging",
+            MtkUsbMode.AgentlessAdb => "adb",
+            _ => string.Empty,
+        };
 
 }

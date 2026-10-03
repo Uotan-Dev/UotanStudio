@@ -42,15 +42,7 @@ public sealed partial class DeviceMonitorService
             throw new IOException("The selected device endpoint is no longer present. Refresh the device list.");
         }
 
-        var expectedProtocol = device.Protocol switch
-        {
-            DeviceProtocolKind.Adb => "adb",
-            DeviceProtocolKind.Fastboot => "fastboot",
-            DeviceProtocolKind.Edl => "edl",
-            DeviceProtocolKind.Rkdl => "rkdl",
-            DeviceProtocolKind.Hdc => "hdc",
-            _ => throw new ArgumentOutOfRangeException(nameof(device))
-        };
+        var expectedProtocol = ExpectedEndpointProtocol(device.Protocol);
         if (!string.Equals(selected.Protocol, expectedProtocol, StringComparison.Ordinal))
         {
             throw new IOException("The selected endpoint no longer exposes the requested protocol.");
@@ -60,6 +52,27 @@ public sealed partial class DeviceMonitorService
             ? _controller.OpenAsync(snapshot, selected.Id, kind, cancellationToken).GetAwaiter().GetResult()
             : _controller.OpenAsync(snapshot, selected.Id, cancellationToken).GetAwaiter().GetResult();
     }
+
+    /// <summary>
+    /// <para>把设备协议映射为 Comm 发现层使用的端点协议字符串；每个已定义的协议都必须有映射，
+    /// 否则在租约端点前就会失败。</para>
+    /// Maps a device protocol to the endpoint protocol string used by Comm's discovery layer; every
+    /// defined protocol must have a mapping, otherwise leasing the endpoint fails before any I/O.
+    /// </summary>
+    /// <param name="protocol">The device protocol to map. <para>待映射的设备协议。</param>
+    /// <returns>The discovery-layer protocol string. <para>发现层协议字符串。</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="protocol"/> is not a defined
+    /// protocol. <para><paramref name="protocol"/> 不是已定义的协议。</para></exception>
+    internal static string ExpectedEndpointProtocol(DeviceProtocolKind protocol) => protocol switch
+    {
+        DeviceProtocolKind.Adb => "adb",
+        DeviceProtocolKind.Fastboot => "fastboot",
+        DeviceProtocolKind.Edl => "edl",
+        DeviceProtocolKind.Rkdl => "rkdl",
+        DeviceProtocolKind.Hdc => "hdc",
+        DeviceProtocolKind.Mtk => "mtk",
+        _ => throw new ArgumentOutOfRangeException(nameof(protocol), protocol, "Unexpected protocol kind.")
+    };
 
     private (DeviceLease Lease, IAdbDeviceSession Session) LeaseAdb(DetectedDevice device,
         CancellationToken cancellationToken)

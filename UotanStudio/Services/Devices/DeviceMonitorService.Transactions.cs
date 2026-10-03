@@ -2,6 +2,7 @@ using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
+using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Services.Devices;
@@ -168,6 +169,27 @@ public sealed partial class DeviceMonitorService
         {
             if (!lease.TryGetSession<RkdlSession>(out var session))
                 throw new IOException("The selected device does not expose an RKDL session.");
+            cancellationToken.ThrowIfCancellationRequested();
+            return await operation(session).ConfigureAwait(false);
+        }
+        finally
+        {
+            CloseLease(lease);
+        }
+    }
+
+    internal async Task<TResult> RunMtkAsync<TResult>(DetectedDevice device,
+        Func<MtkSession, Task<TResult>> operation, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (device.Protocol != DeviceProtocolKind.Mtk)
+            throw new ArgumentException("An MTK target is required.", nameof(device));
+        var lease = LeaseEndpoint(device, sessionKind: DeviceSessionKind.Mtk, cancellationToken: cancellationToken);
+        try
+        {
+            if (!lease.TryGetSession<MtkSession>(out var session))
+                throw new IOException("The selected device does not expose an MTK session.");
             cancellationToken.ThrowIfCancellationRequested();
             return await operation(session).ConfigureAwait(false);
         }

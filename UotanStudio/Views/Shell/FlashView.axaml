@@ -214,9 +214,26 @@
                             <Button Name="FlashSelectedButton" Classes="pane-action"
                                     Click="OnFlashSelectedClick"
                                     Content="{DynamicResource Flash_FlashSelected}" />
-                            <Button Name="FlashEdlBundleButton" Classes="pane-action" IsVisible="False"
-                                    Click="OnFlashEdlBundleClick"
-                                    Content="{DynamicResource Flash_FlashEdlBundle}" />
+                            <!-- 完整包有两种等价入口：USB 端点与显式串口；动作行只按“包已就绪且目标可用”显隐，
+                                 选项行跟随动作行而不是单独的 USB 按钮。 -->
+                            <!-- The bundle has two equivalent entries, a USB endpoint and an explicit serial port; the
+                                 action row shows only when the bundle is ready and a usable target exists, and the
+                                 option rows follow the action row rather than the USB button alone. -->
+                            <StackPanel Name="BundleActionRow" Spacing="8" IsVisible="False">
+                                <Button Name="FlashEdlBundleButton" Classes="pane-action" IsVisible="False"
+                                        Click="OnFlashEdlBundleClick"
+                                        Content="{DynamicResource Flash_FlashEdlBundle}" />
+                                <Button Name="EdlSerialFlashButton" Classes="pane-action"
+                                        Click="OnEdlSerialFlashClick"
+                                        Content="{DynamicResource Flash_EdlSerialFlash}"
+                                        AutomationProperties.Name="{DynamicResource Flash_EdlSerialFlash}" />
+                            </StackPanel>
+                            <TextBlock Name="EdlSerialPortLabel" Text="{DynamicResource Flash_EdlSerialPort}"
+                                       IsVisible="{Binding #EdlSerialFlashButton.IsVisible}"
+                                       FontSize="12" Opacity="0.8" />
+                            <ComboBox Name="EdlSerialPortBox" Height="32"
+                                      IsVisible="{Binding #EdlSerialFlashButton.IsVisible}"
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlSerialPort}" />
                             <Button Name="EraseSelectedButton" Classes="pane-action"
                                     Click="OnEraseSelectedClick"
                                     Content="{DynamicResource Flash_EraseSelected}" />
@@ -231,15 +248,13 @@
                         <!-- 复选框按两列四行排布：列宽由网格统一决定，同一列的勾选框上下对齐。 -->
                         <!-- Check boxes form two columns by four rows; the grid fixes the column widths so boxes in
                              the same column line up instead of being centred per line. -->
-                        <Grid Name="FlashOptionGrid" RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="Auto,Auto"
+                        <Grid Name="FlashOptionGrid" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="Auto,Auto"
                               RowSpacing="6" ColumnSpacing="12" HorizontalAlignment="Left">
                             <CheckBox Name="DisableVbmetaBox" Content="{DynamicResource Flash_DisableVbmeta}"
                                       HorizontalAlignment="Left" />
                             <CheckBox Grid.Column="1" Name="DeleteCowBox" Content="{DynamicResource Flash_DeleteCow}"
                                       HorizontalAlignment="Left" />
-                            <CheckBox Grid.Row="1" Name="UseAdbBox" IsEnabled="False" Content="{DynamicResource Flash_UseAdb}"
-                                      HorizontalAlignment="Left" />
-                            <CheckBox Grid.Row="1" Grid.Column="1" Name="AddRootBox" IsEnabled="False"
+                            <CheckBox Grid.Row="1" Name="AddRootBox" IsEnabled="False"
                                       Content="{DynamicResource Flash_AddRoot}" HorizontalAlignment="Left" />
                             <CheckBox Grid.Row="2" Name="EraseDataBox" Content="{DynamicResource Flash_EraseData}"
                                       HorizontalAlignment="Left" />
@@ -247,15 +262,65 @@
                                       Content="{DynamicResource Flash_RebootAfter}" HorizontalAlignment="Left" />
                             <CheckBox Grid.Row="3" Name="VerifyAfterFlashBox"
                                       Content="{DynamicResource Flash_VerifyAfterFlash}" HorizontalAlignment="Left" />
+                            <!-- 两项策略只被完整 EDL 包流程消费，因此与包按钮同步显隐，避免对其他协议产生无效开关。 -->
+                            <!-- Both policy boxes are honored only by the full EDL bundle flow, so they share the bundle button's -->
+                            <!-- visibility instead of offering dead switches for other protocols. -->
+                            <CheckBox Grid.Row="4" Name="SkipAbsentSourcesBox"
+                                      IsVisible="{Binding #BundleActionRow.IsVisible}"
+                                      Content="{DynamicResource Flash_SkipAbsentSources}" HorizontalAlignment="Left" />
+                            <CheckBox Grid.Row="4" Grid.Column="1" Name="ContinueOnFailureBox"
+                                      IsVisible="{Binding #BundleActionRow.IsVisible}"
+                                      Content="{DynamicResource Flash_ContinueOnFailure}" HorizontalAlignment="Left" />
+                            <!-- UFS provisioning 只随完整包流程出现，与包按钮同步显隐，避免对其他协议产生无效开关。 -->
+                            <!-- UFS provisioning appears only with the full bundle flow, sharing the bundle button's
+                                 visibility instead of offering a dead switch for other protocols. -->
+                            <CheckBox Grid.Row="5" Name="EdlSkipUfsBox"
+                                      IsVisible="{Binding #BundleActionRow.IsVisible}"
+                                      Content="{DynamicResource Flash_EdlSkipUfsProvision}" HorizontalAlignment="Left" />
+                            <!-- 三项调优只被完整 EDL 包流程消费，与包按钮同步显隐；未选时保持编排器默认。 -->
+                            <!-- The three tuning controls are honored only by the full EDL bundle flow and share the
+                                 bundle button's visibility; leaving them unset keeps the orchestrator defaults. -->
+                            <TextBlock Grid.Row="6" Text="{DynamicResource Flash_EdlSectorSize}"
+                                       IsVisible="{Binding #BundleActionRow.IsVisible}"
+                                       VerticalAlignment="Center" FontSize="12" Opacity="0.8" />
+                            <ComboBox Grid.Row="6" Grid.Column="1" Name="EdlSectorSizeBox" Height="28"
+                                      MinWidth="88" SelectedIndex="0"
+                                      IsVisible="{Binding #BundleActionRow.IsVisible}"
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlSectorSize}">
+                                <ComboBoxItem Content="{DynamicResource Flash_Auto}" />
+                                <ComboBoxItem Content="512" />
+                                <ComboBoxItem Content="2048" />
+                                <ComboBoxItem Content="4096" />
+                            </ComboBox>
+                            <TextBlock Grid.Row="7" Text="{DynamicResource Flash_EdlSlot}"
+                                       IsVisible="{Binding #BundleActionRow.IsVisible}"
+                                       VerticalAlignment="Center" FontSize="12" Opacity="0.8" />
+                            <ComboBox Grid.Row="7" Grid.Column="1" Name="EdlSlotBox" Height="28"
+                                      MinWidth="88" SelectedIndex="0"
+                                      IsVisible="{Binding #BundleActionRow.IsVisible}"
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlSlot}">
+                                <ComboBoxItem Content="{DynamicResource Flash_Auto}" />
+                                <ComboBoxItem Content="1" />
+                                <ComboBoxItem Content="2" />
+                            </ComboBox>
+                            <TextBlock Grid.Row="8" Text="{DynamicResource Flash_EdlWipeFirst}"
+                                       IsVisible="{Binding #BundleActionRow.IsVisible}"
+                                       VerticalAlignment="Center" FontSize="12" Opacity="0.8" />
+                            <TextBox Grid.Row="8" Grid.Column="1" Name="EdlWipeFirstBox" Height="28"
+                                     Width="88" Text="0" PlaceholderText="0"
+                                     IsVisible="{Binding #BundleActionRow.IsVisible}"
+                                     AutomationProperties.Name="{DynamicResource Flash_EdlWipeFirst}" />
                         </Grid>
                         <Button Name="ChooseRootPackageButton" Classes="pane-action"
                                 Click="OnChooseRootPackageClick"
                                 Content="{DynamicResource Flash_ChooseRootPackage}" />
                         <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
                         <TextBlock Text="{DynamicResource Flash_Mtk}" FontWeight="SemiBold" />
-                        <!-- MTK 串口下载只在检测到 scatter 输入时出现，整块由接线代码控制可见性。 -->
-                        <!-- The MTK serial block only appears once scatter input is available; the wiring code owns its visibility. -->
+                        <!-- MTK 下载块只在检测到 scatter 输入或 MTK 设备时出现，整块由接线代码控制可见性。 -->
+                        <!-- The MTK download block appears once scatter input or an MTK device is present; the wiring code owns its visibility. -->
                         <StackPanel Name="MtkPane" Spacing="8" IsVisible="False">
+                            <TextBlock Name="MtkPortLabel" Text="{DynamicResource Flash_MtkPorts}"
+                                       FontSize="12" Opacity="0.8" />
                             <ComboBox Name="MtkPortBox" Height="32" VerticalContentAlignment="Center"
                                       HorizontalAlignment="Stretch"
                                       AutomationProperties.Name="{DynamicResource Flash_MtkPorts}" />
@@ -275,9 +340,41 @@
                                     AutomationProperties.Name="{DynamicResource Flash_MtkEmiFile}" />
                             <TextBlock Name="MtkEmiPathText" TextTrimming="CharacterEllipsis"
                                        FontSize="12" Opacity="0.8" />
+                            <!-- 自动匹配由设备上报的硬件代码挑选 DA 条目，勾选后手数条目索引失效。 -->
+                            <!-- Auto-match lets the reported hardware code pick the DA entry; the counted index is ignored. -->
+                            <CheckBox Name="MtkAutoMatchBox" Content="{DynamicResource Flash_MtkAutoMatch}"
+                                      HorizontalAlignment="Left"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkAutoMatch}" />
+                            <TextBlock Text="{DynamicResource Flash_MtkEntryIndex}" FontSize="12" Opacity="0.8" />
                             <ComboBox Name="MtkEntryIndexBox" Height="32" VerticalContentAlignment="Center"
                                       HorizontalAlignment="Stretch"
+                                      IsEnabled="{Binding !IsChecked, ElementName=MtkAutoMatchBox}"
                                       AutomationProperties.Name="{DynamicResource Flash_MtkEntryIndex}" />
+                            <!-- 密钥目录可选；存在匹配的 sla_<hwcode>.pem 时才会应答 Boot ROM SLA 请求。 -->
+                            <!-- The key directory is optional; a Boot ROM SLA request is answered only with a matching sla_<hwcode>.pem. -->
+                            <Button Name="ChooseMtkKeyDirButton" Classes="pane-action"
+                                    Click="OnChooseMtkKeyDirClick"
+                                    Content="{DynamicResource Flash_MtkKeyDir}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkKeyDir}" />
+                            <TextBlock Name="MtkKeyDirText" TextTrimming="CharacterEllipsis"
+                                       FontSize="12" Opacity="0.8" />
+                            <TextBlock Name="MtkBaudLabel" Text="{DynamicResource Flash_MtkBaud}"
+                                       FontSize="12" Opacity="0.8" />
+                            <ComboBox Name="MtkBaudBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkBaud}" />
+                            <!-- 下载代理家族由本选择框决定，不做探测：XFlash 用于新芯片，Legacy 用于旧芯片，XML 用于按区域名寻址的 v6 代理。 -->
+                            <!-- The download-agent family is chosen here, never probed: XFlash for current chips, Legacy for legacy chips and XML for the region-named v6 agent. -->
+                            <TextBlock Text="{DynamicResource Flash_MtkProtocol}" FontSize="12" Opacity="0.8" />
+                            <ComboBox Name="MtkProtocolBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch"
+                                      SelectedIndex="0"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkProtocol}">
+                                <ComboBoxItem Content="{DynamicResource Flash_MtkProtocolXFlash}" />
+                                <ComboBoxItem Content="{DynamicResource Flash_MtkProtocolLegacy}" />
+                                <ComboBoxItem Content="{DynamicResource Flash_MtkProtocolXml}" />
+                            </ComboBox>
+                            <TextBlock Text="{DynamicResource Flash_MtkStorageKind}" FontSize="12" Opacity="0.8" />
                             <ComboBox Name="MtkStorageKindBox" Height="32" VerticalContentAlignment="Center"
                                       HorizontalAlignment="Stretch"
                                       AutomationProperties.Name="{DynamicResource Flash_MtkStorageKind}" />
@@ -288,12 +385,198 @@
                                     Click="OnMtkFlashClick"
                                     Content="{DynamicResource Flash_MtkFlash}"
                                     AutomationProperties.Name="{DynamicResource Flash_MtkFlash}" />
+                            <Button Name="MtkReadbackButton" Classes="pane-action"
+                                    Click="OnMtkReadbackClick"
+                                    Content="{DynamicResource Flash_MtkReadback}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkReadback}" />
+                            <Button Name="MtkShowGptButton" Classes="pane-action"
+                                    Click="OnMtkShowGptClick"
+                                    Content="{DynamicResource Flash_MtkShowGpt}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkShowGpt}" />
+                            <!-- 整用户区转储是只读操作，按所选代理家族上报的容量分块读取，目标文件由用户挑选；
+                                 字节先落暂存文件，长度与上报值一致时才替换目标。 -->
+                            <!-- A whole-user-area dump is read-only: it walks the capacity the selected agent family
+                                 reported in chunks, takes the destination file from the user, and replaces the target
+                                 only after the staged length equals the reported length. -->
+                            <Button Name="MtkFullDumpButton" Classes="pane-action"
+                                    Click="OnMtkFullDumpClick"
+                                    Content="{DynamicResource Flash_MtkFullDump}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkFullDump}" />
+                            <TextBlock Text="{DynamicResource Flash_MtkSecurityGroup}" FontSize="12"
+                                       FontWeight="SemiBold" Opacity="0.8" />
+                            <!-- 安全配置与 efuse 都按面板选定的代理家族执行：XML 家族没有 seccfg 或 efuse 通路，由服务层直接拒绝，不降级到其他家族。 -->
+                            <!-- The secure-boot configuration and eFuse reads follow the family chosen in the pane: the
+                                 XML family has no seccfg or eFuse path and is refused by the service rather than being
+                                 substituted with another family. -->
+                            <TextBlock Text="{DynamicResource Flash_MtkSecCfgPartition}" FontSize="12" Opacity="0.8" />
+                            <TextBox Name="MtkSecCfgPartitionBox" Height="32" VerticalContentAlignment="Center" Text="0"
+                                     PlaceholderText="{DynamicResource Flash_MtkSecCfgPartition}"
+                                     AutomationProperties.Name="{DynamicResource Flash_MtkSecCfgPartition}" />
+                            <Button Name="MtkSecCfgReadButton" Classes="pane-action"
+                                    Click="OnMtkSecCfgReadClick"
+                                    Content="{DynamicResource Flash_MtkSecCfgRead}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkSecCfgRead}" />
+                            <TextBlock Text="{DynamicResource Flash_MtkSecCfgLock}" FontSize="12" Opacity="0.8" />
+                            <ComboBox Name="MtkSecCfgLockBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch" SelectedIndex="0"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkSecCfgLock}" />
+                            <Button Name="MtkSecCfgApplyButton" Classes="pane-action"
+                                    Click="OnMtkSecCfgApplyClick"
+                                    Content="{DynamicResource Flash_MtkSecCfgApply}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkSecCfgApply}" />
+                            <Button Name="MtkEfusePublicKeyButton" Classes="pane-action"
+                                    Click="OnMtkEfusePublicKeyClick"
+                                    Content="{DynamicResource Flash_MtkEfusePublicKey}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkEfusePublicKey}" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <TextBox Name="MtkEfuseStartBox" Height="32" VerticalContentAlignment="Center" Text="0"
+                                         PlaceholderText="{DynamicResource Flash_MtkEfuseStart}"
+                                         AutomationProperties.Name="{DynamicResource Flash_MtkEfuseStart}" />
+                                <TextBox Grid.Column="1" Name="MtkEfuseCountBox" Height="32"
+                                         VerticalContentAlignment="Center" Text="16"
+                                         PlaceholderText="{DynamicResource Flash_MtkEfuseCount}"
+                                         AutomationProperties.Name="{DynamicResource Flash_MtkEfuseCount}" />
+                            </Grid>
+                            <Button Name="MtkEfuseRangeButton" Classes="pane-action"
+                                    Click="OnMtkEfuseRangeClick"
+                                    Content="{DynamicResource Flash_MtkEfuseRange}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkEfuseRange}" />
+                            <!-- 下载代理内存读写按面板选定的家族分派：寄存器读写以四字为单位循环，块读写上限由 Comm 校验，
+                                 界面只解析输入形状，不重复实现边界规则；poke 是不可逆写，必须同时勾选确认并经对话框确认。 -->
+                            <!-- The download-agent memory group dispatches on the family chosen in the pane: register
+                                 access loops in four-byte cells, the bulk ceilings are validated by Comm rather than
+                                 duplicated here, and a poke is an irreversible write that needs both the checkbox and
+                                 the confirmation dialog. -->
+                            <TextBlock Text="{DynamicResource Flash_MtkDaMemoryGroup}" FontSize="12"
+                                       FontWeight="SemiBold" Opacity="0.8" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <TextBox Name="MtkMemoryAddressBox" Height="32" VerticalContentAlignment="Center"
+                                         Text="0x10000" PlaceholderText="{DynamicResource Flash_MtkMemoryAddress}"
+                                         AutomationProperties.Name="{DynamicResource Flash_MtkMemoryAddress}" />
+                                <TextBox Grid.Column="1" Name="MtkMemoryLengthBox" Height="32"
+                                         VerticalContentAlignment="Center" Text="64"
+                                         PlaceholderText="{DynamicResource Flash_MtkMemoryLength}"
+                                         AutomationProperties.Name="{DynamicResource Flash_MtkMemoryLength}" />
+                            </Grid>
+                            <CheckBox Name="MtkMemoryRegisterBox" Content="{DynamicResource Flash_MtkMemoryAsRegister}"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkMemoryAsRegister}" />
+                            <Button Name="MtkMemoryPeekButton" Classes="pane-action"
+                                    Click="OnMtkMemoryPeekClick"
+                                    Content="{DynamicResource Flash_MtkMemoryPeek}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkMemoryPeek}" />
+                            <TextBox Name="MtkPokeDataBox" Height="32" VerticalContentAlignment="Center"
+                                     PlaceholderText="{DynamicResource Flash_MtkPokeData}"
+                                     AutomationProperties.Name="{DynamicResource Flash_MtkPokeData}" />
+                            <CheckBox Name="MtkPokeConfirmBox" Content="{DynamicResource Flash_MtkPokeConfirm}"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkPokeConfirm}" />
+                            <Button Name="MtkPokeButton" Classes="pane-action" Click="OnMtkPokeClick"
+                                    Content="{DynamicResource Flash_MtkPoke}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkPoke}" />
+                            <Button Name="MtkBromDumpButton" Classes="pane-action" Click="OnMtkBromDumpClick"
+                                    Content="{DynamicResource Flash_MtkBromDump}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkBromDump}" />
+                            <!-- OEM 密钥写入是不可逆操作：类别、密钥与可选 SEJ 基址都由用户给出，缺失基址时由服务层拒绝而不是猜测。 -->
+                            <!-- OEM key programming is irreversible: the class, the key and the optional SEJ base all
+                                 come from the user, and a missing base is refused by the service rather than guessed. -->
+                            <TextBlock Text="{DynamicResource Flash_MtkOemKeyKind}" FontSize="12" Opacity="0.8" />
+                            <ComboBox Name="MtkOemKeyKindBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch" SelectedIndex="0"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkOemKeyKind}" />
+                            <TextBox Name="MtkOemKeyHexBox" Height="32" VerticalContentAlignment="Center"
+                                     PlaceholderText="{DynamicResource Flash_MtkOemKeyHex}"
+                                     AutomationProperties.Name="{DynamicResource Flash_MtkOemKeyHex}" />
+                            <TextBox Name="MtkOemKeySejBaseBox" Height="32" VerticalContentAlignment="Center"
+                                     PlaceholderText="{DynamicResource Flash_MtkOemKeySejBaseOptional}"
+                                     AutomationProperties.Name="{DynamicResource Flash_MtkOemKeySejBase}" />
+                            <Button Name="MtkOemKeyProgramButton" Classes="pane-action"
+                                    Click="OnMtkOemKeyProgramClick"
+                                    Content="{DynamicResource Flash_MtkOemKeyProgram}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkOemKeyProgram}" />
+                            <!-- 预览只描述将要提交的寄存器窗口、单元数与密钥摘要，任何字节都不发出；提交仍需要单独的写入按钮。 -->
+                            <!-- The preview describes the register window, unit count and key digest a submission would
+                                 use without sending any byte; the write stays a separate action. -->
+                            <Button Name="MtkOemKeyPreviewButton" Classes="pane-action"
+                                    Click="OnMtkOemKeyPreviewClick"
+                                    Content="{DynamicResource Flash_MtkOemKeyPreview}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkOemKeyPreview}" />
+                            <!-- 擦除对已列出的 scatter 行与“无镜像但策略允许”的行都生效，范围由实机 GPT 复核。 -->
+                            <!-- Erase covers both listed scatter rows and policy-eligible rows without an image;
+                                 the live GPT re-checks every range. -->
+                            <Button Name="MtkEraseButton" Classes="pane-action"
+                                    Click="OnMtkEraseClick"
+                                    Content="{DynamicResource Flash_MtkErase}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkErase}" />
+                            <!-- 以下两组操作只在 USB 上的 MediaTek 租约成立时出现：串口路径没有 BootROM 阶段的控制面。 -->
+                            <!-- These two groups appear only for a MediaTek lease on USB: the serial path has no
+                                 BootROM-stage control surface. -->
+                            <StackPanel Name="MtkUsbOnlyRow" Spacing="8" IsVisible="False">
+                            <!-- BootROM 利用只在用户逐项显式授权后运行：家族与载荷来源都按名字指名，未实现的家族由服务层直接拒绝，绝不改用其他家族。 -->
+                            <!-- The BootROM exploit runs only under explicit per-item authorization: family and payload
+                                 source are named by the user, and an unimplemented family is refused rather than swapped. -->
+                            <CheckBox Name="MtkExploitBypassBox" Content="{DynamicResource Flash_MtkExploitBypass}"
+                                      HorizontalAlignment="Left" Click="OnMtkExploitAuthorizationClick"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkExploitBypass}" />
+                            <CheckBox Name="MtkExploitVolatileBox" Content="{DynamicResource Flash_MtkExploitVolatile}"
+                                      HorizontalAlignment="Left" Click="OnMtkExploitAuthorizationClick"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkExploitVolatile}" />
+                            <TextBlock Text="{DynamicResource Flash_MtkExploitFamily}" FontSize="12" Opacity="0.8" />
+                            <ComboBox Name="MtkExploitFamilyBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch" SelectedIndex="0"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkExploitFamily}" />
+                            <TextBlock Text="{DynamicResource Flash_MtkExploitPayload}" FontSize="12" Opacity="0.8" />
+                            <ComboBox Name="MtkExploitPayloadBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkExploitPayload}" />
+                            <Button Name="MtkBypassButton" Classes="pane-action"
+                                    Click="OnMtkBypassClick"
+                                    Content="{DynamicResource Flash_MtkRunBypass}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkRunBypass}" />
+                            <!-- RPMB 只读捕获的寻址形态必须属于所选代理家族支持的组合；组合不支持时先在本地拒绝，不接触设备。 -->
+                            <!-- The read-only RPMB capture must use an addressing shape the chosen family supports; an
+                                 unsupported combination is refused locally before any device contact. -->
+                            <TextBlock Text="{DynamicResource Flash_MtkRpmbMode}" FontSize="12" Opacity="0.8" />
+                            <ComboBox Name="MtkRpmbModeBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch" SelectedIndex="0"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkRpmbMode}" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <TextBox Name="MtkRpmbOffsetBox" Height="32" VerticalContentAlignment="Center"
+                                         PlaceholderText="{DynamicResource Flash_MtkRpmbOffset}"
+                                         AutomationProperties.Name="{DynamicResource Flash_MtkRpmbOffset}" />
+                                <TextBox Grid.Column="1" Name="MtkRpmbLengthBox" Height="32"
+                                         VerticalContentAlignment="Center"
+                                         PlaceholderText="{DynamicResource Flash_MtkRpmbLength}"
+                                         AutomationProperties.Name="{DynamicResource Flash_MtkRpmbLength}" />
+                            </Grid>
+                            <Button Name="MtkRpmbReadButton" Classes="pane-action"
+                                    Click="OnMtkRpmbReadClick"
+                                    Content="{DynamicResource Flash_MtkRpmbRead}"
+                                    AutomationProperties.Name="{DynamicResource Flash_MtkRpmbRead}" />
+                            </StackPanel>
+                            <!-- 关机与两种启动模式切换都要先启动到存储就绪的代理，因此复用本面板的 DA/EMI/端口选择。 -->
+                            <!-- Every power and boot-mode request first boots a storage-ready agent, so it reuses this
+                                 pane's DA/EMI/port selection. -->
+                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                                <Button Name="MtkRebootButton" Classes="pane-action"
+                                        Click="OnMtkRebootClick"
+                                        Content="{DynamicResource Flash_MtkReboot}"
+                                        AutomationProperties.Name="{DynamicResource Flash_MtkReboot}" />
+                                <Button Grid.Column="1" Name="MtkRebootFastbootButton" Classes="pane-action"
+                                        Click="OnMtkRebootFastbootClick"
+                                        Content="{DynamicResource Flash_MtkRebootFastboot}"
+                                        AutomationProperties.Name="{DynamicResource Flash_MtkRebootFastboot}" />
+                                <Button Grid.Column="2" Name="MtkPowerOffButton" Classes="pane-action"
+                                        Click="OnMtkPowerOffClick"
+                                        Content="{DynamicResource Flash_MtkPowerOff}"
+                                        AutomationProperties.Name="{DynamicResource Flash_MtkPowerOff}" />
+                            </Grid>
                             <TextBlock Name="MtkScatterHintText" Text="{DynamicResource Flash_MtkLoadScatterHint}"
                                        FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
                         </StackPanel>
                         <TextBlock Name="EdlHeader" Text="{DynamicResource Flash_Edl}" FontWeight="SemiBold" IsVisible="False" />
                         <StackPanel Name="EdlPane" Spacing="8" IsVisible="False">
                             <TextBlock Name="EdlStorageInfoText" Text="{DynamicResource Flash_EdlStorageInfoUnknown}"
+                                       FontSize="12" Opacity="0.8" TextWrapping="Wrap" />
+                            <TextBlock Name="EdlCapabilityText" IsVisible="False"
                                        FontSize="12" Opacity="0.8" TextWrapping="Wrap" />
                             <Button Name="EdlReadStorageInfoButton" Classes="pane-action"
                                     Click="OnEdlReadStorageInfoClick"
@@ -305,10 +588,122 @@
                                     AutomationProperties.Name="{DynamicResource Flash_EdlChooseProgrammer}" />
                             <TextBlock Name="EdlProgrammerPathText" TextTrimming="CharacterEllipsis"
                                        FontSize="12" Opacity="0.8" />
+                            <!-- 包内同时存在多个 firehose loader 时由用户显式选择，不自动取第一个。 -->
+                            <!-- When the package ships several firehose loaders the user picks one; the first is never assumed. -->
+                            <TextBlock Name="EdlProgrammerChoiceLabel" FontSize="12" Opacity="0.8" IsVisible="False"
+                                       Text="{DynamicResource Flash_EdlProgrammerChoice}" />
+                            <ComboBox Name="EdlProgrammerPickBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch" IsVisible="False"
+                                      SelectionChanged="OnEdlProgrammerPickChanged"
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlProgrammerChoice}" />
+                            <!-- 鉴权只在初始化前生效：先选命令家族，再给出项目号与设备序列号，二者与 Sahara 上报身份交叉校验。 -->
+                            <!-- Vendor startup requirements apply before initialization: pick the command family, then
+                                 the project id and serial, which are cross-checked against the identity Sahara reports. -->
+                            <TextBlock Text="{DynamicResource Flash_EdlAuthKind}" FontSize="12" Opacity="0.8" />
+                            <ComboBox Name="EdlAuthKindBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch"
+                                      SelectionChanged="OnEdlAuthKindChanged"
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlAuthKind}" />
+                            <ComboBox Name="EdlOnePlusModelBox" Height="32" VerticalContentAlignment="Center"
+                                      HorizontalAlignment="Stretch" IsVisible="False"
+                                      SelectionChanged="OnEdlOnePlusModelChanged"
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlOnePlusModel}" />
+                            <!-- SetNetType 只在部分 OnePlus loader 上被要求，且不能与普通项目号校验同时使用。 -->
+                            <!-- SetNetType is only required by some OnePlus loaders and never combines with ordinary
+                                 project-name verification. -->
+                            <CheckBox Name="EdlNetTypeBox" Content="{DynamicResource Flash_EdlNetType}"
+                                      HorizontalAlignment="Left"
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlNetType}" />
+                            <!-- 下面三项是链路兼容开关：只在驱动或 programmer 表现出对应异常时勾选，默认全部关闭。 -->
+                            <!-- The three entries below are link-compatibility switches; enable them only when the
+                                 driver or programmer shows the matching failure, and all three stay off by default. -->
+                            <CheckBox Name="EdlQudRecoveryBox" Content="{DynamicResource Flash_EdlQudRecovery}"
+                                      HorizontalAlignment="Left"
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlQudRecovery}" />
+                            <CheckBox Name="EdlPendingCompletionBox"
+                                      Content="{DynamicResource Flash_EdlPendingCompletion}"
+                                      HorizontalAlignment="Left"
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlPendingCompletion}" />
+                            <TextBox Name="EdlAuthTimeoutBox" Height="32" VerticalContentAlignment="Center" Text="60000"
+                                     PlaceholderText="{DynamicResource Flash_EdlAuthTimeout}"
+                                     AutomationProperties.Name="{DynamicResource Flash_EdlAuthTimeout}" />
+                            <TextBox Name="EdlProjectIdBox" Height="32" VerticalContentAlignment="Center"
+                                     PlaceholderText="{DynamicResource Flash_EdlProjectId}"
+                                     AutomationProperties.Name="{DynamicResource Flash_EdlProjectId}" />
+                            <TextBox Name="EdlSerialBox" Height="32" VerticalContentAlignment="Center"
+                                     PlaceholderText="{DynamicResource Flash_EdlSerial}"
+                                     AutomationProperties.Name="{DynamicResource Flash_EdlSerial}" />
                             <Button Name="EdlReadbackButton" Classes="pane-action"
                                     Click="OnEdlReadbackClick"
                                     Content="{DynamicResource Flash_EdlReadbackSelected}"
                                     AutomationProperties.Name="{DynamicResource Flash_EdlReadbackSelected}" />
+                            <!-- 擦除按清单里的扇区范围执行，支持 NUM_DISK_SECTORS 相对地址，由目标端求值。 -->
+                            <!-- Erase follows the manifest's sector range, supports the NUM_DISK_SECTORS-relative
+                                 address and lets the target evaluate it. -->
+                            <Button Name="EdlEraseButton" Classes="pane-action"
+                                    Click="OnEdlEraseClick"
+                                    Content="{DynamicResource Flash_EdlErase}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlErase}" />
+                            <!-- 修复分区表只写回设备自身读回的表，不引入包内 GPT；写后按元数据指纹复核。 -->
+                            <!-- The repair writes back only the table read from the device itself, never a packaged
+                                 GPT, and revalidates the metadata fingerprint afterwards. -->
+                            <Button Name="EdlRepairGptButton" Classes="pane-action"
+                                    Click="OnEdlRepairGptClick"
+                                    Content="{DynamicResource Flash_EdlRepairGpt}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlRepairGpt}" />
+                            <!-- 内存转储只面向处于 Sahara 内存调试（crashdump）态的目标：不加载 programmer，也不配置存储。 -->
+                            <!-- The memory dump targets a device sitting in Sahara memory-debug (crashdump) mode: no
+                                 programmer is loaded and no storage is configured. -->
+                            <Button Name="EdlRamDumpButton" Classes="pane-action"
+                                    Click="OnEdlRamDumpClick"
+                                    Content="{DynamicResource Flash_EdlRamDump}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlRamDump}" />
+                            <!-- 重启走 firehose power reset，内部会先尽力发送 setbootablestoragedrive。 -->
+                            <!-- The reboot goes through firehose power reset, which first sends a best-effort
+                                 setbootablestoragedrive. -->
+                            <Button Name="EdlResetButton" Classes="pane-action"
+                                    Click="OnEdlResetClick"
+                                    Content="{DynamicResource Flash_EdlReset}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlReset}" />
+                            <!-- 断电、回到 EDL 与切换活动分区都复用同一套 programmer 与鉴权配置，只在命令字上不同。 -->
+                            <!-- Power-off, the return to EDL and the active-partition switch reuse the same programmer and
+                                 authentication configuration and differ only in the command sent. -->
+                            <Button Name="EdlPowerOffButton" Classes="pane-action"
+                                    Click="OnEdlPowerOffClick"
+                                    Content="{DynamicResource Flash_EdlPowerOff}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlPowerOff}" />
+                            <Button Name="EdlResetToEdlButton" Classes="pane-action"
+                                    Click="OnEdlResetToEdlClick"
+                                    Content="{DynamicResource Flash_EdlResetToEdl}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlResetToEdl}" />
+                            <TextBox Name="EdlActiveSlotBox" Height="32" VerticalContentAlignment="Center" Text="a"
+                                     PlaceholderText="{DynamicResource Flash_EdlSetActiveSlot}"
+                                     AutomationProperties.Name="{DynamicResource Flash_EdlSetActiveSlot}" />
+                            <Button Name="EdlSetActiveSlotButton" Classes="pane-action"
+                                    Click="OnEdlSetActiveSlotClick"
+                                    Content="{DynamicResource Flash_EdlSetActiveSlotApply}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlSetActiveSlotApply}" />
+                            <!-- UFS provisioning 只吃外部描述符文件：预览不写设备，提交前必须确认，非 UFS 存储由服务层拒绝。 -->
+                            <!-- UFS provisioning takes an external descriptor profile: the preview writes nothing, the
+                                 submission needs confirmation, and non-UFS storage is refused by the service layer. -->
+                            <Button Name="EdlChooseUfsProfileButton" Classes="pane-action"
+                                    Click="OnEdlChooseUfsProfileClick"
+                                    Content="{DynamicResource Flash_EdlUfsProfileChoose}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlUfsProfileChoose}" />
+                            <TextBlock Name="EdlUfsProfileText" TextTrimming="CharacterEllipsis"
+                                       FontSize="12" Opacity="0.8" />
+                            <Button Name="EdlUfsPreviewButton" Classes="pane-action"
+                                    Click="OnEdlUfsPreviewClick"
+                                    Content="{DynamicResource Flash_EdlUfsPreview}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlUfsPreview}" />
+                            <Button Name="EdlUfsProvisionButton" Classes="pane-action"
+                                    Click="OnEdlUfsProvisionClick"
+                                    Content="{DynamicResource Flash_EdlUfsProvision}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlUfsProvision}" />
+                            <Button Name="EdlUfsResetButton" Classes="pane-action"
+                                    Click="OnEdlUfsResetClick"
+                                    Content="{DynamicResource Flash_EdlUfsReset}"
+                                    AutomationProperties.Name="{DynamicResource Flash_EdlUfsReset}" />
                             <CheckBox Name="EdlGenerateXmlBox" Content="{DynamicResource Flash_EdlGenerateXml}"
                                       HorizontalAlignment="Left"
                                       AutomationProperties.Name="{DynamicResource Flash_EdlGenerateXml}" />
