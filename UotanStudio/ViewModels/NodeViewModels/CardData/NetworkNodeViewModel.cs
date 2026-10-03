@@ -1,9 +1,9 @@
 using System.Globalization;
-using System.Security.Cryptography;
 using Avalonia;
 using UotanStudio.Firmware.Infrastructure.Downloads;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
+using UotanStudio.Services.Network;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 
@@ -80,30 +80,21 @@ public sealed class NetworkNodeViewModel : FlowNodeViewModel
         {
             throw new InvalidOperationException("URL must be an absolute HTTP or HTTPS address.");
         }
-        if (string.IsNullOrWhiteSpace(outputPath))
-        {
-            throw new InvalidOperationException("Output Path is required.");
-        }
         var expectedHash = Convert.ToString(ReadInput("Expected SHA256"), CultureInfo.InvariantCulture)?.Trim();
-        if (!string.IsNullOrEmpty(expectedHash)
-            && (expectedHash.Length != 64 || !expectedHash.All(Uri.IsHexDigit)))
-        {
-            throw new InvalidDataException("Expected SHA256 must be 64 hexadecimal characters.");
-        }
         var timeoutText = Convert.ToString(ReadInput("Timeout Seconds"), CultureInfo.InvariantCulture);
-        if (!string.IsNullOrWhiteSpace(timeoutText)
-            && (!double.TryParse(timeoutText, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds)
-                || !double.IsFinite(seconds) || seconds < 1 || seconds > 3600))
+        double? timeoutSeconds = null;
+        if (!string.IsNullOrWhiteSpace(timeoutText))
         {
-            throw new InvalidDataException("Timeout Seconds must be between 1 and 3600.");
+            if (!double.TryParse(timeoutText, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds)
+                || !double.IsFinite(seconds) || seconds < 1 || seconds > 3600)
+            {
+                throw new InvalidDataException("Timeout Seconds must be between 1 and 3600.");
+            }
+            timeoutSeconds = seconds;
         }
 
-        var useMirrors = string.Equals(Convert.ToString(ReadInput("Source"), CultureInfo.InvariantCulture), "GitHub Mirror", StringComparison.Ordinal);
-        if (useMirrors && !HttpDownload.IsGitHubUrl(uri))
-        {
-            throw new InvalidOperationException("GitHub Mirror source only accepts GitHub download addresses.");
-        }
-
+        var useMirrors = string.Equals(Convert.ToString(ReadInput("Source"), CultureInfo.InvariantCulture),
+            "GitHub Mirror", StringComparison.Ordinal);
         var progress = new DownloadProgress(value =>
         {
             if (value.Total > 0)
@@ -111,61 +102,21 @@ public sealed class NetworkNodeViewModel : FlowNodeViewModel
                 context.ReportProgress((double)value.Processed / value.Total);
             }
         });
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
-        if (!string.IsNullOrWhiteSpace(timeoutText))
-        {
-            timeout.CancelAfter(TimeSpan.FromSeconds(double.Parse(timeoutText, CultureInfo.InvariantCulture)));
-        }
-        var destination = Path.GetFullPath(outputPath);
-        var staging = string.IsNullOrEmpty(expectedHash)
-            ? destination : destination + $".verify-{Guid.NewGuid():N}";
+        var request = new FileDownloadRequest(uri, outputPath ?? string.Empty, useMirrors, requestHeaders,
+            expectedHash, timeoutSeconds);
         try
         {
-            Uri source;
-            if (useMirrors)
-            {
-                source = await HttpDownload.DownloadAsync(_httpClient, uri, staging, progress,
-                    timeout.Token, requestHeaders).ConfigureAwait(false);
-            }
-            else
-            {
-                await HttpDownload.DownloadSingleAsync(_httpClient, uri, staging, progress,
-                    timeout.Token, requestHeaders).ConfigureAwait(false);
-                source = uri;
-            }
-            if (!string.IsNullOrEmpty(expectedHash))
-            {
-                await using (var input = new FileStream(staging, FileMode.Open, FileAccess.Read, FileShare.Read,
-                    128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
-                {
-                    var actualHash = await SHA256.HashDataAsync(input, timeout.Token).ConfigureAwait(false);
-                    if (!CryptographicOperations.FixedTimeEquals(actualHash, Convert.FromHexString(expectedHash)))
-                    {
-                        throw new InvalidDataException("Downloaded SHA256 does not match the expected value.");
-                    }
-                }
-                timeout.Token.ThrowIfCancellationRequested();
-                File.Move(staging, destination, overwrite: true);
-            }
-
-            var length = new FileInfo(destination).Length;
-            WriteOutput("Path", destination);
-            WriteOutput("Source URL", source.ToString());
-            WriteOutput("Bytes", (double)length);
+            var result = await FileDownloadService.DownloadAsync(_httpClient, request, progress,
+                context.CancellationToken).ConfigureAwait(false);
+            WriteOutput("Path", result.Path);
+            WriteOutput("Source URL", result.Source.ToString());
+            WriteOutput("Bytes", (double)result.Bytes);
             context.ReportProgress(1);
-            context.Log.Write(LogLevel.Info, Title, $"Downloaded {length} bytes from '{source}'.");
+            context.Log.Write(LogLevel.Info, Title, $"Downloaded {result.Bytes} bytes from '{result.Source}'.");
         }
-        catch (OperationCanceledException error) when (!context.CancellationToken.IsCancellationRequested
-            && timeout.IsCancellationRequested)
+        catch (TimeoutException error)
         {
             throw new TimeoutException(LanguageService.Instance.GetString("Node_Network_Timeout"), error);
-        }
-        finally
-        {
-            if (!string.Equals(staging, destination, StringComparison.Ordinal) && File.Exists(staging))
-            {
-                File.Delete(staging);
-            }
         }
     }
 
