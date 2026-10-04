@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Firmware.Core.Streams;
 

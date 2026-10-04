@@ -1,5 +1,4 @@
 using System.Text;
-using System.Threading;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;

@@ -4,7 +4,6 @@ using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Mirroring;
 using UotanStudio.Services.Scripting;
-using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 

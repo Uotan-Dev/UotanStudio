@@ -2,7 +2,6 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Mtk.Profile;
-using UotanStudio.Firmware.VendorFirmware.MediaTek;
 using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Comm.Protocols.Mtk;
 using UotanStudio.Tests.Comm.TestDoubles;

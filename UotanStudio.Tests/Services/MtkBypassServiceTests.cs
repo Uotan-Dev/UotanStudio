@@ -214,7 +214,7 @@ public sealed class MtkBypassServiceTests
         Assert.Null(handoff.PayloadIdentity);
         Assert.Null(handoff.PayloadSha256);
         Assert.True(handoff.DaUploadHandoffReady);
-        Assert.Equal(13, device.ControlTransfers.Count);
+        Assert.Equal(17, device.ControlTransfers.Count);
         Assert.Contains("no payload uploaded", handoff.Summary);
     }
 

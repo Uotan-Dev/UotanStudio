@@ -6,7 +6,6 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
-using UotanStudio.Services.Patching;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.VisualPlugins;
 using UotanStudio.ViewModels.NodeViewModels;

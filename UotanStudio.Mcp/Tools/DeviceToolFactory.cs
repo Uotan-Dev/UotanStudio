@@ -3,7 +3,6 @@ using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Protocols.Fastboot;
-using IOException = System.IO.IOException;
 using Path = System.IO.Path;
 
 namespace UotanStudio.Mcp.Tools;
